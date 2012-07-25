@@ -55,7 +55,7 @@ Open a terminal-window (or SSH-session) and as the user 'pi' run:
     sudo apt-get update
     sudo apt-get -y install git-core
     git clone git@github.com:wireload/screenly-ose.git ~/screenly
-    ~/screenly/misc/install_screenly.sh
+    ~/screenly/misc/install.sh
 
 Assuming everything went well, reboot your system. Screenly should now load. 
 
