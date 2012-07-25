@@ -88,3 +88,7 @@ To upgrade Screenly, simply run (as the user 'pi'):
 Once done, simply restart Screenly. If you prefer not not restart the computer, you might get away with (depending on the update):
 
     pkill -f "viewer.py"
+    
+## Licensing
+
+Dual License: [GPLv2](http://www.gnu.org/licenses/gpl-2.0.html) and Commercial License. For more information, contact [WireLoad](http://wireload.net/company/). 
