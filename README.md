@@ -11,10 +11,13 @@ Since Screenly was written for the Raspberry Pi from the ground up, we had to ma
 There are many use cases where Screenly can be used, such as:
 
  * Display BI or server dashboards
- * Advertisements
+ * Advertisements (in-store or in store-front)
  * Internal information boards
+ * Fancy photo-frame
 
-Screenshots of Screenly are availale [here](https://plus.google.com/photos/114752059167800133595/albums/5769054991542902385).
+A rought video of Screenly in action is available [here](http://www.youtube.com/watch?v=yjDjEfhspxk).
+
+Screenshots and pictures of Screenly are available [here](https://picasaweb.google.com/102112347693505491575/Screenly01?authkey=Gv1sRgCNa2qp-j5vWUGQ).
 
 ## How Screenly works
 
