@@ -1,0 +1,115 @@
+body {
+    /* From subtlepatterns.com  */
+    background-image:url('/static/img/low_contrast_linen.png');
+    background-repeat: repeat;
+    font-family: "HelveticaNeue-Light","Helvetica Neue Light","HelveticaNeue", "Helvetica Neue", "Helvetica", "Arial" , "sans-serif";
+    text-align: center;
+    width: 1024px;
+    margin-left:auto;
+    margin-right:auto;
+}
+
+h1 {
+	font-size:60px;
+	text-shadow: #EEE 0px 1px 0px;
+	color:#ffffff;
+	margin-top: 0px;
+	margin-bottom: 20px;
+}
+
+h2 {
+	font-size:35px;
+	text-shadow: #EEE 0px 1px 0px;
+	color:#EEEEEE;
+	margin-top: 0px;
+	margin-bottom: 5px;
+}
+
+a {
+    color: #75B6FF;
+    text-decoration: none;
+}
+
+p {
+	color:#EEEEEE;
+    font-size: 20px;
+}
+
+table.center {
+    margin-left:auto; 
+    margin-right:auto;
+}
+
+table,td,th {
+    width: 1024px;
+    color: #FFFFFF;
+    border:0px solid gray;
+}
+
+td, th {
+    padding: 5px;
+}
+
+th {
+    background-color: #6D93BF;
+    color: white;
+}
+
+strong {
+    color: #EBEBEB;
+}
+
+ul {
+	color:#FFFFFF;
+}
+
+.main {
+	margin-top: 40px;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+.footer {
+    color: white;
+    margin-bottom: 5px;
+    margin-top: 20px;
+}
+
+.image {
+	margin-top:20px;
+	margin-bottom:20px;
+}
+
+.left {
+    text-align: left;
+    color:#EEEEEE;
+    font-size: 20px;
+    padding-left:150px;
+}
+
+fieldset {
+   border: 0px;
+   width: 20em;
+}
+
+input { 
+    font-size: 15px;
+    font-family: "HelveticaNeue-Light","Helvetica Neue Light","HelveticaNeue", "Helvetica Neue", "Helvetica", "Arial", "sans-serif";    
+}
+
+select { 
+    font-size: 15px;
+    font-family: "HelveticaNeue-Light","Helvetica Neue Light","HelveticaNeue", "Helvetica Neue", "Helvetica", "Arial", "sans-serif";
+    width: 145px;
+    height: 20px;
+}
+
+label {
+    width: 145px;
+    float: left;
+    text-align: right;
+    height: 20px;
+    padding-top:5px;
+    margin-right: 0.5em;
+    display: block
+}
