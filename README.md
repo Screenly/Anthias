@@ -1,23 +1,22 @@
 # Screenly OSE -- Digital Signage for the Raspberry Pi
 
-When we started [Skarmverket](http://skarmverket.se), a small network of public billboards in Sweden, we evaluated many of the existing solutions on the market. Most of them are clunky and/or expensive. A fair number of them ran on Windows and used Adobe Flash. We ended up writing our own solution and used Asus Eee PCs with Linux. 
+When we started [Skarmverket](http://skarmverket.se), a small network of public billboards in Sweden, we evaluated many of the existing solutions on the market. Most of them were clunky and/or expensive. A fair number of them ran on Windows and used Adobe Flash. We ended up writing our own solution and used Asus Eee PCs with Linux. 
 
-Then the [Raspberry Pi](http://www.raspberrypi.org/) came along. Priced at $35, and equipped with everything needed to power a screen. We were immediatelly sold and knew that this what we wanted to use moving forward. Since we love Open Source, we've decided to release Screenly for free for anyone to use. 
+Then the [Raspberry Pi](http://www.raspberrypi.org/) came along. Priced at $35, and equipped with everything needed to power a screen. We were immediatelly sold and knew that this was what we wanted to use moving forward. Since we love Open Source, we've decided to release Screenly for free for anyone to use. 
 
 The current version should be consider a beta. While we have been running it in the lab without any issues, there might still be issues that we are unaware of at this point. Yet, we wanted to make Screenly available to the vibrant Rasberry Pi community.
 
-Since Screenly was written for the Raspberry Pi from the ground up, we had to make it lean as possible. 
+Since Screenly was written for the Raspberry Pi from the ground up, we had to make it as lean as possible. 
 
 There are many use cases where Screenly can be used, such as:
 
- * Display BI/System dashboards
+ * Display BI or server dashboards
  * Advertisements
  * Internal information boards
 
 ## How Screenly works
 
-Once installed, Screenly can view images, videos and websites on the screen. You can configure your own playlist, 
-and set the duration for how long each element should be viewed.
+Once installed, Screenly can view images, videos and websites on the screen. You can configure your own playlist, and set the duration for how long each element should be viewed.
 
 Here's how you add content to your Screenly box:
 
@@ -28,7 +27,7 @@ Here's how you add content to your Screenly box:
   * Select the asset you just added in the drop-down, select the time frame you wish to display the asset and the duration (if image or website) and press 'Submit.'
  * Repeate for all the assets you want to display.
 
-Note: If you don't have any server where you can make your asset availalbe, you can use [public folders](https://www.dropbox.com/help/16/en) in Dropbox. 
+Note: If you don't have any server where you can make your asset available, you can use [public folders](https://www.dropbox.com/help/16/en) in Dropbox. 
 
 ## Requirements
 
