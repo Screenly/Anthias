@@ -10,7 +10,8 @@ do
     # Clean up in case of an unclean exit
     killall uzbl-core
     rm /tmp/uzbl_*
+    rm /tmp/screenly_html/*
     
     # Launch the viewer
-    python ~/screenly2/viewer.py
+    python ~/screenly/viewer.py
 done

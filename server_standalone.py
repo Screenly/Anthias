@@ -17,10 +17,9 @@ from urlparse import urlparse
 from hurry.filesize import size
 
 # Define settings
-configdir = os.getenv("HOME") + "/.screenly2/"
-database = configdir + "screenly2.db"
+configdir = os.getenv("HOME") + "/.screenly/"
+database = configdir + "screenly.db"
 nodetype = "standalone"
-hostname=socket.gethostname()
 
 def get_playlist():
     
@@ -122,7 +121,6 @@ def process_asset():
             message =  "Added asset (" + asset_id + ") to the database."
             return template('templates/message', header=header, message=message)
             
-            
         else:
             header = "Ops!"
             message = "Unable to fetch file."
@@ -171,7 +169,6 @@ def process_schedule():
         header = "Yes!"
         message = "Successfully scheduled asset."
         return template('templates/message', header=header, message=message)
-        
         
     else:
         header = "Ops!"
@@ -278,7 +275,7 @@ def view_node_playlist():
 
     nodeplaylist = json.loads(get_playlist())
     
-    return template('templates/server_standalone/view_playlist', nodeplaylist=nodeplaylist, hostname=hostname)
+    return template('templates/server_standalone/view_playlist', nodeplaylist=nodeplaylist)
 
 @route('/add_asset')
 def add_asset():

@@ -15,8 +15,8 @@ import logging
 import glob, stat
 
 # Define settings
-configdir = os.getenv("HOME") + "/.screenly2/"
-database = configdir + "screenly2.db"
+configdir = os.getenv("HOME") + "/.screenly/"
+database = configdir + "screenly.db"
 nodetype = "standalone"
 
 # Initiate logging
@@ -135,6 +135,11 @@ def view_web(url, duration):
     f.write('set uri = %s\n' % black_page)
     f.close()
 
+
+# Create folder to hold HTML-pages
+html_folder = '/tmp/screenly_html/'
+if not os.path.isdir(html_folder):
+   os.makedirs(html_folder)
 
 # Set up HTML templates
 black_page = html_templates.black_page()

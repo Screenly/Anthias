@@ -1,17 +1,47 @@
-# Screenly Open Source Edition (OSE) -- Beta
+# Screenly OSE -- Digital Signage for the Raspberry Pi
 
-Screenly is an intelligent digital signage solution for the [Raspberry Pi](http://www.raspberrypi.org/).
-Once installed, the system can be managed remotely using a web-browser.
+When we started [Skarmverket](http://skarmverket.se), a small network of public billboards in Sweden, we evaluated many of the existing solutions on the market. Most of them are clunky and/or expensive. A fair number of them ran on Windows and used Adobe Flash. We ended up writing our own solution and used Asus Eee PCs with Linux. 
+
+Then the [Raspberry Pi](http://www.raspberrypi.org/) came along. Priced at $35, and equipped with everything needed to power a screen. We were immediatelly sold and knew that this what we wanted to use moving forward. Since we love Open Source, we've decided to release Screenly for free for anyone to use. 
+
+The current version should be consider a beta. While we have been running it in the lab without any issues, there might still be issues that we are unaware of at this point. Yet, we wanted to make Screenly available to the vibrant Rasberry Pi community.
+
+Since Screenly was written for the Raspberry Pi from the ground up, we had to make it lean as possible. 
+
+There are many use cases where Screenly can be used, such as:
+
+ * Display BI/System dashboards
+ * Advertisements
+ * Internal information boards
+
+## How Screenly works
+
+Once installed, Screenly can view images, videos and websites on the screen. You can configure your own playlist, 
+and set the duration for how long each element should be viewed.
+
+Here's how you add content to your Screenly box:
+
+ * Point your browser to the URL displayed on the screen at boot.
+ * Click 'Add asset.'
+  * Provide a name of the asset, the URL to the asset, and the asset type and click 'Submit.'
+ * Click 'Schedule asset.'
+  * Select the asset you just added in the drop-down, select the time frame you wish to display the asset and the duration (if image or website) and press 'Submit.'
+ * Repeate for all the assets you want to display.
+
+Note: If you don't have any server where you can make your asset availalbe, you can use [public folders](https://www.dropbox.com/help/16/en) in Dropbox. 
 
 ## Requirements
 
- * A Raspberry Pi (Model B) with [Raspbian Wheezy](http://www.raspberrypi.org/downloads).
+ * A Raspberry Pi (Model B).
  * An SD Card (>2GB).
+ * A HDMI-cable.
  * A network connection (with DHCP).
+ * A Keyboard and mouse (only required for the installation).
+ * A monitor/TV that can view full HD (and has HDMI input).
 
-## Configure Raspbian
+## Configure the Raspberry Pi
 
- * Flash the SD card and install Raspbian Wheezy. Instructions are available [here](http://elinux.org/RPi_Easy_SD_Card_Setup).
+ * Flash the SD card and install [Raspbian Wheezy](http://www.raspberrypi.org/downloads). Instructions are available [here](http://elinux.org/RPi_Easy_SD_Card_Setup).
  * Configure Raspbian to automatically log into X.
  * Make sure that the system's clock is configured for the proper timezone.
  * Expand the filesystem if needed. 
@@ -20,20 +50,42 @@ Please note that Screenly currently relies on the user 'pi', so don't change the
 
 ## Install Screenly OSE
  
-Open a terminal and run:
+Open a terminal-window (or SSH-session) and as the user 'pi' run:
 
-    wget -O ~/install_screenly.sh https://github.com/wireload/screenly-ose/.....
-    chmod +x install_screenly.sh
-    ~/install_screenly.sh
+    cd ~
+    sudo apt-get update
+    sudo apt-get -y install git-core
+    git clone git@github.com:wireload/screenly-ose.git ~/screenly
+    ~/screenly/misc/install_screenly.sh
 
-Assuming everything went well, reboot your system. Screenly should now load. Upon loading, Screenly's URL should show up on the screen (http://<the IP>:8080).
+Assuming everything went well, reboot your system. Screenly should now load. 
+
+Upon boot, Screenly's URL should show up on the screen (e.g. http://aaa.bbb.ccc.ddd:8080).
 
 ## Supported media
 
 Screenly currently three types of media:
 
- * Videos (all formats supported by [omxplayer](https://github.com/huceke/omxplayer/).)
+ * Videos
+  * Screenly uses [omxplayer](https://github.com/huceke/omxplayer/) as the video back-end. It is currently limited to MP4/h264-encoded videos.
  * Images
  * Web-pages
 
-Images and web-pages will be rendered in a 1920x1080, so adjust your content for this size.
+Adobe Flash-media *is not* supported. 
+
+Images and web-pages will be rendered in 1920x1080, so adjust your content for this size. 
+
+It is also worth noting that no media is permanently stored on the Raspberry Pi. All content is simply retrieved from the remote server (with limited caching in the browser).
+
+## Upgrade Screenly
+
+Since Screenly still is in beta, it's not unlikely that you'll run across bugs.
+
+To upgrade Screenly, simply run (as the user 'pi'):
+
+    cd ~/screenly
+    git pull
+
+Once done, simply restart Screenly. If you prefer not not restart the computer, you might get away with (depending on the update):
+
+    pkill -f "viewer.py"
