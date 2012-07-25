@@ -3,7 +3,7 @@
 echo "Installing Screenly OSE (alpha)"
 
 echo "Installing dependencies..."
-sudo apt-get -y install git-core python-pip python-netifaces python-simplejson python-imaging uzbl unclutter sqlite3 supervisor omxplayer
+sudo apt-get -y install git-core python-pip python-netifaces python-simplejson python-imaging uzbl unclutter sqlite3 supervisor omxplayer x11-xserver-utils
 sudo pip install bottle requests pytz hurry.filesize
 
 echo "Adding Screenly to X auto start..."
