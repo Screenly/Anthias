@@ -14,6 +14,8 @@ There are many use cases where Screenly can be used, such as:
  * Advertisements
  * Internal information boards
 
+Screenshots of Screenly are availale [here](https://plus.google.com/photos/114752059167800133595/albums/5769054991542902385).
+
 ## How Screenly works
 
 Once installed, Screenly can view images, videos and websites on the screen. You can configure your own playlist, and set the duration for how long each element should be viewed.
@@ -85,7 +87,7 @@ To upgrade Screenly, simply run (as the user 'pi'):
     cd ~/screenly
     git pull
 
-Once done, simply restart Screenly. If you prefer not not restart the computer, you might get away with (depending on the update):
+Once done, simply restart the computer. If you prefer not to reboot, you might get away with (depending on the update):
 
     pkill -f "viewer.py"
     
