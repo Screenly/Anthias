@@ -26,6 +26,10 @@ ln -s ~/screenly/misc/gtkrc-2.0 ~/.gtkrc-2.0
 mv ~/.config/openbox/lxde-rc.xml ~/.config/openbox/lxde-rc.xml.bak
 ln -s ~/screenly/misc/lxde-rc.xml ~/.config/openbox/lxde-rc.xml
 mv ~/.config/lxpanel/LXDE/panels/panel ~/.config/lxpanel/LXDE/panels/panel.bak
-ln -s ~/screenly/misc/lxde_panel ~/.config/lxpanel/LXDE/panels/panel
+sudo mv /etc/xdg/lxsession/LXDE/autostart /etc/xdg/lxsession/LXDE/autostart.bak
+
+echo "Quiet the boot process..."
+sudo cp /boot/cmdline.txt /boot/cmdline.txt.bak
+sudo sed 's/$/ quiet/' -i /boot/cmdline.txt  
 
 echo "Assuming no errors were encountered, go ahead and restart your computer."
