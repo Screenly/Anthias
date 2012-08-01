@@ -93,6 +93,7 @@ To upgrade Screenly, simply run (as the user 'pi'):
 Once done, simply restart the computer. If you prefer not to reboot, you might get away with (depending on the update):
 
     pkill -f "viewer.py"
+    sudo supervisorctl restart screenly
     
 ## Licensing
 
