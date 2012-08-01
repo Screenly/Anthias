@@ -7,6 +7,7 @@ sudo apt-get -y install git-core python-pip python-netifaces python-simplejson p
 sudo pip install bottle requests pytz hurry.filesize
 
 echo "Adding Screenly to X auto start..."
+mkdir -p ~/.config/lxsession/LXDE/
 echo "@~/screenly/misc/xloader.sh" > ~/.config/lxsession/LXDE/autostart
 
 echo "Increasing swap space to 500MB..."
