@@ -40,7 +40,7 @@ Note: If you don't have any server where you can make your asset available, you 
  * An SD Card (>2GB).
  * A HDMI-cable.
  * A network connection (with DHCP).
- * A Keyboard and mouse (only required for the installation).
+ * A keyboard and mouse (only required for the installation).
  * A monitor/TV that can view full HD (and has HDMI input).
 
 ## Configure the Raspberry Pi
