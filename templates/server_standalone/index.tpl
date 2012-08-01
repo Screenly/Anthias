@@ -8,6 +8,7 @@
         <h2>View</h2>
         <p>
         <a href="/view_playlist">View playlist</a><br />
+	<a href="/view_assets">View assets</a><br />
         <a href="/system_info">View system info</a><br />
         <p>
     

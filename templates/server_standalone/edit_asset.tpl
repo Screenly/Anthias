@@ -1,7 +1,18 @@
-% start_date = asset["start_date"].split("T")[0]
-% start_time = asset["start_date"].split("T")[1]
-% end_date = asset["end_date"].split("T")[0]
-% end_time = asset["end_date"].split("T")[1]
+% if asset["start_date"]:
+	% start_date = asset["start_date"].split("T")[0]
+	% start_time = asset["start_date"].split("T")[1]
+% else:
+	% start_date = ""
+	% start_time = ""
+% end
+
+% if asset["end_date"]:
+	% end_date = asset["end_date"].split("T")[0]
+	% end_time = asset["end_date"].split("T")[1]
+% else:
+	% end_date = ""
+	% end_time = ""
+% end	
 
 <head>
     <title>Screenly Edit Asset</title>

@@ -4,7 +4,7 @@
 __author__ = "Viktor Petersson"
 __copyright__ = "Copyright 2012, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
-__version__ = "0.1"
+__version__ = "0.1.1"
 __email__ = "vpetersson@wireload.net"
 
 import json, hashlib, os, requests, mimetypes, sys, sqlite3, socket, netifaces
@@ -21,7 +21,49 @@ configdir = os.getenv("HOME") + "/.screenly/"
 database = configdir + "screenly.db"
 nodetype = "standalone"
 
+def time_lookup():
+    if nodetype == "standalone":
+        return datetime.now()
+    elif nodetype == "managed":
+        return datetime.utcnow()
+
 def get_playlist():
+    
+    conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
+    c = conn.cursor()
+    c.execute("SELECT * FROM assets ORDER BY name")
+    assets = c.fetchall()
+    
+    playlist = []
+    for asset in assets:
+        # Match variables with database
+        asset_id = asset[0]  
+        name = asset[1]
+        filename = asset[2]
+        uri = asset[3] # Path in local database
+	input_start_date = asset[5]
+	input_end_date = asset[6]
+
+        try:
+            start_date = datestring.date_to_string(asset[5])
+        except:
+            start_date = None
+
+        try:
+            end_date = datestring.date_to_string(asset[6])
+        except:
+            end_date = None
+            
+        duration = asset[7]
+        mimetype = asset[8]
+
+        playlistitem = { "name" : name, "uri" : uri, "duration" : duration, "mimetype" : mimetype, "asset_id" : asset_id, "start_date" : start_date, "end_date" : end_date}
+        if (start_date and end_date) and (input_start_date < time_lookup() and input_end_date > time_lookup()):
+		playlist.append(playlistitem)
+    
+    return json.dumps(playlist)
+
+def get_assets():
     
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
@@ -50,9 +92,11 @@ def get_playlist():
         mimetype = asset[8]
 
         playlistitem = { "name" : name, "uri" : uri, "duration" : duration, "mimetype" : mimetype, "asset_id" : asset_id, "start_date" : start_date, "end_date" : end_date}
-        playlist.append(playlistitem)
+	playlist.append(playlistitem)
     
     return json.dumps(playlist)
+
+
 
 def initiate_db():
 
@@ -218,7 +262,7 @@ def update_asset():
 
 
 @route('/delete_asset/:asset_id')
-def edit_asset(asset_id):
+def delete_asset(asset_id):
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
     
@@ -277,6 +321,14 @@ def view_node_playlist():
     
     return template('templates/server_standalone/view_playlist', nodeplaylist=nodeplaylist)
 
+@route('/view_assets')
+def view_assets():
+
+    nodeplaylist = json.loads(get_assets())
+    
+    return template('templates/server_standalone/view_assets', nodeplaylist=nodeplaylist)
+
+
 @route('/add_asset')
 def add_asset():
     return template('templates/server_standalone/add_asset')
@@ -307,8 +359,17 @@ def edit_asset(asset_id):
     filename = asset[2]
     uri = asset[3]
     md5 = asset[4]
-    start_date = datestring.date_to_string(asset[5])
-    end_date = datestring.date_to_string(asset[6])
+
+    if asset[5]:
+	    start_date = datestring.date_to_string(asset[5])
+    else:
+	    start_date = None
+
+    if asset[6]:
+	    end_date = datestring.date_to_string(asset[6])
+    else:
+	    end_date = None
+
     duration = asset[7]
     mimetype = asset[8]
 
