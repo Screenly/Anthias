@@ -17,8 +17,8 @@ from urlparse import urlparse
 from hurry.filesize import size
 
 # Define settings
-configdir = os.getenv("HOME") + "/.screenly/"
-database = configdir + "screenly.db"
+configdir = os.path.join(os.getenv('HOME'), '.screenly/')
+database = os.path.join(configdir, 'screenly.db')
 nodetype = "standalone"
 
 def time_lookup():

@@ -15,8 +15,8 @@ import logging
 import glob, stat
 
 # Define settings
-configdir = os.getenv("HOME") + "/.screenly/"
-database = configdir + "screenly.db"
+configdir = os.path.join(os.getenv('HOME'), '.screenly/')
+database = os.path.join(configdir, 'screenly.db')
 nodetype = "standalone"
 
 # Initiate logging
@@ -112,7 +112,7 @@ def view_video(video):
             logging.debug("Unclean exit: " + str(run))
 
         # Clean up after omxplayer
-        omxplayer_logfile = os.getenv('HOME') + '/omxplayer.log'
+        omxplayer_logfile = os.path.join(os.getenv('HOME'), 'omxplayer.log')
         if os.path.isfile(omxplayer_logfile):
             os.remove(omxplayer_logfile)
 
