@@ -100,7 +100,7 @@ def view_image(image, name, duration):
     f.close()
     
 def view_video(video):
-    ## For Raspberry Pi
+    ## For Raspberry Pii
     if arch == "armv6l":
         logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % video)
         omxplayer = "omxplayer"
@@ -112,8 +112,9 @@ def view_video(video):
             logging.debug("Unclean exit: " + str(run))
 
         # Clean up after omxplayer
-        omxplayer_logfile = os.getenv("HOME") + omxplayer.log
-        os.remove(omxplayer_logfile)
+        omxplayer_logfile = os.getenv('HOME') + '/omxplayer.log'
+        if os.path.isfile(omxplayer_logfile):
+            os.remove(omxplayer_logfile)
 
     ## For x86
     elif arch == "x86_64" or arch == "x86_32":
@@ -135,6 +136,7 @@ def view_web(url, duration):
     f.write('set uri = %s\n' % black_page)
     f.close()
 
+logging.debug('Starting viewer.py')
 
 # Create folder to hold HTML-pages
 html_folder = '/tmp/screenly_html/'
@@ -146,14 +148,26 @@ black_page = html_templates.black_page()
 
 # Fire up the browser
 run_browser = load_browser()
+
+logging.debug('Getting browser PID.')
 browser_pid = run_browser.pid
+
+logging.debug('Getting FIFO.')
 fifo = get_fifo()
 
 # Infinit loop. 
 # Break every 5th run to refresh database
 
 while True:
+    logging.debug('Entering infinite loop.')
+
+    # Bring up the blank page (in case there are only videos).
+    logging.debug('Loading blank page.')
+    view_web(black_page, 1)
+
     assets = generate_asset_list()
+
+    logging.debug('Disable the browser status bar')
     disable_browser_status()
 
     # If the playlist is empty, go to sleep.
