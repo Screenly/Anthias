@@ -3,7 +3,7 @@
 echo "Installing Screenly OSE (alpha)"
 
 echo "Installing dependencies..."
-sudo apt-get -y install python-pip python-netifaces python-simplejson python-imaging uzbl unclutter sqlite3 supervisor omxplayer x11-xserver-utils
+sudo apt-get -y install python-pip python-netifaces python-simplejson python-imaging uzbl unclutter sqlite3 supervisor omxplayer x11-xserver-utils watchdog chkconfig
 sudo pip install bottle requests pytz hurry.filesize
 
 echo "Adding Screenly to X auto start..."
@@ -14,6 +14,15 @@ echo "Increasing swap space to 500MB..."
 echo "CONF_SWAPSIZE=500" > ~/dphys-swapfile
 sudo cp /etc/dphys-swapfile /etc/dphys-swapfile.bak
 sudo mv ~/dphys-swapfile /etc/dphys-swapfile
+
+echo "Enabling Watchdog..."
+sudo modprobe bcm2708_wdog
+sudo cp /etc/modules /etc/modules.bak
+sudo sed '$ i\bcm2708_wdog' -i /etc/modules
+sudo chkconfig watchdog on
+sudo cp /etc/watchdog.conf /etc/watchdog.conf.bak
+sudo sed -e 's/#watchdog-device/watchdog-device/g' -i /etc/watchdog.conf
+sudo /etc/init.d/watchdog start
 
 echo "Adding Screenly to autostart (via Supervisord)"
 sudo ln -s ~/screenly/misc/screenly.conf /etc/supervisor/conf.d/
