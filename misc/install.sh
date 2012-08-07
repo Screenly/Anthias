@@ -1,6 +1,15 @@
 #!/bin/bash
 
-echo "Installing Screenly OSE (alpha)"
+echo "Installing Screenly OSE (beta)"
+
+## Simple disk storage check. Naively assumes root partition holds all system data.
+ROOT_AVAIL=$(df -k / | tail -n 1 | awk {'print $4'})
+MIN_REQ="512000"
+
+if [[ $ROOT_AVAIL -lt $MIN_REQ ]]; then
+	echo "Insufficient disk space. Make sure you have at least 500MB available on the root partition."
+	exit 1 
+fi
 
 echo "Installing dependencies..."
 sudo apt-get -y install python-pip python-netifaces python-simplejson python-imaging uzbl unclutter sqlite3 supervisor omxplayer x11-xserver-utils watchdog chkconfig
