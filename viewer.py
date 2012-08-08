@@ -100,7 +100,7 @@ def view_image(image, name, duration):
     f.close()
     
 def view_video(video):
-    ## For Raspberry Pii
+    ## For Raspberry Pi
     if arch == "armv6l":
         logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % video)
         omxplayer = "omxplayer"

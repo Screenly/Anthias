@@ -57,7 +57,15 @@ def get_playlist():
         duration = asset[7]
         mimetype = asset[8]
 
-        playlistitem = { "name" : name, "uri" : uri, "duration" : duration, "mimetype" : mimetype, "asset_id" : asset_id, "start_date" : start_date, "end_date" : end_date}
+        playlistitem = {
+                "name" : name,
+                "uri" : uri,
+                "duration" : duration,
+                "mimetype" : mimetype,
+                "asset_id" : asset_id,
+                "start_date" : start_date,
+                "end_date" : end_date
+                }
         if (start_date and end_date) and (input_start_date < time_lookup() and input_end_date > time_lookup()):
 		playlist.append(playlistitem)
     
@@ -91,7 +99,15 @@ def get_assets():
         duration = asset[7]
         mimetype = asset[8]
 
-        playlistitem = { "name" : name, "uri" : uri, "duration" : duration, "mimetype" : mimetype, "asset_id" : asset_id, "start_date" : start_date, "end_date" : end_date}
+        playlistitem = {
+                "name" : name,
+                "uri" : uri,
+                "duration" : duration,
+                "mimetype" : mimetype,
+                "asset_id" : asset_id,
+                "start_date" : start_date,
+                "end_date" : end_date
+                }
 	playlist.append(playlistitem)
     
     return json.dumps(playlist)
@@ -373,7 +389,15 @@ def edit_asset(asset_id):
     duration = asset[7]
     mimetype = asset[8]
 
-    assetdict = { "name" : name, "uri" : uri, "duration" : duration, "mimetype" : mimetype, "asset_id" : asset_id, "start_date" : start_date, "end_date" : end_date}
+    assetdict = {
+            "name" : name,
+            "uri" : uri,
+            "duration" : duration,
+            "mimetype" : mimetype,
+            "asset_id" : asset_id,
+            "start_date" : start_date,
+            "end_date" : end_date
+            }
 
     return template('templates/server_standalone/edit_asset', asset=assetdict)
         
