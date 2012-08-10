@@ -40,8 +40,8 @@ def get_playlist():
         asset_id = asset[0]  
         name = asset[1]
         uri = asset[2] # Path in local database
-	    input_start_date = asset[4]
-	    input_end_date = asset[5]
+        input_start_date = asset[4]
+        input_end_date = asset[5]
 
         try:
             start_date = datestring.date_to_string(asset[4])
@@ -53,8 +53,8 @@ def get_playlist():
         except:
             end_date = None
             
-        duration = asset[7]
-        mimetype = asset[8]
+        duration = asset[6]
+        mimetype = asset[7]
 
         playlistitem = {
                 "name" : name,
@@ -94,8 +94,8 @@ def get_assets():
         except:
             end_date = ""
             
-        duration = asset[7]
-        mimetype = asset[8]
+        duration = asset[6]
+        mimetype = asset[7]
 
         playlistitem = {
                 "name" : name,
