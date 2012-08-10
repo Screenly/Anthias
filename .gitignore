@@ -28,3 +28,7 @@ pip-log.txt
 
 # VIM
 *.swp
+
+.DS_Store
+.fseventsd/*
+.Spotlight-V100/*
