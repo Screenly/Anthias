@@ -44,13 +44,12 @@ def generate_asset_list():
     for asset in query:
         asset_id = asset[0]  
         name = asset[1]
-        filename = asset[2]
-        uri = asset[3]
-        md5 = asset[4]
-        start_date = asset[5]
-        end_date = asset[6]
-        duration = asset[7]
-        mimetype = asset[8]
+        uri = asset[2]
+        md5 = asset[3]
+        start_date = asset[4]
+        end_date = asset[5]
+        duration = asset[6]
+        mimetype = asset[7]
 
         if (start_date and end_date) and (start_date < time_lookup() and end_date > time_lookup()):
             playlist.append({"name" : name, "uri" : uri, "duration" : duration, "mimetype" : mimetype})
@@ -125,16 +124,24 @@ def view_video(video):
             logging.debug("Unclean exit: " + str(run))
 
 def view_web(url, duration):
-    logging.debug('Displaying url %s for %s seconds.' % (url, duration))
-    f = open(fifo, 'a')
-    f.write('set uri = %s\n' % url)
-    f.close()
+
+    # Make sure the resource is available before trying loading it.
+    web_resource = requests.get(url).status_code
+    if web_resource == 200:
+        logging.debug('Web content appears to be available. Proceeding.')  
+        logging.debug('Displaying url %s for %s seconds.' % (url, duration))
+        f = open(fifo, 'a')
+        f.write('set uri = %s\n' % url)
+        f.close()
     
-    sleep(int(duration))
+        sleep(int(duration))
     
-    f = open(fifo, 'a')
-    f.write('set uri = %s\n' % black_page)
-    f.close()
+        f = open(fifo, 'a')
+        f.write('set uri = %s\n' % black_page)
+        f.close()
+    else: 
+        logging.debug('Received non-200 status from %s. Skipping.' % (url))
+        pass
 
 logging.debug('Starting viewer.py')
 

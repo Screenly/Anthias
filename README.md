@@ -89,6 +89,7 @@ To upgrade Screenly, simply run (as the user 'pi'):
 
     cd ~/screenly
     git pull
+    python misc/migrate.py
 
 Once done, simply restart the computer. If you prefer not to reboot, you might get away with (depending on the update):
 

@@ -4,7 +4,7 @@
 __author__ = "Viktor Petersson"
 __copyright__ = "Copyright 2012, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 __email__ = "vpetersson@wireload.net"
 
 import json, hashlib, os, requests, mimetypes, sys, sqlite3, socket, netifaces
@@ -39,18 +39,17 @@ def get_playlist():
         # Match variables with database
         asset_id = asset[0]  
         name = asset[1]
-        filename = asset[2]
-        uri = asset[3] # Path in local database
-	input_start_date = asset[5]
-	input_end_date = asset[6]
+        uri = asset[2] # Path in local database
+	    input_start_date = asset[4]
+	    input_end_date = asset[5]
 
         try:
-            start_date = datestring.date_to_string(asset[5])
+            start_date = datestring.date_to_string(asset[4])
         except:
             start_date = None
 
         try:
-            end_date = datestring.date_to_string(asset[6])
+            end_date = datestring.date_to_string(asset[5])
         except:
             end_date = None
             
@@ -83,16 +82,15 @@ def get_assets():
         # Match variables with database
         asset_id = asset[0]  
         name = asset[1]
-        filename = asset[2]
-        uri = asset[3] # Path in local database
+        uri = asset[2] # Path in local database
 
         try:
-            start_date = datestring.date_to_string(asset[5])
+            start_date = datestring.date_to_string(asset[4])
         except:
             start_date = ""
 
         try:
-            end_date = datestring.date_to_string(asset[6])
+            end_date = datestring.date_to_string(asset[5])
         except:
             end_date = ""
             
@@ -128,7 +126,7 @@ def initiate_db():
     asset_table = c.fetchone()
     
     if not asset_table:
-        c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, filename TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT)")
+        c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT)")
         return "Initiated database."
     
 @route('/process_asset', method='POST')
@@ -169,12 +167,11 @@ def process_asset():
             if "video" in mimetype:
                 duration = "N/A"
 
-            filename = uri_check.path.split('/')[-1]
             start_date = ""
             end_date = ""
             duration = ""
             
-            c.execute("INSERT INTO assets (asset_id, name, filename, uri, start_date, end_date, duration, mimetype) VALUES (?,?,?,?,?,?,?,?)", (asset_id, name, filename, uri, start_date, end_date, duration, mimetype))
+            c.execute("INSERT INTO assets (asset_id, name, uri, start_date, end_date, duration, mimetype) VALUES (?,?,?,?,?,?,?,?)", (asset_id, name, uri, start_date, end_date, duration, mimetype))
             conn.commit()
             
             header = "Yay!"
@@ -372,22 +369,21 @@ def edit_asset(asset_id):
     
     asset_id = asset[0]
     name = asset[1]
-    filename = asset[2]
-    uri = asset[3]
-    md5 = asset[4]
+    uri = asset[2]
+    md5 = asset[3]
 
-    if asset[5]:
+    if asset[4]:
 	    start_date = datestring.date_to_string(asset[5])
     else:
 	    start_date = None
 
-    if asset[6]:
+    if asset[5]:
 	    end_date = datestring.date_to_string(asset[6])
     else:
 	    end_date = None
 
-    duration = asset[7]
-    mimetype = asset[8]
+    duration = asset[6]
+    mimetype = asset[7]
 
     assetdict = {
             "name" : name,
