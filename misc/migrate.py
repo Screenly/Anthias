@@ -4,6 +4,8 @@ import sqlite3, os
 configdir = os.path.join(os.getenv('HOME'), '.screenly/')
 database = os.path.join(configdir, 'screenly.db')
 
+
+### Migration for table 'filename'
 try: 
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
@@ -32,8 +34,5 @@ if filename_exist:
     c.executescript(migration)
     c.close()
     print "Dropped obsolete column (filename)"
-
-else:
-    pass
 
 print "Migration done."
