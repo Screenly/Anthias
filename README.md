@@ -25,7 +25,7 @@ Once installed, Screenly can view images, videos and websites on the screen. You
 
 Here's how you add content to your Screenly box:
 
- * Point your browser to the URL displayed on the screen at boot.
+ * Point your browser to the URL displayed on the screen at boot (from a different computer).
  * Click 'Add asset.'
   * Provide a name of the asset, the URL to the asset, and the asset type and click 'Submit.'
  * Click 'Schedule asset.'
@@ -37,8 +37,8 @@ Note: If you don't have any server where you can make your asset available, you 
 ## Requirements
 
  * A Raspberry Pi (Model B).
- * An SD Card (>2GB).
- * A HDMI-cable.
+ * An SD Card (>4GB).
+ * An HDMI-cable.
  * A network connection (with DHCP).
  * A keyboard and mouse (only required for the installation).
  * A monitor/TV that can view full HD (and has HDMI input).
@@ -64,7 +64,8 @@ Open a terminal-window (or SSH-session) and as the user 'pi' run:
 
 Assuming everything went well, reboot your system. Screenly should now load. 
 
-Upon boot, Screenly's URL should show up on the screen (e.g. http://aaa.bbb.ccc.ddd:8080).
+Upon boot, Screenly's management URL should show up on the screen (e.g. http://aaa.bbb.ccc.ddd:8080).
+To manage the content, open up this URL **on a different computer**. Don't try to manage the content directly on the Raspberry Pi using a keyboard and mouse. That won't work.
 
 ## Supported media
 
