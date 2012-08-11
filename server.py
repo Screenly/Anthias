@@ -149,7 +149,7 @@ def process_asset():
         if not (uri_check.scheme == "http" or uri_check.scheme == "https"):
             header = "Ops!"
             message = "URL must be HTTP or HTTPS."
-            return template('templates/message', header=header, message=message)
+            return template('message', header=header, message=message)
 
         file = requests.get(uri)
 
@@ -176,16 +176,16 @@ def process_asset():
             
             header = "Yay!"
             message =  "Added asset (" + asset_id + ") to the database."
-            return template('templates/message', header=header, message=message)
+            return template('message', header=header, message=message)
             
         else:
             header = "Ops!"
             message = "Unable to fetch file."
-            return template('templates/message', header=header, message=message)
+            return template('message', header=header, message=message)
     else:
         header = "Ops!"
         message = "Invalid input."
-        return template('templates/message', header=header, message=message)
+        return template('message', header=header, message=message)
 
 @route('/process_schedule', method='POST')
 def process_schedule():
@@ -216,7 +216,7 @@ def process_schedule():
             except:
                 header = "Ops!"
                 message = "Duration missing. This is required for images and web-pages."
-                return template('templates/message', header=header, message=message)
+                return template('message', header=header, message=message)
         else:
             duration = "N/A"
 
@@ -225,12 +225,12 @@ def process_schedule():
         
         header = "Yes!"
         message = "Successfully scheduled asset."
-        return template('templates/message', header=header, message=message)
+        return template('message', header=header, message=message)
         
     else:
         header = "Ops!"
         message = "Failed to process schedule."
-        return template('templates/message', header=header, message=message)
+        return template('message', header=header, message=message)
 
 @route('/update_asset', method='POST')
 def update_asset():
@@ -265,13 +265,13 @@ def update_asset():
 
         header = "Yes!"
         message = "Successfully updated asset."
-        return template('templates/message', header=header, message=message)
+        return template('message', header=header, message=message)
 
 
     else:
         header = "Ops!"
         message = "Failed to update asset."
-        return template('templates/message', header=header, message=message)
+        return template('message', header=header, message=message)
 
 
 @route('/delete_asset/:asset_id')
@@ -285,15 +285,15 @@ def delete_asset(asset_id):
         
         header = "Success!"
         message = "Deleted asset."
-        return template('templates/message', header=header, message=message)
+        return template('message', header=header, message=message)
     except:
         header = "Ops!"
         message = "Failed to delete asset."
-        return template('templates/message', header=header, message=message)
+        return template('message', header=header, message=message)
 
 @route('/')
 def viewIndex():
-    return template('templates/server_standalone/index')
+    return template('index')
 
 
 @route('/system_info')
@@ -314,7 +314,7 @@ def system_info():
         uptime_seconds = float(f.readline().split()[0])
         uptime = str(timedelta(seconds = uptime_seconds))
 
-    return template('templates/server_standalone/system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=uptime)
+    return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=uptime)
 
 @route('/splash_page')
 def splash_page():
@@ -324,7 +324,7 @@ def splash_page():
 
     my_ip = netifaces.ifaddresses('eth0')[2][0]['addr']
 
-    return template('templates/splash_page', my_ip=my_ip)
+    return template('splash_page', my_ip=my_ip)
 
 
 @route('/view_playlist')
@@ -332,19 +332,19 @@ def view_node_playlist():
 
     nodeplaylist = json.loads(get_playlist())
     
-    return template('templates/server_standalone/view_playlist', nodeplaylist=nodeplaylist)
+    return template('view_playlist', nodeplaylist=nodeplaylist)
 
 @route('/view_assets')
 def view_assets():
 
     nodeplaylist = json.loads(get_assets())
     
-    return template('templates/server_standalone/view_assets', nodeplaylist=nodeplaylist)
+    return template('view_assets', nodeplaylist=nodeplaylist)
 
 
 @route('/add_asset')
 def add_asset():
-    return template('templates/server_standalone/add_asset')
+    return template('add_asset')
 
 
 @route('/schedule_asset')
@@ -356,7 +356,7 @@ def schedule_asset():
     c.execute("SELECT * FROM assets ORDER BY name")
     assetlist = c.fetchall()
     
-    return template('templates/server_standalone/schedule_asset', assetlist=assetlist)
+    return template('schedule_asset', assetlist=assetlist)
         
 @route('/edit_asset/:asset_id')
 def edit_asset(asset_id):
@@ -395,7 +395,7 @@ def edit_asset(asset_id):
             "end_date" : end_date
             }
 
-    return template('templates/server_standalone/edit_asset', asset=assetdict)
+    return template('edit_asset', asset=assetdict)
         
 # Static
 @route('/static/:path#.+#', name='static')
