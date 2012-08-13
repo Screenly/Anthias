@@ -125,8 +125,16 @@ def view_video(video):
 
 def view_web(url, duration):
 
-    # Make sure the resource is available before trying loading it.
-    web_resource = requests.get(url).status_code
+    # If local web page, check if the file exist. If remote, check if it is
+    # available.
+    if html_folder in url:
+        if os.path.exists(url):
+            web_resource = 200
+        else:
+            breal
+    else:
+        web_resource = requests.get(url).status_code
+
     if web_resource == 200:
         logging.debug('Web content appears to be available. Proceeding.')  
         logging.debug('Displaying url %s for %s seconds.' % (url, duration))
@@ -140,7 +148,7 @@ def view_web(url, duration):
         f.write('set uri = %s\n' % black_page)
         f.close()
     else: 
-        logging.debug('Received non-200 status from %s. Skipping.' % (url))
+        logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (url))
         pass
 
 logging.debug('Starting viewer.py')
