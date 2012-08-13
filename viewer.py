@@ -7,7 +7,7 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 __version__ = "0.1"
 __email__ = "vpetersson@wireload.net"
 
-import subprocess, mimetypes, os, sqlite3, shutil, platform
+import subprocess, mimetypes, os, sqlite3, shutil, platform, requests
 import html_templates
 from datetime import datetime
 from time import sleep
