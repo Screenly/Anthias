@@ -19,6 +19,8 @@ A rought video of Screenly in action is available [here](http://www.youtube.com/
 
 Screenshots and pictures of Screenly are available [here](https://picasaweb.google.com/102112347693505491575/Screenly01?authkey=Gv1sRgCNa2qp-j5vWUGQ).
 
+There is also a fairly active [thread](http://www.raspberrypi.org/phpBB3/viewtopic.php?f=41&t=12396) Screenly on the Raspberry Pi forum.
+
 ## How Screenly works
 
 Once installed, Screenly can view images, videos and websites on the screen. You can configure your own playlist, and set the duration for how long each element should be viewed.
