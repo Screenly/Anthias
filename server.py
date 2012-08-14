@@ -364,26 +364,25 @@ def edit_asset(asset_id):
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
-    c.execute("SELECT * FROM assets WHERE asset_id=?", (asset_id,))
+    c.execute("SELECT name, uri, md5, start_date, end_date, duration, mimetype FROM assets WHERE asset_id=?", (asset_id,))
     asset = c.fetchone()
     
-    asset_id = asset[0]
-    name = asset[1]
-    uri = asset[2]
-    md5 = asset[3]
+    name = asset[0]
+    uri = asset[1]
+    md5 = asset[2]
 
-    if asset[4]:
-	    start_date = datestring.date_to_string(asset[5])
+    if asset[3]:
+	    start_date = datestring.date_to_string(asset[3])
     else:
 	    start_date = None
 
-    if asset[5]:
-	    end_date = datestring.date_to_string(asset[6])
+    if asset[4]:
+	    end_date = datestring.date_to_string(asset[4])
     else:
 	    end_date = None
 
-    duration = asset[6]
-    mimetype = asset[7]
+    duration = asset[5]
+    mimetype = asset[6]
 
     assetdict = {
             "name" : name,
