@@ -171,7 +171,7 @@ def process_asset():
             end_date = ""
             duration = ""
             
-            c.execute("INSERT INTO assets (asset_id, name, uri, start_date, end_date, duration, mimetype) VALUES (?,?,?,?,?,?,?,?)", (asset_id, name, uri, start_date, end_date, duration, mimetype))
+            c.execute("INSERT INTO assets (asset_id, name, uri, start_date, end_date, duration, mimetype) VALUES (?,?,?,?,?,?,?)", (asset_id, name, uri, start_date, end_date, duration, mimetype))
             conn.commit()
             
             header = "Yay!"
