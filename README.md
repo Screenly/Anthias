@@ -64,7 +64,7 @@ Open a terminal-window (or SSH-session) and as the user 'pi' run:
     git clone git://github.com/wireload/screenly-ose.git ~/screenly
     ~/screenly/misc/install.sh
 
-(If if you're running the installation over SSH, running the installation through a screen-session is highly recommended.)
+(If you're running the installation over SSH, running the installation through a screen-session is highly recommended.)
 
 Assuming everything went well, reboot your system. Screenly should now load. 
 
