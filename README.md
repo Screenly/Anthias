@@ -39,7 +39,7 @@ Note: If you don't have any server where you can make your asset available, you 
 ## Requirements
 
  * A Raspberry Pi (Model B).
- * An SD Card (>4GB).
+ * An SD Card (>4GB). Class 10 is highly recommended.
  * An HDMI-cable.
  * A network connection (with DHCP).
  * A keyboard and mouse (only required for the installation).
@@ -63,6 +63,8 @@ Open a terminal-window (or SSH-session) and as the user 'pi' run:
     sudo apt-get -y install git-core
     git clone git://github.com/wireload/screenly-ose.git ~/screenly
     ~/screenly/misc/install.sh
+
+(If if you're running the installation over SSH, running the installation through a screen-session is highly recommended.)
 
 Assuming everything went well, reboot your system. Screenly should now load. 
 
