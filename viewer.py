@@ -18,6 +18,7 @@ import glob, stat
 configdir = os.path.join(os.getenv('HOME'), '.screenly/')
 database = os.path.join(configdir, 'screenly.db')
 nodetype = "standalone"
+show_splash = True
 
 # Initiate logging
 logging.basicConfig(level=logging.INFO,
@@ -59,7 +60,12 @@ def load_browser():
     logging.info('Loading browser...')
     browser_bin = "uzbl-browser"
     browser_resolution = "1920x1080"
-    browser_load_url = "http://127.0.0.1:8080/splash_page"
+
+    if show_splash:
+        browser_load_url = "http://127.0.0.1:8080/splash_page"
+    else:
+        browser_load_url = black_page
+
     browser_args = [browser_bin, "--geometry=" + browser_resolution, "--uri=" + browser_load_url]
     browser = subprocess.Popen(browser_args)
     
