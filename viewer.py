@@ -119,7 +119,7 @@ def view_video(video):
     if arch == "armv6l":
         logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % video)
         omxplayer = "omxplayer"
-        omxplayer_args = [omxplayer, "-o", "hdmi", "-w", str(video)]
+        omxplayer_args = [omxplayer, "-o", audio_output, "-w", str(video)]
         run = subprocess.call(omxplayer_args, stdout=True)
         logging.debug(run)
 
@@ -172,7 +172,7 @@ configdir = os.path.join(os.getenv('HOME'), config.get('main', 'configdir'))
 database = os.path.join(os.getenv('HOME'), config.get('main', 'database'))
 nodetype = config.get('main', 'nodetype')
 show_splash = str_to_bol(config.get('viewer', 'show_splash'))
-
+audio_output = config.get('viewer', 'audio_output')
 
 logging.debug('Starting viewer.py')
 
