@@ -140,7 +140,7 @@ def process_asset():
         request.POST.get('mimetype','').strip()
         ):
 
-        name =  request.POST.get('name','').strip()
+        name =  request.POST.get('name','').decode('UTF-8')
         uri = request.POST.get('uri','').strip()
         mimetype = request.POST.get('mimetype','').strip()
 
@@ -244,7 +244,7 @@ def update_asset():
         ):
 
         asset_id =  request.POST.get('asset_id','').strip()
-        name = request.POST.get('name','').strip()
+        name = request.POST.get('name','').decode('UTF-8')
         uri = request.POST.get('uri','').strip()
         mimetype = request.POST.get('mimetype','').strip()
 

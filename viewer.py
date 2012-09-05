@@ -33,18 +33,18 @@ def time_lookup():
         return datetime.now()
     elif nodetype == "managed":
         return datetime.utcnow()
-                        
+
 def generate_asset_list():
     logging.info('Generating asset-list...')
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
-    c.execute("SELECT * FROM assets ORDER BY name")
+    c.execute("SELECT asset_id, name, uri, md5, start_date, end_date, duration, mimetype FROM assets ORDER BY name")
     query = c.fetchall()
 
     playlist = []
     for asset in query:
         asset_id = asset[0]  
-        name = asset[1]
+        name = asset[1].encode('ascii', 'ignore')
         uri = asset[2]
         md5 = asset[3]
         start_date = asset[4]
