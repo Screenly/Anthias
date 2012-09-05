@@ -7,18 +7,12 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 __version__ = "0.1"
 __email__ = "vpetersson@wireload.net"
 
-import subprocess, mimetypes, os, sqlite3, shutil, platform, requests
+import subprocess, mimetypes, os, sqlite3, shutil, platform, requests, ConfigParser
 import html_templates
 from datetime import datetime
 from time import sleep
 import logging
 import glob, stat
-
-# Define settings
-configdir = os.path.join(os.getenv('HOME'), '.screenly/')
-database = os.path.join(configdir, 'screenly.db')
-nodetype = "standalone"
-show_splash = True
 
 # Initiate logging
 logging.basicConfig(level=logging.INFO,
@@ -26,7 +20,20 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(message)s',
                     datefmt='%a, %d %b %Y %H:%M:%S')
 
-arch = platform.machine()
+# Get config file
+config = ConfigParser.ConfigParser()
+conf_file = os.path.join(os.getenv('HOME'), '.screenly', 'screenly.conf')
+if not os.path.isfile(conf_file):
+    logging.info('Config-file missing.')
+    sys.exit(1)
+else:
+    logging.debug('Reading config-file...')
+    config.read(conf_file)
+
+confdir = os.path.join(os.getenv('HOME'), config.get('main', 'configdir'))
+database = os.path.join(os.getenv('HOME'), config.get('main', 'database'))
+nodetype = config.get('main', 'nodetype')
+show_splash = config.get('viewer', 'show_splash')
 
 def time_lookup():
     if nodetype == "standalone":
@@ -105,6 +112,8 @@ def view_image(image, name, duration):
     f.close()
     
 def view_video(video):
+    arch = platform.machine()
+
     ## For Raspberry Pi
     if arch == "armv6l":
         logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % video)

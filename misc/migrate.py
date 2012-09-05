@@ -1,4 +1,4 @@
-import sqlite3, os
+import sqlite3, os, shutil
 
 # Define settings
 configdir = os.path.join(os.getenv('HOME'), '.screenly/')
@@ -34,5 +34,12 @@ if filename_exist:
     c.executescript(migration)
     c.close()
     print "Dropped obsolete column (filename)"
+
+# Ensure config file is in place
+conf_file = os.path.join(os.getenv('HOME'), '.screenly', 'screenly.conf')
+if not os.path.isfile(conf_file):
+    print "Copying in config file..."
+    example_conf = os.path.join(os.getenv('HOME'), 'screenly', 'misc', 'screenly.conf')    
+    shutil.copy(example_conf, conf_file)
 
 print "Migration done."

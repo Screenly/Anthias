@@ -7,7 +7,7 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 __version__ = "0.1.2"
 __email__ = "vpetersson@wireload.net"
 
-import json, hashlib, os, requests, mimetypes, sys, sqlite3, socket, netifaces
+import json, hashlib, os, requests, mimetypes, sys, sqlite3, socket, netifaces, ConfigParser
 from datetime import datetime, timedelta
 from bottle import route, run, debug, template, request, validate, error, static_file, get
 from dateutils import datestring
@@ -16,10 +16,19 @@ from PIL import Image
 from urlparse import urlparse
 from hurry.filesize import size
 
-# Define settings
-configdir = os.path.join(os.getenv('HOME'), '.screenly/')
-database = os.path.join(configdir, 'screenly.db')
-nodetype = "standalone"
+# Get config file
+config = ConfigParser.ConfigParser()
+conf_file = os.path.join(os.getenv('HOME'), '.screenly', 'screenly.conf')
+if not os.path.isfile(conf_file):
+    logging.info('Config-file missing.')
+    sys.exit(1)
+else:
+    logging.debug('Reading config-file...')
+    config.read(conf_file)
+
+confdir = os.path.join(os.getenv('HOME'), config.get('main', 'configdir'))
+database = os.path.join(os.getenv('HOME'), config.get('main', 'database'))
+nodetype = config.get('main', 'nodetype')
 
 def time_lookup():
     if nodetype == "standalone":

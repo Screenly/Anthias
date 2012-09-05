@@ -24,6 +24,10 @@ echo "CONF_SWAPSIZE=500" > ~/dphys-swapfile
 sudo cp /etc/dphys-swapfile /etc/dphys-swapfile.bak
 sudo mv ~/dphys-swapfile /etc/dphys-swapfile
 
+echo "Adding Screenly's config-file"
+mkdir -p ~/.screenly
+cp ~/screenly/misc/screenly.conf ~/.screenly/ 
+
 echo "Enabling Watchdog..."
 sudo modprobe bcm2708_wdog
 sudo cp /etc/modules /etc/modules.bak
@@ -34,7 +38,7 @@ sudo sed -e 's/#watchdog-device/watchdog-device/g' -i /etc/watchdog.conf
 sudo /etc/init.d/watchdog start
 
 echo "Adding Screenly to autostart (via Supervisord)"
-sudo ln -s ~/screenly/misc/screenly.conf /etc/supervisor/conf.d/
+sudo ln -s ~/screenly/misc/supervisor_screenly.conf /etc/supervisor/conf.d/
 sudo /etc/init.d/supervisor stop
 sudo /etc/init.d/supervisor start
 
