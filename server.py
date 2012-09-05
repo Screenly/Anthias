@@ -26,7 +26,7 @@ else:
     print 'Reading config-file...'
     config.read(conf_file)
 
-confdir = os.path.join(os.getenv('HOME'), config.get('main', 'configdir'))
+configdir = os.path.join(os.getenv('HOME'), config.get('main', 'configdir'))
 database = os.path.join(os.getenv('HOME'), config.get('main', 'database'))
 nodetype = config.get('main', 'nodetype')
 

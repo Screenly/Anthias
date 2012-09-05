@@ -30,16 +30,17 @@ else:
     logging.debug('Reading config-file...')
     config.read(conf_file)
 
-confdir = os.path.join(os.getenv('HOME'), config.get('main', 'configdir'))
-database = os.path.join(os.getenv('HOME'), config.get('main', 'database'))
-nodetype = config.get('main', 'nodetype')
-show_splash = config.get('viewer', 'show_splash')
-
 def time_lookup():
     if nodetype == "standalone":
         return datetime.now()
     elif nodetype == "managed":
         return datetime.utcnow()
+
+def str_to_bol(string):
+    if 'true' in string.lower():
+        return True
+    else:
+        return False
 
 def generate_asset_list():
     logging.info('Generating asset-list...')
@@ -165,6 +166,13 @@ def view_web(url, duration):
     else: 
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (url))
         pass
+
+# Get config values
+configdir = os.path.join(os.getenv('HOME'), config.get('main', 'configdir'))
+database = os.path.join(os.getenv('HOME'), config.get('main', 'database'))
+nodetype = config.get('main', 'nodetype')
+show_splash = str_to_bol(config.get('viewer', 'show_splash'))
+
 
 logging.debug('Starting viewer.py')
 
