@@ -65,7 +65,7 @@ def generate_asset_list():
     
     if shuffle_playlist:
         from random import shuffle
-        random.shuffle(playlist)
+        shuffle(playlist)
     
     return playlist
     
