@@ -62,6 +62,11 @@ def generate_asset_list():
 
         if (start_date and end_date) and (start_date < time_lookup() and end_date > time_lookup()):
             playlist.append({"name" : name, "uri" : uri, "duration" : duration, "mimetype" : mimetype})
+    
+    if shuffle_playlist:
+        from random import shuffle
+        random.shuffle(playlist)
+    
     return playlist
     
 def load_browser():
@@ -173,6 +178,7 @@ database = os.path.join(os.getenv('HOME'), config.get('main', 'database'))
 nodetype = config.get('main', 'nodetype')
 show_splash = str_to_bol(config.get('viewer', 'show_splash'))
 audio_output = config.get('viewer', 'audio_output')
+shuffle_playlist = str_to_bol(config.get('viewer', 'shuffle_playlist'))
 
 logging.debug('Starting viewer.py')
 
