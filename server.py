@@ -20,10 +20,10 @@ from hurry.filesize import size
 config = ConfigParser.ConfigParser()
 conf_file = os.path.join(os.getenv('HOME'), '.screenly', 'screenly.conf')
 if not os.path.isfile(conf_file):
-    logging.info('Config-file missing.')
+    print 'Config-file missing.'
     sys.exit(1)
 else:
-    logging.debug('Reading config-file...')
+    print 'Reading config-file...'
     config.read(conf_file)
 
 confdir = os.path.join(os.getenv('HOME'), config.get('main', 'configdir'))
