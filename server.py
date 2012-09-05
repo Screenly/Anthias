@@ -240,25 +240,32 @@ def update_asset():
     if (request.POST.get('asset_id','').strip() and 
         request.POST.get('name','').strip() and
         request.POST.get('uri','').strip() and
-        request.POST.get('duration','').strip() and
-        request.POST.get('mimetype','').strip() and
-        request.POST.get('start_date','').strip() and
-        request.POST.get('start_time','').strip() and
-        request.POST.get('end_date','').strip() and
-        request.POST.get('end_time','').strip()
+        request.POST.get('mimetype','').strip()
         ):
 
         asset_id =  request.POST.get('asset_id','').strip()
         name = request.POST.get('name','').strip()
         uri = request.POST.get('uri','').strip()
-        duration = request.POST.get('duration','').strip()    
         mimetype = request.POST.get('mimetype','').strip()
-        input_start_date = request.POST.get('start_date','').strip()
-        input_start_time = request.POST.get('start_time','').strip()
-        start_date = datetime.strptime(input_start_date+"T"+input_start_time, '%Y-%m-%dT%H:%M:%S')
-        input_end_date = request.POST.get('end_date','').strip()
-        input_end_time = request.POST.get('end_time','').strip()
-        end_date = datetime.strptime(input_end_date+"T"+input_end_time, '%Y-%m-%dT%H:%M:%S')
+
+        try:
+            duration = request.POST.get('duration','').strip()
+        except:
+            duration = None
+
+        try:
+            input_start_date = request.POST.get('start_date','').strip()
+            input_start_time = request.POST.get('start_time','').strip()
+            start_date = datetime.strptime(input_start_date+"T"+input_start_time, '%Y-%m-%dT%H:%M:%S')
+        except:
+            start_date = None
+
+        try:
+            input_end_date = request.POST.get('end_date','').strip()
+            input_end_time = request.POST.get('end_time','').strip()
+            end_date = datetime.strptime(input_end_date+"T"+input_end_time, '%Y-%m-%dT%H:%M:%S')
+        except:
+            end_date = None
 
         c.execute("UPDATE assets SET start_date=?, end_date=?, duration=?, name=?, uri=?, duration=?, mimetype=? WHERE asset_id=?", (start_date, end_date, duration, name, uri, duration, mimetype, asset_id))
         conn.commit()
