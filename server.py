@@ -83,7 +83,7 @@ def get_assets():
     
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
-    c.execute("SELECT * FROM assets ORDER BY name")
+    c.execute("SELECT asset_id, name, uri, start_date, end_date, duration, mimetype FROM assets ORDER BY name")
     assets = c.fetchall()
     
     playlist = []
@@ -94,17 +94,17 @@ def get_assets():
         uri = asset[2] # Path in local database
 
         try:
-            start_date = datestring.date_to_string(asset[4])
+            start_date = datestring.date_to_string(asset[3])
         except:
             start_date = ""
 
         try:
-            end_date = datestring.date_to_string(asset[5])
+            end_date = datestring.date_to_string(asset[4])
         except:
             end_date = ""
             
-        duration = asset[6]
-        mimetype = asset[7]
+        duration = asset[5]
+        mimetype = asset[6]
 
         playlistitem = {
                 "name" : name,
@@ -118,8 +118,6 @@ def get_assets():
 	playlist.append(playlistitem)
     
     return json.dumps(playlist)
-
-
 
 def initiate_db():
 
@@ -202,19 +200,16 @@ def process_schedule():
     c = conn.cursor()
 
     if (request.POST.get('asset','').strip() and 
-        request.POST.get('start_date','').strip() and
-        request.POST.get('start_time','').strip() and
-        request.POST.get('end_date','').strip() and
-        request.POST.get('end_time','').strip()
+        request.POST.get('start','').strip() and
+        request.POST.get('end','').strip()
         ):
 
         asset_id =  request.POST.get('asset','').strip()
-        input_start_date = request.POST.get('start_date','').strip()
-        input_start_time = request.POST.get('start_time','').strip()
-        start_date = datetime.strptime(input_start_date+"T"+input_start_time, '%Y-%m-%dT%H:%M:%S')
-        input_end_date = request.POST.get('end_date','').strip()
-        input_end_time = request.POST.get('end_time','').strip()
-        end_date = datetime.strptime(input_end_date+"T"+input_end_time, '%Y-%m-%dT%H:%M:%S')
+        input_start = request.POST.get('start','').strip()
+        input_end = request.POST.get('end','').strip() 
+
+        start_date = datetime.strptime(input_start, '%Y-%m-%d @ %H:%M')
+        end_date = datetime.strptime(input_end, '%Y-%m-%d @ %H:%M')
 
         query = c.execute("SELECT mimetype FROM assets WHERE asset_id=?", (asset_id,))
         asset_mimetype = c.fetchone()
@@ -263,16 +258,14 @@ def update_asset():
             duration = None
 
         try:
-            input_start_date = request.POST.get('start_date','').strip()
-            input_start_time = request.POST.get('start_time','').strip()
-            start_date = datetime.strptime(input_start_date+"T"+input_start_time, '%Y-%m-%dT%H:%M:%S')
+            input_start = request.POST.get('start','')
+            start_date = datetime.strptime(input_start, '%Y-%m-%d @ %H:%M')
         except:
             start_date = None
 
         try:
-            input_end_date = request.POST.get('end_date','').strip()
-            input_end_time = request.POST.get('end_time','').strip()
-            end_date = datetime.strptime(input_end_date+"T"+input_end_time, '%Y-%m-%dT%H:%M:%S')
+            input_end = request.POST.get('end','').strip()
+            end_date = datetime.strptime(input_end, '%Y-%m-%d @ %H:%M')
         except:
             end_date = None
 
@@ -282,7 +275,6 @@ def update_asset():
         header = "Yes!"
         message = "Successfully updated asset."
         return template('message', header=header, message=message)
-
 
     else:
         header = "Ops!"
@@ -309,6 +301,7 @@ def delete_asset(asset_id):
 
 @route('/')
 def viewIndex():
+    initiate_db()
     return template('index')
 
 
@@ -369,10 +362,19 @@ def schedule_asset():
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
-    c.execute("SELECT * FROM assets ORDER BY name")
-    assetlist = c.fetchall()
-    
-    return template('schedule_asset', assetlist=assetlist)
+    assets = []
+    c.execute("SELECT name, asset_id FROM assets ORDER BY name")
+    query = c.fetchall()
+    for asset in query:
+        name = asset[0]
+        asset_id = asset[1]
+        
+        assets.append({
+            'name' : name,
+            'asset_id' : asset_id,
+        })
+
+    return template('schedule_asset', assets=assets)
         
 @route('/edit_asset/:asset_id')
 def edit_asset(asset_id):
@@ -400,7 +402,7 @@ def edit_asset(asset_id):
     duration = asset[5]
     mimetype = asset[6]
 
-    assetdict = {
+    asset_info = {
             "name" : name,
             "uri" : uri,
             "duration" : duration,
@@ -409,8 +411,8 @@ def edit_asset(asset_id):
             "start_date" : start_date,
             "end_date" : end_date
             }
-
-    return template('edit_asset', asset=assetdict)
+    #return str(asset_info)
+    return template('edit_asset', asset_info=asset_info)
         
 # Static
 @route('/static/:path#.+#', name='static')
@@ -425,4 +427,9 @@ def mistake403(code):
 def mistake404(code):
     return 'Sorry, this page does not exist!'
 
-run(host='0.0.0.0', port=8080, reloader=True)
+# Ugly local dev fix.
+if sys.platform == "darwin":
+    port = '8080'
+    run(host='127.0.0.1', port=port, reloader=True)
+else:
+    run(host='0.0.0.0', port=8080, reloader=True)

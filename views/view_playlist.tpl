@@ -19,24 +19,18 @@
                     % end
                     
                     % if asset["start_date"]: 
-                        % input_start_date=asset["start_date"].split("T")
-                        % start_date=input_start_date[0]
-                        % start_time=input_start_date[1]
+                        % start_date = asset["start_date"]
                     % else:
-                        % start_date = "None"
-                        % start_time = ""
+                        % start_date = ""
                     % end
                 
                     % if asset["end_date"]:
-                        % input_end_date=asset["end_date"].split("T")
-                        % end_date=input_end_date[0]
-                        % end_time=input_end_date[1]
+                        % end_date = asset["end_date"]
                     % else:
                         % end_date = "None"
-                        % end_time = ""
                     % end
                     
-                    <tr><td>{{asset["name"]}}</td><td>{{start_date}} {{start_time}}</td><td>{{end_date}} {{end_time}}</td><td>{{asset['duration']}}</td><td><a href="{{asset['uri']}}">{{uri}}</a></td><td><a href="/edit_asset/{{asset['asset_id']}}">Edit</a></td></tr>
+                    <tr><td>{{asset["name"]}}</td><td>{{start_date}}</td><td>{{end_date}}</td><td>{{asset['duration']}}</td><td><a href="{{asset['uri']}}">{{uri}}</a></td><td><a href="/edit_asset/{{asset['asset_id']}}">Edit</a></td></tr>
                     % end
             %end
         </table>

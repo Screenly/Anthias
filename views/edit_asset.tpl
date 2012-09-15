@@ -1,56 +1,85 @@
-% if asset["start_date"]:
-	% start_date = asset["start_date"].split("T")[0]
-	% start_time = asset["start_date"].split("T")[1]
-% else:
-	% start_date = ""
-	% start_time = ""
+% try:
+    % start_info = asset_info["start_date"]
+    % start_date = start_info.split(' @ ')[0]
+    % start_time = start_info.split(' @ ')[1]
+    % start_hour = start_time.split(':')[0]
+    % start_minute = start_time.split(':')[1]
+% except:
+    % start_date = ""
+    % start_time = ""
+    % start_info = ""
+    % start_hour = ""
+    % start_minute = ""
 % end
 
-% if asset["end_date"]:
-	% end_date = asset["end_date"].split("T")[0]
-	% end_time = asset["end_date"].split("T")[1]
-% else:
-	% end_date = ""
-	% end_time = ""
-% end	
+% try:
+    % end_info = asset_info["end_date"]
+    % end_date = end_info.split(' @ ')[0]
+    % end_time = end_info.split(' @ ')[1]
+    % end_hour = end_time.split(':')[0]
+    % end_minute = end_time.split(':')[1]
+% except:
+    % end_date = ""
+    % end_time = ""
+    % end_info = ""
+    % end_hour = ""
+    % end_minute = ""
+% end
 
 <head>
     <title>Screenly Edit Asset</title>
-    <link type="text/css" href="/static/css/style.css" rel="Stylesheet" />	
+    <link type="text/css" href="/static/css/style.css" rel="Stylesheet" />
+	<link type="text/css" href="/static/css/ui-lightness/jquery-ui-1.8.23.custom.css" rel="Stylesheet" />	
+	<script type="text/javascript" src="/static/js/jquery-1.8.0.min.js"></script>
+	<script type="text/javascript" src="/static/js/jquery-ui-1.8.23.custom.min.js"></script>
+	<script type="text/javascript" src="/static/js/jquery-ui-timepicker-addon.js"></script>
+	<script>
+	$(function() {
+		$( "#start" ).datetimepicker({
+		separator: ' @ ',
+		hour: {{start_hour}},
+		minute: {{start_minute}},
+		dateFormat: 'yy-mm-dd',
+		});
+
+		$( "#end" ).datetimepicker({
+		separator: ' @ ',
+		hour: {{end_hour}},
+		minute: {{end_minute}},
+		dateFormat: 'yy-mm-dd',
+		});
+	});
+	</script>
 </head>
 <body>
     <div class="main">
         <h1>Screenly :: Edit Asset</h1>
             <fieldset class="main">
-        	<form action="/update_asset" name="asset" method="post">
-    		    <input type="hidden" id="asset_id" name="asset_id" value="{{asset["asset_id"]}}" /></p>
-        		<p><strong><label for="name">Name: </value></strong>
-        		    <input type="text" id="name" name="name" value="{{asset["name"]}}"/></p>
-        		<p><strong><label for="uri">URI: </value></strong>
-        		    <input type="text" id="uri" name="uri" value="{{asset["uri"]}}"/></p>
-        		<p><strong><label for="duration">Duration: </value></strong>
-    		        <input type="text" id="duration" name="duration" value="{{asset["duration"]}}"/></p>
-            	<p><strong><label for="mimetype">Resource type: </value></strong>
-            	<select id="mimetype" name="mimetype">
-                        <option value="{{asset["mimetype"]}}">{{asset["mimetype"]}}</name>
+		<form action="/update_asset" name="asset" method="post">
+		    <input type="hidden" id="asset_id" name="asset_id" value="{{asset_info["asset_id"]}}" /></p>
+			<p><strong><label for="name">Name: </value></strong>
+			    <input type="text" id="name" name="name" value="{{asset_info["name"]}}"/></p>
+			<p><strong><label for="uri">URI: </value></strong>
+			    <input type="text" id="uri" name="uri" value="{{asset_info["uri"]}}"/></p>
+			<p><strong><label for="duration">Duration: </value></strong>
+			<input type="text" id="duration" name="duration" value="{{asset_info["duration"]}}"/></p>
+		<p><strong><label for="mimetype">Resource type: </value></strong>
+		<select id="mimetype" name="mimetype">
+                        <option value="{{asset_info["mimetype"]}}">{{asset_info["mimetype"]}}</name>
                         <option value=""></name>
                         <option value="image">Image</name>
                         <option value="video">Video</name>
                         <option value="web">Website</name>
-                    </select></p>
-        		<p><strong><label for="start_date">Start Date: </value></strong>
-    		        <input type="text" id="start_date" name="start_date" value="{{start_date}}"/></p>
-                <p><strong><label for="start_time">Start Time: </value></strong>
-        		    <input type="text" id="start_time" name="start_time" value="{{start_time}}"/></p>
-        		<p><strong><label for="end_date">End Date: </value></strong>
-    		        <input type="text" id="end_date" name="end_date" value="{{end_date}}"/></p>
-        		<p><strong><label for="end_time">End Time: </value></strong>
-    		        <input type="text" id="end_time" name="end_time" value="{{end_time}}"/></p>
-        		<p><div class="aligncenter"><input type="submit" value="Submit" /></div></p>
-        	</form>
+		</select></p>
+			<p><strong><label for="start">Start: </value></strong>
+			<input type="text" id="start" name="start" value="{{start_info}}"/></p>
+			<p><strong><label for="end">End: </value></strong>
+			<input type="text" id="end" name="end" value="{{end_info}}"/></p>
+			<p><div class="aligncenter"><input type="submit" value="Submit" /></div></p>
+		</form>
             </fieldset>
     
-            <a href="/delete_asset/{{asset["asset_id"]}}">Delete asset</a>
+            <a href="/delete_asset/{{asset_info["asset_id"]}}">Delete asset</a>
         </div>
         <div class="footer">
             <a href="/">Back</a>
