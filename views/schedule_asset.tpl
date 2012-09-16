@@ -9,19 +9,19 @@
 	<script>
 	$(function() {
 		$( "#start" ).datetimepicker({
-		separator: ' @ ',
-		hour: {{datetime.now().strftime('%H')}},
-		minute: {{datetime.now().strftime('%M')}},
-		dateFormat: 'yy-mm-dd',
-		minDate: {{datetime.now().strftime('%Y-%m-%d')}},
+			separator: ' @ ',
+			hour: {{datetime.now().strftime('%H')}},
+			minute: {{datetime.now().strftime('%M')}},
+			dateFormat: 'yy-mm-dd',
+			firstDay: 1,
 		});
 
 		$( "#end" ).datetimepicker({
-		separator: ' @ ',
-		hour: 23,
-		minute: 59,
-		dateFormat: 'yy-mm-dd',
-		minDate: {{(datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')}}
+			separator: ' @ ',
+			hour: 23,
+			minute: 59,
+			dateFormat: 'yy-mm-dd',
+			firstDay: 1,
 		});
 	});
 	</script>

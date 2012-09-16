@@ -36,17 +36,19 @@
 	<script>
 	$(function() {
 		$( "#start" ).datetimepicker({
-		separator: ' @ ',
-		hour: {{start_hour}},
-		minute: {{start_minute}},
-		dateFormat: 'yy-mm-dd',
+			separator: ' @ ',
+			hour: {{start_hour}},
+			minute: {{start_minute}},
+			dateFormat: 'yy-mm-dd',
+			firstDay: 1,
 		});
 
 		$( "#end" ).datetimepicker({
-		separator: ' @ ',
-		hour: {{end_hour}},
-		minute: {{end_minute}},
-		dateFormat: 'yy-mm-dd',
+			separator: ' @ ',
+			hour: {{end_hour}},
+			minute: {{end_minute}},
+			dateFormat: 'yy-mm-dd',
+			firstDay: 1,
 		});
 	});
 	</script>
