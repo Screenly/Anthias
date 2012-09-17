@@ -16,7 +16,7 @@
                 % end
                     
                 % try:
-			% start_date = asset["start_date"]: 
+			% start_date = asset["start_date"] 
                 % except:
                         % start_date = "None"
                 % end
