@@ -39,7 +39,7 @@ Note: If you don't have any server where you can make your asset available, you 
 ## Requirements
 
  * A Raspberry Pi (Model B).
- * An SD Card (>4GB). Class 10 is highly recommended.
+ * An SD Card (**>4GB**). Class 10 is highly recommended.
  * An HDMI-cable.
  * A network connection (with DHCP).
  * A keyboard and mouse (only required for the installation).
@@ -47,16 +47,21 @@ Note: If you don't have any server where you can make your asset available, you 
 
 ## Configure the Raspberry Pi
 
- * Flash the SD card and install [Raspbian Wheezy](http://www.raspberrypi.org/downloads). Instructions are available [here](http://elinux.org/RPi_Easy_SD_Card_Setup).
- * Configure Raspbian to automatically log into X.
- * Make sure that the system's clock is configured for the proper timezone.
- * Expand the filesystem if needed. 
+First, flash the SD card and install [Raspbian Wheezy](http://www.raspberrypi.org/downloads). Instructions are available [here](http://elinux.org/RPi_Easy_SD_Card_Setup). On the first boot, you should be presented with a configuration screen (raspi-config). In raspi-config, make sure you make the following changes:
 
-Please note that Screenly currently relies on the user 'pi', so don't change the username.
+ * Expand the root file system (**required**)
+ * Disable overscan (if required by your display)
+ * Change keyboard mapping (optional)
+ * Change time zone (optional, but Screenly's scheduling uses this)
+ * Enable SSH (optional)
+ * Configure boot behaivor to boot into X (**required**)
+ * Change password for 'pi' user (recommended)
+
+Once you've made all these changes, you must restart your Raspberry Pi. 
 
 ## Install Screenly OSE
- 
-Open a terminal-window (or SSH-session) and as the user 'pi' run:
+
+After you've done all the following changes above **and** rebooted, open a terminal (ctrl+alt+F1) or SSH session and as the user 'pi' run:
 
     cd ~
     sudo apt-get update
@@ -64,7 +69,7 @@ Open a terminal-window (or SSH-session) and as the user 'pi' run:
     git clone git://github.com/wireload/screenly-ose.git ~/screenly
     ~/screenly/misc/install.sh
 
-(If you're running the installation over SSH, running the installation through a screen-session is highly recommended.)
+(If you're running the installation over SSH, running the installation through a 'screen'-session is highly recommended.)
 
 Assuming everything went well, reboot your system. Screenly should now load. 
 
@@ -80,7 +85,7 @@ Screenly currently three types of media:
  * Images
  * Web-pages
 
-Adobe Flash-media *is not* supported. 
+Adobe Flash-media *is not*, and will most likely never be, supported. 
 
 Images and web-pages will be rendered in 1920x1080, so adjust your content for this size. 
 
