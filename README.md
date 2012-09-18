@@ -100,7 +100,29 @@ Once done, simply restart the computer. If you prefer not to reboot, you might g
 
     pkill -f "viewer.py"
     sudo supervisorctl restart screenly
-    
+
+## FAQ
+
+### Can I change Screenly's resolution? 
+
+Yes, just edit the line 'resolution' in ~/.screenly/screenly.conf. The default resolution is 1920x1080 (Full HD).
+
+### Can I use Screenly with a rotated screen? 
+
+Yes, that's possible. First change the resolution in ~/.screenly/screenly.conf from 1920x1080 to 1080x1920. After you've done that, you need to change the screen orientation. To do this, add the following to /boot/config.txt.
+
+	display_rotate=3
+
+That will rotate the screen 270 degrees ([source](http://elinux.org/RPi_config.txt)). After you've made both of these changes, simply reboot (`sudo shutdown -r now`). When Screenly comes back up, it should be in rotated mode.
+
+**Please note that I have not been able to test this myself, but [according to Clifor](http://www.raspberrypi.org/phpBB3/viewtopic.php?p=176082#p176082) on the Raspberry Pi-forum it does works.**
+
 ## Licensing
 
 Dual License: [GPLv2](http://www.gnu.org/licenses/gpl-2.0.html) and Commercial License. For more information, contact [WireLoad](http://wireload.net/company/). 
+
+## Credits
+
+ * [huceke](https://github.com/huceke) for writing omxplayer
+ * The [jQuery](http://jquery.com/)-guys for the jQuery Datepicker
+ * [Trent Richardson](http://trentrichardson.com/) for the Timepicker-addon to jQuery's Datepicker

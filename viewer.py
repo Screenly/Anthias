@@ -7,7 +7,7 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 __version__ = "0.1"
 __email__ = "vpetersson@wireload.net"
 
-import subprocess, mimetypes, os, sqlite3, shutil, platform, requests, ConfigParser
+import subprocess, mimetypes, os, sqlite3, shutil, platform, requests, ConfigParser, sys
 import html_templates
 from datetime import datetime
 from time import sleep
@@ -72,7 +72,7 @@ def generate_asset_list():
 def load_browser():
     logging.info('Loading browser...')
     browser_bin = "uzbl-browser"
-    browser_resolution = "1920x1080"
+    browser_resolution = resolution
 
     if show_splash:
         browser_load_url = "http://127.0.0.1:8080/splash_page"
@@ -179,6 +179,11 @@ nodetype = config.get('main', 'nodetype')
 show_splash = str_to_bol(config.get('viewer', 'show_splash'))
 audio_output = config.get('viewer', 'audio_output')
 shuffle_playlist = str_to_bol(config.get('viewer', 'shuffle_playlist'))
+
+try:
+    resolution = shuffle_playlist = config.get('viewer', 'resolution')
+except:
+    resolution = '1920x1080'
 
 logging.debug('Starting viewer.py')
 
