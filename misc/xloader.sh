@@ -16,8 +16,9 @@ do
 	# Clean up in case of an unclean exit
 	echo "Cleaning up..." >> $LOG
 	killall uzbl-core
-	rm /tmp/uzbl_*
-	rm /tmp/screenly_html/*
+	killall omxplayer omxplayer.bin
+	rm -f /tmp/uzbl_*
+	rm -f /tmp/screenly_html/*
     
 	# Launch the viewer
 	python ~/screenly/viewer.py >> $LOG 2>&1
