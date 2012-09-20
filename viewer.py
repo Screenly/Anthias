@@ -11,13 +11,15 @@ import sqlite3, ConfigParser
 from sys import exit
 from requests import get 
 from platform import machine 
-from os import path, getenv, stat, remove, makedirs 
+from os import path, getenv, remove, makedirs
+from os import stat as os_stat
 from subprocess import Popen, call 
 import html_templates
 from datetime import datetime
 from time import sleep
 import logging
-import glob, stat
+from glob import glob
+from stat import S_ISFIFO
 
 # Initiate logging
 logging.basicConfig(level=logging.INFO,
@@ -95,9 +97,9 @@ def load_browser():
     return browser
 
 def get_fifo():
-    candidates = glob.glob('/tmp/uzbl_fifo_*')
+    candidates = glob('/tmp/uzbl_fifo_*')
     for file in candidates:
-        if stat.S_ISFIFO(stat(file).st_mode):
+        if S_ISFIFO(os_stat(file).st_mode):
             return file
         else:
             return None    
