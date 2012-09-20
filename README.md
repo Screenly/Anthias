@@ -56,6 +56,7 @@ First, flash the SD card and install [Raspbian Wheezy](http://www.raspberrypi.or
  * Enable SSH (optional)
  * Configure boot behaivor to boot into X (**required**)
  * Change password for 'pi' user (recommended)
+ * Change memory split to 128/128 (recommended)
 
 Once you've made all these changes, you must restart your Raspberry Pi. 
 
