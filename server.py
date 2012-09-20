@@ -7,7 +7,13 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 __version__ = "0.1.2"
 __email__ = "vpetersson@wireload.net"
 
-import json, hashlib, os, requests, mimetypes, sys, sqlite3, socket, netifaces, ConfigParser
+import sqlite3, ConfigParser
+from netifaces import ifaddresses
+from sys import exit, platform
+from requests import get
+from os import path, getenv, makedirs, getloadavg, statvfs
+from hashlib import md5
+from json import dumps, loads 
 from datetime import datetime, timedelta
 from bottle import route, run, debug, template, request, validate, error, static_file, get
 from dateutils import datestring
@@ -18,16 +24,16 @@ from hurry.filesize import size
 
 # Get config file
 config = ConfigParser.ConfigParser()
-conf_file = os.path.join(os.getenv('HOME'), '.screenly', 'screenly.conf')
-if not os.path.isfile(conf_file):
+conf_file = path.join(getenv('HOME'), '.screenly', 'screenly.conf')
+if not path.isfile(conf_file):
     print 'Config-file missing.'
-    sys.exit(1)
+    exit(1)
 else:
     print 'Reading config-file...'
     config.read(conf_file)
 
-configdir = os.path.join(os.getenv('HOME'), config.get('main', 'configdir'))
-database = os.path.join(os.getenv('HOME'), config.get('main', 'database'))
+configdir = path.join(getenv('HOME'), config.get('main', 'configdir'))
+database = path.join(getenv('HOME'), config.get('main', 'database'))
 nodetype = config.get('main', 'nodetype')
 
 def time_lookup():
@@ -77,7 +83,7 @@ def get_playlist():
         if (start_date and end_date) and (input_start_date < time_lookup() and input_end_date > time_lookup()):
 		playlist.append(playlistitem)
     
-    return json.dumps(playlist)
+    return dumps(playlist)
 
 def get_assets():
     
@@ -117,13 +123,13 @@ def get_assets():
                 }
 	playlist.append(playlistitem)
     
-    return json.dumps(playlist)
+    return dumps(playlist)
 
 def initiate_db():
 
     # Create config dir if it doesn't exist
-    if not os.path.isdir(configdir):
-       os.makedirs(configdir)
+    if not path.isdir(configdir):
+       makedirs(configdir)
 
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
@@ -158,11 +164,11 @@ def process_asset():
             message = "URL must be HTTP or HTTPS."
             return template('message', header=header, message=message)
 
-        file = requests.get(uri)
+        file = get(uri)
 
         # Only proceed if fetch was successful. 
         if file.status_code == 200:
-            asset_id = hashlib.md5(name+uri).hexdigest()
+            asset_id = md5(name+uri).hexdigest()
             
             strict_uri = uri_check.scheme + "://" + uri_check.netloc + uri_check.path
 
@@ -312,10 +318,10 @@ def system_info():
     viewlog = f.readlines()    
     f.close()
 
-    loadavg = os.getloadavg()[2]
+    loadavg = getloadavg()[2]
     
     # Calculate disk space
-    slash = os.statvfs("/")
+    slash = statvfs("/")
     free_space = size(slash.f_bsize * slash.f_bavail)
     
     # Get uptime
@@ -331,7 +337,7 @@ def splash_page():
     # Make sure the database exist and that it is initated.
     initiate_db()
 
-    my_ip = netifaces.ifaddresses('eth0')[2][0]['addr']
+    my_ip = ifaddresses('eth0')[2][0]['addr']
 
     return template('splash_page', my_ip=my_ip)
 
@@ -339,14 +345,14 @@ def splash_page():
 @route('/view_playlist')
 def view_node_playlist():
 
-    nodeplaylist = json.loads(get_playlist())
+    nodeplaylist = loads(get_playlist())
     
     return template('view_playlist', nodeplaylist=nodeplaylist)
 
 @route('/view_assets')
 def view_assets():
 
-    nodeplaylist = json.loads(get_assets())
+    nodeplaylist = loads(get_assets())
     
     return template('view_assets', nodeplaylist=nodeplaylist)
 
@@ -428,7 +434,7 @@ def mistake404(code):
     return 'Sorry, this page does not exist!'
 
 # Ugly local dev fix.
-if sys.platform == "darwin":
+if platform == "darwin":
     port = '8080'
     run(host='127.0.0.1', port=port, reloader=True)
 else:

@@ -7,7 +7,12 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 __version__ = "0.1"
 __email__ = "vpetersson@wireload.net"
 
-import subprocess, mimetypes, os, sqlite3, shutil, platform, requests, ConfigParser, sys
+import sqlite3, ConfigParser
+from sys import exit
+from requests import get 
+from platform import machine 
+from os import path, getenv, stat, remove, makedirs 
+from subprocess import Popen, call 
 import html_templates
 from datetime import datetime
 from time import sleep
@@ -22,10 +27,10 @@ logging.basicConfig(level=logging.INFO,
 
 # Get config file
 config = ConfigParser.ConfigParser()
-conf_file = os.path.join(os.getenv('HOME'), '.screenly', 'screenly.conf')
-if not os.path.isfile(conf_file):
+conf_file = path.join(getenv('HOME'), '.screenly', 'screenly.conf')
+if not path.isfile(conf_file):
     logging.info('Config-file missing.')
-    sys.exit(1)
+    exit(1)
 else:
     logging.debug('Reading config-file...')
     config.read(conf_file)
@@ -80,7 +85,7 @@ def load_browser():
         browser_load_url = black_page
 
     browser_args = [browser_bin, "--geometry=" + browser_resolution, "--uri=" + browser_load_url]
-    browser = subprocess.Popen(browser_args)
+    browser = Popen(browser_args)
     
     logging.info('Browser loaded. Running as PID %d.' % browser.pid)
 
@@ -92,7 +97,7 @@ def load_browser():
 def get_fifo():
     candidates = glob.glob('/tmp/uzbl_fifo_*')
     for file in candidates:
-        if stat.S_ISFIFO(os.stat(file).st_mode):
+        if stat.S_ISFIFO(stat(file).st_mode):
             return file
         else:
             return None    
@@ -118,29 +123,29 @@ def view_image(image, name, duration):
     f.close()
     
 def view_video(video):
-    arch = platform.machine()
+    arch = machine()
 
     ## For Raspberry Pi
     if arch == "armv6l":
         logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % video)
         omxplayer = "omxplayer"
         omxplayer_args = [omxplayer, "-o", audio_output, "-w", str(video)]
-        run = subprocess.call(omxplayer_args, stdout=True)
+        run = call(omxplayer_args, stdout=True)
         logging.debug(run)
 
         if run != 0:
             logging.debug("Unclean exit: " + str(run))
 
         # Clean up after omxplayer
-        omxplayer_logfile = os.path.join(os.getenv('HOME'), 'omxplayer.log')
-        if os.path.isfile(omxplayer_logfile):
-            os.remove(omxplayer_logfile)
+        omxplayer_logfile = path.join(getenv('HOME'), 'omxplayer.log')
+        if path.isfile(omxplayer_logfile):
+            remove(omxplayer_logfile)
 
     ## For x86
     elif arch == "x86_64" or arch == "x86_32":
         logging.debug('Displaying video %s. Detected x86. Using mplayer.' % video)
         mplayer = "mplayer"
-        run = subprocess.call([mplayer, "-fs", "-nosound", str(video) ], stdout=False)
+        run = call([mplayer, "-fs", "-nosound", str(video) ], stdout=False)
         if run != 0:
             logging.debug("Unclean exit: " + str(run))
 
@@ -149,12 +154,12 @@ def view_web(url, duration):
     # If local web page, check if the file exist. If remote, check if it is
     # available.
     if html_folder in url:
-        if os.path.exists(url):
+        if path.exists(url):
             web_resource = 200
         else:
             breal
     else:
-        web_resource = requests.get(url).status_code
+        web_resource = get(url).status_code
 
     if web_resource == 200:
         logging.debug('Web content appears to be available. Proceeding.')  
@@ -173,8 +178,8 @@ def view_web(url, duration):
         pass
 
 # Get config values
-configdir = os.path.join(os.getenv('HOME'), config.get('main', 'configdir'))
-database = os.path.join(os.getenv('HOME'), config.get('main', 'database'))
+configdir = path.join(getenv('HOME'), config.get('main', 'configdir'))
+database = path.join(getenv('HOME'), config.get('main', 'database'))
 nodetype = config.get('main', 'nodetype')
 show_splash = str_to_bol(config.get('viewer', 'show_splash'))
 audio_output = config.get('viewer', 'audio_output')
@@ -189,8 +194,8 @@ logging.debug('Starting viewer.py')
 
 # Create folder to hold HTML-pages
 html_folder = '/tmp/screenly_html/'
-if not os.path.isdir(html_folder):
-   os.makedirs(html_folder)
+if not path.isdir(html_folder):
+   makedirs(html_folder)
 
 # Set up HTML templates
 black_page = html_templates.black_page()
