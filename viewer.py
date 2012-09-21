@@ -155,11 +155,8 @@ def view_web(url, duration):
 
     # If local web page, check if the file exist. If remote, check if it is
     # available.
-    if html_folder in url:
-        if path.exists(url):
-            web_resource = 200
-        else:
-            breal
+    if (html_folder in url and path.exists(url)):
+        web_resource = 200
     else:
         web_resource = get(url).status_code
 
