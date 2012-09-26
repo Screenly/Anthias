@@ -10,7 +10,7 @@ __email__ = "vpetersson@wireload.net"
 import sqlite3, ConfigParser
 from netifaces import ifaddresses
 from sys import exit, platform
-from requests import get
+from requests import get as req_get
 from os import path, getenv, makedirs, getloadavg, statvfs
 from hashlib import md5
 from json import dumps, loads 
@@ -164,7 +164,7 @@ def process_asset():
             message = "URL must be HTTP or HTTPS."
             return template('message', header=header, message=message)
 
-        file = get(uri)
+        file = req_get(uri)
 
         # Only proceed if fetch was successful. 
         if file.status_code == 200:
