@@ -59,13 +59,13 @@
             <fieldset class="main">
 		<form action="/update_asset" name="asset" method="post">
 		    <input type="hidden" id="asset_id" name="asset_id" value="{{asset_info["asset_id"]}}" /></p>
-			<p><strong><label for="name">Name: </value></strong>
+			<p><strong><label for="name">Name: </label></strong>
 			    <input type="text" id="name" name="name" value="{{asset_info["name"]}}"/></p>
-			<p><strong><label for="uri">URI: </value></strong>
+			<p><strong><label for="uri">URI: </label></strong>
 			    <input type="text" id="uri" name="uri" value="{{asset_info["uri"]}}"/></p>
-			<p><strong><label for="duration">Duration: </value></strong>
+			<p><strong><label for="duration">Duration: </label></strong>
 			<input type="text" id="duration" name="duration" value="{{asset_info["duration"]}}"/></p>
-		<p><strong><label for="mimetype">Resource type: </value></strong>
+		<p><strong><label for="mimetype">Resource type: </label></strong>
 		<select id="mimetype" name="mimetype">
                         <option value="{{asset_info["mimetype"]}}">{{asset_info["mimetype"]}}</name>
                         <option value=""></name>
@@ -73,9 +73,9 @@
                         <option value="video">Video</name>
                         <option value="web">Website</name>
 		</select></p>
-			<p><strong><label for="start">Start: </value></strong>
+			<p><strong><label for="start">Start: </label></strong>
 			<input type="text" id="start" name="start" value="{{start_info}}"/></p>
-			<p><strong><label for="end">End: </value></strong>
+			<p><strong><label for="end">End: </label></strong>
 			<input type="text" id="end" name="end" value="{{end_info}}"/></p>
 			<p><div class="aligncenter"><input type="submit" value="Submit" /></div></p>
 		</form>

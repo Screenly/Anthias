@@ -8,11 +8,11 @@
         <h1>Screenly :: Submit Asset</h1>
             <fieldset class="main">
         	<form action="/process_asset" name="asset" method="post">
-        		<p><strong><label for="name">Name: </value></strong>
+        		<p><strong><label for="name">Name: </label></strong>
         		    <input type="text" id="name" name="name" /></p>
-        		<p><strong><label for="amount">URL: </value></strong>
+        		<p><strong><label for="amount">URL: </label></strong>
         		    <input type="text" id="value" name="uri" /></p>
-        		<p><strong><label for="mimetype">Resource type: </value></strong>
+        		<p><strong><label for="mimetype">Resource type: </label></strong>
             	<select id="mimetype" name="mimetype">
                         <option value=""></name>
                         <option value="image">Image</name>
