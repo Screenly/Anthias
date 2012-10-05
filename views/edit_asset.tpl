@@ -67,11 +67,11 @@
 			<input type="text" id="duration" name="duration" value="{{asset_info["duration"]}}"/></p>
 		<p><strong><label for="mimetype">Resource type: </label></strong>
 		<select id="mimetype" name="mimetype">
-                        <option value="{{asset_info["mimetype"]}}">{{asset_info["mimetype"]}}</name>
-                        <option value=""></name>
-                        <option value="image">Image</name>
-                        <option value="video">Video</name>
-                        <option value="web">Website</name>
+                        <option value="{{asset_info["mimetype"]}}">{{asset_info["mimetype"]}}</option>
+                        <option value=""></option>
+                        <option value="image">Image</option>
+                        <option value="video">Video</option>
+                        <option value="web">Website</option>
 		</select></p>
 			<p><strong><label for="start">Start: </label></strong>
 			<input type="text" id="start" name="start" value="{{start_info}}"/></p>
