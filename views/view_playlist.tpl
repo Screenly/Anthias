@@ -13,7 +13,8 @@
             % if asset["start_date"]:
                 
                     % if len(asset["uri"]) > 30:
-                        % uri=asset["uri"][0:30] + "..."
+                        % l = len(asset["uri"])
+                        % uri= "..." + asset["uri"][l-30:l]
                     % else:
                         % uri=asset["uri"]
                     % end
@@ -30,7 +31,7 @@
                         % end_date = "None"
                     % end
                     
-                    <tr><td>{{asset["name"]}}</td><td>{{start_date}}</td><td>{{end_date}}</td><td>{{asset['duration']}}</td><td><a href="{{asset['uri']}}">{{uri}}</a></td><td><a href="/edit_asset/{{asset['asset_id']}}">Edit</a></td></tr>
+                    <tr><td>{{asset["name"]}}</td><td>{{start_date}}</td><td>{{end_date}}</td><td>{{asset['duration']}}</td><td><a href="{{asset['uri']}}" title="{{asset['uri']}}">{{uri}}</a></td><td><a href="/edit_asset/{{asset['asset_id']}}">Edit</a></td></tr>
                     % end
             %end
         </table>

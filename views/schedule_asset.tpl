@@ -32,18 +32,18 @@
             <fieldset class="main">
 		<form action="/process_schedule" name="asset" method="post">
     
-		<p><strong><label for="asset">Asset: </value></strong>
+		<p><strong><label for="asset">Asset: </label></strong>
                 <select id="asset" name="asset">
 		<option value=""></option>
 		% for asset in assets:
                     <option value="{{asset['asset_id']}}">{{asset['name']}}</option>
                 % end
                 </select></p>
-                <p><strong><label for="start">Start:</value></strong>
+                <p><strong><label for="start">Start:</label></strong>
 			    <input id="start" type="textbox" name="start" value="{{datetime.now().strftime('%Y-%m-%d @ %H:%M')}}" /></p>
-                <p><strong><label for="end">End:</value></strong>
+                <p><strong><label for="end">End:</label></strong>
 			    <input id="end" type="textbox" name="end" value="{{(datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d') + " @ 23:59"}}" /></p>
-                <p><strong><label for="duration">Duration:</value></strong>
+                <p><strong><label for="duration">Duration:</label></strong>
                     <input id="duration" type="textbox" name="duration" value="5" /> In seconds. Only for images and web-pages.</p>
 			<p><div class="aligncenter"><input type="submit" value="Submit" /></div></p>
 		</form>
