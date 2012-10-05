@@ -313,10 +313,13 @@ def viewIndex():
 
 @route('/system_info')
 def system_info():
-
-    f = open('/tmp/screenly_viewer.log', 'r')
-    viewlog = f.readlines()    
-    f.close()
+    viewer_log_file = '/tmp/screenly_viewer.log'
+    if path.exists(viewer_log_file):
+        f = open(viewer_log_file, 'r')
+        viewlog = f.readlines()    
+        f.close()
+    else:
+    	viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
 
     loadavg = getloadavg()[2]
     

@@ -185,7 +185,7 @@ audio_output = config.get('viewer', 'audio_output')
 shuffle_playlist = str_to_bol(config.get('viewer', 'shuffle_playlist'))
 
 try:
-    resolution = shuffle_playlist = config.get('viewer', 'resolution')
+    resolution = config.get('viewer', 'resolution')
 except:
     resolution = '1920x1080'
 
