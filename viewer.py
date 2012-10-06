@@ -27,6 +27,11 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(message)s',
                     datefmt='%a, %d %b %Y %H:%M:%S')
 
+# Silence urllib info messages ('Starting new HTTP connection')
+# that are triggered by the remote url availability check in view_web
+requests_log = logging.getLogger("requests")
+requests_log.setLevel(logging.WARNING)
+
 # Get config file
 config = ConfigParser.ConfigParser()
 conf_file = path.join(getenv('HOME'), '.screenly', 'screenly.conf')
