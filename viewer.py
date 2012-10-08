@@ -96,8 +96,9 @@ def load_browser():
     
     logging.info('Browser loaded. Running as PID %d.' % browser.pid)
 
-    # Show splash screen for 60 seconds.
-    sleep(60)
+    if show_splash:
+        # Show splash screen for 60 seconds.
+        sleep(60)
 
     return browser
 
