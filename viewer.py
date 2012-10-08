@@ -99,6 +99,9 @@ def load_browser():
     if show_splash:
         # Show splash screen for 60 seconds.
         sleep(60)
+    else:
+        # Give browser some time to start (we have seen multiple uzbl running without this)
+        sleep(10)
 
     return browser
 
