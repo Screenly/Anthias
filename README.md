@@ -1,12 +1,14 @@
 # Screenly OSE -- Digital Signage for the Raspberry Pi
 
-When we started [Skarmverket](http://skarmverket.se), a small network of public billboards in Sweden, we evaluated many of the existing solutions on the market. Most of them were clunky and/or expensive. A fair number of them ran on Windows and used Adobe Flash. We ended up writing our own solution and used Asus Eee PCs with Linux. 
+Screenly is a product from [WireLoad](http://wireload.net) that we developed for [Skarmverket](http://skarmverket.se), a small network of public billboards in Sweden. Before we began, we evaluated many of the existing solutions on the market. Most of them were clunky and/or expensive. A fair number of them ran on Windows and used Adobe Flash. We ended up writing our own solution and used Asus Eee PCs with Linux. 
 
 Then the [Raspberry Pi](http://www.raspberrypi.org/) came along. Priced at $35, and equipped with everything needed to power a screen. We were immediatelly sold and knew that this was what we wanted to use moving forward. Since we love Open Source, we've decided to release Screenly for free for anyone to use. 
 
 The current version should be consider a beta. While we have been running it in the lab without any issues, there might still be issues that we are unaware of at this point. Yet, we wanted to make Screenly available to the vibrant Rasberry Pi community.
 
 Since Screenly was written for the Raspberry Pi from the ground up, we had to make it as lean as possible. 
+
+Screenly OSE is aimed at single-node deployments. In addition to Screenly OSE, we are also working on a commercial version called Screenly Pro ([wait-list](http://signup.screenlyapp.com/)) that is aimed at deployment larger than one node.
 
 There are many use cases where Screenly can be used, such as:
 
