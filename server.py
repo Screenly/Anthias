@@ -9,12 +9,13 @@ __email__ = "vpetersson@wireload.net"
 
 import sqlite3, ConfigParser
 from netifaces import ifaddresses
-from sys import exit, platform
+from sys import exit, platform, stdout
 from requests import get as req_get
 from os import path, getenv, makedirs, getloadavg, statvfs
 from hashlib import md5
 from json import dumps, loads 
 from datetime import datetime, timedelta
+from time import time
 from bottle import route, run, debug, template, request, validate, error, static_file, get
 from dateutils import datestring
 from StringIO import StringIO
@@ -35,6 +36,12 @@ else:
 configdir = path.join(getenv('HOME'), config.get('main', 'configdir'))
 database = path.join(getenv('HOME'), config.get('main', 'database'))
 nodetype = config.get('main', 'nodetype')
+
+# get database last modification time
+try:
+    db_mtime = path.getmtime(database)
+except:
+    db_mtime = 0
 
 def time_lookup():
     if nodetype == "standalone":
@@ -126,6 +133,7 @@ def get_assets():
     return dumps(playlist)
 
 def initiate_db():
+    global db_mtime
 
     # Create config dir if it doesn't exist
     if not path.isdir(configdir):
@@ -140,10 +148,26 @@ def initiate_db():
     
     if not asset_table:
         c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT)")
+        db_mtime = time()
         return "Initiated database."
     
+@route('/dbisnewer/:t#[0-9]+(\.[0-9]+)?#')
+def dbisnewer(t):
+    try:
+        if float(db_mtime) >= float(t):
+            res = 'yes'
+        else:
+            res = 'no'
+    except:
+        res = 'error'
+
+    print 'dbisnewer t='+str(t)+'  db_mtime='+str(db_mtime)+' : '+res
+    stdout.flush()
+    return res
+
 @route('/process_asset', method='POST')
 def process_asset():
+    global db_mtime
 
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
@@ -186,6 +210,7 @@ def process_asset():
             
             c.execute("INSERT INTO assets (asset_id, name, uri, start_date, end_date, duration, mimetype) VALUES (?,?,?,?,?,?,?)", (asset_id, name, uri, start_date, end_date, duration, mimetype))
             conn.commit()
+            db_mtime = time()
             
             header = "Yay!"
             message =  "Added asset (" + asset_id + ") to the database."
@@ -202,6 +227,7 @@ def process_asset():
 
 @route('/process_schedule', method='POST')
 def process_schedule():
+    global db_mtime
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
@@ -232,6 +258,7 @@ def process_schedule():
 
         c.execute("UPDATE assets SET start_date=?, end_date=?, duration=? WHERE asset_id=?", (start_date, end_date, duration, asset_id))
         conn.commit()
+        db_mtime = time()
         
         header = "Yes!"
         message = "Successfully scheduled asset."
@@ -244,6 +271,7 @@ def process_schedule():
 
 @route('/update_asset', method='POST')
 def update_asset():
+    global db_mtime
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
@@ -277,6 +305,7 @@ def update_asset():
 
         c.execute("UPDATE assets SET start_date=?, end_date=?, duration=?, name=?, uri=?, duration=?, mimetype=? WHERE asset_id=?", (start_date, end_date, duration, name, uri, duration, mimetype, asset_id))
         conn.commit()
+        db_mtime = time()
 
         header = "Yes!"
         message = "Successfully updated asset."
@@ -290,12 +319,14 @@ def update_asset():
 
 @route('/delete_asset/:asset_id')
 def delete_asset(asset_id):
+    global db_mtime
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
     
     c.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
     try:
         conn.commit()
+        db_mtime = time()
         
         header = "Success!"
         message = "Deleted asset."
