@@ -16,7 +16,7 @@ from os import stat as os_stat
 from subprocess import Popen, call 
 import html_templates
 from datetime import datetime
-from time import sleep
+from time import sleep, time
 import logging
 from glob import glob
 from stat import S_ISFIFO
@@ -76,13 +76,18 @@ class Scheduler(object):
 
     def refresh_playlist(self):
         logging.debug('refresh_playlist')
-        if self.counter >= 5:
+        dbisnewer = get("http://127.0.0.1:8080/dbisnewer/"+str(self.gentime))
+        logging.info('dbisnewer: code (%d), text: (%s)' % (dbisnewer.status_code, dbisnewer.text))
+        if dbisnewer.status_code == 200 and dbisnewer.text == "yes":
+            self.update_playlist()
+        elif self.counter >= 5:
             self.update_playlist()
 
     def update_playlist(self):
         logging.debug('update_playlist')
         self.assets = generate_asset_list()
         self.nassets = len(self.assets)
+        self.gentime = time()
         self.counter = 0
         self.index = 0
         logging.debug('update_playlist done, count %d, counter %d, index %d' % (self.nassets, self.counter, self.index))
@@ -106,6 +111,7 @@ def generate_asset_list():
         duration = asset[6]
         mimetype = asset[7]
 
+        logging.debug('generate_asset_list: %s: start (%s) end (%s)' % (name, start_date, end_date))
         if (start_date and end_date) and (start_date < time_cur and end_date > time_cur):
             playlist.append({"name" : name, "uri" : uri, "duration" : duration, "mimetype" : mimetype})
 
