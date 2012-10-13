@@ -16,7 +16,7 @@ from os import stat as os_stat
 from subprocess import Popen, call 
 import html_templates
 from datetime import datetime
-from time import sleep
+from time import sleep, time
 import logging
 from glob import glob
 from stat import S_ISFIFO
@@ -26,6 +26,13 @@ logging.basicConfig(level=logging.INFO,
                     filename='/tmp/screenly_viewer.log',
                     format='%(asctime)s %(message)s',
                     datefmt='%a, %d %b %Y %H:%M:%S')
+
+# Silence urllib info messages ('Starting new HTTP connection')
+# that are triggered by the remote url availability check in view_web
+requests_log = logging.getLogger("requests")
+requests_log.setLevel(logging.WARNING)
+
+logging.debug('Starting viewer.py')
 
 # Get config file
 config = ConfigParser.ConfigParser()
@@ -49,6 +56,46 @@ def str_to_bol(string):
     else:
         return False
 
+class Scheduler(object):
+    def __init__(self, *args, **kwargs):
+        logging.debug('Scheduler init')
+        self.update_playlist()
+
+    def get_next_asset(self):
+        logging.debug('get_next_asset')
+        self.refresh_playlist()
+        logging.debug('get_next_asset after refresh')
+        if self.nassets == 0:
+            return None
+        idx = self.index
+        self.index = (self.index + 1) % self.nassets
+        logging.debug('get_next_asset counter %d returning asset %d of %d' % (self.counter, idx+1, self.nassets))
+        if shuffle_playlist and self.index == 0:
+            self.counter += 1
+        return self.assets[idx]
+
+    def refresh_playlist(self):
+        logging.debug('refresh_playlist')
+        dbisnewer = get("http://127.0.0.1:8080/dbisnewer/"+str(self.gentime))
+        logging.info('dbisnewer: code (%d), text: (%s)' % (dbisnewer.status_code, dbisnewer.text))
+        time_cur = time_lookup()
+        logging.debug('refresh: counter: (%d) deadline (%s) timecur (%s)' % (self.counter, self.deadline, time_cur))
+        if dbisnewer.status_code == 200 and dbisnewer.text == "yes":
+            self.update_playlist()
+        elif shuffle_playlist and self.counter >= 5:
+            self.update_playlist()
+        elif self.deadline <= time_cur:
+            self.update_playlist()
+
+    def update_playlist(self):
+        logging.debug('update_playlist')
+        (self.assets, self.deadline) = generate_asset_list()
+        self.nassets = len(self.assets)
+        self.gentime = time()
+        self.counter = 0
+        self.index = 0
+        logging.debug('update_playlist done, count %d, counter %d, index %d, deadline %s' % (self.nassets, self.counter, self.index, self.deadline))
+
 def generate_asset_list():
     logging.info('Generating asset-list...')
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
@@ -57,6 +104,8 @@ def generate_asset_list():
     query = c.fetchall()
 
     playlist = []
+    time_cur = time_lookup()
+    deadline = None
     for asset in query:
         asset_id = asset[0]  
         name = asset[1].encode('ascii', 'ignore')
@@ -67,14 +116,23 @@ def generate_asset_list():
         duration = asset[6]
         mimetype = asset[7]
 
-        if (start_date and end_date) and (start_date < time_lookup() and end_date > time_lookup()):
+        logging.debug('generate_asset_list: %s: start (%s) end (%s)' % (name, start_date, end_date))
+        if (start_date and end_date) and (start_date < time_cur and end_date > time_cur):
             playlist.append({"name" : name, "uri" : uri, "duration" : duration, "mimetype" : mimetype})
-    
+        if (start_date and end_date) and (start_date < time_cur and end_date > time_cur):
+            if deadline == None or end_date < deadline:
+               deadline = end_date
+        if (start_date and end_date) and (start_date > time_cur and end_date > start_date):
+            if deadline == None or start_date < deadline:
+               deadline = start_date
+
+    logging.debug('generate_asset_list deadline: %s' % deadline)
+
     if shuffle_playlist:
         from random import shuffle
         shuffle(playlist)
     
-    return playlist
+    return (playlist, deadline)
     
 def load_browser():
     logging.info('Loading browser...')
@@ -91,8 +149,12 @@ def load_browser():
     
     logging.info('Browser loaded. Running as PID %d.' % browser.pid)
 
-    # Show splash screen for 60 seconds.
-    sleep(60)
+    if show_splash:
+        # Show splash screen for 60 seconds.
+        sleep(60)
+    else:
+        # Give browser some time to start (we have seen multiple uzbl running without this)
+        sleep(10)
 
     return browser
 
@@ -189,8 +251,6 @@ try:
 except:
     resolution = '1920x1080'
 
-logging.debug('Starting viewer.py')
-
 # Create folder to hold HTML-pages
 html_folder = '/tmp/screenly_html/'
 if not path.isdir(html_folder):
@@ -208,36 +268,34 @@ browser_pid = run_browser.pid
 logging.debug('Getting FIFO.')
 fifo = get_fifo()
 
+# Bring up the blank page (in case there are only videos).
+logging.debug('Loading blank page.')
+view_web(black_page, 1)
+
+logging.debug('Disable the browser status bar')
+disable_browser_status()
+
+scheduler = Scheduler()
+
 # Infinit loop. 
-# Break every 5th run to refresh database
-
+logging.debug('Entering infinite loop.')
 while True:
-    logging.debug('Entering infinite loop.')
 
-    # Bring up the blank page (in case there are only videos).
-    logging.debug('Loading blank page.')
-    view_web(black_page, 1)
+    asset = scheduler.get_next_asset()
+    logging.debug('got asset'+str(asset))
 
-    assets = generate_asset_list()
-
-    logging.debug('Disable the browser status bar')
-    disable_browser_status()
-
-    # If the playlist is empty, go to sleep.
-    if len(assets) == 0:
+    if asset == None:
+        # The playlist is empty, go to sleep.
         logging.info('Playlist is empty. Going to sleep.')
         sleep(5)
     else:
-        counter = 1
-        while counter <= 5:
-            logging.debug('Run counter: %d' % counter)
-            for asset in assets:
-                if "image" in asset["mimetype"]:
-                    view_image(asset["uri"], asset["name"], asset["duration"])
-                elif "video" in asset["mimetype"]:
-                    view_video(asset["uri"])
-                elif "web" in asset["mimetype"]:
-                    view_web(asset["uri"], asset["duration"])
-                else:
-                    print "Unknown MimeType, or MimeType missing"
-            counter += 1
+        logging.info('show asset %s' % asset["name"])
+
+        if "image" in asset["mimetype"]:
+            view_image(asset["uri"], asset["name"], asset["duration"])
+        elif "video" in asset["mimetype"]:
+            view_video(asset["uri"])
+        elif "web" in asset["mimetype"]:
+            view_web(asset["uri"], asset["duration"])
+        else:
+            print "Unknown MimeType, or MimeType missing"
