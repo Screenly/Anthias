@@ -70,7 +70,7 @@ class Scheduler(object):
         idx = self.index
         self.index = (self.index + 1) % self.nassets
         logging.debug('get_next_asset counter %d returning asset %d of %d' % (self.counter, idx+1, self.nassets))
-        if self.index == 0:
+        if shuffle_playlist and self.index == 0:
             self.counter += 1
         return self.assets[idx]
 
@@ -78,19 +78,23 @@ class Scheduler(object):
         logging.debug('refresh_playlist')
         dbisnewer = get("http://127.0.0.1:8080/dbisnewer/"+str(self.gentime))
         logging.info('dbisnewer: code (%d), text: (%s)' % (dbisnewer.status_code, dbisnewer.text))
+        time_cur = time_lookup()
+        logging.debug('refresh: counter: (%d) deadline (%s) timecur (%s)' % (self.counter, self.deadline, time_cur))
         if dbisnewer.status_code == 200 and dbisnewer.text == "yes":
             self.update_playlist()
-        elif self.counter >= 5:
+        elif shuffle_playlist and self.counter >= 5:
+            self.update_playlist()
+        elif self.deadline <= time_cur:
             self.update_playlist()
 
     def update_playlist(self):
         logging.debug('update_playlist')
-        self.assets = generate_asset_list()
+        (self.assets, self.deadline) = generate_asset_list()
         self.nassets = len(self.assets)
         self.gentime = time()
         self.counter = 0
         self.index = 0
-        logging.debug('update_playlist done, count %d, counter %d, index %d' % (self.nassets, self.counter, self.index))
+        logging.debug('update_playlist done, count %d, counter %d, index %d, deadline %s' % (self.nassets, self.counter, self.index, self.deadline))
 
 def generate_asset_list():
     logging.info('Generating asset-list...')
@@ -101,6 +105,7 @@ def generate_asset_list():
 
     playlist = []
     time_cur = time_lookup()
+    deadline = None
     for asset in query:
         asset_id = asset[0]  
         name = asset[1].encode('ascii', 'ignore')
@@ -114,12 +119,20 @@ def generate_asset_list():
         logging.debug('generate_asset_list: %s: start (%s) end (%s)' % (name, start_date, end_date))
         if (start_date and end_date) and (start_date < time_cur and end_date > time_cur):
             playlist.append({"name" : name, "uri" : uri, "duration" : duration, "mimetype" : mimetype})
+        if (start_date and end_date) and (start_date < time_cur and end_date > time_cur):
+            if deadline == None or end_date < deadline:
+               deadline = end_date
+        if (start_date and end_date) and (start_date > time_cur and end_date > start_date):
+            if deadline == None or start_date < deadline:
+               deadline = start_date
+
+    logging.debug('generate_asset_list deadline: %s' % deadline)
 
     if shuffle_playlist:
         from random import shuffle
         shuffle(playlist)
     
-    return playlist
+    return (playlist, deadline)
     
 def load_browser():
     logging.info('Loading browser...')
