@@ -76,11 +76,9 @@ class Scheduler(object):
 
     def refresh_playlist(self):
         logging.debug('refresh_playlist')
-        dbisnewer = get("http://127.0.0.1:8080/dbisnewer/"+str(self.gentime))
-        logging.info('dbisnewer: code (%d), text: (%s)' % (dbisnewer.status_code, dbisnewer.text))
         time_cur = time_lookup()
         logging.debug('refresh: counter: (%d) deadline (%s) timecur (%s)' % (self.counter, self.deadline, time_cur))
-        if dbisnewer.status_code == 200 and dbisnewer.text == "yes":
+        if self.dbisnewer():
             self.update_playlist()
         elif shuffle_playlist and self.counter >= 5:
             self.update_playlist()
@@ -95,6 +93,23 @@ class Scheduler(object):
         self.counter = 0
         self.index = 0
         logging.debug('update_playlist done, count %d, counter %d, index %d, deadline %s' % (self.nassets, self.counter, self.index, self.deadline))
+
+    def dbisnewer(self):
+        return self.dbisnewer_check_file()
+        # return self.dbisnewer_ask_server()
+
+    def dbisnewer_ask_server(self):
+        dbisnewer = get("http://127.0.0.1:8080/dbisnewer/"+str(self.gentime))
+        logging.info('dbisnewer: code (%d), text: (%s)' % (dbisnewer.status_code, dbisnewer.text))
+        return dbisnewer.status_code == 200 and dbisnewer.text == "yes"
+
+    def dbisnewer_check_file(self):
+        # get database file last modification time
+        try:
+            db_mtime = path.getmtime(database)
+        except:
+            db_mtime = 0
+        return db_mtime >= self.gentime
 
 def generate_asset_list():
     logging.info('Generating asset-list...')
