@@ -82,7 +82,7 @@ class Scheduler(object):
             self.update_playlist()
         elif shuffle_playlist and self.counter >= 5:
             self.update_playlist()
-        elif self.deadline <= time_cur:
+        elif self.deadline != None and self.deadline <= time_cur:
             self.update_playlist()
 
     def update_playlist(self):
