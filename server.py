@@ -368,12 +368,18 @@ def system_info():
 @route('/splash_page')
 def splash_page():
 
-    # Make sure the database exist and that it is initated.
+    # Make sure the database exist and that it is initiated.
     initiate_db()
 
-    my_ip = ifaddresses('eth0')[2][0]['addr']
+    try:
+        my_ip = ifaddresses('eth0')[2][0]['addr']
+        ip_lookup = True
+        url = 'http://' + my_ip + ':8080'
+    except:
+        ip_lookup = False
+        url = "Unable to lookup IP from eth0."
 
-    return template('splash_page', my_ip=my_ip)
+    return template('splash_page', ip_lookup=ip_lookup, url=url)
 
 
 @route('/view_playlist')
