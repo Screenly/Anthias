@@ -183,12 +183,18 @@ def process_asset():
 
         # Make sure it's a valid resource
         uri_check = urlparse(uri)
-        if not (uri_check.scheme == "http" or uri_check.scheme == "https"):
+        if not (uri_check.scheme == "http" or uri_check.scheme == "https" or uri_check.scheme == ""):
             header = "Ops!"
-            message = "URL must be HTTP or HTTPS."
+            message = "URL must be HTTP or HTTPS or absolute path to local file."
             return template('message', header=header, message=message)
 
-        file = req_get(uri)
+        if (path.exists(uri)):
+            status_code = 200
+            file_to_open = uri
+        else:
+            file = req_get(uri)
+            status_code = file.status_code
+            file_to_open = StringIO(file.content)
 
         # Only proceed if fetch was successful. 
         if file.status_code == 200:
@@ -197,7 +203,7 @@ def process_asset():
             strict_uri = uri_check.scheme + "://" + uri_check.netloc + uri_check.path
 
             if "image" in mimetype:
-                resolution = Image.open(StringIO(file.content)).size
+                resolution = Image.open(file_to_open).size
             else:
                 resolution = "N/A"
 
