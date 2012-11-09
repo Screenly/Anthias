@@ -317,7 +317,7 @@ def viewIndex():
 def system_info():
     viewer_log_file = '/tmp/screenly_viewer.log'
     if path.exists(viewer_log_file):
-        viewlog = check_output(['tail', '-n', '20', viewer_log_file])    
+        viewlog = check_output(['tail', '-n', '20', viewer_log_file]).split('\n')  
     else:
     	viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
 
