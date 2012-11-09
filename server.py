@@ -82,7 +82,7 @@ def get_playlist():
                 "end_date" : end_date
                 }
         if (start_date and end_date) and (input_start_date < time_lookup() and input_end_date > time_lookup()):
-        playlist.append(playlistitem)
+            playlist.append(playlistitem)
     
     return dumps(playlist)
 
