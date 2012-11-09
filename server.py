@@ -21,6 +21,7 @@ from StringIO import StringIO
 from PIL import Image
 from urlparse import urlparse
 from hurry.filesize import size
+from subprocess import call
 
 # Get config file
 config = ConfigParser.ConfigParser()
@@ -323,7 +324,9 @@ def system_info():
     	viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
 
     loadavg = getloadavg()[2]
-    
+
+    resolution = call(['tvservice', '-s'], stdout=True)
+
     # Calculate disk space
     slash = statvfs("/")
     free_space = size(slash.f_bsize * slash.f_bavail)
@@ -333,7 +336,7 @@ def system_info():
         uptime_seconds = float(f.readline().split()[0])
         uptime = str(timedelta(seconds = uptime_seconds))
 
-    return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=uptime)
+    return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=uptime, resolution=resolution)
 
 @route('/splash_page')
 def splash_page():
