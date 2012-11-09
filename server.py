@@ -82,7 +82,7 @@ def get_playlist():
                 "end_date" : end_date
                 }
         if (start_date and end_date) and (input_start_date < time_lookup() and input_end_date > time_lookup()):
-		playlist.append(playlistitem)
+        playlist.append(playlistitem)
     
     return dumps(playlist)
 
@@ -122,7 +122,7 @@ def get_assets():
                 "start_date" : start_date,
                 "end_date" : end_date
                 }
-	playlist.append(playlistitem)
+    playlist.append(playlistitem)
     
     return dumps(playlist)
 
@@ -319,7 +319,7 @@ def system_info():
     if path.exists(viewer_log_file):
         viewlog = check_output(['tail', '-n', '20', viewer_log_file]).split('\n')  
     else:
-    	viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
+        viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
 
     loadavg = getloadavg()[2]
 
@@ -407,14 +407,14 @@ def edit_asset(asset_id):
     md5 = asset[2]
 
     if asset[3]:
-	    start_date = datestring.date_to_string(asset[3])
+        start_date = datestring.date_to_string(asset[3])
     else:
-	    start_date = None
+        start_date = None
 
     if asset[4]:
-	    end_date = datestring.date_to_string(asset[4])
+        end_date = datestring.date_to_string(asset[4])
     else:
-	    end_date = None
+        end_date = None
 
     duration = asset[5]
     mimetype = asset[6]
