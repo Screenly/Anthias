@@ -140,7 +140,7 @@ def generate_asset_list():
     
     return (playlist, deadline)
 
-def watchdog()
+def watchdog():
     """
     Notify the watchdog file to be used with the watchdog-device.
     """
