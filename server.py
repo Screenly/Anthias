@@ -21,7 +21,7 @@ from StringIO import StringIO
 from PIL import Image
 from urlparse import urlparse
 from hurry.filesize import size
-from subprocess import call
+from subprocess import check_output
 
 # Get config file
 config = ConfigParser.ConfigParser()
@@ -317,15 +317,13 @@ def viewIndex():
 def system_info():
     viewer_log_file = '/tmp/screenly_viewer.log'
     if path.exists(viewer_log_file):
-        f = open(viewer_log_file, 'r')
-        viewlog = f.readlines()    
-        f.close()
+        viewlog = check_output(['tail', '-n', '20', viewer_log_file])    
     else:
     	viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
 
     loadavg = getloadavg()[2]
 
-    resolution = call(['tvservice', '-s'], stdout=True)
+    resolution = check_output(['tvservice', '-s']).strip()
 
     # Calculate disk space
     slash = statvfs("/")
