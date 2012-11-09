@@ -12,7 +12,7 @@ from sys import exit
 from requests import get 
 from platform import machine 
 from os import path, getenv, remove, makedirs
-from os import stat as os_stat
+from os import stat as os_stat, utime
 from subprocess import Popen, call 
 import html_templates
 from datetime import datetime
@@ -139,7 +139,18 @@ def generate_asset_list():
         shuffle(playlist)
     
     return (playlist, deadline)
-    
+
+def watchdog()
+    """
+    Notify the watchdog file to be used with the watchdog-device.
+    """
+
+    watchdog = '/tmp/screenly.watchdog'
+    if not path.isfile(watchdog):
+        open(watchdog, 'w').close()
+    else:
+        utime(watchdog,None)
+
 def load_browser():
     logging.info('Loading browser...')
     browser_bin = "uzbl-browser"
@@ -296,6 +307,8 @@ while True:
         sleep(5)
     else:
         logging.info('show asset %s' % asset["name"])
+
+        watchdog()
 
         if "image" in asset["mimetype"]:
             view_image(asset["uri"], asset["name"], asset["duration"])
