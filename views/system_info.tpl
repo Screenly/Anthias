@@ -9,11 +9,12 @@
             <strong>Load Average</strong>: {{loadavg}}<br />
             <strong>Free Space</strong> (on "/"): {{free_space}}<br />
             <strong>Uptime</strong>: {{uptime}}<br />
-            <strong>Resolution</strong>: {{resolution}}<br />
+            <strong>Monitor info</strong>: {{resolution}}<br />
         </p>
         <h2>Viewer Log</h2>
         <div class="left">
         <p>
+            Last 20 entries...
             % for line in viewlog:
             <small>{{line}}</small><br />
             % end
