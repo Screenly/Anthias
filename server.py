@@ -7,11 +7,12 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 __version__ = "0.1.2"
 __email__ = "vpetersson@wireload.net"
 
-import sqlite3, ConfigParser
+import sqlite3
+from Config import Config
 from netifaces import ifaddresses
-from sys import exit, platform, stdout
+from sys import platform, stdout
 from requests import get as req_get, head as req_head
-from os import path, getenv, makedirs, getloadavg, statvfs
+from os import path, makedirs, getloadavg, statvfs
 from hashlib import md5
 from json import dumps, loads 
 from datetime import datetime, timedelta
@@ -23,25 +24,10 @@ from urlparse import urlparse
 from hurry.filesize import size
 from subprocess import check_output
 
-# Get config file
-config = ConfigParser.ConfigParser()
-conf_file = path.join(getenv('HOME'), '.screenly', 'screenly.conf')
-if not path.isfile(conf_file):
-    print 'Config-file missing.'
-    exit(1)
-else:
-    print 'Reading config-file...'
-    config.read(conf_file)
-
-configdir = path.join(getenv('HOME'), config.get('main', 'configdir'))
-database = path.join(getenv('HOME'), config.get('main', 'database'))
-nodetype = config.get('main', 'nodetype')
-
-def time_lookup():
-    if nodetype == "standalone":
-        return datetime.now()
-    elif nodetype == "managed":
-        return datetime.utcnow()
+# Get config
+config = Config()
+# easy access to database for now, maybe move sqlite3 to the Config as well?
+database = config.database
 
 def get_playlist():
     
@@ -81,7 +67,7 @@ def get_playlist():
                 "start_date" : start_date,
                 "end_date" : end_date
                 }
-        if (start_date and end_date) and (input_start_date < time_lookup() and input_end_date > time_lookup()):
+        if (start_date and end_date) and (input_start_date < config.time_lookup() and input_end_date > config.time_lookup()):
             playlist.append(playlistitem)
     
     return dumps(playlist)
@@ -128,8 +114,8 @@ def get_assets():
 
 def initiate_db():
     # Create config dir if it doesn't exist
-    if not path.isdir(configdir):
-       makedirs(configdir)
+    if not path.isdir(config.configdir):
+       makedirs(config.configdir)
 
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
@@ -345,7 +331,7 @@ def splash_page():
     try:
         my_ip = ifaddresses('eth0')[2][0]['addr']
         ip_lookup = True
-        url = 'http://' + my_ip + ':8080'
+        url = 'http://%s:%i' % (my_ip, config.port)
     except:
         ip_lookup = False
         url = "Unable to lookup IP from eth0."
@@ -444,9 +430,5 @@ def mistake403(code):
 def mistake404(code):
     return 'Sorry, this page does not exist!'
 
-# Ugly local dev fix.
-if platform == "darwin":
-    port = '8080'
-    run(host='127.0.0.1', port=port, reloader=True)
-else:
-    run(host='0.0.0.0', port=8080, reloader=True)
+#Starting the server listen on configured address and port
+run(host=config.listen, port=config.port, reloader=True)
