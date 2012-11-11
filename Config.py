@@ -9,6 +9,7 @@ __email__ = "vpetersson@wireload.net"
 import ConfigParser
 from os import path, getenv
 from datetime import datetime
+from netifaces import ifaddresses
 
 def logg(string, out=None):
     if out is None:
@@ -31,10 +32,6 @@ class Config:
         # Get main config values
         self.database = path.join(getenv('HOME'), config.get('main', 'database'))
         self.nodetype = config.get('main', 'nodetype')
-
-        #this listen directive needs to be handled in viewer,
-        #  if it is 0.0.0.0 then the viewer shuld connect to 127.0.0.0 otherwise it shuld be configured adress,
-        #  the same goes in server, but instead of 127.0.0.1 it shuld be the found adress.
         self.listen = config.get('main', 'listen')
         self.port = config.getint('main', 'port')
 
@@ -52,3 +49,20 @@ class Config:
             return datetime.now()
         elif self.nodetype == "managed":
             return datetime.utcnow()
+
+    def get_conf_url(self):
+        try:
+            if self.listen == '0.0.0.0':
+                server = ifaddresses('eth0')[2][0]['addr']
+            else:
+                server = self.listen
+            return 'http://%s:%i' % (server, self.port)
+        except:
+            return None
+
+    def get_viewer_baseurl(self):
+        if self.listen == '0.0.0.0':
+            server = '127.0.0.1'
+        else:
+            server = self.listen
+        return 'http://%s:%i' % (server, self.port)

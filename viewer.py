@@ -136,7 +136,7 @@ def load_browser():
     browser_bin = "uzbl-browser"
 
     if config.show_splash:
-        browser_load_url = "http://127.0.0.1:%i/splash_page" % config.port
+        browser_load_url = config.get_viewer_baseurl() + '/splash_page'
     else:
         browser_load_url = black_page
 

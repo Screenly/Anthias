@@ -9,7 +9,6 @@ __email__ = "vpetersson@wireload.net"
 
 import sqlite3
 from Config import Config
-from netifaces import ifaddresses
 from sys import platform, stdout
 from requests import get as req_get, head as req_head
 from os import path, makedirs, getloadavg, statvfs
@@ -328,12 +327,9 @@ def splash_page():
     # Make sure the database exist and that it is initiated.
     initiate_db()
 
-    try:
-        my_ip = ifaddresses('eth0')[2][0]['addr']
-        ip_lookup = True
-        url = 'http://%s:%i' % (my_ip, config.port)
-    except:
-        ip_lookup = False
+    url = config.get_conf_url();
+    ip_lookup = url is not None
+    if not ip_lookup:
         url = "Unable to lookup IP from eth0."
 
     return template('splash_page', ip_lookup=ip_lookup, url=url)
