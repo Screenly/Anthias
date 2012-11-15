@@ -122,7 +122,7 @@ def get_assets():
                 "start_date" : start_date,
                 "end_date" : end_date
                 }
-    playlist.append(playlistitem)
+        playlist.append(playlistitem)
     
     return dumps(playlist)
 
