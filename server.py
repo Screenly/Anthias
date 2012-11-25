@@ -157,11 +157,10 @@ def process_asset():
             status_code = file.status_code
             file_to_open = StringIO(file.content)
 
-        # Only proceed if fetch was successful.
-        if file.status_code == 200:
+        # Only proceed if fetch was successful. 
+        if status_code == 200:
             asset_id = md5(name + uri).hexdigest()
 
-            strict_uri = file.url
 
             if "image" in mimetype:
                 resolution = Image.open(file_to_open).size
