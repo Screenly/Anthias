@@ -12,7 +12,7 @@ from sys import exit
 from requests import get 
 from platform import machine 
 from os import path, getenv, remove, makedirs
-from os import stat as os_stat
+from os import stat as os_stat, utime
 from subprocess import Popen, call 
 import html_templates
 from datetime import datetime
@@ -95,15 +95,6 @@ class Scheduler(object):
         logging.debug('update_playlist done, count %d, counter %d, index %d, deadline %s' % (self.nassets, self.counter, self.index, self.deadline))
 
     def dbisnewer(self):
-        return self.dbisnewer_check_file()
-        # return self.dbisnewer_ask_server()
-
-    def dbisnewer_ask_server(self):
-        dbisnewer = get("http://127.0.0.1:8080/dbisnewer/"+str(self.gentime))
-        logging.info('dbisnewer: code (%d), text: (%s)' % (dbisnewer.status_code, dbisnewer.text))
-        return dbisnewer.status_code == 200 and dbisnewer.text == "yes"
-
-    def dbisnewer_check_file(self):
         # get database file last modification time
         try:
             db_mtime = path.getmtime(database)
@@ -148,7 +139,18 @@ def generate_asset_list():
         shuffle(playlist)
     
     return (playlist, deadline)
-    
+
+def watchdog():
+    """
+    Notify the watchdog file to be used with the watchdog-device.
+    """
+
+    watchdog = '/tmp/screenly.watchdog'
+    if not path.isfile(watchdog):
+        open(watchdog, 'w').close()
+    else:
+        utime(watchdog,None)
+
 def load_browser():
     logging.info('Loading browser...')
     browser_bin = "uzbl-browser"
@@ -305,6 +307,8 @@ while True:
         sleep(5)
     else:
         logging.info('show asset %s' % asset["name"])
+
+        watchdog()
 
         if "image" in asset["mimetype"]:
             view_image(asset["uri"], asset["name"], asset["duration"])

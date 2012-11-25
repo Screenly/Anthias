@@ -10,18 +10,18 @@ __email__ = "vpetersson@wireload.net"
 import sqlite3, ConfigParser
 from netifaces import ifaddresses
 from sys import exit, platform, stdout
-from requests import get as req_get
+from requests import get as req_get, head as req_head
 from os import path, getenv, makedirs, getloadavg, statvfs
 from hashlib import md5
 from json import dumps, loads 
 from datetime import datetime, timedelta
-from time import time
 from bottle import route, run, debug, template, request, validate, error, static_file, get
 from dateutils import datestring
 from StringIO import StringIO
 from PIL import Image
 from urlparse import urlparse
 from hurry.filesize import size
+from subprocess import check_output
 
 # Get config file
 config = ConfigParser.ConfigParser()
@@ -36,12 +36,6 @@ else:
 configdir = path.join(getenv('HOME'), config.get('main', 'configdir'))
 database = path.join(getenv('HOME'), config.get('main', 'database'))
 nodetype = config.get('main', 'nodetype')
-
-# get database last modification time
-try:
-    db_mtime = path.getmtime(database)
-except:
-    db_mtime = 0
 
 def time_lookup():
     if nodetype == "standalone":
@@ -88,7 +82,7 @@ def get_playlist():
                 "end_date" : end_date
                 }
         if (start_date and end_date) and (input_start_date < time_lookup() and input_end_date > time_lookup()):
-		playlist.append(playlistitem)
+            playlist.append(playlistitem)
     
     return dumps(playlist)
 
@@ -128,13 +122,11 @@ def get_assets():
                 "start_date" : start_date,
                 "end_date" : end_date
                 }
-	playlist.append(playlistitem)
+        playlist.append(playlistitem)
     
     return dumps(playlist)
 
 def initiate_db():
-    global db_mtime
-
     # Create config dir if it doesn't exist
     if not path.isdir(configdir):
        makedirs(configdir)
@@ -148,27 +140,10 @@ def initiate_db():
     
     if not asset_table:
         c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT)")
-        db_mtime = time()
         return "Initiated database."
     
-@route('/dbisnewer/:t#[0-9]+(\.[0-9]+)?#')
-def dbisnewer(t):
-    try:
-        if float(db_mtime) >= float(t):
-            res = 'yes'
-        else:
-            res = 'no'
-    except:
-        res = 'error'
-
-    print 'dbisnewer t='+str(t)+'  db_mtime='+str(db_mtime)+' : '+res
-    stdout.flush()
-    return res
-
 @route('/process_asset', method='POST')
 def process_asset():
-    global db_mtime
-
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
@@ -192,7 +167,10 @@ def process_asset():
             status_code = 200
             file_to_open = uri
         else:
-            file = req_get(uri)
+            if "image" in mimetype:
+                file = req_get(uri)
+            else:
+                file = req_head(uri)
             status_code = file.status_code
             file_to_open = StringIO(file.content)
 
@@ -216,7 +194,6 @@ def process_asset():
             
             c.execute("INSERT INTO assets (asset_id, name, uri, start_date, end_date, duration, mimetype) VALUES (?,?,?,?,?,?,?)", (asset_id, name, uri, start_date, end_date, duration, mimetype))
             conn.commit()
-            db_mtime = time()
             
             header = "Yay!"
             message =  "Added asset (" + asset_id + ") to the database."
@@ -233,7 +210,6 @@ def process_asset():
 
 @route('/process_schedule', method='POST')
 def process_schedule():
-    global db_mtime
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
@@ -264,7 +240,6 @@ def process_schedule():
 
         c.execute("UPDATE assets SET start_date=?, end_date=?, duration=? WHERE asset_id=?", (start_date, end_date, duration, asset_id))
         conn.commit()
-        db_mtime = time()
         
         header = "Yes!"
         message = "Successfully scheduled asset."
@@ -277,7 +252,6 @@ def process_schedule():
 
 @route('/update_asset', method='POST')
 def update_asset():
-    global db_mtime
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
@@ -311,7 +285,6 @@ def update_asset():
 
         c.execute("UPDATE assets SET start_date=?, end_date=?, duration=?, name=?, uri=?, duration=?, mimetype=? WHERE asset_id=?", (start_date, end_date, duration, name, uri, duration, mimetype, asset_id))
         conn.commit()
-        db_mtime = time()
 
         header = "Yes!"
         message = "Successfully updated asset."
@@ -325,14 +298,12 @@ def update_asset():
 
 @route('/delete_asset/:asset_id')
 def delete_asset(asset_id):
-    global db_mtime
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
     
     c.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
     try:
         conn.commit()
-        db_mtime = time()
         
         header = "Success!"
         message = "Deleted asset."
@@ -352,14 +323,14 @@ def viewIndex():
 def system_info():
     viewer_log_file = '/tmp/screenly_viewer.log'
     if path.exists(viewer_log_file):
-        f = open(viewer_log_file, 'r')
-        viewlog = f.readlines()    
-        f.close()
+        viewlog = check_output(['tail', '-n', '20', viewer_log_file]).split('\n')  
     else:
-    	viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
+        viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
 
     loadavg = getloadavg()[2]
-    
+
+    resolution = check_output(['tvservice', '-s']).strip()
+
     # Calculate disk space
     slash = statvfs("/")
     free_space = size(slash.f_bsize * slash.f_bavail)
@@ -369,7 +340,7 @@ def system_info():
         uptime_seconds = float(f.readline().split()[0])
         uptime = str(timedelta(seconds = uptime_seconds))
 
-    return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=uptime)
+    return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=uptime, resolution=resolution)
 
 @route('/splash_page')
 def splash_page():
@@ -442,14 +413,14 @@ def edit_asset(asset_id):
     md5 = asset[2]
 
     if asset[3]:
-	    start_date = datestring.date_to_string(asset[3])
+        start_date = datestring.date_to_string(asset[3])
     else:
-	    start_date = None
+        start_date = None
 
     if asset[4]:
-	    end_date = datestring.date_to_string(asset[4])
+        end_date = datestring.date_to_string(asset[4])
     else:
-	    end_date = None
+        end_date = None
 
     duration = asset[5]
     mimetype = asset[6]
