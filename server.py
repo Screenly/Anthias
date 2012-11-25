@@ -197,7 +197,7 @@ def process_asset():
             file_to_open = StringIO(file.content)
 
         # Only proceed if fetch was successful. 
-        if file.status_code == 200:
+        if status_code == 200:
             asset_id = md5(name+uri).hexdigest()
             
             strict_uri = uri_check.scheme + "://" + uri_check.netloc + uri_check.path
