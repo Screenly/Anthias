@@ -10,7 +10,7 @@ __email__ = "vpetersson@wireload.net"
 import sqlite3, ConfigParser
 from netifaces import ifaddresses
 from sys import exit, platform, stdout
-from requests import get as req_get, head as req_head
+from requests import head as req_head
 from os import path, getenv, makedirs, getloadavg, statvfs
 from hashlib import md5
 from json import dumps, loads 
@@ -164,10 +164,7 @@ def process_asset():
         if (path.exists(uri)):
             status_code = 200
         else:
-            if "image" in mimetype:
-                file = req_get(uri)
-            else:
-                file = req_head(uri)
+            file = req_head(uri)
             status_code = file.status_code
 
         # Only proceed if fetch was successful. 
