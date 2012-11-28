@@ -17,8 +17,6 @@ from json import dumps, loads
 from datetime import datetime, timedelta
 from bottle import route, run, debug, template, request, validate, error, static_file, get
 from dateutils import datestring
-from StringIO import StringIO
-from PIL import Image
 from urlparse import urlparse
 from hurry.filesize import size
 from subprocess import check_output
@@ -165,25 +163,18 @@ def process_asset():
 
         if (path.exists(uri)):
             status_code = 200
-            file_to_open = uri
         else:
             if "image" in mimetype:
                 file = req_get(uri)
             else:
                 file = req_head(uri)
             status_code = file.status_code
-            file_to_open = StringIO(file.content)
 
         # Only proceed if fetch was successful. 
         if status_code == 200:
             asset_id = md5(name+uri).hexdigest()
             
             strict_uri = uri_check.scheme + "://" + uri_check.netloc + uri_check.path
-
-            if "image" in mimetype:
-                resolution = Image.open(file_to_open).size
-            else:
-                resolution = "N/A"
 
             if "video" in mimetype:
                 duration = "N/A"
