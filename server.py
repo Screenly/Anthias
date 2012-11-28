@@ -14,9 +14,7 @@ from hurry.filesize import size
 from json import dumps, loads
 from netifaces import ifaddresses
 from os import path, makedirs, getloadavg, statvfs
-from PIL import Image
-from requests import get as req_get, head as req_head
-from StringIO import StringIO
+from requests import head as req_head
 from subprocess import check_output
 from sys import  platform
 from urlparse import urlparse
