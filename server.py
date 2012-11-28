@@ -156,22 +156,18 @@ def process_asset():
 
         # Make sure it's a valid resource
         uri_check = urlparse(uri)
-        if not (uri_check.scheme == "http" or uri_check.scheme == "https" or uri_check.scheme == ""):
+        local_and_exists = (uri_check.scheme == "" and path.exists(uri))
+        if not (uri_check.scheme == "http" or uri_check.scheme == "https" or local_and_exists):
             header = "Ops!"
             message = "URL must be HTTP or HTTPS or absolute path to local file."
             return template('message', header=header, message=message)
 
-        if (path.exists(uri)):
-            status_code = 200
-        else:
+        if not local_and_exists:
             file = req_head(uri)
-            status_code = file.status_code
 
         # Only proceed if fetch was successful. 
-        if status_code == 200:
+        if local_and_exists or file.status_code == 200:
             asset_id = md5(name+uri).hexdigest()
-            
-            strict_uri = uri_check.scheme + "://" + uri_check.netloc + uri_check.path
 
             if "video" in mimetype:
                 duration = "N/A"
