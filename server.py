@@ -151,21 +151,13 @@ def process_asset():
 
         if (path.exists(uri)):
             status_code = 200
-            file_to_open = uri
         else:
-            file = req_get(uri, allow_redirects=True)
+            file = req_head(uri, allow_redirects=True)
             status_code = file.status_code
-            file_to_open = StringIO(file.content)
 
-        # Only proceed if fetch was successful. 
+        # Only proceed if fetch was successful.
         if status_code == 200:
             asset_id = md5(name + uri).hexdigest()
-
-
-            if "image" in mimetype:
-                resolution = Image.open(file_to_open).size
-            else:
-                resolution = "N/A"
 
             if "video" in mimetype:
                 duration = "N/A"
