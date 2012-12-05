@@ -142,7 +142,8 @@ def process_asset():
 
         # Make sure it's a valid resource
         uri_check = urlparse(uri)
-        local_and_exists = (uri_check.scheme == "" and path.exists(uri))
+        #Support local assets both as /home/pi/image path #1.png and file:///home/pi/url%20path.png , Note special chars in absolute path.
+        local_and_exists = ((uri_check.scheme == "" and path.exists(uri)) or (uri_check.scheme == "file" and path.exists(uri_check.path)))
         if not (uri_check.scheme == "http" or uri_check.scheme == "https" or local_and_exists):
             header = "Ops!"
             message = "URL must be HTTP or HTTPS or absolute path to local file."
