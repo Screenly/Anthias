@@ -4,7 +4,7 @@ body {
     background-repeat: repeat;
     font-family: "HelveticaNeue-Light","Helvetica Neue Light","HelveticaNeue", "Helvetica Neue", "Helvetica", "Arial" , "sans-serif";
     text-align: center;
-    width: 1024px;
+    width: auto;
     margin-left:auto;
     margin-right:auto;
 }
@@ -41,7 +41,7 @@ table.center {
 }
 
 table,td,th {
-    width: 1024px;
+    width: auto;
     color: #FFFFFF;
     border:0px solid gray;
 }
@@ -88,13 +88,10 @@ ul {
 }
 
 fieldset {
-   border: 0px;
-   width: 20em;
+   width: 40em;
 }
 
 input { 
-    font-size: 15px;
-    font-family: "HelveticaNeue-Light","Helvetica Neue Light","HelveticaNeue", "Helvetica Neue", "Helvetica", "Arial", "sans-serif";    
 }
 
 select { 
@@ -105,13 +102,6 @@ select {
 }
 
 label {
-    width: 145px;
-    float: left;
-    text-align: right;
-    height: 20px;
-    padding-top:5px;
-    margin-right: 0.5em;
-    display: block
 }
 
 div.ui-datepicker {
