@@ -33,3 +33,6 @@ pip-log.txt
 .fseventsd/*
 .Spotlight-V100/*
 venv
+.project
+.pydevproject
+.settings/*
