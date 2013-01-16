@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 
+from datetime import datetime
 from os import path, getenv
 from sys import exit
 import ConfigParser
-import datetime
 import logging
 
 
