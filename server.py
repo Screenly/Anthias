@@ -150,9 +150,9 @@ def process_asset():
             return template('message', header=header, message=message)
 
         if "image" in mimetype:
-            file = req_get(uri)
+            file = req_get(uri, allow_redirects=True)
         else:
-            file = req_head(uri)
+            file = req_head(uri, allow_redirects=True)
 
         # Only proceed if fetch was successful.
         if file.status_code == 200:
