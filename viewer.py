@@ -7,19 +7,21 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 __version__ = "0.1"
 __email__ = "vpetersson@wireload.net"
 
-import sqlite3, ConfigParser
-from sys import exit
-from requests import get 
-from platform import machine 
+from datetime import datetime
+from glob import glob
 from os import path, getenv, remove, makedirs
 from os import stat as os_stat, utime
-from subprocess import Popen, call 
-import html_templates
-from datetime import datetime
-from time import sleep, time
-import logging
-from glob import glob
+from platform import machine
+from requests import get
 from stat import S_ISFIFO
+from subprocess import Popen, call
+from sys import exit
+from time import sleep, time
+import ConfigParser
+import logging
+import sqlite3
+
+import html_templates
 
 # Initiate logging
 logging.basicConfig(level=logging.INFO,
