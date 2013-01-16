@@ -235,52 +235,54 @@ def view_web(url, duration):
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (url))
         pass
 
-# Create folder to hold HTML-pages
-html_folder = '/tmp/screenly_html/'
-if not path.isdir(html_folder):
-    makedirs(html_folder)
 
-# Set up HTML templates
-black_page = html_templates.black_page()
+if __name__ == "__main__":
+    # Create folder to hold HTML-pages
+    html_folder = '/tmp/screenly_html/'
+    if not path.isdir(html_folder):
+        makedirs(html_folder)
 
-# Fire up the browser
-run_browser = load_browser()
+    # Set up HTML templates
+    black_page = html_templates.black_page()
 
-logging.debug('Getting browser PID.')
-browser_pid = run_browser.pid
+    # Fire up the browser
+    run_browser = load_browser()
 
-logging.debug('Getting FIFO.')
-fifo = get_fifo()
+    logging.debug('Getting browser PID.')
+    browser_pid = run_browser.pid
 
-# Bring up the blank page (in case there are only videos).
-logging.debug('Loading blank page.')
-view_web(black_page, 1)
+    logging.debug('Getting FIFO.')
+    fifo = get_fifo()
 
-logging.debug('Disable the browser status bar')
-disable_browser_status()
+    # Bring up the blank page (in case there are only videos).
+    logging.debug('Loading blank page.')
+    view_web(black_page, 1)
 
-scheduler = Scheduler()
+    logging.debug('Disable the browser status bar')
+    disable_browser_status()
 
-# Infinite loop.
-logging.debug('Entering infinite loop.')
-while True:
-    asset = scheduler.get_next_asset()
-    logging.debug('got asset' + str(asset))
+    scheduler = Scheduler()
 
-    if asset == None:
-        # The playlist is empty, go to sleep.
-        logging.info('Playlist is empty. Going to sleep.')
-        sleep(5)
-    else:
-        logging.info('show asset %s' % asset["name"])
+    # Infinite loop.
+    logging.debug('Entering infinite loop.')
+    while True:
+        asset = scheduler.get_next_asset()
+        logging.debug('got asset' + str(asset))
 
-        watchdog()
-
-        if "image" in asset["mimetype"]:
-            view_image(asset["uri"], asset["name"], asset["duration"])
-        elif "video" in asset["mimetype"]:
-            view_video(asset["uri"])
-        elif "web" in asset["mimetype"]:
-            view_web(asset["uri"], asset["duration"])
+        if asset == None:
+            # The playlist is empty, go to sleep.
+            logging.info('Playlist is empty. Going to sleep.')
+            sleep(5)
         else:
-            print "Unknown MimeType, or MimeType missing"
+            logging.info('show asset %s' % asset["name"])
+
+            watchdog()
+
+            if "image" in asset["mimetype"]:
+                view_image(asset["uri"], asset["name"], asset["duration"])
+            elif "video" in asset["mimetype"]:
+                view_video(asset["uri"])
+            elif "web" in asset["mimetype"]:
+                view_web(asset["uri"], asset["duration"])
+            else:
+                print "Unknown MimeType, or MimeType missing"
