@@ -39,14 +39,15 @@ configdir = path.join(getenv('HOME'), config.get('main', 'configdir'))
 database = path.join(getenv('HOME'), config.get('main', 'database'))
 nodetype = config.get('main', 'nodetype')
 
+
 def time_lookup():
     if nodetype == "standalone":
         return datetime.now()
     elif nodetype == "managed":
         return datetime.utcnow()
 
-def get_playlist():
 
+def get_playlist():
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
     c.execute("SELECT * FROM assets ORDER BY name")
@@ -57,7 +58,7 @@ def get_playlist():
         # Match variables with database
         asset_id = asset[0]
         name = asset[1]
-        uri = asset[2] # Path in local database
+        uri = asset[2]  # Path in local database
         input_start_date = asset[4]
         input_end_date = asset[5]
 
@@ -75,21 +76,21 @@ def get_playlist():
         mimetype = asset[7]
 
         playlistitem = {
-                "name" : name,
-                "uri" : uri,
-                "duration" : duration,
-                "mimetype" : mimetype,
-                "asset_id" : asset_id,
-                "start_date" : start_date,
-                "end_date" : end_date
-                }
+            "name": name,
+            "uri": uri,
+            "duration": duration,
+            "mimetype": mimetype,
+            "asset_id": asset_id,
+            "start_date": start_date,
+            "end_date": end_date
+        }
         if (start_date and end_date) and (input_start_date < time_lookup() and input_end_date > time_lookup()):
             playlist.append(playlistitem)
 
     return dumps(playlist)
 
-def get_assets():
 
+def get_assets():
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
     c.execute("SELECT asset_id, name, uri, start_date, end_date, duration, mimetype FROM assets ORDER BY name")
@@ -100,7 +101,7 @@ def get_assets():
         # Match variables with database
         asset_id = asset[0]
         name = asset[1]
-        uri = asset[2] # Path in local database
+        uri = asset[2]  # Path in local database
 
         try:
             start_date = datestring.date_to_string(asset[3])
@@ -116,22 +117,23 @@ def get_assets():
         mimetype = asset[6]
 
         playlistitem = {
-                "name" : name,
-                "uri" : uri,
-                "duration" : duration,
-                "mimetype" : mimetype,
-                "asset_id" : asset_id,
-                "start_date" : start_date,
-                "end_date" : end_date
-                }
+            "name": name,
+            "uri": uri,
+            "duration": duration,
+            "mimetype": mimetype,
+            "asset_id": asset_id,
+            "start_date": start_date,
+            "end_date": end_date
+        }
         playlist.append(playlistitem)
 
     return dumps(playlist)
 
+
 def initiate_db():
     # Create config dir if it doesn't exist
     if not path.isdir(configdir):
-       makedirs(configdir)
+        makedirs(configdir)
 
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
@@ -144,19 +146,20 @@ def initiate_db():
         c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT)")
         return "Initiated database."
 
+
 @route('/process_asset', method='POST')
 def process_asset():
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
-    if (request.POST.get('name','').strip() and
-        request.POST.get('uri','').strip() and
-        request.POST.get('mimetype','').strip()
+    if (request.POST.get('name', '').strip() and
+        request.POST.get('uri', '').strip() and
+        request.POST.get('mimetype', '').strip()
         ):
 
-        name =  request.POST.get('name','').decode('UTF-8')
-        uri = request.POST.get('uri','').strip()
-        mimetype = request.POST.get('mimetype','').strip()
+        name = request.POST.get('name', '').decode('UTF-8')
+        uri = request.POST.get('uri', '').strip()
+        mimetype = request.POST.get('mimetype', '').strip()
 
         # Make sure it's a valid resource
         uri_check = urlparse(uri)
@@ -172,7 +175,7 @@ def process_asset():
 
         # Only proceed if fetch was successful.
         if file.status_code == 200:
-            asset_id = md5(name+uri).hexdigest()
+            asset_id = md5(name + uri).hexdigest()
 
             strict_uri = uri_check.scheme + "://" + uri_check.netloc + uri_check.path
 
@@ -192,7 +195,7 @@ def process_asset():
             conn.commit()
 
             header = "Yay!"
-            message =  "Added asset (" + asset_id + ") to the database."
+            message = "Added asset (" + asset_id + ") to the database."
             return template('message', header=header, message=message)
 
         else:
@@ -204,19 +207,20 @@ def process_asset():
         message = "Invalid input."
         return template('message', header=header, message=message)
 
+
 @route('/process_schedule', method='POST')
 def process_schedule():
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
-    if (request.POST.get('asset','').strip() and
-        request.POST.get('start','').strip() and
-        request.POST.get('end','').strip()
+    if (request.POST.get('asset', '').strip() and
+        request.POST.get('start', '').strip() and
+        request.POST.get('end', '').strip()
         ):
 
-        asset_id =  request.POST.get('asset','').strip()
-        input_start = request.POST.get('start','').strip()
-        input_end = request.POST.get('end','').strip()
+        asset_id = request.POST.get('asset', '').strip()
+        input_start = request.POST.get('start', '').strip()
+        input_end = request.POST.get('end', '').strip()
 
         start_date = datetime.strptime(input_start, '%Y-%m-%d @ %H:%M')
         end_date = datetime.strptime(input_end, '%Y-%m-%d @ %H:%M')
@@ -226,7 +230,7 @@ def process_schedule():
 
         if "image" or "web" in asset_mimetype:
             try:
-                duration = request.POST.get('duration','').strip()
+                duration = request.POST.get('duration', '').strip()
             except:
                 header = "Ops!"
                 message = "Duration missing. This is required for images and web-pages."
@@ -246,35 +250,36 @@ def process_schedule():
         message = "Failed to process schedule."
         return template('message', header=header, message=message)
 
+
 @route('/update_asset', method='POST')
 def update_asset():
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
-    if (request.POST.get('asset_id','').strip() and
-        request.POST.get('name','').strip() and
-        request.POST.get('uri','').strip() and
-        request.POST.get('mimetype','').strip()
+    if (request.POST.get('asset_id', '').strip() and
+        request.POST.get('name', '').strip() and
+        request.POST.get('uri', '').strip() and
+        request.POST.get('mimetype', '').strip()
         ):
 
-        asset_id =  request.POST.get('asset_id','').strip()
-        name = request.POST.get('name','').decode('UTF-8')
-        uri = request.POST.get('uri','').strip()
-        mimetype = request.POST.get('mimetype','').strip()
+        asset_id = request.POST.get('asset_id', '').strip()
+        name = request.POST.get('name', '').decode('UTF-8')
+        uri = request.POST.get('uri', '').strip()
+        mimetype = request.POST.get('mimetype', '').strip()
 
         try:
-            duration = request.POST.get('duration','').strip()
+            duration = request.POST.get('duration', '').strip()
         except:
             duration = None
 
         try:
-            input_start = request.POST.get('start','')
+            input_start = request.POST.get('start', '')
             start_date = datetime.strptime(input_start, '%Y-%m-%d @ %H:%M')
         except:
             start_date = None
 
         try:
-            input_end = request.POST.get('end','').strip()
+            input_end = request.POST.get('end', '').strip()
             end_date = datetime.strptime(input_end, '%Y-%m-%d @ %H:%M')
         except:
             end_date = None
@@ -309,6 +314,7 @@ def delete_asset(asset_id):
         message = "Failed to delete asset."
         return template('message', header=header, message=message)
 
+
 @route('/')
 def viewIndex():
     initiate_db()
@@ -334,13 +340,13 @@ def system_info():
     # Get uptime
     with open('/proc/uptime', 'r') as f:
         uptime_seconds = float(f.readline().split()[0])
-        uptime = str(timedelta(seconds = uptime_seconds))
+        uptime = str(timedelta(seconds=uptime_seconds))
 
     return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=uptime, resolution=resolution)
 
+
 @route('/splash_page')
 def splash_page():
-
     # Make sure the database exist and that it is initiated.
     initiate_db()
 
@@ -362,6 +368,7 @@ def view_node_playlist():
 
     return template('view_playlist', nodeplaylist=nodeplaylist)
 
+
 @route('/view_assets')
 def view_assets():
 
@@ -377,7 +384,6 @@ def add_asset():
 
 @route('/schedule_asset')
 def schedule_asset():
-
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
@@ -389,15 +395,15 @@ def schedule_asset():
         asset_id = asset[1]
 
         assets.append({
-            'name' : name,
-            'asset_id' : asset_id,
+            'name': name,
+            'asset_id': asset_id,
         })
 
     return template('schedule_asset', assets=assets)
 
+
 @route('/edit_asset/:asset_id')
 def edit_asset(asset_id):
-
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
@@ -422,25 +428,29 @@ def edit_asset(asset_id):
     mimetype = asset[6]
 
     asset_info = {
-            "name" : name,
-            "uri" : uri,
-            "duration" : duration,
-            "mimetype" : mimetype,
-            "asset_id" : asset_id,
-            "start_date" : start_date,
-            "end_date" : end_date
+            "name": name,
+            "uri": uri,
+            "duration": duration,
+            "mimetype": mimetype,
+            "asset_id": asset_id,
+            "start_date": start_date,
+            "end_date": end_date
             }
     #return str(asset_info)
     return template('edit_asset', asset_info=asset_info)
 
 # Static
+
+
 @route('/static/:path#.+#', name='static')
 def static(path):
     return static_file(path, root='static')
 
+
 @error(403)
 def mistake403(code):
     return 'The parameter you passed has the wrong format!'
+
 
 @error(404)
 def mistake404(code):
