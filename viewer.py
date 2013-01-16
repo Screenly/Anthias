@@ -55,10 +55,7 @@ def time_lookup():
 
 
 def str_to_bol(string):
-    if 'true' in string.lower():
-        return True
-    else:
-        return False
+    return 'true' in string.lower()
 
 
 class Scheduler(object):
