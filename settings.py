@@ -4,6 +4,7 @@
 from os import path, getenv
 from sys import exit
 import ConfigParser
+import datetime
 import logging
 
 
@@ -45,3 +46,6 @@ try:
     resolution = config.get('viewer', 'resolution')
 except:
     resolution = '1920x1080'
+
+# This assumes nodetype never changes from "standalone" to "managed" during a run.
+get_current_time = datetime.now if nodetype == "standalone" else datetime.utcnow

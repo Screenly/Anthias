@@ -25,13 +25,7 @@ import sqlite3
 from bottle import route, run, debug, template, request, error, static_file
 
 import settings
-
-
-def time_lookup():
-    if settings.nodetype == "standalone":
-        return datetime.now()
-    elif settings.nodetype == "managed":
-        return datetime.utcnow()
+from settings import get_current_time
 
 
 def get_playlist():
@@ -71,7 +65,7 @@ def get_playlist():
             "start_date": start_date,
             "end_date": end_date
         }
-        if (start_date and end_date) and (input_start_date < time_lookup() and input_end_date > time_lookup()):
+        if (start_date and end_date) and (input_start_date < get_current_time() and input_end_date > get_current_time()):
             playlist.append(playlistitem)
 
     return dumps(playlist)
