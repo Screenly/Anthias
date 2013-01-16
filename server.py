@@ -13,42 +13,29 @@ from hashlib import md5
 from hurry.filesize import size
 from json import dumps, loads
 from netifaces import ifaddresses
-from os import path, getenv, makedirs, getloadavg, statvfs
+from os import path, makedirs, getloadavg, statvfs
 from PIL import Image
 from requests import get as req_get, head as req_head
 from StringIO import StringIO
 from subprocess import check_output
-from sys import exit, platform
+from sys import  platform
 from urlparse import urlparse
-import ConfigParser
 import sqlite3
 
 from bottle import route, run, debug, template, request, error, static_file
 
-# Get config file
-config = ConfigParser.ConfigParser()
-conf_file = path.join(getenv('HOME'), '.screenly', 'screenly.conf')
-if not path.isfile(conf_file):
-    print 'Config-file missing.'
-    exit(1)
-else:
-    print 'Reading config-file...'
-    config.read(conf_file)
-
-configdir = path.join(getenv('HOME'), config.get('main', 'configdir'))
-database = path.join(getenv('HOME'), config.get('main', 'database'))
-nodetype = config.get('main', 'nodetype')
+import settings
 
 
 def time_lookup():
-    if nodetype == "standalone":
+    if settings.nodetype == "standalone":
         return datetime.now()
-    elif nodetype == "managed":
+    elif settings.nodetype == "managed":
         return datetime.utcnow()
 
 
 def get_playlist():
-    conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
     c.execute("SELECT * FROM assets ORDER BY name")
     assets = c.fetchall()
@@ -91,7 +78,7 @@ def get_playlist():
 
 
 def get_assets():
-    conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
     c.execute("SELECT asset_id, name, uri, start_date, end_date, duration, mimetype FROM assets ORDER BY name")
     assets = c.fetchall()
@@ -132,10 +119,10 @@ def get_assets():
 
 def initiate_db():
     # Create config dir if it doesn't exist
-    if not path.isdir(configdir):
-        makedirs(configdir)
+    if not path.isdir(settings.configdir):
+        makedirs(settings.configdir)
 
-    conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
     # Check if the asset-table exist. If it doesn't, create it.
@@ -149,7 +136,7 @@ def initiate_db():
 
 @route('/process_asset', method='POST')
 def process_asset():
-    conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
     if (request.POST.get('name', '').strip() and
@@ -210,7 +197,7 @@ def process_asset():
 
 @route('/process_schedule', method='POST')
 def process_schedule():
-    conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
     if (request.POST.get('asset', '').strip() and
@@ -253,7 +240,7 @@ def process_schedule():
 
 @route('/update_asset', method='POST')
 def update_asset():
-    conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
     if (request.POST.get('asset_id', '').strip() and
@@ -299,7 +286,7 @@ def update_asset():
 
 @route('/delete_asset/:asset_id')
 def delete_asset(asset_id):
-    conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
     c.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
@@ -384,7 +371,7 @@ def add_asset():
 
 @route('/schedule_asset')
 def schedule_asset():
-    conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
     assets = []
@@ -404,7 +391,7 @@ def schedule_asset():
 
 @route('/edit_asset/:asset_id')
 def edit_asset(asset_id):
-    conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
     c.execute("SELECT name, uri, md5, start_date, end_date, duration, mimetype FROM assets WHERE asset_id=?", (asset_id,))
