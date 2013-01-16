@@ -46,17 +46,20 @@ else:
     logging.debug('Reading config-file...')
     config.read(conf_file)
 
+
 def time_lookup():
     if nodetype == "standalone":
         return datetime.now()
     elif nodetype == "managed":
         return datetime.utcnow()
 
+
 def str_to_bol(string):
     if 'true' in string.lower():
         return True
     else:
         return False
+
 
 class Scheduler(object):
     def __init__(self, *args, **kwargs):
@@ -71,7 +74,7 @@ class Scheduler(object):
             return None
         idx = self.index
         self.index = (self.index + 1) % self.nassets
-        logging.debug('get_next_asset counter %d returning asset %d of %d' % (self.counter, idx+1, self.nassets))
+        logging.debug('get_next_asset counter %d returning asset %d of %d' % (self.counter, idx + 1, self.nassets))
         if shuffle_playlist and self.index == 0:
             self.counter += 1
         return self.assets[idx]
@@ -104,6 +107,7 @@ class Scheduler(object):
             db_mtime = 0
         return db_mtime >= self.gentime
 
+
 def generate_asset_list():
     logging.info('Generating asset-list...')
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
@@ -115,7 +119,7 @@ def generate_asset_list():
     time_cur = time_lookup()
     deadline = None
     for asset in query:
-        asset_id = asset[0]  
+        asset_id = asset[0]
         name = asset[1].encode('ascii', 'ignore')
         uri = asset[2]
         md5 = asset[3]
@@ -126,21 +130,22 @@ def generate_asset_list():
 
         logging.debug('generate_asset_list: %s: start (%s) end (%s)' % (name, start_date, end_date))
         if (start_date and end_date) and (start_date < time_cur and end_date > time_cur):
-            playlist.append({"name" : name, "uri" : uri, "duration" : duration, "mimetype" : mimetype})
+            playlist.append({"name": name, "uri": uri, "duration": duration, "mimetype": mimetype})
         if (start_date and end_date) and (start_date < time_cur and end_date > time_cur):
             if deadline == None or end_date < deadline:
-               deadline = end_date
+                deadline = end_date
         if (start_date and end_date) and (start_date > time_cur and end_date > start_date):
             if deadline == None or start_date < deadline:
-               deadline = start_date
+                deadline = start_date
 
     logging.debug('generate_asset_list deadline: %s' % deadline)
 
     if shuffle_playlist:
         from random import shuffle
         shuffle(playlist)
-    
+
     return (playlist, deadline)
+
 
 def watchdog():
     """
@@ -151,7 +156,8 @@ def watchdog():
     if not path.isfile(watchdog):
         open(watchdog, 'w').close()
     else:
-        utime(watchdog,None)
+        utime(watchdog, None)
+
 
 def load_browser():
     logging.info('Loading browser...')
@@ -165,7 +171,7 @@ def load_browser():
 
     browser_args = [browser_bin, "--geometry=" + browser_resolution, "--uri=" + browser_load_url]
     browser = Popen(browser_args)
-    
+
     logging.info('Browser loaded. Running as PID %d.' % browser.pid)
 
     if show_splash:
@@ -177,14 +183,16 @@ def load_browser():
 
     return browser
 
+
 def get_fifo():
     candidates = glob('/tmp/uzbl_fifo_*')
     for file in candidates:
         if S_ISFIFO(os_stat(file).st_mode):
             return file
         else:
-            return None    
-    
+            return None
+
+
 def disable_browser_status():
     logging.debug('Disabled status-bar in browser')
     f = open(fifo, 'a')
@@ -198,13 +206,14 @@ def view_image(image, name, duration):
     f = open(fifo, 'a')
     f.write('set uri = %s\n' % url)
     f.close()
-    
+
     sleep(int(duration))
-    
+
     f = open(fifo, 'a')
     f.write('set uri = %s\n' % black_page)
     f.close()
-    
+
+
 def view_video(video):
     arch = machine()
 
@@ -228,12 +237,12 @@ def view_video(video):
     elif arch == "x86_64" or arch == "x86_32":
         logging.debug('Displaying video %s. Detected x86. Using mplayer.' % video)
         mplayer = "mplayer"
-        run = call([mplayer, "-fs", "-nosound", str(video) ], stdout=False)
+        run = call([mplayer, "-fs", "-nosound", str(video)], stdout=False)
         if run != 0:
             logging.debug("Unclean exit: " + str(run))
 
-def view_web(url, duration):
 
+def view_web(url, duration):
     # If local web page, check if the file exist. If remote, check if it is
     # available.
     if (html_folder in url and path.exists(url)):
@@ -242,18 +251,18 @@ def view_web(url, duration):
         web_resource = get(url).status_code
 
     if web_resource == 200:
-        logging.debug('Web content appears to be available. Proceeding.')  
+        logging.debug('Web content appears to be available. Proceeding.')
         logging.debug('Displaying url %s for %s seconds.' % (url, duration))
         f = open(fifo, 'a')
         f.write('set uri = %s\n' % url)
         f.close()
-    
+
         sleep(int(duration))
-    
+
         f = open(fifo, 'a')
         f.write('set uri = %s\n' % black_page)
         f.close()
-    else: 
+    else:
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (url))
         pass
 
@@ -273,7 +282,7 @@ except:
 # Create folder to hold HTML-pages
 html_folder = '/tmp/screenly_html/'
 if not path.isdir(html_folder):
-   makedirs(html_folder)
+    makedirs(html_folder)
 
 # Set up HTML templates
 black_page = html_templates.black_page()
@@ -296,12 +305,11 @@ disable_browser_status()
 
 scheduler = Scheduler()
 
-# Infinit loop. 
+# Infinite loop.
 logging.debug('Entering infinite loop.')
 while True:
-
     asset = scheduler.get_next_asset()
-    logging.debug('got asset'+str(asset))
+    logging.debug('got asset' + str(asset))
 
     if asset == None:
         # The playlist is empty, go to sleep.
