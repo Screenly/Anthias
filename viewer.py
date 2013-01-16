@@ -11,6 +11,7 @@ from glob import glob
 from os import path, getenv, remove, makedirs
 from os import stat as os_stat, utime
 from platform import machine
+from random import shuffle
 from requests import get
 from stat import S_ISFIFO
 from subprocess import Popen, call
@@ -103,7 +104,6 @@ def generate_asset_list():
     logging.debug('generate_asset_list deadline: %s' % deadline)
 
     if settings.shuffle_playlist:
-        from random import shuffle
         shuffle(playlist)
 
     return (playlist, deadline)
