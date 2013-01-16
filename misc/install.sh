@@ -28,6 +28,9 @@ echo "Adding Screenly's config-file"
 mkdir -p ~/.screenly
 cp ~/screenly/misc/screenly.conf ~/.screenly/
 
+echo "Creating cache directory"
+mkdir -p ~/.screenly/cache
+
 echo "Enabling Watchdog..."
 sudo modprobe bcm2708_wdog
 sudo cp /etc/modules /etc/modules.bak

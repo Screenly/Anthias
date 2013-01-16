@@ -11,7 +11,7 @@ import sqlite3, ConfigParser
 from netifaces import ifaddresses
 from sys import exit, platform, stdout
 from requests import get as req_get, head as req_head
-from os import path, getenv, makedirs, getloadavg, statvfs
+from os import path, getenv, makedirs, getloadavg, statvfs, remove
 from hashlib import md5
 from json import dumps, loads 
 from datetime import datetime, timedelta
@@ -22,6 +22,7 @@ from PIL import Image
 from urlparse import urlparse
 from hurry.filesize import size
 from subprocess import check_output
+import urllib
 
 # Get config file
 config = ConfigParser.ConfigParser()
@@ -71,6 +72,8 @@ def get_playlist():
             
         duration = asset[6]
         mimetype = asset[7]
+        is_cached = asset[8]
+        cached_location = asset[9]
 
         playlistitem = {
                 "name" : name,
@@ -79,7 +82,9 @@ def get_playlist():
                 "mimetype" : mimetype,
                 "asset_id" : asset_id,
                 "start_date" : start_date,
-                "end_date" : end_date
+                "end_date" : end_date,
+                "is_cached" : is_cached,
+                "cached_location" : cached_location
                 }
         if (start_date and end_date) and (input_start_date < time_lookup() and input_end_date > time_lookup()):
             playlist.append(playlistitem)
@@ -90,7 +95,7 @@ def get_assets():
     
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
-    c.execute("SELECT asset_id, name, uri, start_date, end_date, duration, mimetype FROM assets ORDER BY name")
+    c.execute("SELECT asset_id, name, uri, start_date, end_date, duration, mimetype, is_cached, cached_location FROM assets ORDER BY name")
     assets = c.fetchall()
     
     playlist = []
@@ -112,6 +117,8 @@ def get_assets():
             
         duration = asset[5]
         mimetype = asset[6]
+        is_cached = asset[7]
+        cached_location = asset[8]
 
         playlistitem = {
                 "name" : name,
@@ -120,7 +127,9 @@ def get_assets():
                 "mimetype" : mimetype,
                 "asset_id" : asset_id,
                 "start_date" : start_date,
-                "end_date" : end_date
+                "end_date" : end_date,
+                "is_cached" : is_cached,
+                "cached_location" : cached_location
                 }
         playlist.append(playlistitem)
     
@@ -129,7 +138,7 @@ def get_assets():
 def initiate_db():
     # Create config dir if it doesn't exist
     if not path.isdir(configdir):
-       makedirs(configdir)
+        makedirs(configdir)
 
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
@@ -139,7 +148,7 @@ def initiate_db():
     asset_table = c.fetchone()
     
     if not asset_table:
-        c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT)")
+        c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT, is_cached TEXT, cached_location TEXT)")
         return "Initiated database."
     
 @route('/process_asset', method='POST')
@@ -155,6 +164,9 @@ def process_asset():
         name =  request.POST.get('name','').decode('UTF-8')
         uri = request.POST.get('uri','').strip()
         mimetype = request.POST.get('mimetype','').strip()
+        is_cached = request.POST.get('is_cached','').strip()
+        if not "on" in is_cached:
+            is_cached = "off"
 
         # Make sure it's a valid resource
         uri_check = urlparse(uri)
@@ -186,11 +198,25 @@ def process_asset():
             end_date = ""
             duration = ""
             
-            c.execute("INSERT INTO assets (asset_id, name, uri, start_date, end_date, duration, mimetype) VALUES (?,?,?,?,?,?,?)", (asset_id, name, uri, start_date, end_date, duration, mimetype))
+            if "on" in is_cached:
+                cached_location = cache_asset(asset_id, uri)
+
+                if "diskspace" in cached_location:
+                    is_cached = "off"
+                    message = "Insufficient diskspace to cache asset. "
+                    cached_location = "N/A"
+                else:
+                    message = "Asset successfully cached at " + cached_location + ". "
+            else:
+                cached_location = "N/A"
+                is_cached = "off"
+                message = ""
+
+            c.execute("INSERT INTO assets (asset_id, name, uri, start_date, end_date, duration, mimetype, is_cached, cached_location) VALUES (?,?,?,?,?,?,?,?,?)", (asset_id, name, uri, start_date, end_date, duration, mimetype, is_cached, cached_location))
             conn.commit()
             
             header = "Yay!"
-            message =  "Added asset (" + asset_id + ") to the database."
+            message = message + "Added asset (" + asset_id + ") to the database."
             return template('message', header=header, message=message)
             
         else:
@@ -259,6 +285,9 @@ def update_asset():
         name = request.POST.get('name','').decode('UTF-8')
         uri = request.POST.get('uri','').strip()
         mimetype = request.POST.get('mimetype','').strip()
+        is_cached_post = request.POST.get('is_cached','').strip()
+        if not "on" in is_cached_post:
+            is_cached_post = "off"
 
         try:
             duration = request.POST.get('duration','').strip()
@@ -277,11 +306,30 @@ def update_asset():
         except:
             end_date = None
 
-        c.execute("UPDATE assets SET start_date=?, end_date=?, duration=?, name=?, uri=?, duration=?, mimetype=? WHERE asset_id=?", (start_date, end_date, duration, name, uri, duration, mimetype, asset_id))
+        c.execute("SELECT is_cached, cached_location FROM assets WHERE asset_id=?", (asset_id,))
+        asset = c.fetchone()
+        is_cached = asset[0]
+        cached_location = asset[1]
+        message = ""
+        if "on" in is_cached and "off" in is_cached_post:
+            remove("/home/pi/.screenly/cache/" + asset_id)
+            message = "Removed cached asset at /home/pi/.screenly/cache/" + asset_id + ". "
+            cached_location = "N/A"
+
+        if "off" in is_cached and "on" in is_cached_post:
+            cached_location = cache_asset(asset_id, uri)
+            if "diskspace" in cached_location:
+                is_cached_post = "off"
+                message = "Insufficient diskspace to cache asset. "
+                cached_location = "N/A"
+            else:
+                message = "Asset successfully cached at " + cached_location + ". "
+
+        c.execute("UPDATE assets SET start_date=?, end_date=?, name=?, uri=?, duration=?, mimetype=?, is_cached=?, cached_location=? WHERE asset_id=?", (start_date, end_date, name, uri, duration, mimetype, is_cached_post, cached_location, asset_id))
         conn.commit()
 
         header = "Yes!"
-        message = "Successfully updated asset."
+        message = message + "Successfully updated asset."
         return template('message', header=header, message=message)
 
     else:
@@ -294,13 +342,21 @@ def update_asset():
 def delete_asset(asset_id):
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
-    
+
+    c.execute("SELECT is_cached FROM assets WHERE asset_id=?", (asset_id,))
+    asset = c.fetchone()
+    is_cached = asset[0]
+
     c.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
     try:
         conn.commit()
         
+        message = ""
+        if "on" in is_cached:
+            remove("/home/pi/.screenly/cache/" + asset_id)
+            message = "Removed cached asset at /home/pi/.screenly/cache/" + asset_id + ". "
         header = "Success!"
-        message = "Deleted asset."
+        message = message + "Deleted asset."
         return template('message', header=header, message=message)
     except:
         header = "Ops!"
@@ -370,7 +426,10 @@ def view_assets():
 
 @route('/add_asset')
 def add_asset():
-    return template('add_asset')
+    disk = statvfs("/home/pi/.screenly/cache")
+    free_space = size(disk.f_bsize * disk.f_bavail)
+    free_space_bytes = (disk.f_bsize * disk.f_bavail)
+    return template('add_asset', free_space=free_space, free_space_bytes=free_space_bytes)
 
 
 @route('/schedule_asset')
@@ -395,11 +454,10 @@ def schedule_asset():
         
 @route('/edit_asset/:asset_id')
 def edit_asset(asset_id):
-
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
-    c.execute("SELECT name, uri, md5, start_date, end_date, duration, mimetype FROM assets WHERE asset_id=?", (asset_id,))
+    c.execute("SELECT name, uri, md5, start_date, end_date, duration, mimetype, is_cached, cached_location FROM assets WHERE asset_id=?", (asset_id,))
     asset = c.fetchone()
     
     name = asset[0]
@@ -418,7 +476,12 @@ def edit_asset(asset_id):
 
     duration = asset[5]
     mimetype = asset[6]
-
+    is_cached = asset[7]
+    cached_location = asset[8]
+    if "on" in is_cached:
+        is_cached = "checked"
+    if "off" in is_cached:
+        is_cached = ""
     asset_info = {
             "name" : name,
             "uri" : uri,
@@ -426,11 +489,21 @@ def edit_asset(asset_id):
             "mimetype" : mimetype,
             "asset_id" : asset_id,
             "start_date" : start_date,
-            "end_date" : end_date
+            "end_date" : end_date,
+            "is_cached" : is_cached,
+            "cached_location" : cached_location
             }
-    #return str(asset_info)
-    return template('edit_asset', asset_info=asset_info)
-        
+    disk = statvfs("/home/pi/.screenly/cache")
+    free_space = size(disk.f_bsize * disk.f_bavail)
+    free_space_bytes = (disk.f_bsize * disk.f_bavail)
+    return template('edit_asset', asset_info=asset_info, free_space=free_space, free_space_bytes=free_space_bytes)
+def cache_asset(asset_id, uri):
+    #TODO - check disk space before attempting to cache asset.
+    #If disk space is insufficient then set value of cached_location = "diskspace"
+    urllib.urlretrieve(uri, "/home/pi/.screenly/cache/" + asset_id)
+    cached_location = "/home/pi/.screenly/cache/" + asset_id
+    return cached_location;
+
 # Static
 @route('/static/:path#.+#', name='static')
 def static(path):

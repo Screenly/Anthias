@@ -106,7 +106,7 @@ def generate_asset_list():
     logging.info('Generating asset-list...')
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
-    c.execute("SELECT asset_id, name, uri, md5, start_date, end_date, duration, mimetype FROM assets ORDER BY name")
+    c.execute("SELECT asset_id, name, uri, md5, start_date, end_date, duration, mimetype, is_cached, cached_location FROM assets ORDER BY name")
     query = c.fetchall()
 
     playlist = []
@@ -121,16 +121,18 @@ def generate_asset_list():
         end_date = asset[5]
         duration = asset[6]
         mimetype = asset[7]
+        is_cached = asset[8]
+        cached_location = asset[9]
 
         logging.debug('generate_asset_list: %s: start (%s) end (%s)' % (name, start_date, end_date))
         if (start_date and end_date) and (start_date < time_cur and end_date > time_cur):
-            playlist.append({"name" : name, "uri" : uri, "duration" : duration, "mimetype" : mimetype})
+            playlist.append({"name" : name, "uri" : uri, "duration" : duration, "mimetype" : mimetype, "is_cached" : is_cached, "cached_location" : cached_location})
         if (start_date and end_date) and (start_date < time_cur and end_date > time_cur):
             if deadline == None or end_date < deadline:
-               deadline = end_date
+                deadline = end_date
         if (start_date and end_date) and (start_date > time_cur and end_date > start_date):
             if deadline == None or start_date < deadline:
-               deadline = start_date
+                deadline = start_date
 
     logging.debug('generate_asset_list deadline: %s' % deadline)
 
@@ -271,7 +273,7 @@ except:
 # Create folder to hold HTML-pages
 html_folder = '/tmp/screenly_html/'
 if not path.isdir(html_folder):
-   makedirs(html_folder)
+    makedirs(html_folder)
 
 # Set up HTML templates
 black_page = html_templates.black_page()
@@ -309,12 +311,19 @@ while True:
         logging.info('show asset %s' % asset["name"])
 
         watchdog()
+        uri = asset["uri"]
+        is_cached = asset["is_cached"]
+        cached_location = asset["cached_location"]
 
         if "image" in asset["mimetype"]:
-            view_image(asset["uri"], asset["name"], asset["duration"])
+            if "on" in is_cached:
+                uri = cached_location
+            view_image(uri, asset["name"], asset["duration"])
         elif "video" in asset["mimetype"]:
-            view_video(asset["uri"])
+            if "on" in is_cached:
+                uri = cached_location
+            view_video(uri)
         elif "web" in asset["mimetype"]:
-            view_web(asset["uri"], asset["duration"])
+            view_web(uri, asset["duration"])
         else:
             print "Unknown MimeType, or MimeType missing"
