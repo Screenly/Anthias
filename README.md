@@ -1,14 +1,14 @@
 # Screenly OSE -- Digital Signage for the Raspberry Pi
 
-Screenly is a product from [WireLoad](http://wireload.net) that we developed for [Skarmverket](http://skarmverket.se), a small network of public billboards in Sweden. Before we began, we evaluated many of the existing solutions on the market. Most of them were clunky and/or expensive. A fair number of them ran on Windows and used Adobe Flash. We ended up writing our own solution and used Asus Eee PCs with Linux. 
+Screenly is a product from [WireLoad](http://wireload.net) that we developed for [Skarmverket](http://skarmverket.se), a small network of public billboards in Sweden. Before we began, we evaluated many of the existing solutions on the market. Most of them were clunky and/or expensive. A fair number of them ran on Windows and used Adobe Flash. We ended up writing our own solution and used Asus Eee PCs with Linux.
 
-Then the [Raspberry Pi](http://www.raspberrypi.org/) came along. Priced at $35, and equipped with everything needed to power a screen. We were immediatelly sold and knew that this was what we wanted to use moving forward. Since we love Open Source, we've decided to release Screenly for free for anyone to use. 
+Then the [Raspberry Pi](http://www.raspberrypi.org/) came along: priced at $35, and equipped with everything needed to power a screen. We were immediatelly sold and knew that this was what we wanted to use moving forward. Since we love Open Source, we've decided to release Screenly for free for anyone to use.
 
-The current version should be consider a beta. While we have been running it in the lab without any issues, there might still be issues that we are unaware of at this point. Yet, we wanted to make Screenly available to the vibrant Rasberry Pi community.
+The current version should be considered a beta. While we have been running it in the lab without any issues, there might still be issues that we are unaware of at this point. Yet, we wanted to make Screenly available to the vibrant Rasberry Pi community.
 
-Since Screenly was written for the Raspberry Pi from the ground up, we had to make it as lean as possible. 
+Since Screenly was written for the Raspberry Pi from the ground up, we had to make it as lean as possible.
 
-Screenly OSE is aimed at single-node deployments. In addition to Screenly OSE, we are also working on a commercial version called Screenly Pro ([wait-list](http://signup.screenlyapp.com/)) that is aimed at deployment larger than one node.
+Screenly OSE is aimed at single-node deployments. In addition to Screenly OSE, we are also working on a commercial version called Screenly Pro ([wait-list](http://signup.screenlyapp.com/)) that is aimed at deployments larger than one node.
 
 There are many use cases where Screenly can be used, such as:
 
@@ -17,7 +17,7 @@ There are many use cases where Screenly can be used, such as:
  * Internal information boards
  * Fancy photo-frame
 
-A rought video of Screenly in action is available [here](http://www.youtube.com/watch?v=yjDjEfhspxk).
+A rough video of Screenly in action is available [here](http://www.youtube.com/watch?v=yjDjEfhspxk).
 
 Screenshots and pictures of Screenly are available [here](https://picasaweb.google.com/102112347693505491575/Screenly01?authkey=Gv1sRgCNa2qp-j5vWUGQ).
 
@@ -34,9 +34,9 @@ Here's how you add content to your Screenly box:
   * Provide a name of the asset, the URL to the asset, and the asset type and click 'Submit.'
  * Click 'Schedule asset.'
   * Select the asset you just added in the drop-down, select the time frame you wish to display the asset and the duration (if image or website) and press 'Submit.'
- * Repeate for all the assets you want to display.
+ * Repeat for all the assets you want to display.
 
-Note: If you don't have any server where you can make your asset available, you can use [public folders](https://www.dropbox.com/help/16/en) in Dropbox. 
+Note: if you don't have any server where you can make your assets available, you can use [public folders](https://www.dropbox.com/help/16/en) in Dropbox.
 
 ## Requirements
 
@@ -60,7 +60,7 @@ First, flash the SD card and install [Raspbian Wheezy](http://www.raspberrypi.or
  * Change password for 'pi' user (recommended)
  * Change memory split to 128/128 (recommended)
 
-Once you've made all these changes, you must restart your Raspberry Pi. 
+Once you've made all these changes, you must restart your Raspberry Pi.
 
 ## Install Screenly OSE
 
@@ -74,7 +74,7 @@ After you've done all the following changes above **and** rebooted, open a termi
 
 (If you're running the installation over SSH, running the installation through a 'screen'-session is highly recommended.)
 
-Assuming everything went well, reboot your system. Screenly should now load. 
+Assuming everything went well, reboot your system. Screenly should now load.
 
 Upon boot, Screenly's management URL should show up on the screen (e.g. http://aaa.bbb.ccc.ddd:8080).
 To manage the content, open up this URL **on a different computer**. Don't try to manage the content directly on the Raspberry Pi using a keyboard and mouse. That won't work.
@@ -88,9 +88,9 @@ Screenly currently three types of media:
  * Images
  * Web-pages
 
-Adobe Flash-media *is not*, and will most likely never be, supported. 
+Adobe Flash-media *is not*, and will most likely never be, supported.
 
-Images and web-pages will be rendered in 1920x1080, so adjust your content for this size. 
+Images and web-pages will be rendered in 1920x1080, so adjust your content for this size.
 
 It is also worth noting that no media is permanently stored on the Raspberry Pi. All content is simply retrieved from the remote server (with limited caching in the browser).
 
@@ -111,11 +111,11 @@ Once done, simply restart the computer. If you prefer not to reboot, you might g
 
 ## FAQ
 
-### Can I change Screenly's resolution? 
+### Can I change Screenly's resolution?
 
 Yes, just edit the line 'resolution' in ~/.screenly/screenly.conf. The default resolution is 1920x1080 (Full HD).
 
-### Can I use Screenly with a rotated screen? 
+### Can I use Screenly with a rotated screen?
 
 Yes, that's possible. First change the resolution in ~/.screenly/screenly.conf from 1920x1080 to 1080x1920. After you've done that, you need to change the screen orientation. To do this, add the following to /boot/config.txt.
 
@@ -127,7 +127,7 @@ That will rotate the screen 270 degrees ([source](http://elinux.org/RPi_config.t
 
 ## Licensing
 
-Dual License: [GPLv2](http://www.gnu.org/licenses/gpl-2.0.html) and Commercial License. For more information, contact [WireLoad](http://wireload.net/company/). 
+Dual License: [GPLv2](http://www.gnu.org/licenses/gpl-2.0.html) and Commercial License. For more information, contact [WireLoad](http://wireload.net/company/).
 
 ## Credits
 
