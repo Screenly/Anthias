@@ -50,7 +50,7 @@ class Scheduler(object):
             self.update_playlist()
         elif settings.shuffle_playlist and self.counter >= 5:
             self.update_playlist()
-        elif self.deadline != None and self.deadline <= time_cur:
+        elif self.deadline and self.deadline <= time_cur:
             self.update_playlist()
 
     def update_playlist(self):
@@ -92,14 +92,14 @@ def generate_asset_list():
         mimetype = asset[7]
 
         logging.debug('generate_asset_list: %s: start (%s) end (%s)' % (name, start_date, end_date))
-        if (start_date and end_date) and (start_date < time_cur and end_date > time_cur):
-            playlist.append({"name": name, "uri": uri, "duration": duration, "mimetype": mimetype})
-        if (start_date and end_date) and (start_date < time_cur and end_date > time_cur):
-            if deadline == None or end_date < deadline:
-                deadline = end_date
-        if (start_date and end_date) and (start_date > time_cur and end_date > start_date):
-            if deadline == None or start_date < deadline:
-                deadline = start_date
+        if start_date and end_date:
+            if start_date < time_cur and end_date > time_cur:
+                playlist.append({"name": name, "uri": uri, "duration": duration, "mimetype": mimetype})
+                if not deadline or end_date < deadline:
+                    deadline = end_date
+            elif start_date >= time_cur and end_date > start_date:
+                if not deadline or start_date < deadline:
+                    deadline = start_date
 
     logging.debug('generate_asset_list deadline: %s' % deadline)
 
