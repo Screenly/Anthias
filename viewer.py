@@ -7,15 +7,14 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 __version__ = "0.1"
 __email__ = "vpetersson@wireload.net"
 
-import sqlite3, ConfigParser
-from sys import exit
+import sqlite3
+from Config import Config
 from requests import get 
 from platform import machine 
 from os import path, getenv, remove, makedirs
 from os import stat as os_stat, utime
 from subprocess import Popen, call 
 import html_templates
-from datetime import datetime
 from time import sleep, time
 import logging
 from glob import glob
@@ -34,27 +33,8 @@ requests_log.setLevel(logging.WARNING)
 
 logging.debug('Starting viewer.py')
 
-# Get config file
-config = ConfigParser.ConfigParser()
-conf_file = path.join(getenv('HOME'), '.screenly', 'screenly.conf')
-if not path.isfile(conf_file):
-    logging.info('Config-file missing.')
-    exit(1)
-else:
-    logging.debug('Reading config-file...')
-    config.read(conf_file)
-
-def time_lookup():
-    if nodetype == "standalone":
-        return datetime.now()
-    elif nodetype == "managed":
-        return datetime.utcnow()
-
-def str_to_bol(string):
-    if 'true' in string.lower():
-        return True
-    else:
-        return False
+# Get config
+config = Config(logging.debug)
 
 class Scheduler(object):
     def __init__(self, *args, **kwargs):
@@ -70,17 +50,17 @@ class Scheduler(object):
         idx = self.index
         self.index = (self.index + 1) % self.nassets
         logging.debug('get_next_asset counter %d returning asset %d of %d' % (self.counter, idx+1, self.nassets))
-        if shuffle_playlist and self.index == 0:
+        if config.shuffle_playlist and self.index == 0:
             self.counter += 1
         return self.assets[idx]
 
     def refresh_playlist(self):
         logging.debug('refresh_playlist')
-        time_cur = time_lookup()
+        time_cur = config.time_lookup()
         logging.debug('refresh: counter: (%d) deadline (%s) timecur (%s)' % (self.counter, self.deadline, time_cur))
         if self.dbisnewer():
             self.update_playlist()
-        elif shuffle_playlist and self.counter >= 5:
+        elif config.shuffle_playlist and self.counter >= 5:
             self.update_playlist()
         elif self.deadline != None and self.deadline <= time_cur:
             self.update_playlist()
@@ -97,20 +77,20 @@ class Scheduler(object):
     def dbisnewer(self):
         # get database file last modification time
         try:
-            db_mtime = path.getmtime(database)
+            db_mtime = path.getmtime(config.database)
         except:
             db_mtime = 0
         return db_mtime >= self.gentime
 
 def generate_asset_list():
     logging.info('Generating asset-list...')
-    conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(config.database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
     c.execute("SELECT asset_id, name, uri, md5, start_date, end_date, duration, mimetype FROM assets ORDER BY name")
     query = c.fetchall()
 
     playlist = []
-    time_cur = time_lookup()
+    time_cur = config.time_lookup()
     deadline = None
     for asset in query:
         asset_id = asset[0]  
@@ -134,7 +114,7 @@ def generate_asset_list():
 
     logging.debug('generate_asset_list deadline: %s' % deadline)
 
-    if shuffle_playlist:
+    if config.shuffle_playlist:
         from random import shuffle
         shuffle(playlist)
     
@@ -154,19 +134,18 @@ def watchdog():
 def load_browser():
     logging.info('Loading browser...')
     browser_bin = "uzbl-browser"
-    browser_resolution = resolution
 
-    if show_splash:
-        browser_load_url = "http://127.0.0.1:8080/splash_page"
+    if config.show_splash:
+        browser_load_url = config.get_viewer_baseurl() + '/splash_page'
     else:
         browser_load_url = black_page
 
-    browser_args = [browser_bin, "--geometry=" + browser_resolution, "--uri=" + browser_load_url]
+    browser_args = [browser_bin, "--geometry=" + config.resolution, "--uri=" + browser_load_url]
     browser = Popen(browser_args)
     
     logging.info('Browser loaded. Running as PID %d.' % browser.pid)
 
-    if show_splash:
+    if config.show_splash:
         # Show splash screen for 60 seconds.
         sleep(60)
     else:
@@ -210,7 +189,7 @@ def view_video(video):
     if arch == "armv6l":
         logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % video)
         omxplayer = "omxplayer"
-        omxplayer_args = [omxplayer, "-o", audio_output, "-w", str(video)]
+        omxplayer_args = [omxplayer, "-o", config.audio_output, "-w", str(video)]
         run = call(omxplayer_args, stdout=True)
         logging.debug(run)
 
@@ -254,19 +233,6 @@ def view_web(url, duration):
     else: 
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (url))
         pass
-
-# Get config values
-configdir = path.join(getenv('HOME'), config.get('main', 'configdir'))
-database = path.join(getenv('HOME'), config.get('main', 'database'))
-nodetype = config.get('main', 'nodetype')
-show_splash = str_to_bol(config.get('viewer', 'show_splash'))
-audio_output = config.get('viewer', 'audio_output')
-shuffle_playlist = str_to_bol(config.get('viewer', 'shuffle_playlist'))
-
-try:
-    resolution = config.get('viewer', 'resolution')
-except:
-    resolution = '1920x1080'
 
 # Create folder to hold HTML-pages
 html_folder = '/tmp/screenly_html/'
