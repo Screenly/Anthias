@@ -158,7 +158,7 @@ def process_asset():
         if file.status_code == 200:
             asset_id = md5(name + uri).hexdigest()
 
-            strict_uri = uri_check.scheme + "://" + uri_check.netloc + uri_check.path
+            strict_uri = file.url
 
             if "image" in mimetype:
                 resolution = Image.open(StringIO(file.content)).size
