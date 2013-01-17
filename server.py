@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 from dateutils import datestring
 from hashlib import md5
 from hurry.filesize import size
-from json import dumps, loads
 from netifaces import ifaddresses
 from os import path, makedirs, getloadavg, statvfs
 from PIL import Image
@@ -68,7 +67,7 @@ def get_playlist():
         if (start_date and end_date) and (input_start_date < get_current_time() and input_end_date > get_current_time()):
             playlist.append(playlistitem)
 
-    return dumps(playlist)
+    return playlist
 
 
 def get_assets():
@@ -108,7 +107,7 @@ def get_assets():
         }
         playlist.append(playlistitem)
 
-    return dumps(playlist)
+    return playlist
 
 
 def initiate_db():
@@ -345,7 +344,7 @@ def splash_page():
 @route('/view_playlist')
 def view_node_playlist():
 
-    nodeplaylist = loads(get_playlist())
+    nodeplaylist = get_playlist()
 
     return template('view_playlist', nodeplaylist=nodeplaylist)
 
@@ -353,7 +352,7 @@ def view_node_playlist():
 @route('/view_assets')
 def view_assets():
 
-    nodeplaylist = loads(get_assets())
+    nodeplaylist = get_assets()
 
     return template('view_assets', nodeplaylist=nodeplaylist)
 
