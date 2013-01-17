@@ -28,7 +28,8 @@ logging.debug('Starting viewer.py')
 config = ConfigParser.ConfigParser()
 conf_file = path.join(getenv('HOME'), '.screenly', 'screenly.conf')
 if not path.isfile(conf_file):
-    logging.info('Config-file missing.')
+    print 'Config-file missing.'
+    logging.error('Config-file missing.')
     exit(1)
 else:
     logging.debug('Reading config-file...')
