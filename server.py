@@ -123,6 +123,15 @@ def initiate_db():
         c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT)")
         return "Initiated database."
 
+def validate_uri(uri):
+    """ Simple URL verification """
+    success = False
+    uri_check = urlparse(uri)
+
+    if (uri_check.scheme in ('http', 'https') and uri_check.netloc):
+        success = True
+
+    return success
 
 @route('/process_asset', method='POST')
 def process_asset():
@@ -137,11 +146,9 @@ def process_asset():
         uri = request.POST.get('uri', '').strip()
         mimetype = request.POST.get('mimetype', '').strip()
 
-        # Make sure it's a valid resource
-        uri_check = urlparse(uri)
-        if not (uri_check.scheme == "http" or uri_check.scheme == "https"):
+        if not validate_uri(uri):
             header = "Ops!"
-            message = "URL must be HTTP or HTTPS."
+            message = "Invalid URL. Failed to update asset."
             return template('message', header=header, message=message)
 
         if "image" in mimetype:
@@ -240,6 +247,11 @@ def update_asset():
         name = request.POST.get('name', '').decode('UTF-8')
         uri = request.POST.get('uri', '').strip()
         mimetype = request.POST.get('mimetype', '').strip()
+
+        if not validate_uri(uri):
+            header = "Ops!"
+            message = "Invalid URL. Failed to update asset."
+            return template('message', header=header, message=message)
 
         try:
             duration = request.POST.get('duration', '').strip()
