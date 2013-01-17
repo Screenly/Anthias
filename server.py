@@ -316,16 +316,22 @@ def system_info():
 
     loadavg = getloadavg()[2]
 
-    resolution = check_output(['tvservice', '-s']).strip()
+    try:
+        resolution = check_output(['tvservice', '-s']).strip()
+    except:
+        resolution = None
 
     # Calculate disk space
     slash = statvfs("/")
     free_space = size(slash.f_bsize * slash.f_bavail)
 
     # Get uptime
-    with open('/proc/uptime', 'r') as f:
-        uptime_seconds = float(f.readline().split()[0])
-        uptime = str(timedelta(seconds=uptime_seconds))
+    try:
+        with open('/proc/uptime', 'r') as f:
+            uptime_seconds = float(f.readline().split()[0])
+            uptime = str(timedelta(seconds=uptime_seconds))
+    except:
+        uptime = None
 
     return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=uptime, resolution=resolution)
 
