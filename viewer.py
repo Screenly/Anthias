@@ -154,27 +154,26 @@ def get_fifo():
         else:
             return None
 
+def browser_set(set_data):
+    f = open(fifo, 'a')
+    f.write('set %s\n' % set_data)
+    f.close()
+
+def browser_url(url):
+    browser_set('uri = %s' % url)
 
 def disable_browser_status():
     logging.debug('Disabled status-bar in browser')
-    f = open(fifo, 'a')
-    f.write('set show_status = 0\n')
-    f.close()
-
+    browser_set('show_status = 0')
 
 def view_image(image, name, duration):
     logging.debug('Displaying image %s for %s seconds.' % (image, duration))
     url = html_templates.image_page(image, name)
-    f = open(fifo, 'a')
-    f.write('set uri = %s\n' % url)
-    f.close()
+    browser_url(url)
 
     sleep(int(duration))
 
-    f = open(fifo, 'a')
-    f.write('set uri = %s\n' % black_page)
-    f.close()
-
+    browser_url(black_page)
 
 def view_video(video):
     arch = machine()
@@ -215,15 +214,11 @@ def view_web(url, duration):
     if web_resource == 200:
         logging.debug('Web content appears to be available. Proceeding.')
         logging.debug('Displaying url %s for %s seconds.' % (url, duration))
-        f = open(fifo, 'a')
-        f.write('set uri = %s\n' % url)
-        f.close()
+        browser_url(url)
 
         sleep(int(duration))
 
-        f = open(fifo, 'a')
-        f.write('set uri = %s\n' % black_page)
-        f.close()
+        browser_url(url)
     else:
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (url))
         pass
