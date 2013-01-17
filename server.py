@@ -13,9 +13,7 @@ from hashlib import md5
 from hurry.filesize import size
 from netifaces import ifaddresses
 from os import path, makedirs, getloadavg, statvfs
-from PIL import Image
-from requests import get as req_get, head as req_head
-from StringIO import StringIO
+from requests import head as req_head
 from subprocess import check_output
 from sys import  platform
 from urlparse import urlparse
@@ -131,53 +129,46 @@ if __name__ == "__main__":
     def process_asset():
         conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
         c = conn.cursor()
-    
+
         if (request.POST.get('name', '').strip() and
             request.POST.get('uri', '').strip() and
             request.POST.get('mimetype', '').strip()
             ):
-    
+
             name = request.POST.get('name', '').decode('UTF-8')
             uri = request.POST.get('uri', '').strip()
             mimetype = request.POST.get('mimetype', '').strip()
-    
+
             # Make sure it's a valid resource
             uri_check = urlparse(uri)
-            if not (uri_check.scheme == "http" or uri_check.scheme == "https"):
+            #Support local assets both as /home/pi/image path #1.png and file:///home/pi/url%20path.png , Note special chars in absolute path.
+            local_and_exists = ((uri_check.scheme == "" and path.exists(uri)) or (uri_check.scheme == "file" and path.exists(uri_check.path)))
+            if not (uri_check.scheme == "http" or uri_check.scheme == "https" or local_and_exists):
                 header = "Ops!"
-                message = "URL must be HTTP or HTTPS."
+                message = "URL must be HTTP or HTTPS or absolute path to local file."
                 return template('message', header=header, message=message)
-    
-            if "image" in mimetype:
-                file = req_get(uri, allow_redirects=True)
-            else:
+
+            if not local_and_exists:
                 file = req_head(uri, allow_redirects=True)
-    
+
             # Only proceed if fetch was successful.
-            if file.status_code == 200:
+            if local_and_exists or file.status_code == 200:
                 asset_id = md5(name + uri).hexdigest()
-    
-                strict_uri = file.url
-    
-                if "image" in mimetype:
-                    resolution = Image.open(StringIO(file.content)).size
-                else:
-                    resolution = "N/A"
-    
+
                 if "video" in mimetype:
                     duration = "N/A"
-    
+
                 start_date = ""
                 end_date = ""
                 duration = ""
-    
+
                 c.execute("INSERT INTO assets (asset_id, name, uri, start_date, end_date, duration, mimetype) VALUES (?,?,?,?,?,?,?)", (asset_id, name, uri, start_date, end_date, duration, mimetype))
                 conn.commit()
-    
+
                 header = "Yay!"
                 message = "Added asset (" + asset_id + ") to the database."
                 return template('message', header=header, message=message)
-    
+
             else:
                 header = "Ops!"
                 message = "Unable to fetch file."
@@ -186,28 +177,28 @@ if __name__ == "__main__":
             header = "Ops!"
             message = "Invalid input."
             return template('message', header=header, message=message)
-    
-    
+
+
     @route('/process_schedule', method='POST')
     def process_schedule():
         conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
         c = conn.cursor()
-    
+
         if (request.POST.get('asset', '').strip() and
             request.POST.get('start', '').strip() and
             request.POST.get('end', '').strip()
             ):
-    
+
             asset_id = request.POST.get('asset', '').strip()
             input_start = request.POST.get('start', '').strip()
             input_end = request.POST.get('end', '').strip()
-    
+
             start_date = datetime.strptime(input_start, '%Y-%m-%d @ %H:%M')
             end_date = datetime.strptime(input_end, '%Y-%m-%d @ %H:%M')
-    
+
             query = c.execute("SELECT mimetype FROM assets WHERE asset_id=?", (asset_id,))
             asset_mimetype = c.fetchone()
-    
+
             if "image" or "web" in asset_mimetype:
                 try:
                     duration = request.POST.get('duration', '').strip()
@@ -217,75 +208,75 @@ if __name__ == "__main__":
                     return template('message', header=header, message=message)
             else:
                 duration = "N/A"
-    
+
             c.execute("UPDATE assets SET start_date=?, end_date=?, duration=? WHERE asset_id=?", (start_date, end_date, duration, asset_id))
             conn.commit()
-    
+
             header = "Yes!"
             message = "Successfully scheduled asset."
             return template('message', header=header, message=message)
-    
+
         else:
             header = "Ops!"
             message = "Failed to process schedule."
             return template('message', header=header, message=message)
-    
-    
+
+
     @route('/update_asset', method='POST')
     def update_asset():
         conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
         c = conn.cursor()
-    
+
         if (request.POST.get('asset_id', '').strip() and
             request.POST.get('name', '').strip() and
             request.POST.get('uri', '').strip() and
             request.POST.get('mimetype', '').strip()
             ):
-    
+
             asset_id = request.POST.get('asset_id', '').strip()
             name = request.POST.get('name', '').decode('UTF-8')
             uri = request.POST.get('uri', '').strip()
             mimetype = request.POST.get('mimetype', '').strip()
-    
+
             try:
                 duration = request.POST.get('duration', '').strip()
             except:
                 duration = None
-    
+
             try:
                 input_start = request.POST.get('start', '')
                 start_date = datetime.strptime(input_start, '%Y-%m-%d @ %H:%M')
             except:
                 start_date = None
-    
+
             try:
                 input_end = request.POST.get('end', '').strip()
                 end_date = datetime.strptime(input_end, '%Y-%m-%d @ %H:%M')
             except:
                 end_date = None
-    
+
             c.execute("UPDATE assets SET start_date=?, end_date=?, duration=?, name=?, uri=?, duration=?, mimetype=? WHERE asset_id=?", (start_date, end_date, duration, name, uri, duration, mimetype, asset_id))
             conn.commit()
-    
+
             header = "Yes!"
             message = "Successfully updated asset."
             return template('message', header=header, message=message)
-    
+
         else:
             header = "Ops!"
             message = "Failed to update asset."
             return template('message', header=header, message=message)
-    
-    
+
+
     @route('/delete_asset/:asset_id')
     def delete_asset(asset_id):
         conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
         c = conn.cursor()
-    
+
         c.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
         try:
             conn.commit()
-    
+
             header = "Success!"
             message = "Deleted asset."
             return template('message', header=header, message=message)
@@ -293,14 +284,14 @@ if __name__ == "__main__":
             header = "Ops!"
             message = "Failed to delete asset."
             return template('message', header=header, message=message)
-    
-    
+
+
     @route('/')
     def viewIndex():
         initiate_db()
         return template('index')
-    
-    
+
+
     @route('/system_info')
     def system_info():
         viewer_log_file = '/tmp/screenly_viewer.log'
@@ -308,28 +299,28 @@ if __name__ == "__main__":
             viewlog = check_output(['tail', '-n', '20', viewer_log_file]).split('\n')
         else:
             viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
-    
+
         loadavg = getloadavg()[2]
-    
+
         resolution = check_output(['tvservice', '-s']).strip()
-    
+
         # Calculate disk space
         slash = statvfs("/")
         free_space = size(slash.f_bsize * slash.f_bavail)
-    
+
         # Get uptime
         with open('/proc/uptime', 'r') as f:
             uptime_seconds = float(f.readline().split()[0])
             uptime = str(timedelta(seconds=uptime_seconds))
-    
+
         return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=uptime, resolution=resolution)
-    
-    
+
+
     @route('/splash_page')
     def splash_page():
         # Make sure the database exist and that it is initiated.
         initiate_db()
-    
+
         try:
             my_ip = ifaddresses('eth0')[2][0]['addr']
             ip_lookup = True
@@ -337,76 +328,76 @@ if __name__ == "__main__":
         except:
             ip_lookup = False
             url = "Unable to lookup IP from eth0."
-    
+
         return template('splash_page', ip_lookup=ip_lookup, url=url)
-    
-    
+
+
     @route('/view_playlist')
     def view_node_playlist():
-    
+
         nodeplaylist = get_playlist()
-    
+
         return template('view_playlist', nodeplaylist=nodeplaylist)
-    
-    
+
+
     @route('/view_assets')
     def view_assets():
-    
+
         nodeplaylist = get_assets()
-    
+
         return template('view_assets', nodeplaylist=nodeplaylist)
-    
-    
+
+
     @route('/add_asset')
     def add_asset():
         return template('add_asset')
-    
-    
+
+
     @route('/schedule_asset')
     def schedule_asset():
         conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
         c = conn.cursor()
-    
+
         assets = []
         c.execute("SELECT name, asset_id FROM assets ORDER BY name")
         query = c.fetchall()
         for asset in query:
             name = asset[0]
             asset_id = asset[1]
-    
+
             assets.append({
                 'name': name,
                 'asset_id': asset_id,
             })
-    
+
         return template('schedule_asset', assets=assets)
-    
-    
+
+
     @route('/edit_asset/:asset_id')
     def edit_asset(asset_id):
         conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
         c = conn.cursor()
-    
+
         c.execute("SELECT name, uri, md5, start_date, end_date, duration, mimetype FROM assets WHERE asset_id=?", (asset_id,))
         asset = c.fetchone()
-    
+
         name = asset[0]
         uri = asset[1]
         md5 = asset[2]
-    
+
         if asset[3]:
             start_date = datestring.date_to_string(asset[3])
         else:
             start_date = None
-    
+
         if asset[4]:
             end_date = datestring.date_to_string(asset[4])
         else:
             end_date = None
-    
+
         duration = asset[5]
         mimetype = asset[6]
-    
+
         asset_info = {
                 "name": name,
                 "uri": uri,
@@ -418,24 +409,24 @@ if __name__ == "__main__":
                 }
         #return str(asset_info)
         return template('edit_asset', asset_info=asset_info)
-    
+
     # Static
-    
-    
+
+
     @route('/static/:path#.+#', name='static')
     def static(path):
         return static_file(path, root='static')
-    
-    
+
+
     @error(403)
     def mistake403(code):
         return 'The parameter you passed has the wrong format!'
-    
-    
+
+
     @error(404)
     def mistake404(code):
         return 'Sorry, this page does not exist!'
-    
+
     # Ugly local dev fix.
     if platform == "darwin":
         port = '8080'
