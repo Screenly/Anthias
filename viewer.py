@@ -17,11 +17,11 @@ from stat import S_ISFIFO
 from subprocess import Popen, call
 from time import sleep, time
 import logging
-import sqlite3
 
+from db import connection
+from settings import get_current_time
 import html_templates
 import settings
-from settings import get_current_time
 
 
 class Scheduler(object):
@@ -73,8 +73,7 @@ class Scheduler(object):
 
 def generate_asset_list():
     logging.info('Generating asset-list...')
-    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
-    c = conn.cursor()
+    c = connection.cursor()
     c.execute("SELECT asset_id, name, uri, md5, start_date, end_date, duration, mimetype FROM assets ORDER BY name")
     query = c.fetchall()
 

@@ -19,17 +19,16 @@ from StringIO import StringIO
 from subprocess import check_output
 from sys import  platform
 from urlparse import urlparse
-import sqlite3
 
 from bottle import route, run, debug, template, request, error, static_file
 
 import settings
 from settings import get_current_time
+from db import connection
 
 
 def get_playlist():
-    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
-    c = conn.cursor()
+    c = connection.cursor()
     c.execute("SELECT * FROM assets ORDER BY name")
     assets = c.fetchall()
 
@@ -71,8 +70,7 @@ def get_playlist():
 
 
 def get_assets():
-    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
-    c = conn.cursor()
+    c = connection.cursor()
     c.execute("SELECT asset_id, name, uri, start_date, end_date, duration, mimetype FROM assets ORDER BY name")
     assets = c.fetchall()
 
@@ -115,8 +113,7 @@ def initiate_db():
     if not path.isdir(settings.configdir):
         makedirs(settings.configdir)
 
-    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
-    c = conn.cursor()
+    c = connection.cursor()
 
     # Check if the asset-table exist. If it doesn't, create it.
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='assets'")
@@ -129,8 +126,7 @@ def initiate_db():
 
 @route('/process_asset', method='POST')
 def process_asset():
-    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
-    c = conn.cursor()
+    c = connection.cursor()
 
     if (request.POST.get('name', '').strip() and
         request.POST.get('uri', '').strip() and
@@ -172,7 +168,7 @@ def process_asset():
             duration = ""
 
             c.execute("INSERT INTO assets (asset_id, name, uri, start_date, end_date, duration, mimetype) VALUES (?,?,?,?,?,?,?)", (asset_id, name, uri, start_date, end_date, duration, mimetype))
-            conn.commit()
+            connection.commit()
 
             header = "Yay!"
             message = "Added asset (" + asset_id + ") to the database."
@@ -190,8 +186,7 @@ def process_asset():
 
 @route('/process_schedule', method='POST')
 def process_schedule():
-    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
-    c = conn.cursor()
+    c = connection.cursor()
 
     if (request.POST.get('asset', '').strip() and
         request.POST.get('start', '').strip() and
@@ -219,7 +214,7 @@ def process_schedule():
             duration = "N/A"
 
         c.execute("UPDATE assets SET start_date=?, end_date=?, duration=? WHERE asset_id=?", (start_date, end_date, duration, asset_id))
-        conn.commit()
+        connection.commit()
 
         header = "Yes!"
         message = "Successfully scheduled asset."
@@ -233,8 +228,7 @@ def process_schedule():
 
 @route('/update_asset', method='POST')
 def update_asset():
-    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
-    c = conn.cursor()
+    c = connection.cursor()
 
     if (request.POST.get('asset_id', '').strip() and
         request.POST.get('name', '').strip() and
@@ -265,7 +259,7 @@ def update_asset():
             end_date = None
 
         c.execute("UPDATE assets SET start_date=?, end_date=?, duration=?, name=?, uri=?, duration=?, mimetype=? WHERE asset_id=?", (start_date, end_date, duration, name, uri, duration, mimetype, asset_id))
-        conn.commit()
+        connection.commit()
 
         header = "Yes!"
         message = "Successfully updated asset."
@@ -279,12 +273,11 @@ def update_asset():
 
 @route('/delete_asset/:asset_id')
 def delete_asset(asset_id):
-    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
-    c = conn.cursor()
+    c = connection.cursor()
 
     c.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
     try:
-        conn.commit()
+        connection.commit()
 
         header = "Success!"
         message = "Deleted asset."
@@ -362,8 +355,7 @@ def add_asset():
 
 @route('/schedule_asset')
 def schedule_asset():
-    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
-    c = conn.cursor()
+    c = connection.cursor()
 
     assets = []
     c.execute("SELECT name, asset_id FROM assets ORDER BY name")
@@ -382,8 +374,7 @@ def schedule_asset():
 
 @route('/edit_asset/:asset_id')
 def edit_asset(asset_id):
-    conn = sqlite3.connect(settings.database, detect_types=sqlite3.PARSE_DECLTYPES)
-    c = conn.cursor()
+    c = connection.cursor()
 
     c.execute("SELECT name, uri, md5, start_date, end_date, duration, mimetype FROM assets WHERE asset_id=?", (asset_id,))
     asset = c.fetchone()
