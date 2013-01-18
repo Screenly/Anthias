@@ -66,11 +66,7 @@ Once you've made all these changes, you must restart your Raspberry Pi.
 
 After you've done all the following changes above **and** rebooted, open a terminal (ctrl+alt+F1) or SSH session and as the user 'pi' run:
 
-    cd ~
-    sudo apt-get update
-    sudo apt-get -y install git-core
-    git clone git://github.com/wireload/screenly-ose.git ~/screenly
-    ~/screenly/misc/install.sh
+    curl -sL https://raw.github.com/wireload/screenly-ose/master/misc/install.sh | bash
 
 (If you're running the installation over SSH, running the installation through a 'screen'-session is highly recommended.)
 

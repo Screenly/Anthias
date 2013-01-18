@@ -11,9 +11,19 @@ if [ $ROOT_AVAIL -lt $MIN_REQ ]; then
 	exit 1
 fi
 
+echo "Updating system package database..."
+sudo apt-get -qq update > /dev/null
+
+echo "Upgrading the system..."
+echo "(This might take a while.)"
+sudo apt-get -y -qq upgrade > /dev/null
+
 echo "Installing dependencies..."
-sudo apt-get -y install python-pip python-netifaces python-simplejson python-imaging uzbl unclutter sqlite3 supervisor omxplayer x11-xserver-utils watchdog chkconfig
-sudo pip install bottle requests pytz hurry.filesize
+sudo apt-get -y -qq install git-core python-pip python-netifaces python-simplejson python-imaging uzbl unclutter sqlite3 supervisor omxplayer x11-xserver-utils watchdog chkconfig > /dev/null
+sudo pip install bottle requests pytz hurry.filesize > /dev/null
+
+echo "Downloading Screenly-OSE..."
+git clone git://github.com/wireload/screenly-ose.git ~/screenly > /dev/null
 
 echo "Adding Screenly to X auto start..."
 mkdir -p ~/.config/lxsession/LXDE/
@@ -29,7 +39,7 @@ mkdir -p ~/.screenly
 cp ~/screenly/misc/screenly.conf ~/.screenly/
 
 echo "Enabling Watchdog..."
-sudo modprobe bcm2708_wdog
+sudo modprobe bcm2708_wdog > /dev/null
 sudo cp /etc/modules /etc/modules.bak
 sudo sed '$ i\bcm2708_wdog' -i /etc/modules
 sudo chkconfig watchdog on
@@ -39,8 +49,8 @@ sudo /etc/init.d/watchdog start
 
 echo "Adding Screenly to autostart (via Supervisord)"
 sudo ln -s ~/screenly/misc/supervisor_screenly.conf /etc/supervisor/conf.d/
-sudo /etc/init.d/supervisor stop
-sudo /etc/init.d/supervisor start
+sudo /etc/init.d/supervisor stop > /dev/null
+sudo /etc/init.d/supervisor start > /dev/null
 
 echo "Making modifications to X..."
 [ -f ~/.gtkrc-2.0 ] && rm -f ~/.gtkrc-2.0
