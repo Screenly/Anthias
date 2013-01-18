@@ -5,3 +5,4 @@ netifaces==0.8
 pytz==2012d
 requests==0.14.0
 wsgiref==0.1.2
+bottle-haml==0.1.3
