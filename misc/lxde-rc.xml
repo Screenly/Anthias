@@ -657,6 +657,7 @@
   <!-- match all windows, and remove their decorations -->
 <application class="*">
 	<decor>no</decor>
+	<maximized>yes</maximized>
 </application>
 
     <!--
