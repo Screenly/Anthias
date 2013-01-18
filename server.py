@@ -13,9 +13,7 @@ from hashlib import md5
 from hurry.filesize import size
 from netifaces import ifaddresses
 from os import path, makedirs, getloadavg, statvfs
-from PIL import Image
-from requests import get as req_get, head as req_head
-from StringIO import StringIO
+from requests import head as req_head
 from subprocess import check_output
 from sys import  platform
 from urlparse import urlparse
@@ -151,21 +149,12 @@ def process_asset():
             message = "Invalid URL. Failed to update asset."
             return template('message', header=header, message=message)
 
-        if "image" in mimetype:
-            file = req_get(uri, allow_redirects=True)
-        else:
-            file = req_head(uri, allow_redirects=True)
+        # Check resource exist on server
+        file = req_head(uri, allow_redirects=True)
 
         # Only proceed if fetch was successful.
         if file.status_code == 200:
             asset_id = md5(name + uri).hexdigest()
-
-            strict_uri = file.url
-
-            if "image" in mimetype:
-                resolution = Image.open(StringIO(file.content)).size
-            else:
-                resolution = "N/A"
 
             if "video" in mimetype:
                 duration = "N/A"
