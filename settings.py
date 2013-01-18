@@ -42,6 +42,7 @@ nodetype = config.get('main', 'nodetype')
 show_splash = str_to_bol(config.get('viewer', 'show_splash'))
 audio_output = config.get('viewer', 'audio_output')
 shuffle_playlist = str_to_bol(config.get('viewer', 'shuffle_playlist'))
+asset_folder = path.join(getenv('HOME'), 'screenly_assets')
 
 try:
     resolution = config.get('viewer', 'resolution')
