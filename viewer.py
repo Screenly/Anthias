@@ -168,9 +168,9 @@ def disable_browser_status():
     browser_set('show_status = 0')
 
 
-def view_image(image, name, duration):
+def view_image(image, asset_id, duration):
     logging.debug('Displaying image %s for %s seconds.' % (image, duration))
-    url = html_templates.image_page(image, name)
+    url = html_templates.image_page(image, asset_id)
     browser_url(url)
 
     sleep(int(duration))
@@ -270,7 +270,7 @@ if __name__ == "__main__":
             watchdog()
 
             if "image" in asset["mimetype"]:
-                view_image(asset["uri"], asset["name"], asset["duration"])
+                view_image(asset["uri"], asset["asset_id"], asset["duration"])
             elif "video" in asset["mimetype"]:
                 view_video(asset["uri"])
             elif "web" in asset["mimetype"]:
