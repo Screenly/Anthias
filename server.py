@@ -304,7 +304,8 @@ def delete_asset(asset_id):
 @route('/')
 def viewIndex():
     initiate_db()
-    return haml_template('index')
+    playlist = get_assets()
+    return haml_template('index', playlist=playlist)
 
 
 @route('/system_info')

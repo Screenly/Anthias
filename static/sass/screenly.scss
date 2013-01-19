@@ -72,3 +72,22 @@ h1.page-header {
   text-align: center;
 }
 
+section {
+  .header {
+    background: $navbarBackgroundHighlight;
+    color: #fff;
+    padding: 6px 9px;
+    margin-bottom: 9px;
+    @include gradient-vertical($navbarBackgroundHighlight, $navbarBackground);
+    @include border-radius($baseBorderRadius);
+    @include box-shadow(0 1px 4px rgba(0,0,0,.065));
+    font-weight: bold;
+    text-shadow: #555 0px 1px 1px !important;
+    text-transform: uppercase;
+  }
+
+  table {
+    width: 100%;
+  }
+
+}

@@ -36,8 +36,27 @@
         .span12
           %h1.page-header
             Schedule Overview
+
       .row
-        .span12.content-box
+        .span12
+          %section
+            .header
+              Active content
+            %table.table.table-striped
+              %thead
+                %tr
+                  %th Name
+                  %th Start
+                  %th End
+                  %th
+              %tbody
+                - for asset in playlist:
+                  %tr
+                    %td ${asset['name']}
+                    %td ${asset['start_date']}
+                    %td ${asset['end_date']}
+                    %td
+                      %a(href="#") Deactivate
 
     #footer
       .container
