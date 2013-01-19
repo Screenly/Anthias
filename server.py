@@ -12,7 +12,7 @@ from dateutils import datestring
 from hashlib import md5
 from hurry.filesize import size
 from netifaces import ifaddresses
-from os import path, makedirs, getloadavg, statvfs
+from os import path, makedirs, getloadavg, statvfs, mkdir
 from PIL import Image
 from requests import get as req_get, head as req_head
 from StringIO import StringIO
@@ -28,7 +28,7 @@ from db import connection
 
 # Make sure the asset folder exist. If not, create it
 if not path.isdir(asset_folder):
-    path.mkdir(asset_fodler)
+    mkdir(asset_folder)
 
 def get_playlist():
     c = connection.cursor()
