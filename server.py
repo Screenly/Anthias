@@ -54,19 +54,21 @@ def get_playlist():
         except:
             end_date = None
 
-        duration = asset[6]
-        mimetype = asset[7]
-
-        playlistitem = {
-            "name": name,
-            "uri": uri,
-            "duration": duration,
-            "mimetype": mimetype,
-            "asset_id": asset_id,
-            "start_date": start_date,
-            "end_date": end_date
-        }
         if (start_date and end_date) and (input_start_date < get_current_time() and input_end_date > get_current_time()):
+
+            duration = asset[6]
+            mimetype = asset[7]
+
+            playlistitem = {
+                "name": name,
+                "uri": uri,
+                "duration": duration,
+                "mimetype": mimetype,
+                "asset_id": asset_id,
+                "start_date": start_date,
+                "end_date": end_date
+            }
+
             playlist.append(playlistitem)
 
     return playlist
