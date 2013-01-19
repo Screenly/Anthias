@@ -1,0 +1,41 @@
+body {
+  margin-top: 60px;
+  margin-bottom: 60px; }
+
+.navbar .container ul.nav li > a {
+  text-shadow: 0 1px 0 #000; }
+.navbar .container a.brand {
+  text-shadow: 0 1px 0 #000; }
+  .navbar .container a.brand span {
+    font-size: 15px; }
+.navbar .container li.update-available a {
+  font-weight: bold;
+  text-shadow: #555 0px 1px 1px !important; }
+
+#footer {
+  height: 40px;
+  background: url(../img/wireload-bg.jpeg);
+  border-top: 1px #ccc solid;
+  -webkit-box-shadow: 0 -2px 9px rgba(0, 0, 0, 0.05);
+  -moz-box-shadow: 0 -2px 9px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 -2px 9px rgba(0, 0, 0, 0.05);
+  opacity: 0.9;
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  text-shadow: #fff 0px 1px 1px; }
+  #footer .container {
+    position: relative; }
+    #footer .container #wireload-logo {
+      position: absolute;
+      right: 0;
+      top: 10px; }
+    #footer .container .copy {
+      position: absolute;
+      left: 0;
+      top: 10px;
+      color: #535d79;
+      font-size: 12px; }
+
+h1.page-header {
+  text-align: center; }

@@ -21,6 +21,7 @@ from sys import  platform
 from urlparse import urlparse
 
 from bottle import route, run, debug, template, request, error, static_file
+from bottlehaml import haml_template
 
 import settings
 from settings import get_current_time
@@ -303,7 +304,7 @@ def delete_asset(asset_id):
 @route('/')
 def viewIndex():
     initiate_db()
-    return template('index')
+    return haml_template('index')
 
 
 @route('/system_info')
