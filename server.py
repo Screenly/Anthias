@@ -12,7 +12,7 @@ from dateutils import datestring
 from hashlib import md5
 from hurry.filesize import size
 from netifaces import ifaddresses
-from os import path, makedirs, getloadavg, statvfs
+from os import path, makedirs, getloadavg, statvfs, mkdir
 from PIL import Image
 from requests import get as req_get, head as req_head
 from StringIO import StringIO
@@ -24,9 +24,12 @@ from bottle import route, run, debug, template, request, error, static_file
 from bottlehaml import haml_template
 
 import settings
-from settings import get_current_time
+from settings import get_current_time, asset_folder
 from db import connection
 
+# Make sure the asset folder exist. If not, create it
+if not path.isdir(asset_folder):
+    mkdir(asset_folder)
 
 def get_playlist():
     c = connection.cursor()
@@ -52,19 +55,21 @@ def get_playlist():
         except:
             end_date = None
 
-        duration = asset[6]
-        mimetype = asset[7]
-
-        playlistitem = {
-            "name": name,
-            "uri": uri,
-            "duration": duration,
-            "mimetype": mimetype,
-            "asset_id": asset_id,
-            "start_date": start_date,
-            "end_date": end_date
-        }
         if (start_date and end_date) and (input_start_date < get_current_time() and input_end_date > get_current_time()):
+
+            duration = asset[6]
+            mimetype = asset[7]
+
+            playlistitem = {
+                "name": name,
+                "uri": uri,
+                "duration": duration,
+                "mimetype": mimetype,
+                "asset_id": asset_id,
+                "start_date": start_date,
+                "end_date": end_date
+            }
+
             playlist.append(playlistitem)
 
     return playlist
@@ -138,54 +143,86 @@ def validate_uri(uri):
 def process_asset():
     c = connection.cursor()
 
-    if (request.POST.get('name', '').strip() and
-        request.POST.get('uri', '').strip() and
+    if  (request.POST.get('name', '').strip() and
+        (request.POST.get('uri', '').strip() or request.files.file_upload.file) and
         request.POST.get('mimetype', '').strip()
         ):
 
         name = request.POST.get('name', '').decode('UTF-8')
-        uri = request.POST.get('uri', '').strip()
         mimetype = request.POST.get('mimetype', '').strip()
 
-        if not validate_uri(uri):
+        try:
+            uri = request.POST.get('uri', '').strip()
+        except:
+            uri = False
+
+        try:
+            file_upload = request.files.file_upload.file
+        except:
+            file_upload = False
+
+        # Make sure it is a valid combination
+        if (file_upload and 'web' in mimetype):
             header = "Ops!"
-            message = "Invalid URL. Failed to update asset."
+            message = "Invalid combination. Can't upload web resource."
             return template('message', header=header, message=message)
 
-        if "image" in mimetype:
-            file = req_get(uri, allow_redirects=True)
-        else:
-            file = req_head(uri, allow_redirects=True)
+        if (uri and file_upload):
+            header = "Ops!"
+            message = "Invalid combination. Can't select both URI and a file."
+            return template('message', header=header, message=message)
 
-        # Only proceed if fetch was successful.
-        if file.status_code == 200:
-            asset_id = md5(name + uri).hexdigest()
-
-            strict_uri = file.url
+        if uri:
+            if not validate_uri(uri):
+                header = "Ops!"
+                message = "Invalid URL. Failed to add asset."
+                return template('message', header=header, message=message)
 
             if "image" in mimetype:
-                resolution = Image.open(StringIO(file.content)).size
+                file = req_get(uri, allow_redirects=True)
             else:
-                resolution = "N/A"
+                file = req_head(uri, allow_redirects=True)
 
-            if "video" in mimetype:
-                duration = "N/A"
+            # Only proceed if fetch was successful.
+            if file.status_code == 200:
+                asset_id = md5(name + uri).hexdigest()
 
-            start_date = ""
-            end_date = ""
-            duration = ""
+                strict_uri = file.url
 
-            c.execute("INSERT INTO assets (asset_id, name, uri, start_date, end_date, duration, mimetype) VALUES (?,?,?,?,?,?,?)", (asset_id, name, uri, start_date, end_date, duration, mimetype))
-            connection.commit()
+                if "image" in mimetype:
+                    resolution = Image.open(StringIO(file.content)).size
+                else:
+                    resolution = "N/A"
 
-            header = "Yay!"
-            message = "Added asset (" + asset_id + ") to the database."
-            return template('message', header=header, message=message)
+                if "video" in mimetype:
+                    duration = "N/A"
+            else:
+                header = "Ops!"
+                message = "Unable to fetch file."
+                return template('message', header=header, message=message)
 
-        else:
-            header = "Ops!"
-            message = "Unable to fetch file."
-            return template('message', header=header, message=message)
+        if file_upload:
+            asset_id = md5(file_upload.read()).hexdigest()
+
+            local_uri = path.join(asset_folder, asset_id)
+            f = open(local_uri, 'w')
+            asset_file_input = file_upload.read()
+            f.write(asset_file_input)
+            f.close()
+
+            uri = local_uri
+
+        start_date = ""
+        end_date = ""
+        duration = ""
+
+        c.execute("INSERT INTO assets (asset_id, name, uri, start_date, end_date, duration, mimetype) VALUES (?,?,?,?,?,?,?)", (asset_id, name, uri, start_date, end_date, duration, mimetype))
+        connection.commit()
+
+        header = "Yay!"
+        message = "Added asset (" + asset_id + ") to the database."
+        return template('message', header=header, message=message)
+
     else:
         header = "Ops!"
         message = "Invalid input."
@@ -249,7 +286,7 @@ def update_asset():
         uri = request.POST.get('uri', '').strip()
         mimetype = request.POST.get('mimetype', '').strip()
 
-        if not validate_uri(uri):
+        if not validate_uri(uri) and asset_folder not in uri:
             header = "Ops!"
             message = "Invalid URL. Failed to update asset."
             return template('message', header=header, message=message)
