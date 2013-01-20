@@ -30,6 +30,20 @@ from db import connection
 if not path.isdir(asset_folder):
     mkdir(asset_folder)
 
+
+def is_active(asset):
+    """Accepts an asset dictionary and determines if it
+    is active, returning Boolean."""
+
+    if not (asset['start_date'] and asset['end_date']):
+        return False
+
+    if asset['start_date'] < get_current_time() and asset['end_date'] > get_current_time():
+        return True
+    else:
+        return False
+
+
 def get_playlist():
     c = connection.cursor()
     c.execute("SELECT * FROM assets ORDER BY name")
@@ -72,6 +86,48 @@ def get_playlist():
             playlist.append(playlistitem)
 
     return playlist
+
+
+def fetch_assets(keys=None, order_by="name"):
+    """Fetches all assets from the database and returns their
+    data as returned from the SQLite3 cursor."""
+    c = connection.cursor()
+
+    if keys is None:
+        keys = [
+            "asset_id", "name", "uri", "start_date",
+            "end_date", "duration", "mimetype"
+        ]
+
+    c.execute("SELECT %s FROM assets ORDER BY %s" % (", ".join(keys), order_by))
+    raw_assets = c.fetchall()
+    assets = []
+
+    for asset in raw_assets:
+        dictionary = {}
+        for i in range(len(keys)):
+            dictionary[keys[i]] = asset[i]
+        assets.append(dictionary)
+
+    return assets
+
+
+def get_assets_grouped():
+    """Returns a dictionary containing a list of active assets
+    and a list of inactive assets stored at their respective
+    keys. Example: {'active': [...], 'inactive': [...]}"""
+    
+    assets = fetch_assets()
+    active = []
+    inactive = []
+
+    for asset in assets:
+        if is_active(asset):
+            active.append(asset)
+        else:
+            inactive.append(asset)
+
+    return {'active': active, 'inactive': inactive}
 
 
 def get_assets():
