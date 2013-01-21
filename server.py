@@ -91,7 +91,7 @@ def get_playlist():
 
 def fetch_assets(keys=None, order_by="name"):
     """Fetches all assets from the database and returns their
-    data as returned from the SQLite3 cursor."""
+    data as a list of dictionaries corresponding to each asset."""
     c = connection.cursor()
 
     if keys is None:
@@ -117,7 +117,7 @@ def get_assets_grouped():
     """Returns a dictionary containing a list of active assets
     and a list of inactive assets stored at their respective
     keys. Example: {'active': [...], 'inactive': [...]}"""
-    
+
     assets = fetch_assets()
     active = []
     inactive = []
