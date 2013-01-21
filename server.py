@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from dateutils import datestring
 from hashlib import md5
 from hurry.filesize import size
+import json
 from netifaces import ifaddresses
 from os import path, makedirs, getloadavg, statvfs, mkdir
 from PIL import Image
@@ -20,7 +21,7 @@ from subprocess import check_output
 from sys import  platform
 from urlparse import urlparse
 
-from bottle import route, run, debug, template, request, error, static_file
+from bottle import route, run, debug, template, request, error, static_file, response
 from bottlehaml import haml_template
 
 import settings
@@ -194,6 +195,26 @@ def validate_uri(uri):
         success = True
 
     return success
+
+
+################################
+# API
+################################
+
+def make_json_response(obj):
+    response.content_type = "application/json"
+    return json.dumps(obj)
+
+@route('/api/assets', method="GET")
+def api_assets():
+
+    assets = fetch_assets()
+
+    for asset in assets:
+        asset['is_active'] = is_active(asset)
+
+    return make_json_response(assets)
+
 
 @route('/process_asset', method='POST')
 def process_asset():
