@@ -102,10 +102,9 @@ def fetch_assets(keys=None, order_by="name"):
         ]
 
     c.execute("SELECT %s FROM assets ORDER BY %s" % (", ".join(keys), order_by))
-    raw_assets = c.fetchall()
     assets = []
 
-    for asset in raw_assets:
+    for asset in c.fetchall():
         dictionary = {}
         for i in range(len(keys)):
             dictionary[keys[i]] = asset[i]
