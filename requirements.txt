@@ -1,7 +1,6 @@
 PIL==1.1.7
 bottle==0.10.11
 hurry.filesize==0.9
-netifaces==0.8
 pytz==2012d
 requests==0.14.0
 wsgiref==0.1.2
