@@ -53,7 +53,7 @@
                   %th End
                   %th
               %tbody
-                - for asset in playlist:
+                - for asset in assets['active']:
                   %tr
                     %td ${asset['name']}
                     %td ${asset['start_date']}
