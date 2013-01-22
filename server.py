@@ -12,7 +12,7 @@ from dateutils import datestring
 from hashlib import md5
 from hurry.filesize import size
 from netifaces import ifaddresses
-from os import path, makedirs, getloadavg, statvfs, mkdir
+from os import path, makedirs, getloadavg, statvfs, mkdir, remove as remove_file
 from PIL import Image
 from requests import get as req_get, head as req_head
 from StringIO import StringIO
@@ -383,6 +383,11 @@ def delete_asset(asset_id):
     c.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
     try:
         connection.commit()
+
+        # If file exist on disk, delete it.
+        local_uri = path.join(asset_folder, asset_id)
+        if path.isfile(local_uri):
+            remove_file(local_uri)
 
         header = "Success!"
         message = "Deleted asset."
