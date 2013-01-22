@@ -116,7 +116,7 @@ def get_assets_grouped():
     """Returns a dictionary containing a list of active assets
     and a list of inactive assets stored at their respective
     keys. Example: {'active': [...], 'inactive': [...]}"""
-    
+
     assets = fetch_assets()
     active = []
     inactive = []
@@ -536,9 +536,4 @@ def mistake404(code):
     return 'Sorry, this page does not exist!'
 
 if __name__ == "__main__":
-    # Ugly local dev fix.
-    if platform == "darwin":
-        port = '8080'
-        run(host='127.0.0.1', port=port, reloader=True)
-    else:
-        run(host='0.0.0.0', port=8080, reloader=True)
+    run(host=settings.listen_ip, port=settings.listen_port, reloader=True)

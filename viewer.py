@@ -126,7 +126,7 @@ def load_browser():
     browser_resolution = settings.resolution
 
     if settings.show_splash:
-        browser_load_url = "http://127.0.0.1:8080/splash_page"
+        browser_load_url = "http://%s:%s/splash_page" % (settings.listen_ip, settings.listen_port)
     else:
         browser_load_url = black_page
 
