@@ -17,10 +17,9 @@ from PIL import Image
 from requests import get as req_get, head as req_head
 from StringIO import StringIO
 from subprocess import check_output
-from sys import  platform
 from urlparse import urlparse
 
-from bottle import route, run, debug, template, request, error, static_file
+from bottle import route, run, template, request, error, static_file
 
 import settings
 from settings import get_current_time, asset_folder
