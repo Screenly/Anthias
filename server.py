@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 from dateutils import datestring
 from hashlib import md5
 from hurry.filesize import size
-import json
 from netifaces import ifaddresses
 from os import path, makedirs, getloadavg, statvfs, mkdir, remove as remove_file
 from PIL import Image
@@ -27,6 +26,7 @@ from bottlehaml import haml_template
 import settings
 from settings import get_current_time, asset_folder
 from db import connection
+from utils import json_dump
 
 # Make sure the asset folder exist. If not, create it
 if not path.isdir(asset_folder):
@@ -173,7 +173,7 @@ def validate_uri(uri):
 
 def make_json_response(obj):
     response.content_type = "application/json"
-    return json.dumps(obj)
+    return json_dump(obj)
 
 @route('/api/assets', method="GET")
 def api_assets():
