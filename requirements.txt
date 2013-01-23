@@ -4,5 +4,5 @@ hurry.filesize==0.9
 pytz==2012d
 requests==0.14.0
 wsgiref==0.1.2
-bottle-haml==0.1.3
+bottle-haml==0.1.4
 mock==1.0.1
