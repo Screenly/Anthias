@@ -45,45 +45,16 @@ def is_active(asset):
 
 
 def get_playlist():
-    c = connection.cursor()
-    c.execute("SELECT * FROM assets ORDER BY name")
-    assets = c.fetchall()
 
     playlist = []
-    for asset in assets:
-        # Match variables with database
-        asset_id = asset[0]
-        name = asset[1]
-        uri = asset[2]  # Path in local database
-        input_start_date = asset[4]
-        input_end_date = asset[5]
+    for asset in fetch_assets():
 
-        try:
-            start_date = datestring.date_to_string(asset[4])
-        except:
-            start_date = None
+        if is_active(asset):
 
-        try:
-            end_date = datestring.date_to_string(asset[5])
-        except:
-            end_date = None
+            asset['start_date'] = datestring.date_to_string(asset['start_date'])
+            asset['end_date'] = datestring.date_to_string(asset['end_date'])
 
-        if (start_date and end_date) and (input_start_date < get_current_time() and input_end_date > get_current_time()):
-
-            duration = asset[6]
-            mimetype = asset[7]
-
-            playlistitem = {
-                "name": name,
-                "uri": uri,
-                "duration": duration,
-                "mimetype": mimetype,
-                "asset_id": asset_id,
-                "start_date": start_date,
-                "end_date": end_date
-            }
-
-            playlist.append(playlistitem)
+            playlist.append(asset)
 
     return playlist
 
