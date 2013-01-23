@@ -26,10 +26,6 @@ import settings
 from settings import get_current_time, asset_folder
 from db import connection
 
-# Make sure the asset folder exist. If not, create it
-if not path.isdir(asset_folder):
-    mkdir(asset_folder)
-
 
 def is_active(asset):
     """Accepts an asset dictionary and determines if it
@@ -512,4 +508,8 @@ def mistake404(code):
     return 'Sorry, this page does not exist!'
 
 if __name__ == "__main__":
+    # Make sure the asset folder exist. If not, create it
+    if not path.isdir(asset_folder):
+        mkdir(asset_folder)
+
     run(host=settings.listen_ip, port=settings.listen_port, reloader=True)
