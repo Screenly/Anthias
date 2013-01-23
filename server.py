@@ -40,12 +40,9 @@ def is_active(asset):
 
 
 def get_playlist():
-
     playlist = []
     for asset in fetch_assets():
-
         if is_active(asset):
-
             asset['start_date'] = datestring.date_to_string(asset['start_date'])
             asset['end_date'] = datestring.date_to_string(asset['end_date'])
 
