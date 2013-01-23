@@ -102,45 +102,6 @@ def get_assets_grouped():
     return {'active': active, 'inactive': inactive}
 
 
-def get_assets():
-    c = connection.cursor()
-    c.execute("SELECT asset_id, name, uri, start_date, end_date, duration, mimetype FROM assets ORDER BY name")
-    assets = c.fetchall()
-
-    playlist = []
-    for asset in assets:
-        # Match variables with database
-        asset_id = asset[0]
-        name = asset[1]
-        uri = asset[2]  # Path in local database
-
-        try:
-            start_date = datestring.date_to_string(asset[3])
-        except:
-            start_date = ""
-
-        try:
-            end_date = datestring.date_to_string(asset[4])
-        except:
-            end_date = ""
-
-        duration = asset[5]
-        mimetype = asset[6]
-
-        playlistitem = {
-            "name": name,
-            "uri": uri,
-            "duration": duration,
-            "mimetype": mimetype,
-            "asset_id": asset_id,
-            "start_date": start_date,
-            "end_date": end_date
-        }
-        playlist.append(playlistitem)
-
-    return playlist
-
-
 def initiate_db():
     # Create config dir if it doesn't exist
     if not path.isdir(settings.configdir):
@@ -443,7 +404,7 @@ def view_node_playlist():
 
 @route('/view_assets')
 def view_assets():
-    nodeplaylist = get_assets()
+    nodeplaylist = fetch_assets()
 
     return template('view_assets', nodeplaylist=nodeplaylist)
 
