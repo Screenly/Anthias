@@ -21,22 +21,31 @@ from urlparse import urlparse
 
 from bottle import route, run, template, request, error, static_file
 
-import settings
-from settings import get_current_time, asset_folder
 from db import connection
+from settings import get_current_time, asset_folder
+import settings
 
 
-def is_active(asset):
+def is_active(asset, at_time=None):
     """Accepts an asset dictionary and determines if it
-    is active, returning Boolean."""
+    is active at the given time. If no time is specified,
+    get_current_time() is used.
+
+    >>> asset = {'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d', 'mimetype': u'web', 'name': u'WireLoad', 'end_date': datetime(2013, 1, 19, 23, 59), 'uri': u'http://www.wireload.net', 'duration': u'5', 'start_date': datetime(2013, 1, 16, 0, 0)};
+
+    >>> is_active(asset, datetime(2013, 1, 16, 12, 00))
+    True
+    >>> is_active(asset, datetime(2014, 1, 1))
+    False
+
+    """
 
     if not (asset['start_date'] and asset['end_date']):
         return False
 
-    if asset['start_date'] < get_current_time() and asset['end_date'] > get_current_time():
-        return True
-    else:
-        return False
+    at_time = at_time or get_current_time()
+
+    return (asset['start_date'] < at_time and asset['end_date'] > at_time)
 
 
 def get_playlist():
@@ -147,15 +156,27 @@ def initiate_db():
         c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT)")
         return "Initiated database."
 
+
 def validate_uri(uri):
-    """ Simple URL verification """
-    success = False
+    """Simple URL verification.
+
+    >>> validate_uri("hello")
+    False
+    >>> validate_uri("ftp://example.com")
+    False
+    >>> validate_uri("http://")
+    False
+    >>> validate_uri("http://wireload.net/logo.png")
+    True
+    >>> validate_uri("https://wireload.net/logo.png")
+    True
+
+    """
+
     uri_check = urlparse(uri)
 
-    if (uri_check.scheme in ('http', 'https') and uri_check.netloc):
-        success = True
+    return bool(uri_check.scheme in ('http', 'https') and uri_check.netloc)
 
-    return success
 
 @route('/process_asset', method='POST')
 def process_asset():
