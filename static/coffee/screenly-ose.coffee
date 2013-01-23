@@ -83,6 +83,8 @@ jQuery ->
     events:
       'click #deactivate': 'deactivateAsset'
 
+    tagName: "tr"
+
     render: ->
       $(@el).html(@template(@model.toJSON()))
       @
@@ -99,6 +101,8 @@ jQuery ->
 
     events:
       'click #activate': 'activateAsset'
+
+    tagName: "tr"
 
     render: ->
       $(@el).html(@template(@model.toJSON()))

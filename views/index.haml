@@ -44,23 +44,19 @@
 
     %script(type="text/template", id="active-asset-row-template")
       :plain
-        <tr>
-          <td><%= name %></td>
-          <td></td>
-          <td></td>
-          <td>
-            <a href="#" id="deactivate">Deactivate</a>
-          </td>
-        </tr>
+        <td><%= name %></td>
+        <td><%= start_date %></td>
+        <td><%= end_date %></td>
+        <td>
+          <a href="#" id="deactivate">Deactivate</a>
+        </td>
 
     %script(type="text/template", id="inactive-asset-row-template")
       :plain
-        <tr>
-          <td><%= name %></td>
-          <td>
-            <a href="#" id="activate">Activate</a>
-          </td>
-        </tr>
+        <td><%= name %></td>
+        <td>
+          <a href="#" id="activate">Activate</a>
+        </td>
                 
 
   %body
