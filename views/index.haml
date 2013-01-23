@@ -14,6 +14,55 @@
     %script(src="/static/js/backbone-0.9.10.min.js")
     %script(src="/static/js/screenly-ose.js")
 
+    %script(type="text/template", id="active-assets-template")
+      .row
+        .span12
+          %section
+            .header
+              Active content
+            %table.table.table-striped
+              %thead
+                %tr
+                  %th Name
+                  %th Start
+                  %th End
+                  %th
+              %tbody
+
+    %script(type="text/template", id="inactive-assets-template")
+      .row
+        .span12
+          %section
+            .header
+              Inactive content
+            %table.table.table-striped
+              %thead
+                %tr
+                  %th Name
+                  %th
+              %tbody
+
+    %script(type="text/template", id="active-asset-row-template")
+      :plain
+        <tr>
+          <td><%= name %></td>
+          <td></td>
+          <td></td>
+          <td>
+            <a href="#" id="deactivate">Deactivate</a>
+          </td>
+        </tr>
+
+    %script(type="text/template", id="inactive-asset-row-template")
+      :plain
+        <tr>
+          <td><%= name %></td>
+          <td>
+            <a href="#" id="activate">Activate</a>
+          </td>
+        </tr>
+                
+
   %body
   
     .navbar.navbar-fixed-top
@@ -40,26 +89,8 @@
           %h1.page-header
             Schedule Overview
 
-      .row
-        .span12
-          %section
-            .header
-              Active content
-            %table.table.table-striped
-              %thead
-                %tr
-                  %th Name
-                  %th Start
-                  %th End
-                  %th
-              %tbody
-                - for asset in assets['active']:
-                  %tr
-                    %td ${asset['name']}
-                    %td ${asset['start_date']}
-                    %td ${asset['end_date']}
-                    %td
-                      %a(href="#") Deactivate
+      #active-assets-container
+      #inactive-assets-container
 
     #footer
       .container
