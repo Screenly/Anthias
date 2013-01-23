@@ -52,3 +52,6 @@ class ServerTest(unittest.TestCase):
         server.get_current_time.return_value = datetime.datetime(2013, 1, 21, 00, 01)
         pl = server.get_playlist()
         self.assertEquals(pl, [])
+
+if __name__ == '__main__':
+    unittest.main()

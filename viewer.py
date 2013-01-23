@@ -93,7 +93,7 @@ def generate_asset_list():
         logging.debug('generate_asset_list: %s: start (%s) end (%s)' % (name, start_date, end_date))
         if start_date and end_date:
             if start_date < time_cur and end_date > time_cur:
-                playlist.append({"name": name, "uri": uri, "duration": duration, "mimetype": mimetype})
+                playlist.append({"asset_id": asset_id, "name": name, "uri": uri, "duration": duration, "mimetype": mimetype})
                 if not deadline or end_date < deadline:
                     deadline = end_date
             elif start_date >= time_cur and end_date > start_date:
@@ -126,7 +126,7 @@ def load_browser():
     browser_resolution = settings.resolution
 
     if settings.show_splash:
-        browser_load_url = "http://127.0.0.1:8080/splash_page"
+        browser_load_url = "http://%s:%s/splash_page" % (settings.listen_ip, settings.listen_port)
     else:
         browser_load_url = black_page
 

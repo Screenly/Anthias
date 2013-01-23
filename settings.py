@@ -49,5 +49,14 @@ try:
 except:
     resolution = '1920x1080'
 
+try:
+    # Expect the string in format: ip:port
+    listen = config.get('main', 'listen').split(':')
+    listen_ip = listen[0]
+    listen_port = listen[1]
+except:
+    listen_ip = '0.0.0.0'
+    listen_port = '8080'
+
 # This assumes nodetype never changes from "standalone" to "managed" during a run.
 get_current_time = datetime.now if nodetype == "standalone" else datetime.utcnow

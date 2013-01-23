@@ -13,7 +13,7 @@ from hashlib import md5
 from hurry.filesize import size
 import json
 from netifaces import ifaddresses
-from os import path, makedirs, getloadavg, statvfs, mkdir
+from os import path, makedirs, getloadavg, statvfs, mkdir, remove as remove_file
 from PIL import Image
 from requests import get as req_get, head as req_head
 from StringIO import StringIO
@@ -47,45 +47,16 @@ def is_active(asset):
 
 
 def get_playlist():
-    c = connection.cursor()
-    c.execute("SELECT * FROM assets ORDER BY name")
-    assets = c.fetchall()
 
     playlist = []
-    for asset in assets:
-        # Match variables with database
-        asset_id = asset[0]
-        name = asset[1]
-        uri = asset[2]  # Path in local database
-        input_start_date = asset[4]
-        input_end_date = asset[5]
+    for asset in fetch_assets():
 
-        try:
-            start_date = datestring.date_to_string(asset[4])
-        except:
-            start_date = None
+        if is_active(asset):
 
-        try:
-            end_date = datestring.date_to_string(asset[5])
-        except:
-            end_date = None
+            asset['start_date'] = datestring.date_to_string(asset['start_date'])
+            asset['end_date'] = datestring.date_to_string(asset['end_date'])
 
-        if (start_date and end_date) and (input_start_date < get_current_time() and input_end_date > get_current_time()):
-
-            duration = asset[6]
-            mimetype = asset[7]
-
-            playlistitem = {
-                "name": name,
-                "uri": uri,
-                "duration": duration,
-                "mimetype": mimetype,
-                "asset_id": asset_id,
-                "start_date": start_date,
-                "end_date": end_date
-            }
-
-            playlist.append(playlistitem)
+            playlist.append(asset)
 
     return playlist
 
@@ -405,6 +376,11 @@ def delete_asset(asset_id):
     try:
         connection.commit()
 
+        # If file exist on disk, delete it.
+        local_uri = path.join(asset_folder, asset_id)
+        if path.isfile(local_uri):
+            remove_file(local_uri)
+
         header = "Success!"
         message = "Deleted asset."
         return template('message', header=header, message=message)
@@ -558,9 +534,4 @@ def mistake404(code):
     return 'Sorry, this page does not exist!'
 
 if __name__ == "__main__":
-    # Ugly local dev fix.
-    if platform == "darwin":
-        port = '8080'
-        run(host='127.0.0.1', port=port, reloader=True)
-    else:
-        run(host='0.0.0.0', port=8080, reloader=True)
+    run(host=settings.listen_ip, port=settings.listen_port, reloader=True)
