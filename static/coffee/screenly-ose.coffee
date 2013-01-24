@@ -49,6 +49,18 @@ jQuery ->
   # Views
   ################################
 
+  class AddAssetModalView extends Backbone.View
+    initialize: (options) ->
+      @template = _.template($('#add-asset-modal-template').html())
+
+    render: ->
+      $(@el).html(@template())
+      @
+
+  screenly.views.AddAssetModalView = AddAssetModalView
+
+  class EditAssetModalView extends Backbone.View
+
   class AssetsView extends Backbone.View
     initialize: (options) ->
 
@@ -90,6 +102,7 @@ jQuery ->
       @
 
     deactivateAsset: (event) ->
+      event.preventDefault()
       screenly.ActiveAssets.remove(@model)
       screenly.InactiveAssets.add(@model)
 
@@ -131,6 +144,12 @@ jQuery ->
 
   $("#active-assets-container").append activeAssetsView.render().el
   $("#inactive-assets-container").append inactiveAssetsView.render().el
+
+  $("#add-asset-button").click ->
+    console.log "Clicked add asset button"
+    modal = new AddAssetModalView()
+    $("body").append modal.render().el
+    $(modal.el).children(":first").modal()
 
 
 
