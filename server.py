@@ -29,6 +29,10 @@ from settings import get_current_time, asset_folder
 import settings
 
 
+################################
+# Utilities
+################################
+
 def is_active(asset, at_time=None):
     """Accepts an asset dictionary and determines if it
     is active at the given time. If no time is specified,
@@ -141,7 +145,6 @@ def validate_uri(uri):
     return bool(uri_check.scheme in ('http', 'https') and uri_check.netloc)
 
 
-
 ################################
 # API
 ################################
@@ -149,6 +152,7 @@ def validate_uri(uri):
 def make_json_response(obj):
     response.content_type = "application/json"
     return json_dump(obj)
+
 
 @route('/api/assets', method="GET")
 def api_assets():
@@ -161,11 +165,22 @@ def api_assets():
     return make_json_response(assets)
 
 
+################################
+# Views
+################################
+
+@route('/')
+def viewIndex():
+    initiate_db()
+    assets = get_assets_grouped()
+    return haml_template('index', assets=assets)
+
+
 @route('/process_asset', method='POST')
 def process_asset():
     c = connection.cursor()
 
-    if  (request.POST.get('name', '').strip() and
+    if (request.POST.get('name', '').strip() and
         (request.POST.get('uri', '').strip() or request.files.file_upload.file) and
         request.POST.get('mimetype', '').strip()
         ):
@@ -365,13 +380,6 @@ def delete_asset(asset_id):
         return template('message', header=header, message=message)
 
 
-@route('/')
-def viewIndex():
-    initiate_db()
-    assets = get_assets_grouped()
-    return haml_template('index', assets=assets)
-
-
 @route('/system_info')
 def system_info():
     viewer_log_file = '/tmp/screenly_viewer.log'
@@ -493,12 +501,6 @@ def edit_asset(asset_id):
     return template('edit_asset', asset_info=asset_info)
 
 
-# Static
-@route('/static/:path#.+#', name='static')
-def static(path):
-    return static_file(path, root='static')
-
-
 @error(403)
 def mistake403(code):
     return 'The parameter you passed has the wrong format!'
@@ -507,6 +509,16 @@ def mistake403(code):
 @error(404)
 def mistake404(code):
     return 'Sorry, this page does not exist!'
+
+
+################################
+# Static
+################################
+
+@route('/static/:path#.+#', name='static')
+def static(path):
+    return static_file(path, root='static')
+
 
 if __name__ == "__main__":
     # Make sure the asset folder exist. If not, create it
