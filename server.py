@@ -216,11 +216,11 @@ def process_asset():
                 return template('message', header=header, message=message)
 
         if file_upload:
-            asset_id = md5(file_upload.read()).hexdigest()
+            asset_file_input = file_upload.read()
+            asset_id = md5(asset_file_input).hexdigest()
 
             local_uri = path.join(asset_folder, asset_id)
             f = open(local_uri, 'w')
-            asset_file_input = file_upload.read()
             f.write(asset_file_input)
             f.close()
 
