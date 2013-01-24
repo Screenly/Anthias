@@ -20,8 +20,8 @@ class ServerTest(unittest.TestCase):
         fake_cursor = server.connection.cursor.return_value
         fake_cursor.execute.return_value = None
         fake_cursor.fetchall.return_value = (
-                (u'7e978f8c1204a6f70770a1eb54a76e9b', u'Google', u'https://www.google.com/images/srpr/logo3w.png', None, datetime.datetime(2013, 1, 17, 00, 00), datetime.datetime(2013, 1, 21, 00, 00), u'6', u'image'),
-                (u'4c8dbce552edb5812d3a866cfe5f159d', u'WireLoad', u'http://www.wireload.net', None, datetime.datetime(2013, 1, 16, 00, 00), datetime.datetime(2013, 1, 19, 23, 59), u'5', u'web')
+                (u'7e978f8c1204a6f70770a1eb54a76e9b', u'Google', u'https://www.google.com/images/srpr/logo3w.png',  datetime.datetime(2013, 1, 17, 00, 00), datetime.datetime(2013, 1, 21, 00, 00), u'6', u'image'),
+                (u'4c8dbce552edb5812d3a866cfe5f159d', u'WireLoad', u'http://www.wireload.net', datetime.datetime(2013, 1, 16, 00, 00), datetime.datetime(2013, 1, 19, 23, 59), u'5', u'web')
             )
 
         # Fake the current time.
@@ -30,7 +30,7 @@ class ServerTest(unittest.TestCase):
         server.get_current_time.return_value = datetime.datetime(2013, 1, 16, 12, 00)
 
         pl = server.get_playlist()
-        fake_cursor.execute.assert_called_once_with("SELECT * FROM assets ORDER BY name")
+        fake_cursor.execute.assert_called_once_with("SELECT asset_id, name, uri, start_date, end_date, duration, mimetype FROM assets ORDER BY name")
         self.assertEquals(pl, [
                 {'mimetype': u'web', 'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d', 'name': u'WireLoad', 'end_date': '2013-01-19 @ 23:59', 'uri': u'http://www.wireload.net', 'duration': u'5', 'start_date': '2013-01-16 @ 00:00'}
             ])
