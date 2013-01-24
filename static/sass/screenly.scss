@@ -69,7 +69,9 @@ body {
 
 
 h1.page-header {
-  text-align: center;
+  .pull-right {
+    font-weight: normal;
+  }
 }
 
 section {

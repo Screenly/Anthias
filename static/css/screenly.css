@@ -37,8 +37,8 @@ body {
       color: #535d79;
       font-size: 12px; }
 
-h1.page-header {
-  text-align: center; }
+h1.page-header .pull-right {
+  font-weight: normal; }
 
 section .header {
   background: #0b7eff;
