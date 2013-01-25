@@ -10,6 +10,9 @@ jQuery ->
   ################################
 
   class Asset extends Backbone.Model
+    url: ->
+      if @get('asset_id')
+        "/api/assets/#{asset_id}"
 
   ################################
   # Collections

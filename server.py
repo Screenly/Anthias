@@ -145,13 +145,88 @@ def validate_uri(uri):
     return bool(uri_check.scheme in ('http', 'https') and uri_check.netloc)
 
 
+def make_json_response(obj):
+    response.content_type = "application/json"
+    return json_dump(obj)
+
+
+def api_error(error):
+    response.content_type = "application/json"
+    response.status = 500
+    return json_dump({'error': error})
+
+
 ################################
 # API
 ################################
 
-def make_json_response(obj):
-    response.content_type = "application/json"
-    return json_dump(obj)
+def prepare_asset(request):
+
+    data = request.POST or {}
+
+    def get(key):
+        return data.get(key, '').strip()
+
+    if all([
+        get('name'),
+        get('uri') or request.files.file_upload,
+        get('mimetype')]):
+
+        asset = {
+            'name': get('name').decode('UTF-8'),
+            'mimetype': get('mimetype'),
+        }
+
+        uri = get('uri') or False
+        try:
+            file_upload = request.files.file_upload.file
+        except:
+            file_upload = False
+
+        if file_upload and 'web' in asset['mimetype']:
+            raise Exception("Invalid combination. Can't upload a web resource.")
+
+        if uri and file_upload:
+            raise Exception("Invalid combination. Can't select both URI and a file.")
+
+        if uri:
+            if not validate_uri(uri):
+                raise Exception("Invalid URL. Failed to add asset.")
+
+            if "image" in asset['mimetype']:
+                file = req_get(uri, allow_redirects=True)
+            else:
+                file = req_head(uri, allow_redirects=True)
+
+            if file.status_code == 200:
+                asset['asset_id'] = md5(asset['name'] + uri).hexdigest()
+                # strict_uri = file.url
+
+                if "image" in asset['mimetype']:
+                    asset['resolution'] = Image.open(StringIO(file.content)).size
+
+            else:
+                raise Exception("Could not retrieve file. Check the asset URL.")
+
+        if file_upload:
+            asset['asset_id'] = md5(file_upload.read()).hexdigest()
+            asset['uri'] = path.join(asset_folder, asset['asset_id'])
+
+            with open(asset['uri'], 'w') as f:
+                f.write(file_upload.read())
+
+        if not asset.get('resolution', False):
+            asset['resolution'] = "N/A"
+
+        if "video" in asset['mimetype']:
+            asset['duration'] = "N/A"
+
+        asset['start_date'] = ""
+        asset['end_date'] = ""
+
+        return asset
+    else:
+        raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
 
 
 @route('/api/assets', method="GET")
@@ -163,6 +238,17 @@ def api_assets():
         asset['is_active'] = is_active(asset)
 
     return make_json_response(assets)
+
+
+@route('/api/assets', method="POST")
+def add_asset():
+    try:
+        asset = prepare_asset(request)
+        # TODO save asset to database
+        return make_json_response(asset)
+    except Exception as e:
+        return api_error(str(e))
+
 
 
 ################################
