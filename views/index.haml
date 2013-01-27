@@ -66,7 +66,33 @@
           %button.close(type="button", dataDismiss="modal", ariaHidden="true") x
           %h3#myModalLabel Add Asset
         .modal-body
-          %p Hey guys.
+          %form.form-horizontal
+            %fieldset
+              .control-group
+                %label.control-label Name
+                .controls
+                  %input.span5(type="text", name="name", placeholder="Nickname for this asset")
+              .control-group
+                %label.control-label Asset Type
+                .controls
+                  %select.span5(name="mimetype")
+                    %option(value="image") Image
+                    %option(value="video") Video
+                    %option(value="webpage") Webpage
+            %hr
+            %fieldset
+              .control-group
+                %label.control-label Asset URL
+                .controls
+                  %input.span5(type="text", name="uri", placeholder="Public URL to this asset's location")
+              %div(style="text-align: center; font-weight: bold; color: #888; margin-bottom: 20px")
+                &mdash; or &mdash;
+              .control-group
+                %label.control-label Upload Asset
+                .controls
+                  %input(type="file", name="file_upload")
+
+
         .modal-footer
           %a.btn(href="#", dataDismiss="modal") Close
           %a.btn.btn-primary(href="#") Add Asset
