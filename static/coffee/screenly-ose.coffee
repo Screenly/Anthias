@@ -69,13 +69,13 @@ class EditAssetModalView extends Backbone.View
 class AssetsView extends Backbone.View
   initialize: (options) ->
 
-    if not 'template_name' in options
+    if not 'templateName' in options
       console.log "You need to specify the template name for this AssetsView."
 
     if not 'childViewClass' in options
       console.log "You must specify the child view class for this AssetsView."
 
-    @template = _.template($('#' + options.template_name).html())
+    @template = _.template($('#' + options.templateName).html())
     
     @collection.bind "reset", @render, @
     @collection.bind "remove", @render, @
@@ -141,13 +141,13 @@ jQuery ->
   # Initialize the initial view
   activeAssetsView = new AssetsView(
     collection: screenly.ActiveAssets, 
-    template_name: "active-assets-template", 
+    templateName: "active-assets-template", 
     childViewClass: ActiveAssetRowView
   )
 
   inactiveAssetsView = new AssetsView(
     collection: screenly.InactiveAssets,
-    template_name: "inactive-assets-template",
+    templateName: "inactive-assets-template",
     childViewClass: InactiveAssetRowView
   )
 
