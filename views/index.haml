@@ -62,11 +62,11 @@
 
     %script(type="text/template", id="add-asset-modal-template")
       .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
-        .modal-header
-          %button.close(type="button", dataDismiss="modal", ariaHidden="true") x
-          %h3#myModalLabel Add Asset
-        .modal-body
-          %form.form-horizontal
+        %form.form-horizontal(method="POST", action="/api/assets")
+          .modal-header
+            %button.close(type="button", dataDismiss="modal", ariaHidden="true") x
+            %h3#myModalLabel Add Asset
+          .modal-body
             %fieldset
               .control-group
                 %label.control-label Name
@@ -93,9 +93,9 @@
                   %input(type="file", name="file_upload")
 
 
-        .modal-footer
-          %a.btn(href="#", dataDismiss="modal") Close
-          %a.btn.btn-primary(href="#") Add Asset
+          .modal-footer
+            %a.btn(href="#", dataDismiss="modal") Close
+            %input.btn.btn-primary(type="submit", value="Add Asset")
 
                 
 

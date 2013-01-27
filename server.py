@@ -19,7 +19,7 @@ from StringIO import StringIO
 from subprocess import check_output
 from urlparse import urlparse
 
-from bottle import route, run, template, request, error, static_file, response
+from bottle import route, run, template, request, error, static_file, response, redirect
 from bottlehaml import haml_template
 
 from db import connection
@@ -244,11 +244,17 @@ def api_assets():
 def add_asset():
     try:
         asset = prepare_asset(request)
-        # TODO save asset to database
-        return make_json_response(asset)
+
+        c = connection.cursor()
+        c.execute(
+            "INSERT INTO assets (%s) VALUES (%s)" % (", ".join(asset.keys()), ",".join(["?"] * len(asset.keys()))),
+            asset.values()
+        )
+        connection.commit()
     except Exception as e:
         return api_error(str(e))
 
+    redirect("/")
 
 
 ################################
