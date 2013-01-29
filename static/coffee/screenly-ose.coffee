@@ -60,6 +60,8 @@ class AddAssetModalView extends Backbone.View
 
   render: ->
     $(@el).html(@template())
+    # setTimeout (=> @$(".date").datepicker()), 1000
+    @$("input.date").datepicker()
     @
 
 screenly.views.AddAssetModalView = AddAssetModalView
@@ -154,8 +156,8 @@ jQuery ->
   $("#active-assets-container").append activeAssetsView.render().el
   $("#inactive-assets-container").append inactiveAssetsView.render().el
 
-  $("#add-asset-button").click ->
-    console.log "Clicked add asset button"
+  $("#add-asset-button").click (event) ->
+    event.preventDefault()
     modal = new AddAssetModalView()
     $("body").append modal.render().el
     $(modal.el).children(":first").modal()

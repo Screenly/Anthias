@@ -64,3 +64,6 @@ section .header {
   text-transform: uppercase; }
 section table {
   width: 100%; }
+
+.modal form {
+  margin-bottom: 0; }

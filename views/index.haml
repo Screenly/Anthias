@@ -7,6 +7,7 @@
 
     %link(href="/static/css/bootstrap.css", rel="stylesheet")
     %link(href="/static/css/screenly.css", rel="stylesheet")
+    %link(href="/static/css/datepicker.css", rel="stylesheet")
 
     %script(src="/static/js/jquery-1.8.0.min.js")
     / %script(src="/static/js/bootstrap-dropdown.js")
@@ -14,6 +15,7 @@
     %script(src="/static/js/backbone-0.9.10.min.js")
     %script(src="/static/js/bootstrap-transition.js")
     %script(src="/static/js/bootstrap-modal.js")
+    %script(src="/static/js/bootstrap-datepicker.js")
     %script(src="/static/js/screenly-ose.js")
 
     %script(type="text/template", id="active-assets-template")
@@ -79,18 +81,32 @@
                     %option(value="image") Image
                     %option(value="video") Video
                     %option(value="webpage") Webpage
-            %hr
+            
             %fieldset
-              .control-group
+              .control-group(style="margin-bottom: 0")
                 %label.control-label Asset URL
                 .controls
                   %input.span5(type="text", name="uri", placeholder="Public URL to this asset's location")
-              %div(style="text-align: center; font-weight: bold; color: #888; margin-bottom: 20px")
-                &mdash; or &mdash;
+                  %div(style="line-height: 27px; font-weight: bold; color: #888")
+                    &mdash; or &mdash;
               .control-group
                 %label.control-label Upload Asset
                 .controls
                   %input(type="file", name="file_upload")
+            %hr
+            %fieldset
+              .control-group
+                %label.control-label Start Date
+                .controls
+                  %input.span2.date(type="text", name="start_date_date")
+              .control-group
+                %label.control-label End Date
+                .controls
+                  %input.span2.date(type="text", name="end_date_date")
+              .control-group
+                %label.control-label Duration
+                .controls
+                  %input.span5(type="text", name="duration", placeholder="Duration in seconds")
 
 
           .modal-footer
