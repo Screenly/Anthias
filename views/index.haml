@@ -8,6 +8,7 @@
     %link(href="/static/css/bootstrap.css", rel="stylesheet")
     %link(href="/static/css/screenly.css", rel="stylesheet")
     %link(href="/static/css/datepicker.css", rel="stylesheet")
+    %link(href="/static/css/timepicker.css", rel="stylesheet")
 
     %script(src="/static/js/jquery-1.8.0.min.js")
     / %script(src="/static/js/bootstrap-dropdown.js")
@@ -16,6 +17,7 @@
     %script(src="/static/js/bootstrap-transition.js")
     %script(src="/static/js/bootstrap-modal.js")
     %script(src="/static/js/bootstrap-datepicker.js")
+    %script(src="/static/js/bootstrap-timepicker.js")
     %script(src="/static/js/screenly-ose.js")
 
     %script(type="text/template", id="active-assets-template")
@@ -64,7 +66,7 @@
 
     %script(type="text/template", id="add-asset-modal-template")
       .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
-        %form.form-horizontal(method="POST", action="/api/assets")
+        %form.form-horizontal#add-form(method="POST", action="/api/assets")
           .modal-header
             %button.close(type="button", dataDismiss="modal", ariaHidden="true") x
             %h3#myModalLabel Add Asset
@@ -99,19 +101,24 @@
                 %label.control-label Start Date
                 .controls
                   %input.span2.date(type="text", name="start_date_date")
+                  %input.span2.time(type="text", name="start_date_time")
+                  %input(type="hidden", name="start_date")
               .control-group
                 %label.control-label End Date
                 .controls
                   %input.span2.date(type="text", name="end_date_date")
+                  %input.span2.time(type="text", name="end_date_time")
+                  %input(type="hidden", name="end_date")
               .control-group
                 %label.control-label Duration
                 .controls
-                  %input.span5(type="text", name="duration", placeholder="Duration in seconds")
+                  %input.span1(type="text", name="duration")
+                  seconds
 
 
           .modal-footer
             %a.btn(href="#", dataDismiss="modal") Close
-            %input.btn.btn-primary(type="submit", value="Add Asset")
+            %input.btn.btn-primary#add-button(type="button", value="Add Asset")
 
                 
 

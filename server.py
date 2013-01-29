@@ -223,8 +223,18 @@ def prepare_asset(request):
         if "video" in asset['mimetype']:
             asset['duration'] = "N/A"
 
-        asset['start_date'] = ""
-        asset['end_date'] = ""
+        if get('duration'):
+            asset['duration'] = get('duration')
+
+        if get('start_date'):
+            asset['start_date'] = datetime.strptime(get('start_date'), '%m/%d/%Y %H:%M')
+        else:
+            asset['start_date'] = ""
+
+        if get('end_date'):
+            asset['end_date'] = datetime.strptime(get('end_date'), '%m/%d/%Y %H:%M')
+        else:
+            asset['end_date'] = ""
 
         return asset
     else:

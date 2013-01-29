@@ -55,14 +55,41 @@ screenly.InactiveAssets = new InactiveAssets()
 ################################
 
 class AddAssetModalView extends Backbone.View
+
+  events:
+    'click #add-button': 'addButtonWasClicked'
+
   initialize: (options) ->
     @template = _.template($('#add-asset-modal-template').html())
 
   render: ->
     $(@el).html(@template())
-    # setTimeout (=> @$(".date").datepicker()), 1000
-    @$("input.date").datepicker()
+    
+    @$("input.date").datepicker({autoclose: true})
+    @$("input.date").datepicker('setValue', new Date())
+
+    @$('input.time').timepicker({
+      minuteStep: 5,
+      showInputs: false,
+      disableFocus: true,
+      defaultTime: 'current',
+      showMeridian: false
+    })
+
     @
+
+  addButtonWasClicked: (event) ->
+    event.preventDefault()
+    console.log "You tried to add Asset"
+
+    start_date = $("input[name='start_date_date']").val() + " " + $("input[name='start_date_time']").val()
+    end_date = $("input[name='end_date_date']").val() + " " + $("input[name='end_date_time']").val()
+    $("input[name='start_date']").val(start_date)
+    $("input[name='end_date']").val(end_date)
+
+    @$("form").submit()
+
+
 
 screenly.views.AddAssetModalView = AddAssetModalView
 
