@@ -178,6 +178,7 @@ def prepare_asset(request):
         }
 
         uri = get('uri') or False
+
         try:
             file_upload = request.files.file_upload.file
         except:
@@ -200,6 +201,7 @@ def prepare_asset(request):
 
             if file.status_code == 200:
                 asset['asset_id'] = md5(asset['name'] + uri).hexdigest()
+                asset['uri'] = uri
                 # strict_uri = file.url
 
                 # if "image" in asset['mimetype']:
