@@ -4,6 +4,11 @@
 @screenly.views = window.screenly.views ? {}
 @screenly.models = window.screenly.models ? {}
 
+
+# Tell Backbone to send its saves as JSON-encoded.
+Backbone.emulateJSON = true
+
+
 ################################
 # Utilities
 ################################
