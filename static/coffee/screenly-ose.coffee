@@ -151,6 +151,16 @@ class ActiveAssetRowView extends Backbone.View
 
   deactivateAsset: (event) ->
     event.preventDefault()
+
+    # To deactivate, set this asset's end_date to right now
+    @model.set('end_date', localizedDateString(new Date()))
+
+    # Now persist the change on the server so this becomes
+    # active immediately.
+    @model.save()
+
+    # Now let's update the local collections, which
+    # should change the view the user sees.
     screenly.ActiveAssets.remove(@model)
     screenly.InactiveAssets.add(@model)
 
@@ -171,6 +181,16 @@ class InactiveAssetRowView extends Backbone.View
 
   activateAsset: (event) ->
     event.preventDefault()
+
+    # To "activate" an asset, we set its start_date
+    # to now and, for now, set its end_date to
+    # 10 years from now.
+    @model.set('start_date', localizedDateString(new Date()))
+    @model.set('end_date', localizedDateString((new Date()).getTime() + (10 * 365 * 24 * 60 * 60000) ))
+    @model.save()
+
+    # Now let's update the local collections, which
+    # should change the view the user sees.
     screenly.InactiveAssets.remove @model
     screenly.ActiveAssets.add @model
 
