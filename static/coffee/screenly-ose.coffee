@@ -12,7 +12,7 @@
 class Asset extends Backbone.Model
   url: ->
     if @get('asset_id')
-      "/api/assets/#{asset_id}"
+      "/api/assets/#{@get('asset_id')}"
 
 screenly.models.Asset = Asset
 
@@ -84,11 +84,14 @@ class AddAssetModalView extends Backbone.View
 
     start_date = $("input[name='start_date_date']").val() + " " + $("input[name='start_date_time']").val()
     end_date = $("input[name='end_date_date']").val() + " " + $("input[name='end_date_time']").val()
-    $("input[name='start_date']").val(start_date)
-    $("input[name='end_date']").val(end_date)
+
+    start_date = new Date(start_date)
+    end_date = new Date(end_date)
+
+    $("input[name='start_date']").val(start_date.toISOString())
+    $("input[name='end_date']").val(end_date.toISOString())
 
     @$("form").submit()
-
 
 
 screenly.views.AddAssetModalView = AddAssetModalView

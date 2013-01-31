@@ -162,7 +162,10 @@ def api_error(error):
 
 def prepare_asset(request):
 
-    data = request.POST or {}
+    data = request.POST or request.FORM or {}
+
+    if 'model' in data:
+        data = json.loads(data['model'])
 
     def get(key):
         return data.get(key, '').strip()
@@ -227,12 +230,12 @@ def prepare_asset(request):
             asset['duration'] = get('duration')
 
         if get('start_date'):
-            asset['start_date'] = datetime.strptime(get('start_date'), '%m/%d/%Y %H:%M')
+            asset['start_date'] = datetime.strptime(get('start_date'), "%Y-%m-%dT%H:%M:%S.%fZ")
         else:
             asset['start_date'] = ""
 
         if get('end_date'):
-            asset['end_date'] = datetime.strptime(get('end_date'), '%m/%d/%Y %H:%M')
+            asset['end_date'] = datetime.strptime(get('end_date'), "%Y-%m-%dT%H:%M:%S.%fZ")
         else:
             asset['end_date'] = ""
 
@@ -267,6 +270,23 @@ def add_asset():
         return api_error(str(e))
 
     redirect("/")
+
+
+@route('/api/assets/:asset_id', method="POST")
+def edit_asset(asset_id):
+    try:
+        asset = prepare_asset(request)
+        del asset['asset_id']
+
+        c = connection.cursor()
+        query = "UPDATE assets SET %s=? WHERE asset_id=?" % "=?, ".join(asset.keys())
+
+        c.execute(query, asset.values() + [asset_id])
+        connection.commit()
+
+        return make_json_response(asset)
+    except Exception as e:
+        return api_error(str(e))
 
 
 ################################
