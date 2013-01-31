@@ -18,6 +18,7 @@ from requests import get as req_get, head as req_head
 from StringIO import StringIO
 from subprocess import check_output
 from urlparse import urlparse
+import json
 
 from bottle import route, run, template, request, error, static_file, response, redirect
 from bottlehaml import haml_template
