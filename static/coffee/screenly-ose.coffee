@@ -4,6 +4,15 @@
 @screenly.views = window.screenly.views ? {}
 @screenly.models = window.screenly.models ? {}
 
+################################
+# Utilities
+################################
+
+localizedDateString = (string) ->
+  date = new Date(string)
+  offset = date.getTimezoneOffset()
+  (new Date(date.getTime() - (offset * 60000))).toISOString()
+
 
 ################################
 # Models
@@ -85,11 +94,8 @@ class AddAssetModalView extends Backbone.View
     start_date = $("input[name='start_date_date']").val() + " " + $("input[name='start_date_time']").val()
     end_date = $("input[name='end_date_date']").val() + " " + $("input[name='end_date_time']").val()
 
-    start_date = new Date(start_date)
-    end_date = new Date(end_date)
-
-    $("input[name='start_date']").val(start_date.toISOString())
-    $("input[name='end_date']").val(end_date.toISOString())
+    $("input[name='start_date']").val(localizedDateString(start_date))
+    $("input[name='end_date']").val(localizedDateString(end_date))
 
     @$("form").submit()
 
