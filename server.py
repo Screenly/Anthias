@@ -231,12 +231,12 @@ def prepare_asset(request):
             asset['duration'] = get('duration')
 
         if get('start_date'):
-            asset['start_date'] = datetime.strptime(get('start_date'), "%Y-%m-%dT%H:%M:%S.%fZ")
+            asset['start_date'] = datetime.strptime(get('start_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
         else:
             asset['start_date'] = ""
 
         if get('end_date'):
-            asset['end_date'] = datetime.strptime(get('end_date'), "%Y-%m-%dT%H:%M:%S.%fZ")
+            asset['end_date'] = datetime.strptime(get('end_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
         else:
             asset['end_date'] = ""
 
