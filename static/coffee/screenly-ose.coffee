@@ -3,6 +3,7 @@
 @screenly.collections = window.screenly.collections ? {}
 @screenly.views = window.screenly.views ? {}
 @screenly.models = window.screenly.models ? {}
+@screenly.utils = window.screenly.utils ? {}
 
 
 # Tell Backbone to send its saves as JSON-encoded.
@@ -13,10 +14,16 @@ Backbone.emulateJSON = true
 # Utilities
 ################################
 
-localizedDateString = (string) ->
-  date = new Date(string)
-  offset = date.getTimezoneOffset()
-  (new Date(date.getTime() - (offset * 60000))).toISOString()
+ISOFromDateString = (string) ->
+  (new Date(string)).toISOString()
+
+formattedDateString = (date) ->
+  (new Date(date)).toLocaleString()
+
+futureDateInYears = (years) ->
+  new Date(new Date().getTime() + (years * 365 * 24 * 60 * 60000))
+
+@screenly.utils.formattedDateString = formattedDateString
 
 
 ################################
@@ -99,8 +106,8 @@ class AddAssetModalView extends Backbone.View
     start_date = $("input[name='start_date_date']").val() + " " + $("input[name='start_date_time']").val()
     end_date = $("input[name='end_date_date']").val() + " " + $("input[name='end_date_time']").val()
 
-    $("input[name='start_date']").val(localizedDateString(start_date))
-    $("input[name='end_date']").val(localizedDateString(end_date))
+    $("input[name='start_date']").val(ISOFromDateString(start_date))
+    $("input[name='end_date']").val(ISOFromDateString(end_date))
 
     @$("form").submit()
 
@@ -152,7 +159,7 @@ class ActiveAssetRowView extends Backbone.View
   deactivateAsset: (event) ->
 
     # To deactivate, set this asset's end_date to right now
-    @model.set('end_date', localizedDateString(new Date()))
+    @model.set('end_date', (new Date()).toISOString())
 
     # Now persist the change on the server so this becomes
     # active immediately.
@@ -187,8 +194,8 @@ class InactiveAssetRowView extends Backbone.View
     # To "activate" an asset, we set its start_date
     # to now and, for now, set its end_date to
     # 10 years from now.
-    @model.set('start_date', localizedDateString(new Date()))
-    @model.set('end_date', localizedDateString((new Date()).getTime() + (10 * 365 * 24 * 60 * 60000) ))
+    @model.set('start_date', (new Date()).toISOString())
+    @model.set('end_date', futureDateInYears(10).toISOString())
     @model.save()
 
     # Now let's update the local collections, which

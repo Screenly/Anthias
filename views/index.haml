@@ -54,8 +54,8 @@
     %script(type="text/template", id="active-asset-row-template")
       :plain
         <td><%= name %></td>
-        <td><%= start_date %></td>
-        <td><%= end_date %></td>
+        <td><%= screenly.utils.formattedDateString(start_date) %></td>
+        <td><%= screenly.utils.formattedDateString(end_date) %></td>
         <td>
           <label class="checkbox toggle well" style="width:115px" id="deactivate">
             <input id="view" type="checkbox" checked />
@@ -71,8 +71,8 @@
     %script(type="text/template", id="inactive-asset-row-template")
       :plain
         <td><%= name %></td>
-        <td><%= start_date %></td>
-        <td><%= end_date %></td>
+        <td><%= screenly.utils.formattedDateString(start_date) %></td>
+        <td><%= screenly.utils.formattedDateString(end_date) %></td>
         <td>
           <label class="checkbox toggle well" style="width:115px" id="activate">
             <input id="view" type="checkbox" />
