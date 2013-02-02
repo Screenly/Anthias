@@ -9,6 +9,7 @@
     %link(href="/static/css/screenly.css", rel="stylesheet")
     %link(href="/static/css/datepicker.css", rel="stylesheet")
     %link(href="/static/css/timepicker.css", rel="stylesheet")
+    %link(href="/static/css/toggle-switch.css", rel="stylesheet")
 
     %script(src="/static/js/jquery-1.8.0.min.js")
     / %script(src="/static/js/bootstrap-dropdown.js")
@@ -45,6 +46,8 @@
               %thead
                 %tr
                   %th Name
+                  %th Start
+                  %th End
                   %th
               %tbody
 
@@ -54,14 +57,32 @@
         <td><%= start_date %></td>
         <td><%= end_date %></td>
         <td>
-          <a href="#" id="deactivate">Deactivate</a>
+          <label class="checkbox toggle well" style="width:115px" id="deactivate">
+            <input id="view" type="checkbox" checked />
+            <p>
+              <span>On</span>
+              <span>Off</span>
+            </p>
+            
+            <a class="btn btn-primary slide-button"></a>
+          </label>
         </td>
 
     %script(type="text/template", id="inactive-asset-row-template")
       :plain
         <td><%= name %></td>
+        <td><%= start_date %></td>
+        <td><%= end_date %></td>
         <td>
-          <a href="#" id="activate">Activate</a>
+          <label class="checkbox toggle well" style="width:115px" id="activate">
+            <input id="view" type="checkbox" />
+            <p>
+              <span>On</span>
+              <span>Off</span>
+            </p>
+            
+            <a class="btn btn-primary slide-button"></a>
+          </label>
         </td>
 
     %script(type="text/template", id="add-asset-modal-template")
