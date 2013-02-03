@@ -272,7 +272,7 @@ $popoverArrowOuterColor:  rgba(0,0,0,.25) !default;
 // Default 940px grid
 // -------------------------
 $gridColumns:             12 !default;
-$gridColumnWidth:         40px !default;
+$gridColumnWidth:         50px !default;
 $gridGutterWidth:         20px !default;
 $gridRowWidth:            ($gridColumns * $gridColumnWidth) + ($gridGutterWidth * ($gridColumns - 1)) !default;
 
