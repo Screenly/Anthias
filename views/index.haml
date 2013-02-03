@@ -34,6 +34,7 @@
                   %th Start
                   %th End
                   %th
+                  %th
               %tbody
 
     %script(type="text/template", id="inactive-assets-template")
@@ -49,6 +50,7 @@
                   %th Start
                   %th End
                   %th
+                  %th
               %tbody
 
     %script(type="text/template", id="active-asset-row-template")
@@ -56,6 +58,9 @@
         <td><%= name %></td>
         <td><%= screenly.utils.formattedDateString(start_date) %></td>
         <td><%= screenly.utils.formattedDateString(end_date) %></td>
+        <td>
+          <a href="#" class="btn" id="edit-asset-button">Edit</a>
+        </td>
         <td>
           <label class="checkbox toggle well" style="width:115px" id="deactivate">
             <input id="view" type="checkbox" checked />
@@ -73,6 +78,9 @@
         <td><%= name %></td>
         <td><%= screenly.utils.formattedDateString(start_date) %></td>
         <td><%= screenly.utils.formattedDateString(end_date) %></td>
+        <td>
+          <a href="#" class="btn" id="edit-asset-button">Edit</a>
+        </td>
         <td>
           <label class="checkbox toggle well" style="width:115px" id="activate">
             <input id="view" type="checkbox" />
