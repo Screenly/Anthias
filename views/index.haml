@@ -93,6 +93,62 @@
           </label>
         </td>
 
+    %script(type="text/template", id="asset-modal-template")
+      .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
+        %form.form-horizontal#add-form(method="POST", action="/api/assets")
+          .modal-header
+            %button.close(type="button", dataDismiss="modal", ariaHidden="true") x
+            %h3#modalLabel Asset
+          .modal-body
+            %fieldset
+              .control-group
+                %label.control-label Name
+                .controls
+                  %input.span5(type="text", name="name", placeholder="Nickname for this asset")
+              .control-group
+                %label.control-label Asset Type
+                .controls
+                  %select.span5(name="mimetype")
+                    %option(value="image") Image
+                    %option(value="video") Video
+                    %option(value="webpage") Webpage
+            
+            %fieldset
+              .control-group(style="margin-bottom: 0")
+                %label.control-label Asset URL
+                .controls
+                  %input.span5(type="text", name="uri", placeholder="Public URL to this asset's location")
+                  %div(style="line-height: 27px; font-weight: bold; color: #888")
+                    &mdash; or &mdash;
+              .control-group
+                %label.control-label Upload Asset
+                .controls
+                  %input(type="file", name="file_upload")
+            %hr
+            %fieldset
+              .control-group
+                %label.control-label Start Date
+                .controls
+                  %input.span2.date(type="text", name="start_date_date")
+                  %input.span2.time(type="text", name="start_date_time")
+                  %input(type="hidden", name="start_date")
+              .control-group
+                %label.control-label End Date
+                .controls
+                  %input.span2.date(type="text", name="end_date_date")
+                  %input.span2.time(type="text", name="end_date_time")
+                  %input(type="hidden", name="end_date")
+              .control-group
+                %label.control-label Duration
+                .controls
+                  %input.span1(type="text", name="duration")
+                  seconds
+
+
+          .modal-footer
+            %a.btn(href="#", dataDismiss="modal") Close
+            %input.btn.btn-primary#submit-button(type="button", value="Add Asset")
+
     %script(type="text/template", id="add-asset-modal-template")
       .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
         %form.form-horizontal#add-form(method="POST", action="/api/assets")

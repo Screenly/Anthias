@@ -116,6 +116,64 @@ screenly.views.AddAssetModalView = AddAssetModalView
 
 class EditAssetModalView extends Backbone.View
 
+class AssetModalView extends Backbone.View
+
+  initialize: (options) ->
+    @template = _.template($('#asset-modal-template').html())
+
+  events:
+    'click #submit-button': 'submitButtonWasClicked'
+
+  render: ->
+    $(@el).html(@template())
+
+    @$('input.time').timepicker({
+      minuteStep: 5,
+      showInputs: false,
+      disableFocus: true,
+      defaultTime: 'current',
+      showMeridian: true
+    })
+
+    if @model
+
+      @$('#modalLabel').text("Edit Asset")
+      @$("form").attr "action", "/api/assets/#{@model.get('asset_id')}"
+      @$("#submit-button").val("Edit Asset")
+
+      @$("input[name='name']").val @model.get('name')
+      @$("input[name='uri']").val @model.get('uri')
+      @$("input[name='duration']").val @model.get('duration')
+      @$("select[name='mimetype']").val @model.get('mimetype')
+
+      start_date = new Date(@model.get('start_date'))
+      end_date = new Date(@model.get('end_date'))
+      
+      @$("input[name='start_date_date']").datepicker('update', start_date)
+      @$("input[name='end_date_date']").datepicker('update', end_date)
+      @$("input[name='start_date_time']").val start_date.toLocaleTimeString()
+      @$("input[name='end_date_time']").val end_date.toLocaleTimeString()
+
+    else
+      @$('#modalLabel').text("Add Asset")
+      @$("input.date").datepicker {autoclose: true}
+      @$("input.date").datepicker 'update', new Date()
+
+    @
+
+  submitButtonWasClicked: (event) ->
+    event.preventDefault()
+
+    start_date = $("input[name='start_date_date']").val() + " " + $("input[name='start_date_time']").val()
+    end_date = $("input[name='end_date_date']").val() + " " + $("input[name='end_date_time']").val()
+
+    $("input[name='start_date']").val(ISOFromDateString(start_date))
+    $("input[name='end_date']").val(ISOFromDateString(end_date))
+
+    @$("form").submit()
+
+screenly.views.AssetModalView = AssetModalView
+
 class AssetsView extends Backbone.View
   initialize: (options) ->
 
@@ -149,6 +207,7 @@ class ActiveAssetRowView extends Backbone.View
 
   events:
     'click #deactivate': 'deactivateAsset'
+    'click #edit-asset-button': 'editAsset'
 
   tagName: "tr"
 
@@ -174,6 +233,12 @@ class ActiveAssetRowView extends Backbone.View
       screenly.InactiveAssets.add(@model)
     ), 500
 
+  editAsset: (event) ->
+    event.preventDefault()
+    modal = new AssetModalView({model: @model})
+    $(@el).append modal.render().el
+    $(modal.el).children(":first").modal()
+
 
 class InactiveAssetRowView extends Backbone.View
 
@@ -182,6 +247,7 @@ class InactiveAssetRowView extends Backbone.View
 
   events:
     'click #activate': 'activateAsset'
+    'click #edit-asset-button': 'editAsset'
 
   tagName: "tr"
 
@@ -204,6 +270,12 @@ class InactiveAssetRowView extends Backbone.View
       screenly.InactiveAssets.remove @model
       screenly.ActiveAssets.add @model
     ), 500
+
+  editAsset: (event) ->
+    event.preventDefault()
+    modal = new AssetModalView({model: @model})
+    $(@el).append modal.render().el
+    $(modal.el).children(":first").modal()
 
 screenly.views.AssetsView = AssetsView
 screenly.views.ActiveAssetRowView = ActiveAssetRowView

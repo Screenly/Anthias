@@ -284,10 +284,10 @@ def edit_asset(asset_id):
 
         c.execute(query, asset.values() + [asset_id])
         connection.commit()
-
-        return make_json_response(asset)
     except Exception as e:
         return api_error(str(e))
+
+    redirect("/")
 
 
 ################################
