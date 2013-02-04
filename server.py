@@ -532,7 +532,7 @@ def system_info():
     except:
         uptime = None
 
-    return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=uptime, resolution=resolution)
+    return haml_template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=uptime, resolution=resolution)
 
 
 @route('/splash_page')
