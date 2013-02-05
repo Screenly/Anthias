@@ -173,7 +173,7 @@ def prepare_asset(request):
 
     if all([
         get('name'),
-        get('uri') or request.files.file_upload,
+        get('uri') or (request.files.file_upload != ""),
         get('mimetype')]):
 
         asset = {

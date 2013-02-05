@@ -95,7 +95,7 @@
 
     %script(type="text/template", id="asset-modal-template")
       .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
-        %form.form-horizontal#add-form(method="POST", action="/api/assets")
+        %form.form-horizontal#add-form(method="POST", action="/api/assets", enctype="multipart/form-data")
           .modal-header
             %button.close(type="button", dataDismiss="modal", ariaHidden="true") x
             %h3#modalLabel Asset
@@ -151,7 +151,7 @@
 
     %script(type="text/template", id="add-asset-modal-template")
       .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
-        %form.form-horizontal#add-form(method="POST", action="/api/assets")
+        %form.form-horizontal#add-form(method="POST", action="/api/assets", enctype="multipart/form-data")
           .modal-header
             %button.close(type="button", dataDismiss="modal", ariaHidden="true") x
             %h3#myModalLabel Add Asset
