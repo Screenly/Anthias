@@ -49,33 +49,7 @@
       .row
         .span12
           %h1.page-header
-            System Info
-
-          %table.table.table-bordered(style="width: 100%")
-            %thead
-              %tr
-                %th Load Average
-                %th Free Space
-                %th Uptime
-                %th Monitor Info
-            %tbody
-              %tr
-                %td ${loadavg}
-                %td ${free_space}
-                %td ${uptime}
-                %td ${resolution}
-
-          %section
-            .header
-              Latest Viewer Logs
-
-          - if viewlog:
-            %table.table.table-striped
-              - for line in viewlog:
-                %tr
-                  %td ${line}
-          - else:
-            %p There are no recent log messages.
+            Settings
 
     #footer
       .container

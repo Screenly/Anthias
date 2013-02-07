@@ -301,6 +301,11 @@ def viewIndex():
     return haml_template('index', assets=assets)
 
 
+@route('/settings')
+def settings_page():
+    return haml_template('settings')
+
+
 @route('/process_asset', method='POST')
 def process_asset():
     c = connection.cursor()
