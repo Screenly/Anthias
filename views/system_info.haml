@@ -1,6 +1,6 @@
 !!! 5
 %html
-  
+
   %head
     %meta(charset="utf-8")
     %title Screenly OSE
@@ -22,11 +22,11 @@
     / %script(src="/static/js/screenly-ose.js")
 
   %body
-  
+
     .navbar.navbar-fixed-top
       .navbar-inner
         .container
-          %a.brand(href="/") 
+          %a.brand(href="/")
             %strong Screenly
             %span OSE
 
@@ -41,7 +41,7 @@
                 Settings
             %li.divider-vertical
             %li
-              %a(href="/system_info") 
+              %a(href="/system_info")
                 %i.icon-tasks.icon-white
                 System Info
 
@@ -62,7 +62,7 @@
               %tr
                 %td ${loadavg}
                 %td ${free_space}
-                %td ${uptime}
+                %td ${uptime.days} days and ${uptime.seconds / 3600} hours
                 %td ${resolution}
 
           %section

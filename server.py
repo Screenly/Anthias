@@ -19,6 +19,7 @@ from StringIO import StringIO
 from subprocess import check_output
 from urlparse import urlparse
 import json
+from uptime import uptime
 
 from bottle import route, run, template, request, error, static_file, response, redirect
 from bottlehaml import haml_template
@@ -531,14 +532,10 @@ def system_info():
     free_space = size(slash.f_bavail * slash.f_frsize)
 
     # Get uptime
-    try:
-        with open('/proc/uptime', 'r') as f:
-            uptime_seconds = float(f.readline().split()[0])
-            uptime = str(timedelta(seconds=uptime_seconds))
-    except:
-        uptime = None
+    uptime_in_seconds = uptime()
+    system_uptime = timedelta(seconds=uptime_in_seconds)
 
-    return haml_template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=uptime, resolution=resolution)
+    return haml_template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=system_uptime, resolution=resolution)
 
 
 @route('/splash_page')
