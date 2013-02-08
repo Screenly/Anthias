@@ -298,7 +298,6 @@ def edit_asset(asset_id):
 
 @route('/')
 def viewIndex():
-    initiate_db()
     assets = get_assets_grouped()
     return haml_template('index', assets=assets)
 
@@ -542,8 +541,6 @@ def system_info():
 
 @route('/splash_page')
 def splash_page():
-    # Make sure the database exist and that it is initiated.
-    initiate_db()
 
     try:
         my_ip = ifaddresses('eth0')[2][0]['addr']
@@ -654,5 +651,7 @@ if __name__ == "__main__":
     # Make sure the asset folder exist. If not, create it
     if not path.isdir(asset_folder):
         mkdir(asset_folder)
+
+    initiate_db()
 
     run(host=settings.listen_ip, port=settings.listen_port, reloader=True)
