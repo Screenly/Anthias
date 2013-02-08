@@ -518,7 +518,8 @@ def system_info():
     else:
         viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
 
-    loadavg = getloadavg()[2]
+    # Get load average from last 15 minutes and round to two digits.
+    loadavg = round(getloadavg()[2],2)
 
     try:
         resolution = check_output(['tvservice', '-s']).strip()
