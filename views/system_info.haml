@@ -67,7 +67,7 @@
                   - if display_info:
                     %ul
                       - for info in display_info:
-                        %li ${info}
+                        %li ${info.strip().capitalize()}
           %section
             .header
               Latest Viewer Logs
