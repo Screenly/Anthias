@@ -521,11 +521,11 @@ def system_info():
         viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
 
     # Get load average from last 15 minutes and round to two digits.
-    loadavg = round(getloadavg()[2],2)
+    loadavg = round(getloadavg()[2], 2)
 
     try:
         run_tvservice = check_output(['tvservice', '-s'])
-        display_info = re_split('\||,',run_tvservice.strip('state:'))
+        display_info = re_split('\||,', run_tvservice.strip('state:'))
     except:
         display_info = False
 
