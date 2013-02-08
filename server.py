@@ -528,7 +528,7 @@ def system_info():
 
     # Calculate disk space
     slash = statvfs("/")
-    free_space = size(slash.f_bsize * slash.f_bavail)
+    free_space = size(slash.f_bavail * slash.f_frsize)
 
     # Get uptime
     try:
