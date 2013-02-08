@@ -20,6 +20,7 @@ from subprocess import check_output
 from urlparse import urlparse
 import json
 from uptime import uptime
+from re import split as re_split
 
 from bottle import route, run, template, request, error, static_file, response, redirect
 from bottlehaml import haml_template
@@ -523,9 +524,10 @@ def system_info():
     loadavg = round(getloadavg()[2],2)
 
     try:
-        resolution = check_output(['tvservice', '-s']).strip()
+        run_tvservice = check_output(['tvservice', '-s'])
+        display_info = re_split('\||,',run_tvservice.strip('state:'))
     except:
-        resolution = None
+        display_info = False
 
     # Calculate disk space
     slash = statvfs("/")
@@ -535,7 +537,7 @@ def system_info():
     uptime_in_seconds = uptime()
     system_uptime = timedelta(seconds=uptime_in_seconds)
 
-    return haml_template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=system_uptime, resolution=resolution)
+    return haml_template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=system_uptime, display_info=display_info)
 
 
 @route('/splash_page')

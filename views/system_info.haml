@@ -63,8 +63,11 @@
                 %td ${loadavg}
                 %td ${free_space}
                 %td ${uptime.days} days and ${uptime.seconds / 3600} hours
-                %td ${resolution}
-
+                %td
+                  - if display_info:
+                    %ul
+                      - for info in display_info:
+                        %li ${info}
           %section
             .header
               Latest Viewer Logs
