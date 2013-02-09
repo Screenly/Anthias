@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 from dateutils import datestring
 from hashlib import md5
 from hurry.filesize import size
-from netifaces import ifaddresses
 from os import path, makedirs, getloadavg, statvfs, mkdir, remove as remove_file
 from PIL import Image
 from requests import get as req_get, head as req_head
@@ -23,6 +22,7 @@ from bottle import route, run, template, request, error, static_file
 
 from db import connection
 from settings import get_current_time, asset_folder
+from utils import get_node_ip
 import settings
 
 
@@ -392,13 +392,14 @@ def splash_page():
     # Make sure the database exist and that it is initiated.
     initiate_db()
 
-    try:
-        my_ip = ifaddresses('eth0')[2][0]['addr']
+    my_ip = get_node_ip()
+
+    if my_ip:
         ip_lookup = True
-        url = 'http://' + my_ip + ':8080'
-    except:
+        url = "http://{}:{}".format(my_ip, settings.listen_port)
+    else:
         ip_lookup = False
-        url = "Unable to lookup IP from eth0."
+        url = "Unable to look up your installation's IP address."
 
     return template('splash_page', ip_lookup=ip_lookup, url=url)
 
