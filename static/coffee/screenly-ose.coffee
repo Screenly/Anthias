@@ -144,9 +144,6 @@ class AssetsView extends Backbone.View
     if not 'templateName' in options
       console.log "You need to specify the template name for this AssetsView."
 
-    if not 'childViewClass' in options
-      console.log "You must specify the child view class for this AssetsView."
-
     @template = _.template($('#' + options.templateName).html())
     
     @collection.bind "reset", @render, @
@@ -160,42 +157,65 @@ class AssetsView extends Backbone.View
     
     @$('tbody').empty()
     @collection.each (asset) =>
-      @$('tbody').append (new @options['childViewClass']({model: asset})).render().el
+      @$('tbody').append (new AssetRowView({model: asset})).render().el
 
     @
 
-class ActiveAssetRowView extends Backbone.View
-
+class AssetRowView extends Backbone.View
+  
   initialize: (options) ->
-    @template = _.template($('#active-asset-row-template').html())
+    @template = _.template($('#asset-row-template').html())
 
   events:
-    'click #deactivate': 'deactivateAsset'
+    'click #activation-toggle': 'toggleActivation'
     'click #edit-asset-button': 'editAsset'
+    #'click #delete-asset-button': 'deleteAsset'
 
   tagName: "tr"
 
   render: ->
     $(@el).html(@template(@model.toJSON()))
+    if @model.get('is_active')
+      @$(".toggle input").prop("checked", true)
     @
 
-  deactivateAsset: (event) ->
+  toggleActivation: (event) ->
 
-    # To deactivate, set this asset's end_date to right now
-    @model.set('end_date', (new Date()).toISOString())
+    # If it is active, let's deactivate it.
+    if @model.get('is_active')
+      
+      # To deactivate, set this asset's end_date to right now
+      @model.set('end_date', (new Date()).toISOString())
 
-    # Now persist the change on the server so this becomes
-    # active immediately.
-    @model.save()
+      # Now persist the change on the server so this becomes
+      # active immediately.
+      @model.save()
 
-    # Now let's update the local collections, which
-    # should change the view the user sees. Let's delay
-    # this for 1 second to allow the animation to
-    # complete.
-    setTimeout (=> 
-      screenly.ActiveAssets.remove(@model)
-      screenly.InactiveAssets.add(@model)
-    ), 500
+      # Now let's update the local collections, which
+      # should change the view the user sees. Let's delay
+      # this for 1 second to allow the animation to
+      # complete.
+      setTimeout (=> 
+        screenly.ActiveAssets.remove(@model)
+        screenly.InactiveAssets.add(@model)
+      ), 500
+
+    else
+      # To "activate" an asset, we set its start_date
+      # to now and, for now, set its end_date to
+      # 10 years from now.
+      @model.set('start_date', (new Date()).toISOString())
+      @model.set('end_date', futureDateInYears(10).toISOString())
+      @model.save()
+
+      # Now let's update the local collections, which
+      # should change the view the user sees.
+      setTimeout (=> 
+        screenly.InactiveAssets.remove @model
+        screenly.ActiveAssets.add @model
+      ), 500
+
+    
 
   editAsset: (event) ->
     event.preventDefault()
@@ -203,46 +223,10 @@ class ActiveAssetRowView extends Backbone.View
     $(@el).append modal.render().el
     $(modal.el).children(":first").modal()
 
+  
 
-class InactiveAssetRowView extends Backbone.View
-
-  initialize: (options) ->
-    @template = _.template($('#inactive-asset-row-template').html())
-
-  events:
-    'click #activate': 'activateAsset'
-    'click #edit-asset-button': 'editAsset'
-
-  tagName: "tr"
-
-  render: ->
-    $(@el).html(@template(@model.toJSON()))
-    @
-
-  activateAsset: (event) ->
-
-    # To "activate" an asset, we set its start_date
-    # to now and, for now, set its end_date to
-    # 10 years from now.
-    @model.set('start_date', (new Date()).toISOString())
-    @model.set('end_date', futureDateInYears(10).toISOString())
-    @model.save()
-
-    # Now let's update the local collections, which
-    # should change the view the user sees.
-    setTimeout (=> 
-      screenly.InactiveAssets.remove @model
-      screenly.ActiveAssets.add @model
-    ), 500
-
-  editAsset: (event) ->
-    event.preventDefault()
-    modal = new AssetModalView({model: @model})
-    $(@el).append modal.render().el
-    $(modal.el).children(":first").modal()
 
 screenly.views.AssetsView = AssetsView
-screenly.views.ActiveAssetRowView = ActiveAssetRowView
 
 jQuery ->
   
@@ -251,14 +235,12 @@ jQuery ->
   # Initialize the initial view
   activeAssetsView = new AssetsView(
     collection: screenly.ActiveAssets, 
-    templateName: "active-assets-template", 
-    childViewClass: ActiveAssetRowView
+    templateName: "active-assets-template"
   )
 
   inactiveAssetsView = new AssetsView(
     collection: screenly.InactiveAssets,
-    templateName: "inactive-assets-template",
-    childViewClass: InactiveAssetRowView
+    templateName: "inactive-assets-template"
   )
 
   $("#active-assets-container").append activeAssetsView.render().el

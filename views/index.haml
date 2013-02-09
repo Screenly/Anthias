@@ -53,36 +53,19 @@
                   %th
               %tbody
 
-    %script(type="text/template", id="active-asset-row-template")
+    %script(type="text/template", id="asset-row-template")
       :plain
         <td><%= name %></td>
         <td><%= screenly.utils.formattedDateString(start_date) %></td>
         <td><%= screenly.utils.formattedDateString(end_date) %></td>
         <td>
           <a href="#" class="btn" id="edit-asset-button">Edit</a>
+          <a href="#" class="btn" id="delete-asset-button">
+            <i class="icon-trash"></i>
+          </a>
         </td>
         <td>
-          <label class="checkbox toggle well" style="width:115px" id="deactivate">
-            <input id="view" type="checkbox" checked />
-            <p>
-              <span>On</span>
-              <span>Off</span>
-            </p>
-
-            <a class="btn btn-primary slide-button"></a>
-          </label>
-        </td>
-
-    %script(type="text/template", id="inactive-asset-row-template")
-      :plain
-        <td><%= name %></td>
-        <td><%= screenly.utils.formattedDateString(start_date) %></td>
-        <td><%= screenly.utils.formattedDateString(end_date) %></td>
-        <td>
-          <a href="#" class="btn" id="edit-asset-button">Edit</a>
-        </td>
-        <td>
-          <label class="checkbox toggle well" style="width:115px" id="activate">
+          <label class="checkbox toggle well" style="width:115px" id="activation-toggle">
             <input id="view" type="checkbox" />
             <p>
               <span>On</span>
