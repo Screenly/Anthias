@@ -31,6 +31,11 @@ futureDateInYears = (years) ->
 ################################
 
 class Asset extends Backbone.Model
+
+  initialize: (options) ->
+    if @get("asset_id")
+      @set('id', @get('asset_id'))
+
   url: ->
     if @get('asset_id')
       "/api/assets/#{@get('asset_id')}"

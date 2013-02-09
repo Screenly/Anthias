@@ -275,7 +275,7 @@ def add_asset():
     redirect("/")
 
 
-@route('/api/assets/:asset_id', method="POST")
+@route('/api/assets/:asset_id', method=["PUT", "POST"])
 def edit_asset(asset_id):
     try:
         asset = prepare_asset(request)
