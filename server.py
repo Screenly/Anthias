@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 from dateutils import datestring
 from hashlib import md5
 from hurry.filesize import size
-from netifaces import ifaddresses
 from os import path, makedirs, getloadavg, statvfs, mkdir, remove as remove_file
 from PIL import Image
 from requests import get as req_get, head as req_head
@@ -29,6 +28,7 @@ from db import connection
 from utils import json_dump
 
 from settings import get_current_time, asset_folder
+from utils import get_node_ip
 import settings
 
 
@@ -370,11 +370,11 @@ def process_asset():
                 return template('message', header=header, message=message)
 
         if file_upload:
-            asset_id = md5(file_upload.read()).hexdigest()
+            asset_file_input = file_upload.read()
+            asset_id = md5(asset_file_input).hexdigest()
 
             local_uri = path.join(asset_folder, asset_id)
             f = open(local_uri, 'w')
-            asset_file_input = file_upload.read()
             f.write(asset_file_input)
             f.close()
 
@@ -542,13 +542,14 @@ def system_info():
 @route('/splash_page')
 def splash_page():
 
-    try:
-        my_ip = ifaddresses('eth0')[2][0]['addr']
+    my_ip = get_node_ip()
+
+    if my_ip:
         ip_lookup = True
-        url = 'http://' + my_ip + ':8080'
-    except:
+        url = "http://{}:{}".format(my_ip, settings.listen_port)
+    else:
         ip_lookup = False
-        url = "Unable to lookup IP from eth0."
+        url = "Unable to look up your installation's IP address."
 
     return template('splash_page', ip_lookup=ip_lookup, url=url)
 
