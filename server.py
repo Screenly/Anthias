@@ -292,6 +292,17 @@ def edit_asset(asset_id):
     redirect("/")
 
 
+@route('/api/assets/:asset_id', method="DELETE")
+def remove_asset(asset_id):
+    try:
+        c = connection.cursor()
+        c.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
+        connection.commit()
+        response.status = 204  # return an OK with no content
+    except:
+        return api_error("Could not remove asset with asset_id={}".format(asset_id))
+
+
 ################################
 # Views
 ################################

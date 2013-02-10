@@ -99,6 +99,8 @@ class AssetModalView extends Backbone.View
       showMeridian: true
     })
 
+    @$("input.date").datepicker {autoclose: true}
+
     if @model
 
       @$('#modalLabel').text("Edit Asset")
@@ -120,7 +122,6 @@ class AssetModalView extends Backbone.View
 
     else
       @$('#modalLabel').text("Add Asset")
-      @$("input.date").datepicker {autoclose: true}
       @$("input.date").datepicker 'update', new Date()
 
     @
@@ -169,14 +170,22 @@ class AssetRowView extends Backbone.View
   events:
     'click #activation-toggle': 'toggleActivation'
     'click #edit-asset-button': 'editAsset'
-    #'click #delete-asset-button': 'deleteAsset'
+    'click #delete-asset-button': 'deleteAsset'
 
   tagName: "tr"
 
   render: ->
     $(@el).html(@template(@model.toJSON()))
+
     if @model.get('is_active')
       @$(".toggle input").prop("checked", true)
+
+    @$("#delete-asset-button").popover
+      html: true
+      placement: 'left'
+      title: "Are you sure?"
+      content: '<a href="#" id="confirm-delete" class="btn btn-large btn-danger">DELETE ASSET</a>'
+
     @
 
   toggleActivation: (event) ->
@@ -213,9 +222,7 @@ class AssetRowView extends Backbone.View
       setTimeout (=> 
         screenly.InactiveAssets.remove @model
         screenly.ActiveAssets.add @model
-      ), 500
-
-    
+      ), 500 
 
   editAsset: (event) ->
     event.preventDefault()
@@ -223,7 +230,12 @@ class AssetRowView extends Backbone.View
     $(@el).append modal.render().el
     $(modal.el).children(":first").modal()
 
-  
+  deleteAsset: (event) ->
+
+    @$("#confirm-delete").click (event) =>
+      event.preventDefault()
+      @$("#delete-asset-button").popover('hide')
+      @model.destroy()
 
 
 screenly.views.AssetsView = AssetsView
