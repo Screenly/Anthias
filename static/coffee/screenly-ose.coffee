@@ -105,7 +105,6 @@ class AssetModalView extends Backbone.View
 
       @$('#modalLabel').text("Edit Asset")
       @$("form").attr "action", "/api/assets/#{@model.get('asset_id')}"
-      @$("#submit-button").val("Edit Asset")
 
       @$("input[name='name']").val @model.get('name')
       @$("input[name='uri']").val @model.get('uri')
