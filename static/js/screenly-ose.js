@@ -5,7 +5,7 @@
 
 
 (function() {
-  var API, App, Asset, AssetModalView, AssetRowView, Assets, AssetsView, D, d2iso, d2s, d2time, d2ts, now, year2ts, years_from_now, _tpl,
+  var API, App, Asset, AssetModalView, AssetRowView, Assets, AssetsView, date_to, get_template, now, y2ts, years_from_now,
     __hasProp = {}.hasOwnProperty,
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
@@ -13,39 +13,34 @@
 
   API = (window.Screenly || (window.Screenly = {}));
 
-  D = function(d) {
-    return new Date(d);
+  API.date_to = date_to = {
+    iso: function(d) {
+      return (new Date(d)).toISOString();
+    },
+    string: function(d) {
+      return (new Date(d)).toLocaleString();
+    },
+    time: function(d) {
+      return (new Date(d)).toLocaleTimeString();
+    },
+    timestamp: function(d) {
+      return (new Date(d)).getTime();
+    }
   };
 
   now = function() {
     return new Date();
   };
 
-  API.d2iso = d2iso = function(d) {
-    return (D(d)).toISOString();
-  };
-
-  API.d2s = d2s = function(d) {
-    return (D(d)).toLocaleString();
-  };
-
-  API.d2time = d2time = function(d) {
-    return (D(d)).toLocaleTimeString();
-  };
-
-  API.d2ts = d2ts = function(d) {
-    return (D(d)).getTime();
-  };
-
-  year2ts = function(years) {
+  y2ts = function(years) {
     return years * 365 * 24 * 60 * 60000;
   };
 
   years_from_now = function(years) {
-    return D((year2ts(years)) + d2ts(now()));
+    return new Date((y2ts(years)) + date_to.timestamp(now()));
   };
 
-  _tpl = function(name) {
+  get_template = function(name) {
     return _.template(($("#" + name + "-template")).html());
   };
 
@@ -111,14 +106,14 @@
     };
 
     AssetModalView.prototype.initialize = function(options) {
-      this.tpl = _tpl('asset-modal');
+      this.template = get_template('asset-modal');
       ($('body')).append(this.render().el);
       return (this.$el.children(":first")).modal();
     };
 
     AssetModalView.prototype.render = function() {
       var field, which, _i, _j, _len, _len1, _ref, _ref1;
-      this.$el.html(this.tpl());
+      this.$el.html(this.template());
       (this.$("input.date")).datepicker({
         autoclose: true
       });
@@ -141,7 +136,7 @@
         for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
           which = _ref1[_j];
           (this.$f("" + which + "_date_date")).datepicker('update', this.model.get("" + which + "_date"));
-          this.$fv("" + which + "_date_time", d2time(this.model.get("" + which + "_date")));
+          this.$fv("" + which + "_date_time", date_to.time(this.model.get("" + which + "_date")));
         }
       } else {
         (this.$("input.date")).datepicker('update', new Date());
@@ -160,13 +155,12 @@
       _ref = ['start', 'end'];
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         which = _ref[_i];
-        this.$fv("" + which + "_date", d2iso((this.$fv("" + which + "_date_date")) + " " + (this.$fv("" + which + "_date_time"))));
+        this.$fv("" + which + "_date", date_to.iso((this.$fv("" + which + "_date_date")) + " " + (this.$fv("" + which + "_date_time"))));
       }
       return (this.$("form")).submit();
     };
 
     AssetModalView.prototype.changeMimetype = function() {
-      console.log('chaneg');
       return (this.$('.file_upload')).toggle((this.$fv('mimetype')) !== 'webpage');
     };
 
@@ -194,17 +188,17 @@
     AssetRowView.prototype.tagName = "tr";
 
     AssetRowView.prototype.initialize = function(options) {
-      return this.tpl = _tpl('asset-row');
+      return this.template = get_template('asset-row');
     };
 
     AssetRowView.prototype.render = function() {
-      this.$el.html(this.tpl(this.model.toJSON()));
+      this.$el.html(this.template(this.model.toJSON()));
       (this.$(".toggle input")).prop("checked", this.model.get('is_active'));
       (this.$("#delete-asset-button")).popover({
         html: true,
         placement: 'left',
         title: "Are you sure?",
-        content: _tpl('confirm-delete')
+        content: get_template('confirm-delete')
       });
       return this;
     };
@@ -220,13 +214,13 @@
       if (this.model.get('is_active')) {
         this.model.set({
           is_active: false,
-          end_date: d2iso(now())
+          end_date: date_to.iso(now())
         });
       } else {
         this.model.set({
           is_active: true,
-          start_date: d2iso(now()),
-          end_date: d2iso(years_from_now(10))
+          start_date: date_to.iso(now()),
+          end_date: date_to.iso(years_from_now(10))
         });
       }
       this.model.save();
