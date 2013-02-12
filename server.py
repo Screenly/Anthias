@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from dateutils import datestring
 from hashlib import md5
 from hurry.filesize import size
-from os import path, makedirs, getloadavg, statvfs, mkdir, remove as remove_file
+from os import path, makedirs, getloadavg, statvfs, mkdir, getenv, remove as remove_file
 from PIL import Image
 from requests import get as req_get, head as req_head
 from StringIO import StringIO
@@ -20,6 +20,7 @@ from urlparse import urlparse
 import json
 from uptime import uptime
 from re import split as re_split
+import ConfigParser
 
 from bottle import route, run, template, request, error, static_file, response, redirect
 from bottlehaml import haml_template
@@ -312,9 +313,33 @@ def viewIndex():
     return haml_template('index', assets=assets)
 
 
-@route('/settings')
+@route('/settings', method=["GET", "POST"])
 def settings_page():
-    return haml_template('settings')
+
+    config = ConfigParser.ConfigParser()
+    conf_file = path.join(getenv('HOME'), '.screenly', 'screenly.conf')
+    config.read(conf_file)
+    context = {'flash': None}
+
+    if request.method == "POST":
+        config.set("viewer", "show_splash", request.POST.get('show_splash', 'True'))
+        config.set("viewer", "audio_output", request.POST.get('audio_output', 'hdmi'))
+        config.set("viewer", "shuffle_playlist", request.POST.get('shuffle_playlist', 'False'))
+
+        try:
+            # Write new settings to disk.
+            with open(conf_file, "w") as settings_file:
+                config.write(settings_file)
+                settings.load_settings()  # reload the new settings into memory
+            context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
+        except:
+            context['flash'] = {'class': "error", 'message': "Settings file could not be saved."}
+
+    context['show_splash'] = config.get('viewer', 'show_splash')
+    context['audio_output'] = config.get('viewer', 'audio_output')
+    context['shuffle_playlist'] = config.get('viewer', 'shuffle_playlist')
+
+    return haml_template('settings', **context)
 
 
 @route('/process_asset', method='POST')

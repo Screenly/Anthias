@@ -51,6 +51,56 @@
           %h1.page-header
             Settings
 
+
+          - if flash:
+            <div class="alert alert-${flash['class']}">
+              = flash['message']
+            </div>
+
+          %form.form-horizontal(method="post")
+            .control-group
+              %label.control-label Show Splash Screen
+              .controls
+                %select(name="show_splash")
+                  - if show_splash == 'True':
+                    %option(value="True", selected="selected") On
+                    %option(value="False") Off
+                  - else:
+                    %option(value="True") On
+                    %option(value="False", selected="selected") Off
+                .help-text
+                  Specifies whether the Screenly OSE splash screen should be shown.
+
+            .control-group
+              %label.control-label Audio Out
+              .controls
+                %select(name="audio_output")
+                  - if audio_output == 'hdmi':
+                    %option(value="hdmi", selected="selected") HDMI
+                    %option(value="local") 3.5mm jack
+                  - else:
+                    %option(value="hdmi") HDMI
+                    %option(value="local", selected="selected") 3.5mm jack
+                .help-text
+                  Specify where audio from this node should be sent.
+
+            .control-group
+              %label.control-label Playlist Shuffling
+              .controls
+                %select(name="shuffle_playlist")
+                  - if shuffle_playlist == 'True':
+                    %option(value="True", selected="selected") On
+                    %option(value="False") Off
+                  - else:
+                    %option(value="True") On
+                    %option(value="False", selected="selected") Off
+                .help-text
+                  Toggle the shuffling of the playlist when being displayed through the viewer.
+
+            .form-actions
+              %input.btn.btn-primary(type="submit", value="Save Settings")
+              %a.btn(href="/") Cancel
+
     #footer
       .container
         .copy
