@@ -1,265 +1,157 @@
+### screenly-ose ui ###
 
-@screenly = window.screenly ? {}
-@screenly.collections = window.screenly.collections ? {}
-@screenly.views = window.screenly.views ? {}
-@screenly.models = window.screenly.models ? {}
-@screenly.utils = window.screenly.utils ? {}
+API = (window.Screenly ||= {}) # exports
 
+D = (d) -> new Date d # parses strings and timestamps; idempotent
+now = -> new Date()
+
+API.d2iso  = d2iso  = (d) -> (D d).toISOString()        # isostring
+API.d2s    = d2s    = (d) -> (D d).toLocaleString()     # nice string
+API.d2time = d2time = (d) -> (D d).toLocaleTimeString() # nice time
+API.d2ts   = d2ts   = (d) -> (D d).getTime()            # timestamp
+
+year2ts = (years) -> (years * 365 * 24 * 60 * 60000)
+years_from_now = (years) -> D (year2ts years) + d2ts now()
+
+_tpl = (name) -> _.template ($ "##{name}-template").html()
+_pd = (e) -> e.preventDefault(); false
+
+
+# Models
 
 # Tell Backbone to send its saves as JSON-encoded.
-Backbone.emulateJSON = true
-
-
-################################
-# Utilities
-################################
-
-ISOFromDateString = (string) ->
-  (new Date(string)).toISOString()
-
-formattedDateString = (date) ->
-  (new Date(date)).toLocaleString()
-
-futureDateInYears = (years) ->
-  new Date(new Date().getTime() + (years * 365 * 24 * 60 * 60000))
-
-@screenly.utils.formattedDateString = formattedDateString
-
-
-################################
-# Models
-################################
+Backbone.emulateJSON = on
 
 class Asset extends Backbone.Model
-
-  initialize: (options) ->
-    if @get("asset_id")
-      @set('id', @get('asset_id'))
-
-  url: ->
-    if @get('asset_id')
-      "/api/assets/#{@get('asset_id')}"
-
-screenly.models.Asset = Asset
-
-################################
-# Collections
-################################
+  idAttribute: "asset_id"
 
 class Assets extends Backbone.Collection
   url: "/api/assets"
   model: Asset
-  
-  initialize: (options) ->
-    @on "reset", ->
-      screenly.ActiveAssets.reset()
-      screenly.InactiveAssets.reset()
 
-      @each (model) ->
-        if model.get('is_active')
-          screenly.ActiveAssets.add model
-        else
-          screenly.InactiveAssets.add model
 
-screenly.Assets = new Assets()
-
-class ActiveAssets extends Backbone.Collection
-  model: Asset
-
-class InactiveAssets extends Backbone.Collection
-  model: Asset
-
-screenly.collections.Assets = Assets
-screenly.collections.ActiveAssets = ActiveAssets
-screenly.collections.InactiveAssets = InactiveAssets
-
-screenly.ActiveAssets = new ActiveAssets()
-screenly.InactiveAssets = new InactiveAssets()
-
-################################
 # Views
-################################
 
 class AssetModalView extends Backbone.View
+  $f: (field) => @$ "[name='#{field}']"
+  $fv: (field, val...) => (@$f field).val val...
 
-  initialize: (options) ->
-    @template = _.template($('#asset-modal-template').html())
+  initialize: (options) =>
+    @tpl = _tpl 'asset-modal'
+    ($ 'body').append @render().el
+    (@$el.children ":first").modal()
 
-  events:
-    'click #submit-button': 'submitButtonWasClicked'
+  render: =>
+    @$el.html @tpl()
 
-  render: ->
-    $(@el).html(@template())
+    (@$ "input.date").datepicker autoclose: yes
+    (@$ 'input.time').timepicker
+      minuteStep: 5
+      defaultTime: 'current'
+      showInputs: yes
+      disableFocus: yes
+      showMeridian: yes
 
-    @$('input.time').timepicker({
-      minuteStep: 5,
-      showInputs: false,
-      disableFocus: true,
-      defaultTime: 'current',
-      showMeridian: true
-    })
-
-    @$("input.date").datepicker {autoclose: true}
+    (@$ '#modalLabel').text (if @model then "Edit Asset" else "Add Asset")
 
     if @model
+      (@$ "form").attr "action", @model.url()
 
-      @$('#modalLabel').text("Edit Asset")
-      @$("form").attr "action", "/api/assets/#{@model.get('asset_id')}"
-      @$("#submit-button").val("Edit Asset")
+      for field in 'name uri duration mimetype'.split ' '
+        @$fv field, @model.get field
 
-      @$("input[name='name']").val @model.get('name')
-      @$("input[name='uri']").val @model.get('uri')
-      @$("input[name='duration']").val @model.get('duration')
-      @$("select[name='mimetype']").val @model.get('mimetype')
-
-      start_date = new Date(@model.get('start_date'))
-      end_date = new Date(@model.get('end_date'))
-      
-      @$("input[name='start_date_date']").datepicker('update', start_date)
-      @$("input[name='end_date_date']").datepicker('update', end_date)
-      @$("input[name='start_date_time']").val start_date.toLocaleTimeString()
-      @$("input[name='end_date_time']").val end_date.toLocaleTimeString()
+      for which in ['start', 'end']
+        (@$f "#{which}_date_date").datepicker 'update', @model.get "#{which}_date"
+        @$fv "#{which}_date_time", d2time @model.get "#{which}_date"
 
     else
-      @$('#modalLabel').text("Add Asset")
-      @$("input.date").datepicker 'update', new Date()
+      (@$ "input.date").datepicker 'update', new Date()
 
-    @
+    this
 
-  submitButtonWasClicked: (event) ->
-    event.preventDefault()
+  events: {'click #submit-button': 'submit'}
 
-    start_date = $("input[name='start_date_date']").val() + " " + $("input[name='start_date_time']").val()
-    end_date = $("input[name='end_date_date']").val() + " " + $("input[name='end_date_time']").val()
+  submit: (e) =>
+    for which in ['start', 'end']
+      @$fv "#{which}_date",
+        d2iso (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")
+    (@$ "form").submit()
 
-    $("input[name='start_date']").val(ISOFromDateString(start_date))
-    $("input[name='end_date']").val(ISOFromDateString(end_date))
-
-    @$("form").submit()
-
-screenly.views.AssetModalView = AssetModalView
-
-class AssetsView extends Backbone.View
-  initialize: (options) ->
-
-    if not 'templateName' in options
-      console.log "You need to specify the template name for this AssetsView."
-
-    @template = _.template($('#' + options.templateName).html())
-    
-    @collection.bind "reset", @render, @
-    @collection.bind "remove", @render, @
-    @collection.bind "add", @render, @
-
-  render: ->
-    $(@el).html(@template())
-
-    # TODO This can be cleaned up to not re-render everything all the time.
-    
-    @$('tbody').empty()
-    @collection.each (asset) =>
-      @$('tbody').append (new AssetRowView({model: asset})).render().el
-
-    @
 
 class AssetRowView extends Backbone.View
-  
-  initialize: (options) ->
-    @template = _.template($('#asset-row-template').html())
-
-  events:
-    'click #activation-toggle': 'toggleActivation'
-    'click #edit-asset-button': 'editAsset'
-    'click #delete-asset-button': 'deleteAsset'
-
   tagName: "tr"
 
-  render: ->
-    $(@el).html(@template(@model.toJSON()))
+  initialize: (options) =>
+    @tpl = _tpl 'asset-row'
 
-    if @model.get('is_active')
-      @$(".toggle input").prop("checked", true)
+  render: =>
+    @$el.html @tpl @model.toJSON()
+    (@$ ".toggle input").prop "checked", @model.get 'is_active'
+    (@$ "#delete-asset-button").popover
+      html: yes, placement: 'left', title: "Are you sure?", content: _tpl 'confirm-delete'
+    this
 
-    @$("#delete-asset-button").popover
-      html: true
-      placement: 'left'
-      title: "Are you sure?"
-      content: '<a href="#" id="confirm-delete" class="btn btn-large btn-danger">DELETE ASSET</a>'
+  events:
+    'click #activation-toggle': 'toggleActive'
+    'click #edit-asset-button': 'edit'
+    'click #confirm-delete': 'delete'
 
-    @
-
-  toggleActivation: (event) ->
-
-    # If it is active, let's deactivate it.
-    if @model.get('is_active')
-      
-      # To deactivate, set this asset's end_date to right now
-      @model.set('end_date', (new Date()).toISOString())
-
-      # Now persist the change on the server so this becomes
-      # active immediately.
-      @model.save()
-
-      # Now let's update the local collections, which
-      # should change the view the user sees. Let's delay
-      # this for 1 second to allow the animation to
-      # complete.
-      setTimeout (=> 
-        screenly.ActiveAssets.remove(@model)
-        screenly.InactiveAssets.add(@model)
-      ), 500
-
+  toggleActive: (e) =>
+    console.log 'toggleactive', e
+    if @model.get 'is_active'
+      @model.set
+        is_active: no
+        end_date: d2iso now()
     else
-      # To "activate" an asset, we set its start_date
-      # to now and, for now, set its end_date to
-      # 10 years from now.
-      @model.set('start_date', (new Date()).toISOString())
-      @model.set('end_date', futureDateInYears(10).toISOString())
-      @model.save()
+      @model.set
+        is_active: yes
+        start_date: d2iso now()
+        end_date: d2iso years_from_now 10
+    @model.save()
+    (@$ ".toggle input").prop "checked", @model.get 'is_active'
+    setTimeout (=> @remove()), 300
+    _pd e
 
-      # Now let's update the local collections, which
-      # should change the view the user sees.
-      setTimeout (=> 
-        screenly.InactiveAssets.remove @model
-        screenly.ActiveAssets.add @model
-      ), 500 
+  edit: (e) =>
+    new AssetModalView model: @model
+    _pd e
 
-  editAsset: (event) ->
-    event.preventDefault()
-    modal = new AssetModalView({model: @model})
-    $(@el).append modal.render().el
-    $(modal.el).children(":first").modal()
+  delete: (e) =>
+    (@$ "#delete-asset-button").popover 'hide'
+    @model.destroy().done => @remove()
+    _pd e
 
-  deleteAsset: (event) ->
+class AssetsView extends Backbone.View
+  initialize: (options) =>
+    for event in ['reset', 'add']
+      @collection.bind event, @render
 
-    @$("#confirm-delete").click (event) =>
-      event.preventDefault()
-      @$("#delete-asset-button").popover('hide')
-      @model.destroy()
+    @collection.bind 'change', (model) =>
+      setTimeout (=> @render _ [model]), 300
+
+  render: (models = @collection) =>
+    console.log models
+    models.each (model) =>
+      which = if model.get 'is_active' then 'active' else 'inactive'
+      (@$ "##{which}-assets").append (new AssetRowView model: model).render().el
+    this
 
 
-screenly.views.AssetsView = AssetsView
+# App
 
-jQuery ->
-  
-  screenly.Assets.fetch()
+API.app = class App extends Backbone.View
+  initialize: =>
+    (API.assets = new Assets()).fetch()
+    API.assetsView = new AssetsView
+      collection: API.assets
+      el: @$ '#assets'
+    this
 
-  # Initialize the initial view
-  activeAssetsView = new AssetsView(
-    collection: screenly.ActiveAssets, 
-    templateName: "active-assets-template"
-  )
+  events: {'click #add-asset-button': 'add'}
 
-  inactiveAssetsView = new AssetsView(
-    collection: screenly.InactiveAssets,
-    templateName: "inactive-assets-template"
-  )
+  add: (e) =>
+    new AssetModalView()
+    _pd e
 
-  $("#active-assets-container").append activeAssetsView.render().el
-  $("#inactive-assets-container").append inactiveAssetsView.render().el
 
-  $("#add-asset-button").click (event) ->
-    event.preventDefault()
-    modal = new AssetModalView()
-    $("body").append modal.render().el
-    $(modal.el).children(":first").modal()
+jQuery -> new App el: $ 'body'
