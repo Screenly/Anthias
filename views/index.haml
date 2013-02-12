@@ -23,43 +23,11 @@
     %script(src="/static/js/bootstrap-timepicker.js")
     %script(src="/static/js/screenly-ose.js")
 
-    %script(type="text/template", id="active-assets-template")
-      .row
-        .span12
-          %section
-            .header
-              Active content
-            %table.table.table-striped
-              %thead
-                %tr
-                  %th Name
-                  %th Start
-                  %th End
-                  %th
-                  %th
-              %tbody
-
-    %script(type="text/template", id="inactive-assets-template")
-      .row
-        .span12
-          %section
-            .header
-              Inactive content
-            %table.table.table-striped
-              %thead
-                %tr
-                  %th Name
-                  %th Start
-                  %th End
-                  %th
-                  %th
-              %tbody
-
     %script(type="text/template", id="asset-row-template")
       :plain
         <td><%= name %></td>
-        <td><%= screenly.utils.formattedDateString(start_date) %></td>
-        <td><%= screenly.utils.formattedDateString(end_date) %></td>
+        <td><%= Screenly.d2s(start_date) %></td>
+        <td><%= Screenly.d2s(end_date) %></td>
         <td>
           <a href="#" class="btn" id="edit-asset-button">Edit</a>
           <a href="#" class="btn" id="delete-asset-button">
@@ -77,6 +45,9 @@
             <a class="btn btn-primary slide-button"></a>
           </label>
         </td>
+
+    %script(type="text/template", id="confirm-delete-template")
+      %a#confirm-delete.btn.btn-large.btn-danger(href="#") DELETE ASSET
 
     %script(type="text/template", id="asset-modal-template")
       .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
@@ -164,13 +135,38 @@
         .span12
           %h1.page-header
             .pull-right
-              %a.btn.btn-primary(href="#", id="add-asset-button")
+              %a#add-asset-button.btn.btn-primary(href="#")
                 %i.icon-plus.icon-white
                 Add Asset
             Schedule Overview
 
-      #active-assets-container
-      #inactive-assets-container
+      #assets.row
+        .span12
+          %section
+            .header
+              Active assets
+            %table.table.table-striped
+              %thead
+                %tr
+                  %th Name
+                  %th Start
+                  %th End
+                  %th
+                  %th
+              %tbody#active-assets
+        .span12
+          %section
+            .header
+              Inctive assets
+            %table.table.table-striped
+              %thead
+                %tr
+                  %th Name
+                  %th Start
+                  %th End
+                  %th
+                  %th
+              %tbody#inactive-assets
 
     #footer
       .container
