@@ -1,6 +1,6 @@
 import sqlite3
 
-import settings
+from settings import settings
 
 
 class Connection(object):

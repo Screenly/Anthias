@@ -19,9 +19,8 @@ from time import sleep, time
 import logging
 
 from db import connection
-from settings import get_current_time
 import html_templates
-import settings
+from settings import settings
 
 
 class Scheduler(object):
@@ -44,7 +43,7 @@ class Scheduler(object):
 
     def refresh_playlist(self):
         logging.debug('refresh_playlist')
-        time_cur = get_current_time()
+        time_cur = settings.get_current_time()
         logging.debug('refresh: counter: (%d) deadline (%s) timecur (%s)' % (self.counter, self.deadline, time_cur))
         if self.dbisnewer():
             self.update_playlist()
@@ -78,7 +77,7 @@ def generate_asset_list():
     query = c.fetchall()
 
     playlist = []
-    time_cur = get_current_time()
+    time_cur = settings.get_current_time()
     deadline = None
     for asset in query:
         asset_id = asset[0]

@@ -27,9 +27,8 @@ from bottlehaml import haml_template
 from db import connection
 from utils import json_dump
 
-from settings import get_current_time, asset_folder
 from utils import get_node_ip
-import settings
+from settings import settings
 
 
 ################################
@@ -53,7 +52,7 @@ def is_active(asset, at_time=None):
     if not (asset['start_date'] and asset['end_date']):
         return False
 
-    at_time = at_time or get_current_time()
+    at_time = at_time or settings.get_current_time()
 
     return (asset['start_date'] < at_time and asset['end_date'] > at_time)
 
@@ -218,7 +217,7 @@ def prepare_asset(request):
 
         if file_upload:
             asset['asset_id'] = md5(file_upload.read()).hexdigest()
-            asset['uri'] = path.join(asset_folder, asset['asset_id'])
+            asset['uri'] = path.join(settings.asset_folder, asset['asset_id'])
 
             with open(asset['uri'], 'w') as f:
                 f.write(file_upload.read())
@@ -384,7 +383,7 @@ def process_asset():
             asset_file_input = file_upload.read()
             asset_id = md5(asset_file_input).hexdigest()
 
-            local_uri = path.join(asset_folder, asset_id)
+            local_uri = path.join(settings.asset_folder, asset_id)
             f = open(local_uri, 'w')
             f.write(asset_file_input)
             f.close()
@@ -465,7 +464,7 @@ def update_asset():
         uri = request.POST.get('uri', '').strip()
         mimetype = request.POST.get('mimetype', '').strip()
 
-        if not validate_uri(uri) and asset_folder not in uri:
+        if not validate_uri(uri) and settings.asset_folder not in uri:
             header = "Ops!"
             message = "Invalid URL. Failed to update asset."
             return template('message', header=header, message=message)
@@ -509,7 +508,7 @@ def delete_asset(asset_id):
         connection.commit()
 
         # If file exist on disk, delete it.
-        local_uri = path.join(asset_folder, asset_id)
+        local_uri = path.join(settings.asset_folder, asset_id)
         if path.isfile(local_uri):
             remove_file(local_uri)
 
@@ -661,8 +660,8 @@ def static(path):
 
 if __name__ == "__main__":
     # Make sure the asset folder exist. If not, create it
-    if not path.isdir(asset_folder):
-        mkdir(asset_folder)
+    if not path.isdir(settings.asset_folder):
+        mkdir(settings.asset_folder)
 
     initiate_db()
 
