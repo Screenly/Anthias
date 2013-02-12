@@ -11,16 +11,18 @@ from datetime import datetime, timedelta
 from dateutils import datestring
 from hashlib import md5
 from hurry.filesize import size
-from os import path, makedirs, getloadavg, statvfs, mkdir, getenv, remove as remove_file
-from PIL import Image
+from os import path, makedirs, getloadavg, statvfs, mkdir, getenv
 from requests import get as req_get, head as req_head
-from StringIO import StringIO
 from subprocess import check_output
 from urlparse import urlparse
 import json
 from uptime import uptime
 from re import split as re_split
+
 import ConfigParser
+
+#from StringIO import StringIO
+#from PIL import Image
 
 from bottle import route, run, template, request, error, static_file, response, redirect
 from bottlehaml import haml_template
@@ -330,220 +332,16 @@ def settings_page():
             # Write new settings to disk.
             with open(conf_file, "w") as settings_file:
                 config.write(settings_file)
-                settings.load_settings()  # reload the new settings into memory
+            settings.load_settings()  # reload the new settings into memory
             context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
-        except:
-            context['flash'] = {'class': "error", 'message': "Settings file could not be saved."}
+        except Exception as e:
+            context['flash'] = {'class': "error", 'message': e}
 
     context['show_splash'] = config.get('viewer', 'show_splash')
     context['audio_output'] = config.get('viewer', 'audio_output')
     context['shuffle_playlist'] = config.get('viewer', 'shuffle_playlist')
 
     return haml_template('settings', **context)
-
-
-@route('/process_asset', method='POST')
-def process_asset():
-    c = connection.cursor()
-
-    if (request.POST.get('name', '').strip() and
-        (request.POST.get('uri', '').strip() or request.files.file_upload.file) and
-        request.POST.get('mimetype', '').strip()
-        ):
-
-        name = request.POST.get('name', '').decode('UTF-8')
-        mimetype = request.POST.get('mimetype', '').strip()
-
-        try:
-            uri = request.POST.get('uri', '').strip()
-        except:
-            uri = False
-
-        try:
-            file_upload = request.files.file_upload.file
-        except:
-            file_upload = False
-
-        # Make sure it is a valid combination
-        if (file_upload and 'web' in mimetype):
-            header = "Ops!"
-            message = "Invalid combination. Can't upload web resource."
-            return template('message', header=header, message=message)
-
-        if (uri and file_upload):
-            header = "Ops!"
-            message = "Invalid combination. Can't select both URI and a file."
-            return template('message', header=header, message=message)
-
-        if uri:
-            if not validate_uri(uri):
-                header = "Ops!"
-                message = "Invalid URL. Failed to add asset."
-                return template('message', header=header, message=message)
-
-            if "image" in mimetype:
-                file = req_get(uri, allow_redirects=True)
-            else:
-                file = req_head(uri, allow_redirects=True)
-
-            # Only proceed if fetch was successful.
-            if file.status_code == 200:
-                asset_id = md5(name + uri).hexdigest()
-
-                strict_uri = file.url
-
-                if "image" in mimetype:
-                    resolution = Image.open(StringIO(file.content)).size
-                else:
-                    resolution = "N/A"
-
-                if "video" in mimetype:
-                    duration = "N/A"
-            else:
-                header = "Ops!"
-                message = "Unable to fetch file."
-                return template('message', header=header, message=message)
-
-        if file_upload:
-            asset_file_input = file_upload.read()
-            asset_id = md5(asset_file_input).hexdigest()
-
-            local_uri = path.join(settings.asset_folder, asset_id)
-            f = open(local_uri, 'w')
-            f.write(asset_file_input)
-            f.close()
-
-            uri = local_uri
-
-        start_date = ""
-        end_date = ""
-        duration = ""
-
-        c.execute("INSERT INTO assets (asset_id, name, uri, start_date, end_date, duration, mimetype) VALUES (?,?,?,?,?,?,?)", (asset_id, name, uri, start_date, end_date, duration, mimetype))
-        connection.commit()
-
-        header = "Yay!"
-        message = "Added asset (" + asset_id + ") to the database."
-        return template('message', header=header, message=message)
-
-    else:
-        header = "Ops!"
-        message = "Invalid input."
-        return template('message', header=header, message=message)
-
-
-@route('/process_schedule', method='POST')
-def process_schedule():
-    c = connection.cursor()
-
-    if (request.POST.get('asset', '').strip() and
-        request.POST.get('start', '').strip() and
-        request.POST.get('end', '').strip()
-        ):
-
-        asset_id = request.POST.get('asset', '').strip()
-        input_start = request.POST.get('start', '').strip()
-        input_end = request.POST.get('end', '').strip()
-
-        start_date = datetime.strptime(input_start, '%Y-%m-%d @ %H:%M')
-        end_date = datetime.strptime(input_end, '%Y-%m-%d @ %H:%M')
-
-        query = c.execute("SELECT mimetype FROM assets WHERE asset_id=?", (asset_id,))
-        asset_mimetype = c.fetchone()
-
-        if "image" or "web" in asset_mimetype:
-            try:
-                duration = request.POST.get('duration', '').strip()
-            except:
-                header = "Ops!"
-                message = "Duration missing. This is required for images and web-pages."
-                return template('message', header=header, message=message)
-        else:
-            duration = "N/A"
-
-        c.execute("UPDATE assets SET start_date=?, end_date=?, duration=? WHERE asset_id=?", (start_date, end_date, duration, asset_id))
-        connection.commit()
-
-        header = "Yes!"
-        message = "Successfully scheduled asset."
-        return template('message', header=header, message=message)
-
-    else:
-        header = "Ops!"
-        message = "Failed to process schedule."
-        return template('message', header=header, message=message)
-
-
-@route('/update_asset', method='POST')
-def update_asset():
-    c = connection.cursor()
-
-    if (request.POST.get('asset_id', '').strip() and
-        request.POST.get('name', '').strip() and
-        request.POST.get('uri', '').strip() and
-        request.POST.get('mimetype', '').strip()
-        ):
-
-        asset_id = request.POST.get('asset_id', '').strip()
-        name = request.POST.get('name', '').decode('UTF-8')
-        uri = request.POST.get('uri', '').strip()
-        mimetype = request.POST.get('mimetype', '').strip()
-
-        if not validate_uri(uri) and settings.asset_folder not in uri:
-            header = "Ops!"
-            message = "Invalid URL. Failed to update asset."
-            return template('message', header=header, message=message)
-
-        try:
-            duration = request.POST.get('duration', '').strip()
-        except:
-            duration = None
-
-        try:
-            input_start = request.POST.get('start', '')
-            start_date = datetime.strptime(input_start, '%Y-%m-%d @ %H:%M')
-        except:
-            start_date = None
-
-        try:
-            input_end = request.POST.get('end', '').strip()
-            end_date = datetime.strptime(input_end, '%Y-%m-%d @ %H:%M')
-        except:
-            end_date = None
-
-        c.execute("UPDATE assets SET start_date=?, end_date=?, duration=?, name=?, uri=?, duration=?, mimetype=? WHERE asset_id=?", (start_date, end_date, duration, name, uri, duration, mimetype, asset_id))
-        connection.commit()
-
-        header = "Yes!"
-        message = "Successfully updated asset."
-        return template('message', header=header, message=message)
-
-    else:
-        header = "Ops!"
-        message = "Failed to update asset."
-        return template('message', header=header, message=message)
-
-
-@route('/delete_asset/:asset_id')
-def delete_asset(asset_id):
-    c = connection.cursor()
-
-    c.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
-    try:
-        connection.commit()
-
-        # If file exist on disk, delete it.
-        local_uri = path.join(settings.asset_folder, asset_id)
-        if path.isfile(local_uri):
-            remove_file(local_uri)
-
-        header = "Success!"
-        message = "Deleted asset."
-        return template('message', header=header, message=message)
-    except:
-        header = "Ops!"
-        message = "Failed to delete asset."
-        return template('message', header=header, message=message)
 
 
 @route('/system_info')
@@ -587,81 +385,6 @@ def splash_page():
         url = "Unable to look up your installation's IP address."
 
     return template('splash_page', ip_lookup=ip_lookup, url=url)
-
-
-@route('/view_playlist')
-def view_node_playlist():
-    nodeplaylist = get_playlist()
-
-    return template('view_playlist', nodeplaylist=nodeplaylist)
-
-
-@route('/view_assets')
-def view_assets():
-    nodeplaylist = fetch_assets()
-
-    return template('view_assets', nodeplaylist=nodeplaylist)
-
-
-@route('/add_asset')
-def add_asset():
-    return template('add_asset')
-
-
-@route('/schedule_asset')
-def schedule_asset():
-    c = connection.cursor()
-
-    assets = []
-    c.execute("SELECT name, asset_id FROM assets ORDER BY name")
-    query = c.fetchall()
-    for asset in query:
-        name = asset[0]
-        asset_id = asset[1]
-
-        assets.append({
-            'name': name,
-            'asset_id': asset_id,
-        })
-
-    return template('schedule_asset', assets=assets)
-
-
-@route('/edit_asset/:asset_id')
-def edit_asset(asset_id):
-    c = connection.cursor()
-
-    c.execute("SELECT name, uri, md5, start_date, end_date, duration, mimetype FROM assets WHERE asset_id=?", (asset_id,))
-    asset = c.fetchone()
-
-    name = asset[0]
-    uri = asset[1]
-    md5 = asset[2]
-
-    if asset[3]:
-        start_date = datestring.date_to_string(asset[3])
-    else:
-        start_date = None
-
-    if asset[4]:
-        end_date = datestring.date_to_string(asset[4])
-    else:
-        end_date = None
-
-    duration = asset[5]
-    mimetype = asset[6]
-
-    asset_info = {
-            "name": name,
-            "uri": uri,
-            "duration": duration,
-            "mimetype": mimetype,
-            "asset_id": asset_id,
-            "start_date": start_date,
-            "end_date": end_date
-            }
-    #return str(asset_info)
-    return template('edit_asset', asset_info=asset_info)
 
 
 @error(403)
