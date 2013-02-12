@@ -1,20 +1,17 @@
 ### screenly-ose ui ###
 
 API = (window.Screenly ||= {}) # exports
+API.date_to = date_to =
+  iso:       (d) -> (new Date d).toISOString()
+  string:    (d) -> (new Date d).toLocaleString()
+  time:      (d) -> (new Date d).toLocaleTimeString()
+  timestamp: (d) -> (new Date d).getTime()
 
-D = (d) -> new Date d # parses strings and timestamps; idempotent
 now = -> new Date()
+y2ts = (years) -> (years * 365 * 24 * 60 * 60000)
+years_from_now = (years) -> new Date ((y2ts years) + date_to.timestamp now())
 
-API.d2iso  = d2iso  = (d) -> (D d).toISOString()        # isostring
-API.d2s    = d2s    = (d) -> (D d).toLocaleString()     # nice string
-API.d2time = d2time = (d) -> (D d).toLocaleTimeString() # nice time
-API.d2ts   = d2ts   = (d) -> (D d).getTime()            # timestamp
-
-year2ts = (years) -> (years * 365 * 24 * 60 * 60000)
-years_from_now = (years) -> D (year2ts years) + d2ts now()
-
-_tpl = (name) -> _.template ($ "##{name}-template").html()
-_pd = (e) -> e.preventDefault(); false
+get_template = (name) -> _.template ($ "##{name}-template").html()
 
 
 # Models
@@ -37,12 +34,12 @@ class AssetModalView extends Backbone.View
   $fv: (field, val...) => (@$f field).val val...
 
   initialize: (options) =>
-    @tpl = _tpl 'asset-modal'
+    @template = get_template 'asset-modal'
     ($ 'body').append @render().el
     (@$el.children ":first").modal()
 
   render: =>
-    @$el.html @tpl()
+    @$el.html @template()
 
     (@$ "input.date").datepicker autoclose: yes
     (@$ 'input.time').timepicker
@@ -62,33 +59,40 @@ class AssetModalView extends Backbone.View
 
       for which in ['start', 'end']
         (@$f "#{which}_date_date").datepicker 'update', @model.get "#{which}_date"
-        @$fv "#{which}_date_time", d2time @model.get "#{which}_date"
+        @$fv "#{which}_date_time", date_to.time @model.get "#{which}_date"
 
     else
       (@$ "input.date").datepicker 'update', new Date()
 
+    @changeMimetype()
     this
 
-  events: {'click #submit-button': 'submit'}
+  events:
+    'click #submit-button': 'submit'
+    'change select[name=mimetype]': 'changeMimetype'
 
   submit: (e) =>
     for which in ['start', 'end']
       @$fv "#{which}_date",
-        d2iso (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")
+        date_to.iso (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")
     (@$ "form").submit()
+
+  changeMimetype: =>
+    (@$ '.file_upload').toggle ((@$fv 'mimetype') != 'webpage')
+
 
 
 class AssetRowView extends Backbone.View
   tagName: "tr"
 
   initialize: (options) =>
-    @tpl = _tpl 'asset-row'
+    @template = get_template 'asset-row'
 
   render: =>
-    @$el.html @tpl @model.toJSON()
+    @$el.html @template @model.toJSON()
     (@$ ".toggle input").prop "checked", @model.get 'is_active'
     (@$ "#delete-asset-button").popover
-      html: yes, placement: 'left', title: "Are you sure?", content: _tpl 'confirm-delete'
+      html: yes, placement: 'left', title: "Are you sure?", content: get_template 'confirm-delete'
     this
 
   events:
@@ -97,29 +101,29 @@ class AssetRowView extends Backbone.View
     'click #confirm-delete': 'delete'
 
   toggleActive: (e) =>
-    console.log 'toggleactive', e
     if @model.get 'is_active'
       @model.set
         is_active: no
-        end_date: d2iso now()
+        end_date: date_to.iso now()
     else
       @model.set
         is_active: yes
-        start_date: d2iso now()
-        end_date: d2iso years_from_now 10
+        start_date: date_to.iso now()
+        end_date: date_to.iso years_from_now 10
     @model.save()
     (@$ ".toggle input").prop "checked", @model.get 'is_active'
     setTimeout (=> @remove()), 300
-    _pd e
+    e.preventDefault(); false
 
   edit: (e) =>
     new AssetModalView model: @model
-    _pd e
+    e.preventDefault(); false
 
   delete: (e) =>
     (@$ "#delete-asset-button").popover 'hide'
     @model.destroy().done => @remove()
-    _pd e
+    e.preventDefault(); false
+
 
 class AssetsView extends Backbone.View
   initialize: (options) =>
@@ -127,10 +131,9 @@ class AssetsView extends Backbone.View
       @collection.bind event, @render
 
     @collection.bind 'change', (model) =>
-      setTimeout (=> @render _ [model]), 300
+      setTimeout (=> @render _ [model]), 320
 
   render: (models = @collection) =>
-    console.log models
     models.each (model) =>
       which = if model.get 'is_active' then 'active' else 'inactive'
       (@$ "##{which}-assets").append (new AssetRowView model: model).render().el
@@ -151,7 +154,7 @@ API.app = class App extends Backbone.View
 
   add: (e) =>
     new AssetModalView()
-    _pd e
+    e.preventDefault(); false
 
 
 jQuery -> new App el: $ 'body'
