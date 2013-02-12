@@ -5,7 +5,7 @@
 
 
 (function() {
-  var API, App, Asset, AssetModalView, AssetRowView, Assets, AssetsView, D, d2iso, d2s, d2time, d2ts, now, year2ts, years_from_now, _pd, _tpl,
+  var API, App, Asset, AssetModalView, AssetRowView, Assets, AssetsView, D, d2iso, d2s, d2time, d2ts, now, year2ts, years_from_now, _tpl,
     __hasProp = {}.hasOwnProperty,
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
@@ -49,11 +49,6 @@
     return _.template(($("#" + name + "-template")).html());
   };
 
-  _pd = function(e) {
-    e.preventDefault();
-    return false;
-  };
-
   Backbone.emulateJSON = true;
 
   Asset = (function(_super) {
@@ -91,6 +86,8 @@
     __extends(AssetModalView, _super);
 
     function AssetModalView() {
+      this.changeMimetype = __bind(this.changeMimetype, this);
+
       this.submit = __bind(this.submit, this);
 
       this.render = __bind(this.render, this);
@@ -149,11 +146,13 @@
       } else {
         (this.$("input.date")).datepicker('update', new Date());
       }
+      this.changeMimetype();
       return this;
     };
 
     AssetModalView.prototype.events = {
-      'click #submit-button': 'submit'
+      'click #submit-button': 'submit',
+      'change select[name=mimetype]': 'changeMimetype'
     };
 
     AssetModalView.prototype.submit = function(e) {
@@ -164,6 +163,11 @@
         this.$fv("" + which + "_date", d2iso((this.$fv("" + which + "_date_date")) + " " + (this.$fv("" + which + "_date_time"))));
       }
       return (this.$("form")).submit();
+    };
+
+    AssetModalView.prototype.changeMimetype = function() {
+      console.log('chaneg');
+      return (this.$('.file_upload')).toggle((this.$fv('mimetype')) !== 'webpage');
     };
 
     return AssetModalView;
@@ -213,7 +217,6 @@
 
     AssetRowView.prototype.toggleActive = function(e) {
       var _this = this;
-      console.log('toggleactive', e);
       if (this.model.get('is_active')) {
         this.model.set({
           is_active: false,
@@ -231,14 +234,16 @@
       setTimeout((function() {
         return _this.remove();
       }), 300);
-      return _pd(e);
+      e.preventDefault();
+      return false;
     };
 
     AssetRowView.prototype.edit = function(e) {
       new AssetModalView({
         model: this.model
       });
-      return _pd(e);
+      e.preventDefault();
+      return false;
     };
 
     AssetRowView.prototype["delete"] = function(e) {
@@ -247,7 +252,8 @@
       this.model.destroy().done(function() {
         return _this.remove();
       });
-      return _pd(e);
+      e.preventDefault();
+      return false;
     };
 
     return AssetRowView;
@@ -276,7 +282,7 @@
       return this.collection.bind('change', function(model) {
         return setTimeout((function() {
           return _this.render(_([model]));
-        }), 300);
+        }), 320);
       });
     };
 
@@ -285,7 +291,6 @@
       if (models == null) {
         models = this.collection;
       }
-      console.log(models);
       models.each(function(model) {
         var which;
         which = model.get('is_active') ? 'active' : 'inactive';
@@ -326,7 +331,8 @@
 
     App.prototype.add = function(e) {
       new AssetModalView();
-      return _pd(e);
+      e.preventDefault();
+      return false;
     };
 
     return App;

@@ -14,7 +14,6 @@ year2ts = (years) -> (years * 365 * 24 * 60 * 60000)
 years_from_now = (years) -> D (year2ts years) + d2ts now()
 
 _tpl = (name) -> _.template ($ "##{name}-template").html()
-_pd = (e) -> e.preventDefault(); false
 
 
 # Models
@@ -67,15 +66,23 @@ class AssetModalView extends Backbone.View
     else
       (@$ "input.date").datepicker 'update', new Date()
 
+    @changeMimetype()
     this
 
-  events: {'click #submit-button': 'submit'}
+  events:
+    'click #submit-button': 'submit'
+    'change select[name=mimetype]': 'changeMimetype'
 
   submit: (e) =>
     for which in ['start', 'end']
       @$fv "#{which}_date",
         d2iso (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")
     (@$ "form").submit()
+
+  changeMimetype: =>
+    console.log 'chaneg'
+    (@$ '.file_upload').toggle ((@$fv 'mimetype') != 'webpage')
+
 
 
 class AssetRowView extends Backbone.View
@@ -97,7 +104,6 @@ class AssetRowView extends Backbone.View
     'click #confirm-delete': 'delete'
 
   toggleActive: (e) =>
-    console.log 'toggleactive', e
     if @model.get 'is_active'
       @model.set
         is_active: no
@@ -110,16 +116,17 @@ class AssetRowView extends Backbone.View
     @model.save()
     (@$ ".toggle input").prop "checked", @model.get 'is_active'
     setTimeout (=> @remove()), 300
-    _pd e
+    e.preventDefault(); false
 
   edit: (e) =>
     new AssetModalView model: @model
-    _pd e
+    e.preventDefault(); false
 
   delete: (e) =>
     (@$ "#delete-asset-button").popover 'hide'
     @model.destroy().done => @remove()
-    _pd e
+    e.preventDefault(); false
+
 
 class AssetsView extends Backbone.View
   initialize: (options) =>
@@ -127,10 +134,9 @@ class AssetsView extends Backbone.View
       @collection.bind event, @render
 
     @collection.bind 'change', (model) =>
-      setTimeout (=> @render _ [model]), 300
+      setTimeout (=> @render _ [model]), 320
 
   render: (models = @collection) =>
-    console.log models
     models.each (model) =>
       which = if model.get 'is_active' then 'active' else 'inactive'
       (@$ "##{which}-assets").append (new AssetRowView model: model).render().el
@@ -151,7 +157,7 @@ API.app = class App extends Backbone.View
 
   add: (e) =>
     new AssetModalView()
-    _pd e
+    e.preventDefault(); false
 
 
 jQuery -> new App el: $ 'body'
