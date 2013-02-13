@@ -137,7 +137,15 @@ class AssetsView extends Backbone.View
     models.each (model) =>
       which = if model.get 'is_active' then 'active' else 'inactive'
       (@$ "##{which}-assets").append (new AssetRowView model: model).render().el
-    this
+
+    for which in ['inactive', 'active']
+      header = @$(".#{which}-table thead")
+      if @$("##{which}-assets tr").length
+        header.show()
+      else 
+        header.hide()
+
+    @
 
 
 # App

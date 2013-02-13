@@ -281,7 +281,8 @@
     };
 
     AssetsView.prototype.render = function(models) {
-      var _this = this;
+      var header, which, _i, _len, _ref,
+        _this = this;
       if (models == null) {
         models = this.collection;
       }
@@ -292,6 +293,16 @@
           model: model
         })).render().el);
       });
+      _ref = ['inactive', 'active'];
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        which = _ref[_i];
+        header = this.$("." + which + "-table thead");
+        if (this.$("#" + which + "-assets tr").length) {
+          header.show();
+        } else {
+          header.hide();
+        }
+      }
       return this;
     };
 
