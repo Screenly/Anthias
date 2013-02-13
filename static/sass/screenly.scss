@@ -39,6 +39,7 @@ body {
   border-top: 1px #ccc solid;
   @include box-shadow(0 -2px 9px rgba(0, 0, 0, 0.05));
   opacity: 0.9;
+  z-index: 10;
 
   position: fixed;
   bottom: 0;
