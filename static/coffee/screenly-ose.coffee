@@ -3,7 +3,7 @@
 API = (window.Screenly ||= {}) # exports
 API.date_to = date_to =
   iso:       (d) -> (new Date d).toISOString()
-  string:    (d) -> (new Date d).toLocaleString()
+  string:    (d) -> (moment (new Date d)).format("MM/DD/YYYY hh:mm:ss A")
   time:      (d) -> (new Date d).toLocaleTimeString()
   timestamp: (d) -> (new Date d).getTime()
 

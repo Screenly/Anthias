@@ -18,7 +18,7 @@
       return (new Date(d)).toISOString();
     },
     string: function(d) {
-      return (new Date(d)).toLocaleString();
+      return (moment(new Date(d))).format("MM/DD/YYYY hh:mm:ss A");
     },
     time: function(d) {
       return (new Date(d)).toLocaleTimeString();
