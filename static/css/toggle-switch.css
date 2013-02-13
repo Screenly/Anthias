@@ -66,6 +66,11 @@ https://github.com/ghinda/css-toggle-switch
 		margin-left: 100px;
 		
 		text-align: center;
+		color: #fff;
+	}
+
+	.toggle p span.on {
+		color: #000;
 	}
 	
 	.toggle p span:last-child {
@@ -116,6 +121,14 @@ https://github.com/ghinda/css-toggle-switch
 	
 	.toggle input:checked ~ .slide-button {
 		right: 50%;
+	}
+
+	.toggle input:checked ~ p span.on {
+		color: #fff;
+	}
+
+	.toggle input:checked ~ p span.off {
+		color: #000;
 	}
 	
 	/* Outline the toggles when the inputs are focused */
