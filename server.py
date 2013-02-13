@@ -184,6 +184,17 @@ def is_up_to_date():
         return False
 
 
+def template(template_name, **context):
+    """Screenly template response generator. Shares the
+    same function signature as Bottle's template() method
+    but also injects some global context."""
+
+    # Add global contexts
+    context['up_to_date'] = is_up_to_date()
+
+    return haml_template(template_name, **context)
+
+
 ################################
 # API
 ################################
@@ -335,7 +346,7 @@ def remove_asset(asset_id):
 @route('/')
 def viewIndex():
     assets = get_assets_grouped()
-    return haml_template('index', assets=assets, up_to_date=is_up_to_date())
+    return template('index', assets=assets)
 
 
 @route('/settings', method=["GET", "POST"])
@@ -364,7 +375,7 @@ def settings_page():
     context['audio_output'] = config.get('viewer', 'audio_output')
     context['shuffle_playlist'] = config.get('viewer', 'shuffle_playlist')
 
-    return haml_template('settings', up_to_date=is_up_to_date(), **context)
+    return template('settings', **context)
 
 
 @route('/system_info')
@@ -392,7 +403,7 @@ def system_info():
     uptime_in_seconds = uptime()
     system_uptime = timedelta(seconds=uptime_in_seconds)
 
-    return haml_template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=system_uptime, display_info=display_info, up_to_date=is_up_to_date())
+    return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=system_uptime, display_info=display_info)
 
 
 @route('/splash_page')
@@ -407,7 +418,7 @@ def splash_page():
         ip_lookup = False
         url = "Unable to look up your installation's IP address."
 
-    return haml_template('splash_page', ip_lookup=ip_lookup, url=url)
+    return template('splash_page', ip_lookup=ip_lookup, url=url)
 
 
 @error(403)
