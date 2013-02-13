@@ -12,11 +12,12 @@ from os import path, getenv, remove, makedirs
 from os import stat as os_stat, utime
 from platform import machine
 from random import shuffle
-from requests import get
+from requests import get as req_get
 from stat import S_ISFIFO
 from subprocess import Popen, call
 from time import sleep, time
 import logging
+from datetime import datetime, timedelta
 
 from db import connection
 import html_templates
@@ -211,7 +212,7 @@ def view_web(url, duration):
     if (html_folder in url and path.exists(url)):
         web_resource = 200
     else:
-        web_resource = get(url).status_code
+        web_resource = req_get(url).status_code
 
     if web_resource == 200:
         logging.debug('Web content appears to be available. Proceeding.')
@@ -224,6 +225,29 @@ def view_web(url, duration):
     else:
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (url))
         pass
+
+
+def check_update():
+    """
+    Check if there is a later version of Screenly-OSE
+    available. Only do this update once per day.
+    """
+
+    sha_file = path.join(getenv('HOME'), '.screenly', 'latest_screenly_sha')
+
+    try:
+        get_mtime = path.getmtime(sha_file)
+        last_update = datetime.fromtimestamp(get_mtime)
+    except:
+        last_update  = None
+
+    if last_update == None or last_update < (datetime.now() - timedelta(days=1)):
+
+        latest_sha = req_get('http://stats.screenlyapp.com/latest')
+        if latest_sha.status_code == 200:
+            f = open(sha_file, 'w')
+            f.write(latest_sha.content.strip())
+            f.close()
 
 
 if __name__ == "__main__":
@@ -258,6 +282,8 @@ if __name__ == "__main__":
     while True:
         asset = scheduler.get_next_asset()
         logging.debug('got asset' + str(asset))
+
+        check_update()
 
         if asset == None:
             # The playlist is empty, go to sleep.

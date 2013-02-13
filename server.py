@@ -164,24 +164,29 @@ def api_error(error):
 def is_up_to_date():
     """
     Determine if there is any update available.
-    We check the Github master SHA (via stats.screenlyapp.com)
-    and compare it to the local SHA.
+    Used in conjunction with check_update() in server.py
     """
 
-    try:
-        local_sha = git('rev-parse', 'HEAD')
-    except:
-        return False
+    sha_file = path.join(getenv('HOME'), '.screenly', 'latest_screenly_sha')
 
     try:
-        latest_sha = req_get('http://stats.screenlyapp.com/latest').content.strip()
+        f = open(sha_file, 'r')
+        latest_sha = f.read().strip()
+        f.close()
     except:
-        return False
+        latest_sha = False
 
-    if local_sha == latest_sha:
-        return True
-    else:
-        return False
+    if latest_sha:
+        try:
+            check_sha = git('branch', '--contains', latest_sha)
+        except:
+            check_sha = None
+
+        if 'master' in check_sha:
+            return True
+        else:
+            return False
+
 
 
 ################################
