@@ -18,7 +18,7 @@ from urlparse import urlparse
 import json
 from uptime import uptime
 from re import split as re_split
-
+from sh import git
 import ConfigParser
 
 #from StringIO import StringIO
@@ -159,6 +159,29 @@ def api_error(error):
     response.content_type = "application/json"
     response.status = 500
     return json_dump({'error': error})
+
+
+def is_up_to_date():
+    """
+    Determine if there is any update available.
+    We check the Github master SHA (via stats.screenlyapp.com)
+    and compare it to the local SHA.
+    """
+
+    try:
+        local_sha = git('rev-parse', 'HEAD')
+    except:
+        return False
+
+    try:
+        latest_sha = req_get('http://stats.screenlyapp.com/latest').content.strip()
+    except:
+        return False
+
+    if local_sha == latest_sha:
+        return True
+    else:
+        return False
 
 
 ################################
@@ -312,7 +335,7 @@ def remove_asset(asset_id):
 @route('/')
 def viewIndex():
     assets = get_assets_grouped()
-    return haml_template('index', assets=assets)
+    return haml_template('index', assets=assets, up_to_date=is_up_to_date())
 
 
 @route('/settings', method=["GET", "POST"])
@@ -341,7 +364,7 @@ def settings_page():
     context['audio_output'] = config.get('viewer', 'audio_output')
     context['shuffle_playlist'] = config.get('viewer', 'shuffle_playlist')
 
-    return haml_template('settings', **context)
+    return haml_template('settings', up_to_date=is_up_to_date(), **context)
 
 
 @route('/system_info')
@@ -369,7 +392,7 @@ def system_info():
     uptime_in_seconds = uptime()
     system_uptime = timedelta(seconds=uptime_in_seconds)
 
-    return haml_template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=system_uptime, display_info=display_info)
+    return haml_template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=system_uptime, display_info=display_info, up_to_date=is_up_to_date())
 
 
 @route('/splash_page')

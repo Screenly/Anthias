@@ -117,10 +117,11 @@
             %span OSE
 
           %ul.nav.pull-right
-            / %li.update-available
-            /   %a(href="#")
-            /     %i.icon-circle-arrow-down.icon-white
-            /     Update Available
+            - if not up_to_date:
+              %li.update-available
+                %a(href="#")
+                  %i.icon-circle-arrow-down.icon-white
+                  Update Available
             %li
               %a(href="/settings")
                 %i.icon-cog.icon-white
