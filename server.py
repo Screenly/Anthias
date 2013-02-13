@@ -24,7 +24,7 @@ import ConfigParser
 #from StringIO import StringIO
 #from PIL import Image
 
-from bottle import route, run, template, request, error, static_file, response, redirect
+from bottle import route, run, request, error, static_file, response, redirect
 from bottlehaml import haml_template
 
 from db import connection
@@ -407,7 +407,7 @@ def splash_page():
         ip_lookup = False
         url = "Unable to look up your installation's IP address."
 
-    return template('splash_page', ip_lookup=ip_lookup, url=url)
+    return haml_template('splash_page', ip_lookup=ip_lookup, url=url)
 
 
 @error(403)
