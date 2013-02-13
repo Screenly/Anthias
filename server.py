@@ -186,6 +186,11 @@ def is_up_to_date():
             return True
         else:
             return False
+    # If we weren't able to verify with remote side,
+    # we'll set up_to_date to true in order to hide
+    # the 'update available' message
+    else:
+        return True
 
 
 
