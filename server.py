@@ -257,9 +257,6 @@ def prepare_asset(request):
                 asset['uri'] = uri
                 # strict_uri = file.url
 
-                # if "image" in asset['mimetype']:
-                #     asset['resolution'] = Image.open(StringIO(file.content)).size
-
             else:
                 raise Exception("Could not retrieve file. Check the asset URL.")
 
@@ -269,9 +266,6 @@ def prepare_asset(request):
 
             with open(asset['uri'], 'w') as f:
                 f.write(file_upload.read())
-
-        # if not asset.get('resolution', False):
-        #     asset['resolution'] = "N/A"
 
         # If no duration is provided, default to 10. JavaScript
         # validation should not allow this to occur but it
