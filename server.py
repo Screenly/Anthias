@@ -9,6 +9,7 @@ __email__ = "vpetersson@wireload.net"
 
 from datetime import datetime, timedelta
 from dateutils import datestring
+from functools import wraps
 from hashlib import md5
 from hurry.filesize import size
 from os import path, makedirs, getloadavg, statvfs, mkdir, getenv
@@ -25,6 +26,7 @@ import ConfigParser
 #from PIL import Image
 
 from bottle import route, run, request, error, static_file, response, redirect
+from bottle import HTTPResponse
 from bottlehaml import haml_template
 
 from db import connection
@@ -37,78 +39,6 @@ from settings import settings
 ################################
 # Utilities
 ################################
-
-def is_active(asset, at_time=None):
-    """Accepts an asset dictionary and determines if it
-    is active at the given time. If no time is specified,
-    get_current_time() is used.
-
-    >>> asset = {'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d', 'mimetype': u'web', 'name': u'WireLoad', 'end_date': datetime(2013, 1, 19, 23, 59), 'uri': u'http://www.wireload.net', 'duration': u'5', 'start_date': datetime(2013, 1, 16, 0, 0)};
-
-    >>> is_active(asset, datetime(2013, 1, 16, 12, 00))
-    True
-    >>> is_active(asset, datetime(2014, 1, 1))
-    False
-
-    """
-
-    if not (asset['start_date'] and asset['end_date']):
-        return False
-
-    at_time = at_time or settings.get_current_time()
-
-    return (asset['start_date'] < at_time and asset['end_date'] > at_time)
-
-
-def get_playlist():
-    playlist = []
-    for asset in fetch_assets():
-        if is_active(asset):
-            asset['start_date'] = datestring.date_to_string(asset['start_date'])
-            asset['end_date'] = datestring.date_to_string(asset['end_date'])
-
-            playlist.append(asset)
-
-    return playlist
-
-
-def fetch_assets(keys=None, order_by="name"):
-    """Fetches all assets from the database and returns their
-    data as a list of dictionaries corresponding to each asset."""
-    c = connection.cursor()
-
-    if keys is None:
-        keys = [
-            "asset_id", "name", "uri", "start_date",
-            "end_date", "duration", "mimetype"
-        ]
-
-    c.execute("SELECT %s FROM assets ORDER BY %s" % (", ".join(keys), order_by))
-    assets = []
-
-    for asset in c.fetchall():
-        dictionary = {}
-        for i in range(len(keys)):
-            dictionary[keys[i]] = asset[i]
-        assets.append(dictionary)
-
-    return assets
-
-
-def initiate_db():
-    # Create config dir if it doesn't exist
-    if not path.isdir(settings.configdir):
-        makedirs(settings.configdir)
-
-    c = connection.cursor()
-
-    # Check if the asset-table exist. If it doesn't, create it.
-    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='assets'")
-    asset_table = c.fetchone()
-
-    if not asset_table:
-        c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT)")
-        return "Initiated database."
 
 
 def validate_uri(uri):
@@ -175,7 +105,6 @@ def is_up_to_date():
         return True
 
 
-
 def template(template_name, **context):
     """Screenly template response generator. Shares the
     same function signature as Bottle's template() method
@@ -185,6 +114,94 @@ def template(template_name, **context):
     context['up_to_date'] = is_up_to_date()
 
     return haml_template(template_name, **context)
+
+
+################################
+# Model
+################################
+
+FIELDS = [
+    "asset_id", "name", "uri", "start_date",
+    "end_date", "duration", "mimetype"
+]
+
+
+def initiate_db():
+    # Create config dir if it doesn't exist
+    if not path.isdir(settings.configdir):
+        makedirs(settings.configdir)
+
+    c = connection.cursor()
+
+    # Check if the asset-table exist. If it doesn't, create it.
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='assets'")
+    asset_table = c.fetchone()
+
+    if not asset_table:
+        c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT)")
+        return "Initiated database."
+
+
+def is_active(asset, at_time=None):
+    """Accepts an asset dictionary and determines if it
+    is active at the given time. If no time is specified,
+    get_current_time() is used.
+
+    >>> asset = {'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d', 'mimetype': u'web', 'name': u'WireLoad', 'end_date': datetime(2013, 1, 19, 23, 59), 'uri': u'http://www.wireload.net', 'duration': u'5', 'start_date': datetime(2013, 1, 16, 0, 0)};
+
+    >>> is_active(asset, datetime(2013, 1, 16, 12, 00))
+    True
+    >>> is_active(asset, datetime(2014, 1, 1))
+    False
+
+    """
+
+    if not (asset['start_date'] and asset['end_date']):
+        return False
+
+    at_time = at_time or settings.get_current_time()
+
+    return (asset['start_date'] < at_time and asset['end_date'] > at_time)
+
+
+def fetch_assets(keys=FIELDS, order_by="name"):
+    """Fetches all assets from the database and returns their
+    data as a list of dictionaries corresponding to each asset."""
+    c = connection.cursor()
+
+    c.execute("SELECT %s FROM assets ORDER BY %s" % (", ".join(keys), order_by))
+    assets = []
+
+    for asset in c.fetchall():
+        dictionary = {}
+        for i in range(len(keys)):
+            dictionary[keys[i]] = asset[i]
+        assets.append(dictionary)
+
+    return assets
+
+
+def insert_asset(asset):
+    c = connection.cursor()
+    c.execute(
+        "INSERT INTO assets (%s) VALUES (%s)" % (", ".join(asset.keys()), ",".join(["?"] * len(asset.keys()))),
+        asset.values()
+    )
+    connection.commit()
+
+
+def update_asset(asset_id, asset):
+    del asset['asset_id']
+    c = connection.cursor()
+    query = "UPDATE assets SET %s=? WHERE asset_id=?" % "=?, ".join(asset.keys())
+    c.execute(query, asset.values() + [asset_id])
+    connection.commit()
+
+
+def delete_asset(asset_id):
+    c = connection.cursor()
+    c.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
+    connection.commit()
 
 
 ################################
@@ -278,58 +295,46 @@ def prepare_asset(request):
 
 @route('/api/assets', method="GET")
 def api_assets():
-
     assets = fetch_assets()
-
     for asset in assets:
         asset['is_active'] = is_active(asset)
-
     return make_json_response(assets)
 
 
+# api view decorator. handles errors
+def api(view):
+    @wraps(view)
+    def api_view(*args, **kwargs):
+        try:
+            return view(*args, **kwargs)
+        except HTTPResponse:
+            raise
+        except Exception as e:
+            return api_error(str(e))
+    return api_view
+
+
 @route('/api/assets', method="POST")
+@api
 def add_asset():
-    try:
-        asset = prepare_asset(request)
-
-        c = connection.cursor()
-        c.execute(
-            "INSERT INTO assets (%s) VALUES (%s)" % (", ".join(asset.keys()), ",".join(["?"] * len(asset.keys()))),
-            asset.values()
-        )
-        connection.commit()
-    except Exception as e:
-        return api_error(str(e))
-
+    asset = prepare_asset(request)
+    insert_asset(asset)
     redirect("/")
 
 
 @route('/api/assets/:asset_id', method=["PUT", "POST"])
+@api
 def edit_asset(asset_id):
-    try:
-        asset = prepare_asset(request)
-        del asset['asset_id']
-
-        c = connection.cursor()
-        query = "UPDATE assets SET %s=? WHERE asset_id=?" % "=?, ".join(asset.keys())
-
-        c.execute(query, asset.values() + [asset_id])
-        connection.commit()
-    except Exception as e:
-        return api_error(str(e))
-
+    asset = prepare_asset(request)
+    update_asset(asset_id, asset)
     redirect("/")
 
 
 @route('/api/assets/:asset_id', method="DELETE")
+@api
 def remove_asset(asset_id):
-    try:
-        c = connection.cursor()
-        c.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
-        connection.commit()
-        response.status = 204  # return an OK with no content
-    except:
-        return api_error("Could not remove asset with asset_id={}".format(asset_id))
+    delete_asset(asset_id)
+    response.status = 204  # return an OK with no content
 
 
 ################################
