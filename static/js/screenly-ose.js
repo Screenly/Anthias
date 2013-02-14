@@ -192,8 +192,23 @@
     };
 
     AssetRowView.prototype.render = function() {
+      var icon_class;
       this.$el.html(this.template(this.model.toJSON()));
       (this.$(".toggle input")).prop("checked", this.model.get('is_active'));
+      switch (this.model.get("mimetype")) {
+        case "video":
+          icon_class = "icon-facetime-video";
+          break;
+        case "image":
+          icon_class = "icon-picture";
+          break;
+        case "webpage":
+          icon_class = "icon-globe";
+          break;
+        default:
+          icon_class = "";
+      }
+      (this.$("#asset-icon")).attr("class", icon_class);
       (this.$("#delete-asset-button")).popover({
         html: true,
         placement: 'left',

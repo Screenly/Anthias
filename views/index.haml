@@ -26,7 +26,10 @@
 
     %script(type="text/template", id="asset-row-template")
       :plain
-        <td><%= name %></td>
+        <td>
+          <i id="asset-icon"></i>
+          <%= name %>
+        </td>
         <td><%= Screenly.date_to.string(start_date) %></td>
         <td><%= Screenly.date_to.string(end_date) %></td>
         <td>
