@@ -221,7 +221,8 @@
     AssetRowView.prototype.events = {
       'click #activation-toggle': 'toggleActive',
       'click #edit-asset-button': 'edit',
-      'click #confirm-delete': 'delete'
+      'click #confirm-delete': 'delete',
+      'click #cancel-delete': 'hidePopover'
     };
 
     AssetRowView.prototype.toggleActive = function(e) {
@@ -257,12 +258,16 @@
 
     AssetRowView.prototype["delete"] = function(e) {
       var _this = this;
-      (this.$("#delete-asset-button")).popover('hide');
+      this.hidePopover();
       this.model.destroy().done(function() {
         return _this.remove();
       });
       e.preventDefault();
       return false;
+    };
+
+    AssetRowView.prototype.hidePopover = function() {
+      return (this.$("#delete-asset-button")).popover('hide');
     };
 
     return AssetRowView;

@@ -107,6 +107,7 @@ class AssetRowView extends Backbone.View
     'click #activation-toggle': 'toggleActive'
     'click #edit-asset-button': 'edit'
     'click #confirm-delete': 'delete'
+    'click #cancel-delete': 'hidePopover'
 
   toggleActive: (e) =>
     if @model.get 'is_active'
@@ -128,9 +129,12 @@ class AssetRowView extends Backbone.View
     e.preventDefault(); false
 
   delete: (e) =>
-    (@$ "#delete-asset-button").popover 'hide'
+    @hidePopover()
     @model.destroy().done => @remove()
     e.preventDefault(); false
+
+  hidePopover: ->
+    (@$ "#delete-asset-button").popover 'hide'
 
 
 class AssetsView extends Backbone.View
