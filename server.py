@@ -15,6 +15,7 @@ from hurry.filesize import size
 from os import path, makedirs, getloadavg, statvfs, mkdir, getenv
 from requests import get as req_get, head as req_head
 from subprocess import check_output
+import traceback
 from urlparse import urlparse
 import json
 from uptime import uptime
@@ -168,7 +169,6 @@ def fetch_assets(keys=FIELDS, order_by="name"):
     """Fetches all assets from the database and returns their
     data as a list of dictionaries corresponding to each asset."""
     c = connection.cursor()
-
     c.execute("SELECT %s FROM assets ORDER BY %s" % (", ".join(keys), order_by))
     assets = []
 
@@ -181,6 +181,19 @@ def fetch_assets(keys=FIELDS, order_by="name"):
     return assets
 
 
+def fetch_asset(asset_id, keys=FIELDS):
+    c = connection.cursor()
+    c.execute("SELECT %s FROM assets WHERE asset_id=?" % ", ".join(keys), (asset_id,))
+    assets = []
+    for asset in c.fetchall():
+        dictionary = {}
+        for i in range(len(keys)):
+            dictionary[keys[i]] = asset[i]
+        assets.append(dictionary)
+    if len(assets):
+        return assets[0]
+
+
 def insert_asset(asset):
     c = connection.cursor()
     c.execute(
@@ -188,6 +201,7 @@ def insert_asset(asset):
         asset.values()
     )
     connection.commit()
+    return asset
 
 
 def update_asset(asset_id, asset):
@@ -196,6 +210,8 @@ def update_asset(asset_id, asset):
     query = "UPDATE assets SET %s=? WHERE asset_id=?" % "=?, ".join(asset.keys())
     c.execute(query, asset.values() + [asset_id])
     connection.commit()
+    asset.update({'asset_id': asset_id})
+    return asset
 
 
 def delete_asset(asset_id):
@@ -306,10 +322,11 @@ def api(view):
     @wraps(view)
     def api_view(*args, **kwargs):
         try:
-            return view(*args, **kwargs)
+            return make_json_response(view(*args, **kwargs))
         except HTTPResponse:
             raise
         except Exception as e:
+            traceback.print_exc()
             return api_error(str(e))
     return api_view
 
@@ -317,17 +334,19 @@ def api(view):
 @route('/api/assets', method="POST")
 @api
 def add_asset():
-    asset = prepare_asset(request)
-    insert_asset(asset)
-    redirect("/")
+    return insert_asset(prepare_asset(request))
+
+
+@route('/api/assets/:asset_id', method="GET")
+@api
+def edit_asset(asset_id):
+    return fetch_asset(asset_id)
 
 
 @route('/api/assets/:asset_id', method=["PUT", "POST"])
 @api
 def edit_asset(asset_id):
-    asset = prepare_asset(request)
-    update_asset(asset_id, asset)
-    redirect("/")
+    return update_asset(asset_id, prepare_asset(request))
 
 
 @route('/api/assets/:asset_id', method="DELETE")
@@ -405,9 +424,7 @@ def system_info():
 
 @route('/splash_page')
 def splash_page():
-
     my_ip = get_node_ip()
-
     if my_ip:
         ip_lookup = True
         url = "http://{}:{}".format(my_ip, settings.listen_port)
