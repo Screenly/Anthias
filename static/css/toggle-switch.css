@@ -23,6 +23,7 @@ https://github.com/ghinda/css-toggle-switch
 		position: relative;
 		padding: 0;
 		/*margin-left: 100px;*/
+		width: 115px;
 	}
 
 	/* Position the label over all the elements, except the slide-button
