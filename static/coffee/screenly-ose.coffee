@@ -19,17 +19,17 @@ get_template = (name) -> _.template ($ "##{name}-template").html()
 # Tell Backbone to send its saves as JSON-encoded.
 Backbone.emulateJSON = on
 
-class Asset extends Backbone.Model
+API.Asset = class Asset extends Backbone.Model
   idAttribute: "asset_id"
 
-class Assets extends Backbone.Collection
+API.Assets = class Assets extends Backbone.Collection
   url: "/api/assets"
   model: Asset
 
 
 # Views
 
-class AssetModalView extends Backbone.View
+class EditAssetView extends Backbone.View
   $f: (field) => @$ "[name='#{field}']"
   $fv: (field, val...) => (@$f field).val val...
 
@@ -91,16 +91,15 @@ class AssetRowView extends Backbone.View
   render: =>
     @$el.html @template @model.toJSON()
     (@$ ".toggle input").prop "checked", @model.get 'is_active'
-
-    switch (@model.get "mimetype")
-      when "video"   then icon_class = "icon-facetime-video"
-      when "image"   then icon_class = "icon-picture"
-      when "webpage" then icon_class = "icon-globe"
-      else                icon_class = ""
-    (@$ ".asset-icon").addClass icon_class
+    (@$ ".asset-icon").addClass switch @model.get "mimetype"
+      when "video"   then "icon-facetime-video"
+      when "image"   then "icon-picture"
+      when "webpage" then "icon-globe"
+      else ""
 
     (@$ "#delete-asset-button").popover
-      html: yes, placement: 'left', title: "Are you sure?", content: get_template 'confirm-delete'
+      html: yes, placement: 'left', title: "Are you sure?", content:
+        get_template 'confirm-delete'
     this
 
   events:
@@ -125,13 +124,13 @@ class AssetRowView extends Backbone.View
     e.preventDefault(); false
 
   edit: (e) =>
-    new AssetModalView model: @model
-    e.preventDefault(); false
+    new EditAssetView model: @model
+    false
 
   delete: (e) =>
     @hidePopover()
     @model.destroy().done => @remove()
-    e.preventDefault(); false
+    false
 
   hidePopover: ->
     (@$ "#delete-asset-button").popover 'hide'
@@ -139,11 +138,9 @@ class AssetRowView extends Backbone.View
 
 class AssetsView extends Backbone.View
   initialize: (options) =>
-    for event in ['reset', 'add']
-      @collection.bind event, @render
-
     @collection.bind 'change:is_active', (model) =>
       setTimeout (=> @render _ [model]), 320
+    @collection.bind event, @render for event in ['reset', 'add']
 
   render: (models = @collection) =>
     models.each (model) =>
@@ -151,18 +148,12 @@ class AssetsView extends Backbone.View
       (@$ "##{which}-assets").append (new AssetRowView model: model).render().el
 
     for which in ['inactive', 'active']
-      header = @$(".#{which}-table thead")
-      if @$("##{which}-assets tr").length
-        header.show()
-      else
-        header.hide()
+      @$(".#{which}-table thead").toggle !!(@$("##{which}-assets tr").length)
 
-    @
+    this
 
 
-# App
-
-API.app = class App extends Backbone.View
+API.App = class App extends Backbone.View
   initialize: =>
     ($ window).ajaxError =>
       ($ '#request-error').html (get_template 'request-error')()
@@ -176,8 +167,9 @@ API.app = class App extends Backbone.View
   events: {'click #add-asset-button': 'add'}
 
   add: (e) =>
-    new AssetModalView()
-    e.preventDefault(); false
+    new EditAssetView()
+    false
 
 
-jQuery -> new App el: $ 'body'
+jQuery -> API.app = new App el: $ 'body'
+

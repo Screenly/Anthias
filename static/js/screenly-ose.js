@@ -5,7 +5,7 @@
 
 
 (function() {
-  var API, App, Asset, AssetModalView, AssetRowView, Assets, AssetsView, date_to, get_template, now, y2ts, years_from_now,
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, get_template, now, y2ts, years_from_now,
     __hasProp = {}.hasOwnProperty,
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
@@ -46,7 +46,7 @@
 
   Backbone.emulateJSON = true;
 
-  Asset = (function(_super) {
+  API.Asset = Asset = (function(_super) {
 
     __extends(Asset, _super);
 
@@ -60,7 +60,7 @@
 
   })(Backbone.Model);
 
-  Assets = (function(_super) {
+  API.Assets = Assets = (function(_super) {
 
     __extends(Assets, _super);
 
@@ -76,11 +76,11 @@
 
   })(Backbone.Collection);
 
-  AssetModalView = (function(_super) {
+  EditAssetView = (function(_super) {
 
-    __extends(AssetModalView, _super);
+    __extends(EditAssetView, _super);
 
-    function AssetModalView() {
+    function EditAssetView() {
       this.changeMimetype = __bind(this.changeMimetype, this);
 
       this.submit = __bind(this.submit, this);
@@ -92,26 +92,26 @@
       this.$fv = __bind(this.$fv, this);
 
       this.$f = __bind(this.$f, this);
-      return AssetModalView.__super__.constructor.apply(this, arguments);
+      return EditAssetView.__super__.constructor.apply(this, arguments);
     }
 
-    AssetModalView.prototype.$f = function(field) {
+    EditAssetView.prototype.$f = function(field) {
       return this.$("[name='" + field + "']");
     };
 
-    AssetModalView.prototype.$fv = function() {
+    EditAssetView.prototype.$fv = function() {
       var field, val, _ref;
       field = arguments[0], val = 2 <= arguments.length ? __slice.call(arguments, 1) : [];
       return (_ref = this.$f(field)).val.apply(_ref, val);
     };
 
-    AssetModalView.prototype.initialize = function(options) {
+    EditAssetView.prototype.initialize = function(options) {
       this.template = get_template('asset-modal');
       ($('body')).append(this.render().el);
       return (this.$el.children(":first")).modal();
     };
 
-    AssetModalView.prototype.render = function() {
+    EditAssetView.prototype.render = function() {
       var field, which, _i, _j, _len, _len1, _ref, _ref1;
       this.$el.html(this.template());
       (this.$("input.date")).datepicker({
@@ -145,12 +145,12 @@
       return this;
     };
 
-    AssetModalView.prototype.events = {
+    EditAssetView.prototype.events = {
       'click #submit-button': 'submit',
       'change select[name=mimetype]': 'changeMimetype'
     };
 
-    AssetModalView.prototype.submit = function(e) {
+    EditAssetView.prototype.submit = function(e) {
       var which, _i, _len, _ref;
       _ref = ['start', 'end'];
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
@@ -160,11 +160,11 @@
       return (this.$("form")).submit();
     };
 
-    AssetModalView.prototype.changeMimetype = function() {
+    EditAssetView.prototype.changeMimetype = function() {
       return (this.$('.file_upload')).toggle((this.$fv('mimetype')) !== 'webpage');
     };
 
-    return AssetModalView;
+    return EditAssetView;
 
   })(Backbone.View);
 
@@ -192,23 +192,20 @@
     };
 
     AssetRowView.prototype.render = function() {
-      var icon_class;
       this.$el.html(this.template(this.model.toJSON()));
       (this.$(".toggle input")).prop("checked", this.model.get('is_active'));
-      switch (this.model.get("mimetype")) {
-        case "video":
-          icon_class = "icon-facetime-video";
-          break;
-        case "image":
-          icon_class = "icon-picture";
-          break;
-        case "webpage":
-          icon_class = "icon-globe";
-          break;
-        default:
-          icon_class = "";
-      }
-      (this.$(".asset-icon")).addClass(icon_class);
+      (this.$(".asset-icon")).addClass((function() {
+        switch (this.model.get("mimetype")) {
+          case "video":
+            return "icon-facetime-video";
+          case "image":
+            return "icon-picture";
+          case "webpage":
+            return "icon-globe";
+          default:
+            return "";
+        }
+      }).call(this));
       (this.$("#delete-asset-button")).popover({
         html: true,
         placement: 'left',
@@ -249,10 +246,9 @@
     };
 
     AssetRowView.prototype.edit = function(e) {
-      new AssetModalView({
+      new EditAssetView({
         model: this.model
       });
-      e.preventDefault();
       return false;
     };
 
@@ -262,7 +258,6 @@
       this.model.destroy().done(function() {
         return _this.remove();
       });
-      e.preventDefault();
       return false;
     };
 
@@ -286,22 +281,24 @@
     }
 
     AssetsView.prototype.initialize = function(options) {
-      var event, _i, _len, _ref,
+      var event, _i, _len, _ref, _results,
         _this = this;
-      _ref = ['reset', 'add'];
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        event = _ref[_i];
-        this.collection.bind(event, this.render);
-      }
-      return this.collection.bind('change:is_active', function(model) {
+      this.collection.bind('change:is_active', function(model) {
         return setTimeout((function() {
           return _this.render(_([model]));
         }), 320);
       });
+      _ref = ['reset', 'add'];
+      _results = [];
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        event = _ref[_i];
+        _results.push(this.collection.bind(event, this.render));
+      }
+      return _results;
     };
 
     AssetsView.prototype.render = function(models) {
-      var header, which, _i, _len, _ref,
+      var which, _i, _len, _ref,
         _this = this;
       if (models == null) {
         models = this.collection;
@@ -316,12 +313,7 @@
       _ref = ['inactive', 'active'];
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         which = _ref[_i];
-        header = this.$("." + which + "-table thead");
-        if (this.$("#" + which + "-assets tr").length) {
-          header.show();
-        } else {
-          header.hide();
-        }
+        this.$("." + which + "-table thead").toggle(!!(this.$("#" + which + "-assets tr").length));
       }
       return this;
     };
@@ -330,7 +322,7 @@
 
   })(Backbone.View);
 
-  API.app = App = (function(_super) {
+  API.App = App = (function(_super) {
 
     __extends(App, _super);
 
@@ -342,6 +334,10 @@
     }
 
     App.prototype.initialize = function() {
+      var _this = this;
+      ($(window)).ajaxError(function() {
+        return ($('#request-error')).html((get_template('request-error'))());
+      });
       (API.assets = new Assets()).fetch();
       API.assetsView = new AssetsView({
         collection: API.assets,
@@ -355,8 +351,7 @@
     };
 
     App.prototype.add = function(e) {
-      new AssetModalView();
-      e.preventDefault();
+      new EditAssetView();
       return false;
     };
 
@@ -365,7 +360,7 @@
   })(Backbone.View);
 
   jQuery(function() {
-    return new App({
+    return API.app = new App({
       el: $('body')
     });
   });
