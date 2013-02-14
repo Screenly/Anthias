@@ -95,24 +95,6 @@ def fetch_assets(keys=None, order_by="name"):
     return assets
 
 
-def get_assets_grouped():
-    """Returns a dictionary containing a list of active assets
-    and a list of inactive assets stored at their respective
-    keys. Example: {'active': [...], 'inactive': [...]}"""
-
-    assets = fetch_assets()
-    active = []
-    inactive = []
-
-    for asset in assets:
-        if is_active(asset):
-            active.append(asset)
-        else:
-            inactive.append(asset)
-
-    return {'active': active, 'inactive': inactive}
-
-
 def initiate_db():
     # Create config dir if it doesn't exist
     if not path.isdir(settings.configdir):
@@ -356,8 +338,7 @@ def remove_asset(asset_id):
 
 @route('/')
 def viewIndex():
-    assets = get_assets_grouped()
-    return template('index', assets=assets)
+    return template('index')
 
 
 @route('/settings', method=["GET", "POST"])
