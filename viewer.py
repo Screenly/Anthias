@@ -24,6 +24,11 @@ import html_templates
 from settings import settings
 
 
+# Define to none to ensure we refresh
+# the settings.
+last_settings_refresh = None
+
+
 class Scheduler(object):
     def __init__(self, *args, **kwargs):
         logging.debug('Scheduler init')
@@ -236,12 +241,12 @@ def check_update():
     sha_file = path.join(getenv('HOME'), '.screenly', 'latest_screenly_sha')
 
     try:
-        get_mtime = path.getmtime(sha_file)
-        last_update = datetime.fromtimestamp(get_mtime)
+        sha_file_mtime = path.getmtime(sha_file)
+        last_update = datetime.fromtimestamp(sha_file_mtime)
     except:
-        last_update  = None
+        last_update = None
 
-    if last_update == None or last_update < (datetime.now() - timedelta(days=1)):
+    if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
 
         latest_sha = req_get('http://stats.screenlyapp.com/latest')
         if latest_sha.status_code == 200:
@@ -250,7 +255,29 @@ def check_update():
             f.close()
 
 
+def reload_settings():
+    """
+    Reload settings if the timestamp of the
+    settings file is newer than the settings
+    file loaded in memory.
+    """
+
+    settings_file = path.join(getenv('HOME'), '.screenly', 'screenly.conf')
+    settings_file_mtime = path.getmtime(settings_file)
+    settings_file_timestamp = datetime.fromtimestamp(settings_file_mtime)
+
+    if not last_settings_refresh or settings_file_timestamp > last_settings_refresh:
+        settings.load_settings()
+
+    global last_setting_refresh
+    last_setting_refresh = datetime.now()
+
+
 if __name__ == "__main__":
+
+    # Before we start, reload the settings.
+    reload_settings()
+
     # Create folder to hold HTML-pages
     html_folder = '/tmp/screenly_html/'
     if not path.isdir(html_folder):
@@ -285,7 +312,7 @@ if __name__ == "__main__":
 
         check_update()
 
-        if asset == None:
+        if asset is None:
             # The playlist is empty, go to sleep.
             logging.info('Playlist is empty. Going to sleep.')
             sleep(5)
