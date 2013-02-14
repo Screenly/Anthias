@@ -97,7 +97,7 @@ class AssetRowView extends Backbone.View
       when "image"   then icon_class = "icon-picture"
       when "webpage" then icon_class = "icon-globe"
       else                icon_class = ""
-    (@$ "#asset-icon").attr "class", icon_class
+    (@$ ".asset-icon").addClass icon_class
 
     (@$ "#delete-asset-button").popover
       html: yes, placement: 'left', title: "Are you sure?", content: get_template 'confirm-delete'

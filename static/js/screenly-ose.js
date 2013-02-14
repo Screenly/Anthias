@@ -208,7 +208,7 @@
         default:
           icon_class = "";
       }
-      (this.$("#asset-icon")).attr("class", icon_class);
+      (this.$(".asset-icon")).addClass(icon_class);
       (this.$("#delete-asset-button")).popover({
         html: true,
         placement: 'left',
