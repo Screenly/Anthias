@@ -22,34 +22,35 @@
     %script(src="/static/js/screenly-ose.js")
 
     %script(type="text/template", id="asset-row-template")
-      :plain
-        <td>
-          <i class="asset-icon"></i>
+      %td
+        %i.asset-icon
+        :plain
           <%= name %>
-        </td>
-        <td><%= Screenly.date_to.string(start_date) %></td>
-        <td><%= Screenly.date_to.string(end_date) %></td>
-        <td>
-          <a href="#" class="btn" id="edit-asset-button">Edit</a>
-          <a href="#" class="btn" id="delete-asset-button">
-            <i class="icon-trash"></i>
-          </a>
-        </td>
-        <td>
-          <label class="checkbox toggle well" id="activation-toggle">
-            <input id="view" type="checkbox" />
-            <p>
-              <span class="on">On</span>
-              <span class="off">Off</span>
-            </p>
-
-            <a class="btn btn-primary slide-button"></a>
-          </label>
-        </td>
+      %td
+        :plain
+          <%= Screenly.date_to.string(start_date) %>
+      %td
+        :plain
+          <%= Screenly.date_to.string(end_date) %>
+      %td
+        %a.btn.edit-asset-button(href="")
+          %i.icon-pencil
+        %a.btn.delete-asset-button(href="#", dataTitle="Sure?", dataPlacement="left", dataHtml="true", dataTrigger="manual")
+          %i.icon-trash
+      %td
+        %label.activation-toggle.checkbox.toggle.well
+          %input(type="checkbox")
+          %p
+            %span.on On
+            %span.off Off
+          %a.slide-button.btn.btn-primary
 
     %script(type="text/template", id="confirm-delete-template")
-      %a#confirm-delete.btn.btn-large.btn-danger(href="#") Yes
-      %a#cancel-delete.btn.btn-large(href="#") No
+      .clearfix
+        .pull-left
+          %a.confirm-delete.btn.btn-large.btn-danger(href="#") Delete
+        .pull-right
+          %a.cancel-delete.btn.btn-large(href="#") Cancel
 
     %script(type="text/template", id="request-error-template")
       .container
@@ -62,7 +63,6 @@
       .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
         %form.form-horizontal#add-form(method="POST", action="/api/assets", enctype="multipart/form-data")
           .modal-header
-            %button.close(type="button", dataDismiss="modal", ariaHidden="true") x
             %h3#modalLabel Add Asset
           .modal-body
             %fieldset
@@ -110,7 +110,7 @@
                   seconds
 
           .modal-footer
-            %a.btn(href="#", dataDismiss="modal") Close
+            %input.btn(type="button", dataDismiss="modal", value="Close")
             %input.btn.btn-primary(type="submit", value="Save")
 
 
@@ -155,26 +155,26 @@
             .header
               Active assets
             %table.table.table-striped.active-table
-              %thead
+              %thead(style="display:none")
                 %tr
-                  %th Name
-                  %th Start
-                  %th End
-                  %th
-                  %th
+                  %th.span3 Name
+                  %th.span2 Start
+                  %th.span2 End
+                  %th(style="width:13%")
+                  %th.span1
               %tbody#active-assets
         .span12
           %section
             .header
               Inactive assets
             %table.table.table-striped.inactive-table
-              %thead
+              %thead(style="display:none")
                 %tr
-                  %th Name
-                  %th Start
-                  %th End
-                  %th
-                  %th
+                  %th.span3 Name
+                  %th.span2 Start
+                  %th.span2 End
+                  %th(style="width:13%")
+                  %th.span1
               %tbody#inactive-assets
 
       %hr

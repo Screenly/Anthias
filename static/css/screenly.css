@@ -76,3 +76,5 @@ section table {
 
 #request-error { z-index: 10000 }
 #request-error .alert { position:fixed; margin-left:240px; margin-top:2px }
+
+.checkbox.toggle.well { cursor: pointer }

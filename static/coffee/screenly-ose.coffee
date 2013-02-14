@@ -68,8 +68,8 @@ class EditAssetView extends Backbone.View
     this
 
   events:
-    'click #submit-button': 'submit'
     'change select[name=mimetype]': 'changeMimetype'
+    'submit form': 'submit'
 
   submit: (e) =>
     for which in ['start', 'end']
@@ -89,24 +89,20 @@ class AssetRowView extends Backbone.View
     @template = get_template 'asset-row'
 
   render: =>
-    @$el.html @template @model.toJSON()
+    @$el.html @template @model.toJSON() unless @$el.html()
     (@$ ".toggle input").prop "checked", @model.get 'is_active'
     (@$ ".asset-icon").addClass switch @model.get "mimetype"
       when "video"   then "icon-facetime-video"
       when "image"   then "icon-picture"
       when "webpage" then "icon-globe"
       else ""
-
-    (@$ "#delete-asset-button").popover
-      html: yes, placement: 'left', title: "Are you sure?", content:
-        get_template 'confirm-delete'
+    (@$ ".delete-asset-button").popover content: get_template 'confirm-delete'
     this
 
   events:
-    'click #activation-toggle': 'toggleActive'
-    'click #edit-asset-button': 'edit'
-    'click #confirm-delete': 'delete'
-    'click #cancel-delete': 'hidePopover'
+    'click .activation-toggle': 'toggleActive'
+    'click .edit-asset-button': 'edit'
+    'click .delete-asset-button': 'showPopover'
 
   toggleActive: (e) =>
     if @model.get 'is_active'
@@ -132,8 +128,16 @@ class AssetRowView extends Backbone.View
     @model.destroy().done => @remove()
     false
 
-  hidePopover: ->
-    (@$ "#delete-asset-button").popover 'hide'
+  showPopover: =>
+    if not ($ '.popover').length
+      (@$ ".delete-asset-button").popover 'show'
+      ($ '.confirm-delete').click @delete
+      ($ document).one 'click', @hidePopover
+    false
+
+  hidePopover: =>
+    (@$ ".delete-asset-button").popover 'hide'
+    false
 
 
 class AssetsView extends Backbone.View

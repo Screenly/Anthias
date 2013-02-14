@@ -146,8 +146,8 @@
     };
 
     EditAssetView.prototype.events = {
-      'click #submit-button': 'submit',
-      'change select[name=mimetype]': 'changeMimetype'
+      'change select[name=mimetype]': 'changeMimetype',
+      'submit form': 'submit'
     };
 
     EditAssetView.prototype.submit = function(e) {
@@ -173,6 +173,10 @@
     __extends(AssetRowView, _super);
 
     function AssetRowView() {
+      this.hidePopover = __bind(this.hidePopover, this);
+
+      this.showPopover = __bind(this.showPopover, this);
+
       this["delete"] = __bind(this["delete"], this);
 
       this.edit = __bind(this.edit, this);
@@ -192,7 +196,9 @@
     };
 
     AssetRowView.prototype.render = function() {
-      this.$el.html(this.template(this.model.toJSON()));
+      if (!this.$el.html()) {
+        this.$el.html(this.template(this.model.toJSON()));
+      }
       (this.$(".toggle input")).prop("checked", this.model.get('is_active'));
       (this.$(".asset-icon")).addClass((function() {
         switch (this.model.get("mimetype")) {
@@ -206,20 +212,16 @@
             return "";
         }
       }).call(this));
-      (this.$("#delete-asset-button")).popover({
-        html: true,
-        placement: 'left',
-        title: "Are you sure?",
+      (this.$(".delete-asset-button")).popover({
         content: get_template('confirm-delete')
       });
       return this;
     };
 
     AssetRowView.prototype.events = {
-      'click #activation-toggle': 'toggleActive',
-      'click #edit-asset-button': 'edit',
-      'click #confirm-delete': 'delete',
-      'click #cancel-delete': 'hidePopover'
+      'click .activation-toggle': 'toggleActive',
+      'click .edit-asset-button': 'edit',
+      'click .delete-asset-button': 'showPopover'
     };
 
     AssetRowView.prototype.toggleActive = function(e) {
@@ -261,8 +263,18 @@
       return false;
     };
 
+    AssetRowView.prototype.showPopover = function() {
+      if (!($('.popover')).length) {
+        (this.$(".delete-asset-button")).popover('show');
+        ($('.confirm-delete')).click(this["delete"]);
+        ($(document)).one('click', this.hidePopover);
+      }
+      return false;
+    };
+
     AssetRowView.prototype.hidePopover = function() {
-      return (this.$("#delete-asset-button")).popover('hide');
+      (this.$(".delete-asset-button")).popover('hide');
+      return false;
     };
 
     return AssetRowView;
