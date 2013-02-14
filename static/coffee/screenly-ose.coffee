@@ -142,7 +142,7 @@ class AssetsView extends Backbone.View
     for event in ['reset', 'add']
       @collection.bind event, @render
 
-    @collection.bind 'change', (model) =>
+    @collection.bind 'change:is_active', (model) =>
       setTimeout (=> @render _ [model]), 320
 
   render: (models = @collection) =>
@@ -154,7 +154,7 @@ class AssetsView extends Backbone.View
       header = @$(".#{which}-table thead")
       if @$("##{which}-assets tr").length
         header.show()
-      else 
+      else
         header.hide()
 
     @

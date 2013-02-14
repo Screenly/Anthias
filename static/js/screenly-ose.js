@@ -293,7 +293,7 @@
         event = _ref[_i];
         this.collection.bind(event, this.render);
       }
-      return this.collection.bind('change', function(model) {
+      return this.collection.bind('change:is_active', function(model) {
         return setTimeout((function() {
           return _this.render(_([model]));
         }), 320);
