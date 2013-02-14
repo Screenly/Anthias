@@ -217,7 +217,8 @@ def prepare_asset(request):
         data = json.loads(data['model'])
 
     def get(key):
-        return data.get(key, '').strip()
+        val = data.get(key, '')
+        return val.strip() if isinstance(val, basestring) else val
 
     if all([
         get('name'),
@@ -272,11 +273,17 @@ def prepare_asset(request):
         # if not asset.get('resolution', False):
         #     asset['resolution'] = "N/A"
 
+        # If no duration is provided, default to 10. JavaScript
+        # validation should not allow this to occur but it
+        # is extremely important that an asset have a duration
+        # value so we double check here.
+        if get('duration') not in ['', None]:
+            asset['duration'] = "10"
+        else:
+            asset['duration'] = get('duration')
+
         if "video" in asset['mimetype']:
             asset['duration'] = "N/A"
-
-        if get('duration'):
-            asset['duration'] = get('duration')
 
         if get('start_date'):
             asset['start_date'] = datetime.strptime(get('start_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
