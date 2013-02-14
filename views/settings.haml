@@ -9,7 +9,7 @@
     %link(href="/static/css/screenly.css", rel="stylesheet")
     / %link(href="/static/css/datepicker.css", rel="stylesheet")
     / %link(href="/static/css/timepicker.css", rel="stylesheet")
-    / %link(href="/static/css/toggle-switch.css", rel="stylesheet")
+    %link(href="/static/css/toggle-switch.css", rel="stylesheet")
 
     %script(src="/static/js/jquery-1.8.0.min.js")
     / %script(src="/static/js/bootstrap-dropdown.js")
@@ -62,13 +62,17 @@
             .control-group
               %label.control-label Show Splash Screen
               .controls
-                %select(name="show_splash")
+
+                %label.checkbox.toggle.well#splash_checkbox
                   - if show_splash == 'True':
-                    %option(value="True", selected="selected") On
-                    %option(value="False") Off
+                    %input#id(type="checkbox", checked="checked", name="show_splash")
                   - else:
-                    %option(value="True") On
-                    %option(value="False", selected="selected") Off
+                    %input#id(type="checkbox", name="show_splash")
+                  %p
+                    %span.on On
+                    %span.off Off
+                  %a.btn.btn-primary.slide-button
+
                 .help-text
                   Specifies whether the Screenly OSE splash screen should be shown.
 
@@ -88,13 +92,17 @@
             .control-group
               %label.control-label Playlist Shuffling
               .controls
-                %select(name="shuffle_playlist")
+
+                %label.checkbox.toggle.well#shuffle_checkbox
                   - if shuffle_playlist == 'True':
-                    %option(value="True", selected="selected") On
-                    %option(value="False") Off
+                    %input#id(type="checkbox", checked="checked", name="shuffle_playlist")
                   - else:
-                    %option(value="True") On
-                    %option(value="False", selected="selected") Off
+                    %input#id(type="checkbox", name="shuffle_playlist")
+                  %p
+                    %span.on On
+                    %span.off Off
+                  %a.btn.btn-primary.slide-button
+
                 .help-text
                   Toggle the shuffling of the playlist when being displayed through the viewer.
 

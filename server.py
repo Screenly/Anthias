@@ -369,9 +369,9 @@ def settings_page():
     context = {'flash': None}
 
     if request.method == "POST":
-        config.set("viewer", "show_splash", request.POST.get('show_splash', 'True'))
+        config.set("viewer", "show_splash", str(request.POST.get('show_splash', 'off') == 'on'))
         config.set("viewer", "audio_output", request.POST.get('audio_output', 'hdmi'))
-        config.set("viewer", "shuffle_playlist", request.POST.get('shuffle_playlist', 'False'))
+        config.set("viewer", "shuffle_playlist", str(request.POST.get('shuffle_playlist', 'off') == 'on'))
 
         try:
             # Write new settings to disk.
