@@ -164,6 +164,9 @@ class AssetsView extends Backbone.View
 
 API.app = class App extends Backbone.View
   initialize: =>
+    ($ window).ajaxError =>
+      ($ '#request-error').html (get_template 'request-error')()
+
     (API.assets = new Assets()).fetch()
     API.assetsView = new AssetsView
       collection: API.assets

@@ -51,6 +51,12 @@
       %a#confirm-delete.btn.btn-large.btn-danger(href="#") Yes
       %a#cancel-delete.btn.btn-large(href="#") No
 
+    %script(type="text/template", id="request-error-template")
+      .alert.alert-error
+        %button.close(type="button", dataDismiss="alert") &times;
+        The operation failed. Please reload the page and try again.
+
+
     %script(type="text/template", id="asset-modal-template")
       .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
         %form.form-horizontal#add-form(method="POST", action="/api/assets", enctype="multipart/form-data")
@@ -134,6 +140,10 @@
                 System Info
 
     .container
+      .row
+        .span12
+          #request-error
+
       .row
         .span12
           %h1.page-header
