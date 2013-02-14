@@ -52,9 +52,10 @@
       %a#cancel-delete.btn.btn-large(href="#") No
 
     %script(type="text/template", id="request-error-template")
-      .alert.alert-error
-        %button.close(type="button", dataDismiss="alert") &times;
-        The operation failed. Please reload the page and try again.
+      .container
+        .alert.alert-error
+          %button.close(type="button", dataDismiss="alert") &times;
+          The operation failed. Please reload the page and try again.
 
 
     %script(type="text/template", id="asset-modal-template")
@@ -62,17 +63,17 @@
         %form.form-horizontal#add-form(method="POST", action="/api/assets", enctype="multipart/form-data")
           .modal-header
             %button.close(type="button", dataDismiss="modal", ariaHidden="true") x
-            %h3#modalLabel Asset
+            %h3#modalLabel Add Asset
           .modal-body
             %fieldset
               .control-group
                 %label.control-label Name
                 .controls
-                  %input.span5(type="text", name="name", placeholder="Nickname for this asset")
+                  %input.span4(type="text", name="name", placeholder="Nickname for this asset")
               .control-group
                 %label.control-label Asset Type
                 .controls
-                  %select.span5(name="mimetype")
+                  %select.span4(name="mimetype")
                     %option(value="image") Image
                     %option(value="video") Video
                     %option(value="webpage") Webpage
@@ -81,7 +82,7 @@
               .control-group(style="margin-bottom: 0")
                 %label.control-label Asset URL
                 .controls
-                  %input.span5(type="text", name="uri", placeholder="Public URL to this asset's location")
+                  %input.span4(type="text", name="uri", placeholder="Public URL to this asset's location")
                   .file_upload(style="line-height: 27px; font-weight: bold; color: #888")
                     &mdash; or &mdash;
               .control-group.file_upload
@@ -114,6 +115,7 @@
 
 
   %body
+    #request-error.navbar.navbar-fixed-top
     .navbar.navbar-fixed-top
       .navbar-inner
         .container
@@ -125,23 +127,19 @@
             - if not up_to_date:
               %li.update-available
                 %a(href="#")
-                  %i.icon-circle-arrow-down.icon-white
+                  %i.icon-circle-arrow-down
                   Update Available
             %li
               %a(href="/settings")
-                %i.icon-cog.icon-white
+                %i.icon-cog
                 Settings
             %li.divider-vertical
             %li
               %a(href="/system_info")
-                %i.icon-tasks.icon-white
+                %i.icon-tasks
                 System Info
 
     .container
-      .row
-        .span12
-          #request-error
-
       .row
         .span12
           %h1.page-header

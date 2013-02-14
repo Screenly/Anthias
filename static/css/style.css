@@ -36,7 +36,7 @@ p {
 }
 
 table.center {
-    margin-left:auto; 
+    margin-left:auto;
     margin-right:auto;
 }
 
@@ -92,12 +92,12 @@ fieldset {
    width: 20em;
 }
 
-input { 
+input {
     font-size: 15px;
-    font-family: "HelveticaNeue-Light","Helvetica Neue Light","HelveticaNeue", "Helvetica Neue", "Helvetica", "Arial", "sans-serif";    
+    font-family: "HelveticaNeue-Light","Helvetica Neue Light","HelveticaNeue", "Helvetica Neue", "Helvetica", "Arial", "sans-serif";
 }
 
-select { 
+select {
     font-size: 15px;
     font-family: "HelveticaNeue-Light","Helvetica Neue Light","HelveticaNeue", "Helvetica Neue", "Helvetica", "Arial", "sans-serif";
     width: 145px;
@@ -125,5 +125,4 @@ div.ui-datepicker {
 .ui-timepicker-div dl dd { margin: 0 10px 10px 65px; }
 .ui-timepicker-div td { font-size: 90%; }
 .ui-tpicker-grid-label { background: none; border: none; margin: 0; padding: 0; }
-
 
