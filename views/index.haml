@@ -36,9 +36,9 @@
         :plain
           <%= Screenly.date_to.string(end_date) %>
       %td
-        %a.btn.edit-asset-button(href="")
+        %button.edit-asset-button.btn(type="button")
           %i.icon-pencil
-        %a.btn.delete-asset-button(href="#", dataTitle="Sure?", dataPlacement="left", dataHtml="true", dataTrigger="manual")
+        %button.delete-asset-button.btn(type="button", dataTitle="Sure?", dataPlacement="left", dataHtml="true", dataTrigger="manual")
           %i.icon-trash
       %td
         %label.activation-toggle.checkbox.toggle.well
@@ -64,56 +64,66 @@
 
     %script(type="text/template", id="asset-modal-template")
       .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
-        %form.form-horizontal#add-form(method="POST", action="/api/assets", enctype="multipart/form-data")
+        %form.form-horizontal#add-form
           .modal-header
             %h3#modalLabel Add Asset
           .modal-body
             %fieldset
-              .control-group
+              .control-group.name
                 %label.control-label Name
                 .controls
                   %input.span4(type="text", name="name", placeholder="Nickname for this asset")
-              .control-group
+
+            %fieldset
+              .tabbable
+                %ul.nav.nav-tabs
+                  %li.active.tabnav-uri(style="margin-left:180px")
+                    %a(href="#tab-uri", dataToggle="tab") URL
+                  %li.tabnav-upload.file_upload
+                    %a(href="#tab-upload", dataToggle="tab") Upload
+                .tab-content
+                  #tab-uri.tab-pane.active
+                    .control-group.uri
+                      %label.control-label Asset URL
+                      .controls
+                        %input.span4(type="text", name="uri", placeholder="Public URL to this asset's location")
+                  #tab-upload.tab-pane
+                    .control-group.file_upload
+                      %label.control-label Upload Asset
+                      .controls
+                        %input(type="file", name="file_upload")
+
+            %fieldset
+              .control-group.mimetype
                 %label.control-label Asset Type
                 .controls
-                  %select.span4(name="mimetype")
+                  %select.input-medium(name="mimetype")
                     %option(value="image") Image
                     %option(value="video") Video
                     %option(value="webpage") Webpage
 
-            %fieldset
-              .control-group(style="margin-bottom: 0")
-                %label.control-label Asset URL
-                .controls
-                  %input.span4(type="text", name="uri", placeholder="Public URL to this asset's location")
-                  .file_upload(style="line-height: 27px; font-weight: bold; color: #888")
-                    &mdash; or &mdash;
-              .control-group.file_upload
-                %label.control-label Upload Asset
-                .controls
-                  %input(type="file", name="file_upload")
             %hr
             %fieldset
-              .control-group
+              .control-group.start_date
                 %label.control-label Start Date
                 .controls
-                  %input.span2.date(type="text", name="start_date_date")
-                  %input.span2.time(type="text", name="start_date_time")
+                  %input.input-small.date(type="text", name="start_date_date")
+                  %input.input-small.time(type="text", name="start_date_time")
                   %input(type="hidden", name="start_date")
-              .control-group
+              .control-group.end_date
                 %label.control-label End Date
                 .controls
-                  %input.span2.date(type="text", name="end_date_date")
-                  %input.span2.time(type="text", name="end_date_time")
+                  %input.input-small.date(type="text", name="end_date_date")
+                  %input.input-small.time(type="text", name="end_date_time")
                   %input(type="hidden", name="end_date")
-              .control-group
+              .control-group.duration
                 %label.control-label Duration
                 .controls
-                  %input.span1(type="text", name="duration")
+                  %input.span1(type="number", name="duration")
                   seconds
 
           .modal-footer
-            %input.btn(type="button", dataDismiss="modal", value="Close")
+            %input.btn.cancel(type="button", value="Cancel")
             %input.btn.btn-primary(type="submit", value="Save")
 
 

@@ -5,10 +5,10 @@
 
 
 (function() {
-  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, get_template, now, y2ts, years_from_now,
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, delay, get_template, now, y2ts, years_from_now,
+    __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     __hasProp = {}.hasOwnProperty,
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
-    __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     __slice = [].slice;
 
   API = (window.Screenly || (window.Screenly = {}));
@@ -19,6 +19,9 @@
     },
     string: function(d) {
       return (moment(new Date(d))).format("MM/DD/YYYY hh:mm:ss A");
+    },
+    date: function(d) {
+      return (new Date(d)).toLocaleDateString();
     },
     time: function(d) {
       return (new Date(d)).toLocaleTimeString();
@@ -44,6 +47,10 @@
     return _.template(($("#" + name + "-template")).html());
   };
 
+  delay = function(wait, fn) {
+    return _.delay(fn, wait);
+  };
+
   Backbone.emulateJSON = true;
 
   API.Asset = Asset = (function(_super) {
@@ -51,10 +58,28 @@
     __extends(Asset, _super);
 
     function Asset() {
+      this.defaults = __bind(this.defaults, this);
+
+      this.fields = __bind(this.fields, this);
       return Asset.__super__.constructor.apply(this, arguments);
     }
 
     Asset.prototype.idAttribute = "asset_id";
+
+    Asset.prototype.fields = function() {
+      return _.keys(this.defaults());
+    };
+
+    Asset.prototype.defaults = function() {
+      return {
+        name: '',
+        mimetype: 'image',
+        uri: '',
+        start_date: now(),
+        end_date: now(),
+        duration: 10
+      };
+    };
 
     return Asset;
 
@@ -81,9 +106,17 @@
     __extends(EditAssetView, _super);
 
     function EditAssetView() {
-      this.changeMimetype = __bind(this.changeMimetype, this);
+      this.clickTabNavUpload = __bind(this.clickTabNavUpload, this);
 
-      this.submit = __bind(this.submit, this);
+      this.clickTabNavUri = __bind(this.clickTabNavUri, this);
+
+      this.cancel = __bind(this.cancel, this);
+
+      this.change = __bind(this.change, this);
+
+      this.save = __bind(this.save, this);
+
+      this.viewmodel = __bind(this.viewmodel, this);
 
       this.render = __bind(this.render, this);
 
@@ -106,62 +139,170 @@
     };
 
     EditAssetView.prototype.initialize = function(options) {
-      this.template = get_template('asset-modal');
-      ($('body')).append(this.render().el);
-      return (this.$el.children(":first")).modal();
-    };
-
-    EditAssetView.prototype.render = function() {
-      var field, which, _i, _j, _len, _len1, _ref, _ref1;
-      this.$el.html(this.template());
-      (this.$("input.date")).datepicker({
-        autoclose: true
-      });
+      ($('body')).append(this.$el.html(get_template('asset-modal')));
       (this.$('input.time')).timepicker({
         minuteStep: 5,
-        defaultTime: 'current',
         showInputs: true,
         disableFocus: true,
         showMeridian: true
       });
-      (this.$('#modalLabel')).text((this.model ? "Edit Asset" : "Add Asset"));
-      if (this.model) {
-        (this.$("form")).attr("action", this.model.url());
-        _ref = 'name uri duration mimetype'.split(' ');
-        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-          field = _ref[_i];
-          this.$fv(field, this.model.get(field));
-        }
-        _ref1 = ['start', 'end'];
-        for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
-          which = _ref1[_j];
-          (this.$f("" + which + "_date_date")).datepicker('update', this.model.get("" + which + "_date"));
-          this.$fv("" + which + "_date_time", date_to.time(this.model.get("" + which + "_date")));
-        }
-      } else {
-        (this.$("input.date")).datepicker('update', new Date());
-      }
-      this.changeMimetype();
+      (this.$('.modal-header .close')).remove();
+      (this.$el.children(":first")).modal();
+      this.model.bind('change', this.render);
+      this.render();
       return this;
     };
 
-    EditAssetView.prototype.events = {
-      'change select[name=mimetype]': 'changeMimetype',
-      'submit form': 'submit'
+    EditAssetView.prototype.render = function(model) {
+      var date, field, which, _i, _j, _len, _len1, _ref, _ref1;
+      if (model == null) {
+        model = this.model;
+      }
+      this.undelegateEvents();
+      if (!model.isNew()) {
+        (this.$('#modalLabel')).text("Edit Asset");
+      }
+      (this.$('.duration')).toggle((model.get('mimetype')) !== 'video');
+      if ((model.get('mimetype')) === 'webpage') {
+        (this.$('.file_upload')).hide();
+        (this.$('.tabbable a.tabnav-uri')).click();
+      } else {
+        (this.$('.file_upload')).show();
+      }
+      _ref = model.fields();
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        field = _ref[_i];
+        this.$fv(field, model.get(field));
+      }
+      _ref1 = ['start', 'end'];
+      for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
+        which = _ref1[_j];
+        date = model.get("" + which + "_date");
+        this.$fv("" + which + "_date_date", date_to.date(date));
+        (this.$f("" + which + "_date_date")).datepicker({
+          autoclose: true
+        });
+        (this.$f("" + which + "_date_date")).datepicker('setValue', date_to.date(date));
+        this.$fv("" + which + "_date_time", date_to.time(date));
+      }
+      this.delegateEvents();
+      return false;
     };
 
-    EditAssetView.prototype.submit = function(e) {
-      var which, _i, _len, _ref;
+    EditAssetView.prototype.viewmodel = function() {
+      var field, which, _i, _j, _len, _len1, _ref, _ref1,
+        _this = this;
       _ref = ['start', 'end'];
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         which = _ref[_i];
-        this.$fv("" + which + "_date", date_to.iso((this.$fv("" + which + "_date_date")) + " " + (this.$fv("" + which + "_date_time"))));
+        this.$fv("" + which + "_date", date_to.iso((function() {
+          return (_this.$fv("" + which + "_date_date")) + " " + (_this.$fv("" + which + "_date_time"));
+        })()));
       }
-      return (this.$("form")).submit();
+      _ref1 = this.model.fields();
+      for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
+        field = _ref1[_j];
+        this.model.set(field, this.$fv(field), {
+          silent: true
+        });
+      }
+      if ((this.$('.control-group.file_upload')).hasClass('active')) {
+        return this.model.set('uri', this.$fv('file_upload'));
+      }
     };
 
-    EditAssetView.prototype.changeMimetype = function() {
-      return (this.$('.file_upload')).toggle((this.$fv('mimetype')) !== 'webpage');
+    EditAssetView.prototype.events = {
+      'submit form': 'save',
+      'click .cancel': 'cancel',
+      'change': 'change',
+      'keyup': 'change',
+      'click .tabnav-uri': 'clickTabNavUri',
+      'click .tabnav-upload': 'clickTabNavUpload'
+    };
+
+    EditAssetView.prototype.save = function(e) {
+      var isNew, save,
+        _this = this;
+      e.preventDefault();
+      this.viewmodel();
+      isNew = this.model.isNew();
+      save = null;
+      if ((this.$('#tab-upload')).hasClass('active')) {
+        this.$el.fileupload({
+          url: this.model.url(),
+          progressall: function(e, data) {
+            return console.log('prog', e, data);
+          },
+          done: function(e, data) {
+            return console.log('prg done');
+          }
+        });
+        save = this.$el.fileupload('send', {
+          fileInput: this.$f('file_upload'),
+          formData: function(form) {
+            console.log(form.serializeArray());
+            return form.serializeArray();
+          }
+        });
+      } else {
+        save = this.model.save();
+      }
+      save.done(function(data) {
+        if (!_this.model.collection) {
+          _this.collection.add(_this.model);
+        }
+        (_this.$el.children(":first")).modal('hide');
+        _.extend(_this.model.attributes, data);
+        if (isNew) {
+          return _this.model.collection.add(_this.model);
+        }
+      });
+      save.fail(function() {
+        console.log('fail');
+        return (_this.$('input, select')).prop('disabled', false);
+      });
+      (this.$('input, select')).prop('disabled', true);
+      return false;
+    };
+
+    EditAssetView.prototype.change = function(e) {
+      var _this = this;
+      this._change || (this._change = _.throttle((function() {
+        _this.viewmodel();
+        _this.model.trigger('change');
+        return true;
+      }), 500));
+      return this._change.apply(this, arguments);
+    };
+
+    EditAssetView.prototype.cancel = function(e) {
+      var _this = this;
+      this.model.set(this.model.previousAttributes());
+      if (this.model.isNew()) {
+        this.model.destroy();
+      }
+      (this.$el.children(":first")).modal('hide');
+      return delay(500, function() {
+        return _this.remove();
+      });
+    };
+
+    EditAssetView.prototype.clickTabNavUri = function(e) {
+      (this.$('ul.nav-tabs li')).removeClass('active');
+      (this.$('.tab-pane')).removeClass('active');
+      (this.$('.tabnav-uri')).addClass('active');
+      (this.$('#tab-uri')).addClass('active');
+      _.defer(this.change);
+      return false;
+    };
+
+    EditAssetView.prototype.clickTabNavUpload = function(e) {
+      (this.$('ul.nav-tabs li')).removeClass('active');
+      (this.$('.tab-pane')).removeClass('active');
+      (this.$('.tabnav-upload')).addClass('active');
+      (this.$('#tab-upload')).addClass('active');
+      _.defer(this.change);
+      return false;
     };
 
     return EditAssetView;
@@ -181,6 +322,8 @@
 
       this.edit = __bind(this.edit, this);
 
+      this.setEnabled = __bind(this.setEnabled, this);
+
       this.toggleActive = __bind(this.toggleActive, this);
 
       this.render = __bind(this.render, this);
@@ -196,9 +339,10 @@
     };
 
     AssetRowView.prototype.render = function() {
-      if (!this.$el.html()) {
-        this.$el.html(this.template(this.model.toJSON()));
-      }
+      this.$el.html(this.template(this.model.toJSON()));
+      (this.$(".delete-asset-button")).popover({
+        content: get_template('confirm-delete')
+      });
       (this.$(".toggle input")).prop("checked", this.model.get('is_active'));
       (this.$(".asset-icon")).addClass((function() {
         switch (this.model.get("mimetype")) {
@@ -212,20 +356,18 @@
             return "";
         }
       }).call(this));
-      (this.$(".delete-asset-button")).popover({
-        content: get_template('confirm-delete')
-      });
       return this;
     };
 
     AssetRowView.prototype.events = {
-      'click .activation-toggle': 'toggleActive',
+      'change .activation-toggle input': 'toggleActive',
       'click .edit-asset-button': 'edit',
       'click .delete-asset-button': 'showPopover'
     };
 
     AssetRowView.prototype.toggleActive = function(e) {
-      var _this = this;
+      var save,
+        _this = this;
       if (this.model.get('is_active')) {
         this.model.set({
           is_active: false,
@@ -238,13 +380,35 @@
           end_date: date_to.iso(years_from_now(10))
         });
       }
-      this.model.save();
-      (this.$(".toggle input")).prop("checked", this.model.get('is_active'));
-      setTimeout((function() {
-        return _this.remove();
-      }), 300);
-      e.preventDefault();
-      return false;
+      this.setEnabled(false);
+      save = this.model.save();
+      delay(300, function() {
+        save.done(function() {
+          _this.remove();
+          return _this.model.collection.trigger('add', _([_this.model]));
+        });
+        return save.fail(function() {
+          _this.model.set(_this.model.previousAttributes(), {
+            silent: true
+          });
+          _this.setEnabled(true);
+          return _this.render();
+        });
+      });
+      return true;
+    };
+
+    AssetRowView.prototype.setEnabled = function(enabled) {
+      if (enabled) {
+        this.$el.removeClass('warning');
+        this.delegateEvents();
+        return (this.$('input, button')).prop('disabled', false);
+      } else {
+        this.hidePopover();
+        this.undelegateEvents();
+        this.$el.addClass('warning');
+        return (this.$('input, button')).prop('disabled', true);
+      }
     };
 
     AssetRowView.prototype.edit = function(e) {
@@ -255,11 +419,16 @@
     };
 
     AssetRowView.prototype["delete"] = function(e) {
-      var _this = this;
+      var xhr,
+        _this = this;
       this.hidePopover();
-      this.model.destroy().done(function() {
-        return _this.remove();
-      });
+      if ((xhr = this.model.destroy()) === !false) {
+        xhr.done(function() {
+          return _this.remove();
+        });
+      } else {
+        this.remove();
+      }
       return false;
     };
 
@@ -267,7 +436,7 @@
       if (!($('.popover')).length) {
         (this.$(".delete-asset-button")).popover('show');
         ($('.confirm-delete')).click(this["delete"]);
-        ($(document)).one('click', this.hidePopover);
+        ($(window)).one('click', this.hidePopover);
       }
       return false;
     };
@@ -293,14 +462,8 @@
     }
 
     AssetsView.prototype.initialize = function(options) {
-      var event, _i, _len, _ref, _results,
-        _this = this;
-      this.collection.bind('change:is_active', function(model) {
-        return setTimeout((function() {
-          return _this.render(_([model]));
-        }), 320);
-      });
-      _ref = ['reset', 'add'];
+      var event, _i, _len, _ref, _results;
+      _ref = ['reset', 'add', 'sync'];
       _results = [];
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         event = _ref[_i];
@@ -309,22 +472,23 @@
       return _results;
     };
 
-    AssetsView.prototype.render = function(models) {
-      var which, _i, _len, _ref,
+    AssetsView.prototype.render = function() {
+      var which, _i, _j, _len, _len1, _ref, _ref1,
         _this = this;
-      if (models == null) {
-        models = this.collection;
+      _ref = ['active', 'inactive'];
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        which = _ref[_i];
+        (this.$("#" + which + "-assets")).html('');
       }
-      models.each(function(model) {
-        var which;
+      this.collection.each(function(model) {
         which = model.get('is_active') ? 'active' : 'inactive';
         return (_this.$("#" + which + "-assets")).append((new AssetRowView({
           model: model
         })).render().el);
       });
-      _ref = ['inactive', 'active'];
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        which = _ref[_i];
+      _ref1 = ['inactive', 'active'];
+      for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
+        which = _ref1[_j];
         this.$("." + which + "-table thead").toggle(!!(this.$("#" + which + "-assets tr").length));
       }
       return this;
@@ -363,7 +527,11 @@
     };
 
     App.prototype.add = function(e) {
-      new EditAssetView();
+      new EditAssetView({
+        model: new Asset({}, {
+          collection: API.assets
+        })
+      });
       return false;
     };
 

@@ -4,6 +4,7 @@ API = (window.Screenly ||= {}) # exports
 API.date_to = date_to =
   iso:       (d) -> (new Date d).toISOString()
   string:    (d) -> (moment (new Date d)).format("MM/DD/YYYY hh:mm:ss A")
+  date:      (d) -> (new Date d).toLocaleDateString()
   time:      (d) -> (new Date d).toLocaleTimeString()
   timestamp: (d) -> (new Date d).getTime()
 
@@ -12,6 +13,7 @@ y2ts = (years) -> (years * 365 * 24 * 60 * 60000)
 years_from_now = (years) -> new Date ((y2ts years) + date_to.timestamp now())
 
 get_template = (name) -> _.template ($ "##{name}-template").html()
+delay = (wait, fn) -> _.delay fn, wait
 
 
 # Models
@@ -21,6 +23,14 @@ Backbone.emulateJSON = on
 
 API.Asset = class Asset extends Backbone.Model
   idAttribute: "asset_id"
+  fields: => _.keys @defaults()
+  defaults: =>
+    name: ''
+    mimetype: 'image'
+    uri: ''
+    start_date: now()
+    end_date: now()
+    duration: 10
 
 API.Assets = class Assets extends Backbone.Collection
   url: "/api/assets"
@@ -34,53 +44,119 @@ class EditAssetView extends Backbone.View
   $fv: (field, val...) => (@$f field).val val...
 
   initialize: (options) =>
-    @template = get_template 'asset-modal'
-    ($ 'body').append @render().el
-    (@$el.children ":first").modal()
-
-  render: =>
-    @$el.html @template()
-
-    (@$ "input.date").datepicker autoclose: yes
+    ($ 'body').append @$el.html get_template 'asset-modal'
     (@$ 'input.time').timepicker
-      minuteStep: 5
-      defaultTime: 'current'
-      showInputs: yes
-      disableFocus: yes
-      showMeridian: yes
+      minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: yes
 
-    (@$ '#modalLabel').text (if @model then "Edit Asset" else "Add Asset")
-
-    if @model
-      (@$ "form").attr "action", @model.url()
-
-      for field in 'name uri duration mimetype'.split ' '
-        @$fv field, @model.get field
-
-      for which in ['start', 'end']
-        (@$f "#{which}_date_date").datepicker 'update', @model.get "#{which}_date"
-        @$fv "#{which}_date_time", date_to.time @model.get "#{which}_date"
-
-    else
-      (@$ "input.date").datepicker 'update', new Date()
-
-    @changeMimetype()
+    (@$ '.modal-header .close').remove()
+    (@$el.children ":first").modal()
+    @model.bind 'change', @render
+    @render()
     this
 
-  events:
-    'change select[name=mimetype]': 'changeMimetype'
-    'submit form': 'submit'
+  render: (model = @model) =>
+    @undelegateEvents()
+    # errors = @model.validate @model.attributes
 
-  submit: (e) =>
+    (@$ '#modalLabel').text "Edit Asset" unless model.isNew()
+    (@$ '.duration').toggle ((model.get 'mimetype') != 'video')
+
+    if (model.get 'mimetype') == 'webpage'
+      (@$ '.file_upload').hide()
+      (@$ '.tabbable a.tabnav-uri').click()
+    else
+      (@$ '.file_upload').show()
+
+    for field in model.fields()
+      @$fv field, model.get field
+
     for which in ['start', 'end']
-      @$fv "#{which}_date",
-        date_to.iso (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")
-    (@$ "form").submit()
+      date = model.get "#{which}_date"
+      @$fv "#{which}_date_date", date_to.date date
+      (@$f "#{which}_date_date").datepicker autoclose: yes
+      (@$f "#{which}_date_date").datepicker 'setValue', date_to.date date
+      @$fv "#{which}_date_time", date_to.time date
 
-  changeMimetype: =>
-    (@$ '.file_upload').toggle ((@$fv 'mimetype') != 'webpage')
+    @delegateEvents()
+    false
+
+  viewmodel: =>
+    for which in ['start', 'end']
+      @$fv "#{which}_date", date_to.iso do =>
+        (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")
+    for field in @model.fields()
+      @model.set field, (@$fv field), silent: true
+    if (@$ '.control-group.file_upload').hasClass 'active'
+      @model.set 'uri', @$fv 'file_upload'
 
 
+  events:
+    'submit form': 'save'
+    'click .cancel': 'cancel'
+    'change': 'change'
+    'keyup': 'change'
+    'click .tabnav-uri': 'clickTabNavUri'
+    'click .tabnav-upload': 'clickTabNavUpload'
+
+  save: (e) =>
+    e.preventDefault()
+    @viewmodel()
+    isNew = @model.isNew()
+    #if @model.isValid()
+
+    save = null
+    if (@$ '#tab-upload').hasClass 'active'
+      @$el.fileupload
+        url: @model.url()
+        progressall: (e, data) => console.log 'prog', e, data
+        done: (e, data) => console.log 'prg done'
+      save = @$el.fileupload 'send',
+        fileInput: (@$f 'file_upload')
+        formData: (form) => console.log form.serializeArray(); form.serializeArray()
+
+    else
+      save = @model.save()
+
+    save.done (data) =>
+      @collection.add @model if not @model.collection
+      (@$el.children ":first").modal 'hide'
+      _.extend @model.attributes, data
+      @model.collection.add @model if isNew
+    save.fail =>
+      console.log 'fail'
+      (@$ 'input, select').prop 'disabled', off
+
+    (@$ 'input, select').prop 'disabled', on
+    false
+
+  change: (e) =>
+    @_change  ||= _.throttle (=>
+      @viewmodel()
+      @model.trigger 'change'
+      true), 500
+    @_change arguments...
+
+  cancel: (e) =>
+    @model.set @model.previousAttributes()
+    if @model.isNew() then @model.destroy()
+    (@$el.children ":first").modal 'hide'
+    delay 500, => @remove()
+
+  clickTabNavUri: (e) =>
+    (@$ 'ul.nav-tabs li').removeClass 'active'
+    (@$ '.tab-pane').removeClass 'active'
+    (@$ '.tabnav-uri').addClass 'active'
+    (@$ '#tab-uri').addClass 'active'
+    _.defer @change
+    false
+
+  clickTabNavUpload: (e) =>
+    (@$ 'ul.nav-tabs li').removeClass 'active'
+    (@$ '.tab-pane').removeClass 'active'
+    (@$ '.tabnav-upload').addClass 'active'
+    (@$ '#tab-upload').addClass 'active'
+    _.defer @change
+    false
 
 class AssetRowView extends Backbone.View
   tagName: "tr"
@@ -89,35 +165,51 @@ class AssetRowView extends Backbone.View
     @template = get_template 'asset-row'
 
   render: =>
-    @$el.html @template @model.toJSON() unless @$el.html()
+    @$el.html @template @model.toJSON()
+    (@$ ".delete-asset-button").popover content: get_template 'confirm-delete'
     (@$ ".toggle input").prop "checked", @model.get 'is_active'
     (@$ ".asset-icon").addClass switch @model.get "mimetype"
       when "video"   then "icon-facetime-video"
       when "image"   then "icon-picture"
       when "webpage" then "icon-globe"
       else ""
-    (@$ ".delete-asset-button").popover content: get_template 'confirm-delete'
     this
 
   events:
-    'click .activation-toggle': 'toggleActive'
+    'change .activation-toggle input': 'toggleActive'
     'click .edit-asset-button': 'edit'
     'click .delete-asset-button': 'showPopover'
 
   toggleActive: (e) =>
-    if @model.get 'is_active'
-      @model.set
-        is_active: no
-        end_date: date_to.iso now()
+    if @model.get 'is_active' then @model.set
+      is_active: no
+      end_date: date_to.iso now()
+    else @model.set
+      is_active: yes
+      start_date: date_to.iso now()
+      end_date: date_to.iso years_from_now 10
+
+    @setEnabled off
+    save = @model.save()
+    delay 300, =>
+      save.done =>
+        @remove()
+        @model.collection.trigger 'add', _ [@model]
+      save.fail =>
+        @model.set @model.previousAttributes(), silent: yes # revert changes
+        @setEnabled on
+        @render()
+    true
+
+  setEnabled: (enabled) => if enabled
+      @$el.removeClass 'warning'
+      @delegateEvents()
+      (@$ 'input, button').prop 'disabled', off
     else
-      @model.set
-        is_active: yes
-        start_date: date_to.iso now()
-        end_date: date_to.iso years_from_now 10
-    @model.save()
-    (@$ ".toggle input").prop "checked", @model.get 'is_active'
-    setTimeout (=> @remove()), 300
-    e.preventDefault(); false
+      @hidePopover()
+      @undelegateEvents()
+      @$el.addClass 'warning'
+      (@$ 'input, button').prop 'disabled', on
 
   edit: (e) =>
     new EditAssetView model: @model
@@ -125,14 +217,17 @@ class AssetRowView extends Backbone.View
 
   delete: (e) =>
     @hidePopover()
-    @model.destroy().done => @remove()
+    if (xhr = @model.destroy()) is not false
+      xhr.done => @remove()
+    else
+      @remove()
     false
 
   showPopover: =>
     if not ($ '.popover').length
       (@$ ".delete-asset-button").popover 'show'
       ($ '.confirm-delete').click @delete
-      ($ document).one 'click', @hidePopover
+      ($ window).one 'click', @hidePopover
     false
 
   hidePopover: =>
@@ -142,18 +237,17 @@ class AssetRowView extends Backbone.View
 
 class AssetsView extends Backbone.View
   initialize: (options) =>
-    @collection.bind 'change:is_active', (model) =>
-      setTimeout (=> @render _ [model]), 320
-    @collection.bind event, @render for event in ['reset', 'add']
+    @collection.bind event, @render for event in ['reset', 'add', 'sync']
 
-  render: (models = @collection) =>
-    models.each (model) =>
+  render: =>
+    (@$ "##{which}-assets").html '' for which in ['active', 'inactive']
+
+    @collection.each (model) =>
       which = if model.get 'is_active' then 'active' else 'inactive'
       (@$ "##{which}-assets").append (new AssetRowView model: model).render().el
 
     for which in ['inactive', 'active']
       @$(".#{which}-table thead").toggle !!(@$("##{which}-assets tr").length)
-
     this
 
 
@@ -171,7 +265,8 @@ API.App = class App extends Backbone.View
   events: {'click #add-asset-button': 'add'}
 
   add: (e) =>
-    new EditAssetView()
+    new EditAssetView model:
+      new Asset {}, {collection: API.assets}
     false
 
 
