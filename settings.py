@@ -70,7 +70,6 @@ class ScreenlySettings(object):
             self.listen_ip = '0.0.0.0'
             self.listen_port = '8080'
 
-        # This assumes nodetype never changes from "standalone" to "managed" during a run.
-        self.get_current_time = datetime.now if self.nodetype == "standalone" else datetime.utcnow
+        self.get_current_time = datetime.utcnow
 
 settings = ScreenlySettings()
