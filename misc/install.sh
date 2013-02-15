@@ -50,7 +50,7 @@ sudo sed -e 's/#watchdog-device/watchdog-device/g' -i /etc/watchdog.conf
 sudo /etc/init.d/watchdog start
 
 echo "Adding Screenly to autostart (via Supervisord)"
-sudo ln -s ~/screenly/misc/supervisor_screenly.conf /etc/supervisor/conf.d/
+sudo ln -s ~/screenly/misc/supervisor_screenly.conf /etc/supervisor/conf.d/screenly.conf
 sudo /etc/init.d/supervisor stop > /dev/null
 sudo /etc/init.d/supervisor start > /dev/null
 
