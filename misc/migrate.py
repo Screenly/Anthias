@@ -54,12 +54,12 @@ supervisor_symlink = '/etc/supervisor/conf.d/screenly.conf'
 old_target = '/home/pi/screenly/misc/screenly.conf'
 new_target = '/home/pi/screenly/misc/supervisor_screenly.conf'
 
-if os.readlink(supervisor_symlink) == old_target:
-    print 'Removing invalid symlink'
-    try:
+try:
+    supervisor_target = os.readlink(supervisor_symlink)
+    if supervisor_target == old_target:
         subprocess.call(['/usr/bin/sudo', 'rm', supervisor_symlink])
-    except:
-        print 'Failed to remove symlink.'
+except:
+    pass
 
 if not os.path.isfile(supervisor_symlink):
     try:
