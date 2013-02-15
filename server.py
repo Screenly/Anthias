@@ -10,9 +10,10 @@ __email__ = "vpetersson@wireload.net"
 from datetime import datetime, timedelta
 from dateutils import datestring
 from functools import wraps
-from hashlib import md5
+import uuid
 from hurry.filesize import size
 from os import path, makedirs, getloadavg, statvfs, mkdir, getenv
+import os
 from requests import get as req_get, head as req_head
 from subprocess import check_output
 import traceback
@@ -191,7 +192,9 @@ def fetch_asset(asset_id, keys=FIELDS):
             dictionary[keys[i]] = asset[i]
         assets.append(dictionary)
     if len(assets):
-        return assets[0]
+        asset = assets[0]
+        asset.update({'is_active': is_active(asset)})
+        return asset
 
 
 def insert_asset(asset):
@@ -201,6 +204,7 @@ def insert_asset(asset):
         asset.values()
     )
     connection.commit()
+    asset.update({'is_active': is_active(asset)})
     return asset
 
 
@@ -211,6 +215,7 @@ def update_asset(asset_id, asset):
     c.execute(query, asset.values() + [asset_id])
     connection.commit()
     asset.update({'asset_id': asset_id})
+    asset.update({'is_active': is_active(asset)})
     return asset
 
 
@@ -243,22 +248,28 @@ def prepare_asset(request):
         asset = {
             'name': get('name').decode('UTF-8'),
             'mimetype': get('mimetype'),
+            'asset_id': get('asset_id'),
         }
 
         uri = get('uri') or False
 
-        try:
-            file_upload = request.files.file_upload.file
-        except:
-            file_upload = False
+        if not asset['asset_id']:
+            asset['asset_id'] = uuid.uuid4().hex
 
-        if file_upload and 'web' in asset['mimetype']:
+        try:
+            file_upload = request.files.file_upload
+            filename = file_upload.filename
+        except AttributeError:
+            file_upload = None
+            filename = None
+
+        if filename and 'web' in asset['mimetype']:
             raise Exception("Invalid combination. Can't upload a web resource.")
 
-        if uri and file_upload:
+        if uri and filename:
             raise Exception("Invalid combination. Can't select both URI and a file.")
 
-        if uri:
+        if uri and not uri.startswith('/'):
             if not validate_uri(uri):
                 raise Exception("Invalid URL. Failed to add asset.")
 
@@ -268,31 +279,30 @@ def prepare_asset(request):
                 file = req_head(uri, allow_redirects=True)
 
             if file.status_code == 200:
-                asset['asset_id'] = md5(asset['name'] + uri).hexdigest()
                 asset['uri'] = uri
                 # strict_uri = file.url
 
             else:
                 raise Exception("Could not retrieve file. Check the asset URL.")
+        else:
+            asset['uri'] = uri
 
-        if file_upload:
-            asset['asset_id'] = md5(file_upload.read()).hexdigest()
+        if filename:
             asset['uri'] = path.join(settings.asset_folder, asset['asset_id'])
 
             with open(asset['uri'], 'w') as f:
-                f.write(file_upload.read())
+                while True:
+                    chunk = file_upload.file.read(1024)
+                    if not chunk:
+                        break
+                    f.write(chunk)
 
-        # If no duration is provided, default to 10. JavaScript
-        # validation should not allow this to occur but it
-        # is extremely important that an asset have a duration
-        # value so we double check here.
-        if get('duration') not in ['', None]:
-            asset['duration'] = "10"
-        else:
-            asset['duration'] = get('duration')
 
         if "video" in asset['mimetype']:
             asset['duration'] = "N/A"
+        else:
+            # crashes if it's not an int. we want that.
+            asset['duration'] = int(get('duration'))
 
         if get('start_date'):
             asset['start_date'] = datetime.strptime(get('start_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
@@ -303,6 +313,12 @@ def prepare_asset(request):
             asset['end_date'] = datetime.strptime(get('end_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
         else:
             asset['end_date'] = ""
+
+        if not asset['asset_id']:
+            raise Exception
+
+        if not asset['uri']:
+            raise Exception
 
         return asset
     else:
@@ -352,6 +368,9 @@ def edit_asset(asset_id):
 @route('/api/assets/:asset_id', method="DELETE")
 @api
 def remove_asset(asset_id):
+    asset = fetch_asset(asset_id)
+    if asset['uri'].startswith(settings.asset_folder):
+        os.remove(asset['uri'])
     delete_asset(asset_id)
     response.status = 204  # return an OK with no content
 
