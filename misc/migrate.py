@@ -1,4 +1,7 @@
-import sqlite3, os, shutil, subprocess
+import sqlite3
+import os
+import shutil
+import subprocess
 
 # Define settings
 configdir = os.path.join(os.getenv('HOME'), '.screenly/')
@@ -6,7 +9,7 @@ database = os.path.join(configdir, 'screenly.db')
 
 
 ### Migration for table 'filename'
-try: 
+try:
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
     c.execute("SELECT filename FROM assets")
@@ -20,7 +23,7 @@ if filename_exist:
     conn = sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
     c = conn.cursor()
 
-    migration= """
+    migration = """
         BEGIN TRANSACTION;
         CREATE TEMPORARY TABLE assets_backup(asset_id, name, uri, md5, start_date, end_date, duration, mimetype);
         INSERT INTO assets_backup SELECT asset_id, name, uri, md5, start_date, end_date, duration, mimetype FROM assets;
@@ -39,20 +42,26 @@ if filename_exist:
 conf_file = os.path.join(os.getenv('HOME'), '.screenly', 'screenly.conf')
 if not os.path.isfile(conf_file):
     print "Copying in config file..."
-    example_conf = os.path.join(os.getenv('HOME'), 'screenly', 'misc', 'screenly.conf')    
+    example_conf = os.path.join(os.getenv('HOME'), 'screenly', 'misc', 'screenly.conf')
     shutil.copy(example_conf, conf_file)
+
+incorrect_supervisor_symlink = '/etc/supervisor/conf.d/supervisor_screenly.conf'
+if os.path.isfile(incorrect_supervisor_symlink):
+    subprocess.call(['/usr/bin/sudo', 'rm', incorrect_supervisor_symlink])
 
 # Updating symlink for supervisor
 supervisor_symlink = '/etc/supervisor/conf.d/screenly.conf'
 old_target = '/home/pi/screenly/misc/screenly.conf'
 new_target = '/home/pi/screenly/misc/supervisor_screenly.conf'
 
-if os.readlink(supervisor_symlink) == old_target:
-    print 'Updating Supervisor symlink'
-    try:
+try:
+    supervisor_target = os.readlink(supervisor_symlink)
+    if supervisor_target == old_target:
         subprocess.call(['/usr/bin/sudo', 'rm', supervisor_symlink])
-    except:
-        print 'Failed to remove symlink.'
+except:
+    pass
+
+if not os.path.isfile(supervisor_symlink):
     try:
         subprocess.call(['/usr/bin/sudo', 'ln', '-s', new_target, supervisor_symlink])
     except:
