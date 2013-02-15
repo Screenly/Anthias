@@ -45,22 +45,23 @@ if not os.path.isfile(conf_file):
     example_conf = os.path.join(os.getenv('HOME'), 'screenly', 'misc', 'screenly.conf')
     shutil.copy(example_conf, conf_file)
 
-incorrect_supervisor_file = '/etc/supervisor/conf.d/supervisor_screenly.conf'
-if os.path.isfile(incorrect_supervisor_file):
-    subprocess.call(['/usr/bin/sudo', 'rm', incorrect_supervisor_file])
-
+incorrect_supervisor_symlink = '/etc/supervisor/conf.d/supervisor_screenly.conf'
+if os.path.isfile(incorrect_supervisor_symlink):
+    subprocess.call(['/usr/bin/sudo', 'rm', incorrect_supervisor_symlink])
 
 # Updating symlink for supervisor
 supervisor_symlink = '/etc/supervisor/conf.d/screenly.conf'
 old_target = '/home/pi/screenly/misc/screenly.conf'
 new_target = '/home/pi/screenly/misc/supervisor_screenly.conf'
 
-if os.readlink(supervisor_symlink) == old_target or not os.path.isfile(supervisor_symlink):
-    print 'Updating Supervisor symlink'
+if os.readlink(supervisor_symlink) == old_target:
+    print 'Removing invalid symlink'
     try:
         subprocess.call(['/usr/bin/sudo', 'rm', supervisor_symlink])
     except:
         print 'Failed to remove symlink.'
+
+if not os.path.isfile(supervisor_symlink):
     try:
         subprocess.call(['/usr/bin/sudo', 'ln', '-s', new_target, supervisor_symlink])
     except:
