@@ -25,7 +25,7 @@ echo "Downloading Screenly-OSE..."
 git clone git://github.com/wireload/screenly-ose.git ~/screenly > /dev/null
 
 echo "Installing more dependencies..."
-sudo pip install -r ~/screenly/requirements.txt > /dev/null
+sudo pip install -r ~/screenly/requirements.txt -q > /dev/null
 
 echo "Adding Screenly to X auto start..."
 mkdir -p ~/.config/lxsession/LXDE/
