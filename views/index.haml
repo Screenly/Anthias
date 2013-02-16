@@ -97,7 +97,7 @@
               .control-group.mimetype
                 %label.control-label Asset Type
                 .controls
-                  %select.input-medium(name="mimetype")
+                  %select.span2(name="mimetype")
                     %option(value="image") Image
                     %option(value="video") Video
                     %option(value="webpage") Webpage
@@ -107,14 +107,14 @@
               .control-group.start_date
                 %label.control-label Start Date
                 .controls
-                  %input.input-small.date(type="text", name="start_date_date")
-                  %input.input-small.time(type="text", name="start_date_time")
+                  %input.span2.date(type="text", name="start_date_date")
+                  %input.span2.time(type="text", name="start_date_time")
                   %input(type="hidden", name="start_date")
               .control-group.end_date
                 %label.control-label End Date
                 .controls
-                  %input.input-small.date(type="text", name="end_date_date")
-                  %input.input-small.time(type="text", name="end_date_time")
+                  %input.span2.date(type="text", name="end_date_date")
+                  %input.span2.time(type="text", name="end_date_time")
                   %input(type="hidden", name="end_date")
               .control-group.duration
                 %label.control-label Duration
