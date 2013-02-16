@@ -79,16 +79,16 @@
                 %ul.nav.nav-tabs
                   %li.active.tabnav-uri(style="margin-left:180px")
                     %a(href="#tab-uri", dataToggle="tab") URL
-                  %li.tabnav-upload.file_upload
-                    %a(href="#tab-upload", dataToggle="tab") Upload
+                  %li.tabnav-file_upload
+                    %a(href="#tab-file_upload", dataToggle="tab") Upload
                 .tab-content
                   #tab-uri.tab-pane.active
                     .control-group.uri
                       %label.control-label Asset URL
                       .controls
                         %input.span4(type="text", name="uri", placeholder="Public URL to this asset's location")
-                  #tab-upload.tab-pane
-                    .control-group.file_upload
+                  #tab-file_upload.tab-pane
+                    .control-group
                       %label.control-label Upload Asset
                       .controls
                         %input(type="file", name="file_upload")

@@ -62,10 +62,7 @@ class EditAssetView extends Backbone.View
     (@$ '.duration').toggle ((model.get 'mimetype') != 'video')
 
     if (model.get 'mimetype') == 'webpage'
-      (@$ '.file_upload').hide()
-      (@$ '.tabbable a.tabnav-uri').click()
-    else
-      (@$ '.file_upload').show()
+      (@$ 'li.tabnav-uri').click()
 
     for field in model.fields()
       @$fv field, model.get field
@@ -86,7 +83,7 @@ class EditAssetView extends Backbone.View
         (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")
     for field in @model.fields()
       @model.set field, (@$fv field), silent: true
-    if (@$ '.control-group.file_upload').hasClass 'active'
+    if (@$ 'li.tabnav-file_upload').hasClass 'active'
       @model.set 'uri', @$fv 'file_upload'
 
 
@@ -96,7 +93,7 @@ class EditAssetView extends Backbone.View
     'change': 'change'
     'keyup': 'change'
     'click .tabnav-uri': 'clickTabNavUri'
-    'click .tabnav-upload': 'clickTabNavUpload'
+    'click .tabnav-file_upload': 'clickTabNavUpload'
 
   save: (e) =>
     e.preventDefault()
@@ -105,7 +102,7 @@ class EditAssetView extends Backbone.View
     #if @model.isValid()
 
     save = null
-    if (@$ '#tab-upload').hasClass 'active'
+    if (@$ '#tab-file_upload').hasClass 'active'
       @$el.fileupload
         url: @model.url()
         progressall: (e, data) => console.log 'prog', e, data
@@ -153,8 +150,8 @@ class EditAssetView extends Backbone.View
   clickTabNavUpload: (e) =>
     (@$ 'ul.nav-tabs li').removeClass 'active'
     (@$ '.tab-pane').removeClass 'active'
-    (@$ '.tabnav-upload').addClass 'active'
-    (@$ '#tab-upload').addClass 'active'
+    (@$ '.tabnav-file_upload').addClass 'active'
+    (@$ '#tab-file_upload').addClass 'active'
     _.defer @change
     false
 

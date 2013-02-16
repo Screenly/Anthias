@@ -164,10 +164,7 @@
       }
       (this.$('.duration')).toggle((model.get('mimetype')) !== 'video');
       if ((model.get('mimetype')) === 'webpage') {
-        (this.$('.file_upload')).hide();
-        (this.$('.tabbable a.tabnav-uri')).click();
-      } else {
-        (this.$('.file_upload')).show();
+        (this.$('li.tabnav-uri')).click();
       }
       _ref = model.fields();
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
@@ -206,7 +203,7 @@
           silent: true
         });
       }
-      if ((this.$('.control-group.file_upload')).hasClass('active')) {
+      if ((this.$('li.tabnav-file_upload')).hasClass('active')) {
         return this.model.set('uri', this.$fv('file_upload'));
       }
     };
@@ -217,7 +214,7 @@
       'change': 'change',
       'keyup': 'change',
       'click .tabnav-uri': 'clickTabNavUri',
-      'click .tabnav-upload': 'clickTabNavUpload'
+      'click .tabnav-file_upload': 'clickTabNavUpload'
     };
 
     EditAssetView.prototype.save = function(e) {
@@ -227,7 +224,7 @@
       this.viewmodel();
       isNew = this.model.isNew();
       save = null;
-      if ((this.$('#tab-upload')).hasClass('active')) {
+      if ((this.$('#tab-file_upload')).hasClass('active')) {
         this.$el.fileupload({
           url: this.model.url(),
           progressall: function(e, data) {
@@ -299,8 +296,8 @@
     EditAssetView.prototype.clickTabNavUpload = function(e) {
       (this.$('ul.nav-tabs li')).removeClass('active');
       (this.$('.tab-pane')).removeClass('active');
-      (this.$('.tabnav-upload')).addClass('active');
-      (this.$('#tab-upload')).addClass('active');
+      (this.$('.tabnav-file_upload')).addClass('active');
+      (this.$('#tab-file_upload')).addClass('active');
       _.defer(this.change);
       return false;
     };
