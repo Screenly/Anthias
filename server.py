@@ -369,8 +369,11 @@ def edit_asset(asset_id):
 @api
 def remove_asset(asset_id):
     asset = fetch_asset(asset_id)
-    if asset['uri'].startswith(settings.asset_folder):
-        os.remove(asset['uri'])
+    try:
+        if asset['uri'].startswith(settings.asset_folder):
+            os.remove(asset['uri'])
+    except OSError:
+        pass
     delete_asset(asset_id)
     response.status = 204  # return an OK with no content
 
