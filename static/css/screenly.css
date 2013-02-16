@@ -74,7 +74,9 @@ section table {
 .popover .btn-large {
   width: 60px; }
 
-#request-error { z-index: 10000 }
-#request-error .alert { position:fixed; margin-left:240px; margin-top:2px }
-
-.checkbox.toggle.well { cursor: pointer }
+#request-error {
+  z-index: 10000; }
+  #request-error .alert {
+    position: fixed;
+    margin-left: 240px;
+    margin-top: 2px; }

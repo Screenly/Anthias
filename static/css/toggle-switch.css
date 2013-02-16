@@ -90,6 +90,10 @@ https://github.com/ghinda/css-toggle-switch
 		padding: 0;
 	}
 
+	.checkbox.toggle.well { 
+  		cursor: pointer;
+	}
+
 	/* Shared */
 	.toggle {
 		display: block;
