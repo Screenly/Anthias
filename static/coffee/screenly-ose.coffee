@@ -83,9 +83,6 @@ class EditAssetView extends Backbone.View
         (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")
     for field in @model.fields()
       @model.set field, (@$fv field), silent: true
-    if (@$ 'li.tabnav-file_upload').hasClass 'active'
-      @model.set 'uri', @$fv 'file_upload'
-
 
   events:
     'submit form': 'save'
@@ -99,31 +96,27 @@ class EditAssetView extends Backbone.View
     e.preventDefault()
     @viewmodel()
     isNew = @model.isNew()
-    #if @model.isValid()
-
     save = null
     if (@$ '#tab-file_upload').hasClass 'active'
+      (@$ '.progress').show()
       @$el.fileupload
         url: @model.url()
-        progressall: (e, data) => console.log 'prog', e, data
-        done: (e, data) => console.log 'prg done'
-      save = @$el.fileupload 'send',
-        fileInput: (@$f 'file_upload')
-        formData: (form) => console.log form.serializeArray(); form.serializeArray()
-
+        progressall: (e, data) => if data.loaded and data.total
+          (@$ '.progress .bar').css 'width', "#{data.loaded/data.total*100}%"
+      save = @$el.fileupload 'send', fileInput: (@$f 'file_upload')
     else
       save = @model.save()
 
+    (@$ 'input, select').prop 'disabled', on
     save.done (data) =>
       @collection.add @model if not @model.collection
       (@$el.children ":first").modal 'hide'
       _.extend @model.attributes, data
       @model.collection.add @model if isNew
     save.fail =>
-      console.log 'fail'
+      (@$ '.progress').hide()
       (@$ 'input, select').prop 'disabled', off
 
-    (@$ 'input, select').prop 'disabled', on
     false
 
   change: (e) =>

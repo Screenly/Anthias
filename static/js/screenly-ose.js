@@ -187,7 +187,7 @@
     };
 
     EditAssetView.prototype.viewmodel = function() {
-      var field, which, _i, _j, _len, _len1, _ref, _ref1,
+      var field, which, _i, _j, _len, _len1, _ref, _ref1, _results,
         _this = this;
       _ref = ['start', 'end'];
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
@@ -197,15 +197,14 @@
         })()));
       }
       _ref1 = this.model.fields();
+      _results = [];
       for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
         field = _ref1[_j];
-        this.model.set(field, this.$fv(field), {
+        _results.push(this.model.set(field, this.$fv(field), {
           silent: true
-        });
+        }));
       }
-      if ((this.$('li.tabnav-file_upload')).hasClass('active')) {
-        return this.model.set('uri', this.$fv('file_upload'));
-      }
+      return _results;
     };
 
     EditAssetView.prototype.events = {
@@ -225,25 +224,22 @@
       isNew = this.model.isNew();
       save = null;
       if ((this.$('#tab-file_upload')).hasClass('active')) {
+        (this.$('.progress')).show();
         this.$el.fileupload({
           url: this.model.url(),
           progressall: function(e, data) {
-            return console.log('prog', e, data);
-          },
-          done: function(e, data) {
-            return console.log('prg done');
+            if (data.loaded && data.total) {
+              return (_this.$('.progress .bar')).css('width', "" + (data.loaded / data.total * 100) + "%");
+            }
           }
         });
         save = this.$el.fileupload('send', {
-          fileInput: this.$f('file_upload'),
-          formData: function(form) {
-            console.log(form.serializeArray());
-            return form.serializeArray();
-          }
+          fileInput: this.$f('file_upload')
         });
       } else {
         save = this.model.save();
       }
+      (this.$('input, select')).prop('disabled', true);
       save.done(function(data) {
         if (!_this.model.collection) {
           _this.collection.add(_this.model);
@@ -255,10 +251,9 @@
         }
       });
       save.fail(function() {
-        console.log('fail');
+        (_this.$('.progress')).hide();
         return (_this.$('input, select')).prop('disabled', false);
       });
-      (this.$('input, select')).prop('disabled', true);
       return false;
     };
 

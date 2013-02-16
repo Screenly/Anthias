@@ -3,7 +3,7 @@
 
 $footerHeight: 40px;
 
-body {  
+body {
   margin-top: 60px;
   margin-bottom: $footerHeight + $baseLineHeight;
 }
@@ -32,7 +32,7 @@ body {
   bottom: 0;
   width: 100%;
   text-shadow: #fff 0px 1px 1px;
-  
+
   .container {
     position: relative;
 
@@ -91,19 +91,25 @@ section {
   .popover-title {
     font-weight: bold;
   }
-  
+
   .btn-large {
     width: 60px;
   }
 
 }
 
-#request-error { 
+#request-error {
   z-index: 10000;
 
   .alert {
-    position: fixed; 
-    margin-left: 240px; 
+    position: fixed;
+    margin-left: 240px;
     margin-top: 2px;
   }
+}
+
+#add-form .progress {
+  margin-top: 4px;
+  margin-bottom: 0px;
+  width: 69%;
 }
