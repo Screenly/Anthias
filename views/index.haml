@@ -129,7 +129,7 @@
 
   %body
     #request-error.navbar.navbar-fixed-top
-    .navbar.navbar-fixed-top
+    .navbar.navbar-fixed-top.navbar-inverse
       .navbar-inner
         .container
           %a.brand(href="/")
@@ -140,16 +140,16 @@
             - if not up_to_date:
               %li.update-available
                 %a(href="#")
-                  %i.icon-circle-arrow-down
+                  %i.icon-circle-arrow-down.icon-white
                   Update Available
             %li
               %a(href="/settings")
-                %i.icon-cog
+                %i.icon-cog.icon-white
                 Settings
-            %li.divider-vertical
+            %li.divider-vertical.icon-white
             %li
               %a(href="/system_info")
-                %i.icon-tasks
+                %i.icon-tasks.icon-white
                 System Info
 
     .container
