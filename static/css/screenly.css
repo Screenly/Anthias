@@ -80,3 +80,7 @@ section table {
   margin-top: 4px;
   margin-bottom: 0px;
   width: 69%; }
+#add-form .uri-text {
+  padding-top: 5px;
+  margin-left: 0px;
+  overflow: hidden; }

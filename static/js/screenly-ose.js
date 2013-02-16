@@ -76,16 +76,12 @@
 
     function Asset() {
       this.defaults = __bind(this.defaults, this);
-
-      this.fields = __bind(this.fields, this);
       return Asset.__super__.constructor.apply(this, arguments);
     }
 
     Asset.prototype.idAttribute = "asset_id";
 
-    Asset.prototype.fields = function() {
-      return _.keys(this.defaults());
-    };
+    Asset.prototype.fields = 'name mimetype uri start_date end_date duration'.split(' ');
 
     Asset.prototype.defaults = function() {
       return {
@@ -172,41 +168,37 @@
       (this.$('.modal-header .close')).remove();
       (this.$el.children(":first")).modal();
       this.model.bind('change', this.render);
-      this.render();
-      return this;
+      return this.render();
     };
 
-    EditAssetView.prototype.render = function(model) {
+    EditAssetView.prototype.render = function() {
       var date, f, field, which, _i, _j, _k, _len, _len1, _len2, _ref, _ref1, _ref2;
-      if (model == null) {
-        model = this.model;
-      }
       this.undelegateEvents();
-      if (model.isNew()) {
-
-      } else {
+      if (!this.model.isNew()) {
         _ref = 'mimetype uri file_upload'.split(' ');
         for (_i = 0, _len = _ref.length; _i < _len; _i++) {
           f = _ref[_i];
           (this.$(f)).attr('disabled', true);
         }
         (this.$('#modalLabel')).text("Edit Asset");
+        (this.$('.asset-location')).hide();
+        (this.$('.asset-location.edit')).show();
       }
-      (this.$('.duration')).toggle((model.get('mimetype')) !== 'video');
-      if ((model.get('mimetype')) === 'webpage') {
+      (this.$('.duration')).toggle((this.model.get('mimetype')) !== 'video');
+      if ((this.model.get('mimetype')) === 'webpage') {
         this.clickTabNavUri();
       }
-      _ref1 = model.fields();
+      console.log(this.model.fields);
+      _ref1 = this.model.fields;
       for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
         field = _ref1[_j];
-        if (!(this.$(field)).prop('disabled')) {
-          this.$fv(field, model.get(field));
-        }
+        this.$fv(field, this.model.get(field));
       }
+      (this.$('.uri-text')).html(this.model.get('uri'));
       _ref2 = ['start', 'end'];
       for (_k = 0, _len2 = _ref2.length; _k < _len2; _k++) {
         which = _ref2[_k];
-        date = model.get("" + which + "_date");
+        date = this.model.get("" + which + "_date");
         this.$fv("" + which + "_date_date", date_to.date(date));
         (this.$f("" + which + "_date_date")).datepicker({
           autoclose: true
@@ -228,13 +220,15 @@
           return (_this.$fv("" + which + "_date_date")) + " " + (_this.$fv("" + which + "_date_time"));
         })()));
       }
-      _ref1 = this.model.fields();
+      _ref1 = this.model.fields;
       _results = [];
       for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
         field = _ref1[_j];
-        _results.push(this.model.set(field, this.$fv(field), {
-          silent: true
-        }));
+        if (!(this.$f(field)).prop('disabled')) {
+          _results.push(this.model.set(field, this.$fv(field), {
+            silent: true
+          }));
+        }
       }
       return _results;
     };
@@ -405,7 +399,7 @@
             return "";
         }
       }).call(this));
-      return this;
+      return this.el;
     };
 
     AssetRowView.prototype.events = {
@@ -533,14 +527,14 @@
         which = model.get('is_active') ? 'active' : 'inactive';
         return (_this.$("#" + which + "-assets")).append((new AssetRowView({
           model: model
-        })).render().el);
+        })).render());
       });
       _ref1 = ['inactive', 'active'];
       for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
         which = _ref1[_j];
         this.$("." + which + "-table thead").toggle(!!(this.$("#" + which + "-assets tr").length));
       }
-      return this;
+      return this.el;
     };
 
     return AssetsView;
@@ -564,11 +558,10 @@
         return ($('#request-error')).html((get_template('request-error'))());
       });
       (API.assets = new Assets()).fetch();
-      API.assetsView = new AssetsView({
+      return API.assetsView = new AssetsView({
         collection: API.assets,
         el: this.$('#assets')
       });
-      return this;
     };
 
     App.prototype.events = {

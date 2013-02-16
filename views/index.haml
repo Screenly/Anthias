@@ -73,25 +73,31 @@
                 %label.control-label Name
                 .controls
                   %input.span4(type="text", name="name", placeholder="Nickname for this asset")
-
-            %fieldset
-              .tabbable
-                %ul.nav.nav-tabs
-                  %li.active.tabnav-uri(style="margin-left:180px")
-                    %a(href="#tab-uri", dataToggle="tab") URL
-                  %li.tabnav-file_upload
-                    %a(href="#tab-file_upload", dataToggle="tab") Upload
-                .tab-content
-                  #tab-uri.tab-pane.active
-                    .control-group.uri
-                      %label.control-label Asset URL
-                      .controls
-                        %input.span4(type="text", name="uri", placeholder="Public URL to this asset's location")
-                  #tab-file_upload.tab-pane
-                    .control-group
-                      %label.control-label Upload Asset
-                      .controls
-                        %input(type="file", name="file_upload")
+            .asset-location.add
+              %fieldset
+                .tabbable
+                  %ul.nav.nav-tabs
+                    %li.active.tabnav-uri(style="margin-left:180px")
+                      %a(href="#tab-uri", dataToggle="tab") URL
+                    %li.tabnav-file_upload
+                      %a(href="#tab-file_upload", dataToggle="tab") Upload
+                  .tab-content
+                    #tab-uri.tab-pane.active
+                      .control-group.uri
+                        %label.control-label Asset URL
+                        .controls
+                          %input.span4(type="text", name="uri", placeholder="Public URL to this asset's location")
+                    #tab-file_upload.tab-pane
+                      .control-group
+                        %label.control-label Upload Asset
+                        .controls
+                          %input(type="file", name="file_upload")
+            .asset-location.edit(style="display:none")
+              %fieldset
+                .control-group
+                  %label.control-label Asset Location
+                  .controls
+                    .uri-text.span4.first
 
             %fieldset
               .control-group.mimetype

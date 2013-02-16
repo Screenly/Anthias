@@ -29,7 +29,7 @@ Backbone.emulateJSON = on
 
 API.Asset = class Asset extends Backbone.Model
   idAttribute: "asset_id"
-  fields: => _.keys @defaults()
+  fields: 'name mimetype uri start_date end_date duration'.split ' '
   defaults: =>
     name: ''
     mimetype: 'webpage'
@@ -58,25 +58,25 @@ class EditAssetView extends Backbone.View
     (@$el.children ":first").modal()
     @model.bind 'change', @render
     @render()
-    this
 
-  render: (model = @model) =>
+  render: () =>
     @undelegateEvents()
 
-    if model.isNew()
-      #(@$ '.')
-    else
+    if not @model.isNew()
       (@$ f).attr 'disabled', on for f in 'mimetype uri file_upload'.split ' '
       (@$ '#modalLabel').text "Edit Asset"
+      (@$ '.asset-location').hide(); (@$ '.asset-location.edit').show()
 
-    (@$ '.duration').toggle ((model.get 'mimetype') != 'video')
-    @clickTabNavUri() if (model.get 'mimetype') == 'webpage'
+    (@$ '.duration').toggle ((@model.get 'mimetype') != 'video')
+    @clickTabNavUri() if (@model.get 'mimetype') == 'webpage'
 
-    for field in model.fields() when not (@$ field).prop 'disabled'
-      @$fv field, model.get field
+    console.log @model.fields
+    for field in @model.fields
+      @$fv field, @model.get field
+    (@$ '.uri-text').html @model.get 'uri'
 
     for which in ['start', 'end']
-      date = model.get "#{which}_date"
+      date = @model.get "#{which}_date"
       @$fv "#{which}_date_date", date_to.date date
       (@$f "#{which}_date_date").datepicker autoclose: yes
       (@$f "#{which}_date_date").datepicker 'setValue', date_to.date date
@@ -89,7 +89,7 @@ class EditAssetView extends Backbone.View
     for which in ['start', 'end']
       @$fv "#{which}_date", date_to.iso do =>
         (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")
-    for field in @model.fields()
+    for field in @model.fields when not (@$f field).prop 'disabled'
       @model.set field, (@$fv field), silent: true
 
   events:
@@ -182,7 +182,7 @@ class AssetRowView extends Backbone.View
       when "image"   then "icon-picture"
       when "webpage" then "icon-globe"
       else ""
-    this
+    @el
 
   events:
     'change .activation-toggle input': 'toggleActive'
@@ -253,11 +253,11 @@ class AssetsView extends Backbone.View
 
     @collection.each (model) =>
       which = if model.get 'is_active' then 'active' else 'inactive'
-      (@$ "##{which}-assets").append (new AssetRowView model: model).render().el
+      (@$ "##{which}-assets").append (new AssetRowView model: model).render()
 
     for which in ['inactive', 'active']
       @$(".#{which}-table thead").toggle !!(@$("##{which}-assets tr").length)
-    this
+    @el
 
 
 API.App = class App extends Backbone.View
@@ -269,7 +269,6 @@ API.App = class App extends Backbone.View
     API.assetsView = new AssetsView
       collection: API.assets
       el: @$ '#assets'
-    this
 
   events: {'click #add-asset-button': 'add'}
 
