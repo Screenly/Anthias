@@ -15,6 +15,12 @@ years_from_now = (years) -> new Date ((y2ts years) + date_to.timestamp now())
 get_template = (name) -> _.template ($ "##{name}-template").html()
 delay = (wait, fn) -> _.delay fn, wait
 
+mimetypes = [ [('jpg jpeg png pnm gif bmp'.split ' '), 'image']
+              [('avi mkv mov mpg mpeg mp4 ts flv'.split ' '), 'video']]
+get_mimetype = (filename) =>
+  ext = (_.last filename.split '.').toLowerCase()
+  mt = _.find mimetypes, (mt) -> ext in mt[0]
+  if mt then mt[1] else null
 
 # Models
 
@@ -26,7 +32,7 @@ API.Asset = class Asset extends Backbone.Model
   fields: => _.keys @defaults()
   defaults: =>
     name: ''
-    mimetype: 'image'
+    mimetype: 'webpage'
     uri: ''
     start_date: now()
     end_date: now()
@@ -40,8 +46,8 @@ API.Assets = class Assets extends Backbone.Collection
 # Views
 
 class EditAssetView extends Backbone.View
-  $f: (field) => @$ "[name='#{field}']"
-  $fv: (field, val...) => (@$f field).val val...
+  $f: (field) => @$ "[name='#{field}']" # get field element
+  $fv: (field, val...) => (@$f field).val val... # get or set filed value
 
   initialize: (options) =>
     ($ 'body').append @$el.html get_template 'asset-modal'
@@ -56,15 +62,17 @@ class EditAssetView extends Backbone.View
 
   render: (model = @model) =>
     @undelegateEvents()
-    # errors = @model.validate @model.attributes
 
-    (@$ '#modalLabel').text "Edit Asset" unless model.isNew()
+    if model.isNew()
+      #(@$ '.')
+    else
+      (@$ f).attr 'disabled', on for f in 'mimetype uri file_upload'.split ' '
+      (@$ '#modalLabel').text "Edit Asset"
+
     (@$ '.duration').toggle ((model.get 'mimetype') != 'video')
+    @clickTabNavUri() if (model.get 'mimetype') == 'webpage'
 
-    if (model.get 'mimetype') == 'webpage'
-      (@$ 'li.tabnav-uri').click()
-
-    for field in model.fields()
+    for field in model.fields() when not (@$ field).prop 'disabled'
       @$fv field, model.get field
 
     for which in ['start', 'end']
@@ -91,6 +99,8 @@ class EditAssetView extends Backbone.View
     'keyup': 'change'
     'click .tabnav-uri': 'clickTabNavUri'
     'click .tabnav-file_upload': 'clickTabNavUpload'
+    'paste [name=uri]': 'updateUriMimetype'
+    'change [name=file_upload]': 'updateFileUploadMimetype'
 
   save: (e) =>
     e.preventDefault()
@@ -116,7 +126,6 @@ class EditAssetView extends Backbone.View
     save.fail =>
       (@$ '.progress').hide()
       (@$ 'input, select').prop 'disabled', off
-
     false
 
   change: (e) =>
@@ -130,23 +139,33 @@ class EditAssetView extends Backbone.View
     @model.set @model.previousAttributes()
     if @model.isNew() then @model.destroy()
     (@$el.children ":first").modal 'hide'
-    delay 500, => @remove()
+    #delay 500, => @remove()
 
-  clickTabNavUri: (e) =>
+  clickTabNavUri: (e) => # TODO: clean
     (@$ 'ul.nav-tabs li').removeClass 'active'
     (@$ '.tab-pane').removeClass 'active'
     (@$ '.tabnav-uri').addClass 'active'
     (@$ '#tab-uri').addClass 'active'
+    _.defer @updateUriMimetype
     _.defer @change
     false
 
-  clickTabNavUpload: (e) =>
+  clickTabNavUpload: (e) => # TODO: clean
     (@$ 'ul.nav-tabs li').removeClass 'active'
     (@$ '.tab-pane').removeClass 'active'
     (@$ '.tabnav-file_upload').addClass 'active'
     (@$ '#tab-file_upload').addClass 'active'
+    (@$fv 'mimetype', 'image') if (@$fv 'mimetype') == 'webpage'
+    _.defer @updateFileUploadMimetype
     _.defer @change
     false
+
+  updateUriMimetype: => _.defer => @updateMimetype @$fv 'uri'
+  updateFileUploadMimetype: => _.defer => @updateMimetype @$fv 'file_upload'
+  updateMimetype: (filename) =>
+    mt = get_mimetype filename
+    @$fv 'mimetype', mt if mt
+
 
 class AssetRowView extends Backbone.View
   tagName: "tr"

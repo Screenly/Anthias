@@ -5,7 +5,9 @@
 
 
 (function() {
-  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, delay, get_template, now, y2ts, years_from_now,
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, delay, get_mimetype, get_template, mimetypes, now, y2ts, years_from_now,
+    _this = this,
+    __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     __hasProp = {}.hasOwnProperty,
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -51,6 +53,21 @@
     return _.delay(fn, wait);
   };
 
+  mimetypes = [['jpg jpeg png pnm gif bmp'.split(' '), 'image'], ['avi mkv mov mpg mpeg mp4 ts flv'.split(' '), 'video']];
+
+  get_mimetype = function(filename) {
+    var ext, mt;
+    ext = (_.last(filename.split('.'))).toLowerCase();
+    mt = _.find(mimetypes, function(mt) {
+      return __indexOf.call(mt[0], ext) >= 0;
+    });
+    if (mt) {
+      return mt[1];
+    } else {
+      return null;
+    }
+  };
+
   Backbone.emulateJSON = true;
 
   API.Asset = Asset = (function(_super) {
@@ -73,7 +90,7 @@
     Asset.prototype.defaults = function() {
       return {
         name: '',
-        mimetype: 'image',
+        mimetype: 'webpage',
         uri: '',
         start_date: now(),
         end_date: now(),
@@ -106,6 +123,12 @@
     __extends(EditAssetView, _super);
 
     function EditAssetView() {
+      this.updateMimetype = __bind(this.updateMimetype, this);
+
+      this.updateFileUploadMimetype = __bind(this.updateFileUploadMimetype, this);
+
+      this.updateUriMimetype = __bind(this.updateUriMimetype, this);
+
       this.clickTabNavUpload = __bind(this.clickTabNavUpload, this);
 
       this.clickTabNavUri = __bind(this.clickTabNavUri, this);
@@ -154,26 +177,35 @@
     };
 
     EditAssetView.prototype.render = function(model) {
-      var date, field, which, _i, _j, _len, _len1, _ref, _ref1;
+      var date, f, field, which, _i, _j, _k, _len, _len1, _len2, _ref, _ref1, _ref2;
       if (model == null) {
         model = this.model;
       }
       this.undelegateEvents();
-      if (!model.isNew()) {
+      if (model.isNew()) {
+
+      } else {
+        _ref = 'mimetype uri file_upload'.split(' ');
+        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+          f = _ref[_i];
+          (this.$(f)).attr('disabled', true);
+        }
         (this.$('#modalLabel')).text("Edit Asset");
       }
       (this.$('.duration')).toggle((model.get('mimetype')) !== 'video');
       if ((model.get('mimetype')) === 'webpage') {
-        (this.$('li.tabnav-uri')).click();
+        this.clickTabNavUri();
       }
-      _ref = model.fields();
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        field = _ref[_i];
-        this.$fv(field, model.get(field));
-      }
-      _ref1 = ['start', 'end'];
+      _ref1 = model.fields();
       for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
-        which = _ref1[_j];
+        field = _ref1[_j];
+        if (!(this.$(field)).prop('disabled')) {
+          this.$fv(field, model.get(field));
+        }
+      }
+      _ref2 = ['start', 'end'];
+      for (_k = 0, _len2 = _ref2.length; _k < _len2; _k++) {
+        which = _ref2[_k];
         date = model.get("" + which + "_date");
         this.$fv("" + which + "_date_date", date_to.date(date));
         (this.$f("" + which + "_date_date")).datepicker({
@@ -213,7 +245,9 @@
       'change': 'change',
       'keyup': 'change',
       'click .tabnav-uri': 'clickTabNavUri',
-      'click .tabnav-file_upload': 'clickTabNavUpload'
+      'click .tabnav-file_upload': 'clickTabNavUpload',
+      'paste [name=uri]': 'updateUriMimetype',
+      'change [name=file_upload]': 'updateFileUploadMimetype'
     };
 
     EditAssetView.prototype.save = function(e) {
@@ -268,15 +302,11 @@
     };
 
     EditAssetView.prototype.cancel = function(e) {
-      var _this = this;
       this.model.set(this.model.previousAttributes());
       if (this.model.isNew()) {
         this.model.destroy();
       }
-      (this.$el.children(":first")).modal('hide');
-      return delay(500, function() {
-        return _this.remove();
-      });
+      return (this.$el.children(":first")).modal('hide');
     };
 
     EditAssetView.prototype.clickTabNavUri = function(e) {
@@ -284,6 +314,7 @@
       (this.$('.tab-pane')).removeClass('active');
       (this.$('.tabnav-uri')).addClass('active');
       (this.$('#tab-uri')).addClass('active');
+      _.defer(this.updateUriMimetype);
       _.defer(this.change);
       return false;
     };
@@ -293,8 +324,34 @@
       (this.$('.tab-pane')).removeClass('active');
       (this.$('.tabnav-file_upload')).addClass('active');
       (this.$('#tab-file_upload')).addClass('active');
+      if ((this.$fv('mimetype')) === 'webpage') {
+        this.$fv('mimetype', 'image');
+      }
+      _.defer(this.updateFileUploadMimetype);
       _.defer(this.change);
       return false;
+    };
+
+    EditAssetView.prototype.updateUriMimetype = function() {
+      var _this = this;
+      return _.defer(function() {
+        return _this.updateMimetype(_this.$fv('uri'));
+      });
+    };
+
+    EditAssetView.prototype.updateFileUploadMimetype = function() {
+      var _this = this;
+      return _.defer(function() {
+        return _this.updateMimetype(_this.$fv('file_upload'));
+      });
+    };
+
+    EditAssetView.prototype.updateMimetype = function(filename) {
+      var mt;
+      mt = get_mimetype(filename);
+      if (mt) {
+        return this.$fv('mimetype', mt);
+      }
     };
 
     return EditAssetView;
