@@ -87,3 +87,6 @@ section .header {
   padding-top: 5px;
   margin-left: 0px;
   overflow: hidden; }
+
+#assets table td {
+  line-height: 30px; }

@@ -113,7 +113,7 @@ section {
   }
 }
 
-#add-form{
+#add-form {
  .progress {
     margin-top: 4px;
     margin-bottom: 0px;
@@ -123,5 +123,11 @@ section {
     padding-top: 5px;
     margin-left: 0px;
     overflow: hidden;
+  }
+}
+
+#assets {
+  table td {
+    line-height: 30px;
   }
 }
