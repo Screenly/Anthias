@@ -3,19 +3,19 @@ body {
   margin-bottom: 60px; }
 
 .navbar .container ul.nav li > a {
-  text-shadow: 0 1px 0 #000; }
+  text-shadow: 0 1px 0 black; }
 .navbar .container a.brand {
-  text-shadow: 0 1px 0 #000; }
+  text-shadow: 0 1px 0 black; }
   .navbar .container a.brand span {
     font-size: 15px; }
 .navbar .container li.update-available a {
   font-weight: bold;
-  text-shadow: #555 0px 1px 1px !important; }
+  text-shadow: #555555 0px 1px 1px !important; }
 
 #footer {
   height: 40px;
   background: url(../img/wireload-bg.jpeg);
-  border-top: 1px #ccc solid;
+  border-top: 1px #cccccc solid;
   -webkit-box-shadow: 0 -2px 9px rgba(0, 0, 0, 0.05);
   -moz-box-shadow: 0 -2px 9px rgba(0, 0, 0, 0.05);
   box-shadow: 0 -2px 9px rgba(0, 0, 0, 0.05);
@@ -24,7 +24,7 @@ body {
   position: fixed;
   bottom: 0;
   width: 100%;
-  text-shadow: #fff 0px 1px 1px; }
+  text-shadow: white 0px 1px 1px; }
   #footer .container {
     position: relative; }
     #footer .container #wireload-logo {
@@ -61,10 +61,8 @@ section .header {
   -moz-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.065);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.065);
   font-weight: bold;
-  text-shadow: #555 0px 1px 1px !important;
+  text-shadow: #555555 0px 1px 1px !important;
   text-transform: uppercase; }
-section table {
-  width: 100%; }
 
 .modal form {
   margin-bottom: 0; }
