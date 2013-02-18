@@ -188,7 +188,6 @@
       if ((this.model.get('mimetype')) === 'webpage') {
         this.clickTabNavUri();
       }
-      console.log(this.model.fields);
       _ref1 = this.model.fields;
       for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
         field = _ref1[_j];

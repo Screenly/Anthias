@@ -70,7 +70,6 @@ class EditAssetView extends Backbone.View
     (@$ '.duration').toggle ((@model.get 'mimetype') != 'video')
     @clickTabNavUri() if (@model.get 'mimetype') == 'webpage'
 
-    console.log @model.fields
     for field in @model.fields
       @$fv field, @model.get field
     (@$ '.uri-text').html @model.get 'uri'
