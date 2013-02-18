@@ -6,7 +6,7 @@ echo "Fetching the latest update..."
 cd ~/screenly
 git pull
 
-echo "Ensuring all Python modules are installed"
+echo "Ensuring all Python modules are installed..."
 sudo pip install -r requirements.txt -q
 
 echo "Running migration..."

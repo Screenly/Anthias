@@ -78,28 +78,28 @@ def api_error(error):
 def is_up_to_date():
     """
     Determine if there is any update available.
-    Used in conjunction with check_update() in server.py
+    Used in conjunction with check_update() in viewer.py.
     """
 
     sha_file = path.join(getenv('HOME'), '.screenly', 'latest_screenly_sha')
 
+    # Until this has been created by viewer.py, let's just assume we're up to date.
+    if not os.path.exists(sha_file):
+        return True
+
     try:
-        f = open(sha_file, 'r')
-        latest_sha = f.read().strip()
-        f.close()
+        with open(sha_file, 'r') as f:
+            latest_sha = f.read().strip()
     except:
-        latest_sha = False
+        latest_sha = None
 
     if latest_sha:
         try:
             check_sha = git('branch', '--contains', latest_sha)
+            return not 'master' in check_sha
         except:
-            check_sha = None
-
-        if 'master' in check_sha:
-            return True
-        else:
             return False
+
     # If we weren't able to verify with remote side,
     # we'll set up_to_date to true in order to hide
     # the 'update available' message

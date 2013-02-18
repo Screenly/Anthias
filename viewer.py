@@ -247,12 +247,10 @@ def check_update():
         last_update = None
 
     if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
-
         latest_sha = req_get('http://stats.screenlyapp.com/latest')
         if latest_sha.status_code == 200:
-            f = open(sha_file, 'w')
-            f.write(latest_sha.content.strip())
-            f.close()
+            with open(sha_file, 'w') as f:
+                f.write(latest_sha.content.strip())
 
 
 def reload_settings():
