@@ -5,7 +5,7 @@
 
 
 (function() {
-  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, delay, get_mimetype, get_template, mimetypes, now, y2ts, years_from_now,
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, default_duration, delay, get_mimetype, get_template, mimetypes, now, y2ts, years_from_now,
     _this = this,
     __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
@@ -68,6 +68,8 @@
     }
   };
 
+  default_duration = 10;
+
   Backbone.emulateJSON = true;
 
   API.Asset = Asset = (function(_super) {
@@ -90,7 +92,7 @@
         uri: '',
         start_date: now(),
         end_date: now(),
-        duration: 10
+        duration: default_duration
       };
     };
 
@@ -188,7 +190,6 @@
       if ((this.model.get('mimetype')) === 'webpage') {
         this.clickTabNavUri();
       }
-      console.log(this.model.fields);
       _ref1 = this.model.fields;
       for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
         field = _ref1[_j];
@@ -269,6 +270,7 @@
       }
       (this.$('input, select')).prop('disabled', true);
       save.done(function(data) {
+        default_duration = _this.model.get('duration');
         if (!_this.model.collection) {
           _this.collection.add(_this.model);
         }
@@ -344,8 +346,9 @@
       var mt;
       mt = get_mimetype(filename);
       if (mt) {
-        return this.$fv('mimetype', mt);
+        this.$fv('mimetype', mt);
       }
+      return _.defer(this.change);
     };
 
     return EditAssetView;

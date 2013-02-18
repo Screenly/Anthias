@@ -12,8 +12,8 @@ body {
 
   ul.nav li > a {
     text-shadow: 0 1px 0 #000;
-  }  
- 
+  }
+
   a {
     &.brand {
       text-shadow: 0 1px 0 #000;
@@ -22,7 +22,7 @@ body {
       }
     }
   }
- 
+
   li.update-available {
     a {
       font-weight: bold;
@@ -66,7 +66,6 @@ body {
 
 }
 
-
 h1.page-header {
   .pull-right {
     font-weight: normal;
@@ -86,11 +85,6 @@ section {
     text-shadow: #555 0px 1px 1px !important;
     text-transform: uppercase;
   }
-
-  table {
-    width: 100%;
-  }
-
 }
 
 .modal form {
@@ -119,7 +113,7 @@ section {
   }
 }
 
-#add-form{
+#add-form {
  .progress {
     margin-top: 4px;
     margin-bottom: 0px;
@@ -129,5 +123,11 @@ section {
     padding-top: 5px;
     margin-left: 0px;
     overflow: hidden;
+  }
+}
+
+#assets {
+  table td {
+    line-height: 30px;
   }
 }

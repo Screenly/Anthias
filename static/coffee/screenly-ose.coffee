@@ -24,6 +24,8 @@ get_mimetype = (filename) =>
 
 # Models
 
+default_duration = 10
+
 # Tell Backbone to send its saves as JSON-encoded.
 Backbone.emulateJSON = on
 
@@ -36,7 +38,7 @@ API.Asset = class Asset extends Backbone.Model
     uri: ''
     start_date: now()
     end_date: now()
-    duration: 10
+    duration: default_duration
 
 API.Assets = class Assets extends Backbone.Collection
   url: "/api/assets"
@@ -70,7 +72,6 @@ class EditAssetView extends Backbone.View
     (@$ '.duration').toggle ((@model.get 'mimetype') != 'video')
     @clickTabNavUri() if (@model.get 'mimetype') == 'webpage'
 
-    console.log @model.fields
     for field in @model.fields
       @$fv field, @model.get field
     (@$ '.uri-text').html @model.get 'uri'
@@ -119,6 +120,7 @@ class EditAssetView extends Backbone.View
 
     (@$ 'input, select').prop 'disabled', on
     save.done (data) =>
+      default_duration = @model.get 'duration'
       @collection.add @model if not @model.collection
       (@$el.children ":first").modal 'hide'
       _.extend @model.attributes, data
@@ -165,6 +167,7 @@ class EditAssetView extends Backbone.View
   updateMimetype: (filename) =>
     mt = get_mimetype filename
     @$fv 'mimetype', mt if mt
+    _.defer @change
 
 
 class AssetRowView extends Backbone.View
