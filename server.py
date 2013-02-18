@@ -8,34 +8,32 @@ __version__ = "0.1.2"
 __email__ = "vpetersson@wireload.net"
 
 from datetime import datetime, timedelta
-from dateutils import datestring
 from functools import wraps
-import uuid
 from hurry.filesize import size
 from os import path, makedirs, getloadavg, statvfs, mkdir, getenv
-import os
-from requests import get as req_get, head as req_head
-from subprocess import check_output
-import traceback
-from urlparse import urlparse
-import json
-from uptime import uptime
 from re import split as re_split
+from requests import get as req_get, head as req_head
 from sh import git
+from subprocess import check_output
+from uptime import uptime
+from urlparse import urlparse
 import ConfigParser
+import json
+import os
+import traceback
+import uuid
 
 #from StringIO import StringIO
 #from PIL import Image
 
-from bottle import route, run, request, error, static_file, response, redirect
+from bottle import route, run, request, error, static_file, response
 from bottle import HTTPResponse
 from bottlehaml import haml_template
 
 from db import connection
-from utils import json_dump
-
-from utils import get_node_ip
 from settings import settings
+from utils import get_node_ip
+from utils import json_dump
 
 
 ################################

@@ -7,6 +7,7 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 __version__ = "0.1"
 __email__ = "vpetersson@wireload.net"
 
+from datetime import datetime, timedelta
 from glob import glob
 from os import path, getenv, remove, makedirs
 from os import stat as os_stat, utime
@@ -17,11 +18,10 @@ from stat import S_ISFIFO
 from subprocess import Popen, call
 from time import sleep, time
 import logging
-from datetime import datetime, timedelta
 
 from db import connection
-import html_templates
 from settings import settings
+import html_templates
 
 
 # Define to none to ensure we refresh
