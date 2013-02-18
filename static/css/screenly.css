@@ -90,3 +90,6 @@ section .header {
 
 #assets table td {
   line-height: 30px; }
+
+form .control-group .controls select {
+  margin-bottom: 9px; }

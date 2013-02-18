@@ -61,13 +61,10 @@
                     %span.off Off
                   %a.btn.btn-primary.slide-button
 
-                .help-text
-                  Specifies whether the Screenly OSE splash screen should be shown.
-
             .control-group
               %label.control-label Audio Out
               .controls
-                %select(name="audio_output")
+                %select.span2(name="audio_output")
                   - if audio_output == 'hdmi':
                     %option(value="hdmi", selected="selected") HDMI
                     %option(value="local") 3.5mm jack
@@ -90,9 +87,6 @@
                     %span.on On
                     %span.off Off
                   %a.btn.btn-primary.slide-button
-
-                .help-text
-                  Toggle the shuffling of the playlist when being displayed through the viewer.
 
             .form-actions
               %input.btn.btn-primary(type="submit", value="Save Settings")
