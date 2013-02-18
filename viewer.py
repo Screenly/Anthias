@@ -229,7 +229,6 @@ def view_web(url, duration):
         browser_url(url)
     else:
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (url))
-        pass
 
 
 def check_update():
@@ -297,7 +296,7 @@ if __name__ == "__main__":
     logging.debug('Loading blank page.')
     view_web(black_page, 1)
 
-    logging.debug('Disable the browser status bar')
+    logging.debug('Disable the browser status bar.')
     disable_browser_status()
 
     scheduler = Scheduler()
@@ -315,7 +314,7 @@ if __name__ == "__main__":
             logging.info('Playlist is empty. Going to sleep.')
             sleep(5)
         else:
-            logging.info('show asset %s' % asset["name"])
+            logging.info('Showing asset %s.' % asset["name"])
 
             watchdog()
 
