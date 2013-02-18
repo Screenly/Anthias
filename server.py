@@ -35,6 +35,7 @@ from utils import json_dump
 from utils import get_node_ip
 
 from settings import settings, DEFAULTS
+get_current_time = datetime.utcnow
 
 ################################
 # Utilities
@@ -157,7 +158,7 @@ def is_active(asset, at_time=None):
     if not (asset['start_date'] and asset['end_date']):
         return False
 
-    at_time = at_time or datetime.utcnow()
+    at_time = at_time or get_current_time()
 
     return (asset['start_date'] < at_time and asset['end_date'] > at_time)
 
