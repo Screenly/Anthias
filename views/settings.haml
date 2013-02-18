@@ -51,12 +51,11 @@
             .control-group
               %label.control-label Show Splash Screen
               .controls
-
                 %label.checkbox.toggle.well#splash_checkbox
-                  - if show_splash == 'True':
-                    %input#id(type="checkbox", checked="checked", name="show_splash")
+                  - if show_splash:
+                    %input(type="checkbox", checked="checked", name="show_splash")
                   - else:
-                    %input#id(type="checkbox", name="show_splash")
+                    %input(type="checkbox", name="show_splash")
                   %p
                     %span.on On
                     %span.off Off
@@ -83,10 +82,10 @@
               .controls
 
                 %label.checkbox.toggle.well#shuffle_checkbox
-                  - if shuffle_playlist == 'True':
-                    %input#id(type="checkbox", checked="checked", name="shuffle_playlist")
+                  - if shuffle_playlist:
+                    %input(type="checkbox", checked="checked", name="shuffle_playlist")
                   - else:
-                    %input#id(type="checkbox", name="shuffle_playlist")
+                    %input(type="checkbox", name="shuffle_playlist")
                   %p
                     %span.on On
                     %span.off Off

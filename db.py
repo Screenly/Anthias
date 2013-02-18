@@ -7,7 +7,7 @@ class Connection(object):
     """Database connection."""
 
     def __init__(self, database=None):
-        self.database = database or settings.database
+        self.database = database or settings.get_database()
         self._conn = None
 
     @property
@@ -34,4 +34,4 @@ class Connection(object):
         self._conn = None
 
 # Default connection based on settings in settings.py.
-connection = Connection(settings.database)
+connection = Connection(settings.get_database())

@@ -17,7 +17,6 @@ from sh import git
 from subprocess import check_output
 from uptime import uptime
 from urlparse import urlparse
-import ConfigParser
 import json
 import os
 import traceback
@@ -31,15 +30,15 @@ from bottle import HTTPResponse
 from bottlehaml import haml_template
 
 from db import connection
-from settings import settings
-from utils import get_node_ip
-from utils import json_dump
 
+from utils import json_dump
+from utils import get_node_ip
+
+from settings import settings, DEFAULTS
 
 ################################
 # Utilities
 ################################
-
 
 def validate_uri(uri):
     """Simple URL verification.
@@ -128,8 +127,8 @@ FIELDS = [
 
 def initiate_db():
     # Create config dir if it doesn't exist
-    if not path.isdir(settings.configdir):
-        makedirs(settings.configdir)
+    if not path.isdir(settings.get_configdir()):
+        makedirs(settings.get_configdir())
 
     c = connection.cursor()
 
@@ -144,8 +143,7 @@ def initiate_db():
 
 def is_active(asset, at_time=None):
     """Accepts an asset dictionary and determines if it
-    is active at the given time. If no time is specified,
-    get_current_time() is used.
+    is active at the given time. If no time is specified, 'now' is used.
 
     >>> asset = {'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d', 'mimetype': u'web', 'name': u'WireLoad', 'end_date': datetime(2013, 1, 19, 23, 59), 'uri': u'http://www.wireload.net', 'duration': u'5', 'start_date': datetime(2013, 1, 16, 0, 0)};
 
@@ -159,7 +157,7 @@ def is_active(asset, at_time=None):
     if not (asset['start_date'] and asset['end_date']):
         return False
 
-    at_time = at_time or settings.get_current_time()
+    at_time = at_time or datetime.utcnow()
 
     return (asset['start_date'] < at_time and asset['end_date'] > at_time)
 
@@ -286,7 +284,7 @@ def prepare_asset(request):
             asset['uri'] = uri
 
         if filename:
-            asset['uri'] = path.join(settings.asset_folder, asset['asset_id'])
+            asset['uri'] = path.join(settings.get_asset_folder(), asset['asset_id'])
 
             with open(asset['uri'], 'w') as f:
                 while True:
@@ -341,7 +339,7 @@ def api(view):
             raise
         except Exception as e:
             traceback.print_exc()
-            return api_error(str(e))
+            return api_error(unicode(e))
     return api_view
 
 
@@ -368,7 +366,7 @@ def edit_asset(asset_id):
 def remove_asset(asset_id):
     asset = fetch_asset(asset_id)
     try:
-        if asset['uri'].startswith(settings.asset_folder):
+        if asset['uri'].startswith(settings.get_asset_folder()):
             os.remove(asset['uri'])
     except OSError:
         pass
@@ -388,28 +386,23 @@ def viewIndex():
 @route('/settings', method=["GET", "POST"])
 def settings_page():
 
-    config = ConfigParser.ConfigParser()
-    conf_file = path.join(getenv('HOME'), '.screenly', 'screenly.conf')
-    config.read(conf_file)
     context = {'flash': None}
 
     if request.method == "POST":
-        config.set("viewer", "show_splash", str(request.POST.get('show_splash', 'off') == 'on'))
-        config.set("viewer", "audio_output", request.POST.get('audio_output', 'hdmi'))
-        config.set("viewer", "shuffle_playlist", str(request.POST.get('shuffle_playlist', 'off') == 'on'))
-
+        for field, default in DEFAULTS['viewer'].items():
+            value = request.POST.get(field, default)
+            if isinstance(default, bool):
+                value = value == 'on'
+            settings[field] = value
         try:
-            # Write new settings to disk.
-            with open(conf_file, "w") as settings_file:
-                config.write(settings_file)
-            settings.load_settings()  # reload the new settings into memory
+            settings.save()
             context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
-        except Exception as e:
+        except IOError as e:
             context['flash'] = {'class': "error", 'message': e}
-
-    context['show_splash'] = config.get('viewer', 'show_splash')
-    context['audio_output'] = config.get('viewer', 'audio_output')
-    context['shuffle_playlist'] = config.get('viewer', 'shuffle_playlist')
+    else:
+        settings.load()
+    for field, default in DEFAULTS['viewer'].items():
+        context[field] = settings[field]
 
     return template('settings', **context)
 
@@ -447,7 +440,7 @@ def splash_page():
     my_ip = get_node_ip()
     if my_ip:
         ip_lookup = True
-        url = "http://{}:{}".format(my_ip, settings.listen_port)
+        url = "http://{}:{}".format(my_ip, settings.get_listen_port())
     else:
         ip_lookup = False
         url = "Unable to look up your installation's IP address."
@@ -476,9 +469,11 @@ def static(path):
 
 if __name__ == "__main__":
     # Make sure the asset folder exist. If not, create it
-    if not path.isdir(settings.asset_folder):
-        mkdir(settings.asset_folder)
+    if not path.isdir(settings.get_asset_folder()):
+        mkdir(settings.get_asset_folder())
 
     initiate_db()
 
-    run(host=settings.listen_ip, port=settings.listen_port, reloader=True)
+    run(host=settings.get_listen_ip(),
+        port=settings.get_listen_port(),
+        reloader=True)
