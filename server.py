@@ -96,7 +96,7 @@ def is_up_to_date():
     if latest_sha:
         try:
             check_sha = git('branch', '--contains', latest_sha)
-            return not 'master' in check_sha
+            return 'master' in check_sha
         except:
             return False
 
