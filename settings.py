@@ -52,6 +52,24 @@ class ScreenlySettings(IterableUserDict):
             self.load()
         return rv
 
+    def _get(self, config, section, field, default):
+        try:
+            if isinstance(default, bool):
+                self[field] = config.getboolean(section, field)
+            elif isinstance(default, int):
+                self[field] = config.getint(section, field)
+            else:
+                self[field] = config.get(section, field)
+        except ConfigParser.Error as e:
+            logging.info("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (section, field, unicode(e), default))
+            self[field] = default
+
+    def _set(self, config, section, field, default):
+        if isinstance(default, bool):
+            config.set(section, field, self.get(field, default) and 'on' or 'off')
+        else:
+            config.set(section, field, unicode(self.get(field, default)))
+
     def load(self):
         "Loads the latest settings from screenly.conf into memory."
         logging.debug('Reading config-file...')
@@ -60,16 +78,7 @@ class ScreenlySettings(IterableUserDict):
 
         for section, defaults in DEFAULTS.items():
             for field, default in defaults.items():
-                try:
-                    if isinstance(default, bool):
-                        self[field] = config.getboolean(section, field)
-                    elif isinstance(default, int):
-                        self[field] = config.getint(section, field)
-                    else:
-                        self[field] = config.get(section, field)
-                except ConfigParser.Error as e:
-                    logging.warning("Could not parse setting '%s.%s': %s" % (section, field, unicode(e)))
-                    self[field] = default
+                self._get(config, section, field, default)
         try:
             ip = self.get_listen_ip()
             port = int(self.get_listen_port())
@@ -83,10 +92,7 @@ class ScreenlySettings(IterableUserDict):
         for section, defaults in DEFAULTS.items():
             config.add_section(section)
             for field, default in defaults.items():
-                if isinstance(default, bool):
-                    config.set(section, field, self.get(field, default) and 'on' or 'off')
-                else:
-                    config.set(section, field, unicode(self.get(field, default)))
+                self._set(config, section, field, default)
         with open(self.conf_file, "w") as f:
             config.write(f)
         self.load()
