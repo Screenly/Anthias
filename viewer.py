@@ -203,7 +203,7 @@ def view_video(video):
             remove(omxplayer_logfile)
 
     ## For x86
-    elif arch == "x86_64" or arch == "x86_32":
+    elif arch in ['x86_64', 'x86_32']:
         logging.debug('Displaying video %s. Detected x86. Using mplayer.' % video)
         mplayer = "mplayer"
         run = call([mplayer, "-fs", "-nosound", str(video)], stdout=False)
