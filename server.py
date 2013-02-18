@@ -178,6 +178,11 @@ def fetch_assets(keys=FIELDS, order_by="name"):
     return assets
 
 
+def get_playlist():
+    "Returns all currently active assets."
+    return [asset for asset in fetch_assets() if is_active(asset)]
+
+
 def fetch_asset(asset_id, keys=FIELDS):
     c = connection.cursor()
     c.execute("SELECT %s FROM assets WHERE asset_id=?" % ", ".join(keys), (asset_id,))
