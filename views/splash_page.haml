@@ -1,0 +1,35 @@
+!!! 5
+%html
+
+  %head
+    %meta(charset="utf-8")
+    %title Welcome to Screenly
+
+    %link(href="/static/css/bootstrap.css", rel="stylesheet")
+    %link(href="/static/css/screenly.css", rel="stylesheet")
+
+  %body.splash
+
+    .container
+      .row
+        .span12
+          .page-header.text-center
+            %h1 Welcome to Screenly
+
+      .row
+        .span12.text-center
+          - if ip_lookup:
+            %p.lead To manage the content on this screen, just point your browser to:
+
+            .well.lead
+              %a(href="${url}") ${url}
+          - else:
+            %p.lead Unable to resolve management IP.
+
+      %hr
+
+      .row
+        .span12.text-center
+          Brought to you by <br />
+          %a(href="http://wireload.net")
+            %img(src="/static/img/WireLoad.png")

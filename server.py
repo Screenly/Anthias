@@ -8,119 +8,38 @@ __version__ = "0.1.2"
 __email__ = "vpetersson@wireload.net"
 
 from datetime import datetime, timedelta
-from dateutils import datestring
-from hashlib import md5
+from functools import wraps
 from hurry.filesize import size
-from os import path, makedirs, getloadavg, statvfs, mkdir, remove as remove_file
-from PIL import Image
+from os import path, makedirs, getloadavg, statvfs, mkdir, getenv
+from re import split as re_split
 from requests import get as req_get, head as req_head
-from StringIO import StringIO
+from sh import git
 from subprocess import check_output
+from uptime import uptime
 from urlparse import urlparse
+import json
+import os
+import traceback
+import uuid
 
-from bottle import route, run, template, request, error, static_file
+#from StringIO import StringIO
+#from PIL import Image
+
+from bottle import route, run, request, error, static_file, response
+from bottle import HTTPResponse
+from bottlehaml import haml_template
 
 from db import connection
-from settings import get_current_time, asset_folder
-from utils import get_node_ip
-import settings
 
+from utils import json_dump
+from utils import get_node_ip
+
+from settings import settings, DEFAULTS
+get_current_time = datetime.utcnow
 
 ################################
 # Utilities
 ################################
-
-def is_active(asset, at_time=None):
-    """Accepts an asset dictionary and determines if it
-    is active at the given time. If no time is specified,
-    get_current_time() is used.
-
-    >>> asset = {'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d', 'mimetype': u'web', 'name': u'WireLoad', 'end_date': datetime(2013, 1, 19, 23, 59), 'uri': u'http://www.wireload.net', 'duration': u'5', 'start_date': datetime(2013, 1, 16, 0, 0)};
-
-    >>> is_active(asset, datetime(2013, 1, 16, 12, 00))
-    True
-    >>> is_active(asset, datetime(2014, 1, 1))
-    False
-
-    """
-
-    if not (asset['start_date'] and asset['end_date']):
-        return False
-
-    at_time = at_time or get_current_time()
-
-    return (asset['start_date'] < at_time and asset['end_date'] > at_time)
-
-
-def get_playlist():
-    playlist = []
-    for asset in fetch_assets():
-        if is_active(asset):
-            asset['start_date'] = datestring.date_to_string(asset['start_date'])
-            asset['end_date'] = datestring.date_to_string(asset['end_date'])
-
-            playlist.append(asset)
-
-    return playlist
-
-
-def fetch_assets(keys=None, order_by="name"):
-    """Fetches all assets from the database and returns their
-    data as returned from the SQLite3 cursor."""
-    c = connection.cursor()
-
-    if keys is None:
-        keys = [
-            "asset_id", "name", "uri", "start_date",
-            "end_date", "duration", "mimetype"
-        ]
-
-    c.execute("SELECT %s FROM assets ORDER BY %s" % (", ".join(keys), order_by))
-    raw_assets = c.fetchall()
-    assets = []
-
-    for asset in raw_assets:
-        dictionary = {}
-        for i in range(len(keys)):
-            dictionary[keys[i]] = asset[i]
-        assets.append(dictionary)
-
-    return assets
-
-
-def get_assets_grouped():
-    """Returns a dictionary containing a list of active assets
-    and a list of inactive assets stored at their respective
-    keys. Example: {'active': [...], 'inactive': [...]}"""
-
-    assets = fetch_assets()
-    active = []
-    inactive = []
-
-    for asset in assets:
-        if is_active(asset):
-            active.append(asset)
-        else:
-            inactive.append(asset)
-
-    return {'active': active, 'inactive': inactive}
-
-
-def initiate_db():
-    # Create config dir if it doesn't exist
-    if not path.isdir(settings.configdir):
-        makedirs(settings.configdir)
-
-    c = connection.cursor()
-
-    # Check if the asset-table exist. If it doesn't, create it.
-    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='assets'")
-    asset_table = c.fetchone()
-
-    if not asset_table:
-        c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT)")
-        return "Initiated database."
-
 
 def validate_uri(uri):
     """Simple URL verification.
@@ -143,218 +62,355 @@ def validate_uri(uri):
     return bool(uri_check.scheme in ('http', 'https') and uri_check.netloc)
 
 
+def make_json_response(obj):
+    response.content_type = "application/json"
+    return json_dump(obj)
+
+
+def api_error(error):
+    response.content_type = "application/json"
+    response.status = 500
+    return json_dump({'error': error})
+
+
+def is_up_to_date():
+    """
+    Determine if there is any update available.
+    Used in conjunction with check_update() in viewer.py.
+    """
+
+    sha_file = path.join(getenv('HOME'), '.screenly', 'latest_screenly_sha')
+
+    # Until this has been created by viewer.py, let's just assume we're up to date.
+    if not os.path.exists(sha_file):
+        return True
+
+    try:
+        with open(sha_file, 'r') as f:
+            latest_sha = f.read().strip()
+    except:
+        latest_sha = None
+
+    if latest_sha:
+        try:
+            check_sha = git('branch', '--contains', latest_sha)
+            return 'master' in check_sha
+        except:
+            return False
+
+    # If we weren't able to verify with remote side,
+    # we'll set up_to_date to true in order to hide
+    # the 'update available' message
+    else:
+        return True
+
+
+def template(template_name, **context):
+    """Screenly template response generator. Shares the
+    same function signature as Bottle's template() method
+    but also injects some global context."""
+
+    # Add global contexts
+    context['up_to_date'] = is_up_to_date()
+
+    return haml_template(template_name, **context)
+
+
+################################
+# Model
+################################
+
+FIELDS = [
+    "asset_id", "name", "uri", "start_date",
+    "end_date", "duration", "mimetype"
+]
+
+
+def initiate_db():
+    # Create config dir if it doesn't exist
+    if not path.isdir(settings.get_configdir()):
+        makedirs(settings.get_configdir())
+
+    c = connection.cursor()
+
+    # Check if the asset-table exist. If it doesn't, create it.
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='assets'")
+    asset_table = c.fetchone()
+
+    if not asset_table:
+        c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT)")
+        return "Initiated database."
+
+
+def is_active(asset, at_time=None):
+    """Accepts an asset dictionary and determines if it
+    is active at the given time. If no time is specified, 'now' is used.
+
+    >>> asset = {'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d', 'mimetype': u'web', 'name': u'WireLoad', 'end_date': datetime(2013, 1, 19, 23, 59), 'uri': u'http://www.wireload.net', 'duration': u'5', 'start_date': datetime(2013, 1, 16, 0, 0)};
+
+    >>> is_active(asset, datetime(2013, 1, 16, 12, 00))
+    True
+    >>> is_active(asset, datetime(2014, 1, 1))
+    False
+
+    """
+
+    if not (asset['start_date'] and asset['end_date']):
+        return False
+
+    at_time = at_time or get_current_time()
+
+    return (asset['start_date'] < at_time and asset['end_date'] > at_time)
+
+
+def fetch_assets(keys=FIELDS, order_by="name"):
+    """Fetches all assets from the database and returns their
+    data as a list of dictionaries corresponding to each asset."""
+    c = connection.cursor()
+    c.execute("SELECT %s FROM assets ORDER BY %s" % (", ".join(keys), order_by))
+    assets = []
+
+    for asset in c.fetchall():
+        dictionary = {}
+        for i in range(len(keys)):
+            dictionary[keys[i]] = asset[i]
+        assets.append(dictionary)
+
+    return assets
+
+
+def get_playlist():
+    "Returns all currently active assets."
+    return [asset for asset in fetch_assets() if is_active(asset)]
+
+
+def fetch_asset(asset_id, keys=FIELDS):
+    c = connection.cursor()
+    c.execute("SELECT %s FROM assets WHERE asset_id=?" % ", ".join(keys), (asset_id,))
+    assets = []
+    for asset in c.fetchall():
+        dictionary = {}
+        for i in range(len(keys)):
+            dictionary[keys[i]] = asset[i]
+        assets.append(dictionary)
+    if len(assets):
+        asset = assets[0]
+        asset.update({'is_active': is_active(asset)})
+        return asset
+
+
+def insert_asset(asset):
+    c = connection.cursor()
+    c.execute(
+        "INSERT INTO assets (%s) VALUES (%s)" % (", ".join(asset.keys()), ",".join(["?"] * len(asset.keys()))),
+        asset.values()
+    )
+    connection.commit()
+    asset.update({'is_active': is_active(asset)})
+    return asset
+
+
+def update_asset(asset_id, asset):
+    del asset['asset_id']
+    c = connection.cursor()
+    query = "UPDATE assets SET %s=? WHERE asset_id=?" % "=?, ".join(asset.keys())
+    c.execute(query, asset.values() + [asset_id])
+    connection.commit()
+    asset.update({'asset_id': asset_id})
+    asset.update({'is_active': is_active(asset)})
+    return asset
+
+
+def delete_asset(asset_id):
+    c = connection.cursor()
+    c.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
+    connection.commit()
+
+
+################################
+# API
+################################
+
+def prepare_asset(request):
+
+    data = request.POST or request.FORM or {}
+
+    if 'model' in data:
+        data = json.loads(data['model'])
+
+    def get(key):
+        val = data.get(key, '')
+        return val.strip() if isinstance(val, basestring) else val
+
+    if all([
+        get('name'),
+        get('uri') or (request.files.file_upload != ""),
+        get('mimetype')]):
+
+        asset = {
+            'name': get('name').decode('UTF-8'),
+            'mimetype': get('mimetype'),
+            'asset_id': get('asset_id'),
+        }
+
+        uri = get('uri') or False
+
+        if not asset['asset_id']:
+            asset['asset_id'] = uuid.uuid4().hex
+
+        try:
+            file_upload = request.files.file_upload
+            filename = file_upload.filename
+        except AttributeError:
+            file_upload = None
+            filename = None
+
+        if filename and 'web' in asset['mimetype']:
+            raise Exception("Invalid combination. Can't upload a web resource.")
+
+        if uri and filename:
+            raise Exception("Invalid combination. Can't select both URI and a file.")
+
+        if uri and not uri.startswith('/'):
+            if not validate_uri(uri):
+                raise Exception("Invalid URL. Failed to add asset.")
+
+            if "image" in asset['mimetype']:
+                file = req_get(uri, allow_redirects=True)
+            else:
+                file = req_head(uri, allow_redirects=True)
+
+            if file.status_code == 200:
+                asset['uri'] = uri
+                # strict_uri = file.url
+
+            else:
+                raise Exception("Could not retrieve file. Check the asset URL.")
+        else:
+            asset['uri'] = uri
+
+        if filename:
+            asset['uri'] = path.join(settings.get_asset_folder(), asset['asset_id'])
+
+            with open(asset['uri'], 'w') as f:
+                while True:
+                    chunk = file_upload.file.read(1024)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+
+
+        if "video" in asset['mimetype']:
+            asset['duration'] = "N/A"
+        else:
+            # crashes if it's not an int. we want that.
+            asset['duration'] = int(get('duration'))
+
+        if get('start_date'):
+            asset['start_date'] = datetime.strptime(get('start_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
+        else:
+            asset['start_date'] = ""
+
+        if get('end_date'):
+            asset['end_date'] = datetime.strptime(get('end_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
+        else:
+            asset['end_date'] = ""
+
+        if not asset['asset_id']:
+            raise Exception
+
+        if not asset['uri']:
+            raise Exception
+
+        return asset
+    else:
+        raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
+
+
+@route('/api/assets', method="GET")
+def api_assets():
+    assets = fetch_assets()
+    for asset in assets:
+        asset['is_active'] = is_active(asset)
+    return make_json_response(assets)
+
+
+# api view decorator. handles errors
+def api(view):
+    @wraps(view)
+    def api_view(*args, **kwargs):
+        try:
+            return make_json_response(view(*args, **kwargs))
+        except HTTPResponse:
+            raise
+        except Exception as e:
+            traceback.print_exc()
+            return api_error(unicode(e))
+    return api_view
+
+
+@route('/api/assets', method="POST")
+@api
+def add_asset():
+    return insert_asset(prepare_asset(request))
+
+
+@route('/api/assets/:asset_id', method="GET")
+@api
+def edit_asset(asset_id):
+    return fetch_asset(asset_id)
+
+
+@route('/api/assets/:asset_id', method=["PUT", "POST"])
+@api
+def edit_asset(asset_id):
+    return update_asset(asset_id, prepare_asset(request))
+
+
+@route('/api/assets/:asset_id', method="DELETE")
+@api
+def remove_asset(asset_id):
+    asset = fetch_asset(asset_id)
+    try:
+        if asset['uri'].startswith(settings.get_asset_folder()):
+            os.remove(asset['uri'])
+    except OSError:
+        pass
+    delete_asset(asset_id)
+    response.status = 204  # return an OK with no content
+
+
 ################################
 # Views
 ################################
 
 @route('/')
 def viewIndex():
-    initiate_db()
     return template('index')
 
 
-@route('/process_asset', method='POST')
-def process_asset():
-    c = connection.cursor()
+@route('/settings', method=["GET", "POST"])
+def settings_page():
 
-    if (request.POST.get('name', '').strip() and
-        (request.POST.get('uri', '').strip() or request.files.file_upload.file) and
-        request.POST.get('mimetype', '').strip()
-        ):
+    context = {'flash': None}
 
-        name = request.POST.get('name', '').decode('UTF-8')
-        mimetype = request.POST.get('mimetype', '').strip()
-
+    if request.method == "POST":
+        for field, default in DEFAULTS['viewer'].items():
+            value = request.POST.get(field, default)
+            if isinstance(default, bool):
+                value = value == 'on'
+            settings[field] = value
         try:
-            uri = request.POST.get('uri', '').strip()
-        except:
-            uri = False
-
-        try:
-            file_upload = request.files.file_upload.file
-        except:
-            file_upload = False
-
-        # Make sure it is a valid combination
-        if (file_upload and 'web' in mimetype):
-            header = "Ops!"
-            message = "Invalid combination. Can't upload web resource."
-            return template('message', header=header, message=message)
-
-        if (uri and file_upload):
-            header = "Ops!"
-            message = "Invalid combination. Can't select both URI and a file."
-            return template('message', header=header, message=message)
-
-        if uri:
-            if not validate_uri(uri):
-                header = "Ops!"
-                message = "Invalid URL. Failed to add asset."
-                return template('message', header=header, message=message)
-
-            if "image" in mimetype:
-                file = req_get(uri, allow_redirects=True)
-            else:
-                file = req_head(uri, allow_redirects=True)
-
-            # Only proceed if fetch was successful.
-            if file.status_code == 200:
-                asset_id = md5(name + uri).hexdigest()
-
-                strict_uri = file.url
-
-                if "image" in mimetype:
-                    resolution = Image.open(StringIO(file.content)).size
-                else:
-                    resolution = "N/A"
-
-                if "video" in mimetype:
-                    duration = "N/A"
-            else:
-                header = "Ops!"
-                message = "Unable to fetch file."
-                return template('message', header=header, message=message)
-
-        if file_upload:
-            asset_file_input = file_upload.read()
-            asset_id = md5(asset_file_input).hexdigest()
-
-            local_uri = path.join(asset_folder, asset_id)
-            f = open(local_uri, 'w')
-            f.write(asset_file_input)
-            f.close()
-
-            uri = local_uri
-
-        start_date = ""
-        end_date = ""
-        duration = ""
-
-        c.execute("INSERT INTO assets (asset_id, name, uri, start_date, end_date, duration, mimetype) VALUES (?,?,?,?,?,?,?)", (asset_id, name, uri, start_date, end_date, duration, mimetype))
-        connection.commit()
-
-        header = "Yay!"
-        message = "Added asset (" + asset_id + ") to the database."
-        return template('message', header=header, message=message)
-
+            settings.save()
+            context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
+        except IOError as e:
+            context['flash'] = {'class': "error", 'message': e}
     else:
-        header = "Ops!"
-        message = "Invalid input."
-        return template('message', header=header, message=message)
+        settings.load()
+    for field, default in DEFAULTS['viewer'].items():
+        context[field] = settings[field]
 
-
-@route('/process_schedule', method='POST')
-def process_schedule():
-    c = connection.cursor()
-
-    if (request.POST.get('asset', '').strip() and
-        request.POST.get('start', '').strip() and
-        request.POST.get('end', '').strip()
-        ):
-
-        asset_id = request.POST.get('asset', '').strip()
-        input_start = request.POST.get('start', '').strip()
-        input_end = request.POST.get('end', '').strip()
-
-        start_date = datetime.strptime(input_start, '%Y-%m-%d @ %H:%M')
-        end_date = datetime.strptime(input_end, '%Y-%m-%d @ %H:%M')
-
-        query = c.execute("SELECT mimetype FROM assets WHERE asset_id=?", (asset_id,))
-        asset_mimetype = c.fetchone()
-
-        if "image" or "web" in asset_mimetype:
-            try:
-                duration = request.POST.get('duration', '').strip()
-            except:
-                header = "Ops!"
-                message = "Duration missing. This is required for images and web-pages."
-                return template('message', header=header, message=message)
-        else:
-            duration = "N/A"
-
-        c.execute("UPDATE assets SET start_date=?, end_date=?, duration=? WHERE asset_id=?", (start_date, end_date, duration, asset_id))
-        connection.commit()
-
-        header = "Yes!"
-        message = "Successfully scheduled asset."
-        return template('message', header=header, message=message)
-
-    else:
-        header = "Ops!"
-        message = "Failed to process schedule."
-        return template('message', header=header, message=message)
-
-
-@route('/update_asset', method='POST')
-def update_asset():
-    c = connection.cursor()
-
-    if (request.POST.get('asset_id', '').strip() and
-        request.POST.get('name', '').strip() and
-        request.POST.get('uri', '').strip() and
-        request.POST.get('mimetype', '').strip()
-        ):
-
-        asset_id = request.POST.get('asset_id', '').strip()
-        name = request.POST.get('name', '').decode('UTF-8')
-        uri = request.POST.get('uri', '').strip()
-        mimetype = request.POST.get('mimetype', '').strip()
-
-        if not validate_uri(uri) and asset_folder not in uri:
-            header = "Ops!"
-            message = "Invalid URL. Failed to update asset."
-            return template('message', header=header, message=message)
-
-        try:
-            duration = request.POST.get('duration', '').strip()
-        except:
-            duration = None
-
-        try:
-            input_start = request.POST.get('start', '')
-            start_date = datetime.strptime(input_start, '%Y-%m-%d @ %H:%M')
-        except:
-            start_date = None
-
-        try:
-            input_end = request.POST.get('end', '').strip()
-            end_date = datetime.strptime(input_end, '%Y-%m-%d @ %H:%M')
-        except:
-            end_date = None
-
-        c.execute("UPDATE assets SET start_date=?, end_date=?, duration=?, name=?, uri=?, duration=?, mimetype=? WHERE asset_id=?", (start_date, end_date, duration, name, uri, duration, mimetype, asset_id))
-        connection.commit()
-
-        header = "Yes!"
-        message = "Successfully updated asset."
-        return template('message', header=header, message=message)
-
-    else:
-        header = "Ops!"
-        message = "Failed to update asset."
-        return template('message', header=header, message=message)
-
-
-@route('/delete_asset/:asset_id')
-def delete_asset(asset_id):
-    c = connection.cursor()
-
-    c.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
-    try:
-        connection.commit()
-
-        # If file exist on disk, delete it.
-        local_uri = path.join(asset_folder, asset_id)
-        if path.isfile(local_uri):
-            remove_file(local_uri)
-
-        header = "Success!"
-        message = "Deleted asset."
-        return template('message', header=header, message=message)
-    except:
-        header = "Ops!"
-        message = "Failed to delete asset."
-        return template('message', header=header, message=message)
+    return template('settings', **context)
 
 
 @route('/system_info')
@@ -365,118 +421,37 @@ def system_info():
     else:
         viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
 
-    loadavg = getloadavg()[2]
+    # Get load average from last 15 minutes and round to two digits.
+    loadavg = round(getloadavg()[2], 2)
 
     try:
-        resolution = check_output(['tvservice', '-s']).strip()
+        run_tvservice = check_output(['tvservice', '-s'])
+        display_info = re_split('\||,', run_tvservice.strip('state:'))
     except:
-        resolution = None
+        display_info = False
 
     # Calculate disk space
     slash = statvfs("/")
-    free_space = size(slash.f_bsize * slash.f_bavail)
+    free_space = size(slash.f_bavail * slash.f_frsize)
 
     # Get uptime
-    try:
-        with open('/proc/uptime', 'r') as f:
-            uptime_seconds = float(f.readline().split()[0])
-            uptime = str(timedelta(seconds=uptime_seconds))
-    except:
-        uptime = None
+    uptime_in_seconds = uptime()
+    system_uptime = timedelta(seconds=uptime_in_seconds)
 
-    return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=uptime, resolution=resolution)
+    return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=system_uptime, display_info=display_info)
 
 
 @route('/splash_page')
 def splash_page():
-    # Make sure the database exist and that it is initiated.
-    initiate_db()
-
     my_ip = get_node_ip()
-
     if my_ip:
         ip_lookup = True
-        url = "http://{}:{}".format(my_ip, settings.listen_port)
+        url = "http://{}:{}".format(my_ip, settings.get_listen_port())
     else:
         ip_lookup = False
         url = "Unable to look up your installation's IP address."
 
     return template('splash_page', ip_lookup=ip_lookup, url=url)
-
-
-@route('/view_playlist')
-def view_node_playlist():
-    nodeplaylist = get_playlist()
-
-    return template('view_playlist', nodeplaylist=nodeplaylist)
-
-
-@route('/view_assets')
-def view_assets():
-    nodeplaylist = fetch_assets()
-
-    return template('view_assets', nodeplaylist=nodeplaylist)
-
-
-@route('/add_asset')
-def add_asset():
-    return template('add_asset')
-
-
-@route('/schedule_asset')
-def schedule_asset():
-    c = connection.cursor()
-
-    assets = []
-    c.execute("SELECT name, asset_id FROM assets ORDER BY name")
-    query = c.fetchall()
-    for asset in query:
-        name = asset[0]
-        asset_id = asset[1]
-
-        assets.append({
-            'name': name,
-            'asset_id': asset_id,
-        })
-
-    return template('schedule_asset', assets=assets)
-
-
-@route('/edit_asset/:asset_id')
-def edit_asset(asset_id):
-    c = connection.cursor()
-
-    c.execute("SELECT name, uri, md5, start_date, end_date, duration, mimetype FROM assets WHERE asset_id=?", (asset_id,))
-    asset = c.fetchone()
-
-    name = asset[0]
-    uri = asset[1]
-    md5 = asset[2]
-
-    if asset[3]:
-        start_date = datestring.date_to_string(asset[3])
-    else:
-        start_date = None
-
-    if asset[4]:
-        end_date = datestring.date_to_string(asset[4])
-    else:
-        end_date = None
-
-    duration = asset[5]
-    mimetype = asset[6]
-
-    asset_info = {
-            "name": name,
-            "uri": uri,
-            "duration": duration,
-            "mimetype": mimetype,
-            "asset_id": asset_id,
-            "start_date": start_date,
-            "end_date": end_date
-            }
-    #return str(asset_info)
-    return template('edit_asset', asset_info=asset_info)
 
 
 @error(403)
@@ -500,7 +475,11 @@ def static(path):
 
 if __name__ == "__main__":
     # Make sure the asset folder exist. If not, create it
-    if not path.isdir(asset_folder):
-        mkdir(asset_folder)
+    if not path.isdir(settings.get_asset_folder()):
+        mkdir(settings.get_asset_folder())
 
-    run(host=settings.listen_ip, port=settings.listen_port, reloader=True)
+    initiate_db()
+
+    run(host=settings.get_listen_ip(),
+        port=settings.get_listen_port(),
+        reloader=True)

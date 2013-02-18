@@ -1,15 +1,27 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 
-from datetime import datetime
 from os import path, getenv
 from sys import exit
 import ConfigParser
 import logging
+from UserDict import IterableUserDict
 
+CONFIG_DIR = path.join(getenv('HOME'), '.screenly')
 
-def str_to_bol(string):
-    return 'true' in string.lower()
+DEFAULTS = {
+    'main': {
+        'database': '.screenly/screenly.db',
+        'nodetype': 'standalone',
+        'listen': '0.0.0.0:8080',
+    },
+    'viewer': {
+        'show_splash': True,
+        'audio_output': 'hdmi',
+        'shuffle_playlist': False,
+        'resolution': '1920x1080',
+    }
+}
 
 # Initiate logging
 logging.basicConfig(level=logging.INFO,
@@ -24,39 +36,80 @@ requests_log.setLevel(logging.WARNING)
 
 logging.debug('Starting viewer.py')
 
-# Get config file
-config = ConfigParser.ConfigParser()
-conf_file = path.join(getenv('HOME'), '.screenly', 'screenly.conf')
-if not path.isfile(conf_file):
-    print 'Config-file missing.'
-    logging.error('Config-file missing.')
-    exit(1)
-else:
-    logging.debug('Reading config-file...')
-    config.read(conf_file)
 
-# Get config values
-configdir = path.join(getenv('HOME'), config.get('main', 'configdir'))
-database = path.join(getenv('HOME'), config.get('main', 'database'))
-nodetype = config.get('main', 'nodetype')
-show_splash = str_to_bol(config.get('viewer', 'show_splash'))
-audio_output = config.get('viewer', 'audio_output')
-shuffle_playlist = str_to_bol(config.get('viewer', 'shuffle_playlist'))
-asset_folder = path.join(getenv('HOME'), 'screenly_assets')
+class ScreenlySettings(IterableUserDict):
+    "Screenly OSE's Settings."
 
-try:
-    resolution = config.get('viewer', 'resolution')
-except:
-    resolution = '1920x1080'
+    def __init__(self, *args, **kwargs):
+        rv = IterableUserDict.__init__(self, *args, **kwargs)
+        self.conf_file = path.join(CONFIG_DIR, 'screenly.conf')
 
-try:
-    # Expect the string in format: ip:port
-    listen = config.get('main', 'listen').split(':')
-    listen_ip = listen[0]
-    listen_port = listen[1]
-except:
-    listen_ip = '0.0.0.0'
-    listen_port = '8080'
+        if not path.isfile(self.conf_file):
+            print 'Config-file missing.'
+            logging.error('Config-file missing.')
+            exit(1)
+        else:
+            self.load()
+        return rv
 
-# This assumes nodetype never changes from "standalone" to "managed" during a run.
-get_current_time = datetime.now if nodetype == "standalone" else datetime.utcnow
+    def _get(self, config, section, field, default):
+        try:
+            if isinstance(default, bool):
+                self[field] = config.getboolean(section, field)
+            elif isinstance(default, int):
+                self[field] = config.getint(section, field)
+            else:
+                self[field] = config.get(section, field)
+        except ConfigParser.Error as e:
+            logging.info("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (section, field, unicode(e), default))
+            self[field] = default
+
+    def _set(self, config, section, field, default):
+        if isinstance(default, bool):
+            config.set(section, field, self.get(field, default) and 'on' or 'off')
+        else:
+            config.set(section, field, unicode(self.get(field, default)))
+
+    def load(self):
+        "Loads the latest settings from screenly.conf into memory."
+        logging.debug('Reading config-file...')
+        config = ConfigParser.ConfigParser()
+        config.read(self.conf_file)
+
+        for section, defaults in DEFAULTS.items():
+            for field, default in defaults.items():
+                self._get(config, section, field, default)
+        try:
+            ip = self.get_listen_ip()
+            port = int(self.get_listen_port())
+        except ValueError as e:
+            logging.warning("Could not parse setting 'listen': %s" % unicode(e))
+            self['listen'] = DEFAULTS['main']['listen']
+
+    def save(self):
+        # Write new settings to disk.
+        config = ConfigParser.ConfigParser()
+        for section, defaults in DEFAULTS.items():
+            config.add_section(section)
+            for field, default in defaults.items():
+                self._set(config, section, field, default)
+        with open(self.conf_file, "w") as f:
+            config.write(f)
+        self.load()
+
+    def get_configdir(self):
+        return CONFIG_DIR
+
+    def get_database(self):
+        return path.join(getenv('HOME'), self['database'])
+
+    def get_asset_folder(self):
+        return path.join(getenv('HOME'), 'screenly_assets')
+
+    def get_listen_ip(self):
+        return self['listen'].split(':')[0]
+
+    def get_listen_port(self):
+        return self['listen'].split(':')[1]
+
+settings = ScreenlySettings()

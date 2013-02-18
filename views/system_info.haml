@@ -1,0 +1,77 @@
+!!! 5
+%html
+
+  %head
+    %meta(charset="utf-8")
+    %title Screenly OSE
+
+    %link(href="/static/css/bootstrap.css", rel="stylesheet")
+    %link(href="/static/css/screenly.css", rel="stylesheet")
+    %script(src="/static/js/jquery-1.9.1.min.js")
+
+  %body
+
+    .navbar.navbar-fixed-top
+      .navbar-inner
+        .container
+          %a.brand(href="/")
+            %strong Screenly
+            %span OSE
+
+          %ul.nav.pull-right
+            - if not up_to_date:
+              %li.update-available
+                %a(href="http://www.screenlyapp.com/ose.html#upgrade")
+                  %i.icon-circle-arrow-down.icon-white
+                  Update Available
+            %li
+              %a(href="/settings")
+                %i.icon-cog.icon-white
+                Settings
+            %li.divider-vertical
+            %li
+              %a(href="/system_info")
+                %i.icon-tasks.icon-white
+                System Info
+
+    .container
+      .row
+        .span12
+          %h1.page-header
+            System Info
+
+          %table.table.table-bordered(style="width: 100%")
+            %thead
+              %tr
+                %th Load Average
+                %th Free Space
+                %th Uptime
+                %th Monitor Info
+            %tbody
+              %tr
+                %td ${loadavg}
+                %td ${free_space}
+                %td ${uptime.days} days and ${uptime.seconds / 3600} hours
+                %td
+                  - if display_info:
+                    %ul
+                      - for info in display_info:
+                        %li ${info.strip().capitalize()}
+          %section
+            .header
+              Latest Viewer Logs
+
+          - if viewlog:
+            %table.table.table-striped
+              - for line in viewlog:
+                %tr
+                  %td ${line}
+          - else:
+            %p There are no recent log messages.
+
+    #footer
+      .container
+        .copy
+          &copy; <strong>2012-2013.</strong> WireLoad, Inc.
+        %a(id="wireload-logo", href="http://wireload.net/")
+          %img(src="/static/img/wireload-logo.png", alt="Wireload")

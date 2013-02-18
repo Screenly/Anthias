@@ -1,0 +1,216 @@
+!!! 5
+%html
+
+  %head
+    %meta(charset="utf-8")
+    %title Screenly OSE
+
+    %link(href="/static/css/bootstrap.css", rel="stylesheet")
+    %link(href="/static/css/datepicker.css", rel="stylesheet")
+    %link(href="/static/css/timepicker.css", rel="stylesheet")
+    %link(href="/static/css/toggle-switch.css", rel="stylesheet")
+    %link(href="/static/css/screenly.css", rel="stylesheet")
+
+    %script(src="/static/js/jquery-1.9.1.min.js")
+    / %script(src="/static/js/bootstrap-dropdown.js")
+    %script(src="/static/js/underscore-1.4.3.min.js")
+    %script(src="/static/js/backbone-0.9.10.min.js")
+    %script(src="/static/js/bootstrap.min.js")
+    %script(src="/static/js/bootstrap-datepicker.js")
+    %script(src="/static/js/bootstrap-timepicker.js")
+    %script(src="/static/js/jquery.ui.widget.js")
+    %script(src="/static/js/jquery.iframe-transport.js")
+    %script(src="/static/js/jquery.fileupload.js")
+    %script(src="/static/js/moment.js")
+    %script(src="/static/js/screenly-ose.js")
+
+    %script(type="text/template", id="asset-row-template")
+      %td
+        %i.asset-icon
+        :plain
+          <%= name %>
+      %td
+        :plain
+          <%= Screenly.date_to.string(start_date) %>
+      %td
+        :plain
+          <%= Screenly.date_to.string(end_date) %>
+      %td
+        %button.edit-asset-button.btn(type="button")
+          %i.icon-pencil
+        %button.delete-asset-button.btn(type="button", dataTitle="Sure?", dataPlacement="left", dataHtml="true", dataTrigger="manual")
+          %i.icon-trash
+      %td
+        %label.activation-toggle.checkbox.toggle.well
+          %input(type="checkbox")
+          %p
+            %span.on On
+            %span.off Off
+          %a.slide-button.btn.btn-primary
+
+    %script(type="text/template", id="confirm-delete-template")
+      .clearfix
+        .pull-left
+          %a.confirm-delete.btn.btn-large.btn-danger(href="#") Delete
+        .pull-right
+          %a.cancel-delete.btn.btn-large(href="#") Cancel
+
+    %script(type="text/template", id="request-error-template")
+      .container
+        .alert.alert-error
+          %button.close(type="button", dataDismiss="alert") &times;
+          The operation failed. Please reload the page and try again.
+
+
+    %script(type="text/template", id="asset-modal-template")
+      .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
+        %form.form-horizontal#add-form
+          .modal-header
+            %h3#modalLabel Add Asset
+          .modal-body
+            %fieldset
+              .control-group.name
+                %label.control-label Name
+                .controls
+                  %input.span4(type="text", name="name", placeholder="Nickname for this asset")
+            .asset-location.add
+              %fieldset
+                .tabbable
+                  %ul.nav.nav-tabs
+                    %li.active.tabnav-uri(style="margin-left:180px")
+                      %a(href="#tab-uri", dataToggle="tab") URL
+                    %li.tabnav-file_upload
+                      %a(href="#tab-file_upload", dataToggle="tab") Upload
+                  .tab-content
+                    #tab-uri.tab-pane.active
+                      .control-group.uri
+                        %label.control-label Asset URL
+                        .controls
+                          %input.span4(type="text", name="uri", placeholder="Public URL to this asset's location")
+                    #tab-file_upload.tab-pane
+                      .control-group
+                        %label.control-label Upload Asset
+                        .controls
+                          %input(type="file", name="file_upload")
+            .asset-location.edit(style="display:none")
+              %fieldset
+                .control-group
+                  %label.control-label Asset Location
+                  .controls
+                    .uri-text.span4.first
+
+            %fieldset
+              .control-group.mimetype
+                %label.control-label Asset Type
+                .controls
+                  %select.span2(name="mimetype")
+                    %option(value="image") Image
+                    %option(value="video") Video
+                    %option(value="webpage") Webpage
+
+            %hr
+            %fieldset
+              .control-group.start_date
+                %label.control-label Start Date
+                .controls
+                  %input.span2.date(type="text", name="start_date_date")
+                  %input.span2.time(type="text", name="start_date_time")
+                  %input(type="hidden", name="start_date")
+              .control-group.end_date
+                %label.control-label End Date
+                .controls
+                  %input.span2.date(type="text", name="end_date_date")
+                  %input.span2.time(type="text", name="end_date_time")
+                  %input(type="hidden", name="end_date")
+              .control-group.duration
+                %label.control-label Duration
+                .controls
+                  %input.span1(type="number", name="duration")
+                  seconds
+
+          .modal-footer
+            .pull-left.progress.progress-striped.active(style="display:none")
+              .bar
+            %input.btn.cancel(type="button", value="Cancel")
+            %input.btn.btn-primary(type="submit", value="Save")
+
+
+  %body
+    #request-error.navbar.navbar-fixed-top
+    .navbar.navbar-fixed-top
+      .navbar-inner
+        .container
+          %a.brand(href="/")
+            %strong Screenly
+            %span OSE
+
+          %ul.nav.pull-right
+            - if not up_to_date:
+              %li.update-available
+                %a(href="http://www.screenlyapp.com/ose.html#upgrade")
+                  %i.icon-circle-arrow-down.icon-white
+                  Update Available
+            %li
+              %a(href="/settings")
+                %i.icon-cog.icon-white
+                Settings
+            %li.divider-vertical
+            %li
+              %a(href="/system_info")
+                %i.icon-tasks.icon-white
+                System Info
+
+    .container
+      .row
+        .span12
+          %h1.page-header
+            .pull-right
+              %a#add-asset-button.btn.btn-primary(href="#")
+                %i.icon-plus.icon-white
+                Add Asset
+            Schedule Overview
+
+      #assets.row
+        .span12
+          %section
+            .header
+              Active assets
+            %table.table.table-striped.active-table
+              %thead(style="display:none")
+                %tr
+                  %th Name
+                  %th(style="width:21%") Start
+                  %th(style="width:21%") End
+                  %th(style="width:13%")
+                  %th(style="width:7%")
+              %tbody#active-assets
+        .span12
+          %section
+            .header
+              Inactive assets
+            %table.table.table-striped.inactive-table
+              %thead(style="display:none")
+                %tr
+                  %th Name
+                  %th(style="width:21%") Start
+                  %th(style="width:21%") End
+                  %th(style="width:13%")
+                  %th(style="width:7%")
+              %tbody#inactive-assets
+
+      %hr
+      %span Want to get more out of Screenly?
+      %a.brand(href="http://www.screenlyapp.com/?utm_source=Screenly-OSE&utm_medium=root-page&utm_campaign=OSE")
+        %strong Try Screenly Pro.
+
+    #footer
+      .container
+        .copy
+          &copy; <strong>2012-2013.</strong> WireLoad, Inc.
+        %a(id="wireload-logo", href="http://wireload.net/")
+          %img(src="/static/img/wireload-logo.png", alt="Wireload")
+
+
+
+
+
