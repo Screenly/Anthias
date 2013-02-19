@@ -190,7 +190,7 @@ def view_video(video):
     if arch == "armv6l":
         logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % video)
         omxplayer = "omxplayer"
-        omxplayer_args = [omxplayer, "-o", settings['audio_output'], "-w", str(video)]
+        omxplayer_args = [omxplayer, "-o", settings['audio_output'], str(video)]
         run = call(omxplayer_args, stdout=True)
         logging.debug(run)
 
