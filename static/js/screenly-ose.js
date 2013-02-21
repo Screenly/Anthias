@@ -5,7 +5,7 @@
 
 
 (function() {
-  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, default_duration, delay, get_mimetype, get_template, mimetypes, now, y2ts, years_from_now,
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, default_duration, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, y2ts, years_from_now,
     _this = this,
     __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
@@ -66,6 +66,18 @@
     } else {
       return null;
     }
+  };
+
+  url_test = function(v) {
+    return /(http|ftp|https):\/\/[\w-]+(\.[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test(v);
+  };
+
+  get_filename = function(v) {
+    return (v.replace(/[\/\\\s]+$/g, '')).replace(/^.*[\\\/]/g, '');
+  };
+
+  insertWbr = function(v) {
+    return (v.replace(/\//g, '/<wbr>')).replace(/\&/g, '&amp;<wbr>');
   };
 
   default_duration = 10;
@@ -193,13 +205,11 @@
       _ref1 = this.model.fields;
       for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
         field = _ref1[_j];
-        if (field !== 'uri') {
-          if ((this.$fv(field)) !== this.model.get(field)) {
-            this.$fv(field, this.model.get(field));
-          }
+        if ((this.$fv(field)) !== this.model.get(field)) {
+          this.$fv(field, this.model.get(field));
         }
       }
-      (this.$('.uri-text')).html(this.model.get('uri'));
+      (this.$('.uri-text')).html(insertWbr(this.model.get('uri')));
       _ref2 = ['start', 'end'];
       for (_k = 0, _len2 = _ref2.length; _k < _len2; _k++) {
         which = _ref2[_k];
@@ -329,8 +339,8 @@
         if ((this.$fv('mimetype')) === 'webpage') {
           this.$fv('mimetype', 'image');
         }
+        this.updateFileUploadMimetype;
       }
-      this.updateFileUploadMimetype;
       return false;
     };
 
@@ -390,7 +400,12 @@
     };
 
     AssetRowView.prototype.render = function() {
-      this.$el.html(this.template(this.model.toJSON()));
+      var json;
+      this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
+        name: insertWbr(json.name),
+        start_date: date_to.string(json.start_date),
+        end_date: date_to.string(json.end_date)
+      })));
       (this.$(".delete-asset-button")).popover({
         content: get_template('confirm-delete')
       });

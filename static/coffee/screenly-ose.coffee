@@ -22,6 +22,10 @@ get_mimetype = (filename) =>
   mt = _.find mimetypes, (mt) -> ext in mt[0]
   if mt then mt[1] else null
 
+url_test = (v) -> /(http|ftp|https):\/\/[\w-]+(\.[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test v
+get_filename = (v) -> (v.replace /[\/\\\s]+$/g, '').replace /^.*[\\\/]/g, ''
+insertWbr = (v) -> (v.replace /\//g, '/<wbr>').replace /\&/g, '&amp;<wbr>'
+
 # Models
 
 default_duration = 10
@@ -72,10 +76,10 @@ class EditAssetView extends Backbone.View
     (@$ '.duration').toggle ((@model.get 'mimetype') != 'video')
     @clickTabNavUri() if (@model.get 'mimetype') == 'webpage'
 
-    for field in @model.fields when field != 'uri'
+    for field in @model.fields
       if (@$fv field) != @model.get field
         @$fv field, @model.get field
-    (@$ '.uri-text').html @model.get 'uri'
+    (@$ '.uri-text').html insertWbr @model.get 'uri'
 
     for which in ['start', 'end']
       date = @model.get "#{which}_date"
@@ -85,14 +89,14 @@ class EditAssetView extends Backbone.View
       @$fv "#{which}_date_time", date_to.time date
 
     @delegateEvents()
-    false
+    no
 
   viewmodel: =>
     for which in ['start', 'end']
       @$fv "#{which}_date", date_to.iso do =>
         (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")
     for field in @model.fields when not (@$f field).prop 'disabled'
-      @model.set field, (@$fv field), silent: true
+      @model.set field, (@$fv field), silent:yes
 
   events:
     'submit form': 'save'
@@ -129,13 +133,13 @@ class EditAssetView extends Backbone.View
     save.fail =>
       (@$ '.progress').hide()
       (@$ 'input, select').prop 'disabled', off
-    false
+    no
 
   change: (e) =>
     @_change  ||= _.throttle (=>
       @viewmodel()
       @model.trigger 'change'
-      true), 500
+      yes), 500
     @_change arguments...
 
   cancel: (e) =>
@@ -150,7 +154,7 @@ class EditAssetView extends Backbone.View
       (@$ '.tabnav-uri').addClass 'active'
       (@$ '#tab-uri').addClass 'active'
       @updateUriMimetype()
-    false
+    no
 
   clickTabNavUpload: (e) => # TODO: clean
     if not (@$ '#tab-file_upload').hasClass 'active'
@@ -159,8 +163,8 @@ class EditAssetView extends Backbone.View
       (@$ '.tabnav-file_upload').addClass 'active'
       (@$ '#tab-file_upload').addClass 'active'
       (@$fv 'mimetype', 'image') if (@$fv 'mimetype') == 'webpage'
-    @updateFileUploadMimetype
-    false
+      @updateFileUploadMimetype
+    no
 
   updateUriMimetype: => _.defer => @updateMimetype @$fv 'uri'
   updateFileUploadMimetype: => _.defer => @updateMimetype @$fv 'file_upload'
@@ -176,7 +180,10 @@ class AssetRowView extends Backbone.View
     @template = get_template 'asset-row'
 
   render: =>
-    @$el.html @template @model.toJSON()
+    @$el.html @template _.extend json = @model.toJSON(),
+      name: insertWbr json.name # word break urls at slashes
+      start_date: date_to.string json.start_date
+      end_date: date_to.string json.end_date
     (@$ ".delete-asset-button").popover content: get_template 'confirm-delete'
     (@$ ".toggle input").prop "checked", @model.get 'is_active'
     (@$ ".asset-icon").addClass switch @model.get "mimetype"
@@ -207,10 +214,10 @@ class AssetRowView extends Backbone.View
         @remove()
         @model.collection.trigger 'add', _ [@model]
       save.fail =>
-        @model.set @model.previousAttributes(), silent: yes # revert changes
+        @model.set @model.previousAttributes(), silent:yes # revert changes
         @setEnabled on
         @render()
-    true
+    yes
 
   setEnabled: (enabled) => if enabled
       @$el.removeClass 'warning'
@@ -224,7 +231,7 @@ class AssetRowView extends Backbone.View
 
   edit: (e) =>
     new EditAssetView model: @model
-    false
+    no
 
   delete: (e) =>
     @hidePopover()
@@ -232,18 +239,18 @@ class AssetRowView extends Backbone.View
       xhr.done => @remove()
     else
       @remove()
-    false
+    no
 
   showPopover: =>
     if not ($ '.popover').length
       (@$ ".delete-asset-button").popover 'show'
       ($ '.confirm-delete').click @delete
       ($ window).one 'click', @hidePopover
-    false
+    no
 
   hidePopover: =>
     (@$ ".delete-asset-button").popover 'hide'
-    false
+    no
 
 
 class AssetsView extends Backbone.View
@@ -277,7 +284,7 @@ API.App = class App extends Backbone.View
   add: (e) =>
     new EditAssetView model:
       new Asset {}, {collection: API.assets}
-    false
+    no
 
 
 jQuery -> API.app = new App el: $ 'body'

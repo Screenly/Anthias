@@ -31,10 +31,10 @@
           <%= name %>
       %td
         :plain
-          <%= Screenly.date_to.string(start_date) %>
+          <%= start_date %>
       %td
         :plain
-          <%= Screenly.date_to.string(end_date) %>
+          <%= end_date %>
       %td
         %button.edit-asset-button.btn(type="button")
           %i.icon-pencil
@@ -178,7 +178,7 @@
             %table.table.table-striped.active-table
               %thead(style="display:none")
                 %tr
-                  %th Name
+                  %th(style="width:38%") Name
                   %th(style="width:21%") Start
                   %th(style="width:21%") End
                   %th(style="width:13%")
@@ -191,7 +191,7 @@
             %table.table.table-striped.inactive-table
               %thead(style="display:none")
                 %tr
-                  %th Name
+                  %th(style="width:38%") Name
                   %th(style="width:21%") Start
                   %th(style="width:21%") End
                   %th(style="width:13%")
