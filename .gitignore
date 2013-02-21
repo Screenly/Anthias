@@ -32,4 +32,5 @@ pip-log.txt
 .DS_Store
 .fseventsd/*
 .Spotlight-V100/*
+.sass-cache/*
 venv
