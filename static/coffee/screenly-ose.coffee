@@ -72,8 +72,9 @@ class EditAssetView extends Backbone.View
     (@$ '.duration').toggle ((@model.get 'mimetype') != 'video')
     @clickTabNavUri() if (@model.get 'mimetype') == 'webpage'
 
-    for field in @model.fields
-      @$fv field, @model.get field
+    for field in @model.fields when field != 'uri'
+      if (@$fv field) != @model.get field
+        @$fv field, @model.get field
     (@$ '.uri-text').html @model.get 'uri'
 
     for which in ['start', 'end']
@@ -141,25 +142,24 @@ class EditAssetView extends Backbone.View
     @model.set @model.previousAttributes()
     if @model.isNew() then @model.destroy()
     (@$el.children ":first").modal 'hide'
-    #delay 500, => @remove()
 
   clickTabNavUri: (e) => # TODO: clean
-    (@$ 'ul.nav-tabs li').removeClass 'active'
-    (@$ '.tab-pane').removeClass 'active'
-    (@$ '.tabnav-uri').addClass 'active'
-    (@$ '#tab-uri').addClass 'active'
-    _.defer @updateUriMimetype
-    _.defer @change
+    if not (@$ '#tab-uri').hasClass 'active'
+      (@$ 'ul.nav-tabs li').removeClass 'active'
+      (@$ '.tab-pane').removeClass 'active'
+      (@$ '.tabnav-uri').addClass 'active'
+      (@$ '#tab-uri').addClass 'active'
+      @updateUriMimetype()
     false
 
   clickTabNavUpload: (e) => # TODO: clean
-    (@$ 'ul.nav-tabs li').removeClass 'active'
-    (@$ '.tab-pane').removeClass 'active'
-    (@$ '.tabnav-file_upload').addClass 'active'
-    (@$ '#tab-file_upload').addClass 'active'
-    (@$fv 'mimetype', 'image') if (@$fv 'mimetype') == 'webpage'
-    _.defer @updateFileUploadMimetype
-    _.defer @change
+    if not (@$ '#tab-file_upload').hasClass 'active'
+      (@$ 'ul.nav-tabs li').removeClass 'active'
+      (@$ '.tab-pane').removeClass 'active'
+      (@$ '.tabnav-file_upload').addClass 'active'
+      (@$ '#tab-file_upload').addClass 'active'
+      (@$fv 'mimetype', 'image') if (@$fv 'mimetype') == 'webpage'
+    @updateFileUploadMimetype
     false
 
   updateUriMimetype: => _.defer => @updateMimetype @$fv 'uri'
@@ -167,7 +167,6 @@ class EditAssetView extends Backbone.View
   updateMimetype: (filename) =>
     mt = get_mimetype filename
     @$fv 'mimetype', mt if mt
-    _.defer @change
 
 
 class AssetRowView extends Backbone.View

@@ -193,7 +193,11 @@
       _ref1 = this.model.fields;
       for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
         field = _ref1[_j];
-        this.$fv(field, this.model.get(field));
+        if (field !== 'uri') {
+          if ((this.$fv(field)) !== this.model.get(field)) {
+            this.$fv(field, this.model.get(field));
+          }
+        }
       }
       (this.$('.uri-text')).html(this.model.get('uri'));
       _ref2 = ['start', 'end'];
@@ -306,25 +310,27 @@
     };
 
     EditAssetView.prototype.clickTabNavUri = function(e) {
-      (this.$('ul.nav-tabs li')).removeClass('active');
-      (this.$('.tab-pane')).removeClass('active');
-      (this.$('.tabnav-uri')).addClass('active');
-      (this.$('#tab-uri')).addClass('active');
-      _.defer(this.updateUriMimetype);
-      _.defer(this.change);
+      if (!(this.$('#tab-uri')).hasClass('active')) {
+        (this.$('ul.nav-tabs li')).removeClass('active');
+        (this.$('.tab-pane')).removeClass('active');
+        (this.$('.tabnav-uri')).addClass('active');
+        (this.$('#tab-uri')).addClass('active');
+        this.updateUriMimetype();
+      }
       return false;
     };
 
     EditAssetView.prototype.clickTabNavUpload = function(e) {
-      (this.$('ul.nav-tabs li')).removeClass('active');
-      (this.$('.tab-pane')).removeClass('active');
-      (this.$('.tabnav-file_upload')).addClass('active');
-      (this.$('#tab-file_upload')).addClass('active');
-      if ((this.$fv('mimetype')) === 'webpage') {
-        this.$fv('mimetype', 'image');
+      if (!(this.$('#tab-file_upload')).hasClass('active')) {
+        (this.$('ul.nav-tabs li')).removeClass('active');
+        (this.$('.tab-pane')).removeClass('active');
+        (this.$('.tabnav-file_upload')).addClass('active');
+        (this.$('#tab-file_upload')).addClass('active');
+        if ((this.$fv('mimetype')) === 'webpage') {
+          this.$fv('mimetype', 'image');
+        }
       }
-      _.defer(this.updateFileUploadMimetype);
-      _.defer(this.change);
+      this.updateFileUploadMimetype;
       return false;
     };
 
@@ -346,9 +352,8 @@
       var mt;
       mt = get_mimetype(filename);
       if (mt) {
-        this.$fv('mimetype', mt);
+        return this.$fv('mimetype', mt);
       }
-      return _.defer(this.change);
     };
 
     return EditAssetView;
