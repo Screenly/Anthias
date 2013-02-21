@@ -158,7 +158,6 @@ class EditAssetView extends Backbone.View
         if not (_.isNumber v*1 ) or v*1 < 1
           'please enter a valid number'
       uri: (v) =>
-        #console.log (@$ '#tab-uri').hasClass 'active'
         if ((that.$ '#tab-uri').hasClass 'active') and not url_test v
           'please enter a valid URL'
       file_upload: (v) =>
@@ -306,8 +305,12 @@ class AssetsView extends Backbone.View
 
 API.App = class App extends Backbone.View
   initialize: =>
-    ($ window).ajaxError =>
+    ($ window).ajaxError (e,r) =>
       ($ '#request-error').html (get_template 'request-error')()
+      if (j = $.parseJSON r.responseText) and (err = j.error)
+        ($ '#request-error .msg').text 'Server Error: ' + err
+    ($ window).ajaxSuccess (data) =>
+      ($ '#request-error').html ''
 
     (API.assets = new Assets()).fetch()
     API.assetsView = new AssetsView

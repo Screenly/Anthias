@@ -77,7 +77,8 @@ section .header {
   #request-error .alert {
     position: fixed;
     margin-left: 240px;
-    margin-top: 2px; }
+    margin-top: 2px;
+    width: 400px; }
 
 #add-form .progress {
   margin-top: 4px;

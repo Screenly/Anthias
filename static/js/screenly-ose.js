@@ -650,8 +650,15 @@
 
     App.prototype.initialize = function() {
       var _this = this;
-      ($(window)).ajaxError(function() {
-        return ($('#request-error')).html((get_template('request-error'))());
+      ($(window)).ajaxError(function(e, r) {
+        var err, j;
+        ($('#request-error')).html((get_template('request-error'))());
+        if ((j = $.parseJSON(r.responseText)) && (err = j.error)) {
+          return ($('#request-error .msg')).text('Server Error: ' + err);
+        }
+      });
+      ($(window)).ajaxSuccess(function(data) {
+        return ($('#request-error')).html('');
       });
       (API.assets = new Assets()).fetch();
       return API.assetsView = new AssetsView({
