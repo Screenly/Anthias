@@ -12,7 +12,6 @@ CONFIG_DIR = path.join(getenv('HOME'), '.screenly')
 DEFAULTS = {
     'main': {
         'database': '.screenly/screenly.db',
-        'nodetype': 'standalone',
         'listen': '0.0.0.0:8080',
     },
     'viewer': {
