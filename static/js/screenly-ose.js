@@ -145,6 +145,8 @@
 
       this.cancel = __bind(this.cancel, this);
 
+      this.validate = __bind(this.validate, this);
+
       this.change = __bind(this.change, this);
 
       this.save = __bind(this.save, this);
@@ -172,6 +174,7 @@
     };
 
     EditAssetView.prototype.initialize = function(options) {
+      var _this = this;
       ($('body')).append(this.$el.html(get_template('asset-modal')));
       (this.$('input.time')).timepicker({
         minuteStep: 5,
@@ -182,7 +185,12 @@
       (this.$('.modal-header .close')).remove();
       (this.$el.children(":first")).modal();
       this.model.bind('change', this.render);
-      return this.render();
+      this.render();
+      this.validate();
+      _.delay((function() {
+        return (_this.$f('uri')).focus();
+      }), 300);
+      return false;
     };
 
     EditAssetView.prototype.render = function() {
@@ -324,9 +332,55 @@
       this._change || (this._change = _.throttle((function() {
         _this.viewmodel();
         _this.model.trigger('change');
+        _this.validate();
         return true;
       }), 500));
       return this._change.apply(this, arguments);
+    };
+
+    EditAssetView.prototype.validate = function(e) {
+      var errors, field, fn, that, v, validators, _i, _len, _ref, _results,
+        _this = this;
+      that = this;
+      validators = {
+        duration: function(v) {
+          if (!(_.isNumber(v * 1)) || v * 1 < 1) {
+            return 'please enter a valid number';
+          }
+        },
+        uri: function(v) {
+          if (((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
+            return 'please enter a valid URL';
+          }
+        },
+        file_upload: function(v) {
+          if (!v && !(that.$('#tab-uri')).hasClass('active')) {
+            return 'please select a file';
+          }
+        }
+      };
+      errors = (function() {
+        var _results;
+        _results = [];
+        for (field in validators) {
+          fn = validators[field];
+          if (v = fn(this.$fv(field))) {
+            _results.push([field, v]);
+          }
+        }
+        return _results;
+      }).call(this);
+      (this.$(".control-group.warning .help-inline.warning")).remove();
+      (this.$(".control-group")).removeClass('warning');
+      (this.$('[type=submit]')).prop('disabled', false);
+      _results = [];
+      for (_i = 0, _len = errors.length; _i < _len; _i++) {
+        _ref = errors[_i], field = _ref[0], v = _ref[1];
+        (this.$('[type=submit]')).prop('disabled', true);
+        (this.$(".control-group." + field)).addClass('warning');
+        _results.push((this.$(".control-group." + field + " .controls")).append($("<span class='help-inline warning'>" + v + "</span>")));
+      }
+      return _results;
     };
 
     EditAssetView.prototype.cancel = function(e) {
@@ -343,6 +397,7 @@
         (this.$('.tab-pane')).removeClass('active');
         (this.$('.tabnav-uri')).addClass('active');
         (this.$('#tab-uri')).addClass('active');
+        (this.$f('uri')).focus();
         this.updateUriMimetype();
       }
       return false;

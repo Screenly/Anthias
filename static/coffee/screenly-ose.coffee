@@ -64,10 +64,12 @@ class EditAssetView extends Backbone.View
     (@$el.children ":first").modal()
     @model.bind 'change', @render
     @render()
+    @validate()
+    _.delay (=> (@$f 'uri').focus()), 300
+    no
 
   render: () =>
     @undelegateEvents()
-
     if not @model.isNew()
       (@$ f).attr 'disabled', on for f in 'mimetype uri file_upload'.split ' '
       (@$ '#modalLabel').text "Edit Asset"
@@ -87,7 +89,6 @@ class EditAssetView extends Backbone.View
       (@$f "#{which}_date_date").datepicker autoclose: yes
       (@$f "#{which}_date_date").datepicker 'setValue', date_to.date date
       @$fv "#{which}_date_time", date_to.time date
-
     @delegateEvents()
     no
 
@@ -146,8 +147,34 @@ class EditAssetView extends Backbone.View
     @_change  ||= _.throttle (=>
       @viewmodel()
       @model.trigger 'change'
+      @validate()
       yes), 500
     @_change arguments...
+
+  validate: (e) =>
+    that = this
+    validators =
+      duration: (v) =>
+        if not (_.isNumber v*1 ) or v*1 < 1
+          'please enter a valid number'
+      uri: (v) =>
+        #console.log (@$ '#tab-uri').hasClass 'active'
+        if ((that.$ '#tab-uri').hasClass 'active') and not url_test v
+          'please enter a valid URL'
+      file_upload: (v) =>
+        if not v and not (that.$ '#tab-uri').hasClass 'active'
+          return 'please select a file'
+    errors = ([field, v] for field, fn of validators when v = fn (@$fv field))
+
+    (@$ ".control-group.warning .help-inline.warning").remove()
+    (@$ ".control-group").removeClass 'warning'
+    (@$ '[type=submit]').prop 'disabled', no
+    for [field, v] in errors
+      (@$ '[type=submit]').prop 'disabled', yes
+      (@$ ".control-group.#{field}").addClass 'warning'
+      (@$ ".control-group.#{field} .controls").append \
+        $ ("<span class='help-inline warning'>#{v}</span>")
+
 
   cancel: (e) =>
     @model.set @model.previousAttributes()
@@ -160,6 +187,7 @@ class EditAssetView extends Backbone.View
       (@$ '.tab-pane').removeClass 'active'
       (@$ '.tabnav-uri').addClass 'active'
       (@$ '#tab-uri').addClass 'active'
+      (@$f 'uri').focus()
       @updateUriMimetype()
     no
 
