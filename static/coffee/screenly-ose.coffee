@@ -114,6 +114,8 @@ class EditAssetView extends Backbone.View
     isNew = @model.isNew()
     save = null
     if (@$ '#tab-file_upload').hasClass 'active'
+      if not @$fv 'name'
+        @$fv 'name', get_filename @$fv 'file_upload'
       (@$ '.progress').show()
       @$el.fileupload
         url: @model.url()
@@ -121,6 +123,11 @@ class EditAssetView extends Backbone.View
           (@$ '.progress .bar').css 'width', "#{data.loaded/data.total*100}%"
       save = @$el.fileupload 'send', fileInput: (@$f 'file_upload')
     else
+      if not @model.get 'name'
+        if get_mimetype @model.get 'uri'
+          @model.set {name: get_filename @model.get 'uri'}, silent:yes
+        else
+          @model.set {name: @model.get 'uri'}, silent:yes
       save = @model.save()
 
     (@$ 'input, select').prop 'disabled', on

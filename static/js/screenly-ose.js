@@ -267,6 +267,9 @@
       isNew = this.model.isNew();
       save = null;
       if ((this.$('#tab-file_upload')).hasClass('active')) {
+        if (!this.$fv('name')) {
+          this.$fv('name', get_filename(this.$fv('file_upload')));
+        }
         (this.$('.progress')).show();
         this.$el.fileupload({
           url: this.model.url(),
@@ -280,6 +283,21 @@
           fileInput: this.$f('file_upload')
         });
       } else {
+        if (!this.model.get('name')) {
+          if (get_mimetype(this.model.get('uri'))) {
+            this.model.set({
+              name: get_filename(this.model.get('uri'))
+            }, {
+              silent: true
+            });
+          } else {
+            this.model.set({
+              name: this.model.get('uri')
+            }, {
+              silent: true
+            });
+          }
+        }
         save = this.model.save();
       }
       (this.$('input, select')).prop('disabled', true);
