@@ -61,7 +61,7 @@ class ScreenlySettings(IterableUserDict):
             else:
                 self[field] = config.get(section, field)
         except ConfigParser.Error as e:
-            logging.info("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (section, field, unicode(e), default))
+            logging.debug("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (section, field, unicode(e), default))
             self[field] = default
 
     def _set(self, config, section, field, default):
@@ -80,10 +80,10 @@ class ScreenlySettings(IterableUserDict):
             for field, default in defaults.items():
                 self._get(config, section, field, default)
         try:
-            ip = self.get_listen_ip()
-            port = int(self.get_listen_port())
+            self.get_listen_ip()
+            int(self.get_listen_port())
         except ValueError as e:
-            logging.warning("Could not parse setting 'listen': %s" % unicode(e))
+            logging.info("Could not parse setting 'listen': %s. Using default value: '%s'." % (unicode(e), DEFAULTS['main']['listen']))
             self['listen'] = DEFAULTS['main']['listen']
 
     def save(self):
