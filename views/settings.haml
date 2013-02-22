@@ -49,7 +49,7 @@
 
           %form.form-horizontal(method="post")
             .control-group
-              %label.control-label Show Splash Screen
+              %label.control-label Show splash screen
               .controls
                 %label.checkbox.toggle.well#splash_checkbox
                   - if show_splash:
@@ -62,7 +62,21 @@
                   %a.btn.btn-primary.slide-button
 
             .control-group
-              %label.control-label Audio Out
+              %label.control-label Shuffle playlist
+              .controls
+
+                %label.checkbox.toggle.well#shuffle_checkbox
+                  - if shuffle_playlist:
+                    %input(type="checkbox", checked="checked", name="shuffle_playlist")
+                  - else:
+                    %input(type="checkbox", name="shuffle_playlist")
+                  %p
+                    %span.on On
+                    %span.off Off
+                  %a.btn.btn-primary.slide-button
+
+            .control-group
+              %label.control-label Audio output
               .controls
                 %select.span2(name="audio_output")
                   - if audio_output == 'hdmi':
@@ -71,10 +85,9 @@
                   - else:
                     %option(value="hdmi") HDMI
                     %option(value="local", selected="selected") 3.5mm jack
-                .help-text
-                  Specify where audio from this node should be sent.
 
             .control-group
+<<<<<<< HEAD
               %label.control-label Playlist Shuffling
               .controls
 
@@ -87,6 +100,11 @@
                     %span.on On
                     %span.off Off
                   %a.btn.btn-primary.slide-button
+=======
+              %label.control-label Default duration
+              .controls
+                  %input.span1(type="number", name="default_duration", value=default_duration)
+>>>>>>> 7c64d6d... Restructured the settings page.
 
             .form-actions
               %input.btn.btn-primary(type="submit", value="Save Settings")

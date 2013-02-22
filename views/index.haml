@@ -38,7 +38,7 @@
       %td
         %button.edit-asset-button.btn(type="button")
           %i.icon-pencil
-        %button.delete-asset-button.btn(type="button", dataTitle="Sure?", dataPlacement="left", dataHtml="true", dataTrigger="manual")
+        %button.delete-asset-button.btn(type="button", dataTitle="Are you sure?", dataPlacement="left", dataHtml="true", dataTrigger="manual")
           %i.icon-trash
       %td
         %label.activation-toggle.checkbox.toggle.well
@@ -51,9 +51,9 @@
     %script(type="text/template", id="confirm-delete-template")
       .clearfix
         .pull-left
-          %a.confirm-delete.btn.btn-large.btn-danger(href="#") Delete
+          %a.confirm-delete.btn.btn-medium.btn-danger(href="#") Delete
         .pull-right
-          %a.cancel-delete.btn.btn-large(href="#") Cancel
+          %a.cancel-delete.btn.btn-medium(href="#") Cancel
 
     %script(type="text/template", id="request-error-template")
       .container
