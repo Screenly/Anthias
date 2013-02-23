@@ -4,7 +4,7 @@
 __author__ = "Viktor Petersson"
 __copyright__ = "Copyright 2012, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 __email__ = "vpetersson@wireload.net"
 
 from datetime import datetime, timedelta
@@ -122,7 +122,7 @@ def template(template_name, **context):
 
 FIELDS = [
     "asset_id", "name", "uri", "start_date",
-    "end_date", "duration", "mimetype"
+    "end_date", "duration", "mimetype", "is_enabled", "nocache"
 ]
 
 
@@ -138,7 +138,7 @@ def initiate_db():
     asset_table = c.fetchone()
 
     if not asset_table:
-        c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT)")
+        c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT, is_enabled INTEGER default 0, nocache INTEGER default 0)")
         return "Initiated database."
 
 
@@ -251,6 +251,8 @@ def prepare_asset(request):
             'name': get('name').decode('UTF-8'),
             'mimetype': get('mimetype'),
             'asset_id': get('asset_id'),
+            'is_enabled': get('is_enabled'),
+            'nocache': get('nocache'),
         }
 
         uri = get('uri') or False
