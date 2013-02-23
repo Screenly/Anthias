@@ -16,7 +16,6 @@ from requests import get as req_get, head as req_head
 from sh import git
 from subprocess import check_output
 from uptime import uptime
-from urlparse import urlparse
 import json
 import os
 import traceback
@@ -33,6 +32,7 @@ from db import connection
 
 from utils import json_dump
 from utils import get_node_ip
+from utils import validate_uri
 
 from settings import settings, DEFAULTS
 get_current_time = datetime.utcnow
@@ -40,26 +40,6 @@ get_current_time = datetime.utcnow
 ################################
 # Utilities
 ################################
-
-def validate_uri(uri):
-    """Simple URL verification.
-
-    >>> validate_uri("hello")
-    False
-    >>> validate_uri("ftp://example.com")
-    False
-    >>> validate_uri("http://")
-    False
-    >>> validate_uri("http://wireload.net/logo.png")
-    True
-    >>> validate_uri("https://wireload.net/logo.png")
-    True
-
-    """
-
-    uri_check = urlparse(uri)
-
-    return bool(uri_check.scheme in ('http', 'https') and uri_check.netloc)
 
 
 def make_json_response(obj):
