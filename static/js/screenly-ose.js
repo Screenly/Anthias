@@ -349,7 +349,7 @@
           }
         },
         uri: function(v) {
-          if (((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
+          if (_this.model.isNew() && ((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
             return 'please enter a valid URL';
           }
         },

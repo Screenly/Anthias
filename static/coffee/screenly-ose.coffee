@@ -158,7 +158,7 @@ class EditAssetView extends Backbone.View
         if not (_.isNumber v*1 ) or v*1 < 1
           'please enter a valid number'
       uri: (v) =>
-        if ((that.$ '#tab-uri').hasClass 'active') and not url_test v
+        if @model.isNew() and ((that.$ '#tab-uri').hasClass 'active') and not url_test v
           'please enter a valid URL'
       file_upload: (v) =>
         if not v and not (that.$ '#tab-uri').hasClass 'active'
