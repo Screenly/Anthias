@@ -31,8 +31,8 @@ def migrate_add_is_enabled_and_nocache():
         else:
             migration = """
 begin transaction;
-alter table assets add is_enabled boolean default false;
-alter table assets add nocache boolean default false;
+alter table assets add is_enabled integer default 0;
+alter table assets add nocache integer default 0;
 commit;"""
             cursor.executescript(migration)
             print 'Added new columns ('+col+')'
