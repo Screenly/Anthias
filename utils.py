@@ -1,7 +1,27 @@
 import json
 from netifaces import ifaddresses
 from sh import grep, netstat
+from urlparse import urlparse
 
+def validate_uri(uri):
+    """Simple URL verification.
+
+    >>> validate_uri("hello")
+    False
+    >>> validate_uri("ftp://example.com")
+    False
+    >>> validate_uri("http://")
+    False
+    >>> validate_uri("http://wireload.net/logo.png")
+    True
+    >>> validate_uri("https://wireload.net/logo.png")
+    True
+
+    """
+
+    uri_check = urlparse(uri)
+
+    return bool(uri_check.scheme in ('http', 'https') and uri_check.netloc)
 
 def get_node_ip():
     """Returns the node's IP, for the interface
