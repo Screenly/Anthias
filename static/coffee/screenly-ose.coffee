@@ -219,7 +219,7 @@ class AssetRowView extends Backbone.View
       start_date: date_to.string json.start_date
       end_date: date_to.string json.end_date
     (@$ ".delete-asset-button").popover content: get_template 'confirm-delete'
-    (@$ ".toggle input").prop "checked", @model.get 'is_active'
+    (@$ ".toggle input").prop "checked", @model.get 'is_enabled'
     (@$ ".asset-icon").addClass switch @model.get "mimetype"
       when "video"   then "icon-facetime-video"
       when "image"   then "icon-picture"
@@ -228,29 +228,19 @@ class AssetRowView extends Backbone.View
     @el
 
   events:
-    'change .activation-toggle input': 'toggleActive'
+    'change .is_enabled-toggle input': 'toggleIsEnabled'
     'click .edit-asset-button': 'edit'
     'click .delete-asset-button': 'showPopover'
 
-  toggleActive: (e) =>
-    if @model.get 'is_active' then @model.set
-      is_active: no
-      end_date: date_to.iso now()
-    else @model.set
-      is_active: yes
-      start_date: date_to.iso now()
-      end_date: date_to.iso years_from_now 10
-
+  toggleIsEnabled: (e) =>
+    val = (1 + @model.get 'is_enabled') % 2
+    @model.set is_enabled: val
     @setEnabled off
     save = @model.save()
-    delay 300, =>
-      save.done =>
-        @remove()
-        @model.collection.trigger 'add', _ [@model]
-      save.fail =>
-        @model.set @model.previousAttributes(), silent:yes # revert changes
-        @setEnabled on
-        @render()
+    save.done => @setEnabled on
+    save.fail =>
+      @model.set @model.previousAttributes(), silent:yes # revert changes
+      @render()
     yes
 
   setEnabled: (enabled) => if enabled
