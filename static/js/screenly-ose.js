@@ -344,7 +344,7 @@
       that = this;
       validators = {
         duration: function(v) {
-          if (!(_.isNumber(v * 1)) || v * 1 < 1) {
+          if (('video' !== _this.model.get('mimetype')) && (!(_.isNumber(v * 1)) || v * 1 < 1)) {
             return 'please enter a valid number';
           }
         },

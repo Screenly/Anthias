@@ -155,7 +155,7 @@ class EditAssetView extends Backbone.View
     that = this
     validators =
       duration: (v) =>
-        if not (_.isNumber v*1 ) or v*1 < 1
+        if ('video' isnt @model.get 'mimetype') and (not (_.isNumber v*1 ) or v*1 < 1)
           'please enter a valid number'
       uri: (v) =>
         if @model.isNew() and ((that.$ '#tab-uri').hasClass 'active') and not url_test v
