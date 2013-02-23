@@ -181,7 +181,8 @@ def fetch_assets(keys=FIELDS, order_by="name"):
 
 def get_playlist():
     "Returns all currently active assets."
-    return [asset for asset in fetch_assets() if is_active(asset)]
+    predicate = lambda ass: ass['is_enabled'] == 1 and is_active(ass)
+    return filter(predicate, fetch_assets())
 
 
 def fetch_asset(asset_id, keys=FIELDS):

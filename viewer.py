@@ -19,10 +19,9 @@ from subprocess import Popen, call
 from time import sleep, time
 import logging
 
-from db import connection
 from settings import settings
 import html_templates
-
+from server import get_playlist
 
 # Define to none to ensure we refresh
 # the settings.
@@ -78,33 +77,8 @@ class Scheduler(object):
 
 def generate_asset_list():
     logging.info('Generating asset-list...')
-    c = connection.cursor()
-    c.execute("SELECT asset_id, name, uri, md5, start_date, end_date, duration, mimetype FROM assets ORDER BY name")
-    query = c.fetchall()
-
-    playlist = []
-    time_cur = datetime.utcnow()
-    deadline = None
-    for asset in query:
-        asset_id = asset[0]
-        name = asset[1].encode('ascii', 'ignore')
-        uri = asset[2]
-        md5 = asset[3]
-        start_date = asset[4]
-        end_date = asset[5]
-        duration = asset[6]
-        mimetype = asset[7]
-
-        logging.debug('generate_asset_list: %s: start (%s) end (%s)' % (name, start_date, end_date))
-        if start_date and end_date:
-            if start_date < time_cur and end_date > time_cur:
-                playlist.append({"asset_id": asset_id, "name": name, "uri": uri, "duration": duration, "mimetype": mimetype})
-                if not deadline or end_date < deadline:
-                    deadline = end_date
-            elif start_date >= time_cur and end_date > start_date:
-                if not deadline or start_date < deadline:
-                    deadline = start_date
-
+    playlist = get_playlist()
+    deadline = sorted([ass['end_date'] for ass in playlist])[0]
     logging.debug('generate_asset_list deadline: %s' % deadline)
 
     if settings['shuffle_playlist']:
