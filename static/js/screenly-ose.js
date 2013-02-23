@@ -458,7 +458,7 @@
 
       this.setEnabled = __bind(this.setEnabled, this);
 
-      this.toggleActive = __bind(this.toggleActive, this);
+      this.toggleIsEnabled = __bind(this.toggleIsEnabled, this);
 
       this.render = __bind(this.render, this);
 
@@ -482,7 +482,7 @@
       (this.$(".delete-asset-button")).popover({
         content: get_template('confirm-delete')
       });
-      (this.$(".toggle input")).prop("checked", this.model.get('is_active'));
+      (this.$(".toggle input")).prop("checked", this.model.get('is_enabled'));
       (this.$(".asset-icon")).addClass((function() {
         switch (this.model.get("mimetype")) {
           case "video":
@@ -499,40 +499,28 @@
     };
 
     AssetRowView.prototype.events = {
-      'change .activation-toggle input': 'toggleActive',
+      'change .is_enabled-toggle input': 'toggleIsEnabled',
       'click .edit-asset-button': 'edit',
       'click .delete-asset-button': 'showPopover'
     };
 
-    AssetRowView.prototype.toggleActive = function(e) {
-      var save,
+    AssetRowView.prototype.toggleIsEnabled = function(e) {
+      var save, val,
         _this = this;
-      if (this.model.get('is_active')) {
-        this.model.set({
-          is_active: false,
-          end_date: date_to.iso(now())
-        });
-      } else {
-        this.model.set({
-          is_active: true,
-          start_date: date_to.iso(now()),
-          end_date: date_to.iso(years_from_now(10))
-        });
-      }
+      val = (1 + this.model.get('is_enabled')) % 2;
+      this.model.set({
+        is_enabled: val
+      });
       this.setEnabled(false);
       save = this.model.save();
-      delay(300, function() {
-        save.done(function() {
-          _this.remove();
-          return _this.model.collection.trigger('add', _([_this.model]));
+      save.done(function() {
+        return _this.setEnabled(true);
+      });
+      save.fail(function() {
+        _this.model.set(_this.model.previousAttributes(), {
+          silent: true
         });
-        return save.fail(function() {
-          _this.model.set(_this.model.previousAttributes(), {
-            silent: true
-          });
-          _this.setEnabled(true);
-          return _this.render();
-        });
+        return _this.render();
       });
       return true;
     };
