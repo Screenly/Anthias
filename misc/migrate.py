@@ -2,25 +2,32 @@ import sqlite3
 import os
 import shutil
 import subprocess
+from contextlib import contextmanager
 
-# Define settings
 configdir = os.path.join(os.getenv('HOME'), '.screenly/')
 database = os.path.join(configdir, 'screenly.db')
-mkconn = lambda: sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES)
-def test_for_column(col,conn):
-    cursor = conn.cursor()
+
+def test_column(col, cursor):
+    """Test if a column is in the db"""
     try:
         cursor.execute('SELECT ' + col + ' FROM assets')
-    except sqlite3.OperationalError as no_such:
-        return False, cursor
+    except sqlite3.OperationalError:
+        return False
     else:
-        return True, cursor
+        return True
 
-def migrate_add_enabled_nocache():
-    with mkconn() as conn:
-        has_col, cursor = test_for_column('is_enabled,nocache',conn)
-        if has_col:
-            print "Columns is_enabled and nocache already present"
+@contextmanager
+def open_db_get_cursor():
+    with sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES) as conn:
+        cursor = conn.cursor()
+        yield cursor
+        cursor.close()
+
+def migrate_add_is_enabled_and_nocache():
+    with open_db_get_cursor() as cursor:
+        col = 'is_enabled,nocache'
+        if test_column(col, cursor):
+            print 'Columns ('+col+') already present'
         else:
             migration = """
 begin transaction;
@@ -28,17 +35,18 @@ alter table assets add is_enabled boolean default false;
 alter table assets add nocache boolean default false;
 commit;"""
             cursor.executescript(migration)
-            print "Added columns is_enabled and nocache"
-        cursor.close()
+            print 'Added new columns ('+col+')'
+            # TODO: loop through existing assets and set is_enabled to is_active()
+
 
 def migrate_drop_filename():
     """
     Migration for table 'filename'
     if the column 'filename' exist, drop it
     """
-    with mkconn() as conn:
-        has_col, cursor = test_for_column('filename',conn)
-        if has_col:
+    with open_db_get_cursor() as cursor:
+        col = 'filename'
+        if test_column(col, cursor):
             migration = """
 BEGIN TRANSACTION;
 CREATE TEMPORARY TABLE assets_backup(asset_id, name, uri, md5, start_date, end_date, duration, mimetype);
@@ -50,8 +58,9 @@ DROP TABLE assets_backup;
 COMMIT;
 """
             cursor.executescript(migration)
-            print "Dropped obsolete column (filename)"
-        cursor.close()
+            print 'Dropped obsolete column ('+col+')'
+        else:
+            print 'Obsolete column ('+col+') is not present'
 ###
 
 
@@ -82,13 +91,13 @@ def fix_supervisor():
 
     if not os.path.isfile(supervisor_symlink):
         try:
-            pass#subprocess.call(['/usr/bin/sudo', 'ln', '-s', new_target, supervisor_symlink])
+            subprocess.call(['/usr/bin/sudo', 'ln', '-s', new_target, supervisor_symlink])
         except:
             print 'Failed to create symlink'
 
 if __name__ == '__main__':
     migrate_drop_filename()
-    migrate_add_enabled_nocache()
+    migrate_add_is_enabled_and_nocache()
     ensure_conf()
     fix_supervisor()
     print "Migration done."
