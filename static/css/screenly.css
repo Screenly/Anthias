@@ -90,7 +90,7 @@ section .header {
   overflow: hidden; }
 
 #assets table td {
-  line-height: 30px; }
+  line-height: 32px; }
 
 form .control-group .controls select {
   margin-bottom: 9px; }
