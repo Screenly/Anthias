@@ -433,6 +433,7 @@
     EditAssetView.prototype.updateMimetype = function(filename) {
       var mt;
       mt = get_mimetype(filename);
+      (this.$('#file_upload_label')).text(get_filename(filename));
       if (mt) {
         return this.$fv('mimetype', mt);
       }

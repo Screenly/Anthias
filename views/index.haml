@@ -95,7 +95,10 @@
                       .control-group
                         %label.control-label Upload Asset
                         .controls
-                          %input(type="file", name="file_upload")
+                          %div
+                            %button.btn Choose file
+                            %input(type="file", name="file_upload")
+                          #file_upload_label
             .asset-location.edit(style="display:none")
               %fieldset
                 .control-group

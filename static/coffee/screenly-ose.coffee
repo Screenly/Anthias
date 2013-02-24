@@ -202,7 +202,9 @@ class EditAssetView extends Backbone.View
   updateUriMimetype: => _.defer => @updateMimetype @$fv 'uri'
   updateFileUploadMimetype: => _.defer => @updateMimetype @$fv 'file_upload'
   updateMimetype: (filename) =>
+    # also updates the filename label in the dom
     mt = get_mimetype filename
+    (@$ '#file_upload_label').text (get_filename filename)
     @$fv 'mimetype', mt if mt
 
 

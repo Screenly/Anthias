@@ -140,6 +140,23 @@ form .control-group .controls {
 }
 
 input[name="file_upload"] {
-    line-height: 20px;
-    margin-top: 4px;
+    opacity: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.controls {
+    position: relative;
+    width:auto;
+}
+
+#file_upload_label {
+    position: absolute;
+    top: 5px;
+    left: 105px;
+    right: 0;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
