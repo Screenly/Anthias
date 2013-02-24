@@ -386,7 +386,8 @@ def remove_asset(asset_id):
 
 @route('/')
 def viewIndex():
-    return template('index')
+    ctx = {'default_duration': settings['default_duration']}
+    return template('index',**ctx)
 
 
 @route('/settings', method=["GET", "POST"])

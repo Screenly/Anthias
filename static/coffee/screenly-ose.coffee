@@ -28,7 +28,6 @@ insertWbr = (v) -> (v.replace /\//g, '/<wbr>').replace /\&/g, '&amp;<wbr>'
 
 # Models
 
-default_duration = 10
 
 # Tell Backbone to send its saves as JSON-encoded.
 Backbone.emulateJSON = on
@@ -155,7 +154,7 @@ class EditAssetView extends Backbone.View
     that = this
     validators =
       duration: (v) =>
-        if not (_.isNumber v*1 ) or v*1 < 1
+        if ('video' isnt @model.get 'mimetype') and (not (_.isNumber v*1 ) or v*1 < 1)
           'please enter a valid number'
       uri: (v) =>
         if @model.isNew() and ((that.$ '#tab-uri').hasClass 'active') and not url_test v
@@ -203,7 +202,9 @@ class EditAssetView extends Backbone.View
   updateUriMimetype: => _.defer => @updateMimetype @$fv 'uri'
   updateFileUploadMimetype: => _.defer => @updateMimetype @$fv 'file_upload'
   updateMimetype: (filename) =>
+    # also updates the filename label in the dom
     mt = get_mimetype filename
+    (@$ '#file_upload_label').text (get_filename filename)
     @$fv 'mimetype', mt if mt
 
 

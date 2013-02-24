@@ -87,18 +87,9 @@
                     %option(value="local", selected="selected") 3.5mm jack
 
             .control-group
-              %label.control-label Playlist Shuffling
+              %label.control-label Default duration
               .controls
-
-                %label.checkbox.toggle.well#shuffle_checkbox
-                  - if shuffle_playlist:
-                    %input(type="checkbox", checked="checked", name="shuffle_playlist")
-                  - else:
-                    %input(type="checkbox", name="shuffle_playlist")
-                  %p
-                    %span.on On
-                    %span.off Off
-                  %a.btn.btn-primary.slide-button
+                %input.span1(type="number", name="default_duration", value=default_duration)
 
             .form-actions
               %input.btn.btn-primary(type="submit", value="Save Settings")
