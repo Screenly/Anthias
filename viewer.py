@@ -23,6 +23,8 @@ from settings import settings
 import html_templates
 from server import get_playlist
 
+from utils import validate_uri
+
 # Define to none to ensure we refresh
 # the settings.
 last_settings_refresh = None
@@ -293,7 +295,10 @@ if __name__ == "__main__":
             watchdog()
 
             if "image" in asset["mimetype"]:
-                view_image(asset["uri"], asset["asset_id"], asset["duration"])
+                img_uri = asset['uri']
+                if asset['nocache'] == 1 and validate_uri(img_uri):
+                    img_uri += '?_nocache=' + str(time())
+                view_image(img_uri, asset["asset_id"], asset["duration"])
             elif "video" in asset["mimetype"]:
                 view_video(asset["uri"])
             elif "web" in asset["mimetype"]:
