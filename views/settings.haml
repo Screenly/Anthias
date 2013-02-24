@@ -86,20 +86,6 @@
                     %option(value="hdmi") HDMI
                     %option(value="local", selected="selected") 3.5mm jack
 
-            .control-group
-              %label.control-label Playlist Shuffling
-              .controls
-
-                %label.checkbox.toggle.well#shuffle_checkbox
-                  - if shuffle_playlist:
-                    %input(type="checkbox", checked="checked", name="shuffle_playlist")
-                  - else:
-                    %input(type="checkbox", name="shuffle_playlist")
-                  %p
-                    %span.on On
-                    %span.off Off
-                  %a.btn.btn-primary.slide-button
-
             .form-actions
               %input.btn.btn-primary(type="submit", value="Save Settings")
               %a.btn(href="/") Cancel
