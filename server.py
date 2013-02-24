@@ -32,7 +32,7 @@ from db import connection
 
 from utils import json_dump
 from utils import get_node_ip
-from utils import validate_uri
+from utils import validate_url
 
 from settings import settings, DEFAULTS
 get_current_time = datetime.utcnow
@@ -255,7 +255,7 @@ def prepare_asset(request):
             raise Exception("Invalid combination. Can't select both URI and a file.")
 
         if uri and not uri.startswith('/'):
-            if not validate_uri(uri):
+            if not validate_url(uri):
                 raise Exception("Invalid URL. Failed to add asset.")
 
             if "image" in asset['mimetype']:
