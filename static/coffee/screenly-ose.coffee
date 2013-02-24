@@ -28,7 +28,6 @@ insertWbr = (v) -> (v.replace /\//g, '/<wbr>').replace /\&/g, '&amp;<wbr>'
 
 # Models
 
-default_duration = 10
 
 # Tell Backbone to send its saves as JSON-encoded.
 Backbone.emulateJSON = on

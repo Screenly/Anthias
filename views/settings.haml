@@ -86,6 +86,11 @@
                     %option(value="hdmi") HDMI
                     %option(value="local", selected="selected") 3.5mm jack
 
+            .control-group
+              %label.control-label Default duration
+              .controls
+                %input.span1(type="number", name="default_duration", value=default_duration)
+
             .form-actions
               %input.btn.btn-primary(type="submit", value="Save Settings")
               %a.btn(href="/") Cancel

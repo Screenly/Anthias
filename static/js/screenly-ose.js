@@ -5,7 +5,7 @@
 
 
 (function() {
-  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, default_duration, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, y2ts, years_from_now,
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, y2ts, years_from_now,
     _this = this,
     __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
@@ -79,8 +79,6 @@
   insertWbr = function(v) {
     return (v.replace(/\//g, '/<wbr>')).replace(/\&/g, '&amp;<wbr>');
   };
-
-  default_duration = 10;
 
   Backbone.emulateJSON = true;
 
@@ -310,6 +308,7 @@
       }
       (this.$('input, select')).prop('disabled', true);
       save.done(function(data) {
+        var default_duration;
         default_duration = _this.model.get('duration');
         if (!_this.model.collection) {
           _this.collection.add(_this.model);
