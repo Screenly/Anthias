@@ -3,25 +3,24 @@ from netifaces import ifaddresses
 from sh import grep, netstat
 from urlparse import urlparse
 
-def validate_uri(uri):
+def validate_url(string):
     """Simple URL verification.
 
-    >>> validate_uri("hello")
+    >>> validate_url("hello")
     False
-    >>> validate_uri("ftp://example.com")
+    >>> validate_url("ftp://example.com")
     False
-    >>> validate_uri("http://")
+    >>> validate_url("http://")
     False
-    >>> validate_uri("http://wireload.net/logo.png")
+    >>> validate_url("http://wireload.net/logo.png")
     True
-    >>> validate_uri("https://wireload.net/logo.png")
+    >>> validate_url("https://wireload.net/logo.png")
     True
 
     """
 
-    uri_check = urlparse(uri)
-
-    return bool(uri_check.scheme in ('http', 'https') and uri_check.netloc)
+    checker = urlparse(string)
+    return bool(checker.scheme in ('http', 'https') and checker.netloc)
 
 def get_node_ip():
     """Returns the node's IP, for the interface

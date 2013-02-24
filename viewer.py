@@ -23,7 +23,7 @@ from settings import settings
 import html_templates
 from server import get_playlist
 
-from utils import validate_uri
+from utils import validate_url
 
 # Define to none to ensure we refresh
 # the settings.
@@ -296,7 +296,7 @@ if __name__ == "__main__":
 
             if "image" in asset["mimetype"]:
                 img_uri = asset['uri']
-                if asset['nocache'] == 1 and validate_uri(img_uri):
+                if asset['nocache'] == 1 and validate_url(img_uri):
                     img_uri += '?_nocache=' + str(time())
                 view_image(img_uri, asset["asset_id"], asset["duration"])
             elif "video" in asset["mimetype"]:
