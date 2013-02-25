@@ -173,6 +173,7 @@
 
     EditAssetView.prototype.initialize = function(options) {
       var _this = this;
+      this.edit = options.edit;
       ($('body')).append(this.$el.html(get_template('asset-modal')));
       (this.$('input.time')).timepicker({
         minuteStep: 5,
@@ -194,7 +195,7 @@
     EditAssetView.prototype.render = function() {
       var date, f, field, which, _i, _j, _k, _len, _len1, _len2, _ref, _ref1, _ref2;
       this.undelegateEvents();
-      if (!this.model.isNew()) {
+      if (this.edit) {
         _ref = 'mimetype uri file_upload'.split(' ');
         for (_i = 0, _len = _ref.length; _i < _len; _i++) {
           f = _ref[_i];
@@ -266,11 +267,10 @@
     };
 
     EditAssetView.prototype.save = function(e) {
-      var isNew, save,
+      var save,
         _this = this;
       e.preventDefault();
       this.viewmodel();
-      isNew = this.model.isNew();
       save = null;
       if ((this.$('#tab-file_upload')).hasClass('active')) {
         if (!this.$fv('name')) {
@@ -315,7 +315,7 @@
         }
         (_this.$el.children(":first")).modal('hide');
         _.extend(_this.model.attributes, data);
-        if (isNew) {
+        if (!_this.edit) {
           return _this.model.collection.add(_this.model);
         }
       });
@@ -348,7 +348,7 @@
           }
         },
         uri: function(v) {
-          if (_this.model.isNew() && ((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
+          if (!_this.edit && _this.model.isNew() && ((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
             return 'please enter a valid URL';
           }
         },
@@ -384,7 +384,7 @@
 
     EditAssetView.prototype.cancel = function(e) {
       this.model.set(this.model.previousAttributes());
-      if (this.model.isNew()) {
+      if (!this.edit) {
         this.model.destroy();
       }
       return (this.$el.children(":first")).modal('hide');
@@ -540,7 +540,8 @@
 
     AssetRowView.prototype.edit = function(e) {
       new EditAssetView({
-        model: this.model
+        model: this.model,
+        edit: true
       });
       return false;
     };
