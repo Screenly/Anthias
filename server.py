@@ -4,7 +4,7 @@
 __author__ = "Viktor Petersson"
 __copyright__ = "Copyright 2012, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 __email__ = "vpetersson@wireload.net"
 
 from datetime import datetime, timedelta
@@ -16,7 +16,6 @@ from requests import get as req_get, head as req_head
 from sh import git
 from subprocess import check_output
 from uptime import uptime
-from urlparse import urlparse
 import json
 import os
 import traceback
@@ -33,6 +32,7 @@ from db import connection
 
 from utils import json_dump
 from utils import get_node_ip
+from utils import validate_url
 
 from settings import settings, DEFAULTS
 get_current_time = datetime.utcnow
@@ -40,26 +40,6 @@ get_current_time = datetime.utcnow
 ################################
 # Utilities
 ################################
-
-def validate_uri(uri):
-    """Simple URL verification.
-
-    >>> validate_uri("hello")
-    False
-    >>> validate_uri("ftp://example.com")
-    False
-    >>> validate_uri("http://")
-    False
-    >>> validate_uri("http://wireload.net/logo.png")
-    True
-    >>> validate_uri("https://wireload.net/logo.png")
-    True
-
-    """
-
-    uri_check = urlparse(uri)
-
-    return bool(uri_check.scheme in ('http', 'https') and uri_check.netloc)
 
 
 def make_json_response(obj):
@@ -122,7 +102,7 @@ def template(template_name, **context):
 
 FIELDS = [
     "asset_id", "name", "uri", "start_date",
-    "end_date", "duration", "mimetype"
+    "end_date", "duration", "mimetype", "is_enabled", "nocache"
 ]
 
 
@@ -138,7 +118,7 @@ def initiate_db():
     asset_table = c.fetchone()
 
     if not asset_table:
-        c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT)")
+        c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT, is_enabled INTEGER default 0, nocache INTEGER default 0)")
         return "Initiated database."
 
 
@@ -181,7 +161,8 @@ def fetch_assets(keys=FIELDS, order_by="name"):
 
 def get_playlist():
     "Returns all currently active assets."
-    return [asset for asset in fetch_assets() if is_active(asset)]
+    predicate = lambda ass: ass['is_enabled'] == 1 and is_active(ass)
+    return filter(predicate, fetch_assets())
 
 
 def fetch_asset(asset_id, keys=FIELDS):
@@ -251,6 +232,8 @@ def prepare_asset(request):
             'name': get('name').decode('UTF-8'),
             'mimetype': get('mimetype'),
             'asset_id': get('asset_id'),
+            'is_enabled': get('is_enabled'),
+            'nocache': get('nocache'),
         }
 
         uri = get('uri') or False
@@ -272,7 +255,7 @@ def prepare_asset(request):
             raise Exception("Invalid combination. Can't select both URI and a file.")
 
         if uri and not uri.startswith('/'):
-            if not validate_uri(uri):
+            if not validate_url(uri):
                 raise Exception("Invalid URL. Failed to add asset.")
 
             if "image" in asset['mimetype']:
