@@ -92,6 +92,7 @@ def template(template_name, **context):
 
     # Add global contexts
     context['up_to_date'] = is_up_to_date()
+    context['default_duration'] = settings['default_duration']
 
     return haml_template(template_name, **context)
 
@@ -369,8 +370,7 @@ def remove_asset(asset_id):
 
 @route('/')
 def viewIndex():
-    ctx = {'default_duration': settings['default_duration']}
-    return template('index',**ctx)
+    return template('index')
 
 
 @route('/settings', method=["GET", "POST"])
