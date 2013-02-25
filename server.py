@@ -203,9 +203,7 @@ def prepare_asset(request):
 
 @route('/api/assets', method="GET")
 def api_assets():
-    assets = fetch_assets()
-    for asset in assets:
-        asset['is_active'] = is_active(asset)
+    assets = assets_helper.read(db_conn)
     return make_json_response(assets)
 
 
@@ -226,31 +224,31 @@ def api(view):
 @route('/api/assets', method="POST")
 @api
 def add_asset():
-    return insert_asset(prepare_asset(request))
+    return assets_helper.create(db_conn, prepare_asset(request))
 
 
 @route('/api/assets/:asset_id', method="GET")
 @api
 def edit_asset(asset_id):
-    return fetch_asset(asset_id)
+    return assets_helper.read(db_conn, asset_id)
 
 
 @route('/api/assets/:asset_id', method=["PUT", "POST"])
 @api
 def edit_asset(asset_id):
-    return update_asset(asset_id, prepare_asset(request))
+    return assets_helper.update(db_conn, asset_id, prepare_asset(request))
 
 
 @route('/api/assets/:asset_id', method="DELETE")
 @api
 def remove_asset(asset_id):
-    asset = fetch_asset(asset_id)
+    asset = assets_helper.read(db_conn, asset_id)
     try:
         if asset['uri'].startswith(settings.get_asset_folder()):
             os.remove(asset['uri'])
     except OSError:
         pass
-    delete_asset(asset_id)
+    assets_helper.delete(db_conn, asset_id)
     response.status = 204  # return an OK with no content
 
 
