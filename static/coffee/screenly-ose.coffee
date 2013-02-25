@@ -55,6 +55,7 @@ class EditAssetView extends Backbone.View
   $fv: (field, val...) => (@$f field).val val... # get or set filed value
 
   initialize: (options) =>
+    @edit = options.edit
     ($ 'body').append @$el.html get_template 'asset-modal'
     (@$ 'input.time').timepicker
       minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: yes
@@ -69,7 +70,7 @@ class EditAssetView extends Backbone.View
 
   render: () =>
     @undelegateEvents()
-    if not @model.isNew()
+    if @edit
       (@$ f).attr 'disabled', on for f in 'mimetype uri file_upload'.split ' '
       (@$ '#modalLabel').text "Edit Asset"
       (@$ '.asset-location').hide(); (@$ '.asset-location.edit').show()
@@ -111,7 +112,6 @@ class EditAssetView extends Backbone.View
   save: (e) =>
     e.preventDefault()
     @viewmodel()
-    isNew = @model.isNew()
     save = null
     if (@$ '#tab-file_upload').hasClass 'active'
       if not @$fv 'name'
@@ -136,7 +136,7 @@ class EditAssetView extends Backbone.View
       @collection.add @model if not @model.collection
       (@$el.children ":first").modal 'hide'
       _.extend @model.attributes, data
-      @model.collection.add @model if isNew
+      @model.collection.add @model unless @edit
     save.fail =>
       (@$ '.progress').hide()
       (@$ 'input, select').prop 'disabled', off
@@ -157,7 +157,7 @@ class EditAssetView extends Backbone.View
         if ('video' isnt @model.get 'mimetype') and (not (_.isNumber v*1 ) or v*1 < 1)
           'please enter a valid number'
       uri: (v) =>
-        if @model.isNew() and ((that.$ '#tab-uri').hasClass 'active') and not url_test v
+        if not @edit and @model.isNew() and ((that.$ '#tab-uri').hasClass 'active') and not url_test v
           'please enter a valid URL'
       file_upload: (v) =>
         if not v and not (that.$ '#tab-uri').hasClass 'active'
@@ -176,7 +176,7 @@ class EditAssetView extends Backbone.View
 
   cancel: (e) =>
     @model.set @model.previousAttributes()
-    if @model.isNew() then @model.destroy()
+    unless @edit then @model.destroy()
     (@$el.children ":first").modal 'hide'
 
   clickTabNavUri: (e) => # TODO: clean
@@ -265,7 +265,7 @@ class AssetRowView extends Backbone.View
       (@$ 'input, button').prop 'disabled', on
 
   edit: (e) =>
-    new EditAssetView model: @model
+    new EditAssetView model: @model, edit:on
     no
 
   delete: (e) =>
