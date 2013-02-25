@@ -21,22 +21,19 @@ import os
 import traceback
 import uuid
 
-#from StringIO import StringIO
-#from PIL import Image
-
 from bottle import route, run, request, error, static_file, response
 from bottle import HTTPResponse
 from bottlehaml import haml_template
 
-from db import connection
+import db
+import assets_helper
+import queries
 
 from utils import json_dump
 from utils import get_node_ip
 from utils import validate_url
 
 from settings import settings, DEFAULTS
-get_current_time = datetime.utcnow
-
 ################################
 # Utilities
 ################################
@@ -100,113 +97,6 @@ def template(template_name, **context):
 ################################
 # Model
 ################################
-
-FIELDS = [
-    "asset_id", "name", "uri", "start_date",
-    "end_date", "duration", "mimetype", "is_enabled", "nocache"
-]
-
-
-def initiate_db():
-    # Create config dir if it doesn't exist
-    if not path.isdir(settings.get_configdir()):
-        makedirs(settings.get_configdir())
-
-    c = connection.cursor()
-
-    # Check if the asset-table exist. If it doesn't, create it.
-    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='assets'")
-    asset_table = c.fetchone()
-
-    if not asset_table:
-        c.execute("CREATE TABLE assets (asset_id TEXT, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT, is_enabled INTEGER default 0, nocache INTEGER default 0)")
-        return "Initiated database."
-
-
-def is_active(asset, at_time=None):
-    """Accepts an asset dictionary and determines if it
-    is active at the given time. If no time is specified, 'now' is used.
-
-    >>> asset = {'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d', 'mimetype': u'web', 'name': u'WireLoad', 'end_date': datetime(2013, 1, 19, 23, 59), 'uri': u'http://www.wireload.net', 'duration': u'5', 'start_date': datetime(2013, 1, 16, 0, 0)};
-
-    >>> is_active(asset, datetime(2013, 1, 16, 12, 00))
-    True
-    >>> is_active(asset, datetime(2014, 1, 1))
-    False
-
-    """
-
-    if not (asset['start_date'] and asset['end_date']):
-        return False
-
-    at_time = at_time or get_current_time()
-
-    return (asset['start_date'] < at_time and asset['end_date'] > at_time)
-
-
-def fetch_assets(keys=FIELDS, order_by="name"):
-    """Fetches all assets from the database and returns their
-    data as a list of dictionaries corresponding to each asset."""
-    c = connection.cursor()
-    c.execute("SELECT %s FROM assets ORDER BY %s" % (", ".join(keys), order_by))
-    assets = []
-
-    for asset in c.fetchall():
-        dictionary = {}
-        for i in range(len(keys)):
-            dictionary[keys[i]] = asset[i]
-        assets.append(dictionary)
-
-    return assets
-
-
-def get_playlist():
-    "Returns all currently active assets."
-    predicate = lambda ass: ass['is_enabled'] == 1 and is_active(ass)
-    return filter(predicate, fetch_assets())
-
-
-def fetch_asset(asset_id, keys=FIELDS):
-    c = connection.cursor()
-    c.execute("SELECT %s FROM assets WHERE asset_id=?" % ", ".join(keys), (asset_id,))
-    assets = []
-    for asset in c.fetchall():
-        dictionary = {}
-        for i in range(len(keys)):
-            dictionary[keys[i]] = asset[i]
-        assets.append(dictionary)
-    if len(assets):
-        asset = assets[0]
-        asset.update({'is_active': is_active(asset)})
-        return asset
-
-
-def insert_asset(asset):
-    c = connection.cursor()
-    c.execute(
-        "INSERT INTO assets (%s) VALUES (%s)" % (", ".join(asset.keys()), ",".join(["?"] * len(asset.keys()))),
-        asset.values()
-    )
-    connection.commit()
-    asset.update({'is_active': is_active(asset)})
-    return asset
-
-
-def update_asset(asset_id, asset):
-    del asset['asset_id']
-    c = connection.cursor()
-    query = "UPDATE assets SET %s=? WHERE asset_id=?" % "=?, ".join(asset.keys())
-    c.execute(query, asset.values() + [asset_id])
-    connection.commit()
-    asset.update({'asset_id': asset_id})
-    asset.update({'is_active': is_active(asset)})
-    return asset
-
-
-def delete_asset(asset_id):
-    c = connection.cursor()
-    c.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
-    connection.commit()
 
 
 ################################
@@ -461,9 +351,18 @@ if __name__ == "__main__":
     # Make sure the asset folder exist. If not, create it
     if not path.isdir(settings.get_asset_folder()):
         mkdir(settings.get_asset_folder())
+    # Create config dir if it doesn't exist
+    if not path.isdir(settings.get_configdir()):
+        makedirs(settings.get_configdir())
 
-    initiate_db()
-
-    run(host=settings.get_listen_ip(),
-        port=settings.get_listen_port(),
-        reloader=True)
+    with db.conn(settings.get_database()) as conn:
+        global db_conn
+        db_conn = conn
+        with db.cursor(db_conn) as c:
+            # Check if the asset-table exist. If it doesn't, create it.
+            c.execute(queries.exists_assets_table)
+            if c.fetchone() == None:
+                c.execute(queries.create_assets_table)
+        run(host=settings.get_listen_ip(),
+            port=settings.get_listen_port(),
+            reloader=True)
