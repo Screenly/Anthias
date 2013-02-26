@@ -17,13 +17,13 @@ def is_active(asset, at_time=None):
 
     if asset['start_date'] and asset['end_date']:
         at = at_time or datetime.datetime.utcnow()
-        return asset['start_date'] < at and asset['end_date'] > at
+        active = asset['start_date'] < at and asset['end_date'] > at
+        return active and asset['is_enabled']
     return False
 
 def get_playlist(conn):
     """Returns all currently active assets."""
-    predicate = lambda ass: ass['is_enabled'] == 1 and is_active(ass)
-    return filter(predicate, read(conn))
+    return filter(is_active, read(conn))
 
 def mkdict(keys):
     """Returns a function that creates a dict from a database record."""
