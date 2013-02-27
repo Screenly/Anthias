@@ -101,7 +101,7 @@
         mimetype: 'webpage',
         uri: '',
         start_date: now(),
-        end_date: now(),
+        end_date: moment().add('days', 7).toDate(),
         duration: default_duration
       };
     };
