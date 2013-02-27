@@ -308,14 +308,16 @@
       }
       (this.$('input, select')).prop('disabled', true);
       save.done(function(data) {
-        var default_duration;
+        var default_duration, isNew;
+        isNew = _this.model.isNew();
         default_duration = _this.model.get('duration');
+        _this.model.id = data.asset_id;
         if (!_this.model.collection) {
           _this.collection.add(_this.model);
         }
         (_this.$el.children(":first")).modal('hide');
         _.extend(_this.model.attributes, data);
-        if (!_this.edit) {
+        if (isNew) {
           return _this.model.collection.add(_this.model);
         }
       });
@@ -348,12 +350,12 @@
           }
         },
         uri: function(v) {
-          if (!_this.edit && _this.model.isNew() && ((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
+          if (_this.model.isNew() && ((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
             return 'please enter a valid URL';
           }
         },
         file_upload: function(v) {
-          if (!v && !(that.$('#tab-uri')).hasClass('active')) {
+          if (_this.model.isNew() && !v && !(that.$('#tab-uri')).hasClass('active')) {
             return 'please select a file';
           }
         }

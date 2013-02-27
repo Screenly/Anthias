@@ -25,6 +25,8 @@ from server import get_playlist
 
 from utils import validate_url
 
+import db
+import assets_helper
 # Define to none to ensure we refresh
 # the settings.
 last_settings_refresh = None
@@ -79,7 +81,7 @@ class Scheduler(object):
 
 def generate_asset_list():
     logging.info('Generating asset-list...')
-    playlist = get_playlist()
+    playlist = assets_helper.get_playlist(db_conn)
     deadline = sorted([ass['end_date'] for ass in playlist])[0]
     logging.debug('generate_asset_list deadline: %s' % deadline)
 
@@ -250,6 +252,9 @@ if __name__ == "__main__":
 
     # Before we start, reload the settings.
     reload_settings()
+
+    global db_conn
+    db_conn = db.conn(settings.get_database())
 
     # Create folder to hold HTML-pages
     html_folder = '/tmp/screenly_html/'

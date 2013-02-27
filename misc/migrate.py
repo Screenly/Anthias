@@ -1,11 +1,39 @@
+#!/usr/bin/env python
+# -*- coding: utf8 -*-
+
 import sqlite3
 import os
 import shutil
 import subprocess
 from contextlib import contextmanager
+import datetime
 
 configdir = os.path.join(os.getenv('HOME'), '.screenly/')
 database = os.path.join(configdir, 'screenly.db')
+
+comma = ','.join
+quest = lambda l:'=?,'.join(l)+'=?'
+query_read_all = lambda keys:'SELECT '+comma(keys)+' FROM assets ORDER BY name'
+query_update = lambda keys:'UPDATE assets SET '+quest(keys)+' WHERE asset_id=?'
+mkdict = lambda keys: (lambda row: dict([(keys[ki],v) for ki,v in enumerate(row)]))
+
+def is_active(asset):
+    if asset['start_date'] and asset['end_date']:
+        at = datetime.datetime.utcnow()
+        return asset['start_date'] < at and asset['end_date'] > at
+    return False
+
+def read(c):
+    keys = 'asset_id start_date end_date is_enabled'.split(' ')
+    c.execute(query_read_all(keys))
+    mk = mkdict(keys)
+    assets = [mk(asset) for asset in c.fetchall()]
+    return assets
+
+def update(c, asset_id, asset):
+    del asset['asset_id']
+    c.execute(query_update(asset.keys()), asset.values() + [asset_id])
+
 
 def test_column(col, cursor):
     """Test if a column is in the db"""
@@ -20,35 +48,30 @@ def test_column(col, cursor):
 def open_db_get_cursor():
     with sqlite3.connect(database, detect_types=sqlite3.PARSE_DECLTYPES) as conn:
         cursor = conn.cursor()
-        yield cursor
+        yield (cursor,conn)
         cursor.close()
 
+# ✂--------
+query_add_is_enabled_and_nocache = """begin transaction;
+alter table assets add is_enabled integer default 0;
+alter table assets add nocache integer default 0;
+commit;
+"""
 def migrate_add_is_enabled_and_nocache():
-    with open_db_get_cursor() as cursor:
+    with open_db_get_cursor() as (cursor,conn):
         col = 'is_enabled,nocache'
         if test_column(col, cursor):
             print 'Columns ('+col+') already present'
         else:
-            migration = """
-begin transaction;
-alter table assets add is_enabled integer default 0;
-alter table assets add nocache integer default 0;
-commit;"""
-            cursor.executescript(migration)
+            cursor.executescript(query_add_is_enabled_and_nocache)
+            assets = read(cursor)
+            for asset in assets:
+                asset.update({'is_enabled': is_active(asset)})
+                update(cursor, asset['asset_id'], asset)
+                conn.commit()
             print 'Added new columns ('+col+')'
-            # TODO: loop through existing assets and set is_enabled to is_active()
-
-
-def migrate_drop_filename():
-    """
-    Migration for table 'filename'
-    if the column 'filename' exist, drop it
-    """
-    with open_db_get_cursor() as cursor:
-        col = 'filename'
-        if test_column(col, cursor):
-            migration = """
-BEGIN TRANSACTION;
+# ✂--------
+query_drop_filename = """BEGIN TRANSACTION;
 CREATE TEMPORARY TABLE assets_backup(asset_id, name, uri, md5, start_date, end_date, duration, mimetype);
 INSERT INTO assets_backup SELECT asset_id, name, uri, md5, start_date, end_date, duration, mimetype FROM assets;
 DROP TABLE assets;
@@ -57,12 +80,15 @@ INSERT INTO assets SELECT asset_id, name, uri, md5, start_date, end_date, durati
 DROP TABLE assets_backup;
 COMMIT;
 """
-            cursor.executescript(migration)
+def migrate_drop_filename():
+    with open_db_get_cursor() as (cursor,_):
+        col = 'filename'
+        if test_column(col, cursor):
+            cursor.executescript(query_drop_filename)
             print 'Dropped obsolete column ('+col+')'
         else:
             print 'Obsolete column ('+col+') is not present'
-###
-
+# ✂--------
 
 def ensure_conf():
     """Ensure config file is in place"""
@@ -86,13 +112,13 @@ def fix_supervisor():
         supervisor_target = os.readlink(supervisor_symlink)
         if supervisor_target == old_target:
             subprocess.call(['/usr/bin/sudo', 'rm', supervisor_symlink])
-    except:
+    except (OSError,IOError) as _:
         pass
 
     if not os.path.isfile(supervisor_symlink):
         try:
             subprocess.call(['/usr/bin/sudo', 'ln', '-s', new_target, supervisor_symlink])
-        except:
+        except (OSError,IOError) as _:
             print 'Failed to create symlink'
 
 if __name__ == '__main__':

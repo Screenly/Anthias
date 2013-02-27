@@ -132,11 +132,13 @@ class EditAssetView extends Backbone.View
 
     (@$ 'input, select').prop 'disabled', on
     save.done (data) =>
+      isNew = @model.isNew()
       default_duration = @model.get 'duration'
+      @model.id = data.asset_id
       @collection.add @model if not @model.collection
       (@$el.children ":first").modal 'hide'
       _.extend @model.attributes, data
-      @model.collection.add @model unless @edit
+      @model.collection.add @model if isNew
     save.fail =>
       (@$ '.progress').hide()
       (@$ 'input, select').prop 'disabled', off
@@ -157,10 +159,10 @@ class EditAssetView extends Backbone.View
         if ('video' isnt @model.get 'mimetype') and (not (_.isNumber v*1 ) or v*1 < 1)
           'please enter a valid number'
       uri: (v) =>
-        if not @edit and @model.isNew() and ((that.$ '#tab-uri').hasClass 'active') and not url_test v
+        if @model.isNew() and ((that.$ '#tab-uri').hasClass 'active') and not url_test v
           'please enter a valid URL'
       file_upload: (v) =>
-        if not v and not (that.$ '#tab-uri').hasClass 'active'
+        if @model.isNew() and not v and not (that.$ '#tab-uri').hasClass 'active'
           return 'please select a file'
     errors = ([field, v] for field, fn of validators when v = fn (@$fv field))
 
