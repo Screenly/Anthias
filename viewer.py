@@ -21,7 +21,6 @@ import logging
 
 from settings import settings
 import html_templates
-from server import get_playlist
 
 from utils import validate_url
 
