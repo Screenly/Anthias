@@ -1,32 +1,39 @@
+#!/usr/bin/env python
+# -*- coding: utf8 -*-
+
 import sqlite3
 import os
 import shutil
 import subprocess
 from contextlib import contextmanager
 import datetime
+
+configdir = os.path.join(os.getenv('HOME'), '.screenly/')
+database = os.path.join(configdir, 'screenly.db')
+
+comma = ','.join
+quest = lambda l:'=?,'.join(l)+'=?'
+query_read_all = lambda keys:'SELECT '+comma(keys)+' FROM assets ORDER BY name'
+query_update = lambda keys:'UPDATE assets SET '+quest(keys)+' WHERE asset_id=?'
+mkdict = lambda keys: (lambda row: dict([(keys[ki],v) for ki,v in enumerate(row)]))
+
 def is_active(asset):
     if asset['start_date'] and asset['end_date']:
         at = datetime.datetime.utcnow()
         return asset['start_date'] < at and asset['end_date'] > at
     return False
-def mkdict(keys):
-    return lambda row: dict([(keys[ki],v) for ki,v in enumerate(row)])
-comma = lambda l: ','.join(l)
-quest = lambda l: '=?,'.join(l)+'=?'
-query_read_all = lambda keys:'SELECT '+comma(keys)+' FROM assets ORDER BY name'
-query_update = lambda keys:'UPDATE assets SET '+quest(keys)+' WHERE asset_id=?'
+
 def read(c):
     keys = 'asset_id start_date end_date is_enabled'.split(' ')
     c.execute(query_read_all(keys))
     mk = mkdict(keys)
     assets = [mk(asset) for asset in c.fetchall()]
     return assets
+
 def update(c, asset_id, asset):
     del asset['asset_id']
     c.execute(query_update(asset.keys()), asset.values() + [asset_id])
 
-configdir = os.path.join(os.getenv('HOME'), '.screenly/')
-database = os.path.join(configdir, 'screenly.db')
 
 def test_column(col, cursor):
     """Test if a column is in the db"""
@@ -44,7 +51,7 @@ def open_db_get_cursor():
         yield (cursor,conn)
         cursor.close()
 
-
+# ✂--------
 query_add_is_enabled_and_nocache = """begin transaction;
 alter table assets add is_enabled integer default 0;
 alter table assets add nocache integer default 0;
@@ -63,8 +70,7 @@ def migrate_add_is_enabled_and_nocache():
                 update(cursor, asset['asset_id'], asset)
                 conn.commit()
             print 'Added new columns ('+col+')'
-            # TODO: loop through existing assets and set is_enabled to is_active()
-
+# ✂--------
 query_drop_filename = """BEGIN TRANSACTION;
 CREATE TEMPORARY TABLE assets_backup(asset_id, name, uri, md5, start_date, end_date, duration, mimetype);
 INSERT INTO assets_backup SELECT asset_id, name, uri, md5, start_date, end_date, duration, mimetype FROM assets;
@@ -75,14 +81,14 @@ DROP TABLE assets_backup;
 COMMIT;
 """
 def migrate_drop_filename():
-    with open_db_get_cursor() as (cursor,conn):
+    with open_db_get_cursor() as (cursor,_):
         col = 'filename'
         if test_column(col, cursor):
             cursor.executescript(query_drop_filename)
             print 'Dropped obsolete column ('+col+')'
         else:
             print 'Obsolete column ('+col+') is not present'
-
+# ✂--------
 
 def ensure_conf():
     """Ensure config file is in place"""
@@ -106,13 +112,13 @@ def fix_supervisor():
         supervisor_target = os.readlink(supervisor_symlink)
         if supervisor_target == old_target:
             subprocess.call(['/usr/bin/sudo', 'rm', supervisor_symlink])
-    except:
+    except (OSError,IOError) as _:
         pass
 
     if not os.path.isfile(supervisor_symlink):
         try:
             subprocess.call(['/usr/bin/sudo', 'ln', '-s', new_target, supervisor_symlink])
-        except:
+        except (OSError,IOError) as _:
             print 'Failed to create symlink'
 
 if __name__ == '__main__':
