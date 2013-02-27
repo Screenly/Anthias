@@ -11,6 +11,10 @@ API.date_to = date_to =
 now = -> new Date()
 y2ts = (years) -> (years * 365 * 24 * 60 * 60000)
 years_from_now = (years) -> new Date ((y2ts years) + date_to.timestamp now())
+from_now = (->
+  n = now().getTime()
+  (t) -> new Date (t+n))()
+a_week = 7*84600*1000
 
 get_template = (name) -> _.template ($ "##{name}-template").html()
 delay = (wait, fn) -> _.delay fn, wait
@@ -40,7 +44,7 @@ API.Asset = class Asset extends Backbone.Model
     mimetype: 'webpage'
     uri: ''
     start_date: now()
-    end_date: moment().add('days',7).toDate()
+    end_date: from_now a_week
     duration: default_duration
 
 API.Assets = class Assets extends Backbone.Collection
