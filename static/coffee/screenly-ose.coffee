@@ -285,7 +285,7 @@ class AssetRowView extends Backbone.View
 
 class AssetsView extends Backbone.View
   initialize: (options) =>
-    @collection.bind event, @render for event in ['reset', 'add', 'sync']
+    @collection.bind event, @render for event in ('reset add remove sync'.split ' ')
 
   render: =>
     (@$ "##{which}-assets").html '' for which in ['active', 'inactive']

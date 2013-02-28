@@ -605,7 +605,7 @@
 
     AssetsView.prototype.initialize = function(options) {
       var event, _i, _len, _ref, _results;
-      _ref = ['reset', 'add', 'sync'];
+      _ref = 'reset add remove sync'.split(' ');
       _results = [];
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         event = _ref[_i];
