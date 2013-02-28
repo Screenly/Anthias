@@ -2,6 +2,8 @@ import db
 import queries
 import datetime
 
+get_time = datetime.datetime.utcnow
+
 def is_active(asset, at_time=None):
     """Accepts an asset dictionary and determines if it
     is active at the given time. If no time is specified, 'now' is used.
@@ -16,7 +18,7 @@ def is_active(asset, at_time=None):
     """
 
     if asset['start_date'] and asset['end_date']:
-        at = at_time or datetime.datetime.utcnow()
+        at = at_time or get_time()
         active = asset['start_date'] < at and asset['end_date'] > at
         return active and asset['is_enabled']
     return False
@@ -35,6 +37,8 @@ def create(conn, asset):
     Returns the asset.
     Asset's is_active field is updated before returning.
     """
+    if asset.has_key('is_active'):
+        asset.pop('is_active')
     with db.commit(conn) as c:
         c.execute(queries.create(asset.keys()),asset.values())
     asset.update({'is_active': is_active(asset)})
@@ -66,6 +70,8 @@ def update(conn, asset_id, asset):
     Asset's asset_id and is_active field is updated before returning.
     """
     del asset['asset_id']
+    if asset.has_key('is_active'):
+        asset.pop('is_active')
     with db.commit(conn) as c:
         c.execute(queries.update(asset.keys()), asset.values() + [asset_id])
     asset.update({'asset_id': asset_id})
