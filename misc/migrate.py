@@ -34,7 +34,6 @@ def update(c, asset_id, asset):
     del asset['asset_id']
     c.execute(query_update(asset.keys()), asset.values() + [asset_id])
 
-
 def test_column(col, cursor):
     """Test if a column is in the db"""
     try:
@@ -52,7 +51,33 @@ def open_db_get_cursor():
         cursor.close()
 
 # ✂--------
-query_add_is_enabled_and_nocache = """begin transaction;
+query_create_assets_table = """
+create table assets(
+asset_id text primary key,
+name text,
+uri text,
+md5 text,
+start_date timestamp,
+end_date timestamp,
+duration text,
+mimetype text,
+is_enabled integer default 0,
+nocache integer default 0)"""
+query_make_asset_id_primary_key = """
+begin transaction;
+create table temp as select * from assets;
+drop table assets;
+"""+query_create_assets_table+""";
+insert or ignore into assets select * from temp;
+drop table temp;
+commit;"""
+def migrate_make_asset_id_primary_key():
+    with open_db_get_cursor() as (cursor,_):
+        cursor.executescript(query_make_asset_id_primary_key)
+        print 'asset_id is primary key'
+# ✂--------
+query_add_is_enabled_and_nocache = """
+begin transaction;
 alter table assets add is_enabled integer default 0;
 alter table assets add nocache integer default 0;
 commit;
@@ -124,6 +149,7 @@ def fix_supervisor():
 if __name__ == '__main__':
     migrate_drop_filename()
     migrate_add_is_enabled_and_nocache()
+    migrate_make_asset_id_primary_key()
     ensure_conf()
     fix_supervisor()
     print "Migration done."

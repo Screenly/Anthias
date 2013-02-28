@@ -1,15 +1,22 @@
-exists_assets_table = """
-SELECT name FROM sqlite_master WHERE type='table' AND name='assets'
-"""
 create_assets_table = """
-CREATE TABLE assets (asset_id TEXT PRIMARY KEY, name TEXT, uri TEXT, md5 TEXT, start_date TIMESTAMP, end_date TIMESTAMP, duration TEXT, mimetype TEXT, is_enabled INTEGER default 0, nocache INTEGER default 0)
+create table assets(
+asset_id text primary key,
+name text,
+uri text,
+md5 text,
+start_date timestamp,
+end_date timestamp,
+duration text,
+mimetype text,
+is_enabled integer default 0,
+nocache integer default 0)
 """
 
-comma = lambda l: ','.join(l)
+comma = ','.join
 quest = lambda l: '=?,'.join(l)+'=?'
 
-read_all = lambda keys:'SELECT '+comma(keys)+' FROM assets ORDER BY name'
-read = lambda keys:'SELECT '+comma(keys)+' FROM assets WHERE asset_id=?'
-create = lambda keys:'INSERT INTO assets ('+comma(keys)+ ') VALUES ('+comma(['?']*len(keys))+')'
-remove = 'DELETE FROM assets WHERE asset_id=?'
-update = lambda keys:'UPDATE assets SET '+quest(keys)+' WHERE asset_id=?'
+read_all = lambda keys:'select '+comma(keys)+' from assets order by name'
+read = lambda keys:'select '+comma(keys)+' from assets where asset_id=?'
+create = lambda keys:'insert into assets ('+comma(keys)+ ') values ('+comma(['?']*len(keys))+')'
+remove = 'delete from assets where asset_id=?'
+update = lambda keys:'update assets set '+quest(keys)+' where asset_id=?'

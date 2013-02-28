@@ -30,12 +30,10 @@ url_test = (v) -> /(http|ftp|https):\/\/[\w-]+(\.[\w-]+)+([\w.,@?^=%&amp;:\/~+#-
 get_filename = (v) -> (v.replace /[\/\\\s]+$/g, '').replace /^.*[\\\/]/g, ''
 insertWbr = (v) -> (v.replace /\//g, '/<wbr>').replace /\&/g, '&amp;<wbr>'
 
-# Models
-
-
 # Tell Backbone to send its saves as JSON-encoded.
 Backbone.emulateJSON = on
 
+# Models
 API.Asset = class Asset extends Backbone.Model
   idAttribute: "asset_id"
   fields: 'name mimetype uri start_date end_date duration'.split ' '
@@ -46,6 +44,8 @@ API.Asset = class Asset extends Backbone.Model
     start_date: now()
     end_date: from_now a_week
     duration: default_duration
+    is_enabled: 0
+    nocache: 0
 
 API.Assets = class Assets extends Backbone.Collection
   url: "/api/assets"
@@ -53,7 +53,6 @@ API.Assets = class Assets extends Backbone.Collection
 
 
 # Views
-
 class EditAssetView extends Backbone.View
   $f: (field) => @$ "[name='#{field}']" # get field element
   $fv: (field, val...) => (@$f field).val val... # get or set filed value

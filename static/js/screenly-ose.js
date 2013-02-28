@@ -112,7 +112,9 @@
         uri: '',
         start_date: now(),
         end_date: from_now(a_week),
-        duration: default_duration
+        duration: default_duration,
+        is_enabled: 0,
+        nocache: 0
       };
     };
 

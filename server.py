@@ -27,7 +27,6 @@ from bottlehaml import haml_template
 
 import db
 import assets_helper
-import queries
 
 from utils import json_dump
 from utils import get_node_ip
@@ -357,10 +356,7 @@ if __name__ == "__main__":
         global db_conn
         db_conn = conn
         with db.cursor(db_conn) as c:
-            # Check if the asset-table exist. If it doesn't, create it.
-            c.execute(queries.exists_assets_table)
-            if c.fetchone() == None:
-                c.execute(queries.create_assets_table)
+            db.create_assets_table(c)
         run(host=settings.get_listen_ip(),
             port=settings.get_listen_port(),
             reloader=True)
