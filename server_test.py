@@ -7,7 +7,6 @@ import unittest
 
 import assets_helper
 import db
-import queries
 
 # fixtures chronology
 #
@@ -65,7 +64,7 @@ class DBHelperTest(unittest.TestCase):
         self.assertEmpty = functools.partial(self.assertEqual, [])
         self.conn = db.conn(':memory:')
         with db.commit(self.conn) as cursor:
-            cursor.execute(queries.create_assets_table)
+            cursor.execute(assets_helper.create_assets_table)
 
     def tearDown(self):
         self.conn.close()
