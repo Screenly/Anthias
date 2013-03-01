@@ -113,10 +113,9 @@ def prepare_asset(request):
         val = data.get(key, '')
         return val.strip() if isinstance(val, basestring) else val
 
-    if all([
-        get('name'),
-        get('uri') or (request.files.file_upload != ""),
-        get('mimetype')]):
+    if all([get('name'),
+            get('uri') or (request.files.file_upload != ""),
+            get('mimetype')]):
 
         asset = {
             'name': get('name').decode('UTF-8'),
@@ -171,7 +170,6 @@ def prepare_asset(request):
                     if not chunk:
                         break
                     f.write(chunk)
-
 
         if "video" in asset['mimetype']:
             asset['duration'] = "N/A"

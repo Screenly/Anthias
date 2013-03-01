@@ -4,6 +4,7 @@ import datetime
 
 get_time = datetime.datetime.utcnow
 
+
 def is_active(asset, at_time=None):
     """Accepts an asset dictionary and determines if it
     is active at the given time. If no time is specified, 'now' is used.
@@ -23,13 +24,16 @@ def is_active(asset, at_time=None):
         return active and asset['is_enabled']
     return False
 
+
 def get_playlist(conn):
     """Returns all currently active assets."""
     return filter(is_active, read(conn))
 
+
 def mkdict(keys):
     """Returns a function that creates a dict from a database record."""
-    return lambda row: dict([(keys[ki],v) for ki,v in enumerate(row)])
+    return lambda row: dict([(keys[ki], v) for ki, v in enumerate(row)])
+
 
 def create(conn, asset):
     """
@@ -37,12 +41,13 @@ def create(conn, asset):
     Returns the asset.
     Asset's is_active field is updated before returning.
     """
-    if asset.has_key('is_active'):
+    if 'is_active' in asset:
         asset.pop('is_active')
     with db.commit(conn) as c:
-        c.execute(queries.create(asset.keys()),asset.values())
+        c.execute(queries.create(asset.keys()), asset.values())
     asset.update({'is_active': is_active(asset)})
     return asset
+
 
 def read(conn, asset_id=None, keys=db.FIELDS):
     """
@@ -53,15 +58,16 @@ def read(conn, asset_id=None, keys=db.FIELDS):
     assets = []
     mk = mkdict(keys)
     with db.cursor(conn) as c:
-        if asset_id == None:
+        if asset_id is None:
             c.execute(queries.read_all(keys))
         else:
-            c.execute(queries.read(keys),[asset_id])
+            c.execute(queries.read(keys), [asset_id])
         assets = [mk(asset) for asset in c.fetchall()]
     [asset.update({'is_active': is_active(asset)}) for asset in assets]
     if asset_id and len(assets):
         return assets[0]
     return assets
+
 
 def update(conn, asset_id, asset):
     """
@@ -70,13 +76,14 @@ def update(conn, asset_id, asset):
     Asset's asset_id and is_active field is updated before returning.
     """
     del asset['asset_id']
-    if asset.has_key('is_active'):
+    if 'is_active' in asset:
         asset.pop('is_active')
     with db.commit(conn) as c:
         c.execute(queries.update(asset.keys()), asset.values() + [asset_id])
     asset.update({'asset_id': asset_id})
     asset.update({'is_active': is_active(asset)})
     return asset
+
 
 def delete(conn, asset_id):
     """Remove an asset from the database."""

@@ -3,6 +3,7 @@ from netifaces import ifaddresses
 from sh import grep, netstat
 from urlparse import urlparse
 
+
 def validate_url(string):
     """Simple URL verification.
 
@@ -21,6 +22,7 @@ def validate_url(string):
 
     checker = urlparse(string)
     return bool(checker.scheme in ('http', 'https') and checker.netloc)
+
 
 def get_node_ip():
     """Returns the node's IP, for the interface
