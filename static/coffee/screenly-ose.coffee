@@ -63,6 +63,7 @@ class EditAssetView extends Backbone.View
     (@$ 'input.time').timepicker
       minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: yes
 
+    (@$ 'input[name="nocache"]').prop 'checked', @model.get 'nocache'
     (@$ '.modal-header .close').remove()
     (@$el.children ":first").modal()
     @model.bind 'change', @render
@@ -77,6 +78,9 @@ class EditAssetView extends Backbone.View
       (@$ f).attr 'disabled', on for f in 'mimetype uri file_upload'.split ' '
       (@$ '#modalLabel').text "Edit Asset"
       (@$ '.asset-location').hide(); (@$ '.asset-location.edit').show()
+
+    has_nocache = ((@$ '#tab-uri').hasClass 'active') and (@model.get 'mimetype') is 'image'
+    (@$ '.nocache').toggle has_nocache
 
     (@$ '.duration').toggle ((@model.get 'mimetype') != 'video')
     @clickTabNavUri() if (@model.get 'mimetype') == 'webpage'
@@ -116,6 +120,7 @@ class EditAssetView extends Backbone.View
     e.preventDefault()
     @viewmodel()
     save = null
+    @model.set 'nocache', if (@$ 'input[name="nocache"]').prop 'checked' then 1 else 0
     if (@$ '#tab-file_upload').hasClass 'active'
       if not @$fv 'name'
         @$fv 'name', get_filename @$fv 'file_upload'
@@ -135,13 +140,11 @@ class EditAssetView extends Backbone.View
 
     (@$ 'input, select').prop 'disabled', on
     save.done (data) =>
-      isNew = @model.isNew()
-      default_duration = @model.get 'duration'
       @model.id = data.asset_id
       @collection.add @model if not @model.collection
       (@$el.children ":first").modal 'hide'
       _.extend @model.attributes, data
-      @model.collection.add @model if isNew
+      @model.collection.add @model unless @edit
     save.fail =>
       (@$ '.progress').hide()
       (@$ 'input, select').prop 'disabled', off

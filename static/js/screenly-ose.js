@@ -193,6 +193,7 @@
         disableFocus: true,
         showMeridian: true
       });
+      (this.$('input[name="nocache"]')).prop('checked', this.model.get('nocache'));
       (this.$('.modal-header .close')).remove();
       (this.$el.children(":first")).modal();
       this.model.bind('change', this.render);
@@ -205,7 +206,7 @@
     };
 
     EditAssetView.prototype.render = function() {
-      var date, f, field, which, _i, _j, _k, _len, _len1, _len2, _ref, _ref1, _ref2;
+      var date, f, field, has_nocache, which, _i, _j, _k, _len, _len1, _len2, _ref, _ref1, _ref2;
       this.undelegateEvents();
       if (this.edit) {
         _ref = 'mimetype uri file_upload'.split(' ');
@@ -217,6 +218,8 @@
         (this.$('.asset-location')).hide();
         (this.$('.asset-location.edit')).show();
       }
+      has_nocache = ((this.$('#tab-uri')).hasClass('active')) && (this.model.get('mimetype')) === 'image';
+      (this.$('.nocache')).toggle(has_nocache);
       (this.$('.duration')).toggle((this.model.get('mimetype')) !== 'video');
       if ((this.model.get('mimetype')) === 'webpage') {
         this.clickTabNavUri();
@@ -284,6 +287,7 @@
       e.preventDefault();
       this.viewmodel();
       save = null;
+      this.model.set('nocache', (this.$('input[name="nocache"]')).prop('checked') ? 1 : 0);
       if ((this.$('#tab-file_upload')).hasClass('active')) {
         if (!this.$fv('name')) {
           this.$fv('name', get_filename(this.$fv('file_upload')));
@@ -320,16 +324,13 @@
       }
       (this.$('input, select')).prop('disabled', true);
       save.done(function(data) {
-        var default_duration, isNew;
-        isNew = _this.model.isNew();
-        default_duration = _this.model.get('duration');
         _this.model.id = data.asset_id;
         if (!_this.model.collection) {
           _this.collection.add(_this.model);
         }
         (_this.$el.children(":first")).modal('hide');
         _.extend(_this.model.attributes, data);
-        if (isNew) {
+        if (!_this.edit) {
           return _this.model.collection.add(_this.model);
         }
       });
