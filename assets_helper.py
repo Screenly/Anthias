@@ -2,6 +2,11 @@ import db
 import queries
 import datetime
 
+FIELDS = ["asset_id", "name", "uri", "start_date",
+          "end_date", "duration", "mimetype", "is_enabled", "nocache"]
+
+create_assets_table = 'CREATE TABLE assets(asset_id text primary key, name text, uri text, md5 text, start_date timestamp, end_date timestamp, duration text, mimetype text, is_enabled integer default 0, nocache integer default 0)'
+
 get_time = datetime.datetime.utcnow
 
 
@@ -49,7 +54,7 @@ def create(conn, asset):
     return asset
 
 
-def read(conn, asset_id=None, keys=db.FIELDS):
+def read(conn, asset_id=None, keys=FIELDS):
     """
     Fetch one or more assets from the database.
     Returns a list of dicts or one dict.

@@ -26,6 +26,7 @@ from bottle import HTTPResponse
 from bottlehaml import haml_template
 
 import db
+import queries
 import assets_helper
 
 from utils import json_dump
@@ -354,7 +355,9 @@ if __name__ == "__main__":
         global db_conn
         db_conn = conn
         with db.cursor(db_conn) as c:
-            db.create_assets_table(c)
+            c.execute(queries.exists_table)
+            if c.fetchone() is None:
+                c.execute(assets_helper.create_assets_table)
         run(host=settings.get_listen_ip(),
             port=settings.get_listen_port(),
             reloader=True)
