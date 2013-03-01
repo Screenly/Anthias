@@ -2,9 +2,12 @@
 # -*- coding: utf8 -*-
 
 import datetime
-import os
+import unittest
+import functools
 
-test_db = 'test.db'
+import db
+import queries
+import assets_helper
 
 # fixtures chronology
 #
@@ -56,86 +59,67 @@ asset_y_diff = {
     'duration': u'324'
 }
 
-import db
-conn = None
-# setUp and tearDown helpers
-def mkdb():
-    global conn
-    conn = db.conn(test_db)
-def initdb():
-    mkdb()
-    with db.commit(conn) as cursor:
-        cursor.execute(queries.create_assets_table)
-def rmdb():
-    os.remove(test_db)
+class DBHelperTest(unittest.TestCase):
+    def setUp(self):
+        self.assertEmpty = functools.partial(self.assertEqual, [])
+        self.conn = db.conn(':memory:')
+        with db.commit(self.conn) as cursor:
+            cursor.execute(queries.create_assets_table)
+    def tearDown(self):
+        self.conn.close()
+    # ✂--------
+    def test_create_read_asset(self):
+        assets_helper.create(self.conn, asset_x)
+        assets_helper.create(self.conn, asset_y)
+        should_be_y_x = assets_helper.read(self.conn)
+        self.assertEqual([asset_y,asset_x],should_be_y_x)
+    # ✂--------
+    def test_create_update_read_asset(self):
+        assets_helper.create(self.conn, asset_x)
+        asset_x_ = asset_x.copy()
+        asset_x_.update(**asset_x_diff)
+        assets_helper.update(self.conn, asset_x['asset_id'], asset_x_)
 
-# ✂--------
-import queries
-import assets_helper
-# ✂--------
-def test_init_db():
-    with db.commit(conn) as cursor:
-        cursor.execute(queries.create_assets_table)
-test_init_db.setUp = mkdb
-test_init_db.tearDown = rmdb
-# ✂--------
-def test_create_read_asset():
-    assets_helper.create(conn, asset_x)
-    assets_helper.create(conn, asset_y)
-    should_be_y_x = assets_helper.read(conn)
-    assert [asset_y,asset_x] == should_be_y_x
-test_create_read_asset.setUp = initdb
-test_create_read_asset.tearDown = rmdb
-# ✂--------
-def test_create_update_read_asset():
-    assets_helper.create(conn, asset_x)
-    asset_x_ = asset_x.copy()
-    asset_x_.update(**asset_x_diff)
-    assets_helper.update(conn, asset_x['asset_id'], asset_x_)
+        assets_helper.create(self.conn, asset_y)
+        asset_y_ = asset_y.copy()
+        asset_y_.update(**asset_y_diff)
+        assets_helper.update(self.conn, asset_y['asset_id'], asset_y_)
 
-    assets_helper.create(conn, asset_y)
-    asset_y_ = asset_y.copy()
-    asset_y_.update(**asset_y_diff)
-    assets_helper.update(conn, asset_y['asset_id'], asset_y_)
+        should_be_y__x_ = assets_helper.read(self.conn)
+        self.assertEqual([asset_y_, asset_x_],should_be_y__x_)
+    # ✂--------
+    def test_create_delete_asset(self):
+        assets_helper.create(self.conn, asset_x)
+        assets_helper.delete(self.conn, asset_x['asset_id'])
 
-    should_be_y__x_ = assets_helper.read(conn)
-    assert [asset_y_, asset_x_] == should_be_y__x_
-test_create_update_read_asset.setUp = initdb
-test_create_update_read_asset.tearDown = rmdb
-# ✂--------
-def test_create_delete_asset():
-    assets_helper.create(conn, asset_x)
-    assets_helper.delete(conn, asset_x['asset_id'])
+        assets_helper.create(self.conn, asset_y)
+        assets_helper.delete(self.conn, asset_y['asset_id'])
 
-    assets_helper.create(conn, asset_y)
-    assets_helper.delete(conn, asset_y['asset_id'])
+        should_be_empty = assets_helper.read(self.conn)
+        self.assertEmpty(should_be_empty)
+    # ✂--------
+    def set_now(self,d):
+        assets_helper.get_time = lambda: d
+    def test_get_playlist(self):
+        assets_helper.create(self.conn, asset_x)
+        assets_helper.create(self.conn, asset_y)
 
-    should_be_empty = assets_helper.read(conn)
-    assert [] == should_be_empty
-test_create_delete_asset.setUp = initdb
-test_create_delete_asset.tearDown = rmdb
-# ✂--------
-def set_now(d):
-    assets_helper.get_time = lambda: d
-def test_get_playlist():
-    assets_helper.create(conn, asset_x)
-    assets_helper.create(conn, asset_y)
+        self.set_now(date_e)
+        should_be_empty = assets_helper.get_playlist(self.conn)
+        self.assertEmpty(should_be_empty)
 
-    set_now(date_e)
-    should_be_empty = assets_helper.get_playlist(conn)
-    assert [] == should_be_empty
+        self.set_now(date_f)
+        [should_be_x] = assets_helper.get_playlist(self.conn)
+        self.assertEqual(asset_x['asset_id'],should_be_x['asset_id'])
 
-    set_now(date_f)
-    [should_be_x] = assets_helper.get_playlist(conn)
-    assert asset_x['asset_id'] == should_be_x['asset_id']
+        self.set_now(date_g)
+        should_be_y_x = assets_helper.get_playlist(self.conn)
+        self.assertEqual([should_be_y_x[0]['asset_id'],
+                          should_be_y_x[1]['asset_id']],
+                         [asset_y['asset_id'],
+                          asset_x['asset_id']])
 
-    set_now(date_g)
-    should_be_y_x = assets_helper.get_playlist(conn)
-    assert should_be_y_x[0]['asset_id'] == asset_y['asset_id'] and should_be_y_x[1]['asset_id'] == asset_x['asset_id']
-
-    set_now(date_h)
-    [should_be_y] = assets_helper.get_playlist(conn)
-    assert asset_y['asset_id'] == should_be_y['asset_id']
-test_get_playlist.setUp = initdb
-test_get_playlist.tearDown = rmdb
-# ✂--------
+        self.set_now(date_h)
+        [should_be_y] = assets_helper.get_playlist(self.conn)
+        self.assertEqual(asset_y['asset_id'],should_be_y['asset_id'])
+        # ✂--------
