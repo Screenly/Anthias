@@ -2,12 +2,12 @@
 # -*- coding: utf8 -*-
 
 import datetime
-import unittest
 import functools
+import unittest
 
+import assets_helper
 import db
 import queries
-import assets_helper
 
 # fixtures chronology
 #
@@ -40,7 +40,7 @@ asset_x = {
     'duration': u'5',
     'is_enabled': 1,
     'nocache': 0,
-    }
+}
 asset_x_diff = {
     'duration': u'10'
 }
@@ -54,10 +54,11 @@ asset_y = {
     'duration': u'6',
     'is_enabled': 1,
     'nocache': 0,
-    }
+}
 asset_y_diff = {
     'duration': u'324'
 }
+
 
 class DBHelperTest(unittest.TestCase):
     def setUp(self):
@@ -65,15 +66,18 @@ class DBHelperTest(unittest.TestCase):
         self.conn = db.conn(':memory:')
         with db.commit(self.conn) as cursor:
             cursor.execute(queries.create_assets_table)
+
     def tearDown(self):
         self.conn.close()
     # ✂--------
+
     def test_create_read_asset(self):
         assets_helper.create(self.conn, asset_x)
         assets_helper.create(self.conn, asset_y)
         should_be_y_x = assets_helper.read(self.conn)
-        self.assertEqual([asset_y,asset_x],should_be_y_x)
+        self.assertEqual([asset_y, asset_x], should_be_y_x)
     # ✂--------
+
     def test_create_update_read_asset(self):
         assets_helper.create(self.conn, asset_x)
         asset_x_ = asset_x.copy()
@@ -86,8 +90,9 @@ class DBHelperTest(unittest.TestCase):
         assets_helper.update(self.conn, asset_y['asset_id'], asset_y_)
 
         should_be_y__x_ = assets_helper.read(self.conn)
-        self.assertEqual([asset_y_, asset_x_],should_be_y__x_)
+        self.assertEqual([asset_y_, asset_x_], should_be_y__x_)
     # ✂--------
+
     def test_create_delete_asset(self):
         assets_helper.create(self.conn, asset_x)
         assets_helper.delete(self.conn, asset_x['asset_id'])
@@ -98,8 +103,10 @@ class DBHelperTest(unittest.TestCase):
         should_be_empty = assets_helper.read(self.conn)
         self.assertEmpty(should_be_empty)
     # ✂--------
-    def set_now(self,d):
+
+    def set_now(self, d):
         assets_helper.get_time = lambda: d
+
     def test_get_playlist(self):
         assets_helper.create(self.conn, asset_x)
         assets_helper.create(self.conn, asset_y)
@@ -110,7 +117,7 @@ class DBHelperTest(unittest.TestCase):
 
         self.set_now(date_f)
         [should_be_x] = assets_helper.get_playlist(self.conn)
-        self.assertEqual(asset_x['asset_id'],should_be_x['asset_id'])
+        self.assertEqual(asset_x['asset_id'], should_be_x['asset_id'])
 
         self.set_now(date_g)
         should_be_y_x = assets_helper.get_playlist(self.conn)
@@ -121,5 +128,5 @@ class DBHelperTest(unittest.TestCase):
 
         self.set_now(date_h)
         [should_be_y] = assets_helper.get_playlist(self.conn)
-        self.assertEqual(asset_y['asset_id'],should_be_y['asset_id'])
+        self.assertEqual(asset_y['asset_id'], should_be_y['asset_id'])
         # ✂--------
