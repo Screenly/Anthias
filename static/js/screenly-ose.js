@@ -358,6 +358,11 @@
           if (_this.model.isNew() && !v && !(that.$('#tab-uri')).hasClass('active')) {
             return 'please select a file';
           }
+        },
+        end_date: function(v) {
+          if (!((new Date(_this.$fv('start_date'))) < (new Date(_this.$fv('end_date'))))) {
+            return 'end date should be after start date';
+          }
         }
       };
       errors = (function() {

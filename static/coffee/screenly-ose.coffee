@@ -166,6 +166,9 @@ class EditAssetView extends Backbone.View
       file_upload: (v) =>
         if @model.isNew() and not v and not (that.$ '#tab-uri').hasClass 'active'
           return 'please select a file'
+      end_date: (v) =>
+        unless (new Date @$fv 'start_date') < (new Date @$fv 'end_date')
+          'end date should be after start date'
     errors = ([field, v] for field, fn of validators when v = fn (@$fv field))
 
     (@$ ".control-group.warning .help-inline.warning").remove()
