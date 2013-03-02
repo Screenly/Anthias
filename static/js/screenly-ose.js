@@ -5,7 +5,7 @@
 
 
 (function() {
-  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, a_week, date_to, delay, from_now, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, y2ts, years_from_now,
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, a_week, date_to, delay, from_now, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test,
     _this = this,
     __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
@@ -15,34 +15,24 @@
 
   API = (window.Screenly || (window.Screenly = {}));
 
-  API.date_to = date_to = {
-    iso: function(d) {
-      return (new Date(d)).toISOString();
-    },
-    string: function(d) {
-      return (moment(new Date(d))).format("MM/DD/YYYY hh:mm:ss A");
-    },
-    date: function(d) {
-      return (new Date(d)).toLocaleDateString();
-    },
-    time: function(d) {
-      return (new Date(d)).toLocaleTimeString();
-    },
-    timestamp: function(d) {
-      return (new Date(d)).getTime();
-    }
+  API.date_to = date_to = function(d) {
+    var dd;
+    dd = moment(new Date(d));
+    return {
+      string: function() {
+        return dd.format('MM/DD/YYYY hh:mm:ss A');
+      },
+      date: function() {
+        return dd.format('MM/DD/YYYY');
+      },
+      time: function() {
+        return dd.format('hh:mm A');
+      }
+    };
   };
 
   now = function() {
     return new Date();
-  };
-
-  y2ts = function(years) {
-    return years * 365 * 24 * 60 * 60000;
-  };
-
-  years_from_now = function(years) {
-    return new Date((y2ts(years)) + date_to.timestamp(now()));
   };
 
   from_now = (function() {
@@ -205,7 +195,7 @@
     };
 
     EditAssetView.prototype.render = function() {
-      var date, f, field, which, _i, _j, _k, _len, _len1, _len2, _ref, _ref1, _ref2;
+      var d, f, field, which, _i, _j, _k, _len, _len1, _len2, _ref, _ref1, _ref2;
       this.undelegateEvents();
       if (this.edit) {
         _ref = 'mimetype uri file_upload'.split(' ');
@@ -232,27 +222,24 @@
       _ref2 = ['start', 'end'];
       for (_k = 0, _len2 = _ref2.length; _k < _len2; _k++) {
         which = _ref2[_k];
-        date = this.model.get("" + which + "_date");
-        this.$fv("" + which + "_date_date", date_to.date(date));
+        d = date_to(this.model.get("" + which + "_date"));
+        this.$fv("" + which + "_date_date", d.date());
         (this.$f("" + which + "_date_date")).datepicker({
           autoclose: true
         });
-        (this.$f("" + which + "_date_date")).datepicker('setValue', date_to.date(date));
-        this.$fv("" + which + "_date_time", date_to.time(date));
+        (this.$f("" + which + "_date_date")).datepicker('setValue', d.date());
+        this.$fv("" + which + "_date_time", d.time());
       }
       this.delegateEvents();
       return false;
     };
 
     EditAssetView.prototype.viewmodel = function() {
-      var field, which, _i, _j, _len, _len1, _ref, _ref1, _results,
-        _this = this;
+      var field, which, _i, _j, _len, _len1, _ref, _ref1, _results;
       _ref = ['start', 'end'];
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         which = _ref[_i];
-        this.$fv("" + which + "_date", date_to.iso((function() {
-          return (_this.$fv("" + which + "_date_date")) + " " + (_this.$fv("" + which + "_date_time"));
-        })()));
+        this.$fv("" + which + "_date", (new Date((this.$fv("" + which + "_date_date")) + " " + (this.$fv("" + which + "_date_time")))).toISOString());
       }
       _ref1 = this.model.fields;
       _results = [];
@@ -490,8 +477,8 @@
       var json;
       this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
         name: insertWbr(json.name),
-        start_date: date_to.string(json.start_date),
-        end_date: date_to.string(json.end_date)
+        start_date: (date_to(json.start_date)).string(),
+        end_date: (date_to(json.end_date)).string()
       })));
       (this.$(".delete-asset-button")).popover({
         content: get_template('confirm-delete')
