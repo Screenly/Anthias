@@ -329,7 +329,7 @@
         }
         (_this.$el.children(":first")).modal('hide');
         _.extend(_this.model.attributes, data);
-        if (isNew) {
+        if (!_this.edit) {
           return _this.model.collection.add(_this.model);
         }
       });

@@ -141,7 +141,7 @@ class EditAssetView extends Backbone.View
       @collection.add @model if not @model.collection
       (@$el.children ":first").modal 'hide'
       _.extend @model.attributes, data
-      @model.collection.add @model if isNew
+      @model.collection.add @model unless @edit
     save.fail =>
       (@$ '.progress').hide()
       (@$ 'input, select').prop 'disabled', off
