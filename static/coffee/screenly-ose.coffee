@@ -8,10 +8,6 @@ API.date_to = date_to = (d) ->
   time: -> dd.format 'hh:mm A'
 
 now = -> new Date()
-from_now = (->
-  n = now().getTime()
-  (t) -> new Date (t+n))()
-a_week = 7*84600*1000
 
 get_template = (name) -> _.template ($ "##{name}-template").html()
 delay = (wait, fn) -> _.delay fn, wait
@@ -39,7 +35,7 @@ API.Asset = class Asset extends Backbone.Model
     mimetype: 'webpage'
     uri: ''
     start_date: now()
-    end_date: from_now a_week
+    end_date: (moment().add 'days', 7).toDate()
     duration: default_duration
     is_enabled: 0
     nocache: 0

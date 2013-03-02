@@ -5,7 +5,7 @@
 
 
 (function() {
-  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, a_week, date_to, delay, from_now, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test,
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test,
     _this = this,
     __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
@@ -34,16 +34,6 @@
   now = function() {
     return new Date();
   };
-
-  from_now = (function() {
-    var n;
-    n = now().getTime();
-    return function(t) {
-      return new Date(t + n);
-    };
-  })();
-
-  a_week = 7 * 84600 * 1000;
 
   get_template = function(name) {
     return _.template(($("#" + name + "-template")).html());
@@ -101,7 +91,7 @@
         mimetype: 'webpage',
         uri: '',
         start_date: now(),
-        end_date: from_now(a_week),
+        end_date: (moment().add('days', 7)).toDate(),
         duration: default_duration,
         is_enabled: 0,
         nocache: 0
