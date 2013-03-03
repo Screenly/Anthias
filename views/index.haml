@@ -134,15 +134,22 @@
                 .controls
                   %input.span1(type="number", name="duration")
                   seconds
-              .control-group.nocache
-                %label.control-label Disable cache
-                .controls
-                  %label.nocache-toggle.checkbox.toggle.well
-                    %input(type="checkbox", name="nocache")
-                    %p
-                      %span.on Yes
-                      %span.off No
-                    %a.slide-button.btn.btn-primary
+              #advanced-accordion.accordion.nocache
+                .accordion-group
+                  .accrodion-heading
+                    %i.icon-play.unrotated
+                    %a.accordion-toggle(dataToggle="collapse", dataParent="#advanced-accordion", href="#collapseAdvanced") Advanced
+                  #collapseAdvanced.accordion-body.collapse
+                    .accordion-inner
+                      .control-group
+                        %label.control-label Disable cache
+                        .controls
+                          %label.nocache-toggle.checkbox.toggle.well
+                            %input(type="checkbox", name="nocache")
+                            %p
+                              %span.on Yes
+                              %span.off No
+                            %a.slide-button.btn.btn-primary
 
           .modal-footer
             .pull-left.progress.progress-striped.active(style="display:none")

@@ -123,6 +123,8 @@
     __extends(EditAssetView, _super);
 
     function EditAssetView() {
+      this.toggleAdvanced = __bind(this.toggleAdvanced, this);
+
       this.updateMimetype = __bind(this.updateMimetype, this);
 
       this.updateFileUploadMimetype = __bind(this.updateFileUploadMimetype, this);
@@ -254,6 +256,7 @@
       'keyup': 'change',
       'click .tabnav-uri': 'clickTabNavUri',
       'click .tabnav-file_upload': 'clickTabNavUpload',
+      'click .accordion-toggle': 'toggleAdvanced',
       'paste [name=uri]': 'updateUriMimetype',
       'change [name=file_upload]': 'updateFileUploadMimetype'
     };
@@ -434,6 +437,11 @@
       if (mt) {
         return this.$fv('mimetype', mt);
       }
+    };
+
+    EditAssetView.prototype.toggleAdvanced = function() {
+      (this.$('.icon-play')).toggleClass('rotated');
+      return (this.$('.icon-play')).toggleClass('unrotated');
     };
 
     return EditAssetView;

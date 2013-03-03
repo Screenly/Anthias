@@ -160,3 +160,17 @@ input[name="file_upload"] {
     text-overflow: ellipsis;
     overflow: hidden;
 }
+
+.accordion-inner { padding: 9px 0 0 0; }
+.accordion-group { border: none; }
+
+@mixin rota($angle,$time){
+    @each $prefix in webkit moz ms o {
+	-#{$prefix}-transition: all $time linear;
+	-#{$prefix}-transform: rotate($angle);
+    }
+    transition: all $time linear;
+    transform: rotate($angle);
+}
+.unrotated { @include rota(0deg,.15s); }
+.rotated { @include rota(90deg,.15s); }

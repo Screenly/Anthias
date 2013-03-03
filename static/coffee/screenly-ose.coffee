@@ -105,6 +105,7 @@ class EditAssetView extends Backbone.View
     'keyup': 'change'
     'click .tabnav-uri': 'clickTabNavUri'
     'click .tabnav-file_upload': 'clickTabNavUpload'
+    'click .accordion-toggle': 'toggleAdvanced'
     'paste [name=uri]': 'updateUriMimetype'
     'change [name=file_upload]': 'updateFileUploadMimetype'
 
@@ -209,6 +210,10 @@ class EditAssetView extends Backbone.View
     mt = get_mimetype filename
     (@$ '#file_upload_label').text (get_filename filename)
     @$fv 'mimetype', mt if mt
+
+  toggleAdvanced: =>
+    (@$ '.icon-play').toggleClass 'rotated'
+    (@$ '.icon-play').toggleClass 'unrotated'
 
 
 class AssetRowView extends Backbone.View

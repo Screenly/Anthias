@@ -113,3 +113,33 @@ input[name="file_upload"] {
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden; }
+
+.accordion-inner {
+  padding: 9px 0 0 0; }
+
+.accordion-group {
+  border: none; }
+
+.unrotated {
+  -webkit-transition: all 0.15s linear;
+  -webkit-transform: rotate(0deg);
+  -moz-transition: all 0.15s linear;
+  -moz-transform: rotate(0deg);
+  -ms-transition: all 0.15s linear;
+  -ms-transform: rotate(0deg);
+  -o-transition: all 0.15s linear;
+  -o-transform: rotate(0deg);
+  transition: all 0.15s linear;
+  transform: rotate(0deg); }
+
+.rotated {
+  -webkit-transition: all 0.15s linear;
+  -webkit-transform: rotate(90deg);
+  -moz-transition: all 0.15s linear;
+  -moz-transform: rotate(90deg);
+  -ms-transition: all 0.15s linear;
+  -ms-transform: rotate(90deg);
+  -o-transition: all 0.15s linear;
+  -o-transform: rotate(90deg);
+  transition: all 0.15s linear;
+  transform: rotate(90deg); }
