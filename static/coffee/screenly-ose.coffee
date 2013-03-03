@@ -72,8 +72,11 @@ class EditAssetView extends Backbone.View
       (@$ '#modalLabel').text "Edit Asset"
       (@$ '.asset-location').hide(); (@$ '.asset-location.edit').show()
 
-    has_nocache = ((@$ '#tab-uri').hasClass 'active') and (@model.get 'mimetype') is 'image'
-    (@$ '.nocache').toggle has_nocache
+    img = (@model.get 'mimetype') is 'image'
+    on_uri_tab = (@$ '#tab-uri').hasClass 'active'
+    edit = @edit and url_test @model.get 'uri'
+    has_nocache = img and (on_uri_tab or edit)
+    (@$ '.advanced-accordion').toggle has_nocache
 
     (@$ '.duration').toggle ((@model.get 'mimetype') != 'video')
     @clickTabNavUri() if (@model.get 'mimetype') == 'webpage'
@@ -105,7 +108,7 @@ class EditAssetView extends Backbone.View
     'keyup': 'change'
     'click .tabnav-uri': 'clickTabNavUri'
     'click .tabnav-file_upload': 'clickTabNavUpload'
-    'click .accordion-toggle': 'toggleAdvanced'
+    'click .advanced-toggle': 'toggleAdvanced'
     'paste [name=uri]': 'updateUriMimetype'
     'change [name=file_upload]': 'updateFileUploadMimetype'
 
@@ -214,6 +217,7 @@ class EditAssetView extends Backbone.View
   toggleAdvanced: =>
     (@$ '.icon-play').toggleClass 'rotated'
     (@$ '.icon-play').toggleClass 'unrotated'
+    (@$ '.collapse-advanced').collapse 'toggle'
 
 
 class AssetRowView extends Backbone.View

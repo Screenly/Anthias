@@ -188,7 +188,7 @@
     };
 
     EditAssetView.prototype.render = function() {
-      var d, f, field, has_nocache, which, _i, _j, _k, _len, _len1, _len2, _ref, _ref1, _ref2;
+      var d, edit, f, field, has_nocache, img, on_uri_tab, which, _i, _j, _k, _len, _len1, _len2, _ref, _ref1, _ref2;
       this.undelegateEvents();
       if (this.edit) {
         _ref = 'mimetype uri file_upload'.split(' ');
@@ -200,8 +200,11 @@
         (this.$('.asset-location')).hide();
         (this.$('.asset-location.edit')).show();
       }
-      has_nocache = ((this.$('#tab-uri')).hasClass('active')) && (this.model.get('mimetype')) === 'image';
-      (this.$('.nocache')).toggle(has_nocache);
+      img = (this.model.get('mimetype')) === 'image';
+      on_uri_tab = (this.$('#tab-uri')).hasClass('active');
+      edit = this.edit && url_test(this.model.get('uri'));
+      has_nocache = img && (on_uri_tab || edit);
+      (this.$('.advanced-accordion')).toggle(has_nocache);
       (this.$('.duration')).toggle((this.model.get('mimetype')) !== 'video');
       if ((this.model.get('mimetype')) === 'webpage') {
         this.clickTabNavUri();
@@ -256,7 +259,7 @@
       'keyup': 'change',
       'click .tabnav-uri': 'clickTabNavUri',
       'click .tabnav-file_upload': 'clickTabNavUpload',
-      'click .accordion-toggle': 'toggleAdvanced',
+      'click .advanced-toggle': 'toggleAdvanced',
       'paste [name=uri]': 'updateUriMimetype',
       'change [name=file_upload]': 'updateFileUploadMimetype'
     };
@@ -441,7 +444,8 @@
 
     EditAssetView.prototype.toggleAdvanced = function() {
       (this.$('.icon-play')).toggleClass('rotated');
-      return (this.$('.icon-play')).toggleClass('unrotated');
+      (this.$('.icon-play')).toggleClass('unrotated');
+      return (this.$('.collapse-advanced')).collapse('toggle');
     };
 
     return EditAssetView;

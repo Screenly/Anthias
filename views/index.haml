@@ -134,16 +134,16 @@
                 .controls
                   %input.span1(type="number", name="duration")
                   seconds
-              #advanced-accordion.accordion.nocache
+              .advanced-accordion.accordion
                 .accordion-group
                   .accrodion-heading
                     %i.icon-play.unrotated
-                    %a.accordion-toggle(dataToggle="collapse", dataParent="#advanced-accordion", href="#collapseAdvanced") Advanced
-                  #collapseAdvanced.accordion-body.collapse
+                    %a.advanced-toggle(href="#") Advanced
+                  .collapse-advanced.accordion-body.collapse
                     .accordion-inner
                       .control-group
                         %label.control-label Disable cache
-                        .controls
+                        .controls.nocache
                           %label.nocache-toggle.checkbox.toggle.well
                             %input(type="checkbox", name="nocache")
                             %p
