@@ -14,16 +14,20 @@
     :javascript
       var default_duration = ${default_duration};
 
-    %script(src="/static/js/jquery-1.9.1.min.js")
-    / %script(src="/static/js/bootstrap-dropdown.js")
     %script(src="/static/js/underscore-1.4.3.min.js")
-    %script(src="/static/js/backbone-0.9.10.min.js")
-    %script(src="/static/js/bootstrap.min.js")
+
+    %script(src="/static/js/jquery-1.9.1.min.js")
+    %script(src="/static/js/jquery.iframe-transport.js")
+
+    %script(src="/static/js/backbone-0.9.10.min.js") /needs jquery
+
+    %script(src="/static/js/jquery-ui-1.10.1.custom.min.js")
+    %script(src="/static/js/jquery.fileupload.js") /needs jqueryui.widget
+
+    %script(src="/static/js/bootstrap.min.js") /needs jquery
     %script(src="/static/js/bootstrap-datepicker.js")
     %script(src="/static/js/bootstrap-timepicker.js")
-    %script(src="/static/js/jquery.ui.widget.js")
-    %script(src="/static/js/jquery.iframe-transport.js")
-    %script(src="/static/js/jquery.fileupload.js")
+
     %script(src="/static/js/moment.js")
     %script(src="/static/js/screenly-ose.js")
 

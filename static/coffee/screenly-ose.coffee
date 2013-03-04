@@ -325,6 +325,8 @@ API.App = class App extends Backbone.View
       collection: API.assets
       el: @$ '#assets'
 
+    ($ '#active-assets').sortable containment: 'parent', axis: 'y'
+
   events: {'click #add-asset-button': 'add'}
 
   add: (e) =>

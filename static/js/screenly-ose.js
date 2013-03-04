@@ -708,9 +708,13 @@
         return ($('#request-error')).html('');
       });
       (API.assets = new Assets()).fetch();
-      return API.assetsView = new AssetsView({
+      API.assetsView = new AssetsView({
         collection: API.assets,
         el: this.$('#assets')
+      });
+      return ($('#active-assets')).sortable({
+        containment: 'parent',
+        axis: 'y'
       });
     };
 
