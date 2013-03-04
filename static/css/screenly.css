@@ -143,3 +143,6 @@ input[name="file_upload"] {
   -o-transform: rotate(90deg);
   transition: all 0.15s linear;
   transform: rotate(90deg); }
+
+.nocache-toggle {
+  padding-top: 0 !important; }
