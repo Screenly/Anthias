@@ -235,6 +235,7 @@ class AssetRowView extends Backbone.View
       name: insertWbr json.name # word break urls at slashes
       start_date: (date_to json.start_date).string()
       end_date: (date_to json.end_date).string()
+    @$el.prop 'id', @model.get 'asset_id'
     (@$ ".delete-asset-button").popover content: get_template 'confirm-delete'
     (@$ ".toggle input").prop "checked", @model.get 'is_enabled'
     (@$ ".asset-icon").addClass switch @model.get "mimetype"
@@ -325,7 +326,12 @@ API.App = class App extends Backbone.View
       collection: API.assets
       el: @$ '#assets'
 
-    ($ '#active-assets').sortable containment: 'parent', axis: 'y'
+    sorted = ($ '#active-assets').sortable
+      containment: 'parent'
+      axis: 'y'
+      helper: 'clone'
+      update: (e,ui) =>
+        $.post '/api/assets/order', ids: (sorted.sortable 'toArray').join ','
 
   events: {'click #add-asset-button': 'add'}
 

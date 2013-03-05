@@ -243,6 +243,13 @@ def remove_asset(asset_id):
     response.status = 204  # return an OK with no content
 
 
+@route('/api/assets/order', method="POST")
+@api
+def playlist_order():
+    "Receive a list of asset_ids in the order they should be in the playlist"
+    for ordinal,asset_id in enumerate(request.POST.get('ids', '').split(',')):
+        assets_helper.update(db_conn, asset_id, {'asset_id':asset_id, 'ordinal':ordinal})
+
 ################################
 # Views
 ################################
