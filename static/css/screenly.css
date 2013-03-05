@@ -152,3 +152,6 @@ input[name="file_upload"] {
 
 .modal-body {
   max-height: 600px !important; }
+
+.ui-sortable-helper {
+  background: #fff; }

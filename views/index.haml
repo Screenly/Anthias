@@ -32,22 +32,22 @@
     %script(src="/static/js/screenly-ose.js")
 
     %script(type="text/template", id="asset-row-template")
-      %td
+      %td(style="width:38%")
         %i.asset-icon
         :plain
           <%= name %>
-      %td
+      %td(style="width:21%")
         :plain
           <%= start_date %>
-      %td
+      %td(style="width:21%")
         :plain
           <%= end_date %>
-      %td
+      %td(style="width:13%")
         %button.edit-asset-button.btn(type="button")
           %i.icon-pencil
         %button.delete-asset-button.btn(type="button", dataTitle="Are you sure?", dataPlacement="left", dataHtml="true", dataTrigger="manual")
           %i.icon-trash
-      %td
+      %td(style="width:7%")
         %label.is_enabled-toggle.checkbox.toggle.well
           %input(type="checkbox")
           %p

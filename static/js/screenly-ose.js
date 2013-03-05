@@ -528,6 +528,7 @@
         start_date: (date_to(json.start_date)).string(),
         end_date: (date_to(json.end_date)).string()
       })));
+      this.$el.prop('id', this.model.get('asset_id'));
       (this.$(".delete-asset-button")).popover({
         content: get_template('confirm-delete')
       });
@@ -696,7 +697,8 @@
     }
 
     App.prototype.initialize = function() {
-      var _this = this;
+      var sorted,
+        _this = this;
       ($(window)).ajaxError(function(e, r) {
         var err, j;
         ($('#request-error')).html((get_template('request-error'))());
@@ -712,9 +714,15 @@
         collection: API.assets,
         el: this.$('#assets')
       });
-      return ($('#active-assets')).sortable({
+      return sorted = ($('#active-assets')).sortable({
         containment: 'parent',
-        axis: 'y'
+        axis: 'y',
+        helper: 'clone',
+        update: function(e, ui) {
+          return $.post('/api/assets/order', {
+            ids: (sorted.sortable('toArray')).join(',')
+          });
+        }
       });
     };
 
