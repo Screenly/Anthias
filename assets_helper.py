@@ -86,7 +86,8 @@ def update(conn, asset_id, asset):
     with db.commit(conn) as c:
         c.execute(queries.update(asset.keys()), asset.values() + [asset_id])
     asset.update({'asset_id': asset_id})
-    asset.update({'is_active': is_active(asset)})
+    if 'start_date' in asset:
+        asset.update({'is_active': is_active(asset)})
     return asset
 
 
