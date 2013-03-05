@@ -56,6 +56,27 @@ def open_db_get_cursor():
         cursor.close()
 
 # ✂--------
+query_add_ordinal = """
+begin transaction;
+alter table assets add ordinal integer default 0;
+commit;
+"""
+
+
+def migrate_add_ordinal():
+    with open_db_get_cursor() as (cursor, conn):
+        col = 'ordinal'
+        if test_column(col, cursor):
+            print 'Columns (' + col + ') already present'
+        else:
+            cursor.executescript(query_add_ordinal)
+            assets = read(cursor)
+            for asset in assets:
+                asset.update({'ordinal': 0})
+                update(cursor, asset['asset_id'], asset)
+                conn.commit()
+            print 'Added new column (' + col + ')'
+# ✂--------
 query_create_assets_table = """
 create table assets(
 asset_id text primary key,
@@ -163,6 +184,7 @@ if __name__ == '__main__':
     migrate_drop_filename()
     migrate_add_is_enabled_and_nocache()
     migrate_make_asset_id_primary_key()
+    migrate_add_ordinal()
     ensure_conf()
     fix_supervisor()
     print "Migration done."
