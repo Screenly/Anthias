@@ -241,6 +241,7 @@ class AssetRowView extends Backbone.View
     save.done => @setEnabled on
     save.fail =>
       @model.set @model.previousAttributes(), silent:yes # revert changes
+      @setEnabled on
       @render()
     yes
 

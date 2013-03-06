@@ -516,6 +516,7 @@
         _this.model.set(_this.model.previousAttributes(), {
           silent: true
         });
+        _this.setEnabled(true);
         return _this.render();
       });
       return true;

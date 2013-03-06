@@ -144,7 +144,7 @@ def prepare_asset(request):
         if uri and filename:
             raise Exception("Invalid combination. Can't select both URI and a file.")
 
-        if uri and not uri.startswith('/'):
+        if asset['is_enabled'] and uri and not uri.startswith('/'):
             if not validate_url(uri):
                 raise Exception("Invalid URL. Failed to add asset.")
 
