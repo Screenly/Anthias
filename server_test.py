@@ -7,6 +7,8 @@ import unittest
 
 import assets_helper
 import db
+import server
+import utils
 
 # fixtures chronology
 #
@@ -57,6 +59,32 @@ asset_y = {
 asset_y_diff = {
     'duration': u'324'
 }
+asset_z = {
+    'mimetype': u'image',
+    'asset_id': u'9722cd9c45e44dc9b23521be8132b38f',
+    'name': u'url test',
+    'start_date': date_c.isoformat(),
+    'end_date': date_d.isoformat(),
+    'duration': u'1',
+    'is_enabled': 1,
+    'nocache': 0,
+}
+url_fail = 'http://doesnotwork.example.com'
+url_redir = 'http://example.com'
+#url_timeout = 'http://...'
+
+
+class Req():
+    def __init__(self, asset):
+        self.POST = asset
+
+
+class URLHelperTest(unittest.TestCase):
+    def test_url_1(self):
+        self.assertTrue(server.url_fails(url_fail))
+
+    def test_url_2(self):
+        self.assertFalse(server.url_fails(url_redir))
 
 
 class DBHelperTest(unittest.TestCase):
