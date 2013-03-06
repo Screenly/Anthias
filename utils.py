@@ -1,3 +1,4 @@
+import requests
 import json
 from netifaces import ifaddresses
 from sh import grep, netstat
@@ -48,3 +49,14 @@ def handler(obj):
 
 def json_dump(obj):
     return json.dumps(obj, default=handler)
+
+
+def url_fails(url):
+    try:
+        if validate_url(url):
+            obj = requests.head(url, allow_redirects=True)
+            assert obj.status_code == 200
+    except (requests.ConnectionError, AssertionError):
+        return True
+    else:
+        return False

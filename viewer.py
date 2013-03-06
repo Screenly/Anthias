@@ -23,6 +23,7 @@ from settings import settings
 import html_templates
 
 from utils import validate_url
+from utils import url_fails
 
 import db
 import assets_helper
@@ -293,7 +294,7 @@ if __name__ == "__main__":
             # The playlist is empty, go to sleep.
             logging.info('Playlist is empty. Going to sleep.')
             sleep(5)
-        else:
+        elif not url_fails(asset['uri']):
             logging.info('Showing asset %s.' % asset["name"])
 
             watchdog()
@@ -309,3 +310,5 @@ if __name__ == "__main__":
                 view_web(asset["uri"], asset["duration"])
             else:
                 print "Unknown MimeType, or MimeType missing"
+        else:
+            logging.info('Asset {0} is not available, skipping.'.format(asset['uri']))
