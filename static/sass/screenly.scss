@@ -185,6 +185,7 @@ input[name="file_upload"] {
     background: #fff;
 }
 .asset-icon { margin-left: 5px; }
+#inactive-assets img { display: none; }
 .asset_row_name {
     @include ellip();
     width: 38%;

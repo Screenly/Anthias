@@ -159,6 +159,9 @@ input[name="file_upload"] {
 .asset-icon {
   margin-left: 5px; }
 
+#inactive-assets img {
+  display: none; }
+
 .asset_row_name {
   white-space: nowrap;
   text-overflow: ellipsis;
