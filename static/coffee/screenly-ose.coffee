@@ -56,6 +56,7 @@ class EditAssetView extends Backbone.View
     (@$ 'input.time').timepicker
       minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: yes
 
+    (@$ 'input[name="nocache"]').prop 'checked', @model.get 'nocache'
     (@$ '.modal-header .close').remove()
     (@$el.children ":first").modal()
     @model.bind 'change', @render
@@ -85,6 +86,8 @@ class EditAssetView extends Backbone.View
       (@$f "#{which}_date_date").datepicker autoclose: yes
       (@$f "#{which}_date_date").datepicker 'setValue', d.date()
       @$fv "#{which}_date_time", d.time()
+
+    @displayAdvanced()
     @delegateEvents()
     no
 
@@ -101,6 +104,8 @@ class EditAssetView extends Backbone.View
     'keyup': 'change'
     'click .tabnav-uri': 'clickTabNavUri'
     'click .tabnav-file_upload': 'clickTabNavUpload'
+    'click .tabnav-file_upload, .tabnav-uri': 'displayAdvanced'
+    'click .advanced-toggle': 'toggleAdvanced'
     'paste [name=uri]': 'updateUriMimetype'
     'change [name=file_upload]': 'updateFileUploadMimetype'
 
@@ -108,6 +113,7 @@ class EditAssetView extends Backbone.View
     e.preventDefault()
     @viewmodel()
     save = null
+    @model.set 'nocache', if (@$ 'input[name="nocache"]').prop 'checked' then 1 else 0
     if (@$ '#tab-file_upload').hasClass 'active'
       if not @$fv 'name'
         @$fv 'name', get_filename @$fv 'file_upload'
@@ -127,8 +133,6 @@ class EditAssetView extends Backbone.View
 
     (@$ 'input, select').prop 'disabled', on
     save.done (data) =>
-      isNew = @model.isNew()
-      default_duration = @model.get 'duration'
       @model.id = data.asset_id
       @collection.add @model if not @model.collection
       (@$el.children ":first").modal 'hide'
@@ -206,6 +210,18 @@ class EditAssetView extends Backbone.View
     mt = get_mimetype filename
     (@$ '#file_upload_label').text (get_filename filename)
     @$fv 'mimetype', mt if mt
+
+  toggleAdvanced: =>
+    (@$ '.icon-play').toggleClass 'rotated'
+    (@$ '.icon-play').toggleClass 'unrotated'
+    (@$ '.collapse-advanced').collapse 'toggle'
+
+  displayAdvanced: =>
+    img = 'image' is @$fv 'mimetype'
+    on_uri_tab = not @edit and (@$ '#tab-uri').hasClass 'active'
+    edit = @edit and url_test @model.get 'uri'
+    has_nocache = img and (on_uri_tab or edit)
+    (@$ '.advanced-accordion').toggle has_nocache is on
 
 
 class AssetRowView extends Backbone.View
