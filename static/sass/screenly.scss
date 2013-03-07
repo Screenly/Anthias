@@ -175,3 +175,4 @@ input[name="file_upload"] {
 .unrotated { @include rota(0deg,.15s); }
 .rotated { @include rota(90deg,.15s); }
 .nocache-toggle { padding-top: 0 !important; }
+.advanced-accordion { display: none; }

@@ -72,12 +72,6 @@ class EditAssetView extends Backbone.View
       (@$ '#modalLabel').text "Edit Asset"
       (@$ '.asset-location').hide(); (@$ '.asset-location.edit').show()
 
-    img = (@model.get 'mimetype') is 'image'
-    on_uri_tab = not @edit and (@$ '#tab-uri').hasClass 'active'
-    edit = @edit and url_test @model.get 'uri'
-    has_nocache = img and (on_uri_tab or edit)
-    (@$ '.advanced-accordion').toggle has_nocache
-
     (@$ '.duration').toggle ((@model.get 'mimetype') != 'video')
     @clickTabNavUri() if (@model.get 'mimetype') == 'webpage'
 
@@ -92,6 +86,9 @@ class EditAssetView extends Backbone.View
       (@$f "#{which}_date_date").datepicker autoclose: yes
       (@$f "#{which}_date_date").datepicker 'setValue', d.date()
       @$fv "#{which}_date_time", d.time()
+
+    @displayAdvanced()
+
     @delegateEvents()
     no
 
@@ -108,6 +105,7 @@ class EditAssetView extends Backbone.View
     'keyup': 'change'
     'click .tabnav-uri': 'clickTabNavUri'
     'click .tabnav-file_upload': 'clickTabNavUpload'
+    'click .tabnav-file_upload, .tabnav-uri': 'displayAdvanced'
     'click .advanced-toggle': 'toggleAdvanced'
     'paste [name=uri]': 'updateUriMimetype'
     'change [name=file_upload]': 'updateFileUploadMimetype'
@@ -218,6 +216,13 @@ class EditAssetView extends Backbone.View
     (@$ '.icon-play').toggleClass 'rotated'
     (@$ '.icon-play').toggleClass 'unrotated'
     (@$ '.collapse-advanced').collapse 'toggle'
+
+  displayAdvanced: =>
+    img = 'image' is @$fv 'mimetype'
+    on_uri_tab = not @edit and (@$ '#tab-uri').hasClass 'active'
+    edit = @edit and url_test @model.get 'uri'
+    has_nocache = img and (on_uri_tab or edit)
+    (@$ '.advanced-accordion').toggle has_nocache is on
 
 
 class AssetRowView extends Backbone.View

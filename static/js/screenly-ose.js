@@ -126,6 +126,9 @@
 
     function EditAssetView() {
       var _this = this;
+      this.displayAdvanced = function() {
+        return EditAssetView.prototype.displayAdvanced.apply(_this, arguments);
+      };
       this.toggleAdvanced = function() {
         return EditAssetView.prototype.toggleAdvanced.apply(_this, arguments);
       };
@@ -209,7 +212,7 @@
     };
 
     EditAssetView.prototype.render = function() {
-      var d, edit, f, field, has_nocache, img, on_uri_tab, which, _i, _j, _k, _len, _len1, _len2, _ref, _ref1, _ref2;
+      var d, f, field, which, _i, _j, _k, _len, _len1, _len2, _ref, _ref1, _ref2;
       this.undelegateEvents();
       if (this.edit) {
         _ref = 'mimetype uri file_upload'.split(' ');
@@ -221,11 +224,6 @@
         (this.$('.asset-location')).hide();
         (this.$('.asset-location.edit')).show();
       }
-      img = (this.model.get('mimetype')) === 'image';
-      on_uri_tab = !this.edit && (this.$('#tab-uri')).hasClass('active');
-      edit = this.edit && url_test(this.model.get('uri'));
-      has_nocache = img && (on_uri_tab || edit);
-      (this.$('.advanced-accordion')).toggle(has_nocache);
       (this.$('.duration')).toggle((this.model.get('mimetype')) !== 'video');
       if ((this.model.get('mimetype')) === 'webpage') {
         this.clickTabNavUri();
@@ -249,6 +247,7 @@
         (this.$f("" + which + "_date_date")).datepicker('setValue', d.date());
         this.$fv("" + which + "_date_time", d.time());
       }
+      this.displayAdvanced();
       this.delegateEvents();
       return false;
     };
@@ -280,6 +279,7 @@
       'keyup': 'change',
       'click .tabnav-uri': 'clickTabNavUri',
       'click .tabnav-file_upload': 'clickTabNavUpload',
+      'click .tabnav-file_upload, .tabnav-uri': 'displayAdvanced',
       'click .advanced-toggle': 'toggleAdvanced',
       'paste [name=uri]': 'updateUriMimetype',
       'change [name=file_upload]': 'updateFileUploadMimetype'
@@ -467,6 +467,15 @@
       (this.$('.icon-play')).toggleClass('rotated');
       (this.$('.icon-play')).toggleClass('unrotated');
       return (this.$('.collapse-advanced')).collapse('toggle');
+    };
+
+    EditAssetView.prototype.displayAdvanced = function() {
+      var edit, has_nocache, img, on_uri_tab;
+      img = 'image' === this.$fv('mimetype');
+      on_uri_tab = !this.edit && (this.$('#tab-uri')).hasClass('active');
+      edit = this.edit && url_test(this.model.get('uri'));
+      has_nocache = img && (on_uri_tab || edit);
+      return (this.$('.advanced-accordion')).toggle(has_nocache === true);
     };
 
     return EditAssetView;

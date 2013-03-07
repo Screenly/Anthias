@@ -146,3 +146,6 @@ input[name="file_upload"] {
 
 .nocache-toggle {
   padding-top: 0 !important; }
+
+.advanced-accordion {
+  display: none; }
