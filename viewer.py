@@ -10,7 +10,7 @@ __email__ = "vpetersson@wireload.net"
 from datetime import datetime, timedelta
 from glob import glob
 from os import path, getenv, remove, makedirs
-from os import stat as os_stat, utime
+from os import stat as os_stat, utime, system
 from platform import machine
 from random import shuffle
 from requests import get as req_get
@@ -18,6 +18,7 @@ from stat import S_ISFIFO
 from subprocess import Popen, call
 from time import sleep, time
 import logging
+import signal
 
 from settings import settings
 import html_templates
@@ -30,6 +31,18 @@ import assets_helper
 # Define to none to ensure we refresh
 # the settings.
 last_settings_refresh = None
+
+
+def sigusr1(signum, frame):
+        """
+        This is the signal handler for SIGUSR1
+        The signal interrupts sleep() calls, so
+        the currently running asset will be skipped.
+        Since video assets don't have a duration field,
+        the video player has to be killed.
+        """
+        logging.info("Signal received, skipping.")
+        system("killall omxplayer.bin")
 
 
 class Scheduler(object):
@@ -249,6 +262,9 @@ def reload_settings():
 
 
 if __name__ == "__main__":
+
+    # Install signal handler
+    signal.signal(signal.SIGUSR1, sigusr1)
 
     # Before we start, reload the settings.
     reload_settings()
