@@ -13,14 +13,6 @@ get_time = datetime.datetime.utcnow
 def is_active(asset, at_time=None):
     """Accepts an asset dictionary and determines if it
     is active at the given time. If no time is specified, 'now' is used.
-
-    >>> asset = {'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d', 'mimetype': u'web', 'name': u'WireLoad', 'end_date': datetime(2013, 1, 19, 23, 59), 'uri': u'http://www.wireload.net', 'duration': u'5', 'start_date': datetime(2013, 1, 16, 0, 0)};
-
-    >>> is_active(asset, datetime(2013, 1, 16, 12, 00))
-    True
-    >>> is_active(asset, datetime(2014, 1, 1))
-    False
-
     """
 
     if asset['start_date'] and asset['end_date']:
