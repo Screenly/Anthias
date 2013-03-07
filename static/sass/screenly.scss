@@ -176,3 +176,4 @@ input[name="file_upload"] {
 .rotated { @include rota(90deg,.15s); }
 .nocache-toggle { padding-top: 0 !important; }
 .advanced-accordion { display: none; }
+.modal-body { max-height: 600px !important; }

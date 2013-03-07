@@ -149,3 +149,6 @@ input[name="file_upload"] {
 
 .advanced-accordion {
   display: none; }
+
+.modal-body {
+  max-height: 600px !important; }
