@@ -56,24 +56,24 @@ def open_db_get_cursor():
         cursor.close()
 
 # ✂--------
-query_add_ordinal = """
+query_add_play_order = """
 begin transaction;
-alter table assets add ordinal integer default 0;
+alter table assets add play_order integer default 0;
 commit;
 """
 
 
-def migrate_add_ordinal():
+def migrate_add_play_order():
     with open_db_get_cursor() as (cursor, conn):
-        col = 'ordinal'
+        col = 'play_order'
         if test_column(col, cursor):
             print 'Column (' + col + ') already present'
         else:
             print 'Adding new column (' + col + ')'
-            cursor.executescript(query_add_ordinal)
+            cursor.executescript(query_add_play_order)
             assets = read(cursor)
             for asset in assets:
-                asset.update({'ordinal': 0})
+                asset.update({'play_order': 0})
                 update(cursor, asset['asset_id'], asset)
                 conn.commit()
 # ✂--------
@@ -191,7 +191,7 @@ if __name__ == '__main__':
     migrate_drop_filename()
     migrate_add_is_enabled_and_nocache()
     migrate_make_asset_id_primary_key()
-    migrate_add_ordinal()
+    migrate_add_play_order()
     ensure_conf()
     fix_supervisor()
     print "Migration done."
