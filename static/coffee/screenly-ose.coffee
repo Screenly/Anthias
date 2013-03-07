@@ -299,6 +299,14 @@ class AssetRowView extends Backbone.View
 class AssetsView extends Backbone.View
   initialize: (options) =>
     @collection.bind event, @render for event in ('reset add remove sync'.split ' ')
+    @sorted = (@$ '#active-assets').sortable
+      containment: 'parent'
+      axis: 'y'
+      helper: 'clone'
+      update: @update_order
+
+  update_order: =>
+    $.post '/api/assets/order', ids: ((@$ '#active-assets').sortable 'toArray').join ','
 
   render: =>
     (@$ "##{which}-assets").html '' for which in ['active', 'inactive']
@@ -309,6 +317,7 @@ class AssetsView extends Backbone.View
 
     for which in ['inactive', 'active']
       @$(".#{which}-table thead").toggle !!(@$("##{which}-assets tr").length)
+    @update_order()
     @el
 
 
@@ -326,12 +335,6 @@ API.App = class App extends Backbone.View
       collection: API.assets
       el: @$ '#assets'
 
-    sorted = ($ '#active-assets').sortable
-      containment: 'parent'
-      axis: 'y'
-      helper: 'clone'
-      update: (e,ui) =>
-        $.post '/api/assets/order', ids: (sorted.sortable 'toArray').join ','
 
   events: {'click #add-asset-button': 'add'}
 

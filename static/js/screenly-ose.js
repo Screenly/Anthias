@@ -638,6 +638,9 @@
       this.render = function() {
         return AssetsView.prototype.render.apply(_this, arguments);
       };
+      this.update_order = function() {
+        return AssetsView.prototype.update_order.apply(_this, arguments);
+      };
       this.initialize = function(options) {
         return AssetsView.prototype.initialize.apply(_this, arguments);
       };
@@ -645,14 +648,24 @@
     }
 
     AssetsView.prototype.initialize = function(options) {
-      var event, _i, _len, _ref, _results;
+      var event, _i, _len, _ref;
       _ref = 'reset add remove sync'.split(' ');
-      _results = [];
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         event = _ref[_i];
-        _results.push(this.collection.bind(event, this.render));
+        this.collection.bind(event, this.render);
       }
-      return _results;
+      return this.sorted = (this.$('#active-assets')).sortable({
+        containment: 'parent',
+        axis: 'y',
+        helper: 'clone',
+        update: this.update_order
+      });
+    };
+
+    AssetsView.prototype.update_order = function() {
+      return $.post('/api/assets/order', {
+        ids: ((this.$('#active-assets')).sortable('toArray')).join(',')
+      });
     };
 
     AssetsView.prototype.render = function() {
@@ -674,6 +687,7 @@
         which = _ref1[_j];
         this.$("." + which + "-table thead").toggle(!!(this.$("#" + which + "-assets tr").length));
       }
+      this.update_order();
       return this.el;
     };
 
@@ -697,8 +711,7 @@
     }
 
     App.prototype.initialize = function() {
-      var sorted,
-        _this = this;
+      var _this = this;
       ($(window)).ajaxError(function(e, r) {
         var err, j;
         ($('#request-error')).html((get_template('request-error'))());
@@ -710,19 +723,9 @@
         return ($('#request-error')).html('');
       });
       (API.assets = new Assets()).fetch();
-      API.assetsView = new AssetsView({
+      return API.assetsView = new AssetsView({
         collection: API.assets,
         el: this.$('#assets')
-      });
-      return sorted = ($('#active-assets')).sortable({
-        containment: 'parent',
-        axis: 'y',
-        helper: 'clone',
-        update: function(e, ui) {
-          return $.post('/api/assets/order', {
-            ids: (sorted.sortable('toArray')).join(',')
-          });
-        }
       });
     };
 
