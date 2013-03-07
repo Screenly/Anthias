@@ -3,9 +3,9 @@ import queries
 import datetime
 
 FIELDS = ["asset_id", "name", "uri", "start_date",
-          "end_date", "duration", "mimetype", "is_enabled", "nocache"]
+          "end_date", "duration", "mimetype", "is_enabled", "nocache", "play_order"]
 
-create_assets_table = 'CREATE TABLE assets(asset_id text primary key, name text, uri text, md5 text, start_date timestamp, end_date timestamp, duration text, mimetype text, is_enabled integer default 0, nocache integer default 0)'
+create_assets_table = 'CREATE TABLE assets(asset_id text primary key, name text, uri text, md5 text, start_date timestamp, end_date timestamp, duration text, mimetype text, is_enabled integer default 0, nocache integer default 0, play_order integer default 0)'
 
 get_time = datetime.datetime.utcnow
 
