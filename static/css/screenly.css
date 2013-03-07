@@ -155,3 +155,6 @@ input[name="file_upload"] {
 
 .ui-sortable-helper {
   background: #fff; }
+
+.asset-icon {
+  margin-left: 5px; }
