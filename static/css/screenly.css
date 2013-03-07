@@ -158,3 +158,10 @@ input[name="file_upload"] {
 
 .asset-icon {
   margin-left: 5px; }
+
+.asset_row_name {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  width: 38%;
+  max-width: 330px; }

@@ -151,14 +151,18 @@ input[name="file_upload"] {
     width:auto;
 }
 
+@mixin ellip(){
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
 #file_upload_label {
     position: absolute;
     top: 5px;
     left: 105px;
     right: 0;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    overflow: hidden;
+    @include ellip();
 }
 
 .accordion-inner { padding: 9px 0 0 0; }
@@ -181,3 +185,8 @@ input[name="file_upload"] {
     background: #fff;
 }
 .asset-icon { margin-left: 5px; }
+.asset_row_name {
+    @include ellip();
+    width: 38%;
+    max-width: 330px;
+}
