@@ -67,15 +67,15 @@ def migrate_add_ordinal():
     with open_db_get_cursor() as (cursor, conn):
         col = 'ordinal'
         if test_column(col, cursor):
-            print 'Columns (' + col + ') already present'
+            print 'Column (' + col + ') already present'
         else:
+            print 'Adding new column (' + col + ')'
             cursor.executescript(query_add_ordinal)
             assets = read(cursor)
             for asset in assets:
                 asset.update({'ordinal': 0})
                 update(cursor, asset['asset_id'], asset)
                 conn.commit()
-            print 'Added new column (' + col + ')'
 # ✂--------
 query_create_assets_table = """
 create table assets(
@@ -100,9 +100,16 @@ commit;"""
 
 
 def migrate_make_asset_id_primary_key():
+    has_primary_key = False
     with open_db_get_cursor() as (cursor, _):
-        cursor.executescript(query_make_asset_id_primary_key)
-        print 'asset_id is primary key'
+        table_info = cursor.execute('pragma table_info(assets)')
+        has_primary_key = table_info.fetchone()[-1] == 1
+    if has_primary_key:
+        print 'already has primary key'
+    else:
+        with open_db_get_cursor() as (cursor, _):
+            cursor.executescript(query_make_asset_id_primary_key)
+            print 'asset_id is primary key'
 # ✂--------
 query_add_is_enabled_and_nocache = """
 begin transaction;
