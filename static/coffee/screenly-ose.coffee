@@ -73,7 +73,7 @@ class EditAssetView extends Backbone.View
       (@$ '.asset-location').hide(); (@$ '.asset-location.edit').show()
 
     img = (@model.get 'mimetype') is 'image'
-    on_uri_tab = (@$ '#tab-uri').hasClass 'active'
+    on_uri_tab = not @edit and (@$ '#tab-uri').hasClass 'active'
     edit = @edit and url_test @model.get 'uri'
     has_nocache = img and (on_uri_tab or edit)
     (@$ '.advanced-accordion').toggle has_nocache
