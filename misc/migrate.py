@@ -91,7 +91,7 @@ is_enabled integer default 0,
 nocache integer default 0)"""
 query_make_asset_id_primary_key = """
 begin transaction;
-create table temp as select * from assets;
+create table temp as select asset_id,name,uri,md5,start_date,end_date,duration,mimetype,is_enabled,nocache from assets;
 drop table assets;
 """ + query_create_assets_table + """;
 insert or ignore into assets select * from temp;
