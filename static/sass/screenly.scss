@@ -188,8 +188,8 @@ input[name="file_upload"] {
 #inactive-assets img { display: none; }
 .asset_row_name {
     @include ellip();
-    max-width: 350px;
-    min-width: 350px;
+    max-width: 340px;
+    min-width: 340px;
 }
 .asset_row_btns { padding: 6px 8px 10px 8px !important; }
 .table td { vertical-align: middle !important; }

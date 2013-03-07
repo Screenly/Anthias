@@ -166,8 +166,8 @@ input[name="file_upload"] {
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
-  max-width: 350px;
-  min-width: 350px; }
+  max-width: 340px;
+  min-width: 340px; }
 
 .asset_row_btns {
   padding: 6px 8px 10px 8px !important; }
