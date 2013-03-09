@@ -318,10 +318,10 @@ class AssetsView extends Backbone.View
     for which in ['inactive', 'active']
       @$(".#{which}-table thead").toggle !!(@$("##{which}-assets tr").length)
     if @$('#active-assets tr').length > 1
-      @sorted.sortable 'enabled'
+      @sorted.sortable 'enable'
       @update_order()
     else
-      @sortable.sortable 'disabled'
+      @sorted.sortable 'disable'
     @el
 
 

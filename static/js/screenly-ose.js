@@ -689,10 +689,10 @@
         this.$("." + which + "-table thead").toggle(!!(this.$("#" + which + "-assets tr").length));
       }
       if (this.$('#active-assets tr').length > 1) {
-        this.sorted.sortable('enabled');
+        this.sorted.sortable('enable');
         this.update_order();
       } else {
-        this.sortable.sortable('disabled');
+        this.sorted.sortable('disable');
       }
       return this.el;
     };
