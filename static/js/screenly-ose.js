@@ -688,7 +688,12 @@
         which = _ref1[_j];
         this.$("." + which + "-table thead").toggle(!!(this.$("#" + which + "-assets tr").length));
       }
-      this.update_order();
+      if (this.$('#active-assets tr').length > 1) {
+        this.sorted.sortable('enabled');
+        this.update_order();
+      } else {
+        this.sortable.sortable('disabled');
+      }
       return this.el;
     };
 
