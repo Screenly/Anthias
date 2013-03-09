@@ -52,11 +52,14 @@ def json_dump(obj):
 
 
 def url_fails(url):
-    try:
-        if validate_url(url):
+    if validate_url(url):
+        try:
             obj = requests.head(url, allow_redirects=True)
-            assert obj.status_code == 200
-    except (requests.ConnectionError, AssertionError):
-        return True
+            if obj.status_code == 200:
+                return False
+            else:
+                return True
+        except (requests.ConnectionError, AssertionError):
+            return True
     else:
-        return False
+        return True
