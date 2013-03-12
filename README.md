@@ -4,5 +4,4 @@ To learn more about Screenly, please visit the official website at [ScreenlyApp.
 
 ### Running the Unit Tests
 
-    nosetests
-
+    nosetests --with-doctest
