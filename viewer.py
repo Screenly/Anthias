@@ -2,10 +2,8 @@
 # -*- coding: utf8 -*-
 
 __author__ = "Viktor Petersson"
-__copyright__ = "Copyright 2012, WireLoad Inc"
+__copyright__ = "Copyright 2012-2013, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
-__version__ = "0.1"
-__email__ = "vpetersson@wireload.net"
 
 from datetime import datetime, timedelta
 from glob import glob
@@ -31,6 +29,16 @@ import assets_helper
 # Define to none to ensure we refresh
 # the settings.
 last_settings_refresh = None
+
+
+def get_is_pro_init():
+    """
+    Function to handle first-run on Screenly Pro
+    """
+    if path.isfile('/home/pi/.screenly_not_initialized'):
+        return False
+    else:
+        return True
 
 
 def sigusr1(signum, frame):
@@ -121,7 +129,9 @@ def load_browser():
     browser_bin = "uzbl-browser"
     browser_resolution = settings['resolution']
 
-    if settings['show_splash']:
+    if not is_pro_init:
+        browser_load_url = "http://localhost:8888"
+    elif settings['show_splash']:
         browser_load_url = "http://%s:%s/splash_page" % (settings.get_listen_ip(), settings.get_listen_port())
     else:
         browser_load_url = black_page
@@ -131,7 +141,10 @@ def load_browser():
 
     logging.info('Browser loaded. Running as PID %d.' % browser.pid)
 
-    if settings['show_splash']:
+    if not is_pro_init:
+        # Give the user one hour to initialize Pro.
+        sleep(3600)
+    elif settings['show_splash']:
         # Show splash screen for 60 seconds.
         sleep(60)
     else:
@@ -279,6 +292,9 @@ if __name__ == "__main__":
 
     # Set up HTML templates
     black_page = html_templates.black_page()
+
+    # Check if this is a brand new Pro node
+    is_pro_init = get_is_pro_init()
 
     # Fire up the browser
     run_browser = load_browser()
