@@ -73,6 +73,7 @@ asset_z = {
 }
 url_fail = 'http://doesnotwork.example.com'
 url_redir = 'http://example.com'
+uri_ = '/home/user/file'
 #url_timeout = 'http://...'
 
 
@@ -87,6 +88,9 @@ class URLHelperTest(unittest.TestCase):
 
     def test_url_2(self):
         self.assertFalse(server.url_fails(url_redir))
+
+    def test_url_3(self):
+        self.assertFalse(server.url_fails(uri_))
 
 
 class DBHelperTest(unittest.TestCase):
