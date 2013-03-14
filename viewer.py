@@ -201,6 +201,8 @@ def view_image(uri, duration):
         except:
             web_resource = None
 
+    logging.debug('HTTP Error code: %s' % str(web_resource))
+
     if web_resource == 200:
         feh('--scale-down', '--borderless', '--fullscreen', '--cycle-once', '--slideshow-delay', duration,  uri)
     else:
@@ -248,6 +250,8 @@ def view_web(url, duration):
             web_resource = req_head(url, timeout=5).status_code
         except:
             web_resource = None
+
+    logging.debug('HTTP Error code: %s' % str(web_resource))
 
     if web_resource == 200:
         logging.debug('Web content appears to be available. Proceeding.')
