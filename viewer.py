@@ -13,7 +13,7 @@ from platform import machine
 from random import shuffle
 from requests import get as req_get, head as req_head
 from stat import S_ISFIFO
-from subprocess import Popen, call
+from subprocess import Popen
 from time import sleep, time
 from sh import feh
 import logging
@@ -31,6 +31,13 @@ import assets_helper
 # the settings.
 last_settings_refresh = None
 
+
+# Detect the architecture and load the proper video player
+arch = machine()
+if arch == 'armv6l':
+    from sh import omxplayer
+elif arch in ['x86_64', 'x86_32']:
+    from sh import mplayer
 
 def get_is_pro_init():
     """
@@ -136,6 +143,26 @@ def watchdog():
         utime(watchdog, None)
 
 
+def content_is_accessible(uri):
+    """
+    Determine if content is accessible or not.
+    """
+
+    # If it's local content, just check if the file exist on disk.
+    if (html_folder in uri and path.exists(uri)):
+        return True
+
+    try:
+        # Give up if we can't even get the header in five seconds.
+        remote_asset_status = req_head(uri, timeout=5).status_code
+        if remote_asset_status == 200:
+            return True
+        else:
+            return False
+    except:
+        return False
+
+
 def load_browser():
     logging.info('Loading browser...')
     browser_bin = "uzbl-browser"
@@ -192,18 +219,7 @@ def disable_browser_status():
 def view_image(uri, duration):
     logging.debug('Displaying image %s for %s seconds.' % (uri, duration))
 
-    if (html_folder in uri and path.exists(uri)):
-        web_resource = 200
-    else:
-        try:
-            # Give up if we can't even get the header in five seconds.
-            web_resource = req_head(uri, timeout=5).status_code
-        except:
-            web_resource = None
-
-    logging.debug('HTTP Error code: %s' % str(web_resource))
-
-    if web_resource == 200:
+    if content_is_accessible(uri):
         feh('--scale-down', '--borderless', '--fullscreen', '--cycle-once', '--slideshow-delay', duration,  uri)
     else:
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (uri))
@@ -212,17 +228,14 @@ def view_image(uri, duration):
 
 
 def view_video(video):
-    arch = machine()
 
     ## For Raspberry Pi
-    if arch == "armv6l":
+    if arch == 'armv6l':
         logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % video)
-        omxplayer = "omxplayer"
-        omxplayer_args = [omxplayer, "-o", settings['audio_output'], str(video)]
-        run = call(omxplayer_args, stdout=True)
-        logging.debug(run)
 
-        if run != 0:
+        run = omxplayer('-o', settings['audio_output'], str(video))
+
+        if run.exit_code != 0:
             logging.debug("Unclean exit: " + str(run))
 
         # Clean up after omxplayer
@@ -233,27 +246,15 @@ def view_video(video):
     ## For x86
     elif arch in ['x86_64', 'x86_32']:
         logging.debug('Displaying video %s. Detected x86. Using mplayer.' % video)
-        mplayer = "mplayer"
-        run = call([mplayer, "-fs", "-nosound", str(video)], stdout=False)
-        if run != 0:
+
+        run = mplayer('-fs', '-nosound', str(video))
+
+        if run.exit_code != 0:
             logging.debug("Unclean exit: " + str(run))
 
 
 def view_web(url, duration):
-    # If local web page, check if the file exist. If remote, check if it is
-    # available.
-    if (html_folder in url and path.exists(url)):
-        web_resource = 200
-    else:
-        try:
-            # Give up if we can't even get the header in five seconds.
-            web_resource = req_head(url, timeout=5).status_code
-        except:
-            web_resource = None
-
-    logging.debug('HTTP Error code: %s' % str(web_resource))
-
-    if web_resource == 200:
+    if content_is_accessible(url):
         logging.debug('Web content appears to be available. Proceeding.')
         logging.debug('Displaying url %s for %s seconds.' % (url, duration))
         browser_url(url)
