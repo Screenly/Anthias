@@ -224,8 +224,6 @@ def view_image(uri, duration):
     else:
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (uri))
 
-    browser_url(black_page)
-
 
 def view_video(uri):
 
@@ -265,11 +263,12 @@ def view_web(url, duration):
     if asset_is_accessible(url):
         logging.debug('Web content appears to be available. Proceeding.')
         logging.debug('Displaying url %s for %s seconds.' % (url, duration))
+
         browser_url(url)
 
         sleep(int(duration))
 
-        browser_url(url)
+        browser_url(black_page)
     else:
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (url))
 
