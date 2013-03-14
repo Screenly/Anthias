@@ -52,6 +52,16 @@ def sigusr1(signum, frame):
         logging.info("Signal received, skipping.")
         system("killall omxplayer.bin")
 
+def sigusr2(signum, frame):
+        """
+        This is the signal handler for SIGUSR2
+        Resets the last_settings_refresh timestamp to force
+        settings reloading.
+        """
+        logging.info("Signal received, reloading settings.")
+        last_settings_refresh = None
+        reload_settings()
+
 
 class Scheduler(object):
     def __init__(self, *args, **kwargs):
@@ -270,14 +280,17 @@ def reload_settings():
     if not last_settings_refresh or settings_file_timestamp > last_settings_refresh:
         settings.load()
 
+    logging.getLogger().setLevel(logging.DEBUG if settings['debug_logging'] else logging.INFO)
+
     global last_setting_refresh
     last_setting_refresh = datetime.utcnow()
 
 
 if __name__ == "__main__":
 
-    # Install signal handler
+    # Install signal handlers
     signal.signal(signal.SIGUSR1, sigusr1)
+    signal.signal(signal.SIGUSR2, sigusr2)
 
     # Before we start, reload the settings.
     reload_settings()
