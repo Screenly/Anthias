@@ -15,6 +15,7 @@ from requests import get as req_get
 from stat import S_ISFIFO
 from subprocess import Popen, call
 from time import sleep, time
+from sh import feh
 import logging
 import signal
 
@@ -51,6 +52,7 @@ def sigusr1(signum, frame):
         """
         logging.info("Signal received, skipping.")
         system("killall omxplayer.bin")
+
 
 def sigusr2(signum, frame):
         """
@@ -187,12 +189,10 @@ def disable_browser_status():
     browser_set('show_status = 0')
 
 
-def view_image(image, asset_id, duration):
-    logging.debug('Displaying image %s for %s seconds.' % (image, duration))
-    url = html_templates.image_page(image, asset_id)
-    browser_url(url)
+def view_image(uri, duration):
+    logging.debug('Displaying image %s for %s seconds.' % (uri, duration))
 
-    sleep(int(duration))
+    feh('--scale-down', '--borderless', '--fullscreen', '--cycle-once', '--slideshow-delay ' +  duration,  uri)
 
     browser_url(black_page)
 
@@ -357,10 +357,7 @@ if __name__ == "__main__":
             watchdog()
 
             if "image" in asset["mimetype"]:
-                img_uri = asset['uri']
-                if asset['nocache'] == 1 and validate_url(img_uri):
-                    img_uri += '?_nocache=' + str(time())
-                view_image(img_uri, asset["asset_id"], asset["duration"])
+                view_image(asset['uri'], asset["duration"])
             elif "video" in asset["mimetype"]:
                 view_video(asset["uri"])
             elif "web" in asset["mimetype"]:

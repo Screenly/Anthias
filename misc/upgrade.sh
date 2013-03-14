@@ -9,6 +9,9 @@ sudo chown -R pi:pi $SCREENLY
 sudo chown -R pi:pi /home/pi/screenly_assets
 sudo chown -R pi:pi /home/pi/.screenly
 
+echo "Installing feh (if missing)..."
+sudo apt-get -y -qq install feh
+
 echo "Fetching the latest update..."
 cd $SCREENLY
 git pull
