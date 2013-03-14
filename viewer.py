@@ -143,7 +143,7 @@ def watchdog():
         utime(watchdog, None)
 
 
-def content_is_accessible(uri):
+def asset_is_accessible(uri):
     """
     Determine if content is accessible or not.
     """
@@ -219,7 +219,7 @@ def disable_browser_status():
 def view_image(uri, duration):
     logging.debug('Displaying image %s for %s seconds.' % (uri, duration))
 
-    if content_is_accessible(uri):
+    if asset_is_accessible(uri):
         feh('--scale-down', '--borderless', '--fullscreen', '--cycle-once', '--slideshow-delay', duration,  uri)
     else:
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (uri))
@@ -233,7 +233,7 @@ def view_video(uri):
     if arch == 'armv6l':
         logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % uri)
 
-        if content_is_accessible(uri):
+        if asset_is_accessible(uri):
             run = omxplayer('-o', settings['audio_output'], str(uri))
         else:
             logging.debug('Content is unaccessible. Skipping...')
@@ -251,7 +251,7 @@ def view_video(uri):
     elif arch in ['x86_64', 'x86_32']:
         logging.debug('Displaying video %s. Detected x86. Using mplayer.' % uri)
 
-        if content_is_accessible(uri):
+        if asset_is_accessible(uri):
             run = mplayer('-fs', '-nosound', str(uri))
         else:
             logging.debug('Content is unaccessible. Skipping...')
@@ -262,7 +262,7 @@ def view_video(uri):
 
 
 def view_web(url, duration):
-    if content_is_accessible(url):
+    if asset_is_accessible(url):
         logging.debug('Web content appears to be available. Proceeding.')
         logging.debug('Displaying url %s for %s seconds.' % (url, duration))
         browser_url(url)
