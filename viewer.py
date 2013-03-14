@@ -192,7 +192,7 @@ def disable_browser_status():
 def view_image(uri, duration):
     logging.debug('Displaying image %s for %s seconds.' % (uri, duration))
 
-    feh('--scale-down', '--borderless', '--fullscreen', '--cycle-once', '--slideshow-delay ' +  duration,  uri)
+    feh('--scale-down', '--borderless', '--fullscreen', '--cycle-once', '--slideshow-delay', duration,  uri)
 
     browser_url(black_page)
 
