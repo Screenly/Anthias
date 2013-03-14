@@ -259,11 +259,22 @@ def check_update():
     except:
         last_update = None
 
+    logging.debug('Last update: %s' % str(last_update))
+
     if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
-        latest_sha = req_get('http://stats.screenlyapp.com/latest', timeout=5)
+        try:
+            latest_sha = req_get('http://stats.screenlyapp.com/latest')
+        except:
+            logging.debug('Unable to retreive latest SHA')
+            return False
         if latest_sha.status_code == 200:
             with open(sha_file, 'w') as f:
                 f.write(latest_sha.content.strip())
+            return True
+        else:
+            return False
+    else:
+        return False
 
 
 def reload_settings():
@@ -333,7 +344,8 @@ if __name__ == "__main__":
         asset = scheduler.get_next_asset()
         logging.debug('got asset' + str(asset))
 
-        check_update()
+        is_up_to_date = check_update()
+        logging.debug('Is up to date: %s' % str(is_up_to_date))
 
         if asset is None:
             # The playlist is empty, go to sleep.
