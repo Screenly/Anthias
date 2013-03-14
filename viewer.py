@@ -227,13 +227,17 @@ def view_image(uri, duration):
     browser_url(black_page)
 
 
-def view_video(video):
+def view_video(uri):
 
     ## For Raspberry Pi
     if arch == 'armv6l':
-        logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % video)
+        logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % uri)
 
-        run = omxplayer('-o', settings['audio_output'], str(video))
+        if content_is_accessible(uri):
+            run = omxplayer('-o', settings['audio_output'], str(uri))
+        else:
+            logging.debug('Content is unaccessible. Skipping...')
+            return
 
         if run.exit_code != 0:
             logging.debug("Unclean exit: " + str(run))
@@ -245,9 +249,13 @@ def view_video(video):
 
     ## For x86
     elif arch in ['x86_64', 'x86_32']:
-        logging.debug('Displaying video %s. Detected x86. Using mplayer.' % video)
+        logging.debug('Displaying video %s. Detected x86. Using mplayer.' % uri)
 
-        run = mplayer('-fs', '-nosound', str(video))
+        if content_is_accessible(uri):
+            run = mplayer('-fs', '-nosound', str(uri))
+        else:
+            logging.debug('Content is unaccessible. Skipping...')
+            return
 
         if run.exit_code != 0:
             logging.debug("Unclean exit: " + str(run))
