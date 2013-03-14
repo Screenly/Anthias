@@ -22,7 +22,6 @@ import signal
 from settings import settings
 import html_templates
 
-from utils import validate_url
 from utils import url_fails
 
 import db
@@ -38,6 +37,7 @@ if arch == 'armv6l':
     from sh import omxplayer
 elif arch in ['x86_64', 'x86_32']:
     from sh import mplayer
+
 
 def get_is_pro_init():
     """
