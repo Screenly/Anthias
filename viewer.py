@@ -149,7 +149,7 @@ def asset_is_accessible(uri):
     """
 
     # If it's local content, just check if the file exist on disk.
-    if (html_folder in uri and path.exists(uri)):
+    if (get_asset_folder['asset_folder'] in uri and path.exists(uri)):
         return True
 
     try:
