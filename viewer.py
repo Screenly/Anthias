@@ -192,12 +192,12 @@ def disable_browser_status():
 def view_image(uri, duration):
     logging.debug('Displaying image %s for %s seconds.' % (uri, duration))
 
-    if (html_folder in url and path.exists(url)):
+    if (html_folder in uri and path.exists(uri)):
         web_resource = 200
     else:
         try:
             # Give up if we can't even get the header in five seconds.
-            web_resource = req_head(url, timeout=5).status_code
+            web_resource = req_head(uri, timeout=5).status_code
         except:
             web_resource = None
 
