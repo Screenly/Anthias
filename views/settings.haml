@@ -91,6 +91,20 @@
               .controls
                 %input.span1(type="number", name="default_duration", value=default_duration)
 
+            .control-group
+              %label.control-label Debug logging
+              .controls
+
+                %label.checkbox.toggle.well#debug_checkbox
+                  - if debug_logging:
+                    %input(type="checkbox", checked="checked", name="debug_logging")
+                  - else:
+                    %input(type="checkbox", name="debug_logging")
+                  %p
+                    %span.on On
+                    %span.off Off
+                  %a.btn.btn-primary.slide-button
+
             .form-actions
               %input.btn.btn-primary(type="submit", value="Save Settings")
               %a.btn(href="/") Cancel
