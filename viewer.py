@@ -148,8 +148,10 @@ def asset_is_accessible(uri):
     Determine if content is accessible or not.
     """
 
+    asset_folder = path.join(getenv('HOME'), 'screenly_assets')
     # If it's local content, just check if the file exist on disk.
-    if (get_asset_folder['asset_folder'] in uri and path.exists(uri)):
+
+    if (asset_folder in uri and path.exists(uri)):
         return True
 
     try:
