@@ -231,7 +231,10 @@ def view_web(url, duration):
     if (html_folder in url and path.exists(url)):
         web_resource = 200
     else:
-        web_resource = req_get(url).status_code
+        try:
+            web_resource = req_get(url).status_code
+        except:
+            web_resource = None
 
     if web_resource == 200:
         logging.debug('Web content appears to be available. Proceeding.')
