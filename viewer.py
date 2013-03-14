@@ -192,7 +192,19 @@ def disable_browser_status():
 def view_image(uri, duration):
     logging.debug('Displaying image %s for %s seconds.' % (uri, duration))
 
-    feh('--scale-down', '--borderless', '--fullscreen', '--cycle-once', '--slideshow-delay', duration,  uri)
+    if (html_folder in url and path.exists(url)):
+        web_resource = 200
+    else:
+        try:
+            # Give up if we can't even get the header in five seconds.
+            web_resource = req_head(url, timeout=5).status_code
+        except:
+            web_resource = None
+
+    if web_resource == 200:
+        feh('--scale-down', '--borderless', '--fullscreen', '--cycle-once', '--slideshow-delay', duration,  uri)
+    else:
+        logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (uri))
 
     browser_url(black_page)
 
