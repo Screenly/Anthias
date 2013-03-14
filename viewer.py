@@ -11,7 +11,7 @@ from os import path, getenv, remove, makedirs
 from os import stat as os_stat, utime, system
 from platform import machine
 from random import shuffle
-from requests import get as req_get
+from requests import get as req_get, head as req_head
 from stat import S_ISFIFO
 from subprocess import Popen, call
 from time import sleep, time
@@ -232,7 +232,8 @@ def view_web(url, duration):
         web_resource = 200
     else:
         try:
-            web_resource = req_get(url).status_code
+            # Give up if we can't even get the header in five seconds.
+            web_resource = req_head(url, timeout=5).status_code
         except:
             web_resource = None
 
