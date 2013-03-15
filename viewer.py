@@ -50,26 +50,26 @@ def get_is_pro_init():
 
 
 def sigusr1(signum, frame):
-        """
-        This is the signal handler for SIGUSR1
-        The signal interrupts sleep() calls, so
-        the currently running asset will be skipped.
-        Since video assets don't have a duration field,
-        the video player has to be killed.
-        """
-        logging.info("Signal received, skipping.")
-        system("killall omxplayer.bin")
+    """
+    This is the signal handler for SIGUSR1
+    The signal interrupts sleep() calls, so
+    the currently running asset will be skipped.
+    Since video assets don't have a duration field,
+    the video player has to be killed.
+    """
+    logging.info("Signal received, skipping.")
+    system("killall omxplayer.bin")
 
 
 def sigusr2(signum, frame):
-        """
-        This is the signal handler for SIGUSR2
-        Resets the last_settings_refresh timestamp to force
-        settings reloading.
-        """
-        logging.info("Signal received, reloading settings.")
-        last_settings_refresh = None
-        reload_settings()
+    """
+    This is the signal handler for SIGUSR2
+    Resets the last_settings_refresh timestamp to force
+    settings reloading.
+    """
+    logging.info("Signal received, reloading settings.")
+    last_settings_refresh = None
+    reload_settings()
 
 
 class Scheduler(object):
