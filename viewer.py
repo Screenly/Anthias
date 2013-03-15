@@ -279,30 +279,36 @@ def check_update():
     """
     Check if there is a later version of Screenly-OSE
     available. Only do this update once per day.
+
+    Return True if up to date was written to disk,
+    False if no update needed and None if unable to check.
     """
 
     sha_file = path.join(getenv('HOME'), '.screenly', 'latest_screenly_sha')
 
-    try:
+    if path.isfile(sha_file):
         sha_file_mtime = path.getmtime(sha_file)
         last_update = datetime.fromtimestamp(sha_file_mtime)
-    except:
+    else:
         last_update = None
 
     logging.debug('Last update: %s' % str(last_update))
 
     if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
-        try:
+
+        if asset_is_accessible('http://stats.screenlyapp.com'):
             latest_sha = req_get('http://stats.screenlyapp.com/latest')
-        except:
-            logging.debug('Unable to retreive latest SHA')
-            return False
-        if latest_sha.status_code == 200:
-            with open(sha_file, 'w') as f:
-                f.write(latest_sha.content.strip())
-            return True
+
+            if latest_sha.status_code == 200:
+                with open(sha_file, 'w') as f:
+                    f.write(latest_sha.content.strip())
+                return True
+            else:
+                logging.debug('Received on 200-status')
+                return
         else:
-            return False
+            logging.debug('Unable to retreive latest SHA')
+            return
     else:
         return False
 
@@ -375,7 +381,7 @@ if __name__ == "__main__":
         logging.debug('got asset' + str(asset))
 
         is_up_to_date = check_update()
-        logging.debug('Is up to date: %s' % str(is_up_to_date))
+        logging.debug('Check update: %s' % str(is_up_to_date))
 
         if asset is None:
             # The playlist is empty, go to sleep.
