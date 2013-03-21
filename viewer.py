@@ -43,7 +43,7 @@ def get_is_pro_init():
     """
     Function to handle first-run on Screenly Pro
     """
-    if path.isfile('/home/pi/.screenly_not_initialized'):
+    if path.isfile('/home/pi/.screenly/not_initialized'):
         return False
     else:
         return True
