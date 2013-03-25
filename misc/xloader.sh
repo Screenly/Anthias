@@ -4,10 +4,9 @@ LOG=/tmp/screenly_xloader.log
 
 echo "Disabling screen power savings..." > $LOG
 
-xset s off                    # Don't activate screensaver
-xset -dpms                    # Disable DPMS (Energy Star) features
-xset s noblank                # Don't blank the video device
-unclutter -idle 0 -visible &  # Hide the mouse cursor
+xset s off                         # Don't activate screensaver
+xset -dpms                         # Disable DPMS (Energy Star) features
+xset s noblank                     # Don't blank the video device
 
 sleep 5
 

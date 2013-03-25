@@ -12,6 +12,11 @@ sudo chown -R pi:pi /home/pi/.screenly
 echo "Installing feh (if missing)..."
 sudo apt-get -y -qq install feh
 
+echo "Removing 'unclutter' and replacing it with a better hack."
+sudo apt-get -y -qq remove unclutter
+sudo killall unclutter
+sudo sed -e 's/^#xserver-command=X$/xserver-command=X -nocursor/g' -i /etc/lightdm/lightdm.conf
+
 echo "Fetching the latest update..."
 cd $SCREENLY
 git pull
