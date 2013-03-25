@@ -170,8 +170,18 @@ def load_browser():
     browser_bin = "uzbl-browser"
     browser_resolution = settings['resolution']
 
+    is_pro_init = get_is_pro_init()
     if not is_pro_init:
-        browser_load_url = "http://localhost:8888"
+        logging.debug('Detected Pro initiation cycle.')
+
+        # Wait for the intro file to exist (if it doesn't)
+        intro_file = '/home/pi/.screenly/intro.html'
+        while not path.isfile(intro_file):
+            logging.debug('intro.html missing. Going to sleep.')
+            sleep(5)
+
+        browser_load_url = 'file://' + intro_file
+
     elif settings['show_splash']:
         browser_load_url = "http://%s:%s/splash_page" % (settings.get_listen_ip(), settings.get_listen_port())
     else:
@@ -183,8 +193,9 @@ def load_browser():
     logging.info('Browser loaded. Running as PID %d.' % browser.pid)
 
     if not is_pro_init:
-        # Give the user one hour to initialize Pro.
-        sleep(3600)
+        while not get_is_pro_init():
+            logging.debug('Waiting for node to be initialized.')
+            sleep(10)
     elif settings['show_splash']:
         # Show splash screen for 60 seconds.
         sleep(60)
@@ -352,9 +363,6 @@ if __name__ == "__main__":
 
     # Set up HTML templates
     black_page = html_templates.black_page()
-
-    # Check if this is a brand new Pro node
-    is_pro_init = get_is_pro_init()
 
     # Fire up the browser
     run_browser = load_browser()
