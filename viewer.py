@@ -156,7 +156,7 @@ def asset_is_accessible(uri):
 
     try:
         # Give up if we can't even get the header in five seconds.
-        remote_asset_status = req_head(uri, timeout=5).status_code
+        remote_asset_status = req_head(uri, timeout=5, allow_redirects=True).status_code
         if remote_asset_status == 200:
             return True
         else:
