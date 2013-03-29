@@ -30,6 +30,7 @@ import assets_helper
 # the settings.
 last_settings_refresh = None
 load_screen_pid = None
+is_pro_init = None
 
 # Detect the architecture and load the proper video player
 arch = machine()
@@ -170,6 +171,7 @@ def load_browser():
     browser_bin = "uzbl-browser"
     browser_resolution = settings['resolution']
 
+    global is_pro_init
     is_pro_init = get_is_pro_init()
     if not is_pro_init:
         logging.debug('Detected Pro initiation cycle.')
@@ -192,11 +194,7 @@ def load_browser():
 
     logging.info('Browser loaded. Running as PID %d.' % browser.pid)
 
-    if not is_pro_init:
-        while not get_is_pro_init():
-            logging.debug('Waiting for node to be initialized.')
-            sleep(10)
-    elif settings['show_splash']:
+    if settings['show_splash']:
         # Show splash screen for 60 seconds.
         sleep(60)
     else:
@@ -214,19 +212,32 @@ def get_fifo():
     return None
 
 
-def browser_set(set_data):
+def browser_fifo(data):
     f = open(fifo, 'a')
-    f.write('set %s\n' % set_data)
+    f.write('%s\n' % data)
     f.close()
 
 
+def browser_reload(force=False):
+    """
+    Reload the browser. Use to Force=True to force-reload
+    """
+
+    if not force:
+        reload_command = 'reload'
+    else:
+        reload_command = 'reload_ign_cache'
+
+    browser_fifo(reload_command)
+
+
 def browser_url(url):
-    browser_set('uri = %s' % url)
+    browser_fifo('set uri = %s' % url)
 
 
 def disable_browser_status():
     logging.debug('Disabled status-bar in browser')
-    browser_set('show_status = 0')
+    browser_fifo('set show_status = 0')
 
 
 def view_image(uri, duration):
@@ -396,14 +407,28 @@ if __name__ == "__main__":
     logging.debug('Getting FIFO.')
     fifo = get_fifo()
 
-    # Bring up the blank page (in case there are only videos).
-    logging.debug('Loading blank page.')
-    view_web(black_page, 1)
 
     logging.debug('Disable the browser status bar.')
     disable_browser_status()
 
+    # Disable load screen early if initialization mode
+    if not is_pro_init:
+        toggle_load_screen(False)
+
+    # Wait until initialized (Pro only).
+    while not get_is_pro_init():
+        logging.debug('Waiting for node to be initialized.')
+        browser_reload(force=True)
+        sleep(5)
+
+    # Bring up the blank page (in case there are only videos).
+    logging.debug('Loading blank page.')
+    view_web(black_page, 1)
+
     scheduler = Scheduler()
+
+    # Disable load screen
+    toggle_load_screen(False)
 
     # Infinite loop.
     logging.debug('Entering infinite loop.')
@@ -413,9 +438,6 @@ if __name__ == "__main__":
 
         is_up_to_date = check_update()
         logging.debug('Check update: %s' % str(is_up_to_date))
-
-        # Disable load screen
-        toggle_load_screen(False)
 
         if asset is None:
             # The playlist is empty, go to sleep.
