@@ -290,7 +290,7 @@ def toggle_load_screen(status=True):
     """
     Toggle the load screen. Set status to either True or False.
     """
-    load_screen = '/home/pi/screenly/loading.png'
+    load_screen = '/home/pi/screenly/loading.jpg'
     global load_screen_pid
 
     if (status and path.isfile(load_screen)):
