@@ -178,7 +178,7 @@ def load_browser():
         intro_file = '/home/pi/.screenly/intro.html'
         while not path.isfile(intro_file):
             logging.debug('intro.html missing. Going to sleep.')
-            sleep(5)
+            sleep(0.5)
 
         browser_load_url = 'file://' + intro_file
 
