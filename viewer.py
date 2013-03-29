@@ -8,7 +8,7 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 from datetime import datetime, timedelta
 from glob import glob
 from os import path, getenv, remove, makedirs
-from os import stat as os_stat, utime, system
+from os import stat as os_stat, utime, system, kill
 from platform import machine
 from random import shuffle
 from requests import get as req_get, head as req_head
@@ -29,7 +29,7 @@ import assets_helper
 # Define to none to ensure we refresh
 # the settings.
 last_settings_refresh = None
-
+load_screen_pid = None
 
 # Detect the architecture and load the proper video player
 arch = machine()
@@ -286,6 +286,25 @@ def view_web(url, duration):
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (url))
 
 
+def toggle_load_screen(status=True):
+    """
+    Toggle the load screen. Set status to either True or False.
+    """
+    load_screen = '/home/pi/screenly/loading.png'
+    global load_screen_pid
+
+    if (status and path.isfile(load_screen)):
+        image_loader = feh('--scale-down', '--borderless', '--fullscreen', load_screen, _bg=True)
+        load_screen_pid = image_loader.pid
+        return image_loader.pid
+
+    elif not status and load_screen_pid:
+        kill(load_screen_pid, signal.SIGTERM)
+        return True
+    else:
+        return False
+
+
 def check_update():
     """
     Check if there is a later version of Screenly-OSE
@@ -346,6 +365,9 @@ def reload_settings():
 
 if __name__ == "__main__":
 
+    # Bring up load screen
+    toggle_load_screen(True)
+
     # Install signal handlers
     signal.signal(signal.SIGUSR1, sigusr1)
     signal.signal(signal.SIGUSR2, sigusr2)
@@ -390,6 +412,9 @@ if __name__ == "__main__":
 
         is_up_to_date = check_update()
         logging.debug('Check update: %s' % str(is_up_to_date))
+
+        # Disable load screen
+        toggle_load_screen(False)
 
         if asset is None:
             # The playlist is empty, go to sleep.
