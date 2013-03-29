@@ -300,6 +300,7 @@ def toggle_load_screen(status=True):
 
     elif not status and load_screen_pid:
         kill(load_screen_pid, signal.SIGTERM)
+        load_screen_pid = None
         return True
     else:
         return False
