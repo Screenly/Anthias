@@ -13,9 +13,8 @@ from platform import machine
 from random import shuffle
 from requests import get as req_get, head as req_head
 from stat import S_ISFIFO
-from subprocess import Popen
 from time import sleep, time
-from sh import feh
+import sh
 import logging
 import signal
 
@@ -169,8 +168,6 @@ def asset_is_accessible(uri):
 
 def load_browser():
     logging.info('Loading browser...')
-    browser_bin = "uzbl-browser"
-    browser_resolution = settings['resolution']
 
     global is_pro_init
     is_pro_init = get_is_pro_init()
@@ -190,8 +187,7 @@ def load_browser():
     else:
         browser_load_url = black_page
 
-    browser_args = [browser_bin, "--geometry=" + browser_resolution, "--uri=" + browser_load_url]
-    browser = Popen(browser_args)
+    browser = sh.Command('uzbl-browser')('--uri=' + browser_load_url, _bg=True)
 
     logging.info('Browser loaded. Running as PID %d.' % browser.pid)
 
@@ -258,7 +254,7 @@ def view_image(uri, duration):
     logging.debug('Displaying image %s for %s seconds.' % (uri, duration))
 
     if asset_is_accessible(uri):
-        feh('--scale-down', '--borderless', '--fullscreen', '--cycle-once', '--slideshow-delay', duration,  uri)
+        sh.feh('--scale-down', '--borderless', '--fullscreen', '--cycle-once', '--slideshow-delay', duration,  uri)
     else:
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (uri))
 
@@ -319,7 +315,7 @@ def toggle_load_screen(status=True):
     global load_screen_pid
 
     if (status and path.isfile(load_screen)):
-        image_loader = feh('--scale-down', '--borderless', '--fullscreen', load_screen, _bg=True)
+        image_loader = sh.feh('--scale-down', '--borderless', '--fullscreen', load_screen, _bg=True)
         load_screen_pid = image_loader.pid
         return image_loader.pid
 
