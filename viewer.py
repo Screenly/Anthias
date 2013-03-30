@@ -205,11 +205,24 @@ def load_browser():
 
 
 def get_fifo():
-    candidates = glob('/tmp/uzbl_fifo_*')
-    for file in candidates:
-        if S_ISFIFO(os_stat(file).st_mode):
-            return file
-    return None
+    """
+    Look for UZBL's FIFO-file in /tmp.
+    Don't give up until it has been found.
+    """
+    found_fifo = False
+    fifo = None
+
+    logging.debug('Looking for UZBL fifo...')
+
+    while not found_fifo:
+        candidates = glob('/tmp/uzbl_fifo_*')
+        for file in candidates:
+            if S_ISFIFO(os_stat(file).st_mode):
+                found_fifo = True
+                fifo = file
+        sleep(0.5)
+    logging.debug('Found UZBL fifo  in %s.' % file)
+    return fifo
 
 
 def browser_fifo(data):
@@ -406,7 +419,6 @@ if __name__ == "__main__":
 
     logging.debug('Getting FIFO.')
     fifo = get_fifo()
-
 
     logging.debug('Disable the browser status bar.')
     disable_browser_status()
