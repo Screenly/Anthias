@@ -68,6 +68,7 @@ def sigusr2(signum, frame):
     Resets the last_settings_refresh timestamp to force
     settings reloading.
     """
+    global last_settings_refresh
     logging.info("Signal received, reloading settings.")
     last_settings_refresh = None
     reload_settings()
