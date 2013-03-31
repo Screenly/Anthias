@@ -187,7 +187,7 @@ def load_browser():
     else:
         browser_load_url = black_page
 
-    browser = sh.Command('uzbl-browser')('--uri=' + browser_load_url, _bg=True)
+    browser = sh.Command('uzbl-browser')(uri=browser_load_url, _bg=True)
 
     logging.info('Browser loaded. Running as PID %d.' % browser.pid)
 
@@ -254,7 +254,7 @@ def view_image(uri, duration):
     logging.debug('Displaying image %s for %s seconds.' % (uri, duration))
 
     if asset_is_accessible(uri):
-        sh.feh('--scale-down', '--borderless', '--fullscreen', '--cycle-once', '--slideshow-delay', duration,  uri)
+        sh.feh(uri, scale_down=True, borderless=True, fullscreen=True, cycle_once=True, slideshow_delay=duration)
     else:
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (uri))
 
@@ -266,7 +266,7 @@ def view_video(uri):
         logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % uri)
 
         if asset_is_accessible(uri):
-            run = omxplayer('-o', settings['audio_output'], str(uri))
+            run = omxplayer(uri, o=settings['audio_output'])
         else:
             logging.debug('Content is unaccessible. Skipping...')
             return
@@ -284,7 +284,7 @@ def view_video(uri):
         logging.debug('Displaying video %s. Detected x86. Using mplayer.' % uri)
 
         if asset_is_accessible(uri):
-            run = mplayer('-fs', '-nosound', str(uri))
+            run = mplayer(uri, fs=True, nosound=True)
         else:
             logging.debug('Content is unaccessible. Skipping...')
             return
@@ -315,7 +315,7 @@ def toggle_load_screen(status=True):
     global load_screen_pid
 
     if (status and path.isfile(load_screen)):
-        image_loader = sh.feh('--scale-down', '--borderless', '--fullscreen', load_screen, _bg=True)
+        image_loader = sh.feh(load_screen, scale_down=True, borderless=True, fullscreen=True, _bg=True)
         load_screen_pid = image_loader.pid
         return image_loader.pid
 
@@ -427,8 +427,8 @@ if __name__ == "__main__":
     # Wait until initialized (Pro only).
     while not get_is_pro_init():
         logging.debug('Waiting for node to be initialized.')
-        browser_reload(force=True)
-        sleep(5)
+        browser_reload()
+        sleep(10)
 
     # Bring up the blank page (in case there are only videos).
     logging.debug('Loading blank page.')
