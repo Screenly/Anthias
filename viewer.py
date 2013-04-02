@@ -426,17 +426,17 @@ if __name__ == "__main__":
         toggle_load_screen(False)
 
     # Wait until initialized (Pro only).
+    did_show_pin = False
+    did_show_claimed = False
     while not get_is_pro_init():
-        did_show_pin = False
-        did_show_claimed = False
-
         with open('/home/pi/.screenly/setup_status.json', 'rb') as status_file:
             status = json.load(status_file)
 
-        if not did_show_pin and status.get('pin'):
+        if not did_show_pin and not did_show_claimed and status.get('pin'):
             browser_fifo('''js showPin("%s")''' % status.get('pin').replace('"', '\\"'))
             did_show_pin = True
-        elif not did_show_claimed and status.get('claimed'):
+
+        if not did_show_claimed and status.get('claimed'):
             browser_fifo('''js showUpdating()''')
             did_show_claimed = True
 
