@@ -427,7 +427,6 @@ if __name__ == "__main__":
     # Wait until initialized (Pro only).
     while not get_is_pro_init():
         logging.debug('Waiting for node to be initialized.')
-        browser_reload()
         sleep(10)
 
     # Bring up the blank page (in case there are only videos).
