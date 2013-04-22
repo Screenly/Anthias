@@ -312,14 +312,14 @@ def toggle_load_screen(status=True):
     """
     Toggle the load screen. Set status to either True or False.
     """
+
     load_screen = '/home/pi/screenly/loading.jpg'
     global load_screen_pid
 
-    if (status and path.isfile(load_screen)):
+    if status and path.isfile(load_screen):
         image_loader = sh.feh(load_screen, scale_down=True, borderless=True, fullscreen=True, _bg=True)
         load_screen_pid = image_loader.pid
         return image_loader.pid
-
     elif not status and load_screen_pid:
         kill(load_screen_pid, signal.SIGTERM)
         load_screen_pid = None
@@ -449,9 +449,6 @@ if __name__ == "__main__":
 
     scheduler = Scheduler()
 
-    # Disable load screen
-    toggle_load_screen(False)
-
     # Infinite loop.
     logging.debug('Entering infinite loop.')
     while True:
@@ -463,9 +460,11 @@ if __name__ == "__main__":
 
         if asset is None:
             # The playlist is empty, go to sleep.
+            toggle_load_screen(True)
             logging.info('Playlist is empty. Going to sleep.')
             sleep(5)
         elif not url_fails(asset['uri']):
+            toggle_load_screen(False)
             logging.info('Showing asset %s.' % asset["name"])
 
             watchdog()
