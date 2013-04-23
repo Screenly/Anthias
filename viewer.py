@@ -32,6 +32,7 @@ import assets_helper
 last_settings_refresh = None
 load_screen_pid = None
 is_pro_init = None
+current_browser_url = None
 
 # Detect the architecture and load the proper video player
 arch = machine()
@@ -189,7 +190,7 @@ def asset_is_accessible(uri):
 def load_browser():
     logging.info('Loading browser...')
 
-    global is_pro_init
+    global is_pro_init, current_browser_url
     is_pro_init = get_is_pro_init()
     if not is_pro_init:
         logging.debug('Detected Pro initiation cycle.')
@@ -208,6 +209,7 @@ def load_browser():
         browser_load_url = black_page
 
     browser = sh.Command('uzbl-browser')(uri=browser_load_url, _bg=True)
+    current_browser_url = browser_load_url
 
     logging.info('Browser loaded. Running as PID %d.' % browser.pid)
 
@@ -261,8 +263,30 @@ def browser_reload(force=False):
     browser_fifo(reload_command)
 
 
+def browser_clear():
+    """Clear the browser if necessary.
+
+    Call this function right before displaying now browser content (with feh or omx).
+
+    When a web assset is loaded into the browser, it's not cleared after the duration but instead
+    remains displayed until the next asset is ready to show. This minimises the amount of transition
+    time - in the case where the next asset is also web content the browser is never cleared,
+    and in other cases it's cleared as late as possible.
+
+    """
+
+    if current_browser_url != black_page:
+        browser_url(black_page)
+
+
 def browser_url(url):
+    global current_browser_url
+
+    if url == current_browser_url:
+        logging.debug("Already showing %s, keeping it." % url)
+        return
     browser_fifo('set uri = %s' % url)
+    current_browser_url = url
 
 
 def disable_browser_status():
@@ -274,7 +298,11 @@ def view_image(uri, duration):
     logging.debug('Displaying image %s for %s seconds.' % (uri, duration))
 
     if asset_is_accessible(uri):
-        sh.feh(uri, scale_down=True, borderless=True, fullscreen=True, cycle_once=True, slideshow_delay=duration)
+        run = sh.feh(uri, scale_down=True, borderless=True, fullscreen=True, cycle_once=True, slideshow_delay=duration, _bt=True)
+        # Wait until feh is starting before clearing the browser. This minimises delay between
+        # web and image content.
+        browser_clear()
+        run.wait()
     else:
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (uri))
 
@@ -286,10 +314,16 @@ def view_video(uri):
         logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % uri)
 
         if asset_is_accessible(uri):
-            run = omxplayer(uri, o=settings['audio_output'])
+            run = omxplayer(uri, o=settings['audio_output'], _bg=True)
         else:
             logging.debug('Content is unaccessible. Skipping...')
             return
+
+        # Wait until omxplayer is starting before clearing the browser. This minimises delay between
+        # web and image content. Omxplayer will run on top of the browser so the delay in clearing
+        # won't be visible. This minimises delay between web and video.
+        browser_clear()
+        run.wait()
 
         if run.exit_code != 0:
             logging.debug("Unclean exit: " + str(run))
@@ -304,10 +338,13 @@ def view_video(uri):
         logging.debug('Displaying video %s. Detected x86. Using mplayer.' % uri)
 
         if asset_is_accessible(uri):
-            run = mplayer(uri, fs=True, nosound=True)
+            run = mplayer(uri, fs=True, nosound=True, _bg=True)
         else:
             logging.debug('Content is unaccessible. Skipping...')
             return
+
+        browser_clear()
+        run.wait()
 
         if run.exit_code != 0:
             logging.debug("Unclean exit: " + str(run))
@@ -321,8 +358,6 @@ def view_web(url, duration):
         browser_url(url)
 
         sleep(int(duration))
-
-        browser_url(black_page)
     else:
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (url))
 
@@ -476,14 +511,14 @@ if __name__ == "__main__":
     logging.debug('Entering infinite loop.')
     while True:
         asset = scheduler.get_next_asset()
-        logging.debug('got asset' + str(asset))
+        logging.debug('got asset %s' % asset)
 
         is_up_to_date = check_update()
         logging.debug('Check update: %s' % str(is_up_to_date))
 
         if asset is None:
-            # The playlist is empty, go to sleep.
             toggle_load_screen(True)
+            # The playlist is empty, go to sleep.
             logging.info('Playlist is empty. Going to sleep.')
             sleep(5)
         elif not url_fails(asset['uri']):
