@@ -18,6 +18,7 @@ import json
 import logging
 import sh
 import signal
+from ctypes import cdll
 
 from settings import settings
 import html_templates
@@ -38,6 +39,24 @@ if arch == 'armv6l':
     from sh import omxplayer
 elif arch in ['x86_64', 'x86_32']:
     from sh import mplayer
+
+# Used by send_to_front.
+libx11 = cdll.LoadLibrary('libX11.so')
+
+
+def send_to_front(name):
+    """Instruct X11 to bring a window with the given name in its title to front."""
+
+    r = [l for l in sh.xwininfo('-root', '-tree').split("\n") if name in l]
+    if not len(r) == 1:
+        logging.info("Unable to send window with %s in title to front - %d matches found." % (name, len(r)))
+        return
+    win_id = int(r[0].strip().split(" ", 2)[0], 16)
+
+    dsp = libx11.XOpenDisplay(None)
+    logging.debug("Raising %s window %X to front." % (name, win_id))
+    libx11.XRaiseWindow(dsp, win_id)
+    libx11.XCloseDisplay(dsp)
 
 
 def get_is_pro_init():
@@ -317,15 +336,19 @@ def toggle_load_screen(status=True):
     global load_screen_pid
 
     if status and path.isfile(load_screen):
-        image_loader = sh.feh(load_screen, scale_down=True, borderless=True, fullscreen=True, _bg=True)
-        load_screen_pid = image_loader.pid
-        return image_loader.pid
+        if not load_screen_pid:
+            image_loader = sh.feh(load_screen, scale_down=True, borderless=True, fullscreen=True, _bg=True)
+            load_screen_pid = image_loader.pid
+            logging.debug("Load screen PID: %d." % load_screen_pid)
+        else:
+            # If we're already showing the load screen, just make sure it's on top.
+            send_to_front("feh")
     elif not status and load_screen_pid:
+        logging.debug("Killing load screen with PID: %d." % load_screen_pid)
         kill(load_screen_pid, signal.SIGTERM)
         load_screen_pid = None
-        return True
-    else:
-        return False
+
+    return load_screen_pid
 
 
 def check_update():
