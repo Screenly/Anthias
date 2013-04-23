@@ -508,6 +508,11 @@ if __name__ == "__main__":
     did_show_pin = False
     did_show_claimed = False
     while not get_is_pro_init():
+        # Wait for the status page to fully load.
+        while not browser_page_has("showPin"):
+            logging.debug("Waiting for intro page to load...")
+            sleep(1)
+
         with open('/home/pi/.screenly/setup_status.json', 'rb') as status_file:
             status = json.load(status_file)
 
