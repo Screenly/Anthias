@@ -250,6 +250,27 @@ def browser_fifo(data):
     f.close()
 
 
+def browser_socket(command, timeout=0.5):
+    """Like browser_fifo but also read back any immediate response from UZBL.
+
+    Note that the response can be anything, including events entirely unrelated
+    to the command executed.
+    """
+
+    uzbl_socket = "/tmp/uzbl_socket_%d" % browser_pid
+    r = sh.socat("-t%f" % timeout, "-", "unix-connect:%s" % uzbl_socket, _in=command + "\n")
+    # Very spammy.
+    # logging.debug("browser_socket(%r) -> %r" % (command, r))
+    return r
+
+
+def browser_page_has(name):
+    """Return true if the given name is defined on the currently loaded browser page."""
+
+    positive_response = "COMMAND_EXECUTED js  'typeof(%s) !== \\'undefined\\''\ntrue" % name
+    return positive_response in browser_socket("js typeof(%s) !== 'undefined'" % name)
+
+
 def browser_reload(force=False):
     """
     Reload the browser. Use to Force=True to force-reload
