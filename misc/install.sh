@@ -19,7 +19,7 @@ echo "(This might take a while.)"
 sudo apt-get -y -qq upgrade > /dev/null
 
 echo "Installing dependencies..."
-sudo apt-get -y -qq install git-core python-pip python-netifaces python-simplejson python-imaging python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils xorg-dev watchdog chkconfig feh > /dev/null
+sudo apt-get -y -qq install git-core python-pip python-netifaces python-simplejson python-imaging python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev watchdog chkconfig feh > /dev/null
 
 echo "Downloading Screenly-OSE..."
 git clone git://github.com/wireload/screenly-ose.git ~/screenly > /dev/null
