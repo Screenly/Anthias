@@ -517,9 +517,10 @@ if __name__ == "__main__":
         logging.debug('Check update: %s' % str(is_up_to_date))
 
         if asset is None:
-            toggle_load_screen(True)
             # The playlist is empty, go to sleep.
             logging.info('Playlist is empty. Going to sleep.')
+            toggle_load_screen(True)
+            browser_clear()
             sleep(5)
         elif not url_fails(asset['uri']):
             toggle_load_screen(False)
