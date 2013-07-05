@@ -301,6 +301,14 @@ def browser_clear():
 
 
 def browser_url(url):
+    try: browser_page_has('life')
+    except sh.ErrorReturnCode_1 as e:
+        logging.exception('browser socket dead, restarting browser')
+        global fifo, browser_pid
+        browser_pid = load_browser().pid
+        fifo = get_fifo()
+        disable_browser_status()
+
     global current_browser_url
 
     if url == current_browser_url:
