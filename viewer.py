@@ -135,7 +135,7 @@ class Scheduler(object):
     def dbisnewer(self):
         # get database file last modification time
         try:
-            db_mtime = path.getmtime(settings.get_database())
+            db_mtime = path.getmtime(settings['database'])
         except:
             db_mtime = 0
         return db_mtime >= self.gentime
@@ -487,7 +487,7 @@ if __name__ == "__main__":
     reload_settings()
 
     global db_conn
-    db_conn = db.conn(settings.get_database())
+    db_conn = db.conn(settings['database'])
 
     # Create folder to hold HTML-pages
     html_folder = '/tmp/screenly_html/'
