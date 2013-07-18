@@ -21,6 +21,7 @@ DEFAULTS = {
         'resolution': '1920x1080',
         'default_duration': '10',
         'debug_logging': False,
+        'verify_ssl': True,
     }
 }
 

@@ -508,6 +508,9 @@ if __name__ == "__main__":
     logging.debug('Disable the browser status bar.')
     disable_browser_status()
 
+    if not settings['verify_ssl']:
+       browser_fifo('set ssl_verify = 0')
+
     # Disable load screen early if initialization mode
     if not is_pro_init:
         toggle_load_screen(False)
