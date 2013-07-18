@@ -64,7 +64,7 @@ def get_is_pro_init():
     """
     Function to handle first-run on Screenly Pro
     """
-    if path.isfile('/home/pi/.screenly/not_initialized'):
+    if path.isfile(path.join(settings.get_configdir(), 'not_initialized')):
         return False
     else:
         return True
@@ -170,7 +170,7 @@ def asset_is_accessible(uri):
     Determine if content is accessible or not.
     """
 
-    asset_folder = path.join(getenv('HOME'), 'screenly_assets')
+    asset_folder = settings['assetdir']
     # If it's local content, just check if the file exist on disk.
 
     if ((asset_folder in uri) or (html_folder in uri) and path.exists(uri)):
@@ -196,7 +196,7 @@ def load_browser():
         logging.debug('Detected Pro initiation cycle.')
 
         # Wait for the intro file to exist (if it doesn't)
-        intro_file = '/home/pi/.screenly/intro.html'
+        intro_file = path.join(settings.get_configdir(), 'intro.html')
         while not path.isfile(intro_file):
             logging.debug('intro.html missing. Going to sleep.')
             sleep(0.5)
@@ -358,7 +358,7 @@ def view_video(uri):
             logging.debug("Unclean exit: " + str(run))
 
         # Clean up after omxplayer
-        omxplayer_logfile = path.join(getenv('HOME'), 'omxplayer.log')
+        omxplayer_logfile = HOME + 'omxplayer.log'
         if path.isfile(omxplayer_logfile):
             remove(omxplayer_logfile)
 
@@ -396,7 +396,7 @@ def toggle_load_screen(status=True):
     Toggle the load screen. Set status to either True or False.
     """
 
-    load_screen = '/home/pi/screenly/loading.jpg'
+    load_screen = HOME + 'screenly/loading.jpg'
     global load_screen_pid
 
     if status and path.isfile(load_screen):
@@ -424,7 +424,7 @@ def check_update():
     False if no update needed and None if unable to check.
     """
 
-    sha_file = path.join(getenv('HOME'), '.screenly', 'latest_screenly_sha')
+    sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
 
     if path.isfile(sha_file):
         sha_file_mtime = path.getmtime(sha_file)
@@ -460,7 +460,7 @@ def reload_settings():
     file loaded in memory.
     """
 
-    settings_file = path.join(getenv('HOME'), '.screenly', 'screenly.conf')
+    settings_file = settings.get_configfile()
     settings_file_mtime = path.getmtime(settings_file)
     settings_file_timestamp = datetime.fromtimestamp(settings_file_mtime)
 
@@ -475,6 +475,7 @@ def reload_settings():
 
 if __name__ == "__main__":
 
+    HOME = getenv('HOME', '/home/pi/')
     # Bring up load screen
     toggle_load_screen(True)
 
@@ -524,7 +525,7 @@ if __name__ == "__main__":
             logging.debug("Waiting for intro page to load...")
             sleep(1)
 
-        with open('/home/pi/.screenly/setup_status.json', 'rb') as status_file:
+        with open(path.join(settings.get_configdir(), 'setup_status.json'), 'rb') as status_file:
             status = json.load(status_file)
 
         if not did_show_pin and not did_show_claimed and status.get('pin'):
