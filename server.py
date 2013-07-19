@@ -56,7 +56,7 @@ def is_up_to_date():
     Used in conjunction with check_update() in viewer.py.
     """
 
-    sha_file = path.join(getenv('HOME'), '.screenly', 'latest_screenly_sha')
+    sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
 
     # Until this has been created by viewer.py, let's just assume we're up to date.
     if not os.path.exists(sha_file):
@@ -153,7 +153,7 @@ def prepare_asset(request):
             asset['uri'] = uri
 
         if filename:
-            asset['uri'] = path.join(settings.get_asset_folder(), asset['asset_id'])
+            asset['uri'] = path.join(settings['assetdir'], asset['asset_id'])
 
             with open(asset['uri'], 'w') as f:
                 while True:
@@ -235,7 +235,7 @@ def edit_asset(asset_id):
 def remove_asset(asset_id):
     asset = assets_helper.read(db_conn, asset_id)
     try:
-        if asset['uri'].startswith(settings.get_asset_folder()):
+        if asset['uri'].startswith(settings['assetdir']):
             os.remove(asset['uri'])
     except OSError:
         pass
@@ -345,13 +345,13 @@ def static(path):
 
 if __name__ == "__main__":
     # Make sure the asset folder exist. If not, create it
-    if not path.isdir(settings.get_asset_folder()):
-        mkdir(settings.get_asset_folder())
+    if not path.isdir(settings['assetdir']):
+        mkdir(settings['assetdir'])
     # Create config dir if it doesn't exist
     if not path.isdir(settings.get_configdir()):
         makedirs(settings.get_configdir())
 
-    with db.conn(settings.get_database()) as conn:
+    with db.conn(settings['database']) as conn:
         global db_conn
         db_conn = conn
         with db.cursor(db_conn) as c:
