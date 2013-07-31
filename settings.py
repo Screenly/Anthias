@@ -63,11 +63,11 @@ class ScreenlySettings(IterableUserDict):
                 self[field] = config.getint(section, field)
             else:
                 self[field] = config.get(section, field)
-                if field in ['database', 'assetdir']:
-                    self[field] = str(path.join(self.home, self[field]))
         except ConfigParser.Error as e:
             logging.debug("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (section, field, unicode(e), default))
             self[field] = default
+        if field in ['database', 'assetdir']:
+            self[field] = str(path.join(self.home, self[field]))
 
     def _set(self, config, section, field, default):
         if isinstance(default, bool):
