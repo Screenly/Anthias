@@ -258,7 +258,7 @@ def browser_socket(command, timeout=0.5):
     """
 
     uzbl_socket = "/tmp/uzbl_socket_%d" % browser_pid
-    r = sh.socat("-t%f" % timeout, "-", "unix-connect:%s" % uzbl_socket, _in=command + "\n")
+    r = sh.socat("-t%f" % timeout, "-", "unix-connect:%s" % uzbl_socket, _in=command + "\n", _timeout=2)
     # Very spammy.
     # logging.debug("browser_socket(%r) -> %r" % (command, r))
     return r
