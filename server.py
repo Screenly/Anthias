@@ -247,12 +247,13 @@ def remove_asset(asset_id):
 @api
 def playlist_order():
     "Receive a list of asset_ids in the order they should be in the playlist"
-    for play_order,asset_id in enumerate(request.POST.get('ids', '').split(',')):
-        assets_helper.update(db_conn, asset_id, {'asset_id':asset_id, 'play_order':play_order})
+    for play_order, asset_id in enumerate(request.POST.get('ids', '').split(',')):
+        assets_helper.update(db_conn, asset_id, {'asset_id': asset_id, 'play_order': play_order})
 
 ################################
 # Views
 ################################
+
 
 @route('/')
 def viewIndex():
@@ -360,4 +361,4 @@ if __name__ == "__main__":
                 c.execute(assets_helper.create_assets_table)
         run(host=settings.get_listen_ip(),
             port=settings.get_listen_port(),
-            reloader=True)
+            reloader=True, server='gunicorn', workers=1)
