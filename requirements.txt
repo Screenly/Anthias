@@ -1,8 +1,10 @@
 Mako==0.7.3
 MarkupSafe==0.15
+PIL==1.1.7
 PyHAML==0.1.9
 bottle==0.10.11
 bottle-haml==0.1.4
+gunicorn==18.0
 hurry.filesize==0.9
 mock==1.0.1
 netifaces==0.8
