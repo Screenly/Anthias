@@ -13,7 +13,7 @@ DEFAULTS = {
     'main': {
         'database': CONFIG_DIR + 'screenly.db',
         'listen': '0.0.0.0:8080',
-        'assetdir': 'screenly_assets',
+        'assetdir': '/home/pi/screenly/screenly_assets',
     },
     'viewer': {
         'show_splash': True,
