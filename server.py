@@ -170,7 +170,7 @@ def prepare_asset(request):
             else:
                 asset['duration'] = 'N/A'
         else:
-            # crashes if it's not an int. we want that.
+            # Crashes if it's not an int. We want that.
             asset['duration'] = int(get('duration'))
 
         if get('start_date'):
@@ -366,4 +366,4 @@ if __name__ == "__main__":
                 c.execute(assets_helper.create_assets_table)
         run(host=settings.get_listen_ip(),
             port=settings.get_listen_port(),
-            reloader=True, server='gunicorn', workers=1)
+            reloader=True)
