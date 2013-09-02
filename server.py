@@ -32,6 +32,7 @@ from utils import json_dump
 from utils import get_node_ip
 from utils import validate_url
 from utils import url_fails
+from utils import get_video_duration
 
 from settings import settings, DEFAULTS
 ################################
@@ -163,7 +164,11 @@ def prepare_asset(request):
                     f.write(chunk)
 
         if "video" in asset['mimetype']:
-            asset['duration'] = "N/A"
+            video_duration = get_video_duration(asset['uri'])
+            if video_duration:
+                asset['duration'] = video_duration.total_seconds()
+            else:
+                asset['duration'] = 'N/A'
         else:
             # crashes if it's not an int. we want that.
             asset['duration'] = int(get('duration'))
