@@ -4,7 +4,7 @@
 __author__ = "Viktor Petersson"
 __copyright__ = "Copyright 2012, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 __email__ = "vpetersson@wireload.net"
 
 from datetime import datetime, timedelta
@@ -32,6 +32,7 @@ from utils import json_dump
 from utils import get_node_ip
 from utils import validate_url
 from utils import url_fails
+from utils import get_video_duration
 
 from settings import settings, DEFAULTS
 ################################
@@ -163,9 +164,13 @@ def prepare_asset(request):
                     f.write(chunk)
 
         if "video" in asset['mimetype']:
-            asset['duration'] = "N/A"
+            video_duration = get_video_duration(asset['uri'])
+            if video_duration:
+                asset['duration'] = int(video_duration.total_seconds())
+            else:
+                asset['duration'] = 'N/A'
         else:
-            # crashes if it's not an int. we want that.
+            # Crashes if it's not an int. We want that.
             asset['duration'] = int(get('duration'))
 
         if get('start_date'):
@@ -361,4 +366,4 @@ if __name__ == "__main__":
                 c.execute(assets_helper.create_assets_table)
         run(host=settings.get_listen_ip(),
             port=settings.get_listen_port(),
-            reloader=True, server='gunicorn', workers=1)
+            reloader=True)
