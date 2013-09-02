@@ -4,7 +4,7 @@
 __author__ = "Viktor Petersson"
 __copyright__ = "Copyright 2012, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 __email__ = "vpetersson@wireload.net"
 
 from datetime import datetime, timedelta
@@ -166,7 +166,7 @@ def prepare_asset(request):
         if "video" in asset['mimetype']:
             video_duration = get_video_duration(asset['uri'])
             if video_duration:
-                asset['duration'] = video_duration.total_seconds()
+                asset['duration'] = int(video_duration.total_seconds())
             else:
                 asset['duration'] = 'N/A'
         else:
