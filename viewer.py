@@ -14,6 +14,7 @@ from random import shuffle
 from requests import get as req_get, head as req_head
 from stat import S_ISFIFO
 from time import sleep, time
+from sys import argv
 import json
 import logging
 import sh
@@ -208,7 +209,8 @@ def load_browser():
     else:
         browser_load_url = black_page
 
-    browser = sh.Command('uzbl-browser')(uri=browser_load_url, _bg=True)
+    geom = [l for l in sh.xwininfo('-root').split("\n") if 'geometry' in l][0].split('y ')[1]
+    browser = sh.Command('uzbl-browser')(g=geom, uri=browser_load_url, _bg=True)
     current_browser_url = browser_load_url
 
     logging.info('Browser loaded. Running as PID %d.' % browser.pid)
