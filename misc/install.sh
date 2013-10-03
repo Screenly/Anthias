@@ -64,6 +64,20 @@ ln -s ~/screenly/misc/lxde-rc.xml ~/.config/openbox/lxde-rc.xml
 [ -f /etc/xdg/lxsession/LXDE/autostart ] && sudo mv /etc/xdg/lxsession/LXDE/autostart /etc/xdg/lxsession/LXDE/autostart.bak
 sudo sed -e 's/^#xserver-command=X$/xserver-command=X -nocursor/g' -i /etc/lightdm/lightdm.conf
 
+# Make sure we have proper framebuffer depth.
+if grep -q framebuffer_depth /boot/config.txt; then
+  sudo sed 's/^framebuffer_depth.*/framebuffer_depth=32/' -i /boot/config.txt
+else
+  echo 'framebuffer_depth=32' | sudo tee -a /boot/config.txt > /dev/null
+fi
+
+# Fix frame buffer bug
+if grep -q framebuffer_ignore_alpha /boot/config.txt; then
+  sudo sed 's/^framebuffer_ignore_alpha.*/framebuffer_ignore_alpha=1/' -i /boot/config.txt
+else
+  echo 'framebuffer_ignore_alpha=1' | sudo tee -a /boot/config.txt > /dev/null
+fi
+
 echo "Quiet the boot process..."
 sudo cp /boot/cmdline.txt /boot/cmdline.txt.bak
 sudo sed 's/$/ quiet/' -i /boot/cmdline.txt

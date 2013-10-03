@@ -14,7 +14,6 @@ from random import shuffle
 from requests import get as req_get, head as req_head
 from stat import S_ISFIFO
 from time import sleep, time
-from sys import argv
 import json
 import logging
 import sh
@@ -303,7 +302,8 @@ def browser_clear():
 
 
 def browser_url(url):
-    try: browser_page_has('life')
+    try:
+        browser_page_has('life')
     except sh.ErrorReturnCode_1 as e:
         logging.exception('browser socket dead, restarting browser')
         global fifo, browser_pid
@@ -325,15 +325,18 @@ def disable_browser_status():
     browser_fifo('set show_status = 0')
 
 
-def view_image(uri, duration):
+def view_image(uri, asset_id, duration):
     logging.debug('Displaying image %s for %s seconds.' % (uri, duration))
 
     if asset_is_accessible(uri):
-        run = sh.feh(uri, scale_down=True, borderless=True, fullscreen=True, cycle_once=True, slideshow_delay=duration, _bg=True)
-        # Wait until feh is starting before clearing the browser. This minimises delay between
-        # web and image content.
-        browser_clear()
-        run.wait()
+        logging.debug('Image appears to be available. Proceeding.')
+        logging.debug('Displaying uri %s for %s seconds.' % (uri, duration))
+
+        image_tmp_page = html_templates.image_page(uri, asset_id)
+
+        browser_url(image_tmp_page)
+
+        sleep(int(duration))
     else:
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (uri))
 
@@ -512,7 +515,7 @@ if __name__ == "__main__":
     disable_browser_status()
 
     if not settings['verify_ssl']:
-       browser_fifo('set ssl_verify = 0')
+        browser_fifo('set ssl_verify = 0')
 
     # Disable load screen early if initialization mode
     if not is_pro_init:
@@ -569,7 +572,7 @@ if __name__ == "__main__":
             watchdog()
 
             if "image" in asset["mimetype"]:
-                view_image(asset['uri'], asset["duration"])
+                view_image(asset['uri'], asset['asset_id'], asset["duration"])
             elif "video" in asset["mimetype"]:
                 view_video(asset["uri"])
             elif "web" in asset["mimetype"]:
