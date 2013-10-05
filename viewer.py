@@ -235,13 +235,16 @@ def get_fifo():
     logging.debug('Looking for UZBL fifo...')
 
     while not found_fifo:
+        # Sort the files with the newest file first,
+        # to avoid an old fifo being found first.
         candidates = glob('/tmp/uzbl_fifo_*')
-        for file in candidates:
+        sorted_candidates = sorted(candidates, key=path.getctime, reverse=True)
+        for file in sorted_candidates:
             if S_ISFIFO(os_stat(file).st_mode):
                 found_fifo = True
                 fifo = file
         sleep(0.5)
-    logging.debug('Found UZBL fifo  in %s.' % file)
+    logging.debug('Found UZBL fifo in %s.' % file)
     return fifo
 
 
