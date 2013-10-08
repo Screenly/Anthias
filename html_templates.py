@@ -12,7 +12,17 @@ def black_page():
 
 def image_page(uri, asset_id):
     full_filename = '/tmp/screenly_html/' + asset_id + '.html'
-    html = "<html><head><style>body {background-image:url('%s'); background-repeat:no-repeat; background-position:center; background-color:#000000;}</style></head><!-- Just a black page --></html>" % uri
+    html = """<html>
+  <head>
+    <script>
+      scale = function () {
+      var i = new Image(); i.src = '%s';
+      document.body.style.backgroundSize = i.width > window.innerWidth || i.height > window.innerHeight ? 'contain' : 'auto';
+      }
+    </script>
+  </head>
+  <body style="background: #000 url(%s) center no-repeat" onload="scale()"></body>
+</html>""" % (uri, uri)
     f = open(full_filename, 'w')
     f.write(html)
     f.close()
