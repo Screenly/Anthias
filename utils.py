@@ -88,9 +88,9 @@ def json_dump(obj):
 def url_fails(url):
     try:
         if validate_url(url):
-            obj = requests.head(url, allow_redirects=True)
+            obj = requests.head(url, allow_redirects=True, timeout=10)
             assert obj.status_code == 200
-    except (requests.ConnectionError, AssertionError):
+    except (requests.ConnectionError, requests.exceptions.Timeout, AssertionError):
         return True
     else:
         return False
