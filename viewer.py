@@ -64,10 +64,8 @@ def get_is_pro_init():
     """
     Function to handle first-run on Screenly Pro
     """
-    if path.isfile(path.join(settings.get_configdir(), 'not_initialized')):
-        return False
-    else:
-        return True
+    # path.isfile returns either True or False.
+    return path.isfile(path.join(settings.get_configdir(), 'not_initialized')):
 
 
 def sigusr1(signum, frame):
