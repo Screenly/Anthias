@@ -27,6 +27,7 @@ from bottlehaml import haml_template
 import db
 import queries
 import assets_helper
+import schedules_helper
 
 from utils import json_dump
 from utils import get_node_ip
@@ -199,7 +200,6 @@ def api_assets():
     assets = assets_helper.read(db_conn)
     return make_json_response(assets)
 
-
 # api view decorator. handles errors
 def api(view):
     @wraps(view)
@@ -255,6 +255,11 @@ def playlist_order():
     for play_order, asset_id in enumerate(request.POST.get('ids', '').split(',')):
         assets_helper.update(db_conn, asset_id, {'asset_id': asset_id, 'play_order': play_order})
 
+@route('/api/schedules/:asset_id', method="GET")
+def api_schedules(asset_id):
+    schedules = schedules_helper.read(db_conn, asset_id)
+    return make_json_response(schedules)
+
 ################################
 # Views
 ################################
@@ -263,6 +268,10 @@ def playlist_order():
 @route('/')
 def viewIndex():
     return template('index')
+
+@route('/asset/<asset_id>/schedule')
+def viewSchedule(asset_id):
+    return template('schedule', asset_id=asset_id)
 
 
 @route('/settings', method=["GET", "POST"])

@@ -9,3 +9,5 @@ read = lambda keys: 'select ' + comma(keys) + ' from assets where asset_id=?'
 create = lambda keys: 'insert into assets (' + comma(keys) + ') values (' + comma(['?'] * len(keys)) + ')'
 remove = 'delete from assets where asset_id=?'
 update = lambda keys: 'update assets set ' + quest(keys) + ' where asset_id=?'
+
+read_schedule = lambda keys: 'select ' + comma(keys) + ' from schedules where asset_id=?'
