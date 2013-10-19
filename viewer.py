@@ -30,7 +30,6 @@ import assets_helper
 # Define to none to ensure we refresh
 # the settings.
 last_settings_refresh = None
-load_screen_pid = None
 is_pro_init = None
 current_browser_url = None
 
@@ -399,29 +398,6 @@ def view_web(url, duration):
         logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (url))
 
 
-def toggle_load_screen(status=True):
-    """
-    Toggle the load screen. Set status to either True or False.
-    """
-
-    load_screen = HOME + 'screenly/loading.jpg'
-    global load_screen_pid
-
-    if status and path.isfile(load_screen):
-        if not load_screen_pid:
-            image_loader = sh.feh(load_screen, scale_down=True, borderless=True, fullscreen=True, _bg=True)
-            load_screen_pid = image_loader.pid
-            logging.debug("Load screen PID: %d." % load_screen_pid)
-        else:
-            # If we're already showing the load screen, just make sure it's on top.
-            send_to_front("feh")
-    elif not status and load_screen_pid:
-        logging.debug("Killing load screen with PID: %d." % load_screen_pid)
-        kill(load_screen_pid, signal.SIGTERM)
-        load_screen_pid = None
-
-    return load_screen_pid
-
 
 def check_update():
     """
@@ -484,8 +460,6 @@ def reload_settings():
 if __name__ == "__main__":
 
     HOME = getenv('HOME', '/home/pi/')
-    # Bring up load screen
-    toggle_load_screen(True)
 
     # Install signal handlers
     signal.signal(signal.SIGUSR1, sigusr1)
@@ -520,9 +494,6 @@ if __name__ == "__main__":
     if not settings['verify_ssl']:
         browser_fifo('set ssl_verify = 0')
 
-    # Disable load screen early if initialization mode
-    if not is_pro_init:
-        toggle_load_screen(False)
 
     # Wait until initialized (Pro only).
     did_show_pin = False
@@ -565,11 +536,9 @@ if __name__ == "__main__":
         if asset is None:
             # The playlist is empty, go to sleep.
             logging.info('Playlist is empty. Going to sleep.')
-            toggle_load_screen(True)
             browser_clear()
             sleep(5)
         elif not url_fails(asset['uri']):
-            toggle_load_screen(False)
             logging.info('Showing asset %s.' % asset["name"])
 
             watchdog()
