@@ -280,11 +280,37 @@ def pro_init():
     return True
 
 
+def asset_loop():
+    scheduler = Scheduler()
+    logging.debug('Entering infinite loop.')
+    while True:
+        check_update()
+        asset = scheduler.get_next_asset()
 
+        if asset is None:
+            logging.info('Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY)
+            view_image(HOME + LOAD_SCREEN)
+            sleep(EMPTY_PL_DELAY)
 
         elif path.isfile(asset['uri']) or not url_fails(asset['uri']):
+            name, mime, uri = asset['name'], asset['mimetype'], asset['uri']
+            logging.info('Showing asset %s (%s)', name, mime)
+            logging.debug('Asset URI %s', uri)
+            watchdog()
 
+            if 'image' in mime:
+                view_image(uri)
+            elif 'web' in mime:
+                browser_url(uri)
+            elif 'video' in mime:
+                view_video(uri)
+            else:
+                logging.error('Unknown MimeType %s', mime)
 
+            if 'image' in mime or 'web' in mime:
+                duration = int(asset['duration'])
+                logging.info('Sleeping for %s', duration)
+                sleep(duration)
         else:
             logging.info('Asset %s at %s is not available, skipping.', asset['name'], asset['uri'])
             sleep(0.5)
@@ -307,40 +333,19 @@ def setup():
     html_templates.black_page(BLACK_PAGE)
 
 
-    scheduler = Scheduler()
 def main():
     setup()
     if pro_init():
         return
 
-    # Infinite loop.
-    logging.debug('Entering infinite loop.')
-    while True:
-        asset = scheduler.get_next_asset()
-        logging.debug('got asset %s' % asset)
     url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port()) if settings['show_splash'] else BLACK_PAGE
     load_browser(url=url)
 
-        is_up_to_date = check_update()
-        logging.debug('Check update: %s' % str(is_up_to_date))
     if settings['show_splash']:
         sleep(60)
 
-        if asset is None:
-            # The playlist is empty, go to sleep.
-            logging.info('Playlist is empty. Going to sleep.')
-            browser_clear()
-            sleep(5)
+    asset_loop()
 
-            watchdog()
 
-            if "image" in asset["mimetype"]:
-                view_image(asset['uri'], asset['asset_id'], asset["duration"])
-            elif "video" in asset["mimetype"]:
-                view_video(asset["uri"])
-            elif "web" in asset["mimetype"]:
-                view_web(asset["uri"], asset["duration"])
-            else:
-                print "Unknown MimeType, or MimeType missing"
 if __name__ == "__main__":
     main()
