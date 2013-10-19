@@ -139,26 +139,7 @@ def watchdog():
         utime(watchdog, None)
 
 
-def asset_is_accessible(uri):
-    """
-    Determine if content is accessible or not.
-    """
 
-    asset_folder = settings['assetdir']
-    # If it's local content, just check if the file exist on disk.
-
-    if ((asset_folder in uri) or (html_folder in uri) and path.exists(uri)):
-        return True
-
-    try:
-        # Give up if we can't even get the header in five seconds.
-        remote_asset_status = req_head(uri, timeout=5, allow_redirects=True).status_code
-        if remote_asset_status == 200:
-            return True
-        else:
-            return False
-    except:
-        return False
 
 
 def load_browser():
@@ -258,8 +239,6 @@ def disable_browser_status():
 def view_image(uri, asset_id, duration):
     logging.debug('Displaying image %s for %s seconds.' % (uri, duration))
 
-    if asset_is_accessible(uri):
-        logging.debug('Image appears to be available. Proceeding.')
         logging.debug('Displaying uri %s for %s seconds.' % (uri, duration))
 
         image_tmp_page = html_templates.image_page(uri, asset_id)
@@ -267,8 +246,6 @@ def view_image(uri, asset_id, duration):
         browser_url(image_tmp_page)
 
         sleep(int(duration))
-    else:
-        logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (uri))
 
 
 def view_video(uri):
@@ -277,11 +254,7 @@ def view_video(uri):
     if arch == 'armv6l':
         logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % uri)
 
-        if asset_is_accessible(uri):
             run = omxplayer(uri, o=settings['audio_output'], _bg=True)
-        else:
-            logging.debug('Content is unaccessible. Skipping...')
-            return
 
         # Wait until omxplayer is starting before clearing the browser. This minimises delay between
         # web and image content. Omxplayer will run on top of the browser so the delay in clearing
@@ -301,11 +274,7 @@ def view_video(uri):
     elif arch in ['x86_64', 'x86_32']:
         logging.debug('Displaying video %s. Detected x86. Using mplayer.' % uri)
 
-        if asset_is_accessible(uri):
             run = mplayer(uri, fs=True, nosound=True, _bg=True)
-        else:
-            logging.debug('Content is unaccessible. Skipping...')
-            return
 
         browser_clear()
         run.wait()
@@ -315,15 +284,12 @@ def view_video(uri):
 
 
 def view_web(url, duration):
-    if asset_is_accessible(url):
-        logging.debug('Web content appears to be available. Proceeding.')
         logging.debug('Displaying url %s for %s seconds.' % (url, duration))
 
         browser_url(url)
 
         sleep(int(duration))
     else:
-        logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (url))
 
 
 
@@ -348,7 +314,7 @@ def check_update():
 
     if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
 
-        if asset_is_accessible('http://stats.screenlyapp.com'):
+        if not url_fails('http://stats.screenlyapp.com'):
             latest_sha = req_get('http://stats.screenlyapp.com/latest')
 
             if latest_sha.status_code == 200:
@@ -413,11 +379,15 @@ if __name__ == "__main__":
     logging.debug('Getting browser PID.')
     browser_pid = run_browser.pid
 
+        elif path.isfile(asset['uri']) or not url_fails(asset['uri']):
 
     logging.debug('Disable the browser status bar.')
     disable_browser_status()
 
     if not settings['verify_ssl']:
+        else:
+            logging.info('Asset %s at %s is not available, skipping.', asset['name'], asset['uri'])
+            sleep(0.5)
 
 
     # Wait until initialized (Pro only).
@@ -461,8 +431,6 @@ if __name__ == "__main__":
             logging.info('Playlist is empty. Going to sleep.')
             browser_clear()
             sleep(5)
-        elif not url_fails(asset['uri']):
-            logging.info('Showing asset %s.' % asset["name"])
 
             watchdog()
 
@@ -474,5 +442,3 @@ if __name__ == "__main__":
                 view_web(asset["uri"], asset["duration"])
             else:
                 print "Unknown MimeType, or MimeType missing"
-        else:
-            logging.info('Asset {0} is not available, skipping.'.format(asset['uri']))
