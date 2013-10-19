@@ -141,42 +141,44 @@ def watchdog():
 
 
 
-
-
-def load_browser():
+def load_browser(url=None):
+    global browser, current_browser_url
     logging.info('Loading browser...')
 
     global is_pro_init, current_browser_url
     is_pro_init = get_is_pro_init()
     if not is_pro_init:
         logging.debug('Detected Pro initiation cycle.')
+    if browser:
+        logging.info('killing previous uzbl %s', browser.pid)
+        browser.process.kill()
 
         # Wait for the intro file to exist (if it doesn't)
         intro_file = path.join(settings.get_configdir(), 'intro.html')
         while not path.isfile(intro_file):
             logging.debug('intro.html missing. Going to sleep.')
             sleep(0.5)
+    if not url is None:
+        current_browser_url = url
 
         browser_load_url = 'file://' + intro_file
+    # --config=-       read commands (and config) from stdin
+    # --print-events   print events to stdout
+    # ---uri=URI       URI to load on start
+    browser = sh.Command('uzbl-browser')(print_events=True, config='-', uri=current_browser_url, _bg=True)
+    logging.info('Browser loading %s. Running as PID %s.', current_browser_url, browser.pid)
+
+    uzbl_rc = 'ssl_verify {}\n'.format('1' if settings['verify_ssl'] else '0')
+    with open(HOME + UZBLRC) as f:  # load uzbl.rc
+        uzbl_rc = f.read() + uzbl_rc
+    browser_send(uzbl_rc)
 
 
-    geom = [l for l in sh.xwininfo('-root').split("\n") if 'geometry' in l][0].split('y ')[1]
-    browser = sh.Command('uzbl-browser')(g=geom, uri=browser_load_url, _bg=True)
-    current_browser_url = browser_load_url
-
-    logging.info('Browser loaded. Running as PID %d.' % browser.pid)
 
     if settings['show_splash']:
         # Show splash screen for 60 seconds.
         sleep(60)
     else:
-        # Give browser some time to start (we have seen multiple uzbl running without this)
-        sleep(10)
-
-    return browser
-
-
-
 
 
 def browser_clear(force=False):
@@ -193,10 +195,6 @@ def browser_url(url, cb=lambda _: True, force=False):
         current_browser_url = url
         browser_send('uri ' + current_browser_url, cb=cb)
         logging.info('current url is %s', current_browser_url)
-
-
-def disable_browser_status():
-    logging.debug('Disabled status-bar in browser')
 
 
 def view_image(uri, asset_id, duration):
@@ -334,18 +332,11 @@ if __name__ == "__main__":
         makedirs(html_folder)
 
 
-    # Fire up the browser
-    run_browser = load_browser()
 
-    logging.debug('Getting browser PID.')
-    browser_pid = run_browser.pid
 
         elif path.isfile(asset['uri']) or not url_fails(asset['uri']):
 
-    logging.debug('Disable the browser status bar.')
-    disable_browser_status()
 
-    if not settings['verify_ssl']:
         else:
             logging.info('Asset %s at %s is not available, skipping.', asset['name'], asset['uri'])
             sleep(0.5)
