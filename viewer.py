@@ -30,15 +30,8 @@ import assets_helper
 last_settings_refresh = None
 current_browser_url = None
 
-# Detect the architecture and load the proper video player
-arch = machine()
-if arch == 'armv6l':
-    from sh import omxplayer
-elif arch in ['x86_64', 'x86_32']:
-    from sh import mplayer
-
-
 BLACK_PAGE = '/tmp/screenly_html/black_page.html'
+SCREENLY_HTML = '/tmp/screenly_html/'
 
 
 
@@ -159,9 +152,6 @@ def browser_send(command, cb=lambda _: True):
         while not browser.process._pipe_queue.empty():  # flush stdout
             browser.next()
 
-    if settings['show_splash']:
-        # Show splash screen for 60 seconds.
-        sleep(60)
         browser.process.stdin.put(command + '\n')
         while True:  # loop until cb returns True
             if cb(browser.next()):
@@ -262,13 +252,11 @@ def reload_settings():
     last_setting_refresh = datetime.utcnow()
 
 
-if __name__ == "__main__":
 def pro_init():
     """Function to handle first-run on Screenly Pro"""
     is_pro_init = path.isfile(path.join(settings.get_configdir(), 'not_initialized'))
     intro_file = path.join(settings.get_configdir(), 'intro.html')
 
-    HOME = getenv('HOME', '/home/pi/')
     if is_pro_init:
         logging.debug('Detected Pro initiation cycle.')
         while not path.isfile(intro_file):
@@ -278,28 +266,17 @@ def pro_init():
     else:
         return False
 
-    # Install signal handlers
-    signal.signal(signal.SIGUSR1, sigusr1)
-    signal.signal(signal.SIGUSR2, sigusr2)
     status_path = path.join(settings.get_configdir(), 'setup_status.json')
     while is_pro_init:
         with open(status_path, 'rb') as status_file:
             status = json.load(status_file)
 
-    # Before we start, reload the settings.
-    reload_settings()
         browser_send('js showUpdating()' if status['claimed'] else
                      'js showPin("{0}")'.format(status['pin']))
 
-    global db_conn
-    db_conn = db.conn(settings['database'])
         logging.debug('Waiting for node to be initialized.')
         sleep(5)
 
-    # Create folder to hold HTML-pages
-    html_folder = '/tmp/screenly_html/'
-    if not path.isdir(html_folder):
-        makedirs(html_folder)
     return True
 
 
@@ -313,14 +290,26 @@ def pro_init():
             sleep(0.5)
 
 
+def setup():
+    global HOME, arch, db_conn
+    HOME = getenv('HOME', '/home/pi')
+    arch = machine()
 
+    signal.signal(signal.SIGUSR1, sigusr1)
+    signal.signal(signal.SIGUSR2, sigusr2)
 
+    reload_settings()
+    db_conn = db.conn(settings['database'])
 
+    if not path.isdir(SCREENLY_HTML):
+        makedirs(SCREENLY_HTML)
 
     html_templates.black_page(BLACK_PAGE)
 
 
     scheduler = Scheduler()
+def main():
+    setup()
     if pro_init():
         return
 
@@ -329,9 +318,13 @@ def pro_init():
     while True:
         asset = scheduler.get_next_asset()
         logging.debug('got asset %s' % asset)
+    url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port()) if settings['show_splash'] else BLACK_PAGE
+    load_browser(url=url)
 
         is_up_to_date = check_update()
         logging.debug('Check update: %s' % str(is_up_to_date))
+    if settings['show_splash']:
+        sleep(60)
 
         if asset is None:
             # The playlist is empty, go to sleep.
@@ -349,3 +342,5 @@ def pro_init():
                 view_web(asset["uri"], asset["duration"])
             else:
                 print "Unknown MimeType, or MimeType missing"
+if __name__ == "__main__":
+    main()
