@@ -18,7 +18,6 @@ import json
 import logging
 import sh
 import signal
-from ctypes import cdll
 
 from settings import settings
 import html_templates
@@ -40,23 +39,7 @@ if arch == 'armv6l':
 elif arch in ['x86_64', 'x86_32']:
     from sh import mplayer
 
-# Used by send_to_front.
-libx11 = cdll.LoadLibrary('libX11.so')
 
-
-def send_to_front(name):
-    """Instruct X11 to bring a window with the given name in its title to front."""
-
-    r = [l for l in sh.xwininfo('-root', '-tree').split("\n") if name in l]
-    if not len(r) == 1:
-        logging.info("Unable to send window with %s in title to front - %d matches found." % (name, len(r)))
-        return
-    win_id = int(r[0].strip().split(" ", 2)[0], 16)
-
-    dsp = libx11.XOpenDisplay(None)
-    logging.debug("Raising %s window %X to front." % (name, win_id))
-    libx11.XRaiseWindow(dsp, win_id)
-    libx11.XCloseDisplay(dsp)
 
 
 def get_is_pro_init():
