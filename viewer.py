@@ -182,23 +182,6 @@ def load_browser():
 
 
 
-def browser_page_has(name):
-    """Return true if the given name is defined on the currently loaded browser page."""
-
-    positive_response = "COMMAND_EXECUTED js  'typeof(%s) !== \\'undefined\\''\ntrue" % name
-
-
-def browser_reload(force=False):
-    """
-    Reload the browser. Use to Force=True to force-reload
-    """
-
-    if not force:
-        reload_command = 'reload'
-    else:
-        reload_command = 'reload_ign_cache'
-
-
 def browser_clear():
     """Clear the browser if necessary.
 
@@ -216,11 +199,6 @@ def browser_clear():
 
 
 def browser_url(url):
-    try:
-        browser_page_has('life')
-    except sh.ErrorReturnCode_1 as e:
-        logging.exception('browser socket dead, restarting browser')
-        global fifo, browser_pid
         browser_pid = load_browser().pid
         disable_browser_status()
 
@@ -395,7 +373,6 @@ if __name__ == "__main__":
     did_show_claimed = False
     while not get_is_pro_init():
         # Wait for the status page to fully load.
-        while not browser_page_has("showPin"):
             logging.debug("Waiting for intro page to load...")
             sleep(1)
 
