@@ -12,7 +12,6 @@ from os import stat as os_stat, utime, system, kill
 from platform import machine
 from random import shuffle
 from requests import get as req_get, head as req_head
-from stat import S_ISFIFO
 from time import sleep, time
 import json
 import logging
@@ -199,34 +198,6 @@ def load_browser():
     return browser
 
 
-def get_fifo():
-    """
-    Look for UZBL's FIFO-file in /tmp.
-    Don't give up until it has been found.
-    """
-    found_fifo = False
-    fifo = None
-
-    logging.debug('Looking for UZBL fifo...')
-
-    while not found_fifo:
-        # Sort the files with the newest file first,
-        # to avoid an old fifo being found first.
-        candidates = glob('/tmp/uzbl_fifo_*')
-        sorted_candidates = sorted(candidates, key=path.getctime, reverse=True)
-        for file in sorted_candidates:
-            if S_ISFIFO(os_stat(file).st_mode):
-                found_fifo = True
-                fifo = file
-        sleep(0.5)
-    logging.debug('Found UZBL fifo in %s.' % file)
-    return fifo
-
-
-def browser_fifo(data):
-    f = open(fifo, 'a')
-    f.write('%s\n' % data)
-    f.close()
 
 
 def browser_socket(command, timeout=0.5):
@@ -260,8 +231,6 @@ def browser_reload(force=False):
     else:
         reload_command = 'reload_ign_cache'
 
-    browser_fifo(reload_command)
-
 
 def browser_clear():
     """Clear the browser if necessary.
@@ -286,7 +255,6 @@ def browser_url(url):
         logging.exception('browser socket dead, restarting browser')
         global fifo, browser_pid
         browser_pid = load_browser().pid
-        fifo = get_fifo()
         disable_browser_status()
 
     global current_browser_url
@@ -294,13 +262,11 @@ def browser_url(url):
     if url == current_browser_url:
         logging.debug("Already showing %s, keeping it." % url)
         return
-    browser_fifo('set uri = %s' % url)
     current_browser_url = url
 
 
 def disable_browser_status():
     logging.debug('Disabled status-bar in browser')
-    browser_fifo('set show_status = 0')
 
 
 def view_image(uri, asset_id, duration):
@@ -461,14 +427,11 @@ if __name__ == "__main__":
     logging.debug('Getting browser PID.')
     browser_pid = run_browser.pid
 
-    logging.debug('Getting FIFO.')
-    fifo = get_fifo()
 
     logging.debug('Disable the browser status bar.')
     disable_browser_status()
 
     if not settings['verify_ssl']:
-        browser_fifo('set ssl_verify = 0')
 
 
     # Wait until initialized (Pro only).
@@ -484,11 +447,9 @@ if __name__ == "__main__":
             status = json.load(status_file)
 
         if not did_show_pin and not did_show_claimed and status.get('pin'):
-            browser_fifo('''js showPin("%s")''' % status.get('pin').replace('"', '\\"'))
             did_show_pin = True
 
         if not did_show_claimed and status.get('claimed'):
-            browser_fifo('''js showUpdating()''')
             did_show_claimed = True
 
         logging.debug('Waiting for node to be initialized.')
