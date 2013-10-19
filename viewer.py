@@ -187,16 +187,9 @@ def browser_url(url, cb=lambda _: True, force=False):
         logging.info('current url is %s', current_browser_url)
 
 
-def view_image(uri, asset_id, duration):
-    logging.debug('Displaying image %s for %s seconds.' % (uri, duration))
-
-        logging.debug('Displaying uri %s for %s seconds.' % (uri, duration))
-
-        image_tmp_page = html_templates.image_page(uri, asset_id)
-
-        browser_url(image_tmp_page)
-
-        sleep(int(duration))
+def view_image(uri):
+    browser_clear()
+    browser_send('js window.setimg("{0}")'.format(uri), cb=lambda b: 'COMMAND_EXECUTED' in b and 'setimg' in b)
 
 
 def view_video(uri):
