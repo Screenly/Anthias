@@ -1,0 +1,32 @@
+# common directory locations
+set prefix      = @(echo $PREFIX)@
+set data_home   = @(echo $XDG_DATA_HOME)@
+set cache_home  = @(echo $XDG_CACHE_HOME)@
+set config_home = @(echo $XDG_CONFIG_HOME)@
+
+# Interface paths.
+set fifo_dir   = /tmp
+set socket_dir = /tmp
+set shell_cmd       = sh -c
+
+set on_event        = request ON_EVENT
+
+set scripts_dir      = @data_home/uzbl:@prefix/share/uzbl/examples/data:scripts
+
+# These handlers can't be moved to the new event system yet as we don't
+# support events that can wait for a response from a script.
+set scheme_handler      = sync_spawn @scripts_dir/scheme.py
+#set request_handler     = sync_spawn @scripts_dir/request.py
+set authentication_handler = sync_spawn @scripts_dir/auth.py
+set download_handler    = sync_spawn @scripts_dir/download.sh
+
+# Custom CSS can be defined here, including link follower hint styles
+set stylesheet_uri = file://@config_home/uzbl/style.css
+set show_status       = 0
+set useragent         = Uzbl (Webkit @{WEBKIT_MAJOR}.@{WEBKIT_MINOR}) (@(+uname -sm)@ [@ARCH_UZBL])
+
+# Set it to certificates store of your distribution, or your own CAfile.
+set ssl_ca_file = /etc/ssl/certs/ca-certificates.crt
+set ssl_verify = 1
+# Example SSL error handler:
+@on_event   LOAD_ERROR    js var patt=new RegExp('SSL handshake failed'); if (patt.test('%3')) {alert ('%3');}
