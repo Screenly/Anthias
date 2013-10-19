@@ -193,48 +193,15 @@ def view_image(uri):
 
 
 def view_video(uri):
+    logging.debug('Displaying video %s', uri)
 
-    ## For Raspberry Pi
     if arch == 'armv6l':
-        logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % uri)
-
-            run = omxplayer(uri, o=settings['audio_output'], _bg=True)
-
-        # Wait until omxplayer is starting before clearing the browser. This minimises delay between
-        # web and image content. Omxplayer will run on top of the browser so the delay in clearing
-        # won't be visible. This minimises delay between web and video.
-        browser_clear()
-        run.wait()
-
-        if run.exit_code != 0:
-            logging.debug("Unclean exit: " + str(run))
-
-        # Clean up after omxplayer
-        omxplayer_logfile = HOME + 'omxplayer.log'
-        if path.isfile(omxplayer_logfile):
-            remove(omxplayer_logfile)
-
-    ## For x86
-    elif arch in ['x86_64', 'x86_32']:
-        logging.debug('Displaying video %s. Detected x86. Using mplayer.' % uri)
-
-            run = mplayer(uri, fs=True, nosound=True, _bg=True)
-
-        browser_clear()
-        run.wait()
-
-        if run.exit_code != 0:
-            logging.debug("Unclean exit: " + str(run))
-
-
-def view_web(url, duration):
-        logging.debug('Displaying url %s for %s seconds.' % (url, duration))
-
-        browser_url(url)
-
-        sleep(int(duration))
+        run = sh.omxplayer(uri, o=settings['audio_output'], _bg=True)
     else:
+        run = sh.mplayer(uri, '-nosound', _bg=True)
 
+    browser_clear(force=True)
+    run.wait()
 
 
 def check_update():
