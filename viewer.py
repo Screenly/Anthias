@@ -179,33 +179,20 @@ def load_browser():
 
 
 
-def browser_clear():
-    """Clear the browser if necessary.
-
-    Call this function right before displaying now browser content (with feh or omx).
+def browser_clear(force=False):
+    """Load a black page. Default cb waits for the page to load."""
     browser_url(BLACK_PAGE, force=force, cb=lambda buf: 'LOAD_FINISH' in buf and BLACK_PAGE in buf)
 
-    When a web assset is loaded into the browser, it's not cleared after the duration but instead
-    remains displayed until the next asset is ready to show. This minimises the amount of transition
-    time - in the case where the next asset is also web content the browser is never cleared,
-    and in other cases it's cleared as late as possible.
 
-    """
-
-    if current_browser_url != black_page:
-        browser_url(black_page)
-
-
-def browser_url(url):
-        browser_pid = load_browser().pid
-        disable_browser_status()
-
+def browser_url(url, cb=lambda _: True, force=False):
     global current_browser_url
 
-    if url == current_browser_url:
-        logging.debug("Already showing %s, keeping it." % url)
-        return
-    current_browser_url = url
+    if url == current_browser_url and not force:
+        logging.debug('Already showing %s, keeping it.', current_browser_url)
+    else:
+        current_browser_url = url
+        browser_send('uri ' + current_browser_url, cb=cb)
+        logging.info('current url is %s', current_browser_url)
 
 
 def disable_browser_status():
