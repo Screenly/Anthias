@@ -28,7 +28,6 @@ import assets_helper
 # Define to none to ensure we refresh
 # the settings.
 last_settings_refresh = None
-is_pro_init = None
 current_browser_url = None
 
 # Detect the architecture and load the proper video player
@@ -41,15 +40,6 @@ elif arch in ['x86_64', 'x86_32']:
 
 BLACK_PAGE = '/tmp/screenly_html/black_page.html'
 
-
-def get_is_pro_init():
-    """
-    Function to handle first-run on Screenly Pro
-    """
-    if path.isfile(path.join(settings.get_configdir(), 'not_initialized')):
-        return False
-    else:
-        return True
 
 
 def sigusr1(signum, frame):
@@ -145,23 +135,13 @@ def load_browser(url=None):
     global browser, current_browser_url
     logging.info('Loading browser...')
 
-    global is_pro_init, current_browser_url
-    is_pro_init = get_is_pro_init()
-    if not is_pro_init:
-        logging.debug('Detected Pro initiation cycle.')
     if browser:
         logging.info('killing previous uzbl %s', browser.pid)
         browser.process.kill()
 
-        # Wait for the intro file to exist (if it doesn't)
-        intro_file = path.join(settings.get_configdir(), 'intro.html')
-        while not path.isfile(intro_file):
-            logging.debug('intro.html missing. Going to sleep.')
-            sleep(0.5)
     if not url is None:
         current_browser_url = url
 
-        browser_load_url = 'file://' + intro_file
     # --config=-       read commands (and config) from stdin
     # --print-events   print events to stdout
     # ---uri=URI       URI to load on start
@@ -323,23 +303,44 @@ def reload_settings():
 
 
 if __name__ == "__main__":
+def pro_init():
+    """Function to handle first-run on Screenly Pro"""
+    is_pro_init = path.isfile(path.join(settings.get_configdir(), 'not_initialized'))
+    intro_file = path.join(settings.get_configdir(), 'intro.html')
 
     HOME = getenv('HOME', '/home/pi/')
+    if is_pro_init:
+        logging.debug('Detected Pro initiation cycle.')
+        while not path.isfile(intro_file):
+            logging.debug('intro.html missing. Going to sleep.')
+            sleep(5)
+        load_browser(url=intro_file)
+    else:
+        return False
 
     # Install signal handlers
     signal.signal(signal.SIGUSR1, sigusr1)
     signal.signal(signal.SIGUSR2, sigusr2)
+    status_path = path.join(settings.get_configdir(), 'setup_status.json')
+    while is_pro_init:
+        with open(status_path, 'rb') as status_file:
+            status = json.load(status_file)
 
     # Before we start, reload the settings.
     reload_settings()
+        browser_send('js showUpdating()' if status['claimed'] else
+                     'js showPin("{0}")'.format(status['pin']))
 
     global db_conn
     db_conn = db.conn(settings['database'])
+        logging.debug('Waiting for node to be initialized.')
+        sleep(5)
 
     # Create folder to hold HTML-pages
     html_folder = '/tmp/screenly_html/'
     if not path.isdir(html_folder):
         makedirs(html_folder)
+    return True
 
 
 
@@ -352,29 +353,16 @@ if __name__ == "__main__":
             sleep(0.5)
 
 
-    # Wait until initialized (Pro only).
-    did_show_pin = False
-    did_show_claimed = False
-    while not get_is_pro_init():
-        # Wait for the status page to fully load.
-            logging.debug("Waiting for intro page to load...")
-            sleep(1)
 
-        with open(path.join(settings.get_configdir(), 'setup_status.json'), 'rb') as status_file:
-            status = json.load(status_file)
 
-        if not did_show_pin and not did_show_claimed and status.get('pin'):
-            did_show_pin = True
 
-        if not did_show_claimed and status.get('claimed'):
-            did_show_claimed = True
 
-        logging.debug('Waiting for node to be initialized.')
-        sleep(1)
     html_templates.black_page(BLACK_PAGE)
 
 
     scheduler = Scheduler()
+    if pro_init():
+        return
 
     # Infinite loop.
     logging.debug('Entering infinite loop.')
