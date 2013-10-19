@@ -39,6 +39,7 @@ elif arch in ['x86_64', 'x86_32']:
     from sh import mplayer
 
 
+BLACK_PAGE = '/tmp/screenly_html/black_page.html'
 
 
 def get_is_pro_init():
@@ -158,10 +159,6 @@ def load_browser():
 
         browser_load_url = 'file://' + intro_file
 
-    elif settings['show_splash']:
-        browser_load_url = "http://%s:%s/splash_page" % (settings.get_listen_ip(), settings.get_listen_port())
-    else:
-        browser_load_url = black_page
 
     geom = [l for l in sh.xwininfo('-root').split("\n") if 'geometry' in l][0].split('y ')[1]
     browser = sh.Command('uzbl-browser')(g=geom, uri=browser_load_url, _bg=True)
@@ -186,6 +183,7 @@ def browser_clear():
     """Clear the browser if necessary.
 
     Call this function right before displaying now browser content (with feh or omx).
+    browser_url(BLACK_PAGE, force=force, cb=lambda buf: 'LOAD_FINISH' in buf and BLACK_PAGE in buf)
 
     When a web assset is loaded into the browser, it's not cleared after the duration but instead
     remains displayed until the next asset is ready to show. This minimises the amount of transition
@@ -348,8 +346,6 @@ if __name__ == "__main__":
     if not path.isdir(html_folder):
         makedirs(html_folder)
 
-    # Set up HTML templates
-    black_page = html_templates.black_page()
 
     # Fire up the browser
     run_browser = load_browser()
@@ -387,10 +383,8 @@ if __name__ == "__main__":
 
         logging.debug('Waiting for node to be initialized.')
         sleep(1)
+    html_templates.black_page(BLACK_PAGE)
 
-    # Bring up the blank page (in case there are only videos).
-    logging.debug('Loading blank page.')
-    view_web(black_page, 1)
 
     scheduler = Scheduler()
 
