@@ -6,12 +6,11 @@ __copyright__ = "Copyright 2012-2013, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 from datetime import datetime, timedelta
-from glob import glob
 from os import path, getenv, remove, makedirs
 from os import stat as os_stat, utime, system, kill
 from platform import machine
 from random import shuffle
-from requests import get as req_get, head as req_head
+from requests import get as req_get
 from time import sleep, time
 import json
 import logging
@@ -20,19 +19,20 @@ import signal
 
 from settings import settings
 import html_templates
-
 from utils import url_fails
-
 import db
 import assets_helper
-# Define to none to ensure we refresh
-# the settings.
-last_settings_refresh = None
-current_browser_url = None
 
 BLACK_PAGE = '/tmp/screenly_html/black_page.html'
+WATCHDOG_PATH = '/tmp/screenly.watchdog'
 SCREENLY_HTML = '/tmp/screenly_html/'
+LOAD_SCREEN = '/screenly/loading.jpg'
+UZBLRC = '/screenly/misc/uzbl.rc'
+EMPTY_PL_DELAY = 5  # secs
 
+last_settings_refresh = None
+current_browser_url = None
+browser = None
 
 
 def sigusr1(signum, frame):
@@ -112,16 +112,11 @@ def generate_asset_list():
 
 
 def watchdog():
-    """
-    Notify the watchdog file to be used with the watchdog-device.
-    """
-
-    watchdog = '/tmp/screenly.watchdog'
-    if not path.isfile(watchdog):
-        open(watchdog, 'w').close()
+    """Notify the watchdog file to be used with the watchdog-device."""
+    if not path.isfile(WATCHDOG_PATH):
+        open(WATCHDOG_PATH, 'w').close()
     else:
-        utime(watchdog, None)
-
+        utime(WATCHDOG_PATH, None)
 
 
 def load_browser(url=None):
