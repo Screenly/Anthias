@@ -174,11 +174,21 @@ def load_browser(url=None):
     browser_send(uzbl_rc)
 
 
+def browser_send(command, cb=lambda _: True):
+    if not (browser is None) and browser.process.alive:
+        while not browser.process._pipe_queue.empty():  # flush stdout
+            browser.next()
 
     if settings['show_splash']:
         # Show splash screen for 60 seconds.
         sleep(60)
+        browser.process.stdin.put(command + '\n')
+        while True:  # loop until cb returns True
+            if cb(browser.next()):
+                break
     else:
+        logging.info('browser found dead, restarting')
+        load_browser()
 
 
 def browser_clear(force=False):
