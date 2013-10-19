@@ -82,7 +82,7 @@ class Scheduler(object):
             return None
         idx = self.index
         self.index = (self.index + 1) % self.nassets
-        logging.debug('get_next_asset counter %d returning asset %d of %d' % (self.counter, idx + 1, self.nassets))
+        logging.debug('get_next_asset counter %s returning asset %s of %s', self.counter, idx + 1, self.nassets)
         if settings['shuffle_playlist'] and self.index == 0:
             self.counter += 1
         return self.assets[idx]
@@ -90,7 +90,7 @@ class Scheduler(object):
     def refresh_playlist(self):
         logging.debug('refresh_playlist')
         time_cur = datetime.utcnow()
-        logging.debug('refresh: counter: (%d) deadline (%s) timecur (%s)' % (self.counter, self.deadline, time_cur))
+        logging.debug('refresh: counter: (%s) deadline (%s) timecur (%s)', self.counter, self.deadline, time_cur)
         if self.dbisnewer():
             self.update_playlist()
         elif settings['shuffle_playlist'] and self.counter >= 5:
@@ -105,7 +105,7 @@ class Scheduler(object):
         self.gentime = time()
         self.counter = 0
         self.index = 0
-        logging.debug('update_playlist done, count %d, counter %d, index %d, deadline %s' % (self.nassets, self.counter, self.index, self.deadline))
+        logging.debug('update_playlist done, count %s, counter %s, index %s, deadline %s', self.nassets, self.counter, self.index, self.deadline)
 
     def dbisnewer(self):
         # get database file last modification time
@@ -120,7 +120,7 @@ def generate_asset_list():
     logging.info('Generating asset-list...')
     playlist = assets_helper.get_playlist(db_conn)
     deadline = sorted([asset['end_date'] for asset in playlist])[0] if len(playlist) > 0 else None
-    logging.debug('generate_asset_list deadline: %s' % deadline)
+    logging.debug('generate_asset_list deadline: %s', deadline)
 
     if settings['shuffle_playlist']:
         shuffle(playlist)
