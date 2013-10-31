@@ -6,16 +6,15 @@ __copyright__ = "Copyright 2012-2013, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 from datetime import datetime, timedelta
-from os import path, getenv, remove, makedirs
-from os import stat as os_stat, utime, system, kill
+from os import path, getenv, utime
 from platform import machine
 from random import shuffle
 from requests import get as req_get
 from time import sleep, time
-import json
+from json import load as json_load
+from signal import signal, SIGUSR1, SIGUSR2
 import logging
 import sh
-import signal
 
 from settings import settings
 import html_templates
@@ -247,7 +246,7 @@ def pro_init():
     status_path = path.join(settings.get_configdir(), 'setup_status.json')
     while is_pro_init:
         with open(status_path, 'rb') as status_file:
-            status = json.load(status_file)
+            status = json_load(status_file)
 
         browser_send('js showUpdating()' if status['claimed'] else
                      'js showPin("{0}")'.format(status['pin']))
@@ -299,15 +298,13 @@ def setup():
     HOME = getenv('HOME', '/home/pi')
     arch = machine()
 
-    signal.signal(signal.SIGUSR1, sigusr1)
-    signal.signal(signal.SIGUSR2, sigusr2)
+    signal(SIGUSR1, sigusr1)
+    signal(SIGUSR2, sigusr2)
 
     load_settings()
     db_conn = db.conn(settings['database'])
 
-    if not path.isdir(SCREENLY_HTML):
-        makedirs(SCREENLY_HTML)
-
+    sh.mkdir(SCREENLY_HTML, p=True)
     html_templates.black_page(BLACK_PAGE)
 
 
