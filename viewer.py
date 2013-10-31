@@ -257,40 +257,37 @@ def pro_init():
     return True
 
 
-def asset_loop():
-    scheduler = Scheduler()
-    logging.debug('Entering infinite loop.')
-    while True:
-        check_update()
-        asset = scheduler.get_next_asset()
+def asset_loop(scheduler):
+    check_update()
+    asset = scheduler.get_next_asset()
 
-        if asset is None:
-            logging.info('Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY)
-            view_image(HOME + LOAD_SCREEN)
-            sleep(EMPTY_PL_DELAY)
+    if asset is None:
+        logging.info('Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY)
+        view_image(HOME + LOAD_SCREEN)
+        sleep(EMPTY_PL_DELAY)
 
-        elif path.isfile(asset['uri']) or not url_fails(asset['uri']):
-            name, mime, uri = asset['name'], asset['mimetype'], asset['uri']
-            logging.info('Showing asset %s (%s)', name, mime)
-            logging.debug('Asset URI %s', uri)
-            watchdog()
+    elif path.isfile(asset['uri']) or not url_fails(asset['uri']):
+        name, mime, uri = asset['name'], asset['mimetype'], asset['uri']
+        logging.info('Showing asset %s (%s)', name, mime)
+        logging.debug('Asset URI %s', uri)
+        watchdog()
 
-            if 'image' in mime:
-                view_image(uri)
-            elif 'web' in mime:
-                browser_url(uri)
-            elif 'video' in mime:
-                view_video(uri)
-            else:
-                logging.error('Unknown MimeType %s', mime)
-
-            if 'image' in mime or 'web' in mime:
-                duration = int(asset['duration'])
-                logging.info('Sleeping for %s', duration)
-                sleep(duration)
+        if 'image' in mime:
+            view_image(uri)
+        elif 'web' in mime:
+            browser_url(uri)
+        elif 'video' in mime:
+            view_video(uri)
         else:
-            logging.info('Asset %s at %s is not available, skipping.', asset['name'], asset['uri'])
-            sleep(0.5)
+            logging.error('Unknown MimeType %s', mime)
+
+        if 'image' in mime or 'web' in mime:
+            duration = int(asset['duration'])
+            logging.info('Sleeping for %s', duration)
+            sleep(duration)
+    else:
+        logging.info('Asset %s at %s is not available, skipping.', asset['name'], asset['uri'])
+        sleep(0.5)
 
 
 def setup():
@@ -319,7 +316,10 @@ def main():
     if settings['show_splash']:
         sleep(60)
 
-    asset_loop()
+    scheduler = Scheduler()
+    logging.debug('Entering infinite loop.')
+    while True:
+        asset_loop(scheduler)
 
 
 if __name__ == "__main__":
