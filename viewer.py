@@ -30,7 +30,6 @@ LOAD_SCREEN = '/screenly/loading.jpg'
 UZBLRC = '/screenly/misc/uzbl.rc'
 EMPTY_PL_DELAY = 5  # secs
 
-last_settings_refresh = None
 current_browser_url = None
 browser = None
 
@@ -46,10 +45,8 @@ def sigusr1(signum, frame):
 
 def sigusr2(signum, frame):
     """Reload settings"""
-    global last_settings_refresh
     logging.info("USR2 received, reloading settings.")
-    last_settings_refresh = None
-    reload_settings()
+    load_settings()
 
 
 class Scheduler(object):
@@ -227,24 +224,10 @@ def check_update():
         return False
 
 
-def reload_settings():
-    """
-    Reload settings if the timestamp of the
-    settings file is newer than the settings
-    file loaded in memory.
-    """
-
-    settings_file = settings.get_configfile()
-    settings_file_mtime = path.getmtime(settings_file)
-    settings_file_timestamp = datetime.fromtimestamp(settings_file_mtime)
-
-    if not last_settings_refresh or settings_file_timestamp > last_settings_refresh:
-        settings.load()
-
+def load_settings():
+    """Load settings and set the log level."""
+    settings.load()
     logging.getLogger().setLevel(logging.DEBUG if settings['debug_logging'] else logging.INFO)
-
-    global last_setting_refresh
-    last_setting_refresh = datetime.utcnow()
 
 
 def pro_init():
@@ -319,7 +302,7 @@ def setup():
     signal.signal(signal.SIGUSR1, sigusr1)
     signal.signal(signal.SIGUSR2, sigusr2)
 
-    reload_settings()
+    load_settings()
     db_conn = db.conn(settings['database'])
 
     if not path.isdir(SCREENLY_HTML):
