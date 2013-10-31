@@ -39,7 +39,7 @@ def sigusr1(signum, frame):
     omxplayer is killed to skip any currently playing video assets.
     """
     logging.info('USR1 received, skipping.')
-    sh.killall('omxplayer.bin')
+    sh.killall('omxplayer.bin', _ok_code=[1])
 
 
 def sigusr2(signum, frame):
