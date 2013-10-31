@@ -22,12 +22,14 @@ from utils import url_fails
 import db
 import assets_helper
 
+SPLASH_DELAY = 60  # secs
+EMPTY_PL_DELAY = 5  # secs
+
 BLACK_PAGE = '/tmp/screenly_html/black_page.html'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 SCREENLY_HTML = '/tmp/screenly_html/'
-LOAD_SCREEN = '/screenly/loading.jpg'
-UZBLRC = '/screenly/misc/uzbl.rc'
-EMPTY_PL_DELAY = 5  # secs
+LOAD_SCREEN = '/screenly/loading.jpg'  # relative to $HOME
+UZBLRC = '/screenly/misc/uzbl.rc'  # relative to $HOME
 
 current_browser_url = None
 browser = None
@@ -128,7 +130,6 @@ def load_browser(url=None):
 
     # --config=-       read commands (and config) from stdin
     # --print-events   print events to stdout
-    # ---uri=URI       URI to load on start
     browser = sh.Command('uzbl-browser')(print_events=True, config='-', uri=current_browser_url, _bg=True)
     logging.info('Browser loading %s. Running as PID %s.', current_browser_url, browser.pid)
 
@@ -314,7 +315,7 @@ def main():
     load_browser(url=url)
 
     if settings['show_splash']:
-        sleep(60)
+        sleep(SPLASH_DELAY)
 
     scheduler = Scheduler()
     logging.debug('Entering infinite loop.')
