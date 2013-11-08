@@ -30,6 +30,7 @@ WATCHDOG_PATH = '/tmp/screenly.watchdog'
 SCREENLY_HTML = '/tmp/screenly_html/'
 LOAD_SCREEN = '/screenly/loading.jpg'  # relative to $HOME
 UZBLRC = '/screenly/misc/uzbl.rc'  # relative to $HOME
+INTRO = '/screenly/intro-template.html'
 
 current_browser_url = None
 browser = None
@@ -233,14 +234,10 @@ def load_settings():
 def pro_init():
     """Function to handle first-run on Screenly Pro"""
     is_pro_init = path.isfile(path.join(settings.get_configdir(), 'not_initialized'))
-    intro_file = path.join(settings.get_configdir(), 'intro.html')
 
     if is_pro_init:
         logging.debug('Detected Pro initiation cycle.')
-        while not path.isfile(intro_file):
-            logging.debug('intro.html missing. Going to sleep.')
-            sleep(5)
-        load_browser(url=intro_file)
+        load_browser(url=HOME+INTRO)
     else:
         return False
 
@@ -249,8 +246,12 @@ def pro_init():
         with open(status_path, 'rb') as status_file:
             status = json_load(status_file)
 
-        browser_send('js showUpdating()' if status['claimed'] else
-                     'js showPin("{0}")'.format(status['pin']))
+        if status.get('neterror', False):
+            browser_send('js showNetError()')
+        elif status['claimed']:
+            browser_send('js showUpdating()')
+        else:
+            browser_send('js showPin("{0}")'.format(status['pin']))
 
         logging.debug('Waiting for node to be initialized.')
         sleep(5)
