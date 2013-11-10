@@ -1,0 +1,181 @@
+!!! 5
+%html
+
+  %head
+    %meta(charset="utf-8")
+    %title Screenly OSE - Edit Schedule
+
+    %link(href="/static/css/bootstrap.css", rel="stylesheet")
+    %link(href="/static/css/datepicker.css", rel="stylesheet")
+    %link(href="/static/css/timepicker.css", rel="stylesheet")
+    %link(href="/static/css/toggle-switch.css", rel="stylesheet")
+    %link(href="/static/css/screenly.css", rel="stylesheet")
+
+    / :javascript
+    /   var default_duration = ${default_duration};
+
+    %script(src="/static/js/underscore-1.5.2.js")
+
+    %script(src="/static/js/jquery-1.9.1.min.js")
+    %script(src="/static/js/jquery.iframe-transport.js")
+
+    %script(src="/static/js/backbone-0.9.10.min.js") /needs jquery
+
+    %script(src="/static/js/jquery-ui-1.10.1.custom.min.js")
+    %script(src="/static/js/jquery.fileupload.js") /needs jqueryui.widget
+
+    %script(src="/static/js/bootstrap.min.js") /needs jquery
+    %script(src="/static/js/bootstrap-datepicker.js")
+    %script(src="/static/js/bootstrap-timepicker.js")
+
+    %script(src="/static/js/moment.js")
+    %script(src="/static/js/screenly-ose.js")
+
+    %script(type="text/template", id="schedule-row-template")
+      %td.schedule_row_name
+        %img(src="/static/img/drag-handle.png")
+        %i.schedule-icon
+        :plain
+          <%= name %>
+      %td.schedule_row_buttons
+      	%button.edit-schedule-button.btn(type="button")
+      		%i.icon-wrench
+      	%button.delete-schedule-button.btn(type="button", dataTitle="Are you sure?", dataPlacement="left", dataHtml="true", dataTrigger="manual")
+          %i.icon-trash
+
+    %script(type="text/template", id="confirm-delete-template")
+      .clearfix
+        .pull-left
+          %a.confirm-delete.btn.btn-medium.btn-danger(href="#") Delete
+        .pull-right
+          %a.cancel-delete.btn.btn-medium(href="#") Cancel
+
+    %script(type="text/template", id="schedule-modal-template")
+      .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
+        %form.form-horizontal#add-form
+          .modal-header
+            %h3#modalLabel Add Schedule
+          .modal-body
+            %input(type="hidden", name="asset_id")
+            %fieldset
+              .control-group.name
+                %label.control-label Name
+                .controls
+                  %input.span4(type="text", name="name")
+            %hr
+            %h4 Schedule Summary
+            %fieldset
+              .control-group.start_date
+                %label.control-label Start Date / Time
+                .controls
+                  %input.span2.date(type="text", name="start_date_date")
+                  %input.span2.time(type="text", name="start_date_time")
+                  %input(type="hidden", name="start_date")
+              .control-group.end_date
+                %label.control-label End Date / Time
+                .controls
+                  %input.span2.date(type="text", name="end_date_date")
+                  %input.span2.time(type="text", name="end_date_time")
+                  %input(type="hidden", name="end_date")
+              .control-group.duration
+                %label.control-label Duration
+                .controls
+                  %input.span1(type="number", min=1, name="duration")
+                  seconds
+              .control-group.priority
+                %label.control-label Priority
+                .controls
+                  %input.span1(type="number", max=10, name="priority")
+                  From 0 through to 10
+              .control-group
+                %label.control-label Repeat
+                .controls.repeat
+                  %label.nocache-toggle.checkbox.toggle.well
+                    %input(type="checkbox", name="repeat")
+                    %p
+                      %span.on Yes
+                      %span.off No
+                    %a.slide-button.btn.btn-primary
+            .accordion
+              .accordion-group
+                .accordion-heading
+                  %i.icon-play.unrotated
+                  %a.advanced-toggle(href="#") Advanced Pattern Options
+                .collapse-advanced.accordion-body.collapse
+                  .accordion-inner
+                    .form-inline
+                      %fieldset
+                        .control-group.days
+                          %label.control-label Days of Week
+                          .controls
+                            %select(multiple="mltiple")
+                              %option(value="monday") Monday
+                              %option(value="tuesday") Tuesday
+                              %option(value="tuesday") Wednesday
+                              %option(value="tuesday") Thursday
+                              %option(value="tuesday") Friday
+                              %option(value="tuesday") Saturday
+                              %option(value="tuesday") Sunday
+          .modal-footer
+            .pull-left.progress.progress-striped.active(style="display:none")
+              .bar
+            %input.btn.cancel(type="button", value="Cancel")
+            %input.btn.btn-primary(type="submit", value="Save")
+
+
+  %body
+    #request-error.navbar.navbar-fixed-top
+    .navbar.navbar-fixed-top
+      .navbar-inner
+        .container
+          %a.brand(href="/")
+            %strong Screenly
+            %span OSE
+
+          %ul.nav.pull-right
+            - if not up_to_date:
+              %li.update-available
+                %a(href="http://www.screenlyapp.com/ose.html#upgrade")
+                  %i.icon-circle-arrow-down.icon-white
+                  Update Available
+            %li
+              %a(href="/settings")
+                %i.icon-cog.icon-white
+                Settings
+            %li.divider-vertical
+            %li
+              %a(href="/system_info")
+                %i.icon-tasks.icon-white
+                System Info
+
+    .container
+      .row
+        .span12
+          %h1.page-header
+            .pull-right
+              %a#add-schedule-button.btn.btn-primary(href="#")
+                %i.icon-plus.icon-white
+                Add Schedule
+            Schedule Overview
+
+      #schedules.row
+        .span12
+          %section
+            .header
+              Schedules
+            %table.table.table-striped.active-table
+              %thead(style="display:none")
+                %tr
+                  %th.schedule_row_name Name
+                  %th(style="width:21%") Start
+                  %th(style="width:21%") End
+                  %th(style="width:13%")
+                  %th(style="width:7%")
+              %tbody#schedules-tbody
+
+    #footer
+      .container
+        .copy
+          &copy; <strong>2012-2013.</strong> WireLoad, Inc.
+        %a(id="wireload-logo", href="http://wireload.net/")
+          %img(src="/static/img/wireload-logo.png", alt="WireLoad")

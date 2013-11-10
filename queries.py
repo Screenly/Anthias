@@ -11,3 +11,6 @@ remove = 'delete from assets where asset_id=?'
 update = lambda keys: 'update assets set ' + quest(keys) + ' where asset_id=?'
 
 read_schedule = lambda keys: 'select ' + comma(keys) + ' from schedules where asset_id=?'
+create_schedule = lambda keys: 'insert into schedules (' + comma(keys) + ') values (' + comma(['?'] * len(keys)) + ')'
+update_schedule = lambda keys: 'update schedules set ' + quest(keys) + ' where id=?'
+remove_schedule = 'delete from schedules where id=?'

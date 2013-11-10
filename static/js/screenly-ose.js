@@ -6,7 +6,7 @@
 
 
 (function() {
-  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test,
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, routes, Schedule, EditScheduleView, ScheduleRowView, Schedules, SchedulesView
     _this = this,
     __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     __hasProp = {}.hasOwnProperty,
@@ -95,7 +95,7 @@
         uri: '',
         start_date: now(),
         end_date: (moment().add('days', 7)).toDate(),
-        duration: default_duration,
+        duration: 0,
         is_enabled: 0,
         nocache: 0
       };
@@ -498,6 +498,9 @@
       this["delete"] = function(e) {
         return AssetRowView.prototype.delete.apply(_this, arguments);
       };
+      this.redirectSchedule = function(e) {
+        return AssetRowView.prototype.redirectSchedule.apply(_this, arguments);
+      };
       this.edit = function(e) {
         return AssetRowView.prototype.edit.apply(_this, arguments);
       };
@@ -552,8 +555,15 @@
     AssetRowView.prototype.events = {
       'change .is_enabled-toggle input': 'toggleIsEnabled',
       'click .edit-asset-button': 'edit',
-      'click .delete-asset-button': 'showPopover'
+      'click .delete-asset-button': 'showPopover',
+      'click .edit-schedule-button': 'redirectSchedule'
     };
+
+    AssetRowView.prototype.redirectSchedule = function(e) {
+      var assetID = this.model.get('asset_id');
+      window.location = '/asset/'+assetID+'/schedule';
+      e.preventDefault();
+    }
 
     AssetRowView.prototype.toggleIsEnabled = function(e) {
       var save, val,
@@ -701,6 +711,319 @@
 
   })(Backbone.View);
 
+  EditScheduleView = (function(_super) {
+    __extends(EditScheduleView, _super);
+
+    function EditScheduleView() {
+      var _this = this;
+      this.initialize = function(options) {
+        return EditScheduleView.prototype.initialize.apply(_this, arguments);
+      }
+      this.cancel = function(options) {
+        return EditScheduleView.prototype.cancel.apply(_this, arguments);
+      }
+      this.render = function(options) {
+        return EditScheduleView.prototype.render.apply(_this, arguments);
+      }
+      this.save = function(e) {
+        return EditScheduleView.prototype.save.apply(_this, arguments);
+      };
+      this.$f = function(field) {
+        return EditScheduleView.prototype.$f.apply(_this, arguments);
+      };
+      this.$fieldValue = function() {
+        var field, val;
+        field = arguments[0], val = 2 <= arguments.length ? __slice.call(arguments, 1) : [];
+        return EditScheduleView.prototype.$fieldValue.apply(_this, arguments);
+      };
+      return EditScheduleView.__super__.constructor.apply(this, arguments);
+    }
+
+    EditScheduleView.prototype.$f = function(field) {
+      return this.$("[name='" + field + "']");
+    };
+
+    EditScheduleView.prototype.$fieldValue = function() {
+      var field, val, _ref;
+      field = arguments[0], val = 2 <= arguments.length ? __slice.call(arguments, 1) : [];
+      return (_ref = this.$f(field)).val.apply(_ref, val);
+    };
+
+    EditScheduleView.prototype.events = {
+      'submit form': 'save',
+      'click .advanced-toggle': 'toggleAdvanced',
+      'click .cancel': 'cancel',
+    }
+
+    EditScheduleView.prototype.viewmodel = function() {
+      var field, which, _i, _j, _len, _len1, _ref, _ref1, _results;
+      _ref = ['start', 'end'];
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        which = _ref[_i];
+        this.$fieldValue("" + which + "_date", (new Date((this.$fieldValue("" + which + "_date_date")) + " " + (this.$fieldValue("" + which + "_date_time")))).toISOString());
+      }
+      _ref1 = this.model.fields;
+      _results = [];
+      for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
+        field = _ref1[_j];
+        if (!(this.$f(field)).prop('disabled')) {
+          _results.push(this.model.set(field, this.$fieldValue(field), {
+            silent: true
+          }));
+        }
+      }
+      return _results;
+    };
+
+    EditScheduleView.prototype.initialize = function(options){
+      var _this = this;
+      if(!this.model.get("asset_id")){
+        this.model.set({asset_id: API.schedules.asset_id})
+      }
+      this.edit = options.edit;
+      ($('body')).append(this.$el.html(get_template('schedule-modal')));
+      (this.$el.children(":first")).modal();
+      (this.$('input[name="repeat"]')).prop('checked', this.model.get('repeat'));
+      this.model.bind('change', this.render);
+      this.render();
+      _.delay((function() {
+        return (_this.$f('uri')).focus();
+      }), 300);
+      return false;
+    }
+
+    EditScheduleView.prototype.render = function(){
+      var d, f, field, which, _i, _j, _k, _len, _len1, _len2, _ref, _ref1, _ref2;
+      if (this.edit) {
+        _ref = 'name'.split(' ');
+        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+          f = _ref[_i];
+          (this.$(f)).attr('disabled', true);
+        }
+      }
+      _ref1 = this.model.fields;
+        for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
+          field = _ref1[_j];
+          if ((this.$fieldValue(field)) !== this.model.get(field)) {
+            this.$fieldValue(field, this.model.get(field));
+          }
+        }
+        _ref2 = ['start', 'end'];
+        for (_k = 0, _len2 = _ref2.length; _k < _len2; _k++) {
+          which = _ref2[_k];
+          d = date_to(this.model.get("" + which + "_date"));
+          this.$fieldValue("" + which + "_date_date", d.date());
+          (this.$f("" + which + "_date_date")).datepicker({
+            autoclose: true
+          });
+          (this.$f("" + which + "_date_date")).datepicker('setValue', d.date());
+          this.$fieldValue("" + which + "_date_time", d.time());
+        }
+      this.delegateEvents();
+      return false; 
+    }
+
+    EditScheduleView.prototype.save = function(e) {
+      var save,
+        _this = this;
+      e.preventDefault();
+      this.viewmodel();
+      save = null;
+      save = this.model.save();
+      save.done(function(data) {
+        _this.model.id = data.asset_id;
+        if (!_this.model.collection) {
+          _this.collection.add(_this.model);
+        }
+        (_this.$el.children(":first")).modal('hide');
+        _.extend(_this.model.attributes, data);
+        if (!_this.edit) {
+          return _this.model.collection.add(_this.model);
+        }
+      });
+      return false;
+    }
+
+    EditScheduleView.prototype.cancel = function() {
+      return (this.$el.children(":first")).modal('hide');
+    }
+
+    EditScheduleView.prototype.toggleAdvanced = function() {
+      (this.$('.icon-play')).toggleClass('rotated');
+      (this.$('.icon-play')).toggleClass('unrotated');
+      return (this.$('.collapse-advanced')).collapse('toggle');
+    };
+    return EditScheduleView;
+  })(Backbone.View);
+
+  
+  ScheduleRowView = (function(_super) {
+    __extends(ScheduleRowView, _super);
+
+    function ScheduleRowView() {
+      var _this = this;
+      this.render = function() {
+        return ScheduleRowView.prototype.render.apply(_this, arguments);
+      };
+      this["delete"] = function(e) {
+        return ScheduleRowView.prototype.delete.apply(_this, arguments);
+      };
+      this.edit = function(e) {
+        return ScheduleRowView.prototype.edit.apply(_this, arguments);
+      };
+      this.initialize = function(options) {
+        return ScheduleRowView.prototype.initialize.apply(_this, arguments);
+      };
+      this.showDeletePopover = function() {
+        return ScheduleRowView.prototype.showDeletePopover.apply(_this, arguments);
+      };
+      this.hideDeletePopover = function() {
+        return ScheduleRowView.prototype.hideDeletePopover.apply(_this, arguments);
+      };
+      return ScheduleRowView.__super__.constructor.apply(this, arguments);
+    }
+
+    ScheduleRowView.prototype["delete"] = function(e) {
+      var xhr,
+        _this = this;
+      this.hideDeletePopover();
+      if((xhr = this.model.destroy()) === !false) {
+        xhr.done(function() {
+          return _this.remove();
+        });
+      } else {
+        this.remove();
+      }
+      alert('hello');
+      return false;
+    }
+
+    ScheduleRowView.prototype.edit = function(e) {
+      new EditScheduleView({
+        model: this.model,
+        edit: true
+      });
+      return false;
+    };
+
+    ScheduleRowView.prototype.events = {
+      'click .edit-schedule-button': 'edit',
+      'click .delete-schedule-button': 'showDeletePopover',
+    }
+
+    ScheduleRowView.prototype.initialize = function(options) {
+      return this.template = get_template('schedule-row');
+    }
+
+    ScheduleRowView.prototype.render = function() {
+      var json;
+      this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
+         name: json.name,
+      })));
+      (this.$(".delete-schedule-button")).popover({
+        content: get_template('confirm-delete')
+      });
+      this.$el.prop('id', this.model.get('id'));
+      return this.el;
+    }
+
+    ScheduleRowView.prototype.showDeletePopover = function(){
+      (this.$(".delete-schedule-button")).popover('show');
+      ($('.confirm-delete')).click(this["delete"]);
+      ($(window)).one('click', this.hideDeletePopover);
+      return false;
+    }
+
+    ScheduleRowView.prototype.hideDeletePopover = function(){
+      (this.$(".delete-schedule-button")).popover('hide');
+      return false;
+    }
+
+    ScheduleRowView.prototype.tagName = "tr";
+
+    return ScheduleRowView;
+  })(Backbone.View);
+
+  SchedulesView = (function(_super) {
+
+    __extends(SchedulesView, _super);
+
+    function SchedulesView() {
+      var _this = this;
+      this.render = function() {
+        return SchedulesView.prototype.render.apply(_this, arguments);
+      };
+      this.initialize = function(options) {
+        return SchedulesView.prototype.initialize.apply(_this, arguments);
+      };
+      return SchedulesView.__super__.constructor.apply(this, arguments);
+    }
+
+    SchedulesView.prototype.initialize = function(options) {
+      var event, _i, _len, _ref;
+      _ref = 'add remove sync'.split(' ');// reset
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        event = _ref[_i];
+        this.collection.bind(event, this.render);
+      }
+    };
+
+    SchedulesView.prototype.render = function(){
+      this.$("#schedules-tbody").html('');
+      this.collection.each(function(model) {
+        return (_this.$("#schedules-tbody")).append((new ScheduleRowView({
+          model: model
+        })).render());
+      });
+      return this.el;
+    };
+
+    return SchedulesView;
+
+  })(Backbone.View);
+
+  API.Schedule = Schedule = (function(_super) {
+    __extends(Schedule, _super);
+
+    function Schedule() {
+      var _this = this;
+      this.defaults = function() {
+        return Schedule.prototype.defaults.apply(_this, arguments);
+      }
+      return Schedule.__super__.constructor.apply(this, arguments);
+    }
+    Schedule.prototype.idAttribute = "id";
+
+    Schedule.prototype.fields = 'asset_id name start_date end_date duration repeat priority pattern_days'.split(' ');
+
+    Schedule.prototype.defaults = function(){
+      return {
+        name: '',
+        start_date: now(),
+        end_date: now(),
+        //duration: default_duration,
+        priority: 0,
+     };
+    };
+    return Schedule;
+
+  })(Backbone.Model);
+
+  API.Schedules = Schedules = (function(_super) {
+
+    __extends(Schedules, _super);
+
+    function Schedules(model, options) {
+      Schedules.prototype.url = "/api/schedules/"+ options.asset_id;
+      Schedules.prototype.asset_id = options.asset_id;
+      return Schedules.__super__.constructor.apply(this, arguments);
+    }
+    Schedules.prototype.model = Schedule;
+
+    return Schedules;
+
+  })(Backbone.Collection);
+
   API.App = App = (function(_super) {
 
     __extends(App, _super);
@@ -710,7 +1033,7 @@
       this.add = function(e) {
         return App.prototype.add.apply(_this, arguments);
       };
-      this.initialize = function() {
+      this.inititalize = function() {
         return App.prototype.initialize.apply(_this, arguments);
       };
       return App.__super__.constructor.apply(this, arguments);
@@ -728,21 +1051,51 @@
       ($(window)).ajaxSuccess(function(data) {
         return ($('#request-error')).html('');
       });
-      (API.assets = new Assets()).fetch();
-      return API.assetsView = new AssetsView({
-        collection: API.assets,
-        el: this.$('#assets')
+      Routes = Backbone.Router.extend({
+        routes: {
+          "asset/:asset_id/schedule": "loadschedule",
+          "*path": "loadAssets"
+        },
+        loadschedule: function(asset_id){
+          (API.schedules = new Schedules(Schedule, {'asset_id':asset_id})).fetch();
+        },
+        loadAssets: function(){
+          (API.assets = new Assets()).fetch();
+        },
       });
+      this.routes = new Routes();
+      Backbone.history.start({pushState: true});
+      if(API.assets){
+        return API.assetsView = new AssetsView({
+          collection: API.assets,
+          el: this.$('#assets')
+        });
+      } else if (API.schedules) {
+        return API.schedulesView = new SchedulesView({
+          collection: API.schedules,
+          el: this.$('#schedules')
+        });
+      }
     };
 
     App.prototype.events = {
-      'click #add-asset-button': 'add'
+      'click #add-asset-button': 'add',
+      'click #add-schedule-button': 'addSchedule'
     };
 
     App.prototype.add = function(e) {
       new EditAssetView({
         model: new Asset({}, {
           collection: API.assets
+        })
+      });
+      return false;
+    };
+
+    App.prototype.addSchedule = function(e) {
+      new EditScheduleView({
+        model: new Schedule({}, {
+          collection: API.schedules
         })
       });
       return false;

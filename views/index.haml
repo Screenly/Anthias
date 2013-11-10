@@ -43,7 +43,9 @@
       %td(style="width:21%")
         :plain
           <%= end_date %>
-      %td.asset_row_btns(style="width:13%")
+      %td.asset_row_btns(style="width:21%")
+        %button.edit-schedule-button.btn(type="button")
+          %i.icon-time
         %button.edit-asset-button.btn(type="button")
           %i.icon-pencil
         %button.delete-asset-button.btn(type="button", dataTitle="Are you sure?", dataPlacement="left", dataHtml="true", dataTrigger="manual")
@@ -121,6 +123,8 @@
                     %option(value="webpage") Webpage
 
             %hr
+            %h4 Asset Schedule Summary
+            %input(type="hidden", name="schedules_int", value="1")
             %fieldset
               .control-group.start_date
                 %label.control-label Start Date
@@ -196,7 +200,7 @@
               %a#add-asset-button.btn.btn-primary(href="#")
                 %i.icon-plus.icon-white
                 Add Asset
-            Schedule Overview
+            Asset Overview
 
       #assets.row
         .span12
@@ -225,11 +229,6 @@
                   %th(style="width:13%")
                   %th(style="width:7%")
               %tbody#inactive-assets
-
-      %hr
-      %span Want to get more out of Screenly?
-      %a.brand(href="http://www.screenlyapp.com/?utm_source=Screenly-OSE&utm_medium=root-page&utm_campaign=OSE")
-        %strong Try Screenly Pro.
 
     #footer
       .container

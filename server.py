@@ -195,6 +195,49 @@ def prepare_asset(request):
         raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
 
 
+def prepare_schedule(request):
+    data = request.POST or request.FORM or {}
+
+    if 'model' in data:
+        data = json.loads(data['model'])
+
+    def get(key):
+        val = data.get(key, '')
+        return val.strip() if isinstance(val, basestring) else val
+
+    if all([get('name')]):
+
+        schedule = {
+            'asset_id' : get('asset_id'),
+            'name': get('name').decode('UTF-8'),
+            'duration': get('duration'),
+            'repeat': get('repeat'),
+            'priority': get('priority'),
+            'pattern_days': get('pattern_days'),
+        }
+
+        if get('start_date'):
+            schedule['start_date'] = datetime.strptime(get('start_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
+        else:
+            schedule['start_date'] = ""
+
+        if get('end_date'):
+            schedule['end_date'] = datetime.strptime(get('end_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
+        else:
+            schedule['end_date'] = ""
+
+    else:
+        raise Exception("Please provide a name")
+
+    return schedule
+
+
+
+@route('/api/schedules/:asset_id', method="GET")
+def api_schedules(asset_id):
+    schedules = schedules_helper.read(db_conn, asset_id)
+    return make_json_response(schedules)
+
 @route('/api/assets', method="GET")
 def api_assets():
     assets = assets_helper.read(db_conn)
@@ -255,10 +298,25 @@ def playlist_order():
     for play_order, asset_id in enumerate(request.POST.get('ids', '').split(',')):
         assets_helper.update(db_conn, asset_id, {'asset_id': asset_id, 'play_order': play_order})
 
-@route('/api/schedules/:asset_id', method="GET")
-def api_schedules(asset_id):
-    schedules = schedules_helper.read(db_conn, asset_id)
-    return make_json_response(schedules)
+################################
+# Schedule Routes
+
+@route('/api/schedules/:asset_id/:schedule_id', method=["POST", "PUT"])
+@api
+def edit_schedule(asset_id, schedule_id):
+    return schedules_helper.update(db_conn, schedule_id, prepare_schedule(request))
+
+@route('/api/schedules/:schedule_id', method="POST")
+@api
+def add_asset(schedule_id):
+    return schedules_helper.create(db_conn, prepare_schedule(request))
+
+@route('/api/schedules/:asset_id/:schedule_id', method="DELETE")
+@api
+def remove_asset(asset_id, schedule_id):
+    schedules_helper.delete(db_conn, schedule_id)
+    response.status = 204  # return an OK with no content
+
 
 ################################
 # Views
