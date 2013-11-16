@@ -731,6 +731,9 @@
       this.$f = function(field) {
         return EditScheduleView.prototype.$f.apply(_this, arguments);
       };
+      this.toggleRepeat = function(e) {
+        return EditScheduleView.prototype.toggleRepeat.apply(_this, arguments);
+      };
       this.$fieldValue = function() {
         var field, val;
         field = arguments[0], val = 2 <= arguments.length ? __slice.call(arguments, 1) : [];
@@ -753,6 +756,17 @@
       'submit form': 'save',
       'click .advanced-toggle': 'toggleAdvanced',
       'click .cancel': 'cancel',
+      'change .repeat-toggle input': 'toggleRepeat',
+    }
+
+    EditScheduleView.prototype.toggleRepeat = function() {
+      var save, val,
+        _this = this;
+      val = (1 + this.model.get('repeat')) % 2;
+      this.model.set({
+        repeat: val
+      });
+      alert('hello');
     }
 
     EditScheduleView.prototype.viewmodel = function() {
