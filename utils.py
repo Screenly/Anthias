@@ -5,6 +5,7 @@ from netifaces import ifaddresses
 from sh import grep, netstat
 from urlparse import urlparse
 from datetime import timedelta
+from settings import settings
 
 # This will only work on the Raspberry Pi,
 # so let's wrap it in a try/except so that
@@ -88,7 +89,7 @@ def json_dump(obj):
 def url_fails(url):
     try:
         if validate_url(url):
-            obj = requests.head(url, allow_redirects=True, timeout=10)
+            obj = requests.head(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl'])
             assert obj.status_code == 200
     except (requests.ConnectionError, requests.exceptions.Timeout, AssertionError):
         return True
