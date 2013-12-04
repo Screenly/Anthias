@@ -9,8 +9,8 @@ sudo chown -R pi:pi $SCREENLY
 sudo chown -R pi:pi /home/pi/screenly_assets
 sudo chown -R pi:pi /home/pi/.screenly
 
-echo "Installing feh (if missing)..."
-sudo apt-get -y -qq install feh
+echo "Removing feh (no longer needed)..."
+sudo apt-get -y -qq remove feh
 
 echo "Installing libx11-dev (if missing)..."
 sudo apt-get -y -qq install libx11-dev
