@@ -73,7 +73,8 @@ class Scheduler(object):
         logging.debug('refresh_playlist')
         time_cur = datetime.utcnow()
         logging.debug('refresh: counter: (%s) deadline (%s) timecur (%s)', self.counter, self.deadline, time_cur)
-        if self.dbisnewer():
+        if self.get_db_mtime() > self.last_update_db_mtime:
+            logging.debug('updating playlist due to database modification')
             self.update_playlist()
         elif settings['shuffle_playlist'] and self.counter >= 5:
             self.update_playlist()
@@ -82,20 +83,19 @@ class Scheduler(object):
 
     def update_playlist(self):
         logging.debug('update_playlist')
+        self.last_update_db_mtime = self.get_db_mtime()
         (self.assets, self.deadline) = generate_asset_list()
         self.nassets = len(self.assets)
-        self.gentime = time()
         self.counter = 0
         self.index = 0
         logging.debug('update_playlist done, count %s, counter %s, index %s, deadline %s', self.nassets, self.counter, self.index, self.deadline)
 
-    def dbisnewer(self):
+    def get_db_mtime(self):
         # get database file last modification time
         try:
-            db_mtime = path.getmtime(settings['database'])
+            return path.getmtime(settings['database'])
         except:
-            db_mtime = 0
-        return db_mtime >= self.gentime
+            return 0
 
 
 def generate_asset_list():
