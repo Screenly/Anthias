@@ -177,13 +177,20 @@ def view_image(uri):
 
 
 def view_video(uri, duration):
-    video_timeout = VIDEO_TIMEOUT + int(duration.split('.')[0]) if duration else None
-    logging.debug('Displaying video %s for %s ', uri, video_timeout)
+    logging.debug('Displaying video %s for %s ', uri, duration)
 
     if arch == 'armv6l':
-        run = sh.timeout(video_timeout, 'omxplayer', uri, o=settings['audio_output'], _bg=True, _ok_code=[0, 124])
+        player_args = ['omxplayer', uri]
+        player_kwargs = {'o': settings['audio_output'], '_bg': True, '_ok_code': [0, 124]}
+        player_kwargs['_ok_code'] = [0, 124]
     else:
-        run = sh.mplayer(uri, '-nosound', _bg=True)
+        player_args = ['mplayer', uri, '-nosound']
+        player_kwargs = {'_bg': True}
+
+    if duration and duration != 'N/A':
+        player_args = ['timeout', VIDEO_TIMEOUT + int(duration.split('.')[0])] + player_args
+
+    run = sh.Command(player_args[0])(*player_args[1:], **player_kwargs)
 
     browser_clear(force=True)
     run.wait()
