@@ -193,7 +193,9 @@ def view_video(uri, duration):
     run = sh.Command(player_args[0])(*player_args[1:], **player_kwargs)
 
     browser_clear(force=True)
-    run.wait()
+    while run.process.alive:
+        watchdog()
+        sleep(1)
     if run.exit_code == 124:
         logging.error('omxplayer timed out')
 
