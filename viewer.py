@@ -35,6 +35,7 @@ INTRO = '/screenly/intro-template.html'
 current_browser_url = None
 browser = None
 
+VIDEO_TIMEOUT=20  # secs
 
 def sigusr1(signum, frame):
     """
@@ -175,16 +176,19 @@ def view_image(uri):
     browser_send('js window.setimg("{0}")'.format(uri), cb=lambda b: 'COMMAND_EXECUTED' in b and 'setimg' in b)
 
 
-def view_video(uri):
-    logging.debug('Displaying video %s', uri)
+def view_video(uri, duration):
+    video_timeout = VIDEO_TIMEOUT + int(duration.split('.')[0]) if duration else None
+    logging.debug('Displaying video %s for %s ', uri, video_timeout)
 
     if arch == 'armv6l':
-        run = sh.omxplayer(uri, o=settings['audio_output'], _bg=True)
+        run = sh.timeout(video_timeout, 'omxplayer', uri, o=settings['audio_output'], _bg=True, _ok_code=[0, 124])
     else:
         run = sh.mplayer(uri, '-nosound', _bg=True)
 
     browser_clear(force=True)
     run.wait()
+    if run.exit_code == 124:
+        logging.error('omxplayer timed out')
 
 
 def check_update():
@@ -279,7 +283,7 @@ def asset_loop(scheduler):
         elif 'web' in mime:
             browser_url(uri)
         elif 'video' in mime:
-            view_video(uri)
+            view_video(uri, asset['duration'])
         else:
             logging.error('Unknown MimeType %s', mime)
 
