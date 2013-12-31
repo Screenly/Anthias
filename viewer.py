@@ -259,6 +259,9 @@ def pro_init():
         with open(status_path, 'rb') as status_file:
             status = json_load(status_file)
 
+        browser_send('js showIpMac("%s", "%s")' %
+            (status.get('ip', ''), status.get('mac', '')) )
+
         if status.get('neterror', False):
             browser_send('js showNetError()')
         elif status['claimed']:
