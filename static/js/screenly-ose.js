@@ -6,7 +6,7 @@
 
 
 (function() {
-  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, routes, Schedule, EditScheduleView, ScheduleRowView, Schedules, SchedulesView
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, bool_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, routes, Schedule, EditScheduleView, ScheduleRowView, Schedules, SchedulesView
     _this = this,
     __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     __hasProp = {}.hasOwnProperty,
@@ -30,6 +30,16 @@
       }
     };
   };
+
+  API.bool_to = bool_to = function(boolVal) {
+    if(boolVal == 0) {
+      return "No";
+    } else if(boolVal == 1) {
+      return "Yes";
+    } else{
+      return "";
+    }
+  }
 
   now = function() {
     return new Date();
@@ -760,13 +770,12 @@
     }
 
     EditScheduleView.prototype.toggleRepeat = function() {
-      var save, val,
+      var val,
         _this = this;
-      val = (1 + this.model.get('repeat')) % 2;
-      this.model.set({
-        repeat: val
-      });
-      alert('hello');
+      val = $("input[name='repeat']").val();
+      val = 1 - val;
+      $("input[name='repeat']").val(val);
+      return true;
     }
 
     EditScheduleView.prototype.viewmodel = function() {
@@ -908,7 +917,6 @@
       } else {
         this.remove();
       }
-      alert('hello');
       return false;
     }
 
@@ -933,6 +941,8 @@
       var json;
       this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
          name: json.name,
+         start_date: (date_to(json.start_date)).string(),
+         repeat: (bool_to(json.repeat)),
       })));
       (this.$(".delete-schedule-button")).popover({
         content: get_template('confirm-delete')
@@ -1015,7 +1025,7 @@
         name: '',
         start_date: now(),
         end_date: now(),
-        //duration: default_duration,
+        repeat: 0,
         priority: 0,
      };
     };
