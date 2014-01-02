@@ -33,10 +33,14 @@
 
     %script(type="text/template", id="schedule-row-template")
       %td.schedule_row_name
-        %img(src="/static/img/drag-handle.png")
-        %i.schedule-icon
         :plain
           <%= name %>
+      %td.schedule_repeat
+        :plain
+          <%= start_date %>
+      %td
+        :plain
+          <%= repeat %>
       %td.schedule_row_buttons
       	%button.edit-schedule-button.btn(type="button")
       		%i.icon-wrench
@@ -156,21 +160,19 @@
               %a#add-schedule-button.btn.btn-primary(href="#")
                 %i.icon-plus.icon-white
                 Add Schedule
-            Schedule Overview
-
+            Asset \Name's\ Schedules
       #schedules.row
         .span12
           %section
             .header
               Schedules
             %table.table.table-striped.active-table
-              %thead(style="display:none")
+              %thead
                 %tr
                   %th.schedule_row_name Name
-                  %th(style="width:21%") Start
-                  %th(style="width:21%") End
-                  %th(style="width:13%")
-                  %th(style="width:7%")
+                  %th Start
+                  %th Repeats
+                  %th(style="width:15%")
               %tbody#schedules-tbody
 
     #footer
