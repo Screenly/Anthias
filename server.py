@@ -431,6 +431,9 @@ if __name__ == "__main__":
             c.execute(queries.exists_table)
             if c.fetchone() is None:
                 c.execute(assets_helper.create_assets_table)
+            c.execute(queries.exists_table_schedule)
+            if c.fetchone() is None:
+                c.execute(schedules_helper.create_schedules_table)
         run(host=settings.get_listen_ip(),
             port=settings.get_listen_port(),
             reloader=True)
