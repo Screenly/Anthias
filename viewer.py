@@ -266,7 +266,7 @@ def pro_init():
             browser_send('js showNetError()')
         elif status['claimed']:
             browser_send('js showUpdating()')
-        else:
+        elif status['pin']:
             browser_send('js showPin("{0}")'.format(status['pin']))
 
         logging.debug('Waiting for node to be initialized.')
