@@ -207,13 +207,15 @@ def prepare_schedule(request):
 
     if all([get('name')]):
 
+        str = ','
         schedule = {
             'asset_id' : get('asset_id'),
             'name': get('name').decode('UTF-8'),
             'duration': get('duration'),
             'repeat': get('repeat'),
             'priority': get('priority'),
-            'pattern_days': get('pattern_days'),
+            'pattern_type': get('pattern_type'),
+            'pattern_days': str.join(get('pattern_days')),
         }
 
         if get('start_date'):
@@ -236,6 +238,8 @@ def prepare_schedule(request):
 @route('/api/schedules/:asset_id', method="GET")
 def api_schedules(asset_id):
     schedules = schedules_helper.read(db_conn, asset_id)
+    for schedule in schedules:
+        schedule['pattern_days'] = schedule['pattern_days'].split(',')
     return make_json_response(schedules)
 
 @route('/api/assets', method="GET")

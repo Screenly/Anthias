@@ -107,19 +107,25 @@
                   %a.advanced-toggle(href="#") Advanced Pattern Options
                 .collapse-advanced.accordion-body.collapse
                   .accordion-inner
-                    .form-inline
-                      %fieldset
-                        .control-group.days
-                          %label.control-label Days of Week
-                          .controls
-                            %select(multiple="mltiple")
-                              %option(value="monday") Monday
-                              %option(value="tuesday") Tuesday
-                              %option(value="tuesday") Wednesday
-                              %option(value="tuesday") Thursday
-                              %option(value="tuesday") Friday
-                              %option(value="tuesday") Saturday
-                              %option(value="tuesday") Sunday
+                    %fieldset
+                      .control-group.pattern_type
+                        %label.control-label Pattern Type
+                        .controls
+                          %select.span2(name="pattern_type")
+                            %option(value="daily") Daily
+                            %option(value="weekly") Weekly
+                    %fieldset
+                      .control-group.pattern_days
+                        %label.control-label Days of Week
+                        .controls
+                          %select(multiple="multiple", name="pattern_days")
+                            %option(value="monday") Monday
+                            %option(value="tuesday") Tuesday
+                            %option(value="wednesday") Wednesday
+                            %option(value="thursday") Thursday
+                            %option(value="friday") Friday
+                            %option(value="saturday") Saturday
+                            %option(value="sunday") Sunday
           .modal-footer
             .pull-left.progress.progress-striped.active(style="display:none")
               .bar

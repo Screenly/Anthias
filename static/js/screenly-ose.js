@@ -993,6 +993,7 @@
     };
 
     SchedulesView.prototype.render = function(){
+      this.$(".page-header").html('Hello');
       this.$("#schedules-tbody").html('');
       this.collection.each(function(model) {
         return (_this.$("#schedules-tbody")).append((new ScheduleRowView({
@@ -1018,7 +1019,7 @@
     }
     Schedule.prototype.idAttribute = "id";
 
-    Schedule.prototype.fields = 'asset_id name start_date end_date duration repeat priority pattern_days'.split(' ');
+    Schedule.prototype.fields = 'asset_id name start_date end_date duration repeat priority pattern_type pattern_days'.split(' ');
 
     Schedule.prototype.defaults = function(){
       return {
@@ -1027,6 +1028,7 @@
         end_date: now(),
         repeat: 0,
         priority: 0,
+        pattern_type: '',
      };
     };
     return Schedule;

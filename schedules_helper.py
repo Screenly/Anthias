@@ -2,15 +2,16 @@ import db
 import queries
 import datetime
 
-FIELDS = ["id", "asset_id", "name", "start_date", "end_date", "duration", "repeat", "priority", "pattern_days"]
+FIELDS = ["id", "asset_id", "name", "start_date", "end_date", "duration", "repeat", "priority", "pattern_type", "pattern_days"] 
 
-create_schedules_table = 'CREATE TABLE schedules(id integer primary key autoincrement, asset_id text, name text, start_date timestamp, end_date timestamp, duration integer, repeat integer default 0, priority integer default 0, pattern_days text)'
+create_schedules_table = 'CREATE TABLE schedules(id integer primary key autoincrement, asset_id text, name text, start_date timestamp, end_date timestamp, duration integer, repeat integer default 0, priority integer default 0, pattern_days text, pattern_type text)'
+
 
 get_time = datetime.datetime.utcnow
 
 
-def is_active(asset, at_time=None):
-    """Accepts an asset dictionary and determines if it
+def is_active(schedule, at_time=None):
+    """Accepts a schedule dictionary and determines if it
     is active at the given time. If no time is specified, 'now' is used.
 
     >>> asset = {'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d', 'mimetype': u'web', 'name': u'WireLoad', 'end_date': datetime.datetime(2013, 1, 19, 23, 59), 'uri': u'http://www.wireload.net', 'duration': u'5', 'is_enabled': True, 'nocache': 0, 'play_order': 1, 'start_date': datetime.datetime(2013, 1, 16, 0, 0)};
@@ -25,15 +26,19 @@ def is_active(asset, at_time=None):
 
     """
 
-    if asset['is_enabled'] and asset['start_date'] and asset['end_date']:
-        at = at_time or get_time()
-        return asset['start_date'] < at and asset['end_date'] > at
+    if schedule['start_date'] and schedule['end_date']:
+        if scheule['repeat']:
+            at = at_time or get_time()
+            return schedule['start_date'] < at and schedule['end_date'] > at
+        # schedule repeats
+        # get value of repeats_when with case statement
+
     return False
 
 
-def get_playlist(conn):
-    """Returns all currently active assets."""
-    return filter(is_active, read(conn))
+def get_schedules(asset_id, conn):
+    """Returns all currently active schedules for an asset."""
+    return filter(is_active, read(conn, asset_id))
 
 
 def mkdict(keys):
@@ -43,8 +48,8 @@ def mkdict(keys):
 
 def create(conn, schedule):
     """
-    Create a database record for an asset.
-    Returns the asset.
+    Create a database record for an schedule.
+    Returns the schedule.
     Asset's is_active field is updated before returning.
     """
     with db.commit(conn) as c:
@@ -56,7 +61,6 @@ def read(conn, asset_id, keys=FIELDS):
     """
     Fetch one or more schedules from the database.
     Returns a list of dicts or one dict.
-    Assets' is_active field is updated before returning.
     """
     schedules = []
     mk = mkdict(keys)
@@ -78,6 +82,6 @@ def update(conn, id, schedule):
 
 
 def delete(conn, schedule_id):
-    """Remove an asset from the database."""
+    """Remove a schedule from the database."""
     with db.commit(conn) as c:
         c.execute(queries.remove_schedule, [schedule_id])
