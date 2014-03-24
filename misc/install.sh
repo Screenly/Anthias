@@ -26,7 +26,7 @@ echo "Installing dependencies..."
 #
 # If we dont find the LSB signature, insert the stuff after the first line which we expect to be #!/bin/sh
 grep -q "BEGIN INIT INFO" /etc/init.d/mathkernel || \
-sed -e '2i### BEGIN INIT INFO\
+sudo sed -e '2i### BEGIN INIT INFO\
 # Provides:          mathkernel\
 # Required-Start:    $syslog\
 # Required-Stop:     $syslog\
