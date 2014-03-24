@@ -24,9 +24,10 @@ echo "Installing dependencies..."
 # "There is a loop between service watchdog and mathkernel if stopped ..."
 # The fix is described in the 7th post in http://www.raspberrypi.org/forum/viewtopic.php?f=28&t=66059
 #
-# If we dont find the LSB signature, insert the stuff after the first line which we expect to be #!/bin/sh
-grep -q "BEGIN INIT INFO" /etc/init.d/mathkernel || \
-sudo sed -e '2i### BEGIN INIT INFO\
+# Check, and if we dont find the LSB signature, insert the stuff after the first line which we expect to be #!/bin/sh
+if grep -q "BEGIN INIT INFO" /etc/init.d/mathkernel ; then
+  sudo cp /etc/init.d/mathkernel /etc/init.d/mathkernel.modified_by_screenly
+  sudo sed -e '2i### BEGIN INIT INFO\
 # Provides:          mathkernel\
 # Required-Start:    $syslog\
 # Required-Stop:     $syslog\
@@ -38,6 +39,7 @@ sudo sed -e '2i### BEGIN INIT INFO\
 ### END INIT INFO\
 #\
 # rest of file here' -i /etc/init.d/mathkernel
+fi
 
 sudo apt-get -y -qq install git-core python-pip python-netifaces python-simplejson python-imaging python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev watchdog chkconfig feh > /dev/null
 
