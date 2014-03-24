@@ -19,6 +19,28 @@ echo "(This might take a while.)"
 sudo apt-get -y -qq upgrade > /dev/null
 
 echo "Installing dependencies..."
+
+# The latest raspbian (2014-01-07-wheezy-raspbian) causes the following error when installing watchdog:
+# "There is a loop between service watchdog and mathkernel if stopped ..."
+# The fix is described in the 7th post in http://www.raspberrypi.org/forum/viewtopic.php?f=28&t=66059
+#
+# Check, and if we dont find the LSB signature, insert the stuff after the first line which we expect to be #!/bin/sh
+if grep -q "BEGIN INIT INFO" /etc/init.d/mathkernel ; then
+  sudo cp /etc/init.d/mathkernel /etc/init.d/mathkernel.modified_by_screenly
+  sudo sed -e '2i### BEGIN INIT INFO\
+# Provides:          mathkernel\
+# Required-Start:    $syslog\
+# Required-Stop:     $syslog\
+# Default-Start:     2 3 4 5\
+# Default-Stop:      0 1 6\
+# Short-Description: mathkernel\
+# Description:       This file should be used to construct scripts to be\
+#                    placed in /etc/init.d.\
+### END INIT INFO\
+#\
+# rest of file here' -i /etc/init.d/mathkernel
+fi
+
 sudo apt-get -y -qq install git-core python-pip python-netifaces python-simplejson python-imaging python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev watchdog chkconfig feh > /dev/null
 
 echo "Downloading Screenly-OSE..."
