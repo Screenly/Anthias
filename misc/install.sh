@@ -26,7 +26,7 @@ echo "Installing dependencies..."
 #
 # Check, and if we dont find the LSB signature, insert the stuff after the first line which we expect to be #!/bin/sh
 if grep -v -q "BEGIN INIT INFO" /etc/init.d/mathkernel ; then
-  sudo cp /etc/init.d/mathkernel /etc/init.d/mathkernel.modified_by_screenly
+  sudo cp /etc/init.d/mathkernel /etc/init.d-mathkernel.modified_by_screenly
   sudo sed -e '2i### BEGIN INIT INFO\
 # Provides:          mathkernel\
 # Required-Start:    $syslog\
