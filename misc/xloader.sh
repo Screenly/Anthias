@@ -9,11 +9,21 @@ xset -dpms          # Disable DPMS (Energy Star) features
 xset s noblank      # Don't blank the video device
 export NOREFRESH=1  # Fix white flickering in omxplayer
 
-sleep 5
+# Wait for server.py to be up and running (maximum 25s)
+RETRIES=1
+MAXRETRIES=5
+while [[ $RETRIES < $MAXRETRIES ]]; do
+  echo "Waiting for server.py to start (retry $RETRIES / $MAXRETRIES)" >> $LOG
+  if [[ $(pgrep -f server.py) == "" ]]; then
+    RETRIES=$(($RETRIES+1))
+    sleep 5
+  else
+    RETRIES=$MAXRETRIES
+  fi
+done
 
 echo "Launching infinite loop..." >> $LOG
-while true
-do
+while true; do
 	# Clean up in case of an unclean exit
 	echo "Cleaning up..." >> $LOG
 	killall uzbl-core
