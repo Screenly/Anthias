@@ -14,7 +14,8 @@ RETRIES=1
 MAXRETRIES=5
 while [[ $RETRIES < $MAXRETRIES ]]; do
   echo "Waiting for server.py to start (retry $RETRIES / $MAXRETRIES)" >> $LOG
-  if [[ $(pgrep -f server.py) == "" ]]; then
+  SERVERPID=$(pgrep -f server.py)
+  if [ -x $SERVERPID ]; then
     RETRIES=$(($RETRIES+1))
     sleep 5
   else
