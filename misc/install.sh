@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Installing Screenly OSE (beta)"
+echo "Installing Screenly OSE"
 
 ## Simple disk storage check. Naively assumes root partition holds all system data.
 ROOT_AVAIL=$(df -k / | tail -n 1 | awk {'print $4'})
