@@ -5,7 +5,7 @@ from nose.tools import ok_, eq_
 import mock
 
 import os
-import time
+
 
 class ViewerTestCase(object):
     def setup(self):
