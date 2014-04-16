@@ -94,7 +94,7 @@ def url_fails(url):
     try:
         if validate_url(url):
             obj = requests.head(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl'])
-            assert (obj.status_code == 200 or obj.status_code == 405)
+            assert obj.status_code in (200, 405)
     except (requests.ConnectionError, requests.exceptions.Timeout, AssertionError):
         return True
     else:
