@@ -8,7 +8,7 @@ mock==1.0.1
 netifaces==0.8
 nose==1.2.1
 pytz==2012d
-requests==0.14.0
+requests==2.2.1
 sh==1.08
 six==1.2.0
 uptime==2.0.2
