@@ -9,6 +9,9 @@ xset -dpms          # Disable DPMS (Energy Star) features
 xset s noblank      # Don't blank the video device
 export NOREFRESH=1  # Fix white flickering in omxplayer
 
+# Give the server an honest chance to start.
+sleep 2
+
 # Wait for server.py to be up and running (maximum 25s)
 RETRIES=1
 MAXRETRIES=5
