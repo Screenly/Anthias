@@ -59,7 +59,13 @@ class EditAssetView extends Backbone.View
     (@$ 'input[name="nocache"]').prop 'checked', @model.get 'nocache'
     (@$ '.modal-header .close').remove()
     (@$el.children ":first").modal()
+
+    @modelBackup = @model.clone()
+    @modelBackup.set 'start_date', new Date(@model.get('start_date'))
+    @modelBackup.set 'end_date', new Date(@model.get('end_date'))
+
     @model.bind 'change', @render
+
     @render()
     @validate()
     _.delay (=> (@$f 'uri').focus()), 300
@@ -179,7 +185,7 @@ class EditAssetView extends Backbone.View
 
 
   cancel: (e) =>
-    @model.set @model.previousAttributes()
+    @model.set @modelBackup.previousAttributes()
     unless @edit then @model.destroy()
     (@$el.children ":first").modal 'hide'
 
