@@ -318,7 +318,7 @@ class AssetsView extends Backbone.View
     (@$ "##{which}-assets").html '' for which in ['active', 'inactive']
 
     @collection.each (model) =>
-      which = if model.get 'is_active' then 'active' else 'inactive'
+      which = if model.get 'is_enabled' then 'active' else 'inactive'
       (@$ "##{which}-assets").append (new AssetRowView model: model).render()
 
     for which in ['inactive', 'active']

@@ -633,7 +633,7 @@
       }
       this.collection.each((function(_this) {
         return function(model) {
-          which = model.get('is_active') ? 'active' : 'inactive';
+          which = model.get('is_enabled') ? 'active' : 'inactive';
           return (_this.$("#" + which + "-assets")).append((new AssetRowView({
             model: model
           })).render());
