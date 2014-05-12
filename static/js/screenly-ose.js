@@ -115,7 +115,9 @@
 
   })(Backbone.Collection);
 
-  EditAssetView = (function(_super) {
+  API.View = {};
+
+  API.View.EditAssetView = EditAssetView = (function(_super) {
     __extends(EditAssetView, _super);
 
     function EditAssetView() {
@@ -460,7 +462,7 @@
 
   })(Backbone.View);
 
-  AssetRowView = (function(_super) {
+  API.View.AssetRowView = AssetRowView = (function(_super) {
     __extends(AssetRowView, _super);
 
     function AssetRowView() {
@@ -593,7 +595,7 @@
 
   })(Backbone.View);
 
-  AssetsView = (function(_super) {
+  API.View.AssetsView = AssetsView = (function(_super) {
     __extends(AssetsView, _super);
 
     function AssetsView() {
@@ -633,7 +635,7 @@
       }
       this.collection.each((function(_this) {
         return function(model) {
-          which = model.get('is_active') ? 'active' : 'inactive';
+          which = model.get('is_enabled') ? 'active' : 'inactive';
           return (_this.$("#" + which + "-assets")).append((new AssetRowView({
             model: model
           })).render());
@@ -704,11 +706,5 @@
     return App;
 
   })(Backbone.View);
-
-  jQuery(function() {
-    return API.app = new App({
-      el: $('body')
-    });
-  });
 
 }).call(this);
