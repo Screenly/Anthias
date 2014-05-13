@@ -77,7 +77,7 @@
     function Asset() {
       this.rollback = __bind(this.rollback, this);
       this.backup = __bind(this.backup, this);
-      this.is_active = __bind(this.is_active, this);
+      this.active = __bind(this.active, this);
       this.defaults = __bind(this.defaults, this);
       return Asset.__super__.constructor.apply(this, arguments);
     }
@@ -91,6 +91,7 @@
         name: '',
         mimetype: 'webpage',
         uri: '',
+        is_active: false,
         start_date: now(),
         end_date: (moment().add('days', 7)).toDate(),
         duration: default_duration,
@@ -99,7 +100,7 @@
       };
     };
 
-    Asset.prototype.is_active = function() {
+    Asset.prototype.active = function() {
       var at, end_date, start_date;
       if (this.get('is_enabled') && this.get('start_date') && this.get('end_date')) {
         at = now();
@@ -112,12 +113,10 @@
     };
 
     Asset.prototype.backup = function() {
-      this.backup_attributes = this.toJSON();
-      return console.log(this.backup_attributes);
+      return this.backup_attributes = this.toJSON();
     };
 
     Asset.prototype.rollback = function() {
-      console.log(this.backup_attributes);
       if (this.backup_attributes) {
         this.set(this.backup_attributes);
         return this.backup_attributes = void 0;
@@ -143,7 +142,9 @@
 
   })(Backbone.Collection);
 
-  EditAssetView = (function(_super) {
+  API.View = {};
+
+  API.View.EditAssetView = EditAssetView = (function(_super) {
     __extends(EditAssetView, _super);
 
     function EditAssetView() {
@@ -486,7 +487,7 @@
 
   })(Backbone.View);
 
-  AssetRowView = (function(_super) {
+  API.View.AssetRowView = AssetRowView = (function(_super) {
     __extends(AssetRowView, _super);
 
     function AssetRowView() {
@@ -619,7 +620,7 @@
 
   })(Backbone.View);
 
-  AssetsView = (function(_super) {
+  API.View.AssetsView = AssetsView = (function(_super) {
     __extends(AssetsView, _super);
 
     function AssetsView() {
@@ -659,7 +660,7 @@
       }
       this.collection.each((function(_this) {
         return function(model) {
-          which = model.is_active() ? 'active' : 'inactive';
+          which = model.active() ? 'active' : 'inactive';
           return (_this.$("#" + which + "-assets")).append((new AssetRowView({
             model: model
           })).render());
@@ -730,11 +731,5 @@
     return App;
 
   })(Backbone.View);
-
-  jQuery(function() {
-    return API.app = new App({
-      el: $('body')
-    });
-  });
 
 }).call(this);

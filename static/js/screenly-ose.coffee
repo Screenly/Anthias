@@ -34,13 +34,13 @@ API.Asset = class Asset extends Backbone.Model
     name: ''
     mimetype: 'webpage'
     uri: ''
+    is_active: false
     start_date: now()
     end_date: (moment().add 'days', 7).toDate()
     duration: default_duration
     is_enabled: 0
     nocache: 0
-
-  is_active: =>
+  active: =>
     if @get('is_enabled') and @get('start_date') and @get('end_date')
       at = now()
       start_date = new Date(@get('start_date'));
@@ -64,7 +64,8 @@ API.Assets = class Assets extends Backbone.Collection
 
 
 # Views
-class EditAssetView extends Backbone.View
+API.View = {};
+API.View.EditAssetView = class EditAssetView extends Backbone.View
   $f: (field) => @$ "[name='#{field}']" # get field element
   $fv: (field, val...) => (@$f field).val val... # get or set filed value
 
@@ -246,7 +247,7 @@ class EditAssetView extends Backbone.View
     (@$ '.advanced-accordion').toggle has_nocache is on
 
 
-class AssetRowView extends Backbone.View
+API.View.AssetRowView = class AssetRowView extends Backbone.View
   tagName: "tr"
 
   initialize: (options) =>
@@ -318,7 +319,7 @@ class AssetRowView extends Backbone.View
     no
 
 
-class AssetsView extends Backbone.View
+API.View.AssetsView = class AssetsView extends Backbone.View
   initialize: (options) =>
     @collection.bind event, @render for event in ('reset add remove sync'.split ' ')
     @sorted = (@$ '#active-assets').sortable
@@ -334,7 +335,7 @@ class AssetsView extends Backbone.View
     (@$ "##{which}-assets").html '' for which in ['active', 'inactive']
 
     @collection.each (model) =>
-      which = if model.is_active() then 'active' else 'inactive'
+      which = if model.active() then 'active' else 'inactive'
       (@$ "##{which}-assets").append (new AssetRowView model: model).render()
 
     for which in ['inactive', 'active']
@@ -368,7 +369,4 @@ API.App = class App extends Backbone.View
     new EditAssetView model:
       new Asset {}, {collection: API.assets}
     no
-
-
-jQuery -> API.app = new App el: $ 'body'
 
