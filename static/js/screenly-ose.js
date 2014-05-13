@@ -75,6 +75,9 @@
     __extends(Asset, _super);
 
     function Asset() {
+      this.rollback = __bind(this.rollback, this);
+      this.backup = __bind(this.backup, this);
+      this.is_active = __bind(this.is_active, this);
       this.defaults = __bind(this.defaults, this);
       return Asset.__super__.constructor.apply(this, arguments);
     }
@@ -94,6 +97,31 @@
         is_enabled: 0,
         nocache: 0
       };
+    };
+
+    Asset.prototype.is_active = function() {
+      var at, end_date, start_date;
+      if (this.get('is_enabled') && this.get('start_date') && this.get('end_date')) {
+        at = now();
+        start_date = new Date(this.get('start_date'));
+        end_date = new Date(this.get('end_date'));
+        return start_date < at && end_date > at;
+      } else {
+        return false;
+      }
+    };
+
+    Asset.prototype.backup = function() {
+      this.backup_attributes = this.toJSON();
+      return console.log(this.backup_attributes);
+    };
+
+    Asset.prototype.rollback = function() {
+      console.log(this.backup_attributes);
+      if (this.backup_attributes) {
+        this.set(this.backup_attributes);
+        return this.backup_attributes = void 0;
+      }
     };
 
     return Asset;
@@ -160,9 +188,7 @@
       (this.$('input[name="nocache"]')).prop('checked', this.model.get('nocache'));
       (this.$('.modal-header .close')).remove();
       (this.$el.children(":first")).modal();
-      this.modelBackup = this.model.clone();
-      this.modelBackup.set('start_date', new Date(this.model.get('start_date')));
-      this.modelBackup.set('end_date', new Date(this.model.get('end_date')));
+      this.model.backup();
       this.model.bind('change', this.render);
       this.render();
       this.validate();
@@ -383,7 +409,7 @@
     };
 
     EditAssetView.prototype.cancel = function(e) {
-      this.model.set(this.modelBackup.previousAttributes());
+      this.model.rollback();
       if (!this.edit) {
         this.model.destroy();
       }
@@ -633,7 +659,7 @@
       }
       this.collection.each((function(_this) {
         return function(model) {
-          which = model.get('is_enabled') ? 'active' : 'inactive';
+          which = model.is_active() ? 'active' : 'inactive';
           return (_this.$("#" + which + "-assets")).append((new AssetRowView({
             model: model
           })).render());

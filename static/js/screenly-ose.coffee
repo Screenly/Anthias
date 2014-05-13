@@ -40,6 +40,24 @@ API.Asset = class Asset extends Backbone.Model
     is_enabled: 0
     nocache: 0
 
+  is_active: =>
+    if @get('is_enabled') and @get('start_date') and @get('end_date')
+      at = now()
+      start_date = new Date(@get('start_date'));
+      end_date = new Date(@get('end_date'));
+      return start_date < at and end_date > at
+    else
+      return false  
+
+  backup: =>
+    @backup_attributes = @toJSON()
+
+  rollback: =>
+    if @backup_attributes
+      @set @backup_attributes
+      @backup_attributes = undefined
+
+
 API.Assets = class Assets extends Backbone.Collection
   url: "/api/assets"
   model: Asset
@@ -60,9 +78,7 @@ class EditAssetView extends Backbone.View
     (@$ '.modal-header .close').remove()
     (@$el.children ":first").modal()
 
-    @modelBackup = @model.clone()
-    @modelBackup.set 'start_date', new Date(@model.get('start_date'))
-    @modelBackup.set 'end_date', new Date(@model.get('end_date'))
+    @model.backup()
 
     @model.bind 'change', @render
 
@@ -185,7 +201,7 @@ class EditAssetView extends Backbone.View
 
 
   cancel: (e) =>
-    @model.set @modelBackup.previousAttributes()
+    @model.rollback()
     unless @edit then @model.destroy()
     (@$el.children ":first").modal 'hide'
 
@@ -318,7 +334,7 @@ class AssetsView extends Backbone.View
     (@$ "##{which}-assets").html '' for which in ['active', 'inactive']
 
     @collection.each (model) =>
-      which = if model.get 'is_enabled' then 'active' else 'inactive'
+      which = if model.is_active() then 'active' else 'inactive'
       (@$ "##{which}-assets").append (new AssetRowView model: model).render()
 
     for which in ['inactive', 'active']
