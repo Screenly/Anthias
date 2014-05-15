@@ -45,7 +45,7 @@ API.Asset = class Asset extends Backbone.Model
       at = now()
       start_date = new Date(@get('start_date'));
       end_date = new Date(@get('end_date'));
-      return start_date < at and end_date > at
+      return start_date <= at <= end_date
     else
       return false  
 

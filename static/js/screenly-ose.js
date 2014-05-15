@@ -106,7 +106,7 @@
         at = now();
         start_date = new Date(this.get('start_date'));
         end_date = new Date(this.get('end_date'));
-        return start_date < at && end_date > at;
+        return (start_date <= at && at <= end_date);
       } else {
         return false;
       }
