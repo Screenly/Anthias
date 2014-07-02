@@ -101,13 +101,16 @@ class Scheduler(object):
 
 def generate_asset_list():
     logging.info('Generating asset-list...')
-    playlist = assets_helper.get_playlist(db_conn)
-    deadline = sorted([asset['end_date'] for asset in playlist])[0] if len(playlist) > 0 else None
+    
+    now = datetime.utcnow()
+    enabled_assets = [a for a in assets_helper.read(db_conn) if a['is_enabled']]
+    future_dates = [a[k] for a in enabled_assets for k in ['start_date', 'end_date'] if a[k] > now]
+    deadline = sorted(future_dates)[0] if future_dates else None
     logging.debug('generate_asset_list deadline: %s', deadline)
 
+    playlist = assets_helper.get_playlist(db_conn)
     if settings['shuffle_playlist']:
         shuffle(playlist)
-
     return (playlist, deadline)
 
 
