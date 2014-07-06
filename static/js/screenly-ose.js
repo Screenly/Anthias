@@ -214,7 +214,7 @@
         (this.$('.asset-location')).hide();
         (this.$('.asset-location.edit')).show();
       }
-      (this.$('.duration')).toggle((this.model.get('mimetype')) !== 'video');
+      (this.$('.duration')).toggle(true);
       if ((this.model.get('mimetype')) === 'webpage') {
         this.clickTabNavUri();
       }

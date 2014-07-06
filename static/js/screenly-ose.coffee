@@ -95,7 +95,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
       (@$ '#modalLabel').text "Edit Asset"
       (@$ '.asset-location').hide(); (@$ '.asset-location.edit').show()
 
-    (@$ '.duration').toggle ((@model.get 'mimetype') != 'video')
+    (@$ '.duration').toggle (true)
     @clickTabNavUri() if (@model.get 'mimetype') == 'webpage'
 
     for field in @model.fields
