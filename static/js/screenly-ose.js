@@ -464,7 +464,12 @@
       mt = get_mimetype(filename);
       (this.$('#file_upload_label')).text(get_filename(filename));
       if (mt) {
-        return this.$fv('mimetype', mt);
+        this.$fv('mimetype', mt);
+      }
+      if (mt !== "video") {
+        return this.$fv('duration', default_duration);
+      } else {
+        return this.$fv('duration', -1);
       }
     };
 

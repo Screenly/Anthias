@@ -233,6 +233,12 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     mt = get_mimetype filename
     (@$ '#file_upload_label').text (get_filename filename)
     @$fv 'mimetype', mt if mt
+    if mt != "video"
+    	@$fv 'duration', default_duration
+    else
+    	@$fv 'duration', -1 
+
+
 
   toggleAdvanced: =>
     (@$ '.icon-play').toggleClass 'rotated'
