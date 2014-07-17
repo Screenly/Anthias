@@ -469,7 +469,7 @@
       if (mt !== "video") {
         return this.$fv('duration', default_duration);
       } else {
-        return this.$fv('duration', -1);
+        return this.$fv('duration', 0);
       }
     };
 

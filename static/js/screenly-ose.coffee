@@ -236,7 +236,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     if mt != "video"
     	@$fv 'duration', default_duration
     else
-    	@$fv 'duration', -1 
+    	@$fv 'duration', 0 
 
 
 
