@@ -3,7 +3,7 @@
 /* screenly-ose ui */
 
 (function() {
-  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test,
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, viduris,
     __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     __hasProp = {}.hasOwnProperty,
@@ -42,9 +42,16 @@
 
   mimetypes = [['jpg jpeg png pnm gif bmp'.split(' '), 'image'], ['avi mkv mov mpg mpeg mp4 ts flv'.split(' '), 'video']];
 
+  viduris = 'rtsp rtmp'.split(' ');
+
   get_mimetype = (function(_this) {
     return function(filename) {
-      var ext, mt;
+      var ext, match, mt, scheme;
+      scheme = (_.first(filename.split(':'))).toLowerCase();
+      match = __indexOf.call(viduris, scheme) >= 0;
+      if (match) {
+        return 'video';
+      }
       ext = (_.last(filename.split('.'))).toLowerCase();
       mt = _.find(mimetypes, function(mt) {
         return __indexOf.call(mt[0], ext) >= 0;
@@ -58,7 +65,7 @@
   })(this);
 
   url_test = function(v) {
-    return /(http|https):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test(v);
+    return /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test(v);
   };
 
   get_filename = function(v) {
@@ -214,7 +221,7 @@
         (this.$('.asset-location')).hide();
         (this.$('.asset-location.edit')).show();
       }
-      (this.$('.duration')).toggle((this.model.get('mimetype')) !== 'video');
+      (this.$('.duration')).toggle(true);
       if ((this.model.get('mimetype')) === 'webpage') {
         this.clickTabNavUri();
       }
@@ -464,7 +471,12 @@
       mt = get_mimetype(filename);
       (this.$('#file_upload_label')).text(get_filename(filename));
       if (mt) {
-        return this.$fv('mimetype', mt);
+        this.$fv('mimetype', mt);
+      }
+      if (mt !== "video") {
+        return this.$fv('duration', default_duration);
+      } else {
+        return this.$fv('duration', 0);
       }
     };
 
