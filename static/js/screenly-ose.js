@@ -164,6 +164,7 @@
       this.clickTabNavUri = __bind(this.clickTabNavUri, this);
       this.cancel = __bind(this.cancel, this);
       this.validate = __bind(this.validate, this);
+      this.change_mimetype = __bind(this.change_mimetype, this);
       this.change = __bind(this.change, this);
       this.save = __bind(this.save, this);
       this.viewmodel = __bind(this.viewmodel, this);
@@ -279,7 +280,8 @@
       'click .tabnav-file_upload, .tabnav-uri': 'displayAdvanced',
       'click .advanced-toggle': 'toggleAdvanced',
       'paste [name=uri]': 'updateUriMimetype',
-      'change [name=file_upload]': 'updateFileUploadMimetype'
+      'change [name=file_upload]': 'updateFileUploadMimetype',
+      'change [name=mimetype]': 'change_mimetype'
     };
 
     EditAssetView.prototype.save = function(e) {
@@ -357,6 +359,16 @@
         };
       })(this)), 500));
       return this._change.apply(this, arguments);
+    };
+
+    EditAssetView.prototype.change_mimetype = function() {
+      if ((this.$fv('mimetype')) !== "video") {
+        (this.$('.zerohint')).hide();
+        return this.$fv('duration', default_duration);
+      } else {
+        (this.$('.zerohint')).show();
+        return this.$fv('duration', 0);
+      }
     };
 
     EditAssetView.prototype.validate = function(e) {
@@ -473,11 +485,7 @@
       if (mt) {
         this.$fv('mimetype', mt);
       }
-      if (mt !== "video") {
-        return this.$fv('duration', default_duration);
-      } else {
-        return this.$fv('duration', 0);
-      }
+      return this.change_mimetype();
     };
 
     EditAssetView.prototype.toggleAdvanced = function() {

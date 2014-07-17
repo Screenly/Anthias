@@ -137,6 +137,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     'click .advanced-toggle': 'toggleAdvanced'
     'paste [name=uri]': 'updateUriMimetype'
     'change [name=file_upload]': 'updateFileUploadMimetype'
+    'change [name=mimetype]': 'change_mimetype'
 
   save: (e) =>
     e.preventDefault()
@@ -179,6 +180,14 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
       @validate()
       yes), 500
     @_change arguments...
+
+  change_mimetype: =>
+    if (@$fv 'mimetype') != "video"
+      (@$ '.zerohint').hide()
+      @$fv 'duration', default_duration
+    else 
+      (@$ '.zerohint').show()
+      @$fv 'duration', 0
 
   validate: (e) =>
     that = this
@@ -239,12 +248,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     mt = get_mimetype filename
     (@$ '#file_upload_label').text (get_filename filename)
     @$fv 'mimetype', mt if mt
-    if mt != "video"
-    	@$fv 'duration', default_duration
-    else
-    	@$fv 'duration', 0 
-
-
+    @change_mimetype()
 
   toggleAdvanced: =>
     (@$ '.icon-play').toggleClass 'rotated'
