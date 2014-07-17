@@ -14,7 +14,13 @@ delay = (wait, fn) -> _.delay fn, wait
 
 mimetypes = [ [('jpg jpeg png pnm gif bmp'.split ' '), 'image']
               [('avi mkv mov mpg mpeg mp4 ts flv'.split ' '), 'video']]
+viduris   = ('rtsp rtmp'.split ' ')
+
+
 get_mimetype = (filename) =>
+  scheme = (_.first filename.split ':').toLowerCase()
+  match = scheme in viduris
+  if match then return 'video'
   ext = (_.last filename.split '.').toLowerCase()
   mt = _.find mimetypes, (mt) -> ext in mt[0]
   if mt then mt[1] else null
