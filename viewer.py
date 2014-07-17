@@ -2,7 +2,7 @@
 # -*- coding: utf8 -*-
 
 __author__ = "Viktor Petersson"
-__copyright__ = "Copyright 2012-2013, WireLoad Inc"
+__copyright__ = "Copyright 2012-2014, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 from datetime import datetime, timedelta
@@ -101,7 +101,7 @@ class Scheduler(object):
 
 def generate_asset_list():
     logging.info('Generating asset-list...')
-    
+
     now = datetime.utcnow()
     enabled_assets = [a for a in assets_helper.read(db_conn) if a['is_enabled']]
     future_dates = [a[k] for a in enabled_assets for k in ['start_date', 'end_date'] if a[k] > now]
