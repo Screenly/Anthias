@@ -330,7 +330,7 @@ def setup():
 def wait_for_splash_page(url):
     max_retries = 20
     retries = 0
-    while retries > max_retries:
+    while retries < max_retries:
         fetch_head = req_head(url)
         if fetch_head.status_code == 200:
             break
