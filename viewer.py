@@ -36,7 +36,8 @@ INTRO = '/screenly/intro-template.html'
 current_browser_url = None
 browser = None
 
-VIDEO_TIMEOUT=20  # secs
+VIDEO_TIMEOUT = 20  # secs
+
 
 def sigusr1(signum, frame):
     """
@@ -263,8 +264,7 @@ def pro_init():
         with open(status_path, 'rb') as status_file:
             status = json_load(status_file)
 
-        browser_send('js showIpMac("%s", "%s")' %
-            (status.get('ip', ''), status.get('mac', '')) )
+        browser_send('js showIpMac("%s", "%s")' % (status.get('ip', ''), status.get('mac', '')))
 
         if status.get('neterror', False):
             browser_send('js showNetError()')
@@ -337,7 +337,8 @@ def wait_for_splash_page(url):
         else:
             sleep(1)
             retries += 1
-            logging.debug('Waiting for splash-page. Retry %d') % max_retriex
+            logging.debug('Waiting for splash-page. Retry %d') % retries
+
 
 def main():
     setup()
