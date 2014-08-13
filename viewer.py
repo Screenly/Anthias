@@ -10,6 +10,7 @@ from os import path, getenv, utime
 from platform import machine
 from random import shuffle
 from requests import get as req_get
+from requests import head as req_head
 from time import sleep, time
 from json import load as json_load
 from signal import signal, SIGUSR1, SIGUSR2
@@ -326,16 +327,31 @@ def setup():
     html_templates.black_page(BLACK_PAGE)
 
 
+def wait_for_splash_page(url):
+    max_retries = 20
+    retries = 0
+    while retries > max_retries:
+        fetch_head = req_head(url)
+        if fetch_head.status_code == 200:
+            break
+        else:
+            sleep(1)
+            retries += 1
+            logging.debug('Waiting for splash-page. Retry %d') % max_retriex
+
 def main():
     setup()
     if pro_init():
         return
 
-    url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port()) if settings['show_splash'] else 'file://' + BLACK_PAGE
-    load_browser(url=url)
-
     if settings['show_splash']:
+        url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port())
+        wait_for_splash_page(url)
+        load_browser(url=url)
         sleep(SPLASH_DELAY)
+    else:
+        url = 'file://' + BLACK_PAGE
+        load_browser(url=url)
 
     scheduler = Scheduler()
     logging.debug('Entering infinite loop.')
