@@ -4,6 +4,13 @@ To learn more about Screenly, please visit the official website at [ScreenlyApp.
 
 ## Disk Image Changelog
 
+### 2014-08-13
+
+ * Adds support for Raspberry Pi Model B+.
+ * Improves handling in `viewer.py` where the splash page is being displayed before `server.py` has been fully loaded.
+ * Pulls in APT updates from Screenly's APT repository.
+ * Other bugfixes up to commit 1946e252471fcf34c27903970fbde601189d65a5.
+
 ### 2014-07-17
 
  * Fixes issue with load screen failing to connect.
