@@ -13,7 +13,17 @@ DEFAULTS = {
     'main': {
         'database': CONFIG_DIR + 'screenly.db',
         'listen': '0.0.0.0:8080',
+	'proto': 'http',
         'assetdir': 'screenly_assets',
+        'auth': None,
+        'username': None,
+        'password': None,
+        'ldapserver': None,
+        'ldapuserformat': None,
+        'ldapbasedn': None,
+        'ldapfilterformat': None,
+        'ldapfiltererrmessage': None,
+        'ldapattributes': None,
     },
     'viewer': {
         'show_splash': True,

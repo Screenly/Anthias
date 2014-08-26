@@ -33,6 +33,11 @@
               %a(href="/system_info")
                 %i.icon-tasks.icon-white
                 System Info
+            - if username != None:
+              %li.divider-vertical
+              %li
+                %a(href="/auth/logout")
+                  Logout ${username}
 
     .container
       .row
