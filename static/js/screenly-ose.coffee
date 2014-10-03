@@ -14,12 +14,18 @@ delay = (wait, fn) -> _.delay fn, wait
 
 mimetypes = [ [('jpg jpeg png pnm gif bmp'.split ' '), 'image']
               [('avi mkv mov mpg mpeg mp4 ts flv'.split ' '), 'video']]
+viduris   = ('rtsp rtmp'.split ' ')
+
+
 get_mimetype = (filename) =>
+  scheme = (_.first filename.split ':').toLowerCase()
+  match = scheme in viduris
+  if match then return 'video'
   ext = (_.last filename.split '.').toLowerCase()
   mt = _.find mimetypes, (mt) -> ext in mt[0]
   if mt then mt[1] else null
 
-url_test = (v) -> /(http|https):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test v
+url_test = (v) -> /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test v
 get_filename = (v) -> (v.replace /[\/\\\s]+$/g, '').replace /^.*[\\\/]/g, ''
 insertWbr = (v) -> (v.replace /\//g, '/<wbr>').replace /\&/g, '&amp;<wbr>'
 
@@ -95,7 +101,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
       (@$ '#modalLabel').text "Edit Asset"
       (@$ '.asset-location').hide(); (@$ '.asset-location.edit').show()
 
-    (@$ '.duration').toggle ((@model.get 'mimetype') != 'video')
+    (@$ '.duration').toggle (true)
     @clickTabNavUri() if (@model.get 'mimetype') == 'webpage'
 
     for field in @model.fields
@@ -131,6 +137,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     'click .advanced-toggle': 'toggleAdvanced'
     'paste [name=uri]': 'updateUriMimetype'
     'change [name=file_upload]': 'updateFileUploadMimetype'
+    'change [name=mimetype]': 'change_mimetype'
 
   save: (e) =>
     e.preventDefault()
@@ -173,6 +180,14 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
       @validate()
       yes), 500
     @_change arguments...
+
+  change_mimetype: =>
+    if (@$fv 'mimetype') != "video"
+      (@$ '.zerohint').hide()
+      @$fv 'duration', default_duration
+    else 
+      (@$ '.zerohint').show()
+      @$fv 'duration', 0
 
   validate: (e) =>
     that = this
@@ -233,6 +248,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     mt = get_mimetype filename
     (@$ '#file_upload_label').text (get_filename filename)
     @$fv 'mimetype', mt if mt
+    @change_mimetype()
 
   toggleAdvanced: =>
     (@$ '.icon-play').toggleClass 'rotated'

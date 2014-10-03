@@ -3,7 +3,7 @@
 /* screenly-ose ui */
 
 (function() {
-  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test,
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, viduris,
     __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     __hasProp = {}.hasOwnProperty,
@@ -42,9 +42,16 @@
 
   mimetypes = [['jpg jpeg png pnm gif bmp'.split(' '), 'image'], ['avi mkv mov mpg mpeg mp4 ts flv'.split(' '), 'video']];
 
+  viduris = 'rtsp rtmp'.split(' ');
+
   get_mimetype = (function(_this) {
     return function(filename) {
-      var ext, mt;
+      var ext, match, mt, scheme;
+      scheme = (_.first(filename.split(':'))).toLowerCase();
+      match = __indexOf.call(viduris, scheme) >= 0;
+      if (match) {
+        return 'video';
+      }
       ext = (_.last(filename.split('.'))).toLowerCase();
       mt = _.find(mimetypes, function(mt) {
         return __indexOf.call(mt[0], ext) >= 0;
@@ -58,7 +65,7 @@
   })(this);
 
   url_test = function(v) {
-    return /(http|https):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test(v);
+    return /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test(v);
   };
 
   get_filename = function(v) {
@@ -157,6 +164,7 @@
       this.clickTabNavUri = __bind(this.clickTabNavUri, this);
       this.cancel = __bind(this.cancel, this);
       this.validate = __bind(this.validate, this);
+      this.change_mimetype = __bind(this.change_mimetype, this);
       this.change = __bind(this.change, this);
       this.save = __bind(this.save, this);
       this.viewmodel = __bind(this.viewmodel, this);
@@ -214,7 +222,7 @@
         (this.$('.asset-location')).hide();
         (this.$('.asset-location.edit')).show();
       }
-      (this.$('.duration')).toggle((this.model.get('mimetype')) !== 'video');
+      (this.$('.duration')).toggle(true);
       if ((this.model.get('mimetype')) === 'webpage') {
         this.clickTabNavUri();
       }
@@ -272,7 +280,8 @@
       'click .tabnav-file_upload, .tabnav-uri': 'displayAdvanced',
       'click .advanced-toggle': 'toggleAdvanced',
       'paste [name=uri]': 'updateUriMimetype',
-      'change [name=file_upload]': 'updateFileUploadMimetype'
+      'change [name=file_upload]': 'updateFileUploadMimetype',
+      'change [name=mimetype]': 'change_mimetype'
     };
 
     EditAssetView.prototype.save = function(e) {
@@ -350,6 +359,16 @@
         };
       })(this)), 500));
       return this._change.apply(this, arguments);
+    };
+
+    EditAssetView.prototype.change_mimetype = function() {
+      if ((this.$fv('mimetype')) !== "video") {
+        (this.$('.zerohint')).hide();
+        return this.$fv('duration', default_duration);
+      } else {
+        (this.$('.zerohint')).show();
+        return this.$fv('duration', 0);
+      }
     };
 
     EditAssetView.prototype.validate = function(e) {
@@ -464,8 +483,9 @@
       mt = get_mimetype(filename);
       (this.$('#file_upload_label')).text(get_filename(filename));
       if (mt) {
-        return this.$fv('mimetype', mt);
+        this.$fv('mimetype', mt);
       }
+      return this.change_mimetype();
     };
 
     EditAssetView.prototype.toggleAdvanced = function() {

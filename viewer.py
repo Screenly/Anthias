@@ -2,7 +2,7 @@
 # -*- coding: utf8 -*-
 
 __author__ = "Viktor Petersson"
-__copyright__ = "Copyright 2012-2013, WireLoad Inc"
+__copyright__ = "Copyright 2012-2014, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 from datetime import datetime, timedelta
@@ -10,6 +10,7 @@ from os import path, getenv, utime
 from platform import machine
 from random import shuffle
 from requests import get as req_get
+from requests import head as req_head
 from time import sleep, time
 from json import load as json_load
 from signal import signal, SIGUSR1, SIGUSR2
@@ -35,7 +36,8 @@ INTRO = '/screenly/intro-template.html'
 current_browser_url = None
 browser = None
 
-VIDEO_TIMEOUT=20  # secs
+VIDEO_TIMEOUT = 20  # secs
+
 
 def sigusr1(signum, frame):
     """
@@ -101,13 +103,16 @@ class Scheduler(object):
 
 def generate_asset_list():
     logging.info('Generating asset-list...')
-    playlist = assets_helper.get_playlist(db_conn)
-    deadline = sorted([asset['end_date'] for asset in playlist])[0] if len(playlist) > 0 else None
+
+    now = datetime.utcnow()
+    enabled_assets = [a for a in assets_helper.read(db_conn) if a['is_enabled']]
+    future_dates = [a[k] for a in enabled_assets for k in ['start_date', 'end_date'] if a[k] > now]
+    deadline = sorted(future_dates)[0] if future_dates else None
     logging.debug('generate_asset_list deadline: %s', deadline)
 
+    playlist = assets_helper.get_playlist(db_conn)
     if settings['shuffle_playlist']:
         shuffle(playlist)
-
     return (playlist, deadline)
 
 
@@ -259,8 +264,7 @@ def pro_init():
         with open(status_path, 'rb') as status_file:
             status = json_load(status_file)
 
-        browser_send('js showIpMac("%s", "%s")' %
-            (status.get('ip', ''), status.get('mac', '')) )
+        browser_send('js showIpMac("%s", "%s")' % (status.get('ip', ''), status.get('mac', '')))
 
         if status.get('neterror', False):
             browser_send('js showNetError()')
@@ -323,16 +327,32 @@ def setup():
     html_templates.black_page(BLACK_PAGE)
 
 
+def wait_for_splash_page(url):
+    max_retries = 20
+    retries = 0
+    while retries < max_retries:
+        fetch_head = req_head(url)
+        if fetch_head.status_code == 200:
+            break
+        else:
+            sleep(1)
+            retries += 1
+            logging.debug('Waiting for splash-page. Retry %d') % retries
+
+
 def main():
     setup()
     if pro_init():
         return
 
-    url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port()) if settings['show_splash'] else 'file://' + BLACK_PAGE
-    load_browser(url=url)
-
     if settings['show_splash']:
+        url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port())
+        wait_for_splash_page(url)
+        load_browser(url=url)
         sleep(SPLASH_DELAY)
+    else:
+        url = 'file://' + BLACK_PAGE
+        load_browser(url=url)
 
     scheduler = Scheduler()
     logging.debug('Entering infinite loop.')
