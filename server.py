@@ -66,18 +66,22 @@ if settings['auth'] == 'ldap':
     ldap_u_attr = json.loads(settings['ldapattributes'])
     ldapattr = []
     for a in ldap_u_attr:
-       ldapattr.append(str(a))
+        ldapattr.append(str(a))
     auth_config('ldapattributes', ldapattr)
-elif settings['auth'] == 'basic' and settings['username'] and settings['password']:
-    credentials = { settings['username'] : settings['password'] }
-    auth_config('credentials', { settings['username'] : settings['password'] })
+elif (settings['auth'] == 'basic' and
+      settings['username'] and settings['password']):
+    credentials = {settings['username']: settings['password']}
+    auth_config('credentials', {settings['username']: settings['password']})
 elif settings['auth'] == 'basic':
-    print 'Cannot use '+str(settings['auth'])+' authentication in web interface,'
-    print ' because username and/or password are not set in screenly config-file.'
+    print ('Cannot use '+str(settings['auth']) +
+           ' authentication in web interface,')
+    print (' because username and/or password' +
+           ' are not set in screenly config-file.')
     stdout.flush()
     auth = None
-elif settings['auth'] != None:
-    print 'Cannot use '+str(settings['auth'])+' authentication in web interface: unknown auth type.'
+elif settings['auth'] is not None:
+    print ('Cannot use '+str(settings['auth']) +
+           ' authentication in web interface: unknown auth type.')
     stdout.flush()
     auth = None
 
@@ -90,9 +94,11 @@ else:
     print 'To enable authentication in web interface,'
     print ' specify auth in the config-file.'
     stdout.flush()
-    session_manager = bottlesession.PreconfiguredSession({'valid':True, 'name': '', 'new': False})
+    session_manager = bottlesession.PreconfiguredSession(
+        {'valid': True, 'name': '', 'new': False})
 
-valid_user = bottlesession.authenticator(session_manager, login_scheme=settings['proto'])
+valid_user = bottlesession.authenticator(
+    session_manager, login_scheme=settings['proto'])
 
 
 ################################
@@ -169,18 +175,6 @@ def login():
     stdout.flush()
 
     context = {'flash': None}
-
-    #if (request.POST.get('name','').strip() and
-    #    request.POST.get('password','').strip()
-    #    ):
-    #
-    #    name =  request.POST.get('name','').strip()
-    #    password = request.POST.get('password','').strip()
-    #    if (name, password) == ('rott', 'hackme'):
-    #           return template('index')
-    #
-    # return template('login')
-
     session = session_manager.get_session()
     session['valid'] = False
 
@@ -198,8 +192,9 @@ def login():
         stdout.flush()
         return template('login', **context)
 
-    check_err_msg = auth_check_credentials(settings['auth'], username, password)
-    if check_err_msg == None:
+    check_err_msg = auth_check_credentials(
+        settings['auth'], username, password)
+    if check_err_msg is None:
         session['valid'] = True
         session['name'] = username
 
@@ -213,9 +208,8 @@ def login():
         return template('login', **context)
 
     redirpath = request.get_cookie('validuserloginredirect')
-    if redirpath == None:
+    if redirpath is None:
         urlparts = request.urlparts
-        #redirpath = urlparts.scheme + '://' + urlparts.netloc + '/'
         redirpath = settings['proto'] + '://' + urlparts.netloc + '/'
     print 'login username='+str(username)+' : ok, redirect : '+redirpath
     stdout.flush()
@@ -231,11 +225,8 @@ def logout():
     session['valid'] = False
     session_manager.save(session)
     urlparts = request.urlparts
-    #redirpath = urlparts.scheme + '://' + urlparts.netloc + '/'
     redirpath = settings['proto'] + '://' + urlparts.netloc + '/'
     redirect(redirpath)
-
-
 
 
 ################################
