@@ -92,7 +92,7 @@ else:
     stdout.flush()
     session_manager = bottlesession.PreconfiguredSession({'valid':True, 'name': '', 'new': False})
 
-valid_user = bottlesession.authenticator(session_manager, login_proto=settings['proto'])
+valid_user = bottlesession.authenticator(session_manager, login_scheme=settings['proto'])
 
 
 ################################
