@@ -87,10 +87,45 @@
         it("should exist", function() {
           return expect(Screenly.Assets).toBeDefined();
         });
-        return it("should use the Asset model", function() {
+        it("should use the Asset model", function() {
           var assets;
           assets = new Screenly.Assets();
           return expect(assets.model).toBe(Screenly.Asset);
+        });
+        return it("should use keep play order of assets", function() {
+          var asset1, asset2, asset3, assets;
+          assets = new Screenly.Assets();
+          asset1 = new Screenly.Asset({
+            asset_id: 1,
+            is_enabled: true,
+            name: 'AAA',
+            uri: 'http://www.screenlyapp.com',
+            play_order: 2
+          });
+          asset2 = new Screenly.Asset({
+            asset_id: 2,
+            is_enabled: true,
+            name: 'BBB',
+            uri: 'http://www.screenlyapp.com',
+            play_order: 1
+          });
+          asset3 = new Screenly.Asset({
+            asset_id: 3,
+            is_enabled: true,
+            name: 'CCC',
+            uri: 'http://www.screenlyapp.com',
+            play_order: 0
+          });
+          assets.add([asset1, asset2, asset3]);
+          expect(assets.at(0)).toBe(asset3);
+          expect(assets.at(1)).toBe(asset2);
+          expect(assets.at(2)).toBe(asset1);
+          asset1.set('play_order', 0);
+          asset3.set('play_order', 2);
+          assets.sort();
+          expect(assets.at(0)).toBe(asset1);
+          expect(assets.at(1)).toBe(asset2);
+          return expect(assets.at(2)).toBe(asset3);
         });
       });
     });

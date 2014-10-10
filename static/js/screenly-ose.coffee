@@ -46,6 +46,7 @@ API.Asset = class Asset extends Backbone.Model
     duration: default_duration
     is_enabled: 0
     nocache: 0
+    play_order: 0
   active: =>
     if @get('is_enabled') and @get('start_date') and @get('end_date')
       at = now()
@@ -53,7 +54,7 @@ API.Asset = class Asset extends Backbone.Model
       end_date = new Date(@get('end_date'));
       return start_date <= at <= end_date
     else
-      return false  
+      return false
 
   backup: =>
     @backup_attributes = @toJSON()
@@ -67,6 +68,7 @@ API.Asset = class Asset extends Backbone.Model
 API.Assets = class Assets extends Backbone.Collection
   url: "/api/assets"
   model: Asset
+  comparator: 'play_order'
 
 
 # Views
@@ -185,7 +187,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     if (@$fv 'mimetype') != "video"
       (@$ '.zerohint').hide()
       @$fv 'duration', default_duration
-    else 
+    else
       (@$ '.zerohint').show()
       @$fv 'duration', 0
 
@@ -345,6 +347,9 @@ API.View.AssetsView = class AssetsView extends Backbone.View
       update: @update_order
 
   update_order: =>
+    @collection.get(id).set('play_order', i) for id, i in (@$ '#active-assets').sortable 'toArray'
+    @collection.sort()
+
     $.post '/api/assets/order', ids: ((@$ '#active-assets').sortable 'toArray').join ','
 
   render: =>
