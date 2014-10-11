@@ -1,0 +1,3 @@
+[submodule "bottlesession"]
+	path = bottlesession
+	url = https://github.com/utwente-fmt/bottlesession
