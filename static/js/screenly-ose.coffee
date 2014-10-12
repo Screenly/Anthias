@@ -1,11 +1,29 @@
 ### screenly-ose ui ###
 
 API = (window.Screenly ||= {}) # exports
+
+date_settings_12hour =
+  full_date: 'MM/DD/YYYY hh:mm:ss A',
+  date: 'MM/DD/YYYY',
+  time: 'hh:mm A',
+  show_meridian: true,
+  date_picker_format: 'mm/dd/yyyy'
+
+date_settings_24hour =
+  full_date: 'YYYY/MM/DD HH:mm:ss',
+  date: 'YYYY/MM/DD',
+  time: 'HH:mm',
+  show_meridian: false,
+  datepicker_format: 'yyyy/mm/dd'
+
+date_settings = if use_24_hour_clock then date_settings_24hour else date_settings_12hour
+
+
 API.date_to = date_to = (d) ->
   dd = moment (new Date d)
-  string: -> dd.format 'MM/DD/YYYY hh:mm:ss A'
-  date: -> dd.format 'MM/DD/YYYY'
-  time: -> dd.format 'hh:mm A'
+  string: -> dd.format date_settings.full_date
+  date: -> dd.format date_settings.date
+  time: -> dd.format date_settings.time
 
 now = -> new Date()
 
@@ -53,7 +71,7 @@ API.Asset = class Asset extends Backbone.Model
       end_date = new Date(@get('end_date'));
       return start_date <= at <= end_date
     else
-      return false  
+      return false
 
   backup: =>
     @backup_attributes = @toJSON()
@@ -79,7 +97,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     @edit = options.edit
     ($ 'body').append @$el.html get_template 'asset-modal'
     (@$ 'input.time').timepicker
-      minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: yes
+      minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: date_settings.show_meridian
 
     (@$ 'input[name="nocache"]').prop 'checked', @model.get 'nocache'
     (@$ '.modal-header .close').remove()
@@ -112,7 +130,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     for which in ['start', 'end']
       d = date_to @model.get "#{which}_date"
       @$fv "#{which}_date_date", d.date()
-      (@$f "#{which}_date_date").datepicker autoclose: yes
+      (@$f "#{which}_date_date").datepicker autoclose: yes, format: date_settings.datepicker_format
       (@$f "#{which}_date_date").datepicker 'setValue', d.date()
       @$fv "#{which}_date_time", d.time()
 
@@ -185,7 +203,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     if (@$fv 'mimetype') != "video"
       (@$ '.zerohint').hide()
       @$fv 'duration', default_duration
-    else 
+    else
       (@$ '.zerohint').show()
       @$fv 'duration', 0
 

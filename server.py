@@ -91,6 +91,7 @@ def template(template_name, **context):
     # Add global contexts
     context['up_to_date'] = is_up_to_date()
     context['default_duration'] = settings['default_duration']
+    context['use_24_hour_clock'] = settings['use_24_hour_clock']
 
     return haml_template(template_name, **context)
 
