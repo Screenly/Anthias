@@ -121,7 +121,8 @@
         end_date: (moment().add('days', 7)).toDate(),
         duration: default_duration,
         is_enabled: 0,
-        nocache: 0
+        nocache: 0,
+        play_order: 0
       };
     };
 
@@ -162,6 +163,8 @@
     Assets.prototype.url = "/api/assets";
 
     Assets.prototype.model = Asset;
+
+    Assets.prototype.comparator = 'play_order';
 
     return Assets;
 
@@ -685,6 +688,13 @@
     };
 
     AssetsView.prototype.update_order = function() {
+      var i, id, _i, _len, _ref;
+      _ref = (this.$('#active-assets')).sortable('toArray');
+      for (i = _i = 0, _len = _ref.length; _i < _len; i = ++_i) {
+        id = _ref[i];
+        this.collection.get(id).set('play_order', i);
+      }
+      this.collection.sort();
       return $.post('/api/assets/order', {
         ids: ((this.$('#active-assets')).sortable('toArray')).join(',')
       });
