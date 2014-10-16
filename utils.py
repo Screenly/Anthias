@@ -93,7 +93,7 @@ def url_fails(url):
     Can not check RTSP or RTMP, so we just believe it is there (if not OMX Player will terminate, and the next asset is shown -> no ugly error messages)
     """
     if url.startswith('rtsp://'):
-	return False
+        return False
     if url.startswith('rtmp://'):
         return False
     try:
