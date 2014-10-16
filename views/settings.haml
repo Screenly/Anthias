@@ -92,6 +92,20 @@
                 %input.span1(type="number", name="default_duration", value=default_duration)
 
             .control-group
+              %label.control-label Use 24-hour clock
+              .controls
+
+                %label.checkbox.toggle.well#use_24_hour_clock_checkbox
+                  - if use_24_hour_clock:
+                    %input(type="checkbox", checked="checked", name="use_24_hour_clock")
+                  - else:
+                    %input(type="checkbox", name="use_24_hour_clock")
+                  %p
+                    %span.on On
+                    %span.off Off
+                  %a.btn.btn-primary.slide-button
+
+            .control-group
               %label.control-label Debug logging
               .controls
 

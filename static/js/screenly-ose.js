@@ -3,7 +3,7 @@
 /* screenly-ose ui */
 
 (function() {
-  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, viduris,
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_settings, date_settings_12hour, date_settings_24hour, date_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, viduris,
     __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     __hasProp = {}.hasOwnProperty,
@@ -12,18 +12,36 @@
 
   API = (window.Screenly || (window.Screenly = {}));
 
+  date_settings_12hour = {
+    full_date: 'MM/DD/YYYY hh:mm:ss A',
+    date: 'MM/DD/YYYY',
+    time: 'hh:mm A',
+    show_meridian: true,
+    date_picker_format: 'mm/dd/yyyy'
+  };
+
+  date_settings_24hour = {
+    full_date: 'YYYY/MM/DD HH:mm:ss',
+    date: 'YYYY/MM/DD',
+    time: 'HH:mm',
+    show_meridian: false,
+    datepicker_format: 'yyyy/mm/dd'
+  };
+
+  date_settings = use_24_hour_clock ? date_settings_24hour : date_settings_12hour;
+
   API.date_to = date_to = function(d) {
     var dd;
     dd = moment(new Date(d));
     return {
       string: function() {
-        return dd.format('MM/DD/YYYY hh:mm:ss A');
+        return dd.format(date_settings.full_date);
       },
       date: function() {
-        return dd.format('MM/DD/YYYY');
+        return dd.format(date_settings.date);
       },
       time: function() {
-        return dd.format('hh:mm A');
+        return dd.format(date_settings.time);
       }
     };
   };
@@ -195,7 +213,7 @@
         minuteStep: 5,
         showInputs: true,
         disableFocus: true,
-        showMeridian: true
+        showMeridian: date_settings.show_meridian
       });
       (this.$('input[name="nocache"]')).prop('checked', this.model.get('nocache'));
       (this.$('.modal-header .close')).remove();
@@ -243,7 +261,8 @@
         d = date_to(this.model.get("" + which + "_date"));
         this.$fv("" + which + "_date_date", d.date());
         (this.$f("" + which + "_date_date")).datepicker({
-          autoclose: true
+          autoclose: true,
+          format: date_settings.datepicker_format
         });
         (this.$f("" + which + "_date_date")).datepicker('setValue', d.date());
         this.$fv("" + which + "_date_time", d.time());

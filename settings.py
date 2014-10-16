@@ -23,6 +23,7 @@ DEFAULTS = {
         'default_duration': '10',
         'debug_logging': False,
         'verify_ssl': True,
+        'use_24_hour_clock': False
     }
 }
 

@@ -92,7 +92,7 @@
           assets = new Screenly.Assets();
           return expect(assets.model).toBe(Screenly.Asset);
         });
-        return it("should use keep play order of assets", function() {
+        return it("should keep play order of assets", function() {
           var asset1, asset2, asset3, assets;
           assets = new Screenly.Assets();
           asset1 = new Screenly.Asset({
