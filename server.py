@@ -164,7 +164,7 @@ def prepare_asset(request):
                         break
                     f.write(chunk)
 
-        if "video" in asset['mimetype'] and get('duration')=="0":
+        if "video" in asset['mimetype']:
             video_duration = get_video_duration(asset['uri'])
             if video_duration:
                 asset['duration'] = int(video_duration.total_seconds())
