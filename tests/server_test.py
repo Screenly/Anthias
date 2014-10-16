@@ -45,7 +45,7 @@ asset_w = {
 }
 
 asset_w_diff = {
-    'duration': u'10'
+    'name': u'Tôi có thể ăn thủy tinh mà không hại gì.'
 }
 
 asset_x = {
