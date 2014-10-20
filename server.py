@@ -121,7 +121,7 @@ def prepare_asset(request):
             get('mimetype')]):
 
         asset = {
-            'name': get('name').decode('UTF-8'),
+            'name': get('name'),
             'mimetype': get('mimetype'),
             'asset_id': get('asset_id'),
             'is_enabled': get('is_enabled'),

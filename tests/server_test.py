@@ -31,6 +31,23 @@ date_b = datetime.datetime(2013, 1, 19, 23, 59)
 date_h = datetime.datetime(2013, 1, 20, 10, 59)
 date_d = datetime.datetime(2013, 1, 21, 00, 00)
 
+asset_w = {
+    'mimetype': u'web',
+    'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d',
+    'name': u'いろはにほへど',
+    'uri': u'http://www.wireload.net',
+    'start_date': date_a,
+    'end_date': date_b,
+    'duration': u'5',
+    'is_enabled': 1,
+    'nocache': 0,
+    'play_order': 1,
+}
+
+asset_w_diff = {
+    'name': u'Tôi có thể ăn thủy tinh mà không hại gì.'
+}
+
 asset_x = {
     'mimetype': u'web',
     'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d',
@@ -43,9 +60,11 @@ asset_x = {
     'nocache': 0,
     'play_order': 1,
 }
+
 asset_x_diff = {
     'duration': u'10'
 }
+
 asset_y = {
     'mimetype': u'image',
     'asset_id': u'7e978f8c1204a6f70770a1eb54a76e9b',
@@ -135,6 +154,16 @@ class DBHelperTest(unittest.TestCase):
 
         should_be_empty = assets_helper.read(self.conn)
         self.assertEmpty(should_be_empty)
+    # ✂--------
+
+    def test_create_update_read_asset_utf8(self):
+        assets_helper.create(self.conn, asset_w)
+        asset_w_ = asset_w.copy()
+        asset_w_.update(**asset_w_diff)
+        assets_helper.update(self.conn, asset_w['asset_id'], asset_w_)
+
+        should_be_w_ = assets_helper.read(self.conn)
+        self.assertEqual([asset_w_], should_be_w_)
     # ✂--------
 
     def set_now(self, d):
