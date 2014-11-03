@@ -4,6 +4,13 @@ To learn more about Screenly, please visit the official website at [ScreenlyApp.
 
 ## Disk Image Changelog
 
+### 2014-11-03
+
+ * Adds support for setting 24/12h clock.
+ * System updates (including Bash and OpenSSL).
+ * Solves an UTF8 bug ([#226](https://github.com/wireload/screenly-ose/issues/226))
+ * Various bugfixes.
+
 ### 2014-08-13
 
  * Adds support for Raspberry Pi Model B+.
