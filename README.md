@@ -2,6 +2,17 @@
 
 To learn more about Screenly, please visit the official website at [ScreenlyApp.com](http://www.screenlyapp.com). On the official site, you'll find the complete installation instructions, along with a live-demo of Screenly.
 
+## Docker image for development
+
+To simplify development of the server module of Screenly OSE, we've created a Docker container. This is intended to run on your local machine with the Screenly OSE repository mounted as a volume.
+
+Assuming you're in the source code repository, simply run:
+
+    $ docker run --rm -ti \
+        -p 8080:8080
+        -v $(pwd):/home/pi/screenly
+        wireload/screenly-ose-server
+
 ## Disk Image Changelog
 
 ### 2014-11-03
