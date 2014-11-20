@@ -9,8 +9,8 @@ To simplify development of the server module of Screenly OSE, we've created a Do
 Assuming you're in the source code repository, simply run:
 
     $ docker run --rm -ti \
-        -p 8080:8080
-        -v $(pwd):/home/pi/screenly
+        -p 8080:8080 \
+        -v $(pwd):/home/pi/screenly \
         wireload/screenly-ose-server
 
 ## Disk Image Changelog
