@@ -201,8 +201,8 @@ def view_video(uri, duration):
     while run.process.alive:
         watchdog()
         sleep(1)
-    if run.exit_code == 124:
-        logging.error('omxplayer timed out')
+    if not run.exit_code == 0:
+        logging.error('omxplayer exited with exit code %i.' % run.exit_code)
 
 
 def check_update():
