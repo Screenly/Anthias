@@ -1,8 +1,7 @@
-#rerun
 Mako==0.7.3
 MarkupSafe==0.15
 PyHAML==0.1.9
-bottle==0.12.07
+bottle==0.10.11
 bottle-haml==0.1.4
 hurry.filesize==0.9
 mock==1.0.1
@@ -11,6 +10,6 @@ nose==1.2.1
 pytz==2012d
 requests==2.2.1
 sh==1.08
-six==1.2.0
+six==1.8.0
 uptime==2.0.2
 wsgiref==0.1.2
