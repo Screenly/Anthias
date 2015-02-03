@@ -17,17 +17,17 @@ Assuming you're in the source code repository, simply run:
 
 ### 2014-11-03
 
- * Adds support for setting 24/12h clock.
+ * Adds a setting for time display in 24 or 12 hour formats.
  * System updates (including Bash and OpenSSL).
- * Solves an UTF8 bug ([#226](https://github.com/wireload/screenly-ose/issues/226))
- * Various bugfixes.
+ * Solves a UTF8 bug ([#226](https://github.com/wireload/screenly-ose/issues/226)).
+ * Various bug fixes.
 
 ### 2014-08-13
 
  * Adds support for Raspberry Pi Model B+.
  * Improves handling in `viewer.py` where the splash page is being displayed before `server.py` has been fully loaded.
  * Pulls in APT updates from Screenly's APT repository.
- * Other bugfixes up to commit 1946e252471fcf34c27903970fbde601189d65a5.
+ * Other bug fixes up to commit 1946e252471fcf34c27903970fbde601189d65a5.
 
 ### 2014-07-17
 
