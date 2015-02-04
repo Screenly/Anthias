@@ -234,7 +234,7 @@ def check_update():
                     f.write(latest_sha.content.strip())
                 return True
             else:
-                logging.debug('Received on 200-status')
+                logging.debug('Received non 200-status')
                 return
         else:
             logging.debug('Unable to retreive latest SHA')
