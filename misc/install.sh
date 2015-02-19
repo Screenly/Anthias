@@ -81,7 +81,7 @@ echo "Making modifications to X..."
 ln -s ~/screenly/misc/gtkrc-2.0 ~/.gtkrc-2.0
 [ -f ~/.config/openbox/lxde-pi-rc.xml ] && mv ~/.config/openbox/lxde-pi-rc.xml ~/.config/openbox/lxde-pi-rc.xml.bak
 [ -d ~/.config/openbox ] || mkdir -p ~/.config/openbox
-ln -s ~/screenly/misc/lxde-pi-rc.xml ~/.config/openbox/lxde-pi-rc.xml
+ln -s ~/screenly/misc/lxde-rc.xml ~/.config/openbox/lxde-pi-rc.xml
 [ -f ~/.config/lxpanel/LXDE-pi/panels/panel ] && mv ~/.config/lxpanel/LXDE-pi/panels/panel ~/.config/lxpanel/LXDE-pi/panels/panel.bak
 [ -f /etc/xdg/lxsession/LXDE-pi/autostart ] && sudo mv /etc/xdg/lxsession/LXDE-pi/autostart /etc/xdg/lxsession/LXDE-pi/autostart.bak
 sudo sed -e 's/^#xserver-command=X$/xserver-command=X -nocursor/g' -i /etc/lightdm/lightdm.conf
