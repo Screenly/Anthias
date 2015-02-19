@@ -50,8 +50,8 @@ echo "Installing more dependencies..."
 sudo pip install -r ~/screenly/requirements.txt -q > /dev/null
 
 echo "Adding Screenly to X auto start..."
-mkdir -p ~/.config/lxsession/LXDE/
-echo "@~/screenly/misc/xloader.sh" > ~/.config/lxsession/LXDE/autostart
+mkdir -p ~/.config/lxsession/LXDE-pi/
+echo "@~/screenly/misc/xloader.sh" > ~/.config/lxsession/LXDE-pi/autostart
 
 echo "Increasing swap space to 500MB..."
 echo "CONF_SWAPSIZE=500" > ~/dphys-swapfile
@@ -79,11 +79,11 @@ sudo /etc/init.d/supervisor start > /dev/null
 echo "Making modifications to X..."
 [ -f ~/.gtkrc-2.0 ] && rm -f ~/.gtkrc-2.0
 ln -s ~/screenly/misc/gtkrc-2.0 ~/.gtkrc-2.0
-[ -f ~/.config/openbox/lxde-rc.xml ] && mv ~/.config/openbox/lxde-rc.xml ~/.config/openbox/lxde-rc.xml.bak
+[ -f ~/.config/openbox/lxde-pi-rc.xml ] && mv ~/.config/openbox/lxde-pi-rc.xml ~/.config/openbox/lxde-pi-rc.xml.bak
 [ -d ~/.config/openbox ] || mkdir -p ~/.config/openbox
-ln -s ~/screenly/misc/lxde-rc.xml ~/.config/openbox/lxde-rc.xml
-[ -f ~/.config/lxpanel/LXDE/panels/panel ] && mv ~/.config/lxpanel/LXDE/panels/panel ~/.config/lxpanel/LXDE/panels/panel.bak
-[ -f /etc/xdg/lxsession/LXDE/autostart ] && sudo mv /etc/xdg/lxsession/LXDE/autostart /etc/xdg/lxsession/LXDE/autostart.bak
+ln -s ~/screenly/misc/lxde-pi-rc.xml ~/.config/openbox/lxde-pi-rc.xml
+[ -f ~/.config/lxpanel/LXDE-pi/panels/panel ] && mv ~/.config/lxpanel/LXDE-pi/panels/panel ~/.config/lxpanel/LXDE-pi/panels/panel.bak
+[ -f /etc/xdg/lxsession/LXDE-pi/autostart ] && sudo mv /etc/xdg/lxsession/LXDE-pi/autostart /etc/xdg/lxsession/LXDE-pi/autostart.bak
 sudo sed -e 's/^#xserver-command=X$/xserver-command=X -nocursor/g' -i /etc/lightdm/lightdm.conf
 
 # Make sure we have proper framebuffer depth.
