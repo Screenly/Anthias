@@ -184,8 +184,7 @@ def view_image(uri):
 def view_video(uri, duration):
     logging.debug('Displaying video %s for %s ', uri, duration)
 
-    raspi_arch = ['armv61', 'armv71']
-    if arch in raspi_arch:
+    if arch in ['armv61', 'armv71']
         player_args = ['omxplayer', uri]
         player_kwargs = {'o': settings['audio_output'], '_bg': True, '_ok_code': [0, 124]}
         player_kwargs['_ok_code'] = [0, 124]
