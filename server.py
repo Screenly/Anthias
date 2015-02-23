@@ -1,11 +1,25 @@
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 
-__author__ = "Viktor Petersson"
-__copyright__ = "Copyright 2012, WireLoad Inc"
-__license__ = "Dual License: GPLv2 and Commercial License"
-__version__ = "0.1.4"
-__email__ = "vpetersson@wireload.net"
+## Some legacy parts of this project are Copyright 2012, Wireload Inc
+## Viktor Petersson, vpetersson@wireload.net
+
+__author__ = "James Kirsop"
+__version__ = "0.1.5"
+__email__ = "james.kirsop@gmail.com"
 
 from datetime import datetime, timedelta
 from functools import wraps
@@ -36,6 +50,10 @@ from utils import url_fails
 from utils import get_video_duration
 
 from settings import settings, DEFAULTS
+import string
+
+from classes import AvailableDays
+import operator
 ################################
 # Utilities
 ################################
@@ -174,16 +192,6 @@ def prepare_asset(request):
             # Crashes if it's not an int. We want that.
             asset['duration'] = int(get('duration'))
 
-        if get('start_date'):
-            asset['start_date'] = datetime.strptime(get('start_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
-        else:
-            asset['start_date'] = ""
-
-        if get('end_date'):
-            asset['end_date'] = datetime.strptime(get('end_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
-        else:
-            asset['end_date'] = ""
-
         if not asset['asset_id']:
             raise Exception
 
@@ -206,8 +214,11 @@ def prepare_schedule(request):
         return val.strip() if isinstance(val, basestring) else val
 
     if all([get('name')]):
-
-        str = ','
+        if get('pattern_days') is not None:
+            pattern_days = [ int(x) for x in get('pattern_days') ]
+            pattern_days = reduce(operator.or_, pattern_days)
+        else:
+            pattern_days = None
         schedule = {
             'asset_id' : get('asset_id'),
             'name': get('name').decode('UTF-8'),
@@ -215,18 +226,28 @@ def prepare_schedule(request):
             'repeat': get('repeat'),
             'priority': get('priority'),
             'pattern_type': get('pattern_type'),
-            'pattern_days': str.join(get('pattern_days')),
+            'pattern_days': pattern_days,
         }
 
         if get('start_date'):
-            schedule['start_date'] = datetime.strptime(get('start_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
+            schedule['start_date'] = datetime.strptime(get('start_date').split(".")[0], "%Y-%m-%dT%H:%M:%S").strftime("%Y-%m-%d")
         else:
             schedule['start_date'] = ""
 
+        if get('start_time'):
+            schedule['start_time'] = datetime.strptime(get('start_time').split(".")[0], "%I:%M %p")
+        else:
+            schedule['start_time'] = ""
+
         if get('end_date'):
-            schedule['end_date'] = datetime.strptime(get('end_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
+            schedule['end_date'] = datetime.strptime(get('end_date').split(".")[0], "%Y-%m-%dT%H:%M:%S").strftime("%Y-%m-%d")
         else:
             schedule['end_date'] = ""
+
+        if get('end_time'):
+            schedule['end_time'] = datetime.strptime(get('end_time').split(".")[0], "%I:%M %p")
+        else:
+            schedule['end_time'] = ""
 
     else:
         raise Exception("Please provide a name")
@@ -239,7 +260,12 @@ def prepare_schedule(request):
 def api_schedules(asset_id):
     schedules = schedules_helper.read(db_conn, asset_id)
     for schedule in schedules:
-        schedule['pattern_days'] = schedule['pattern_days'].split(',')
+        tList = []
+        if(isinstance(schedule['pattern_days'],(int,long,float))):
+            for name, member in AvailableDays.__members__.items():
+                if schedule['pattern_days'] & member.value:
+                    tList.append(member.value)
+        schedule['pattern_days'] = tList
     return make_json_response(schedules)
 
 @route('/api/assets', method="GET")

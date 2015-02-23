@@ -1,16 +1,18 @@
 import db
 import queries
 import datetime
+import classes
 
-FIELDS = ["id", "asset_id", "name", "start_date", "end_date", "duration", "repeat", "priority", "pattern_type", "pattern_days"] 
+FIELDS = ["id", "asset_id", "name", "start_date", "start_time", "end_date", "end_time", "duration", "repeat", "priority", "pattern_type", "pattern_days"] 
 
-create_schedules_table = 'CREATE TABLE schedules(id integer primary key autoincrement, asset_id text, name text, start_date timestamp, end_date timestamp, duration integer, repeat integer default 0, priority integer default 0, pattern_days text, pattern_type text)'
-
+#create_schedules_table = 'CREATE TABLE schedules(id integer primary key autoincrement, asset_id text, name text, start_date timestamp, end_date timestamp, duration integer, repeat integer default 0, priority integer default 0, pattern_days text, pattern_type text)'
+create_schedules_table = 'CREATE TABLE schedules(id integer primary key autoincrement, asset_id text, name text, start_date text, start_time text, end_date text, end_time text, duration integer, repeat integer default 0, priority integer default 0, pattern_days integer default 0, pattern_type text);'
 
 get_time = datetime.datetime.utcnow
+get_date = datetime.date.today
 
 
-def is_active(schedule, at_time=None):
+def is_active(schedule, at_date=None, at_time=None):
     """Accepts a schedule dictionary and determines if it
     is active at the given time. If no time is specified, 'now' is used.
 
@@ -26,13 +28,15 @@ def is_active(schedule, at_time=None):
 
     """
 
-    if schedule['start_date'] and schedule['end_date']:
-        if scheule['repeat']:
-            at = at_time or get_time()
-            return schedule['start_date'] < at and schedule['end_date'] > at
-        # schedule repeats
-        # get value of repeats_when with case statement
-
+    at = at_time or get_time()
+    at_d = at_date or get_date()
+    if (schedule['start_date'] and schedule['start_date'] <= at_d) and (schedule['repeat'] or schedule['end_date']) and (schedule['start_time'].time() <= at and schedule['end_time'].time() >= at):
+        if schedule['repeat'] and (schedule['end_date'] == None or schedule['end_date'] >= at_d):
+            if schedule['pattern_type'] == 'weekly':
+                print 'Weekly Pattern Type'
+            return schedule['pattern_type'] == 'daily'
+        else:
+            return schedule['end_date'] >= at
     return False
 
 

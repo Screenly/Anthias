@@ -1,13 +1,17 @@
 import db
 import queries
 import datetime
+import schedules_helper
+from classes import AvailableDays
+import operator
+import string
 
-FIELDS = ["asset_id", "name", "uri", "start_date",
-          "end_date", "duration", "mimetype", "is_enabled", "nocache", "play_order"]
+FIELDS = ["asset_id", "name", "uri", "duration", "end_date", "start_date", "mimetype", "is_enabled", "nocache", "play_order"]
 
-create_assets_table = 'CREATE TABLE assets(asset_id text primary key, name text, uri text, md5 text, start_date timestamp, end_date timestamp, duration text, mimetype text, is_enabled integer default 0, nocache integer default 0, play_order integer default 0)'
+create_assets_table = 'CREATE TABLE assets(asset_id text primary key, name text, uri text, md5 text, duration text, mimetype text, is_enabled integer default 0, nocache integer default 0, play_order integer default 0)'
 
 get_time = datetime.datetime.utcnow
+get_date = datetime.date.utcnow
 
 
 def is_active(asset, at_time=None):
@@ -25,16 +29,29 @@ def is_active(asset, at_time=None):
     False
 
     """
+    
+    if asset['is_enabled']
+        return True
+    return False
 
-    if asset['is_enabled'] and asset['start_date'] and asset['end_date']:
+def is_scheduled(asset, conn, at_time=None):
+    """Similar to is_active, but checks to see if the current asset is scheudled
+    in addition to if it's active"""
+    return True
+    if asset['is_enabled'] and asset['start_date'] and (schedules_helper.get_schedules(asset['asset_id'],conn) or asset['end_date']):
         at = at_time or get_time()
-        return asset['start_date'] < at and asset['end_date'] > at
+        return True
     return False
 
 
 def get_playlist(conn):
     """Returns all currently active assets."""
-    return filter(is_active, read(conn))
+    #return filter(is_active, read(conn))
+    return [asset for asset in read(conn) if is_scheduled(asset, conn)]
+
+def get_playlist_scheduled(conn):
+    """Returns all currently active assets that are scheduled to play."""
+    return filter(is_scheduled, read(conn))
 
 
 def mkdict(keys):

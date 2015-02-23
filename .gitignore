@@ -34,3 +34,7 @@ pip-log.txt
 .Spotlight-V100/*
 .sass-cache/*
 venv
+
+bottle.py
+
+ui/*

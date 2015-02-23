@@ -37,12 +37,6 @@
         %i.asset-icon
         :plain
           <%= name %>
-      %td(style="width:21%")
-        :plain
-          <%= start_date %>
-      %td(style="width:21%")
-        :plain
-          <%= end_date %>
       %td.asset_row_btns(style="width:21%")
         %button.edit-schedule-button.btn(type="button")
           %i.icon-time
@@ -76,6 +70,7 @@
     %script(type="text/template", id="asset-modal-template")
       .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
         %form.form-horizontal#add-form
+          %input(type="hidden", name="duration")
           .modal-header
             %h3#modalLabel Add Asset
           .modal-body
@@ -121,28 +116,7 @@
                     %option(value="image") Image
                     %option(value="video") Video
                     %option(value="webpage") Webpage
-
-            %hr
-            %h4 Asset Schedule Summary
-            %input(type="hidden", name="schedules_int", value="1")
             %fieldset
-              .control-group.start_date
-                %label.control-label Start Date
-                .controls
-                  %input.span2.date(type="text", name="start_date_date")
-                  %input.span2.time(type="text", name="start_date_time")
-                  %input(type="hidden", name="start_date")
-              .control-group.end_date
-                %label.control-label End Date
-                .controls
-                  %input.span2.date(type="text", name="end_date_date")
-                  %input.span2.time(type="text", name="end_date_time")
-                  %input(type="hidden", name="end_date")
-              .control-group.duration
-                %label.control-label Duration
-                .controls
-                  %input.span1(type="number", name="duration")
-                  seconds
               .advanced-accordion.accordion
                 .accordion-group
                   .accrodion-heading
@@ -211,8 +185,6 @@
               %thead(style="display:none")
                 %tr
                   %th.asset_row_name Name
-                  %th(style="width:21%") Start
-                  %th(style="width:21%") End
                   %th(style="width:13%")
                   %th(style="width:7%")
               %tbody#active-assets
@@ -224,8 +196,6 @@
               %thead(style="display:none")
                 %tr
                   %th.asset_row_name Name
-                  %th(style="width:21%") Start
-                  %th(style="width:21%") End
                   %th(style="width:13%")
                   %th(style="width:7%")
               %tbody#inactive-assets
@@ -233,6 +203,4 @@
     #footer
       .container
         .copy
-          &copy; <strong>2012-2013.</strong> WireLoad, Inc.
-        %a(id="wireload-logo", href="http://wireload.net/")
-          %img(src="/static/img/wireload-logo.png", alt="WireLoad")
+          Some components &copy; <strong>2012-2013.</strong> WireLoad, Inc.
