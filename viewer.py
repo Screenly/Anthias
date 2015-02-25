@@ -184,7 +184,7 @@ def view_image(uri):
 def view_video(uri, duration):
     logging.debug('Displaying video %s for %s ', uri, duration)
 
-    if arch == 'armv6l':
+    if arch in ['armv6l', 'armv7l']:
         player_args = ['omxplayer', uri]
         player_kwargs = {'o': settings['audio_output'], '_bg': True, '_ok_code': [0, 124]}
         player_kwargs['_ok_code'] = [0, 124]
@@ -255,7 +255,7 @@ def pro_init():
 
     if is_pro_init:
         logging.debug('Detected Pro initiation cycle.')
-        load_browser(url=HOME+INTRO)
+        load_browser(url=HOME + INTRO)
     else:
         return False
 
