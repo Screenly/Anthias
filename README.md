@@ -15,6 +15,13 @@ Assuming you're in the source code repository, simply run:
 
 ## Disk Image Changelog
 
+### 2015-02-25
+
+ * Adds support for Raspberry Pi B+ V2.
+ * Upgrades kernel and kernel modules.
+ * Brings system packages up to date.
+ * Various bug fixes.
+
 ### 2014-11-03
 
  * Adds a setting for time display in 24 or 12 hour formats.
