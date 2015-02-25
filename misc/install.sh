@@ -59,8 +59,8 @@ echo "Installing more dependencies..."
 sudo pip install -r ~/screenly/requirements.txt -q > /dev/null
 
 echo "Adding Screenly to X auto start..."
-mkdir -p ~/.config/lxsession/LXDE$SUFFIX/
-echo "@~/screenly/misc/xloader.sh" > ~/.config/lxsession/LXDE$SUFFIX/autostart
+mkdir -p "~/.config/lxsession/LXDE$SUFFIX/"
+echo "@~/screenly/misc/xloader.sh" > "~/.config/lxsession/LXDE$SUFFIX/autostart"
 
 echo "Increasing swap space to 500MB..."
 echo "CONF_SWAPSIZE=500" > ~/dphys-swapfile
@@ -88,11 +88,11 @@ sudo /etc/init.d/supervisor start > /dev/null
 echo "Making modifications to X..."
 [ -f ~/.gtkrc-2.0 ] && rm -f ~/.gtkrc-2.0
 ln -s ~/screenly/misc/gtkrc-2.0 ~/.gtkrc-2.0
-[ -f ~/.config/openbox/lxde$SUFFIX-rc.xml ] && mv ~/.config/openbox/lxde$SUFFIX-rc.xml ~/.config/openbox/lxde$SUFFIX-rc.xml.bak
+[ -f "~/.config/openbox/lxde$SUFFIX-rc.xml" ] && mv "~/.config/openbox/lxde$SUFFIX-rc.xml" "~/.config/openbox/lxde$SUFFIX-rc.xml.bak"
 [ -d ~/.config/openbox ] || mkdir -p ~/.config/openbox
-ln -s ~/screenly/misc/lxde-rc.xml ~/.config/openbox/lxde$SUFFIX-rc.xml
-[ -f ~/.config/lxpanel/LXDE$SUFFIX/panels/panel ] && mv ~/.config/lxpanel/LXDE$SUFFIX/panels/panel ~/.config/lxpanel/LXDE$SUFFIX/panels/panel.bak
-[ -f /etc/xdg/lxsession/LXDE$SUFFIX/autostart ] && sudo mv /etc/xdg/lxsession/LXDE$SUFFIX/autostart /etc/xdg/lxsession/LXDE$SUFFIX/autostart.bak
+ln -s ~/screenly/misc/lxde-rc.xml "~/.config/openbox/lxde$SUFFIX-rc.xml"
+[ -f "~/.config/lxpanel/LXDE$SUFFIX/panels/panel" ] && mv "~/.config/lxpanel/LXDE$SUFFIX/panels/panel" "~/.config/lxpanel/LXDE$SUFFIX/panels/panel.bak"
+[ -f "/etc/xdg/lxsession/LXDE$SUFFIX/autostart" ] && sudo mv "/etc/xdg/lxsession/LXDE$SUFFIX/autostart" "/etc/xdg/lxsession/LXDE$SUFFIX/autostart.bak"
 sudo sed -e 's/^#xserver-command=X$/xserver-command=X -nocursor/g' -i /etc/lightdm/lightdm.conf
 
 # Make sure we have proper framebuffer depth.
