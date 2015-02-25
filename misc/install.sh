@@ -34,7 +34,7 @@ sudo apt-get -y -qq install \
     watchdog chkconfig feh > /dev/null
 
 echo "Downloading Screenly-OSE..."
-git clone git://github.com/wireload/screenly-ose.git "$HOME/screenly" > /dev/null
+git clone -q git://github.com/wireload/screenly-ose.git "$HOME/screenly" > /dev/null
 
 echo "Installing more dependencies..."
 sudo pip install -r "$HOME/screenly/requirements.txt" -q > /dev/null
