@@ -28,29 +28,10 @@ echo "(This might take a while.)"
 sudo apt-get -y -qq upgrade > /dev/null
 
 echo "Installing dependencies..."
-
-# The latest raspbian (2014-01-07-wheezy-raspbian) causes the following error when installing watchdog:
-# "There is a loop between service watchdog and mathkernel if stopped ..."
-# The fix is described in the 7th post in http://www.raspberrypi.org/forum/viewtopic.php?f=28&t=66059
-#
-# Check, and if we dont find the LSB signature, insert the stuff after the first line which we expect to be #!/bin/sh
-if grep -v -q "BEGIN INIT INFO" /etc/init.d/mathkernel ; then
-  sudo cp /etc/init.d/mathkernel /etc/init.d-mathkernel.modified_by_screenly
-  sudo sed -e '2i### BEGIN INIT INFO\
-# Provides:          mathkernel\
-# Required-Start:    $syslog\
-# Required-Stop:     $syslog\
-# Default-Start:     2 3 4 5\
-# Default-Stop:      0 1 6\
-# Short-Description: mathkernel\
-# Description:       This file should be used to construct scripts to be\
-#                    placed in /etc/init.d.\
-### END INIT INFO\
-#\
-# rest of file here' -i /etc/init.d/mathkernel
-fi
-
-sudo apt-get -y -qq install git-core python-pip python-netifaces python-simplejson python-imaging python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev watchdog chkconfig feh > /dev/null
+sudo apt-get -y -qq install \
+    git-core python-pip python-netifaces python-simplejson python-imaging
+    python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev
+    watchdog chkconfig feh > /dev/null
 
 echo "Downloading Screenly-OSE..."
 git clone git://github.com/wireload/screenly-ose.git "$HOME/screenly" > /dev/null
@@ -88,14 +69,18 @@ sudo /etc/init.d/supervisor start > /dev/null
 echo "Making modifications to X..."
 [ -f "$HOME/.gtkrc-2.0" ] && rm -f "$HOME/.gtkrc-2.0"
 ln -s "$HOME/screenly/misc/gtkrc-2.0" "$HOME/.gtkrc-2.0"
-[ -f "$HOME/.config/openbox/lxde$SUFFIX-rc.xml" ] && mv "$HOME/.config/openbox/lxde$SUFFIX-rc.xml" "$HOME/.config/openbox/lxde$SUFFIX-rc.xml.bak"
+[ -f "$HOME/.config/openbox/lxde$SUFFIX-rc.xml" ] && \
+    mv "$HOME/.config/openbox/lxde$SUFFIX-rc.xml" "$HOME/.config/openbox/lxde$SUFFIX-rc.xml.bak"
 [ -d "$HOME/.config/openbox" ] || mkdir -p "$HOME/.config/openbox"
 ln -s "$HOME/screenly/misc/lxde-rc.xml" "$HOME/.config/openbox/lxde$SUFFIX-rc.xml"
-[ -f "$HOME/.config/lxpanel/LXDE$SUFFIX/panels/panel" ] && mv "$HOME/.config/lxpanel/LXDE$SUFFIX/panels/panel" "$HOME/.config/lxpanel/LXDE$SUFFIX/panels/panel.bak"
+[ -f "$HOME/.config/lxpanel/LXDE$SUFFIX/panels/panel" ] && \
+    mv "$HOME/.config/lxpanel/LXDE$SUFFIX/panels/panel" "$HOME/.config/lxpanel/LXDE$SUFFIX/panels/panel.bak"
 
 # Cover both situations, as there have been traces of both in recent versions.
-[ -f "/etc/xdg/lxsession/LXDE/autostart" ] && sudo mv "/etc/xdg/lxsession/LXDE/autostart" "/etc/xdg/lxsession/LXDE/autostart.bak"
-[ -f "/etc/xdg/lxsession/LXDE$SUFFIX/autostart" ] && sudo mv "/etc/xdg/lxsession/LXDE$SUFFIX/autostart" "/etc/xdg/lxsession/LXDE$SUFFIX/autostart.bak"
+[ -f "/etc/xdg/lxsession/LXDE/autostart" ] && \
+    sudo mv "/etc/xdg/lxsession/LXDE/autostart" "/etc/xdg/lxsession/LXDE/autostart.bak"
+[ -f "/etc/xdg/lxsession/LXDE$SUFFIX/autostart" ] && \
+    sudo mv "/etc/xdg/lxsession/LXDE$SUFFIX/autostart" "/etc/xdg/lxsession/LXDE$SUFFIX/autostart.bak"
 
 sudo sed -e 's/^#xserver-command=X$/xserver-command=X -nocursor/g' -i /etc/lightdm/lightdm.conf
 
