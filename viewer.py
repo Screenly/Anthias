@@ -170,7 +170,7 @@ def browser_url(url, cb=lambda _: True, force=False):
 
     if url == current_browser_url and not force:
         logging.debug('Already showing %s, reloading it.', current_browser_url)
-        browser_send'reload full')
+        browser_send('reload full')
     else:
         current_browser_url = url
         browser_send('uri ' + current_browser_url, cb=cb)
