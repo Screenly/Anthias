@@ -169,8 +169,12 @@ def browser_url(url, cb=lambda _: True, force=False):
     global current_browser_url
 
     if url == current_browser_url and not force:
-        logging.debug('Already showing %s, reloading it.', current_browser_url)
-        browser_send('reload full')
+        logging.debug('Already showing %s.', current_browser_url)
+
+        # Ideally we want to reload these assets, but it creates a
+        # weird bug for images. Refs #278
+        # logging.debug('Already showing %s, reloading it.', current_browser_url)
+        # browser_send('reload full')
     else:
         current_browser_url = url
         browser_send('uri ' + current_browser_url, cb=cb)
