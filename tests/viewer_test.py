@@ -10,6 +10,10 @@ import os
 class ViewerTestCase(object):
     def setup(self):
         import viewer
+
+        self.original_splash_delay = viewer.SPLASH_DELAY
+        viewer.SPLASH_DELAY = 0
+
         self.u = viewer
 
         self.m_cmd = mock.Mock(name='m_cmd')
@@ -29,6 +33,9 @@ class ViewerTestCase(object):
 
         self.m_loadb = mock.Mock(name='load_browser')
         self.p_loadb = mock.patch.object(self.u, 'load_browser', self.m_loadb)
+
+    def teardown(self):
+        self.u.SPLASH_DELAY = self.original_splash_delay
 
 
 class TestEmptyPl(ViewerTestCase):
