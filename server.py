@@ -114,7 +114,12 @@ def prepare_asset(request):
 
     def get(key):
         val = data.get(key, '')
-        return val.strip() if isinstance(val, basestring) else val
+        if isinstance(val, unicode):
+            return val.strip()
+        elif isinstance(val, basestring):
+            return val.strip().decode('utf-8')
+        else:
+            return val
 
     if all([get('name'),
             get('uri') or (request.files.file_upload != ""),
