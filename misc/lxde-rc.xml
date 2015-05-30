@@ -658,6 +658,7 @@
 <application class="*">
 	<decor>no</decor>
 	<maximized>yes</maximized>
+  <fullscreen>yes</fullscreen>
 </application>
 
     <!--

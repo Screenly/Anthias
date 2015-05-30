@@ -9,8 +9,9 @@ mock==1.0.1
 netifaces==0.8
 nose==1.2.1
 pytz==2012d
-requests==0.14.0
+requests==2.7.0
 sh==1.08
 six==1.2.0
 uptime==2.0.2
 wsgiref==0.1.2
+enum34==1.0.4

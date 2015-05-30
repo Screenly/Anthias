@@ -4,6 +4,7 @@
 __author__ = "Viktor Petersson"
 __copyright__ = "Copyright 2012-2013, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
+__additions__ = "James Kirsop - 2013-2014"
 
 from datetime import datetime, timedelta
 from glob import glob
@@ -12,7 +13,7 @@ from os import stat as os_stat, utime, system, kill
 from platform import machine
 from random import shuffle
 from requests import get as req_get, head as req_head
-from stat import S_ISFIFO
+# from stat import S_ISFIFO
 from time import sleep, time
 import json
 import logging
@@ -33,6 +34,9 @@ last_settings_refresh = None
 load_screen_pid = None
 is_pro_init = None
 current_browser_url = None
+browser = None
+UZBLRC = '/screenly/misc/uzbl.rc'
+BLACK_PAGE = '/tmp/screenly_html/black_page.html'
 
 # Detect the architecture and load the proper video player
 arch = machine()
@@ -99,10 +103,11 @@ class Scheduler(object):
         logging.debug('Scheduler init')
         self.update_playlist()
 
+        # self.previous_asset = None
+
     def get_next_asset(self):
         logging.debug('get_next_asset')
         self.refresh_playlist()
-        logging.debug('get_next_asset after refresh')
         if self.nassets == 0:
             return None
         idx = self.index
@@ -110,6 +115,7 @@ class Scheduler(object):
         logging.debug('get_next_asset counter %d returning asset %d of %d' % (self.counter, idx + 1, self.nassets))
         if settings['shuffle_playlist'] and self.index == 0:
             self.counter += 1
+        self.previous_asset = self.assets[idx]
         return self.assets[idx]
 
     def refresh_playlist(self):
@@ -144,13 +150,16 @@ class Scheduler(object):
 def generate_asset_list():
     logging.info('Generating asset-list...')
     playlist = assets_helper.get_playlist(db_conn)
-    deadline = sorted([asset['end_date'] for asset in playlist])[0] if len(playlist) > 0 else None
-    logging.debug('generate_asset_list deadline: %s' % deadline)
+    logging.debug('Assets: %s', str(len(playlist)))
+    # deadline = sorted([asset['end_date'] for asset in playlist])[0] if len(playlist) > 0 else None
+    # logging.debug('generate_asset_list deadline: %s' % deadline)
+    deadline = None
 
     if settings['shuffle_playlist']:
         shuffle(playlist)
 
-    return (playlist, deadline)
+    # return (playlist, deadline)
+    return (playlist, None)
 
 
 def watchdog():
@@ -187,71 +196,54 @@ def asset_is_accessible(uri):
         return False
 
 
-def load_browser():
+def load_browser(url=None):
+    logging.info("URL: %s", url)
+    global browser, current_browser_url, is_pro_init
     logging.info('Loading browser...')
 
-    global is_pro_init, current_browser_url
     is_pro_init = get_is_pro_init()
-    if not is_pro_init:
-        logging.debug('Detected Pro initiation cycle.')
+    if browser:
+        logging.info('Killing previous browser instances %s', browser.pid)
+        browser.process.kill()
 
         # Wait for the intro file to exist (if it doesn't)
-        intro_file = path.join(settings.get_configdir(), 'intro.html')
-        while not path.isfile(intro_file):
-            logging.debug('intro.html missing. Going to sleep.')
-            sleep(0.5)
+        # intro_file = path.join(settings.get_configdir(), 'intro.html')
+        # while not path.isfile(intro_file):
+        #     logging.debug('intro.html missing. Going to sleep.')
+        #     sleep(0.5)
 
-        browser_load_url = 'file://' + intro_file
+    if not url is None:
+        current_browser_url = url
 
-    elif settings['show_splash']:
-        browser_load_url = "http://%s:%s/splash_page" % (settings.get_listen_ip(), settings.get_listen_port())
+        # browser_load_url = 'file://' + intro_file
+
+    # elif settings['show_splash']:
+    #     current_browser_url = "http://%s:%s/splash_page" % (settings.get_listen_ip(), settings.get_listen_port())
+    # else:
+    #     current_browser_url = black_page
+
+    browser = sh.Command('uzbl-browser')(print_events=True, config='-', uri=current_browser_url, _bg=True)
+    logging.info('Browser loading %s. Running as PID %s.', current_browser_url, browser.pid)
+
+    uzbl_rc = 'ssl_verify {}\n'.format('1' if settings['verify_ssl'] else '0')
+    with open(HOME + UZBLRC) as f:  # load uzbl.rc
+        uzbl_rc = f.read() + uzbl_rc
+    browser_send(uzbl_rc)
+
+def browser_send(command, cb=lambda _: True):
+    if not (browser is None) and browser.process.alive:
+        logging.debug('Browser is alive')
+        while not browser.process._pipe_queue.empty():  # flush stdout
+            browser.next()
+
+        browser.process.stdin.put(command + '\n')
+
+        while True:  # loop until cb returns True
+            if cb(browser.next()):
+                break
     else:
-        browser_load_url = black_page
-
-    geom = [l for l in sh.xwininfo('-root').split("\n") if 'geometry' in l][0].split('y ')[1]
-    browser = sh.Command('uzbl-browser')(g=geom, uri=browser_load_url, _bg=True)
-    current_browser_url = browser_load_url
-
-    logging.info('Browser loaded. Running as PID %d.' % browser.pid)
-
-    if settings['show_splash']:
-        # Show splash screen for 60 seconds.
-        sleep(60)
-    else:
-        # Give browser some time to start (we have seen multiple uzbl running without this)
-        sleep(10)
-
-    return browser
-
-
-def get_fifo():
-    """
-    Look for UZBL's FIFO-file in /tmp.
-    Don't give up until it has been found.
-    """
-    found_fifo = False
-    fifo = None
-
-    logging.debug('Looking for UZBL fifo...')
-
-    while not found_fifo:
-        # Sort the files with the newest file first,
-        # to avoid an old fifo being found first.
-        candidates = glob('/tmp/uzbl_fifo_*')
-        sorted_candidates = sorted(candidates, key=path.getctime, reverse=True)
-        for file in sorted_candidates:
-            if S_ISFIFO(os_stat(file).st_mode):
-                found_fifo = True
-                fifo = file
-        sleep(0.5)
-    logging.debug('Found UZBL fifo in %s.' % file)
-    return fifo
-
-
-def browser_fifo(data):
-    f = open(fifo, 'a')
-    f.write('%s\n' % data)
-    f.close()
+        logging.info('browser found dead, restarting')
+        load_browser()
 
 
 def browser_socket(command, timeout=0.5):
@@ -272,7 +264,7 @@ def browser_page_has(name):
     """Return true if the given name is defined on the currently loaded browser page."""
 
     positive_response = "COMMAND_EXECUTED js  'typeof(%s) !== \\'undefined\\''\ntrue" % name
-    return positive_response in browser_socket("js typeof(%s) !== 'undefined'" % name)
+    # return positive_response in browser_socket("js typeof(%s) !== 'undefined'" % name)
 
 
 def browser_reload(force=False):
@@ -285,47 +277,27 @@ def browser_reload(force=False):
     else:
         reload_command = 'reload_ign_cache'
 
-    browser_fifo(reload_command)
+    # browser_fifo(reload_command)
 
 
 def browser_clear():
-    """Clear the browser if necessary.
-
-    Call this function right before displaying now browser content (with feh or omx).
-
-    When a web assset is loaded into the browser, it's not cleared after the duration but instead
-    remains displayed until the next asset is ready to show. This minimises the amount of transition
-    time - in the case where the next asset is also web content the browser is never cleared,
-    and in other cases it's cleared as late as possible.
-
-    """
-
-    if current_browser_url != black_page:
-        browser_url(black_page)
+    """Clear the browser if necessary. """
+    browser_url(BLACK_PAGE, force=force, cb=lambda buf: 'LOAD_FINISH' in buf and BLACK_PAGE in buf)
 
 
-def browser_url(url):
-    try:
-        browser_page_has('life')
-    except sh.ErrorReturnCode_1 as e:
-        logging.exception('browser socket dead, restarting browser')
-        global fifo, browser_pid
-        browser_pid = load_browser().pid
-        fifo = get_fifo()
-        disable_browser_status()
-
+def browser_url(url, cb=lambda _: True, force=False):
     global current_browser_url
-
-    if url == current_browser_url:
-        logging.debug("Already showing %s, keeping it." % url)
-        return
-    browser_fifo('set uri = %s' % url)
-    current_browser_url = url
+    if url == current_browser_url and not force:
+        logging.debug('Already showing %s, keeping it.', current_browser_url)
+    else:
+        current_browser_url = url
+        browser_send('uri ' + current_browser_url, cb=cb)
+        logging.info('current url is %s', current_browser_url)
 
 
 def disable_browser_status():
     logging.debug('Disabled status-bar in browser')
-    browser_fifo('set show_status = 0')
+    # browser_fifo('set show_status = 0')
 
 
 def view_image(uri, asset_id, duration):
@@ -481,11 +453,58 @@ def reload_settings():
     last_setting_refresh = datetime.utcnow()
 
 
+def wait_for_splash_page(url):
+    max_retries = 20
+    retries = 0
+    while retries < max_retries:
+        fetch_head = req_head(url)
+        if fetch_head.status_code == 200:
+            break
+        else:
+            sleep(1)
+            retries += 1
+            logging.debug('Waiting for splash-page. Retry %d') % retries
+
+
+
+def asset_loop(scheduler):
+    # check_update()
+    asset = scheduler.get_next_asset()
+
+    if asset is None:
+            # The playlist is empty, go to sleep.
+            logging.info('Playlist is empty. Going to sleep.')
+            toggle_load_screen(True)
+            browser_clear()
+            sleep(10)
+
+    elif not url_fails(asset['uri']):
+        logging.info('Showing asset %s.' % asset["name"])
+
+        if "image" in asset["mimetype"]:
+            view_image(asset['uri'], asset['asset_id'], asset["duration"])
+        elif "video" in asset["mimetype"]:
+            view_video(asset["uri"])
+        elif "web" in asset["mimetype"]:
+            # view_web(asset["uri"], asset["duration"])
+            # logging.info("I'd probably update the browser here!")
+            browser_url(asset["uri"])
+        else:
+            print "Unknown MimeType, or MimeType missing"
+        if "image" in asset["mimetype"] or "web" in asset["mimetype"]:
+            if not asset["duration"] == None:
+                sleep(int(asset["duration"]))
+            else:
+                sleep(10)
+    else:
+        logging.info('Asset {0} is not available, skipping.'.format(asset['uri']))
+
+
 if __name__ == "__main__":
 
     HOME = getenv('HOME', '/home/pi/')
     # Bring up load screen
-    toggle_load_screen(True)
+    # toggle_load_screen(True)
 
     # Install signal handlers
     signal.signal(signal.SIGUSR1, sigusr1)
@@ -503,84 +522,26 @@ if __name__ == "__main__":
         makedirs(html_folder)
 
     # Set up HTML templates
-    black_page = html_templates.black_page()
+    BLACK_PAGE = html_templates.black_page()
 
     # Fire up the browser
-    run_browser = load_browser()
+    # run_browser = load_browser()
 
-    logging.debug('Getting browser PID.')
-    browser_pid = run_browser.pid
+    if settings['show_splash']:
+        url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port())
+        wait_for_splash_page(url)
+        load_browser(url=url)
+        sleep(45)
+    else:
+        uri = 'file://' + BLACK_PAGE
+        load_browser(url=uri)
 
-    logging.debug('Getting FIFO.')
-    fifo = get_fifo()
-
-    logging.debug('Disable the browser status bar.')
-    disable_browser_status()
-
-    if not settings['verify_ssl']:
-        browser_fifo('set ssl_verify = 0')
-
-    # Disable load screen early if initialization mode
-    if not is_pro_init:
-        toggle_load_screen(False)
-
-    # Wait until initialized (Pro only).
-    did_show_pin = False
-    did_show_claimed = False
-    while not get_is_pro_init():
-        # Wait for the status page to fully load.
-        while not browser_page_has("showPin"):
-            logging.debug("Waiting for intro page to load...")
-            sleep(1)
-
-        with open(path.join(settings.get_configdir(), 'setup_status.json'), 'rb') as status_file:
-            status = json.load(status_file)
-
-        if not did_show_pin and not did_show_claimed and status.get('pin'):
-            browser_fifo('''js showPin("%s")''' % status.get('pin').replace('"', '\\"'))
-            did_show_pin = True
-
-        if not did_show_claimed and status.get('claimed'):
-            browser_fifo('''js showUpdating()''')
-            did_show_claimed = True
-
-        logging.debug('Waiting for node to be initialized.')
-        sleep(1)
-
-    # Bring up the blank page (in case there are only videos).
-    logging.debug('Loading blank page.')
-    view_web(black_page, 1)
+    # logging.debug('Disable the browser status bar.')
+    # disable_browser_status()
 
     scheduler = Scheduler()
 
     # Infinite loop.
     logging.debug('Entering infinite loop.')
     while True:
-        asset = scheduler.get_next_asset()
-        logging.debug('got asset %s' % asset)
-
-        is_up_to_date = check_update()
-        logging.debug('Check update: %s' % str(is_up_to_date))
-
-        if asset is None:
-            # The playlist is empty, go to sleep.
-            logging.info('Playlist is empty. Going to sleep.')
-            toggle_load_screen(True)
-            browser_clear()
-            sleep(5)
-        elif not url_fails(asset['uri']):
-            toggle_load_screen(False)
-            logging.info('Showing asset %s.' % asset["name"])
-
-            watchdog()
-
-            if "image" in asset["mimetype"]:
-                view_image(asset['uri'], asset['asset_id'], asset["duration"])
-            elif "video" in asset["mimetype"]:
-                view_video(asset["uri"])
-            elif "web" in asset["mimetype"]:
-                view_web(asset["uri"], asset["duration"])
-            else:
-                print "Unknown MimeType, or MimeType missing"
-        else:
-            logging.info('Asset {0} is not available, skipping.'.format(asset['uri']))
+        asset_loop(scheduler)

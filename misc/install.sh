@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Installing Screenly OSE (beta)"
+echo "Installing Screenly OSE"
 
 ## Simple disk storage check. Naively assumes root partition holds all system data.
 ROOT_AVAIL=$(df -k / | tail -n 1 | awk {'print $4'})
@@ -22,23 +22,33 @@ echo "Installing dependencies..."
 sudo apt-get -y -qq install git-core python-pip python-netifaces python-simplejson python-imaging python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev watchdog chkconfig feh > /dev/null
 
 echo "Downloading Screenly-OSE..."
-git clone git://github.com/wireload/screenly-ose.git ~/screenly > /dev/null
+git clone git://github.com/jameskirsop/screenly-ose.git "$HOME/screenly" > /dev/null
 
 echo "Installing more dependencies..."
-sudo pip install -r ~/screenly/requirements.txt -q > /dev/null
+sudo pip install -r "$HOME/screenly/requirements.txt" -q > /dev/null
+
+echo "Updating pip packages"
+sudo pip install requests --upgrade
+sudo pip install requests[security]
 
 echo "Adding Screenly to X auto start..."
-mkdir -p ~/.config/lxsession/LXDE/
-echo "@~/screenly/misc/xloader.sh" > ~/.config/lxsession/LXDE/autostart
+mkdir -p "$HOME/.config/lxsession/LXDE$SUFFIX/"
+echo "@$HOME/screenly/misc/xloader.sh" > "$HOME/.config/lxsession/LXDE$SUFFIX/autostart"
+
+echo "Setting uzbl browser to start in full screen mode"
+sudo sed -i '/<\/applications>/ i\ <application name="uzbl*">\n<fullscreen>yes</fullscreen>\n</application>' lxde-pi-rc.xml
+
+echo "Removing default lxpanel profile"
+sed -i 's/^@lxpanel/#&/' /etc/xdg/lxsession/LXDE-pi/autostart
 
 echo "Increasing swap space to 500MB..."
-echo "CONF_SWAPSIZE=500" > ~/dphys-swapfile
+echo "CONF_SWAPSIZE=500" > "$HOME/dphys-swapfile"
 sudo cp /etc/dphys-swapfile /etc/dphys-swapfile.bak
-sudo mv ~/dphys-swapfile /etc/dphys-swapfile
+sudo mv "$HOME/dphys-swapfile" /etc/dphys-swapfile
 
-echo "Adding Screenly's config-file"
-mkdir -p ~/.screenly
-cp ~/screenly/misc/screenly.conf ~/.screenly/
+echo "Adding Screenlys config-file"
+mkdir -p "$HOME/.screenly"
+cp "$HOME/screenly/misc/screenly.conf" "$HOME/.screenly/"
 
 echo "Enabling Watchdog..."
 sudo modprobe bcm2708_wdog > /dev/null
@@ -50,18 +60,19 @@ sudo sed -e 's/#watchdog-device/watchdog-device/g' -i /etc/watchdog.conf
 sudo /etc/init.d/watchdog start
 
 echo "Adding Screenly to autostart (via Supervisord)"
-sudo ln -s ~/screenly/misc/supervisor_screenly.conf /etc/supervisor/conf.d/screenly.conf
+sudo ln -s "$HOME/screenly/misc/supervisor_screenly.conf" /etc/supervisor/conf.d/screenly.conf
 sudo /etc/init.d/supervisor stop > /dev/null
 sudo /etc/init.d/supervisor start > /dev/null
 
 echo "Making modifications to X..."
-[ -f ~/.gtkrc-2.0 ] && rm -f ~/.gtkrc-2.0
-ln -s ~/screenly/misc/gtkrc-2.0 ~/.gtkrc-2.0
-[ -f ~/.config/openbox/lxde-rc.xml ] && mv ~/.config/openbox/lxde-rc.xml ~/.config/openbox/lxde-rc.xml.bak
-[ -d ~/.config/openbox ] || mkdir -p ~/.config/openbox
-ln -s ~/screenly/misc/lxde-rc.xml ~/.config/openbox/lxde-rc.xml
-[ -f ~/.config/lxpanel/LXDE/panels/panel ] && mv ~/.config/lxpanel/LXDE/panels/panel ~/.config/lxpanel/LXDE/panels/panel.bak
+[ -f "$HOME/.gtkrc-2.0" ] && rm -f "$HOME/.gtkrc-2.0"
+ln -s "$HOME/screenly/misc/gtkrc-2.0" "$HOME/.gtkrc-2.0"
+[ -f "$HOME/.config/openbox/lxde-rc.xml" ] && mv "$HOME/.config/openbox/lxde-rc.xml" "$HOME/.config/openbox/lxde-rc.xml.bak"
+[ -d "$HOME/.config/openbox" ] || mkdir -p "$HOME/.config/openbox"
+ln -s "$HOME/screenly/misc/lxde-rc.xml" "$HOME/.config/openbox/lxde$SUFFIX-rc.xml"
+[ -f "$HOME/.config/lxpanel/LXDE$SUFFIX/panels/panel" ] && mv "$HOME/.config/lxpanel/LXDE$SUFFIX/panels/panel" "$HOME/.config/lxpanel/LXDE$SUFFIX/panels/panel.bak"
 [ -f /etc/xdg/lxsession/LXDE/autostart ] && sudo mv /etc/xdg/lxsession/LXDE/autostart /etc/xdg/lxsession/LXDE/autostart.bak
+[ -f "/etc/xdg/lxsession/LXDE$SUFFIX/autostart" ] && sudo mv "/etc/xdg/lxsession/LXDE$SUFFIX/autostart" "/etc/xdg/lxsession/LXDE$SUFFIX/autostart.bak"
 sudo sed -e 's/^#xserver-command=X$/xserver-command=X -nocursor/g' -i /etc/lightdm/lightdm.conf
 
 # Make sure we have proper framebuffer depth.
