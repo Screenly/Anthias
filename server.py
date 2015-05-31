@@ -214,7 +214,7 @@ def prepare_schedule(request):
         return val.strip() if isinstance(val, basestring) else val
 
     if all([get('name')]):
-        if get('pattern_days') is not None:
+        if get('pattern_days'):
             pattern_days = [ int(x) for x in get('pattern_days') ]
             pattern_days = reduce(operator.or_, pattern_days)
         else:
@@ -255,18 +255,6 @@ def prepare_schedule(request):
     return schedule
 
 
-
-@route('/api/schedules/:asset_id', method="GET")
-def api_schedules(asset_id):
-    schedules = schedules_helper.read(db_conn, asset_id)
-    for schedule in schedules:
-        tList = []
-        if(isinstance(schedule['pattern_days'],(int,long,float))):
-            for name, member in AvailableDays.__members__.items():
-                if schedule['pattern_days'] & member.value:
-                    tList.append(member.value)
-        schedule['pattern_days'] = tList
-    return make_json_response(schedules)
 
 @route('/api/assets', method="GET")
 def api_assets():
@@ -331,15 +319,30 @@ def playlist_order():
 ################################
 # Schedule Routes
 
+@route('/api/schedules/:asset_id', method="GET")
+def api_schedules(asset_id):
+    schedules = schedules_helper.read(db_conn, asset_id)
+    for schedule in schedules:
+        tList = []
+        if(isinstance(schedule['pattern_days'],(int,long,float))):
+            for name, member in AvailableDays.__members__.items():
+                if schedule['pattern_days'] & member.value:
+                    tList.append(member.value)
+        schedule['pattern_days'] = tList
+    return make_json_response(schedules)
+
+
+@route('/api/schedules/:asset_id', method="POST")
+@api
+def add_schedule(asset_id):
+    return schedules_helper.create(db_conn, prepare_schedule(request))
+
+
 @route('/api/schedules/:asset_id/:schedule_id', method=["POST", "PUT"])
 @api
 def edit_schedule(asset_id, schedule_id):
     return schedules_helper.update(db_conn, schedule_id, prepare_schedule(request))
 
-@route('/api/schedules/:schedule_id', method="POST")
-@api
-def add_asset(schedule_id):
-    return schedules_helper.create(db_conn, prepare_schedule(request))
 
 @route('/api/schedules/:asset_id/:schedule_id', method="DELETE")
 @api
