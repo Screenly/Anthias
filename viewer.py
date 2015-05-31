@@ -32,7 +32,6 @@ import assets_helper
 # the settings.
 last_settings_refresh = None
 load_screen_pid = None
-is_pro_init = None
 current_browser_url = None
 browser = None
 UZBLRC = '/screenly/misc/uzbl.rc'
@@ -62,16 +61,6 @@ def send_to_front(name):
     logging.debug("Raising %s window %X to front." % (name, win_id))
     libx11.XRaiseWindow(dsp, win_id)
     libx11.XCloseDisplay(dsp)
-
-
-def get_is_pro_init():
-    """
-    Function to handle first-run on Screenly Pro
-    """
-    if path.isfile(path.join(settings.get_configdir(), 'not_initialized')):
-        return False
-    else:
-        return True
 
 
 def sigusr1(signum, frame):
@@ -198,10 +187,9 @@ def asset_is_accessible(uri):
 
 def load_browser(url=None):
     logging.info("URL: %s", url)
-    global browser, current_browser_url, is_pro_init
+    global browser, current_browser_url
     logging.info('Loading browser...')
 
-    is_pro_init = get_is_pro_init()
     if browser:
         logging.info('Killing previous browser instances %s', browser.pid)
         browser.process.kill()
