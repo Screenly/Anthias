@@ -50,6 +50,9 @@
       %td.schedule_repeat
         :plain
           <%= repeat %>
+      %td.days
+        :plain
+          SOON!
       %td.schedule_row_buttons
       	%button.edit-schedule-button.btn(type="button")
       		%i.icon-wrench
@@ -89,11 +92,18 @@
                     .control-group.start_date
                       %label.control-label Start Date
                       .controls
-                        %input.span2.date(type="text", name="start_date")
+                        .date.input-append
+                          %input.span2(type="text", name="start_date")
+                          %input(type="hidden", name="start_date")
+                          %span.add-on
+                            %i.icon-th
                       %label.control-label End Date
                       .controls
-                        %input.span2.date(type="text", name="end_date")
-                        %input(type="hidden", name="end_date")
+                        .date.input-append
+                          %input.span2(type="text", name="end_date")
+                          %input(type="hidden", name="end_date")
+                          %span.add-on
+                            %i.icon-th
                     .control-group
                       %label.control-label Start Time
                       .controls
@@ -201,6 +211,7 @@
                   %th Start Time
                   %th End Time
                   %th Repeats
+                  %th Days
                   %th(style="width:15%")
               %tbody#schedules-tbody
 

@@ -99,7 +99,6 @@
 
     Asset.prototype.idAttribute = "asset_id";
 
-    //Asset.prototype.fields = 'name mimetype uri start_date end_date duration'.split(' ');
     Asset.prototype.fields = 'name mimetype is_enabled duration uri'.split(' ');
 
     Asset.prototype.defaults = function() {
@@ -107,8 +106,6 @@
         name: '',
         mimetype: 'webpage',
         uri: '',
-        // start_date: now(),
-        // end_date: (moment().add('days', 7)).toDate(),
         duration: 0,
         is_enabled: 0,
         nocache: 0
@@ -543,8 +540,8 @@
       var json;
       this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
         name: insertWbr(json.name),
-        start_date: (date_to(json.start_date)).string(),
-        end_date: (date_to(json.end_date)).string()
+        // start_date: (date_to(json.start_date)).string(),
+        // end_date: (date_to(json.end_date)).string()
       })));
       this.$el.prop('id', this.model.get('asset_id'));
       (this.$(".delete-asset-button")).popover({
@@ -787,7 +784,10 @@
       _ref = ['start', 'end'];
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         which = _ref[_i];
-        this.$fieldValue("" + which + "_date", moment.utc(this.$fieldValue("" + which + "_date"),"MM/DD/YYYY").toISOString());
+        if (this.$fieldValue("" + which + "_date").length > 0){
+        // if(this.$fieldValue.length != ""){
+          this.$fieldValue("" + which + "_date", moment.utc(this.$fieldValue("" + which + "_date"),"MM/DD/YYYY").toISOString());        
+        }
       }
       _ref1 = this.model.fields;
       _results = [];
@@ -848,6 +848,8 @@
           this.$fieldValue("" + which + "_date", d.date());
           (this.$f("" + which + "_date")).datepicker({
             autoclose: true,
+            todayHighlight: true,
+            clearBtn: true,
           });
           (this.$f("" + which + "_date")).datepicker('setValue', d.date());
           d = date_to(this.model.get("" + which + "_time")).time();
@@ -958,10 +960,10 @@
       var json;
       this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
          name: json.name,
-         start_date: (date_to(json.start_date)).date(),
-         end_date: (date_to(json.end_date)).date(),
-         start_time: (date_to(json.start_time)).time(),
-         end_time: (date_to(json.end_time)).time(),
+         start_date: (json.start_date ? (date_to(json.start_date)).date() : null),
+         end_date: (json.end_date ? (date_to(json.end_date)).date() : null),
+         start_time: (json.start_time ? (date_to(json.start_time)).time() : null),
+         end_time: (json.end_time ? (date_to(json.end_time)).time() : null),
          repeat: (bool_to(json.repeat)),
          repeat_bool: (json.repeat),
       })));
@@ -1045,10 +1047,10 @@
     Schedule.prototype.defaults = function(){
       return {
         name: '',
-        start_date: now(),
+        // start_date: now(),
         start_time: now(),
-        end_date: now(),
-        end_time: now(),
+        // end_date: now(),
+        // end_time: now(),
         repeat: 0,
         priority: 0,
         pattern_type: '',
