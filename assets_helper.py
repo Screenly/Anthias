@@ -37,15 +37,8 @@ def is_active(asset, at_time=None):
 def is_scheduled(asset, conn, at_time=None):
     """Similar to is_active, but checks to see if the current asset is scheudled
     in addition to if it's active"""
-    if asset['is_enabled']:
-        return True
-    return False
 
-    if asset['is_enabled'] and asset['start_date'] and (schedules_helper.get_schedules(asset['asset_id'],conn) or asset['end_date']):
-        at = at_time or get_time()
-        return True
-    return False
-
+    return asset['is_enabled'] and schedules_helper.asset_has_active_schedule(asset,conn)
 
 def get_playlist(conn):
     """Returns all currently active assets."""

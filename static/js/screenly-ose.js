@@ -14,10 +14,14 @@
 
   API.date_to = date_to = function(d) {
     var dd;
-    dd = moment.utc(new Date(d));
+    if(d == now()){
+      dd = moment(new Date(d));
+    } else {
+      dd = moment.utc(new Date(d));
+    }
     return {
       string: function() {
-        return dd.format('MM/DD/YYYY hh:mm:ss A');
+        return moment.utc(dd).format('MM/DD/YYYY hh:mm:ss A');
       },
       date: function() {
         return dd.format('MM/DD/YYYY');
@@ -779,16 +783,7 @@
       return true;
     }
 
-    EditScheduleView.prototype.viewmodel = function() {
-      var field, which, _i, _j, _len, _len1, _ref, _ref1, _results;
-      _ref = ['start', 'end'];
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        which = _ref[_i];
-        if (this.$fieldValue("" + which + "_date").length > 0){
-        // if(this.$fieldValue.length != ""){
-          this.$fieldValue("" + which + "_date", moment.utc(this.$fieldValue("" + which + "_date"),"MM/DD/YYYY").toISOString());        
-        }
-      }
+    EditScheduleView.prototype.prepareModelToSend = function(){
       _ref1 = this.model.fields;
       _results = [];
       for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
@@ -800,6 +795,22 @@
         }
       }
       return _results;
+    }
+
+    EditScheduleView.prototype.viewmodel = function() {
+      var field, which, _i, _j, _len, _len1, _ref, _ref1, _results;
+      _ref = ['start', 'end'];
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        which = _ref[_i];
+        if (this.$fieldValue("" + which + "_date").length > 0){
+          this.$fieldValue("" + which + "_date", moment.utc(this.$fieldValue("" + which + "_date"),"MM/DD/YYYY").toISOString());        
+        }
+        if (this.$fieldValue("" + which + "_time").length > 0){
+          console.log(moment(this.$fieldValue("" + which + "_time"),"hh:mm A").utc().format("hh:mm A"));
+          this.$fieldValue("" + which + "_time", moment.utc(this.$fieldValue("" + which + "_time"),"hh:mm A").format("hh:mm A"));        
+        }
+      }
+      return this.prepareModelToSend();
     };
 
     EditScheduleView.prototype.initialize = function(options){
@@ -807,6 +818,9 @@
       if(!this.model.get("asset_id")){
         this.model.set({asset_id: API.schedules.asset_id})
       }
+      this.model.on("invalid", function(model, error){
+        alert(error);
+      });
       this.edit = options.edit;
       ($('body')).append(this.$el.html(get_template('schedule-modal')));
       (this.$el.children(":first")).modal();
@@ -864,9 +878,16 @@
       var save,
         _this = this;
       e.preventDefault();
+      this.prepareModelToSend();
+      if(!this.model.isValid()){
+        return false;
+      }
       this.viewmodel();
       save = null;
       save = this.model.save();
+      if(!save){
+        return false;
+      }
       save.done(function(data) {
         _this.model.id = data.asset_id;
         if (!_this.model.collection) {
@@ -1047,15 +1068,30 @@
     Schedule.prototype.defaults = function(){
       return {
         name: '',
-        // start_date: now(),
         start_time: now(),
-        // end_date: now(),
-        // end_time: now(),
+        end_time: now().setHours(now().getHours() + 1 > 23 ? 0 : now().getHours() + 1),
         repeat: 0,
+        duration: 30,
         priority: 0,
         pattern_type: '',
      };
     };
+
+    Schedule.prototype.validate = function(attributes, options){
+      if(attributes.name == ""){
+        return "You must supply a name for the schedule.";
+      }
+      if((!attributes.start_time && attributes.end_time) || (attributes.start_time && !attributes.end_time)){
+        return "You must supply both a start and end time, or leave empty.";
+      }
+      if(moment(attributes["end_date"],"MM/DD/YYYY").isBefore(moment(attributes["start_date"],"MM/DD/YYYY"))){
+        return "Your end date is before your start date!";
+      }
+      if(moment(attributes["end_time"],"hh:mm A").isBefore(moment(attributes["start_time"],"hh:mm A"))){
+        return "Your end time is before your start time!";
+      }
+    }
+
     return Schedule;
 
   })(Backbone.Model);

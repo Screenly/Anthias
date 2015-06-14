@@ -8,37 +8,37 @@ FIELDS = ["id", "asset_id", "name", "start_date", "start_time", "end_date", "end
 #create_schedules_table = 'CREATE TABLE schedules(id integer primary key autoincrement, asset_id text, name text, start_date timestamp, end_date timestamp, duration integer, repeat integer default 0, priority integer default 0, pattern_days text, pattern_type text)'
 create_schedules_table = 'CREATE TABLE schedules(id integer primary key autoincrement, asset_id text, name text, start_date text, start_time text, end_date text, end_time text, duration integer, repeat integer default 0, priority integer default 0, pattern_days integer default 0, pattern_type text);'
 
-get_time = datetime.datetime.utcnow
+get_time = datetime.datetime.now
 get_date = datetime.date.today
 
 
-def is_active(schedule, at_date=None, at_time=None):
-    """Accepts a schedule dictionary and determines if it
-    is active at the given time. If no time is specified, 'now' is used.
+def asset_has_active_schedule(asset, conn, at_date=None, at_time=None):
+    schedules = read(conn, asset['asset_id'])
 
-    >>> asset = {'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d', 'mimetype': u'web', 'name': u'WireLoad', 'end_date': datetime.datetime(2013, 1, 19, 23, 59), 'uri': u'http://www.wireload.net', 'duration': u'5', 'is_enabled': True, 'nocache': 0, 'play_order': 1, 'start_date': datetime.datetime(2013, 1, 16, 0, 0)};
-    >>> is_active(asset, datetime.datetime(2013, 1, 16, 12, 00))
-    True
-    >>> is_active(asset, datetime.datetime(2014, 1, 1))
-    False
-
-    >>> asset['is_enabled'] = False
-    >>> is_active(asset, datetime.datetime(2013, 1, 16, 12, 00))
-    False
-
-    """
-
-    at = at_time or get_time()
+    at_t = at_time or get_time().time()
     at_d = at_date or get_date()
-    if (schedule['start_date'] and schedule['start_date'] <= at_d) and (schedule['repeat'] or schedule['end_date']) and (schedule['start_time'].time() <= at and schedule['end_time'].time() >= at):
-        if schedule['repeat'] and (schedule['end_date'] == None or schedule['end_date'] >= at_d):
-            if schedule['pattern_type'] == 'weekly':
-                print 'Weekly Pattern Type'
-            return schedule['pattern_type'] == 'daily'
-        else:
-            return schedule['end_date'] >= at
+
+    for schedule in schedules:
+        if (schedule['start_date']):
+            if schedule['start_date'] <= at_d and (schedule['end_date'] and at_d <= schedule['end_date']):
+                return scheduled_withinTimePeriod(at_t, schedule);
+            pass
+        elif scheduled_withinTimePeriod(at_t, schedule):
+            return True
+
+    # if (schedule['start_date'] and schedule['start_date'] <= at_d) and (schedule['repeat'] or schedule['end_date']) and (schedule['start_time'].time() <= at_t and schedule['end_time'].time() >= at_t):
+    #     if schedule['repeat'] and (schedule['end_date'] == None or schedule['end_date'] >= at_d):
+    #         if schedule['pattern_type'] == 'weekly':
+    #             print 'Weekly Pattern Type'
+    #         return schedule['pattern_type'] == 'daily'
+    #     else:
+    #         return schedule['end_date'] >= at_t
     return False
 
+def scheduled_withinTimePeriod(at_t, schedule):
+    if schedule['start_time'] and schedule['end_time']:
+        return schedule['start_time'].time() < at_t and at_t < schedule['end_time'].time()
+    return True
 
 def get_schedules(asset_id, conn):
     """Returns all currently active schedules for an asset."""

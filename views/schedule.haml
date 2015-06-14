@@ -19,7 +19,7 @@
     %script(src="/static/js/jquery-1.9.1.min.js")
     %script(src="/static/js/jquery.iframe-transport.js")
 
-    %script(src="/static/js/backbone-0.9.10.min.js") /needs jquery
+    %script(src="/static/js/backbone.min.js") /needs jquery
 
     %script(src="/static/js/jquery-ui-1.10.1.custom.min.js")
     %script(src="/static/js/jquery.fileupload.js") /needs jqueryui.widget
@@ -122,11 +122,11 @@
                       .controls
                         %input.span1(type="number", min=1, name="duration")
                         seconds
-                    .control-group.priority
-                      %label.control-label Priority
-                      .controls
-                        %input.span1(type="number", max=10, name="priority")
-                        From 0 through to 10
+                    / .control-group.priority
+                    /   %label.control-label Priority
+                    /   .controls
+                    /     %input.span1(type="number", max=10, name="priority")
+                    /     From 0 through to 10
                     .control-group
                       %label.control-label Repeat
                       .controls.repeat
