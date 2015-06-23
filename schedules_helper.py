@@ -1,7 +1,8 @@
 import db
 import queries
 import datetime
-import classes
+from classes import AvailableDays
+import logging
 
 FIELDS = ["id", "asset_id", "name", "start_date", "start_time", "end_date", "end_time", "duration", "repeat", "priority", "pattern_type", "pattern_days"] 
 
@@ -21,18 +22,15 @@ def asset_has_active_schedule(asset, conn, at_date=None, at_time=None):
     for schedule in schedules:
         if (schedule['start_date']):
             if schedule['start_date'] <= at_d and (schedule['end_date'] and at_d <= schedule['end_date']):
+                if schedule['repeat']:
+                    if schedule['pattern_type'] == 'weekly':
+                        for name, member in AvailableDays.__members__.items():
+                            if ((int(schedule['pattern_days']) & member.value) > 0) and (member.name == datetime.datetime.now().strftime('%A')):
+                                return scheduled_withinTimePeriod(at_t, schedule)
+                        return False
                 return scheduled_withinTimePeriod(at_t, schedule);
             pass
-        elif scheduled_withinTimePeriod(at_t, schedule):
-            return True
-
-    # if (schedule['start_date'] and schedule['start_date'] <= at_d) and (schedule['repeat'] or schedule['end_date']) and (schedule['start_time'].time() <= at_t and schedule['end_time'].time() >= at_t):
-    #     if schedule['repeat'] and (schedule['end_date'] == None or schedule['end_date'] >= at_d):
-    #         if schedule['pattern_type'] == 'weekly':
-    #             print 'Weekly Pattern Type'
-    #         return schedule['pattern_type'] == 'daily'
-    #     else:
-    #         return schedule['end_date'] >= at_t
+        return scheduled_withinTimePeriod(at_t, schedule)
     return False
 
 def scheduled_withinTimePeriod(at_t, schedule):

@@ -979,6 +979,15 @@
 
     ScheduleRowView.prototype.render = function() {
       var json;
+      var daysDict = {"2":"Mon",
+        "4":"Tues",
+        "8":"Wednes",
+        "16":"Thurs",
+        "32":"Fri",
+        "64":"Sat",
+        "128":"Sun"
+      };
+      // console.log(this.model.pattern_days);
       this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
          name: json.name,
          start_date: (json.start_date ? (date_to(json.start_date)).date() : null),
@@ -987,6 +996,13 @@
          end_time: (json.end_time ? (date_to(json.end_time)).time() : null),
          repeat: (bool_to(json.repeat)),
          repeat_bool: (json.repeat),
+         pattern_days: (function(){
+          var returnArray = [];
+          for (var i = 0; i <= json.pattern_days.length - 1; i++) {
+            returnArray.push(daysDict[json.pattern_days[i]]);
+          };
+          return returnArray;
+         })(),
       })));
       (this.$(".delete-schedule-button")).popover({
         content: get_template('confirm-delete')
