@@ -978,16 +978,16 @@
     }
 
     ScheduleRowView.prototype.render = function() {
+      console.log(this.model);
       var json;
       var daysDict = {"2":"Mon",
         "4":"Tues",
-        "8":"Wednes",
+        "8":"Wed",
         "16":"Thurs",
         "32":"Fri",
         "64":"Sat",
         "128":"Sun"
       };
-      // console.log(this.model.pattern_days);
       this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
          name: json.name,
          start_date: (json.start_date ? (date_to(json.start_date)).date() : null),
@@ -998,9 +998,18 @@
          repeat_bool: (json.repeat),
          pattern_days: (function(){
           var returnArray = [];
-          for (var i = 0; i <= json.pattern_days.length - 1; i++) {
-            returnArray.push(daysDict[json.pattern_days[i]]);
-          };
+          if(Object.prototype.toString.call(json.pattern_days) === '[object Array]'){
+            for (var i = 0; i <= json.pattern_days.length - 1; i++) {
+              returnArray.push(daysDict[json.pattern_days[i]]);
+            };
+          } else {
+            for (var intDay in daysDict){
+              if (json.pattern_days & intDay){
+                returnArray.push(daysDict[intDay]);
+              }
+            }
+          }
+          
           return returnArray;
          })(),
       })));
@@ -1053,7 +1062,6 @@
     };
 
     SchedulesView.prototype.render = function(){
-      this.$(".page-header").html('Hello');
       this.$("#schedules-tbody").html('');
       this.collection.each(function(model) {
         return (_this.$("#schedules-tbody")).append((new ScheduleRowView({
