@@ -19,7 +19,7 @@ echo "(This might take a while.)"
 sudo apt-get -y -qq upgrade > /dev/null
 
 echo "Installing dependencies..."
-sudo apt-get -y -qq install git-core python-pip python-netifaces python-simplejson python-imaging python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev watchdog chkconfig feh > /dev/null
+sudo apt-get -y -qq install git-core python-pip python-netifaces python-simplejson python-imaging python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev watchdog chkconfig feh libffi-dev > /dev/null
 
 echo "Downloading Screenly-OSE..."
 git clone git://github.com/jameskirsop/screenly-ose.git "$HOME/screenly" > /dev/null
@@ -28,15 +28,16 @@ echo "Installing more dependencies..."
 sudo pip install -r "$HOME/screenly/requirements.txt" -q > /dev/null
 
 echo "Updating pip packages"
+sudo pip install six --upgrade
 sudo pip install requests --upgrade
 sudo pip install requests[security]
 
 echo "Adding Screenly to X auto start..."
-mkdir -p "$HOME/.config/lxsession/LXDE$SUFFIX/"
-echo "@$HOME/screenly/misc/xloader.sh" > "$HOME/.config/lxsession/LXDE$SUFFIX/autostart"
+mkdir -p "$HOME/.config/lxsession/LXDE-pi/"
+echo "@$HOME/screenly/misc/xloader.sh" > "$HOME/.config/lxsession/LXDE-pi/autostart"
 
 echo "Setting uzbl browser to start in full screen mode"
-sudo sed -i '/<\/applications>/ i\ <application name="uzbl*">\n<fullscreen>yes</fullscreen>\n</application>' lxde-pi-rc.xml
+sudo sed -i '/<\/applications>/ i\ <application name="uzbl*">\n<fullscreen>yes</fullscreen>\n</application>' $HOME/.config/lxsession/LXDE-pi/lxde-pi-rc.xml
 
 echo "Removing default lxpanel profile"
 sed -i 's/^@lxpanel/#&/' /etc/xdg/lxsession/LXDE-pi/autostart
@@ -69,10 +70,10 @@ echo "Making modifications to X..."
 ln -s "$HOME/screenly/misc/gtkrc-2.0" "$HOME/.gtkrc-2.0"
 [ -f "$HOME/.config/openbox/lxde-rc.xml" ] && mv "$HOME/.config/openbox/lxde-rc.xml" "$HOME/.config/openbox/lxde-rc.xml.bak"
 [ -d "$HOME/.config/openbox" ] || mkdir -p "$HOME/.config/openbox"
-ln -s "$HOME/screenly/misc/lxde-rc.xml" "$HOME/.config/openbox/lxde$SUFFIX-rc.xml"
-[ -f "$HOME/.config/lxpanel/LXDE$SUFFIX/panels/panel" ] && mv "$HOME/.config/lxpanel/LXDE$SUFFIX/panels/panel" "$HOME/.config/lxpanel/LXDE$SUFFIX/panels/panel.bak"
+ln -s "$HOME/screenly/misc/lxde-rc.xml" "$HOME/.config/openbox/lxde-pi-rc.xml"
+[ -f "$HOME/.config/lxpanel/LXDE-pi/panels/panel" ] && mv "$HOME/.config/lxpanel/LXDE-pi/panels/panel" "$HOME/.config/lxpanel/LXDE-pi/panels/panel.bak"
 [ -f /etc/xdg/lxsession/LXDE/autostart ] && sudo mv /etc/xdg/lxsession/LXDE/autostart /etc/xdg/lxsession/LXDE/autostart.bak
-[ -f "/etc/xdg/lxsession/LXDE$SUFFIX/autostart" ] && sudo mv "/etc/xdg/lxsession/LXDE$SUFFIX/autostart" "/etc/xdg/lxsession/LXDE$SUFFIX/autostart.bak"
+[ -f "/etc/xdg/lxsession/LXDE-pi/autostart" ] && sudo mv "/etc/xdg/lxsession/LXDE-pi/autostart" "/etc/xdg/lxsession/LXDE-pi/autostart.bak"
 sudo sed -e 's/^#xserver-command=X$/xserver-command=X -nocursor/g' -i /etc/lightdm/lightdm.conf
 
 # Make sure we have proper framebuffer depth.
