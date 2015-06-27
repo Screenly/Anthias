@@ -7,7 +7,7 @@ import logging
 FIELDS = ["id", "asset_id", "name", "start_date", "start_time", "end_date", "end_time", "duration", "repeat", "priority", "pattern_type", "pattern_days"] 
 
 #create_schedules_table = 'CREATE TABLE schedules(id integer primary key autoincrement, asset_id text, name text, start_date timestamp, end_date timestamp, duration integer, repeat integer default 0, priority integer default 0, pattern_days text, pattern_type text)'
-create_schedules_table = 'CREATE TABLE schedules(id integer primary key autoincrement, asset_id text, name text, start_date text, start_time text, end_date text, end_time text, duration integer, repeat integer default 0, priority integer default 0, pattern_days integer default 0, pattern_type text);'
+create_schedules_table = 'CREATE TABLE schedules(id integer primary key autoincrement, asset_id text, name text, start_date date, start_time timestamp, end_date date, end_time timestamp, duration integer, repeat integer default 0, priority integer default 0, pattern_days integer default 0, pattern_type text);'
 
 get_time = datetime.datetime.now
 get_date = datetime.date.today

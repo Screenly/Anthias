@@ -6,7 +6,7 @@ from classes import AvailableDays
 import operator
 import string
 
-FIELDS = ["asset_id", "name", "uri", "duration", "end_date", "start_date", "mimetype", "is_enabled", "nocache", "play_order"]
+FIELDS = ["asset_id", "name", "uri", "duration", "mimetype", "is_enabled", "nocache", "play_order"]
 
 create_assets_table = 'CREATE TABLE assets(asset_id text primary key, name text, uri text, md5 text, duration text, mimetype text, is_enabled integer default 0, nocache integer default 0, play_order integer default 0)'
 

@@ -27,9 +27,7 @@ git clone git://github.com/jameskirsop/screenly-ose.git "$HOME/screenly" > /dev/
 echo "Installing more dependencies..."
 sudo pip install -r "$HOME/screenly/requirements.txt" -q > /dev/null
 
-echo "Updating pip packages"
-sudo pip install six --upgrade
-sudo pip install requests --upgrade
+echo "Installing additional requests[security] python package"
 sudo pip install requests[security]
 
 echo "Adding Screenly to X auto start..."
