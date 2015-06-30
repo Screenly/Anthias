@@ -268,7 +268,7 @@ def browser_reload(force=False):
     # browser_fifo(reload_command)
 
 
-def browser_clear():
+def browser_clear(force=False):
     """Clear the browser if necessary. """
     browser_url(BLACK_PAGE, force=force, cb=lambda buf: 'LOAD_FINISH' in buf and BLACK_PAGE in buf)
 
@@ -288,20 +288,17 @@ def disable_browser_status():
     # browser_fifo('set show_status = 0')
 
 
-def view_image(uri, asset_id, duration):
-    logging.debug('Displaying image %s for %s seconds.' % (uri, duration))
+def view_image(uri):
+    logging.debug('Displaying image %s' % (uri))
+    browser_clear()
+    logging.debug('Image URI:'+uri)
+    browser_send('js window.setimg("{0}")'.format(uri), cb=lambda b: 'COMMAND_EXECUTED' in b and 'setimg' in b)
 
-    if asset_is_accessible(uri):
-        logging.debug('Image appears to be available. Proceeding.')
-        logging.debug('Displaying uri %s for %s seconds.' % (uri, duration))
-
-        image_tmp_page = html_templates.image_page(uri, asset_id)
-
-        browser_url(image_tmp_page)
-
-        sleep(int(duration))
-    else:
-        logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (uri))
+    # if asset_is_accessible(uri):
+    #     logging.debug('Image appears to be available. Proceeding.')
+    #     logging.debug('Displaying uri %s for %s seconds.' % (uri, duration))
+    # else:
+    #     logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (uri))
 
 
 def view_video(uri):
@@ -345,18 +342,6 @@ def view_video(uri):
 
         if run.exit_code != 0:
             logging.debug("Unclean exit: " + str(run))
-
-
-def view_web(url, duration):
-    if asset_is_accessible(url):
-        logging.debug('Web content appears to be available. Proceeding.')
-        logging.debug('Displaying url %s for %s seconds.' % (url, duration))
-
-        browser_url(url)
-
-        sleep(int(duration))
-    else:
-        logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (url))
 
 
 def toggle_load_screen(status=True):
@@ -470,20 +455,20 @@ def asset_loop(scheduler):
         logging.info('Showing asset %s.' % asset["name"])
 
         if "image" in asset["mimetype"]:
-            view_image(asset['uri'], asset['asset_id'], asset["duration"])
+            view_image(asset['uri'])
         elif "video" in asset["mimetype"]:
             view_video(asset["uri"])
         elif "web" in asset["mimetype"]:
-            # view_web(asset["uri"], asset["duration"])
-            # logging.info("I'd probably update the browser here!")
             browser_url(asset["uri"])
         else:
             print "Unknown MimeType, or MimeType missing"
         if "image" in asset["mimetype"] or "web" in asset["mimetype"]:
-            if not asset["duration"] == None:
+            logging.debug(asset["duration"])
+            if (not asset["duration"] == None) and (not int(asset["duration"]) == 0) :
                 sleep(int(asset["duration"]))
             else:
-                sleep(10)
+                logging.info('Sleeping for 30 seconds')
+                sleep(30)
     else:
         logging.info('Asset {0} is not available, skipping.'.format(asset['uri']))
 
@@ -510,7 +495,7 @@ if __name__ == "__main__":
         makedirs(html_folder)
 
     # Set up HTML templates
-    BLACK_PAGE = html_templates.black_page()
+    html_templates.black_page(BLACK_PAGE)
 
     # Fire up the browser
     # run_browser = load_browser()
