@@ -34,12 +34,6 @@ echo "Adding Screenly to X auto start..."
 mkdir -p "$HOME/.config/lxsession/LXDE-pi/"
 echo "@$HOME/screenly/misc/xloader.sh" > "$HOME/.config/lxsession/LXDE-pi/autostart"
 
-echo "Setting uzbl browser to start in full screen mode"
-sudo sed -i '/<\/applications>/ i\ <application name="uzbl*">\n<fullscreen>yes</fullscreen>\n</application>' $HOME/.config/lxsession/LXDE-pi/lxde-pi-rc.xml
-
-echo "Removing default lxpanel profile"
-sed -i 's/^@lxpanel/#&/' /etc/xdg/lxsession/LXDE-pi/autostart
-
 echo "Increasing swap space to 500MB..."
 echo "CONF_SWAPSIZE=500" > "$HOME/dphys-swapfile"
 sudo cp /etc/dphys-swapfile /etc/dphys-swapfile.bak
@@ -73,6 +67,12 @@ ln -s "$HOME/screenly/misc/lxde-rc.xml" "$HOME/.config/openbox/lxde-pi-rc.xml"
 [ -f /etc/xdg/lxsession/LXDE/autostart ] && sudo mv /etc/xdg/lxsession/LXDE/autostart /etc/xdg/lxsession/LXDE/autostart.bak
 [ -f "/etc/xdg/lxsession/LXDE-pi/autostart" ] && sudo mv "/etc/xdg/lxsession/LXDE-pi/autostart" "/etc/xdg/lxsession/LXDE-pi/autostart.bak"
 sudo sed -e 's/^#xserver-command=X$/xserver-command=X -nocursor/g' -i /etc/lightdm/lightdm.conf
+
+echo "Setting uzbl browser to start in full screen mode"
+sudo sed -i '/<\/applications>/ i\ <application name="uzbl*">\n<fullscreen>yes</fullscreen>\n</application>' $HOME/.config/openbox/lxde-pi-rc.xml
+
+# echo "Removing default lxpanel profile"
+# sed -i 's/^@lxpanel/#&/' /etc/xdg/lxsession/LXDE-pi/autostart
 
 # Make sure we have proper framebuffer depth.
 if grep -q framebuffer_depth /boot/config.txt; then
