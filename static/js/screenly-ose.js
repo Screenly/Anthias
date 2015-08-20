@@ -270,11 +270,6 @@
 
     EditAssetView.prototype.viewmodel = function() {
       var field, which, _i, _j, _len, _len1, _ref, _ref1, _results;
-      // _ref = ['start', 'end'];
-      // for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-      //   which = _ref[_i];
-      //   this.$fv("" + which + "_date", (new Date((this.$fv("" + which + "_date_date")) + " " + (this.$fv("" + which + "_date_time")))).toISOString());
-      // }
       _ref1 = this.model.fields;
       _results = [];
       for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
@@ -377,11 +372,6 @@
         _this = this;
       that = this;
       validators = {
-        // duration: function(v) {
-        //   if (('video' !== _this.model.get('mimetype')) && (!(_.isNumber(v * 1)) || v * 1 < 1)) {
-        //     return 'please enter a valid number';
-        //   }
-        // },
         uri: function(v) {
           if (_this.model.isNew() && ((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
             return 'please enter a valid URL';
@@ -391,12 +381,7 @@
           if (_this.model.isNew() && !v && !(that.$('#tab-uri')).hasClass('active')) {
             return 'please select a file';
           }
-        },
-        // end_date: function(v) {
-        //   if (!((new Date(_this.$fv('start_date'))) < (new Date(_this.$fv('end_date'))))) {
-        //     return 'end date should be after start date';
-        //   }
-        // }
+        }
       };
       errors = (function() {
         var _results;
@@ -544,8 +529,6 @@
       var json;
       this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
         name: insertWbr(json.name),
-        // start_date: (date_to(json.start_date)).string(),
-        // end_date: (date_to(json.end_date)).string()
       })));
       this.$el.prop('id', this.model.get('asset_id'));
       (this.$(".delete-asset-button")).popover({
@@ -835,6 +818,7 @@
         showInputs: true,
         disableFocus: true,
         showMeridian: true,
+        defaultTime: false
       });
       return false;
     }
@@ -858,16 +842,20 @@
         _ref2 = ['start', 'end'];
         for (_k = 0, _len2 = _ref2.length; _k < _len2; _k++) {
           which = _ref2[_k];
-          d = date_to(this.model.get("" + which + "_date"));
-          this.$fieldValue("" + which + "_date", d.date());
-          (this.$f("" + which + "_date")).datepicker({
-            autoclose: true,
-            todayHighlight: true,
-            clearBtn: true,
-          });
-          (this.$f("" + which + "_date")).datepicker('setValue', d.date());
-          d = date_to(this.model.get("" + which + "_time")).time();
-          (this.$f("" + which + "_time")).timepicker('setTime', d.toString());
+          if(this.model.get("" + which + "_date")){
+            d = date_to(this.model.get("" + which + "_date"));
+            this.$fieldValue("" + which + "_date", d.date());
+            (this.$f("" + which + "_date")).datepicker({
+              autoclose: true,
+              todayHighlight: true,
+              clearBtn: true,
+            });
+            (this.$f("" + which + "_date")).datepicker('setValue', d.date());
+          }
+          if(this.model.get("" + which + "_time")){
+            d = date_to(this.model.get("" + which + "_time")).time();
+            (this.$f("" + which + "_time")).timepicker('setTime', d.toString());
+          }
         }
       this.switchPatternType();
       this.delegateEvents();

@@ -15,3 +15,6 @@ six==1.9.0
 uptime==2.0.2
 wsgiref==0.1.2
 enum34==1.0.4
+urllib3==1.10.4
+pyOpenSSL==0.13
+pyasn1==0.1.6

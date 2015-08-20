@@ -4,7 +4,7 @@
 __author__ = "Viktor Petersson"
 __copyright__ = "Copyright 2012-2013, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
-__additions__ = "James Kirsop - 2013-2014"
+__additions__ = "James Kirsop - 2013-2015"
 
 from datetime import datetime, timedelta
 from glob import glob
@@ -276,7 +276,11 @@ def browser_clear(force=False):
 def browser_url(url, cb=lambda _: True, force=False):
     global current_browser_url
     if url == current_browser_url and not force:
-        logging.debug('Already showing %s, keeping it.', current_browser_url)
+        if not (browser is None) and browser.process.alive:
+            logging.debug('Already showing %s, keeping it.', current_browser_url)
+        else:
+            logging.info('browser found dead, restarting')
+            load_browser()
     else:
         current_browser_url = url
         browser_send('uri ' + current_browser_url, cb=cb)
@@ -463,7 +467,7 @@ def asset_loop(scheduler):
         else:
             print "Unknown MimeType, or MimeType missing"
         if "image" in asset["mimetype"] or "web" in asset["mimetype"]:
-            logging.debug(asset["duration"])
+            logging.info(asset["duration"])
             if (not asset["duration"] == None) and (not int(asset["duration"]) == 0) :
                 sleep(int(asset["duration"]))
             else:

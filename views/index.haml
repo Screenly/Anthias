@@ -3,7 +3,7 @@
 
   %head
     %meta(charset="utf-8")
-    %title Screenly OSE
+    %title &Pi; PiSign
 
     %link(href="/static/css/bootstrap.css", rel="stylesheet")
     %link(href="/static/css/datepicker.css", rel="stylesheet")
@@ -148,8 +148,9 @@
       .navbar-inner
         .container
           %a.brand(href="/")
-            %strong Screenly
-            %span OSE
+            &Pi;
+            %strong Pi
+            Sign
 
           %ul.nav.pull-right
             - if not up_to_date:
@@ -172,7 +173,7 @@
         .span12
           %h1.page-header
             .pull-right
-              %a#add-asset-button.btn.btn-primary(href="#")
+              %a#add-asset-button.btn.btn-success(href="#")
                 %i.icon-plus.icon-white
                 Add Asset
             Asset Overview

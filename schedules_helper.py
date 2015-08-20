@@ -20,6 +20,7 @@ def asset_has_active_schedule(asset, conn, at_date=None, at_time=None):
     at_d = at_date or get_date()
 
     for schedule in schedules:
+        asset['duration'] = schedule['duration']
         if (schedule['start_date']):
             if schedule['start_date'] <= at_d and (schedule['end_date'] and at_d <= schedule['end_date']):
                 if schedule['repeat']:
@@ -31,6 +32,7 @@ def asset_has_active_schedule(asset, conn, at_date=None, at_time=None):
                 return scheduled_withinTimePeriod(at_t, schedule);
             pass
         return scheduled_withinTimePeriod(at_t, schedule)
+    asset['duration'] = None
     return False
 
 def scheduled_withinTimePeriod(at_t, schedule):
