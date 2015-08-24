@@ -7,13 +7,13 @@ import ConfigParser
 import logging
 from UserDict import IterableUserDict
 
-CONFIG_DIR = '.pi-sign/'
+CONFIG_DIR = '.pisign/'
 CONFIG_FILE = 'screenly.conf'
 DEFAULTS = {
     'main': {
-        'database': CONFIG_DIR + 'pi-sign.db',
+        'database': CONFIG_DIR + 'pisign.db',
         'listen': '0.0.0.0:8080',
-        'assetdir': 'pi-sign_assets',
+        'assetdir': 'pisign_assets',
     },
     'viewer': {
         'show_splash': True,

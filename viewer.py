@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 from glob import glob
 from os import path, getenv, remove, makedirs
 from os import stat as os_stat, utime, system, kill
-from platform import machine
 from random import shuffle
 from requests import get as req_get, head as req_head
 # from stat import S_ISFIFO
@@ -38,15 +37,10 @@ UZBLRC = '/screenly/misc/uzbl.rc'
 BLACK_PAGE = '/tmp/screenly_html/black_page.html'
 
 # Detect the architecture and load the proper video player
-arch = machine()
-if arch == 'armv6l':
-    from sh import omxplayer
-elif arch in ['x86_64', 'x86_32']:
-    from sh import mplayer
+from sh import omxplayer
 
 # Used by send_to_front.
 libx11 = cdll.LoadLibrary('libX11.so')
-
 
 def send_to_front(name):
     """Instruct X11 to bring a window with the given name in its title to front."""
@@ -203,13 +197,6 @@ def load_browser(url=None):
     if not url is None:
         current_browser_url = url
 
-        # browser_load_url = 'file://' + intro_file
-
-    # elif settings['show_splash']:
-    #     current_browser_url = "http://%s:%s/splash_page" % (settings.get_listen_ip(), settings.get_listen_port())
-    # else:
-    #     current_browser_url = black_page
-
     browser = sh.Command('uzbl-browser')(print_events=True, config='-', uri=current_browser_url, _bg=True)
     logging.info('Browser loading %s. Running as PID %s.', current_browser_url, browser.pid)
 
@@ -271,6 +258,7 @@ def browser_reload(force=False):
 def browser_clear(force=False):
     """Clear the browser if necessary. """
     browser_url(BLACK_PAGE, force=force, cb=lambda buf: 'LOAD_FINISH' in buf and BLACK_PAGE in buf)
+    browser_send('js window.setimg("")', cb=lambda b: 'COMMAND_EXECUTED' in b and 'setimg' in b)
 
 
 def browser_url(url, cb=lambda _: True, force=False):
@@ -305,47 +293,29 @@ def view_image(uri):
     #     logging.debug('Received non-200 status (or file not found if local) from %s. Skipping.' % (uri))
 
 
-def view_video(uri):
+def view_video(uri,asset_id):
+    browser_clear()
+    logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % uri)
 
-    ## For Raspberry Pi
-    if arch == 'armv6l':
-        logging.debug('Displaying video %s. Detected Raspberry Pi. Using omxplayer.' % uri)
+    if asset_is_accessible(uri):
+        run = omxplayer(uri, o=settings['audio_output'], _bg=True)
+    else:
+        logging.debug('Content is unaccessible. Skipping...')
+        return
 
-        if asset_is_accessible(uri):
-            run = omxplayer(uri, o=settings['audio_output'], _bg=True)
-        else:
-            logging.debug('Content is unaccessible. Skipping...')
-            return
+    # Wait until omxplayer is starting before clearing the browser. This minimises delay between
+    # web and image content. Omxplayer will run on top of the browser so the delay in clearing
+    # won't be visible. This minimises delay between web and video.
+    browser_clear()
+    run.wait()
 
-        # Wait until omxplayer is starting before clearing the browser. This minimises delay between
-        # web and image content. Omxplayer will run on top of the browser so the delay in clearing
-        # won't be visible. This minimises delay between web and video.
-        browser_clear()
-        run.wait()
+    if run.exit_code != 0:
+        logging.debug("Unclean exit: " + str(run))
 
-        if run.exit_code != 0:
-            logging.debug("Unclean exit: " + str(run))
-
-        # Clean up after omxplayer
-        omxplayer_logfile = HOME + 'omxplayer.log'
-        if path.isfile(omxplayer_logfile):
-            remove(omxplayer_logfile)
-
-    ## For x86
-    elif arch in ['x86_64', 'x86_32']:
-        logging.debug('Displaying video %s. Detected x86. Using mplayer.' % uri)
-
-        if asset_is_accessible(uri):
-            run = mplayer(uri, fs=True, nosound=True, _bg=True)
-        else:
-            logging.debug('Content is unaccessible. Skipping...')
-            return
-
-        browser_clear()
-        run.wait()
-
-        if run.exit_code != 0:
-            logging.debug("Unclean exit: " + str(run))
+    # Clean up after omxplayer
+    omxplayer_logfile = HOME + 'omxplayer.log'
+    if path.isfile(omxplayer_logfile):
+        remove(omxplayer_logfile)
 
 
 def toggle_load_screen(status=True):
@@ -461,18 +431,21 @@ def asset_loop(scheduler):
         if "image" in asset["mimetype"]:
             view_image(asset['uri'])
         elif "video" in asset["mimetype"]:
-            view_video(asset["uri"])
+            view_video(asset["uri"],asset["asset_id"])
+            return
         elif "web" in asset["mimetype"]:
             browser_url(asset["uri"])
         else:
             print "Unknown MimeType, or MimeType missing"
         if "image" in asset["mimetype"] or "web" in asset["mimetype"]:
-            logging.info(asset["duration"])
+            logging.debug('Duration:'+str(asset["duration"]))
             if (not asset["duration"] == None) and (not int(asset["duration"]) == 0) :
                 sleep(int(asset["duration"]))
-            else:
-                logging.info('Sleeping for 30 seconds')
-                sleep(30)
+                return
+        
+        logging.info('Sleeping for 30 seconds')
+        sleep(30)
+
     else:
         logging.info('Asset {0} is not available, skipping.'.format(asset['uri']))
 
@@ -480,8 +453,6 @@ def asset_loop(scheduler):
 if __name__ == "__main__":
 
     HOME = getenv('HOME', '/home/pi/')
-    # Bring up load screen
-    # toggle_load_screen(True)
 
     # Install signal handlers
     signal.signal(signal.SIGUSR1, sigusr1)
@@ -500,9 +471,6 @@ if __name__ == "__main__":
 
     # Set up HTML templates
     html_templates.black_page(BLACK_PAGE)
-
-    # Fire up the browser
-    # run_browser = load_browser()
 
     if settings['show_splash']:
         url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port())

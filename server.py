@@ -75,6 +75,8 @@ def is_up_to_date():
     Determine if there is any update available.
     Used in conjunction with check_update() in viewer.py.
     """
+    # Always return true for the moment, until updating is better supported - August 2015
+    return True
 
     sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
 
