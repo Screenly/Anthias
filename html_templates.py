@@ -5,6 +5,10 @@ def black_page(filepath):
   <head>
     <script>
       window.setimg = function (uri) {
+        if (uri == ''){
+          document.body.style.background = '#000000';
+          return;
+        }
         var i = new Image();
         i.onload = function() {
           document.body.style.background = '#000000 url(' + uri + ') no-repeat center center fixed';
@@ -22,19 +26,35 @@ def black_page(filepath):
     return filepath
 
 
-def image_page(uri, asset_id):
+# def image_page(uri, asset_id):
+#     full_filename = '/tmp/screenly_html/' + asset_id + '.html'
+#     html = """<html>
+#   <head>
+#     <script>
+#       scale = function () {
+#       var i = new Image(); i.src = '%s';
+#       document.body.style.backgroundSize = i.width > window.innerWidth || i.height > window.innerHeight ? 'contain' : 'auto';
+#       }
+#     </script>
+#   </head>
+#   <body style="background: #000 url(%s) center no-repeat" onload="scale()"></body>
+# </html>""" % (uri, uri)
+#     f = open(full_filename, 'w')
+#     f.write(html)
+#     f.close()
+#     return full_filename
+
+def video_page(uri, asset_id):
     full_filename = '/tmp/screenly_html/' + asset_id + '.html'
     html = """<html>
   <head>
-    <script>
-      scale = function () {
-      var i = new Image(); i.src = '%s';
-      document.body.style.backgroundSize = i.width > window.innerWidth || i.height > window.innerHeight ? 'contain' : 'auto';
-      }
-    </script>
   </head>
-  <body style="background: #000 url(%s) center no-repeat" onload="scale()"></body>
-</html>""" % (uri, uri)
+  <body style="background: #000">
+    <video src="https://www.daraco.com.au/video/daracoTrailer.mp4" autoplay="autoplay">
+      Whoops!
+    </video>
+  </body>
+</html>"""
     f = open(full_filename, 'w')
     f.write(html)
     f.close()

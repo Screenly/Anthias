@@ -181,3 +181,7 @@ input[name="file_upload"] {
 
 .is_enabled-toggle {
   margin: 5px 0 5px 0 !important; }
+
+#assetName{
+  font-style: italic;
+}

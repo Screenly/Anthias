@@ -3,16 +3,13 @@
 
   %head
     %meta(charset="utf-8")
-    %title Screenly OSE - Edit Schedule
+    %title PiSign - Edit Schedule
 
     %link(href="/static/css/bootstrap.css", rel="stylesheet")
     %link(href="/static/css/datepicker.css", rel="stylesheet")
     %link(href="/static/css/timepicker.css", rel="stylesheet")
     %link(href="/static/css/toggle-switch.css", rel="stylesheet")
     %link(href="/static/css/screenly.css", rel="stylesheet")
-
-    / :javascript
-    /   var default_duration = ${default_duration};
 
     %script(src="/static/js/underscore-1.5.2.js")
 
@@ -87,7 +84,6 @@
                     %a(dataToggle="tab", href="#scheduleEdit_Tab2") Advanced
               .span6.tab-content
                 #scheduleEdit_Tab1.tab-pane.active
-                  / %h4 Schedule Summary
                   %fieldset
                     .control-group.start_date
                       %label.control-label Start Date
@@ -122,11 +118,6 @@
                       .controls
                         %input.span1(type="number", min=1, name="duration")
                         seconds
-                    / .control-group.priority
-                    /   %label.control-label Priority
-                    /   .controls
-                    /     %input.span1(type="number", max=10, name="priority")
-                    /     From 0 through to 10
                     .control-group
                       %label.control-label Repeat
                       .controls.repeat
@@ -169,15 +160,16 @@
       .navbar-inner
         .container
           %a.brand(href="/")
-            %strong Screenly
-            %span OSE
+            &Pi;
+            %strong Pi
+            Sign
 
           %ul.nav.pull-right
-            - if not up_to_date:
-              %li.update-available
-                %a(href="http://www.screenlyapp.com/ose.html#upgrade")
-                  %i.icon-circle-arrow-down.icon-white
-                  Update Available
+            / - if not up_to_date:
+            /   %li.update-available
+            /     %a(href="http://www.screenlyapp.com/ose.html#upgrade")
+            /       %i.icon-circle-arrow-down.icon-white
+            /       Update Available
             %li
               %a(href="/settings")
                 %i.icon-cog.icon-white
@@ -196,7 +188,8 @@
               %a#add-schedule-button.btn.btn-primary(href="#")
                 %i.icon-plus.icon-white
                 Add Schedule
-            Asset Schedules
+            Schedules for 
+            %span#assetName
       #schedules.row
         .span12
           %section

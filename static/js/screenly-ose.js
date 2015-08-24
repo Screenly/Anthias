@@ -3,7 +3,7 @@
 
 
 (function() {
-  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, bool_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, routes, Schedule, EditScheduleView, ScheduleRowView, Schedules, SchedulesView
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, bool_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, routes, Schedule, EditScheduleView, ScheduleRowView, Schedules, SchedulesView, assetNiceName
     _this = this,
     __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     __hasProp = {}.hasOwnProperty,
@@ -843,17 +843,20 @@
         for (_k = 0, _len2 = _ref2.length; _k < _len2; _k++) {
           which = _ref2[_k];
           if(this.model.get("" + which + "_date")){
-            d = date_to(this.model.get("" + which + "_date"));
-            this.$fieldValue("" + which + "_date", d.date());
             (this.$f("" + which + "_date")).datepicker({
               autoclose: true,
               todayHighlight: true,
               clearBtn: true,
             });
-            (this.$f("" + which + "_date")).datepicker('setValue', d.date());
+            if(this.model.get("" + which + "_date")){
+              // this.$fieldValue("" + which + "_date", d.date());
+              d = date_to(this.model.get("" + which + "_date"));
+              (this.$f("" + which + "_date")).datepicker('setValue', d.date());
+            }
           }
           if(this.model.get("" + which + "_time")){
             d = date_to(this.model.get("" + which + "_time")).time();
+            this.$fieldValue("" + which + "_time",d.toString());
             (this.$f("" + which + "_time")).timepicker('setTime', d.toString());
           }
         }
@@ -966,7 +969,6 @@
     }
 
     ScheduleRowView.prototype.render = function() {
-      console.log(this.model);
       var json;
       var daysDict = {"2":"Mon",
         "4":"Tues",
@@ -1030,6 +1032,7 @@
     __extends(SchedulesView, _super);
 
     function SchedulesView() {
+      console.log(this);
       var _this = this;
       this.render = function() {
         return SchedulesView.prototype.render.apply(_this, arguments);
@@ -1047,6 +1050,14 @@
         event = _ref[_i];
         this.collection.bind(event, this.render);
       }
+      var ajaxRequest = new XMLHttpRequest();
+      ajaxRequest.open('GET','/api/assets/'+this.attributes.lol,true);
+      ajaxRequest.onload = function(){
+        if(this.status >= 200 && this.status < 400){
+          $('#assetName').html(JSON.parse(this.response).name);
+        }
+      }
+      ajaxRequest.send();
     };
 
     SchedulesView.prototype.render = function(){
@@ -1152,10 +1163,11 @@
       });
       Routes = Backbone.Router.extend({
         routes: {
-          "asset/:asset_id/schedule": "loadschedule",
+          "asset/:asset_id/schedule": "loadSchedule",
           "*path": "loadAssets"
         },
-        loadschedule: function(asset_id){
+        loadSchedule: function(asset_id){
+          assetNiceName = asset_id;
           (API.schedules = new Schedules(Schedule, {'asset_id':asset_id})).fetch();
         },
         loadAssets: function(){
@@ -1172,7 +1184,8 @@
       } else if (API.schedules) {
         return API.schedulesView = new SchedulesView({
           collection: API.schedules,
-          el: this.$('#schedules')
+          el: this.$('#schedules'),
+          attributes:{lol:assetNiceName}
         });
       }
     };
