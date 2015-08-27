@@ -19,13 +19,19 @@ echo "(This might take a while.)"
 sudo apt-get -y -qq upgrade > /dev/null
 
 echo "Installing dependencies..."
-sudo apt-get -y -qq install git-core python-pip python-netifaces python-simplejson python-imaging python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev watchdog chkconfig feh libffi-dev > /dev/null
+sudo apt-get -y -qq install git-core python-pip python-netifaces python-simplejson python-imaging python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev watchdog chkconfig feh libffi-dev libwebkitgtk-3.0-dev libsoup2.4-dev python3-pip > /dev/null
 
 echo "Downloading PiSign..."
 git clone git://github.com/jameskirsop/pisign.git "$HOME/pisign" > /dev/null
 
+echo "Downloading UZBL Source..."
+git clone https://github.com/uzbl/uzbl.git "$HOME/uzbl-next" > /dev/null
+
 echo "Installing more dependencies..."
 sudo pip install -r "$HOME/pisign/requirements.txt" -q > /dev/null
+
+echo "Installing Python3 Packages"
+sudo pip-3.2 install six
 
 echo "Adding PiSign to X auto start..."
 mkdir -p "$HOME/.config/lxsession/LXDE-pi/"

@@ -8,7 +8,7 @@ import logging
 from UserDict import IterableUserDict
 
 CONFIG_DIR = '.pisign/'
-CONFIG_FILE = 'screenly.conf'
+CONFIG_FILE = 'pisign.conf'
 DEFAULTS = {
     'main': {
         'database': CONFIG_DIR + 'pisign.db',

@@ -33,7 +33,7 @@ last_settings_refresh = None
 load_screen_pid = None
 current_browser_url = None
 browser = None
-UZBLRC = '/screenly/misc/uzbl.rc'
+UZBLRC = '/pisign/misc/uzbl.rc'
 BLACK_PAGE = '/tmp/screenly_html/black_page.html'
 
 # Detect the architecture and load the proper video player
