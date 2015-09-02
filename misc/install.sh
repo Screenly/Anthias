@@ -30,6 +30,9 @@ git clone https://github.com/uzbl/uzbl.git "$HOME/uzbl-next" > /dev/null
 echo "Installing more dependencies..."
 sudo pip install -r "$HOME/pisign/requirements.txt" -q > /dev/null
 
+echo "Making SSL Discovery Work"
+sudo pip install requests[security]
+
 echo "Installing Python3 Packages"
 sudo pip-3.2 install six
 
