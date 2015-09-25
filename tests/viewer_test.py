@@ -2,6 +2,7 @@
 # -*- coding: utf8 -*-
 
 from nose.tools import ok_, eq_
+from nose.plugins.attrib import attr
 import mock
 
 import os
@@ -38,6 +39,7 @@ class ViewerTestCase(object):
         self.u.SPLASH_DELAY = self.original_splash_delay
 
 
+@attr('fixme')
 class TestEmptyPl(ViewerTestCase):
     def test_empty(self):
         m_asset_list = mock.Mock()

@@ -1,11 +1,15 @@
 language: python
 python:
   - "2.7"
-  # does not have headers provided, please ask https://launchpad.net/~pypy/+archive/ppa
-  # maintainers to fix their pypy-dev package.
   - "pypy"
-# command to install dependencies
+addons:
+  apt:
+    packages:
+      - net-tools
 install:
-  - pip install -r requirements.txt --use-mirrors
-# command to run tests
-script: nosetests
+  - pip install -r requirements.txt
+before_script:
+  - mkdir -p ~/.screenly ~/screenly/misc
+  - cp misc/screenly.conf ~/.screenly/
+  - cp misc/uzbl.rc ~/screenly/misc/
+script: nosetests -v -a '!fixme'
