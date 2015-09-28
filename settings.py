@@ -14,6 +14,7 @@ DEFAULTS = {
         'database': CONFIG_DIR + 'screenly.db',
         'listen': '0.0.0.0:8080',
         'assetdir': 'screenly_assets',
+        'use_24_hour_clock': False
     },
     'viewer': {
         'show_splash': True,
@@ -23,29 +24,15 @@ DEFAULTS = {
         'default_duration': '10',
         'debug_logging': False,
         'verify_ssl': True,
-        'use_24_hour_clock': False
     }
 }
 
-# Initiate logging
-logging.basicConfig(level=logging.INFO,
-                    filename='/tmp/screenly_viewer.log',
-                    format='%(asctime)s %(message)s',
-                    datefmt='%a, %d %b %Y %H:%M:%S')
-
-# Silence urllib info messages ('Starting new HTTP connection')
-# that are triggered by the remote url availability check in view_web
-requests_log = logging.getLogger("requests")
-requests_log.setLevel(logging.WARNING)
-
-logging.debug('Starting viewer.py')
-
 
 class ScreenlySettings(IterableUserDict):
-    "Screenly OSE's Settings."
+    """Screenly OSE's Settings."""
 
     def __init__(self, *args, **kwargs):
-        rv = IterableUserDict.__init__(self, *args, **kwargs)
+        IterableUserDict.__init__(self, *args, **kwargs)
         self.home = getenv('HOME')
         self.conf_file = self.get_configfile()
 
@@ -54,7 +41,6 @@ class ScreenlySettings(IterableUserDict):
             exit(1)
         else:
             self.load()
-        return rv
 
     def _get(self, config, section, field, default):
         try:
@@ -77,7 +63,7 @@ class ScreenlySettings(IterableUserDict):
             config.set(section, field, unicode(self.get(field, default)))
 
     def load(self):
-        "Loads the latest settings from screenly.conf into memory."
+        """Loads the latest settings from screenly.conf into memory."""
         logging.debug('Reading config-file...')
         config = ConfigParser.ConfigParser()
         config.read(self.conf_file)
@@ -114,5 +100,13 @@ class ScreenlySettings(IterableUserDict):
 
     def get_listen_port(self):
         return self['listen'].split(':')[1]
+
+
+# Silence urllib info messages ('Starting new HTTP connection')
+# that are triggered by the remote url availability check in view_web
+requests_log = logging.getLogger("requests")
+requests_log.setLevel(logging.WARNING)
+
+logging.debug('Starting viewer.py')
 
 settings = ScreenlySettings()

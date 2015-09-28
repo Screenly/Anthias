@@ -8,6 +8,7 @@ addons:
       - net-tools
 install:
   - pip install -r requirements.txt
+  - pip install -r requirements.dev.txt
 before_script:
   - mkdir -p ~/.screenly ~/screenly/misc
   - cp misc/screenly.conf ~/.screenly/
