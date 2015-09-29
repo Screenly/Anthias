@@ -1,4 +1,5 @@
 #!/bin/bash
+trap 'kill $(jobs -p)' EXIT
 
 LOG=/tmp/screenly_xloader.log
 
