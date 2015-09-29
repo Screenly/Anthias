@@ -9,19 +9,9 @@ xset -dpms          # Disable DPMS (Energy Star) features
 xset s noblank      # Don't blank the video device
 export NOREFRESH=1  # Fix white flickering in omxplayer
 
-# Wait for server.py to be up and running (maximum 25s)
-RETRIES=1
-MAXRETRIES=5
-while [[ $RETRIES < $MAXRETRIES ]]; do
-  echo "Waiting for server.py to start (retry $RETRIES / $MAXRETRIES)" >> $LOG
-  SERVERPID=$(pgrep -f server.py)
-  if [ -x $SERVERPID ]; then
-    RETRIES=$(($RETRIES+1))
-    sleep 5
-  else
-    RETRIES=$MAXRETRIES
-  fi
-done
+# Wait for server.py to be up and running (maximum 28s)
+echo "Waiting for server.py to start" >> $LOG
+wget --retry-connrefused -t 8  http://0.0.0.0:8080/splash_page >> $LOG 2>&1
 
 echo "Launching infinite loop..." >> $LOG
 while true; do
