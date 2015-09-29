@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from os import path, getenv, utime
 from platform import machine
 from random import shuffle
+from requests import get as req_get
 from time import sleep
 from json import load as json_load
 from signal import signal, SIGUSR1, SIGUSR2
@@ -221,6 +222,43 @@ def view_video(uri, duration):
         logging.error('omxplayer timed out')
 
 
+def check_update():
+    """
+    Check if there is a later version of Screenly-OSE
+    available. Only do this update once per day.
+    Return True if up to date was written to disk,
+    False if no update needed and None if unable to check.
+    """
+
+    sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
+
+    if path.isfile(sha_file):
+        sha_file_mtime = path.getmtime(sha_file)
+        last_update = datetime.fromtimestamp(sha_file_mtime)
+    else:
+        last_update = None
+
+    logging.debug('Last update: %s' % str(last_update))
+
+    if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
+
+        if not url_fails('http://stats.screenlyapp.com'):
+            latest_sha = req_get('http://stats.screenlyapp.com/latest')
+
+            if latest_sha.status_code == 200:
+                with open(sha_file, 'w') as f:
+                    f.write(latest_sha.content.strip())
+                return True
+            else:
+                logging.debug('Received non 200-status')
+                return
+        else:
+            logging.debug('Unable to retreive latest SHA')
+            return
+    else:
+        return False
+
+
 def load_settings():
     """Load settings and set the log level."""
     settings.load()
@@ -259,6 +297,7 @@ def pro_init():
 
 
 def asset_loop(scheduler):
+    check_update()
     asset = scheduler.get_next_asset()
 
     if asset is None:

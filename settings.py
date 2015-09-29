@@ -27,6 +27,19 @@ DEFAULTS = {
     }
 }
 
+# Initiate logging
+logging.basicConfig(level=logging.INFO,
+                    filename='/tmp/screenly_viewer.log',
+                    format='%(asctime)s %(message)s',
+                    datefmt='%a, %d %b %Y %H:%M:%S')
+
+# Silence urllib info messages ('Starting new HTTP connection')
+# that are triggered by the remote url availability check in view_web
+requests_log = logging.getLogger("requests")
+requests_log.setLevel(logging.WARNING)
+
+logging.debug('Starting viewer.py')
+
 
 class ScreenlySettings(IterableUserDict):
     """Screenly OSE's Settings."""
@@ -100,13 +113,5 @@ class ScreenlySettings(IterableUserDict):
 
     def get_listen_port(self):
         return self['listen'].split(':')[1]
-
-
-# Silence urllib info messages ('Starting new HTTP connection')
-# that are triggered by the remote url availability check in view_web
-requests_log = logging.getLogger("requests")
-requests_log.setLevel(logging.WARNING)
-
-logging.debug('Starting viewer.py')
 
 settings = ScreenlySettings()
