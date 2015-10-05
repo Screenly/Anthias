@@ -20,7 +20,8 @@ date_settings = if use_24_hour_clock then date_settings_24hour else date_setting
 
 
 API.date_to = date_to = (d) ->
-  dd = moment (new Date d)
+  #cross-browser utc to localtime convertion
+  dd = moment.utc(d).local()
   string: -> dd.format date_settings.full_date
   date: -> dd.format date_settings.date
   time: -> dd.format date_settings.time
@@ -68,8 +69,10 @@ API.Asset = class Asset extends Backbone.Model
   active: =>
     if @get('is_enabled') and @get('start_date') and @get('end_date')
       at = now()
-      start_date = new Date(@get('start_date'));
-      end_date = new Date(@get('end_date'));
+      # Provide correct format for Date.parse
+      # Tell to browser that it is UTC + 0 (Z = zero)
+      start_date = new Date(@get('start_date') + 'Z');
+      end_date = new Date(@get('end_date') + 'Z');
       return start_date <= at <= end_date
     else
       return false
