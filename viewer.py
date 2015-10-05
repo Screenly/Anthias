@@ -265,37 +265,6 @@ def load_settings():
     logging.getLogger().setLevel(logging.DEBUG if settings['debug_logging'] else logging.INFO)
 
 
-def pro_init():
-    """Function to handle first-run on Screenly Pro"""
-    is_pro_init = path.isfile(path.join(settings.get_configdir(), 'not_initialized'))
-
-    if not is_pro_init:
-        return False
-
-    logging.debug('Detected Pro initiation cycle.')
-    load_browser(url=HOME + INTRO)
-
-    status_path = path.join(settings.get_configdir(), 'setup_status.json')
-
-    while is_pro_init:
-        with open(status_path, 'rb') as status_file:
-            status = json_load(status_file)
-
-        browser_send('js showIpMac("%s", "%s")' % (status.get('ip', ''), status.get('mac', '')))
-
-        if status.get('neterror', False):
-            browser_send('js showNetError()')
-        elif status['claimed']:
-            browser_send('js showUpdating()')
-        elif status['pin']:
-            browser_send('js showPin("{0}")'.format(status['pin']))
-
-        logging.debug('Waiting for node to be initialized.')
-        sleep(5)
-
-    return True
-
-
 def asset_loop(scheduler):
     check_update()
     asset = scheduler.get_next_asset()
@@ -348,8 +317,6 @@ def setup():
 
 def main():
     setup()
-    if pro_init():
-        return
 
     url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port()) if settings['show_splash'] else 'file://' + BLACK_PAGE
     load_browser(url=url)
