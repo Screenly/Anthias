@@ -19,7 +19,7 @@ import db
 import assets_helper
 
 
-__author__ = "Viktor Petersson"
+__author__ = "WireLoad Inc"
 __copyright__ = "Copyright 2012-2015, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 

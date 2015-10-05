@@ -33,7 +33,7 @@ python $SCREENLY/misc/migrate.py
 echo "Restarting app-server..."
 sudo supervisorctl restart screenly
 
-echo "Restarting X(viewer)"
+echo "Restarting X(viewer)..."
 sudo pkill -f "xloader.sh"
 sudo service lightdm restart
 
