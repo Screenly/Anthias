@@ -33,7 +33,7 @@ def validate_url(string):
     """
 
     checker = urlparse(string)
-    return bool(checker.scheme in ('rtsp', 'rtmp', 'http', 'https') and checker.netloc)
+    return bool(checker.scheme in ('http', 'https') and checker.netloc)
 
 
 def get_node_ip():
@@ -90,12 +90,7 @@ def url_fails(url):
     """
     Accept 200 and 405 as 'OK' statuses for URLs.
     Some hosting providers (like Google App Engine) throws a 405 at `requests`.
-    Can not check RTSP or RTMP, so we just believe it is there (if not OMX Player will terminate, and the next asset is shown -> no ugly error messages)
     """
-    if url.startswith('rtsp://'):
-        return False
-    if url.startswith('rtmp://'):
-        return False
     try:
         if validate_url(url):
             obj = requests.head(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl'])

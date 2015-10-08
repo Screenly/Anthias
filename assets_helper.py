@@ -7,6 +7,8 @@ FIELDS = ["asset_id", "name", "uri", "start_date",
 
 create_assets_table = 'CREATE TABLE assets(asset_id text primary key, name text, uri text, md5 text, start_date timestamp, end_date timestamp, duration text, mimetype text, is_enabled integer default 0, nocache integer default 0, play_order integer default 0)'
 
+
+# Note all times are naive for legacy reasons but always UTC.
 get_time = datetime.datetime.utcnow
 
 
@@ -28,7 +30,7 @@ def is_active(asset, at_time=None):
 
     if asset['is_enabled'] and asset['start_date'] and asset['end_date']:
         at = at_time or get_time()
-        return asset['start_date'] <= at <= asset['end_date']
+        return asset['start_date'] < at < asset['end_date']
     return False
 
 
@@ -54,6 +56,25 @@ def create(conn, asset):
         c.execute(queries.create(asset.keys()), asset.values())
     asset.update({'is_active': is_active(asset)})
     return asset
+
+
+def create_multiple(conn, assets):
+    """
+    Create a database record for each asset.
+    Returns asset list.
+    Asset's is_active field is updated before returning.
+    """
+
+    with db.commit(conn) as c:
+        for asset in assets:
+            if 'is_active' in asset:
+                asset.pop('is_active')
+
+            c.execute(queries.create(asset.keys()), asset.values())
+
+            asset.update({'is_active': is_active(asset)})
+
+    return assets
 
 
 def read(conn, asset_id=None, keys=FIELDS):

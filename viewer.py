@@ -1,17 +1,12 @@
 #!/usr/bin/env python
-# -*- coding: utf8 -*-
-
-__author__ = "Viktor Petersson"
-__copyright__ = "Copyright 2012-2014, WireLoad Inc"
-__license__ = "Dual License: GPLv2 and Commercial License"
+# -*- coding: utf-8 -*-
 
 from datetime import datetime, timedelta
 from os import path, getenv, utime
 from platform import machine
 from random import shuffle
 from requests import get as req_get
-from requests import head as req_head
-from time import sleep, time
+from time import sleep
 from json import load as json_load
 from signal import signal, SIGUSR1, SIGUSR2
 import logging
@@ -22,6 +17,12 @@ import html_templates
 from utils import url_fails
 import db
 import assets_helper
+
+
+__author__ = "WireLoad Inc"
+__copyright__ = "Copyright 2012-2015, WireLoad Inc"
+__license__ = "Dual License: GPLv2 and Commercial License"
+
 
 SPLASH_DELAY = 60  # secs
 EMPTY_PL_DELAY = 5  # secs
@@ -37,6 +38,10 @@ current_browser_url = None
 browser = None
 
 VIDEO_TIMEOUT = 20  # secs
+
+HOME = None
+arch = None
+db_conn = None
 
 
 def sigusr1(signum, frame):
@@ -57,17 +62,21 @@ def sigusr2(signum, frame):
 class Scheduler(object):
     def __init__(self, *args, **kwargs):
         logging.debug('Scheduler init')
+        self.assets = []
+        self.deadline = None
+        self.index = 0
+        self.counter = 0
         self.update_playlist()
 
     def get_next_asset(self):
         logging.debug('get_next_asset')
         self.refresh_playlist()
         logging.debug('get_next_asset after refresh')
-        if self.nassets == 0:
+        if not self.assets:
             return None
         idx = self.index
-        self.index = (self.index + 1) % self.nassets
-        logging.debug('get_next_asset counter %s returning asset %s of %s', self.counter, idx + 1, self.nassets)
+        self.index = (self.index + 1) % len(self.assets)
+        logging.debug('get_next_asset counter %s returning asset %s of %s', self.counter, idx + 1, len(self.assets))
         if settings['shuffle_playlist'] and self.index == 0:
             self.counter += 1
         return self.assets[idx]
@@ -87,11 +96,17 @@ class Scheduler(object):
     def update_playlist(self):
         logging.debug('update_playlist')
         self.last_update_db_mtime = self.get_db_mtime()
-        (self.assets, self.deadline) = generate_asset_list()
-        self.nassets = len(self.assets)
+        (new_assets, new_deadline) = generate_asset_list()
+        if new_assets == self.assets and new_deadline == self.deadline:
+            # If nothing changed, don't disturb the current play-through.
+            return
+
+        self.assets, self.deadline = new_assets, new_deadline
         self.counter = 0
-        self.index = 0
-        logging.debug('update_playlist done, count %s, counter %s, index %s, deadline %s', self.nassets, self.counter, self.index, self.deadline)
+        # Try to keep the same position in the play list. E.g. if a new asset is added to the end of the list, we
+        # don't want to start over from the beginning.
+        self.index = self.index % len(self.assets) if self.assets else 0
+        logging.debug('update_playlist done, count %s, counter %s, index %s, deadline %s', len(self.assets), self.counter, self.index, self.deadline)
 
     def get_db_mtime(self):
         # get database file last modification time
@@ -103,17 +118,14 @@ class Scheduler(object):
 
 def generate_asset_list():
     logging.info('Generating asset-list...')
-
-    now = datetime.utcnow()
-    enabled_assets = [a for a in assets_helper.read(db_conn) if a['is_enabled']]
-    future_dates = [a[k] for a in enabled_assets for k in ['start_date', 'end_date'] if a[k] > now]
-    deadline = sorted(future_dates)[0] if future_dates else None
+    playlist = assets_helper.get_playlist(db_conn)
+    deadline = sorted([asset['end_date'] for asset in playlist])[0] if len(playlist) > 0 else None
     logging.debug('generate_asset_list deadline: %s', deadline)
 
-    playlist = assets_helper.get_playlist(db_conn)
     if settings['shuffle_playlist']:
         shuffle(playlist)
-    return (playlist, deadline)
+
+    return playlist, deadline
 
 
 def watchdog():
@@ -132,7 +144,7 @@ def load_browser(url=None):
         logging.info('killing previous uzbl %s', browser.pid)
         browser.process.kill()
 
-    if not url is None:
+    if url is not None:
         current_browser_url = url
 
     # --config=-       read commands (and config) from stdin
@@ -171,8 +183,8 @@ def browser_url(url, cb=lambda _: True, force=False):
     if url == current_browser_url and not force:
         logging.debug('Already showing %s.', current_browser_url)
 
-        # Ideally we want to reload these assets, but it creates a
-        # weird bug for images. Refs #278
+        # For some reason this invokes a weird black screen issue
+        # when going image -> image.
         # logging.debug('Already showing %s, reloading it.', current_browser_url)
         # browser_send('reload full')
     else:
@@ -189,7 +201,7 @@ def view_image(uri):
 def view_video(uri, duration):
     logging.debug('Displaying video %s for %s ', uri, duration)
 
-    if arch in ['armv6l', 'armv7l']:
+    if arch in ('armv6l', 'armv7l'):
         player_args = ['omxplayer', uri]
         player_kwargs = {'o': settings['audio_output'], '_bg': True, '_ok_code': [0, 124]}
         player_kwargs['_ok_code'] = [0, 124]
@@ -206,15 +218,14 @@ def view_video(uri, duration):
     while run.process.alive:
         watchdog()
         sleep(1)
-    if not run.exit_code == 0:
-        logging.error('omxplayer exited with exit code %i.' % run.exit_code)
+    if run.exit_code == 124:
+        logging.error('omxplayer timed out')
 
 
 def check_update():
     """
     Check if there is a later version of Screenly-OSE
     available. Only do this update once per day.
-
     Return True if up to date was written to disk,
     False if no update needed and None if unable to check.
     """
@@ -254,36 +265,6 @@ def load_settings():
     logging.getLogger().setLevel(logging.DEBUG if settings['debug_logging'] else logging.INFO)
 
 
-def pro_init():
-    """Function to handle first-run on Screenly Pro"""
-    is_pro_init = path.isfile(path.join(settings.get_configdir(), 'not_initialized'))
-
-    if is_pro_init:
-        logging.debug('Detected Pro initiation cycle.')
-        load_browser(url=HOME + INTRO)
-    else:
-        return False
-
-    status_path = path.join(settings.get_configdir(), 'setup_status.json')
-    while is_pro_init:
-        with open(status_path, 'rb') as status_file:
-            status = json_load(status_file)
-
-        browser_send('js showIpMac("%s", "%s")' % (status.get('ip', ''), status.get('mac', '')))
-
-        if status.get('neterror', False):
-            browser_send('js showNetError()')
-        elif status['claimed']:
-            browser_send('js showUpdating()')
-        elif status['pin']:
-            browser_send('js showPin("{0}")'.format(status['pin']))
-
-        logging.debug('Waiting for node to be initialized.')
-        sleep(5)
-
-    return True
-
-
 def asset_loop(scheduler):
     check_update()
     asset = scheduler.get_next_asset()
@@ -302,6 +283,8 @@ def asset_loop(scheduler):
         if 'image' in mime:
             view_image(uri)
         elif 'web' in mime:
+            # FIXME If we want to force periodic reloads of repeated web assets, force=True could be used here.
+            # See e38e6fef3a70906e7f8739294ffd523af6ce66be.
             browser_url(uri)
         elif 'video' in mime:
             view_video(uri, asset['duration'])
@@ -332,32 +315,14 @@ def setup():
     html_templates.black_page(BLACK_PAGE)
 
 
-def wait_for_splash_page(url):
-    max_retries = 20
-    retries = 0
-    while retries < max_retries:
-        fetch_head = req_head(url)
-        if fetch_head.status_code == 200:
-            break
-        else:
-            sleep(1)
-            retries += 1
-            logging.debug('Waiting for splash-page. Retry %d') % retries
-
-
 def main():
     setup()
-    if pro_init():
-        return
+
+    url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port()) if settings['show_splash'] else 'file://' + BLACK_PAGE
+    load_browser(url=url)
 
     if settings['show_splash']:
-        url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port())
-        wait_for_splash_page(url)
-        load_browser(url=url)
         sleep(SPLASH_DELAY)
-    else:
-        url = 'file://' + BLACK_PAGE
-        load_browser(url=url)
 
     scheduler = Scheduler()
     logging.debug('Entering infinite loop.')
@@ -366,4 +331,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except:
+        logging.exception("Viewer crashed.")
+        raise
