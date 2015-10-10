@@ -111,10 +111,7 @@ def prepare_asset(request):
     req = Request(request.environ)
     data = None
 
-    if 'model' in req.form:
-        data = json.loads(req.form['model'])
-    else:
-        data = req.form
+    data = json.loads(req.form['model']) if 'model' in req.form else req.form
 
     def get(key):
         val = data.get(key, '')
