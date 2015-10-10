@@ -261,13 +261,14 @@ def playlist_order():
 
     ids = request.POST.get('ids', '').split(',')
     assets = assets_helper.read(db_conn)
-    last = [x for x in assets if x['asset_id'] not in ids]
 
     for play_order, asset_id in enumerate(ids):
         assets_helper.update(db_conn, asset_id, {'asset_id': asset_id, 'play_order': play_order})
 
-    for asset in last:
-        assets_helper.update(db_conn, asset['asset_id'], {'asset_id': asset_id, 'play_order': len(ids)})
+    # Set the play order to a high value for all inactive assets.
+    for asset in assets:
+        if asset['asset_id'] not in ids:
+            assets_helper.update(db_conn, asset['asset_id'], {'asset_id': asset_id, 'play_order': len(ids)})
 
 ################################
 # Views
