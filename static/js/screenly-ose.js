@@ -688,13 +688,17 @@
     };
 
     AssetsView.prototype.update_order = function() {
-      var i, id, _i, _len, _ref;
-      _ref = (this.$('#active-assets')).sortable('toArray');
-      for (i = _i = 0, _len = _ref.length; _i < _len; i = ++_i) {
-        id = _ref[i];
+      var active, el, i, id, _i, _j, _len, _len1, _ref;
+      active = (this.$('#active-assets')).sortable('toArray');
+      for (i = _i = 0, _len = active.length; _i < _len; i = ++_i) {
+        id = active[i];
         this.collection.get(id).set('play_order', i);
       }
-      this.collection.sort();
+      _ref = (this.$('#inactive-assets tr')).toArray();
+      for (_j = 0, _len1 = _ref.length; _j < _len1; _j++) {
+        el = _ref[_j];
+        this.collection.get(el.id).set('play_order', active.length);
+      }
       return $.post('/api/assets/order', {
         ids: ((this.$('#active-assets')).sortable('toArray')).join(',')
       });
@@ -702,6 +706,7 @@
 
     AssetsView.prototype.render = function() {
       var which, _i, _j, _len, _len1, _ref, _ref1;
+      this.collection.sort();
       _ref = ['active', 'inactive'];
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         which = _ref[_i];
@@ -720,12 +725,7 @@
         which = _ref1[_j];
         this.$("." + which + "-table thead").toggle(!!(this.$("#" + which + "-assets tr").length));
       }
-      if (this.$('#active-assets tr').length > 1) {
-        this.sorted.sortable('enable');
-        this.update_order();
-      } else {
-        this.sorted.sortable('disable');
-      }
+      this.update_order();
       return this.el;
     };
 

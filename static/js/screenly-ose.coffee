@@ -365,12 +365,16 @@ API.View.AssetsView = class AssetsView extends Backbone.View
       update: @update_order
 
   update_order: =>
-    @collection.get(id).set('play_order', i) for id, i in (@$ '#active-assets').sortable 'toArray'
-    @collection.sort()
+    active = (@$ '#active-assets').sortable 'toArray'
+    
+    @collection.get(id).set('play_order', i) for id, i in active
+    @collection.get(el.id).set('play_order', active.length) for el in (@$ '#inactive-assets tr').toArray()
 
     $.post '/api/assets/order', ids: ((@$ '#active-assets').sortable 'toArray').join ','
 
   render: =>
+    @collection.sort()
+    
     (@$ "##{which}-assets").html '' for which in ['active', 'inactive']
 
     @collection.each (model) =>
@@ -379,11 +383,9 @@ API.View.AssetsView = class AssetsView extends Backbone.View
 
     for which in ['inactive', 'active']
       @$(".#{which}-table thead").toggle !!(@$("##{which}-assets tr").length)
-    if @$('#active-assets tr').length > 1
-      @sorted.sortable 'enable'
-      @update_order()
-    else
-      @sorted.sortable 'disable'
+      
+    @update_order()
+   
     @el
 
 
