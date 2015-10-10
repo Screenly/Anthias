@@ -11,3 +11,4 @@ sh==1.08
 six==1.8.0
 uptime==2.0.2
 wsgiref==0.1.2
+werkzeug==0.10.4

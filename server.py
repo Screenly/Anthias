@@ -35,6 +35,7 @@ from utils import url_fails
 from utils import get_video_duration
 
 from settings import settings, DEFAULTS
+from werkzeug.wrappers import Request
 ################################
 # Utilities
 ################################
@@ -107,10 +108,10 @@ def template(template_name, **context):
 
 def prepare_asset(request):
 
-    data = request.POST or request.FORM or {}
+    req = Request(request.environ)
+    data = None
 
-    if 'model' in data:
-        data = json.loads(data['model'])
+    data = json.loads(req.form['model']) if 'model' in req.form else req.form
 
     def get(key):
         val = data.get(key, '')
@@ -122,7 +123,7 @@ def prepare_asset(request):
             return val
 
     if all([get('name'),
-            get('uri') or (request.files.file_upload != ""),
+            get('uri') or req.files.get('file_upload'),
             get('mimetype')]):
 
         asset = {
@@ -139,7 +140,7 @@ def prepare_asset(request):
             asset['asset_id'] = uuid.uuid4().hex
 
         try:
-            file_upload = request.files.file_upload
+            file_upload = req.files.get('file_upload')
             filename = file_upload.filename
         except AttributeError:
             file_upload = None
@@ -162,12 +163,7 @@ def prepare_asset(request):
         if filename:
             asset['uri'] = path.join(settings['assetdir'], asset['asset_id'])
 
-            with open(asset['uri'], 'w') as f:
-                while True:
-                    chunk = file_upload.file.read(1024)
-                    if not chunk:
-                        break
-                    f.write(chunk)
+            file_upload.save(asset['uri'])
 
         if "video" in asset['mimetype']:
             video_duration = get_video_duration(asset['uri'])
