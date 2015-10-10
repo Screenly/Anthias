@@ -20,7 +20,7 @@ date_settings = if use_24_hour_clock then date_settings_24hour else date_setting
 
 
 API.date_to = date_to = (d) ->
-  #cross-browser utc to localtime convertion
+  # Cross-browser UTC to localtime conversion
   dd = moment.utc(d).local()
   string: -> dd.format date_settings.full_date
   date: -> dd.format date_settings.date
