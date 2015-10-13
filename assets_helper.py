@@ -118,3 +118,16 @@ def delete(conn, asset_id):
     """Remove an asset from the database."""
     with db.commit(conn) as c:
         c.execute(queries.remove, [asset_id])
+
+
+def order(db_conn, ids):
+    """Order assets. Move to last position assets which not presented in list of id"""
+    assets = read(db_conn)
+
+    for play_order, asset_id in enumerate(ids):
+        update(db_conn, asset_id, {'asset_id': asset_id, 'play_order': play_order})
+
+    # Set the play order to a high value for all inactive assets.
+    for asset in assets:
+        if asset['asset_id'] not in ids:
+            update(db_conn, asset['asset_id'], {'asset_id': asset['asset_id'], 'play_order': len(ids)})

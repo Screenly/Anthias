@@ -257,18 +257,8 @@ def remove_asset(asset_id):
 @route('/api/assets/order', method="POST")
 @api
 def playlist_order():
-    """Receive a list of asset_ids in the order they should be in the playlist"""
+    assets_helper.order(db_conn, request.POST.get('ids', '').split(','))
 
-    ids = request.POST.get('ids', '').split(',')
-    assets = assets_helper.read(db_conn)
-
-    for play_order, asset_id in enumerate(ids):
-        assets_helper.update(db_conn, asset_id, {'asset_id': asset_id, 'play_order': play_order})
-
-    # Set the play order to a high value for all inactive assets.
-    for asset in assets:
-        if asset['asset_id'] not in ids:
-            assets_helper.update(db_conn, asset['asset_id'], {'asset_id': asset_id, 'play_order': len(ids)})
 
 ################################
 # Views
