@@ -32,7 +32,7 @@ date_d = datetime.datetime(2013, 1, 21, 00, 00)
 
 asset_w = {
     'mimetype': u'web',
-    'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d',
+    'asset_id': u'4c8dbce552edb5812d3a866cfe5f159e',
     'name': u'いろはにほへど',
     'uri': u'http://www.wireload.net',
     'start_date': date_a,
@@ -83,8 +83,8 @@ asset_z = {
     'mimetype': u'image',
     'asset_id': u'9722cd9c45e44dc9b23521be8132b38f',
     'name': u'url test',
-    'start_date': date_c.isoformat(),
-    'end_date': date_d.isoformat(),
+    'start_date': date_c,
+    'end_date': date_d,
     'duration': u'1',
     'is_enabled': 1,
     'nocache': 0,
@@ -191,3 +191,28 @@ class DBHelperTest(unittest.TestCase):
         [should_be_y] = assets_helper.get_playlist(self.conn)
         self.assertEqual(asset_y['asset_id'], should_be_y['asset_id'])
         # ✂--------
+
+    def test_set_order(self):
+        assets = [asset_x, asset_y, asset_z, asset_w]
+        for_order = [asset_x, asset_y]
+
+        assets_helper.create_multiple(self.conn, assets)
+        assets_helper.order(self.conn, [asset['asset_id'] for asset in for_order])
+
+        fetched = assets_helper.read(self.conn)
+
+        self.assertEquals([0, 1, 2, 2], [asset['play_order'] for asset in fetched])
+
+    def test_set_order_empty(self):
+        assets = [asset_x, asset_y, asset_z]
+
+        assets_helper.create_multiple(self.conn, assets)
+        assets_helper.order(self.conn, [])
+
+        fetched = assets_helper.read(self.conn)
+
+        self.assertEquals([0, 0, 0], [asset['play_order'] for asset in fetched])
+
+
+
+
