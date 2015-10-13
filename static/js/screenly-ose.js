@@ -131,8 +131,8 @@
       var at, end_date, start_date;
       if (this.get('is_enabled') && this.get('start_date') && this.get('end_date')) {
         at = now();
-        start_date = new Date(this.get('start_date') + 'Z');
-        end_date = new Date(this.get('end_date') + 'Z');
+        start_date = new Date(this.get('start_date'));
+        end_date = new Date(this.get('end_date'));
         return (start_date <= at && at <= end_date);
       } else {
         return false;

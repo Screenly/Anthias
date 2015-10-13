@@ -71,8 +71,8 @@ API.Asset = class Asset extends Backbone.Model
       at = now()
       # Provide correct format for Date.parse
       # Tell to browser that it is UTC + 0 (Z = zero)
-      start_date = new Date(@get('start_date') + 'Z');
-      end_date = new Date(@get('end_date') + 'Z');
+      start_date = new Date(@get('start_date'));
+      end_date = new Date(@get('end_date'));
       return start_date <= at <= end_date
     else
       return false

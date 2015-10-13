@@ -7,6 +7,8 @@ from sh import grep, netstat
 from urlparse import urlparse
 from datetime import timedelta
 from settings import settings
+from datetime import datetime
+import pytz
 
 HTTP_OK = xrange(200, 299)
 
@@ -79,8 +81,10 @@ def get_video_duration(file):
 
 
 def handler(obj):
-    if hasattr(obj, 'isoformat'):
-        return obj.isoformat()
+    # Set timezone as UTC if it's datetime and format as ISO
+    if isinstance(obj, datetime):
+        with_tz = obj.replace(tzinfo=pytz.utc)
+        return with_tz.isoformat()
     else:
         raise TypeError('Object of type %s with value of %s is not JSON serializable' % (type(obj), repr(obj)))
 

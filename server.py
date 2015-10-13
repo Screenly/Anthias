@@ -30,6 +30,7 @@ from lib.utils import get_node_ip
 from lib.utils import validate_url
 from lib.utils import url_fails
 from lib.utils import get_video_duration
+from dateutil import parser as date_parser
 
 from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS
 from werkzeug.wrappers import Request
@@ -173,13 +174,14 @@ def prepare_asset(request):
             # Crashes if it's not an int. We want that.
             asset['duration'] = int(get('duration'))
 
+        # parse date via python-dateutil and remove timezone info
         if get('start_date'):
-            asset['start_date'] = datetime.strptime(get('start_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
+            asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
         else:
             asset['start_date'] = ""
 
         if get('end_date'):
-            asset['end_date'] = datetime.strptime(get('end_date').split(".")[0], "%Y-%m-%dT%H:%M:%S")
+            asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
         else:
             asset['end_date'] = ""
 
