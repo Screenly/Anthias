@@ -12,7 +12,9 @@ from signal import signal, SIGUSR1, SIGUSR2
 import logging
 import sh
 
-from settings import settings
+from settings import load as load_settings
+from settings import config_dir
+
 import html_templates
 from utils import url_fails
 import db
@@ -33,6 +35,9 @@ SCREENLY_HTML = '/tmp/screenly_html/'
 LOAD_SCREEN = '/screenly/loading.jpg'  # relative to $HOME
 UZBLRC = '/screenly/misc/uzbl.rc'  # relative to $HOME
 INTRO = '/screenly/intro-template.html'
+
+settings = load_settings()
+logging.getLogger().setLevel(logging.DEBUG if settings['debug_logging'] else logging.INFO)
 
 current_browser_url = None
 browser = None
@@ -230,7 +235,7 @@ def check_update():
     False if no update needed and None if unable to check.
     """
 
-    sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
+    sha_file = path.join(config_dir(), 'latest_screenly_sha')
 
     if path.isfile(sha_file):
         sha_file_mtime = path.getmtime(sha_file)
@@ -257,12 +262,6 @@ def check_update():
             return
     else:
         return False
-
-
-def load_settings():
-    """Load settings and set the log level."""
-    settings.load()
-    logging.getLogger().setLevel(logging.DEBUG if settings['debug_logging'] else logging.INFO)
 
 
 def asset_loop(scheduler):
@@ -309,7 +308,7 @@ def setup():
     signal(SIGUSR2, sigusr2)
 
     load_settings()
-    db_conn = db.conn(settings['database'])
+    db_conn = db.conn(settings.get_path('database'))
 
     sh.mkdir(SCREENLY_HTML, p=True)
     html_templates.black_page(BLACK_PAGE)
