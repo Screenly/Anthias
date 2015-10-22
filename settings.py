@@ -105,9 +105,10 @@ class ScreenlySettings:
 def save(settings, conf_path=config_file()):
     parser = ConfigParser.ConfigParser()
 
-    for section, options in settings.conf.items():
+    # Use sorting to make options order interpreter-independent
+    for section, options in sorted(settings.conf.items()):
         parser.add_section(section)
-        for option, value in options.items():
+        for option, value in sorted(options.items()):
             parser.set(section, option, value)
 
     with open(conf_path, mode='w') as f:
