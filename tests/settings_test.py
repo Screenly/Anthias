@@ -42,7 +42,7 @@ class SettingsTest(unittest.TestCase):
         self.assertEquals(s.get_listen_ip(), '0.0.0.0')
         self.assertEquals(s.get_listen_port(), '8080')
 
-    def test_not_found(self):
+    def test_accessing_missing_attribute_raises_attribute_error(self):
         s = self.default_settings()
         self.assertRaises(AttributeError, lambda: s['missing'])
 

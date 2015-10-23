@@ -10,10 +10,12 @@ CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
 
 
-def config_dir(home=getenv('HOME')): return path.join(home, CONFIG_DIR)
+def config_dir(home=getenv('HOME')):
+    return path.join(home, CONFIG_DIR)
 
 
-def config_file(home=getenv('HOME')): return path.join(home, CONFIG_DIR, CONFIG_FILE)
+def config_file(home=getenv('HOME')):
+    return path.join(home, CONFIG_DIR, CONFIG_FILE)
 
 DEFAULTS = {
     'main': {
