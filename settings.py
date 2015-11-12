@@ -90,13 +90,13 @@ class ScreenlySettings(object):
         raise AttributeError(item)
 
     def __getitem__(self, item):
-        if not self.conf:
+        if self.conf is None:
             self.load()
         section = self._find_section(item)
         return self.conf[section][item]
 
     def __setitem__(self, key, value):
-        if not self.conf:
+        if self.conf is None:
             self.load()
         section = self._find_section(key)
         self.conf[section][key] = value
