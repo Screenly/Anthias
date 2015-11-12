@@ -39,10 +39,7 @@ from werkzeug.wrappers import Request
 from settings import DEFAULTS
 from settings import config_dir
 from settings import config_file
-from settings import load as load_settings
-from settings import save as save_settings
-
-settings = load_settings()
+from settings import settings
 
 ################################
 # Utilities
@@ -276,8 +273,6 @@ def viewIndex():
 
 @route('/settings', method=["GET", "POST"])
 def settings_page():
-    global settings
-
     context = {'flash': None}
 
     if request.method == "POST":
@@ -287,12 +282,11 @@ def settings_page():
                 value = value == 'on'
             settings[field] = value
         try:
-            save_settings(settings)
+            settings.save()
             context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
         except IOError as e:
             context['flash'] = {'class': "error", 'message': e}
-    else:
-        settings = load_settings()
+
     for field, default in DEFAULTS['viewer'].items():
         context[field] = settings[field]
 

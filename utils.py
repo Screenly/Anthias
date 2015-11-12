@@ -5,9 +5,8 @@ from netifaces import ifaddresses
 from sh import grep, netstat
 from urlparse import urlparse
 from datetime import timedelta
-from settings import load as load_settings
+from settings import settings
 
-settings = load_settings()
 
 # This will only work on the Raspberry Pi,
 # so let's wrap it in a try/except so that

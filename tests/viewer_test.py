@@ -27,7 +27,7 @@ class ViewerTestCase(object):
         self.p_killall = mock.patch.object(self.u.sh, 'killall', self.m_killall)
 
         self.m_reload = mock.Mock(name='reload')
-        self.p_reload = mock.patch.object(self.u, 'load_settings', self.m_reload)
+        self.p_reload = mock.patch.object(self.u, 'settings', self.m_reload)
 
         self.m_sleep = mock.Mock(name='sleep')
         self.p_sleep = mock.patch.object(self.u, 'sleep', self.m_sleep)

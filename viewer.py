@@ -9,11 +9,11 @@ from requests import get as req_get
 from time import sleep
 from json import load as json_load
 from signal import signal, SIGUSR1, SIGUSR2
-import logging
+import logging as log_factory
 import sh
 
-from settings import load as load_settings
 from settings import config_dir
+from settings import settings
 
 import html_templates
 from utils import url_fails
@@ -36,8 +36,19 @@ LOAD_SCREEN = '/screenly/loading.jpg'  # relative to $HOME
 UZBLRC = '/screenly/misc/uzbl.rc'  # relative to $HOME
 INTRO = '/screenly/intro-template.html'
 
-settings = load_settings()
-logging.getLogger().setLevel(logging.DEBUG if settings['debug_logging'] else logging.INFO)
+# Initiate logging
+log_factory.basicConfig(level=log_factory.DEBUG,
+                        filename='/tmp/screenly_viewer.log',
+                        format='%(asctime)s %(name)s#%(levelname)s: %(message)s',
+                        datefmt='%a, %d %b %Y %H:%M:%S')
+
+
+# Silence urllib info messages ('Starting new HTTP connection')
+# that are triggered by the remote url availability check in view_web
+requests_log = log_factory.getLogger("requests")
+requests_log.setLevel(log_factory.WARNING)
+
+logging = log_factory.getLogger('viewer')
 
 current_browser_url = None
 browser = None
@@ -61,7 +72,7 @@ def sigusr1(signum, frame):
 def sigusr2(signum, frame):
     """Reload settings"""
     logging.info("USR2 received, reloading settings.")
-    load_settings()
+    settings.load()
 
 
 class Scheduler(object):
@@ -307,7 +318,6 @@ def setup():
     signal(SIGUSR1, sigusr1)
     signal(SIGUSR2, sigusr2)
 
-    load_settings()
     db_conn = db.conn(settings.get_path('database'))
 
     sh.mkdir(SCREENLY_HTML, p=True)
@@ -315,6 +325,8 @@ def setup():
 
 
 def main():
+    logging.debug('Starting viewer.py')
+    logging.setLevel(log_factory.DEBUG if settings['debug_logging'] else log_factory.INFO)
     setup()
 
     url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port()) if settings['show_splash'] else 'file://' + BLACK_PAGE

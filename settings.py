@@ -17,6 +17,7 @@ def config_dir(home=getenv('HOME')):
 def config_file(home=getenv('HOME')):
     return path.join(home, CONFIG_DIR, CONFIG_FILE)
 
+
 DEFAULTS = {
     'main': {
         'database': CONFIG_DIR + 'screenly.db',
@@ -35,48 +36,50 @@ DEFAULTS = {
     }
 }
 
-# Initiate logging
-logging.basicConfig(level=logging.INFO,
-                    filename='/tmp/screenly_viewer.log',
-                    format='%(asctime)s %(message)s',
-                    datefmt='%a, %d %b %Y %H:%M:%S')
-
-# Silence urllib info messages ('Starting new HTTP connection')
-# that are triggered by the remote url availability check in view_web
-requests_log = logging.getLogger("requests")
-requests_log.setLevel(logging.WARNING)
-
-logging.debug('Starting viewer.py')
-
-
-def load(conf_path=config_file()):
-    def _get_fn(parser, default):
-        if isinstance(default, bool):
-            return parser.getboolean
-        elif isinstance(default, int):
-            return parser.getint
-        return parser.get
-
-    parser = ConfigParser.ConfigParser()
-    with open(conf_path) as fp:
-        parser.readfp(fp)
-
-    conf = copy.deepcopy(DEFAULTS)
-    # Iterate over default config and load
-    for section, options in conf.items():
-        for option, default in options.items():
-            try:
-                conf[section][option] = _get_fn(parser, default)(section, option)
-            except ConfigParser.Error as e:
-                logging.debug("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (
-                    section, option, unicode(e), default))
-
-    return ScreenlySettings(conf)
+logger = logging.getLogger('settings')
 
 
 class ScreenlySettings:
-    def __init__(self, conf):
+    def __init__(self):
+        self.conf = None
+
+    def set(self, conf):
         self.conf = conf
+
+    def load(self, conf_path=config_file()):
+        def _get_fn(parser, default):
+            if isinstance(default, bool):
+                return parser.getboolean
+            elif isinstance(default, int):
+                return parser.getint
+            return parser.get
+
+        parser = ConfigParser.ConfigParser()
+        with open(conf_path) as fp:
+            parser.readfp(fp)
+
+        conf = copy.deepcopy(DEFAULTS)
+        # Iterate over default config and load
+        for section, options in conf.items():
+            for option, default in options.items():
+                try:
+                    conf[section][option] = _get_fn(parser, default)(section, option)
+                except ConfigParser.Error as e:
+                    logger.debug("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (
+                        section, option, unicode(e), default))
+        self.conf = conf
+
+    def save(self, conf_path=config_file()):
+        parser = ConfigParser.ConfigParser()
+
+        # Use sorting to make options order interpreter-independent
+        for section, options in sorted(self.conf.items()):
+            parser.add_section(section)
+            for option, value in sorted(options.items()):
+                parser.set(section, option, value)
+
+        with open(conf_path, mode='w') as f:
+            parser.write(f)
 
     def _find_section(self, item):
         # Try to find in all sections
@@ -87,10 +90,14 @@ class ScreenlySettings:
         raise AttributeError(item)
 
     def __getitem__(self, item):
+        if not self.conf:
+            self.load()
         section = self._find_section(item)
         return self.conf[section][item]
 
     def __setitem__(self, key, value):
+        if not self.conf:
+            self.load()
         section = self._find_section(key)
         self.conf[section][key] = value
 
@@ -104,14 +111,4 @@ class ScreenlySettings:
         return self['listen'].split(':')[1]
 
 
-def save(settings, conf_path=config_file()):
-    parser = ConfigParser.ConfigParser()
-
-    # Use sorting to make options order interpreter-independent
-    for section, options in sorted(settings.conf.items()):
-        parser.add_section(section)
-        for option, value in sorted(options.items()):
-            parser.set(section, option, value)
-
-    with open(conf_path, mode='w') as f:
-        parser.write(f)
+settings = ScreenlySettings()
