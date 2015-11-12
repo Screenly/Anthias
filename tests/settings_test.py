@@ -7,7 +7,7 @@ from settings import settings as s
 
 
 class SettingsTest(unittest.TestCase):
-    def test_config_dir(self):
+    def test_config_dir_should_be_HOME_with_path(self):
         home = getenv('HOME')
         self.assertEquals(config_dir(home='/tmp'), '/tmp/.screenly/')
         self.assertEquals(config_dir(), home + '/' + '.screenly/')
@@ -48,7 +48,7 @@ class SettingsTest(unittest.TestCase):
         s['listen'] = '127.0.0.1:8080'
         self.assertEqual(s['listen'], '127.0.0.1:8080')
 
-    def test_load_non_exists(self):
+    def test_load_non_exists_file_should_rise_io_error(self):
         self.assertRaises(IOError, lambda: s.load('/tmp/notfound'))
 
     def load_with_conf(self, conf_str):
@@ -66,12 +66,12 @@ class SettingsTest(unittest.TestCase):
         self.load_with_conf('[viewer]\nverify_ssl = False')
         self.assertEqual(s['verify_ssl'], False)
 
-    def test_load_bad_section(self):
+    def test_property_in_bad_section_should_be_ignored(self):
         """option passed in bad section must be ignored"""
         self.load_with_conf('[main]\nverify_ssl = False')
         self.assertEqual(s['verify_ssl'], True)
 
-    def test_load_set_save(self):
+    def test_load_set_save_should_persist_config_on_disk(self):
         self.load_with_conf('[main]\nassetdir = dir')
         s['show_splash'] = False
 

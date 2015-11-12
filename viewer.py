@@ -73,6 +73,7 @@ def sigusr2(signum, frame):
     """Reload settings"""
     logging.info("USR2 received, reloading settings.")
     settings.load()
+    logging.setLevel(log_factory.DEBUG if settings['debug_logging'] else log_factory.INFO)
 
 
 class Scheduler(object):

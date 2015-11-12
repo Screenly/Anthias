@@ -39,7 +39,7 @@ DEFAULTS = {
 logger = logging.getLogger('settings')
 
 
-class ScreenlySettings:
+class ScreenlySettings(object):
     def __init__(self):
         self.conf = None
 
