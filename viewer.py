@@ -128,7 +128,7 @@ class Scheduler(object):
     def get_db_mtime(self):
         # get database file last modification time
         try:
-            return path.getmtime(settings['database'])
+            return path.getmtime(settings.get_path('database'))
         except:
             return 0
 
