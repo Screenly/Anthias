@@ -37,10 +37,11 @@ UZBLRC = '/screenly/misc/uzbl.rc'  # relative to $HOME
 INTRO = '/screenly/intro-template.html'
 
 # Initiate logging
-log_factory.basicConfig(level=log_factory.DEBUG,
-                        filename='/tmp/screenly_viewer.log',
-                        format='%(asctime)s %(name)s#%(levelname)s: %(message)s',
-                        datefmt='%a, %d %b %Y %H:%M:%S')
+log_factory.basicConfig(
+    level=log_factory.DEBUG,
+    filename='/tmp/screenly_viewer.log',
+    format='%(asctime)s %(name)s#%(levelname)s: %(message)s',
+    datefmt='%a, %d %b %Y %H:%M:%S')
 
 
 # Silence urllib info messages ('Starting new HTTP connection')
