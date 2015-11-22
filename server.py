@@ -251,7 +251,7 @@ def remove_asset(asset_id):
 @route('/api/assets/order', method="POST")
 @api
 def playlist_order():
-    assets_helper.order(db_conn, request.POST.get('ids', '').split(','))
+    assets_helper.save_ordering(db_conn, request.POST.get('ids', '').split(','))
 
 
 ################################
