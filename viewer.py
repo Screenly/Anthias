@@ -36,13 +36,6 @@ LOAD_SCREEN = '/screenly/loading.jpg'  # relative to $HOME
 UZBLRC = '/screenly/misc/uzbl.rc'  # relative to $HOME
 INTRO = '/screenly/intro-template.html'
 
-# Initiate logging
-log_factory.basicConfig(
-    level=log_factory.DEBUG,
-    filename='/tmp/screenly_viewer.log',
-    format='%(asctime)s %(name)s#%(levelname)s: %(message)s',
-    datefmt='%a, %d %b %Y %H:%M:%S')
-
 
 # Silence urllib info messages ('Starting new HTTP connection')
 # that are triggered by the remote url availability check in view_web
@@ -327,8 +320,16 @@ def setup():
 
 
 def main():
+    # Initiate logging
+    log_factory.basicConfig(
+        level=log_factory.DEBUG,
+        filename='/tmp/screenly_viewer.log',
+        format='%(asctime)s %(name)s#%(levelname)s: %(message)s',
+        datefmt='%a, %d %b %Y %H:%M:%S')
+
     logging.debug('Starting viewer.py')
     logging.setLevel(log_factory.DEBUG if settings['debug_logging'] else log_factory.INFO)
+    
     setup()
 
     url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port()) if settings['show_splash'] else 'file://' + BLACK_PAGE
