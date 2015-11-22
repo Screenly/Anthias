@@ -195,20 +195,25 @@ class DBHelperTest(unittest.TestCase):
 
     def test_set_order(self):
         assets = [asset_x, asset_y, asset_z, asset_w]
-        for_order = [asset_x, asset_y]
+        for_order = [asset_y, asset_x]
 
         assets_helper.create_multiple(self.conn, assets)
-        assets_helper.order(self.conn, [asset['asset_id'] for asset in for_order])
+        assets_helper.save_ordering(self.conn, [asset['asset_id'] for asset in for_order])
 
         fetched = assets_helper.read(self.conn)
 
-        self.assertEquals([0, 1, 2, 2], [asset['play_order'] for asset in fetched])
+        self.assertEquals(
+            [(0, asset_y['asset_id']),
+             (1, asset_x['asset_id']),
+             (2, asset_z['asset_id']),
+             (2, asset_w['asset_id'])],
+            [(asset['play_order'], asset['asset_id']) for asset in fetched])
 
     def test_set_order_empty(self):
         assets = [asset_x, asset_y, asset_z]
 
         assets_helper.create_multiple(self.conn, assets)
-        assets_helper.order(self.conn, [])
+        assets_helper.save_ordering(self.conn, [])
 
         fetched = assets_helper.read(self.conn)
 

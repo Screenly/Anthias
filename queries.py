@@ -4,7 +4,7 @@ quest = lambda l: '=?,'.join(l) + '=?'
 
 exists_table = "SELECT name FROM sqlite_master WHERE type='table' AND name='assets'"
 
-read_all = lambda keys: 'select ' + comma(keys) + ' from assets order by play_order'
+read_all = lambda keys: 'select ' + comma(keys) + ' from assets order by play_order, rowid'
 read = lambda keys: 'select ' + comma(keys) + ' from assets where asset_id=?'
 create = lambda keys: 'insert into assets (' + comma(keys) + ') values (' + comma(['?'] * len(keys)) + ')'
 remove = 'delete from assets where asset_id=?'

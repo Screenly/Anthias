@@ -120,7 +120,7 @@ def delete(conn, asset_id):
         c.execute(queries.remove, [asset_id])
 
 
-def order(db_conn, ids):
+def save_ordering(db_conn, ids):
     """Order assets. Move to last position assets which not presented in list of id"""
     assets = read(db_conn)
 
