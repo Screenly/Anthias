@@ -5,7 +5,10 @@ body {
 .navbar .container ul.nav li > a {
   text-shadow: 0 1px 0 black; }
 .navbar .container a.brand {
-  text-shadow: 0 1px 0 black; }
+  text-shadow: 0 1px 0 #000;
+  padding: 4px 20px 4px 20px; }
+  .navbar .container a.brand img {
+    height: 32px; }
   .navbar .container a.brand span {
     font-size: 15px; }
 .navbar .container li.update-available a {
