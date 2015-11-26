@@ -88,14 +88,18 @@ def json_dump(obj):
 
 def url_fails(url):
     """
-    Accept 200 and 405 as 'OK' statuses for URLs.
-    Some hosting providers (like Google App Engine) throws a 405 at `requests`.
+    1. check url grammar: if not url then return False
+    2. try HEAD: if not 200 or 405 then try GET: expecting 200
     """
     try:
-        if validate_url(url):
-            obj = requests.head(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl'])
-            assert obj.status_code in (200, 405)
-    except (requests.ConnectionError, requests.exceptions.Timeout, AssertionError):
-        return True
-    else:
+        if not validate_url(url):
+            return False
+
+        if requests.head(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl']).status_code not in (200, 405):
+            if requests.get(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl']).status_code != 200:
+                return True
+
         return False
+
+    except (requests.ConnectionError, requests.exceptions.Timeout):
+        return True
