@@ -30,8 +30,11 @@ sudo apt-get -y -qq upgrade > /dev/null
 echo "Installing dependencies..."
 sudo apt-get -y -qq install \
     git-core python-pip python-netifaces python-simplejson python-imaging \
-    python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev \
+    python-dev uzbl sqlite3 omxplayer x11-xserver-utils libx11-dev \
     watchdog chkconfig feh > /dev/null
+
+# use supervisor from pip
+sudo pip install supervisor==3.2.0 -q > /dev/null
 
 echo "Downloading Screenly-OSE..."
 git clone -q https://github.com/wireload/screenly-ose.git "$HOME/screenly" > /dev/null

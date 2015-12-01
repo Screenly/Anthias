@@ -15,6 +15,12 @@ sudo apt-get -y -qq remove feh
 echo "Installing libx11-dev (if missing)..."
 sudo apt-get -y -qq install libx11-dev
 
+echo "Removing OS-provided supervisor..."
+sudo apt-get -qq purge supervisor
+
+echo "Installing supervisor from pip packages"
+sudo pip install supervisor==3.2.0 -q > /dev/null
+
 echo "Removing 'unclutter' and replacing it with a better hack."
 sudo apt-get -y -qq remove unclutter
 sudo killall unclutter
