@@ -7,6 +7,24 @@ body {
   margin-top: 60px;
   margin-bottom: $footerHeight + $baseLineHeight;
 }
+.splash {
+    margin-top: 0px;
+
+    .logo-container {
+        padding: 20px 0px 40px 0px;
+        img {
+            width:450px;
+        }
+    }
+    .wireload-link {
+        span {
+            font-size: 16px;
+        }
+        img {
+            width: 150px;
+        }
+    }
+}
 
 .navbar .container {
 
@@ -17,9 +35,9 @@ body {
   a {
     &.brand {
       text-shadow: 0 1px 0 #000;
-      padding: 2px 20px 2px 20px;
+      padding: 4px 20px 4px 20px;
       img {
-        height: 36px;
+        height: 32px;
       }
       span {
         font-size: 15px;

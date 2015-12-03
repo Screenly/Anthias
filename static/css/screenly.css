@@ -2,6 +2,17 @@ body {
   margin-top: 60px;
   margin-bottom: 60px; }
 
+.splash {
+  margin-top: 0px; }
+  .splash .logo-container {
+    padding: 20px 0px 40px 0px; }
+    .splash .logo-container img {
+      width: 450px; }
+  .splash .wireload-link span {
+    font-size: 16px; }
+  .splash .wireload-link img {
+    width: 150px; }
+
 .navbar .container ul.nav li > a {
   text-shadow: 0 1px 0 black; }
 .navbar .container a.brand {
