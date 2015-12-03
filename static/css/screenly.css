@@ -10,7 +10,7 @@ body {
       width: 450px; }
   .splash .wireload-link span {
     font-size: 16px; }
-  .splash .wireload-link img {
+  .splash .wireload-link a img {
     width: 150px; }
 
 .navbar .container ul.nav li > a {
