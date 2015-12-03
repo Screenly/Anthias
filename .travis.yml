@@ -14,3 +14,5 @@ before_script:
   - cp misc/screenly.conf ~/.screenly/
   - cp misc/uzbl.rc ~/screenly/misc/
 script: nosetests -v -a '!fixme'
+
+sudo: false
