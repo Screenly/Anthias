@@ -27,7 +27,7 @@ sudo mkdir -p /var/log/supervisor
 
 sudo ln -s "$HOME/screenly/misc/supervisor" /etc/init.d/supervisor
 sudo ln -s "$HOME/screenly/misc/supervisord.conf" /etc/supervisor/supervisord.conf
-sudo upgrade-rc.d supervisor default
+sudo update-rc.d supervisor defaults
 sudo /etc/init.d/supervisor start
 
 echo "Removing 'unclutter' and replacing it with a better hack."

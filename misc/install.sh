@@ -70,7 +70,7 @@ echo "Adding Screenly to autostart (via Supervisord)"
 sudo ln -s "$HOME/screenly/misc/supervisor" /etc/init.d/supervisor
 sudo ln -s "$HOME/screenly/misc/supervisord.conf" /etc/supervisor/supervisord.conf
 sudo ln -s "$HOME/screenly/misc/supervisor_screenly.conf" /etc/supervisor/conf.d/screenly.conf
-sudo upgrade-rc.d supervisor default
+sudo update-rc.d supervisor defaults
 sudo /etc/init.d/supervisor start > /dev/null
 
 echo "Making modifications to X..."
