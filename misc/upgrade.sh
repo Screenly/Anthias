@@ -16,7 +16,7 @@ echo "Installing libx11-dev (if missing)..."
 sudo apt-get -y -qq install libx11-dev
 
 echo "Removing OS-provided supervisor..."
-sudo /etc/init.d/supervisor/stop
+sudo /etc/init.d/supervisor stop
 sudo apt-get -qq purge supervisor
 
 echo "Installing supervisor from pip packages"
