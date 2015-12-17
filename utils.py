@@ -95,11 +95,13 @@ def url_fails(url):
         if not validate_url(url):
             return False
 
-        if requests.head(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl']).status_code not in (200, 405):
-            if requests.get(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl']).status_code != 200:
-                return True
+        if requests.head(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl']).status_code in (200, 405):
+            return False
 
-        return False
+        if requests.get(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl']).status_code == 200:
+            return False
 
     except (requests.ConnectionError, requests.exceptions.Timeout):
-        return True
+        pass
+
+    return True
