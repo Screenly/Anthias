@@ -87,10 +87,8 @@ def json_dump(obj):
 
 
 def url_fails(url):
-    """
-    1. check url grammar: if not url then return False
-    2. try HEAD: if not 200 or 405 then try GET: expecting 200
-    """
+    """try HEAD and GET for url availability check"""
+
     try:
         if not validate_url(url):
             return False
