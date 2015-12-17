@@ -30,8 +30,13 @@ sudo apt-get -y -qq upgrade > /dev/null
 echo "Installing dependencies..."
 sudo apt-get -y -qq install \
     git-core python-pip python-netifaces python-simplejson python-imaging \
-    python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev \
+    python-dev uzbl sqlite3 omxplayer x11-xserver-utils libx11-dev \
     watchdog chkconfig feh > /dev/null
+
+# use supervisor from pip
+sudo pip install supervisor==3.2.0 -q > /dev/null
+sudo mkdir /var/log/supervisor
+sudo mkdir -p /etc/supervisor/conf.d
 
 echo "Downloading Screenly-OSE..."
 git clone -q https://github.com/wireload/screenly-ose.git "$HOME/screenly" > /dev/null
@@ -62,8 +67,10 @@ sudo sed -e 's/#watchdog-device/watchdog-device/g' -i /etc/watchdog.conf
 sudo /etc/init.d/watchdog start
 
 echo "Adding Screenly to autostart (via Supervisord)"
+sudo ln -s "$HOME/screenly/misc/supervisor" /etc/init.d/supervisor
+sudo ln -s "$HOME/screenly/misc/supervisord.conf" /etc/supervisor/supervisord.conf
 sudo ln -s "$HOME/screenly/misc/supervisor_screenly.conf" /etc/supervisor/conf.d/screenly.conf
-sudo /etc/init.d/supervisor stop > /dev/null
+sudo update-rc.d supervisor defaults
 sudo /etc/init.d/supervisor start > /dev/null
 
 echo "Making modifications to X..."
