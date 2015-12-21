@@ -39,6 +39,7 @@ sudo ln -s "$HOME/screenly/misc/supervisor" /etc/init.d/supervisor
 sudo ln -s "$HOME/screenly/misc/supervisord.conf" /etc/supervisor/supervisord.conf
 sudo ln -s "$HOME/screenly/misc/supervisord.conf" /etc/supervisord.conf
 sudo update-rc.d supervisor defaults
+sudo /etc/init.d/supervisor start
 
 echo "Ensuring all Python modules are installed..."
 sudo pip install -r $SCREENLY/requirements.txt -q
