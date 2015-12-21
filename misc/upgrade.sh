@@ -37,6 +37,7 @@ git pull
 echo "Add new supervisor to autostart..."
 sudo ln -s "$HOME/screenly/misc/supervisor" /etc/init.d/supervisor
 sudo ln -s "$HOME/screenly/misc/supervisord.conf" /etc/supervisor/supervisord.conf
+sudo ln -s "$HOME/screenly/misc/supervisord.conf" /etc/supervisord.conf
 sudo update-rc.d supervisor defaults
 
 echo "Ensuring all Python modules are installed..."
@@ -46,7 +47,7 @@ echo "Running migration..."
 python $SCREENLY/misc/migrate.py
 
 echo "Restarting app-server..."
-sudo /etc/init.d/supervisor start
+sudo supervisorctl restart screenly
 
 echo "Restarting X (viewer)..."
 sudo pkill -f "xloader.sh"
