@@ -25,11 +25,6 @@ sudo pip install supervisor==3.2.0 -q > /dev/null
 #if log dir was removed on purge
 sudo mkdir -p /var/log/supervisor
 
-sudo ln -s "$HOME/screenly/misc/supervisor" /etc/init.d/supervisor
-sudo ln -s "$HOME/screenly/misc/supervisord.conf" /etc/supervisor/supervisord.conf
-sudo update-rc.d supervisor defaults
-sudo /etc/init.d/supervisor start
-
 echo "Removing 'unclutter' and replacing it with a better hack."
 sudo apt-get -y -qq remove unclutter
 sudo killall unclutter
@@ -38,6 +33,13 @@ sudo sed -e 's/^#xserver-command=X$/xserver-command=X -nocursor/g' -i /etc/light
 echo "Fetching the latest update..."
 cd $SCREENLY
 git pull
+
+echo "Add new supervisor to autostart..."
+sudo ln -s "$HOME/screenly/misc/supervisor" /etc/init.d/supervisor
+sudo ln -s "$HOME/screenly/misc/supervisord.conf" /etc/supervisor/supervisord.conf
+sudo ln -s "$HOME/screenly/misc/supervisord.conf" /etc/supervisord.conf
+sudo update-rc.d supervisor defaults
+sudo /etc/init.d/supervisor start
 
 echo "Ensuring all Python modules are installed..."
 sudo pip install -r $SCREENLY/requirements.txt -q
