@@ -1,6 +1,5 @@
 Mako==0.7.3
 MarkupSafe==0.15
-PIL==1.1.7
 PyHAML==0.1.9
 bottle==0.10.11
 bottle-haml==0.1.4
@@ -18,3 +17,5 @@ enum34==1.0.4
 urllib3==1.10.4
 pyOpenSSL==0.13
 pyasn1==0.1.6
+enum34
+sh
