@@ -99,3 +99,9 @@ def url_fails(url):
         return True
     else:
         return False
+
+
+def template_handle_unicode(str):
+    if isinstance(str, basestring):
+        return unicode(str.decode('utf-8'))
+    return unicode(str)
