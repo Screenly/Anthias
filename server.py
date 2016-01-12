@@ -92,6 +92,10 @@ def template(template_name, **context):
     context['up_to_date'] = is_up_to_date()
     context['default_duration'] = settings['default_duration']
     context['use_24_hour_clock'] = settings['use_24_hour_clock']
+    context['template_settings'] = {
+        'imports': ['from utils import template_handle_unicode'],
+        'default_filters': ['template_handle_unicode']
+    }
 
     return haml_template(template_name, **context)
 
