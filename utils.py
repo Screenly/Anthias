@@ -101,7 +101,7 @@ def url_fails(url):
         return False
 
 
-def template_handle_unicode(str):
-    if isinstance(str, basestring):
-        return unicode(str.decode('utf-8'))
-    return unicode(str)
+def template_handle_unicode(value):
+    if isinstance(value, basestring):
+        return value.decode('utf-8')
+    return unicode(value)
