@@ -93,7 +93,7 @@ def url_fails(url):
     """
     try:
         if validate_url(url):
-            obj = requests.head(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl'])
+            obj = requests.get(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl'])
             assert obj.status_code in (200, 405)
     except (requests.ConnectionError, requests.exceptions.Timeout, AssertionError):
         return True
