@@ -13,8 +13,8 @@
     .container
       .row
         .span12
-          .page-header.text-center
-            %h1 Welcome to Screenly
+          .logo-container.page-header.text-center
+            %img(src="/static/img/screenly_ose_logo_large.png")
 
       .row
         .span12.text-center
@@ -29,7 +29,8 @@
       %hr
 
       .row
-        .span12.text-center
-          Brought to you by <br />
+        .span12.text-center.wireload-link
+          %span
+            Brought to you by
           %a(href="http://wireload.net")
             %img(src="/static/img/WireLoad.png")
