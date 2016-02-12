@@ -6,7 +6,7 @@
     - if browser_title:
        %title  ${browser_title}
     - else:
-       %title Screenly OSE 
+       %title Screenly OSE
 
     %link(href="/static/css/bootstrap.css", rel="stylesheet")
     %link(href="/static/css/screenly.css", rel="stylesheet")
@@ -124,8 +124,8 @@
             .control-group
              %label.control-label Browser title
              .controls
-              %input.span2(type="text", name="title", value="${browser_title}")
-            
+              %input.span2(type="text", name="browser_title", value="${browser_title}")
+
             .form-actions
              %input.btn.btn-primary(type="submit", value="Save Settings")
              %a.btn(href="/") Cancel
