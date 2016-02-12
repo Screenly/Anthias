@@ -23,7 +23,7 @@ $ docker run --rm -ti \
 All routes will be written with the assumption that the root is http://<ip-address>:8080
 
 
-## GET /api/assets
+### GET /api/assets
 
 Accept: application/json
 ```
@@ -71,7 +71,7 @@ Accept: application/json
 ```
 
 
-## POST /api/assets
+### POST /api/assets
 Yes, that is just a string of json not json itself it will be parsed on the other end
 
 Content-Type: application/x-www-form-urlencoded
@@ -96,7 +96,7 @@ the network tab when on the web frontend
 
 
 
-## GET /api/assets/:asset_id
+### GET /api/assets/:asset_id
 
 Accept: application/json
 ```
@@ -115,7 +115,7 @@ Accept: application/json
 }
 ```
 
-## PUT/POST /api/assets/:asset_id
+### PUT/POST /api/assets/:asset_id
 
 Content-Type: application/json
 ```
@@ -134,12 +134,12 @@ model:
 }"
 ```
 
-## DELETE /api/assets/:asset_id
+### DELETE /api/assets/:asset_id
 
 This route deletes asset with :asset_id
 
 
-## POST /api/order
+### POST /api/order
 
 Content-Type: application/x-www-form-urlencoded
 ```
