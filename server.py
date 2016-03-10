@@ -34,7 +34,7 @@ from utils import validate_url
 from utils import url_fails
 from utils import get_video_duration
 
-from settings import settings, DEFAULTS
+from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS
 from werkzeug.wrappers import Request
 ################################
 # Utilities
@@ -273,7 +273,7 @@ def settings_page():
     context = {'flash': None}
 
     if request.method == "POST":
-        for field, default in DEFAULTS['viewer'].items():
+        for field, default in CONFIGURABLE_SETTINGS.items():
             value = request.POST.get(field, default)
             if isinstance(default, bool):
                 value = value == 'on'
