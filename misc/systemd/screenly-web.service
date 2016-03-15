@@ -1,0 +1,13 @@
+[Unit]
+Description=Screenly Web UI
+After=network.target
+
+[Service]
+Environment=DISPLAY=:0.0
+WorkingDirectory=/home/pi/screenly/
+User=pi
+ExecStart=/usr/bin/python /home/pi/screenly/server.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

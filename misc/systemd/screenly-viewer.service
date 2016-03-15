@@ -1,0 +1,13 @@
+[Unit]
+Description=Screenly Viewer
+After=matchbox.service screenly-web.service
+
+[Service]
+Environment=DISPLAY=:0.0
+WorkingDirectory=/home/pi/screenly/
+User=pi
+ExecStart=/usr/bin/python /home/pi/screenly/viewer.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

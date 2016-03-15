@@ -1,0 +1,11 @@
+[Unit]
+Description=X11
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/X
+User=root
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
