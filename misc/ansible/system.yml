@@ -26,8 +26,8 @@
     - name: Use systemd as init, quiet boot process
       lineinfile: dest=/boot/cmdline.txt regexp=(.*) backrefs=yes line="\1 quiet init=/lib/systemd/systemd"
 
-    - name: Install screenly dependencies
-      apt: name={{ item }}
+    - name: Installing Screenly's dependencies
+      apt: name={{ item }} state=latest
       with_items:
         - systemd
         - git-core
@@ -41,10 +41,10 @@
         - matchbox
         - xserver-xorg
 
-    - name: DEPRECATIONS - Remove supervisor, lightdm
+    - name: Removing deprecated apt dependencies
       apt: name={{ item }} state=absent
       with_items:
         - supervisor
         - lightdm
-    - name: DEPRECATIONS - Remove supervisor from pip
+    - name: Removing deprecated pip dependencies
       pip: name=supervisor state=absent

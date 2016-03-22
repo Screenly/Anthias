@@ -12,7 +12,7 @@
       file: path=/home/pi/.screenly state=directory
 
     - name: Copy screenly default config
-      copy: src=/home/pi/screenly/misc/screenly.conf dest=/home/pi/.screenly/screenly.conf
+      copy: src=/home/pi/screenly/misc/screenly.conf dest=/home/pi/.screenly/screenly.conf force=no
 
     - name: Install pip dependencies
       become: yes
