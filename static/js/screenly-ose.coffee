@@ -81,6 +81,9 @@ API.Asset = class Asset extends Backbone.Model
     if @backup_attributes
       @set @backup_attributes
       @backup_attributes = undefined
+  old_name: =>
+    if @backup_attributes
+      return @backup_attributes.name
 
 
 API.Assets = class Assets extends Backbone.Collection
@@ -175,7 +178,9 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
       save = @$el.fileupload 'send', fileInput: (@$f 'file_upload')
     else
       if not @model.get 'name'
-        if get_mimetype @model.get 'uri'
+        if @model.old_name()
+          @model.set {name: @model.old_name()}, silent:yes
+        else if get_mimetype @model.get 'uri'
           @model.set {name: get_filename @model.get 'uri'}, silent:yes
         else
           @model.set {name: @model.get 'uri'}, silent:yes
@@ -408,4 +413,3 @@ API.App = class App extends Backbone.View
     new EditAssetView model:
       new Asset {}, {collection: API.assets}
     no
-
