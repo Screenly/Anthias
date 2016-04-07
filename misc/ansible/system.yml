@@ -40,6 +40,7 @@
         - omxplayer
         - matchbox
         - xserver-xorg
+        - x11-xserver-utils
 
     - name: Removing deprecated apt dependencies
       apt: name={{ item }} state=absent
