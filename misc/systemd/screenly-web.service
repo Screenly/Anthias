@@ -1,11 +1,12 @@
 [Unit]
 Description=Screenly Web UI
-After=network.target
+After=network-online.target
 
 [Service]
 Environment=DISPLAY=:0.0
 WorkingDirectory=/home/pi/screenly/
 User=pi
+ExecStartPre=/usr/bin/python /home/pi/screenly/misc/wait.py
 ExecStart=/usr/bin/python /home/pi/screenly/server.py
 Restart=on-failure
 
