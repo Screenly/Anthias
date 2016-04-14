@@ -5,7 +5,7 @@ sudo apt-get install -y python-dev python-setuptools git-core
 sudo easy_install pip
 sudo pip install ansible==2.0.1.0
 
-ansible localhost -m git -a "repo=${1:-git://github.com/wireload/screenly-ose.git} dest=/home/pi/screenly version=${2:-master}"
+ansible localhost -m git -a "repo=${1:-http://github.com/wireload/screenly-ose.git} dest=/home/pi/screenly version=${2:-master}"
 cd /home/pi/screenly/misc/ansible
 ansible-playbook system.yml
 ansible-playbook screenly.yml
