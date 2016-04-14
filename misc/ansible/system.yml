@@ -30,11 +30,8 @@
       apt: name={{ item }} state=latest
       with_items:
         - systemd
-        - git-core
-        - python-pip
         - python-netifaces
         - python-simplejson
-        - python-dev
         - uzbl
         - sqlite3
         - omxplayer
