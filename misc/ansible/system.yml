@@ -11,23 +11,42 @@
 #      with_items: "{{ ansible_mounts }}"
 
     - name: Make sure we have proper framebuffer depth
-      lineinfile: dest=/boot/config.txt regexp=^framebuffer_depth= line=framebuffer_depth=32
+      lineinfile:
+        dest: /boot/config.txt
+        regexp: ^framebuffer_depth=
+        line: framebuffer_depth=32
 
     - name: Fix framebuffer bug
-      lineinfile: dest=/boot/config.txt regexp=^framebuffer_ignore_alpha= line=framebuffer_ignore_alpha=1
+      lineinfile:
+        dest: /boot/config.txt
+        regexp: ^framebuffer_ignore_alpha=
+        line: framebuffer_ignore_alpha=1
 
     - name: Backup kernel boot args
-      copy: src=/boot/cmdline.txt dest=/boot/cmdline.txt.orig force=no
+      copy:
+        src: /boot/cmdline.txt
+        dest: /boot/cmdline.txt.orig
+        force: no
 
-    - debug: msg="1)Don't remove cmdline.txt.orig! 2)For edit kernel boot args use cmdline.txt.orig"
+    - debug:
+        msg: 1)Don't remove cmdline.txt.orig! 2)For edit kernel boot args use cmdline.txt.orig
 
-    - copy: src=/boot/cmdline.txt.orig dest=/boot/cmdline.txt force=yes
+    - copy:
+        src: /boot/cmdline.txt.orig
+        dest: /boot/cmdline.txt
+        force: yes
 
     - name: Use systemd as init, quiet boot process
-      lineinfile: dest=/boot/cmdline.txt regexp=(.*) backrefs=yes line="\1 quiet init=/lib/systemd/systemd"
+      lineinfile:
+        dest: /boot/cmdline.txt
+        regexp: (.*)
+        backrefs: yes
+        line: \1 quiet init=/lib/systemd/systemd
 
     - name: Installing Screenly's dependencies
-      apt: name={{ item }} state=latest
+      apt:
+        name: "{{ item }}"
+        state: latest
       with_items:
         - systemd
         - python-netifaces
@@ -45,4 +64,6 @@
         - supervisor
         - lightdm
     - name: Removing deprecated pip dependencies
-      pip: name=supervisor state=absent
+      pip:
+        name: supervisor
+        state: absent
