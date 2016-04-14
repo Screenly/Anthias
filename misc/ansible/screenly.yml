@@ -9,38 +9,28 @@
 
   tasks:
     - name: Ensure screenly config dir exists
-        file:
-            path=/home/pi/.screenly
-            state=directory
+      file: path=/home/pi/.screenly state=directory
 
     - name: Copy screenly default config
-        copy:
-          src=/home/pi/screenly/misc/screenly.conf
-          dest=/home/pi/.screenly/screenly.conf
-          force=no
+      copy: src=/home/pi/screenly/misc/screenly.conf dest=/home/pi/.screenly/screenly.conf force=no
 
     - name: Install pip dependencies
-        become: yes
-        pip: requirements=/home/pi/screenly/requirements.txt
+      become: yes
+      pip: requirements=/home/pi/screenly/requirements.txt
 
     - name: Create default assets database if not exists
-        copy:
-          src=/home/pi/screenly/misc/screenly.db
-          dest=/home/pi/.screenly/screenly.db
-          force=no
+      copy: src=/home/pi/screenly/misc/screenly.db dest=/home/pi/.screenly/screenly.db force=no
 
     - name: Run database migration
-        command: python /home/pi/screenly/misc/migrate.py
-        register: migrate
+      command: python /home/pi/screenly/misc/migrate.py
+      register: migrate
 
     - debug: msg="{{ migrate.stdout }}"
 
     - name: Copy screenly systemd units
-        become: yes
-        copy:
-          src=/home/pi/screenly/misc/systemd/{{ item }}
-          dest=/etc/systemd/system/{{ item }}
-        with_items: "{{ screenly_systemd_units }}"
+      become: yes
+      copy: src=/home/pi/screenly/misc/systemd/{{ item }} dest=/etc/systemd/system/{{ item }}
+      with_items: "{{ screenly_systemd_units }}"
 
     - name: Enable screenly systemd services
       become: yes
