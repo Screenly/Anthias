@@ -1,7 +1,7 @@
 Mako==0.7.3
 MarkupSafe==0.15
 PyHAML==0.1.9
-bottle==0.12.07
+bottle==0.12.9
 bottle-haml==0.1.4
 hurry.filesize==0.9
 netifaces==0.8
