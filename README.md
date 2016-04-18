@@ -20,6 +20,13 @@ $ docker run --rm -ti \
 
 ## Disk Image Changelog
 
+### 2016-04-18
+
+ * Adds support for Raspberry Pi B+ 3
+ * Switches to Raspbian Jessie Lite (from Raspbian Jessie)
+ * Moves to Ansible-based install/upgrades
+ * Lots of minor bugfixes
+
 ### 2015-02-25
 
  * Adds support for Raspberry Pi B+ V2.
