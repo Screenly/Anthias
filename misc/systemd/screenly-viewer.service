@@ -16,7 +16,8 @@ ExecStartPre=/usr/bin/xset -dpms
 ExecStartPre=/usr/bin/xset s noblank
 
 ExecStart=/usr/bin/python /home/pi/screenly/viewer.py
-Restart=on-failure
+Restart=always
+RestartSec=2
 
 ExecStartPost=/bin/rm -f /tmp/uzbl_*
 ExecStartPost=/bin/rm -f /tmp/screenly_html/*
