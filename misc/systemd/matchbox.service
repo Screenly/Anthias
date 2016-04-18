@@ -1,0 +1,12 @@
+[Unit]
+Description=X11
+After=X.service
+
+[Service]
+Environment=DISPLAY=:0.0
+ExecStart=/usr/bin/matchbox-window-manager -use_titlebar no -use_cursor no
+User=pi
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
