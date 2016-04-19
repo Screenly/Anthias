@@ -19,11 +19,10 @@
         dest: /home/pi/.screenly/screenly.conf
         force: no
 
-    - name: Symlink gtk config
-      file:
+    - name: Copy gtk config
+      copy:
         src: /home/pi/screenly/misc/gtkrc-2.0
         dest: /home/pi/.gtkrc-2.0
-        state: link
 
     - name: Install pip dependencies
       become: yes
