@@ -1,0 +1,9 @@
+style "uzbl" {
+       GtkScrollbar::slider-width=0
+       GtkScrollbar::trough-border=0
+       GtkScrollbar::has-backward-stepper=0
+       GtkScrollbar::has-forward-stepper=0
+       GtkScrollbar::has-secondary-backward-stepper=0
+       GtkScrollbar::has-secondary-forward-stepper=0
+}
+widget "Uzbl*" style "uzbl"
