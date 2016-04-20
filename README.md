@@ -20,16 +20,21 @@ $ docker run --rm -ti \
 
 ## Disk Image Changelog
 
+### 2016-04-20
+
+ * Fixes scroll bar issues.
+ * Adds custom handling for BerryBoot.
+
 ### 2016-04-18
 
- * Adds support for Raspberry Pi B+ 3
- * Switches to Raspbian Jessie Lite (from Raspbian Jessie)
- * Moves to Ansible-based install/upgrades
- * Lots of minor bugfixes
+ * Adds support for Raspberry Pi 3 Model B.
+ * Switches to Raspbian Jessie Lite (from Raspbian Jessie).
+ * Moves to Ansible-based install/upgrades.
+ * Lots of minor bugfixes.
 
 ### 2015-02-25
 
- * Adds support for Raspberry Pi B+ V2.
+ * Adds support for Raspberry Pi 2 Model B.
  * Upgrades kernel and kernel modules.
  * Brings system packages up to date.
  * Various bug fixes.
