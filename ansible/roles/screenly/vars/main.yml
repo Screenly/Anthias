@@ -1,0 +1,5 @@
+screenly_systemd_units:
+  - X.service
+  - matchbox.service
+  - screenly-viewer.service
+  - screenly-web.service
