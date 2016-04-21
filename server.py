@@ -264,7 +264,10 @@ def playlist_order():
 
 @route('/')
 def viewIndex():
-    return template('index')
+    defaults = {};
+    for field, default in DEFAULTS['viewer'].items():
+        defaults[field] = settings[field]
+    return template('index', defaults=defaults)
 
 
 @route('/settings', method=["GET", "POST"])
@@ -294,6 +297,7 @@ def settings_page():
 @route('/system_info')
 def system_info():
     viewer_log_file = '/tmp/screenly_viewer.log'
+    defaults = {}
     if path.exists(viewer_log_file):
         viewlog = check_output(['tail', '-n', '20', viewer_log_file]).split('\n')
     else:
@@ -311,12 +315,13 @@ def system_info():
     # Calculate disk space
     slash = statvfs("/")
     free_space = size(slash.f_bavail * slash.f_frsize)
-
+    for field, default in DEFAULTS['viewer'].items():
+        defaults[field] = settings[field]
     # Get uptime
     uptime_in_seconds = uptime()
     system_uptime = timedelta(seconds=uptime_in_seconds)
 
-    return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=system_uptime, display_info=display_info)
+    return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=system_uptime, display_info=display_info, defaults=defaults)
 
 
 @route('/splash_page')

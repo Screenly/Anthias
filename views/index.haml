@@ -3,7 +3,10 @@
 
   %head
     %meta(charset="utf-8")
-    %title Screenly OSE
+    - if defaults:
+       %title  ${defaults['browser_title']}
+    - else:
+       %title Screenly OSE
 
     %link(href="/static/css/bootstrap.css", rel="stylesheet")
     %link(href="/static/css/datepicker.css", rel="stylesheet")
