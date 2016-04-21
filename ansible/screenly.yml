@@ -1,0 +1,14 @@
+- name: Install Screenly system dependencies
+  hosts: all
+  user: pi
+  become: yes
+
+  roles:
+    - system
+
+- name: Install Screenly OSE
+  hosts: all
+  user: pi
+
+  roles:
+    - screenly
