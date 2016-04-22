@@ -1,0 +1,8 @@
+- name: Install Screenly
+  hosts: all
+  user: pi
+  become: yes
+
+  roles:
+    - system
+    - screenly
