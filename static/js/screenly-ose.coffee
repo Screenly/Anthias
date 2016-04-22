@@ -10,11 +10,11 @@ date_settings_12hour =
   date_picker_format: 'mm/dd/yyyy'
 
 date_settings_24hour =
-  full_date: 'YYYY/MM/DD HH:mm:ss',
-  date: 'YYYY/MM/DD',
+  full_date: 'MM/DD/YYYY HH:mm:ss',
+  date: 'MM/DD/YYYY',
   time: 'HH:mm',
   show_meridian: false,
-  datepicker_format: 'yyyy/mm/dd'
+  datepicker_format: 'mm/dd/yyyy'
 
 date_settings = if use_24_hour_clock then date_settings_24hour else date_settings_12hour
 
