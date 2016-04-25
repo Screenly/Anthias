@@ -78,6 +78,8 @@
       with_items:
         - supervisor
         - lightdm
+        - lightdm-gtk-greeter
+        - supervisor
     - name: Removing deprecated pip dependencies
       pip:
         name: supervisor

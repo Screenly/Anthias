@@ -19,10 +19,11 @@
         dest: /home/pi/.screenly/screenly.conf
         force: no
 
-    - name: Copy gtk config
+    - name: Copy GTK config
       copy:
         src: /home/pi/screenly/misc/gtkrc-2.0
         dest: /home/pi/.gtkrc-2.0
+        force: yes
 
     - name: Install pip dependencies
       become: yes
