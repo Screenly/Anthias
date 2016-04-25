@@ -9,10 +9,12 @@ from requests import get as req_get
 from time import sleep
 from json import load as json_load
 from signal import signal, SIGUSR1, SIGUSR2
-import logging
+import logging as log_factory
 import sh
 
+from settings import config_dir
 from settings import settings
+
 import html_templates
 from utils import url_fails
 import db
@@ -33,6 +35,14 @@ SCREENLY_HTML = '/tmp/screenly_html/'
 LOAD_SCREEN = '/screenly/loading.jpg'  # relative to $HOME
 UZBLRC = '/screenly/misc/uzbl.rc'  # relative to $HOME
 INTRO = '/screenly/intro-template.html'
+
+
+# Silence urllib info messages ('Starting new HTTP connection')
+# that are triggered by the remote url availability check in view_web
+requests_log = log_factory.getLogger("requests")
+requests_log.setLevel(log_factory.WARNING)
+
+logging = log_factory.getLogger('viewer')
 
 current_browser_url = None
 browser = None
@@ -56,7 +66,8 @@ def sigusr1(signum, frame):
 def sigusr2(signum, frame):
     """Reload settings"""
     logging.info("USR2 received, reloading settings.")
-    load_settings()
+    settings.load()
+    logging.setLevel(log_factory.DEBUG if settings['debug_logging'] else log_factory.INFO)
 
 
 class Scheduler(object):
@@ -111,7 +122,7 @@ class Scheduler(object):
     def get_db_mtime(self):
         # get database file last modification time
         try:
-            return path.getmtime(settings['database'])
+            return path.getmtime(settings.get_path('database'))
         except:
             return 0
 
@@ -230,7 +241,7 @@ def check_update():
     False if no update needed and None if unable to check.
     """
 
-    sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
+    sha_file = path.join(config_dir(), 'latest_screenly_sha')
 
     if path.isfile(sha_file):
         sha_file_mtime = path.getmtime(sha_file)
@@ -257,12 +268,6 @@ def check_update():
             return
     else:
         return False
-
-
-def load_settings():
-    """Load settings and set the log level."""
-    settings.load()
-    logging.getLogger().setLevel(logging.DEBUG if settings['debug_logging'] else logging.INFO)
 
 
 def asset_loop(scheduler):
@@ -308,14 +313,23 @@ def setup():
     signal(SIGUSR1, sigusr1)
     signal(SIGUSR2, sigusr2)
 
-    load_settings()
-    db_conn = db.conn(settings['database'])
+    db_conn = db.conn(settings.get_path('database'))
 
     sh.mkdir(SCREENLY_HTML, p=True)
     html_templates.black_page(BLACK_PAGE)
 
 
 def main():
+    # Initiate logging
+    log_factory.basicConfig(
+        level=log_factory.DEBUG,
+        filename='/tmp/screenly_viewer.log',
+        format='%(asctime)s %(name)s#%(levelname)s: %(message)s',
+        datefmt='%a, %d %b %Y %H:%M:%S')
+
+    logging.debug('Starting viewer.py')
+    logging.setLevel(log_factory.DEBUG if settings['debug_logging'] else log_factory.INFO)
+    
     setup()
 
     url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port()) if settings['show_splash'] else 'file://' + BLACK_PAGE

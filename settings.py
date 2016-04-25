@@ -2,13 +2,22 @@
 # -*- coding: utf8 -*-
 
 from os import path, getenv
-from sys import exit
 import ConfigParser
 import logging
-from UserDict import IterableUserDict
+import copy
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
+
+
+def config_dir(home=getenv('HOME')):
+    return path.join(home, CONFIG_DIR)
+
+
+def config_file(home=getenv('HOME')):
+    return path.join(home, CONFIG_DIR, CONFIG_FILE)
+
+
 DEFAULTS = {
     'main': {
         'database': CONFIG_DIR + 'screenly.db',
@@ -27,91 +36,79 @@ DEFAULTS = {
     }
 }
 
-# Initiate logging
-logging.basicConfig(level=logging.INFO,
-                    filename='/tmp/screenly_viewer.log',
-                    format='%(asctime)s %(message)s',
-                    datefmt='%a, %d %b %Y %H:%M:%S')
-
-# Silence urllib info messages ('Starting new HTTP connection')
-# that are triggered by the remote url availability check in view_web
-requests_log = logging.getLogger("requests")
-requests_log.setLevel(logging.WARNING)
-
-logging.debug('Starting viewer.py')
+logger = logging.getLogger('settings')
 
 
-class ScreenlySettings(IterableUserDict):
-    """Screenly OSE's Settings."""
+class ScreenlySettings(object):
+    def __init__(self):
+        self.conf = None
 
-    def __init__(self, *args, **kwargs):
-        IterableUserDict.__init__(self, *args, **kwargs)
-        self.home = getenv('HOME')
-        self.conf_file = self.get_configfile()
+    def set(self, conf):
+        self.conf = conf
 
-        if not path.isfile(self.conf_file):
-            logging.error('Config-file %s missing', self.conf_file)
-            exit(1)
-        else:
-            self.load()
-
-    def _get(self, config, section, field, default):
-        try:
+    def load(self, conf_path=config_file()):
+        def _get_fn(parser, default):
             if isinstance(default, bool):
-                self[field] = config.getboolean(section, field)
+                return parser.getboolean
             elif isinstance(default, int):
-                self[field] = config.getint(section, field)
-            else:
-                self[field] = config.get(section, field)
-        except ConfigParser.Error as e:
-            logging.debug("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (section, field, unicode(e), default))
-            self[field] = default
-        if field in ['database', 'assetdir']:
-            self[field] = str(path.join(self.home, self[field]))
+                return parser.getint
+            return parser.get
 
-    def _set(self, config, section, field, default):
-        if isinstance(default, bool):
-            config.set(section, field, self.get(field, default) and 'on' or 'off')
-        else:
-            config.set(section, field, unicode(self.get(field, default)))
+        parser = ConfigParser.ConfigParser()
+        with open(conf_path) as fp:
+            parser.readfp(fp)
 
-    def load(self):
-        """Loads the latest settings from screenly.conf into memory."""
-        logging.debug('Reading config-file...')
-        config = ConfigParser.ConfigParser()
-        config.read(self.conf_file)
+        conf = copy.deepcopy(DEFAULTS)
+        # Iterate over default config and load
+        for section, options in conf.items():
+            for option, default in options.items():
+                try:
+                    conf[section][option] = _get_fn(parser, default)(section, option)
+                except ConfigParser.Error as e:
+                    logger.debug("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (
+                        section, option, unicode(e), default))
+        self.conf = conf
 
-        for section, defaults in DEFAULTS.items():
-            for field, default in defaults.items():
-                self._get(config, section, field, default)
-        try:
-            self.get_listen_ip()
-            int(self.get_listen_port())
-        except ValueError as e:
-            logging.info("Could not parse setting 'listen': %s. Using default value: '%s'." % (unicode(e), DEFAULTS['main']['listen']))
-            self['listen'] = DEFAULTS['main']['listen']
+    def save(self, conf_path=config_file()):
+        parser = ConfigParser.ConfigParser()
 
-    def save(self):
-        # Write new settings to disk.
-        config = ConfigParser.ConfigParser()
-        for section, defaults in DEFAULTS.items():
-            config.add_section(section)
-            for field, default in defaults.items():
-                self._set(config, section, field, default)
-        with open(self.conf_file, "w") as f:
-            config.write(f)
-        self.load()
+        # Use sorting to make options order interpreter-independent
+        for section, options in sorted(self.conf.items()):
+            parser.add_section(section)
+            for option, value in sorted(options.items()):
+                parser.set(section, option, value)
 
-    def get_configdir(self):
-        return path.join(self.home, CONFIG_DIR)
+        with open(conf_path, mode='w') as f:
+            parser.write(f)
 
-    def get_configfile(self):
-        return path.join(self.home, CONFIG_DIR, CONFIG_FILE)
+    def _find_section(self, item):
+        # Try to find in all sections
+        for section in self.conf.keys():
+            if item in self.conf[section]:
+                return section
+
+        raise AttributeError(item)
+
+    def __getitem__(self, item):
+        if self.conf is None:
+            self.load()
+        section = self._find_section(item)
+        return self.conf[section][item]
+
+    def __setitem__(self, key, value):
+        if self.conf is None:
+            self.load()
+        section = self._find_section(key)
+        self.conf[section][key] = value
+
+    def get_path(self, item, absolute=True, home=getenv('HOME')):
+        return path.join(home, self[item]) if absolute else self[item]
 
     def get_listen_ip(self):
         return self['listen'].split(':')[0]
 
     def get_listen_port(self):
         return self['listen'].split(':')[1]
+
 
 settings = ScreenlySettings()

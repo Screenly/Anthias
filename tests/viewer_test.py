@@ -4,12 +4,12 @@
 from nose.tools import ok_, eq_
 from nose.plugins.attrib import attr
 import mock
-
+import unittest
 import os
 
 
-class ViewerTestCase(object):
-    def setup(self):
+class ViewerTestCase(unittest.TestCase):
+    def setUp(self):
         import viewer
 
         self.original_splash_delay = viewer.SPLASH_DELAY
@@ -26,16 +26,10 @@ class ViewerTestCase(object):
         self.m_killall = mock.Mock(name='killall')
         self.p_killall = mock.patch.object(self.u.sh, 'killall', self.m_killall)
 
-        self.m_reload = mock.Mock(name='reload')
-        self.p_reload = mock.patch.object(self.u, 'load_settings', self.m_reload)
-
-        self.m_sleep = mock.Mock(name='sleep')
-        self.p_sleep = mock.patch.object(self.u, 'sleep', self.m_sleep)
-
         self.m_loadb = mock.Mock(name='load_browser')
         self.p_loadb = mock.patch.object(self.u, 'load_browser', self.m_loadb)
 
-    def teardown(self):
+    def tearDown(self):
         self.u.SPLASH_DELAY = self.original_splash_delay
 
 
@@ -104,8 +98,6 @@ class TestSignalHandlers(ViewerTestCase):
         self.p_killall.stop()
 
     def test_usr2(self):
-        self.u.last_settings_refresh = -1
-        self.p_reload.start()
-        eq_(None, self.u.sigusr2(None, None))
-        self.m_reload.assert_called_once()
-        self.p_reload.stop()
+        self.u.settings.set({})
+        self.assertEquals(None, self.u.sigusr2(None, None))
+        self.assertNotEqual({}, self.u.settings.conf)

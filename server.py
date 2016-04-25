@@ -34,12 +34,16 @@ from utils import validate_url
 from utils import url_fails
 from utils import get_video_duration
 
-from settings import settings, DEFAULTS
 from werkzeug.wrappers import Request
+
+from settings import DEFAULTS
+from settings import config_dir
+from settings import config_file
+from settings import settings
+
 ################################
 # Utilities
 ################################
-
 
 def make_json_response(obj):
     response.content_type = "application/json"
@@ -58,7 +62,7 @@ def is_up_to_date():
     Used in conjunction with check_update() in viewer.py.
     """
 
-    sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
+    sha_file = path.join(config_dir(), 'latest_screenly_sha')
 
     # Until this has been created by viewer.py, let's just assume we're up to date.
     if not os.path.exists(sha_file):
@@ -161,7 +165,7 @@ def prepare_asset(request):
             asset['uri'] = uri
 
         if filename:
-            asset['uri'] = path.join(settings['assetdir'], asset['asset_id'])
+            asset['uri'] = path.join(settings.get_path('assetdir'), asset['asset_id'])
 
             file_upload.save(asset['uri'])
 
@@ -242,7 +246,7 @@ def edit_asset(asset_id):
 def remove_asset(asset_id):
     asset = assets_helper.read(db_conn, asset_id)
     try:
-        if asset['uri'].startswith(settings['assetdir']):
+        if asset['uri'].startswith(settings.get_path('assetdir')):
             os.remove(asset['uri'])
     except OSError:
         pass
@@ -269,11 +273,10 @@ def viewIndex():
 
 @route('/settings', method=["GET", "POST"])
 def settings_page():
-
     context = {'flash': None}
 
     if request.method == "POST":
-        for field, default in DEFAULTS['viewer'].items():
+        for field, default in DEFAULTS['viewer'].items() + DEFAULTS['main'].items():
             value = request.POST.get(field, default)
             if isinstance(default, bool):
                 value = value == 'on'
@@ -283,8 +286,7 @@ def settings_page():
             context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
         except IOError as e:
             context['flash'] = {'class': "error", 'message': e}
-    else:
-        settings.load()
+
     for field, default in DEFAULTS['viewer'].items():
         context[field] = settings[field]
 
@@ -353,13 +355,13 @@ def static(path):
 
 if __name__ == "__main__":
     # Make sure the asset folder exist. If not, create it
-    if not path.isdir(settings['assetdir']):
-        mkdir(settings['assetdir'])
+    if not path.isdir(settings.get_path('assetdir')):
+        mkdir(settings.get_path('assetdir'))
     # Create config dir if it doesn't exist
-    if not path.isdir(settings.get_configdir()):
-        makedirs(settings.get_configdir())
+    if not path.isdir(config_dir()):
+        makedirs(config_dir())
 
-    with db.conn(settings['database']) as conn:
+    with db.conn(settings.get_path('database')) as conn:
         global db_conn
         db_conn = conn
         with db.cursor(db_conn) as c:
