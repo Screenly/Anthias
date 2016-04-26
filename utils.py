@@ -7,6 +7,8 @@ from urlparse import urlparse
 from datetime import timedelta
 from settings import settings
 
+HTTP_OK = xrange(200, 299)
+
 # This will only work on the Raspberry Pi,
 # so let's wrap it in a try/except so that
 # Travis can run.
@@ -87,15 +89,19 @@ def json_dump(obj):
 
 
 def url_fails(url):
-    """
-    Accept 200 and 405 as 'OK' statuses for URLs.
-    Some hosting providers (like Google App Engine) throws a 405 at `requests`.
-    """
+    """try HEAD and GET for url availability check"""
+
     try:
-        if validate_url(url):
-            obj = requests.head(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl'])
-            assert obj.status_code in (200, 405)
-    except (requests.ConnectionError, requests.exceptions.Timeout, AssertionError):
-        return True
-    else:
-        return False
+        if not validate_url(url):
+            return False
+
+        if requests.head(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl']).status_code in HTTP_OK:
+            return False
+
+        if requests.get(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl']).status_code in HTTP_OK:
+            return False
+
+    except (requests.ConnectionError, requests.exceptions.Timeout):
+        pass
+
+    return True
