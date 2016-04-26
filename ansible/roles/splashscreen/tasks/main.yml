@@ -18,3 +18,5 @@
 
 - name: Enables asplashscreen
   command: update-rc.d asplashscreen defaults
+  args:
+    creates: /etc/rcS.d/S01asplashscreen
