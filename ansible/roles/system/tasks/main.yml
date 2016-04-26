@@ -105,4 +105,3 @@
   file:
     path: /var/swap
     state: absent
-    removes: /var/swap
