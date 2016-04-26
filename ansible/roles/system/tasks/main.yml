@@ -83,4 +83,10 @@
     name: supervisor
     state: absent
 
-
+- name: Copies in rc.local
+  copy:
+    src: rc.local
+    dest: /etc/rc.local
+    mode: 0755
+    owner: root
+    group: root
