@@ -81,6 +81,7 @@
     - supervisor
     - lightdm
     - lightdm-gtk-greeter
+    - dphys-swapfile
 
 - name: Removing deprecated pip dependencies
   pip:
@@ -94,3 +95,11 @@
     mode: 0755
     owner: root
     group: root
+
+- name: Disables swap
+  commmand: /sbin/swapoff --all
+
+- name: Removes swapfile from disk
+  file:
+    path: /var/swap
+    state: absent
