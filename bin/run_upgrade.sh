@@ -1,2 +1,2 @@
 #!/bin/bash
-sh install.sh
+curl -sL http://raw.githubusercontent.com/wireload/screenly-ose/master/bin/install.sh | bash
