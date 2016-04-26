@@ -70,12 +70,17 @@
     - x11-xserver-utils
 
 - name: Removing deprecated apt dependencies
-  apt: name="{{ item }}" state=absent
+  apt:
+    name: "{{ item }}"
+    state: absent
   with_items:
     - supervisor
     - lightdm
     - lightdm-gtk-greeter
+
 - name: Removing deprecated pip dependencies
   pip:
     name: supervisor
     state: absent
+
+
