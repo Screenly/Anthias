@@ -97,9 +97,7 @@
     group: root
 
 - name: Disables swap
-  commmand: /sbin/swapoff --all
-  args:
-    removes: /var/swap
+  command: /sbin/swapoff --all removes=/var/swap
 
 - name: Removes swapfile from disk
   file:
