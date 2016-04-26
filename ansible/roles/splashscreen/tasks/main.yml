@@ -1,0 +1,16 @@
+---
+- name: Copies in splash screen
+  copy:
+    src: splashscreen.jpg
+    dest: /etc/splashscreen.jpg
+
+- name: Copies in rc script
+  copy:
+    src: asplashscreen
+    dest: /etc/init.d/asplashscreen
+    mode: 0755
+
+- name: Enables asplashscreen
+  service:
+    name: asplashscreen
+    enabled: yes
