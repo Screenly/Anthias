@@ -7,6 +7,8 @@ from urlparse import urlparse
 from datetime import timedelta
 from settings import settings
 
+HTTP_OK = xrange(200, 299)
+
 # This will only work on the Raspberry Pi,
 # so let's wrap it in a try/except so that
 # Travis can run.
@@ -93,10 +95,10 @@ def url_fails(url):
         if not validate_url(url):
             return False
 
-        if requests.head(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl']).status_code in (200, 405):
+        if requests.head(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl']).status_code in HTTP_OK:
             return False
 
-        if requests.get(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl']).status_code == 200:
+        if requests.get(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl']).status_code in HTTP_OK:
             return False
 
     except (requests.ConnectionError, requests.exceptions.Timeout):
