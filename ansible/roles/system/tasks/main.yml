@@ -15,6 +15,10 @@
 
 - set_fact: is_berryboot="{{berryboot.stat.exists}}"
 
+- debug:
+    msg: "Detected BerryBoot installation. Skipping some steps."
+  when: is_berryboot
+
 - name: Make sure we have proper framebuffer depth
   lineinfile:
     dest: /boot/config.txt
@@ -70,12 +74,23 @@
     - x11-xserver-utils
 
 - name: Removing deprecated apt dependencies
-  apt: name="{{ item }}" state=absent
+  apt:
+    name: "{{ item }}"
+    state: absent
   with_items:
     - supervisor
     - lightdm
     - lightdm-gtk-greeter
+
 - name: Removing deprecated pip dependencies
   pip:
     name: supervisor
     state: absent
+
+- name: Copies in rc.local
+  copy:
+    src: rc.local
+    dest: /etc/rc.local
+    mode: 0755
+    owner: root
+    group: root
