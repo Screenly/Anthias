@@ -5,7 +5,9 @@
 
 The tl;dr for installing Screenly OSE on Raspbian Jessie/Wheezy is:
 
-    curl -sL https://raw.github.com/wireload/screenly-ose/master/bin/install.sh | bash
+```
+$ curl -sL https://raw.github.com/wireload/screenly-ose/master/bin/install.sh | bash
+```
 
 To learn more about Screenly, please visit the official website at [ScreenlyApp.com](http://www.screenlyapp.com). On the official site, you'll find the complete installation instructions, along with a live-demo of Screenly.
 
