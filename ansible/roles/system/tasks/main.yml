@@ -15,6 +15,10 @@
 
 - set_fact: is_berryboot="{{berryboot.stat.exists}}"
 
+- debug:
+    msg: "Detected BerryBoot installation. Skipping some steps."
+  when: is_berryboot
+
 - name: Make sure we have proper framebuffer depth
   lineinfile:
     dest: /boot/config.txt
