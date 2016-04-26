@@ -1,0 +1,46 @@
+
+- name: Ensure screenly config dir exists
+  become: no
+  file:
+    path: /home/pi/.screenly
+    state: directory
+
+- name: Copy screenly default config
+  become: no
+  copy:
+    src: screenly.conf
+    dest: /home/pi/.screenly/screenly.conf
+    force: no
+
+- name: Copy GTK config
+  become: no
+  copy:
+    src: gtkrc-2.0
+    dest: /home/pi/.gtkrc-2.0
+
+- name: Install pip dependencies
+  pip: requirements=/home/pi/screenly/requirements.txt
+
+- name: Create default assets database if not exists
+  become: no
+  copy:
+    src: screenly.db
+    dest: /home/pi/.screenly/screenly.db
+    force: no
+
+- name: Run database migration
+  become: no
+  command: python /home/pi/screenly/bin/migrate.py
+  register: migrate
+
+- debug: msg="{{ migrate.stdout }}"
+
+- name: Copy screenly systemd units
+  copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+  with_items: "{{ screenly_systemd_units }}"
+
+- name: Enable screenly systemd services
+  command: systemctl enable {{ item }} chdir=/etc/systemd/system
+  with_items: "{{ screenly_systemd_units }}"
