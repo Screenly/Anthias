@@ -3,7 +3,7 @@
 
 # Screenly OSE - Digital Signage for the Raspberry Pi
 
-The tl;dr for installing Screenly OSE on Raspbian Jessie/Wheezy is:
+The tl;dr for installing Screenly OSE on [Raspbian](https://www.raspberrypi.org/downloads/raspbian/) Jessie/Wheezy is:
 
 ```
 $ curl -sL https://raw.github.com/wireload/screenly-ose/master/bin/install.sh | bash
