@@ -1,4 +1,10 @@
 ---
+- name: Installs dependencies
+  apt:
+    name: "{{ item }}"
+  with_items:
+    - fbi
+
 - name: Copies in splash screen
   copy:
     src: splashscreen.jpg
@@ -11,6 +17,4 @@
     mode: 0755
 
 - name: Enables asplashscreen
-  service:
-    name: asplashscreen
-    enabled: yes
+  command: update-rc.d asplashscreen defaults
