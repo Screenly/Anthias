@@ -27,6 +27,8 @@
     mode: 644
     owner: root
     group: root
+  notify:
+    - restart-nginx
   tags:
     - enable-ssl
 
