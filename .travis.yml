@@ -10,7 +10,8 @@ install:
   - pip install -r requirements.txt
   - pip install -r requirements.dev.txt
 before_script:
-  - mkdir -p ~/.screenly
+  - mkdir -p ~/.screenly ~/.config/uzbl/
+  - cp ansible/roles/screenly/files/uzbl-config ~/.config/uzbl/config
   - cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
 script: nosetests -v -a '!fixme'
 
