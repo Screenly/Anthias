@@ -1,0 +1,59 @@
+---
+- name: Installs Nginx
+  apt:
+    name: nginx-light
+    state: present
+  tags:
+    - enable-ssl
+
+- name: Removes stunnel
+  apt:
+    name: stunnel4
+    state: absent
+  tags:
+    - enable-ssl
+
+- name: Cleans up default config
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  tags:
+    - enable-ssl
+
+- name: Installs nginx config
+  copy:
+    src: nginx.conf
+    dest:  /etc/nginx/sites-enabled/screenly.conf
+    mode: 644
+    owner: root
+    group: root
+  notify:
+    - restart-nginx
+  tags:
+    - enable-ssl
+
+- name: Installs self-signed certificates
+  copy:
+    src: "{{ item }}"
+    dest: "/etc/ssl/{{ item }}"
+    mode: 0600
+    owner: root
+    group: root
+    force: no
+  with_items:
+    - screenly.crt
+    - screenly.key
+  tags:
+    - enable-ssl
+
+- name: Modifies Screenly Server to only listen on localhost
+  lineinfile:
+    line: 'listen = 127.0.0.1:8080'
+    regexp: '^.*listen.*'
+    dest: /home/pi/.screenly/screenly.conf
+  notify:
+    - restart-screenly-server
+  tags:
+    - enable-ssl
+
+

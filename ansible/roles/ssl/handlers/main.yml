@@ -1,0 +1,10 @@
+---
+- name: restart-nginx
+  service:
+    name: nginx
+    state: restarted
+
+- name: restart-screenly-server
+  service:
+    name: screenly-web.service
+    state: restarted
