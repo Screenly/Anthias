@@ -83,6 +83,12 @@
     - lightdm-gtk-greeter
     - dphys-swapfile
 
+- name: Perform system upgrade
+  apt:
+    upgrade: dist
+  tags:
+    - system-upgrade
+
 - name: Removing deprecated pip dependencies
   pip:
     name: supervisor
