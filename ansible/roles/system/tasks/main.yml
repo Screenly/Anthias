@@ -89,12 +89,6 @@
   tags:
     - system-upgrade
 
-- name: Perform system cleanup
-  apt:
-    autoremove: yes
-  tags:
-    - system-upgrade
-
 - name: Removing deprecated pip dependencies
   pip:
     name: supervisor
