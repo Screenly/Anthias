@@ -1,0 +1,52 @@
+---
+- name: Installs stunnel
+  apt:
+    name: stunnel
+    state: present
+  tags:
+    - stunnel
+
+- name: Installs stunell config
+  copy:
+    src: stunnel.conf
+    dest: /etc/stunnel/stunnel.conf
+    mode: 644
+    owner: root
+    group: root
+  tags:
+    - stunnel
+
+- name: Installs self-signed certificates
+  copy:
+    src: "{{ item }}"
+    dest: "/etc/ssl/{{ item }}"
+    mode: 0600
+    owner: root
+    group: root
+  with_items:
+    - screenly.crt
+    - screenly.key
+  tags:
+    - stunnel
+
+- name: Enables stunnel
+  lineinfile:
+    line: 'ENABLED=1'
+    regexp: '^ENABLED=0$'
+    dest: /etc/default/stunnel4
+  notify:
+    - restart stunnel
+  tags:
+    - stunnel
+
+- name: Modifies Screenly Server to only listen on localhost
+  lineinfile:
+    line: 'listen = 127.0.0.1:8080'
+    regexp: '^.*listen.*'
+    dest: /home/pi/.screenly/screenly.conf
+  notify:
+    - restart screenly server
+  tags:
+    - stunnel
+
+
