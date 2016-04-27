@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 
-__author__ = "Viktor Petersson"
-__copyright__ = "Copyright 2012, WireLoad Inc"
+__author__ = "WireLoad Inc"
+__copyright__ = "Copyright 2012-2016, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
-__version__ = "0.1.4"
-__email__ = "vpetersson@wireload.net"
 
 from datetime import datetime, timedelta
 from functools import wraps
@@ -60,7 +58,8 @@ def is_up_to_date():
 
     sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
 
-    # Until this has been created by viewer.py, let's just assume we're up to date.
+    # Until this has been created by viewer.py,
+    # let's just assume we're up to date.
     if not os.path.exists(sha_file):
         return True
 
@@ -316,7 +315,14 @@ def system_info():
     uptime_in_seconds = uptime()
     system_uptime = timedelta(seconds=uptime_in_seconds)
 
-    return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=system_uptime, display_info=display_info)
+    return template(
+        'system_info',
+        viewlog=viewlog,
+        loadavg=loadavg,
+        free_space=free_space,
+        uptime=system_uptime,
+        display_info=display_info
+    )
 
 
 @route('/splash_page')
@@ -324,7 +330,13 @@ def splash_page():
     my_ip = get_node_ip()
     if my_ip:
         ip_lookup = True
-        url = "http://{}:{}".format(my_ip, settings.get_listen_port())
+
+        # If we bind on 127.0.0.1, `enable_ssl.sh` has most likely been
+        # executed and we should access over SSL.
+        if settings.get_listen_ip() == '127.0.0.1':
+            url = 'https://{}'.format(my_ip)
+        else:
+            url = "http://{}:{}".format(my_ip, settings.get_listen_port())
     else:
         ip_lookup = False
         url = "Unable to look up your installation's IP address."
