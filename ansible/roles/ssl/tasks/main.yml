@@ -1,7 +1,7 @@
 ---
 - name: Installs Nginx
   apt:
-    name: nginx
+    name: nginx-light
     state: present
   tags:
     - enable-ssl
