@@ -14,14 +14,8 @@
   when: ansible_distribution_release == "wheezy"
   environment:
     SKIP_WARNING: 1
-  async: 1800
-  poll: 0
   register: rpiupdate
   tags:
     - system-upgrade
 
-- name: Check on kernel upgrade
-  async_status: jid={{ rpiupdate.ansible_job_id  }}
-  register: job_result
-  until: job_result.finished
-  retries: 120
+- debug: msg="{{ rpiupdate.stdout  }}"
