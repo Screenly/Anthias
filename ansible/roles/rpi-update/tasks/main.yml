@@ -12,7 +12,7 @@
 - name: Run kernel upgrade
   shell: /usr/bin/rpi-update
   when: ansible_distribution_release == "wheezy"
-   environment:
+  environment:
     SKIP_WARNING: 1
   async: 1800
   poll: 0
