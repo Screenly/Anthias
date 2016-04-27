@@ -58,7 +58,8 @@ def is_up_to_date():
 
     sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
 
-    # Until this has been created by viewer.py, let's just assume we're up to date.
+    # Until this has been created by viewer.py,
+    # let's just assume we're up to date.
     if not os.path.exists(sha_file):
         return True
 
@@ -314,7 +315,14 @@ def system_info():
     uptime_in_seconds = uptime()
     system_uptime = timedelta(seconds=uptime_in_seconds)
 
-    return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=system_uptime, display_info=display_info)
+    return template(
+        'system_info',
+        viewlog=viewlog,
+        loadavg=loadavg,
+        free_space=free_space,
+        uptime=system_uptime,
+        display_info=display_info
+    )
 
 
 @route('/splash_page')
