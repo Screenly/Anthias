@@ -1,8 +1,9 @@
 Mako==0.7.3
 MarkupSafe==0.15
 PyHAML==0.1.9
-bottle==0.12.9
 bottle-haml==0.1.4
+bottle==0.12.9
+gunicorn==19.4.5
 hurry.filesize==0.9
 netifaces==0.8
 pytz==2012d
@@ -10,5 +11,5 @@ requests==2.7.0
 sh==1.08
 six==1.8.0
 uptime==2.0.2
-wsgiref==0.1.2
 werkzeug==0.10.4
+wsgiref==0.1.2
