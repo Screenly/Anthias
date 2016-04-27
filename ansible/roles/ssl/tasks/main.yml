@@ -15,7 +15,7 @@
 
 - name: Cleans up default config
   file:
-    path: /etc/nginx/sites-available/default
+    path: /etc/nginx/sites-enabled/default
     state: absent
   tags:
     - enable-ssl
@@ -23,7 +23,7 @@
 - name: Installs nginx config
   copy:
     src: nginx.conf
-    dest:  /etc/nginx/sites-available/screenly.conf
+    dest:  /etc/nginx/sites-enabled/screenly.conf
     mode: 644
     owner: root
     group: root
