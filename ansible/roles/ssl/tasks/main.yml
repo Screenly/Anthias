@@ -1,20 +1,34 @@
 ---
-- name: Installs stunnel
+- name: Installs Nginx
   apt:
-    name: stunnel
+    name: nginx
     state: present
   tags:
-    - stunnel
+    - enable-ssl
 
-- name: Installs stunnel config
+- name: Removes stunnel
+  apt:
+    name: stunnel4
+    state: absent
+  tags:
+    - enable-ssl
+
+- name: Cleans up default config
+  file:
+    path: /etc/nginx/sites-available/default
+    state: absent
+  tags:
+    - enable-ssl
+
+- name: Installs nginx config
   copy:
-    src: stunnel.conf
-    dest: /etc/stunnel/stunnel.conf
+    src: nginx.conf
+    dest:  /etc/nginx/sites-available/screenly.conf
     mode: 644
     owner: root
     group: root
   tags:
-    - stunnel
+    - enable-ssl
 
 - name: Installs self-signed certificates
   copy:
@@ -23,21 +37,12 @@
     mode: 0600
     owner: root
     group: root
+    force: no
   with_items:
     - screenly.crt
     - screenly.key
   tags:
-    - stunnel
-
-- name: Enables stunnel
-  lineinfile:
-    line: 'ENABLED=1'
-    regexp: '^ENABLED=0$'
-    dest: /etc/default/stunnel4
-  notify:
-    - restart-stunnel
-  tags:
-    - stunnel
+    - enable-ssl
 
 - name: Modifies Screenly Server to only listen on localhost
   lineinfile:
@@ -47,6 +52,6 @@
   notify:
     - restart-screenly-server
   tags:
-    - stunnel
+    - enable-ssl
 
 

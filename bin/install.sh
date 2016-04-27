@@ -8,9 +8,9 @@ fi
 
 echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s && echo
 if ! [[ $REPLY =~ ^[Yy]$  ]]; then
-  EXTRA_ARGS="--skip-tags stunnel,system-upgrade"
+  EXTRA_ARGS="--skip-tags enable-ssl,system-upgrade"
 else
-  EXTRA_ARGS="--skip-tags stunnel,"
+  EXTRA_ARGS="--skip-tags enable-ssl,stunnel,"
 fi
 
 set -x

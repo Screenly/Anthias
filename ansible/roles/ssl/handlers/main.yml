@@ -1,7 +1,7 @@
 ---
-- name: restart-stunnel
+- name: restart-nginx
   service:
-    name: stunnel4
+    name: nginx
     state: restarted
 
 - name: restart-screenly-server
