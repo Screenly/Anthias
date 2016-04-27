@@ -19,5 +19,6 @@
     - system-upgrade
 
 - debug: msg="{{ rpiupdate.stdout }}"
+  when: ansible_distribution_release == "wheezy"
   tags:
     - system-upgrade
