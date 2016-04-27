@@ -13,7 +13,13 @@
   command: /usr/bin/rpi-update SKIP_WARNING=1
   when: ansible_distribution_release == "wheezy"
   async: 1800
-  poll: 5
+  poll: 0
   register: rpi-update
   tags:
     - system-upgrade
+
+- name: Check on kernel upgrade
+  async_status: jid={{ rpi-update.ansible_job_id  }}
+  register: job_result
+  until: job_result.finished
+  retries: 120
