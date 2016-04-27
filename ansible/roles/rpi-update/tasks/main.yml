@@ -18,4 +18,6 @@
   tags:
     - system-upgrade
 
-- debug: msg="{{ rpiupdate.stdout  }}"
+- debug: msg="{{ rpiupdate.stdout }}"
+  tags:
+    - system-upgrade
