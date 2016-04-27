@@ -3,6 +3,9 @@
   user: pi
   become: yes
 
+  handlers:
+    - include: handlers/main.yml
+
   roles:
     - system
     - rpi-update
