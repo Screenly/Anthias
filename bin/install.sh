@@ -6,6 +6,13 @@ read -n 1 -r -s
 if ! [[ $REPLY =~ ^[Yy]$  ]]; then
   exit 1
 fi
+
+read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s && echo
+if ! [[ $REPLY =~ ^[Yy]$  ]]; then
+  EXTRA_ARGS="--skip-tags system-upgrade"
+else
+  EXTRA_ARGS=
+fi
 set -x
 
 sudo apt-get update
@@ -16,12 +23,4 @@ sudo pip install ansible==2.0.2.0
 ansible localhost -m git -a "repo=${1:-http://github.com/wireload/screenly-ose.git} dest=/home/pi/screenly version=${2:-master}"
 cd /home/pi/screenly/ansible
 
-set +x
-read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s && echo
-if ! [[ $REPLY =~ ^[Yy]$  ]]; then
-  set -x
-  ansible-playbook site.yml --skip-tags "system-upgrade"
-else
-  set -x
-  ansible-playbook site.yml
-fi
+ansible-playbook site.yml $EXTRA_ARGS
