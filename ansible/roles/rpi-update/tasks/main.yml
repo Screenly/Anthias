@@ -10,7 +10,7 @@
   when: ansible_distribution_release == "wheezy"
 
 - name: Run kernel upgrade
-  shell: /usr/bin/rpi-update
+  command: /usr/bin/rpi-update
   when: ansible_distribution_release == "wheezy"
   environment:
     SKIP_WARNING: 1
