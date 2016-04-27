@@ -10,7 +10,7 @@ echo && read -p "Would you like to perform a full system upgrade as well? (y/N)"
 if [ "$UPGRADE" != 'y' ]; then
   EXTRA_ARGS="--skip-tags enable-ssl,system-upgrade"
 else
-  EXTRA_ARGS="--skip-tags enable-ssl,stunnel,"
+  EXTRA_ARGS="--skip-tags enable-ssl"
 fi
 
 set -x
