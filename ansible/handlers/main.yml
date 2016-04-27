@@ -8,3 +8,8 @@
   service:
     name: screenly-web.service
     state: restarted
+
+- name: restart-screenly-viewer
+  service:
+    name: screenly-viewer.service
+    state: restarted

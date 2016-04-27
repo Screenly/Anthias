@@ -47,4 +47,6 @@
 
 - name: Restart server
   command: /bin/true
-  notify: restart-screenly-server
+  notify:
+    - restart-screenly-server
+    - restart-screenly-viewer
