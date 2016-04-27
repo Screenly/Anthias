@@ -1,7 +1,8 @@
 #!/bin/bash -xe
 
 set +x
-read -p "Screenly OSE is expected to run on a dedicated Raspberry Pi / SD card. You will not be able to use the regular desktop environment once installed. Do you still want to continue? (y/N)" -n 1 -r -s && echo
+echo -n "Screenly OSE is expected to run on a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\nDo you still want to continue? (y/N)"
+read -n 1 -r -s
 if ! [[ $REPLY =~ ^[Yy]$  ]]; then
   exit 1
 fi
