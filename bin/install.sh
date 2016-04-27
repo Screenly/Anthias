@@ -1,13 +1,13 @@
 #!/bin/bash -e
 
 echo -e "Screenly OSE is expected to run on a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\n"
-read -p "Do you still want to continue? (y/N)" -n 1 -r -s
-if ! [[ $REPLY =~ ^[Yy]$  ]]; then
+read -p "Do you still want to continue? (y/N)" -n 1 -r -s INSTALL
+if [ "$INSTALL" != 'y' ]; then
   exit 1
 fi
 
-echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s && echo
-if ! [[ $REPLY =~ ^[Yy]$  ]]; then
+echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
+if [ "$UPGRADE" != 'y'  ]; then
   EXTRA_ARGS="--skip-tags enable-ssl,system-upgrade"
 else
   EXTRA_ARGS="--skip-tags enable-ssl,stunnel,"
