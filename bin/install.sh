@@ -14,6 +14,9 @@ else
 fi
 
 set -x
+sudo mkdir -p /etc/ansible
+echo -e "[local]\nlocalhost ansible_connection=local" | tee /etc/ansible/hosts
+
 sudo apt-get update
 sudo apt-get install -y python-dev python-setuptools git-core
 sudo easy_install pip
