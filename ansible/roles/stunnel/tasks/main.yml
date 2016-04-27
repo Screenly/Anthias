@@ -6,7 +6,7 @@
   tags:
     - stunnel
 
-- name: Installs stunell config
+- name: Installs stunnel config
   copy:
     src: stunnel.conf
     dest: /etc/stunnel/stunnel.conf
