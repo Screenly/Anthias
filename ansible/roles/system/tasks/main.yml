@@ -74,9 +74,7 @@
     - x11-xserver-utils
 
 - name: Install systemd-sysv on Wheezy
-  apt:
-    name: systemd-sysv
-    force: yes
+  command: bash -c 'echo "Yes, do as I say!" | apt-get install -y systemd-sysv'
   when: ansible_distribution_release == "wheezy"
 
 - name: Removing deprecated apt dependencies
