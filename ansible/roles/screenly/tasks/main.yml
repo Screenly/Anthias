@@ -45,7 +45,7 @@
   command: systemctl enable {{ item }} chdir=/etc/systemd/system
   with_items: "{{ screenly_systemd_units }}"
 
-- name: Restart server
+- name: Restart services
   command: /bin/true
   notify:
     - restart-screenly-server

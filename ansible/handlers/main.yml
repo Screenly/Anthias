@@ -5,11 +5,7 @@
     state: restarted
 
 - name: restart-screenly-server
-  service:
-    name: screenly-web.service
-    state: restarted
+  command: systemctl restart screenly-web.service
 
 - name: restart-screenly-viewer
-  service:
-    name: screenly-viewer.service
-    state: restarted
+  command: systemctl restart screenly-viewer.service
