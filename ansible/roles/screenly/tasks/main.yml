@@ -22,7 +22,7 @@
   become: no
   copy:
     src: uzbl-config
-    dest: /home/pi/.config/uzbl/config
+    dest: /home/pi/.config/uzbl/config-screenly
 
 - name: Install pip dependencies
   pip: requirements=/home/pi/screenly/requirements.txt
