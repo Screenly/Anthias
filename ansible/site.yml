@@ -5,5 +5,6 @@
 
   roles:
     - system
+    - rpi-update
     - screenly
     - splashscreen
