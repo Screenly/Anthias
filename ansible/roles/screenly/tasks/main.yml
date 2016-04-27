@@ -18,6 +18,12 @@
     src: gtkrc-2.0
     dest: /home/pi/.gtkrc-2.0
 
+- name: Copy in UZBL config
+  become: no
+  copy:
+    src: uzbl-config
+    dest: /home/pi/.config/uzbl/config
+
 - name: Install pip dependencies
   pip: requirements=/home/pi/screenly/requirements.txt
 
