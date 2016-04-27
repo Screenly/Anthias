@@ -35,7 +35,7 @@
     regexp: '^ENABLED=0$'
     dest: /etc/default/stunnel4
   notify:
-    - restart stunnel
+    - restart-stunnel
   tags:
     - stunnel
 
@@ -45,7 +45,7 @@
     regexp: '^.*listen.*'
     dest: /home/pi/.screenly/screenly.conf
   notify:
-    - restart screenly server
+    - restart-screenly-server
   tags:
     - stunnel
 

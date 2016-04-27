@@ -1,10 +1,10 @@
 ---
-- name: restart stunnel
+- name: restart-stunnel
   service:
     name: stunnel4
     state: restarted
 
-- name: restart screenly server
+- name: restart-screenly-server
   service:
     name: screenly-web.service
     state: restarted
