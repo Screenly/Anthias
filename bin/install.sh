@@ -1,5 +1,14 @@
 #!/bin/bash -e
 
+cat << EOF
+   _____                           __         ____  _____ ______
+  / ___/_____________  ___  ____  / /_  __   / __ \/ ___// ____/
+  \__ \/ ___/ ___/ _ \/ _ \/ __ \/ / / / /  / / / /\__ \/ __/
+ ___/ / /__/ /  /  __/  __/ / / / / /_/ /  / /_/ /___/ / /___
+/____/\___/_/   \___/\___/_/ /_/_/\__, /   \____//____/_____/
+                                 /____/
+EOF
+
 echo -e "Screenly OSE is expected to run on a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\n"
 read -p "Do you still want to continue? (y/N)" -n 1 -r -s INSTALL
 if [ "$INSTALL" != 'y' ]; then
