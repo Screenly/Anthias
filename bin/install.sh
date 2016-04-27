@@ -1,13 +1,13 @@
 #!/bin/bash -xe
 
 set +x
-echo -e "Screenly OSE is expected to run on a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\nDo you still want to continue? (y/N)"
-read -n 1 -r -s
+echo -e "Screenly OSE is expected to run on a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\n"
+read -p "Do you still want to continue? (y/N)" -n 1 -r -s
 if ! [[ $REPLY =~ ^[Yy]$  ]]; then
   exit 1
 fi
 
-echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s && echo
+read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s && echo
 if ! [[ $REPLY =~ ^[Yy]$  ]]; then
   EXTRA_ARGS="--skip-tags system-upgrade"
 else
