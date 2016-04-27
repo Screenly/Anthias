@@ -31,7 +31,7 @@ BLACK_PAGE = '/tmp/screenly_html/black_page.html'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 SCREENLY_HTML = '/tmp/screenly_html/'
 LOAD_SCREEN = '/screenly/loading.jpg'  # relative to $HOME
-UZBLRC = '/screenly/misc/uzbl.rc'  # relative to $HOME
+UZBLRC = '/.config/uzbl/config-screenly'  # relative to $HOME
 INTRO = '/screenly/intro-template.html'
 
 current_browser_url = None
