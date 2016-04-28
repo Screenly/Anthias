@@ -118,6 +118,8 @@
   with_items:
     - 10-evdev.conf
     - 50-synaptics.conf
+    - 10-quirks.conf
+    - 50-wacom.conf
 
 - name: Disables swap
   command: /sbin/swapoff --all removes=/var/swap
