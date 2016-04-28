@@ -18,6 +18,7 @@ EOF
 echo -e "Screenly OSE is expected to run on a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\n"
 read -p "Do you still want to continue? (y/N)" -n 1 -r -s INSTALL
 if [ "$INSTALL" != 'y' ]; then
+  echo
   exit 1
 fi
 
