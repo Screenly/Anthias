@@ -50,7 +50,7 @@
     force: yes
   when: not is_berryboot
 
-- name: Use systemd as init, quiet boot process
+- name: Use Systemd as init and quiet boot process
   lineinfile:
     dest: /boot/cmdline.txt
     regexp: (.*)
@@ -58,7 +58,7 @@
     line: \1 quiet init=/lib/systemd/systemd
   when: not is_berryboot
 
-- name: Installing Screenly's dependencies
+- name: Install Screenly dependencies
   apt:
     name: "{{ item }}"
     state: latest
@@ -77,7 +77,7 @@
   command: bash -c 'echo "Yes, do as I say!" | apt-get install -y --force-yes systemd-sysv'
   when: ansible_distribution_release == "wheezy"
 
-- name: Removing deprecated apt dependencies
+- name: Remove deprecated apt dependencies
   apt:
     name: "{{ item }}"
     state: absent
@@ -93,12 +93,17 @@
   tags:
     - system-upgrade
 
-- name: Removing deprecated pip dependencies
+- name: Clean up unused packages
+  command: apt-get -y autoremove
+  tags:
+    - system-upgrade
+
+- name: Remove deprecated pip dependencies
   pip:
     name: supervisor
     state: absent
 
-- name: Copies in rc.local
+- name: Copy in rc.local
   copy:
     src: rc.local
     dest: /etc/rc.local
@@ -106,10 +111,20 @@
     owner: root
     group: root
 
-- name: Disables swap
+- name: Clear out X11 configs (disables touchpad and other unnecessary things)
+  file:
+    path: "/usr/share/X11/xorg.conf.d/{{ item }}"
+    state: absent
+  with_items:
+    - 10-evdev.conf
+    - 50-synaptics.conf
+    - 10-quirks.conf
+    - 50-wacom.conf
+
+- name: Disable swap
   command: /sbin/swapoff --all removes=/var/swap
 
-- name: Removes swapfile from disk
+- name: Remove swapfile from disk
   file:
     path: /var/swap
     state: absent
