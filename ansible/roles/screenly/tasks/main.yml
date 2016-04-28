@@ -1,18 +1,18 @@
 
-- name: Ensure screenly config dir exists
+- name: Ensure Screenly config dir exists
   become: no
   file:
     path: /home/pi/.screenly
     state: directory
 
-- name: Copy screenly default config
+- name: Copy Screenly default config
   become: no
   copy:
     src: screenly.conf
     dest: /home/pi/.screenly/screenly.conf
     force: no
 
-- name: Copy GTK config
+- name: Copy in GTK config
   become: no
   copy:
     src: gtkrc-2.0
@@ -27,7 +27,7 @@
 - name: Install pip dependencies
   pip: requirements=/home/pi/screenly/requirements.txt
 
-- name: Create default assets database if not exists
+- name: Create default assets database if does not exists
   become: no
   copy:
     src: screenly.db
