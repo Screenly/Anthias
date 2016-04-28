@@ -93,6 +93,11 @@
   tags:
     - system-upgrade
 
+- name: Clean up unused packages
+  command: apt-get -y autoremove
+  tags:
+    - system-upgrade
+
 - name: Removing deprecated pip dependencies
   pip:
     name: supervisor
