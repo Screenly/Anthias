@@ -106,6 +106,14 @@
     owner: root
     group: root
 
+- name: Disables touchpad
+  file:
+    path: "/usr/share/X11/xorg.conf.d/{{ item }}"
+    state: absent
+  with_items:
+    - 10-evdev.conf
+    - 50-synaptics.conf
+
 - name: Disables swap
   command: /sbin/swapoff --all removes=/var/swap
 
