@@ -6,6 +6,9 @@ if ! [ -t 0  ]; then
   exit 1
 fi
 
+# Set color of logo
+tput setaf 4
+
 cat << EOF
    _____                           __         ____  _____ ______
   / ___/_____________  ___  ____  / /_  __   / __ \/ ___// ____/
@@ -14,6 +17,10 @@ cat << EOF
 /____/\___/_/   \___/\___/_/ /_/_/\__, /   \____//____/_____/
                                  /____/
 EOF
+
+# Reset color
+tput sgr 0
+
 
 echo -e "Screenly OSE requires a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\n"
 read -p "Do you still want to continue? (y/N)" -n 1 -r -s INSTALL
