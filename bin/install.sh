@@ -9,6 +9,12 @@ cat << EOF
                                  /____/
 EOF
 
+
+# Make sure the command is launched interactive.
+if ! [ -t 0 ]; then
+  echo -e "Detected old installation command. Please use:\n$ bash <(curl -sL https://www.screenlyapp.com/install-ose.sh)"
+fi
+
 echo -e "Screenly OSE is expected to run on a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\n"
 read -p "Do you still want to continue? (y/N)" -n 1 -r -s INSTALL
 if [ "$INSTALL" != 'y' ]; then
