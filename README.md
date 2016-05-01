@@ -9,12 +9,13 @@ The tl;dr for installing Screenly OSE on [Raspbian](https://www.raspberrypi.org/
 $ bash <(curl -sL https://www.screenlyapp.com/install-ose.sh)
 ```
 
-To learn more about Screenly, please visit the official website at [ScreenlyApp.com](http://www.screenlyapp.com). On the official site, you'll find the complete installation instructions, along with a live-demo of Screenly.
+To learn more about Screenly, please visit the official website at [ScreenlyApp.com](http://www.screenlyapp.com). On the official site, you'll find the complete installation instructions and disk images.
 
 Quick links:
 
  * [FAQ](https://www.screenlyapp.com/faq/ose/)
  * [Screenly OSE Home](https://www.screenlyapp.com/ose/)
+ * [Live demo](http://ose.demo.screenlyapp.com/)
 
 ## Dockerized Development Environment
 
