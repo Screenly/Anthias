@@ -33,10 +33,13 @@ def parse_cpu_info():
 
 def get_kernel_modules():
     modules = []
-    for line in sh.lsmod():
-        if 'Module' not in line:
-            modules.append(line.split()[0])
-    return modules
+    try:
+        for line in sh.lsmod():
+            if 'Module' not in line:
+                modules.append(line.split()[0])
+        return modules
+    except:
+        return 'Unable to run lsmod.'
 
 
 def get_monitor_status():
@@ -120,7 +123,9 @@ def compile_report():
     return report
 
 
-def __main__():
+def main():
     pprint(compile_report())
 
-__main__()
+
+if __name__ == "__main__":
+    main()
