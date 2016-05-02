@@ -12,7 +12,6 @@ from os import path, makedirs, getloadavg, statvfs, mkdir, getenv
 from re import split as re_split
 from sh import git
 from subprocess import check_output
-from uptime import uptime
 import json
 import os
 import traceback
@@ -25,6 +24,7 @@ from bottlehaml import haml_template
 from lib import db
 from lib import queries
 from lib import assets_helper
+from lib import diagnostics
 
 from lib.utils import json_dump
 from lib.utils import get_node_ip
@@ -301,18 +301,14 @@ def system_info():
     # Get load average from last 15 minutes and round to two digits.
     loadavg = round(getloadavg()[2], 2)
 
-    try:
-        run_tvservice = check_output(['tvservice', '-s'])
-        display_info = re_split('\||,', run_tvservice.strip('state:'))
-    except:
-        display_info = False
+    display_info = diagnostics.get_monitor_status()
 
     # Calculate disk space
     slash = statvfs("/")
     free_space = size(slash.f_bavail * slash.f_frsize)
 
     # Get uptime
-    uptime_in_seconds = uptime()
+    uptime_in_seconds = diagnostics.get_uptime()
     system_uptime = timedelta(seconds=uptime_in_seconds)
 
     return template(
