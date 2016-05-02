@@ -31,7 +31,6 @@ CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock
 
 # Initiate logging
 logging.basicConfig(level=logging.INFO,
-                    filename='/tmp/screenly_viewer.log',
                     format='%(asctime)s %(message)s',
                     datefmt='%a, %d %b %Y %H:%M:%S')
 
