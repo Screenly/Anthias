@@ -80,9 +80,9 @@ def try_connectivity():
     result = []
     for url in urls:
         if utils.url_fails(url):
-            result.append('Failed to connect to {}'.format(url))
+            result.append('{}: Error'.format(url))
         else:
-            result.append('Successfully connected to {}'.format(url))
+            result.append('{}: OK'.format(url))
     return result
 
 
