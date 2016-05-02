@@ -86,8 +86,11 @@ def get_load_avg():
 
 def get_git_hash():
     screenly_path = os.path.join(os.getenv('HOME'), 'screenly')
-    get_hash = sh.git('-C', screenly_path, 'rev-parse', 'HEAD')
-    return get_hash.stdout.strip()
+    try:
+        get_hash = sh.git('-C', screenly_path, 'rev-parse', 'HEAD')
+        return get_hash.stdout.strip()
+    except:
+        return 'Unable to get git hash.'
 
 
 def try_connectivity():
