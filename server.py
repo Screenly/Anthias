@@ -8,11 +8,9 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 from datetime import datetime, timedelta
 from functools import wraps
 from hurry.filesize import size
-from os import path, makedirs, getloadavg, statvfs, mkdir, getenv
-from re import split as re_split
+from os import path, makedirs, statvfs, mkdir, getenv
 from sh import git
 from subprocess import check_output
-from uptime import uptime
 import json
 import os
 import traceback
@@ -22,15 +20,16 @@ from bottle import route, run, request, error, static_file, response
 from bottle import HTTPResponse
 from bottlehaml import haml_template
 
-import db
-import queries
-import assets_helper
+from lib import db
+from lib import queries
+from lib import assets_helper
+from lib import diagnostics
 
-from utils import json_dump
-from utils import get_node_ip
-from utils import validate_url
-from utils import url_fails
-from utils import get_video_duration
+from lib.utils import json_dump
+from lib.utils import get_node_ip
+from lib.utils import validate_url
+from lib.utils import url_fails
+from lib.utils import get_video_duration
 
 from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS
 from werkzeug.wrappers import Request
@@ -298,21 +297,16 @@ def system_info():
     else:
         viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
 
-    # Get load average from last 15 minutes and round to two digits.
-    loadavg = round(getloadavg()[2], 2)
+    loadavg = diagnostics.get_load_avg()['15 min']
 
-    try:
-        run_tvservice = check_output(['tvservice', '-s'])
-        display_info = re_split('\||,', run_tvservice.strip('state:'))
-    except:
-        display_info = False
+    display_info = diagnostics.get_monitor_status()
 
     # Calculate disk space
     slash = statvfs("/")
     free_space = size(slash.f_bavail * slash.f_frsize)
 
     # Get uptime
-    uptime_in_seconds = uptime()
+    uptime_in_seconds = diagnostics.get_uptime()
     system_uptime = timedelta(seconds=uptime_in_seconds)
 
     return template(

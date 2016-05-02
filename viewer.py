@@ -14,9 +14,9 @@ import sh
 
 from settings import settings
 import html_templates
-from utils import url_fails
-import db
-import assets_helper
+from lib.utils import url_fails
+from lib import db
+from lib import assets_helper
 
 
 __author__ = "WireLoad Inc"
