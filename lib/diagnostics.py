@@ -58,7 +58,7 @@ def get_uptime():
 
 
 def get_playlist():
-    screenly_db = '/home/pi/.screenly/screenly.db'
+    screenly_db = os.path.join(os.getenv('HOME'), '.screenly/screenly.db')
     playlist = []
     if os.path.isfile(screenly_db):
         conn = sqlite3.connect(screenly_db)
@@ -85,7 +85,7 @@ def get_load_avg():
 
 
 def get_git_hash():
-    screenly_path = '/home/pi/screenly'
+    screenly_path = os.path.join(os.getenv('HOME'), 'screenly')
     get_hash = sh.git('-C', screenly_path, 'rev-parse', 'HEAD')
     return get_hash.stdout.strip()
 
