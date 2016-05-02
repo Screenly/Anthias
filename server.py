@@ -26,11 +26,11 @@ import db
 import queries
 import assets_helper
 
-from utils import json_dump
-from utils import get_node_ip
-from utils import validate_url
-from utils import url_fails
-from utils import get_video_duration
+from lib.utils import json_dump
+from lib.utils import get_node_ip
+from lib.utils import validate_url
+from lib.utils import url_fails
+from lib.utils import get_video_duration
 
 from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS
 from werkzeug.wrappers import Request

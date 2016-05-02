@@ -8,7 +8,7 @@ import unittest
 import assets_helper
 import db
 import server
-import utils
+from lib import utils
 
 # fixtures chronology
 #

@@ -14,7 +14,7 @@ import sh
 
 from settings import settings
 import html_templates
-from utils import url_fails
+from lib.utils import url_fails
 import db
 import assets_helper
 

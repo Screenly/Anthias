@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
-import sh
-import json
 import netifaces
+import os
+import sh
 import socket
 import sqlite3
-import os
-from uptime import uptime
+import utils
 from pprint import pprint
+from uptime import uptime
 
 
 def parse_cpu_info():
@@ -75,6 +75,17 @@ def get_git_hash():
     return get_hash.stdout.strip()
 
 
+def try_connectivity():
+    urls = ['http://www.google.com', 'http://www.bbc.co.uk']
+    result = []
+    for url in urls:
+        if utils.url_fails(url):
+            result.append('Failed to connect to {}'.format(url))
+        else:
+            result.append('Successfully connected to {}'.format(url))
+    return result
+
+
 def compile_report():
     report = {}
     report['cpu_info'] = parse_cpu_info()
@@ -85,6 +96,7 @@ def compile_report():
     report['hostname'] = socket.gethostname()
     report['playlist'] = get_playlist()
     report['git_hash'] = get_git_hash()
+    report['connectivity'] = try_connectivity()
 
     return report
 
