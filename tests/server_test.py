@@ -5,10 +5,9 @@ import datetime
 import functools
 import unittest
 
-import assets_helper
-import db
+from lib import assets_helper
+from lib import db
 import server
-from lib import utils
 
 # fixtures chronology
 #
