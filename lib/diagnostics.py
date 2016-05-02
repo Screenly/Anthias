@@ -69,6 +69,21 @@ def get_playlist():
     return playlist
 
 
+def get_load_avg():
+    """
+    Returns load average rounded to two digits.
+    """
+
+    load_avg = {}
+    get_load_avg = os.getloadavg()
+
+    load_avg['1 min'] = round(get_load_avg[0], 2)
+    load_avg['5 min'] = round(get_load_avg[1], 2)
+    load_avg['15 min'] = round(get_load_avg[2], 2)
+
+    return load_avg
+
+
 def get_git_hash():
     screenly_path = '/home/pi/screenly'
     get_hash = sh.git('-C', screenly_path, 'rev-parse', 'HEAD')
@@ -97,6 +112,7 @@ def compile_report():
     report['playlist'] = get_playlist()
     report['git_hash'] = get_git_hash()
     report['connectivity'] = try_connectivity()
+    report['loadavg'] = get_load_avg()
 
     return report
 

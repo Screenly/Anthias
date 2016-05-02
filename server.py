@@ -8,8 +8,7 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 from datetime import datetime, timedelta
 from functools import wraps
 from hurry.filesize import size
-from os import path, makedirs, getloadavg, statvfs, mkdir, getenv
-from re import split as re_split
+from os import path, makedirs, statvfs, mkdir, getenv
 from sh import git
 from subprocess import check_output
 import json
@@ -298,8 +297,7 @@ def system_info():
     else:
         viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
 
-    # Get load average from last 15 minutes and round to two digits.
-    loadavg = round(getloadavg()[2], 2)
+    loadavg = diagnostics.get_load_avg()['15 min']
 
     display_info = diagnostics.get_monitor_status()
 
