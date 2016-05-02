@@ -22,9 +22,9 @@ from bottle import route, run, request, error, static_file, response
 from bottle import HTTPResponse
 from bottlehaml import haml_template
 
-import db
-import queries
-import assets_helper
+from lib import db
+from lib import queries
+from lib import assets_helper
 
 from lib.utils import json_dump
 from lib.utils import get_node_ip
