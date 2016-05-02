@@ -11,6 +11,8 @@ Environment=DISPLAY=:0.0
 # Fix white flickering in omxplayer
 Environment=NOREFRESH=1
 
+Environment=PYTHONPATH=/home/pi/screenly
+
 # Don't activate screensaver
 ExecStartPre=/usr/bin/xset s off
 
