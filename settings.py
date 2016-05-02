@@ -31,7 +31,7 @@ CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock
 
 # Initiate logging
 logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s %(message)s',
+                    format='%(message)s',
                     datefmt='%a, %d %b %Y %H:%M:%S')
 
 # Silence urllib info messages ('Starting new HTTP connection')
