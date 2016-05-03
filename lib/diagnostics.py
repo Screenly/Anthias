@@ -8,6 +8,7 @@ import sqlite3
 import utils
 from pprint import pprint
 from uptime import uptime
+from datetime import datetime
 
 
 def parse_cpu_info():
@@ -97,7 +98,12 @@ def get_git_hash():
 
 
 def try_connectivity():
-    urls = ['http://www.google.com', 'http://www.bbc.co.uk']
+    urls = [
+        'http://www.google.com',
+        'http://www.bbc.co.uk',
+        'https://www.google.com',
+        'https://www.bbc.co.uk',
+    ]
     result = []
     for url in urls:
         if utils.url_fails(url):
@@ -105,6 +111,15 @@ def try_connectivity():
         else:
             result.append('{}: OK'.format(url))
     return result
+
+
+def ntp_status():
+    query_ntp = sh.ntp('-p')
+    return query_ntp.stdout
+
+
+def get_utc_isodate():
+    return datetime.isoformat(datetime.utcnow())
 
 
 def compile_report():
@@ -119,6 +134,8 @@ def compile_report():
     report['git_hash'] = get_git_hash()
     report['connectivity'] = try_connectivity()
     report['loadavg'] = get_load_avg()
+    report['ntp_status'] = ntp_status()
+    report['utc_isodate'] = get_utc_isodate()
 
     return report
 
