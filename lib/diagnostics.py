@@ -130,7 +130,8 @@ def get_debian_version():
     debian_version = '/etc/debian_version'
     if os.path.isfile(debian_version):
         with open(debian_version, 'r') as f:
-            return str(f.readlines()).strip()
+            for line in f:
+                return str(line).strip()
     else:
         return 'Unable to get Debian version.'
 
