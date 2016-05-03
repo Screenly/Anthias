@@ -89,9 +89,13 @@ def get_load_avg():
 
 
 def get_git_hash():
-    screenly_path = os.path.join(os.getenv('HOME'), 'screenly')
+    screenly_path = os.path.join(os.getenv('HOME'), 'screenly', '.git')
     try:
-        get_hash = sh.git('-C', screenly_path, 'rev-parse', 'HEAD')
+        get_hash = sh.git(
+            '--git-dir={}'.format(screenly_path),
+            'rev-parse',
+            'HEAD'
+        )
         return get_hash.stdout.strip()
     except:
         return 'Unable to get git hash.'
