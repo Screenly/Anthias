@@ -41,8 +41,8 @@ sudo mkdir -p /etc/ansible
 echo -e "[local]\nlocalhost ansible_connection=local" | sudo tee /etc/ansible/hosts > /dev/null
 
 sudo apt-get update
-sudo apt-get install -y python-dev python-setuptools git-core python-pip
-sudo pip install -U pip
+sudo apt-get install -y python-dev python-setuptools git-core
+curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 sudo pip install ansible==2.0.2.0
 
 ansible localhost -m git -a "repo=${1:-http://github.com/wireload/screenly-ose.git} dest=/home/pi/screenly version=${2:-master}"
