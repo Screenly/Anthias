@@ -1,26 +1,34 @@
 
-- name: Ensure Screenly config dir exists
-  become: no
+- name: Ensure folders exist
   file:
-    path: /home/pi/.screenly
+    path: "/home/pi/{{ item }}"
     state: directory
+    owner: pi
+    group: pi
+  with_items:
+    - .screenly
+    - .config
+    - .config/uzbl
 
 - name: Copy Screenly default config
-  become: no
   copy:
+    owner: pi
+    group: pi
     src: screenly.conf
     dest: /home/pi/.screenly/screenly.conf
     force: no
 
 - name: Copy in GTK config
-  become: no
   copy:
+    owner: pi
+    group: pi
     src: gtkrc-2.0
     dest: /home/pi/.gtkrc-2.0
 
 - name: Copy in UZBL config
-  become: no
   copy:
+    owner: pi
+    group: pi
     src: uzbl-config
     dest: /home/pi/.config/uzbl/config-screenly
 
@@ -28,8 +36,9 @@
   pip: requirements=/home/pi/screenly/requirements.txt
 
 - name: Create default assets database if does not exists
-  become: no
   copy:
+    owner: pi
+    group: pi
     src: screenly.db
     dest: /home/pi/.screenly/screenly.db
     force: no
