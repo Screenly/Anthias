@@ -1,6 +1,7 @@
 import requests
 import json
 import re
+import certifi
 from netifaces import ifaddresses
 from sh import grep, netstat
 from urlparse import urlparse
@@ -89,16 +90,24 @@ def json_dump(obj):
 
 
 def url_fails(url):
-    """try HEAD and GET for url availability check"""
+    """
+    Try HEAD and GET for URL availability check.
+    """
+
+    # Use Certifi module
+    if settings['verify_ssl']:
+        verify = certifi.where()
+    else:
+        verify = False
 
     try:
         if not validate_url(url):
             return False
 
-        if requests.head(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl']).status_code in HTTP_OK:
+        if requests.head(url, allow_redirects=True, timeout=10, verify=verify).status_code in HTTP_OK:
             return False
 
-        if requests.get(url, allow_redirects=True, timeout=10, verify=settings['verify_ssl']).status_code in HTTP_OK:
+        if requests.get(url, allow_redirects=True, timeout=10, verify=verify).status_code in HTTP_OK:
             return False
 
     except (requests.ConnectionError, requests.exceptions.Timeout):

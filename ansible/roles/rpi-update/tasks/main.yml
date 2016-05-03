@@ -9,7 +9,7 @@
     group: root
   when: ansible_distribution_release == "wheezy"
 
-- name: Run kernel upgrade
+- name: Run kernel upgrade (this can take up to 10 minutes)
   command: /usr/bin/rpi-update
   when: ansible_distribution_release == "wheezy"
   environment:

@@ -8,6 +8,7 @@ import sqlite3
 import utils
 from pprint import pprint
 from uptime import uptime
+from datetime import datetime
 
 
 def parse_cpu_info():
@@ -88,16 +89,25 @@ def get_load_avg():
 
 
 def get_git_hash():
-    screenly_path = os.path.join(os.getenv('HOME'), 'screenly')
+    screenly_path = os.path.join(os.getenv('HOME'), 'screenly', '.git')
     try:
-        get_hash = sh.git('-C', screenly_path, 'rev-parse', 'HEAD')
+        get_hash = sh.git(
+            '--git-dir={}'.format(screenly_path),
+            'rev-parse',
+            'HEAD'
+        )
         return get_hash.stdout.strip()
     except:
         return 'Unable to get git hash.'
 
 
 def try_connectivity():
-    urls = ['http://www.google.com', 'http://www.bbc.co.uk']
+    urls = [
+        'http://www.google.com',
+        'http://www.bbc.co.uk',
+        'https://www.google.com',
+        'https://www.bbc.co.uk',
+    ]
     result = []
     for url in urls:
         if utils.url_fails(url):
@@ -105,6 +115,25 @@ def try_connectivity():
         else:
             result.append('{}: OK'.format(url))
     return result
+
+
+def ntp_status():
+    query_ntp = sh.ntpq('-p')
+    return query_ntp.stdout
+
+
+def get_utc_isodate():
+    return datetime.isoformat(datetime.utcnow())
+
+
+def get_debian_version():
+    debian_version = '/etc/debian_version'
+    if os.path.isfile(debian_version):
+        with open(debian_version, 'r') as f:
+            for line in f:
+                return str(line).strip()
+    else:
+        return 'Unable to get Debian version.'
 
 
 def compile_report():
@@ -119,6 +148,9 @@ def compile_report():
     report['git_hash'] = get_git_hash()
     report['connectivity'] = try_connectivity()
     report['loadavg'] = get_load_avg()
+    report['ntp_status'] = ntp_status()
+    report['utc_isodate'] = get_utc_isodate()
+    report['debian_version'] = get_debian_version()
 
     return report
 
