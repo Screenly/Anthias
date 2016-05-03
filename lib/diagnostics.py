@@ -126,6 +126,15 @@ def get_utc_isodate():
     return datetime.isoformat(datetime.utcnow())
 
 
+def get_debian_version():
+    debian_version = '/etc/debian_version'
+    if os.path.isfile(debian_version):
+        with open('/proc/cpuinfo', 'r') as f:
+            return f.readlines().strip()
+    else:
+        return 'Unable to get Debian version.'
+
+
 def compile_report():
     report = {}
     report['cpu_info'] = parse_cpu_info()
@@ -140,6 +149,7 @@ def compile_report():
     report['loadavg'] = get_load_avg()
     report['ntp_status'] = ntp_status()
     report['utc_isodate'] = get_utc_isodate()
+    report['debian_version'] = get_debian_version()
 
     return report
 
