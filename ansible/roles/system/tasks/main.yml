@@ -58,14 +58,6 @@
     line: \1 quiet init=/lib/systemd/systemd
   when: not is_berryboot
 
-- name: Ensure locales are present
-  locale_gen:
-    name={{ item }}
-    state=present
-  with_items:
-    - en_US.UTF-8
-    - en_GB.UTF-8
-
 - name: Install Screenly dependencies
   apt:
     name: "{{ item }}"

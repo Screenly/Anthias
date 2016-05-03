@@ -40,6 +40,12 @@ set -x
 sudo mkdir -p /etc/ansible
 echo -e "[local]\nlocalhost ansible_connection=local" | sudo tee /etc/ansible/hosts > /dev/null
 
+if [ ! -f /etc/locale.gen ]; then
+  # No locales found. Creating locales with default UK/US setup.
+  echo -e "en_GB.UTF-8 UTF-8\nen_US.UTF-8 UTF-8" | sudo tee /etc/locale.gen > /dev/null
+  sudo locale-gen
+fi
+
 sudo apt-get update
 sudo apt-get install -y python-dev python-setuptools git-core
 curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
