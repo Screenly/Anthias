@@ -114,7 +114,7 @@ def try_connectivity():
 
 
 def ntp_status():
-    query_ntp = sh.ntp('-p')
+    query_ntp = sh.ntpq('-p')
     return query_ntp.stdout
 
 
