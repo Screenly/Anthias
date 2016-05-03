@@ -8,7 +8,7 @@ gunicorn==19.4.5
 hurry.filesize==0.9
 netifaces==0.8
 pytz==2012d
-requests==2.10.0
+requests[security]==2.10.0
 sh==1.08
 six==1.8.0
 uptime==2.0.2
