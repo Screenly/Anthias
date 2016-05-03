@@ -3,6 +3,7 @@ MarkupSafe==0.15
 PyHAML==0.1.9
 bottle-haml==0.1.4
 bottle==0.12.9
+certifi==2016.02.28
 gunicorn==19.4.5
 hurry.filesize==0.9
 netifaces==0.8
