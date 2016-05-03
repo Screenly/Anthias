@@ -7,6 +7,7 @@ addons:
     packages:
       - net-tools
 install:
+  - pip install -U pip
   - pip install -r requirements.txt
   - pip install -r requirements.dev.txt
 before_script:
