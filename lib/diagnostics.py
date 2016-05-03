@@ -130,7 +130,7 @@ def get_debian_version():
     debian_version = '/etc/debian_version'
     if os.path.isfile(debian_version):
         with open('/proc/cpuinfo', 'r') as f:
-            return f.readlines().strip()
+            return str(f.readlines()).strip()
     else:
         return 'Unable to get Debian version.'
 
