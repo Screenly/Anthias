@@ -43,6 +43,16 @@ def get_kernel_modules():
         return 'Unable to run lsmod.'
 
 
+def get_gpu_version():
+    try:
+        version = sh.vcgencmd('version')
+        for line in version:
+            if 'version' in line:
+                return line.strip().replace('version ', '')
+    except:
+        return 'Unable to run vcgencmd.'
+
+
 def get_monitor_status():
     try:
         return sh.tvservice('-s').stdout.strip()
@@ -151,6 +161,7 @@ def compile_report():
     report['ntp_status'] = ntp_status()
     report['utc_isodate'] = get_utc_isodate()
     report['debian_version'] = get_debian_version()
+    report['gpu_version'] = get_gpu_version()
 
     return report
 
