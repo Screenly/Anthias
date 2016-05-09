@@ -251,9 +251,8 @@ def remove_asset(asset_id):
 @route('/api/assets/order', method="POST")
 @api
 def playlist_order():
-    "Receive a list of asset_ids in the order they should be in the playlist"
-    for play_order, asset_id in enumerate(request.POST.get('ids', '').split(',')):
-        assets_helper.update(db_conn, asset_id, {'asset_id': asset_id, 'play_order': play_order})
+    assets_helper.save_ordering(db_conn, request.POST.get('ids', '').split(','))
+
 
 ################################
 # Views
