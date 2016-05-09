@@ -58,3 +58,10 @@ ansible localhost -m git -a "repo=${1:-http://github.com/wireload/screenly-ose.g
 cd /home/pi/screenly/ansible
 
 ansible-playbook site.yml $EXTRA_ARGS
+
+sudo find /var/cache/apt/archives -type f -delete
+sudo apt-get clean
+find /usr/share/doc -depth -type f ! -name copyright| sudo xargs rm || true
+find /usr/share/doc -empty| sudo xargs rmdir || true
+sudo rm -rf /usr/share/man /usr/share/groff /usr/share/info /usr/share/lintian /usr/share/linda /var/cache/man
+find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en' ! -name 'de*' !  -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' | xargs sudo rm -r
