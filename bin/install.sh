@@ -64,4 +64,4 @@ sudo apt-get clean
 find /usr/share/doc -depth -type f ! -name copyright| sudo xargs rm || true
 find /usr/share/doc -empty| sudo xargs rmdir || true
 sudo rm -rf /usr/share/man /usr/share/groff /usr/share/info /usr/share/lintian /usr/share/linda /var/cache/man
-find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en' ! -name 'de*' !  -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' | xargs sudo rm -r
+find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en' ! -name 'de*' !  -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' | sudo xargs rm -r
