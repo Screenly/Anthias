@@ -32,7 +32,7 @@
 
   API.date_to = date_to = function(d) {
     var dd;
-    dd = moment(new Date(d));
+    dd = moment.utc(d).local();
     return {
       string: function() {
         return dd.format(date_settings.full_date);
