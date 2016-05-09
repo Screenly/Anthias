@@ -59,7 +59,7 @@ cd /home/pi/screenly/ansible
 
 ansible-playbook site.yml $EXTRA_ARGS
 
-sudo find /var/cache/apt/archives -type f -delete
+sudo apt-get autoclean
 sudo apt-get clean
 find /usr/share/doc -depth -type f ! -name copyright| sudo xargs rm || true
 find /usr/share/doc -empty| sudo xargs rmdir || true
