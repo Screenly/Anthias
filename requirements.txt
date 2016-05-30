@@ -1,7 +1,6 @@
 Mako==0.7.3
-Mrser==3.5.0
 PyHAML==0.1.9
-arkupSafe==0.15
+MarkupSafe==0.15
 bottle-haml==0.1.4
 bottle==0.12.9
 certifi==2015.04.28
