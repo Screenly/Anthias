@@ -122,12 +122,19 @@
     owner: root
     group: root
 
+- name: Copy in evdev
+  copy:
+    src: 10-evdev.conf
+    dest: /usr/share/X11/xorg.conf.d/10-evdev.conf
+    mode: 0644
+    owner: root
+    group: root
+
 - name: Clear out X11 configs (disables touchpad and other unnecessary things)
   file:
     path: "/usr/share/X11/xorg.conf.d/{{ item }}"
     state: absent
   with_items:
-    - 10-evdev.conf
     - 50-synaptics.conf
     - 10-quirks.conf
     - 50-wacom.conf
