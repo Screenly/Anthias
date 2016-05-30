@@ -1,10 +1,13 @@
-- name: Copies network manger
+- name: Copies network manger and watchdog
   copy:
     owner: root
     group: root
     mode: 0755
-    src: screenly_net_mgr.py
-    dest: /usr/sbin/screenly_net_mgr.py
+    src: "{{ item }}"
+    dest: "/usr/sbin/{{ item }}"
+  with_items:
+    - screenly_net_mgr.py
+    - screenly_net_watchdog.py
 
 - name: Copies network manger init file
   copy:
@@ -24,3 +27,8 @@
 
 - name: Activate network manager
   command: update-rc.d screenly_net_mgr defaults
+
+- name: Install cronjob for watchdog
+  cron:
+    minute: 0
+    job: /usr/bin/python /usr/sbin/screenly_net_watchdog.py
