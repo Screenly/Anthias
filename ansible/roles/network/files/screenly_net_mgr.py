@@ -20,10 +20,17 @@ def if_config(
         ip=None,
         netmask=None,
         gateway=None,
-        interface='eth0',
+        interface=None,
         ssid=None,
         passphrase=None
 ):
+    if not interface:
+        raise ValueError
+
+    # If an and netmask is present, set static to true
+    if ip and netmask and gateway:
+        static = True
+
     if static:
         interface_stanza = """
 auto {}
@@ -37,10 +44,13 @@ auto {}
   iface {} inet dhcp""".format(interface, interface)
 
     # If wifi configuration
-    if ssid:
-        interface_stanza += '\n  wpa-ssid "{}"'.format(ssid)
-    if passphrase:
-        interface_stanza += '\n  wpa-psk "{}"'.format(passphrase)
+    if 'wlan' in interface:
+        interface_stanza += '\n  wireless-power off'
+
+        if ssid:
+            interface_stanza += '\n  wpa-ssid "{}"'.format(ssid)
+        if passphrase:
+            interface_stanza += '\n  wpa-psk "{}"'.format(passphrase)
 
     # Make sure we end with a newline
     interface_stanza += '\n'
@@ -166,26 +176,23 @@ def main():
 
     interfaces = INTERFACES_TEMPLATE
 
-    """
-    Configuration for eth0
-    """
+    if config.has_section('eth0'):
+        eth0_dhcp = is_dhcp(config, 'eth0')
 
-    eth0_dhcp = is_dhcp(config, 'eth0')
+        if eth0_dhcp:
+            interfaces += if_config(interface='eth0')
+        else:
+            eth0_ip = lookup(config, 'eth0', 'ip')
+            eth0_netmask = lookup(config, 'eth0', 'netmask')
+            eth0_gateway = lookup(config, 'eth0', 'gateway')
 
-    if eth0_dhcp:
-        interfaces += if_config(interface='eth0')
-    else:
-        eth0_ip = lookup(config, 'eth0', 'ip')
-        eth0_netmask = lookup(config, 'eth0', 'netmask')
-        eth0_gateway = lookup(config, 'eth0', 'gateway')
-
-        interfaces += if_config(
-            interface='eth0',
-            static=True,
-            ip=eth0_ip,
-            netmask=eth0_netmask,
-            gateway=eth0_gateway
-        )
+            interfaces += if_config(
+                interface='eth0',
+                static=True,
+                ip=eth0_ip,
+                netmask=eth0_netmask,
+                gateway=eth0_gateway
+            )
 
     if config.has_section('wlan0'):
         wlan0_dhcp = is_dhcp(config, 'wlan0')

@@ -1,4 +1,4 @@
-from nose.tools import eq_
+from nose.tools import eq_, assert_raises
 import screenly_net_mgr
 
 
@@ -17,8 +17,14 @@ restrict ::1
 """
 
 
+def test_no_if():
+    assert_raises(ValueError, screenly_net_mgr.if_config)
+
+
 def test_eth0_dhcp():
-    eq_(screenly_net_mgr.if_config(), """
+    eq_(screenly_net_mgr.if_config(
+        interface='eth0'
+    ), """
 auto eth0
   iface eth0 inet dhcp
 """)
@@ -26,7 +32,7 @@ auto eth0
 
 def test_eth0_static():
     eq_(screenly_net_mgr.if_config(
-        static=True,
+        interface='eth0',
         ip='192.168.10.1',
         netmask='255.255.255.0',
         gateway='192.168.10.1'
@@ -39,17 +45,6 @@ auto eth0
 """)
 
 
-def test_eth0_dhcp_but_with_ip_static_valuesc():
-    eq_(screenly_net_mgr.if_config(
-        ip='192.168.10.1',
-        netmask='255.255.255.0',
-        gateway='192.168.10.1'
-    ), """
-auto eth0
-  iface eth0 inet dhcp
-""")
-
-
 def test_wlan0_dhcp_no_passphrase():
     eq_(screenly_net_mgr.if_config(
         interface='wlan0',
@@ -57,6 +52,7 @@ def test_wlan0_dhcp_no_passphrase():
     ), """
 auto wlan0
   iface wlan0 inet dhcp
+  wireless-power off
   wpa-ssid "foobar"
 """)
 
@@ -69,6 +65,7 @@ def test_wlan0_dhcp_with_passphrase():
     ), """
 auto wlan0
   iface wlan0 inet dhcp
+  wireless-power off
   wpa-ssid "foobar"
   wpa-psk "password"
 """)
@@ -76,7 +73,6 @@ auto wlan0
 
 def test_wlan0_static_with_passphrase():
     eq_(screenly_net_mgr.if_config(
-        static=True,
         interface='wlan0',
         ssid='foobar',
         passphrase='password',
@@ -89,6 +85,7 @@ auto wlan0
   address 192.168.10.1
   netmask 255.255.255.0
   gateway 192.168.10.1
+  wireless-power off
   wpa-ssid "foobar"
   wpa-psk "password"
 """)
