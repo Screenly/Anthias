@@ -1,0 +1,26 @@
+- name: Copies network manger
+  copy:
+    owner: root
+    group: root
+    mode: 0755
+    src: screenly_net_mgr.py
+    dest: /usr/sbin/screenly_net_mgr.py
+
+- name: Copies network manger init file
+  copy:
+    owner: root
+    group: root
+    mode: 0755
+    src: screenly_net_mgr
+    dest: /etc/init.d/screenly_net_mgr
+
+- name: Copies in sample network.ini file
+  copy:
+    owner: root
+    group: root
+    mode: 0644
+    src: network.ini-sample
+    dest: /boot/network.ini-sample
+
+- name: Activate network manager
+  command: update-rc.d screenly_net_mgr defaults
