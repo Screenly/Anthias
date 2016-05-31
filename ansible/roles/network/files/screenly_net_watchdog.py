@@ -21,7 +21,7 @@ def get_default_gw():
 
 def ping_test(host):
     ping = sh.ping('-q', '-c', 10, host, _ok_code=[0, 1])
-    packet_loss = re.findall(r'(\d+)% packet loss', ping.stdout)
+    packet_loss = re.findall(r'(\d+)% packet loss', ping.stdout)[0]
 
     if int(packet_loss) > 60:
         syslog.syslog(syslog.LOG_ERR, 'Unable to ping gateway.')
@@ -67,7 +67,8 @@ def get_lock():
             return False
 
     with open(LOCKFILE, 'w') as f:
-        f.write(os.getpid())
+        pid = str(os.getpid())
+        f.write(pid)
         return True
 
 
@@ -109,6 +110,15 @@ def has_ip(interface):
                 pass
     return False
 
+
+def get_active_iface(config, prefix):
+    for n in range(10):
+        iface = '{}{}'.format(prefix, n)
+        if config.has_section(iface):
+            return iface
+    return False
+
+
 if __name__ == '__main__':
 
     syslog.syslog('Starting net_watchdog.')
@@ -120,16 +130,18 @@ if __name__ == '__main__':
     config = configparser.ConfigParser()
     config.read(NETWORK_PATH)
 
-    wifi = config.has_section('wlan0')
+    wifi_iface = get_active_iface(config, 'wlan')
+
     can_ping_gw = None
     reaches_internet = None
 
-    if wifi:
-        wifi_is_static = is_static(config, 'wlan0')
+    if wifi_iface:
+        syslog.syslog('Found wifi interface {}'.format(wifi_iface))
+        wifi_is_static = is_static(config, wifi_iface)
         wifi_is_healthy = None
 
         if not wifi_is_static:
-            wifi_has_ip = has_ip('wlan0')
+            wifi_has_ip = has_ip(wifi_iface)
         else:
             wifi_has_ip = True
 
@@ -137,7 +149,7 @@ if __name__ == '__main__':
         wifi_is_healthy = wifi_has_ip
 
         if not wifi_is_healthy:
-            wifi_is_healthy = bring_up_interface('wlan0')
+            wifi_is_healthy = bring_up_interface(wifi_iface)
 
         if wifi_is_healthy:
             reaches_internet = http_test('http://www.screenlyapp.com')

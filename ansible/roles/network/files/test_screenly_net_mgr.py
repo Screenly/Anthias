@@ -30,6 +30,15 @@ auto eth0
 """)
 
 
+def test_eth3_dhcp():
+    eq_(screenly_net_mgr.if_config(
+        interface='eth3'
+    ), """
+auto eth3
+  iface eth3 inet dhcp
+""")
+
+
 def test_eth0_static():
     eq_(screenly_net_mgr.if_config(
         interface='eth0',
@@ -65,6 +74,20 @@ def test_wlan0_dhcp_with_passphrase():
     ), """
 auto wlan0
   iface wlan0 inet dhcp
+  wireless-power off
+  wpa-ssid "foobar"
+  wpa-psk "password"
+""")
+
+
+def test_wlan1_dhcp_with_passphrase():
+    eq_(screenly_net_mgr.if_config(
+        interface='wlan1',
+        ssid='foobar',
+        passphrase='password'
+    ), """
+auto wlan1
+  iface wlan1 inet dhcp
   wireless-power off
   wpa-ssid "foobar"
   wpa-psk "password"

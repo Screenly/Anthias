@@ -27,7 +27,6 @@ def if_config(
     if not interface:
         raise ValueError
 
-    # If an and netmask is present, set static to true
     if ip and netmask and gateway:
         static = True
 
@@ -158,10 +157,21 @@ def is_dhcp(config, interface):
     try:
         # If 'ip', 'netmask' and 'gateway' is set, use static mode.
         if config[interface]['ip'] and config[interface]['netmask'] and config[interface]['gateway']:
-            syslog.syslog(syslog.LOG_ERR, '[{}] Found static components. Using static config.'.format(interface))
+            syslog.syslog(
+                syslog.LOG_ERR,
+                '[{}] Found static components. Using static config.'.format(interface)
+            )
             return False
     except:
         return True
+
+
+def get_active_iface(config, prefix):
+    for n in range(10):
+        iface = '{}{}'.format(prefix, n)
+        if config.has_section(iface):
+            return iface
+    return False
 
 
 def main():
@@ -176,46 +186,47 @@ def main():
 
     interfaces = INTERFACES_TEMPLATE
 
-    if config.has_section('eth0'):
-        eth0_dhcp = is_dhcp(config, 'eth0')
+    ethernet = get_active_iface(config, 'eth')
+    wifi = get_active_iface(config, 'wlan')
 
-        if eth0_dhcp:
-            interfaces += if_config(interface='eth0')
+    if ethernet:
+        ethernet_dhcp = is_dhcp(config, ethernet)
+
+        if ethernet_dhcp:
+            interfaces += if_config(interface=ethernet)
         else:
-            eth0_ip = lookup(config, 'eth0', 'ip')
-            eth0_netmask = lookup(config, 'eth0', 'netmask')
-            eth0_gateway = lookup(config, 'eth0', 'gateway')
+            ethernet_ip = lookup(config, ethernet, 'ip')
+            ethernet_netmask = lookup(config, ethernet, 'netmask')
+            ethernet_gateway = lookup(config, ethernet, 'gateway')
 
             interfaces += if_config(
-                interface='eth0',
-                static=True,
-                ip=eth0_ip,
-                netmask=eth0_netmask,
-                gateway=eth0_gateway
+                interface=ethernet,
+                ip=ethernet_ip,
+                netmask=ethernet_netmask,
+                gateway=ethernet_gateway
             )
 
-    if config.has_section('wlan0'):
-        wlan0_dhcp = is_dhcp(config, 'wlan0')
-        ssid = lookup(config, 'wlan0', 'ssid')
-        passphrase = lookup(config, 'wlan0', 'passphrase') if config.has_option('wlan0', 'passphrase') else None
+    if wifi:
+        wifi_dhcp = is_dhcp(config, wifi)
+        ssid = lookup(config, wifi, 'ssid')
+        passphrase = lookup(config, wifi, 'passphrase') if config.has_option(wifi, 'passphrase') else None
 
-        if wlan0_dhcp:
+        if wifi_dhcp:
             interfaces += if_config(
-                interface='wlan0',
+                interface=wifi,
                 ssid=ssid,
                 passphrase=passphrase
             )
         else:
-            wlan0_ip = lookup(config, 'wlan0', 'ip')
-            wlan0_netmask = lookup(config, 'wlan0', 'netmask')
-            wlan0_gateway = lookup(config, 'wlan0', 'gateway')
+            wifi_ip = lookup(config, wifi, 'ip')
+            wifi_netmask = lookup(config, wifi, 'netmask')
+            wifi_gateway = lookup(config, wifi, 'gateway')
 
             interfaces += if_config(
-                interface='wlan0',
-                static=True,
-                ip=wlan0_ip,
-                netmask=wlan0_netmask,
-                gateway=wlan0_gateway,
+                interface=wifi,
+                ip=wifi_ip,
+                netmask=wifi_netmask,
+                gateway=wifi_gateway,
                 ssid=ssid,
                 passphrase=passphrase
             )
