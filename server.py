@@ -296,11 +296,7 @@ def settings_page():
 
 @route('/system_info')
 def system_info():
-    viewer_log_file = '/tmp/screenly_viewer.log'
-    if path.exists(viewer_log_file):
-        viewlog = check_output(['tail', '-n', '20', viewer_log_file]).split('\n')
-    else:
-        viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
+    viewlog = check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')
 
     loadavg = diagnostics.get_load_avg()['15 min']
 
