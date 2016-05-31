@@ -30,5 +30,6 @@
 
 - name: Install cronjob for watchdog
   cron:
+    name: Screenly Net Watchdog
     minute: 0
     job: /usr/bin/python /usr/sbin/screenly_net_watchdog.py
