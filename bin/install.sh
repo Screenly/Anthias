@@ -31,9 +31,9 @@ fi
 
 echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
 if [ "$DEV" != 'y'  ]; then
-  BRANCH="master"
-else
   BRANCH="production"
+else
+  BRANCH="master"
 fi
 
 echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
