@@ -29,6 +29,13 @@ if [ "$INSTALL" != 'y' ]; then
   exit 1
 fi
 
+echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s USE-DEV && echo
+if [ "$USE-DEV" != 'y'  ]; then
+  BRANCH="master"
+else
+  BRANCH="production"
+fi
+
 echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
 if [ "$UPGRADE" != 'y' ]; then
   EXTRA_ARGS="--skip-tags enable-ssl,system-upgrade"
@@ -54,7 +61,7 @@ sudo apt-get install -y python-dev git-core libffi-dev libssl-dev
 curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 sudo pip install ansible==2.0.2.0
 
-ansible localhost -m git -a "repo=${1:-http://github.com/wireload/screenly-ose.git} dest=/home/pi/screenly version=${2:-production}"
+ansible localhost -m git -a "repo=${1:-http://github.com/wireload/screenly-ose.git} dest=/home/pi/screenly version=$BRANCH"
 cd /home/pi/screenly/ansible
 
 ansible-playbook site.yml $EXTRA_ARGS
@@ -66,3 +73,6 @@ sudo find /usr/share/doc -empty -delete
 sudo rm -rf /usr/share/man /usr/share/groff /usr/share/info /usr/share/lintian /usr/share/linda /var/cache/man
 sudo find /usr/share/locale -type f ! -name 'en' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' -delete
 sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' -exec rm -r {} \;
+
+set +x
+echo "Installation completed."
