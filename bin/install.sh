@@ -29,8 +29,8 @@ if [ "$INSTALL" != 'y' ]; then
   exit 1
 fi
 
-echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s USE-DEV && echo
-if [ "$USE-DEV" != 'y'  ]; then
+echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
+if [ "$DEV" != 'y'  ]; then
   BRANCH="master"
 else
   BRANCH="production"
