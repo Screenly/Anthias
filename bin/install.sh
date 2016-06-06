@@ -74,5 +74,7 @@ sudo rm -rf /usr/share/man /usr/share/groff /usr/share/info /usr/share/lintian /
 sudo find /usr/share/locale -type f ! -name 'en' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' -delete
 sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' -exec rm -r {} \;
 
+cd ~/screenly && git rev-parse HEAD > ~/.screenly/latest_screenly_sha
+
 set +x
 echo "Installation completed."

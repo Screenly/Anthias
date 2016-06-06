@@ -56,7 +56,7 @@ def is_up_to_date():
     Used in conjunction with check_update() in viewer.py.
     """
 
-    sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
+    sha_file = os.path.join(settings.get_configdir(), 'latest_screenly_sha')
 
     # Until this has been created by viewer.py,
     # let's just assume we're up to date.
@@ -71,7 +71,7 @@ def is_up_to_date():
 
     if latest_sha:
         branch_sha = git('rev-parse', 'HEAD')
-        return branch_sha == latest_sha
+        return branch_sha.stdout.strip() == latest_sha
 
     # If we weren't able to verify with remote side,
     # we'll set up_to_date to true in order to hide
