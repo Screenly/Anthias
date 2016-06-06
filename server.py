@@ -70,11 +70,8 @@ def is_up_to_date():
         latest_sha = None
 
     if latest_sha:
-        try:
-            check_sha = git('branch', '--contains', latest_sha)
-            return 'master' in check_sha
-        except:
-            return False
+        branch_sha = git('rev-parse', 'HEAD')
+        return branch_sha == latest_sha
 
     # If we weren't able to verify with remote side,
     # we'll set up_to_date to true in order to hide
