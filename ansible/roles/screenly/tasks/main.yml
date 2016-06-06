@@ -1,4 +1,3 @@
-
 - name: Ensure folders exist
   file:
     path: "/home/pi/{{ item }}"

@@ -1,0 +1,33 @@
+; Screenly network configuration
+
+
+; This is how a static network configuration
+; for wired networking would look like this.
+; Read more here:
+; https://www.screenlyapp.com/faq/pro.html#static_ip
+
+;[eth0]
+;mode=static
+;ip=192.168.1.10
+;netmask=255.255.255.0
+;gateway=192.168.1.1
+
+
+; If you want to configure your WLAN with DHCP,
+; the configuration would look something like this.
+; Read more here:
+; https://www.screenlyapp.com/faq/pro/#wifi_support
+
+;[wlan0]
+;ssid=NameOfYourNetwork
+;passphrase=YourNetworkPassword
+
+
+; You may also want to explicitly set
+; the DNS and ntp servers as follows.
+; Read more here:
+; https://www.screenlyapp.com/faq/pro/#custom_ntp
+
+;[generic]
+;dns=8.8.8.8,8.8.4.4
+;ntp=0.pool.ntp.org,1.pool.ntp.org
