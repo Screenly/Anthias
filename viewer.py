@@ -216,7 +216,7 @@ def view_video(uri, duration):
 
 def check_update():
     """
-    Check if there is a later version of Screenly-OSE
+    Check if there is a later version of Screenly OSE
     available. Only do this update once per day.
     Return True if up to date was written to disk,
     False if no update needed and None if unable to check.
@@ -232,10 +232,11 @@ def check_update():
 
     logging.debug('Last update: %s' % str(last_update))
 
+    git_branch = sh.git('rev-parse', '--abbrev-ref', 'HEAD')
     if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
 
         if not url_fails('http://stats.screenlyapp.com'):
-            latest_sha = req_get('http://stats.screenlyapp.com/latest')
+            latest_sha = req_get('http://stats.screenlyapp.com/latest/{}'.format(git_branch))
 
             if latest_sha.status_code == 200:
                 with open(sha_file, 'w') as f:
@@ -245,7 +246,7 @@ def check_update():
                 logging.debug('Received non 200-status')
                 return
         else:
-            logging.debug('Unable to retreive latest SHA')
+            logging.debug('Unable to retrieve latest SHA')
             return
     else:
         return False
