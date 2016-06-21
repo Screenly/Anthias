@@ -13,6 +13,8 @@ before_script:
   - mkdir -p ~/.screenly ~/.config/uzbl/
   - cp ansible/roles/screenly/files/uzbl-config ~/.config/uzbl/config-screenly
   - cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
-script: nosetests -v -a '!fixme'
-
+  - echo -e "[local]\nlocalhost ansible_connection=local" > ansible/localhost
+script:
+  - nosetests -v -a '!fixme'
+  - ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml
 sudo: false
