@@ -9,12 +9,14 @@ install:
   - pip install -U pip
   - pip install -r requirements.txt
   - pip install -r requirements.dev.txt
+  - pip install pep8
 before_script:
   - mkdir -p ~/.screenly ~/.config/uzbl/
   - cp ansible/roles/screenly/files/uzbl-config ~/.config/uzbl/config-screenly
   - cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
   - echo -e "[local]\nlocalhost ansible_connection=local" > ansible/localhost
 script:
+  - find . -name \*.py -exec pep8 --ignore=E402,E501 {} +
   - nosetests -v -a '!fixme'
   - ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml
 sudo: false
