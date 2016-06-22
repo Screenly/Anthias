@@ -1,5 +1,6 @@
 # -*- coding: utf8 -*-
 
+
 def black_page(filepath):
     html = """<html>
   <head>
@@ -20,4 +21,3 @@ def black_page(filepath):
     with open(filepath, 'w') as f:
         f.write(html)
     return filepath
-

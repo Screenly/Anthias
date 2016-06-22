@@ -13,6 +13,6 @@ def is_routing_up():
 
 for _ in range(1, 30):
     if is_routing_up():
-        break;
+        break
     print('Waiting for to come up...')
     time.sleep(1)
