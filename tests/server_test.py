@@ -92,7 +92,7 @@ asset_z = {
 url_fail = 'http://doesnotwork.example.com'
 url_redir = 'http://example.com'
 uri_ = '/home/user/file'
-#url_timeout = 'http://...'
+# url_timeout = 'http://...'
 
 
 class Req():
@@ -217,7 +217,3 @@ class DBHelperTest(unittest.TestCase):
         fetched = assets_helper.read(self.conn)
 
         self.assertEquals([0, 0, 0], [asset['play_order'] for asset in fetched])
-
-
-
-
