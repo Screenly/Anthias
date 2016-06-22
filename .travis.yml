@@ -16,7 +16,7 @@ before_script:
   - cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
   - echo -e "[local]\nlocalhost ansible_connection=local" > ansible/localhost
 script:
-  - find . -name \*.py -exec pep8 --ignore=E402,E501 {} +
+  - find . -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
   - nosetests -v -a '!fixme'
   - ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml
 sudo: false
