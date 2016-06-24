@@ -16,6 +16,6 @@ before_script:
   - echo -e "[local]\nlocalhost ansible_connection=local" > ansible/localhost
 script:
   - find . -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
-  - nosetests -v -a '!fixme'
+  - nosetests -v -a '!fixme' --with-isolation
   - ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml
 sudo: false
