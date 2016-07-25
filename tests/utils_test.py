@@ -3,6 +3,7 @@ from datetime import datetime
 import unittest
 from lib import utils
 
+
 class UtilsTest(unittest.TestCase):
     def test_unicode_correctness_in_bottle_templates(self):
         self.assertEqual(utils.template_handle_unicode('hello'), u'hello')
