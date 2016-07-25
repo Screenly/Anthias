@@ -4,12 +4,13 @@
 from nose.tools import ok_, eq_
 from nose.plugins.attrib import attr
 import mock
-
+import unittest
 import os
+from time import sleep
 
 
-class ViewerTestCase(object):
-    def setup(self):
+class ViewerTestCase(unittest.TestCase):
+    def setUp(self):
         import viewer
 
         self.original_splash_delay = viewer.SPLASH_DELAY
@@ -35,7 +36,7 @@ class ViewerTestCase(object):
         self.m_loadb = mock.Mock(name='load_browser')
         self.p_loadb = mock.patch.object(self.u, 'load_browser', self.m_loadb)
 
-    def teardown(self):
+    def tearDown(self):
         self.u.SPLASH_DELAY = self.original_splash_delay
 
 
@@ -109,3 +110,25 @@ class TestSignalHandlers(ViewerTestCase):
         eq_(None, self.u.sigusr2(None, None))
         self.m_reload.assert_called_once()
         self.p_reload.stop()
+
+
+class TestWatchdog(ViewerTestCase):
+    def test_watchdog_should_create_file_if_not_exists(self):
+        try:
+            os.remove(self.u.WATCHDOG_PATH)
+        except:
+            pass
+        self.u.watchdog()
+        self.assertEqual(os.path.exists(self.u.WATCHDOG_PATH), True)
+
+    def test_watchdog_should_update_mtime(self):
+        # for watchdog file creation
+        self.u.watchdog()
+        mtime = os.path.getmtime(self.u.WATCHDOG_PATH)
+
+        # Python is too fast?
+        sleep(0.01)
+
+        self.u.watchdog()
+        mtime2 = os.path.getmtime(self.u.WATCHDOG_PATH)
+        self.assertGreater(mtime2, mtime)
