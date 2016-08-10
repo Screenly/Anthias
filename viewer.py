@@ -180,9 +180,12 @@ def browser_clear(force=False):
 def browser_url(url, cb=lambda _: True, force=False):
     global current_browser_url
 
-    current_browser_url = url
-    browser_send('uri ' + current_browser_url, cb=cb)
-    logging.info('current url is %s', current_browser_url)
+    if url == current_browser_url and not force:
+        logging.debug('Already showing %s, reloading it.', current_browser_url)
+    else:
+        current_browser_url = url
+        browser_send('uri ' + current_browser_url, cb=cb)
+        logging.info('current url is %s', current_browser_url)
 
 
 def view_image(uri):
