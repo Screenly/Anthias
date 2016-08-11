@@ -63,6 +63,7 @@
     name: "{{ item }}"
     state: latest
   with_items:
+    - console-data
     - libffi-dev
     - libssl-dev
     - matchbox
