@@ -3,11 +3,13 @@
 
 # Screenly OSE - Digital Signage for the Raspberry Pi
 
-The tl;dr for installing Screenly OSE on [Raspbian](https://www.raspberrypi.org/downloads/raspbian/) Jessie/Wheezy is:
+The tl;dr for installing Screenly OSE on [Raspbian](https://www.raspberrypi.org/downloads/raspbian/) Jessie is:
 
 ```
 $ bash <(curl -sL https://www.screenlyapp.com/install-ose.sh)
 ```
+
+(The installation will take 15-20 minutes or so depending on your connectivity and the speed of your SD card.)
 
 To learn more about Screenly, please visit the official website at [ScreenlyApp.com](http://www.screenlyapp.com). On the official site, you'll find the complete installation instructions and disk images.
 
