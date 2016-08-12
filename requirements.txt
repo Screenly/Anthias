@@ -4,6 +4,7 @@ PyHAML==0.1.9
 ansible==2.1.0.0
 bottle-haml==0.1.4
 bottle==0.12.9
+cffi==1.7.0
 certifi==2015.04.28
 configparser==3.5.0
 gunicorn==19.4.5
