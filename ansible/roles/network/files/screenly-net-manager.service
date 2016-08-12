@@ -1,0 +1,9 @@
+[Unit]
+Description=Screenly Network Config Tool
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python /usr/sbin/screenly_net_mgr.py
+
+[Install]
+WantedBy=basic.target
