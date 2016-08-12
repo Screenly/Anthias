@@ -9,11 +9,10 @@
     - screenly_net_mgr.py
     - screenly_net_watchdog.py
 
-- name: Copies network manger init file
+- name: Copies network manager unit file
   copy:
     owner: root
     group: root
-    mode: 0755
     src: screenly-net-manager.service
     dest: /etc/systemd/system/screenly-net-manager.service
 
