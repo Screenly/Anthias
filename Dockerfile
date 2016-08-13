@@ -6,7 +6,6 @@ RUN apt-get update && \
     apt-get clean
 
 # Install Python requirements
-RUN pip install web.py
 ADD requirements.txt /tmp/requirements.txt
 RUN pip install --upgrade cffi
 RUN pip install -r /tmp/requirements.txt
