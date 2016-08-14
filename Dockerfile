@@ -15,10 +15,10 @@ RUN useradd pi
 # Install config file and file structure
 RUN mkdir -p /home/pi/.screenly /home/pi/screenly /home/pi/screenly_assets
 COPY ansible/roles/screenly/files/screenly.conf /home/pi/.screenly/screenly.conf
-RUN chown -R pi:pi /home/pi
 
 # Copy in code base
 COPY . /home/pi/screenly
+RUN chown -R pi:pi /home/pi
 
 USER pi
 WORKDIR /home/pi/screenly
