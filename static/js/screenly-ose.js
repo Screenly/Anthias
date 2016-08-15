@@ -249,6 +249,7 @@
         (this.$('#modalLabel')).text("Edit Asset");
         (this.$('.asset-location')).hide();
         (this.$('.asset-location.edit')).show();
+        (this.$('.mime-select')).prop('disabled', 'true');
       }
       (this.$('.duration')).toggle(true);
       if ((this.model.get('mimetype')) === 'webpage') {
