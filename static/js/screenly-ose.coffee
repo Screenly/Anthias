@@ -124,6 +124,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
       (@$ f).attr 'disabled', on for f in 'mimetype uri file_upload'.split ' '
       (@$ '#modalLabel').text "Edit Asset"
       (@$ '.asset-location').hide(); (@$ '.asset-location.edit').show()
+      (@$ '.mime-select').prop('disabled', 'true')
 
     (@$ '.duration').toggle (true)
     @clickTabNavUri() if (@model.get 'mimetype') == 'webpage'
