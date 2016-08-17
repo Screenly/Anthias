@@ -218,3 +218,9 @@ input[name="file_upload"] {
 .asset_row_btns { padding: 6px 8px 10px 8px !important; }
 .table td { vertical-align: middle !important; }
 .is_enabled-toggle { margin: 5px 0 5px 0 !important; }
+
+#subscribe-popover {
+    position: relative;
+    margin-top: -252px;
+    width: 250px;
+}
