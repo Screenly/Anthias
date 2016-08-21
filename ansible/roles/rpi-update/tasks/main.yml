@@ -11,12 +11,12 @@
 
 - name: Run kernel upgrade (this can take up to 10 minutes)
   command: /usr/bin/rpi-update
-  when: ansible_distribution_release == "wheezy"
   environment:
     SKIP_WARNING: 1
   register: rpiupdate
   tags:
     - system-upgrade
+  when: ansible_distribution_release == "wheezy"
 
 - debug: msg="{{ rpiupdate.stdout }}"
   when: ansible_distribution_release == "wheezy"

@@ -50,10 +50,8 @@
   lineinfile:
     line: 'listen = 127.0.0.1:8080'
     regexp: '^.*listen.*'
-    dest: /home/pi/.screenly/screenly.conf
+    dest: "/home/{{ screenly_user }}/.screenly/screenly.conf"
   notify:
     - restart-screenly-server
   tags:
     - enable-ssl
-
-

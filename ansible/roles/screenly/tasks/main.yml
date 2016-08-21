@@ -1,9 +1,9 @@
 - name: Ensure folders exist
   file:
-    path: "/home/pi/{{ item }}"
+    path: "/home/{{ screenly_user }}/{{ item }}"
     state: directory
-    owner: pi
-    group: pi
+    owner: "{{ screenly_user }}"
+    group: "{{ screenly_user }}"
   with_items:
     - .screenly
     - .config
@@ -11,52 +11,56 @@
 
 - name: Copy Screenly default config
   copy:
-    owner: pi
-    group: pi
+    owner: "{{ screenly_user }}"
+    group: "{{ screenly_user }}"
     src: screenly.conf
-    dest: /home/pi/.screenly/screenly.conf
+    dest: "/home/{{ screenly_user }}/.screenly/screenly.conf"
     force: no
 
 - name: Copy in GTK config
   copy:
-    owner: pi
-    group: pi
+    owner: "{{ screenly_user }}"
+    group: "{{ screenly_user }}"
     src: gtkrc-2.0
-    dest: /home/pi/.gtkrc-2.0
+    dest: "/home/{{ screenly_user }}/.gtkrc-2.0"
 
 - name: Copy in UZBL config
   copy:
-    owner: pi
-    group: pi
+    owner: "{{ screenly_user }}"
+    group: "{{ screenly_user }}"
     src: uzbl-config
-    dest: /home/pi/.config/uzbl/config-screenly
+    dest: /home/{{ screenly_user }}/.config/uzbl/config-screenly
 
 - name: Install pip dependencies
-  pip: requirements=/home/pi/screenly/requirements.txt
+  pip:
+    requirements: "/home/{{ screenly_user }}/screenly/requirements.txt"
 
 - name: Create default assets database if does not exists
   copy:
-    owner: pi
-    group: pi
+    owner: "{{ screenly_user }}"
+    group: "{{ screenly_user }}"
     src: screenly.db
-    dest: /home/pi/.screenly/screenly.db
+    dest: "/home/{{ screenly_user }}/.screenly/screenly.db"
     force: no
 
 - name: Run database migration
   become: no
-  command: python /home/pi/screenly/bin/migrate.py
+  command: python /home/{{ screenly_user }}/screenly/bin/migrate.py
   register: migrate
 
-- debug: msg="{{ migrate.stdout }}"
+- debug:
+  msg: "{{ migrate.stdout }}"
 
 - name: Copy screenly systemd units
-  copy:
+  template:
     src: "{{ item }}"
     dest: "/etc/systemd/system/{{ item }}"
   with_items: "{{ screenly_systemd_units }}"
 
 - name: Enable screenly systemd services
-  command: systemctl enable {{ item }} chdir=/etc/systemd/system
+  command: systemctl enable {{ item }}
+  args:
+    chdir: /etc/systemd/system
   with_items: "{{ screenly_systemd_units }}"
 
 - name: Restart services

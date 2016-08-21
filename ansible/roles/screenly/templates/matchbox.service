@@ -5,7 +5,7 @@ After=X.service
 [Service]
 Environment=DISPLAY=:0.0
 ExecStart=/usr/bin/matchbox-window-manager -use_titlebar no -use_cursor no
-User=pi
+User={{ screenly_user }}
 Restart=on-failure
 
 [Install]

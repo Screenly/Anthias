@@ -1,7 +1,9 @@
 - name: Install Screenly
   hosts: all
-  user: pi
   become: yes
+
+  vars:
+    - screenly_user: pi
 
   handlers:
     - name: restart-nginx
@@ -18,7 +20,7 @@
   roles:
     - system
     - network
-    - rpi-update
+    - { role: rpi-update, when: ansible_architecture == 'armv7l' or ansible_architecture == 'armv6l' }
     - screenly
     - splashscreen
     - ssl

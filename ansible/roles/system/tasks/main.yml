@@ -7,11 +7,19 @@
 #  with_items: "{{ ansible_mounts }}"
 
 
+# Naively assumes it's a raspi if it's an ARM
+- set_fact: is_raspi=true
+  when: ansible_architecture == 'armv7l' or ansible_architecture == 'armv6l'
+
+- set_fact: is_raspi=false
+  when: is_raspi is undefined
+
 # We need custom handling for BerryBoot as it lacks `/boot`.
 # To detect this, the image creates `/etc/berryboot`.
 - stat:
     path: /etc/berryboot
   register: berryboot
+  when: is_raspi
 
 - set_fact: is_berryboot="{{berryboot.stat.exists}}"
 
@@ -19,36 +27,38 @@
     msg: "Detected BerryBoot installation. Skipping some steps."
   when: is_berryboot
 
+#####
+
 - name: Make sure we have proper framebuffer depth
   lineinfile:
     dest: /boot/config.txt
     regexp: ^framebuffer_depth=
     line: framebuffer_depth=32
-  when: not is_berryboot
+  when: not is_berryboot and is_raspi
 
 - name: Fix framebuffer bug
   lineinfile:
     dest: /boot/config.txt
     regexp: ^framebuffer_ignore_alpha=
     line: framebuffer_ignore_alpha=1
-  when: not is_berryboot
+  when: not is_berryboot and is_raspi
 
 - name: Backup kernel boot args
   copy:
     src: /boot/cmdline.txt
     dest: /boot/cmdline.txt.orig
     force: no
-  when: not is_berryboot
+  when: not is_berryboot and is_raspi
 
 - debug:
     msg: "Use cmdline.txt.orig for boot parameters (don't remove this file)"
-  when: not is_berryboot
+  when: not is_berryboot and is_raspi
 
 - copy:
     src: /boot/cmdline.txt.orig
     dest: /boot/cmdline.txt
     force: yes
-  when: not is_berryboot
+  when: not is_berryboot and is_raspi
 
 - name: Use Systemd as init and quiet boot process
   lineinfile:
@@ -56,7 +66,7 @@
     regexp: (.*)
     backrefs: yes
     line: \1 quiet init=/lib/systemd/systemd
-  when: not is_berryboot
+  when: not is_berryboot and is_raspi
 
 - name: Install Screenly dependencies
   apt:
@@ -67,20 +77,28 @@
     - libffi-dev
     - libssl-dev
     - matchbox
-    - omxplayer
     - python-dev
     - python-netifaces
     - python-simplejson
-    - rpi-update
     - sqlite3
     - systemd
     - uzbl
     - x11-xserver-utils
     - xserver-xorg
 
+- name: Install Screenly dependencies (raspi)
+  apt:
+    name: "{{ item  }}"
+    state: latest
+  with_items:
+    - rpi-update
+    - omxplayer
+  when: is_raspi
+
+
 - name: Install systemd-sysv on Wheezy
   command: bash -c 'echo "Yes, do as I say!" | apt-get install -y --force-yes systemd-sysv'
-  when: ansible_distribution_release == "wheezy"
+  when: ansible_distribution_release == "wheezy" and is_raspi
 
 - name: Remove deprecated apt dependencies
   apt:
@@ -143,6 +161,7 @@
 
 - name: Disable swap
   command: /sbin/swapoff --all removes=/var/swap
+  when: is_raspi
 
 - name: Remove swapfile from disk
   file:
