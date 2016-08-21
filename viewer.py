@@ -201,7 +201,7 @@ def view_video(uri, duration):
         player_kwargs = {'o': settings['audio_output'], '_bg': True, '_ok_code': [0, 124]}
         player_kwargs['_ok_code'] = [0, 124]
     else:
-        player_args = ['mplayer', uri, '-nosound']
+        player_args = ['mplayer', '-fs', uri]
         player_kwargs = {'_bg': True}
 
     if duration and duration != 'N/A':
