@@ -20,7 +20,7 @@
   roles:
     - system
     - network
-    - { role: rpi-update, when: ansible_architecture == 'armv7l' or ansible_architecture == 'armv6l' }
+    - { role: rpi-update, when: is_raspi }
     - screenly
     - splashscreen
     - ssl

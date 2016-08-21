@@ -3,13 +3,13 @@ Description=Screenly Web UI
 After=network-online.target
 
 [Service]
-WorkingDirectory=/home/pi/screenly
-User=pi
-ExecStartPre=/usr/bin/python /home/pi/screenly/bin/wait.py
-ExecStart=/usr/bin/python /home/pi/screenly/server.py
+WorkingDirectory=/home/{{ screenly_user }}/screenly
+User={{ screenly_user }}
+ExecStartPre=/usr/bin/python /home/{{ screenly_user }}/screenly/bin/wait.py
+ExecStart=/usr/bin/python /home/{{ screenly_user }}/screenly/server.py
 Restart=always
 RestartSec=5
-Environment=PYTHONPATH=/home/pi/screenly
+Environment=PYTHONPATH=/home/{{ screenly_user }}/screenly
 
 [Install]
 WantedBy=multi-user.target
