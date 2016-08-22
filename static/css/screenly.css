@@ -191,3 +191,8 @@ input[name="file_upload"] {
 
 .is_enabled-toggle {
   margin: 5px 0 5px 0 !important; }
+
+#subscribe-popover {
+  position: relative;
+  margin-top: -252px;
+  width: 250px; }
