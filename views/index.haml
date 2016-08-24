@@ -188,6 +188,29 @@
             %input.btn.cancel(type="button", value="Cancel")
             %input.btn.btn-primary(type="submit", value="Save")
 
+    %script(type="text/template", id="subscribe-form-template")
+      %div#subscribe-popover.popover.top(style="display:block")
+        %div.arrow
+        %div.popover-content
+          %form.validate(action="//wireload.us1.list-manage.com/subscribe/post?u=adb4f752497b0d86b3b1b79d7&id=5c47388076", method="post", name="mc-embedded-subscribe-form", target="_blank", style="margin-bottom:5px")
+            .mc-field-group
+              %label(**{'for': 'mce-EMAIL'})
+                Email Address
+                %span.asterisk *
+              %input#mce-EMAIL.required.email(name="EMAIL", type="email", **{'required' : True})
+            .mc-field-group
+              %label(**{'for': 'mce-FNAME'}) First Name
+              %input#mce-FNAME(name="FNAME", type="text")
+            .mc-field-group
+              %label(**{'for': 'mce-LNAME'}) Last Name
+              %input#mce-LNAME(name="LNAME", type="text")
+
+            / real people should not fill this in and expect good things - do not remove this or risk form bot signups
+            %div(style="position absolute; left -5000px;", hidden="true")
+              %input(name="b_adb4f752497b0d86b3b1b79d7_5c47388076", tabindex="-1", type="text")
+
+            %input#mc-embedded-subscribe.button(class_="btn", name="subscribe", type="submit", value="Subscribe")
+
 
   %body
     #request-error.navbar.navbar-fixed-top
@@ -259,28 +282,7 @@
                 %a.brand(href="http://www.screenlyapp.com/?utm_source=Screenly-OSE&utm_medium=root-page&utm_campaign=OSE", target="_blank")
                   %strong Try Screenly Pro.
             .span6
-              %div#subscribe-popover.popover.top
-                %div.arrow
-                %div.popover-content
-                  %form.validate(action="//wireload.us1.list-manage.com/subscribe/post?u=adb4f752497b0d86b3b1b79d7&id=5c47388076", method="post", name="mc-embedded-subscribe-form", target="_blank", style="margin-bottom:5px")
-                    .mc-field-group
-                      %label(**{'for': 'mce-EMAIL'})
-                        Email Address
-                        %span.asterisk *
-                      %input#mce-EMAIL.required.email(name="EMAIL", type="email", **{'required' : True})
-                    .mc-field-group
-                      %label(**{'for': 'mce-FNAME'}) First Name
-                      %input#mce-FNAME(name="FNAME", type="text")
-                    .mc-field-group
-                      %label(**{'for': 'mce-LNAME'}) Last Name
-                      %input#mce-LNAME(name="LNAME", type="text")
-
-                    / real people should not fill this in and expect good things - do not remove this or risk form bot signups
-                    %div(style="position absolute; left -5000px;", hidden="true")
-                      %input(name="b_adb4f752497b0d86b3b1b79d7_5c47388076", tabindex="-1", type="text")
-
-                    %input#mc-embedded-subscribe.button(class_="btn", name="subscribe", type="submit", value="Subscribe")
-
+              %div#subsribe-form-container
               %span
                 %a
                   %strong#show-email-popover Get the latest Screenly news directly in your mailbox.

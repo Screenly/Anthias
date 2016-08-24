@@ -10,6 +10,25 @@
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
     __slice = [].slice;
 
+  $().ready(function() {
+    var popover_shown;
+    popover_shown = false;
+    window.onkeyup = function(event) {
+      if (event.keyCode === 27) {
+        return $('#subsribe-form-container').html('');
+      }
+    };
+    return $('#show-email-popover').click(function() {
+      if (popover_shown) {
+        $('#subsribe-form-container').html('');
+        return popover_shown = false;
+      } else {
+        $('#subsribe-form-container').html($('#subscribe-form-template').html());
+        return popover_shown = true;
+      }
+    });
+  });
+
   API = (window.Screenly || (window.Screenly = {}));
 
   date_settings_12hour = {

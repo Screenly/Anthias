@@ -1,12 +1,19 @@
 ### screenly-ose ui ###
 
-#$().ready ->
-#  window.onkeyup = (event) ->
-#    if event.keyCode == 27
-#      $('#subscribe-popover').popover().hide()
-#
-#  $('#show-email-popover').click ->
-#    $('#subscribe-popover').popover().toggle()
+$().ready ->
+  popover_shown = off
+
+  window.onkeyup = (event) ->
+    if event.keyCode == 27
+      $('#subsribe-form-container').html('')
+
+  $('#show-email-popover').click ->
+    if popover_shown
+        $('#subsribe-form-container').html('')
+        popover_shown = off
+    else
+        $('#subsribe-form-container').html($('#subscribe-form-template').html())
+        popover_shown = on
 
 API = (window.Screenly ||= {}) # exports
 
