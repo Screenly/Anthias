@@ -1,5 +1,13 @@
 ### screenly-ose ui ###
 
+#$().ready ->
+#  window.onkeyup = (event) ->
+#    if event.keyCode == 27
+#      $('#subscribe-popover').popover().hide()
+#
+#  $('#show-email-popover').click ->
+#    $('#subscribe-popover').popover().toggle()
+
 API = (window.Screenly ||= {}) # exports
 
 date_settings_12hour =
