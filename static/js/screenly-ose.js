@@ -15,7 +15,8 @@
     popover_shown = false;
     window.onkeyup = function(event) {
       if (event.keyCode === 27) {
-        return $('#subsribe-form-container').html('');
+        $('#subsribe-form-container').html('');
+        return popover_shown = false;
       }
     };
     return $('#show-email-popover').click(function() {

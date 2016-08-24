@@ -6,6 +6,7 @@ $().ready ->
   window.onkeyup = (event) ->
     if event.keyCode == 27
       $('#subsribe-form-container').html('')
+      popover_shown = off
 
   $('#show-email-popover').click ->
     if popover_shown
