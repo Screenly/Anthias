@@ -197,7 +197,7 @@ def load_browser(url=None):
     if not url is None:
         current_browser_url = url
 
-    browser = sh.Command('uzbl-browser')(print_events=True, config='-', uri=current_browser_url, _bg=True)
+    browser = sh.Command('uzbl-browser')(current_browser_url, print_events=True, config='-', _bg=True)
     logging.info('Browser loading %s. Running as PID %s.', current_browser_url, browser.pid)
 
     uzbl_rc = 'ssl_verify {}\n'.format('1' if settings['verify_ssl'] else '0')
