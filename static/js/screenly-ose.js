@@ -11,22 +11,35 @@
     __slice = [].slice;
 
   $().ready(function() {
-    var popover_shown;
+    var hide_popover, popover_shown, show_popover;
     popover_shown = false;
-    window.onkeyup = function(event) {
-      if (event.keyCode === 27) {
-        $('#subsribe-form-container').html('');
-        return popover_shown = false;
-      }
+    hide_popover = function() {
+      $('#subsribe-form-container').html('');
+      popover_shown = false;
+      $(window).off('keyup.email_popover');
+      return $(window).off('click.email_popover');
+    };
+    show_popover = function() {
+      $('#subsribe-form-container').html($('#subscribe-form-template').html());
+      popover_shown = true;
+      $(window).on('keyup.email_popover', function(event) {
+        if (event.keyCode === 27) {
+          return hide_popover();
+        }
+      });
+      return $(window).on('click.email_popover', function(event) {
+        var pop;
+        pop = document.getElementById('subscribe-popover');
+        if (!$.contains(pop, event.target)) {
+          return hide_popover();
+        }
+      });
     };
     return $('#show-email-popover').click(function() {
-      if (popover_shown) {
-        $('#subsribe-form-container').html('');
-        return popover_shown = false;
-      } else {
-        $('#subsribe-form-container').html($('#subscribe-form-template').html());
-        return popover_shown = true;
+      if (!popover_shown) {
+        show_popover();
       }
+      return false;
     });
   });
 

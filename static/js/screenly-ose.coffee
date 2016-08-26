@@ -3,18 +3,28 @@
 $().ready ->
   popover_shown = off
 
-  window.onkeyup = (event) ->
-    if event.keyCode == 27
-      $('#subsribe-form-container').html('')
-      popover_shown = off
+  hide_popover = ->
+    $('#subsribe-form-container').html('')
+    popover_shown = off
+    $(window).off('keyup.email_popover')
+    $(window).off('click.email_popover')
+
+  show_popover = ->
+    $('#subsribe-form-container').html($('#subscribe-form-template').html())
+    popover_shown = on
+
+    $(window).on 'keyup.email_popover', (event) ->
+      if event.keyCode == 27
+        hide_popover()
+
+    $(window).on 'click.email_popover', (event) ->
+      pop = document.getElementById('subscribe-popover')
+      if !$.contains(pop, event.target)
+        hide_popover()
 
   $('#show-email-popover').click ->
-    if popover_shown
-        $('#subsribe-form-container').html('')
-        popover_shown = off
-    else
-        $('#subsribe-form-container').html($('#subscribe-form-template').html())
-        popover_shown = on
+    if !popover_shown then show_popover()
+    off
 
 API = (window.Screenly ||= {}) # exports
 
