@@ -6,17 +6,17 @@
 The tl;dr for installing Screenly OSE on [Raspbian](https://www.raspberrypi.org/downloads/raspbian/) Jessie is:
 
 ```
-$ bash <(curl -sL https://www.screenlyapp.com/install-ose.sh)
+$ bash <(curl -sL https://www.screenly.io/install-ose.sh)
 ```
 
 (The installation will take 15-20 minutes or so depending on your connectivity and the speed of your SD card.)
 
-To learn more about Screenly, please visit the official website at [ScreenlyApp.com](http://www.screenlyapp.com). On the official site, you'll find the complete installation instructions and disk images.
+To learn more about Screenly, please visit the official website at [Screenly.io](http://www.screenly.io). On the official site, you'll find the complete installation instructions and disk images.
 
 Quick links:
 
- * [FAQ](https://www.screenlyapp.com/faq/ose/)
- * [Screenly OSE Home](https://www.screenlyapp.com/ose/)
+ * [FAQ](https://www.screenly.io/faq/ose/)
+ * [Screenly OSE Home](https://www.screenly.io/ose/)
  * [Live Demo](http://ose.demo.screenlyapp.com/)
  * [QA Checklist](https://www.forgett.com/checklist/1789089623)
 
