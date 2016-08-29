@@ -10,6 +10,7 @@ from functools import wraps
 from hurry.filesize import size
 from os import path, makedirs, statvfs, mkdir, getenv
 from sh import git
+import sh
 from subprocess import check_output
 import json
 import os
@@ -280,8 +281,11 @@ def settings_page():
             settings[field] = value
         try:
             settings.save()
+            sh.systemctl('kill', '--signal=SIGUSR2', 'screenly-viewer.service')
             context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
         except IOError as e:
+            context['flash'] = {'class': "error", 'message': e}
+        except sh.ErrorReturnCode_1 as e:
             context['flash'] = {'class': "error", 'message': e}
     else:
         settings.load()
