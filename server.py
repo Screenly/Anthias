@@ -281,7 +281,7 @@ def settings_page():
             settings[field] = value
         try:
             settings.save()
-            sh.systemctl('kill', '--signal=SIGUSR2', 'screenly-viewer.service')
+            sh.sudo('systemctl','kill', '--signal=SIGUSR2', 'screenly-viewer.service')
             context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
         except IOError as e:
             context['flash'] = {'class': "error", 'message': e}
