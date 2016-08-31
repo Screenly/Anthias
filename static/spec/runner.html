@@ -36,14 +36,7 @@
       var trivialReporter = new jasmine.TrivialReporter();
 
       jasmineEnv.addReporter(trivialReporter);
-
-      var options = {
-         print: function () {
-            console.log
-         }
-      };
-
-      jasmineEnv.addReporter(new jasmine.ConsoleReporter(options));
+      jasmineEnv.addReporter(new jasmine.ConsoleReporter());
 
       jasmineEnv.specFilter = function(spec) {
         return trivialReporter.specFilter(spec);
