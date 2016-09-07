@@ -16,6 +16,20 @@
     src: screenly-net-manager.service
     dest: /etc/systemd/system/screenly-net-manager.service
 
+- name: Copies network watchdog service file
+  copy:
+    owner: root
+    group: root
+    src: screenly-net-watchdog.service
+    dest: /etc/systemd/system/screenly-net-watchdog.service
+
+- name: Copies network watchdog timer file
+  copy:
+    owner: root
+    group: root
+    src: screenly-net-watchdog.timer
+    dest: /etc/systemd/system/screenly-net-watchdog.timer
+
 - name: Copies in sample network.ini file
   copy:
     owner: root
@@ -26,6 +40,9 @@
 
 - name: Activate network manager
   command: systemctl enable screenly-net-manager.service chdir=/etc/systemd/system
+
+- name: Activate network watchdog
+  command: systemctl enable screenly-net-watchdog.timer chdir=/etc/systemd/system
 
 - name: Install cronjob for watchdog
   cron:
