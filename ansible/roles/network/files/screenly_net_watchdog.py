@@ -7,11 +7,13 @@ import requests
 import sh
 import socket
 import sys
-import syslog
 import time
+import logging
 
 NETWORK_PATH = '/boot/network.ini'
-LOCKFILE = '/tmp/net_watchdog.lock'
+
+logging.basicConfig(level=logging.INFO,
+                    format='%(message)s')
 
 
 def get_default_gw():
@@ -24,7 +26,7 @@ def ping_test(host):
     packet_loss = re.findall(r'(\d+)% packet loss', ping.stdout)[0]
 
     if int(packet_loss) > 60:
-        syslog.syslog(syslog.LOG_ERR, 'Unable to ping gateway.')
+        logging.error('Unable to ping gateway.')
         return False
     else:
         return True
@@ -35,12 +37,12 @@ def http_test(host):
     if 200 <= r.status_code < 400:
         return True
     else:
-        syslog.syslog(syslog.LOG_ERR, 'Unable to reach Screenly.')
+        logging.error('Unable to reach Screenly.')
         return False
 
 
 def restart_interface(interface):
-    syslog.syslog('Restarting network interface.')
+    logging.info('Restarting network interface.')
 
     ifdown = sh.Command('/sbin/ifdown')
     ifdown('--force', interface)
@@ -56,27 +58,6 @@ def is_static(config, interface):
     return ip and netmask and gateway
 
 
-def get_lock():
-    if os.path.isfile(LOCKFILE):
-
-        # Stale lock file
-        stale_timestamp = time.time() - 60 * 30
-        if os.stat(LOCKFILE).st_mtime < stale_timestamp:
-            os.remove(LOCKFILE)
-        else:
-            return False
-
-    with open(LOCKFILE, 'w') as f:
-        pid = str(os.getpid())
-        f.write(pid)
-        return True
-
-
-def release_lock():
-    os.remove(LOCKFILE)
-    return True
-
-
 def bring_up_interface(interface):
     retry_limit = 10
     retries = 0
@@ -87,7 +68,7 @@ def bring_up_interface(interface):
         else:
             retries += 1
             time.sleep(15)
-    syslog.syslog(syslog.LOG_ERR, 'Unable to bring up network interface.')
+    logging.error('Unable to bring up network interface.')
     return False
 
 
@@ -98,7 +79,7 @@ def has_ip(interface):
     try:
         ips = netifaces.ifaddresses(interface)
     except ValueError:
-        syslog.syslog(syslog.LOG_ERR, 'Interface does not exist.')
+        logging.error('Interface does not exist.')
         return False
     for k in ips.keys():
         ip = ips[k][0].get('addr', False)
@@ -120,12 +101,7 @@ def get_active_iface(config, prefix):
 
 
 if __name__ == '__main__':
-
-    syslog.syslog('Starting net_watchdog.')
-
-    if not get_lock():
-        syslog.syslog('Lockfile exist. Exiting.')
-        sys.exit(1)
+    logging.info('Starting net_watchdog.')
 
     config = configparser.ConfigParser()
     config.read(NETWORK_PATH)
@@ -136,7 +112,7 @@ if __name__ == '__main__':
     reaches_internet = None
 
     if wifi_iface:
-        syslog.syslog('Found wifi interface {}'.format(wifi_iface))
+        logging.info('Found wifi interface {}'.format(wifi_iface))
         wifi_is_static = is_static(config, wifi_iface)
         wifi_is_healthy = None
 
@@ -156,11 +132,6 @@ if __name__ == '__main__':
             can_ping_gw = ping_test(get_default_gw())
 
         if reaches_internet or can_ping_gw:
-            syslog.syslog('WiFi interface is healthy.')
+            logging.info('WiFi interface is healthy.')
         else:
-            syslog.syslog(
-                syslog.LOG_ERR,
-                'Unable to connect to internet or gateway.'
-            )
-
-    release_lock()
+            logging.error('Unable to connect to internet or gateway.')
