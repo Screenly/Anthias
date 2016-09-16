@@ -19,6 +19,7 @@ script:
   - nosetests -v -a '!fixme' --with-isolation
   - ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml
   - python -m SimpleHTTPServer 8080 &
-  - phantomjs static/spec/phantom-runner.js
+  - sleep 3
+  - bash static/spec/runner.sh
 
 sudo: false
