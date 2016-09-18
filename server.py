@@ -379,5 +379,5 @@ if __name__ == "__main__":
             host=settings.get_listen_ip(),
             port=settings.get_listen_port(),
             server='gunicorn',
-            timeout=240,
+            timeout=600,
         )
