@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-for i in {1..10}
-do
+for i in {1..10}; do
     timeout 7 phantomjs static/spec/phantom-runner.js
     last=$?
-    if [[ "$last" -ne "124" ]]
-        then exit $last
+    if [[ "$last" -ne "124" ]]; then
+        exit $last
     fi
-    echo "timeout: retry"
+    echo "Timeout reach. Retrying."
 done
 
-echo 'max retries reached. fail!'
+echo "Max retries reached."
 exit 1
