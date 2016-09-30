@@ -9,6 +9,9 @@ from datetime import timedelta
 from settings import settings
 from datetime import datetime
 import pytz
+from platform import machine
+
+arch = machine()
 
 HTTP_OK = xrange(200, 299)
 
@@ -17,6 +20,12 @@ HTTP_OK = xrange(200, 299)
 # Travis can run.
 try:
     from sh import omxplayer
+except:
+    pass
+
+# This will work on x86-based machines
+try:
+    from sh import mplayer
 except:
     pass
 
@@ -62,18 +71,25 @@ def get_video_duration(file):
     """
     time = None
     try:
-        run_omxplayer = omxplayer(file, info=True, _err_to_out=True)
-        for line in run_omxplayer.split('\n'):
-            if 'Duration' in line:
-                match = re.search(r'[0-9]+:[0-9]+:[0-9]+\.[0-9]+', line)
-                if match:
-                    time_input = match.group()
-                    time_split = time_input.split(':')
-                    hours = int(time_split[0])
-                    minutes = int(time_split[1])
-                    seconds = float(time_split[2])
-                    time = timedelta(hours=hours, minutes=minutes, seconds=seconds)
-                break
+        if arch in ('armv6l', 'armv7l'):
+            run_omxplayer = omxplayer(file, info=True, _err_to_out=True)
+            for line in run_omxplayer.split('\n'):
+                if 'Duration' in line:
+                    match = re.search(r'[0-9]+:[0-9]+:[0-9]+\.[0-9]+', line)
+                    if match:
+                        time_input = match.group()
+                        time_split = time_input.split(':')
+                        hours = int(time_split[0])
+                        minutes = int(time_split[1])
+                        seconds = float(time_split[2])
+                        time = timedelta(hours=hours, minutes=minutes, seconds=seconds)
+                    break
+        else:
+            run_mplayer = mplayer('-identify', '-frames', '0', '-nosound', file)
+            for line in run_mplayer.split('\n'):
+                if 'ID_LENGTH=' in line:
+                    time = timedelta(seconds=int(round(float(line.split('=')[1]))))
+                    break
     except:
         pass
 

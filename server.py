@@ -297,7 +297,11 @@ def settings_page():
 
 @route('/system_info')
 def system_info():
-    viewlog = check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')
+    viewlog = None
+    try:
+        viewlog = check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')
+    except:
+        pass
 
     loadavg = diagnostics.get_load_avg()['15 min']
 
