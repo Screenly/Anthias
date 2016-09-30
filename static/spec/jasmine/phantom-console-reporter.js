@@ -42,7 +42,7 @@
             this.finished = true;
 
             if(window.inPhantom)
-                confirm(failed)
+                confirm(failed === 0 ? 0 : 1)
         },
 
         hasGroupedConsole: function() {
