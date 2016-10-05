@@ -119,7 +119,7 @@ model:
 
 This route deletes asset with :asset_id
 
-## POST /api/order
+## POST /api/assets/order
 
 Content-Type: application/x-www-form-urlencoded
 ```
