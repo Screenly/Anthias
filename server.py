@@ -374,15 +374,15 @@ if __name__ == "__main__":
         makedirs(settings.get_configdir())
 
     with db.conn(settings['database']) as conn:
-        with db.cursor(conn) as c:
-            c.execute(queries.exists_table)
-            if c.fetchone() is None:
-                c.execute(assets_helper.create_assets_table)
+        with db.cursor(conn) as cursor:
+            cursor.execute(queries.exists_table)
+            if cursor.fetchone() is None:
+                cursor.execute(assets_helper.create_assets_table)
 
     run(
         host=settings.get_listen_ip(),
         port=settings.get_listen_port(),
         server='gunicorn',
         threads=2,
-        timeout=2,
+        timeout=20,
     )
