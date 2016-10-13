@@ -17,7 +17,7 @@ import os
 import traceback
 import uuid
 
-from bottle import route, run, request, error, static_file, response
+from bottle import route, run, request, error, static_file, response, auth_basic
 from bottle import HTTPResponse
 from bottlehaml import haml_template
 
