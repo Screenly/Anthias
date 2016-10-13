@@ -119,7 +119,7 @@ class ScreenlySettings(IterableUserDict):
     def get_listen_port(self):
         return self['listen'].split(':')[1]
 
-    def check_user(self,user,pswd):
+    def check_user(self, user, pswd):
         try:
             au = self['user']
             pw = self['password']
@@ -130,7 +130,7 @@ class ScreenlySettings(IterableUserDict):
             ret = au == user and pw == pswd
             logging.info("check_user() is returning %s" % ret)
             return ret
-        except :
+        except:
             e = sys.exc_info()[0]
             logging.info("check_user could not find a user " + str(e))
             return True
