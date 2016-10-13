@@ -105,6 +105,7 @@ def template(template_name, **context):
 def check(user, passwd):
     return settings.check_user(user, passwd)
 
+
 ################################
 # API
 ################################
