@@ -111,7 +111,7 @@ class WebTest(unittest.TestCase):
             self.assertEqual(asset['duration'], u'333')
 
     def test_add_asset_image_upload(self):
-        image_file = '/tmp/image.jpg'
+        image_file = '/tmp/image.png'
 
         with Browser() as browser:
             browser.visit('http://localhost:8080')
@@ -136,7 +136,7 @@ class WebTest(unittest.TestCase):
             self.assertEqual(len(assets), 1)
             asset = assets[0]
 
-            self.assertEqual(asset['name'], u'image.jpg')
+            self.assertEqual(asset['name'], u'image.png')
             self.assertEqual(asset['mimetype'], u'image')
             self.assertEqual(asset['duration'], u'30')
 
