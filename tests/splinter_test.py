@@ -71,7 +71,7 @@ class WebTest(unittest.TestCase):
             sleep(1)
 
             wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
-            sleep(2)  # backend need time to process request
+            sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
@@ -100,7 +100,7 @@ class WebTest(unittest.TestCase):
             sleep(1)
 
             wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
-            sleep(2)  # backend need time to process request
+            sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
@@ -128,7 +128,7 @@ class WebTest(unittest.TestCase):
             sleep(1)
 
             wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
-            sleep(2)  # backend need time to process request
+            sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
@@ -157,7 +157,7 @@ class WebTest(unittest.TestCase):
             sleep(1)
 
             wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
-            sleep(2)  # backend need time to process request
+            sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
@@ -178,7 +178,7 @@ class WebTest(unittest.TestCase):
 
             wait_for_and_do(browser, '.delete-asset-button', lambda btn: btn.click())
             wait_for_and_do(browser, '.confirm-delete', lambda btn: btn.click())
-            sleep(2)  # backend need time to process request
+            sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
@@ -191,7 +191,7 @@ class WebTest(unittest.TestCase):
         with Browser() as browser:
             browser.visit('http://localhost:8080')
             wait_for_and_do(browser, 'span[class="on"]', lambda btn: btn.click())
-            sleep(2)  # backend need time to process request
+            sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
@@ -210,7 +210,7 @@ class WebTest(unittest.TestCase):
             browser.visit('http://localhost:8080')
 
             wait_for_and_do(browser, 'span[class="off"]', lambda btn: btn.click())
-            sleep(2)  # backend need time to process request
+            sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
@@ -234,7 +234,7 @@ class WebTest(unittest.TestCase):
 
             asset_y_to_reorder = browser.find_by_id(asset_y['asset_id'])
             asset_x_for_drag.drag_and_drop(asset_y_to_reorder)
-            sleep(2)  # backend need time to process request
+            sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
             x = assets_helper.read(conn, asset_x['asset_id'])
