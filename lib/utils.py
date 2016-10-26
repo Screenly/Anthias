@@ -24,10 +24,11 @@ except:
     pass
 
 # This will work on x86-based machines
-try:
-    from sh import mplayer
-except:
-    pass
+if machine() in ['x86', 'x86_64']:
+    try:
+        from sh import mplayer
+    except:
+        pass
 
 
 def validate_url(string):
