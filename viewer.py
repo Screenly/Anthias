@@ -116,11 +116,11 @@ class Scheduler(object):
             return 0
 
 
-"""
-    1. map assets to deadlines with rule: if asset is active then 'end_date' else 'start_date'
-    2. get nearest deadline
-"""
 def generate_asset_list():
+    """
+        1. map assets to deadlines with rule: if asset is active then 'end_date' else 'start_date'
+        2. get nearest deadline
+    """
     logging.info('Generating asset-list...')
     assets = assets_helper.read(db_conn)
     deadlines = [asset['end_date'] if assets_helper.is_active(asset) else asset['start_date'] for asset in assets]
