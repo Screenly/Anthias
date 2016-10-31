@@ -112,11 +112,11 @@ class SchedulerTest(unittest.TestCase):
         _, deadline = viewer.generate_asset_list()
         self.assertEqual(deadline, asset_y['end_date'])
 
-    """
-        if asset_x is active with end_date = (now + 3) and asset_tomorrow will be active tomorrow then
-        deadline should be (now + 1) as asset_tomorrow[start_date]
-    """
     def test_generate_asset_list_check_deadline_if_asset_scheduled(self):
+        """
+            if asset_x is active with end_date = (now + 3) and asset_tomorrow will be active tomorrow then
+            deadline should be (now + 1) as asset_tomorrow[start_date]
+        """
         assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_tomorrow])
         _, deadline = viewer.generate_asset_list()
         self.assertEqual(deadline, asset_tomorrow['start_date'])
