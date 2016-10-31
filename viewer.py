@@ -116,10 +116,17 @@ class Scheduler(object):
             return 0
 
 
+"""
+    1. map assets to deadlines with rule: if asset is active then 'end_date' else 'start_date'
+    2. get nearest deadline
+"""
 def generate_asset_list():
     logging.info('Generating asset-list...')
-    playlist = assets_helper.get_playlist(db_conn)
-    deadline = sorted([asset['end_date'] for asset in playlist])[0] if len(playlist) > 0 else None
+    assets = assets_helper.read(db_conn)
+    deadlines = [asset['end_date'] if assets_helper.is_active(asset) else asset['start_date'] for asset in assets]
+
+    playlist = filter(assets_helper.is_active, assets)
+    deadline = sorted(deadlines)[0] if len(deadlines) > 0 else None
     logging.debug('generate_asset_list deadline: %s', deadline)
 
     if settings['shuffle_playlist']:
