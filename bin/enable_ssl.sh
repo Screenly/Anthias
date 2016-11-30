@@ -1,7 +1,6 @@
 #!/bin/bash -ex
 
 cd ~/screenly/ansible
-sudo apt-get update
 ansible-playbook -t enable-ssl site.yml
 
 set +x

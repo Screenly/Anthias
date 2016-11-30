@@ -3,6 +3,7 @@
   apt:
     name: nginx-light
     state: present
+    update_cache: yes
   tags:
     - enable-ssl
 
