@@ -16,7 +16,7 @@
 ; If you want to configure your WLAN with DHCP,
 ; the configuration would look something like this.
 ; Read more here:
-; https://www.screenlyapp.com/faq/pro/#wifi_support
+; https://support.screenly.io/hc/en-us/articles/212107126-Can-I-use-a-WiFi-adapter-with-Screenly-Pro-
 
 ;[wlan0]
 ;ssid=NameOfYourNetwork
