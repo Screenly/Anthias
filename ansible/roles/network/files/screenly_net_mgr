@@ -1,3 +1,4 @@
+#!/bin/bash
 ### BEGIN INIT INFO
 # Provides:          screenly_net_cfg
 # Required-Start:    $local_fs
