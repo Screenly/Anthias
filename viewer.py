@@ -191,7 +191,12 @@ def browser_url(url, cb=lambda _: True, force=False):
         logging.debug('Already showing %s, reloading it.', current_browser_url)
     else:
         current_browser_url = url
-        browser_send('uri ' + current_browser_url, cb=cb)
+
+        """Uzbl handles full URI format incorrect: scheme://uname:passwd@domain:port/path
+        We need to escape @"""
+        escaped_url = current_browser_url.replace('@', '\\@')
+
+        browser_send('uri ' + escaped_url, cb=cb)
         logging.info('current url is %s', current_browser_url)
 
 
