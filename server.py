@@ -17,7 +17,7 @@ import os
 import traceback
 import uuid
 
-from bottle import route, run, request, error, static_file, response
+from bottle import route, run, request, error, static_file, response, auth_basic
 from bottle import HTTPResponse
 from bottlehaml import haml_template
 
@@ -101,6 +101,9 @@ def template(template_name, **context):
 ################################
 # Model
 ################################
+
+def check(user, passwd):
+    return settings.check_user(user, passwd)
 
 
 ################################
@@ -199,6 +202,7 @@ def prepare_asset(request):
 
 
 @route('/api/assets', method="GET")
+@auth_basic(check)
 def api_assets():
     with db.conn(settings['database']) as conn:
         assets = assets_helper.read(conn)
@@ -220,6 +224,7 @@ def api(view):
 
 
 @route('/api/assets', method="POST")
+@auth_basic(check)
 @api
 def add_asset():
     asset = prepare_asset(request)
@@ -230,6 +235,7 @@ def add_asset():
 
 
 @route('/api/assets/:asset_id', method="GET")
+@auth_basic(check)
 @api
 def edit_asset(asset_id):
     with db.conn(settings['database']) as conn:
@@ -237,6 +243,7 @@ def edit_asset(asset_id):
 
 
 @route('/api/assets/:asset_id', method=["PUT", "POST"])
+@auth_basic(check)
 @api
 def edit_asset(asset_id):
     with db.conn(settings['database']) as conn:
@@ -244,6 +251,7 @@ def edit_asset(asset_id):
 
 
 @route('/api/assets/:asset_id', method="DELETE")
+@auth_basic(check)
 @api
 def remove_asset(asset_id):
     with db.conn(settings['database']) as conn:
@@ -258,6 +266,7 @@ def remove_asset(asset_id):
 
 
 @route('/api/assets/order', method="POST")
+@auth_basic(check)
 @api
 def playlist_order():
     with db.conn(settings['database']) as conn:
@@ -270,11 +279,13 @@ def playlist_order():
 
 
 @route('/')
+@auth_basic(check)
 def viewIndex():
     return template('index')
 
 
 @route('/settings', method=["GET", "POST"])
+@auth_basic(check)
 def settings_page():
 
     context = {'flash': None}
@@ -302,6 +313,7 @@ def settings_page():
 
 
 @route('/system_info')
+@auth_basic(check)
 def system_info():
     viewlog = None
     try:
