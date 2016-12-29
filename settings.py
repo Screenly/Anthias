@@ -2,7 +2,7 @@
 # -*- coding: utf8 -*-
 
 from os import path, getenv
-from sys import exit, exc_info
+from sys import exit
 import ConfigParser
 import logging
 from UserDict import IterableUserDict
@@ -119,20 +119,12 @@ class ScreenlySettings(IterableUserDict):
     def get_listen_port(self):
         return self['listen'].split(':')[1]
 
-    def check_user(self, user, pswd):
-        try:
-            au = self['user']
-            pw = self['password']
-            logging.info("check_user(" + user + "," + pswd + "), looking for (" + au + "," + pw + ")")
-            if au == "" and pw == "":
-                logging.info("check_user() requires no password")
-                return True
-            ret = au == user and pw == pswd
-            logging.info("check_user() is returning %s" % ret)
-            return ret
-        except:
-            e = sys.exc_info()[0]
-            logging.info("check_user could not find a user " + str(e))
+    def check_user(self, user, password):
+        if not self['user'] or not self['password']:
+            logging.debug('Username or password not configured: skip authentication')
             return True
+
+        return self['user'] == user and self['password'] == password
+
 
 settings = ScreenlySettings()
