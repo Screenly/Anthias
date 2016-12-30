@@ -33,6 +33,10 @@ asset_y = {
     'play_order': 0,
 }
 
+main_page_url = 'http://foo:bar@localhost:8080'
+settings_url = 'http://foo:bar@localhost:8080/settings'
+system_info_url = 'http://foo:bar@localhost:8080/system_info'
+
 
 def wait_for_and_do(browser, query, callback):
     not_filled = True
@@ -60,7 +64,7 @@ class WebTest(unittest.TestCase):
 
     def test_add_asset_url(self):
         with Browser() as browser:
-            browser.visit('http://localhost:8080')
+            browser.visit(main_page_url)
 
             wait_for_and_do(browser, '#add-asset-button', lambda btn: btn.click())
             sleep(1)
@@ -89,7 +93,7 @@ class WebTest(unittest.TestCase):
             assets_helper.create(conn, asset_x)
 
         with Browser() as browser:
-            browser.visit('http://localhost:8080')
+            browser.visit(main_page_url)
             wait_for_and_do(browser, '.edit-asset-button', lambda btn: btn.click())
             sleep(1)
 
@@ -114,7 +118,7 @@ class WebTest(unittest.TestCase):
         image_file = '/tmp/image.png'
 
         with Browser() as browser:
-            browser.visit('http://localhost:8080')
+            browser.visit(main_page_url)
 
             browser.find_by_id('add-asset-button').click()
             sleep(1)
@@ -144,7 +148,7 @@ class WebTest(unittest.TestCase):
         video_file = '/tmp/video.mov'
 
         with Browser() as browser:
-            browser.visit('http://localhost:8080')
+            browser.visit(main_page_url)
 
             browser.find_by_id('add-asset-button').click()
             sleep(1)
@@ -174,7 +178,7 @@ class WebTest(unittest.TestCase):
             assets_helper.create(conn, asset_x)
 
         with Browser() as browser:
-            browser.visit('http://localhost:8080')
+            browser.visit(main_page_url)
 
             wait_for_and_do(browser, '.delete-asset-button', lambda btn: btn.click())
             wait_for_and_do(browser, '.confirm-delete', lambda btn: btn.click())
@@ -189,7 +193,7 @@ class WebTest(unittest.TestCase):
             assets_helper.create(conn, asset_x)
 
         with Browser() as browser:
-            browser.visit('http://localhost:8080')
+            browser.visit(main_page_url)
             wait_for_and_do(browser, 'span[class="on"]', lambda btn: btn.click())
             sleep(3)  # backend need time to process request
 
@@ -207,7 +211,7 @@ class WebTest(unittest.TestCase):
             assets_helper.create(conn, _asset_x)
 
         with Browser() as browser:
-            browser.visit('http://localhost:8080')
+            browser.visit(main_page_url)
 
             wait_for_and_do(browser, 'span[class="off"]', lambda btn: btn.click())
             sleep(3)  # backend need time to process request
@@ -227,7 +231,7 @@ class WebTest(unittest.TestCase):
             assets_helper.create(conn, asset_y)
 
         with Browser() as browser:
-            browser.visit('http://localhost:8080')
+            browser.visit(main_page_url)
 
             asset_x_for_drag = browser.find_by_id(asset_x['asset_id'])
             sleep(1)
@@ -245,12 +249,12 @@ class WebTest(unittest.TestCase):
 
     def test_settings_page_should_work(self):
         with Browser() as browser:
-            browser.visit('http://localhost:8080/settings')
+            browser.visit(settings_url)
             self.assertEqual(browser.is_text_present('Error: 500 Internal Server Error'), False,
                              '500: internal server error not expected')
 
     def test_system_info_page_should_work(self):
         with Browser() as browser:
-            browser.visit('http://localhost:8080/system_info')
+            browser.visit(system_info_url)
             self.assertEqual(browser.is_text_present('Error: 500 Internal Server Error'), False,
                              '500: internal server error not expected')
