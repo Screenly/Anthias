@@ -6,6 +6,7 @@ from sys import exit
 import ConfigParser
 import logging
 from UserDict import IterableUserDict
+import bottle
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -128,3 +129,7 @@ class ScreenlySettings(IterableUserDict):
 
 
 settings = ScreenlySettings()
+
+
+def auth_basic(orig):
+    return orig if not settings['user'] or not settings['password'] else bottle.auth_basic(settings.check_user)(orig)
