@@ -26,7 +26,8 @@ def if_config(
         gateway=None,
         interface=None,
         ssid=None,
-        passphrase=None
+        passphrase=None,
+        hidden_ssid=False,
 ):
     if not interface:
         raise ValueError
@@ -46,7 +47,7 @@ auto {}
 auto {}
   iface {} inet dhcp""".format(interface, interface)
 
-    # If wifi configuration
+    # If WiFi configuration
     if 'wlan' in interface:
         interface_stanza += '\n  wireless-power off'
 
@@ -54,6 +55,9 @@ auto {}
             interface_stanza += '\n  wpa-ssid "{}"'.format(ssid)
         if passphrase:
             interface_stanza += '\n  wpa-psk "{}"'.format(passphrase)
+        if hidden_ssid:
+            if str(hidden_ssid).lower() in ['true', 'yes', 'on', '1']:
+                interface_stanza += '\n  wpa-ap-scan 1\n  wpa-scan-ssid 1'
 
     # Make sure we end with a newline
     interface_stanza += '\n'
@@ -211,12 +215,14 @@ def main():
         wifi_dhcp = is_dhcp(config, wifi)
         ssid = lookup(config, wifi, 'ssid')
         passphrase = lookup(config, wifi, 'passphrase') if config.has_option(wifi, 'passphrase') else None
+        hidden_ssid = lookup(config, wifi, 'hidden_ssid') if config.has_option(wifi, 'hidden_ssid') else False
 
         if wifi_dhcp:
             interfaces += if_config(
                 interface=wifi,
                 ssid=ssid,
-                passphrase=passphrase
+                passphrase=passphrase,
+                hidden_ssid=hidden_ssid,
             )
         else:
             wifi_ip = lookup(config, wifi, 'ip')
@@ -229,7 +235,8 @@ def main():
                 netmask=wifi_netmask,
                 gateway=wifi_gateway,
                 ssid=ssid,
-                passphrase=passphrase
+                passphrase=passphrase,
+                hidden_ssid=hidden_ssid,
             )
 
     write_file(INTERFACES_PATH, interfaces)

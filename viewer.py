@@ -117,9 +117,16 @@ class Scheduler(object):
 
 
 def generate_asset_list():
+    """Choose deadline via:
+        1. Map assets to deadlines with rule: if asset is active then 'end_date' else 'start_date'
+        2. Get nearest deadline
+    """
     logging.info('Generating asset-list...')
-    playlist = assets_helper.get_playlist(db_conn)
-    deadline = sorted([asset['end_date'] for asset in playlist])[0] if len(playlist) > 0 else None
+    assets = assets_helper.read(db_conn)
+    deadlines = [asset['end_date'] if assets_helper.is_active(asset) else asset['start_date'] for asset in assets]
+
+    playlist = filter(assets_helper.is_active, assets)
+    deadline = sorted(deadlines)[0] if len(deadlines) > 0 else None
     logging.debug('generate_asset_list deadline: %s', deadline)
 
     if settings['shuffle_playlist']:
@@ -184,7 +191,12 @@ def browser_url(url, cb=lambda _: True, force=False):
         logging.debug('Already showing %s, reloading it.', current_browser_url)
     else:
         current_browser_url = url
-        browser_send('uri ' + current_browser_url, cb=cb)
+
+        """Uzbl handles full URI format incorrect: scheme://uname:passwd@domain:port/path
+        We need to escape @"""
+        escaped_url = current_browser_url.replace('@', '\\@')
+
+        browser_send('uri ' + escaped_url, cb=cb)
         logging.info('current url is %s', current_browser_url)
 
 

@@ -31,7 +31,7 @@ asset_y = {
     'name': u'Google',
     'uri': u'https://www.google.com/images/srpr/logo3w.png',
     'start_date': datetime.now() - timedelta(days=1),
-    'end_date': datetime.now() + timedelta(days=1),
+    'end_date': datetime.now() + timedelta(days=2),
     'duration': u'6',
     'is_enabled': 1,
     'nocache': 0,
@@ -44,6 +44,19 @@ asset_z = {
     'name': u'Google',
     'uri': u'https://www.google.com/images/srpr/logo3w.png',
     'start_date': datetime.now() - timedelta(days=1),
+    'end_date': datetime.now() + timedelta(days=1),
+    'duration': u'6',
+    'is_enabled': 1,
+    'nocache': 0,
+    'play_order': 2,
+}
+
+asset_tomorrow = {
+    'mimetype': u'image',
+    'asset_id': u'7e978f8c1204a6f70770a1eb54a76e9c',
+    'name': u'Google',
+    'uri': u'https://www.google.com/images/srpr/logo3w.png',
+    'start_date': datetime.now() + timedelta(days=1),
     'end_date': datetime.now() + timedelta(days=1),
     'duration': u'6',
     'is_enabled': 1,
@@ -87,10 +100,19 @@ class SchedulerTest(unittest.TestCase):
         assets, _ = viewer.generate_asset_list()
         self.assertEqual(assets, [asset_y, asset_x])
 
-    def test_generate_asset_list_check_deadline(self):
+    def test_generate_asset_list_check_deadline_if_both_active(self):
+        # if x and y currently active
         assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_y])
         _, deadline = viewer.generate_asset_list()
         self.assertEqual(deadline, asset_y['end_date'])
+
+    def test_generate_asset_list_check_deadline_if_asset_scheduled(self):
+        """If asset_x is active and asset_x[end_date] == (now + 3) and asset_tomorrow will be active tomorrow then
+        deadline should be asset_tomorrow[start_date]
+        """
+        assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_tomorrow])
+        _, deadline = viewer.generate_asset_list()
+        self.assertEqual(deadline, asset_tomorrow['start_date'])
 
     def test_get_next_asset_should_be_y_and_x(self):
         assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_y])

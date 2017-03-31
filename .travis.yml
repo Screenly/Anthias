@@ -5,6 +5,7 @@ addons:
   apt:
     packages:
       - net-tools
+      - mplayer
 install:
   - pip install -U pip
   - pip install -r requirements.txt
@@ -13,7 +14,14 @@ before_script:
   - mkdir -p ~/.screenly ~/.config/uzbl/
   - cp ansible/roles/screenly/files/uzbl-config ~/.config/uzbl/config-screenly
   - cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
+  - cp ansible/roles/screenly/files/screenly.db ~/.screenly/
   - echo -e "[local]\nlocalhost ansible_connection=local" > ansible/localhost
+  - curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
+  - curl https://www.screenly.io/upload/ose_tests/little_buck_bunny_trailer_480p.mov > /tmp/video.mov
+  - export DISPLAY=:99.0
+  - /sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -ac -screen 0 1280x1024x16
+  - python server.py &
+  - sleep 3 # give xvfb some time to start
 script:
   - find . -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
   - nosetests -v -a '!fixme' --with-isolation
