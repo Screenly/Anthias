@@ -14,9 +14,10 @@ $ bash <(curl -sL https://www.screenly.io/install-ose.sh)
 
 To learn more about Screenly, please visit the official website at [Screenly.io](http://www.screenly.io). On the official site, you'll find the complete installation instructions and disk images.
 
+[![An introduction to digital signage with Screenly OSE](http://img.youtube.com/vi/FQte5yP0azE/0.jpg)](http://www.youtube.com/watch?v=FQte5yP0azE)
+
 Quick links:
 
- * [An introduction to digital signage with Screenly OSE (video)](https://www.youtube.com/watch?v=FQte5yP0azE)
  * [Support Forum](https://support.screenly.io)
  * [Screenly OSE Home](https://www.screenly.io/ose/)
  * [Live Demo](http://ose.demo.screenlyapp.com/)
