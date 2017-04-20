@@ -16,7 +16,8 @@ To learn more about Screenly, please visit the official website at [Screenly.io]
 
 Quick links:
 
- * [FAQ](https://www.screenly.io/faq/ose/)
+ * [An introduction to digital signage with Screenly OSE (video)](https://www.youtube.com/watch?v=FQte5yP0azE)
+ * [Support Forum](https://support.screenly.io)
  * [Screenly OSE Home](https://www.screenly.io/ose/)
  * [Live Demo](http://ose.demo.screenlyapp.com/)
  * [QA Checklist](https://www.forgett.com/checklist/1789089623)
