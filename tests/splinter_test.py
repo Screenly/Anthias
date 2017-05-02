@@ -64,9 +64,10 @@ class WebTest(unittest.TestCase):
 
             wait_for_and_do(browser, '#add-asset-button', lambda btn: btn.click())
             sleep(1)
+
             wait_for_and_do(browser, 'input[name="uri"]', lambda field: field.fill('http://example.com'))
-            wait_for_and_do(browser, 'input[name="duration"]', lambda field: field.fill('30'))
             sleep(1)
+
             wait_for_and_do(browser, '#add-form', lambda form: form.click())
             sleep(1)
 
@@ -82,7 +83,7 @@ class WebTest(unittest.TestCase):
             self.assertEqual(asset['name'], u'http://example.com')
             self.assertEqual(asset['uri'], u'http://example.com')
             self.assertEqual(asset['mimetype'], u'webpage')
-            self.assertEqual(asset['duration'], u'30')
+            self.assertEqual(asset['duration'], settings['default_duration'])
 
     def test_edit_asset(self):
         with db.conn(settings['database']) as conn:
@@ -121,13 +122,11 @@ class WebTest(unittest.TestCase):
 
             wait_for_and_do(browser, 'a[href="#tab-file_upload"]', lambda tab: tab.click())
             wait_for_and_do(browser, 'input[name="file_upload"]', lambda input: input.fill(image_file))
-            wait_for_and_do(browser, 'input[name="duration"]', lambda field: field.fill('30'))
             sleep(1)  # wait for new-asset panel animation
 
             wait_for_and_do(browser, '#add-form', lambda form: form.click())
             sleep(1)
 
-            wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
             sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
@@ -138,7 +137,7 @@ class WebTest(unittest.TestCase):
 
             self.assertEqual(asset['name'], u'image.png')
             self.assertEqual(asset['mimetype'], u'image')
-            self.assertEqual(asset['duration'], u'30')
+            self.assertEqual(asset['duration'], settings['default_duration'])
 
     def test_add_asset_video_upload(self):
         video_file = '/tmp/video.mov'
@@ -156,7 +155,6 @@ class WebTest(unittest.TestCase):
             wait_for_and_do(browser, '#add-form', lambda form: form.click())
             sleep(1)
 
-            wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
             sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
@@ -168,6 +166,39 @@ class WebTest(unittest.TestCase):
             self.assertEqual(asset['name'], u'video.mov')
             self.assertEqual(asset['mimetype'], u'video')
             self.assertEqual(asset['duration'], u'33')
+
+    def test_add_two_assets_upload(self):
+        video_file = '/tmp/video.mov'
+        image_file = '/tmp/image.png'
+
+        with Browser() as browser:
+            browser.visit('http://localhost:8080')
+
+            browser.find_by_id('add-asset-button').click()
+            sleep(1)
+
+            wait_for_and_do(browser, 'a[href="#tab-file_upload"]', lambda tab: tab.click())
+            wait_for_and_do(browser, 'input[name="file_upload"]', lambda input: input.fill(video_file))
+            wait_for_and_do(browser, 'input[name="file_upload"]', lambda input: input.fill(image_file))
+            sleep(1)  # wait for new-asset panel animation
+
+            wait_for_and_do(browser, '#add-form', lambda form: form.click())
+            sleep(1)
+
+            sleep(3)  # backend need time to process request
+
+        with db.conn(settings['database']) as conn:
+            assets = assets_helper.read(conn)
+
+            self.assertEqual(len(assets), 2)
+
+            self.assertEqual(assets[0]['name'], u'video.mov')
+            self.assertEqual(assets[0]['mimetype'], u'video')
+            self.assertEqual(assets[0]['duration'], u'33')
+
+            self.assertEqual(assets[1]['name'], u'image.png')
+            self.assertEqual(assets[1]['mimetype'], u'image')
+            self.assertEqual(assets[1]['duration'], settings['default_duration'])
 
     def test_rm_asset(self):
         with db.conn(settings['database']) as conn:
