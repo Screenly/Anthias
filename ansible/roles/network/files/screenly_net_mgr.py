@@ -233,10 +233,9 @@ def main():
     # In case neither wired or wireless is configured,
     # let's just assume wired and dhcp as the default.
     if not (wifi or ethernet):
-        interfaces += if_config(interface='eth0',  dns=dns)
+        interfaces += if_config(interface='eth0', dns=dns)
 
     write_file(INTERFACES_PATH, interfaces)
-
 
     """
     Configure NTP
