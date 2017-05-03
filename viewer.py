@@ -6,11 +6,13 @@ from os import path, getenv, utime
 from platform import machine
 from random import shuffle
 from requests import get as req_get
-from time import sleep
+from time import sleep, ctime
 from json import load as json_load
 from signal import signal, SIGUSR1, SIGUSR2
 import logging
 import sh
+import subprocess
+import ntplib
 
 from settings import settings
 import html_templates
@@ -318,6 +320,12 @@ def setup():
 
     signal(SIGUSR1, sigusr1)
     signal(SIGUSR2, sigusr2)
+    
+    c = ntplib.NTPClient() 
+    responce = c.request('europe.pool.ntp.org', version=3) 
+    cur_date = ctime(responce.tx_time) 
+    sudodate = subprocess.Popen(["sudo", "date", "-s", cur_date]) 
+    sudodate.communicate()
 
     load_settings()
     db_conn = db.conn(settings['database'])
