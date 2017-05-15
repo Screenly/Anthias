@@ -155,6 +155,16 @@ section {
   }
 }
 
+#backup-section {
+  margin-bottom: 50px;
+  .progress {
+    margin-top: 5px;
+    width: 50%;
+    margin-bottom: 5px;
+    display: inline-block;
+  }
+}
+
 #assets {
   table td {
     line-height: 32px;
