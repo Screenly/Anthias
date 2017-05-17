@@ -7,6 +7,7 @@ RUN apt-get update && \
 
 # Install Python requirements
 ADD requirements.txt /tmp/requirements.txt
+RUN pip install --upgrade cffi
 RUN pip install -r /tmp/requirements.txt
 
 # Create runtime user
