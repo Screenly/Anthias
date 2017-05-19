@@ -1,15 +1,15 @@
 import tarfile
 from os import path, getenv, remove
-from shutil import rmtree
 import sh
 
 directories = ['.screenly', 'screenly_assets']
 archive_name = "screenly-backup.tar.gz"
+static_dir = "screenly/static"
 
 
 def create_backup():
     home = getenv('HOME')
-    file_path = path.join('static', archive_name)
+    file_path = path.join(home, static_dir, archive_name)
     if path.isfile(file_path):
         remove(file_path)
 
@@ -27,18 +27,11 @@ def create_backup():
 
 
 def recover(file_path):
-    home = getenv('HOME')
-
     with tarfile.open(file_path, "r:gz") as tar:
         for directory in directories:
             if directory not in tar.getnames():
                 raise Exception("Archive is wrong.")
 
-        sh.sudo('service', 'screenly-viewer', 'stop')
-        for directory in directories:
-            rmtree(path.join(home, directory))
-
-        tar.extractall(path=path.join(home))
-        sh.sudo('service', 'screenly-viewer', 'start')
+    sh.sudo('/usr/local/bin/screenly_utils.sh', 'recover', path.abspath(file_path))
 
     remove(file_path)

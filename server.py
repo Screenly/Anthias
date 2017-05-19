@@ -33,6 +33,7 @@ from lib.utils import validate_url
 from lib.utils import url_fails
 from lib.utils import get_video_duration
 from dateutil import parser as date_parser
+from mimetypes import guess_type
 
 from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS, auth_basic
 from werkzeug.wrappers import Request
@@ -287,7 +288,7 @@ def recover():
     file_upload = (req.files['backup_upload'])
     filename = file_upload.filename
 
-    if not filename.endswith('.tar.gz'):
+    if guess_type(filename)[0] != 'application/x-tar':
         raise Exception("Incorrect file extension.")
 
     location = path.join("static", filename)
