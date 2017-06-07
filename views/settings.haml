@@ -9,9 +9,20 @@
     %link(href="/static/css/screenly.css", rel="stylesheet")
     %link(href="/static/css/toggle-switch.css", rel="stylesheet")
     %script(src="/static/js/jquery-1.9.1.min.js")
+    
+    %script(src="/static/js/bootstrap.min.js") /needs jquery
+    %script(src="/static/js/jquery-ui-1.10.1.custom.min.js")
+    %script(src="/static/js/jquery.fileupload.js") /needs jqueryui.widget
+    
+    %script(src="/static/js/backup.js")
 
   %body
-
+    #request-error.navbar.navbar-fixed-top
+      .container
+        .alert(style="display:none")
+          %button.close(type="button") &times;
+          %span.msg
+            
     .navbar.navbar-fixed-top
       .navbar-inner
         .container
@@ -121,6 +132,17 @@
             .form-actions
               %input.btn.btn-primary(type="submit", value="Save Settings")
               %a.btn(href="/") Cancel
+
+        #backup-section.span12
+          %h1.page-header
+            Backup
+          %input(type="file", name="backup_upload", style="display:none")
+          %button#btn-upload.btn.btn-primary(type="button") Upload and Recover
+          %button#btn-backup.btn Get backup
+          
+          .progress.progress-striped.active(style="display:none")
+            .bar
+
 
     #footer
       .container

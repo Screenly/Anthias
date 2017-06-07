@@ -25,6 +25,7 @@ from lib import db
 from lib import queries
 from lib import assets_helper
 from lib import diagnostics
+from lib import backup_helper
 
 from lib.utils import json_dump
 from lib.utils import get_node_ip
@@ -32,6 +33,7 @@ from lib.utils import validate_url
 from lib.utils import url_fails
 from lib.utils import get_video_duration
 from dateutil import parser as date_parser
+from mimetypes import guess_type
 
 from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS, auth_basic
 from werkzeug.wrappers import Request
@@ -270,6 +272,31 @@ def playlist_order():
         assets_helper.save_ordering(conn, request.POST.get('ids', '').split(','))
 
 
+@route('/api/backup', method="GET")
+@auth_basic
+@api
+def backup():
+    filename = backup_helper.create_backup()
+    return filename
+
+
+@route('/api/recover', method="POST")
+@auth_basic
+@api
+def recover():
+    req = Request(request.environ)
+    file_upload = (req.files['backup_upload'])
+    filename = file_upload.filename
+
+    if guess_type(filename)[0] != 'application/x-tar':
+        raise Exception("Incorrect file extension.")
+
+    location = path.join("static", filename)
+    file_upload.save(location)
+    backup_helper.recover(location)
+    return "Recovery successful."
+
+
 ################################
 # Views
 ################################
@@ -376,6 +403,12 @@ def mistake404(code):
 @route('/static/:path#.+#', name='static')
 def static(path):
     return static_file(path, root='static')
+
+
+@route('/static_with_mime/:path#.+#', name='static')
+def static_with_mime(path):
+    mimetype = request.query['mime'] if 'mime' in request.query else 'auto'
+    return static_file(path, root='static', mimetype=mimetype)
 
 
 if __name__ == "__main__":
