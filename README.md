@@ -1,5 +1,5 @@
-[![Build Status](https://travis-ci.org/screenly/screenly-ose.svg?branch=master)](https://travis-ci.org/wireload/screenly-ose)
-[![Coverage Status](https://coveralls.io/repos/screenly/screenly-ose/badge.svg?branch=master&service=github)](https://coveralls.io/github/wireload/screenly-ose?branch=master)
+[![Build Status](https://travis-ci.org/screenly/screenly-ose.svg?branch=master)](https://travis-ci.org/screenly/screenly-ose)
+[![Coverage Status](https://coveralls.io/repos/screenly/screenly-ose/badge.svg?branch=master&service=github)](https://coveralls.io/github/screenly/screenly-ose?branch=master)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/dfbdedc7a56c4589b931b40ee77e8d9f)](https://www.codacy.com/app/renat-2017/screenly-ose?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=wireload/screenly-ose&amp;utm_campaign=Badge_Grade)
 
 # Screenly OSE - Digital Signage for the Raspberry Pi
