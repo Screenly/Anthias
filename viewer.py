@@ -211,10 +211,9 @@ def view_video(uri, duration):
     if arch in ('armv6l', 'armv7l'):
         player_args = ['omxplayer', uri]
         player_kwargs = {'o': settings['audio_output'], '_bg': True, '_ok_code': [0, 124]}
-        player_kwargs['_ok_code'] = [0, 124]
     else:
         player_args = ['mplayer', uri, '-nosound']
-        player_kwargs = {'_bg': True}
+        player_kwargs = {'_bg': True, '_ok_code': [0, 124]}
 
     if duration and duration != 'N/A':
         player_args = ['timeout', VIDEO_TIMEOUT + int(duration.split('.')[0])] + player_args
@@ -297,7 +296,7 @@ def asset_loop(scheduler):
             # FIXME If we want to force periodic reloads of repeated web assets, force=True could be used here.
             # See e38e6fef3a70906e7f8739294ffd523af6ce66be.
             browser_url(uri)
-        elif 'video' in mime:
+        elif 'video' or 'streaming' in mime:
             view_video(uri, asset['duration'])
         else:
             logging.error('Unknown MimeType %s', mime)

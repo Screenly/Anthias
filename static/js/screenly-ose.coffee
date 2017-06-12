@@ -65,7 +65,7 @@ viduris   = ('rtsp rtmp'.split ' ')
 get_mimetype = (filename) =>
   scheme = (_.first filename.split ':').toLowerCase()
   match = scheme in viduris
-  if match then return 'video'
+  if match then return 'streaming'
   ext = (_.last filename.split '.').toLowerCase()
   mt = _.find mimetypes, (mt) -> ext in mt[0]
   if mt then mt[1] else null
@@ -176,10 +176,12 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
     no 
 
   change_mimetype: =>
-    if (@$fv 'mimetype') != "video"
-      @$fv 'duration', default_duration
-    else
+    if (@$fv 'mimetype') == "video"
       @$fv 'duration', 0
+    else if (@$fv 'mimetype') == "streaming"
+      @$fv 'duration', default_streaming_duration
+    else
+      @$fv 'duration', default_duration
 
   clickTabNavUpload: (e) =>
     if not (@$ '#tab-file_upload').hasClass 'active'
@@ -412,9 +414,10 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
     (@$ ".delete-asset-button").popover content: get_template 'confirm-delete'
     (@$ ".toggle input").prop "checked", @model.get 'is_enabled'
     (@$ ".asset-icon").addClass switch @model.get "mimetype"
-      when "video"   then "icon-facetime-video"
-      when "image"   then "icon-picture"
-      when "webpage" then "icon-globe"
+      when "video"     then "icon-facetime-video"
+      when "streaming" then "icon-facetime-video"
+      when "image"     then "icon-picture"
+      when "webpage"   then "icon-globe"
       else ""
     @el
 

@@ -101,7 +101,7 @@
       scheme = (_.first(filename.split(':'))).toLowerCase();
       match = indexOf.call(viduris, scheme) >= 0;
       if (match) {
-        return 'video';
+        return 'streaming';
       }
       ext = (_.last(filename.split('.'))).toLowerCase();
       mt = _.find(mimetypes, function(mt) {
@@ -330,10 +330,12 @@
     };
 
     AddAssetView.prototype.change_mimetype = function() {
-      if ((this.$fv('mimetype')) !== "video") {
-        return this.$fv('duration', default_duration);
-      } else {
+      if ((this.$fv('mimetype')) === "video") {
         return this.$fv('duration', 0);
+      } else if ((this.$fv('mimetype')) === "streaming") {
+        return this.$fv('duration', default_streaming_duration);
+      } else {
+        return this.$fv('duration', default_duration);
       }
     };
 
@@ -759,6 +761,8 @@
       (this.$(".asset-icon")).addClass((function() {
         switch (this.model.get("mimetype")) {
           case "video":
+            return "icon-facetime-video";
+          case "streaming":
             return "icon-facetime-video";
           case "image":
             return "icon-picture";
