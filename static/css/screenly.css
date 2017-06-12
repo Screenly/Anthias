@@ -106,6 +106,14 @@ section .header {
   margin-left: 0px;
   overflow: hidden; }
 
+#backup-section {
+  margin-bottom: 50px; }
+  #backup-section .progress {
+    margin-top: 5px;
+    width: 50%;
+    margin-bottom: 5px;
+    display: inline-block; }
+
 #assets table td {
   line-height: 32px; }
 
