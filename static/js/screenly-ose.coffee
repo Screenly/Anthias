@@ -173,7 +173,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
       save.fail =>
         (@$ 'input').prop 'disable', off
         model.destroy()
-    no 
+    no
 
   change_mimetype: =>
     if (@$fv 'mimetype') != "video"
@@ -215,7 +215,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
           (that.$ '.progress').hide()
           (that.$ '.progress .bar').css 'width', "0"
           (that.$ '.status').show()
-          (that.$ '.status').html 'Loading is complete'
+          (that.$ '.status').html 'Upload completed.'
     no
 
   clickTabNavUri: (e) => # TODO: clean
@@ -331,7 +331,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     @viewmodel()
     save = null
     @model.set 'nocache', if (@$ 'input[name="nocache"]').prop 'checked' then 1 else 0
-    
+
     if not @model.get 'name'
       if @model.old_name()
         @model.set {name: @model.old_name()}, silent:yes
@@ -480,7 +480,7 @@ API.View.AssetsView = class AssetsView extends Backbone.View
 
   update_order: =>
     active = (@$ '#active-assets').sortable 'toArray'
-    
+
     @collection.get(id).set('play_order', i) for id, i in active
     @collection.get(el.id).set('play_order', active.length) for el in (@$ '#inactive-assets tr').toArray()
 
@@ -488,7 +488,7 @@ API.View.AssetsView = class AssetsView extends Backbone.View
 
   render: =>
     @collection.sort()
-    
+
     (@$ "##{which}-assets").html '' for which in ['active', 'inactive']
 
     @collection.each (model) =>
@@ -497,9 +497,9 @@ API.View.AssetsView = class AssetsView extends Backbone.View
 
     for which in ['inactive', 'active']
       @$(".#{which}-table thead").toggle !!(@$("##{which}-assets tr").length)
-      
+
     @update_order()
-   
+
     @el
 
 

@@ -384,7 +384,7 @@
             (that.$('.progress')).hide();
             (that.$('.progress .bar')).css('width', "0");
             (that.$('.status')).show();
-            return (that.$('.status')).html('Loading is complete');
+            return (that.$('.status')).html('Upload completed.');
           }
         });
       }
