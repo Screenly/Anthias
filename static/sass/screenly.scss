@@ -73,10 +73,13 @@ body {
 
     $topOffset: $footerHeight * 0.25;
 
-    #wireload-logo {
+    #screenly-logo {
       position: absolute;
       right: 0;
       top: $topOffset;
+      color: #535d79;
+      font-weight: bold;
+      text-decoration: none;
     }
 
     .copy {
@@ -219,8 +222,8 @@ input[name="file_upload"] {
 
 @mixin rota($angle,$time){
     @each $prefix in webkit moz ms o {
-	-#{$prefix}-transition: all $time linear;
-	-#{$prefix}-transform: rotate($angle);
+      -#{$prefix}-transition: all $time linear;
+      -#{$prefix}-transform: rotate($angle);
     }
     transition: all $time linear;
     transform: rotate($angle);
