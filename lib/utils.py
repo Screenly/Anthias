@@ -33,7 +33,6 @@ if machine() in ['x86', 'x86_64']:
 
 def validate_url(string):
     """Simple URL verification.
-
     >>> validate_url("hello")
     False
     >>> validate_url("ftp://example.com")
@@ -44,11 +43,10 @@ def validate_url(string):
     True
     >>> validate_url("https://wireload.net/logo.png")
     True
-
     """
 
     checker = urlparse(string)
-    return bool(checker.scheme in ('http', 'https') and checker.netloc)
+    return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
 
 
 def get_node_ip():
@@ -111,6 +109,23 @@ def json_dump(obj):
 
 
 def url_fails(url):
+    """
+    If it is streaming
+    """
+    if urlparse(url).scheme in ('rtsp', 'rtmp'):
+        if arch in ('armv6l', 'armv7l'):
+            run_omxplayer = omxplayer(url, info=True, _err_to_out=True, _ok_code=[0, 1])
+            for line in run_omxplayer.split('\n'):
+                if 'Input #0' in line:
+                    return False
+            return True
+        else:
+            run_mplayer = mplayer('-identify', '-frames', '0', '-nosound', url)
+            for line in run_mplayer.split('\n'):
+                if 'Clip info:' in line:
+                    return False
+            return True
+
     """
     Try HEAD and GET for URL availability check.
     """

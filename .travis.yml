@@ -18,13 +18,16 @@ before_script:
   - cp ansible/roles/screenly/files/screenly.db ~/.screenly/
   - echo -e "[local]\nlocalhost ansible_connection=local" > ansible/localhost
   - curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
-  - curl https://www.screenly.io/upload/ose_tests/little_buck_bunny_trailer_480p.mov > /tmp/video.mov
+  - curl https://www.screenly.io/upload/big_buck_bunny_720p_10mb.flv > /tmp/video.flv
   - export DISPLAY=:99.0
   - /sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -ac -screen 0 1280x1024x16
+  - python tests/rtmplite/rtmp.py -r /tmp/ &
+  - sleep 3
   - python server.py &
   - sleep 3 # give xvfb some time to start
+
 script:
-  - find . -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
+  - find . ! -path "*/rtmplite/*" -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
   - nosetests -v -a '!fixme' --with-isolation
   - ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml
   - python -m SimpleHTTPServer 8080 &
@@ -32,3 +35,4 @@ script:
   - bash static/spec/runner.sh
 
 sudo: false
+dist: trusty

@@ -91,6 +91,7 @@ def template(template_name, **context):
     # Add global contexts
     context['up_to_date'] = is_up_to_date()
     context['default_duration'] = settings['default_duration']
+    context['default_streaming_duration'] = settings['default_streaming_duration']
     context['use_24_hour_clock'] = settings['use_24_hour_clock']
     context['template_settings'] = {
         'imports': ['from lib.utils import template_handle_unicode'],
@@ -149,7 +150,7 @@ def prepare_asset(request):
             file_upload = None
             filename = None
 
-        if filename and 'web' in asset['mimetype']:
+        if filename and ('web' or 'streaming') in asset['mimetype']:
             raise Exception("Invalid combination. Can't upload a web resource.")
 
         if uri and filename:
