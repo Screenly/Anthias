@@ -97,17 +97,18 @@ section .header {
     margin-top: 2px;
     width: 400px; }
 
-#add-form .status {
-  float: left;
-  margin-top: 6px; }
-#add-form .progress {
-  margin-top: 4px;
-  margin-bottom: 0px;
-  width: 69%; }
 #add-form .uri-text {
   padding-top: 5px;
   margin-left: 0px;
   overflow: hidden; }
+
+.modal-footer .status {
+  float: left;
+  margin-top: 6px; }
+.modal-footer .progress {
+  margin-top: 4px;
+  margin-bottom: 0px;
+  width: 69%; }
 
 #backup-section {
   margin-bottom: 50px; }

@@ -128,9 +128,6 @@ class WebTest(unittest.TestCase):
             wait_for_and_do(browser, 'input[name="file_upload"]', lambda input: input.fill(image_file))
             sleep(1)  # wait for new-asset panel animation
 
-            wait_for_and_do(browser, '#add-form', lambda form: form.click())
-            sleep(1)
-
             sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
@@ -156,9 +153,6 @@ class WebTest(unittest.TestCase):
             wait_for_and_do(browser, 'input[name="file_upload"]', lambda input: input.fill(video_file))
             sleep(1)  # wait for new-asset panel animation
 
-            wait_for_and_do(browser, '#add-form', lambda form: form.click())
-            sleep(1)
-
             sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
@@ -182,12 +176,8 @@ class WebTest(unittest.TestCase):
             sleep(1)
 
             wait_for_and_do(browser, 'a[href="#tab-file_upload"]', lambda tab: tab.click())
-            wait_for_and_do(browser, 'input[name="file_upload"]', lambda input: input.fill(video_file))
             wait_for_and_do(browser, 'input[name="file_upload"]', lambda input: input.fill(image_file))
-            sleep(1)  # wait for new-asset panel animation
-
-            wait_for_and_do(browser, '#add-form', lambda form: form.click())
-            sleep(1)
+            wait_for_and_do(browser, 'input[name="file_upload"]', lambda input: input.fill(video_file))
 
             sleep(3)  # backend need time to process request
 
@@ -196,13 +186,13 @@ class WebTest(unittest.TestCase):
 
             self.assertEqual(len(assets), 2)
 
-            self.assertEqual(assets[0]['name'], u'video.flv')
-            self.assertEqual(assets[0]['mimetype'], u'video')
-            self.assertEqual(assets[0]['duration'], u'54')
+            self.assertEqual(assets[0]['name'], u'image.png')
+            self.assertEqual(assets[0]['mimetype'], u'image')
+            self.assertEqual(assets[0]['duration'], settings['default_duration'])
 
-            self.assertEqual(assets[1]['name'], u'image.png')
-            self.assertEqual(assets[1]['mimetype'], u'image')
-            self.assertEqual(assets[1]['duration'], settings['default_duration'])
+            self.assertEqual(assets[1]['name'], u'video.flv')
+            self.assertEqual(assets[1]['mimetype'], u'video')
+            self.assertEqual(assets[1]['duration'], u'54')
 
     def test_add_asset_streaming(self):
         with Browser() as browser:
