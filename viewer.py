@@ -30,7 +30,7 @@ EMPTY_PL_DELAY = 5  # secs
 BLACK_PAGE = '/tmp/screenly_html/black_page.html'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 SCREENLY_HTML = '/tmp/screenly_html/'
-LOAD_SCREEN = '/screenly/loading.jpg'  # relative to $HOME
+LOAD_SCREEN = '/screenly/loading.png'  # relative to $HOME
 UZBLRC = '/.config/uzbl/config-screenly'  # relative to $HOME
 INTRO = '/screenly/intro-template.html'
 
