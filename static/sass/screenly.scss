@@ -142,6 +142,14 @@ section {
 }
 
 #add-form {
+  .uri-text {
+    padding-top: 5px;
+    margin-left: 0px;
+    overflow: hidden;
+  }
+}
+
+.modal-footer {
   .status {
     float: left;
     margin-top: 6px;
@@ -150,11 +158,6 @@ section {
     margin-top: 4px;
     margin-bottom: 0px;
     width: 69%;
-  }
-  .uri-text {
-    padding-top: 5px;
-    margin-left: 0px;
-    overflow: hidden;
   }
 }
 

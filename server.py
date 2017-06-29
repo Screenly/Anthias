@@ -111,11 +111,10 @@ def template(template_name, **context):
 ################################
 
 def prepare_asset(request):
-
     req = Request(request.environ)
     data = None
 
-    data = json.loads(req.form['model']) if 'model' in req.form else req.form
+    data = json.loads(req.form['model'])
 
     def get(key):
         val = data.get(key, '')
@@ -126,79 +125,56 @@ def prepare_asset(request):
         else:
             return val
 
-    if all([get('name'),
-            get('uri') or req.files.get('file_upload'),
-            get('mimetype')]):
-
-        asset = {
-            'name': get('name'),
-            'mimetype': get('mimetype'),
-            'asset_id': get('asset_id'),
-            'is_enabled': get('is_enabled'),
-            'nocache': get('nocache'),
-        }
-
-        uri = get('uri') or False
-
-        if not asset['asset_id']:
-            asset['asset_id'] = uuid.uuid4().hex
-
-        try:
-            file_upload = req.files.get('file_upload')
-            filename = file_upload.filename
-        except AttributeError:
-            file_upload = None
-            filename = None
-
-        if filename and ('web' or 'streaming') in asset['mimetype']:
-            raise Exception("Invalid combination. Can't upload a web resource.")
-
-        if uri and filename:
-            raise Exception("Invalid combination. Can't select both URI and a file.")
-
-        if uri and not uri.startswith('/'):
-            if not validate_url(uri):
-                raise Exception("Invalid URL. Failed to add asset.")
-            else:
-                asset['uri'] = uri
-        else:
-            asset['uri'] = uri
-
-        if filename:
-            asset['uri'] = path.join(settings['assetdir'], asset['asset_id'])
-
-            file_upload.save(asset['uri'])
-
-        if "video" in asset['mimetype']:
-            video_duration = get_video_duration(asset['uri'])
-            if video_duration:
-                asset['duration'] = int(video_duration.total_seconds())
-            else:
-                asset['duration'] = 'N/A'
-        else:
-            # Crashes if it's not an int. We want that.
-            asset['duration'] = int(get('duration'))
-
-        # parse date via python-dateutil and remove timezone info
-        if get('start_date'):
-            asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
-        else:
-            asset['start_date'] = ""
-
-        if get('end_date'):
-            asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
-        else:
-            asset['end_date'] = ""
-
-        if not asset['asset_id']:
-            raise Exception
-
-        if not asset['uri']:
-            raise Exception
-
-        return asset
-    else:
+    if not all([get('name'), get('uri'), get('mimetype')]):
         raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
+
+    asset = {
+        'name': get('name'),
+        'mimetype': get('mimetype'),
+        'asset_id': get('asset_id'),
+        'is_enabled': get('is_enabled'),
+        'nocache': get('nocache'),
+    }
+
+    uri = get('uri')
+
+    if uri.startswith('/'):
+        if not path.isfile(uri):
+            raise Exception("Invalid file path. Failed to add asset.")
+    else:
+        if not validate_url(uri):
+            raise Exception("Invalid URL. Failed to add asset.")
+
+    if not asset['asset_id']:
+        asset['asset_id'] = uuid.uuid4().hex
+        if uri.startswith('/'):
+            os.rename(uri, path.join(settings['assetdir'], asset['asset_id']))
+            uri = path.join(settings['assetdir'], asset['asset_id'])
+
+    asset['uri'] = uri
+
+    if "video" in asset['mimetype']:
+        video_duration = get_video_duration(asset['uri'])
+        if video_duration:
+            asset['duration'] = int(video_duration.total_seconds())
+        else:
+            asset['duration'] = 'N/A'
+    else:
+        # Crashes if it's not an int. We want that.
+        asset['duration'] = int(get('duration'))
+
+    # parse date via python-dateutil and remove timezone info
+    if get('start_date'):
+        asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
+    else:
+        asset['start_date'] = ""
+
+    if get('end_date'):
+        asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
+    else:
+        asset['end_date'] = ""
+
+    return asset
 
 
 @route('/api/assets', method="GET")
@@ -221,6 +197,27 @@ def api(view):
             traceback.print_exc()
             return api_error(unicode(e))
     return api_view
+
+
+@route('/api/upload_file', method="POST")
+@auth_basic
+@api
+def upload_file():
+    req = Request(request.environ)
+    file_upload = req.files.get('file_upload')
+    filename = file_upload.filename
+    file_path = path.join(settings['assetdir'], filename) + ".tmp"
+
+    if 'Content-Range' in request.headers:
+        range_str = request.headers['Content-Range']
+        start_bytes = int(range_str.split(' ')[1].split('-')[0])
+        with open(file_path, 'a') as f:
+            f.seek(start_bytes)
+            f.write(file_upload.read())
+    else:
+        file_upload.save(file_path)
+
+    return file_path
 
 
 @route('/api/assets', method="POST")

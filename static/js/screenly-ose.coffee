@@ -189,29 +189,38 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
       (@$ '.tab-pane').removeClass 'active'
       (@$ '.tabnav-file_upload').addClass 'active'
       (@$ '#tab-file_upload').addClass 'active'
+      (@$ '.uri').hide()
       (@$ '#save-asset').hide()
       that = this
-      @.$el.fileupload
+      (@$ "[name='file_upload']").fileupload
         autoUpload: false
+        sequentialUploads: true
+        maxChunkSize: 5000000 #5 MB
+        url: 'api/upload_file'
         progressall: (e, data) => if data.loaded and data.total
           (@$ '.progress .bar').css 'width', "#{data.loaded/data.total*100}%"
         add: (e, data) ->
           (that.$ '.status').hide()
           (that.$ '.progress').show()
-          model = new Asset {}, {collection: API.assets}
-          data.url = model.url()
+          
+          model =  new Asset {}, {collection: API.assets}
           filename = data['files'][0]['name']
-          that.$fv 'name',  filename
+          that.$fv 'name', filename
           that.updateFileUploadMimetype(filename)
           that.viewmodel model
 
-          save = data.submit()
-          .success (data) =>
-            model.id = data.asset_id
-            _.extend model.attributes, data
-            model.collection.add model
+          data.submit()
+          .success (uri) =>
+            model.set {uri: uri}, silent:yes
+
+            save = model.save()
+            save.done (data) =>
+              model.id = data.asset_id
+              _.extend model.attributes, data
+              model.collection.add model
+            save.fail =>
+              model.destroy()
           .error =>
-            (that.$ 'input').prop 'disable', off
             model.destroy()
         stop: (e) ->
           (that.$ '.progress').hide()
@@ -222,12 +231,13 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
 
   clickTabNavUri: (e) => # TODO: clean
     if not (@$ '#tab-uri').hasClass 'active'
-      @$el.fileupload 'destroy'
+      (@$ "[name='file_upload']").fileupload 'destroy'
       (@$ 'ul.nav-tabs li').removeClass 'active'
       (@$ '.tab-pane').removeClass 'active'
       (@$ '.tabnav-uri').addClass 'active'
       (@$ '#tab-uri').addClass 'active'
       (@$ '#save-asset').show()
+      (@$ '.uri').show()
       (@$f 'uri').focus()
 
   updateUriMimetype: => @updateMimetype @$fv 'uri'
@@ -265,7 +275,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
 
   destroyFileUploadWidget: (e) =>
     if (@$ '#tab-file_upload').hasClass 'active'
-      @$el.fileupload 'destroy'
+      (@$ "[name='file_upload']").fileupload 'destroy'
 
 
 API.View.EditAssetView = class EditAssetView extends Backbone.View
@@ -287,14 +297,13 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
 
     @render()
     @validate()
-    _.delay (=> (@$f 'uri').focus()), 300
     no
 
   render: () =>
     @undelegateEvents()
     (@$ f).attr 'disabled', on for f in 'mimetype uri file_upload'.split ' '
     (@$ '#modalLabel').text "Edit Asset"
-    (@$ '.asset-location').hide(); (@$ '.asset-location.edit').show()
+    (@$ '.asset-location').hide(); (@$ '.uri').hide(); (@$ '.asset-location.edit').show()
     (@$ '.mime-select').prop('disabled', 'true')
 
     (@$ '.duration').toggle (true)
