@@ -7,6 +7,10 @@ recover(){
     sudo service screenly-viewer start
 }
 
+cleanup(){
+    find ~/screenly_assets/ -name '*.tmp' -delete
+}
+
 while :; do
     case $1 in
         recover)
@@ -18,6 +22,10 @@ while :; do
                 echo "The backup file does not exist."
                 exit 1
             fi
+            ;;
+        cleanup)
+            cleanup
+            exit 0
             ;;
         *)
             echo "Invalid command"

@@ -206,7 +206,7 @@ def upload_file():
     req = Request(request.environ)
     file_upload = req.files.get('file_upload')
     filename = file_upload.filename
-    file_path = path.join(settings['assetdir'], filename)
+    file_path = path.join(settings['assetdir'], filename) + ".tmp"
 
     if 'Content-Range' in request.headers:
         range_str = request.headers['Content-Range']

@@ -57,6 +57,13 @@
     owner: root
     group: root
 
+- cron:
+    name: Cleanup screenly_assets
+    minute: 0
+    hour: 1
+    job: "/usr/local/bin/screenly_utils.sh cleanup"
+    user: pi
+
 - name: Copy screenly_overrides
   copy:
     src: screenly_overrides
