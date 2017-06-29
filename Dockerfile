@@ -1,13 +1,14 @@
 FROM debian:jessie
-MAINTAINER Viktor Petersson <vpetersson@wireload.net>
+MAINTAINER Viktor Petersson <vpetersson@screenly.io>
 
 RUN apt-get update && \
-    apt-get -y install git-core net-tools python-pip python-netifaces python-simplejson python-imaging python-dev sqlite3 libffi-dev libssl-dev && \
+    apt-get -y install build-essential git-core net-tools python-netifaces python-simplejson python-imaging python-dev sqlite3 libffi-dev libssl-dev curl && \
     apt-get clean
 
 # Install Python requirements
 ADD requirements.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt
+RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
+    pip install -r /tmp/requirements.txt
 
 # Create runtime user
 RUN useradd pi
