@@ -36,7 +36,7 @@
     group: root
     mode: 0644
     src: network.ini-sample
-    dest: /boot/network.ini
+    dest: /boot/network.ini-sample
 
 - name: Activate network manager
   command: systemctl enable screenly-net-manager.service chdir=/etc/systemd/system
