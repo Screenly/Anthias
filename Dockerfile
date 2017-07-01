@@ -2,7 +2,7 @@ FROM debian:jessie
 MAINTAINER Viktor Petersson <vpetersson@screenly.io>
 
 RUN apt-get update && \
-    apt-get -y install build-essential git-core net-tools python-netifaces python-simplejson python-imaging python-dev sqlite3 libffi-dev libssl-dev curl && \
+    apt-get -y install build-essential git-core net-tools python-netifaces python-simplejson python-imaging python-dev sqlite3 libffi-dev libssl-dev curl mplayer && \
     apt-get clean
 
 # Install Python requirements
