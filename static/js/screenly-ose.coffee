@@ -147,14 +147,13 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
 
   events:
     'change': 'change'
-    'submit form': 'save'
+    'click #save-asset': 'save'
     'click .cancel': 'cancel'
     'hidden.bs.modal': 'destroyFileUploadWidget'
     'click .tabnav-uri': 'clickTabNavUri'
     'click .tabnav-file_upload': 'clickTabNavUpload'
 
   save: (e) =>
-    e.preventDefault()
     if ((@$fv 'uri') == '')
       return no
     if (@$ '#tab-uri').hasClass 'active'
@@ -331,14 +330,13 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
       @model.set field, (@$fv field), silent:yes
 
   events:
-    'submit form': 'save'
+    'click #save-asset': 'save'
     'click .cancel': 'cancel'
     'change': 'change'
     'keyup': 'change'
     'click .advanced-toggle': 'toggleAdvanced'
 
   save: (e) =>
-    e.preventDefault()
     @viewmodel()
     save = null
     @model.set 'nocache', if (@$ 'input[name="nocache"]').prop 'checked' then 1 else 0
