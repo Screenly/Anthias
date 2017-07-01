@@ -285,7 +285,7 @@
 
     AddAssetView.prototype.events = {
       'change': 'change',
-      'submit form': 'save',
+      'click #save-asset': 'save',
       'click .cancel': 'cancel',
       'hidden.bs.modal': 'destroyFileUploadWidget',
       'click .tabnav-uri': 'clickTabNavUri',
@@ -294,7 +294,6 @@
 
     AddAssetView.prototype.save = function(e) {
       var model, save;
-      e.preventDefault();
       if ((this.$fv('uri')) === '') {
         return false;
       }
@@ -603,7 +602,7 @@
     };
 
     EditAssetView.prototype.events = {
-      'submit form': 'save',
+      'click #save-asset': 'save',
       'click .cancel': 'cancel',
       'change': 'change',
       'keyup': 'change',
@@ -612,7 +611,6 @@
 
     EditAssetView.prototype.save = function(e) {
       var save;
-      e.preventDefault();
       this.viewmodel();
       save = null;
       this.model.set('nocache', (this.$('input[name="nocache"]')).prop('checked') ? 1 : 0);
