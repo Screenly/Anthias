@@ -6,6 +6,7 @@ from sys import exit
 import ConfigParser
 import logging
 from UserDict import IterableUserDict
+import bottle
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -22,8 +23,13 @@ DEFAULTS = {
         'shuffle_playlist': False,
         'resolution': '1920x1080',
         'default_duration': '10',
+        'default_streaming_duration': '300',
         'debug_logging': False,
         'verify_ssl': True,
+    },
+    'auth': {
+        'user': '',
+        'password': ''
     }
 }
 CONFIGURABLE_SETTINGS = DEFAULTS['viewer']
@@ -115,4 +121,16 @@ class ScreenlySettings(IterableUserDict):
     def get_listen_port(self):
         return self['listen'].split(':')[1]
 
+    def check_user(self, user, password):
+        if not self['user'] or not self['password']:
+            logging.debug('Username or password not configured: skip authentication')
+            return True
+
+        return self['user'] == user and self['password'] == password
+
+
 settings = ScreenlySettings()
+
+
+def auth_basic(orig):
+    return orig if not settings['user'] or not settings['password'] else bottle.auth_basic(settings.check_user)(orig)

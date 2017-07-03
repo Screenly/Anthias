@@ -49,6 +49,29 @@
 
 - debug: msg="{{ migrate.stdout }}"
 
+- name: Copy screenly_utils.sh
+  copy:
+    src: screenly_utils.sh
+    dest: /usr/local/bin/screenly_utils.sh
+    mode: 0755
+    owner: root
+    group: root
+
+- cron:
+    name: Cleanup screenly_assets
+    minute: 0
+    hour: 1
+    job: "/usr/local/bin/screenly_utils.sh cleanup"
+    user: pi
+
+- name: Copy screenly_overrides
+  copy:
+    src: screenly_overrides
+    dest: /etc/sudoers.d/screenly_overrides
+    mode: 0440
+    owner: root
+    group: root
+
 - name: Copy screenly systemd units
   copy:
     src: "{{ item }}"

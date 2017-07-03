@@ -65,7 +65,7 @@ viduris   = ('rtsp rtmp'.split ' ')
 get_mimetype = (filename) =>
   scheme = (_.first filename.split ':').toLowerCase()
   match = scheme in viduris
-  if match then return 'video'
+  if match then return 'streaming'
   ext = (_.last filename.split '.').toLowerCase()
   mt = _.find mimetypes, (mt) -> ext in mt[0]
   if mt then mt[1] else null
@@ -86,8 +86,8 @@ API.Asset = class Asset extends Backbone.Model
     mimetype: 'webpage'
     uri: ''
     is_active: false
-    start_date: now()
-    end_date: (moment().add 'days', 7).toDate()
+    start_date: ''
+    end_date: ''
     duration: default_duration
     is_enabled: 0
     nocache: 0
@@ -121,12 +121,167 @@ API.Assets = class Assets extends Backbone.Collection
 
 # Views
 API.View = {};
+
+API.View.AddAssetView = class AddAssetView extends Backbone.View
+  $f: (field) => @$ "[name='#{field}']" # get field element
+  $fv: (field, val...) => (@$f field).val val... # get or set filed value
+
+  initialize: (oprions) =>
+    ($ 'body').append @$el.html get_template 'asset-modal'
+    (@$el.children ":first").modal()
+    (@$ '.cancel').val 'Back to Assets'
+
+    deadlines = start: now(), end: (moment().add 'days', 7).toDate()
+    for own tag, deadline of deadlines
+      d = date_to deadline
+      @.$fv "#{tag}_date_date", d.date()
+      @.$fv "#{tag}_date_time", d.time()
+
+    no
+
+  viewmodel:(model) =>
+    for which in ['start', 'end']
+      @$fv "#{which}_date", (new Date (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")).toISOString()
+    for field in model.fields when not (@$f field).prop 'disabled'
+      model.set field, (@$fv field), silent:yes
+
+  events:
+    'change': 'change'
+    'click #save-asset': 'save'
+    'click .cancel': 'cancel'
+    'hidden.bs.modal': 'destroyFileUploadWidget'
+    'click .tabnav-uri': 'clickTabNavUri'
+    'click .tabnav-file_upload': 'clickTabNavUpload'
+
+  save: (e) =>
+    if ((@$fv 'uri') == '')
+      return no
+    if (@$ '#tab-uri').hasClass 'active'
+      model =  new Asset {}, {collection: API.assets}
+      @updateUriMimetype()
+      @viewmodel model
+      model.set {name: model.get 'uri'}, silent:yes
+      save = model.save()
+
+      (@$ 'input').prop 'disabled', on
+      save.done (data) =>
+        model.id = data.asset_id
+        (@$el.children ":first").modal 'hide'
+        _.extend model.attributes, data
+        model.collection.add model
+      save.fail =>
+        (@$ 'input').prop 'disable', off
+        model.destroy()
+    no
+
+  change_mimetype: =>
+    if (@$fv 'mimetype') == "video"
+      @$fv 'duration', 0
+    else if (@$fv 'mimetype') == "streaming"
+      @$fv 'duration', default_streaming_duration
+    else
+      @$fv 'duration', default_duration
+
+  clickTabNavUpload: (e) =>
+    if not (@$ '#tab-file_upload').hasClass 'active'
+      (@$ 'ul.nav-tabs li').removeClass 'active'
+      (@$ '.tab-pane').removeClass 'active'
+      (@$ '.tabnav-file_upload').addClass 'active'
+      (@$ '#tab-file_upload').addClass 'active'
+      (@$ '.uri').hide()
+      (@$ '#save-asset').hide()
+      that = this
+      (@$ "[name='file_upload']").fileupload
+        autoUpload: false
+        sequentialUploads: true
+        maxChunkSize: 5000000 #5 MB
+        url: 'api/upload_file'
+        progressall: (e, data) => if data.loaded and data.total
+          (@$ '.progress .bar').css 'width', "#{data.loaded/data.total*100}%"
+        add: (e, data) ->
+          (that.$ '.status').hide()
+          (that.$ '.progress').show()
+          
+          model =  new Asset {}, {collection: API.assets}
+          filename = data['files'][0]['name']
+          that.$fv 'name', filename
+          that.updateFileUploadMimetype(filename)
+          that.viewmodel model
+
+          data.submit()
+          .success (uri) =>
+            model.set {uri: uri}, silent:yes
+
+            save = model.save()
+            save.done (data) =>
+              model.id = data.asset_id
+              _.extend model.attributes, data
+              model.collection.add model
+            save.fail =>
+              model.destroy()
+          .error =>
+            model.destroy()
+        stop: (e) ->
+          (that.$ '.progress').hide()
+          (that.$ '.progress .bar').css 'width', "0"
+          (that.$ '.status').show()
+          (that.$ '.status').html 'Upload completed.'
+    no
+
+  clickTabNavUri: (e) => # TODO: clean
+    if not (@$ '#tab-uri').hasClass 'active'
+      (@$ "[name='file_upload']").fileupload 'destroy'
+      (@$ 'ul.nav-tabs li').removeClass 'active'
+      (@$ '.tab-pane').removeClass 'active'
+      (@$ '.tabnav-uri').addClass 'active'
+      (@$ '#tab-uri').addClass 'active'
+      (@$ '#save-asset').show()
+      (@$ '.uri').show()
+      (@$f 'uri').focus()
+
+  updateUriMimetype: => @updateMimetype @$fv 'uri'
+  updateFileUploadMimetype: (filename) => @updateMimetype filename
+  updateMimetype: (filename) =>
+    mt = get_mimetype filename
+    @$fv 'mimetype', mt if mt
+    @change_mimetype()
+
+  change: (e) =>
+    @_change  ||= _.throttle (=>
+      @validate()
+      yes), 500
+    @_change arguments...
+
+  validate: (e) =>
+    that = this
+    validators =
+      uri: (v) =>
+        if ((that.$ '#tab-uri').hasClass 'active') and not url_test v
+          'please enter a valid URL'
+    errors = ([field, v] for field, fn of validators when v = fn (@$fv field))
+
+    (@$ ".control-group.warning .help-inline.warning").remove()
+    (@$ ".control-group").removeClass 'warning'
+    (@$ '[type=submit]').prop 'disabled', no
+    for [field, v] in errors
+      (@$ '[type=submit]').prop 'disabled', yes
+      (@$ ".control-group.#{field}").addClass 'warning'
+      (@$ ".control-group.#{field} .controls").append \
+        $ ("<span class='help-inline warning'>#{v}</span>")
+
+  cancel: (e) =>
+    (@$el.children ":first").modal 'hide'
+
+  destroyFileUploadWidget: (e) =>
+    if (@$ '#tab-file_upload').hasClass 'active'
+      (@$ "[name='file_upload']").fileupload 'destroy'
+
+
 API.View.EditAssetView = class EditAssetView extends Backbone.View
   $f: (field) => @$ "[name='#{field}']" # get field element
   $fv: (field, val...) => (@$f field).val val... # get or set filed value
 
   initialize: (options) =>
-    @edit = options.edit
     ($ 'body').append @$el.html get_template 'asset-modal'
     (@$ 'input.time').timepicker
       minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: date_settings.show_meridian
@@ -141,19 +296,16 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
 
     @render()
     @validate()
-    _.delay (=> (@$f 'uri').focus()), 300
     no
 
   render: () =>
     @undelegateEvents()
-    if @edit
-      (@$ f).attr 'disabled', on for f in 'mimetype uri file_upload'.split ' '
-      (@$ '#modalLabel').text "Edit Asset"
-      (@$ '.asset-location').hide(); (@$ '.asset-location.edit').show()
-      (@$ '.mime-select').prop('disabled', 'true')
+    (@$ f).attr 'disabled', on for f in 'mimetype uri file_upload'.split ' '
+    (@$ '#modalLabel').text "Edit Asset"
+    (@$ '.asset-location').hide(); (@$ '.uri').hide(); (@$ '.asset-location.edit').show()
+    (@$ '.mime-select').prop('disabled', 'true')
 
     (@$ '.duration').toggle (true)
-    @clickTabNavUri() if (@model.get 'mimetype') == 'webpage'
 
     for field in @model.fields
       if (@$fv field) != @model.get field
@@ -178,41 +330,25 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
       @model.set field, (@$fv field), silent:yes
 
   events:
-    'submit form': 'save'
+    'click #save-asset': 'save'
     'click .cancel': 'cancel'
     'change': 'change'
     'keyup': 'change'
-    'click .tabnav-uri': 'clickTabNavUri'
-    'click .tabnav-file_upload': 'clickTabNavUpload'
-    'click .tabnav-file_upload, .tabnav-uri': 'displayAdvanced'
     'click .advanced-toggle': 'toggleAdvanced'
-    'paste [name=uri]': 'updateUriMimetype'
-    'change [name=file_upload]': 'updateFileUploadMimetype'
-    'change [name=mimetype]': 'change_mimetype'
 
   save: (e) =>
-    e.preventDefault()
     @viewmodel()
     save = null
     @model.set 'nocache', if (@$ 'input[name="nocache"]').prop 'checked' then 1 else 0
-    if (@$ '#tab-file_upload').hasClass 'active'
-      if not @$fv 'name'
-        @$fv 'name', get_filename @$fv 'file_upload'
-      (@$ '.progress').show()
-      @$el.fileupload
-        url: @model.url()
-        progressall: (e, data) => if data.loaded and data.total
-          (@$ '.progress .bar').css 'width', "#{data.loaded/data.total*100}%"
-      save = @$el.fileupload 'send', fileInput: (@$f 'file_upload')
-    else
-      if not @model.get 'name'
-        if @model.old_name()
-          @model.set {name: @model.old_name()}, silent:yes
-        else if get_mimetype @model.get 'uri'
-          @model.set {name: get_filename @model.get 'uri'}, silent:yes
-        else
-          @model.set {name: @model.get 'uri'}, silent:yes
-      save = @model.save()
+
+    if not @model.get 'name'
+      if @model.old_name()
+        @model.set {name: @model.old_name()}, silent:yes
+      else if get_mimetype @model.get 'uri'
+        @model.set {name: get_filename @model.get 'uri'}, silent:yes
+      else
+        @model.set {name: @model.get 'uri'}, silent:yes
+    save = @model.save()
 
     (@$ 'input, select').prop 'disabled', on
     save.done (data) =>
@@ -220,7 +356,6 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
       @collection.add @model if not @model.collection
       (@$el.children ":first").modal 'hide'
       _.extend @model.attributes, data
-      @model.collection.add @model unless @edit
     save.fail =>
       (@$ '.progress').hide()
       (@$ 'input, select').prop 'disabled', off
@@ -234,26 +369,12 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
       yes), 500
     @_change arguments...
 
-  change_mimetype: =>
-    if (@$fv 'mimetype') != "video"
-      (@$ '.zerohint').hide()
-      @$fv 'duration', default_duration
-    else
-      (@$ '.zerohint').show()
-      @$fv 'duration', 0
-
   validate: (e) =>
     that = this
     validators =
       duration: (v) =>
         if ('video' isnt @model.get 'mimetype') and (not (_.isNumber v*1 ) or v*1 < 1)
           'please enter a valid number'
-      uri: (v) =>
-        if @model.isNew() and ((that.$ '#tab-uri').hasClass 'active') and not url_test v
-          'please enter a valid URL'
-      file_upload: (v) =>
-        if @model.isNew() and not v and not (that.$ '#tab-uri').hasClass 'active'
-          return 'please select a file'
       end_date: (v) =>
         unless (new Date @$fv 'start_date') < (new Date @$fv 'end_date')
           'end date should be after start date'
@@ -271,37 +392,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
 
   cancel: (e) =>
     @model.rollback()
-    unless @edit then @model.destroy()
     (@$el.children ":first").modal 'hide'
-
-  clickTabNavUri: (e) => # TODO: clean
-    if not (@$ '#tab-uri').hasClass 'active'
-      (@$ 'ul.nav-tabs li').removeClass 'active'
-      (@$ '.tab-pane').removeClass 'active'
-      (@$ '.tabnav-uri').addClass 'active'
-      (@$ '#tab-uri').addClass 'active'
-      (@$f 'uri').focus()
-      @updateUriMimetype()
-    no
-
-  clickTabNavUpload: (e) => # TODO: clean
-    if not (@$ '#tab-file_upload').hasClass 'active'
-      (@$ 'ul.nav-tabs li').removeClass 'active'
-      (@$ '.tab-pane').removeClass 'active'
-      (@$ '.tabnav-file_upload').addClass 'active'
-      (@$ '#tab-file_upload').addClass 'active'
-      (@$fv 'mimetype', 'image') if (@$fv 'mimetype') == 'webpage'
-      @updateFileUploadMimetype
-    no
-
-  updateUriMimetype: => _.defer => @updateMimetype @$fv 'uri'
-  updateFileUploadMimetype: => _.defer => @updateMimetype @$fv 'file_upload'
-  updateMimetype: (filename) =>
-    # also updates the filename label in the dom
-    mt = get_mimetype filename
-    (@$ '#file_upload_label').text (get_filename filename)
-    @$fv 'mimetype', mt if mt
-    @change_mimetype()
 
   toggleAdvanced: =>
     (@$ '.icon-play').toggleClass 'rotated'
@@ -310,9 +401,8 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
 
   displayAdvanced: =>
     img = 'image' is @$fv 'mimetype'
-    on_uri_tab = not @edit and (@$ '#tab-uri').hasClass 'active'
-    edit = @edit and url_test @model.get 'uri'
-    has_nocache = img and (on_uri_tab or edit)
+    edit = url_test @model.get 'uri'
+    has_nocache = img and edit
     (@$ '.advanced-accordion').toggle has_nocache is on
 
 
@@ -331,9 +421,10 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
     (@$ ".delete-asset-button").popover content: get_template 'confirm-delete'
     (@$ ".toggle input").prop "checked", @model.get 'is_enabled'
     (@$ ".asset-icon").addClass switch @model.get "mimetype"
-      when "video"   then "icon-facetime-video"
-      when "image"   then "icon-picture"
-      when "webpage" then "icon-globe"
+      when "video"     then "icon-facetime-video"
+      when "streaming" then "icon-facetime-video"
+      when "image"     then "icon-picture"
+      when "webpage"   then "icon-globe"
       else ""
     @el
 
@@ -365,7 +456,7 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
       (@$ 'input, button').prop 'disabled', on
 
   edit: (e) =>
-    new EditAssetView model: @model, edit:on
+    new EditAssetView model: @model
     no
 
   delete: (e) =>
@@ -399,7 +490,7 @@ API.View.AssetsView = class AssetsView extends Backbone.View
 
   update_order: =>
     active = (@$ '#active-assets').sortable 'toArray'
-    
+
     @collection.get(id).set('play_order', i) for id, i in active
     @collection.get(el.id).set('play_order', active.length) for el in (@$ '#inactive-assets tr').toArray()
 
@@ -407,7 +498,7 @@ API.View.AssetsView = class AssetsView extends Backbone.View
 
   render: =>
     @collection.sort()
-    
+
     (@$ "##{which}-assets").html '' for which in ['active', 'inactive']
 
     @collection.each (model) =>
@@ -416,9 +507,9 @@ API.View.AssetsView = class AssetsView extends Backbone.View
 
     for which in ['inactive', 'active']
       @$(".#{which}-table thead").toggle !!(@$("##{which}-assets tr").length)
-      
+
     @update_order()
-   
+
     @el
 
 
@@ -440,6 +531,5 @@ API.App = class App extends Backbone.View
   events: {'click #add-asset-button': 'add'}
 
   add: (e) =>
-    new EditAssetView model:
-      new Asset {}, {collection: API.assets}
+    new AddAssetView
     no

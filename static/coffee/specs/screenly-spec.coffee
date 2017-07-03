@@ -140,6 +140,9 @@ describe "Screenly Open Source", ->
 
   describe "Views", ->
 
+    it "should have AddAssetView", ->
+      expect(Screenly.View.AddAssetView).toBeDefined()
+
     it "should have EditAssetView", ->
       expect(Screenly.View.EditAssetView).toBeDefined()
 

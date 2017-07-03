@@ -73,10 +73,13 @@ body {
 
     $topOffset: $footerHeight * 0.25;
 
-    #wireload-logo {
+    #screenly-logo {
       position: absolute;
       right: 0;
       top: $topOffset;
+      color: #535d79;
+      font-weight: bold;
+      text-decoration: none;
     }
 
     .copy {
@@ -139,15 +142,32 @@ section {
 }
 
 #add-form {
- .progress {
-    margin-top: 4px;
-    margin-bottom: 0px;
-    width: 69%;
-  }
   .uri-text {
     padding-top: 5px;
     margin-left: 0px;
     overflow: hidden;
+  }
+}
+
+.modal-footer {
+  .status {
+    float: left;
+    margin-top: 6px;
+  }
+  .progress {
+    margin-top: 4px;
+    margin-bottom: 0px;
+    width: 69%;
+  }
+}
+
+#backup-section {
+  margin-bottom: 50px;
+  .progress {
+    margin-top: 5px;
+    width: 50%;
+    margin-bottom: 5px;
+    display: inline-block;
   }
 }
 
@@ -164,8 +184,10 @@ form .control-group .controls {
 }
 
 input[name="file_upload"] {
-    opacity: 0;
     position: absolute;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
     top: 0;
     left: 0;
 }
@@ -181,6 +203,15 @@ input[name="file_upload"] {
     overflow: hidden;
 }
 
+.filedrop {
+    position: relative;
+    border: 4px dashed #ccc;
+    padding: 50px;
+    text-align: center;
+    color: #888;
+    border-radius: 12px;
+}
+
 #file_upload_label {
     position: absolute;
     top: 5px;
@@ -194,8 +225,8 @@ input[name="file_upload"] {
 
 @mixin rota($angle,$time){
     @each $prefix in webkit moz ms o {
-	-#{$prefix}-transition: all $time linear;
-	-#{$prefix}-transform: rotate($angle);
+      -#{$prefix}-transition: all $time linear;
+      -#{$prefix}-transform: rotate($angle);
     }
     transition: all $time linear;
     transform: rotate($angle);

@@ -25,6 +25,7 @@ from lib import db
 from lib import queries
 from lib import assets_helper
 from lib import diagnostics
+from lib import backup_helper
 
 from lib.utils import json_dump
 from lib.utils import get_node_ip
@@ -32,8 +33,9 @@ from lib.utils import validate_url
 from lib.utils import url_fails
 from lib.utils import get_video_duration
 from dateutil import parser as date_parser
+from mimetypes import guess_type
 
-from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS
+from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS, auth_basic
 from werkzeug.wrappers import Request
 ################################
 # Utilities
@@ -89,6 +91,7 @@ def template(template_name, **context):
     # Add global contexts
     context['up_to_date'] = is_up_to_date()
     context['default_duration'] = settings['default_duration']
+    context['default_streaming_duration'] = settings['default_streaming_duration']
     context['use_24_hour_clock'] = settings['use_24_hour_clock']
     context['template_settings'] = {
         'imports': ['from lib.utils import template_handle_unicode'],
@@ -108,11 +111,10 @@ def template(template_name, **context):
 ################################
 
 def prepare_asset(request):
-
     req = Request(request.environ)
     data = None
 
-    data = json.loads(req.form['model']) if 'model' in req.form else req.form
+    data = json.loads(req.form['model'])
 
     def get(key):
         val = data.get(key, '')
@@ -123,82 +125,60 @@ def prepare_asset(request):
         else:
             return val
 
-    if all([get('name'),
-            get('uri') or req.files.get('file_upload'),
-            get('mimetype')]):
-
-        asset = {
-            'name': get('name'),
-            'mimetype': get('mimetype'),
-            'asset_id': get('asset_id'),
-            'is_enabled': get('is_enabled'),
-            'nocache': get('nocache'),
-        }
-
-        uri = get('uri') or False
-
-        if not asset['asset_id']:
-            asset['asset_id'] = uuid.uuid4().hex
-
-        try:
-            file_upload = req.files.get('file_upload')
-            filename = file_upload.filename
-        except AttributeError:
-            file_upload = None
-            filename = None
-
-        if filename and 'web' in asset['mimetype']:
-            raise Exception("Invalid combination. Can't upload a web resource.")
-
-        if uri and filename:
-            raise Exception("Invalid combination. Can't select both URI and a file.")
-
-        if uri and not uri.startswith('/'):
-            if not validate_url(uri):
-                raise Exception("Invalid URL. Failed to add asset.")
-            else:
-                asset['uri'] = uri
-        else:
-            asset['uri'] = uri
-
-        if filename:
-            asset['uri'] = path.join(settings['assetdir'], asset['asset_id'])
-
-            file_upload.save(asset['uri'])
-
-        if "video" in asset['mimetype']:
-            video_duration = get_video_duration(asset['uri'])
-            if video_duration:
-                asset['duration'] = int(video_duration.total_seconds())
-            else:
-                asset['duration'] = 'N/A'
-        else:
-            # Crashes if it's not an int. We want that.
-            asset['duration'] = int(get('duration'))
-
-        # parse date via python-dateutil and remove timezone info
-        if get('start_date'):
-            asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
-        else:
-            asset['start_date'] = ""
-
-        if get('end_date'):
-            asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
-        else:
-            asset['end_date'] = ""
-
-        if not asset['asset_id']:
-            raise Exception
-
-        if not asset['uri']:
-            raise Exception
-
-        return asset
-    else:
+    if not all([get('name'), get('uri'), get('mimetype')]):
         raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
+
+    asset = {
+        'name': get('name'),
+        'mimetype': get('mimetype'),
+        'asset_id': get('asset_id'),
+        'is_enabled': get('is_enabled'),
+        'nocache': get('nocache'),
+    }
+
+    uri = get('uri')
+
+    if uri.startswith('/'):
+        if not path.isfile(uri):
+            raise Exception("Invalid file path. Failed to add asset.")
+    else:
+        if not validate_url(uri):
+            raise Exception("Invalid URL. Failed to add asset.")
+
+    if not asset['asset_id']:
+        asset['asset_id'] = uuid.uuid4().hex
+        if uri.startswith('/'):
+            os.rename(uri, path.join(settings['assetdir'], asset['asset_id']))
+            uri = path.join(settings['assetdir'], asset['asset_id'])
+
+    asset['uri'] = uri
+
+    if "video" in asset['mimetype']:
+        video_duration = get_video_duration(asset['uri'])
+        if video_duration:
+            asset['duration'] = int(video_duration.total_seconds())
+        else:
+            asset['duration'] = 'N/A'
+    else:
+        # Crashes if it's not an int. We want that.
+        asset['duration'] = int(get('duration'))
+
+    # parse date via python-dateutil and remove timezone info
+    if get('start_date'):
+        asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
+    else:
+        asset['start_date'] = ""
+
+    if get('end_date'):
+        asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
+    else:
+        asset['end_date'] = ""
+
+    return asset
 
 
 @route('/api/assets', method="GET")
+@auth_basic
 def api_assets():
     with db.conn(settings['database']) as conn:
         assets = assets_helper.read(conn)
@@ -219,7 +199,29 @@ def api(view):
     return api_view
 
 
+@route('/api/upload_file', method="POST")
+@auth_basic
+@api
+def upload_file():
+    req = Request(request.environ)
+    file_upload = req.files.get('file_upload')
+    filename = file_upload.filename
+    file_path = path.join(settings['assetdir'], filename) + ".tmp"
+
+    if 'Content-Range' in request.headers:
+        range_str = request.headers['Content-Range']
+        start_bytes = int(range_str.split(' ')[1].split('-')[0])
+        with open(file_path, 'a') as f:
+            f.seek(start_bytes)
+            f.write(file_upload.read())
+    else:
+        file_upload.save(file_path)
+
+    return file_path
+
+
 @route('/api/assets', method="POST")
+@auth_basic
 @api
 def add_asset():
     asset = prepare_asset(request)
@@ -230,6 +232,7 @@ def add_asset():
 
 
 @route('/api/assets/:asset_id', method="GET")
+@auth_basic
 @api
 def edit_asset(asset_id):
     with db.conn(settings['database']) as conn:
@@ -237,6 +240,7 @@ def edit_asset(asset_id):
 
 
 @route('/api/assets/:asset_id', method=["PUT", "POST"])
+@auth_basic
 @api
 def edit_asset(asset_id):
     with db.conn(settings['database']) as conn:
@@ -244,6 +248,7 @@ def edit_asset(asset_id):
 
 
 @route('/api/assets/:asset_id', method="DELETE")
+@auth_basic
 @api
 def remove_asset(asset_id):
     with db.conn(settings['database']) as conn:
@@ -258,10 +263,36 @@ def remove_asset(asset_id):
 
 
 @route('/api/assets/order', method="POST")
+@auth_basic
 @api
 def playlist_order():
     with db.conn(settings['database']) as conn:
         assets_helper.save_ordering(conn, request.POST.get('ids', '').split(','))
+
+
+@route('/api/backup', method="GET")
+@auth_basic
+@api
+def backup():
+    filename = backup_helper.create_backup()
+    return filename
+
+
+@route('/api/recover', method="POST")
+@auth_basic
+@api
+def recover():
+    req = Request(request.environ)
+    file_upload = (req.files['backup_upload'])
+    filename = file_upload.filename
+
+    if guess_type(filename)[0] != 'application/x-tar':
+        raise Exception("Incorrect file extension.")
+
+    location = path.join("static", filename)
+    file_upload.save(location)
+    backup_helper.recover(location)
+    return "Recovery successful."
 
 
 ################################
@@ -270,11 +301,13 @@ def playlist_order():
 
 
 @route('/')
+@auth_basic
 def viewIndex():
     return template('index')
 
 
 @route('/settings', method=["GET", "POST"])
+@auth_basic
 def settings_page():
 
     context = {'flash': None}
@@ -302,6 +335,7 @@ def settings_page():
 
 
 @route('/system_info')
+@auth_basic
 def system_info():
     viewlog = None
     try:
@@ -367,6 +401,12 @@ def mistake404(code):
 @route('/static/:path#.+#', name='static')
 def static(path):
     return static_file(path, root='static')
+
+
+@route('/static_with_mime/:path#.+#', name='static')
+def static_with_mime(path):
+    mimetype = request.query['mime'] if 'mime' in request.query else 'auto'
+    return static_file(path, root='static', mimetype=mimetype)
 
 
 if __name__ == "__main__":

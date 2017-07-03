@@ -30,7 +30,7 @@ EMPTY_PL_DELAY = 5  # secs
 BLACK_PAGE = '/tmp/screenly_html/black_page.html'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 SCREENLY_HTML = '/tmp/screenly_html/'
-LOAD_SCREEN = '/screenly/loading.jpg'  # relative to $HOME
+LOAD_SCREEN = '/screenly/loading.png'  # relative to $HOME
 UZBLRC = '/.config/uzbl/config-screenly'  # relative to $HOME
 INTRO = '/screenly/intro-template.html'
 
@@ -211,10 +211,9 @@ def view_video(uri, duration):
     if arch in ('armv6l', 'armv7l'):
         player_args = ['omxplayer', uri]
         player_kwargs = {'o': settings['audio_output'], '_bg': True, '_ok_code': [0, 124]}
-        player_kwargs['_ok_code'] = [0, 124]
     else:
         player_args = ['mplayer', uri, '-nosound']
-        player_kwargs = {'_bg': True}
+        player_kwargs = {'_bg': True, '_ok_code': [0, 124]}
 
     if duration and duration != 'N/A':
         player_args = ['timeout', VIDEO_TIMEOUT + int(duration.split('.')[0])] + player_args
@@ -222,11 +221,14 @@ def view_video(uri, duration):
     run = sh.Command(player_args[0])(*player_args[1:], **player_kwargs)
 
     browser_clear(force=True)
-    while run.process.alive:
-        watchdog()
-        sleep(1)
-    if run.exit_code == 124:
-        logging.error('omxplayer timed out')
+    try:
+        while run.process.alive:
+            watchdog()
+            sleep(1)
+        if run.exit_code == 124:
+            logging.error('omxplayer timed out')
+    except sh.ErrorReturnCode_1:
+        logging.info('Resource URI is not correct, remote host is not responding or request was rejected.')
 
 
 def check_update():
@@ -294,7 +296,7 @@ def asset_loop(scheduler):
             # FIXME If we want to force periodic reloads of repeated web assets, force=True could be used here.
             # See e38e6fef3a70906e7f8739294ffd523af6ce66be.
             browser_url(uri)
-        elif 'video' in mime:
+        elif 'video' or 'streaming' in mime:
             view_video(uri, asset['duration'])
         else:
             logging.error('Unknown MimeType %s', mime)

@@ -9,9 +9,20 @@
     %link(href="/static/css/screenly.css", rel="stylesheet")
     %link(href="/static/css/toggle-switch.css", rel="stylesheet")
     %script(src="/static/js/jquery-1.9.1.min.js")
+    
+    %script(src="/static/js/bootstrap.min.js") /needs jquery
+    %script(src="/static/js/jquery-ui-1.10.1.custom.min.js")
+    %script(src="/static/js/jquery.fileupload.js") /needs jqueryui.widget
+    
+    %script(src="/static/js/backup.js")
 
   %body
-
+    #request-error.navbar.navbar-fixed-top
+      .container
+        .alert(style="display:none")
+          %button.close(type="button") &times;
+          %span.msg
+            
     .navbar.navbar-fixed-top
       .navbar-inner
         .container
@@ -91,6 +102,11 @@
                 %input.span1(type="number", name="default_duration", value=default_duration)
 
             .control-group
+              %label.control-label Default streaming duration
+              .controls
+                %input.span1(type="number", name="default_streaming_duration", value=default_streaming_duration)
+
+            .control-group
               %label.control-label Use 24-hour clock
               .controls
 
@@ -122,9 +138,20 @@
               %input.btn.btn-primary(type="submit", value="Save Settings")
               %a.btn(href="/") Cancel
 
+        #backup-section.span12
+          %h1.page-header
+            Backup
+          %input(type="file", name="backup_upload", style="display:none")
+          %button#btn-upload.btn.btn-primary(type="button") Upload and Recover
+          %button#btn-backup.btn Get backup
+          
+          .progress.progress-striped.active(style="display:none")
+            .bar
+
+
     #footer
       .container
         .copy
-          &copy; <strong>2012-2016.</strong> WireLoad, Inc.
-        %a(id="wireload-logo", href="http://wireload.net/", target="_blank")
-          %img(src="/static/img/wireload-logo.png", alt="WireLoad")
+          &copy; Screenly, Inc.
+        %a(id="screenly-logo", href="http://screenly.io/", target="_blank")
+          Screenly.io
