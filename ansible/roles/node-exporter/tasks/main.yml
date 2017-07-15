@@ -1,0 +1,56 @@
+---
+- set_fact:
+    node_exporter_arch: "armv7"
+  when: ansible_machine == 'armv7l'
+
+- set_fact:
+    node_exporter_arch: "armv6"
+  when: ansible_machine == 'armv6l'
+
+- set_fact:
+    node_exporter_url: "https://github.com/prometheus/node_exporter/releases/download/v{{node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}.tar.gz"
+
+- get_url:
+    url: "{{ node_exporter_url }}"
+    dest: /tmp/node_exporter.tgz
+
+- command: tar xfz /tmp/node_exporter.tgz  -C /tmp
+
+- command: mv /tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}/node_exporter /usr/local/bin
+
+- file:
+    path: /usr/local/bin/node_exporter
+    owner: root
+    group: root
+    mode: 0755
+
+- file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - /tmp/node_exporter.tgz
+    - "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}"
+
+# Debian Wheezy
+- copy:
+    src: init.d
+    dest: /etc/init.d/node_exporter
+    mode: 0755
+  when: ansible_distribution == 'Debian' and ansible_distribution_major_version == '7'
+
+- service:
+    name: node_exporter
+    state: started
+  when: ansible_distribution == 'Debian' and ansible_distribution_major_version == '7'
+
+# Debian Jessie
+- copy:
+    src: systemd
+    dest: /etc/systemd/system/node_exporter.service
+  when: ansible_distribution == 'Debian' and ansible_distribution_major_version == '8'
+
+- service:
+    name: node_exporter
+    enabled: yes
+    state: started
+  when: ansible_distribution == 'Debian' and ansible_distribution_major_version == '8'
