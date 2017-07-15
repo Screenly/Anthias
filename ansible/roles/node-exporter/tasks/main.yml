@@ -3,29 +3,29 @@
     node_exporter_arch: "armv7"
   when: ansible_machine == 'armv7l'
   tags:
-    - enable-node-exporter
+    - node-exporter
 
 - set_fact:
     node_exporter_arch: "armv6"
   when: ansible_machine == 'armv6l'
   tags:
-    - enable-node-exporter
+    - node-exporter
 
 - set_fact:
     node_exporter_url: "https://github.com/prometheus/node_exporter/releases/download/v{{node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}.tar.gz"
   tags:
-    - enable-node-exporter
+    - node-exporter
 
 - unarchive:
     src: "{{ node_exporter_url }}"
     dest: /tmp
     remote_src: True
   tags:
-    - enable-node-exporter
+    - node-exporter
 
 - command: mv /tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}/node_exporter /usr/local/bin
   tags:
-    - enable-node-exporter
+    - node-exporter
 
 - file:
     path: /usr/local/bin/node_exporter
@@ -33,7 +33,7 @@
     group: root
     mode: 0755
   tags:
-    - enable-node-exporter
+    - node-exporter
 
 - file:
     path: "{{ item }}"
@@ -41,7 +41,7 @@
   with_items:
     - "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}"
   tags:
-    - enable-node-exporter
+    - node-exporter
 
 # Debian Wheezy
 - copy:
@@ -50,14 +50,14 @@
     mode: 0755
   when: ansible_distribution == 'Debian' and ansible_distribution_major_version == '7'
   tags:
-    - enable-node-exporter
+    - node-exporter
 
 - service:
     name: node_exporter
     state: started
   when: ansible_distribution == 'Debian' and ansible_distribution_major_version == '7'
   tags:
-    - enable-node-exporter
+    - node-exporter
 
 # Debian Jessie
 - copy:
@@ -65,7 +65,7 @@
     dest: /etc/systemd/system/node_exporter.service
   when: ansible_distribution == 'Debian' and ansible_distribution_major_version == '8'
   tags:
-    - enable-node-exporter
+    - node-exporter
 
 - service:
     name: node_exporter
@@ -73,4 +73,4 @@
     state: started
   when: ansible_distribution == 'Debian' and ansible_distribution_major_version == '8'
   tags:
-    - enable-node-exporter
+    - node-exporter

@@ -38,9 +38,9 @@ fi
 
 echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
 if [ "$UPGRADE" != 'y' ]; then
-  EXTRA_ARGS="--skip-tags untagged"
+  EXTRA_ARGS="--tags untagged
 else
-  EXTRA_ARGS="--skip-tags enable-ssl,node-exporter"
+  EXTRA_ARGS="--tags untagged,system-upgrade"
 fi
 
 set -x

@@ -5,21 +5,21 @@
     state: present
     update_cache: yes
   tags:
-    - enable-ssl
+    - ssl
 
 - name: Removes stunnel
   apt:
     name: stunnel4
     state: absent
   tags:
-    - enable-ssl
+    - ssl
 
 - name: Cleans up default config
   file:
     path: /etc/nginx/sites-enabled/default
     state: absent
   tags:
-    - enable-ssl
+    - ssl
 
 - name: Installs nginx config
   copy:
@@ -31,7 +31,7 @@
   notify:
     - restart-nginx
   tags:
-    - enable-ssl
+    - ssl
 
 - name: Installs self-signed certificates
   copy:
@@ -45,7 +45,7 @@
     - screenly.crt
     - screenly.key
   tags:
-    - enable-ssl
+    - ssl
 
 - name: Modifies Screenly Server to only listen on localhost
   lineinfile:
@@ -55,6 +55,6 @@
   notify:
     - restart-screenly-server
   tags:
-    - enable-ssl
+    - ssl
 
 

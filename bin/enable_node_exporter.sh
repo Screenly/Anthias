@@ -1,7 +1,7 @@
 #!/bin/bash -ex
 
 cd ~/screenly/ansible
-ansible-playbook -t enable-ssl site.yml
+ansible-playbook -t node-exporter site.yml
 
 set +x
 echo "You should be all set. You should be able to access monitor the device using Prometheus at http://<your IP>:9100/metrics"
