@@ -361,7 +361,7 @@ def system_info():
 
     return template(
         'system_info',
-        player_name = player_name,
+        player_name=player_name,
         viewlog=viewlog,
         loadavg=loadavg,
         free_space=free_space,
