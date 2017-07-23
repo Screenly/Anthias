@@ -303,7 +303,8 @@ def recover():
 @route('/')
 @auth_basic
 def viewIndex():
-    return template('index')
+    system_name=settings['system_name']
+    return template('index', system_name=system_name)
 
 
 @route('/settings', method=["GET", "POST"])

@@ -59,6 +59,11 @@
 
           %form.form-horizontal(method="post")
             .control-group
+              %label.control-label System name
+              .controls
+               %input.span4(type="text", name="system_name", value=system_name) 
+
+            .control-group
               %label.control-label Show splash screen
               .controls
                 %label.checkbox.toggle.well#splash_checkbox
