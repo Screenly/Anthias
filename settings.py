@@ -18,7 +18,7 @@ DEFAULTS = {
         'use_24_hour_clock': False
     },
     'viewer': {
-        'system_name': '',
+        'player_name': None,
         'show_splash': True,
         'audio_output': 'hdmi',
         'shuffle_playlist': False,
