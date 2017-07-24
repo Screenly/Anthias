@@ -4,12 +4,18 @@ import re
 import certifi
 from netifaces import ifaddresses
 from sh import grep, netstat
+from subprocess import check_output, call
 from urlparse import urlparse
 from datetime import timedelta
-from settings import settings
+from settings import settings, ZmqPublisher
+from assets_helper import update
 from datetime import datetime
+from os import getenv, path
+import db
 import pytz
 from platform import machine
+
+from threading import Thread
 
 arch = machine()
 
@@ -165,6 +171,35 @@ def url_fails(url):
         pass
 
     return True
+
+
+def download_video_from_youtube(uri, asset_id):
+    home = getenv('HOME')
+    name = check_output(['youtube-dl', '-e', uri])
+
+    location = path.join(home, 'screenly_assets', asset_id)
+    thread = YoutubeDownloadThread(location, uri, asset_id)
+    thread.daemon = True
+    thread.start()
+
+    return location, unicode(name.decode('utf-8'))
+
+
+class YoutubeDownloadThread(Thread):
+    def __init__(self, location, uri, asset_id):
+        Thread.__init__(self)
+        self.location = location
+        self.uri = uri
+        self.asset_id = asset_id
+
+    def run(self):
+        publisher = ZmqPublisher.get_instance()
+        call(['youtube-dl', '-f', 'mp4', '-o', self.location, self.uri])
+        publisher.send("video are downloaded")
+        with db.conn(settings['database']) as conn:
+            update(conn, self.asset_id, {'asset_id': self.asset_id, 'is_processing': 0})
+
+        publisher.send(self.asset_id)
 
 
 def template_handle_unicode(value):

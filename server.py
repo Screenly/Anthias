@@ -27,7 +27,7 @@ from lib import assets_helper
 from lib import diagnostics
 from lib import backup_helper
 
-from lib.utils import json_dump
+from lib.utils import json_dump, download_video_from_youtube
 from lib.utils import get_node_ip
 from lib.utils import validate_url
 from lib.utils import url_fails
@@ -93,6 +93,7 @@ def template(template_name, **context):
     context['default_duration'] = settings['default_duration']
     context['default_streaming_duration'] = settings['default_streaming_duration']
     context['use_24_hour_clock'] = settings['use_24_hour_clock']
+    context['listen_ip'] = get_node_ip()
     context['template_settings'] = {
         'imports': ['from lib.utils import template_handle_unicode'],
         'default_filters': ['template_handle_unicode'],
@@ -133,6 +134,7 @@ def prepare_asset(request):
         'mimetype': get('mimetype'),
         'asset_id': get('asset_id'),
         'is_enabled': get('is_enabled'),
+        'is_processing': get('is_processing'),
         'nocache': get('nocache'),
     }
 
@@ -151,12 +153,20 @@ def prepare_asset(request):
             os.rename(uri, path.join(settings['assetdir'], asset['asset_id']))
             uri = path.join(settings['assetdir'], asset['asset_id'])
 
+    if 'youtube_asset' in asset['mimetype']:
+        uri, asset['name'] = download_video_from_youtube(uri, asset['asset_id'])
+        asset['mimetype'] = 'video'
+        asset['is_processing'] = 1
+
     asset['uri'] = uri
 
     if "video" in asset['mimetype']:
-        video_duration = get_video_duration(asset['uri'])
-        if video_duration:
-            asset['duration'] = int(video_duration.total_seconds())
+        if asset['is_processing'] == 0:
+            video_duration = get_video_duration(uri)
+            if video_duration:
+                asset['duration'] = int(video_duration.total_seconds())
+            else:
+                asset['duration'] = 'N/A'
         else:
             asset['duration'] = 'N/A'
     else:

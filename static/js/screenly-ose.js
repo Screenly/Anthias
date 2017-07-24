@@ -3,7 +3,7 @@
 /* screenly-ose ui */
 
 (function() {
-  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_settings, date_settings_12hour, date_settings_24hour, date_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, viduris,
+  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_settings, date_settings_12hour, date_settings_24hour, date_to, delay, domains, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, viduris,
     indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -95,13 +95,22 @@
 
   viduris = 'rtsp rtmp'.split(' ');
 
+  domains = [['www.youtube.com youtu.be'.split(' '), 'youtube_asset']];
+
   get_mimetype = (function(_this) {
     return function(filename) {
-      var ext, match, mt, scheme;
+      var domain, ext, match, mt, scheme;
       scheme = (_.first(filename.split(':'))).toLowerCase();
       match = indexOf.call(viduris, scheme) >= 0;
       if (match) {
         return 'streaming';
+      }
+      domain = _.first(((_.last(filename.split('//'))).toLowerCase()).split('/'));
+      mt = _.find(domains, function(mt) {
+        return indexOf.call(mt[0], domain) >= 0;
+      });
+      if (mt && indexOf.call(mt[0], domain) >= 0) {
+        return mt[1];
       }
       ext = (_.last(filename.split('.'))).toLowerCase();
       mt = _.find(mimetypes, function(mt) {
@@ -155,6 +164,7 @@
         end_date: '',
         duration: default_duration,
         is_enabled: 0,
+        is_processing: 0,
         nocache: 0,
         play_order: 0
       };
@@ -781,6 +791,10 @@
             return "";
         }
       }).call(this));
+      if ((this.model.get("is_processing")) === 1) {
+        (this.$('input, button')).prop('disabled', true);
+        (this.$(".asset-toggle")).html(get_template('processing-message'));
+      }
       return this.el;
     };
 
@@ -949,6 +963,7 @@
     }
 
     App.prototype.initialize = function() {
+      var ws;
       ($(window)).ajaxError((function(_this) {
         return function(e, r) {
           var err, j;
@@ -964,10 +979,18 @@
         };
       })(this));
       (API.assets = new Assets()).fetch();
-      return API.assetsView = new AssetsView({
+      API.assetsView = new AssetsView({
         collection: API.assets,
         el: this.$('#assets')
       });
+      ws = new WebSocket("ws://" + listen_ip + ":9999/");
+      return ws.onmessage = function(x) {
+        var model, save;
+        model = API.assets.get(x.data);
+        if (model) {
+          return save = model.fetch();
+        }
+      };
     };
 
     App.prototype.events = {

@@ -37,6 +37,7 @@
       var default_duration = ${default_duration};
       var default_streaming_duration = ${default_streaming_duration};
       var use_24_hour_clock = ${'true' if use_24_hour_clock else 'false'};
+      var listen_ip = `${listen_ip}`;
 
     %script(src="/static/js/underscore-1.4.3.min.js")
 
@@ -73,7 +74,7 @@
           %i.icon-pencil
         %button.delete-asset-button.btn(type="button", dataTitle="Are you sure?", dataPlacement="left", dataHtml="true", dataTrigger="manual")
           %i.icon-trash
-      %td(style="width:7%")
+      %td.asset-toggle(style="width:7%")
         %label.is_enabled-toggle.checkbox.toggle.well
           %input(type="checkbox")
           %p
@@ -87,6 +88,9 @@
           %a.confirm-delete.btn.btn-medium.btn-danger(href="#") Delete
         .pull-right
           %a.cancel-delete.btn.btn-medium(href="#") Cancel
+
+    %script(type="text/template", id="processing-message-template")
+      %label.processing-message Asset in processing
 
     %script(type="text/template", id="request-error-template")
       .container
@@ -153,6 +157,7 @@
                         %option(value="image") Image
                         %option(value="video") Video
                         %option(value="streaming") Streaming
+                        %option(value="youtube_asset") YouTubeAsset
 
                 %hr
                 %fieldset
