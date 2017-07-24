@@ -40,6 +40,7 @@ asset_w = {
     'duration': u'5',
     'is_enabled': 1,
     'nocache': 0,
+    'is_processing': 0,
     'play_order': 1,
 }
 
@@ -57,6 +58,7 @@ asset_x = {
     'duration': u'5',
     'is_enabled': 1,
     'nocache': 0,
+    'is_processing': 0,
     'play_order': 1,
 }
 
@@ -74,6 +76,7 @@ asset_y = {
     'duration': u'6',
     'is_enabled': 1,
     'nocache': 0,
+    'is_processing': 0,
     'play_order': 0,
 }
 asset_y_diff = {
@@ -88,6 +91,7 @@ asset_z = {
     'duration': u'1',
     'is_enabled': 1,
     'nocache': 0,
+    'is_processing': 0,
 }
 url_fail = 'http://doesnotwork.example.com'
 url_redir = 'http://example.com'
