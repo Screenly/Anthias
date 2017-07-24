@@ -7,6 +7,7 @@ from contextlib import contextmanager
 
 settings1 = """
 [viewer]
+player_name = new player
 show_splash = off
 audio_output = hdmi
 shuffle_playlist = on
@@ -79,6 +80,7 @@ class SettingsTest(unittest.TestCase):
 
     def test_parse_settings(self):
         with fake_settings(settings1) as (mod_settings, settings):
+            self.assertEquals(settings['player_name'], 'new player')
             self.assertEquals(settings['show_splash'], False)
             self.assertEquals(settings['shuffle_playlist'], True)
             self.assertEquals(settings['debug_logging'], True)
@@ -86,6 +88,7 @@ class SettingsTest(unittest.TestCase):
 
     def test_default_settings(self):
         with fake_settings(empty_settings) as (mod_settings, settings):
+            self.assertEquals(settings['player_name'], mod_settings.DEFAULTS['viewer']['player_name'])
             self.assertEquals(settings['show_splash'], mod_settings.DEFAULTS['viewer']['show_splash'])
             self.assertEquals(settings['shuffle_playlist'], mod_settings.DEFAULTS['viewer']['shuffle_playlist'])
             self.assertEquals(settings['debug_logging'], mod_settings.DEFAULTS['viewer']['debug_logging'])
