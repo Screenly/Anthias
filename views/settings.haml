@@ -3,7 +3,10 @@
 
   %head
     %meta(charset="utf-8")
-    %title Screenly OSE
+      - if not player_name:
+        %title Screenly OSE
+      - else:
+        %title Screenly OSE - ${player_name}
 
     %link(href="/static/css/bootstrap.css", rel="stylesheet")
     %link(href="/static/css/screenly.css", rel="stylesheet")
@@ -58,6 +61,11 @@
             </div>
 
           %form.form-horizontal(method="post")
+            .control-group
+              %label.control-label Player name
+              .controls
+               %input.span4(type="text", name="player_name", value=player_name) 
+
             .control-group
               %label.control-label Show splash screen
               .controls

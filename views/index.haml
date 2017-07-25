@@ -3,7 +3,10 @@
 
   %head
     %meta(charset="utf-8")
-    %title Screenly OSE
+      - if not player_name:
+        %title Screenly OSE
+      - else:
+        %title Screenly OSE - ${player_name}
 
     / favicons
     %link(rel="apple-touch-icon-precomposed", sizes="57x57", href="/static/favicons/apple-touch-icon-57x57.png")
@@ -256,6 +259,9 @@
                 %i.icon-plus.icon-white
                 Add Asset
             Schedule Overview
+          - if player_name:
+            %h2
+              ${player_name}
 
       #assets.row
         .span12
