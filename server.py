@@ -346,6 +346,7 @@ def system_info():
     loadavg = diagnostics.get_load_avg()['15 min']
 
     display_info = diagnostics.get_monitor_status()
+    display_status = diagnostics.get_display_status()
 
     # Calculate disk space
     slash = statvfs("/")
@@ -361,7 +362,8 @@ def system_info():
         loadavg=loadavg,
         free_space=free_space,
         uptime=system_uptime,
-        display_info=display_info
+        display_info=display_info,
+        display_status=display_status
     )
 
 
