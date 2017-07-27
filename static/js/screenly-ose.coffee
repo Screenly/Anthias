@@ -60,12 +60,18 @@ delay = (wait, fn) -> _.delay fn, wait
 mimetypes = [ [('jpg jpeg png pnm gif bmp'.split ' '), 'image']
               [('avi mkv mov mpg mpeg mp4 ts flv'.split ' '), 'video']]
 viduris   = ('rtsp rtmp'.split ' ')
+domains = [ [('www.youtube.com youtu.be'.split ' '), 'youtube_asset']]
 
 
 get_mimetype = (filename) =>
   scheme = (_.first filename.split ':').toLowerCase()
   match = scheme in viduris
   if match then return 'streaming'
+
+  domain = (_.first ((_.last filename.split '//').toLowerCase()).split '/')
+  mt = _.find domains, (mt) -> domain in mt[0]
+  if mt and domain in mt[0] then return mt[1]
+
   ext = (_.last filename.split '.').toLowerCase()
   mt = _.find mimetypes, (mt) -> ext in mt[0]
   if mt then mt[1] else null
@@ -90,6 +96,7 @@ API.Asset = class Asset extends Backbone.Model
     end_date: ''
     duration: default_duration
     is_enabled: 0
+    is_processing: 0
     nocache: 0
     play_order: 0
   active: =>
@@ -426,6 +433,11 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
       when "image"     then "icon-picture"
       when "webpage"   then "icon-globe"
       else ""
+
+    if (@model.get "is_processing") == 1
+      (@$ 'input, button').prop 'disabled', on
+      (@$ ".asset-toggle").html get_template 'processing-message'
+
     @el
 
   events:
@@ -527,6 +539,11 @@ API.App = class App extends Backbone.View
       collection: API.assets
       el: @$ '#assets'
 
+    ws = new WebSocket "ws://" + listen_ip + ":9999/"
+    ws.onmessage = (x) ->
+      model = API.assets.get(x.data)
+      if model
+        save = model.fetch()
 
   events: {'click #add-asset-button': 'add'}
 

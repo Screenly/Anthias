@@ -20,3 +20,8 @@ uptime==2.0.2
 werkzeug==0.10.4
 wsgiref==0.1.2
 futures==3.0.5
+youtube_dl>=2017.7.2
+pyzmq==16.0.2
+gevent==1.2.2
+gevent-websocket==0.10.1
+

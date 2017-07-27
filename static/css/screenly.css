@@ -213,6 +213,11 @@ input[name="file_upload"] {
 
 .table td {
   vertical-align: middle !important; }
+.table .asset-toggle {
+  text-align: center; }
+.table .processing-message {
+  width: 117px;
+  margin-bottom: 2px; }
 
 .is_enabled-toggle {
   margin: 5px 0 5px 0 !important; }

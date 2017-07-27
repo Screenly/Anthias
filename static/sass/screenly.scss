@@ -247,7 +247,19 @@ input[name="file_upload"] {
     min-width: 320px;
 }
 .asset_row_btns { padding: 6px 8px 10px 8px !important; }
-.table td { vertical-align: middle !important; }
+
+.table {
+  td { 
+    vertical-align: middle !important; 
+  }
+  .asset-toggle {
+    text-align: center;
+  }
+  .processing-message {
+    width: 117px;
+    margin-bottom: 2px;
+  }
+}
 .is_enabled-toggle { margin: 5px 0 5px 0 !important; }
 
 #subscribe-popover {
