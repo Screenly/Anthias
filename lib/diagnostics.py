@@ -60,6 +60,19 @@ def get_monitor_status():
         return 'Unable to run tvservice.'
 
 
+def get_display_power():
+    try:
+        display_status = sh.vcgencmd('display_power').stdout.strip().split('=')
+        if display_status[1] == '1':
+            return 'True'
+        elif:
+            return 'False'
+        else:
+            return 'Unknown'
+    except:
+        return 'Unable to determine display power.'
+
+
 def get_network_interfaces():
     if_data = {}
     for interface in netifaces.interfaces():
@@ -152,6 +165,7 @@ def compile_report():
     report['uptime'] = get_uptime()
     report['kernel_modules'] = get_kernel_modules()
     report['monitor'] = get_monitor_status()
+    report['display_power'] = get_display_power()
     report['ifconfig'] = get_network_interfaces()
     report['hostname'] = socket.gethostname()
     report['playlist'] = get_playlist()
