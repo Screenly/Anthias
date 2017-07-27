@@ -59,6 +59,7 @@ def get_monitor_status():
     except:
         return 'Unable to run tvservice.'
 
+
 def get_display_status():
     try:
         display_status = sh.vcgencmd('display_power').stdout.strip().split('=')
@@ -70,6 +71,7 @@ def get_display_status():
             return 'Unknown'
     except:
         return 'Unable to determine display power.'
+
 
 def get_network_interfaces():
     if_data = {}
