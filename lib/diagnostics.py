@@ -65,7 +65,7 @@ def get_display_power():
         display_status = sh.vcgencmd('display_power').stdout.strip().split('=')
         if display_status[1] == '1':
             return 'True'
-        elif:
+        elif display_status[1] == '0':
             return 'False'
         else:
             return 'Unknown'
