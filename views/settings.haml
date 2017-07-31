@@ -115,6 +115,17 @@
                 %input.span1(type="number", name="default_streaming_duration", value=default_streaming_duration)
 
             .control-group
+              %label.control-label Date format
+              .controls
+                %select.span2(name="date_format")
+                  - if date_format == 'ddmmyy':
+                    %option(value="ddmmyy", selected="selected") day/month/year
+                    %option(value="mmddyy") month/day/year
+                  - else:
+                    %option(value="ddmmyy") day/month/year
+                    %option(value="mmddyy", selected="selected") month/day/year
+
+            .control-group
               %label.control-label Use 24-hour clock
               .controls
 
