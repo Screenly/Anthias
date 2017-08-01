@@ -38,6 +38,7 @@ DEFAULTS = {
 }
 CONFIGURABLE_SETTINGS = DEFAULTS['viewer']
 CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock']
+CONFIGURABLE_SETTINGS['date_format'] = DEFAULTS['main']['date_format']
 
 # Initiate logging
 logging.basicConfig(level=logging.INFO,
