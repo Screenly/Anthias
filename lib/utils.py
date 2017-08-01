@@ -2,7 +2,7 @@ import requests
 import json
 import re
 import certifi
-from netifaces import ifaddresses
+from netifaces import ifaddresses, interfaces
 from sh import grep, netstat
 from subprocess import check_output, call
 from urlparse import urlparse
@@ -56,18 +56,33 @@ def validate_url(string):
 
 
 def get_node_ip():
-    """Returns the node's IP, for the interface
-    that is being used as the default gateway.
-    This shuld work on both MacOS X and Linux."""
+    if arch in ('armv6l', 'armv7l'):
+        active_interfaces = interfaces()
 
-    try:
-        default_interface = grep(netstat('-nr'), '-e', '^default', '-e' '^0.0.0.0').split()[-1]
-        my_ip = ifaddresses(default_interface)[2][0]['addr']
-        return my_ip
-    except:
-        pass
+        if 'eth0' in active_interfaces:
+            interface = 'eth0'
+        elif 'wlan0' in active_interfaces:
+            interface = 'wlan0'
+        else:
+            raise Exception("No active network interface found.")
 
-    return None
+        try:
+            my_ip = ifaddresses(interface)[2][0]['addr']
+            return my_ip
+        except KeyError:
+            raise Exception("Unable to retrieve an IP.")
+
+    else:
+        """Returns the node's IP, for the interface
+        that is being used as the default gateway.
+        This shuld work on both MacOS X and Linux."""
+
+        try:
+            default_interface = grep(netstat('-nr'), '-e', '^default', '-e' '^0.0.0.0').split()[-1]
+            my_ip = ifaddresses(default_interface)[2][0]['addr']
+            return my_ip
+        except:
+            raise Exception("'Unable to resolve local IP address.")
 
 
 def get_video_duration(file):
