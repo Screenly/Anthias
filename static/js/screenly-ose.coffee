@@ -28,29 +28,33 @@ $().ready ->
 
 API = (window.Screenly ||= {}) # exports
 
-date_settings_12hour =
-  full_date: 'MM/DD/YYYY hh:mm:ss A',
-  date: 'MM/DD/YYYY',
+time_settings_12hour =
   time: 'hh:mm A',
-  show_meridian: true,
-  date_picker_format: 'mm/dd/yyyy'
+  show_meridian: true
 
-date_settings_24hour =
+time_settings_24hour =
+  time: 'HH:mm',
+  show_meridian: false
+
+date_settings_us =
   full_date: 'MM/DD/YYYY HH:mm:ss',
   date: 'MM/DD/YYYY',
-  time: 'HH:mm',
-  show_meridian: false,
   datepicker_format: 'mm/dd/yyyy'
 
-date_settings = if use_24_hour_clock then date_settings_24hour else date_settings_12hour
+date_settings_uk =
+  full_date: 'DD/MM/YYYY HH:mm:ss',
+  date: 'DD/MM/YYYY',
+  datepicker_format: 'dd/mm/yyyy'
 
+time_settings = if use_24_hour_clock then time_settings_24hour else time_settings_12hour
+date_settings = if use_us_date then date_settings_us else date_settings_uk
 
 API.date_to = date_to = (d) ->
   # Cross-browser UTC to localtime conversion
   dd = moment.utc(d).local()
   string: -> dd.format date_settings.full_date
   date: -> dd.format date_settings.date
-  time: -> dd.format date_settings.time
+  time: -> dd.format time_settings.time
 
 now = -> new Date()
 
@@ -291,7 +295,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
   initialize: (options) =>
     ($ 'body').append @$el.html get_template 'asset-modal'
     (@$ 'input.time').timepicker
-      minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: date_settings.show_meridian
+      minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: time_settings.show_meridian
 
     (@$ 'input[name="nocache"]').prop 'checked', @model.get 'nocache'
     (@$ '.modal-header .close').remove()
