@@ -312,7 +312,8 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     (@$ '.asset-location').hide(); (@$ '.uri').hide(); (@$ '.asset-location.edit').show()
     (@$ '.mime-select').prop('disabled', 'true')
 
-    (@$ '.duration').toggle (true)
+    if (@model.get 'mimetype') == 'video'
+      (@$f 'duration').prop 'disabled', on
 
     for field in @model.fields
       if (@$fv field) != @model.get field
