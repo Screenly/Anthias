@@ -161,6 +161,7 @@ def get_debian_version():
 
 def compile_report():
     report = {}
+    report['locale'] = utils.get_locale()
     report['cpu_info'] = parse_cpu_info()
     report['uptime'] = get_uptime()
     report['kernel_modules'] = get_kernel_modules()

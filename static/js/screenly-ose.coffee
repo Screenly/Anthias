@@ -28,33 +28,28 @@ $().ready ->
 
 API = (window.Screenly ||= {}) # exports
 
-time_settings_12hour =
+locale_settings_us =
   time: 'hh:mm A',
-  show_meridian: true
-
-time_settings_24hour =
-  time: 'HH:mm',
-  show_meridian: false
-
-date_settings_us =
+  show_meridian: true,
   full_date: 'MM/DD/YYYY HH:mm:ss',
   date: 'MM/DD/YYYY',
   datepicker_format: 'mm/dd/yyyy'
 
-date_settings_uk =
-  full_date: 'DD/MM/YYYY HH:mm:ss',
+locale_settings_uk =
+  time: 'HH:mm',
+  show_meridian: false,
+  full_date: 'DD/MM/YYYY HH:mm A',
   date: 'DD/MM/YYYY',
   datepicker_format: 'dd/mm/yyyy'
 
-time_settings = if use_24_hour_clock then time_settings_24hour else time_settings_12hour
-date_settings = if use_us_date then date_settings_us else date_settings_uk
+locale_settings = if locale == 'en_GB' then locale_settings_uk else locale_settings_us
 
 API.date_to = date_to = (d) ->
   # Cross-browser UTC to localtime conversion
   dd = moment.utc(d).local()
-  string: -> dd.format date_settings.full_date
-  date: -> dd.format date_settings.date
-  time: -> dd.format time_settings.time
+  string: -> dd.format locale_settings.full_date
+  date: -> dd.format locale_settings.date
+  time: -> dd.format locale_settings.time
 
 now = -> new Date()
 
@@ -295,7 +290,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
   initialize: (options) =>
     ($ 'body').append @$el.html get_template 'asset-modal'
     (@$ 'input.time').timepicker
-      minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: time_settings.show_meridian
+      minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: locale_settings.show_meridian
 
     (@$ 'input[name="nocache"]').prop 'checked', @model.get 'nocache'
     (@$ '.modal-header .close').remove()
@@ -326,7 +321,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     for which in ['start', 'end']
       d = date_to @model.get "#{which}_date"
       @$fv "#{which}_date_date", d.date()
-      (@$f "#{which}_date_date").datepicker autoclose: yes, format: date_settings.datepicker_format
+      (@$f "#{which}_date_date").datepicker autoclose: yes, format: locale_settings.datepicker_format
       (@$f "#{which}_date_date").datepicker 'setValue', d.date()
       @$fv "#{which}_date_time", d.time()
 

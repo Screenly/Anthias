@@ -115,29 +115,15 @@
                 %input.span1(type="number", name="default_streaming_duration", value=default_streaming_duration)
 
             .control-group
-              %label.control-label Date format
+              %label.control-label Date Time locale
               .controls
-                %select.span2(name="date_format")
-                  - if date_format == 'ddmmyy':
-                    %option(value="ddmmyy", selected="selected") day/month/year
-                    %option(value="mmddyy") month/day/year
+                %select.span2(name="locale")
+                  - if locale == 'en_GB':
+                    %option(value="en_GB", selected="selected") en_GB
+                    %option(value="en_US") en_US
                   - else:
-                    %option(value="ddmmyy") day/month/year
-                    %option(value="mmddyy", selected="selected") month/day/year
-
-            .control-group
-              %label.control-label Use 24-hour clock
-              .controls
-
-                %label.checkbox.toggle.well#use_24_hour_clock_checkbox
-                  - if use_24_hour_clock:
-                    %input(type="checkbox", checked="checked", name="use_24_hour_clock")
-                  - else:
-                    %input(type="checkbox", name="use_24_hour_clock")
-                  %p
-                    %span.on On
-                    %span.off Off
-                  %a.btn.btn-primary.slide-button
+                    %option(value="en_GB") en_GB
+                    %option(value="en_US", selected="selected") en_US
 
             .control-group
               %label.control-label Debug logging

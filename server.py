@@ -92,7 +92,7 @@ def template(template_name, **context):
     context['up_to_date'] = is_up_to_date()
     context['default_duration'] = settings['default_duration']
     context['default_streaming_duration'] = settings['default_streaming_duration']
-    context['use_24_hour_clock'] = settings['use_24_hour_clock']
+    context['locale'] = settings['locale']
     context['listen_ip'] = get_node_ip()
     context['template_settings'] = {
         'imports': ['from lib.utils import template_handle_unicode'],
@@ -447,4 +447,5 @@ if __name__ == "__main__":
         server='gunicorn',
         threads=2,
         timeout=20,
+        debug=True,
     )

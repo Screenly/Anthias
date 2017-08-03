@@ -2,6 +2,7 @@ import requests
 import json
 import re
 import certifi
+import locale
 from netifaces import ifaddresses
 from sh import grep, netstat
 from subprocess import check_output, call
@@ -206,3 +207,11 @@ def template_handle_unicode(value):
     if isinstance(value, str):
         return value.decode('utf-8')
     return unicode(value)
+
+
+def get_locale():
+    try:
+        default_locale = locale.getdefaultlocale()
+        return default_locale
+    except:
+        return False

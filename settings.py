@@ -17,8 +17,7 @@ DEFAULTS = {
         'database': CONFIG_DIR + 'screenly.db',
         'listen': '0.0.0.0:8080',
         'assetdir': 'screenly_assets',
-        'use_24_hour_clock': False,
-        'date_format': 'mmddyy'
+        'locale': 'en_GB'
     },
     'viewer': {
         'player_name': '',
@@ -29,7 +28,7 @@ DEFAULTS = {
         'default_duration': '10',
         'default_streaming_duration': '300',
         'debug_logging': False,
-        'verify_ssl': True,
+        'verify_ssl': True
     },
     'auth': {
         'user': '',
@@ -37,8 +36,7 @@ DEFAULTS = {
     }
 }
 CONFIGURABLE_SETTINGS = DEFAULTS['viewer']
-CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock']
-CONFIGURABLE_SETTINGS['date_format'] = DEFAULTS['main']['date_format']
+CONFIGURABLE_SETTINGS['locale'] = DEFAULTS['main']['locale']
 
 # Initiate logging
 logging.basicConfig(level=logging.INFO,

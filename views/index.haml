@@ -39,8 +39,7 @@
     :javascript
       var default_duration = ${default_duration};
       var default_streaming_duration = ${default_streaming_duration};
-      var use_24_hour_clock = ${'true' if use_24_hour_clock else 'false'};
-      var date_format = ${date_format};
+      var locale = `${locale}`;
       var listen_ip = `${listen_ip}`;
 
     %script(src="/static/js/underscore-1.4.3.min.js")
