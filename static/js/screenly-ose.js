@@ -565,7 +565,10 @@
       (this.$('.uri')).hide();
       (this.$('.asset-location.edit')).show();
       (this.$('.mime-select')).prop('disabled', 'true');
-      (this.$('.duration')).toggle(true);
+      if ((this.model.get('mimetype')) === 'video') {
+        console.log('video');
+        (this.$f('duration')).prop('disabled', true);
+      }
       ref1 = this.model.fields;
       for (l = 0, len1 = ref1.length; l < len1; l++) {
         field = ref1[l];
