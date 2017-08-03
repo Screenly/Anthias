@@ -447,5 +447,4 @@ if __name__ == "__main__":
         server='gunicorn',
         threads=2,
         timeout=20,
-        debug=True,
     )
