@@ -51,7 +51,7 @@
   locale_settings_us = {
     time: 'hh:mm A',
     show_meridian: true,
-    full_date: 'MM/DD/YYYY HH:mm:ss',
+    full_date: 'MM/DD/YYYY HH:mm',
     date: 'MM/DD/YYYY',
     datepicker_format: 'mm/dd/yyyy'
   };
@@ -59,12 +59,12 @@
   locale_settings_uk = {
     time: 'HH:mm',
     show_meridian: false,
-    full_date: 'DD/MM/YYYY HH:mm A',
+    full_date: 'DD/MM/YYYY HH:mm',
     date: 'DD/MM/YYYY',
     datepicker_format: 'dd/mm/yyyy'
   };
 
-  switch (locale_settings) {
+  switch (locale) {
     case 'en_GB':
       locale_settings = locale_settings_uk;
       break;
