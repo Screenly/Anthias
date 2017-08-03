@@ -42,7 +42,7 @@ locale_settings_uk =
   date: 'DD/MM/YYYY',
   datepicker_format: 'dd/mm/yyyy'
 
-switch locale_settings
+switch locale
   when 'en_GB' then locale_settings = locale_settings_uk
   when 'en_US' then locale_settings = locale_settings_us
 
