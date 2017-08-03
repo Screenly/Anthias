@@ -42,7 +42,9 @@ locale_settings_uk =
   date: 'DD/MM/YYYY',
   datepicker_format: 'dd/mm/yyyy'
 
-locale_settings = if locale == 'en_GB' then locale_settings_uk else locale_settings_us
+switch locale_settings
+  when 'en_GB' then locale_settings = locale_settings_uk
+  when 'en_US' then locale_settings = locale_settings_us
 
 API.date_to = date_to = (d) ->
   # Cross-browser UTC to localtime conversion
