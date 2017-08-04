@@ -121,7 +121,7 @@ API.Asset = class Asset extends Backbone.Model
 
 
 API.Assets = class Assets extends Backbone.Collection
-  url: "/api/assets"
+  url: "/api/v1/assets"
   model: Asset
   comparator: 'play_order'
 
@@ -202,7 +202,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         autoUpload: false
         sequentialUploads: true
         maxChunkSize: 5000000 #5 MB
-        url: 'api/upload_file'
+        url: 'api/v1/upload_file'
         progressall: (e, data) => if data.loaded and data.total
           (@$ '.progress .bar').css 'width', "#{data.loaded/data.total*100}%"
         add: (e, data) ->
@@ -507,7 +507,7 @@ API.View.AssetsView = class AssetsView extends Backbone.View
     @collection.get(id).set('play_order', i) for id, i in active
     @collection.get(el.id).set('play_order', active.length) for el in (@$ '#inactive-assets tr').toArray()
 
-    $.post '/api/assets/order', ids: ((@$ '#active-assets').sortable 'toArray').join ','
+    $.post '/api/v1/assets/order', ids: ((@$ '#active-assets').sortable 'toArray').join ','
 
   render: =>
     @collection.sort()
