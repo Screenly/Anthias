@@ -210,7 +210,7 @@
       return Assets.__super__.constructor.apply(this, arguments);
     }
 
-    Assets.prototype.url = "/api/assets";
+    Assets.prototype.url = "/api/v1/assets";
 
     Assets.prototype.model = Asset;
 
@@ -362,7 +362,7 @@
           autoUpload: false,
           sequentialUploads: true,
           maxChunkSize: 5000000,
-          url: 'api/upload_file',
+          url: 'api/v1/upload_file',
           progressall: (function(_this) {
             return function(e, data) {
               if (data.loaded && data.total) {
@@ -919,7 +919,7 @@
         el = ref[l];
         this.collection.get(el.id).set('play_order', active.length);
       }
-      return $.post('/api/assets/order', {
+      return $.post('/api/v1/assets/order', {
         ids: ((this.$('#active-assets')).sortable('toArray')).join(',')
       });
     };

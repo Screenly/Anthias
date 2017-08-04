@@ -187,7 +187,7 @@ def prepare_asset(request):
     return asset
 
 
-@route('/api/assets', method="GET")
+@route('/api/v1/assets', method="GET")
 @auth_basic
 def api_assets():
     with db.conn(settings['database']) as conn:
@@ -209,7 +209,7 @@ def api(view):
     return api_view
 
 
-@route('/api/upload_file', method="POST")
+@route('/api/v1/upload_file', method="POST")
 @auth_basic
 @api
 def upload_file():
@@ -230,7 +230,7 @@ def upload_file():
     return file_path
 
 
-@route('/api/assets', method="POST")
+@route('/api/v1/assets', method="POST")
 @auth_basic
 @api
 def add_asset():
@@ -241,7 +241,7 @@ def add_asset():
         return assets_helper.create(conn, asset)
 
 
-@route('/api/assets/:asset_id', method="GET")
+@route('/api/v1/assets/:asset_id', method="GET")
 @auth_basic
 @api
 def edit_asset(asset_id):
@@ -249,7 +249,7 @@ def edit_asset(asset_id):
         return assets_helper.read(conn, asset_id)
 
 
-@route('/api/assets/:asset_id', method=["PUT", "POST"])
+@route('/api/v1/assets/:asset_id', method=["PUT", "POST"])
 @auth_basic
 @api
 def edit_asset(asset_id):
@@ -257,7 +257,7 @@ def edit_asset(asset_id):
         return assets_helper.update(conn, asset_id, prepare_asset(request))
 
 
-@route('/api/assets/:asset_id', method="DELETE")
+@route('/api/v1/assets/:asset_id', method="DELETE")
 @auth_basic
 @api
 def remove_asset(asset_id):
@@ -272,7 +272,7 @@ def remove_asset(asset_id):
         response.status = 204  # return an OK with no content
 
 
-@route('/api/assets/order', method="POST")
+@route('/api/v1/assets/order', method="POST")
 @auth_basic
 @api
 def playlist_order():
@@ -280,7 +280,7 @@ def playlist_order():
         assets_helper.save_ordering(conn, request.POST.get('ids', '').split(','))
 
 
-@route('/api/backup', method="GET")
+@route('/api/v1/backup', method="GET")
 @auth_basic
 @api
 def backup():
@@ -288,7 +288,7 @@ def backup():
     return filename
 
 
-@route('/api/recover', method="POST")
+@route('/api/v1/recover', method="POST")
 @auth_basic
 @api
 def recover():
