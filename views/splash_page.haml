@@ -22,8 +22,8 @@
             %p.lead To manage the content on this screen, just point your browser to:
 
             .well.lead
-              %a(href="${url}") ${url}
+              %a(href="${msg}") ${msg}
           - else:
-            %p.lead Unable to resolve management IP.
+            %p.lead ${msg}
 
       %hr

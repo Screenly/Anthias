@@ -93,7 +93,6 @@ def template(template_name, **context):
     context['default_duration'] = settings['default_duration']
     context['default_streaming_duration'] = settings['default_streaming_duration']
     context['use_24_hour_clock'] = settings['use_24_hour_clock']
-    context['listen_ip'] = get_node_ip()
     context['template_settings'] = {
         'imports': ['from lib.utils import template_handle_unicode'],
         'default_filters': ['template_handle_unicode'],
@@ -314,7 +313,8 @@ def recover():
 @auth_basic
 def viewIndex():
     player_name = settings['player_name']
-    return template('index', player_name=player_name)
+    listen_ip = get_node_ip()
+    return template('index', listen_ip=listen_ip, player_name=player_name)
 
 
 @route('/settings', method=["GET", "POST"])
@@ -385,8 +385,12 @@ def system_info():
 
 @route('/splash_page')
 def splash_page():
-    my_ip = get_node_ip()
-    if my_ip:
+    try:
+        my_ip = get_node_ip()
+    except Exception as e:
+        ip_lookup = False
+        error_msg = e
+    else:
         ip_lookup = True
 
         # If we bind on 127.0.0.1, `enable_ssl.sh` has most likely been
@@ -395,11 +399,9 @@ def splash_page():
             url = 'https://{}'.format(my_ip)
         else:
             url = "http://{}:{}".format(my_ip, settings.get_listen_port())
-    else:
-        ip_lookup = False
-        url = "Unable to look up your installation's IP address."
 
-    return template('splash_page', ip_lookup=ip_lookup, url=url)
+    msg = url if url else error_msg
+    return template('splash_page', ip_lookup=ip_lookup, msg=msg)
 
 
 @error(403)
