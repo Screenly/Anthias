@@ -2,7 +2,7 @@ import requests
 import json
 import re
 import certifi
-from netifaces import ifaddresses, interfaces
+from netifaces import ifaddresses
 from sh import grep, netstat
 from subprocess import check_output, call
 from urlparse import urlparse
@@ -57,14 +57,30 @@ def validate_url(string):
 
 def get_node_ip():
     if arch in ('armv6l', 'armv7l'):
-        active_interfaces = interfaces()
 
-        if 'eth0' in active_interfaces:
-            interface = 'eth0'
-        elif 'wlan0' in active_interfaces:
-            interface = 'wlan0'
-        else:
-            raise Exception("No active network interface found.")
+        interface = None
+        for n in range(10):
+            iface = 'eth{}'.format(n)
+            try:
+                file_carrier = open('/sys/class/net/' + iface + '/carrier')
+                file_operstate = open('/sys/class/net/' + iface + '/operstate')
+
+                if "1" in file_carrier.read() and "up" in file_operstate.read():
+                    interface = iface
+                    break
+            except IOError:
+                continue
+
+        if not interface:
+            file_interfaces = open('/etc/network/interfaces')
+            for n in range(10):
+                iface = 'wlan{}'.format(n)
+                if iface in file_interfaces.read():
+                    interface = iface
+                    break
+
+        if not interface:
+            raise Exception("No active network connection found.")
 
         try:
             my_ip = ifaddresses(interface)[2][0]['addr']
@@ -82,7 +98,7 @@ def get_node_ip():
             my_ip = ifaddresses(default_interface)[2][0]['addr']
             return my_ip
         except:
-            raise Exception("'Unable to resolve local IP address.")
+            raise Exception("Unable to resolve local IP address.")
 
 
 def get_video_duration(file):
