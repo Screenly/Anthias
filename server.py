@@ -385,6 +385,7 @@ def system_info():
 
 @route('/splash_page')
 def splash_page():
+    url = None
     try:
         my_ip = get_node_ip()
     except Exception as e:
