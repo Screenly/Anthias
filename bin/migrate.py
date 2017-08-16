@@ -62,15 +62,20 @@ alter table assets add play_order integer default 0;
 commit;
 """
 
+query_add_is_processing = """
+begin transaction;
+alter table assets add is_processing integer default 0;
+commit;
+"""
 
-def migrate_add_play_order():
+
+def migrate_add_column(col, script):
     with open_db_get_cursor() as (cursor, conn):
-        col = 'play_order'
         if test_column(col, cursor):
             print 'Column (' + col + ') already present'
         else:
             print 'Adding new column (' + col + ')'
-            cursor.executescript(query_add_play_order)
+            cursor.executescript(script)
             assets = read(cursor)
             for asset in assets:
                 asset.update({'play_order': 0})
@@ -158,5 +163,6 @@ if __name__ == '__main__':
     migrate_drop_filename()
     migrate_add_is_enabled_and_nocache()
     migrate_make_asset_id_primary_key()
-    migrate_add_play_order()
+    migrate_add_column('play_order', query_add_play_order)
+    migrate_add_column('is_processing', query_add_is_processing)
     print "Migration done."
