@@ -4,6 +4,8 @@ from geventwebsocket.handler import WebSocketHandler
 from threading import Thread
 import zmq.green as zmq
 
+from settings import settings
+
 
 class WebSocketTranslator(object):
     def __init__(self, context):
@@ -44,6 +46,8 @@ if __name__ == "__main__":
     context = zmq.Context()
     listener = ScreenlyServerListener(context)
     listener.start()
-    server = pywsgi.WSGIServer(("", 9999), WebSocketTranslator(context),
+
+    port = int(settings['websocket_port'])
+    server = pywsgi.WSGIServer(("", port), WebSocketTranslator(context),
                                handler_class=WebSocketHandler)
     server.serve_forever()
