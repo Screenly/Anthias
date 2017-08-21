@@ -540,7 +540,7 @@ API.App = class App extends Backbone.View
       collection: API.assets
       el: @$ '#assets'
 
-    ws = new WebSocket "ws://" + listen_ip + ":9999/"
+    ws = new WebSocket ws_address
     ws.onmessage = (x) ->
       model = API.assets.get(x.data)
       if model

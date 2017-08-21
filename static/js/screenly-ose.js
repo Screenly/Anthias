@@ -566,7 +566,6 @@
       (this.$('.asset-location.edit')).show();
       (this.$('.mime-select')).prop('disabled', 'true');
       if ((this.model.get('mimetype')) === 'video') {
-        console.log('video');
         (this.$f('duration')).prop('disabled', true);
       }
       ref1 = this.model.fields;
@@ -986,7 +985,7 @@
         collection: API.assets,
         el: this.$('#assets')
       });
-      ws = new WebSocket("ws://" + listen_ip + ":9999/");
+      ws = new WebSocket(ws_address);
       return ws.onmessage = function(x) {
         var model, save;
         model = API.assets.get(x.data);

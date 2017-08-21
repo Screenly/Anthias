@@ -313,8 +313,14 @@ def recover():
 @auth_basic
 def viewIndex():
     player_name = settings['player_name']
-    listen_ip = get_node_ip()
-    return template('index', listen_ip=listen_ip, player_name=player_name)
+    my_ip = get_node_ip()
+
+    # If we bind on 127.0.0.1, `enable_ssl.sh` has most likely been executed
+    if settings.get_listen_ip() == '127.0.0.1':
+        ws_address = 'wss://' + my_ip + '/ws/'
+    else:
+        ws_address = 'ws://' + my_ip + ':' + settings['websocket_port']
+    return template('index', ws_address=ws_address, player_name=player_name)
 
 
 @route('/settings', method=["GET", "POST"])

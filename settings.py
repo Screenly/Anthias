@@ -17,7 +17,8 @@ DEFAULTS = {
         'database': CONFIG_DIR + 'screenly.db',
         'listen': '0.0.0.0:8080',
         'assetdir': 'screenly_assets',
-        'use_24_hour_clock': False
+        'use_24_hour_clock': False,
+        'websocket_port': '9999'
     },
     'viewer': {
         'player_name': '',
