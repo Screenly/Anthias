@@ -10,7 +10,7 @@ $().ready ->
     $('#btn-upload').prop 'disabled', yes
     $('#btn-backup').prop 'disabled', yes
 
-    $.get "api/backup"
+    $.get "api/v1/backup"
     .done  (data, e) ->
       if (data)
         window.location = "static_with_mime/" + data + "?mime=application/x-tgz"
@@ -35,7 +35,7 @@ $().ready ->
     $('[name="backup_upload"]').click()
 
   $('[name="backup_upload"]').fileupload
-    url: "api/recover"
+    url: "api/v1/recover"
     progressall: (e, data) -> if data.loaded and data.total
       valuenow = data.loaded/data.total*100
       $('.progress .bar').css 'width', valuenow + '%'

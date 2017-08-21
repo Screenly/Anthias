@@ -3,7 +3,10 @@
 
   %head
     %meta(charset="utf-8")
-    %title Screenly OSE
+      - if not player_name:
+        %title Screenly OSE
+      - else:
+        %title Screenly OSE - ${player_name}
 
     %link(href="/static/css/bootstrap.css", rel="stylesheet")
     %link(href="/static/css/screenly.css", rel="stylesheet")
@@ -46,12 +49,14 @@
                 %th Free Space
                 %th Uptime
                 %th Monitor Info
+                %th Display Power
             %tbody
               %tr
                 %td ${loadavg}
                 %td ${free_space}
                 %td ${uptime.days} days and ${uptime.seconds / 3600} hours
                 %td ${display_info}
+                %td ${display_power}
           %section
             .header
               Latest Viewer Logs

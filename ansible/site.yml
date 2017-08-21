@@ -9,6 +9,9 @@
         name: nginx
         state: restarted
 
+    - name: restart-screenly-websocket_server_layer
+      command: systemctl restart screenly-websocket_server_layer.service
+
     - name: restart-screenly-server
       command: systemctl restart screenly-web.service
 

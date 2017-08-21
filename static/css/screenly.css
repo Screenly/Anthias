@@ -28,7 +28,7 @@ body {
 
 #footer {
   height: 40px;
-  background: url(../img/wireload-bg.jpeg);
+  background: url(../img/screenly-bg.jpeg);
   border-top: 1px #ccc solid;
   -webkit-box-shadow: 0 -2px 9px rgba(0, 0, 0, 0.05);
   -moz-box-shadow: 0 -2px 9px rgba(0, 0, 0, 0.05);
@@ -213,6 +213,11 @@ input[name="file_upload"] {
 
 .table td {
   vertical-align: middle !important; }
+.table .asset-toggle {
+  text-align: center; }
+.table .processing-message {
+  width: 117px;
+  margin-bottom: 2px; }
 
 .is_enabled-toggle {
   margin: 5px 0 5px 0 !important; }

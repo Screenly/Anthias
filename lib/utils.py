@@ -4,12 +4,18 @@ import re
 import certifi
 from netifaces import ifaddresses
 from sh import grep, netstat
+from subprocess import check_output, call
 from urlparse import urlparse
 from datetime import timedelta
-from settings import settings
+from settings import settings, ZmqPublisher
+from assets_helper import update
 from datetime import datetime
+from os import getenv, path
+import db
 import pytz
 from platform import machine
+
+from threading import Thread
 
 arch = machine()
 
@@ -50,18 +56,49 @@ def validate_url(string):
 
 
 def get_node_ip():
-    """Returns the node's IP, for the interface
-    that is being used as the default gateway.
-    This shuld work on both MacOS X and Linux."""
+    if arch in ('armv6l', 'armv7l'):
 
-    try:
-        default_interface = grep(netstat('-nr'), '-e', '^default', '-e' '^0.0.0.0').split()[-1]
-        my_ip = ifaddresses(default_interface)[2][0]['addr']
-        return my_ip
-    except:
-        pass
+        interface = None
+        for n in range(10):
+            iface = 'eth{}'.format(n)
+            try:
+                file_carrier = open('/sys/class/net/' + iface + '/carrier')
+                file_operstate = open('/sys/class/net/' + iface + '/operstate')
 
-    return None
+                if "1" in file_carrier.read() and "up" in file_operstate.read():
+                    interface = iface
+                    break
+            except IOError:
+                continue
+
+        if not interface:
+            file_interfaces = open('/etc/network/interfaces')
+            for n in range(10):
+                iface = 'wlan{}'.format(n)
+                if iface in file_interfaces.read():
+                    interface = iface
+                    break
+
+        if not interface:
+            raise Exception("No active network connection found.")
+
+        try:
+            my_ip = ifaddresses(interface)[2][0]['addr']
+            return my_ip
+        except KeyError:
+            raise Exception("Unable to retrieve an IP.")
+
+    else:
+        """Returns the node's IP, for the interface
+        that is being used as the default gateway.
+        This shuld work on both MacOS X and Linux."""
+
+        try:
+            default_interface = grep(netstat('-nr'), '-e', '^default', '-e' '^0.0.0.0').split()[-1]
+            my_ip = ifaddresses(default_interface)[2][0]['addr']
+            return my_ip
+        except:
+            raise Exception("Unable to resolve local IP address.")
 
 
 def get_video_duration(file):
@@ -165,6 +202,35 @@ def url_fails(url):
         pass
 
     return True
+
+
+def download_video_from_youtube(uri, asset_id):
+    home = getenv('HOME')
+    name = check_output(['youtube-dl', '-e', uri])
+
+    location = path.join(home, 'screenly_assets', asset_id)
+    thread = YoutubeDownloadThread(location, uri, asset_id)
+    thread.daemon = True
+    thread.start()
+
+    return location, unicode(name.decode('utf-8'))
+
+
+class YoutubeDownloadThread(Thread):
+    def __init__(self, location, uri, asset_id):
+        Thread.__init__(self)
+        self.location = location
+        self.uri = uri
+        self.asset_id = asset_id
+
+    def run(self):
+        publisher = ZmqPublisher.get_instance()
+        call(['youtube-dl', '-f', 'mp4', '-o', self.location, self.uri])
+        publisher.send("video are downloaded")
+        with db.conn(settings['database']) as conn:
+            update(conn, self.asset_id, {'asset_id': self.asset_id, 'is_processing': 0})
+
+        publisher.send(self.asset_id)
 
 
 def template_handle_unicode(value):

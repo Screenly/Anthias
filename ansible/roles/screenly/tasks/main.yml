@@ -85,5 +85,6 @@
 - name: Restart services
   command: /bin/true
   notify:
+    - restart-screenly-websocket_server_layer
     - restart-screenly-server
     - restart-screenly-viewer

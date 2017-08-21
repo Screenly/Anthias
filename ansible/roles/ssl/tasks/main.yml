@@ -53,6 +53,7 @@
     regexp: '^.*listen.*'
     dest: /home/pi/.screenly/screenly.conf
   notify:
+    - restart-screenly-websocket_server_layer
     - restart-screenly-server
   tags:
     - enable-ssl

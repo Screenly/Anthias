@@ -57,7 +57,7 @@ body {
 
 #footer {
   height: $footerHeight;
-  background: url(../img/wireload-bg.jpeg);
+  background: url(../img/screenly-bg.jpeg);
   border-top: 1px #ccc solid;
   @include box-shadow(0 -2px 9px rgba(0, 0, 0, 0.05));
   opacity: 0.9;
@@ -247,7 +247,19 @@ input[name="file_upload"] {
     min-width: 320px;
 }
 .asset_row_btns { padding: 6px 8px 10px 8px !important; }
-.table td { vertical-align: middle !important; }
+
+.table {
+  td { 
+    vertical-align: middle !important; 
+  }
+  .asset-toggle {
+    text-align: center;
+  }
+  .processing-message {
+    width: 117px;
+    margin-bottom: 2px;
+  }
+}
 .is_enabled-toggle { margin: 5px 0 5px 0 !important; }
 
 #subscribe-popover {

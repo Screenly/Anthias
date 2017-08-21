@@ -27,7 +27,7 @@ from lib import assets_helper
 from lib import diagnostics
 from lib import backup_helper
 
-from lib.utils import json_dump
+from lib.utils import json_dump, download_video_from_youtube
 from lib.utils import get_node_ip
 from lib.utils import validate_url
 from lib.utils import url_fails
@@ -133,6 +133,7 @@ def prepare_asset(request):
         'mimetype': get('mimetype'),
         'asset_id': get('asset_id'),
         'is_enabled': get('is_enabled'),
+        'is_processing': get('is_processing'),
         'nocache': get('nocache'),
     }
 
@@ -151,12 +152,20 @@ def prepare_asset(request):
             os.rename(uri, path.join(settings['assetdir'], asset['asset_id']))
             uri = path.join(settings['assetdir'], asset['asset_id'])
 
+    if 'youtube_asset' in asset['mimetype']:
+        uri, asset['name'] = download_video_from_youtube(uri, asset['asset_id'])
+        asset['mimetype'] = 'video'
+        asset['is_processing'] = 1
+
     asset['uri'] = uri
 
     if "video" in asset['mimetype']:
-        video_duration = get_video_duration(asset['uri'])
-        if video_duration:
-            asset['duration'] = int(video_duration.total_seconds())
+        if asset['is_processing'] == 0:
+            video_duration = get_video_duration(uri)
+            if video_duration:
+                asset['duration'] = int(video_duration.total_seconds())
+            else:
+                asset['duration'] = 'N/A'
         else:
             asset['duration'] = 'N/A'
     else:
@@ -177,7 +186,7 @@ def prepare_asset(request):
     return asset
 
 
-@route('/api/assets', method="GET")
+@route('/api/v1/assets', method="GET")
 @auth_basic
 def api_assets():
     with db.conn(settings['database']) as conn:
@@ -199,7 +208,7 @@ def api(view):
     return api_view
 
 
-@route('/api/upload_file', method="POST")
+@route('/api/v1/upload_file', method="POST")
 @auth_basic
 @api
 def upload_file():
@@ -220,7 +229,7 @@ def upload_file():
     return file_path
 
 
-@route('/api/assets', method="POST")
+@route('/api/v1/assets', method="POST")
 @auth_basic
 @api
 def add_asset():
@@ -231,7 +240,7 @@ def add_asset():
         return assets_helper.create(conn, asset)
 
 
-@route('/api/assets/:asset_id', method="GET")
+@route('/api/v1/assets/:asset_id', method="GET")
 @auth_basic
 @api
 def edit_asset(asset_id):
@@ -239,7 +248,7 @@ def edit_asset(asset_id):
         return assets_helper.read(conn, asset_id)
 
 
-@route('/api/assets/:asset_id', method=["PUT", "POST"])
+@route('/api/v1/assets/:asset_id', method=["PUT", "POST"])
 @auth_basic
 @api
 def edit_asset(asset_id):
@@ -247,7 +256,7 @@ def edit_asset(asset_id):
         return assets_helper.update(conn, asset_id, prepare_asset(request))
 
 
-@route('/api/assets/:asset_id', method="DELETE")
+@route('/api/v1/assets/:asset_id', method="DELETE")
 @auth_basic
 @api
 def remove_asset(asset_id):
@@ -262,7 +271,7 @@ def remove_asset(asset_id):
         response.status = 204  # return an OK with no content
 
 
-@route('/api/assets/order', method="POST")
+@route('/api/v1/assets/order', method="POST")
 @auth_basic
 @api
 def playlist_order():
@@ -270,7 +279,7 @@ def playlist_order():
         assets_helper.save_ordering(conn, request.POST.get('ids', '').split(','))
 
 
-@route('/api/backup', method="GET")
+@route('/api/v1/backup', method="GET")
 @auth_basic
 @api
 def backup():
@@ -278,7 +287,7 @@ def backup():
     return filename
 
 
-@route('/api/recover', method="POST")
+@route('/api/v1/recover', method="POST")
 @auth_basic
 @api
 def recover():
@@ -303,7 +312,15 @@ def recover():
 @route('/')
 @auth_basic
 def viewIndex():
-    return template('index')
+    player_name = settings['player_name']
+    my_ip = get_node_ip()
+
+    # If we bind on 127.0.0.1, `enable_ssl.sh` has most likely been executed
+    if settings.get_listen_ip() == '127.0.0.1':
+        ws_address = 'wss://' + my_ip + '/ws/'
+    else:
+        ws_address = 'ws://' + my_ip + ':' + settings['websocket_port']
+    return template('index', ws_address=ws_address, player_name=player_name)
 
 
 @route('/settings', method=["GET", "POST"])
@@ -347,6 +364,8 @@ def system_info():
 
     display_info = diagnostics.get_monitor_status()
 
+    display_power = diagnostics.get_display_power()
+
     # Calculate disk space
     slash = statvfs("/")
     free_space = size(slash.f_bavail * slash.f_frsize)
@@ -355,20 +374,30 @@ def system_info():
     uptime_in_seconds = diagnostics.get_uptime()
     system_uptime = timedelta(seconds=uptime_in_seconds)
 
+    # Player name for title
+    player_name = settings['player_name']
+
     return template(
         'system_info',
+        player_name=player_name,
         viewlog=viewlog,
         loadavg=loadavg,
         free_space=free_space,
         uptime=system_uptime,
-        display_info=display_info
+        display_info=display_info,
+        display_power=display_power
     )
 
 
 @route('/splash_page')
 def splash_page():
-    my_ip = get_node_ip()
-    if my_ip:
+    url = None
+    try:
+        my_ip = get_node_ip()
+    except Exception as e:
+        ip_lookup = False
+        error_msg = e
+    else:
         ip_lookup = True
 
         # If we bind on 127.0.0.1, `enable_ssl.sh` has most likely been
@@ -377,11 +406,9 @@ def splash_page():
             url = 'https://{}'.format(my_ip)
         else:
             url = "http://{}:{}".format(my_ip, settings.get_listen_port())
-    else:
-        ip_lookup = False
-        url = "Unable to look up your installation's IP address."
 
-    return template('splash_page', ip_lookup=ip_lookup, url=url)
+    msg = url if url else error_msg
+    return template('splash_page', ip_lookup=ip_lookup, msg=msg)
 
 
 @error(403)

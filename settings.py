@@ -3,10 +3,12 @@
 
 from os import path, getenv
 from sys import exit
+from time import sleep
 import ConfigParser
 import logging
 from UserDict import IterableUserDict
 import bottle
+import zmq
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -15,9 +17,11 @@ DEFAULTS = {
         'database': CONFIG_DIR + 'screenly.db',
         'listen': '0.0.0.0:8080',
         'assetdir': 'screenly_assets',
-        'use_24_hour_clock': False
+        'use_24_hour_clock': False,
+        'websocket_port': '9999'
     },
     'viewer': {
+        'player_name': '',
         'show_splash': True,
         'audio_output': 'hdmi',
         'shuffle_playlist': False,
@@ -130,6 +134,28 @@ class ScreenlySettings(IterableUserDict):
 
 
 settings = ScreenlySettings()
+
+
+class ZmqPublisher:
+    INSTANCE = None
+
+    def __init__(self):
+        if self.INSTANCE is not None:
+            raise ValueError("An instantiation already exists!")
+
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.PUB)
+        self.socket.connect('tcp://127.0.0.1:10001')
+        sleep(1)
+
+    @classmethod
+    def get_instance(cls):
+        if cls.INSTANCE is None:
+            cls.INSTANCE = ZmqPublisher()
+        return cls.INSTANCE
+
+    def send(self, msg):
+        self.socket.send(msg)
 
 
 def auth_basic(orig):
