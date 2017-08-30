@@ -362,7 +362,7 @@
           autoUpload: false,
           sequentialUploads: true,
           maxChunkSize: 5000000,
-          url: 'api/v1/upload_file',
+          url: 'api/v1/file_asset',
           progressall: (function(_this) {
             return function(e, data) {
               if (data.loaded && data.total) {

@@ -7,7 +7,8 @@ from time import sleep
 import ConfigParser
 import logging
 from UserDict import IterableUserDict
-import bottle
+from flask import request, Response
+from functools import wraps
 import zmq
 
 CONFIG_DIR = '.screenly/'
@@ -158,5 +159,17 @@ class ZmqPublisher:
         self.socket.send(msg)
 
 
+def authenticate():
+    return Response("Access denied", 401, {"WWW-Authenticate": "Basic realm=private"})
+
+
 def auth_basic(orig):
-    return orig if not settings['user'] or not settings['password'] else bottle.auth_basic(settings.check_user)(orig)
+    @wraps(orig)
+    def decorated(*args, **kwargs):
+        if not settings['user'] or not settings['password']:
+            return orig(*args, **kwargs)
+        auth = request.authorization
+        if not auth or not settings.check_user(auth.username, auth.password):
+            return authenticate()
+        return orig(*args, **kwargs)
+    return decorated

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+
+    {% if context.player_name %}
+      <title>Screenly OSE - {{context.player_name}}</title>
+    {% else %}
+      <title>Screenly OSE</title>
+    {% endif %}
+      
+    <link href="/static/favicons/apple-touch-icon-57x57.png" rel="apple-touch-icon-precomposed" sizes="57x57" />
+    <link href="/static/favicons/apple-touch-icon-114x114.png" rel="apple-touch-icon-precomposed" sizes="114x114" />
+    <link href="/static/favicons/apple-touch-icon-72x72.png" rel="apple-touch-icon-precomposed" sizes="72x72" />
+    <link href="/static/favicons/apple-touch-icon-144x144.png" rel="apple-touch-icon-precomposed" sizes="144x144" />
+    <link href="/static/favicons/apple-touch-icon-60x60.png" rel="apple-touch-icon-precomposed" sizes="60x60" />
+    <link href="/static/favicons/apple-touch-icon-120x120.png" rel="apple-touch-icon-precomposed" sizes="120x120" />
+    <link href="/static/favicons/apple-touch-icon-76x76.png" rel="apple-touch-icon-precomposed" sizes="76x76" />
+    <link href="/static/favicons/apple-touch-icon-152x152.png" rel="apple-touch-icon-precomposed" sizes="152x152" />
+    <link href="/static/favicons/favicon-196x196.png" rel="icon" sizes="196x196" type="image/png" />
+    <link href="/static/favicons/favicon-96x96.png" rel="icon" sizes="96x96" type="image/png" />
+    <link href="/static/favicons/favicon-32x32.png" rel="icon" sizes="32x32" type="image/png" />
+    <link href="/static/favicons/favicon-16x16.png" rel="icon" sizes="16x16" type="image/png" />
+    <link href="/static/favicons/favicon-128.png" rel="icon" sizes="128x128" type="image/png" />
+    <meta content="screenly-ose;" name="application-name" />
+    <meta content="#FFFFFF" name="msapplication-TileColor" />
+    <meta content="/static/favicons/mstile-144x144.png" name="msapplication-TileImage" />
+    <meta content="/static/favicons/mstile-70x70.png" name="msapplication-square70x70logo" />
+    <meta content="/static/favicons/mstile-150x150.png" name="msapplication-square150x150logo" />
+    <meta content="/static/favicons/mstile-310x150.png" name="msapplication-wide310x150logo" />
+    <meta content="/static/favicons/mstile-310x310.png" name="msapplication-square310x310logo" />
+
+    <link href="/static/css/bootstrap.css" rel="stylesheet" />
+    <link href="/static/css/datepicker.css" rel="stylesheet" />
+    <link href="/static/css/timepicker.css" rel="stylesheet" />
+    <link href="/static/css/toggle-switch.css" rel="stylesheet" />
+    <link href="/static/css/screenly.css" rel="stylesheet" />
+
+    <script type="text/javascript">
+      var default_duration = {{context.default_duration}};
+      var default_streaming_duration = {{context.default_streaming_duration}};
+
+      {% if context.use_24_hour_clock %}
+      var use_24_hour_clock = true
+      {% else %}
+      var use_24_hour_clock = false
+      {% endif %}
+
+      var ws_address = `{{context.ws_address}}`;
+    </script>
+
+    <script src="/static/js/underscore-1.4.3.min.js"></script>
+    <script src="/static/js/jquery-1.9.1.min.js"></script>
+    <script src="/static/js/jquery.iframe-transport.js"></script>
+
+    <script src="/static/js/backbone-0.9.10.min.js"></script> <!-- needs jquery -->
+
+    <script src="/static/js/jquery-ui-1.10.1.custom.min.js"></script>
+    <script src="/static/js/jquery.fileupload.js"></script> <!-- needs jqueryui.widget -->
+
+    <script src="/static/js/bootstrap.min.js"></script> <!-- needs jquery -->
+    <script src="/static/js/bootstrap-datepicker.js"></script>
+    <script src="/static/js/bootstrap-timepicker.js"></script>
+
+    <script src="/static/js/moment.js"></script>
+    <script src="/static/js/screenly-ose.js"></script>
+    <script src="/static/js/main.js"></script>
+
+    <script id="asset-row-template" type="text/template">
+      <td class="asset_row_name">
+        <img src="static/img/drag-handle.png" />
+        <i class="asset-icon"></i>
+        <%= name %>
+      </td>
+      <td style="width:21%">
+        <%= start_date %>
+      </td>
+      <td style="width:21%">
+        <%= end_date %>
+      </td>
+      <td class="asset_row_btns" style="width:13%">
+        <button class="edit-asset-button btn" type="button">
+          <i class="icon-pencil"></i>
+        </button>
+        <button class="delete-asset-button btn" data-html="true" data-placement="left" data-title="Are you sure?" data-trigger="manual" type="button">
+          <i class="icon-trash"></i>
+        </button>
+      </td>
+      <td class="asset-toggle" style="width:7%">
+        <label class="is_enabled-toggle checkbox toggle well">
+          <input type="checkbox" />
+          <p>
+            <span class="on">On</span>
+            <span class="off">Off</span>
+          </p>
+          <a class="slide-button btn btn-primary"></a>
+        </label>
+      </td>
+    </script>
+
+    <script id="confirm-delete-template" type="text/template">
+      <div class="clearfix">
+        <div class="pull-left">
+          <a class="confirm-delete btn btn-medium btn-danger" href="#">Delete</a>
+        </div>
+        <div class="pull-right">
+          <a class="cancel-delete btn btn-medium" href="#">Cancel</a>
+        </div>
+      </div>
+    </script>
+
+    <script id="processing-message-template" type="text/template">
+      <label class="processing-message">Asset in processing</label>
+    </script>
+
+    <script id="request-error-template" type="text/template">
+      <div class="container">
+        <div class="alert alert-error">
+          <button class="close" data-dismiss="alert" type="button">&times;</button>
+          <span class="msg">
+            The operation failed. Please reload the page and try again.
+          </span>
+        </div>
+      </div>
+    </script>
+
+    <script id="asset-modal-template" type="text/template">
+      <div class="modal hide fade" aria-hidden="true" aria-labelledby="myModalLabel" role="dialog" tabindex="-1">
+        <div class="form-horizontal">
+          <div class="modal-header">
+            <h3 id="modalLabel">Add Asset</h3>
+          </div>
+          <div class="modal-body">
+            <div class="asset-location add">
+              <fieldset>
+                <div class="tabbable">
+                  <ul class="nav nav-tabs">
+                    <li class="active tabnav-uri" style="margin-left:180px">
+                      <a data-toggle="tab" href="#tab-uri">URL</a>
+                    </li>
+                    <li class="tabnav-file_upload">
+                      <a data-toggle="tab" href="#tab-file_upload">Upload</a>
+                    </li>
+                  </ul>
+                  <div class="tab-content">
+                    <div id="tab-uri" class="tab-pane active"></div>
+                    <div id="tab-file_upload" class="tab-pane">
+                      <div class="control-group">
+                        <div class="filedrop">
+                          <div class="upload-header">
+                            <button class="btn">Add Files..</button>
+                            <input name="file_upload" type="file" />
+                            <br />
+                            or
+                          </div>
+                          <div>
+                            drop files here to upload
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </fieldset>
+            </div>
+            <form id="add-form">
+              <fieldset>
+                <div class="control-group uri">
+                  <label class="control-label">Asset URL</label>
+                  <div class="controls">
+                    <input class="span4" name="uri" placeholder="Public URL to this asset's location" type="text" />
+                  </div>
+                </div>
+              </fieldset>
+              <div class="asset-location edit" style="display:none">
+                <fieldset></fieldset>
+                <div class="control-group name">
+                  <label class="control-label">Name</label>
+                  <div class="controls">
+                    <input class="span4" name="name" placeholder="Nickname for this asset" type="text" />
+                  </div>
+                </div>
+                <fieldset>
+                  <div class="control-group">
+                    <label class="control-label">Asset Location</label>
+                    <div class="controls">
+                      <div class="uri-text span4 first"></div>
+                    </div>
+                  </div>
+                </fieldset>
+                <fieldset>
+                  <div class="control-group mimetype">
+                    <label class="control-label">Asset Type</label>
+                    <div class="controls">
+                      <select class="mime-select span2" name="mimetype">
+                        <option value="webpage">Webpage</option>
+                        <option value="image">Image</option>
+                        <option value="video">Video</option>
+                        <option value="streaming">Streaming</option>
+                        <option value="youtube_asset">YouTubeAsset</option>
+                      </select>
+                    </div>
+                  </div>
+                </fieldset>
+                <hr />
+                <fieldset>
+                  <div class="control-group start_date">
+                    <label class="control-label">Start Date</label>
+                    <div class="controls">
+                      <input class="span2 date" name="start_date_date" type="text" />
+                      <input class="span2 time" name="start_date_time" type="text" />
+                      <input name="start_date" type="hidden" />
+                    </div>
+                  </div>
+                  <div class="control-group end_date">
+                    <label class="control-label">End Date</label>
+                    <div class="controls">
+                      <input class="span2 date" name="end_date_date" type="text" />
+                      <input class="span2 time" name="end_date_time" type="text" />
+                      <input name="end_date" type="hidden" />
+                    </div>
+                  </div>
+                  <div class="control-group duration">
+                    <label class="control-label">Duration</label>
+                    <div class="controls">
+                      <input class="span1" name="duration" type="number" />
+                      seconds
+                      &nbsp;
+                      <span class="muted zerohint" style="display:none">use 0 to autodetect video length</span>
+                    </div>
+                  </div>
+                  <div class="advanced-accordion accordion">
+                    <div class="accordion-group">
+                      <div class="accrodion-heading">
+                        <i class="icon-play unrotated"></i>
+                        <a class="advanced-toggle" href="#">Advanced</a>
+                      </div>
+                      <div class="collapse-advanced accordion-body collapse">
+                        <div class="accordion-inner">
+                          <div class="control-group">
+                            <label class="control-label">Disable cache</label>
+                            <div class="controls nocache">
+                              <label class="nocache-toggle checkbox toggle well">
+                                <input name="nocache" type="checkbox" />
+                                <p>
+                                  <span class="on">Yes</span>
+                                  <span class="off">No</span>
+                                </p>
+                                <a class="slide-button btn btn-primary"></a>
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </fieldset>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <div class="status"></div>
+            <div class="pull-left progress progress-striped active" style="display:none">
+              <div class="bar"></div>
+            </div>
+            <input class="btn cancel" type="button" value="Cancel" />
+            <input id="save-asset" class="btn btn-primary" type="submit" value="Save" />
+          </div>
+        </div>
+      </div>
+    </script>
+
+    <script id="subscribe-form-template" type="text/template">
+      <div id="subscribe-popover" class="popover top" style="display:block">
+        <div class="arrow"></div>
+        <div class="popover-content">
+          <form class="validate" action="//wireload.us1.list-manage.com/subscribe/post?u=adb4f752497b0d86b3b1b79d7&amp;id=5c47388076" method="post" name="mc-embedded-subscribe-form" style="margin-bottom:5px" target="_blank">
+            <div class="mc-field-group">
+              <label for="mce-EMAIL">
+                Email Address
+                <span class="asterisk">*</span>
+              </label>
+              <input id="mce-EMAIL" class="required email" name="EMAIL" required="required" type="email" />
+            </div>
+            <div class="mc-field-group">
+              <label for="mce-FNAME">First Name</label>
+              <input id="mce-FNAME" name="FNAME" type="text" />
+            </div>
+            <div class="mc-field-group">
+              <label for="mce-LNAME">Last Name</label>
+              <input id="mce-LNAME" name="LNAME" type="text" />
+            </div>
+            <!-- real people should not fill this in and expect good things - do not remove this or risk form bot signups -->
+            <div hidden="true" style="position absolute; left -5000px;">
+              <input name="b_adb4f752497b0d86b3b1b79d7_5c47388076" tabindex="-1" type="text" />
+            </div>
+            <input id="mc-embedded-subscribe" class="button btn" name="subscribe" type="submit" value="Subscribe" />
+          </form>
+        </div>
+      </div>
+    </script>
+
+  </head>
+
+  <body>
+    <div id="request-error" class="navbar navbar-fixed-top"></div>
+    <div class="navbar navbar-fixed-top">
+      <div class="navbar-inner">
+        <div class="container">
+          <a class="brand" href="/">
+            <img src="static/img/screenly_ose_logo.png" />
+          </a>
+          <ul class="nav pull-right">
+            {% if not context.up_to_date %}
+              <li class="update-available">
+                <a href="http://www.screenlyapp.com/ose.html#upgrade">
+                  <i class="icon-circle-arrow-down icon-white"></i>
+                  Update Available
+                </a>
+              </li>
+            {% endif %}
+            <li>
+              <a href="/settings">
+                <i class="icon-cog icon-white"></i>
+                Settings
+              </a>
+            </li>
+            <li class="divider-vertical"></li>
+            <li>
+              <a href="/system_info">
+                <i class="icon-tasks icon-white"></i>
+                System Info
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="span12">
+          <h1 class="page-header">
+            <div class="pull-right">
+              <a id="add-asset-button" class="btn btn-primary" href="#">
+                <i class="icon-plus icon-white"></i>
+                Add Asset
+              </a>
+            </div>
+            Schedule Overview
+          </h1>
+          {% if context.player_name %}
+            <h2>{{context.player_name}}</h2>
+          {% endif %}
+        </div>
+      </div>
+
+      <div id="assets" class="row">
+        <div class="span12">
+          <section>
+            <div class="header">
+              Active assets
+            </div>
+            <table class="table table-striped active-table">
+              <thead style="display:none">
+                <tr>
+                  <th class="asset_row_name">Name</th>
+                  <th style="width:21%">Start</th>
+                  <th style="width:21%">End</th>
+                  <th style="width:13%"></th>
+                  <th style="width:7%"></th>
+                </tr>
+              </thead>
+              <tbody id="active-assets"></tbody>
+            </table>
+          </section>
+        </div>
+        <div class="span12">
+          <section>
+            <div class="header">
+              Inactive assets
+            </div>
+            <table class="table table-striped inactive-table">
+              <thead style="display:none">
+                <tr>
+                  <th class="asset_row_name">Name</th>
+                  <th style="width:21%">Start</th>
+                  <th style="width:21%">End</th>
+                  <th style="width:13%"></th>
+                  <th style="width:7%"></th>
+                </tr>
+              </thead>
+              <tbody id="inactive-assets"></tbody>
+            </table>
+          </section>
+        </div>
+      </div>
+
+      <hr />
+      <div class="container">
+        <div class="row">
+          <div class="span6">
+            <span>Want to get more out of Screenly?
+              <a class="brand" href="http://www.screenlyapp.com/?utm_source=Screenly-OSE&amp;utm_medium=root-page&amp;utm_campaign=OSE" target="_blank">
+                <strong>Try Screenly Pro.</strong>
+              </a></span>
+          </div>
+          <div class="span6">
+            <div id="subsribe-form-container"></div>
+            <span>
+              <a>
+                <strong id="show-email-popover">Get the latest Screenly news directly in your mailbox.</strong>
+              </a>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="footer">
+      <div class="container">
+        <div class="copy">
+          &copy; Screenly, Inc.
+        </div>
+        <a id="screenly-logo" href="http://screenly.io/" target="_blank">
+          Screenly.io
+        </a>
+      </div>
+    </div>
+  </body>
+
+</html>
