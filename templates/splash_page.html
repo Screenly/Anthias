@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Welcome to Screenly</title>
+    <link href="/static/css/bootstrap.css" rel="stylesheet" />
+    <link href="/static/css/screenly.css" rel="stylesheet" />
+  </head>
+  <body class="splash">
+    <div class="container">
+      <div class="row">
+        <div class="span12">
+          <div class="logo-container page-header text-center">
+            <img src="/static/img/screenly_ose_logo_large.png" />
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="span12 text-center">
+          {% if context.ip_lookup %}
+            <p class="lead">To manage the content on this screen, just point your browser to:</p>
+            <div class="well lead">
+              <a href="{{context.msg}}">{{context.msg}}</a>
+            </div>
+          {% else %}
+            <p class="lead">{{context.msg}}</p>
+          {% endif %}
+        </div>
+      </div>
+      <hr />
+    </div>
+  </body>
+</html>
