@@ -5,10 +5,10 @@ __author__ = "WireLoad Inc"
 __copyright__ = "Copyright 2012-2016, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from functools import wraps
 from hurry.filesize import size
-from os import path, makedirs, statvfs, mkdir, getenv
+from os import path, makedirs, statvfs, mkdir
 from sh import git
 import sh
 from subprocess import check_output
@@ -17,9 +17,10 @@ import os
 import traceback
 import uuid
 
-from bottle import route, run, request, error, static_file, response
-from bottle import HTTPResponse
-from bottlehaml import haml_template
+from flask import Flask, request, jsonify, render_template, make_response, send_from_directory
+from flask_restful import Resource, Api
+
+from gunicorn.app.base import Application
 
 from lib import db
 from lib import queries
@@ -37,20 +38,25 @@ from mimetypes import guess_type
 
 from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS, auth_basic
 from werkzeug.wrappers import Request
+
+
+app = Flask(__name__)
+api = Api(app)
+
+
 ################################
 # Utilities
 ################################
 
-
-def make_json_response(obj):
-    response.content_type = "application/json"
-    return json_dump(obj)
+@api.representation('application/json')
+def output_json(data, code, headers=None):
+    response = make_response(json_dump(data), code)
+    response.headers.extend(headers or {})
+    return response
 
 
 def api_error(error):
-    response.content_type = "application/json"
-    response.status = 500
-    return json_dump({'error': error})
+    return make_response(json_dump({'error': error}), 500)
 
 
 def is_up_to_date():
@@ -85,7 +91,7 @@ def is_up_to_date():
 
 def template(template_name, **context):
     """Screenly template response generator. Shares the
-    same function signature as Bottle's template() method
+    same function signature as Flask's render_template() method
     but also injects some global context."""
 
     # Add global contexts
@@ -98,12 +104,7 @@ def template(template_name, **context):
         'default_filters': ['template_handle_unicode'],
     }
 
-    return haml_template(template_name, **context)
-
-
-################################
-# Model
-################################
+    return render_template(template_name, context=context)
 
 
 ################################
@@ -186,130 +187,124 @@ def prepare_asset(request):
     return asset
 
 
-@route('/api/v1/assets', method="GET")
-@auth_basic
-def api_assets():
-    with db.conn(settings['database']) as conn:
-        assets = assets_helper.read(conn)
-        return make_json_response(assets)
-
-
 # api view decorator. handles errors
-def api(view):
+def api_response(view):
     @wraps(view)
     def api_view(*args, **kwargs):
         try:
-            return make_json_response(view(*args, **kwargs))
-        except HTTPResponse:
-            raise
+            return view(*args, **kwargs)
         except Exception as e:
             traceback.print_exc()
             return api_error(unicode(e))
     return api_view
 
 
-@route('/api/v1/upload_file', method="POST")
-@auth_basic
-@api
-def upload_file():
-    req = Request(request.environ)
-    file_upload = req.files.get('file_upload')
-    filename = file_upload.filename
-    file_path = path.join(settings['assetdir'], filename) + ".tmp"
+class Assets(Resource):
+    method_decorators = [auth_basic]
 
-    if 'Content-Range' in request.headers:
-        range_str = request.headers['Content-Range']
-        start_bytes = int(range_str.split(' ')[1].split('-')[0])
-        with open(file_path, 'a') as f:
-            f.seek(start_bytes)
-            f.write(file_upload.read())
-    else:
-        file_upload.save(file_path)
+    def get(self):
+        with db.conn(settings['database']) as conn:
+            assets = assets_helper.read(conn)
+            return assets
 
-    return file_path
+    @api_response
+    def post(self):
+        asset = prepare_asset(request)
+        if url_fails(asset['uri']):
+            raise Exception("Could not retrieve file. Check the asset URL.")
+        with db.conn(settings['database']) as conn:
+            return assets_helper.create(conn, asset), 201
 
 
-@route('/api/v1/assets', method="POST")
-@auth_basic
-@api
-def add_asset():
-    asset = prepare_asset(request)
-    if url_fails(asset['uri']):
-        raise Exception("Could not retrieve file. Check the asset URL.")
-    with db.conn(settings['database']) as conn:
-        return assets_helper.create(conn, asset)
+class Asset(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    def get(self, asset_id):
+        with db.conn(settings['database']) as conn:
+            return assets_helper.read(conn, asset_id)
+
+    def put(self, asset_id):
+        with db.conn(settings['database']) as conn:
+            return assets_helper.update(conn, asset_id, prepare_asset(request))
+
+    def delete(self, asset_id):
+        with db.conn(settings['database']) as conn:
+            asset = assets_helper.read(conn, asset_id)
+            try:
+                if asset['uri'].startswith(settings['assetdir']):
+                    os.remove(asset['uri'])
+            except OSError:
+                pass
+            assets_helper.delete(conn, asset_id)
+            return '', 204  # return an OK with no content
 
 
-@route('/api/v1/assets/:asset_id', method="GET")
-@auth_basic
-@api
-def edit_asset(asset_id):
-    with db.conn(settings['database']) as conn:
-        return assets_helper.read(conn, asset_id)
+class FileAsset(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    def post(self):
+        req = Request(request.environ)
+        file_upload = req.files.get('file_upload')
+        filename = file_upload.filename
+        file_path = path.join(settings['assetdir'], filename) + ".tmp"
+
+        if 'Content-Range' in request.headers:
+            range_str = request.headers['Content-Range']
+            start_bytes = int(range_str.split(' ')[1].split('-')[0])
+            with open(file_path, 'a') as f:
+                f.seek(start_bytes)
+                f.write(file_upload.read())
+        else:
+            file_upload.save(file_path)
+
+        return file_path
 
 
-@route('/api/v1/assets/:asset_id', method=["PUT", "POST"])
-@auth_basic
-@api
-def edit_asset(asset_id):
-    with db.conn(settings['database']) as conn:
-        return assets_helper.update(conn, asset_id, prepare_asset(request))
+class PlaylistOrder(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    def post(self):
+        with db.conn(settings['database']) as conn:
+            assets_helper.save_ordering(conn, request.form.get('ids', '').split(','))
 
 
-@route('/api/v1/assets/:asset_id', method="DELETE")
-@auth_basic
-@api
-def remove_asset(asset_id):
-    with db.conn(settings['database']) as conn:
-        asset = assets_helper.read(conn, asset_id)
-        try:
-            if asset['uri'].startswith(settings['assetdir']):
-                os.remove(asset['uri'])
-        except OSError:
-            pass
-        assets_helper.delete(conn, asset_id)
-        response.status = 204  # return an OK with no content
+class Backup(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    def post(self):
+        filename = backup_helper.create_backup()
+        return filename, 201
 
 
-@route('/api/v1/assets/order', method="POST")
-@auth_basic
-@api
-def playlist_order():
-    with db.conn(settings['database']) as conn:
-        assets_helper.save_ordering(conn, request.POST.get('ids', '').split(','))
+class Recover(Resource):
+    method_decorators = [api_response, auth_basic]
 
+    def post(self):
+        req = Request(request.environ)
+        file_upload = (req.files['backup_upload'])
+        filename = file_upload.filename
 
-@route('/api/v1/backup', method="GET")
-@auth_basic
-@api
-def backup():
-    filename = backup_helper.create_backup()
-    return filename
+        if guess_type(filename)[0] != 'application/x-tar':
+            raise Exception("Incorrect file extension.")
 
+        location = path.join("static", filename)
+        file_upload.save(location)
+        backup_helper.recover(location)
+        return "Recovery successful."
 
-@route('/api/v1/recover', method="POST")
-@auth_basic
-@api
-def recover():
-    req = Request(request.environ)
-    file_upload = (req.files['backup_upload'])
-    filename = file_upload.filename
-
-    if guess_type(filename)[0] != 'application/x-tar':
-        raise Exception("Incorrect file extension.")
-
-    location = path.join("static", filename)
-    file_upload.save(location)
-    backup_helper.recover(location)
-    return "Recovery successful."
-
+api.add_resource(Assets, '/api/v1/assets')
+api.add_resource(Asset, '/api/v1/assets/<asset_id>')
+api.add_resource(FileAsset, '/api/v1/file_asset')
+api.add_resource(PlaylistOrder, '/api/v1/assets/order')
+api.add_resource(Backup, '/api/v1/backup')
+api.add_resource(Recover, '/api/v1/recover')
 
 ################################
 # Views
 ################################
 
 
-@route('/')
+@app.route('/')
 @auth_basic
 def viewIndex():
     player_name = settings['player_name']
@@ -320,10 +315,10 @@ def viewIndex():
         ws_address = 'wss://' + my_ip + '/ws/'
     else:
         ws_address = 'ws://' + my_ip + ':' + settings['websocket_port']
-    return template('index', ws_address=ws_address, player_name=player_name)
+    return template('index.html', ws_address=ws_address, player_name=player_name)
 
 
-@route('/settings', method=["GET", "POST"])
+@app.route('/settings', methods=["GET", "POST"])
 @auth_basic
 def settings_page():
 
@@ -331,7 +326,7 @@ def settings_page():
 
     if request.method == "POST":
         for field, default in CONFIGURABLE_SETTINGS.items():
-            value = request.POST.get(field, default)
+            value = request.form.get(field, default)
             if isinstance(default, bool):
                 value = value == 'on'
             settings[field] = value
@@ -348,15 +343,16 @@ def settings_page():
     for field, default in DEFAULTS['viewer'].items():
         context[field] = settings[field]
 
-    return template('settings', **context)
+    return template('settings.html', **context)
 
 
-@route('/system_info')
+@app.route('/system_info')
 @auth_basic
 def system_info():
     viewlog = None
     try:
-        viewlog = check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')
+        viewlog = [line.decode('utf-8') for line in
+                   check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
     except:
         pass
 
@@ -378,7 +374,7 @@ def system_info():
     player_name = settings['player_name']
 
     return template(
-        'system_info',
+        'system_info.html',
         player_name=player_name,
         viewlog=viewlog,
         loadavg=loadavg,
@@ -389,7 +385,7 @@ def system_info():
     )
 
 
-@route('/splash_page')
+@app.route('/splash_page')
 def splash_page():
     url = None
     try:
@@ -408,32 +404,27 @@ def splash_page():
             url = "http://{}:{}".format(my_ip, settings.get_listen_port())
 
     msg = url if url else error_msg
-    return template('splash_page', ip_lookup=ip_lookup, msg=msg)
+    return template('splash_page.html', ip_lookup=ip_lookup, msg=msg)
 
 
-@error(403)
+@app.errorhandler(403)
 def mistake403(code):
     return 'The parameter you passed has the wrong format!'
 
 
-@error(404)
+@app.errorhandler(404)
 def mistake404(code):
     return 'Sorry, this page does not exist!'
-
 
 ################################
 # Static
 ################################
 
-@route('/static/:path#.+#', name='static')
-def static(path):
-    return static_file(path, root='static')
 
-
-@route('/static_with_mime/:path#.+#', name='static')
+@app.route('/static_with_mime/<string:path>')
 def static_with_mime(path):
-    mimetype = request.query['mime'] if 'mime' in request.query else 'auto'
-    return static_file(path, root='static', mimetype=mimetype)
+    mimetype = request.args['mime'] if 'mime' in request.args else 'auto'
+    return send_from_directory(directory='static', filename=path, mimetype=mimetype)
 
 
 if __name__ == "__main__":
@@ -450,10 +441,17 @@ if __name__ == "__main__":
             if cursor.fetchone() is None:
                 cursor.execute(assets_helper.create_assets_table)
 
-    run(
-        host=settings.get_listen_ip(),
-        port=settings.get_listen_port(),
-        server='gunicorn',
-        threads=2,
-        timeout=20,
-    )
+    config = {
+        'bind': '{}:{}'.format(settings.get_listen_ip(), int(settings.get_listen_port())),
+        'threads': 2,
+        'timeout': 20
+    }
+
+    class GunicornApplication(Application):
+        def init(self, parser, opts, args):
+            return config
+
+        def load(self):
+            return app
+
+    GunicornApplication().run()
