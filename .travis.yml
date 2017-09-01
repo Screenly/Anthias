@@ -23,6 +23,10 @@ before_script:
   - curl https://www.screenly.io/upload/ose-logo.png > ~/screenly_assets/image.tmp
   - curl https://www.screenly.io/upload/big_buck_bunny_720p_10mb.flv > /tmp/video.flv
   - export DISPLAY=:99.0
+  - git branch
+  - git --version
+  - git rev-parse --abbrev-ref HEAD
+  - git symbolic-ref HEAD | sed -e "s/^refs\/heads\///"
   - /sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -ac -screen 0 1280x1024x16
   - python tests/rtmplite/rtmp.py -r /tmp/ &
   - sleep 3

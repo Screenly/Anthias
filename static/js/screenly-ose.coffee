@@ -202,7 +202,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         autoUpload: false
         sequentialUploads: true
         maxChunkSize: 5000000 #5 MB
-        url: 'api/v1/upload_file'
+        url: 'api/v1/file_asset'
         progressall: (e, data) => if data.loaded and data.total
           (@$ '.progress .bar').css 'width', "#{data.loaded/data.total*100}%"
         add: (e, data) ->
