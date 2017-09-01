@@ -249,7 +249,7 @@ def check_update():
 
     logging.debug('Last update: %s' % str(last_update))
 
-    git_branch = sh.git('rev-parse', '--abbrev-ref', 'HEAD')
+    git_branch = sh.git('rev-parse', '--abbrev-ref', 'HEAD').strip()
     if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
 
         if not url_fails('http://stats.screenlyapp.com'):
