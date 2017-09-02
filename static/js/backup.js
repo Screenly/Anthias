@@ -10,7 +10,7 @@
       $('#btn-backup').text("Preparing archive...");
       $('#btn-upload').prop('disabled', true);
       $('#btn-backup').prop('disabled', true);
-      return $.get("api/v1/backup").done(function(data, e) {
+      return $.post("api/v1/backup").done(function(data, e) {
         if (data) {
           return window.location = "static_with_mime/" + data + "?mime=application/x-tgz";
         }

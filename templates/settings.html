@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+
+    {% if context.player_name %}
+      <title>Screenly OSE - {{context.player_name}}</title>
+    {% else %}
+      <title>Screenly OSE</title>
+    {% endif %}
+    <link href="/static/css/bootstrap.css" rel="stylesheet" />
+    <link href="/static/css/screenly.css" rel="stylesheet" />
+    <link href="/static/css/toggle-switch.css" rel="stylesheet" />
+    <script src="/static/js/jquery-1.9.1.min.js"></script>
+
+    <script src="/static/js/bootstrap.min.js"></script> <!-- needs jquery -->
+    <script src="/static/js/jquery-ui-1.10.1.custom.min.js"></script>
+    <script src="/static/js/jquery.fileupload.js"></script> <!-- needs jqueryui.widget -->
+
+    <script src="/static/js/backup.js"></script>
+  </head>
+
+  <body>
+    <div id="request-error" class="navbar navbar-fixed-top">
+      <div class="container">
+        <div class="alert" style="display:none">
+          <button class="close" type="button">&times;</button>
+          <span class="msg"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="navbar navbar-fixed-top">
+      <div class="navbar-inner">
+        <div class="container">
+          <a class="brand" href="/">
+            <img src="static/img/screenly_ose_logo.png" />
+          </a>
+          <ul class="nav pull-right">
+            {% if not context.up_to_date %}
+              <li class="update-available">
+                <a href="http://www.screenlyapp.com/ose.html#upgrade">
+                  <i class="icon-circle-arrow-down icon-white"></i>
+                  Update Available
+                </a>
+              </li>
+            {% endif %}
+            <li>
+              <a href="/settings">
+                <i class="icon-cog icon-white"></i>
+                Settings
+              </a>
+            </li>
+            <li class="divider-vertical"></li>
+            <li>
+              <a href="/system_info">
+                <i class="icon-tasks icon-white"></i>
+                System Info
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="span12">
+          <h1 class="page-header">
+            Settings
+          </h1>
+
+          {% if context.flash %}
+            <div class="alert alert-{{context.flash['class']}}">
+              {{context.flash['message']}}
+            </div>
+          {% endif %}
+          <form class="form-horizontal" method="post">
+            <div class="control-group">
+              <label class="control-label">Player name</label>
+              <div class="controls">
+                <input class="span4" name="player_name" type="text" value={{context.player_name}} />
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label class="control-label">Show splash screen</label>
+              <div class="controls">
+                <label id="splash_checkbox"  class="checkbox toggle well">
+                  {% if context.show_splash %}
+                    <input name="show_splash" checked="checked" type="checkbox" />
+                  {% else %}
+                    <input name="show_splash" type="checkbox" />
+                  {% endif %}
+                  <p>
+                    <span class="on">On</span>
+                    <span class="off">Off</span>
+                  </p>
+                  <a class="btn btn-primary slide-button"></a>
+                </label>
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label class="control-label">Shuffle playlist</label>
+              <div class="controls">
+                <label id="shuffle_checkbox" class="checkbox toggle well">
+                  {% if context.shuffle_playlist %}
+                    <input name="shuffle_playlist" checked="checked" type="checkbox" />
+                  {% else %}
+                    <input name="shuffle_playlist" type="checkbox" />
+                  {% endif %}
+                  <p>
+                    <span class="on">On</span>
+                    <span class="off">Off</span>
+                  </p>
+                  <a class="btn btn-primary slide-button"></a>
+                </label>
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label class="control-label">Audio output</label>
+              <div class="controls">
+                <select class="span2" name="audio_output">
+                  {% if context.audio_output == 'hdmi' %}
+                    <option value="hdmi" selected="selected">HDMI</option>
+                    <option value="local" >3.5mm jack</option>
+                  {% else %}
+                    <option value="hdmi">HDMI</option>
+                    <option value="local" selected="selected">3.5mm jack</option>
+                  {% endif %}
+                </select>
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label class="control-label">Default duration</label>
+              <div class="controls">
+                <input class="span1" name="default_duration" type="number" value={{context.default_duration}} />
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label class="control-label">Default streaming duration</label>
+              <div class="controls">
+                <input class="span1" name="default_streaming_duration" type="number" value={{context.default_streaming_duration}} />
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label class="control-label">Use 24-hour clock</label>
+              <div class="controls">
+                <label id="use_24_hour_clock_checkbox" class="checkbox toggle well">
+                  {% if context.use_24_hour_clock %}
+                    <input name="use_24_hour_clock" checked="checked" type="checkbox" />
+                  {% else %}
+                    <input name="use_24_hour_clock" type="checkbox" />
+                  {% endif %}
+                  <p>
+                    <span class="on">On</span>
+                    <span class="off">Off</span>
+                  </p>
+                  <a class="btn btn-primary slide-button"></a>
+                </label>
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label class="control-label">Debug logging</label>
+              <div class="controls">
+                <label id="debug_checkbox" class="checkbox toggle well">
+                  {% if context.debug_logging %}
+                    <input name="debug_logging" checked="checked" type="checkbox" />
+                  {% else %}
+                    <input name="debug_logging" type="checkbox" />
+                  {% endif %}
+                  <p>
+                    <span class="on">On</span>
+                    <span class="off">Off</span>
+                  </p>
+                  <a class="btn btn-primary slide-button"></a>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <input class="btn btn-primary" type="submit" value="Save Settings" />
+              <a class="btn" href="/">Cancel</a>
+            </div>
+          </form>
+        </div>
+
+        <div id="backup-section" class="span12">
+          <h1 class="page-header">
+            Backup
+          </h1>
+          <input name="backup_upload" style="display:none" type="file" />
+          <button id="btn-upload" class="btn btn-primary" type="button">Upload and Recover</button>
+          <button id="btn-backup" class="btn">Get backup</button>
+          <div class="progress progress-striped active" style="display:none">
+            <div class="bar"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div id="footer">
+      <div class="container">
+        <div class="copy">
+          &copy; Screenly, Inc.
+        </div>
+        <a id="screenly-logo" href="http://screenly.io/" target="_blank">
+          Screenly.io
+        </a>
+      </div>
+    </div>
+  </body>
+</html>
