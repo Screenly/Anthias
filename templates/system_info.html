@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Screenly OSE</title>
+    <link href="/static/css/bootstrap.css" rel="stylesheet" />
+    <link href="/static/css/screenly.css" rel="stylesheet" />
+    <script src="/static/js/jquery-1.9.1.min.js"></script>
+  </head>
+  <body>
+    <div class="navbar navbar-fixed-top">
+      <div class="navbar-inner">
+        <div class="container">
+          <a class="brand" href="/">
+            <img src="static/img/screenly_ose_logo.png" />
+          </a>
+          <ul class="nav pull-right">
+            <li class="update-available">
+              <a href="http://www.screenlyapp.com/ose.html#upgrade">
+                <i class="icon-circle-arrow-down icon-white"></i>
+                Update Available
+              </a>
+            </li>
+            <li>
+              <a href="/settings">
+                <i class="icon-cog icon-white"></i>
+                Settings
+              </a>
+            </li>
+            <li class="divider-vertical"></li>
+            <li>
+              <a href="/system_info">
+                <i class="icon-tasks icon-white"></i>
+                System Info
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="span12">
+
+          <h1 class="page-header">
+            System Info
+          </h1>
+
+          <table class="table table-bordered" style="width: 100%">
+            <thead>
+              <tr>
+                <th>Load Average</th>
+                <th>Free Space</th>
+                <th>Uptime</th>
+                <th>Monitor Info</th>
+                <th>Display Power</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{{context.loadavg}}</td>
+                <td>{{context.free_space}}</td>
+                <td>{{context.uptime.days}} days and {{context.uptime.seconds / 3600}} hours</td>
+                <td>{{context.display_info}}</td>
+                <td>{{context.display_power}}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <section>
+            <div class="header">Latest Viewer Logs</div>
+          </section>
+
+          {% if context.viewlog %}
+            <table class="table table-striped">
+              {% for line in context.viewlog %}
+                <tr>
+                  <td>{{line}}</td>
+                </tr>
+              {% endfor %}
+            </table>
+          {% else %}
+            <p>There are no recent log messages.</p>
+          {% endif %}
+
+        </div>
+      </div>
+    </div>
+
+    <div id="footer">
+      <div class="container">
+        <div class="copy">
+          &copy; Screenly, Inc.
+        </div>
+        <a id="screenly-logo" href="http://screenly.io/" target="_blank">
+          Screenly.io
+        </a>
+      </div>
+    </div>
+
+ 
+  </body>
+</html>

@@ -1,6 +1,7 @@
 from datetime import datetime
 from datetime import timedelta
 import unittest
+from mock import patch
 from settings import settings
 import viewer
 import server
@@ -8,6 +9,15 @@ import os
 import shutil
 
 fancy_sha = 'deadbeaf'
+
+
+def mocked_req_get(*args, **kwargs):
+    class MockResponse:
+        def __init__(self, content, status_code):
+            self.content = content
+            self.status_code = status_code
+
+    return MockResponse('response_content\n', 200)
 
 
 class UpdateTest(unittest.TestCase):
@@ -38,7 +48,8 @@ class UpdateTest(unittest.TestCase):
         with open(self.sha_file, 'r') as f:
             self.assertEqual(f.readline(), fancy_sha)
 
-    def test_if_sha_file_is_empty__check_update__should_return_true(self):
+    @patch('viewer.req_get', side_effect=mocked_req_get)
+    def test_if_sha_file_is_empty__check_update__should_return_true(self, req_get):
         with open(self.sha_file, 'w+') as f:
             pass
 
