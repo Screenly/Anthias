@@ -17,8 +17,10 @@ import os
 import traceback
 import uuid
 
-from flask import Flask, request, jsonify, render_template, make_response, send_from_directory
-from flask_restful import Resource, Api
+from flask import Flask, request, render_template, make_response, send_from_directory
+from flask_restful_swagger_2 import swagger, Resource, Api, Schema
+from flask_swagger_ui import get_swaggerui_blueprint
+from flask_cors import CORS
 
 from gunicorn.app.base import Application
 
@@ -41,7 +43,11 @@ from werkzeug.wrappers import Request
 
 
 app = Flask(__name__)
-api = Api(app)
+CORS(app)
+api = Api(app, api_version="v1", title="Screenly OSE API")
+
+SWAGGER_URL = '/api/docs'
+API_URL = 'http://localhost:8080/api/swagger.json'
 
 
 ################################
@@ -105,6 +111,46 @@ def template(template_name, **context):
     }
 
     return render_template(template_name, context=context)
+
+
+################################
+# Models
+################################
+
+class AssetModel(Schema):
+    type = 'object'
+    properties = {
+        'asset_id': {'type': 'string'},
+        'name': {'type': 'string'},
+        'uri': {'type': 'string'},
+        'start_date': {
+            'type': 'string',
+            'format': 'date-time'
+        },
+        'end_date': {
+            'type': 'string',
+            'format': 'date-time'
+        },
+        'duration': {'type': 'string'},
+        'mimetype': {'type': 'string'},
+        'is_active': {'type': 'boolean'},
+        'is_enabled': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'is_processing': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'nocache': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'play_order': {
+            'type': 'integer',
+            'format': 'int64',
+        }
+    }
 
 
 ################################
@@ -202,12 +248,57 @@ def api_response(view):
 class Assets(Resource):
     method_decorators = [auth_basic]
 
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'List of assets',
+                'schema': {
+                    'type': 'array',
+                    'items': AssetModel
+
+                }
+            }
+        }
+    })
     def get(self):
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
             return assets
 
     @api_response
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'model',
+                'in': 'formData',
+                'type': 'string',
+                'description':
+                    '''
+                    Yes, that is just a string of JSON not JSON itself it will be parsed on the other end.
+                    Content-Type: application/x-www-form-urlencoded
+                    model: "{
+                        "name": "Website",
+                        "mimetype": "webpage",
+                        "uri": "http://example.com",
+                        "is_active": false,
+                        "start_date": "2017-02-02T00:33:00.000Z",
+                        "end_date": "2017-03-01T00:33:00.000Z",
+                        "duration": "10",
+                        "is_enabled": 0,
+                        "is_processing": 0,
+                        "nocache": 0,
+                        "play_order": 0
+                    }"
+                    '''
+            }
+        ],
+        'responses': {
+            '201': {
+                'description': 'Asset created',
+                'schema': AssetModel
+            }
+        }
+    })
     def post(self):
         asset = prepare_asset(request)
         if url_fails(asset['uri']):
@@ -219,14 +310,84 @@ class Assets(Resource):
 class Asset(Resource):
     method_decorators = [api_response, auth_basic]
 
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset'
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'Asset',
+                'schema': AssetModel
+            }
+        }
+    })
     def get(self, asset_id):
         with db.conn(settings['database']) as conn:
             return assets_helper.read(conn, asset_id)
 
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset'
+            },
+            {
+                'name': 'model',
+                'in': 'formData',
+                'type': 'string',
+                'description':
+                    '''
+                    Content-Type: application/x-www-form-urlencoded
+                    model: "{
+                        "asset_id": "793406aa1fd34b85aa82614004c0e63a",
+                        "name": "Website",
+                        "mimetype": "webpage",
+                        "uri": "http://example.com",
+                        "is_active": false,
+                        "start_date": "2017-02-02T00:33:00.000Z",
+                        "end_date": "2017-03-01T00:33:00.000Z",
+                        "duration": "10",
+                        "is_enabled": 0,
+                        "is_processing": 0,
+                        "nocache": 0,
+                        "play_order": 0
+                    }"
+                    '''
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'Asset updated',
+                'schema': AssetModel
+            }
+        }
+    })
     def put(self, asset_id):
         with db.conn(settings['database']) as conn:
             return assets_helper.update(conn, asset_id, prepare_asset(request))
 
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset'
+            },
+        ],
+        'responses': {
+            '204': {
+                'description': 'Deleted'
+            }
+        }
+    })
     def delete(self, asset_id):
         with db.conn(settings['database']) as conn:
             asset = assets_helper.read(conn, asset_id)
@@ -242,6 +403,24 @@ class Asset(Resource):
 class FileAsset(Resource):
     method_decorators = [api_response, auth_basic]
 
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'file_upload',
+                'type': 'file',
+                'in': 'formData',
+                'description': 'File to be sent'
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'File path',
+                'schema': {
+                    'type': 'string'
+                }
+            }
+        }
+    })
     def post(self):
         req = Request(request.environ)
         file_upload = req.files.get('file_upload')
@@ -263,6 +442,26 @@ class FileAsset(Resource):
 class PlaylistOrder(Resource):
     method_decorators = [api_response, auth_basic]
 
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'ids',
+                'in': 'formData',
+                'type': 'string',
+                'description':
+                    '''
+                    Content-Type: application/x-www-form-urlencoded
+                    ids: "793406aa1fd34b85aa82614004c0e63a,1c5cfa719d1f4a9abae16c983a18903b,9c41068f3b7e452baf4dc3f9b7906595"
+                    comma separated ids
+                    '''
+            },
+        ],
+        'responses': {
+            '204': {
+                'description': 'Sorted'
+            }
+        }
+    })
     def post(self):
         with db.conn(settings['database']) as conn:
             assets_helper.save_ordering(conn, request.form.get('ids', '').split(','))
@@ -271,6 +470,16 @@ class PlaylistOrder(Resource):
 class Backup(Resource):
     method_decorators = [api_response, auth_basic]
 
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Backup filename',
+                'schema': {
+                    'type': 'string'
+                }
+            }
+        }
+    })
     def post(self):
         filename = backup_helper.create_backup()
         return filename, 201
@@ -279,6 +488,20 @@ class Backup(Resource):
 class Recover(Resource):
     method_decorators = [api_response, auth_basic]
 
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'backup_upload',
+                'type': 'file',
+                'in': 'formData'
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'Recovery successful'
+            }
+        }
+    })
     def post(self):
         req = Request(request.environ)
         file_upload = (req.files['backup_upload'])
@@ -298,6 +521,17 @@ api.add_resource(FileAsset, '/api/v1/file_asset')
 api.add_resource(PlaylistOrder, '/api/v1/assets/order')
 api.add_resource(Backup, '/api/v1/backup')
 api.add_resource(Recover, '/api/v1/recover')
+
+
+swaggerui_blueprint = get_swaggerui_blueprint(
+    SWAGGER_URL,
+    API_URL,
+    config={
+        'app_name': "Screenly API"
+    }
+)
+app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+
 
 ################################
 # Views
