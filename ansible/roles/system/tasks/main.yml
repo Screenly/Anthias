@@ -51,11 +51,17 @@
   when: not is_berryboot
 
 - name: Use Systemd as init and quiet boot process
-  lineinfile:
+  replace:
     dest: /boot/cmdline.txt
-    regexp: (.*)
-    backrefs: yes
-    line: \1 quiet init=/lib/systemd/systemd
+    regexp: (^(?!$)((?!quiet init=/lib/systemd/systemd).)*$)
+    replace: \1 quiet init=/lib/systemd/systemd
+  when: not is_berryboot
+
+- name: ethN/wlanN names for interfaces
+  replace:
+    dest: /boot/cmdline.txt
+    regexp: (^(?!$)((?!net\.ifnames=0).)*$)
+    replace: \1 net.ifnames=0
   when: not is_berryboot
 
 - name: Install Screenly dependencies
