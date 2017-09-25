@@ -8,7 +8,7 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 from datetime import timedelta
 from functools import wraps
 from hurry.filesize import size
-from os import path, makedirs, statvfs, mkdir
+from os import path, makedirs, statvfs, mkdir, system
 from sh import git
 import sh
 from subprocess import check_output
@@ -515,12 +515,40 @@ class Recover(Resource):
         backup_helper.recover(location)
         return "Recovery successful."
 
+
+class AssetsControl(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'command',
+                'type': 'string',
+                'in': 'path',
+                'description': 'Control command'
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'Asset switched'
+            }
+        }
+    })
+    def get(self, command):
+        if command == "next":
+            system('pkill -SIGUSR1 -f viewer.py')
+            return "Asset switched"
+        if command == "previous":
+            system('pkill -SIGUSR2 -f viewer.py')
+            return "Asset switched"
+
 api.add_resource(Assets, '/api/v1/assets')
 api.add_resource(Asset, '/api/v1/assets/<asset_id>')
 api.add_resource(FileAsset, '/api/v1/file_asset')
 api.add_resource(PlaylistOrder, '/api/v1/assets/order')
 api.add_resource(Backup, '/api/v1/backup')
 api.add_resource(Recover, '/api/v1/recover')
+api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 
 
 swaggerui_blueprint = get_swaggerui_blueprint(
@@ -566,11 +594,11 @@ def settings_page():
             settings[field] = value
         try:
             settings.save()
-            sh.sudo('systemctl', 'kill', '--signal=SIGUSR2', 'screenly-viewer.service')
+            system('pkill -SIGHUP -f viewer.py')
             context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
         except IOError as e:
             context['flash'] = {'class': "error", 'message': e}
-        except sh.ErrorReturnCode_1 as e:
+        except OSError as e:
             context['flash'] = {'class': "error", 'message': e}
     else:
         settings.load()
