@@ -8,7 +8,7 @@ from random import shuffle
 from requests import get as req_get
 from time import sleep
 from json import load as json_load
-from signal import signal, SIGUSR1, SIGUSR2
+from signal import signal, SIGUSR1, SIGUSR2, SIGHUP
 import logging
 import sh
 
@@ -43,6 +43,8 @@ HOME = None
 arch = None
 db_conn = None
 
+scheduler = None
+
 
 def sigusr1(signum, frame):
     """
@@ -54,6 +56,12 @@ def sigusr1(signum, frame):
 
 
 def sigusr2(signum, frame):
+    scheduler.reverse = True
+    logging.info('USR1 received, skipping.')
+    sh.killall('omxplayer.bin', _ok_code=[1])
+
+
+def sighup(signum, frame):
     """Reload settings"""
     logging.info("USR2 received, reloading settings.")
     load_settings()
@@ -66,6 +74,7 @@ class Scheduler(object):
         self.deadline = None
         self.index = 0
         self.counter = 0
+        self.reverse = 0
         self.update_playlist()
 
     def get_next_asset(self):
@@ -74,8 +83,13 @@ class Scheduler(object):
         logging.debug('get_next_asset after refresh')
         if not self.assets:
             return None
-        idx = self.index
-        self.index = (self.index + 1) % len(self.assets)
+        if self.reverse:
+            idx = self.index - 2 % len(self.assets)
+            self.index = self.index - 1 % len(self.assets)
+            self.reverse = False
+        else:
+            idx = self.index
+            self.index = (self.index + 1) % len(self.assets)
         logging.debug('get_next_asset counter %s returning asset %s of %s', self.counter, idx + 1, len(self.assets))
         if settings['shuffle_playlist'] and self.index == 0:
             self.counter += 1
@@ -210,7 +224,7 @@ def view_video(uri, duration):
 
     if arch in ('armv6l', 'armv7l'):
         player_args = ['omxplayer', uri]
-        player_kwargs = {'o': settings['audio_output'], '_bg': True, '_ok_code': [0, 124]}
+        player_kwargs = {'o': settings['audio_output'], '_bg': True, '_ok_code': [0, 124, 143]}
     else:
         player_args = ['mplayer', uri, '-nosound']
         player_kwargs = {'_bg': True, '_ok_code': [0, 124]}
@@ -317,6 +331,7 @@ def setup():
 
     signal(SIGUSR1, sigusr1)
     signal(SIGUSR2, sigusr2)
+    signal(SIGHUP, sighup)
 
     load_settings()
     db_conn = db.conn(settings['database'])
@@ -334,6 +349,7 @@ def main():
     if settings['show_splash']:
         sleep(SPLASH_DELAY)
 
+    global scheduler
     scheduler = Scheduler()
     logging.debug('Entering infinite loop.')
     while True:
