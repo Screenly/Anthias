@@ -18,6 +18,9 @@ class ViewerTestCase(unittest.TestCase):
 
         self.u = viewer
 
+        self.m_scheduler = mock.Mock(name='m_scheduler')
+        self.p_scheduler = mock.patch.object(self.u, 'Scheduler', self.m_scheduler)
+
         self.m_cmd = mock.Mock(name='m_cmd')
         self.p_cmd = mock.patch.object(self.u.sh, 'Command', self.m_cmd)
 
@@ -105,9 +108,22 @@ class TestSignalHandlers(ViewerTestCase):
         self.p_killall.stop()
 
     def test_usr2(self):
-        self.u.last_settings_refresh = -1
-        self.p_reload.start()
+        self.p_killall.start()
+        self.p_scheduler.start()
+
+        self.u.scheduler = self.u.Scheduler()
+        self.u.scheduler.reverse = False
+
         eq_(None, self.u.sigusr2(None, None))
+        self.assertEqual(self.u.scheduler.reverse, True)
+        self.m_killall.assert_called_once_with('omxplayer.bin', _ok_code=[1])
+
+        self.p_killall.stop()
+        self.p_scheduler.stop()
+
+    def test_hup(self):
+        self.p_reload.start()
+        eq_(None, self.u.sighup(None, None))
         self.m_reload.assert_called_once()
         self.p_reload.stop()
 
