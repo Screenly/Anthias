@@ -46,9 +46,6 @@ app = Flask(__name__)
 CORS(app)
 api = Api(app, api_version="v1", title="Screenly OSE API")
 
-SWAGGER_URL = '/api/docs'
-API_URL = 'http://localhost:8080/api/swagger.json'
-
 
 ################################
 # Utilities
@@ -525,7 +522,7 @@ class AssetsControl(Resource):
                 'name': 'command',
                 'type': 'string',
                 'in': 'path',
-                'description': 'Control command'
+                'description': 'Control command ("next" or "previous")'
             }
         ],
         'responses': {
@@ -550,15 +547,25 @@ api.add_resource(Backup, '/api/v1/backup')
 api.add_resource(Recover, '/api/v1/recover')
 api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 
+try:
+    my_ip = get_node_ip()
+except:
+    pass
+else:
+    SWAGGER_URL = '/api/docs'
+    if settings.get_listen_ip() == '127.0.0.1':
+        API_URL = 'https://{}/api/swagger.json'.format(my_ip)
+    else:
+        API_URL = "http://{}:{}/api/swagger.json".format(my_ip, settings.get_listen_port())
 
-swaggerui_blueprint = get_swaggerui_blueprint(
-    SWAGGER_URL,
-    API_URL,
-    config={
-        'app_name': "Screenly API"
-    }
-)
-app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+    swaggerui_blueprint = get_swaggerui_blueprint(
+        SWAGGER_URL,
+        API_URL,
+        config={
+            'app_name': "Screenly API"
+        }
+    )
+    app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 
 
 ################################
