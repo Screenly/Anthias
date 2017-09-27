@@ -26,6 +26,12 @@ Quick links:
 
 Screenly OSE works on all Raspberry Pi versions, including Raspberry Pi Zero and Raspberry Pi 3 Model B.
 
+## API Documentation
+
+```
+http://web_interface_ip:port/api/docs/
+```
+
 ## Dockerized Development Environment
 
 To simplify development of the server module of Screenly OSE, we've created a Docker container. This is intended to run on your local machine with the Screenly OSE repository mounted as a volume.
