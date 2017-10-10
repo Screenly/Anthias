@@ -28,9 +28,7 @@ Screenly OSE works on all Raspberry Pi versions, including Raspberry Pi Zero and
 
 ## API Documentation
 
-```
-http://web_interface_ip:port/api/docs/
-```
+You can view the API documentation at [ose.demo.screenlyapp.com/api/docs/](http://ose.demo.screenlyapp.com/api/docs/). Alternatively, you can simply use your own Raspberry Pi with Screenly and navigate to http://web_interface_ip:port/api/docs/.
 
 ## Dockerized Development Environment
 
