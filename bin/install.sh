@@ -78,3 +78,8 @@ cd ~/screenly && git rev-parse HEAD > ~/.screenly/latest_screenly_sha
 
 set +x
 echo "Installation completed."
+
+read -p "You need to reboot the system for the installation to complete. Would you like to reboot now? (y/N)" -n 1 -r -s REBOOT && echo
+if [ "$REBOOT" == 'y' ]; then
+  sudo reboot
+fi
