@@ -553,7 +553,7 @@ except:
     pass
 else:
     SWAGGER_URL = '/api/docs'
-    swagger_address = getenv("SWAGGER_ADDRESS", my_ip)
+    swagger_address = getenv("SWAGGER_HOST", my_ip)
 
     if swagger_address == my_ip:
         swagger_address += ":{}".format(settings.get_listen_port())
