@@ -553,11 +553,15 @@ except:
     pass
 else:
     SWAGGER_URL = '/api/docs'
-    swagger_host = getenv("SWAGGER_HOST", my_ip)
+    swagger_address = getenv("SWAGGER_ADDRESS", my_ip)
+
+    if swagger_address == my_ip:
+        swagger_address += ":{}".format(settings.get_listen_port())
+
     if settings.get_listen_ip() == '127.0.0.1':
-        API_URL = 'https://{}/api/swagger.json'.format(swagger_host)
+        API_URL = 'https://{}/api/swagger.json'.format(swagger_address)
     else:
-        API_URL = "http://{}:{}/api/swagger.json".format(swagger_host, settings.get_listen_port())
+        API_URL = "http://{}/api/swagger.json".format(swagger_address)
 
     swaggerui_blueprint = get_swaggerui_blueprint(
         SWAGGER_URL,
