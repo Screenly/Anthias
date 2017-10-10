@@ -8,7 +8,7 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 from datetime import timedelta
 from functools import wraps
 from hurry.filesize import size
-from os import path, makedirs, statvfs, mkdir, system
+from os import path, makedirs, statvfs, mkdir, system, getenv
 from sh import git
 import sh
 from subprocess import check_output
@@ -553,10 +553,11 @@ except:
     pass
 else:
     SWAGGER_URL = '/api/docs'
+    swagger_host = getenv("SWAGGER_HOST", my_ip)
     if settings.get_listen_ip() == '127.0.0.1':
-        API_URL = 'https://{}/api/swagger.json'.format(my_ip)
+        API_URL = 'https://{}/api/swagger.json'.format(swagger_host)
     else:
-        API_URL = "http://{}:{}/api/swagger.json".format(my_ip, settings.get_listen_port())
+        API_URL = "http://{}:{}/api/swagger.json".format(swagger_host, settings.get_listen_port())
 
     swaggerui_blueprint = get_swaggerui_blueprint(
         SWAGGER_URL,
