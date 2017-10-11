@@ -19,6 +19,10 @@
     msg: "Detected BerryBoot installation. Skipping some steps."
   when: is_berryboot
 
+- name: Check NOOBS
+  command: cat /boot/config.txt
+  register: config_txt
+
 - name: Make sure we have proper framebuffer depth
   lineinfile:
     dest: /boot/config.txt
@@ -48,15 +52,64 @@
     src: /boot/cmdline.txt.orig
     dest: /boot/cmdline.txt
     force: yes
-  when: not is_berryboot
+  when: not is_berryboot and config_txt.stdout.find('NOOBS') == -1
 
 - name: Use Systemd as init and quiet boot process
-  lineinfile:
+  replace:
     dest: /boot/cmdline.txt
-    regexp: (.*)
-    backrefs: yes
-    line: \1 quiet init=/lib/systemd/systemd
+    regexp: (^(?!$)((?!quiet init=/lib/systemd/systemd).)*$)
+    replace: \1 quiet init=/lib/systemd/systemd
   when: not is_berryboot
+
+- name: ethN/wlanN names for interfaces
+  replace:
+    dest: /boot/cmdline.txt
+    regexp: (^(?!$)((?!net\.ifnames=0).)*$)
+    replace: \1 net.ifnames=0
+  when: not is_berryboot
+
+# Sometimes in some packages there are no necessary files.
+# They are required to install pip dependencies.
+# In this case we need to reinstall the packages.
+- name: Check if cdefs.h exists
+  stat:
+    path: /usr/include/arm-linux-gnueabihf/sys/cdefs.h
+  register: cdefs
+
+- set_fact: cdefs_exist="{{cdefs.stat.exists}}"
+
+- name: Remove libc6-dev
+  apt:
+    name: libc6-dev
+    state: absent
+  when: not cdefs_exist
+
+- name: Install libc6-dev
+  apt:
+    name: libc6-dev
+    state: present
+    update_cache: yes
+  when: not cdefs_exist
+
+- name: Check if cc1plus exists
+  stat:
+    path: /usr/lib/gcc/arm-linux-gnueabihf/4.9/cc1plus
+  register: cc1plus
+
+- set_fact: cc1plus_exist="{{cc1plus.stat.exists}}"
+
+- name: Remove build-essential
+  apt:
+    name: build-essential
+    state: absent
+  when: not cc1plus_exist
+
+- name: Install build-essential
+  apt:
+    name: build-essential
+    state: present
+    update_cache: yes
+  when: not cc1plus_exist
 
 - name: Install Screenly dependencies
   apt:

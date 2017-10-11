@@ -1,4 +1,4 @@
-FROM debian:jessie
+FROM debian:stretch
 MAINTAINER Viktor Petersson <vpetersson@screenly.io>
 
 RUN apt-get update && \

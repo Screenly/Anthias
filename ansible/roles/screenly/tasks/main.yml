@@ -81,10 +81,3 @@
 - name: Enable screenly systemd services
   command: systemctl enable {{ item }} chdir=/etc/systemd/system
   with_items: "{{ screenly_systemd_units }}"
-
-- name: Restart services
-  command: /bin/true
-  notify:
-    - restart-screenly-websocket_server_layer
-    - restart-screenly-server
-    - restart-screenly-viewer

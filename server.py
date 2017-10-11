@@ -5,10 +5,10 @@ __author__ = "WireLoad Inc"
 __copyright__ = "Copyright 2012-2016, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from functools import wraps
 from hurry.filesize import size
-from os import path, makedirs, statvfs, mkdir, getenv
+from os import path, makedirs, statvfs, mkdir, system, getenv
 from sh import git
 import sh
 from subprocess import check_output
@@ -17,9 +17,12 @@ import os
 import traceback
 import uuid
 
-from bottle import route, run, request, error, static_file, response
-from bottle import HTTPResponse
-from bottlehaml import haml_template
+from flask import Flask, request, render_template, make_response, send_from_directory
+from flask_restful_swagger_2 import swagger, Resource, Api, Schema
+from flask_swagger_ui import get_swaggerui_blueprint
+from flask_cors import CORS
+
+from gunicorn.app.base import Application
 
 from lib import db
 from lib import queries
@@ -37,20 +40,26 @@ from mimetypes import guess_type
 
 from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS, auth_basic
 from werkzeug.wrappers import Request
+
+
+app = Flask(__name__)
+CORS(app)
+api = Api(app, api_version="v1", title="Screenly OSE API")
+
+
 ################################
 # Utilities
 ################################
 
-
-def make_json_response(obj):
-    response.content_type = "application/json"
-    return json_dump(obj)
+@api.representation('application/json')
+def output_json(data, code, headers=None):
+    response = make_response(json_dump(data), code)
+    response.headers.extend(headers or {})
+    return response
 
 
 def api_error(error):
-    response.content_type = "application/json"
-    response.status = 500
-    return json_dump({'error': error})
+    return make_response(json_dump({'error': error}), 500)
 
 
 def is_up_to_date():
@@ -85,7 +94,7 @@ def is_up_to_date():
 
 def template(template_name, **context):
     """Screenly template response generator. Shares the
-    same function signature as Bottle's template() method
+    same function signature as Flask's render_template() method
     but also injects some global context."""
 
     # Add global contexts
@@ -98,12 +107,47 @@ def template(template_name, **context):
         'default_filters': ['template_handle_unicode'],
     }
 
-    return haml_template(template_name, **context)
+    return render_template(template_name, context=context)
 
 
 ################################
-# Model
+# Models
 ################################
+
+class AssetModel(Schema):
+    type = 'object'
+    properties = {
+        'asset_id': {'type': 'string'},
+        'name': {'type': 'string'},
+        'uri': {'type': 'string'},
+        'start_date': {
+            'type': 'string',
+            'format': 'date-time'
+        },
+        'end_date': {
+            'type': 'string',
+            'format': 'date-time'
+        },
+        'duration': {'type': 'string'},
+        'mimetype': {'type': 'string'},
+        'is_active': {'type': 'boolean'},
+        'is_enabled': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'is_processing': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'nocache': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'play_order': {
+            'type': 'integer',
+            'format': 'int64',
+        }
+    }
 
 
 ################################
@@ -186,122 +230,347 @@ def prepare_asset(request):
     return asset
 
 
-@route('/api/v1/assets', method="GET")
-@auth_basic
-def api_assets():
-    with db.conn(settings['database']) as conn:
-        assets = assets_helper.read(conn)
-        return make_json_response(assets)
-
-
 # api view decorator. handles errors
-def api(view):
+def api_response(view):
     @wraps(view)
     def api_view(*args, **kwargs):
         try:
-            return make_json_response(view(*args, **kwargs))
-        except HTTPResponse:
-            raise
+            return view(*args, **kwargs)
         except Exception as e:
             traceback.print_exc()
             return api_error(unicode(e))
     return api_view
 
 
-@route('/api/v1/upload_file', method="POST")
-@auth_basic
-@api
-def upload_file():
-    req = Request(request.environ)
-    file_upload = req.files.get('file_upload')
-    filename = file_upload.filename
-    file_path = path.join(settings['assetdir'], filename) + ".tmp"
+class Assets(Resource):
+    method_decorators = [auth_basic]
 
-    if 'Content-Range' in request.headers:
-        range_str = request.headers['Content-Range']
-        start_bytes = int(range_str.split(' ')[1].split('-')[0])
-        with open(file_path, 'a') as f:
-            f.seek(start_bytes)
-            f.write(file_upload.read())
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'List of assets',
+                'schema': {
+                    'type': 'array',
+                    'items': AssetModel
+
+                }
+            }
+        }
+    })
+    def get(self):
+        with db.conn(settings['database']) as conn:
+            assets = assets_helper.read(conn)
+            return assets
+
+    @api_response
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'model',
+                'in': 'formData',
+                'type': 'string',
+                'description':
+                    '''
+                    Yes, that is just a string of JSON not JSON itself it will be parsed on the other end.
+                    Content-Type: application/x-www-form-urlencoded
+                    model: "{
+                        "name": "Website",
+                        "mimetype": "webpage",
+                        "uri": "http://example.com",
+                        "is_active": false,
+                        "start_date": "2017-02-02T00:33:00.000Z",
+                        "end_date": "2017-03-01T00:33:00.000Z",
+                        "duration": "10",
+                        "is_enabled": 0,
+                        "is_processing": 0,
+                        "nocache": 0,
+                        "play_order": 0
+                    }"
+                    '''
+            }
+        ],
+        'responses': {
+            '201': {
+                'description': 'Asset created',
+                'schema': AssetModel
+            }
+        }
+    })
+    def post(self):
+        asset = prepare_asset(request)
+        if url_fails(asset['uri']):
+            raise Exception("Could not retrieve file. Check the asset URL.")
+        with db.conn(settings['database']) as conn:
+            return assets_helper.create(conn, asset), 201
+
+
+class Asset(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset'
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'Asset',
+                'schema': AssetModel
+            }
+        }
+    })
+    def get(self, asset_id):
+        with db.conn(settings['database']) as conn:
+            return assets_helper.read(conn, asset_id)
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset'
+            },
+            {
+                'name': 'model',
+                'in': 'formData',
+                'type': 'string',
+                'description':
+                    '''
+                    Content-Type: application/x-www-form-urlencoded
+                    model: "{
+                        "asset_id": "793406aa1fd34b85aa82614004c0e63a",
+                        "name": "Website",
+                        "mimetype": "webpage",
+                        "uri": "http://example.com",
+                        "is_active": false,
+                        "start_date": "2017-02-02T00:33:00.000Z",
+                        "end_date": "2017-03-01T00:33:00.000Z",
+                        "duration": "10",
+                        "is_enabled": 0,
+                        "is_processing": 0,
+                        "nocache": 0,
+                        "play_order": 0
+                    }"
+                    '''
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'Asset updated',
+                'schema': AssetModel
+            }
+        }
+    })
+    def put(self, asset_id):
+        with db.conn(settings['database']) as conn:
+            return assets_helper.update(conn, asset_id, prepare_asset(request))
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset'
+            },
+        ],
+        'responses': {
+            '204': {
+                'description': 'Deleted'
+            }
+        }
+    })
+    def delete(self, asset_id):
+        with db.conn(settings['database']) as conn:
+            asset = assets_helper.read(conn, asset_id)
+            try:
+                if asset['uri'].startswith(settings['assetdir']):
+                    os.remove(asset['uri'])
+            except OSError:
+                pass
+            assets_helper.delete(conn, asset_id)
+            return '', 204  # return an OK with no content
+
+
+class FileAsset(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'file_upload',
+                'type': 'file',
+                'in': 'formData',
+                'description': 'File to be sent'
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'File path',
+                'schema': {
+                    'type': 'string'
+                }
+            }
+        }
+    })
+    def post(self):
+        req = Request(request.environ)
+        file_upload = req.files.get('file_upload')
+        filename = file_upload.filename
+        file_path = path.join(settings['assetdir'], filename) + ".tmp"
+
+        if 'Content-Range' in request.headers:
+            range_str = request.headers['Content-Range']
+            start_bytes = int(range_str.split(' ')[1].split('-')[0])
+            with open(file_path, 'a') as f:
+                f.seek(start_bytes)
+                f.write(file_upload.read())
+        else:
+            file_upload.save(file_path)
+
+        return file_path
+
+
+class PlaylistOrder(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'ids',
+                'in': 'formData',
+                'type': 'string',
+                'description':
+                    '''
+                    Content-Type: application/x-www-form-urlencoded
+                    ids: "793406aa1fd34b85aa82614004c0e63a,1c5cfa719d1f4a9abae16c983a18903b,9c41068f3b7e452baf4dc3f9b7906595"
+                    comma separated ids
+                    '''
+            },
+        ],
+        'responses': {
+            '204': {
+                'description': 'Sorted'
+            }
+        }
+    })
+    def post(self):
+        with db.conn(settings['database']) as conn:
+            assets_helper.save_ordering(conn, request.form.get('ids', '').split(','))
+
+
+class Backup(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Backup filename',
+                'schema': {
+                    'type': 'string'
+                }
+            }
+        }
+    })
+    def post(self):
+        filename = backup_helper.create_backup()
+        return filename, 201
+
+
+class Recover(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'backup_upload',
+                'type': 'file',
+                'in': 'formData'
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'Recovery successful'
+            }
+        }
+    })
+    def post(self):
+        req = Request(request.environ)
+        file_upload = (req.files['backup_upload'])
+        filename = file_upload.filename
+
+        if guess_type(filename)[0] != 'application/x-tar':
+            raise Exception("Incorrect file extension.")
+
+        location = path.join("static", filename)
+        file_upload.save(location)
+        backup_helper.recover(location)
+        return "Recovery successful."
+
+
+class AssetsControl(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'command',
+                'type': 'string',
+                'in': 'path',
+                'description': 'Control command ("next" or "previous")'
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'Asset switched'
+            }
+        }
+    })
+    def get(self, command):
+        if command == "next":
+            system('pkill -SIGUSR1 -f viewer.py')
+            return "Asset switched"
+        if command == "previous":
+            system('pkill -SIGUSR2 -f viewer.py')
+            return "Asset switched"
+
+api.add_resource(Assets, '/api/v1/assets')
+api.add_resource(Asset, '/api/v1/assets/<asset_id>')
+api.add_resource(FileAsset, '/api/v1/file_asset')
+api.add_resource(PlaylistOrder, '/api/v1/assets/order')
+api.add_resource(Backup, '/api/v1/backup')
+api.add_resource(Recover, '/api/v1/recover')
+api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
+
+try:
+    my_ip = get_node_ip()
+except:
+    pass
+else:
+    SWAGGER_URL = '/api/docs'
+    swagger_address = getenv("SWAGGER_HOST", my_ip)
+
+    if swagger_address == my_ip:
+        swagger_address += ":{}".format(settings.get_listen_port())
+
+    if settings.get_listen_ip() == '127.0.0.1':
+        API_URL = 'https://{}/api/swagger.json'.format(swagger_address)
     else:
-        file_upload.save(file_path)
+        API_URL = "http://{}/api/swagger.json".format(swagger_address)
 
-    return file_path
-
-
-@route('/api/v1/assets', method="POST")
-@auth_basic
-@api
-def add_asset():
-    asset = prepare_asset(request)
-    if url_fails(asset['uri']):
-        raise Exception("Could not retrieve file. Check the asset URL.")
-    with db.conn(settings['database']) as conn:
-        return assets_helper.create(conn, asset)
-
-
-@route('/api/v1/assets/:asset_id', method="GET")
-@auth_basic
-@api
-def edit_asset(asset_id):
-    with db.conn(settings['database']) as conn:
-        return assets_helper.read(conn, asset_id)
-
-
-@route('/api/v1/assets/:asset_id', method=["PUT", "POST"])
-@auth_basic
-@api
-def edit_asset(asset_id):
-    with db.conn(settings['database']) as conn:
-        return assets_helper.update(conn, asset_id, prepare_asset(request))
-
-
-@route('/api/v1/assets/:asset_id', method="DELETE")
-@auth_basic
-@api
-def remove_asset(asset_id):
-    with db.conn(settings['database']) as conn:
-        asset = assets_helper.read(conn, asset_id)
-        try:
-            if asset['uri'].startswith(settings['assetdir']):
-                os.remove(asset['uri'])
-        except OSError:
-            pass
-        assets_helper.delete(conn, asset_id)
-        response.status = 204  # return an OK with no content
-
-
-@route('/api/v1/assets/order', method="POST")
-@auth_basic
-@api
-def playlist_order():
-    with db.conn(settings['database']) as conn:
-        assets_helper.save_ordering(conn, request.POST.get('ids', '').split(','))
-
-
-@route('/api/v1/backup', method="GET")
-@auth_basic
-@api
-def backup():
-    filename = backup_helper.create_backup()
-    return filename
-
-
-@route('/api/v1/recover', method="POST")
-@auth_basic
-@api
-def recover():
-    req = Request(request.environ)
-    file_upload = (req.files['backup_upload'])
-    filename = file_upload.filename
-
-    if guess_type(filename)[0] != 'application/x-tar':
-        raise Exception("Incorrect file extension.")
-
-    location = path.join("static", filename)
-    file_upload.save(location)
-    backup_helper.recover(location)
-    return "Recovery successful."
+    swaggerui_blueprint = get_swaggerui_blueprint(
+        SWAGGER_URL,
+        API_URL,
+        config={
+            'app_name': "Screenly API"
+        }
+    )
+    app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 
 
 ################################
@@ -309,7 +578,7 @@ def recover():
 ################################
 
 
-@route('/')
+@app.route('/')
 @auth_basic
 def viewIndex():
     player_name = settings['player_name']
@@ -320,10 +589,10 @@ def viewIndex():
         ws_address = 'wss://' + my_ip + '/ws/'
     else:
         ws_address = 'ws://' + my_ip + ':' + settings['websocket_port']
-    return template('index', ws_address=ws_address, player_name=player_name)
+    return template('index.html', ws_address=ws_address, player_name=player_name)
 
 
-@route('/settings', method=["GET", "POST"])
+@app.route('/settings', methods=["GET", "POST"])
 @auth_basic
 def settings_page():
 
@@ -331,32 +600,33 @@ def settings_page():
 
     if request.method == "POST":
         for field, default in CONFIGURABLE_SETTINGS.items():
-            value = request.POST.get(field, default)
+            value = request.form.get(field, default)
             if isinstance(default, bool):
                 value = value == 'on'
             settings[field] = value
         try:
             settings.save()
-            sh.sudo('systemctl', 'kill', '--signal=SIGUSR2', 'screenly-viewer.service')
+            system('pkill -SIGHUP -f viewer.py')
             context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
         except IOError as e:
             context['flash'] = {'class': "error", 'message': e}
-        except sh.ErrorReturnCode_1 as e:
+        except OSError as e:
             context['flash'] = {'class': "error", 'message': e}
     else:
         settings.load()
     for field, default in DEFAULTS['viewer'].items():
         context[field] = settings[field]
 
-    return template('settings', **context)
+    return template('settings.html', **context)
 
 
-@route('/system_info')
+@app.route('/system_info')
 @auth_basic
 def system_info():
     viewlog = None
     try:
-        viewlog = check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')
+        viewlog = [line.decode('utf-8') for line in
+                   check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
     except:
         pass
 
@@ -378,7 +648,7 @@ def system_info():
     player_name = settings['player_name']
 
     return template(
-        'system_info',
+        'system_info.html',
         player_name=player_name,
         viewlog=viewlog,
         loadavg=loadavg,
@@ -389,7 +659,7 @@ def system_info():
     )
 
 
-@route('/splash_page')
+@app.route('/splash_page')
 def splash_page():
     url = None
     try:
@@ -408,32 +678,27 @@ def splash_page():
             url = "http://{}:{}".format(my_ip, settings.get_listen_port())
 
     msg = url if url else error_msg
-    return template('splash_page', ip_lookup=ip_lookup, msg=msg)
+    return template('splash_page.html', ip_lookup=ip_lookup, msg=msg)
 
 
-@error(403)
+@app.errorhandler(403)
 def mistake403(code):
     return 'The parameter you passed has the wrong format!'
 
 
-@error(404)
+@app.errorhandler(404)
 def mistake404(code):
     return 'Sorry, this page does not exist!'
-
 
 ################################
 # Static
 ################################
 
-@route('/static/:path#.+#', name='static')
-def static(path):
-    return static_file(path, root='static')
 
-
-@route('/static_with_mime/:path#.+#', name='static')
+@app.route('/static_with_mime/<string:path>')
 def static_with_mime(path):
-    mimetype = request.query['mime'] if 'mime' in request.query else 'auto'
-    return static_file(path, root='static', mimetype=mimetype)
+    mimetype = request.args['mime'] if 'mime' in request.args else 'auto'
+    return send_from_directory(directory='static', filename=path, mimetype=mimetype)
 
 
 if __name__ == "__main__":
@@ -450,10 +715,17 @@ if __name__ == "__main__":
             if cursor.fetchone() is None:
                 cursor.execute(assets_helper.create_assets_table)
 
-    run(
-        host=settings.get_listen_ip(),
-        port=settings.get_listen_port(),
-        server='gunicorn',
-        threads=2,
-        timeout=20,
-    )
+    config = {
+        'bind': '{}:{}'.format(settings.get_listen_ip(), int(settings.get_listen_port())),
+        'threads': 2,
+        'timeout': 20
+    }
+
+    class GunicornApplication(Application):
+        def init(self, parser, opts, args):
+            return config
+
+        def load(self):
+            return app
+
+    GunicornApplication().run()
