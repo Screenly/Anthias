@@ -54,6 +54,20 @@
     force: yes
   when: not is_berryboot and config_txt.stdout.find('NOOBS') == -1
 
+- name: For splash screen using Plymouth
+  replace:
+    dest: /boot/cmdline.txt
+    regexp: (^(?!$)((?!splash).)*$)
+    replace: \1 splash
+  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+
+- name: Remove blinking cursor
+  replace:
+    dest: /boot/cmdline.txt
+    regexp: (^(?!$)((?!vt.global_cursor_default=0).)*$)
+    replace: \1 vt.global_cursor_default=0
+  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+
 - name: Use Systemd as init and quiet boot process
   replace:
     dest: /boot/cmdline.txt
