@@ -15,12 +15,14 @@
             <img src="static/img/screenly_ose_logo.png" />
           </a>
           <ul class="nav pull-right">
+            {% if not context.up_to_date %}
             <li class="update-available">
               <a href="http://www.screenlyapp.com/ose.html#upgrade">
                 <i class="icon-circle-arrow-down icon-white"></i>
                 Update Available
               </a>
             </li>
+            {% endif %}
             <li>
               <a href="/settings">
                 <i class="icon-cog icon-white"></i>
