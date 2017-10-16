@@ -1,22 +1,64 @@
 ---
-- name: Installs dependencies
+
+# If Jessie
+- name: Installs dependencies (Jessie)
   apt:
     name: "{{ item }}"
   with_items:
     - fbi
+  when: ansible_distribution_major_version|int <= 7
 
 - name: Copies in splash screen
   copy:
-    src: splashscreen.jpg
-    dest: /etc/splashscreen.jpg
+    src: splashscreen.png
+    dest: /etc/splashscreen.png
+  when: ansible_distribution_major_version|int <= 7
 
 - name: Copies in rc script
   copy:
     src: asplashscreen
     dest: /etc/init.d/asplashscreen
     mode: 0755
+  when: ansible_distribution_major_version|int <= 7
 
 - name: Enables asplashscreen
   command: update-rc.d asplashscreen defaults
   args:
     creates: /etc/rcS.d/S01asplashscreen
+  when: ansible_distribution_major_version|int <= 7
+
+# If not Jessie
+
+- name: Remove older versions
+  file:
+    state: absent
+    path: "{{ item }}"
+  with_items:
+    - /etc/splashscreen.jpg
+    - /etc/init.d/asplashscreen
+  when: ansible_distribution_major_version|int >= 7
+
+- name: Disable asplashscreen
+  command: update-rc.d asplashscreen remove
+  when: ansible_distribution_major_version|int >= 7
+
+- name: Installs dependencies (not Jessie)
+  apt:
+    name: "{{ item }}"
+  with_items:
+    - plymouth
+  when: ansible_distribution_major_version|int >= 7
+
+- name: Copies plymouth theme
+  copy:
+    src: "{{ item }}"
+    dest: /usr/share/plymouth/themes/screenly/
+  with_items:
+    - screenly.plymouth
+    - screenly.script
+    - splashscreen.png
+  when: ansible_distribution_major_version|int >= 7
+
+- name: Set splashscreen
+  command: plymouth-set-default-theme -R screenly
+  when: ansible_distribution_major_version|int >= 7
