@@ -11,7 +11,7 @@
 ### END INIT INFO
 
 do_start () {
-    /usr/bin/fbi -T 1 -noverbose -a /etc/splashscreen.jpg
+    /usr/bin/fbi -T 1 -noverbose -a /etc/splashscreen.png
     exit 0
 }
 
