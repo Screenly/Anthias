@@ -79,7 +79,7 @@
             <div class="control-group">
               <label class="control-label">Player name</label>
               <div class="controls">
-                <input class="span4" name="player_name" type="text" value={{context.player_name}} />
+                <input class="span4" name="player_name" type="text" value={{context.player_name}}>
               </div>
             </div>
 
@@ -171,9 +171,9 @@
               <div class="controls">
                 <label id="debug_checkbox" class="checkbox toggle well">
                   {% if context.debug_logging %}
-                    <input name="debug_logging" checked="checked" type="checkbox" />
+                    <input name="debug_logging" checked="checked" type="checkbox">
                   {% else %}
-                    <input name="debug_logging" type="checkbox" />
+                    <input name="debug_logging" type="checkbox">
                   {% endif %}
                   <p>
                     <span class="on">On</span>
@@ -185,7 +185,7 @@
             </div>
 
             <div class="form-actions">
-              <input class="btn btn-primary" type="submit" value="Save Settings" />
+              <input class="btn btn-primary" type="submit" value="Save Settings">
               <a class="btn" href="/">Cancel</a>
             </div>
           </form>
@@ -195,7 +195,7 @@
           <h1 class="page-header">
             Backup
           </h1>
-          <input name="backup_upload" style="display:none" type="file" />
+          <input name="backup_upload" style="display:none" type="file">
           <button id="btn-upload" class="btn btn-primary" type="button">Upload and Recover</button>
           <button id="btn-backup" class="btn">Get backup</button>
           <div class="progress progress-striped active" style="display:none">
