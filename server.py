@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 
-__author__ = "WireLoad Inc"
-__copyright__ = "Copyright 2012-2016, WireLoad Inc"
+__author__ = "Screenly, Inc"
+__copyright__ = "Copyright 2012-2017, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 from datetime import timedelta

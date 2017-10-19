@@ -19,8 +19,8 @@ from lib import db
 from lib import assets_helper
 
 
-__author__ = "WireLoad Inc"
-__copyright__ = "Copyright 2012-2016, WireLoad Inc"
+__author__ = "Screenly, Inc"
+__copyright__ = "Copyright 2012-2017, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 
