@@ -68,7 +68,7 @@
               <tr>
                 <td>{{context.loadavg}}</td>
                 <td>{{context.free_space}}</td>
-                <td>{{context.uptime.days}} days and {{context.uptime.seconds / 3600}} hours</td>
+                <td>{{context.uptime.days}} days and {{ (context.uptime.seconds / 3600)|round(2) }} hours</td>
                 <td>{{context.display_info}}</td>
                 <td>{{context.display_power}}</td>
               </tr>
