@@ -1,0 +1,51 @@
+FROM resin/%%RESIN_MACHINE_NAME%%-python
+MAINTAINER Viktor Petersson <vpetersson@screenly.io>
+
+RUN apt-get update && \
+    apt-get -y install build-essential git-core net-tools python-netifaces python-simplejson python-imaging python-dev sqlite3 libffi-dev libssl-dev curl psmisc matchbox omxplayer uzbl x11-xserver-utils xserver-xorg && \
+    apt-get clean
+
+# Install Python requirements
+ADD requirements.txt /tmp/requirements.txt
+RUN curl -s https://bootstrap.pypa.io/get-pip.py | /usr/bin/python && \
+    pip install --upgrade --force-reinstall -r /tmp/requirements.txt
+
+# enable container init system.
+ENV INITSYSTEM on
+
+COPY ansible/roles/screenly/files/screenly-websocket_server_layer.service /etc/systemd/system/screenly-websocket_server_layer.service
+RUN sed -i '/\[Service\]/ a\Environment=HOME=/data' /etc/systemd/system/screenly-websocket_server_layer.service
+RUN systemctl enable screenly-websocket_server_layer.service
+
+COPY ansible/roles/screenly/files/screenly-web.service /etc/systemd/system/screenly-web.service
+RUN sed -i '/\[Service\]/ a\Environment=HOME=/data' /etc/systemd/system/screenly-web.service
+RUN systemctl enable screenly-web.service
+
+COPY ansible/roles/screenly/files/X.service /etc/systemd/system/X.service
+RUN systemctl enable X.service
+
+COPY ansible/roles/screenly/files/matchbox.service /etc/systemd/system/matchbox.service
+RUN systemctl enable matchbox.service
+
+COPY ansible/roles/screenly/files/screenly-viewer.service /etc/systemd/system/screenly-viewer.service
+RUN sed -i '/\[Service\]/ a\Environment=HOME=/data' /etc/systemd/system/screenly-viewer.service
+RUN sed -i '/\[Service\]/ a\Environment=DISABLE_UPDATE_CHECK=True' /etc/systemd/system/screenly-viewer.service
+RUN systemctl enable screenly-viewer.service
+
+# Create runtime user
+RUN useradd pi
+
+RUN /usr/sbin/usermod -a -G video pi
+
+# Install config file and file structure
+RUN mkdir -p /home/pi/screenly
+COPY ansible/roles/screenly/files/gtkrc-2.0 /home/pi/.gtkrc-2.0
+
+# Copy in code base
+COPY . /home/pi/screenly
+
+RUN chown -R pi:pi /home/pi
+
+WORKDIR /home/pi/screenly
+
+CMD ["bash", "bin/start_resin.sh"]
