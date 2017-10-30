@@ -307,9 +307,7 @@ def asset_loop(scheduler):
         if 'image' in mime:
             view_image(uri)
         elif 'web' in mime:
-            # FIXME If we want to force periodic reloads of repeated web assets, force=True could be used here.
-            # See e38e6fef3a70906e7f8739294ffd523af6ce66be.
-            browser_url(uri)
+            browser_url(uri, force=True)
         elif 'video' or 'streaming' in mime:
             view_video(uri, asset['duration'])
         else:
