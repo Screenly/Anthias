@@ -108,7 +108,7 @@ def get_video_duration(file):
     time = None
     try:
         if arch in ('armv6l', 'armv7l'):
-            run_omxplayer = omxplayer(file, info=True, _err_to_out=True)
+            run_omxplayer = omxplayer(file, info=True, _err_to_out=True, _ok_code=[0, 1])
             for line in run_omxplayer.split('\n'):
                 if 'Duration' in line:
                     match = re.search(r'[0-9]+:[0-9]+:[0-9]+\.[0-9]+', line)
@@ -207,13 +207,15 @@ def url_fails(url):
 def download_video_from_youtube(uri, asset_id):
     home = getenv('HOME')
     name = check_output(['youtube-dl', '-e', uri])
+    info = json.loads(check_output(['youtube-dl', '-j', uri]))
+    duration = info['duration']
 
     location = path.join(home, 'screenly_assets', asset_id)
     thread = YoutubeDownloadThread(location, uri, asset_id)
     thread.daemon = True
     thread.start()
 
-    return location, unicode(name.decode('utf-8'))
+    return location, unicode(name.decode('utf-8')), duration
 
 
 class YoutubeDownloadThread(Thread):
