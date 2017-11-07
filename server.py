@@ -197,21 +197,15 @@ def prepare_asset(request):
             uri = path.join(settings['assetdir'], asset['asset_id'])
 
     if 'youtube_asset' in asset['mimetype']:
-        uri, asset['name'] = download_video_from_youtube(uri, asset['asset_id'])
+        uri, asset['name'], asset['duration'] = download_video_from_youtube(uri, asset['asset_id'])
         asset['mimetype'] = 'video'
         asset['is_processing'] = 1
 
     asset['uri'] = uri
 
     if "video" in asset['mimetype']:
-        if asset['is_processing'] == 0:
-            video_duration = get_video_duration(uri)
-            if video_duration:
-                asset['duration'] = int(video_duration.total_seconds())
-            else:
-                asset['duration'] = 'N/A'
-        else:
-            asset['duration'] = 'N/A'
+        if int(get('duration')) == 0:
+            asset['duration'] = int(get_video_duration(uri).total_seconds())
     else:
         # Crashes if it's not an int. We want that.
         asset['duration'] = int(get('duration'))
