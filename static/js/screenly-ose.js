@@ -136,7 +136,7 @@
     return (v.replace(/\//g, '/<wbr>')).replace(/\&/g, '&amp;<wbr>');
   };
 
-  Backbone.emulateJSON = true;
+  Backbone.emulateJSON = false;
 
   API.Asset = Asset = (function(superClass) {
     extend(Asset, superClass);
@@ -210,7 +210,7 @@
       return Assets.__super__.constructor.apply(this, arguments);
     }
 
-    Assets.prototype.url = "/api/v1/assets";
+    Assets.prototype.url = "/api/v1.1/assets";
 
     Assets.prototype.model = Asset;
 

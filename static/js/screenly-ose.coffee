@@ -81,7 +81,7 @@ get_filename = (v) -> (v.replace /[\/\\\s]+$/g, '').replace /^.*[\\\/]/g, ''
 insertWbr = (v) -> (v.replace /\//g, '/<wbr>').replace /\&/g, '&amp;<wbr>'
 
 # Tell Backbone to send its saves as JSON-encoded.
-Backbone.emulateJSON = on
+Backbone.emulateJSON = off
 
 # Models
 API.Asset = class Asset extends Backbone.Model
@@ -121,7 +121,7 @@ API.Asset = class Asset extends Backbone.Model
 
 
 API.Assets = class Assets extends Backbone.Collection
-  url: "/api/v1/assets"
+  url: "/api/v1.1/assets"
   model: Asset
   comparator: 'play_order'
 
