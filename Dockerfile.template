@@ -2,7 +2,24 @@ FROM resin/%%RESIN_MACHINE_NAME%%-python
 MAINTAINER Viktor Petersson <vpetersson@screenly.io>
 
 RUN apt-get update && \
-    apt-get -y install build-essential git-core net-tools python-netifaces python-simplejson python-imaging python-dev sqlite3 libffi-dev libssl-dev curl psmisc matchbox omxplayer uzbl x11-xserver-utils xserver-xorg && \
+    apt-get -y install \
+        build-essential \
+        curl \
+        git-core \
+        libffi-dev \
+        libssl-dev \
+        matchbox \
+        net-tools \
+        omxplayer \
+        psmisc \
+        python-dev \
+        python-imaging \
+        python-netifaces \
+        python-simplejson \
+        sqlite3 \
+        uzbl \
+        x11-xserver-utils \
+        xserver-xorg && \
     apt-get clean
 
 # Install Python requirements
@@ -10,7 +27,7 @@ ADD requirements.txt /tmp/requirements.txt
 RUN curl -s https://bootstrap.pypa.io/get-pip.py | /usr/bin/python && \
     pip install --upgrade --force-reinstall -r /tmp/requirements.txt
 
-# enable container init system.
+# Enable container init system.
 ENV INITSYSTEM on
 
 COPY ansible/roles/screenly/files/screenly-websocket_server_layer.service /etc/systemd/system/screenly-websocket_server_layer.service

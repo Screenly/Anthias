@@ -6,7 +6,13 @@ systemctl start screenly-viewer.service
 systemctl start screenly-web.service
 systemctl start screenly-websocket_server_layer.service
 
-mkdir /data/screenly /data/.screenly /data/screenly_assets /data/.config /data/.config/uzbl
+mkdir -p \
+    /data/.config \
+    /data/.config/uzbl
+    /data/.screenly \
+    /data/screenly \
+    /data/screenly_assets \
+
 cp -n ansible/roles/screenly/files/screenly.conf /data/.screenly/screenly.conf
 cp -n ansible/roles/screenly/files/screenly.db /data/.screenly/screenly.db
 cp -n loading.png /data/screenly/loading.png
