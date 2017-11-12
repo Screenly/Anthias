@@ -8,10 +8,10 @@ systemctl start screenly-websocket_server_layer.service
 
 mkdir -p \
     /data/.config \
-    /data/.config/uzbl
+    /data/.config/uzbl \
     /data/.screenly \
     /data/screenly \
-    /data/screenly_assets \
+    /data/screenly_assets
 
 cp -n ansible/roles/screenly/files/screenly.conf /data/.screenly/screenly.conf
 cp -n ansible/roles/screenly/files/screenly.db /data/.screenly/screenly.db

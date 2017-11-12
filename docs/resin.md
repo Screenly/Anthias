@@ -23,5 +23,6 @@ $ git remote add resin <USERNAME>@git.resin.io:<USERNAME>/<APPNAME>.git
 $ git push resin master
 ```
 
-  * This will take some time, as all components are being installed
+*(This will take some time, as all components are being installed)*
+
 * Navigate to "Fleet Configuration" in the web interface and create a new configuration with the key `RESIN_HOST_CONFIG_gpu_mem` and value `64`.
