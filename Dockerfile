@@ -2,7 +2,22 @@ FROM debian:stretch
 MAINTAINER Viktor Petersson <vpetersson@screenly.io>
 
 RUN apt-get update && \
-    apt-get -y install build-essential git-core net-tools python-netifaces python-simplejson python-imaging python-dev sqlite3 libffi-dev libssl-dev curl mplayer ffmpeg && \
+    apt-get -y install \
+        build-essential \
+        curl \
+        ffmpeg \
+        git-core \
+        libffi-dev \
+        libssl-dev \
+        mplayer \
+        net-tools \
+        procps \
+        python-dev \
+        python-imaging \
+        python-netifaces \
+        python-simplejson \
+        sqlite3 \
+    && \
     apt-get clean
 
 # Install Python requirements
