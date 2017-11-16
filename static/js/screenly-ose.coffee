@@ -540,11 +540,15 @@ API.App = class App extends Backbone.View
       collection: API.assets
       el: @$ '#assets'
 
-    ws = new WebSocket ws_address
-    ws.onmessage = (x) ->
-      model = API.assets.get(x.data)
-      if model
-        save = model.fetch()
+    for address in ws_addresses
+      try
+        ws = new WebSocket address
+        ws.onmessage = (x) ->
+          model = API.assets.get(x.data)
+          if model
+            save = model.fetch()
+      catch error
+        no
 
   events: {'click #add-asset-button': 'add'}
 

@@ -31,16 +31,21 @@ ADD requirements.txt /tmp/requirements.txt
 RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
     pip install --upgrade -r /tmp/requirements.txt
 
+# Screenly Websocker Server
 COPY ansible/roles/screenly/files/screenly-websocket_server_layer.service /etc/systemd/system/screenly-websocket_server_layer.service
 RUN sed -i '/\[Service\]/ a\Environment=HOME=/data' /etc/systemd/system/screenly-websocket_server_layer.service
 
+# Screenly Server
 COPY ansible/roles/screenly/files/screenly-web.service /etc/systemd/system/screenly-web.service
 RUN sed -i '/\[Service\]/ a\Environment=HOME=/data' /etc/systemd/system/screenly-web.service
 
+# X11
 COPY ansible/roles/screenly/files/X.service /etc/systemd/system/X.service
 
+# Matchbox
 COPY ansible/roles/screenly/files/matchbox.service /etc/systemd/system/matchbox.service
 
+#Screenly Viewer
 COPY ansible/roles/screenly/files/screenly-viewer.service /etc/systemd/system/screenly-viewer.service
 RUN sed -i '/\[Service\]/ a\Environment=HOME=/data' /etc/systemd/system/screenly-viewer.service
 RUN sed -i '/\[Service\]/ a\Environment=DISABLE_UPDATE_CHECK=True' /etc/systemd/system/screenly-viewer.service

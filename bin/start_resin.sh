@@ -23,13 +23,15 @@ if [ -n "${MANAGEMENT_USER+x}" ] && [ -n "${MANAGEMENT_PASSWORD+x}" ]; then
     sed -i -e "s/^user=.*/user=${MANAGEMENT_USER}/" -e "s/^password=.*/password=${MANAGEMENT_PASSWORD}/" /data/.screenly/screenly.conf
 fi
 
-sed -i 's/^.*listen.*/listen = 127.0.0.1:8080/' /data/.screenly/screenly.conf
+sed -i "/\[Service\]/ a\Environment=RESIN_UUID=${RESIN_DEVICE_UUID}" /etc/systemd/system/screenly-web.service
 
 systemctl start X.service
 systemctl start matchbox.service
 systemctl start screenly-viewer.service
 systemctl start screenly-web.service
 systemctl start screenly-websocket_server_layer.service
+
+journalctl -f -a
 
 # By default docker gives us 64MB of shared memory size but to display heavy
 # pages we need more.

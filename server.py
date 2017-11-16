@@ -711,13 +711,20 @@ else:
 def viewIndex():
     player_name = settings['player_name']
     my_ip = get_node_ip()
+    resin_uuid = getenv("RESIN_UUID", None)
+
+    ws_addresses = []
 
     # If we bind on 127.0.0.1, `enable_ssl.sh` has most likely been executed
     if settings.get_listen_ip() == '127.0.0.1':
-        ws_address = 'wss://' + my_ip + '/ws/'
+        ws_addresses.append('wss://' + my_ip + '/ws/')
     else:
-        ws_address = 'ws://' + my_ip + ':' + settings['websocket_port']
-    return template('index.html', ws_address=ws_address, player_name=player_name)
+        ws_addresses.append('ws://' + my_ip + ':' + settings['websocket_port'])
+
+    if resin_uuid:
+        ws_addresses.append('wss://{}.resindevice.io/ws/'.format(resin_uuid))
+
+    return template('index.html', ws_addresses=ws_addresses, player_name=player_name)
 
 
 @app.route('/settings', methods=["GET", "POST"])

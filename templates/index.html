@@ -46,7 +46,7 @@
       var use_24_hour_clock = false
       {% endif %}
 
-      var ws_address = `{{context.ws_address}}`;
+      var ws_addresses = {{context.ws_addresses|tojson}};
     </script>
 
     <script src="/static/js/underscore-1.4.3.min.js"></script>

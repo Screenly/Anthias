@@ -56,8 +56,7 @@ def validate_url(string):
 
 
 def get_node_ip():
-    if arch in ('armv6l', 'armv7l'):
-
+    if arch in ('armv6l', 'armv7l') and getenv("RESIN_UUID") is None:
         interface = None
         for n in range(10):
             iface = 'eth{}'.format(n)
@@ -92,7 +91,6 @@ def get_node_ip():
         """Returns the node's IP, for the interface
         that is being used as the default gateway.
         This shuld work on both MacOS X and Linux."""
-
         try:
             default_interface = grep(netstat('-nr'), '-e', '^default', '-e' '^0.0.0.0').split()[-1]
             my_ip = ifaddresses(default_interface)[2][0]['addr']
