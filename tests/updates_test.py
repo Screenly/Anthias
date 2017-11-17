@@ -23,7 +23,7 @@ def mocked_req_get(*args, **kwargs):
 class UpdateTest(unittest.TestCase):
     def setUp(self):
         settings.home = '/tmp/'
-        self.sha_file = settings.get_configdir() + '/latest_screenly_sha'
+        self.sha_file = settings.get_configdir() + 'latest_screenly_sha'
 
         if not os.path.exists(settings.get_configdir()):
             os.mkdir(settings.get_configdir())
@@ -49,7 +49,8 @@ class UpdateTest(unittest.TestCase):
             self.assertEqual(f.readline(), fancy_sha)
 
     @patch('viewer.req_get', side_effect=mocked_req_get)
-    def test_if_sha_file_is_empty__check_update__should_return_true(self, req_get):
+    @patch('viewer.url_fails', side_effect=lambda _: False)
+    def test_if_sha_file_is_empty__check_update__should_return_true(self, req_get, url_fails):
         with open(self.sha_file, 'w+') as f:
             pass
 
