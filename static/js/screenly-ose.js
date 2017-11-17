@@ -965,7 +965,7 @@
     }
 
     App.prototype.initialize = function() {
-      var ws;
+      var address, error, k, len, results, ws;
       ($(window)).ajaxError((function(_this) {
         return function(e, r) {
           var err, j;
@@ -985,14 +985,24 @@
         collection: API.assets,
         el: this.$('#assets')
       });
-      ws = new WebSocket(ws_address);
-      return ws.onmessage = function(x) {
-        var model, save;
-        model = API.assets.get(x.data);
-        if (model) {
-          return save = model.fetch();
+      results = [];
+      for (k = 0, len = ws_addresses.length; k < len; k++) {
+        address = ws_addresses[k];
+        try {
+          ws = new WebSocket(address);
+          results.push(ws.onmessage = function(x) {
+            var model, save;
+            model = API.assets.get(x.data);
+            if (model) {
+              return save = model.fetch();
+            }
+          });
+        } catch (error1) {
+          error = error1;
+          results.push(false);
         }
-      };
+      }
+      return results;
     };
 
     App.prototype.events = {
