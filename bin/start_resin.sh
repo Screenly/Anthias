@@ -1,5 +1,7 @@
 #!/bin/bash
 
+chown -R pi:pi /data
+
 mkdir -p \
     /data/.config \
     /data/.config/uzbl \
@@ -36,5 +38,3 @@ journalctl -f -a
 # By default docker gives us 64MB of shared memory size but to display heavy
 # pages we need more.
 umount /dev/shm && mount -t tmpfs shm /dev/shm
-
-chown -R pi:pi /data
