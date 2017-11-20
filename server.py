@@ -210,7 +210,7 @@ def prepare_asset(request):
     asset['uri'] = uri
 
     if "video" in asset['mimetype']:
-        if int(get('duration')) == 0:
+        if get('duration') == 'N/A' or int(get('duration')) == 0:
             asset['duration'] = int(get_video_duration(uri).total_seconds())
     else:
         # Crashes if it's not an int. We want that.
