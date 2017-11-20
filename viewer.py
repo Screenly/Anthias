@@ -84,8 +84,8 @@ class Scheduler(object):
         if not self.assets:
             return None
         if self.reverse:
-            idx = self.index - 2 % len(self.assets)
-            self.index = self.index - 1 % len(self.assets)
+            idx = (self.index - 2) % len(self.assets)
+            self.index = (self.index - 1) % len(self.assets)
             self.reverse = False
         else:
             idx = self.index
