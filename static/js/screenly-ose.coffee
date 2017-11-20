@@ -550,8 +550,17 @@ API.App = class App extends Backbone.View
       catch error
         no
 
-  events: {'click #add-asset-button': 'add'}
+  events:
+    'click #add-asset-button': 'add',
+    'click #previous-asset-button': 'previous',
+    'click #next-asset-button': 'next'
 
   add: (e) =>
     new AddAssetView
     no
+
+  previous: (e) =>
+    $.get '/api/v1/assets/control/previous'
+
+  next: (e) =>
+    $.get '/api/v1/assets/control/next'

@@ -959,6 +959,8 @@
     extend(App, superClass);
 
     function App() {
+      this.next = bind(this.next, this);
+      this.previous = bind(this.previous, this);
       this.add = bind(this.add, this);
       this.initialize = bind(this.initialize, this);
       return App.__super__.constructor.apply(this, arguments);
@@ -1006,12 +1008,22 @@
     };
 
     App.prototype.events = {
-      'click #add-asset-button': 'add'
+      'click #add-asset-button': 'add',
+      'click #previous-asset-button': 'previous',
+      'click #next-asset-button': 'next'
     };
 
     App.prototype.add = function(e) {
       new AddAssetView;
       return false;
+    };
+
+    App.prototype.previous = function(e) {
+      return $.get('/api/v1/assets/control/previous');
+    };
+
+    App.prototype.next = function(e) {
+      return $.get('/api/v1/assets/control/next');
     };
 
     return App;
