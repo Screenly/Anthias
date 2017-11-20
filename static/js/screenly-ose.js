@@ -311,6 +311,7 @@
         model = new Asset({}, {
           collection: API.assets
         });
+        this.$fv('mimetype', '');
         this.updateUriMimetype();
         this.viewmodel(model);
         model.set({

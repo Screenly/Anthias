@@ -165,6 +165,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
       return no
     if (@$ '#tab-uri').hasClass 'active'
       model =  new Asset {}, {collection: API.assets}
+      @$fv 'mimetype', ''
       @updateUriMimetype()
       @viewmodel model
       model.set {name: model.get 'uri'}, silent:yes
