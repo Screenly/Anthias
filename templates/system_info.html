@@ -2,7 +2,12 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Screenly OSE</title>
+    
+    {% if context.player_name %}
+      <title>Screenly OSE - {{context.player_name}}</title>
+    {% else %}
+      <title>Screenly OSE</title>
+    {% endif %}
     <link href="/static/css/bootstrap.css" rel="stylesheet" />
     <link href="/static/css/screenly.css" rel="stylesheet" />
     <script src="/static/js/jquery-1.9.1.min.js"></script>
@@ -15,12 +20,14 @@
             <img src="static/img/screenly_ose_logo.png" />
           </a>
           <ul class="nav pull-right">
+            {% if not context.up_to_date %}
             <li class="update-available">
               <a href="http://www.screenlyapp.com/ose.html#upgrade">
                 <i class="icon-circle-arrow-down icon-white"></i>
                 Update Available
               </a>
             </li>
+            {% endif %}
             <li>
               <a href="/settings">
                 <i class="icon-cog icon-white"></i>
@@ -61,7 +68,7 @@
               <tr>
                 <td>{{context.loadavg}}</td>
                 <td>{{context.free_space}}</td>
-                <td>{{context.uptime.days}} days and {{context.uptime.seconds / 3600}} hours</td>
+                <td>{{context.uptime.days}} days and {{ (context.uptime.seconds / 3600)|round(2) }} hours</td>
                 <td>{{context.display_info}}</td>
                 <td>{{context.display_power}}</td>
               </tr>

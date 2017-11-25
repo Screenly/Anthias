@@ -81,7 +81,7 @@ get_filename = (v) -> (v.replace /[\/\\\s]+$/g, '').replace /^.*[\\\/]/g, ''
 insertWbr = (v) -> (v.replace /\//g, '/<wbr>').replace /\&/g, '&amp;<wbr>'
 
 # Tell Backbone to send its saves as JSON-encoded.
-Backbone.emulateJSON = on
+Backbone.emulateJSON = off
 
 # Models
 API.Asset = class Asset extends Backbone.Model
@@ -121,7 +121,7 @@ API.Asset = class Asset extends Backbone.Model
 
 
 API.Assets = class Assets extends Backbone.Collection
-  url: "/api/v1/assets"
+  url: "/api/v1.1/assets"
   model: Asset
   comparator: 'play_order'
 
@@ -165,6 +165,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
       return no
     if (@$ '#tab-uri').hasClass 'active'
       model =  new Asset {}, {collection: API.assets}
+      @$fv 'mimetype', ''
       @updateUriMimetype()
       @viewmodel model
       model.set {name: model.get 'uri'}, silent:yes
@@ -540,14 +541,27 @@ API.App = class App extends Backbone.View
       collection: API.assets
       el: @$ '#assets'
 
-    ws = new WebSocket ws_address
-    ws.onmessage = (x) ->
-      model = API.assets.get(x.data)
-      if model
-        save = model.fetch()
+    for address in ws_addresses
+      try
+        ws = new WebSocket address
+        ws.onmessage = (x) ->
+          model = API.assets.get(x.data)
+          if model
+            save = model.fetch()
+      catch error
+        no
 
-  events: {'click #add-asset-button': 'add'}
+  events:
+    'click #add-asset-button': 'add',
+    'click #previous-asset-button': 'previous',
+    'click #next-asset-button': 'next'
 
   add: (e) =>
     new AddAssetView
     no
+
+  previous: (e) =>
+    $.get '/api/v1/assets/control/previous'
+
+  next: (e) =>
+    $.get '/api/v1/assets/control/next'

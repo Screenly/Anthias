@@ -4,7 +4,7 @@
 
 # Screenly OSE - Digital Signage for the Raspberry Pi
 
-The tl;dr for installing Screenly OSE on [Raspbian](https://www.raspberrypi.org/downloads/raspbian/) Jessie is:
+The tl;dr for installing Screenly OSE on [Raspbian Lite](https://www.raspberrypi.org/downloads/raspbian/) is:
 
 ```
 $ bash <(curl -sL https://www.screenly.io/install-ose.sh)

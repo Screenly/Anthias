@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 
-__author__ = "WireLoad Inc"
-__copyright__ = "Copyright 2012-2016, WireLoad Inc"
+__author__ = "Screenly, Inc"
+__copyright__ = "Copyright 2012-2017, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 from datetime import timedelta
@@ -158,7 +158,13 @@ def prepare_asset(request):
     req = Request(request.environ)
     data = None
 
-    data = json.loads(req.form['model'])
+    # For backward compatibility
+    try:
+        data = json.loads(req.data)
+    except ValueError:
+        data = json.loads(req.form['model'])
+    except TypeError:
+        data = json.loads(req.form['model'])
 
     def get(key):
         val = data.get(key, '')
@@ -197,21 +203,15 @@ def prepare_asset(request):
             uri = path.join(settings['assetdir'], asset['asset_id'])
 
     if 'youtube_asset' in asset['mimetype']:
-        uri, asset['name'] = download_video_from_youtube(uri, asset['asset_id'])
+        uri, asset['name'], asset['duration'] = download_video_from_youtube(uri, asset['asset_id'])
         asset['mimetype'] = 'video'
         asset['is_processing'] = 1
 
     asset['uri'] = uri
 
     if "video" in asset['mimetype']:
-        if asset['is_processing'] == 0:
-            video_duration = get_video_duration(uri)
-            if video_duration:
-                asset['duration'] = int(video_duration.total_seconds())
-            else:
-                asset['duration'] = 'N/A'
-        else:
-            asset['duration'] = 'N/A'
+        if get('duration') == 'N/A' or int(get('duration')) == 0:
+            asset['duration'] = int(get_video_duration(uri).total_seconds())
     else:
         # Crashes if it's not an int. We want that.
         asset['duration'] = int(get('duration'))
@@ -397,6 +397,132 @@ class Asset(Resource):
             return '', 204  # return an OK with no content
 
 
+class AssetsNewVersion(Resource):
+    method_decorators = [auth_basic]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'List of assets',
+                'schema': {
+                    'type': 'array',
+                    'items': AssetModel
+
+                }
+            }
+        }
+    })
+    def get(self):
+        with db.conn(settings['database']) as conn:
+            assets = assets_helper.read(conn)
+            return assets
+
+    @api_response
+    @swagger.doc({
+        'parameters': [
+            {
+                'in': 'body',
+                'name': 'model',
+                'description': 'Adds a asset',
+                'schema': AssetModel,
+                'required': True
+            }
+        ],
+        'responses': {
+            '201': {
+                'description': 'Asset created',
+                'schema': AssetModel
+            }
+        }
+    })
+    def post(self):
+        asset = prepare_asset(request)
+        if url_fails(asset['uri']):
+            raise Exception("Could not retrieve file. Check the asset URL.")
+        with db.conn(settings['database']) as conn:
+            return assets_helper.create(conn, asset), 201
+
+
+class AssetNewVersion(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset'
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'Asset',
+                'schema': AssetModel
+            }
+        }
+    })
+    def get(self, asset_id):
+        with db.conn(settings['database']) as conn:
+            return assets_helper.read(conn, asset_id)
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset',
+                'required': True
+            },
+            {
+                'in': 'body',
+                'name': 'model',
+                'description': 'Adds a asset',
+                'schema': AssetModel,
+                'required': True
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'Asset updated',
+                'schema': AssetModel
+            }
+        }
+    })
+    def put(self, asset_id):
+        with db.conn(settings['database']) as conn:
+            return assets_helper.update(conn, asset_id, prepare_asset(request))
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset',
+                'required': True
+
+            },
+        ],
+        'responses': {
+            '204': {
+                'description': 'Deleted'
+            }
+        }
+    })
+    def delete(self, asset_id):
+        with db.conn(settings['database']) as conn:
+            asset = assets_helper.read(conn, asset_id)
+            try:
+                if asset['uri'].startswith(settings['assetdir']):
+                    os.remove(asset['uri'])
+            except OSError:
+                pass
+            assets_helper.delete(conn, asset_id)
+            return '', 204  # return an OK with no content
+
+
 class FileAsset(Resource):
     method_decorators = [api_response, auth_basic]
 
@@ -541,6 +667,8 @@ class AssetsControl(Resource):
 
 api.add_resource(Assets, '/api/v1/assets')
 api.add_resource(Asset, '/api/v1/assets/<asset_id>')
+api.add_resource(AssetsNewVersion, '/api/v1.1/assets')
+api.add_resource(AssetNewVersion, '/api/v1.1/assets/<asset_id>')
 api.add_resource(FileAsset, '/api/v1/file_asset')
 api.add_resource(PlaylistOrder, '/api/v1/assets/order')
 api.add_resource(Backup, '/api/v1/backup')
@@ -583,13 +711,20 @@ else:
 def viewIndex():
     player_name = settings['player_name']
     my_ip = get_node_ip()
+    resin_uuid = getenv("RESIN_UUID", None)
+
+    ws_addresses = []
 
     # If we bind on 127.0.0.1, `enable_ssl.sh` has most likely been executed
     if settings.get_listen_ip() == '127.0.0.1':
-        ws_address = 'wss://' + my_ip + '/ws/'
+        ws_addresses.append('wss://' + my_ip + '/ws/')
     else:
-        ws_address = 'ws://' + my_ip + ':' + settings['websocket_port']
-    return template('index.html', ws_address=ws_address, player_name=player_name)
+        ws_addresses.append('ws://' + my_ip + ':' + settings['websocket_port'])
+
+    if resin_uuid:
+        ws_addresses.append('wss://{}.resindevice.io/ws/'.format(resin_uuid))
+
+    return template('index.html', ws_addresses=ws_addresses, player_name=player_name)
 
 
 @app.route('/settings', methods=["GET", "POST"])

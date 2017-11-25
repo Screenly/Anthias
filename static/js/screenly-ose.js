@@ -136,7 +136,7 @@
     return (v.replace(/\//g, '/<wbr>')).replace(/\&/g, '&amp;<wbr>');
   };
 
-  Backbone.emulateJSON = true;
+  Backbone.emulateJSON = false;
 
   API.Asset = Asset = (function(superClass) {
     extend(Asset, superClass);
@@ -210,7 +210,7 @@
       return Assets.__super__.constructor.apply(this, arguments);
     }
 
-    Assets.prototype.url = "/api/v1/assets";
+    Assets.prototype.url = "/api/v1.1/assets";
 
     Assets.prototype.model = Asset;
 
@@ -311,6 +311,7 @@
         model = new Asset({}, {
           collection: API.assets
         });
+        this.$fv('mimetype', '');
         this.updateUriMimetype();
         this.viewmodel(model);
         model.set({
@@ -959,13 +960,15 @@
     extend(App, superClass);
 
     function App() {
+      this.next = bind(this.next, this);
+      this.previous = bind(this.previous, this);
       this.add = bind(this.add, this);
       this.initialize = bind(this.initialize, this);
       return App.__super__.constructor.apply(this, arguments);
     }
 
     App.prototype.initialize = function() {
-      var ws;
+      var address, error, k, len, results, ws;
       ($(window)).ajaxError((function(_this) {
         return function(e, r) {
           var err, j;
@@ -985,23 +988,43 @@
         collection: API.assets,
         el: this.$('#assets')
       });
-      ws = new WebSocket(ws_address);
-      return ws.onmessage = function(x) {
-        var model, save;
-        model = API.assets.get(x.data);
-        if (model) {
-          return save = model.fetch();
+      results = [];
+      for (k = 0, len = ws_addresses.length; k < len; k++) {
+        address = ws_addresses[k];
+        try {
+          ws = new WebSocket(address);
+          results.push(ws.onmessage = function(x) {
+            var model, save;
+            model = API.assets.get(x.data);
+            if (model) {
+              return save = model.fetch();
+            }
+          });
+        } catch (error1) {
+          error = error1;
+          results.push(false);
         }
-      };
+      }
+      return results;
     };
 
     App.prototype.events = {
-      'click #add-asset-button': 'add'
+      'click #add-asset-button': 'add',
+      'click #previous-asset-button': 'previous',
+      'click #next-asset-button': 'next'
     };
 
     App.prototype.add = function(e) {
       new AddAssetView;
       return false;
+    };
+
+    App.prototype.previous = function(e) {
+      return $.get('/api/v1/assets/control/previous');
+    };
+
+    App.prototype.next = function(e) {
+      return $.get('/api/v1/assets/control/next');
     };
 
     return App;

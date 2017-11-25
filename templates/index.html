@@ -46,7 +46,7 @@
       var use_24_hour_clock = false
       {% endif %}
 
-      var ws_address = `{{context.ws_address}}`;
+      var ws_addresses = {{context.ws_addresses|tojson}};
     </script>
 
     <script src="/static/js/underscore-1.4.3.min.js"></script>
@@ -342,6 +342,14 @@
         <div class="span12">
           <h1 class="page-header">
             <div class="pull-right">
+              <a id="previous-asset-button" class="btn" href="#">
+                <i class="icon-fast-backward"></i>
+                Previous Asset
+              </a>
+              <a id="next-asset-button" class="btn" href="#">
+                <i class="icon-fast-forward"></i>
+                Next Asset
+              </a>
               <a id="add-asset-button" class="btn btn-primary" href="#">
                 <i class="icon-plus icon-white"></i>
                 Add Asset

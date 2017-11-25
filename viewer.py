@@ -19,8 +19,8 @@ from lib import db
 from lib import assets_helper
 
 
-__author__ = "WireLoad Inc"
-__copyright__ = "Copyright 2012-2016, WireLoad Inc"
+__author__ = "Screenly, Inc"
+__copyright__ = "Copyright 2012-2017, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 
@@ -84,8 +84,8 @@ class Scheduler(object):
         if not self.assets:
             return None
         if self.reverse:
-            idx = self.index - 2 % len(self.assets)
-            self.index = self.index - 1 % len(self.assets)
+            idx = (self.index - 2) % len(self.assets)
+            self.index = (self.index - 1) % len(self.assets)
             self.reverse = False
         else:
             idx = self.index
@@ -290,7 +290,9 @@ def load_settings():
 
 
 def asset_loop(scheduler):
-    check_update()
+    disable_update_check = getenv("DISABLE_UPDATE_CHECK", False)
+    if not disable_update_check:
+        check_update()
     asset = scheduler.get_next_asset()
 
     if asset is None:

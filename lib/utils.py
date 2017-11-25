@@ -32,7 +32,7 @@ except:
 # This will work on x86-based machines
 if machine() in ['x86', 'x86_64']:
     try:
-        from sh import mplayer
+        from sh import ffprobe, mplayer
     except:
         pass
 
@@ -56,8 +56,7 @@ def validate_url(string):
 
 
 def get_node_ip():
-    if arch in ('armv6l', 'armv7l'):
-
+    if arch in ('armv6l', 'armv7l') and getenv("RESIN_UUID") is None:
         interface = None
         for n in range(10):
             iface = 'eth{}'.format(n)
@@ -92,7 +91,6 @@ def get_node_ip():
         """Returns the node's IP, for the interface
         that is being used as the default gateway.
         This shuld work on both MacOS X and Linux."""
-
         try:
             default_interface = grep(netstat('-nr'), '-e', '^default', '-e' '^0.0.0.0').split()[-1]
             my_ip = ifaddresses(default_interface)[2][0]['addr']
@@ -106,28 +104,23 @@ def get_video_duration(file):
     Returns the duration of a video file in timedelta.
     """
     time = None
-    try:
-        if arch in ('armv6l', 'armv7l'):
-            run_omxplayer = omxplayer(file, info=True, _err_to_out=True)
-            for line in run_omxplayer.split('\n'):
-                if 'Duration' in line:
-                    match = re.search(r'[0-9]+:[0-9]+:[0-9]+\.[0-9]+', line)
-                    if match:
-                        time_input = match.group()
-                        time_split = time_input.split(':')
-                        hours = int(time_split[0])
-                        minutes = int(time_split[1])
-                        seconds = float(time_split[2])
-                        time = timedelta(hours=hours, minutes=minutes, seconds=seconds)
-                    break
-        else:
-            run_mplayer = mplayer('-identify', '-frames', '0', '-nosound', file)
-            for line in run_mplayer.split('\n'):
-                if 'ID_LENGTH=' in line:
-                    time = timedelta(seconds=int(round(float(line.split('=')[1]))))
-                    break
-    except:
-        pass
+
+    if arch in ('armv6l', 'armv7l'):
+        run_player = omxplayer(file, info=True, _err_to_out=True, _ok_code=[0, 1])
+    else:
+        run_player = ffprobe('-i', file, _err_to_out=True)
+
+    for line in run_player.split('\n'):
+        if 'Duration' in line:
+            match = re.search(r'[0-9]+:[0-9]+:[0-9]+\.[0-9]+', line)
+            if match:
+                time_input = match.group()
+                time_split = time_input.split(':')
+                hours = int(time_split[0])
+                minutes = int(time_split[1])
+                seconds = float(time_split[2])
+                time = timedelta(hours=hours, minutes=minutes, seconds=seconds)
+            break
 
     return time
 
@@ -207,13 +200,15 @@ def url_fails(url):
 def download_video_from_youtube(uri, asset_id):
     home = getenv('HOME')
     name = check_output(['youtube-dl', '-e', uri])
+    info = json.loads(check_output(['youtube-dl', '-j', uri]))
+    duration = info['duration']
 
     location = path.join(home, 'screenly_assets', asset_id)
     thread = YoutubeDownloadThread(location, uri, asset_id)
     thread.daemon = True
     thread.start()
 
-    return location, unicode(name.decode('utf-8'))
+    return location, unicode(name.decode('utf-8')), duration
 
 
 class YoutubeDownloadThread(Thread):
