@@ -30,4 +30,5 @@
     - rpi-update
     - screenly
     - splashscreen
+    - nginx
     - ssl

@@ -1,0 +1,79 @@
+---
+# Enable Nginx
+- name: Check screenly.conf
+  command: cat /home/pi/.screenly/screenly.conf
+  register: config
+
+- set_fact: no_ssl="{{config.stdout.find('admin_ssl = True') == -1}}"
+
+- name: Installs Nginx
+  apt:
+    name: nginx-light
+    state: present
+    update_cache: yes
+
+- name: Cleans up default config
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+
+- name: Installs nginx config
+  copy:
+    src: nginx.conf
+    dest:  /etc/nginx/sites-enabled/screenly.conf
+    mode: 644
+    owner: root
+    group: root
+    force: no
+
+- name: Modifies Screenly Server to only listen on localhost
+  lineinfile:
+    line: ';listen = 0.0.0.0:8080'
+    regexp: '^.*listen.*'
+    dest: /home/pi/.screenly/screenly.conf
+  when: no_ssl
+
+# Disable Nginx
+- name: Remove Nginx
+  apt:
+    name: nginx-light
+    state: absent
+    update_cache: yes
+  tags:
+    - disable-nginx
+
+- name: Remove nginx config
+  file:
+    path:  /etc/nginx/sites-enabled/screenly.conf
+    state: absent
+  tags:
+    - disable-nginx
+
+- name: Remove self-signed certificates
+  file:
+    path: "/etc/ssl/{{ item }}"
+    state: absent
+  with_items:
+    - screenly.crt
+    - screenly.key
+  tags:
+    - disable-nginx
+
+- name: Turns off the ssl mode
+  lineinfile:
+    line: 'admin_ssl = False'
+    regexp: '^.*admin_ssl.*'
+    dest: /home/pi/.screenly/screenly.conf
+  tags:
+    - disable-nginx
+
+- name: Modifies Screenly Server to listen on default gateway
+  lineinfile:
+    line: 'listen = 0.0.0.0:8080'
+    regexp: '^.*listen.*'
+    dest: /home/pi/.screenly/screenly.conf
+  notify:
+    - restart-screenly-websocket_server_layer
+    - restart-screenly-server
+  tags:
+    - disable-nginx

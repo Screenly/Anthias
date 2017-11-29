@@ -683,13 +683,12 @@ else:
     SWAGGER_URL = '/api/docs'
     swagger_address = getenv("SWAGGER_HOST", my_ip)
 
-    if swagger_address == my_ip:
-        swagger_address += ":{}".format(settings.get_listen_port())
-
-    if settings.get_listen_ip() == '127.0.0.1':
+    if settings['admin_ssl']:
         API_URL = 'https://{}/api/swagger.json'.format(swagger_address)
-    else:
+    elif settings.get_listen_ip() == '127.0.0.1' or swagger_address != my_ip:
         API_URL = "http://{}/api/swagger.json".format(swagger_address)
+    else:
+        API_URL = "http://{}:{}/api/swagger.json".format(swagger_address, settings.get_listen_port())
 
     swaggerui_blueprint = get_swaggerui_blueprint(
         SWAGGER_URL,
@@ -715,8 +714,7 @@ def viewIndex():
 
     ws_addresses = []
 
-    # If we bind on 127.0.0.1, `enable_ssl.sh` has most likely been executed
-    if settings.get_listen_ip() == '127.0.0.1':
+    if settings['admin_ssl']:
         ws_addresses.append('wss://' + my_ip + '/ws/')
     else:
         ws_addresses.append('ws://' + my_ip + ':' + settings['websocket_port'])
@@ -805,10 +803,10 @@ def splash_page():
     else:
         ip_lookup = True
 
-        # If we bind on 127.0.0.1, `enable_ssl.sh` has most likely been
-        # executed and we should access over SSL.
-        if settings.get_listen_ip() == '127.0.0.1':
+        if settings['admin_ssl']:
             url = 'https://{}'.format(my_ip)
+        elif settings.get_listen_ip() == '127.0.0.1':
+            url = "http://{}".format(my_ip)
         else:
             url = "http://{}:{}".format(my_ip, settings.get_listen_port())
 

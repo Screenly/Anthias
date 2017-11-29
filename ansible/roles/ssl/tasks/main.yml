@@ -1,16 +1,19 @@
 ---
+- name: Check screenly.conf
+  command: cat /home/pi/.screenly/screenly.conf
+  register: config
+  tags:
+    - enable-ssl
+
+- set_fact: no_admin_ssl_parameter="{{config.stdout.find('admin_ssl') == -1}}"
+  tags:
+    - enable-ssl
+
 - name: Installs Nginx
   apt:
     name: nginx-light
     state: present
     update_cache: yes
-  tags:
-    - enable-ssl
-
-- name: Removes stunnel
-  apt:
-    name: stunnel4
-    state: absent
   tags:
     - enable-ssl
 
@@ -47,9 +50,28 @@
   tags:
     - enable-ssl
 
+- name: Turn on the ssl mode
+  lineinfile:
+    dest: /home/pi/.screenly/screenly.conf
+    insertafter: '^.*listen.*'
+    regexp: '^.*listen.*;'
+    line: 'admin_ssl = True'
+  tags:
+    - enable-ssl
+  when: no_admin_ssl_parameter
+
+- name: Turns on the ssl mode
+  lineinfile:
+    line: 'admin_ssl = True'
+    regexp: '^.*admin_ssl.*'
+    dest: /home/pi/.screenly/screenly.conf
+  tags:
+    - enable-ssl
+  when: not no_admin_ssl_parameter
+
 - name: Modifies Screenly Server to only listen on localhost
   lineinfile:
-    line: 'listen = 127.0.0.1:8080'
+    line: ';listen = 0.0.0.0:8080'
     regexp: '^.*listen.*'
     dest: /home/pi/.screenly/screenly.conf
   notify:
@@ -57,5 +79,3 @@
     - restart-screenly-server
   tags:
     - enable-ssl
-
-

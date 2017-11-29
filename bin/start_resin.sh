@@ -19,6 +19,8 @@ if [ -n "${OVERWRITE_CONFIG}" ]; then
     cp ansible/roles/screenly/files/screenly.conf "/data/.screenly/screenly.conf"
 fi
 
+sed -i "s/^.*listen.*/listen = 0.0.0.0:8080/" /data/.screenly/screenly.conf
+
 # Set management page's user and password from environment variables,
 # but only if both of them are provided. Can have empty values provided.
 if [ -n "${MANAGEMENT_USER+x}" ] && [ -n "${MANAGEMENT_PASSWORD+x}" ]; then
