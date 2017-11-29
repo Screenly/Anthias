@@ -638,6 +638,7 @@ class Recover(Resource):
         backup_helper.recover(location)
         return "Recovery successful."
 
+
 class Info(Resource):
     method_decorators = [api_response, auth_basic]
 
@@ -664,6 +665,7 @@ class Info(Resource):
             'display_info': diagnostics.get_monitor_status(),
             'display_power': diagnostics.get_display_power()
         }
+
 
 class AssetsControl(Resource):
     method_decorators = [api_response, auth_basic]
