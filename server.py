@@ -638,7 +638,7 @@ class Recover(Resource):
         backup_helper.recover(location)
         return "Recovery successful."
 
-class Info(Resource)
+class Info(Resource):
     method_decorators = [api_response, auth_basic]
 
     def get(self):
