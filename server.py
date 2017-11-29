@@ -643,9 +643,9 @@ class Info(Resource):
 
     def get(self):
         viewlog = None
-        try
+        try:
             viewlog = [line.decode('utf-8') for line in
-                   check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
+                    check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
         except:
             pass
 
@@ -657,7 +657,7 @@ class Info(Resource):
         uptime_in_seconds = diagnostics.get_uptime()
         system_uptime = timedelta(seconds=uptime_in_seconds)
 
-         return {
+        return {
             'viewlog': viewlog,
             'loadavg': diagnostics.get_load_avg()['15 min'],
             'free_space': free_space,
