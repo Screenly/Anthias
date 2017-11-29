@@ -1,0 +1,36 @@
+---
+- name: Installs Nginx
+  apt:
+    name: nginx-light
+    state: absent
+    update_cache: yes
+  tags:
+    - disable-ssl
+
+- name: Installs nginx config
+  file:
+    path:  /etc/nginx/sites-enabled/screenly.conf
+    state: absent
+  tags:
+    - disable-ssl
+
+- name: Installs self-signed certificates
+  file:
+    path: "/etc/ssl/{{ item }}"
+    state: absent
+  with_items:
+    - screenly.crt
+    - screenly.key
+  tags:
+    - disable-ssl
+
+- name: Modifies Screenly Server to only listen on localhost
+  lineinfile:
+    line: ';listen = 127.0.0.1:8080'
+    regexp: '^.*listen.*'
+    dest: /home/pi/.screenly/screenly.conf
+  notify:
+    - restart-screenly-websocket_server_layer
+    - restart-screenly-server
+  tags:
+    - disable-ssl
