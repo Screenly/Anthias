@@ -183,6 +183,7 @@ def main():
 
     ethernet = get_active_iface(config, 'eth')
     wifi = get_active_iface(config, 'wlan')
+    usb = get_active_iface(config, 'usb')
 
     if config.has_option('generic', 'dns'):
         dns = config['generic']['dns']
@@ -204,6 +205,24 @@ def main():
                 ip=ethernet_ip,
                 netmask=ethernet_netmask,
                 gateway=ethernet_gateway,
+                dns=dns,
+            )
+
+    if usb:
+        usb_dhcp = is_dhcp(config, usb)
+
+        if usb_dhcp:
+            interfaces += if_config(interface=usb, dns=dns)
+        else:
+            usb_ip = lookup(config, usb, 'ip')
+            usb_netmask = lookup(config, usb, 'netmask')
+            usb_gateway = lookup(config, usb, 'gateway')
+
+            interfaces += if_config(
+                interface=usb,
+                ip=usb_ip,
+                netmask=usb_netmask,
+                gateway=usb_gateway,
                 dns=dns,
             )
 
@@ -239,7 +258,7 @@ def main():
 
     # In case neither wired or wireless is configured,
     # let's just assume wired and dhcp as the default.
-    if not (wifi or ethernet):
+    if not (wifi or ethernet or usb):
         interfaces += if_config(interface='eth0', dns=dns)
 
     write_file(INTERFACES_PATH, interfaces)
