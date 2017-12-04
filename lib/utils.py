@@ -83,7 +83,7 @@ def get_node_ip():
             file_interfaces = open('/etc/network/interfaces')
             iface = 'usb0'
             if iface in file_interfaces.read():
-                interface = iface 
+                interface = iface
 
         if not interface:
             raise Exception("No active network connection found.")
