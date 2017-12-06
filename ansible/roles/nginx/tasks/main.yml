@@ -26,11 +26,11 @@
     group: root
     force: no
 
-- name: Modifies Screenly Server to only listen on localhost
+- name: Modifies screenly-web service to only listen on localhost
   lineinfile:
-    line: ';listen = 0.0.0.0:8080'
-    regexp: '^.*listen.*'
-    dest: /home/pi/.screenly/screenly.conf
+    regexp: '^.*LISTEN.*'
+    state: absent
+    dest: /etc/systemd/system/screenly-web.service
   when: no_ssl
 
 # Disable Nginx
@@ -60,19 +60,21 @@
     - disable-nginx
 
 - name: Turns off the ssl mode
-  lineinfile:
-    line: 'admin_ssl = False'
+  replace:
+    replace: 'admin_ssl = False'
     regexp: '^.*admin_ssl.*'
     dest: /home/pi/.screenly/screenly.conf
   tags:
     - disable-nginx
 
-- name: Modifies Screenly Server to listen on default gateway
+- name: Modifies screenly-web service to listen on default gateway
   lineinfile:
-    line: 'listen = 0.0.0.0:8080'
-    regexp: '^.*listen.*'
-    dest: /home/pi/.screenly/screenly.conf
+    insertafter: '^\[Service\]'
+    regexp: '^\[Service\]*;'
+    line: Environment=LISTEN=0.0.0.0
+    dest: /etc/systemd/system/screenly-web.service
   notify:
+    - reload systemctl
     - restart-screenly-websocket_server_layer
     - restart-screenly-server
   tags:

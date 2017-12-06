@@ -17,9 +17,9 @@ resolution = 1920x1080
 default_duration = 45
 
 [main]
-listen = 192.168.0.10:3333
 assetdir = /home/pi/screenly_assets
 database = /home/pi/.screenly/screenly.db
+admin_ssl = False
 
 """
 
@@ -55,13 +55,20 @@ def fake_settings(raw):
         os.remove(CONFIG_FILE)
 
 
+def getenv(k, default=None):
+    try:
+        return '/tmp' if k == 'HOME' else os.environ[k]
+    except KeyError:
+        return default
+
+
 class SettingsTest(unittest.TestCase):
     def setUp(self):
         if not os.path.exists(CONFIG_DIR):
             os.mkdir(CONFIG_DIR)
         self.orig_getenv = os.getenv
-        os.getenv = lambda k, default=None: '/tmp' if k == 'HOME' \
-            else os.environ[k] if os.environ[k] is not None else default
+
+        os.getenv = getenv
 
     def tearDown(self):
         shutil.rmtree(CONFIG_DIR)
@@ -98,14 +105,6 @@ class SettingsTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             with fake_settings(broken_settings) as (mod_settings, settings):
                 pass
-
-    def test_get_listen_ip(self):
-        with fake_settings(settings1) as (mod_settings, settings):
-            self.assertEqual(settings.get_listen_ip(), '192.168.0.10')
-
-    def test_get_listen_port(self):
-        with fake_settings(settings1) as (mod_settings, settings):
-            self.assertEqual(settings.get_listen_port(), '3333')
 
     def test_save_settings(self):
         with fake_settings(settings1) as (mod_settings, settings):

@@ -38,7 +38,7 @@ from lib.utils import get_video_duration
 from dateutil import parser as date_parser
 from mimetypes import guess_type
 
-from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS, auth_basic
+from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS, auth_basic, LISTEN, PORT
 from werkzeug.wrappers import Request
 
 
@@ -685,10 +685,10 @@ else:
 
     if settings['admin_ssl']:
         API_URL = 'https://{}/api/swagger.json'.format(swagger_address)
-    elif settings.get_listen_ip() == '127.0.0.1' or swagger_address != my_ip:
+    elif LISTEN == '127.0.0.1' or swagger_address != my_ip:
         API_URL = "http://{}/api/swagger.json".format(swagger_address)
     else:
-        API_URL = "http://{}:{}/api/swagger.json".format(swagger_address, settings.get_listen_port())
+        API_URL = "http://{}:{}/api/swagger.json".format(swagger_address, PORT)
 
     swaggerui_blueprint = get_swaggerui_blueprint(
         SWAGGER_URL,
@@ -805,10 +805,10 @@ def splash_page():
 
         if settings['admin_ssl']:
             url = 'https://{}'.format(my_ip)
-        elif settings.get_listen_ip() == '127.0.0.1':
+        elif LISTEN == '127.0.0.1':
             url = "http://{}".format(my_ip)
         else:
-            url = "http://{}:{}".format(my_ip, settings.get_listen_port())
+            url = "http://{}:{}".format(my_ip, PORT)
 
     msg = url if url else error_msg
     return template('splash_page.html', ip_lookup=ip_lookup, msg=msg)
@@ -849,7 +849,7 @@ if __name__ == "__main__":
                 cursor.execute(assets_helper.create_assets_table)
 
     config = {
-        'bind': '{}:{}'.format(settings.get_listen_ip(), int(settings.get_listen_port())),
+        'bind': '{}:{}'.format(LISTEN, PORT),
         'threads': 2,
         'timeout': 20
     }

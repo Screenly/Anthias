@@ -53,28 +53,29 @@
 - name: Turn on the ssl mode
   lineinfile:
     dest: /home/pi/.screenly/screenly.conf
-    insertafter: '^.*listen.*'
-    regexp: '^.*listen.*;'
+    insertafter: '^.*database.*'
+    regexp: '^.*database.*;'
     line: 'admin_ssl = True'
   tags:
     - enable-ssl
   when: no_admin_ssl_parameter
 
 - name: Turns on the ssl mode
-  lineinfile:
-    line: 'admin_ssl = True'
+  replace:
+    replace: 'admin_ssl = True'
     regexp: '^.*admin_ssl.*'
     dest: /home/pi/.screenly/screenly.conf
   tags:
     - enable-ssl
   when: not no_admin_ssl_parameter
 
-- name: Modifies Screenly Server to only listen on localhost
+- name: Modifies screenly-web service to only listen on localhost
   lineinfile:
-    line: ';listen = 0.0.0.0:8080'
-    regexp: '^.*listen.*'
-    dest: /home/pi/.screenly/screenly.conf
+    regexp: '^.*LISTEN.*'
+    state: absent
+    dest: /etc/systemd/system/screenly-web.service
   notify:
+    - reload systemctl
     - restart-screenly-websocket_server_layer
     - restart-screenly-server
   tags:

@@ -31,7 +31,6 @@ RUN useradd pi
 # Install config file and file structure
 RUN mkdir -p /home/pi/.screenly /home/pi/screenly /home/pi/screenly_assets
 COPY ansible/roles/screenly/files/screenly.conf /home/pi/.screenly/screenly.conf
-RUN sed -i "s/^.*listen.*/listen = 0.0.0.0:8080/" /home/pi/.screenly/screenly.conf
 
 # Copy in code base
 COPY . /home/pi/screenly
