@@ -639,6 +639,30 @@ class Recover(Resource):
         return "Recovery successful."
 
 
+class Info(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    def get(self):
+        viewlog = None
+        try:
+            viewlog = [line.decode('utf-8') for line in
+                       check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
+        except:
+            pass
+
+        # Calculate disk space
+        slash = statvfs("/")
+        free_space = size(slash.f_bavail * slash.f_frsize)
+
+        return {
+            'viewlog': viewlog,
+            'loadavg': diagnostics.get_load_avg()['15 min'],
+            'free_space': free_space,
+            'display_info': diagnostics.get_monitor_status(),
+            'display_power': diagnostics.get_display_power()
+        }
+
+
 class AssetsControl(Resource):
     method_decorators = [api_response, auth_basic]
 
@@ -674,6 +698,7 @@ api.add_resource(PlaylistOrder, '/api/v1/assets/order')
 api.add_resource(Backup, '/api/v1/backup')
 api.add_resource(Recover, '/api/v1/recover')
 api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
+api.add_resource(Info, '/api/v1/info')
 
 try:
     my_ip = get_node_ip()
