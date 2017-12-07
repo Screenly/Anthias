@@ -19,7 +19,7 @@ DEFAULTS = {
         'assetdir': 'screenly_assets',
         'use_24_hour_clock': False,
         'websocket_port': '9999',
-        'admin_ssl': False,
+        'use_ssl': False,
     },
     'viewer': {
         'player_name': '',

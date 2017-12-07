@@ -5,7 +5,7 @@
   tags:
     - enable-ssl
 
-- set_fact: no_admin_ssl_parameter="{{config.stdout.find('admin_ssl') == -1}}"
+- set_fact: no_use_ssl_parameter="{{config.stdout.find('use_ssl') == -1}}"
   tags:
     - enable-ssl
 
@@ -55,19 +55,19 @@
     dest: /home/pi/.screenly/screenly.conf
     insertafter: '^.*database.*'
     regexp: '^.*database.*;'
-    line: 'admin_ssl = True'
+    line: 'use_ssl = True'
   tags:
     - enable-ssl
-  when: no_admin_ssl_parameter
+  when: no_use_ssl_parameter
 
 - name: Turns on the ssl mode
   replace:
-    replace: 'admin_ssl = True'
-    regexp: '^.*admin_ssl.*'
+    replace: 'use_ssl = True'
+    regexp: '^.*use_ssl.*'
     dest: /home/pi/.screenly/screenly.conf
   tags:
     - enable-ssl
-  when: not no_admin_ssl_parameter
+  when: not no_use_ssl_parameter
 
 - name: Modifies screenly-web service to only listen on localhost
   lineinfile:

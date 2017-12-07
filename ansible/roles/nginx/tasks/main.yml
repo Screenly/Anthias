@@ -4,7 +4,7 @@
   command: cat /home/pi/.screenly/screenly.conf
   register: config
 
-- set_fact: no_ssl="{{config.stdout.find('admin_ssl = True') == -1}}"
+- set_fact: no_ssl="{{config.stdout.find('use_ssl = True') == -1}}"
 
 - name: Installs Nginx
   apt:
@@ -49,20 +49,10 @@
   tags:
     - disable-nginx
 
-- name: Remove self-signed certificates
-  file:
-    path: "/etc/ssl/{{ item }}"
-    state: absent
-  with_items:
-    - screenly.crt
-    - screenly.key
-  tags:
-    - disable-nginx
-
 - name: Turns off the ssl mode
   replace:
-    replace: 'admin_ssl = False'
-    regexp: '^.*admin_ssl.*'
+    replace: 'use_ssl = False'
+    regexp: '^.*use_ssl.*'
     dest: /home/pi/.screenly/screenly.conf
   tags:
     - disable-nginx

@@ -683,7 +683,7 @@ else:
     SWAGGER_URL = '/api/docs'
     swagger_address = getenv("SWAGGER_HOST", my_ip)
 
-    if settings['admin_ssl']:
+    if settings['use_ssl']:
         API_URL = 'https://{}/api/swagger.json'.format(swagger_address)
     elif LISTEN == '127.0.0.1' or swagger_address != my_ip:
         API_URL = "http://{}/api/swagger.json".format(swagger_address)
@@ -714,7 +714,7 @@ def viewIndex():
 
     ws_addresses = []
 
-    if settings['admin_ssl']:
+    if settings['use_ssl']:
         ws_addresses.append('wss://' + my_ip + '/ws/')
     else:
         ws_addresses.append('ws://' + my_ip + ':' + settings['websocket_port'])
@@ -803,7 +803,7 @@ def splash_page():
     else:
         ip_lookup = True
 
-        if settings['admin_ssl']:
+        if settings['use_ssl']:
             url = 'https://{}'.format(my_ip)
         elif LISTEN == '127.0.0.1':
             url = "http://{}".format(my_ip)
