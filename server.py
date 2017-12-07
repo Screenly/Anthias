@@ -654,10 +654,6 @@ class Info(Resource):
         slash = statvfs("/")
         free_space = size(slash.f_bavail * slash.f_frsize)
 
-        # Get uptime
-        uptime_in_seconds = diagnostics.get_uptime()
-        system_uptime = timedelta(seconds=uptime_in_seconds)
-
         return {
             'viewlog': viewlog,
             'loadavg': diagnostics.get_load_avg()['15 min'],
