@@ -9,6 +9,9 @@
         name: nginx
         state: restarted
 
+    - name: reload systemctl
+      command: systemctl daemon-reload
+
     - name: restart-screenly-websocket_server_layer
       command: systemctl restart screenly-websocket_server_layer.service
 
@@ -30,4 +33,5 @@
     - rpi-update
     - screenly
     - splashscreen
+    - nginx
     - ssl

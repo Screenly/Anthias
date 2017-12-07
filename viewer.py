@@ -12,7 +12,7 @@ from signal import signal, SIGUSR1, SIGUSR2, SIGHUP
 import logging
 import sh
 
-from settings import settings
+from settings import settings, LISTEN, PORT
 import html_templates
 from lib.utils import url_fails
 from lib import db
@@ -356,7 +356,7 @@ def setup():
 def main():
     setup()
 
-    url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port()) if settings['show_splash'] else 'file://' + BLACK_PAGE
+    url = 'http://{0}:{1}/splash_page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
     load_browser(url=url)
 
     if settings['show_splash']:
