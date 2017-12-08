@@ -38,7 +38,7 @@ from lib.utils import get_video_duration
 from dateutil import parser as date_parser
 from mimetypes import guess_type
 
-from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS, auth_basic, LISTEN, PORT
+from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS, auth_basic, LISTEN, PORT, ZmqPublisher
 from werkzeug.wrappers import Request
 
 
@@ -672,7 +672,13 @@ class AssetsControl(Resource):
                 'name': 'command',
                 'type': 'string',
                 'in': 'path',
-                'description': 'Control command ("next" or "previous")'
+                'description':
+                    '''
+                    Control commands:
+                    next - show next asset
+                    previous - show previous asset
+                    asset&asset_id - show asset with `asset_id` id
+                    '''
             }
         ],
         'responses': {
@@ -682,12 +688,9 @@ class AssetsControl(Resource):
         }
     })
     def get(self, command):
-        if command == "next":
-            system('pkill -SIGUSR1 -f viewer.py')
-            return "Asset switched"
-        if command == "previous":
-            system('pkill -SIGUSR2 -f viewer.py')
-            return "Asset switched"
+        publisher = ZmqPublisher.get_instance()
+        publisher.send_to_viewer(command)
+        return "Asset switched"
 
 api.add_resource(Assets, '/api/v1/assets')
 api.add_resource(Asset, '/api/v1/assets/<asset_id>')
@@ -764,7 +767,8 @@ def settings_page():
             settings[field] = value
         try:
             settings.save()
-            system('pkill -SIGHUP -f viewer.py')
+            publisher = ZmqPublisher.get_instance()
+            publisher.send_to_viewer('reload')
             context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
         except IOError as e:
             context['flash'] = {'class': "error", 'message': e}

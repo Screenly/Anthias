@@ -136,8 +136,9 @@ class ZmqPublisher:
             raise ValueError("An instantiation already exists!")
 
         self.context = zmq.Context()
+
         self.socket = self.context.socket(zmq.PUB)
-        self.socket.connect('tcp://127.0.0.1:10001')
+        self.socket.bind('tcp://127.0.0.1:10001')
         sleep(1)
 
     @classmethod
@@ -146,8 +147,11 @@ class ZmqPublisher:
             cls.INSTANCE = ZmqPublisher()
         return cls.INSTANCE
 
-    def send(self, msg):
-        self.socket.send(msg)
+    def send_to_ws_server(self, msg):
+        self.socket.send("ws_server {}".format(msg))
+
+    def send_to_viewer(self, msg):
+        self.socket.send_string("viewer {}".format(msg))
 
 
 def authenticate():

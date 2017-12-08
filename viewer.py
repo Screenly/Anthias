@@ -2,15 +2,18 @@
 # -*- coding: utf-8 -*-
 
 from datetime import datetime, timedelta
-from os import path, getenv, utime
+from os import path, getenv, utime, system
 from platform import machine
 from random import shuffle
+from threading import Thread
+
 from requests import get as req_get
 from time import sleep
 from json import load as json_load
-from signal import signal, SIGUSR1, SIGUSR2, SIGHUP
+from signal import signal, SIGUSR1
 import logging
 import sh
+import zmq
 
 from settings import settings, LISTEN, PORT
 import html_templates
@@ -58,24 +61,48 @@ def sigusr1(signum, frame):
         pass
 
 
-def sigusr2(signum, frame):
-    try:
+def skip_asset(back=False):
+    if back is True:
         scheduler.reverse = True
-    except AttributeError:
-        pass
-
-    logging.info('USR1 received, skipping.')
-
-    try:
-        sh.killall('omxplayer.bin', _ok_code=[1])
-    except OSError:
-        pass
+    system('pkill -SIGUSR1 -f viewer.py')
 
 
-def sighup(signum, frame):
-    """Reload settings"""
-    logging.info("USR2 received, reloading settings.")
-    load_settings()
+def navigate_to_asset(asset_id):
+    scheduler.extra_asset = asset_id
+    system('pkill -SIGUSR1 -f viewer.py')
+
+
+def command_not_found():
+    logging.error("Command not found")
+
+commands = {
+    'next': lambda _: skip_asset(),
+    'previous': lambda _: skip_asset(back=True),
+    'asset': lambda id: navigate_to_asset(id),
+    'reload': lambda _: load_settings(),
+    'unknown': lambda _: command_not_found()
+}
+
+
+class ZmqSubscriber(Thread):
+    def __init__(self):
+        Thread.__init__(self)
+        self.context = zmq.Context()
+
+    def run(self):
+        socket = self.context.socket(zmq.SUB)
+        socket.connect('tcp://127.0.0.1:10001')
+        socket.setsockopt(zmq.SUBSCRIBE, 'viewer')
+        while True:
+            msg = socket.recv()
+            topic, message = msg.split()
+
+            # If the command consists of 2 parts, then the first is the function, the second is the argument
+            parts = message.split('&')
+            command = parts[0]
+            parameter = parts[1] if len(parts) > 1 else None
+
+            commands.get(command, commands.get('unknown'))(parameter)
 
 
 class Scheduler(object):
@@ -86,10 +113,20 @@ class Scheduler(object):
         self.index = 0
         self.counter = 0
         self.reverse = 0
+        self.extra_asset = None
         self.update_playlist()
 
     def get_next_asset(self):
         logging.debug('get_next_asset')
+
+        if self.extra_asset is not None:
+            asset = get_specific_asset(self.extra_asset)
+            if asset and asset['is_processing'] == 0:
+                self.extra_asset = None
+                return asset
+            logging.error("Asset not found or processed")
+            self.extra_asset = None
+
         self.refresh_playlist()
         logging.debug('get_next_asset after refresh')
         if not self.assets:
@@ -139,6 +176,11 @@ class Scheduler(object):
             return path.getmtime(settings['database'])
         except:
             return 0
+
+
+def get_specific_asset(asset_id):
+    logging.info('Getting specific asset')
+    return assets_helper.read(db_conn, asset_id)
 
 
 def generate_asset_list():
@@ -343,8 +385,6 @@ def setup():
     arch = machine()
 
     signal(SIGUSR1, sigusr1)
-    signal(SIGUSR2, sigusr2)
-    signal(SIGHUP, sighup)
 
     load_settings()
     db_conn = db.conn(settings['database'])
@@ -364,6 +404,11 @@ def main():
 
     global scheduler
     scheduler = Scheduler()
+
+    subscriber = ZmqSubscriber()
+    subscriber.daemon = True
+    subscriber.start()
+
     logging.debug('Entering infinite loop.')
     while True:
         asset_loop(scheduler)

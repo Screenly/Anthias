@@ -228,11 +228,10 @@ class YoutubeDownloadThread(Thread):
     def run(self):
         publisher = ZmqPublisher.get_instance()
         call(['youtube-dl', '-f', 'mp4', '-o', self.location, self.uri])
-        publisher.send("video are downloaded")
         with db.conn(settings['database']) as conn:
             update(conn, self.asset_id, {'asset_id': self.asset_id, 'is_processing': 0})
 
-        publisher.send(self.asset_id)
+        publisher.send_to_ws_server(self.asset_id)
 
 
 def template_handle_unicode(value):
