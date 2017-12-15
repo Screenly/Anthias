@@ -33,10 +33,6 @@ echo "Compiling and Installing UZBL Next Release"
 (cd "$HOME/uzbl-next" && exec make > /dev/null)
 (cd "$HOME/uzbl-next" && exec sudo make install > /dev/null)
 
-echo "Removing old version of Pip and grabbing latest"
-sudo apt-get remove python-pip
-sudo easy_install pip
-
 echo "Installing more dependencies..."
 sudo pip install -r "$HOME/pisign/requirements.txt" -q > /dev/null
 
