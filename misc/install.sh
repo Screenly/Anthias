@@ -19,7 +19,7 @@ echo "(This might take a while.)"
 sudo apt-get -y -qq upgrade > /dev/null
 
 echo "Installing dependencies..."
-sudo apt-get -y -qq install git-core python-pip python-netifaces python-simplejson python-imaging python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev watchdog chkconfig feh libffi-dev libwebkitgtk-3.0-dev libsoup2.4-dev python3-pip libssl-dev > /dev/null
+sudo apt-get -y -qq install git-core python-pip python-netifaces python-simplejson python-imaging python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev watchdog chkconfig feh libffi-dev libwebkit2gtk-4.0-dev libgnutls28-dev libsoup2.4-dev python3-pip libssl-dev > /dev/null
 
 echo "Downloading PiSign..."
 git clone git://github.com/jameskirsop/pisign.git "$HOME/pisign" > /dev/null
@@ -27,7 +27,9 @@ git clone git://github.com/jameskirsop/pisign.git "$HOME/pisign" > /dev/null
 echo "Downloading UZBL Source..."
 git clone https://github.com/uzbl/uzbl.git "$HOME/uzbl-next" > /dev/null
 
-echo "Compiling and Installing Latest UZBL Release"
+echo "Compiling and Installing UZBL Next Release"
+(cd "$HOME/uzbl-next" && exec git fetch > /dev/null)
+(cd "$HOME/uzbl-next" && exec git checkout next > /dev/null)
 (cd "$HOME/uzbl-next" && exec make > /dev/null)
 (cd "$HOME/uzbl-next" && exec sudo make install > /dev/null)
 
@@ -58,9 +60,9 @@ mkdir -p "$HOME/.pisign"
 cp "$HOME/pisign/misc/pisign.conf" "$HOME/.pisign/"
 
 echo "Enabling Watchdog..."
-sudo modprobe bcm2708_wdog > /dev/null
+sudo modprobe bcm2835_wdt > /dev/null
 sudo cp /etc/modules /etc/modules.bak
-sudo sed '$ i\bcm2708_wdog' -i /etc/modules
+sudo sed '$ i\bcm2835_wdt' -i /etc/modules
 sudo chkconfig watchdog on
 sudo cp /etc/watchdog.conf /etc/watchdog.conf.bak
 sudo sed -e 's/#watchdog-device/watchdog-device/g' -i /etc/watchdog.conf

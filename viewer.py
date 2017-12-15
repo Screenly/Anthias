@@ -20,6 +20,8 @@ import sh
 import signal
 from ctypes import cdll
 
+from Queue import Queue
+
 from settings import settings
 import html_templates
 
@@ -38,6 +40,8 @@ BLACK_PAGE = '/tmp/screenly_html/black_page.html'
 
 # Detect the architecture and load the proper video player
 from sh import omxplayer
+
+stdinqueue = Queue()
 
 # Used by send_to_front.
 libx11 = cdll.LoadLibrary('libX11.so')
@@ -181,7 +185,7 @@ def asset_is_accessible(uri):
 
 def load_browser(url=None):
     logging.info("URL: %s", url)
-    global browser, current_browser_url
+    global browser, current_browser_url, stdinqueue
     logging.info('Loading browser...')
 
     if browser:
@@ -197,7 +201,9 @@ def load_browser(url=None):
     if not url is None:
         current_browser_url = url
 
-    browser = sh.Command('uzbl-browser')(current_browser_url, print_events=True, config='-', _bg=True)
+    # browser = sh.Command('uzbl-browser')(current_browser_url, print_events=True, config='-', _bg=True, _err="/tmp/uzbl_error.log")
+    # from sh import uzbl_browser
+    browser = sh.uzbl_browser(current_browser_url, print_events=True, _in=stdinqueue, c="-", _bg=True, _err="/tmp/uzbl_error.log")
     logging.info('Browser loading %s. Running as PID %s.', current_browser_url, browser.pid)
 
     uzbl_rc = 'ssl_verify {}\n'.format('1' if settings['verify_ssl'] else '0')
@@ -206,12 +212,13 @@ def load_browser(url=None):
     browser_send(uzbl_rc)
 
 def browser_send(command, cb=lambda _: True):
-    if not (browser is None) and browser.process.alive:
-        logging.debug('Browser is alive')
+    logging.info('Reached line 211: browser_send()')
+    if not (browser is None):
+        logging.info('Browser is alive')
         while not browser.process._pipe_queue.empty():  # flush stdout
             browser.next()
 
-        browser.process.stdin.put(command + '\n')
+        stdinqueue.put(command + '\n')
 
         while True:  # loop until cb returns True
             if cb(browser.next()):
@@ -264,7 +271,7 @@ def browser_clear(force=False):
 def browser_url(url, cb=lambda _: True, force=False):
     global current_browser_url
     if url == current_browser_url and not force:
-        if not (browser is None) and browser.process.alive:
+        if not (browser is None):
             logging.debug('Already showing %s, keeping it.', current_browser_url)
         else:
             logging.info('browser found dead, restarting')

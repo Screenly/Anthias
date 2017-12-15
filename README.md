@@ -8,6 +8,8 @@ It was found that the original Screenly missed many useful features including ti
 
 Development is happening in the 'development' branch (and sub branches). Commits will be made to master once I think things are stable and functional.
 
+You'll want to use Raspbian Stretch as your underlying OS. Jessie and earlier OS's will most likely not work. We've tested the Development branch on a Raspberry Pi 2.
+
 ### Running the Unit Tests
 
     nosetests --with-doctest
