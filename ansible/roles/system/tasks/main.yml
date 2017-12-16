@@ -22,6 +22,9 @@
 - name: Check NOOBS
   command: cat /boot/config.txt
   register: config_txt
+  tags:
+    - touches_boot_partition
+
 
 - name: Make sure we have proper framebuffer depth
   lineinfile:
@@ -29,6 +32,8 @@
     regexp: ^framebuffer_depth=
     line: framebuffer_depth=32
   when: not is_berryboot
+  tags:
+    - touches_boot_partition
 
 - name: Fix framebuffer bug
   lineinfile:
@@ -36,6 +41,8 @@
     regexp: ^framebuffer_ignore_alpha=
     line: framebuffer_ignore_alpha=1
   when: not is_berryboot
+  tags:
+    - touches_boot_partition
 
 - name: Backup kernel boot args
   copy:
@@ -43,6 +50,8 @@
     dest: /boot/cmdline.txt.orig
     force: no
   when: not is_berryboot
+  tags:
+    - touches_boot_partition
 
 - debug:
     msg: "Use cmdline.txt.orig for boot parameters (don't remove this file)"
@@ -53,6 +62,8 @@
     dest: /boot/cmdline.txt
     force: yes
   when: not is_berryboot and config_txt.stdout.find('NOOBS') == -1
+  tags:
+    - touches_boot_partition
 
 - name: For splash screen using Plymouth
   replace:
@@ -67,6 +78,8 @@
     regexp: (^(?!$)((?!vt.global_cursor_default=0).)*$)
     replace: \1 vt.global_cursor_default=0
   when: not is_berryboot and ansible_distribution_major_version|int >= 7
+  tags:
+    - touches_boot_partition
 
 - name: Use Systemd as init and quiet boot process
   replace:
@@ -74,6 +87,8 @@
     regexp: (^(?!$)((?!quiet init=/lib/systemd/systemd).)*$)
     replace: \1 quiet init=/lib/systemd/systemd
   when: not is_berryboot
+  tags:
+    - touches_boot_partition
 
 - name: ethN/wlanN names for interfaces
   replace:
@@ -81,6 +96,8 @@
     regexp: (^(?!$)((?!net\.ifnames=0).)*$)
     replace: \1 net.ifnames=0
   when: not is_berryboot
+  tags:
+    - touches_boot_partition
 
 # Sometimes in some packages there are no necessary files.
 # They are required to install pip dependencies.
