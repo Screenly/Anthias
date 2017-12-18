@@ -36,18 +36,18 @@
   with_items:
     - /etc/splashscreen.jpg
     - /etc/init.d/asplashscreen
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int > 7
 
 - name: Disable asplashscreen
   command: update-rc.d asplashscreen remove
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int > 7
 
 - name: Installs dependencies (not Jessie)
   apt:
     name: "{{ item }}"
   with_items:
     - plymouth
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int > 7
 
 - name: Copies plymouth theme
   copy:
@@ -57,8 +57,8 @@
     - screenly.plymouth
     - screenly.script
     - splashscreen.png
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int > 7
 
 - name: Set splashscreen
   command: plymouth-set-default-theme -R screenly
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int > 7
