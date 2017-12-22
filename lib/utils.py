@@ -56,45 +56,6 @@ def validate_url(string):
 
 
 def get_node_ip():
-    if arch in ('armv6l', 'armv7l') and getenv("RESIN_UUID") is None:
-        interface = None
-        for n in range(10):
-            iface = 'eth{}'.format(n)
-            try:
-                file_carrier = open('/sys/class/net/' + iface + '/carrier')
-                file_operstate = open('/sys/class/net/' + iface + '/operstate')
-
-                if "1" in file_carrier.read() and "up" in file_operstate.read():
-                    interface = iface
-                    break
-            except IOError:
-                continue
-
-        if not interface:
-            file_interfaces = open('/etc/network/interfaces')
-            for n in range(10):
-                iface = 'wlan{}'.format(n)
-                if iface in file_interfaces.read():
-                    interface = iface
-                    break
-
-        if not interface:
-            """Check to see if we're running in USB gadget mode."""
-            file_interfaces = open('/etc/network/interfaces')
-            iface = 'usb0'
-            if iface in file_interfaces.read():
-                interface = iface
-
-        if not interface:
-            raise Exception("No active network connection found.")
-
-        try:
-            my_ip = ifaddresses(interface)[2][0]['addr']
-            return my_ip
-        except KeyError:
-            raise Exception("Unable to retrieve an IP.")
-
-    else:
         """Returns the node's IP, for the interface
         that is being used as the default gateway.
         This should work on both MacOS X and Linux."""

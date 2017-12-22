@@ -7,9 +7,9 @@ from platform import machine
 from random import shuffle
 from threading import Thread
 
+from netifaces import gateways
 from requests import get as req_get
 from time import sleep
-from json import load as json_load
 from signal import signal, SIGUSR1
 import logging
 import sh
@@ -396,8 +396,21 @@ def setup():
 def main():
     setup()
 
+    if not path.isfile(path.join(HOME, '.screenly/wifi_set')):
+        if not gateways().get('default'):
+            url = 'http://{0}:{1}/hotspot'.format(LISTEN, PORT)
+            load_browser(url=url)
+
+            while not gateways().get('default'):
+                sleep(2)
+            if LISTEN == '127.0.0.1':
+                sh.sudo('nginx')
+
+        with open(path.join(HOME, '.screenly/wifi_set'), 'a'):
+            pass
+
     url = 'http://{0}:{1}/splash_page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
-    load_browser(url=url)
+    browser_url(url=url)
 
     if settings['show_splash']:
         sleep(SPLASH_DELAY)
