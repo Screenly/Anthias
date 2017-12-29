@@ -9,6 +9,7 @@ from datetime import timedelta
 from functools import wraps
 from hurry.filesize import size
 from os import path, makedirs, statvfs, mkdir, system, getenv
+from time import sleep
 from sh import git
 import sh
 from subprocess import check_output
@@ -841,6 +842,24 @@ def splash_page():
 
     msg = url if url else error_msg
     return template('splash_page.html', ip_lookup=ip_lookup, msg=msg)
+
+
+@app.route('/hotspot')
+def hotspot_page():
+    if LISTEN == '127.0.0.1':
+        sh.sudo('nginx', '-s', 'stop')
+
+    wifi_connect = sh.sudo('wifi-connect', _bg=True, _err_to_out=True)
+    while 'Starting HTTP server' not in wifi_connect.process.stdout:
+        sleep(1)
+
+    network = None
+    for line in wifi_connect.process.stdout.split('\n'):
+        if 'Access point ' in line:
+            network = line.split("'")[-2]
+            break
+
+    return template('hotspot.html', network=network, address='screenly.io/wifi')
 
 
 @app.errorhandler(403)
