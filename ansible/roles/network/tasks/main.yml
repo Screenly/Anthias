@@ -1,100 +1,71 @@
-- name: Copies network manger and watchdog
-  copy:
-    owner: root
-    group: root
-    mode: 0755
-    src: "{{ item }}"
-    dest: "/usr/sbin/{{ item }}"
+- name: Check if screenly-network-manager files exist
+  stat:
+    path: /usr/sbin/screenly_net_mgr.py
+  register: screenly_network_manager
+
+- set_fact: screenly_network_manager_exist="{{screenly_network_manager.stat.exists}}"
+
+- name: Disable network manager
+  command: systemctl disable screenly-net-manager.service
+  when: screenly_network_manager_exist
+
+- name: Disable network watchdog
+  command: systemctl disable screenly-net-watchdog.timer
+  when: screenly_network_manager_exist
+
+- name: Remove network manger and watchdog
+  file:
+    state: absent
+    path: "/usr/sbin/{{ item }}"
   with_items:
     - screenly_net_mgr.py
     - screenly_net_watchdog.py
-  when: ansible_distribution_major_version|int != 9
 
-- name: Copies network manager unit file
-  copy:
-    owner: root
-    group: root
-    src: screenly-net-manager.service
-    dest: /etc/systemd/system/screenly-net-manager.service
-  when: ansible_distribution_major_version|int != 9
-
-- name: Copies network watchdog service file
-  copy:
-    owner: root
-    group: root
-    src: screenly-net-watchdog.service
-    dest: /etc/systemd/system/screenly-net-watchdog.service
-  when: ansible_distribution_major_version|int != 9
-
-- name: Copies network watchdog timer file
-  copy:
-    owner: root
-    group: root
-    src: screenly-net-watchdog.timer
-    dest: /etc/systemd/system/screenly-net-watchdog.timer
-  when: ansible_distribution_major_version|int != 9
-
-- name: Copies in sample network.ini file
-  copy:
-    owner: root
-    group: root
-    mode: 0644
-    src: network.ini-sample
-    dest: /boot/network.ini-sample
-  tags:
-    - touches_boot_partition
-  when: ansible_distribution_major_version|int != 9
-
-- name: Activate network manager
-  command: systemctl enable screenly-net-manager.service chdir=/etc/systemd/system
-  when: ansible_distribution_major_version|int != 9
-
-- name: Activate network watchdog
-  command: systemctl enable screenly-net-watchdog.timer chdir=/etc/systemd/system
-  when: ansible_distribution_major_version|int != 9
-
-- name: Install cronjob for watchdog
-  cron:
-    name: Screenly Net Watchdog
-    minute: 0
-    job: /usr/bin/python /usr/sbin/screenly_net_watchdog.py
+- name: Remove network manager and watchdog unit files
+  file:
     state: absent
-  when: ansible_distribution_major_version|int != 9
+    path: "/etc/systemd/system/{{ item }}"
+  with_items:
+    - screenly-net-manager.service
+    - screenly-net-watchdog.service
 
+- name: Remove network watchdog timer file
+  file:
+    state: absent
+    path: /etc/systemd/system/screenly-net-watchdog.timer
 
 # Use resin-wifi-connect if Stretch
+
+- name: Check if resin-wifi-connect required version exist
+  stat:
+    path: "/usr/local/share/wifi-connect/ui/{{ resin_wifi_connect_version }}"
+  register: resin_wifi_version_file
+
+- set_fact: resin_wifi_version_file_exist="{{resin_wifi_version_file.stat.exists}}"
 
 - name: Install NetworkManager
   apt:
     name: network-manager
     state: present
-  when: ansible_distribution_major_version|int == 9
-
-- name: Disable network manager
-  command: systemctl disable screenly-net-manager.service
-  when: ansible_distribution_major_version|int == 9
-
-- name: Disable network watchdog
-  command: systemctl disable screenly-net-watchdog.timer
-  when: ansible_distribution_major_version|int == 9
+  when: ansible_distribution_major_version|int >= 9
 
 - name: Stop dhcpcd
   command: systemctl stop dhcpcd
-  when: ansible_distribution_major_version|int == 9
+  when: ansible_distribution_major_version|int >= 9
 
 - name: Disable dhcpcd
   command: systemctl disable dhcpcd
-  when: ansible_distribution_major_version|int == 9
+  when: ansible_distribution_major_version|int >= 9
 
 - name: Activate NetworkManager
   command: systemctl enable NetworkManager
-  when: ansible_distribution_major_version|int == 9
+  when: ansible_distribution_major_version|int >= 9
 
 - name: Download resin-wifi-connect release
   get_url:
-    url: https://github.com/resin-io/resin-wifi-connect/releases/download/v3.0.4/wifi-connect-v3.0.4-linux-rpi.tar.gz
+    url: "https://github.com/resin-io/resin-wifi-connect/releases/download/v{{ resin_wifi_connect_version }}/wifi-connect-v{{ resin_wifi_connect_version }}-linux-rpi.tar.gz"
     dest: /home/pi/resin-wifi-connect.tar.gz
-  when: ansible_distribution_major_version|int == 9
+  when: ansible_distribution_major_version|int >= 9 and not resin_wifi_version_file_exist
 
 - name: Unarchive resin-wifi-connect release
   unarchive:
@@ -102,21 +73,27 @@
     dest: /home/pi
     owner: pi
     group: pi
-  when: ansible_distribution_major_version|int == 9
+  when: ansible_distribution_major_version|int >= 9 and not resin_wifi_version_file_exist
 
 - name: Copy "public" folder
   copy:
     src: /home/pi/public/
     dest: /usr/local/share/wifi-connect/ui
     mode: 0755
-  when: ansible_distribution_major_version|int == 9
+  when: ansible_distribution_major_version|int >= 9 and not resin_wifi_version_file_exist
 
 - name: Copy wifi-connect file
   copy:
     src: /home/pi/wifi-connect
     dest: /usr/local/sbin
     mode: 0755
-  when: ansible_distribution_major_version|int == 9
+  when: ansible_distribution_major_version|int >= 9 and not resin_wifi_version_file_exist
+
+- name: Touch resin-wifi-connect version file
+  file:
+    state: touch
+    path: "/usr/local/share/wifi-connect/ui/{{ resin_wifi_connect_version }}"
+  when: not resin_wifi_version_file_exist
 
 - name: Remove unarchive files
   file:
@@ -126,3 +103,4 @@
     - wifi-connect
     - public
     - resin-wifi-connect.tar.gz
+  when: not resin_wifi_version_file_exist
