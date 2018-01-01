@@ -339,8 +339,8 @@ def check_update():
         if not settings['analytics_opt_out']:
             mp = Mixpanel('d18d9143e39ffdb2a4ee9dcc5ed16c56')
             mp.track(device_id, 'Version', {
-                'Branch': git_branch,
-                'Hash': git_hash
+                'Branch': str(git_branch),
+                'Hash': str(git_hash),
             })
 
         if github.branch_exist(git_branch):
