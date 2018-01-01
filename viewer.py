@@ -21,7 +21,7 @@ import zmq
 
 from settings import settings, LISTEN, PORT
 import html_templates
-from lib.utils import url_fails
+from lib.utils import url_fails, touch
 from lib import db
 from lib import assets_helper
 
@@ -332,7 +332,7 @@ def check_update():
     logging.debug('Last update: %s' % str(last_update))
 
     git_branch = sh.git('rev-parse', '--abbrev-ref', 'HEAD').strip()
-    git_hash = sh.git('rev-parse', '--short', 'HEAD')
+    git_hash = sh.git('rev-parse', '--short', 'HEAD').strip()
 
     if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
 
@@ -354,7 +354,8 @@ def check_update():
                 logging.debug('Unable to fetch latest hash.')
                 return
         else:
-            logging.debug('Unable to check if branch exist.')
+            touch(sha_file)
+            logging.debug('Unable to check if branch exist. Checking again tomorrow.)
             return
     else:
         return False

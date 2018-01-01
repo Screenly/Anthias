@@ -10,7 +10,7 @@ from datetime import timedelta
 from settings import settings, ZmqPublisher
 from assets_helper import update
 from datetime import datetime
-from os import getenv, path
+from os import getenv, path, utime
 import db
 import pytz
 from platform import machine
@@ -35,6 +35,11 @@ if machine() in ['x86', 'x86_64']:
         from sh import ffprobe, mplayer
     except:
         pass
+
+
+def touch(path):
+    with open(path, 'a'):
+        utime(path, None)
 
 
 def validate_url(string):
