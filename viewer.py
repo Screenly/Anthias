@@ -355,7 +355,7 @@ def check_update():
                 return
         else:
             touch(sha_file)
-            logging.debug('Unable to check if branch exist. Checking again tomorrow.)
+            logging.debug('Unable to check if branch exist. Checking again tomorrow.')
             return
     else:
         return False
