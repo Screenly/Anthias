@@ -312,8 +312,8 @@ def check_update():
     False if no update needed and None if unable to check.
     """
 
-    sha_file = path.join(settings.get_configdir(), '.latest_screenly_sha')
-    device_id_file = path.join(settings.get_configdir(), '.device_id')
+    sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
+    device_id_file = path.join(settings.get_configdir(), 'device_id')
 
     if path.isfile(sha_file):
         sha_file_mtime = path.getmtime(sha_file)
