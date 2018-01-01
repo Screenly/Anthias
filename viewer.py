@@ -6,6 +6,7 @@ from os import path, getenv, utime, system
 from platform import machine
 from random import shuffle
 from threading import Thread
+from lib import github
 
 from mixpanel import Mixpanel
 from netifaces import gateways
@@ -342,18 +343,18 @@ def check_update():
                 'Hash': git_hash
             })
 
-        if not url_fails('http://stats.screenlyapp.com'):
-            latest_sha = req_get('http://stats.screenlyapp.com/latest/{}'.format(git_branch))
+        if github.branch_exist(git_branch):
+            latest_sha = github.fetch_hash(git_branch)
 
-            if latest_sha.status_code == 200:
+            if latest_sha:
                 with open(sha_file, 'w') as f:
-                    f.write(latest_sha.content.strip())
+                    f.write(latest_sha)
                 return True
             else:
-                logging.debug('Received non 200-status')
+                logging.debug('Unable to fetch latest hash.')
                 return
         else:
-            logging.debug('Unable to retrieve latest SHA')
+            logging.debug('Unable to check if branch exist.')
             return
     else:
         return False
