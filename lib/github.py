@@ -2,7 +2,7 @@ from requests import get as requests_get
 import logging
 
 
-def branch_exist(branch='master'):
+def branch_exist(branch):
     resp = requests_get(
         'https://api.github.com/repos/screenly/screenly-ose/branches',
         headers={
