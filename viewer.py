@@ -333,6 +333,7 @@ def check_update():
 
     git_branch = sh.git('rev-parse', '--abbrev-ref', 'HEAD').strip()
     git_hash = sh.git('rev-parse', '--short', 'HEAD').strip()
+    git_remote = sh.git('remote', 'get-url origin').strip()
 
     if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
 
@@ -341,6 +342,7 @@ def check_update():
             mp.track(device_id, 'Version', {
                 'Branch': str(git_branch),
                 'Hash': str(git_hash),
+                'Remote': str(git_remote),
             })
 
         if remote_branch_exist(git_branch):
