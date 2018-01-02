@@ -43,16 +43,6 @@
 
 - set_fact: resin_wifi_version_file_exist="{{resin_wifi_version_file.stat.exists}}"
 
-- name: Install NetworkManager
-  apt:
-    name: network-manager
-    state: present
-  when: ansible_distribution_major_version|int >= 9
-
-- name: Stop dhcpcd
-  command: systemctl stop dhcpcd
-  when: ansible_distribution_major_version|int >= 9
-
 - name: Disable dhcpcd
   command: systemctl disable dhcpcd
   when: ansible_distribution_major_version|int >= 9
@@ -93,7 +83,7 @@
   file:
     state: touch
     path: "/usr/local/share/wifi-connect/ui/{{ resin_wifi_connect_version }}"
-  when: not resin_wifi_version_file_exist
+  when: ansible_distribution_major_version|int >= 9 and not resin_wifi_version_file_exist
 
 - name: Remove unarchive files
   file:
@@ -103,4 +93,6 @@
     - wifi-connect
     - public
     - resin-wifi-connect.tar.gz
-  when: not resin_wifi_version_file_exist
+  notify:
+    - install network-manager
+  when: ansible_distribution_major_version|int >= 9 and not resin_wifi_version_file_exist

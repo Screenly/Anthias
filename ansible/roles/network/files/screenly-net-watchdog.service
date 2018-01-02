@@ -1,9 +1,0 @@
-[Unit]
-Description=Screenly Network Watchdog
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/python /usr/sbin/screenly_net_watchdog.py
-
-[Install]
-WantedBy=multi-user.target
