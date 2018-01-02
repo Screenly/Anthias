@@ -6,7 +6,6 @@ from os import path, getenv, utime, system
 from platform import machine
 from random import shuffle
 from threading import Thread
-from lib import github
 
 from mixpanel import Mixpanel
 from netifaces import gateways
@@ -21,6 +20,7 @@ import zmq
 
 from settings import settings, LISTEN, PORT
 import html_templates
+from lib.github import fetch_remote_hash, remote_branch_exist
 from lib.utils import url_fails, touch, is_ci
 from lib import db
 from lib import assets_helper
@@ -343,8 +343,8 @@ def check_update():
                 'Hash': str(git_hash),
             })
 
-        if github.branch_exist(git_branch):
-            latest_sha = github.fetch_hash(git_branch)
+        if remote_branch_exist(git_branch):
+            latest_sha = fetch_remote_hash(git_branch)
 
             if latest_sha:
                 with open(sha_file, 'w') as f:

@@ -2,7 +2,7 @@ from requests import get as requests_get
 import logging
 
 
-def branch_exist(branch):
+def remote_branch_exist(branch):
     if not branch:
         logging.error('No branch specified. Exiting.')
         return
@@ -24,7 +24,7 @@ def branch_exist(branch):
     return False
 
 
-def fetch_hash(branch):
+def fetch_remote_hash(branch):
     if not branch:
         logging.error('No branch specified. Exiting.')
         return
