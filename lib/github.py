@@ -3,6 +3,10 @@ import logging
 
 
 def branch_exist(branch):
+    if not branch:
+        logging.error('No branch specified. Exiting.')
+        return
+
     resp = requests_get(
         'https://api.github.com/repos/screenly/screenly-ose/branches',
         headers={
@@ -21,6 +25,10 @@ def branch_exist(branch):
 
 
 def fetch_hash(branch):
+    if not branch:
+        logging.error('No branch specified. Exiting.')
+        return
+
     resp = requests_get(
         'https://api.github.com/repos/screenly/screenly-ose/git/refs/heads/{}'.format(branch)
     )

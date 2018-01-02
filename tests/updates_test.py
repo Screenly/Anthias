@@ -49,7 +49,7 @@ class UpdateTest(unittest.TestCase):
             self.assertEqual(f.readline(), fancy_sha)
 
     @patch('viewer.req_get', side_effect=mocked_req_get)
-    @patch('viewer.url_fails', side_effect=lambda _: False)
+    @patch('github.branch_exist', side_effect=lambda _: True)
     def test_if_sha_file_is_empty__check_update__should_return_true(self, req_get, url_fails):
         with open(self.sha_file, 'w+') as f:
             pass

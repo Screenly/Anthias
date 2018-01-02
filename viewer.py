@@ -21,7 +21,7 @@ import zmq
 
 from settings import settings, LISTEN, PORT
 import html_templates
-from lib.utils import url_fails, touch
+from lib.utils import url_fails, touch, is_ci
 from lib import db
 from lib import assets_helper
 
@@ -336,7 +336,7 @@ def check_update():
 
     if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
 
-        if not settings['analytics_opt_out']:
+        if not settings['analytics_opt_out'] or not is_ci():
             mp = Mixpanel('d18d9143e39ffdb2a4ee9dcc5ed16c56')
             mp.track(device_id, 'Version', {
                 'Branch': str(git_branch),
