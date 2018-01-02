@@ -50,6 +50,7 @@ class UpdateTest(unittest.TestCase):
 
     @patch('viewer.req_get', side_effect=mocked_req_get)
     @patch('viewer.github.branch_exist', side_effect=lambda _: True)
+    @patch('viewer.github.fetch_hash', side_effect=lambda _: 'master')
     def test_if_sha_file_is_empty__check_update__should_return_true(self, req_get, url_fails):
         with open(self.sha_file, 'w+') as f:
             pass
