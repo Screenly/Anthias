@@ -34,9 +34,11 @@ Assuming you're in the source code repository, simply run:
 
 ```
 $ docker run --rm -ti \
-  -p 8080:8080 \
-  -v $(pwd):/home/pi/screenly \
-  screenly/ose-dev-server
+    --name=screenly-dev \
+    -e 'LISTEN=0.0.0.0' \
+    -p 8080:8080 \
+    -v $(pwd):/home/pi/screenly \
+    screenly/ose-dev-server
 ```
 
 ## Running the Unit Tests
