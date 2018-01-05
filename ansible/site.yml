@@ -9,11 +9,6 @@
         name: nginx
         state: restarted
 
-    - name: install network-manager
-      apt:
-        name: network-manager
-        state: present
-
     - name: reload systemctl
       command: systemctl daemon-reload
 
@@ -34,9 +29,9 @@
 
   roles:
     - system
+    - network
     - rpi-update
     - screenly
     - splashscreen
     - nginx
     - ssl
-    - network
