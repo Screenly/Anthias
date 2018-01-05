@@ -20,6 +20,7 @@ DEFAULTS = {
         'use_24_hour_clock': False,
         'websocket_port': '9999',
         'use_ssl': False,
+        'analytics_opt_out': False
     },
     'viewer': {
         'player_name': '',

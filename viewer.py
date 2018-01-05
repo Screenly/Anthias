@@ -7,17 +7,21 @@ from platform import machine
 from random import shuffle
 from threading import Thread
 
+from mixpanel import Mixpanel
 from netifaces import gateways
 from requests import get as req_get
-from time import sleep
 from signal import signal, SIGUSR1
+from time import sleep
 import logging
+import random
 import sh
+import string
 import zmq
 
 from settings import settings, LISTEN, PORT
 import html_templates
-from lib.utils import url_fails
+from lib.github import fetch_remote_hash, remote_branch_exist
+from lib.utils import url_fails, touch, is_ci
 from lib import db
 from lib import assets_helper
 
@@ -51,7 +55,8 @@ scheduler = None
 
 def sigusr1(signum, frame):
     """
-    The signal interrupts sleep() calls, so the currently playing web or image asset is skipped.
+    The signal interrupts sleep() calls, so the currently
+    playing web or image asset is skipped.
     omxplayer is killed to skip any currently playing video assets.
     """
     logging.info('USR1 received, skipping.')
@@ -74,6 +79,7 @@ def navigate_to_asset(asset_id):
 
 def command_not_found():
     logging.error("Command not found")
+
 
 commands = {
     'next': lambda _: skip_asset(),
@@ -307,6 +313,7 @@ def check_update():
     """
 
     sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
+    device_id_file = path.join(settings.get_configdir(), 'device_id')
 
     if path.isfile(sha_file):
         sha_file_mtime = path.getmtime(sha_file)
@@ -314,23 +321,41 @@ def check_update():
     else:
         last_update = None
 
+    if not path.isfile(device_id_file):
+        device_id = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(15))
+        with open(device_id_file, 'w') as f:
+            f.write(device_id)
+    else:
+        with open(device_id_file, 'r') as f:
+            device_id = f.read()
+
     logging.debug('Last update: %s' % str(last_update))
 
     git_branch = sh.git('rev-parse', '--abbrev-ref', 'HEAD').strip()
+    git_hash = sh.git('rev-parse', '--short', 'HEAD').strip()
+
     if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
 
-        if not url_fails('http://stats.screenlyapp.com'):
-            latest_sha = req_get('http://stats.screenlyapp.com/latest/{}'.format(git_branch))
+        if not settings['analytics_opt_out'] or not is_ci():
+            mp = Mixpanel('d18d9143e39ffdb2a4ee9dcc5ed16c56')
+            mp.track(device_id, 'Version', {
+                'Branch': str(git_branch),
+                'Hash': str(git_hash),
+            })
 
-            if latest_sha.status_code == 200:
+        if remote_branch_exist(git_branch):
+            latest_sha = fetch_remote_hash(git_branch)
+
+            if latest_sha:
                 with open(sha_file, 'w') as f:
-                    f.write(latest_sha.content.strip())
+                    f.write(latest_sha)
                 return True
             else:
-                logging.debug('Received non 200-status')
+                logging.debug('Unable to fetch latest hash.')
                 return
         else:
-            logging.debug('Unable to retrieve latest SHA')
+            touch(sha_file)
+            logging.debug('Unable to check if branch exist. Checking again tomorrow.')
             return
     else:
         return False

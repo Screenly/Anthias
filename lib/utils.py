@@ -1,21 +1,23 @@
-import requests
-import json
-import re
 import certifi
+import db
+import json
+import os
+import pytz
+import re
+import requests
+
+from datetime import datetime, timedelta
+from distutils.util import strtobool
 from netifaces import ifaddresses
+from os import getenv, path, utime
+from platform import machine
+from settings import settings, ZmqPublisher
 from sh import grep, netstat
 from subprocess import check_output, call
-from urlparse import urlparse
-from datetime import timedelta
-from settings import settings, ZmqPublisher
-from assets_helper import update
-from datetime import datetime
-from os import getenv, path
-import db
-import pytz
-from platform import machine
-
 from threading import Thread
+from urlparse import urlparse
+
+from assets_helper import update
 
 arch = machine()
 
@@ -35,6 +37,22 @@ if machine() in ['x86', 'x86_64']:
         from sh import ffprobe, mplayer
     except:
         pass
+
+
+def string_to_bool(string):
+    return bool(strtobool(str(string)))
+
+
+def touch(path):
+    with open(path, 'a'):
+        utime(path, None)
+
+
+def is_ci():
+    """
+    Returns True when run on Travis.
+    """
+    return string_to_bool(os.getenv('CI', False))
 
 
 def validate_url(string):
