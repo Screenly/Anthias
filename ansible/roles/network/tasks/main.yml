@@ -36,13 +36,6 @@
 
 # Use resin-wifi-connect if Stretch
 
-- name: Check if resin-wifi-connect required version exist
-  stat:
-    path: "/usr/local/share/wifi-connect/ui/{{ resin_wifi_connect_version }}"
-  register: resin_wifi_version_file
-
-- set_fact: resin_wifi_version_file_exist="{{resin_wifi_version_file.stat.exists}}"
-
 - name: Disable dhcpcd
   command: systemctl disable dhcpcd
   when: ansible_distribution_major_version|int >= 9
@@ -50,6 +43,14 @@
 - name: Activate NetworkManager
   command: systemctl enable NetworkManager
   when: ansible_distribution_major_version|int >= 9
+
+- name: Check if resin-wifi-connect required version exist
+  stat:
+    path: "/usr/local/share/wifi-connect/ui/{{ resin_wifi_connect_version }}"
+  register: resin_wifi_version_file
+  when: ansible_distribution_major_version|int >= 9
+
+- set_fact: resin_wifi_version_file_exist="{{resin_wifi_version_file.stat.exists}}"
 
 - name: Download resin-wifi-connect release
   get_url:
@@ -93,6 +94,4 @@
     - wifi-connect
     - public
     - resin-wifi-connect.tar.gz
-  notify:
-    - install network-manager
   when: ansible_distribution_major_version|int >= 9 and not resin_wifi_version_file_exist

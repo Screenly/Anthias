@@ -29,6 +29,12 @@ if [ "$INSTALL" != 'y' ]; then
   exit 1
 fi
 
+dpkg -s network-manager > /dev/null 2>&1
+if [ "$?" = "1" ]; then
+  echo -e "\n\nIt looks like NetworkManager is not installed. Please install it by running 'sudo apt install -y network-manager' and then re-run the installation."
+  exit 1
+fi
+
 echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
 if [ "$DEV" != 'y'  ]; then
   BRANCH="production"
