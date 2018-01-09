@@ -51,6 +51,7 @@
   when: ansible_distribution_major_version|int >= 9
 
 - set_fact: resin_wifi_version_file_exist="{{resin_wifi_version_file.stat.exists}}"
+  when: ansible_distribution_major_version|int >= 9
 
 - name: Download resin-wifi-connect release
   get_url:
