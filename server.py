@@ -17,6 +17,7 @@ import json
 import os
 import traceback
 import uuid
+from pwgen import pwgen
 
 from flask import Flask, request, render_template, make_response, send_from_directory
 from flask_restful_swagger_2 import swagger, Resource, Api, Schema
@@ -849,17 +850,15 @@ def hotspot_page():
     if LISTEN == '127.0.0.1':
         sh.sudo('nginx', '-s', 'stop')
 
-    wifi_connect = sh.sudo('wifi-connect', _bg=True, _err_to_out=True)
+    ssid = "ScreenlyOSE-{}".format(pwgen(4, symbols=False))
+    ssid_password = pwgen(8, symbols=False)
+
+    wifi_connect = sh.sudo('wifi-connect', '-s', ssid, '-p', ssid_password, _bg=True, _err_to_out=True)
+
     while 'Starting HTTP server' not in wifi_connect.process.stdout:
         sleep(1)
 
-    network = None
-    for line in wifi_connect.process.stdout.split('\n'):
-        if 'Access point ' in line:
-            network = line.split("'")[-2]
-            break
-
-    return template('hotspot.html', network=network, address='screenly.io/wifi')
+    return template('hotspot.html', network=ssid, ssid_pswd=ssid_password, address='screenly.io/wifi')
 
 
 @app.errorhandler(403)
