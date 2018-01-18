@@ -6,42 +6,40 @@ __copyright__ = "Copyright 2012-2017, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 from datetime import timedelta
+from dateutil import parser as date_parser
 from functools import wraps
 from hurry.filesize import size
-from os import path, makedirs, statvfs, mkdir, system, getenv
-from time import sleep
-from sh import git
-import sh
-from subprocess import check_output
 import json
-import os
+from mimetypes import guess_type
+from os import getenv, makedirs, mkdir, path, remove, rename, statvfs
+from pwgen import pwgen
+from sh import git, sudo
+from subprocess import check_output
+from time import sleep
 import traceback
 import uuid
-from pwgen import pwgen
 
-from flask import Flask, request, render_template, make_response, send_from_directory
-from flask_restful_swagger_2 import swagger, Resource, Api, Schema
-from flask_swagger_ui import get_swaggerui_blueprint
+from flask import Flask, make_response, render_template, request, send_from_directory
 from flask_cors import CORS
+from flask_restful_swagger_2 import Api, Resource, Schema, swagger
+from flask_swagger_ui import get_swaggerui_blueprint
 
 from gunicorn.app.base import Application
-
-from lib import db
-from lib import queries
-from lib import assets_helper
-from lib import diagnostics
-from lib import backup_helper
-
-from lib.utils import json_dump, download_video_from_youtube
-from lib.utils import get_node_ip
-from lib.utils import validate_url
-from lib.utils import url_fails
-from lib.utils import get_video_duration
-from dateutil import parser as date_parser
-from mimetypes import guess_type
-
-from settings import settings, DEFAULTS, CONFIGURABLE_SETTINGS, auth_basic, LISTEN, PORT, ZmqPublisher
 from werkzeug.wrappers import Request
+
+from lib import assets_helper
+from lib import backup_helper
+from lib import db
+from lib import diagnostics
+from lib import queries
+
+from lib.utils import get_node_ip
+from lib.utils import get_video_duration
+from lib.utils import download_video_from_youtube, json_dump
+from lib.utils import url_fails
+from lib.utils import validate_url
+
+from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
 
 
 app = Flask(__name__)
@@ -70,11 +68,11 @@ def is_up_to_date():
     Used in conjunction with check_update() in viewer.py.
     """
 
-    sha_file = os.path.join(settings.get_configdir(), 'latest_screenly_sha')
+    sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
 
     # Until this has been created by viewer.py,
     # let's just assume we're up to date.
-    if not os.path.exists(sha_file):
+    if not path.exists(sha_file):
         return True
 
     try:
@@ -201,7 +199,7 @@ def prepare_asset(request):
     if not asset['asset_id']:
         asset['asset_id'] = uuid.uuid4().hex
         if uri.startswith('/'):
-            os.rename(uri, path.join(settings['assetdir'], asset['asset_id']))
+            rename(uri, path.join(settings['assetdir'], asset['asset_id']))
             uri = path.join(settings['assetdir'], asset['asset_id'])
 
     if 'youtube_asset' in asset['mimetype']:
@@ -392,7 +390,7 @@ class Asset(Resource):
             asset = assets_helper.read(conn, asset_id)
             try:
                 if asset['uri'].startswith(settings['assetdir']):
-                    os.remove(asset['uri'])
+                    remove(asset['uri'])
             except OSError:
                 pass
             assets_helper.delete(conn, asset_id)
@@ -518,7 +516,7 @@ class AssetNewVersion(Resource):
             asset = assets_helper.read(conn, asset_id)
             try:
                 if asset['uri'].startswith(settings['assetdir']):
-                    os.remove(asset['uri'])
+                    remove(asset['uri'])
             except OSError:
                 pass
             assets_helper.delete(conn, asset_id)
@@ -848,12 +846,12 @@ def splash_page():
 @app.route('/hotspot')
 def hotspot_page():
     if LISTEN == '127.0.0.1':
-        sh.sudo('nginx', '-s', 'stop')
+        sudo('nginx', '-s', 'stop')
 
     ssid = "ScreenlyOSE-{}".format(pwgen(4, symbols=False))
     ssid_password = pwgen(8, symbols=False)
 
-    wifi_connect = sh.sudo('wifi-connect', '-s', ssid, '-p', ssid_password, _bg=True, _err_to_out=True)
+    wifi_connect = sudo('wifi-connect', '-s', ssid, '-p', ssid_password, _bg=True, _err_to_out=True)
 
     while 'Starting HTTP server' not in wifi_connect.process.stdout:
         sleep(1)
