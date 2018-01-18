@@ -82,6 +82,8 @@ sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'de*' 
 
 cd ~/screenly && git rev-parse HEAD > ~/.screenly/latest_screenly_sha
 
+if test -f ~/.screenly/wifi_set; then  rm ~/.screenly/wifi_set; fi
+
 set +x
 echo "Installation completed."
 
