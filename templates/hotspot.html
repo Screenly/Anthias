@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Hotspot Page</title>
+    <link href="/static/css/bootstrap.css" rel="stylesheet" />
+    <link href="/static/css/screenly.css" rel="stylesheet" />
+  </head>
+  <body class="splash">
+    <div class="container">
+      <div class="row">
+        <div class="span12">
+          <div class="logo-container page-header text-center">
+            <img src="/static/img/screenly_ose_logo_large.png" />
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="span12 text-center">
+          <p class="lead">No network connection were found. An access point has been created. <br>To configure WiFi networking, simply connect to the access point <br>using your computer or mobile device</p>
+          <div class="well lead">
+            <span href="{{context.msg}}">SSID: {{context.network}}<br>Password: {{context.ssid_pswd}} <br>Address: {{context.address}}</span>
+          </div>
+        </div>
+      </div>
+      <hr />
+    </div>
+  </body>
+</html>

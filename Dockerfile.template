@@ -38,6 +38,8 @@ RUN sed -i '/\[Service\]/ a\Environment=HOME=/data' /etc/systemd/system/screenly
 # Screenly Server
 COPY ansible/roles/screenly/files/screenly-web.service /etc/systemd/system/screenly-web.service
 RUN sed -i '/\[Service\]/ a\Environment=HOME=/data' /etc/systemd/system/screenly-web.service
+RUN sed -i '/\[Service\]/ a\Environment=Environment=LISTEN=0.0.0.0' /etc/systemd/system/screenly-web.service
+RUN sed -i '/\[Service\]/ a\Environment=Environment=SWAGGER_HOST=ose.demo.screenlyapp.com' /etc/systemd/system/screenly-web.service
 
 # X11
 COPY ansible/roles/screenly/files/X.service /etc/systemd/system/X.service

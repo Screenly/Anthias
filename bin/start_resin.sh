@@ -1,7 +1,5 @@
 #!/bin/bash
 
-chown -R pi:pi /data
-
 mkdir -p \
     /data/.config \
     /data/.config/uzbl \
@@ -19,6 +17,9 @@ if [ -n "${OVERWRITE_CONFIG}" ]; then
     cp ansible/roles/screenly/files/screenly.conf "/data/.screenly/screenly.conf"
 fi
 
+# Make sure the right permission is set
+chown -R pi:pi /data
+
 # Set management page's user and password from environment variables,
 # but only if both of them are provided. Can have empty values provided.
 if [ -n "${MANAGEMENT_USER+x}" ] && [ -n "${MANAGEMENT_PASSWORD+x}" ]; then
@@ -33,8 +34,9 @@ systemctl start screenly-viewer.service
 systemctl start screenly-web.service
 systemctl start screenly-websocket_server_layer.service
 
-journalctl -f -a
-
 # By default docker gives us 64MB of shared memory size but to display heavy
 # pages we need more.
 umount /dev/shm && mount -t tmpfs shm /dev/shm
+
+# Send logs to stdout
+journalctl -f -a

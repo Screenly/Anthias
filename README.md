@@ -1,6 +1,5 @@
-[![Build Status](https://travis-ci.org/screenly/Screenly-ose.svg?branch=master)](https://travis-ci.org/Screenly/screenly-ose)
-[![Coverage Status](https://coveralls.io/repos/Screenly/screenly-ose/badge.svg?branch=master&service=github)](https://coveralls.io/github/Screenly/screenly-ose?branch=master)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/dfbdedc7a56c4589b931b40ee77e8d9f)](https://www.codacy.com/app/renat-2017/screenly-ose?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=wireload/screenly-ose&amp;utm_campaign=Badge_Grade)
+[![Build Status](https://travis-ci.org/Screenly/screenly-ose.svg?branch=master)](https://travis-ci.org/Screenly/screenly-ose)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/5905ebcf4aab4220ad9fdf3fb679c49d)](https://www.codacy.com/app/vpetersson/screenly-ose?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Screenly/screenly-ose&amp;utm_campaign=Badge_Grade)
 
 # Screenly OSE - Digital Signage for the Raspberry Pi
 
@@ -35,9 +34,11 @@ Assuming you're in the source code repository, simply run:
 
 ```
 $ docker run --rm -ti \
-  -p 8080:8080 \
-  -v $(pwd):/home/pi/screenly \
-  screenly/ose-dev-server
+    --name=screenly-dev \
+    -e 'LISTEN=0.0.0.0' \
+    -p 8080:8080 \
+    -v $(pwd):/home/pi/screenly \
+    screenly/ose-dev-server
 ```
 
 ## Running the Unit Tests

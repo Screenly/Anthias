@@ -17,6 +17,12 @@
     dest: /home/pi/.screenly/screenly.conf
     force: no
 
+- name: Remove deprecated parameter "listen"
+  lineinfile:
+    regexp: '^.*listen.*'
+    state: absent
+    dest: /home/pi/.screenly/screenly.conf
+
 - name: Copy in GTK config
   copy:
     owner: pi

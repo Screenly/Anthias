@@ -2,19 +2,26 @@
 # -*- coding: utf-8 -*-
 
 from datetime import datetime, timedelta
-from os import path, getenv, utime
+from os import path, getenv, utime, system
 from platform import machine
 from random import shuffle
-from requests import get as req_get
-from time import sleep
-from json import load as json_load
-from signal import signal, SIGUSR1, SIGUSR2, SIGHUP
-import logging
-import sh
+from threading import Thread
 
-from settings import settings
+from mixpanel import Mixpanel
+from netifaces import gateways
+from requests import get as req_get
+from signal import signal, SIGUSR1
+from time import sleep
+import logging
+import random
+import sh
+import string
+import zmq
+
+from settings import settings, LISTEN, PORT
 import html_templates
-from lib.utils import url_fails
+from lib.github import fetch_remote_hash, remote_branch_exist
+from lib.utils import url_fails, touch, is_ci
 from lib import db
 from lib import assets_helper
 
@@ -48,23 +55,60 @@ scheduler = None
 
 def sigusr1(signum, frame):
     """
-    The signal interrupts sleep() calls, so the currently playing web or image asset is skipped.
+    The signal interrupts sleep() calls, so the currently
+    playing web or image asset is skipped.
     omxplayer is killed to skip any currently playing video assets.
     """
     logging.info('USR1 received, skipping.')
-    sh.killall('omxplayer.bin', _ok_code=[1])
+    try:
+        sh.killall('omxplayer.bin', _ok_code=[1])
+    except OSError:
+        pass
 
 
-def sigusr2(signum, frame):
-    scheduler.reverse = True
-    logging.info('USR1 received, skipping.')
-    sh.killall('omxplayer.bin', _ok_code=[1])
+def skip_asset(back=False):
+    if back is True:
+        scheduler.reverse = True
+    system('pkill -SIGUSR1 -f viewer.py')
 
 
-def sighup(signum, frame):
-    """Reload settings"""
-    logging.info("USR2 received, reloading settings.")
-    load_settings()
+def navigate_to_asset(asset_id):
+    scheduler.extra_asset = asset_id
+    system('pkill -SIGUSR1 -f viewer.py')
+
+
+def command_not_found():
+    logging.error("Command not found")
+
+
+commands = {
+    'next': lambda _: skip_asset(),
+    'previous': lambda _: skip_asset(back=True),
+    'asset': lambda id: navigate_to_asset(id),
+    'reload': lambda _: load_settings(),
+    'unknown': lambda _: command_not_found()
+}
+
+
+class ZmqSubscriber(Thread):
+    def __init__(self):
+        Thread.__init__(self)
+        self.context = zmq.Context()
+
+    def run(self):
+        socket = self.context.socket(zmq.SUB)
+        socket.connect('tcp://127.0.0.1:10001')
+        socket.setsockopt(zmq.SUBSCRIBE, 'viewer')
+        while True:
+            msg = socket.recv()
+            topic, message = msg.split()
+
+            # If the command consists of 2 parts, then the first is the function, the second is the argument
+            parts = message.split('&')
+            command = parts[0]
+            parameter = parts[1] if len(parts) > 1 else None
+
+            commands.get(command, commands.get('unknown'))(parameter)
 
 
 class Scheduler(object):
@@ -75,10 +119,20 @@ class Scheduler(object):
         self.index = 0
         self.counter = 0
         self.reverse = 0
+        self.extra_asset = None
         self.update_playlist()
 
     def get_next_asset(self):
         logging.debug('get_next_asset')
+
+        if self.extra_asset is not None:
+            asset = get_specific_asset(self.extra_asset)
+            if asset and asset['is_processing'] == 0:
+                self.extra_asset = None
+                return asset
+            logging.error("Asset not found or processed")
+            self.extra_asset = None
+
         self.refresh_playlist()
         logging.debug('get_next_asset after refresh')
         if not self.assets:
@@ -128,6 +182,11 @@ class Scheduler(object):
             return path.getmtime(settings['database'])
         except:
             return 0
+
+
+def get_specific_asset(asset_id):
+    logging.info('Getting specific asset')
+    return assets_helper.read(db_conn, asset_id)
 
 
 def generate_asset_list():
@@ -254,6 +313,7 @@ def check_update():
     """
 
     sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
+    device_id_file = path.join(settings.get_configdir(), 'device_id')
 
     if path.isfile(sha_file):
         sha_file_mtime = path.getmtime(sha_file)
@@ -261,23 +321,41 @@ def check_update():
     else:
         last_update = None
 
+    if not path.isfile(device_id_file):
+        device_id = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(15))
+        with open(device_id_file, 'w') as f:
+            f.write(device_id)
+    else:
+        with open(device_id_file, 'r') as f:
+            device_id = f.read()
+
     logging.debug('Last update: %s' % str(last_update))
 
     git_branch = sh.git('rev-parse', '--abbrev-ref', 'HEAD').strip()
+    git_hash = sh.git('rev-parse', '--short', 'HEAD').strip()
+
     if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
 
-        if not url_fails('http://stats.screenlyapp.com'):
-            latest_sha = req_get('http://stats.screenlyapp.com/latest/{}'.format(git_branch))
+        if not settings['analytics_opt_out'] and not is_ci():
+            mp = Mixpanel('d18d9143e39ffdb2a4ee9dcc5ed16c56')
+            mp.track(device_id, 'Version', {
+                'Branch': str(git_branch),
+                'Hash': str(git_hash),
+            })
 
-            if latest_sha.status_code == 200:
+        if remote_branch_exist(git_branch):
+            latest_sha = fetch_remote_hash(git_branch)
+
+            if latest_sha:
                 with open(sha_file, 'w') as f:
-                    f.write(latest_sha.content.strip())
+                    f.write(latest_sha)
                 return True
             else:
-                logging.debug('Received non 200-status')
+                logging.debug('Unable to fetch latest hash.')
                 return
         else:
-            logging.debug('Unable to retrieve latest SHA')
+            touch(sha_file)
+            logging.debug('Unable to check if branch exist. Checking again tomorrow.')
             return
     else:
         return False
@@ -332,8 +410,6 @@ def setup():
     arch = machine()
 
     signal(SIGUSR1, sigusr1)
-    signal(SIGUSR2, sigusr2)
-    signal(SIGHUP, sighup)
 
     load_settings()
     db_conn = db.conn(settings['database'])
@@ -345,14 +421,32 @@ def setup():
 def main():
     setup()
 
-    url = 'http://{0}:{1}/splash_page'.format(settings.get_listen_ip(), settings.get_listen_port()) if settings['show_splash'] else 'file://' + BLACK_PAGE
-    load_browser(url=url)
+    if not path.isfile(path.join(HOME, '.screenly/wifi_set')):
+        if not gateways().get('default'):
+            url = 'http://{0}:{1}/hotspot'.format(LISTEN, PORT)
+            load_browser(url=url)
+
+            while not gateways().get('default'):
+                sleep(2)
+            if LISTEN == '127.0.0.1':
+                sh.sudo('nginx')
+
+        with open(path.join(HOME, '.screenly/wifi_set'), 'a'):
+            pass
+
+    url = 'http://{0}:{1}/splash_page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
+    browser_url(url=url)
 
     if settings['show_splash']:
         sleep(SPLASH_DELAY)
 
     global scheduler
     scheduler = Scheduler()
+
+    subscriber = ZmqSubscriber()
+    subscriber.daemon = True
+    subscriber.start()
+
     logging.debug('Entering infinite loop.')
     while True:
         asset_loop(scheduler)

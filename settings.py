@@ -16,10 +16,11 @@ CONFIG_FILE = 'screenly.conf'
 DEFAULTS = {
     'main': {
         'database': CONFIG_DIR + 'screenly.db',
-        'listen': '0.0.0.0:8080',
         'assetdir': 'screenly_assets',
         'use_24_hour_clock': False,
-        'websocket_port': '9999'
+        'websocket_port': '9999',
+        'use_ssl': False,
+        'analytics_opt_out': False
     },
     'viewer': {
         'player_name': '',
@@ -39,6 +40,9 @@ DEFAULTS = {
 }
 CONFIGURABLE_SETTINGS = DEFAULTS['viewer']
 CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock']
+
+PORT = int(getenv('PORT', 8080))
+LISTEN = getenv('LISTEN', '127.0.0.1')
 
 # Initiate logging
 logging.basicConfig(level=logging.INFO,
@@ -96,12 +100,6 @@ class ScreenlySettings(IterableUserDict):
         for section, defaults in DEFAULTS.items():
             for field, default in defaults.items():
                 self._get(config, section, field, default)
-        try:
-            self.get_listen_ip()
-            int(self.get_listen_port())
-        except ValueError as e:
-            logging.info("Could not parse setting 'listen': %s. Using default value: '%s'." % (unicode(e), DEFAULTS['main']['listen']))
-            self['listen'] = DEFAULTS['main']['listen']
 
     def save(self):
         # Write new settings to disk.
@@ -119,12 +117,6 @@ class ScreenlySettings(IterableUserDict):
 
     def get_configfile(self):
         return path.join(self.home, CONFIG_DIR, CONFIG_FILE)
-
-    def get_listen_ip(self):
-        return self['listen'].split(':')[0]
-
-    def get_listen_port(self):
-        return self['listen'].split(':')[1]
 
     def check_user(self, user, password):
         if not self['user'] or not self['password']:
@@ -145,8 +137,9 @@ class ZmqPublisher:
             raise ValueError("An instantiation already exists!")
 
         self.context = zmq.Context()
+
         self.socket = self.context.socket(zmq.PUB)
-        self.socket.connect('tcp://127.0.0.1:10001')
+        self.socket.bind('tcp://127.0.0.1:10001')
         sleep(1)
 
     @classmethod
@@ -155,8 +148,11 @@ class ZmqPublisher:
             cls.INSTANCE = ZmqPublisher()
         return cls.INSTANCE
 
-    def send(self, msg):
-        self.socket.send(msg)
+    def send_to_ws_server(self, msg):
+        self.socket.send("ws_server {}".format(msg))
+
+    def send_to_viewer(self, msg):
+        self.socket.send_string("viewer {}".format(msg))
 
 
 def authenticate():

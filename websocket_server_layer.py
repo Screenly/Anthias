@@ -14,12 +14,13 @@ class WebSocketTranslator(object):
     def __call__(self, environ, start_response):
         ws = environ['wsgi.websocket']
         socket = self.context.socket(zmq.SUB)
-        socket.setsockopt(zmq.SUBSCRIBE, "")
+        socket.setsockopt(zmq.SUBSCRIBE, "ws_server")
         socket.connect('inproc://queue')
         try:
             while True:
                 msg = socket.recv()
-                ws.send(msg)
+                topic, message = msg.split()
+                ws.send(message)
         except WebSocketError:
             ws.close()
 
@@ -33,7 +34,7 @@ class ScreenlyServerListener(Thread):
         socket_incoming = self.context.socket(zmq.SUB)
         socket_outgoing = self.context.socket(zmq.PUB)
 
-        socket_incoming.bind('tcp://127.0.0.1:10001')
+        socket_incoming.connect('tcp://127.0.0.1:10001')
         socket_outgoing.bind('inproc://queue')
 
         socket_incoming.setsockopt(zmq.SUBSCRIBE, "")

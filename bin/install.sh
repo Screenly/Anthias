@@ -29,6 +29,12 @@ if [ "$INSTALL" != 'y' ]; then
   exit 1
 fi
 
+dpkg -s network-manager > /dev/null 2>&1
+if [ "$?" = "1" ]; then
+  echo -e "\n\nIt looks like NetworkManager is not installed. Please install it by running 'sudo apt install -y network-manager' and then re-run the installation."
+  exit 1
+fi
+
 echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
 if [ "$DEV" != 'y'  ]; then
   BRANCH="production"
@@ -38,9 +44,9 @@ fi
 
 echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
 if [ "$UPGRADE" != 'y' ]; then
-  EXTRA_ARGS="--skip-tags enable-ssl,system-upgrade"
+  EXTRA_ARGS="--skip-tags enable-ssl,disable-nginx,system-upgrade"
 else
-  EXTRA_ARGS="--skip-tags enable-ssl"
+  EXTRA_ARGS="--skip-tags enable-ssl,disable-nginx"
 fi
 
 set -x
@@ -75,6 +81,8 @@ sudo find /usr/share/locale -type f ! -name 'en' ! -name 'de*' ! -name 'es*' ! -
 sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' -exec rm -r {} \;
 
 cd ~/screenly && git rev-parse HEAD > ~/.screenly/latest_screenly_sha
+
+if test -f ~/.screenly/wifi_set; then  rm ~/.screenly/wifi_set; fi
 
 set +x
 echo "Installation completed."

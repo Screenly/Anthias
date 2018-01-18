@@ -1,0 +1,71 @@
+---
+# Enable Nginx
+- name: Check screenly.conf
+  command: cat /home/pi/.screenly/screenly.conf
+  register: config
+
+- set_fact: no_ssl="{{config.stdout.find('use_ssl = True') == -1}}"
+
+- name: Installs Nginx
+  apt:
+    name: nginx-light
+    state: present
+    update_cache: yes
+
+- name: Cleans up default config
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+
+- name: Installs nginx config
+  copy:
+    src: nginx.conf
+    dest:  /etc/nginx/sites-enabled/screenly.conf
+    mode: 644
+    owner: root
+    group: root
+    force: no
+
+- name: Modifies screenly-web service to only listen on localhost
+  lineinfile:
+    regexp: '^.*LISTEN.*'
+    state: absent
+    dest: /etc/systemd/system/screenly-web.service
+  when: no_ssl
+
+# Disable Nginx
+- name: Remove Nginx
+  apt:
+    name: nginx-light
+    state: absent
+    update_cache: yes
+  tags:
+    - disable-nginx
+
+- name: Remove nginx config
+  file:
+    path:  /etc/nginx/sites-enabled/screenly.conf
+    state: absent
+  tags:
+    - disable-nginx
+
+- name: Turns off the ssl mode
+  replace:
+    replace: 'use_ssl = False'
+    regexp: '^.*use_ssl.*'
+    dest: /home/pi/.screenly/screenly.conf
+  tags:
+    - disable-nginx
+
+- name: Modifies screenly-web service to listen on default gateway
+  lineinfile:
+    insertafter: '^\[Service\]'
+    regexp: '^\[Service\]*;'
+    line: Environment=LISTEN=0.0.0.0
+    dest: /etc/systemd/system/screenly-web.service
+  notify:
+    - reload systemctl
+    - restart-screenly-websocket_server_layer
+    - restart-screenly-server
+  tags:
+    - disable-nginx

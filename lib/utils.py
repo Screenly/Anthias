@@ -1,21 +1,23 @@
-import requests
-import json
-import re
 import certifi
+import db
+import json
+import os
+import pytz
+import re
+import requests
+
+from datetime import datetime, timedelta
+from distutils.util import strtobool
 from netifaces import ifaddresses
+from os import getenv, path, utime
+from platform import machine
+from settings import settings, ZmqPublisher
 from sh import grep, netstat
 from subprocess import check_output, call
-from urlparse import urlparse
-from datetime import timedelta
-from settings import settings, ZmqPublisher
-from assets_helper import update
-from datetime import datetime
-from os import getenv, path
-import db
-import pytz
-from platform import machine
-
 from threading import Thread
+from urlparse import urlparse
+
+from assets_helper import update
 
 arch = machine()
 
@@ -37,6 +39,22 @@ if machine() in ['x86', 'x86_64']:
         pass
 
 
+def string_to_bool(string):
+    return bool(strtobool(str(string)))
+
+
+def touch(path):
+    with open(path, 'a'):
+        utime(path, None)
+
+
+def is_ci():
+    """
+    Returns True when run on Travis.
+    """
+    return string_to_bool(os.getenv('CI', False))
+
+
 def validate_url(string):
     """Simple URL verification.
     >>> validate_url("hello")
@@ -56,41 +74,9 @@ def validate_url(string):
 
 
 def get_node_ip():
-    if arch in ('armv6l', 'armv7l') and getenv("RESIN_UUID") is None:
-        interface = None
-        for n in range(10):
-            iface = 'eth{}'.format(n)
-            try:
-                file_carrier = open('/sys/class/net/' + iface + '/carrier')
-                file_operstate = open('/sys/class/net/' + iface + '/operstate')
-
-                if "1" in file_carrier.read() and "up" in file_operstate.read():
-                    interface = iface
-                    break
-            except IOError:
-                continue
-
-        if not interface:
-            file_interfaces = open('/etc/network/interfaces')
-            for n in range(10):
-                iface = 'wlan{}'.format(n)
-                if iface in file_interfaces.read():
-                    interface = iface
-                    break
-
-        if not interface:
-            raise Exception("No active network connection found.")
-
-        try:
-            my_ip = ifaddresses(interface)[2][0]['addr']
-            return my_ip
-        except KeyError:
-            raise Exception("Unable to retrieve an IP.")
-
-    else:
         """Returns the node's IP, for the interface
         that is being used as the default gateway.
-        This shuld work on both MacOS X and Linux."""
+        This should work on both MacOS X and Linux."""
         try:
             default_interface = grep(netstat('-nr'), '-e', '^default', '-e' '^0.0.0.0').split()[-1]
             my_ip = ifaddresses(default_interface)[2][0]['addr']
@@ -221,11 +207,10 @@ class YoutubeDownloadThread(Thread):
     def run(self):
         publisher = ZmqPublisher.get_instance()
         call(['youtube-dl', '-f', 'mp4', '-o', self.location, self.uri])
-        publisher.send("video are downloaded")
         with db.conn(settings['database']) as conn:
             update(conn, self.asset_id, {'asset_id': self.asset_id, 'is_processing': 0})
 
-        publisher.send(self.asset_id)
+        publisher.send_to_ws_server(self.asset_id)
 
 
 def template_handle_unicode(value):
