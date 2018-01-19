@@ -22,6 +22,7 @@ echo "Cleaning up logfiles..."
 for i in \
   "$ROOT/tmp/*" \
   "$ROOT/var/lib/dhcp/*" \
+  "$ROOT/home/pi/.screenly/wifi_set" \
   "$ROOT/home/pi/omxplayer.log" \
   "$ROOT/home/pi/.bash_history" \
   "$ROOT/home/pi/.viminfo" \
