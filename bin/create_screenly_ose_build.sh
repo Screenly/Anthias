@@ -3,7 +3,7 @@
 ROOT="/mnt/sdcard/screenly-root"
 BOOT="/mnt/sdcard/screenly-boot"
 SD_DEV=${SD_DEV:=/dev/sdb}
-DESTINATION="~/screenly-build"
+DESTINATION="$HOME/screenly-build"
 DATE=$(date +"%Y-%m-%d")
 
 echo -e "Make sure you run\n\tapt-get clean\nbefore making the build"
