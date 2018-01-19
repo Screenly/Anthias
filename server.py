@@ -13,7 +13,8 @@ import json
 from mimetypes import guess_type
 from os import getenv, makedirs, mkdir, path, remove, rename, statvfs
 from pwgen import pwgen
-from sh import git, sudo
+import sh
+from sh import git
 from subprocess import check_output
 from time import sleep
 import traceback
@@ -846,12 +847,12 @@ def splash_page():
 @app.route('/hotspot')
 def hotspot_page():
     if LISTEN == '127.0.0.1':
-        sudo('nginx', '-s', 'stop')
+        sh.sudo('nginx', '-s', 'stop')
 
     ssid = "ScreenlyOSE-{}".format(pwgen(4, symbols=False))
     ssid_password = pwgen(8, symbols=False)
 
-    wifi_connect = sudo('wifi-connect', '-s', ssid, '-p', ssid_password, _bg=True, _err_to_out=True)
+    wifi_connect = sh.sudo('wifi-connect', '-s', ssid, '-p', ssid_password, _bg=True, _err_to_out=True)
 
     while 'Starting HTTP server' not in wifi_connect.process.stdout:
         sleep(1)
