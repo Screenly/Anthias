@@ -212,8 +212,8 @@ def load_browser(url=None):
     browser_send(uzbl_rc)
 
 def browser_send(command, cb=lambda _: True):
-    logging.info('Reached line 211: browser_send()')
-    if not (browser is None):
+    global browser
+    if not browser.process.exit_code:
         logging.info('Browser is alive')
         while not browser.process._pipe_queue.empty():  # flush stdout
             browser.next()
@@ -271,7 +271,7 @@ def browser_clear(force=False):
 def browser_url(url, cb=lambda _: True, force=False):
     global current_browser_url
     if url == current_browser_url and not force:
-        if not (browser is None):
+        if not browser.process.exit_code:
             logging.debug('Already showing %s, keeping it.', current_browser_url)
         else:
             logging.info('browser found dead, restarting')
