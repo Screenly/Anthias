@@ -1,18 +1,22 @@
-from requests import get as requests_get
+from requests import get as requests_get, exceptions
 import logging
 
 
-def remote_branch_exist(branch):
+def remote_branch_available(branch):
     if not branch:
         logging.error('No branch specified. Exiting.')
         return
 
-    resp = requests_get(
-        'https://api.github.com/repos/screenly/screenly-ose/branches',
-        headers={
-            'Accept': 'application/vnd.github.loki-preview+json',
-        },
-    )
+    try:
+        resp = requests_get(
+            'https://api.github.com/repos/screenly/screenly-ose/branches',
+            headers={
+                'Accept': 'application/vnd.github.loki-preview+json',
+            },
+        )
+    except exceptions.ConnectionError:
+        logging.error('No internet connection.')
+        return
 
     if not resp.ok:
         logging.error('Invalid response from Github: {}'.format(resp.content))
