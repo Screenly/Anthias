@@ -7,7 +7,7 @@ from platform import machine
 from random import shuffle
 from threading import Thread
 
-from mixpanel import Mixpanel
+from mixpanel import Mixpanel, MixpanelException
 from netifaces import gateways
 from requests import get as req_get
 from signal import signal, SIGUSR1
@@ -20,7 +20,7 @@ import zmq
 
 from settings import settings, LISTEN, PORT
 import html_templates
-from lib.github import fetch_remote_hash, remote_branch_exist
+from lib.github import fetch_remote_hash, remote_branch_available
 from lib.utils import url_fails, touch, is_ci
 from lib import db
 from lib import assets_helper
@@ -338,12 +338,15 @@ def check_update():
 
         if not settings['analytics_opt_out'] and not is_ci():
             mp = Mixpanel('d18d9143e39ffdb2a4ee9dcc5ed16c56')
-            mp.track(device_id, 'Version', {
-                'Branch': str(git_branch),
-                'Hash': str(git_hash),
-            })
+            try:
+                mp.track(device_id, 'Version', {
+                    'Branch': str(git_branch),
+                    'Hash': str(git_hash),
+                })
+            except MixpanelException:
+                pass
 
-        if remote_branch_exist(git_branch):
+        if remote_branch_available(git_branch):
             latest_sha = fetch_remote_hash(git_branch)
 
             if latest_sha:
