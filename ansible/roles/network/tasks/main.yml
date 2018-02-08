@@ -67,9 +67,9 @@
     group: pi
   when: ansible_distribution_major_version|int >= 9 and not resin_wifi_version_file_exist
 
-- name: Copy "public" folder
+- name: Copy "ui" folder
   copy:
-    src: /home/pi/public/
+    src: /home/pi/ui/
     dest: /usr/local/share/wifi-connect/ui
     mode: 0755
   when: ansible_distribution_major_version|int >= 9 and not resin_wifi_version_file_exist
@@ -93,6 +93,6 @@
     path: "/home/pi/{{ item }}"
   with_items:
     - wifi-connect
-    - public
+    - ui
     - resin-wifi-connect.tar.gz
   when: ansible_distribution_major_version|int >= 9 and not resin_wifi_version_file_exist
