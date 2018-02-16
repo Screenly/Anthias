@@ -3,4 +3,7 @@
 # Make sure the SSH host keys have been generated
 ssh-keygen -A
 
+# Disable wifi power management
+iwconfig wlan0 power off
+
 exit 0
