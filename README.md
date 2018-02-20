@@ -3,6 +3,12 @@
 
 # Screenly OSE - Digital Signage for the Raspberry Pi
 
+## Disk images
+
+The recommended installation method is to grab the latest disk image from [here](https://github.com/Screenly/screenly-ose/releases).
+
+## Installing on Raspbian
+
 The tl;dr for installing Screenly OSE on [Raspbian Lite](https://www.raspberrypi.org/downloads/raspbian/) is:
 
 ```
@@ -11,7 +17,7 @@ $ bash <(curl -sL https://www.screenly.io/install-ose.sh)
 
 (The installation will take 15-20 minutes or so depending on your connectivity and the speed of your SD card.)
 
-To learn more about Screenly, please visit the official website at [Screenly.io](http://www.screenly.io). On the official site, you'll find the complete installation instructions and disk images.
+To learn more about Screenly, please visit the official website at [Screenly.io](http://www.screenly.io).
 
 [![An introduction to digital signage with Screenly OSE](http://img.youtube.com/vi/FQte5yP0azE/0.jpg)](http://www.youtube.com/watch?v=FQte5yP0azE)
 
