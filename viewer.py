@@ -345,6 +345,8 @@ def check_update():
                 })
             except MixpanelException:
                 pass
+            except AttributeError:
+                pass
 
         if remote_branch_available(git_branch):
             latest_sha = fetch_remote_hash(git_branch)
