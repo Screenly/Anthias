@@ -120,6 +120,24 @@
             </div>
 
             <div class="control-group">
+              <label class="control-label">Enable offline mode</label>
+              <div class="controls">
+                <label id="enable_offline_mode" class="checkbox toggle well">
+                  {% if context.enable_offline_mode %}
+                    <input name="enable_offline_mode" checked="checked" type="checkbox" />
+                  {% else %}
+                    <input name="enable_offline_mode" type="checkbox" />
+                  {% endif %}
+                  <p>
+                    <span class="on">On</span>
+                    <span class="off">Off</span>
+                  </p>
+                  <a class="btn btn-primary slide-button"></a>
+                </label>
+              </div>
+            </div>
+
+            <div class="control-group">
               <label class="control-label">Audio output</label>
               <div class="controls">
                 <select class="span2" name="audio_output">

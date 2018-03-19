@@ -426,18 +426,14 @@ def setup():
 def main():
     setup()
 
-    if not path.isfile(path.join(HOME, '.screenly/wifi_set')):
-        if not gateways().get('default'):
-            url = 'http://{0}:{1}/hotspot'.format(LISTEN, PORT)
-            load_browser(url=url)
+    if not gateways().get('default') and not settings['enable_offline_mode']:
+        url = 'http://{0}:{1}/hotspot'.format(LISTEN, PORT)
+        load_browser(url=url)
 
-            while not gateways().get('default'):
-                sleep(2)
-            if LISTEN == '127.0.0.1':
-                sh.sudo('nginx')
-
-        with open(path.join(HOME, '.screenly/wifi_set'), 'a'):
-            pass
+        while not gateways().get('default'):
+            sleep(2)
+        if LISTEN == '127.0.0.1':
+            sh.sudo('nginx')
 
     url = 'http://{0}:{1}/splash_page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
     browser_url(url=url)
