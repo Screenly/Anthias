@@ -1,0 +1,17 @@
+[Unit]
+Description=Wifi Connect
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+WorkingDirectory=/home/pi/screenly
+User=pi
+Type=oneshot
+
+ConditionPathExists=!/home/pi/.screenly/initialized
+
+ExecStart=/usr/bin/python /home/pi/screenly/start_resin_wifi.py
+ExecStartPost=/usr/bin/touch /home/pi/.screenly/initialized
+
+[Install]
+WantedBy=multi-user.target

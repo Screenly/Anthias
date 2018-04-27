@@ -96,3 +96,11 @@
     - ui
     - resin-wifi-connect.tar.gz
   when: ansible_distribution_major_version|int >= 9 and not resin_wifi_version_file_exist
+
+- name: Copy wifi-connect systemd unit
+  copy:
+    src: "wifi-connect.service"
+    dest: "/etc/systemd/system/wifi-connect.service"
+
+- name: Enable wifi-connect systemd service
+  command: systemctl enable wifi-connect.service chdir=/etc/systemd/system

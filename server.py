@@ -640,6 +640,26 @@ class Recover(Resource):
         return "Recovery successful."
 
 
+class ResetWifiConfig(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'responses': {
+            '204': {
+                'description': 'Deleted'
+            }
+        }
+    })
+    def get(self):
+        home = getenv('HOME')
+        file_path = path.join(home, '.screenly/initialized')
+
+        if path.isfile(file_path):
+            remove(file_path)
+
+        return '', 204
+
+
 class Info(Resource):
     method_decorators = [api_response, auth_basic]
 
@@ -703,6 +723,7 @@ api.add_resource(Backup, '/api/v1/backup')
 api.add_resource(Recover, '/api/v1/recover')
 api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 api.add_resource(Info, '/api/v1/info')
+api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
 
 try:
     my_ip = get_node_ip()
@@ -842,22 +863,6 @@ def splash_page():
 
     msg = url if url else error_msg
     return template('splash_page.html', ip_lookup=ip_lookup, msg=msg)
-
-
-@app.route('/hotspot')
-def hotspot_page():
-    if LISTEN == '127.0.0.1':
-        sh.sudo('nginx', '-s', 'stop')
-
-    ssid = "ScreenlyOSE-{}".format(pwgen(4, symbols=False))
-    ssid_password = pwgen(8, symbols=False)
-
-    wifi_connect = sh.sudo('wifi-connect', '-s', ssid, '-p', ssid_password, _bg=True, _err_to_out=True)
-
-    while 'Starting HTTP server' not in wifi_connect.process.stdout:
-        sleep(1)
-
-    return template('hotspot.html', network=ssid, ssid_pswd=ssid_password, address='screenly.io/wifi')
 
 
 @app.errorhandler(403)

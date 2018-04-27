@@ -64,3 +64,11 @@ $().ready ->
       $('.progress').hide()
       $('#btn-upload').show()
       $('#btn-backup').show()
+
+  $('#btn-reset').click (e) ->
+    $.get '/api/v1/reset_wifi'
+    .done  (e) ->
+      $('#request-error .alert').show()
+      $('#request-error .alert').addClass 'alert-success'
+      $('#request-error .alert').removeClass 'alert-error'
+      ($ '#request-error .msg').text 'Reset was successful. Please reboot the device.'
