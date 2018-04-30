@@ -73,11 +73,11 @@ def main():
 
 
 def md5sum(filename, blocksize=65536):
-    hash = md5.new()
+    h = md5.new()
     with open(filename, "rb") as f:
         for block in iter(lambda: f.read(blocksize), b""):
-            hash.update(block)
-    return hash.hexdigest()
+            h.update(block)
+    return h.hexdigest()
 ####
 
 
