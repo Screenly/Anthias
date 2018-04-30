@@ -9,9 +9,7 @@ from os import link, path
 from lib.utils   import get_video_duration
 
 from lib import assets_helper
-from lib import backup_helper
 from lib import db
-from lib import diagnostics
 from lib import queries
 
 from settings import settings
