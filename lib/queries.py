@@ -6,6 +6,6 @@ exists_table = "SELECT name FROM sqlite_master WHERE type='table' AND name='asse
 
 read_all = lambda keys: 'select ' + comma(keys) + ' from assets order by play_order'
 read = lambda keys: 'select ' + comma(keys) + ' from assets where asset_id=?'
-create = lambda keys: 'insert into assets (' + comma(keys) + ') values (' + comma(['?'] * len(keys)) + ')'
+create = lambda keys: 'insert or replace into assets (' + comma(keys) + ') values (' + comma(['?'] * len(keys)) + ')'
 remove = 'delete from assets where asset_id=?'
 update = lambda keys: 'update assets set ' + quest(keys) + ' where asset_id=?'
