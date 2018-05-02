@@ -16,5 +16,6 @@
   * Run `sudo chmod +x /etc/init.d/resize2fs_once`
   * Run `sudo systemctl enable resize2fs_once`
   * Add `init=/usr/lib/raspi-config/init_resize.sh` in `/boot/cmdline.txt`
+  * Update `/boot/config.txt` as per #693.
   * Shut down the system
  * Create the disk image by running `SD_DEV=/dev/sdc sudo -E ./create_screenly_ose_build.sh` on a Linux machine (where `/dev/sdc` is your SD card)
