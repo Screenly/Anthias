@@ -24,7 +24,6 @@
     mode: 644
     owner: root
     group: root
-    force: no
 
 - name: Modifies screenly-web service to only listen on localhost
   lineinfile:
@@ -32,40 +31,3 @@
     state: absent
     dest: /etc/systemd/system/screenly-web.service
   when: no_ssl
-
-# Disable Nginx
-- name: Remove Nginx
-  apt:
-    name: nginx-light
-    state: absent
-    update_cache: yes
-  tags:
-    - disable-nginx
-
-- name: Remove nginx config
-  file:
-    path:  /etc/nginx/sites-enabled/screenly.conf
-    state: absent
-  tags:
-    - disable-nginx
-
-- name: Turns off the ssl mode
-  replace:
-    replace: 'use_ssl = False'
-    regexp: '^.*use_ssl.*'
-    dest: /home/pi/.screenly/screenly.conf
-  tags:
-    - disable-nginx
-
-- name: Modifies screenly-web service to listen on default gateway
-  lineinfile:
-    insertafter: '^\[Service\]'
-    regexp: '^\[Service\]*;'
-    line: Environment=LISTEN=0.0.0.0
-    dest: /etc/systemd/system/screenly-web.service
-  notify:
-    - reload systemctl
-    - restart-screenly-websocket_server_layer
-    - restart-screenly-server
-  tags:
-    - disable-nginx

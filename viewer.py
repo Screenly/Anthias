@@ -7,7 +7,7 @@ from platform import machine
 from random import shuffle
 from threading import Thread
 
-from mixpanel import Mixpanel
+from mixpanel import Mixpanel, MixpanelException
 from netifaces import gateways
 from requests import get as req_get
 from signal import signal, SIGUSR1
@@ -20,7 +20,7 @@ import zmq
 
 from settings import settings, LISTEN, PORT
 import html_templates
-from lib.github import fetch_remote_hash, remote_branch_exist
+from lib.github import fetch_remote_hash, remote_branch_available
 from lib.utils import url_fails, touch, is_ci
 from lib import db
 from lib import assets_helper
@@ -34,6 +34,7 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 SPLASH_DELAY = 60  # secs
 EMPTY_PL_DELAY = 5  # secs
 
+INITIALIZED_FILE = '/.screenly/initialized'
 BLACK_PAGE = '/tmp/screenly_html/black_page.html'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 SCREENLY_HTML = '/tmp/screenly_html/'
@@ -338,12 +339,17 @@ def check_update():
 
         if not settings['analytics_opt_out'] and not is_ci():
             mp = Mixpanel('d18d9143e39ffdb2a4ee9dcc5ed16c56')
-            mp.track(device_id, 'Version', {
-                'Branch': str(git_branch),
-                'Hash': str(git_hash),
-            })
+            try:
+                mp.track(device_id, 'Version', {
+                    'Branch': str(git_branch),
+                    'Hash': str(git_hash),
+                })
+            except MixpanelException:
+                pass
+            except AttributeError:
+                pass
 
-        if remote_branch_exist(git_branch):
+        if remote_branch_available(git_branch):
             latest_sha = fetch_remote_hash(git_branch)
 
             if latest_sha:
@@ -421,18 +427,12 @@ def setup():
 def main():
     setup()
 
-    if not path.isfile(path.join(HOME, '.screenly/wifi_set')):
-        if not gateways().get('default'):
-            url = 'http://{0}:{1}/hotspot'.format(LISTEN, PORT)
-            load_browser(url=url)
+    if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
+        url = 'http://{0}/hotspot'.format(LISTEN)
+        load_browser(url=url)
 
-            while not gateways().get('default'):
-                sleep(2)
-            if LISTEN == '127.0.0.1':
-                sh.sudo('nginx')
-
-        with open(path.join(HOME, '.screenly/wifi_set'), 'a'):
-            pass
+        while not path.isfile(HOME + INITIALIZED_FILE):
+            sleep(1)
 
     url = 'http://{0}:{1}/splash_page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
     browser_url(url=url)

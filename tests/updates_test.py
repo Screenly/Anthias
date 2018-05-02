@@ -49,9 +49,9 @@ class UpdateTest(unittest.TestCase):
             self.assertEqual(f.readline(), fancy_sha)
 
     @patch('viewer.req_get', side_effect=mocked_req_get)
-    @patch('viewer.remote_branch_exist', side_effect=lambda _: True)
+    @patch('viewer.remote_branch_available', side_effect=lambda _: True)
     @patch('viewer.fetch_remote_hash', side_effect=lambda _: 'master')
-    def test_if_sha_file_is_empty__check_update__should_return_true(self, req_get, remote_branch_exist, fetch_remote_hash):
+    def test_if_sha_file_is_empty__check_update__should_return_true(self, req_get, remote_branch_available, fetch_remote_hash):
         with open(self.sha_file, 'w+') as f:
             pass
 
