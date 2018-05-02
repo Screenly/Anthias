@@ -17,7 +17,7 @@
     <script src="/static/js/jquery-ui-1.10.1.custom.min.js"></script>
     <script src="/static/js/jquery.fileupload.js"></script> <!-- needs jqueryui.widget -->
 
-    <script src="/static/js/backup.js"></script>
+    <script src="/static/js/settings.js"></script>
   </head>
 
   <body>
@@ -120,24 +120,6 @@
             </div>
 
             <div class="control-group">
-              <label class="control-label">Enable offline mode</label>
-              <div class="controls">
-                <label id="enable_offline_mode" class="checkbox toggle well">
-                  {% if context.enable_offline_mode %}
-                    <input name="enable_offline_mode" checked="checked" type="checkbox" />
-                  {% else %}
-                    <input name="enable_offline_mode" type="checkbox" />
-                  {% endif %}
-                  <p>
-                    <span class="on">On</span>
-                    <span class="off">Off</span>
-                  </p>
-                  <a class="btn btn-primary slide-button"></a>
-                </label>
-              </div>
-            </div>
-
-            <div class="control-group">
               <label class="control-label">Audio output</label>
               <div class="controls">
                 <select class="span2" name="audio_output">
@@ -209,15 +191,27 @@
           </form>
         </div>
 
+        <div id="wifi-section" class="span12">
+          <h1 class="page-header">
+            Reset wifi config
+          </h1>
+          <p>Run it, and if the next boot does not have a network connection, you will be prompted to select a WiFi network. <br><b>Warning:</b> after pressing, a reboot is required. Web interface will not be available until reboot.</p>
+          <div class="form-actions">
+            <button id="btn-reset" class="btn btn-primary" type="button">Re-run network detection</button>
+            </div>
+        </div>
+
         <div id="backup-section" class="span12">
           <h1 class="page-header">
             Backup
           </h1>
-          <input name="backup_upload" style="display:none" type="file">
-          <button id="btn-upload" class="btn btn-primary" type="button">Upload and Recover</button>
-          <button id="btn-backup" class="btn">Get backup</button>
-          <div class="progress progress-striped active" style="display:none">
-            <div class="bar"></div>
+          <div class="form-actions">
+            <input name="backup_upload" style="display:none" type="file">
+            <button id="btn-upload" class="btn btn-primary" type="button">Upload and Recover</button>
+            <button id="btn-backup" class="btn">Get backup</button>
+            <div class="progress progress-striped active" style="display:none">
+              <div class="bar"></div>
+            </div>
           </div>
         </div>
       </div>

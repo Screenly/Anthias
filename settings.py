@@ -31,8 +31,7 @@ DEFAULTS = {
         'default_duration': '10',
         'default_streaming_duration': '300',
         'debug_logging': False,
-        'verify_ssl': True,
-        'enable_offline_mode': False
+        'verify_ssl': True
     },
     'auth': {
         'user': '',
