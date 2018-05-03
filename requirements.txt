@@ -23,7 +23,7 @@ pytz==2012d
 pyzmq==16.0.2
 requests[security]==2.10.0
 sh==1.08
-six==1.8.0
+six==1.11.0
 uptime==2.0.2
 werkzeug==0.10.4
 wsgiref==0.1.2
