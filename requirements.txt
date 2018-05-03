@@ -1,5 +1,5 @@
 Mako==0.7.3
-MarkupSafe==0.15
+MarkupSafe==1.0
 ansible==2.1.0.0
 certifi==2015.04.28
 cffi==1.7.0
