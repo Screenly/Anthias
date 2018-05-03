@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -xe
 
 ROOT="/mnt/sdcard/screenly-root"
 BOOT="/mnt/sdcard/screenly-boot"
@@ -44,12 +44,6 @@ sudo rm -f "$ROOT/var/swap"
 # Adds build date for future references
 echo "$DATE" | sudo tee "$ROOT/etc/screenly_build"
 
-# Updates Broadcom firmware
-for i in brcmfmac43430-sdio.txt brcmfmac43430-sdio.bin; do
-  echo "Fetching $i from upstream..."
-  wget -O "$ROOT/lib/firmware/brcm/$i" "https://github.com/RPi-Distro/firmware-nonfree/raw/master/brcm80211/brcm/$i"
-done
-
 echo "Removing SSH-keys.."
 sudo find "$ROOT/etc/ssh/" -type f -iname *pub -delete
 sudo find "$ROOT/etc/ssh/" -type f -iname *key -delete
@@ -58,10 +52,13 @@ echo "Removing all log-files in /var/log"
 sudo find "$ROOT/var/log" -type f -delete
 
 echo "Filling up disks with zeros..."
+set +e
 sudo dd if=/dev/zero of="$ROOT/zeros" bs=1M
+set -e
 sudo rm -f "$ROOT/zeros"
-
+set +e
 sudo dd if=/dev/zero of="$BOOT/zeros" bs=1M
+set -e
 sudo rm -f "$BOOT/zeros"
 
 echo "Umounting card..."
