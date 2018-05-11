@@ -1,13 +1,9 @@
-- name: Ensure folders exist
+- name: Ensure folder exist
   file:
-    path: "/home/pi/{{ item }}"
+    path: "/home/pi/.screenly"
     state: directory
     owner: pi
     group: pi
-  with_items:
-    - .screenly
-    - .config
-    - .config/uzbl
 
 - name: Copy Screenly default config
   copy:
@@ -22,20 +18,6 @@
     regexp: '^.*listen.*'
     state: absent
     dest: /home/pi/.screenly/screenly.conf
-
-- name: Copy in GTK config
-  copy:
-    owner: pi
-    group: pi
-    src: gtkrc-2.0
-    dest: /home/pi/.gtkrc-2.0
-
-- name: Copy in UZBL config
-  copy:
-    owner: pi
-    group: pi
-    src: uzbl-config
-    dest: /home/pi/.config/uzbl/config-screenly
 
 - name: Install pip dependencies
   pip: requirements=/home/pi/screenly/requirements.txt
@@ -85,5 +67,39 @@
   with_items: "{{ screenly_systemd_units }}"
 
 - name: Enable screenly systemd services
-  command: systemctl enable {{ item }} chdir=/etc/systemd/system
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
   with_items: "{{ screenly_systemd_units }}"
+
+- name: Disable deprecated systemd services
+  systemd:
+    name: "{{ item }}"
+    enabled: no
+  with_items:
+    - screenly-viewer.service
+    - matchbox.service
+    - X.service
+
+- name: Remove deprecated systemd units
+  file:
+    path: "/etc/systemd/system/{{ item }}"
+    state: absent
+  with_items:
+    - screenly-viewer.service
+    - matchbox.service
+    - X.service
+
+- name: Create screenly-viewer container
+  docker_container:
+    name: screenly-viewer
+    image: amolodykh/screenly-viewer
+    pull: true
+    state: present
+    restart_policy: unless-stopped
+    network_mode: host
+    privileged: yes
+    volumes:
+      - /home/pi/screenly:/home/pi/screenly
+      - /home/pi/.screenly:/home/pi/.screenly
+      - /home/pi/screenly_assets:/home/pi/screenly_assets

@@ -1,9 +1,9 @@
-Mako==0.7.3
+ansible==2.5.2
 MarkupSafe==1.0
-ansible==2.1.0.0
 certifi==2015.04.28
 cffi==1.7.0
 configparser==3.5.0
+docker-py==1.10.6
 flask-cors==3.0.3
 flask-restful-swagger-2==0.35
 flask-swagger-ui==3.0.12
@@ -14,7 +14,6 @@ gevent-websocket==0.10.1
 gevent==1.2.2
 gunicorn==19.4.5
 hurry.filesize==0.9
-mixpanel==4.3.2
 netifaces==0.10.4
 pwgen==0.8.2.post0
 pyasn1==0.1.8

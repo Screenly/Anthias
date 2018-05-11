@@ -65,7 +65,18 @@ sudo apt-get update
 sudo apt-get purge -y python-setuptools python-pip python-pyasn1
 sudo apt-get install -y python-dev git-core libffi-dev libssl-dev
 curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
-sudo pip install ansible==2.1.0.0
+
+docker -v  > /dev/null
+if [ "$?" != '0' ]; then
+  sudo apt-get install -y apt-transport-https ca-certificates curl
+  curl -fsSL "https://download.docker.com/linux/raspbian/gpg" | apt-key add -qq - >/dev/null
+  echo "deb [arch=armhf] https://download.docker.com/linux/raspbian stretch edge" | sudo tee /etc/apt/sources.list.d/docker.list  > /dev/null
+  sudo apt-get update
+  sudo apt-get install -y -qq --no-install-recommends docker-ce
+  sudo usermod -aG docker pi
+fi
+
+sudo pip install ansible==2.5.2
 
 ansible localhost -m git -a "repo=${1:-https://github.com/screenly/screenly-ose.git} dest=/home/pi/screenly version=$BRANCH"
 cd /home/pi/screenly/ansible

@@ -12,11 +12,8 @@ from hurry.filesize import size
 import json
 from mimetypes import guess_type
 from os import getenv, makedirs, mkdir, path, remove, rename, statvfs
-from pwgen import pwgen
-import sh
 from sh import git
 from subprocess import check_output
-from time import sleep
 import traceback
 import uuid
 
