@@ -1,0 +1,23 @@
+FROM raspbian/stretch
+MAINTAINER Anton Molodykh <amolodykh@screenly.io>
+
+RUN apt-get update && \
+    apt-get -y install \
+        build-essential \
+        curl \
+        libffi-dev \
+        python-dev && \
+    apt-get clean
+
+# Install Python requirements
+ADD requirements.websocket_server.txt /tmp/requirements.txt
+RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
+    pip install -r /tmp/requirements.txt
+
+# Create runtime user
+RUN useradd pi
+
+USER pi
+WORKDIR /home/pi/screenly
+
+CMD python websocket_server_layer.py

@@ -1,9 +1,12 @@
-- name: Ensure folder exist
+- name: Ensure folders exist
   file:
-    path: "/home/pi/.screenly"
+    path: "/home/pi/{{ item }}"
     state: directory
     owner: pi
     group: pi
+  with_items:
+    - .screenly
+    - screenly_assets
 
 - name: Copy Screenly default config
   copy:
@@ -60,35 +63,39 @@
     owner: root
     group: root
 
-- name: Copy screenly systemd units
-  copy:
-    src: "{{ item }}"
-    dest: "/etc/systemd/system/{{ item }}"
-  with_items: "{{ screenly_systemd_units }}"
+- name: Check if deprecated systemd services exists
+  stat:
+    path: /etc/systemd/system/X.service
+  register: X_service
 
-- name: Enable screenly systemd services
-  systemd:
-    name: "{{ item }}"
-    enabled: yes
-  with_items: "{{ screenly_systemd_units }}"
+- set_fact: X_service_exist="{{X_service.stat.exists}}"
 
 - name: Disable deprecated systemd services
   systemd:
     name: "{{ item }}"
     enabled: no
-  with_items:
-    - screenly-viewer.service
-    - matchbox.service
-    - X.service
+  with_items: "{{ screenly_systemd_units }}"
+  when: X_service_exist
 
 - name: Remove deprecated systemd units
   file:
     path: "/etc/systemd/system/{{ item }}"
     state: absent
-  with_items:
-    - screenly-viewer.service
-    - matchbox.service
-    - X.service
+  with_items: "{{ screenly_systemd_units }}"
+
+- name: Create screenly-server container
+  docker_container:
+    name: screenly-server
+    image: amolodykh/screenly-server
+    pull: true
+    state: present
+    recreate: true
+    restart_policy: unless-stopped
+    network_mode: host
+    volumes:
+      - /home/pi/screenly:/home/pi/screenly
+      - /home/pi/.screenly:/home/pi/.screenly
+      - /home/pi/screenly_assets:/home/pi/screenly_assets
 
 - name: Create screenly-viewer container
   docker_container:
@@ -96,6 +103,7 @@
     image: amolodykh/screenly-viewer
     pull: true
     state: present
+    recreate: true
     restart_policy: unless-stopped
     network_mode: host
     privileged: yes
@@ -103,3 +111,16 @@
       - /home/pi/screenly:/home/pi/screenly
       - /home/pi/.screenly:/home/pi/.screenly
       - /home/pi/screenly_assets:/home/pi/screenly_assets
+
+- name: Create screenly-websocket-server container
+  docker_container:
+    name: screenly-websocket-server
+    image: amolodykh/screenly-websocket-server
+    pull: true
+    state: present
+    recreate: true
+    restart_policy: unless-stopped
+    network_mode: host
+    volumes:
+      - /home/pi/screenly:/home/pi/screenly
+      - /home/pi/.screenly:/home/pi/.screenly

@@ -69,10 +69,10 @@ curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 docker -v  > /dev/null
 if [ "$?" != '0' ]; then
   sudo apt-get install -y apt-transport-https ca-certificates curl
-  curl -fsSL "https://download.docker.com/linux/raspbian/gpg" | apt-key add -qq - >/dev/null
+  curl -fsSL "https://download.docker.com/linux/raspbian/gpg" | sudo apt-key add -qq - >/dev/null
   echo "deb [arch=armhf] https://download.docker.com/linux/raspbian stretch edge" | sudo tee /etc/apt/sources.list.d/docker.list  > /dev/null
   sudo apt-get update
-  sudo apt-get install -y -qq --no-install-recommends docker-ce
+  sudo apt-get install -y --no-install-recommends docker-ce
   sudo usermod -aG docker pi
 fi
 
@@ -92,8 +92,6 @@ sudo find /usr/share/locale -type f ! -name 'en' ! -name 'de*' ! -name 'es*' ! -
 sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' -exec rm -r {} \;
 
 cd ~/screenly && git rev-parse HEAD > ~/.screenly/latest_screenly_sha
-
-if test -f ~/.screenly/wifi_set; then  rm ~/.screenly/wifi_set; fi
 
 set +x
 echo "Installation completed."

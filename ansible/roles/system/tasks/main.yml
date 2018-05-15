@@ -151,13 +151,9 @@
     - libffi-dev
     - libssl-dev
     - python-dev
+    - python-netifaces
     - rpi-update
-    - sqlite3
     - systemd
-
-- name: Install systemd-sysv on Wheezy
-  command: bash -c 'echo "Yes, do as I say!" | apt-get install -y --force-yes systemd-sysv'
-  when: ansible_distribution_release == "wheezy"
 
 - name: Remove deprecated apt dependencies
   apt:
@@ -169,6 +165,7 @@
     - lightdm-gtk-greeter
     - matchbox
     - omxplayer
+    - sqlite3
     - supervisor
     - uzbl
     - x11-xserver-utils

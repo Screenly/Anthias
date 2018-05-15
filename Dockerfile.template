@@ -27,9 +27,13 @@ RUN rm /etc/nginx/sites-enabled/default
 COPY ansible/roles/ssl/files/nginx_resin.conf /etc/nginx/sites-enabled/screenly.conf
 
 # Install Python requirements
-ADD requirements.txt /tmp/requirements.txt
+ADD requirements.viewer.txt /tmp/requirements.viewer.txt
+ADD requirements.server.txt /tmp/requirements.server.txt
+ADD requirements.websocket_server.txt /tmp/requirements.websocket_server.txt
 RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
-    pip install --upgrade -r /tmp/requirements.txt
+    pip install --upgrade -r /tmp/requirements.viewer.txt && \
+    pip install --upgrade -r /tmp/requirements.server.txt && \
+    pip install --upgrade -r /tmp/requirements.websocket_server.txt
 
 # Screenly Websocker Server
 COPY ansible/roles/screenly/files/screenly-websocket_server_layer.service /etc/systemd/system/screenly-websocket_server_layer.service
