@@ -10,6 +10,7 @@ RUN apt-get update && \
         libdbus-glib-1-dev \
         libffi-dev \
         libqt5webkit5 \
+        libraspberrypi0 \
         libssl-dev \
         matchbox \
         net-tools \
@@ -32,11 +33,14 @@ RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
 # Create runtime user
 RUN    useradd pi -d /home/pi \
     && /usr/sbin/usermod -a -G video pi
+RUN mkdir -p /home/pi/.screenly /home/pi/screenly /home/pi/screenly_assets
+
+RUN chown -R pi:pi /home/pi
 
 RUN mkdir /usr/local/share/ScreenlyWebview
 
-RUN wget -P /tmp https://github.com/antonmolodykh/Screenly-WebVew/releases/download/0.1/screenly_webview-v0.1.tar.gz
-RUN tar -xzf /tmp/screenly_webview-v0.1.tar.gz -C /tmp
+RUN wget -P /tmp https://github.com/antonmolodykh/Screenly-WebVew/releases/download/0.1/screenly-webview-v0.1.tar.gz
+RUN tar -xzf /tmp/screenly-webview-v0.1.tar.gz -C /tmp
 
 RUN cp -r /tmp/res /usr/local/share/ScreenlyWebview/res
 RUN cp /tmp/ScreenlyWebview /usr/local/bin/ScreenlyWebview

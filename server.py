@@ -661,19 +661,19 @@ class Info(Resource):
     method_decorators = [api_response, auth_basic]
 
     def get(self):
-        viewlog = None
-        try:
-            viewlog = [line.decode('utf-8') for line in
-                       check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
-        except:
-            pass
+        # viewlog = None
+        # try:
+        #     viewlog = [line.decode('utf-8') for line in
+        #                check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
+        # except:
+        #     pass
 
         # Calculate disk space
         slash = statvfs("/")
         free_space = size(slash.f_bavail * slash.f_frsize)
 
         return {
-            'viewlog': viewlog,
+            # 'viewlog': viewlog,
             'loadavg': diagnostics.get_load_avg()['15 min'],
             'free_space': free_space,
             'display_info': diagnostics.get_monitor_status(),
@@ -804,12 +804,12 @@ def settings_page():
 @app.route('/system_info')
 @auth_basic
 def system_info():
-    viewlog = None
-    try:
-        viewlog = [line.decode('utf-8') for line in
-                   check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
-    except:
-        pass
+    # viewlog = None
+    # try:
+    #     viewlog = [line.decode('utf-8') for line in
+    #                check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
+    # except:
+    #     pass
 
     loadavg = diagnostics.get_load_avg()['15 min']
 
@@ -831,7 +831,7 @@ def system_info():
     return template(
         'system_info.html',
         player_name=player_name,
-        viewlog=viewlog,
+        # viewlog=viewlog,
         loadavg=loadavg,
         free_space=free_space,
         uptime=system_uptime,
