@@ -11,13 +11,17 @@ RUN apt-get update && \
         net-tools \
         python-dev \
         python-netifaces \
+        python-pip \
         sqlite3 && \
     apt-get clean
 
+RUN pip install --upgrade pip
+
 # Install Python requirements
-ADD requirements.server.txt /tmp/requirements.txt
-RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
-    pip install -r /tmp/requirements.txt
+ADD requirements.txt /tmp/requirements.txt
+ADD requirements.server.txt /tmp/requirements.server.txt
+RUN pip install -r /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.server.txt
 
 # Create runtime user
 RUN useradd pi

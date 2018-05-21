@@ -171,6 +171,33 @@
     - x11-xserver-utils
     - xserver-xorg
 
+- name: Add docker apt key
+  apt_key:
+    url: https://download.docker.com/linux/raspbian/gpg
+    state: present
+
+- name : Get raspbian name
+  command: lsb_release -cs
+  register: raspbian_name
+
+- name: Add Docker repo
+  lineinfile:
+    path: /etc/apt/sources.list.d/docker.list
+    create: yes
+    line: "deb [arch=armhf] https://download.docker.com/linux/raspbian {{ raspbian_name.stdout }} edge"
+    state: present
+
+- name: Install Docker
+  apt:
+    name: docker-ce
+    update_cache: yes
+    install_recommends: no
+
+- name: Add pi to docker group
+  user:
+    name: pi
+    group: docker
+
 - name: Perform system upgrade
   apt:
     upgrade: dist

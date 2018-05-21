@@ -15,6 +15,7 @@ before_install:
 install:
   - pip install -U pip
   - pip install ansible==2.5.2
+  - pip install -r requirements.txt
   - pip install -r requirements.viewer.txt
   - pip install -r requirements.server.txt
   - pip install -r requirements.dev.txt
