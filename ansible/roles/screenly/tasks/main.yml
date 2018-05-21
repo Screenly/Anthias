@@ -23,7 +23,7 @@
     dest: /home/pi/.screenly/screenly.conf
 
 - name: Install pip dependencies
-  pip: requirements=/home/pi/screenly/requirements.txt
+  pip: requirements=/home/pi/screenly/requirements.host.txt
 
 - name: Create default assets database if does not exists
   copy:
@@ -66,16 +66,16 @@
 - name: Check if deprecated systemd services exists
   stat:
     path: /etc/systemd/system/X.service
-  register: X_service
+  register: x_service
 
-- set_fact: X_service_exist="{{X_service.stat.exists}}"
+- set_fact: x_service_exist="{{x_service.stat.exists}}"
 
 - name: Disable deprecated systemd services
   systemd:
     name: "{{ item }}"
     enabled: no
   with_items: "{{ screenly_systemd_units }}"
-  when: X_service_exist
+  when: x_service_exist
 
 - name: Remove deprecated systemd units
   file:
@@ -92,6 +92,7 @@
     recreate: true
     restart_policy: unless-stopped
     network_mode: host
+    privileged: yes
     volumes:
       - /home/pi/screenly:/home/pi/screenly
       - /home/pi/.screenly:/home/pi/.screenly

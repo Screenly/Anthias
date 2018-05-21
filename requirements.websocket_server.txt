@@ -1,7 +1,4 @@
-configparser==3.5.0
-flask==0.12.2
 gevent-websocket==0.10.1
 gevent==1.2.2
 pyasn1==0.1.8
-pyzmq==16.0.2
 six==1.11.0

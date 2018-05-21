@@ -7,12 +7,12 @@ from platform import machine
 from random import shuffle
 from threading import Thread
 
+from dbus import SessionBus
 from mixpanel import Mixpanel, MixpanelException
 from netifaces import gateways
 from signal import signal, SIGUSR1
 from time import sleep
 import logging
-from pydbus import SessionBus
 import random
 import sh
 import string
@@ -386,7 +386,7 @@ def setup():
 
     load_browser()
     bus = SessionBus()
-    browser_bus = bus.get('screenly.webview', '/Screenly')
+    browser_bus = bus.get_object('screenly.webview', '/Screenly')
 
 
 def main():

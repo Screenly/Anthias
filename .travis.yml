@@ -1,43 +1,26 @@
 language: python
 python:
   - "2.7"
-addons:
-  firefox: "45.0"
-  apt:
-    packages:
-      - net-tools
-      - mplayer
-      - python-setuptools
-before_install:
-  - sudo add-apt-repository ppa:mc3man/trusty-media -y
-  - sudo apt-get update -q
-  - sudo apt-get install ffmpeg python-gi python-dev
-install:
-  - pip install -U pip
-  - pip install ansible==2.5.2
-  - pip install -r requirements.viewer.txt
-  - pip install -r requirements.server.txt
-  - pip install -r requirements.dev.txt
-before_script:
-  - mkdir -p ~/.screenly ~/screenly_assets
-  - cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
-  - cp ansible/roles/screenly/files/screenly.db ~/.screenly/
-  - cp ansible/roles/screenly/files/screenly_utils.sh /tmp/screenly_utils.sh
-  - echo -e "[local]\nlocalhost ansible_connection=local" > ansible/localhost
-  - curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
-  - curl https://www.screenly.io/upload/ose-logo.png > ~/screenly_assets/image.tmp
-  - curl https://www.screenly.io/upload/big_buck_bunny_720p_10mb.flv > /tmp/video.flv
-  - export DISPLAY=:99.0
-  - /sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -ac -screen 0 1280x1024x16
-  - python tests/rtmplite/rtmp.py -r /tmp/ &
-  - sleep 3
-  - python server.py &
-  - sleep 3 # give xvfb some time to start
 
+services:
+  - docker
+
+install:
+  - docker build . -f Dockerfile.travis -t screenly/travis-ci
+  - docker run  --name travis-ci -v $TRAVIS_BUILD_DIR:/root/screenly -td  screenly/travis-ci /bin/bash
+
+before_script:
+  - docker exec travis-ci bash -c "echo -e '[local]\nlocalhost ansible_connection=local' > ansible/localhost"
+  - docker exec travis-ci bash -c "python tests/rtmplite/rtmp.py -r /tmp/" &
+  - sleep 3
+  - docker exec travis-ci bash -c "python server.py" &
+  - sleep 3
+  - docker exec travis-ci bash -c "Xvfb :99 -ac" &
+  - sleep 3
 script:
-  - find . ! -path "*/rtmplite/*" -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
-  - nosetests -v -a '!fixme' --with-isolation
-  - ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml
+  - docker exec -ti travis-ci bash -c "find . ! -path '*/rtmplite/*' -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +"
+  - docker exec -ti travis-ci bash -c "nosetests -v -a '!fixme' --with-isolation"
+  - docker exec -ti travis-ci bash -c "ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml"
   - python -m SimpleHTTPServer 8080 &
   - sleep 3
   - bash static/spec/runner.sh
