@@ -6,13 +6,17 @@ RUN apt-get update && \
         build-essential \
         curl \
         libffi-dev \
-        python-dev && \
+        python-dev \
+        python-pip && \
     apt-get clean
 
+RUN pip install --upgrade pip
+
 # Install Python requirements
-ADD requirements.websocket_server.txt /tmp/requirements.txt
-RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
-    pip install -r /tmp/requirements.txt
+ADD requirements.txt /tmp/requirements.txt
+ADD requirements.websocket_server.txt /tmp/requirements.websocket_server.txt
+RUN pip install -r /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.websocket_server.txt
 
 # Create runtime user
 RUN useradd pi
