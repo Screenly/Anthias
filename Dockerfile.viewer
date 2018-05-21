@@ -1,0 +1,61 @@
+FROM raspbian/stretch
+MAINTAINER Anton Molodykh <amolodykh@screenly.io>
+
+RUN apt-get update && \
+    apt-get -y install \
+        build-essential \
+        curl \
+        git-core \
+        gstreamer0.10-plugins-good \
+        libdbus-glib-1-dev \
+        libffi-dev \
+        libqt5webkit5 \
+        libraspberrypi0 \
+        libssl-dev \
+        matchbox \
+        net-tools \
+        omxplayer \
+        psmisc \
+        python-dev \
+        python-gi \
+        python-netifaces \
+        python-pip \
+        sqlite3 \
+        x11-utils \
+        x11-xserver-utils \
+        xserver-xorg && \
+    apt-get clean
+
+RUN pip install --upgrade pip
+
+# Install Python requirements
+ADD requirements.txt /tmp/requirements.txt
+ADD requirements.viewer.txt /tmp/requirements.viewer.txt
+RUN pip install -r /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.viewer.txt
+
+# Create runtime user
+RUN    useradd pi -d /home/pi \
+    && /usr/sbin/usermod -a -G video pi
+RUN mkdir -p /home/pi/.screenly /home/pi/screenly /home/pi/screenly_assets
+
+RUN chown -R pi:pi /home/pi
+
+RUN mkdir /usr/local/share/ScreenlyWebview
+
+RUN wget -P /tmp https://github.com/antonmolodykh/Screenly-WebVew/releases/download/0.1/screenly-webview-v0.1.tar.gz
+RUN tar -xzf /tmp/screenly-webview-v0.1.tar.gz -C /tmp
+
+RUN cp -r /tmp/res /usr/local/share/ScreenlyWebview/res
+RUN cp /tmp/ScreenlyWebview /usr/local/bin/ScreenlyWebview
+
+# Fix white flickering in omxplayer
+ENV NOREFRESH 1
+
+# Copy X11 configs
+COPY configs/10-serverflags.conf /usr/share/X11/xorg.conf.d/10-serverflags.conf
+COPY configs/10-evdev.conf /usr/share/X11/xorg.conf.d/10-evdev.conf
+
+WORKDIR /home/pi/screenly
+
+CMD ["bash", "bin/start_viewer.sh"]

@@ -68,15 +68,3 @@
   tags:
     - enable-ssl
   when: not no_use_ssl_parameter
-
-- name: Modifies screenly-web service to only listen on localhost
-  lineinfile:
-    regexp: '^.*LISTEN.*'
-    state: absent
-    dest: /etc/systemd/system/screenly-web.service
-  notify:
-    - reload systemctl
-    - restart-screenly-websocket_server_layer
-    - restart-screenly-server
-  tags:
-    - enable-ssl

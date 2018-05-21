@@ -11,14 +11,16 @@ addons:
 before_install:
   - sudo add-apt-repository ppa:mc3man/trusty-media -y
   - sudo apt-get update -q
-  - sudo apt-get install ffmpeg
+  - sudo apt-get install ffmpeg python-gi python-dev
 install:
   - pip install -U pip
+  - pip install ansible==2.5.2
   - pip install -r requirements.txt
+  - pip install -r requirements.viewer.txt
+  - pip install -r requirements.server.txt
   - pip install -r requirements.dev.txt
 before_script:
-  - mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets
-  - cp ansible/roles/screenly/files/uzbl-config ~/.config/uzbl/config-screenly
+  - mkdir -p ~/.screenly ~/screenly_assets
   - cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
   - cp ansible/roles/screenly/files/screenly.db ~/.screenly/
   - cp ansible/roles/screenly/files/screenly_utils.sh /tmp/screenly_utils.sh

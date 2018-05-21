@@ -24,10 +24,3 @@
     mode: 644
     owner: root
     group: root
-
-- name: Modifies screenly-web service to only listen on localhost
-  lineinfile:
-    regexp: '^.*LISTEN.*'
-    state: absent
-    dest: /etc/systemd/system/screenly-web.service
-  when: no_ssl

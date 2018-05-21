@@ -1,0 +1,4 @@
+gevent-websocket==0.10.1
+gevent==1.2.2
+pyasn1==0.1.8
+six==1.11.0
