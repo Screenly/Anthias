@@ -1,10 +1,10 @@
 Mako==0.7.3
 MarkupSafe==1.0
-ansible==2.1.0.0
-certifi==2015.04.28
+ansible==2.5.3
+certifi==2018.4.16
 cffi==1.7.0
 configparser==3.5.0
-flask-cors==3.0.3
+Flask-Cors==3.0.4
 flask-restful-swagger-2==0.35
 flask-swagger-ui==3.0.12
 flask==0.12.2
@@ -12,7 +12,7 @@ flask_restful==0.3.6
 futures==3.0.5
 gevent-websocket==0.10.1
 gevent==1.2.2
-gunicorn==19.4.5
+gunicorn==19.8.1
 hurry.filesize==0.9
 mixpanel==4.3.2
 netifaces==0.10.4
@@ -21,7 +21,7 @@ pyasn1==0.1.8
 python-dateutil==2.4.2
 pytz==2012d
 pyzmq==16.0.2
-requests[security]==2.10.0
+requests[security]==2.18.4
 sh==1.08
 six==1.11.0
 uptime==2.0.2
