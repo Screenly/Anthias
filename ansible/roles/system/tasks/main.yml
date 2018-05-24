@@ -150,31 +150,53 @@
     - console-data
     - libffi-dev
     - libssl-dev
-    - matchbox
-    - omxplayer
     - python-dev
     - python-netifaces
-    - python-simplejson
     - rpi-update
-    - sqlite3
     - systemd
-    - uzbl
-    - x11-xserver-utils
-    - xserver-xorg
-
-- name: Install systemd-sysv on Wheezy
-  command: bash -c 'echo "Yes, do as I say!" | apt-get install -y --force-yes systemd-sysv'
-  when: ansible_distribution_release == "wheezy"
 
 - name: Remove deprecated apt dependencies
   apt:
     name: "{{ item }}"
     state: absent
   with_items:
-    - supervisor
+    - dphys-swapfile
     - lightdm
     - lightdm-gtk-greeter
-    - dphys-swapfile
+    - matchbox
+    - omxplayer
+    - sqlite3
+    - supervisor
+    - uzbl
+    - x11-xserver-utils
+    - xserver-xorg
+
+- name: Add docker apt key
+  apt_key:
+    url: https://download.docker.com/linux/raspbian/gpg
+    state: present
+
+- name : Get raspbian name
+  command: lsb_release -cs
+  register: raspbian_name
+
+- name: Add Docker repo
+  lineinfile:
+    path: /etc/apt/sources.list.d/docker.list
+    create: yes
+    line: "deb [arch=armhf] https://download.docker.com/linux/raspbian {{ raspbian_name.stdout }} edge"
+    state: present
+
+- name: Install Docker
+  apt:
+    name: docker-ce
+    update_cache: yes
+    install_recommends: no
+
+- name: Add pi to docker group
+  user:
+    name: pi
+    group: docker
 
 - name: Perform system upgrade
   apt:
@@ -207,31 +229,6 @@
     mode: 0644
     owner: root
     group: root
-
-- name: Copy in evdev
-  copy:
-    src: 10-evdev.conf
-    dest: /usr/share/X11/xorg.conf.d/10-evdev.conf
-    mode: 0644
-    owner: root
-    group: root
-
-- name: Disable DPMS
-  copy:
-    src: 10-serverflags.conf
-    dest: /usr/share/X11/xorg.conf.d/10-serverflags.conf
-    mode: 0644
-    owner: root
-    group: root
-
-- name: Clear out X11 configs (disables touchpad and other unnecessary things)
-  file:
-    path: "/usr/share/X11/xorg.conf.d/{{ item }}"
-    state: absent
-  with_items:
-    - 50-synaptics.conf
-    - 10-quirks.conf
-    - 50-wacom.conf
 
 - name: Disable swap
   command: /sbin/swapoff --all removes=/var/swap
