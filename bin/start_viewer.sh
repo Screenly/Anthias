@@ -4,19 +4,7 @@
 # Prevent it so that the container does not fall
 trap '' 16
 
-# Start X
-rm -f /tmp/.X0-lock
-/usr/bin/X &
-export DISPLAY=:0.0
-
-# Waiting for X11
-while ! xdpyinfo >/dev/null 2>&1; do
-  sleep 0.5
-done
-
-su - pi -c " /usr/bin/matchbox-window-manager -use_titlebar no -use_cursor no &"
-
-su - pi -c "cd /home/pi/screenly && dbus-run-session python viewer.py &"
+su - pi -c "cd /home/pi/screenly && QT_QPA_EGLFS_FORCE888=1 dbus-run-session python viewer.py &"
 
 # Waiting for the viewer
 while true; do

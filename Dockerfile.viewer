@@ -12,17 +12,14 @@ RUN apt-get update && \
         libqt5webkit5 \
         libraspberrypi0 \
         libssl-dev \
-        matchbox \
+        libts-dev \
         net-tools \
         omxplayer \
         psmisc \
         python-dev \
         python-netifaces \
         python-pip \
-        sqlite3 \
-        x11-utils \
-        x11-xserver-utils \
-        xserver-xorg && \
+        sqlite3 && \
     apt-get clean
 
 RUN pip install --upgrade pip
@@ -33,12 +30,28 @@ ADD requirements.viewer.txt /tmp/requirements.viewer.txt
 RUN pip install -r /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.viewer.txt
 
-# Create runtime user
-RUN    useradd pi -d /home/pi \
-    && /usr/sbin/usermod -a -G video pi
+# QtBase from packages does not support eglfs
+RUN wget -P /tmp https://github.com/antonmolodykh/Screenly-WebVew/releases/download/0.1/qtbase.tar.gz
+RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
+RUN echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf
+RUN ldconfig
+
+# Fix symlinks
+RUN rm /usr/lib/arm-linux-gnueabihf/libEGL.so.1
+RUN rm /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
+RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so
+RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1
+RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
+
+RUN rm /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
+RUN rm /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
+RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so
+RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
+RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
+
+ENV QT_QPA_PLATFORM eglfs
 
 RUN mkdir /usr/local/share/ScreenlyWebview
-
 RUN wget -P /tmp https://github.com/antonmolodykh/Screenly-WebVew/releases/download/0.1/screenly-webview-v0.1.tar.gz
 RUN tar -xzf /tmp/screenly-webview-v0.1.tar.gz -C /tmp
 
@@ -48,9 +61,9 @@ RUN cp /tmp/ScreenlyWebview /usr/local/bin/ScreenlyWebview
 # Fix white flickering in omxplayer
 ENV NOREFRESH 1
 
-# Copy X11 configs
-COPY configs/10-serverflags.conf /usr/share/X11/xorg.conf.d/10-serverflags.conf
-COPY configs/10-evdev.conf /usr/share/X11/xorg.conf.d/10-evdev.conf
+# Create runtime user
+RUN    useradd pi -d /home/pi \
+    && /usr/sbin/usermod -a -G video pi
 
 WORKDIR /home/pi/screenly
 

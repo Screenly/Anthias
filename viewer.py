@@ -250,7 +250,7 @@ def view_video(uri, duration):
 
     if arch in ('armv6l', 'armv7l'):
         player_args = ['omxplayer', uri]
-        player_kwargs = {'o': settings['audio_output'], '_bg': True, '_ok_code': [0, 124, 143]}
+        player_kwargs = {'o': settings['audio_output'], 'layer': 1, '_bg': True, '_ok_code': [0, 124, 143]}
     else:
         player_args = ['mplayer', uri, '-nosound']
         player_kwargs = {'_bg': True, '_ok_code': [0, 124]}
@@ -260,7 +260,7 @@ def view_video(uri, duration):
 
     run = sh.Command(player_args[0])(*player_args[1:], **player_kwargs)
 
-    browser_bus.loadImage('null')
+    view_image('null')
     try:
         while run.process.alive:
             watchdog()
@@ -399,10 +399,9 @@ def main():
         while not path.isfile(HOME + INITIALIZED_FILE):
             sleep(1)
 
-    url = 'http://{0}:{1}/splash_page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
-    view_webpage(url)
-
     if settings['show_splash']:
+        url = 'http://{0}:{1}/splash_page'.format(LISTEN, PORT)
+        view_webpage(url)
         sleep(SPLASH_DELAY)
 
     global scheduler

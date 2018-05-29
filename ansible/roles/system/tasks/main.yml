@@ -44,6 +44,30 @@
   tags:
     - touches_boot_partition
 
+- name: Add gpu_mem_256 in config.txt if it doesn't exist
+  lineinfile:
+    path: /boot/config.txt
+    line: gpu_mem_256=96
+  when: config_txt.stdout.find('gpu_mem_256') == -1
+  tags:
+    - touches_boot_partition
+
+- name: Add gpu_mem_512 in config.txt if it doesn't exist
+  lineinfile:
+    path: /boot/config.txt
+    line: gpu_mem_512=128
+  when: config_txt.stdout.find('gpu_mem_512') == -1
+  tags:
+    - touches_boot_partition
+
+- name: Add gpu_mem_1024 in config.txt if it doesn't exist
+  lineinfile:
+    path: /boot/config.txt
+    line: gpu_mem_1024=196
+  when: config_txt.stdout.find('gpu_mem_1024') == -1
+  tags:
+    - touches_boot_partition
+
 - name: Backup kernel boot args
   copy:
     src: /boot/cmdline.txt
