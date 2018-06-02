@@ -101,12 +101,10 @@ class ScreenlySettings(IterableUserDict):
         for section, defaults in DEFAULTS.items():
             for field, default in defaults.items():
                 self._get(config, section, field, default)
-    
-    def use_defaults(self):
-        config = ConfigParser.ConfigParser()
 
-        for section, defaults in DEFAULTS.items():
-            for field, default in defaults.items():
+    def use_defaults(self):
+        for defaults in DEFAULTS.items():
+            for field, default in defaults[1].items():
                 self[field] = default
 
     def save(self):
