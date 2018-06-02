@@ -66,8 +66,9 @@ class ScreenlySettings(IterableUserDict):
         self.conf_file = self.get_configfile()
 
         if not path.isfile(self.conf_file):
-            logging.error('Config-file %s missing', self.conf_file)
-            exit(1)
+            logging.error('Config-file %s missing. Using defaults.', self.conf_file)
+            self.use_defaults()
+            self.save()
         else:
             self.load()
 
@@ -100,6 +101,13 @@ class ScreenlySettings(IterableUserDict):
         for section, defaults in DEFAULTS.items():
             for field, default in defaults.items():
                 self._get(config, section, field, default)
+    
+    def use_defaults(self):
+        config = ConfigParser.ConfigParser()
+
+        for section, defaults in DEFAULTS.items():
+            for field, default in defaults.items():
+                self[field] = default
 
     def save(self):
         # Write new settings to disk.
