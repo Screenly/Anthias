@@ -785,6 +785,10 @@ def settings_page():
         try:
             for field, default in CONFIGURABLE_SETTINGS.items():
                 value = request.form.get(field, default)
+                if field == "user":
+                    if value != settings['user'] and request.form.get('password', '') == "":
+                        if request.form.get('use_auth', False) == "on":
+                            raise ValueError("Must supply password to change username")
                 if field == "password":
                     if value != request.form.get('password2', ''):
                         raise ValueError("Passwords do not match.")
