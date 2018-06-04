@@ -164,7 +164,8 @@ class ZmqPublisher:
 
 
 def authenticate():
-    return Response("Access denied", 401, {"WWW-Authenticate": "Basic realm=private"})
+    realm = "Screenly OSE" + (" " + settings['player_name'] if settings['player_name'] else "")
+    return Response("Access denied", 401, {"WWW-Authenticate": 'Basic realm="' + realm + '"'})
 
 
 def auth_basic(orig):
