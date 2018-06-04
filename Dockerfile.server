@@ -1,4 +1,4 @@
-FROM raspbian/stretch
+FROM resin/rpi-raspbian:stretch
 MAINTAINER Anton Molodykh <amolodykh@screenly.io>
 
 RUN apt-get update && \
@@ -14,6 +14,7 @@ RUN apt-get update && \
         python-dev \
         python-netifaces \
         python-pip \
+        python-setuptools \
         sqlite3 && \
     apt-get clean
 

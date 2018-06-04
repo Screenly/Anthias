@@ -35,12 +35,21 @@ if [ "$?" = "1" ]; then
   exit 1
 fi
 
-echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
-if [ "$DEV" != 'y'  ]; then
-  BRANCH="production"
+echo && read -p "Would you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to the docker (y/N)" -n 1 -r -s EXP && echo
+if [ "$EXP" != 'y'  ]; then
+  echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
+  if [ "$DEV" != 'y'  ]; then
+    export DOCKER_TAG="production"
+    BRANCH="production"
+  else
+    export DOCKER_TAG="latest"
+    BRANCH="master"
+  fi
 else
-  BRANCH="master"
+  export DOCKER_TAG="experimental"
+  BRANCH="experimental"
 fi
+
 
 echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
 if [ "$UPGRADE" != 'y' ]; then

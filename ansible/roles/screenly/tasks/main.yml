@@ -83,10 +83,13 @@
     state: absent
   with_items: "{{ screenly_systemd_units }}"
 
+- debug:
+    msg: "Use {{ lookup('env', 'DOCKER_TAG') }} version of images."
+
 - name: Create screenly-server container
   docker_container:
-    name: screenly-server
-    image: amolodykh/screenly-server
+    name: screenly-ose-server
+    image: "screenly/screenly-ose-server:{{ lookup('env', 'DOCKER_TAG') }}"
     pull: true
     state: present
     recreate: true
@@ -100,8 +103,8 @@
 
 - name: Create screenly-viewer container
   docker_container:
-    name: screenly-viewer
-    image: amolodykh/screenly-viewer
+    name: screenly-ose-viewer
+    image: "screenly/screenly-ose-viewer:{{ lookup('env', 'DOCKER_TAG') }}"
     pull: true
     state: present
     recreate: true
@@ -115,8 +118,8 @@
 
 - name: Create screenly-websocket-server container
   docker_container:
-    name: screenly-websocket-server
-    image: amolodykh/screenly-websocket-server
+    name: screenly-ose-websocket
+    image: "screenly/screenly-ose-websocket:{{ lookup('env', 'DOCKER_TAG') }}"
     pull: true
     state: present
     recreate: true
