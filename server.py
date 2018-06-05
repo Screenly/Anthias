@@ -783,17 +783,58 @@ def settings_page():
 
     if request.method == "POST":
         try:
+            # put some request variables in local variables to make easier to read
+            formcurpass = request.form.get('curpassword', '')
+            formpassword = request.form.get('password', '')
+            formpassword2 = request.form.get('password2', '')
+            formuser = request.form.get('user', '')
+            use_auth = request.form.get('use_auth', '') == 'on'
+
+            # Handle auth components
+            if settings['password'] != '':    # if password currently set,
+                if formuser != settings['user']:    # trying to change user
+                    # should have current password set. Optionally may change password.
+                    if formcurpass == '':
+                        if not use_auth:
+                            raise ValueError("Must supply current password to disable authentication")
+                        raise ValueError("Must supply current password to change username")
+                    if formcurpass != settings['password']:
+                        raise ValueError("Incorrect current password.")
+
+                    settings['user'] = formuser
+
+                if formpassword != '' and use_auth:
+                    if formcurpass == '':
+                        raise ValueError("Must supply current password to change password")
+                    if formcurpass != settings['password']:
+                        raise ValueError("Incorrect current password.")
+
+                    if formpassword2 != formpassword:  # changing password
+                        raise ValueError("New passwords do not match!")
+
+                    settings['password'] = formpassword
+
+                if formpassword == '' and not use_auth and formpassword2 == '':
+                    # trying to disable authentication
+                    if formcurpass == '':
+                        raise ValueError("Must supply current password to disable authentication")
+                    settings['password'] = ''
+
+            else:        # no current password
+                if formuser != '':    # setting username and password
+                    if formpassword != '' and formpassword != formpassword2:
+                        raise ValueError("New passwords do not match!")
+                    if formpassword == '':
+                        raise ValueError("Must provide password")
+                    settings['user'] = formuser
+                    settings['password'] = formpassword
+
             for field, default in CONFIGURABLE_SETTINGS.items():
                 value = request.form.get(field, default)
-                if field == "user":
-                    if value != settings['user'] and request.form.get('password', '') == "":
-                        if request.form.get('use_auth', False) == "on":
-                            raise ValueError("Must supply password to change username")
-                if field == "password":
-                    if value != request.form.get('password2', ''):
-                        raise ValueError("Passwords do not match.")
-                    if value == "" and settings['user'] != "":
-                        value = settings['password']
+
+                # skip user and password as they should be handled already.
+                if field == "user" or field == "password":
+                    continue
 
                 if isinstance(default, bool):
                     value = value == 'on'
@@ -815,6 +856,7 @@ def settings_page():
         context[field] = settings[field]
 
     context['user'] = settings['user']
+    context['password'] = "password" if settings['password'] != "" else ""
 
     if not settings['user'] or not settings['password']:
         context['use_auth'] = False

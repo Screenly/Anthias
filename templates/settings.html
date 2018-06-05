@@ -207,6 +207,14 @@
                 <input class="span4" name="user" type="text" value="{{context.user}}">
               </div>
             </div>
+            {% if context.password != "" %}
+            <div class="control-group" id="curpassword_group">
+              <label class="control-label">Current Password</label>
+              <div class="controls">
+                <input class="span4" name="curpassword" type="password" value="">
+              </div>
+            </div>
+            {% endif %}
             <div class="control-group" id="password_group">
               <label class="control-label">Password</label>
               <div class="controls">
