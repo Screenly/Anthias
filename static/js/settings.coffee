@@ -72,3 +72,20 @@ $().ready ->
       $('#request-error .alert').addClass 'alert-success'
       $('#request-error .alert').removeClass 'alert-error'
       ($ '#request-error .msg').text 'Reset was successful. Please reboot the device.'
+
+  $('#auth_checkbox p span').click (e) ->
+    if $("input:checkbox[name='use_auth']").is(':checked') 
+      $('#user_group').hide()
+      $('#password_group').hide()
+      $("input:text[name='user']").val("")
+      $("input:password[name='password']").val("")
+    else
+      $('#user_group').show()
+      $('#password_group').show()
+  
+  if $("input:checkbox[name='use_auth']").is(':checked') 
+    $('#user_group').show()
+    $('#password_group').show()
+  else
+    $('#user_group').hide()
+    $('#password_group').hide()

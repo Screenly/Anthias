@@ -39,6 +39,7 @@ DEFAULTS = {
     }
 }
 CONFIGURABLE_SETTINGS = DEFAULTS['viewer']
+CONFIGURABLE_SETTINGS.update(DEFAULTS['auth'])
 CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock']
 
 PORT = int(getenv('PORT', 8080))

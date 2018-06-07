@@ -801,6 +801,11 @@ def settings_page():
     for field, default in DEFAULTS['viewer'].items():
         context[field] = settings[field]
 
+    if not settings['user'] or not settings['password']:
+        context['use_auth'] = False
+    else:
+        context['use_auth'] = True
+
     return template('settings.html', **context)
 
 
