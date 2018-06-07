@@ -782,16 +782,25 @@ def settings_page():
     context = {'flash': None}
 
     if request.method == "POST":
-        for field, default in CONFIGURABLE_SETTINGS.items():
-            value = request.form.get(field, default)
-            if isinstance(default, bool):
-                value = value == 'on'
-            settings[field] = value
         try:
+            for field, default in CONFIGURABLE_SETTINGS.items():
+                value = request.form.get(field, default)
+                if field == "password":
+                    if value != request.form.get('password2', ''):
+                        raise ValueError("Passwords do not match.")
+                    if value == "" and settings['user'] != "":
+                        value = settings['password']
+
+                if isinstance(default, bool):
+                    value = value == 'on'
+                settings[field] = value
+
             settings.save()
             publisher = ZmqPublisher.get_instance()
             publisher.send_to_viewer('reload')
             context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
+        except ValueError as e:
+            context['flash'] = {'class': "error", 'message': e}
         except IOError as e:
             context['flash'] = {'class': "error", 'message': e}
         except OSError as e:
@@ -800,6 +809,8 @@ def settings_page():
         settings.load()
     for field, default in DEFAULTS['viewer'].items():
         context[field] = settings[field]
+
+    context['user'] = settings['user']
 
     if not settings['user'] or not settings['password']:
         context['use_auth'] = False

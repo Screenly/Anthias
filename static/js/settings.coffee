@@ -77,15 +77,20 @@ $().ready ->
     if $("input:checkbox[name='use_auth']").is(':checked') 
       $('#user_group').hide()
       $('#password_group').hide()
+      $('#password2_group').hide()
       $("input:text[name='user']").val("")
       $("input:password[name='password']").val("")
+      $("input:password[name='password2']").val("")
     else
       $('#user_group').show()
       $('#password_group').show()
+      $('#password2_group').show()
   
   if $("input:checkbox[name='use_auth']").is(':checked') 
     $('#user_group').show()
     $('#password_group').show()
+    $('#password2_group').show()
   else
     $('#user_group').hide()
     $('#password_group').hide()
+    $('#password2_group').hide()

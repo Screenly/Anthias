@@ -38,8 +38,9 @@ DEFAULTS = {
         'password': ''
     }
 }
-CONFIGURABLE_SETTINGS = DEFAULTS['viewer']
-CONFIGURABLE_SETTINGS.update(DEFAULTS['auth'])
+CONFIGURABLE_SETTINGS = DEFAULTS['viewer'].copy()
+CONFIGURABLE_SETTINGS['user'] = DEFAULTS['auth']['user']
+CONFIGURABLE_SETTINGS['password'] = DEFAULTS['auth']['password']
 CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock']
 
 PORT = int(getenv('PORT', 8080))
