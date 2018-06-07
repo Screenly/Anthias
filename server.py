@@ -19,6 +19,7 @@ from subprocess import check_output
 from time import sleep
 import traceback
 import uuid
+import hashlib
 
 from flask import Flask, make_response, render_template, request, send_from_directory
 from flask_cors import CORS
@@ -787,6 +788,10 @@ def settings_page():
             formcurpass = request.form.get('curpassword', '')
             formpassword = request.form.get('password', '')
             formpassword2 = request.form.get('password2', '')
+            formcurpass = '' if formcurpass == '' else hashlib.sha256(formcurpass).hexdigest()
+            formpassword = '' if formpassword == '' else hashlib.sha256(formpassword).hexdigest()
+            formpassword2 = '' if formpassword2 == '' else hashlib.sha256(formpassword2).hexdigest()
+
             formuser = request.form.get('user', '')
             use_auth = request.form.get('use_auth', '') == 'on'
 

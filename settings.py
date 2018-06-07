@@ -10,6 +10,7 @@ from UserDict import IterableUserDict
 from flask import request, Response
 from functools import wraps
 import zmq
+import hashlib
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -174,7 +175,7 @@ def auth_basic(orig):
         if not settings['user'] or not settings['password']:
             return orig(*args, **kwargs)
         auth = request.authorization
-        if not auth or not settings.check_user(auth.username, auth.password):
+        if not auth or not settings.check_user(auth.username, hashlib.sha256(auth.password).hexdigest()):
             return authenticate()
         return orig(*args, **kwargs)
     return decorated
