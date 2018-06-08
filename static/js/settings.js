@@ -85,16 +85,16 @@
       });
     });
     $('#auth_checkbox p span').click(function(e) {
-      if ($("input:checkbox[name='use_auth']").is(':checked')) {
+      if ($('input:checkbox[name="use_auth"]').is(':checked')) {
         $('#user_group, #password_group, #password2_group').hide();
-        $("input:text[name='user']").val("");
-        $("input:password[name='password']").val("");
-        return $("input:password[name='password2']").val("");
+        $('input:text[name="user"]').val('');
+        $('input:password[name="password"]').val('');
+        return $('input:password[name="password2"]').val('');
       } else {
         return $('#user_group, #password_group, #password2_group, #curpassword_group').show();
       }
     });
-    if ($("input:checkbox[name='use_auth']").is(':checked')) {
+    if ($('input:checkbox[name="use_auth"]').is(':checked')) {
       return $('#user_group, #password_group, #password2_group, #curpassword_group').show();
     } else {
       return $('#user_group, #password_group, #password2_group, #curpassword_group').hide();
