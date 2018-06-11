@@ -30,8 +30,8 @@ def is_active(asset, at_time=None):
 
     if asset['is_enabled'] and asset['start_date'] and asset['end_date']:
         at = at_time or get_time()
-        return asset['start_date'] < at < asset['end_date']
-    return False
+        return 1 if asset['start_date'] < at < asset['end_date'] else 0
+    return 0
 
 
 def get_playlist(conn):
@@ -103,7 +103,8 @@ def update(conn, asset_id, asset):
     Returns the asset.
     Asset's asset_id and is_active field is updated before returning.
     """
-    del asset['asset_id']
+    if asset.get('asset_id'):
+        del asset['asset_id']
     if 'is_active' in asset:
         asset.pop('is_active')
     with db.commit(conn) as c:
