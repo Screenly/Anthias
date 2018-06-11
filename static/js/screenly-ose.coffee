@@ -91,7 +91,7 @@ API.Asset = class Asset extends Backbone.Model
     name: ''
     mimetype: 'webpage'
     uri: ''
-    is_active: false
+    is_active: 1
     start_date: ''
     end_date: ''
     duration: default_duration
@@ -121,7 +121,7 @@ API.Asset = class Asset extends Backbone.Model
 
 
 API.Assets = class Assets extends Backbone.Collection
-  url: "/api/v1.1/assets"
+  url: "/api/v1.2/assets"
   model: Asset
   comparator: 'play_order'
 
