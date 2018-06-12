@@ -785,54 +785,54 @@ def settings_page():
     if request.method == "POST":
         try:
             # put some request variables in local variables to make easier to read
-            formcurpass = request.form.get('curpassword', '')
-            formpassword = request.form.get('password', '')
-            formpassword2 = request.form.get('password2', '')
-            formcurpass = '' if formcurpass == '' else hashlib.sha256(formcurpass).hexdigest()
-            formpassword = '' if formpassword == '' else hashlib.sha256(formpassword).hexdigest()
-            formpassword2 = '' if formpassword2 == '' else hashlib.sha256(formpassword2).hexdigest()
+            current_pass = request.form.get('curpassword', '')
+            new_pass = request.form.get('password', '')
+            new_pass2 = request.form.get('password2', '')
+            current_pass = '' if current_pass == '' else hashlib.sha256(current_pass).hexdigest()
+            new_pass = '' if new_pass == '' else hashlib.sha256(new_pass).hexdigest()
+            new_pass2 = '' if new_pass2 == '' else hashlib.sha256(new_pass2).hexdigest()
 
-            formuser = request.form.get('user', '')
+            new_user = request.form.get('user', '')
             use_auth = request.form.get('use_auth', '') == 'on'
 
             # Handle auth components
             if settings['password'] != '':    # if password currently set,
-                if formuser != settings['user']:    # trying to change user
+                if new_user != settings['user']:    # trying to change user
                     # should have current password set. Optionally may change password.
-                    if formcurpass == '':
+                    if current_pass == '':
                         if not use_auth:
                             raise ValueError("Must supply current password to disable authentication")
                         raise ValueError("Must supply current password to change username")
-                    if formcurpass != settings['password']:
+                    if current_pass != settings['password']:
                         raise ValueError("Incorrect current password.")
 
-                    settings['user'] = formuser
+                    settings['user'] = new_user
 
-                if formpassword != '' and use_auth:
-                    if formcurpass == '':
+                if new_pass != '' and use_auth:
+                    if current_pass == '':
                         raise ValueError("Must supply current password to change password")
-                    if formcurpass != settings['password']:
+                    if current_pass != settings['password']:
                         raise ValueError("Incorrect current password.")
 
-                    if formpassword2 != formpassword:  # changing password
+                    if new_pass2 != new_pass:  # changing password
                         raise ValueError("New passwords do not match!")
 
-                    settings['password'] = formpassword
+                    settings['password'] = new_pass
 
-                if formpassword == '' and not use_auth and formpassword2 == '':
+                if new_pass == '' and not use_auth and new_pass2 == '':
                     # trying to disable authentication
-                    if formcurpass == '':
+                    if current_pass == '':
                         raise ValueError("Must supply current password to disable authentication")
                     settings['password'] = ''
 
             else:        # no current password
-                if formuser != '':    # setting username and password
-                    if formpassword != '' and formpassword != formpassword2:
+                if new_user != '':    # setting username and password
+                    if new_pass != '' and new_pass != new_pass2:
                         raise ValueError("New passwords do not match!")
-                    if formpassword == '':
+                    if new_pass == '':
                         raise ValueError("Must provide password")
-                    settings['user'] = formuser
-                    settings['password'] = formpassword
+                    settings['user'] = new_user
+                    settings['password'] = new_pass
 
             for field, default in CONFIGURABLE_SETTINGS.items():
                 value = request.form.get(field, default)
