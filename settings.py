@@ -83,6 +83,8 @@ class ScreenlySettings(IterableUserDict):
                 self[field] = config.getint(section, field)
             else:
                 self[field] = config.get(section, field)
+                if field == 'password' and self[field] != '' and len(self[field]) != 64:   # likely not a hashed password.
+                    self[field] = hashlib.sha256(self[field]).hexdigest()   # hash the original password.
         except ConfigParser.Error as e:
             logging.debug("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (section, field, unicode(e), default))
             self[field] = default
