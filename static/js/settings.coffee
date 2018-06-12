@@ -28,7 +28,7 @@ $().ready ->
       $('#btn-backup').text btn_text
       $('#btn-upload').prop 'disabled', no
       $('#btn-backup').prop 'disabled', no
-      
+
 
   $('#btn-upload').click (e) ->
     e.preventDefault()
@@ -41,7 +41,7 @@ $().ready ->
       $('.progress .bar').css 'width', valuenow + '%'
       $('.progress .bar').text 'Uploading: ' + Math.floor(valuenow) + '%'
     add: (e, data) ->
-      $('#btn-upload').hide() 
+      $('#btn-upload').hide()
       $('#btn-backup').hide()
       $('.progress').show()
 
@@ -74,15 +74,15 @@ $().ready ->
       ($ '#request-error .msg').text 'Reset was successful. Please reboot the device.'
 
   $('#auth_checkbox p span').click (e) ->
-    if $('input:checkbox[name="use_auth"]').is(':checked') 
+    if $('input:checkbox[name="use_auth"]').is(':checked')
       $('#user_group, #password_group, #password2_group').hide()
       $('input:text[name="user"]').val('')
       $('input:password[name="password"]').val('')
       $('input:password[name="password2"]').val('')
     else
       $('#user_group, #password_group, #password2_group, #curpassword_group').show()
-  
-  if $('input:checkbox[name="use_auth"]').is(':checked') 
+
+  if $('input:checkbox[name="use_auth"]').is(':checked')
     $('#user_group, #password_group, #password2_group, #curpassword_group').show()
   else
     $('#user_group, #password_group, #password2_group, #curpassword_group').hide()
