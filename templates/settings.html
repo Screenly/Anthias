@@ -184,6 +184,50 @@
               </div>
             </div>
 
+            <div class="control-group">
+              <label class="control-label">Use Authentication</label>
+              <div class="controls">
+                <label id="auth_checkbox"  class="checkbox toggle well">
+                  {% if context.use_auth %}
+                    <input name="use_auth" checked="checked" type="checkbox" />
+                  {% else %}
+                    <input name="use_auth" type="checkbox" />
+                  {% endif %}
+                  <p>
+                    <span class="on">On</span>
+                    <span class="off">Off</span>
+                  </p>
+                  <a class="btn btn-primary slide-button"></a>
+                </label>
+              </div>
+            </div>
+            <div class="control-group" id="user_group">
+              <label class="control-label">User</label>
+              <div class="controls">
+                <input class="span4" name="user" type="text" value="{{context.user}}">
+              </div>
+            </div>
+            {% if context.password != "" %}
+            <div class="control-group" id="curpassword_group">
+              <label class="control-label">Current Password</label>
+              <div class="controls">
+                <input class="span4" name="curpassword" type="password" value="">
+              </div>
+            </div>
+            {% endif %}
+            <div class="control-group" id="password_group">
+              <label class="control-label">Password</label>
+              <div class="controls">
+                <input class="span4" name="password" type="password" value="">
+              </div>
+            </div>
+            <div class="control-group" id="password2_group">
+              <label class="control-label">Confirm Password</label>
+              <div class="controls">
+                <input class="span4" name="password2" type="password" value="">
+              </div>
+            </div>
+
             <div class="form-actions">
               <input class="btn btn-primary" type="submit" value="Save Settings">
               <a class="btn" href="/">Cancel</a>
@@ -216,7 +260,7 @@
         </div>
       </div>
     </div>
-    
+
     <div id="footer">
       <div class="container">
         <div class="copy">

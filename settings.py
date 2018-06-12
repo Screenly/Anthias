@@ -10,6 +10,7 @@ from UserDict import IterableUserDict
 from flask import request, Response
 from functools import wraps
 import zmq
+import hashlib
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -38,7 +39,9 @@ DEFAULTS = {
         'password': ''
     }
 }
-CONFIGURABLE_SETTINGS = DEFAULTS['viewer']
+CONFIGURABLE_SETTINGS = DEFAULTS['viewer'].copy()
+CONFIGURABLE_SETTINGS['user'] = DEFAULTS['auth']['user']
+CONFIGURABLE_SETTINGS['password'] = DEFAULTS['auth']['password']
 CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock']
 
 PORT = int(getenv('PORT', 8080))
@@ -162,7 +165,8 @@ class ZmqPublisher:
 
 
 def authenticate():
-    return Response("Access denied", 401, {"WWW-Authenticate": "Basic realm=private"})
+    realm = "Screenly OSE" + (" " + settings['player_name'] if settings['player_name'] else "")
+    return Response("Access denied", 401, {"WWW-Authenticate": 'Basic realm="' + realm + '"'})
 
 
 def auth_basic(orig):
@@ -171,7 +175,7 @@ def auth_basic(orig):
         if not settings['user'] or not settings['password']:
             return orig(*args, **kwargs)
         auth = request.authorization
-        if not auth or not settings.check_user(auth.username, auth.password):
+        if not auth or not settings.check_user(auth.username, hashlib.sha256(auth.password).hexdigest()):
             return authenticate()
         return orig(*args, **kwargs)
     return decorated
