@@ -16,6 +16,15 @@ body {
             width:450px;
         }
     }
+    @media (max-width: 767px) {
+        .logo-container {
+            padding: 10px 0px 10px 0px;
+            img {
+                max-height: 100px;
+                width: auto;
+            }
+        }
+    }
     .wireload-link {
         span {
             font-size: 16px;
