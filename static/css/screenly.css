@@ -8,6 +8,12 @@ body {
     padding: 20px 0px 40px 0px; }
     .splash .logo-container img {
       width: 450px; }
+  @media (max-width: 767px) {
+    .splash .logo-container {
+      padding: 10px 0px 10px 0px; }
+      .splash .logo-container img {
+        max-height: 100px;
+        width: auto; } }
   .splash .wireload-link span {
     font-size: 16px; }
   .splash .wireload-link a img {
