@@ -43,59 +43,16 @@ class ViewerTestCase(unittest.TestCase):
         self.u.SPLASH_DELAY = self.original_splash_delay
 
 
-@attr('fixme')
-class TestEmptyPl(ViewerTestCase):
-    def test_empty(self):
-        m_asset_list = mock.Mock()
-        m_asset_list.return_value = ([], None)
-        with mock.patch.object(self.u, 'generate_asset_list', m_asset_list):
-            self.u.main()
-
-
-class TestBrowserSend(ViewerTestCase):
-    def test_send(self):
-        self.p_cmd.start()
-        self.p_send.start()
-        self.u.setup()
-        self.u.load_browser()
-        self.p_send.stop()
-        self.p_cmd.stop()
-
-        m_put = mock.Mock(name='uzbl_put')
-        self.m_cmd.return_value.return_value.process.stdin.put = m_put
-
-        self.u.browser_send('test_cmd')
-        m_put.assert_called_once_with('test_cmd\n')
-
-    def test_dead(self):
-        self.p_loadb.start()
-        self.u.browser_send(None)
-        self.m_loadb.assert_called_once()
-        self.p_loadb.stop()
-
-
-class TestBrowserClear(ViewerTestCase):
-    def test_clear(self):
-        with mock.patch.object(self.u, 'browser_url', mock.Mock()) as m_url:
-            self.u.setup()
-            self.u.browser_clear()
-            m_url.assert_called_once()
-
-
 class TestLoadBrowser(ViewerTestCase):
-    def test_setup(self):
-        self.u.setup()
-        ok_(os.path.isdir(self.u.SCREENLY_HTML))
-
     def load_browser(self):
-        m_uzbl = mock.Mock(name='uzbl')
+        m_uzbl = mock.Mock(name='ScreenlyWebview')
         self.m_cmd.return_value = m_uzbl
         self.p_cmd.start()
         self.p_send.start()
         self.u.load_browser()
         self.p_send.stop()
         self.p_cmd.stop()
-        self.m_cmd.assert_called_once_with('uzbl-browser')
+        self.m_cmd.assert_called_once_with('ScreenlyWebview')
         m_uzbl.assert_called_once_with(print_events=True, config='-', uri=None, _bg=True)
         m_send.assert_called_once()
 

@@ -1,0 +1,37 @@
+FROM resin/rpi-raspbian:stretch
+MAINTAINER Anton Molodykh <amolodykh@screenly.io>
+
+RUN apt-get update && \
+    apt-get -y install \
+        build-essential \
+        curl \
+        git-core \
+        libffi-dev \
+        libraspberrypi0 \
+        libssl-dev \
+        net-tools \
+        omxplayer \
+        python-dev \
+        python-netifaces \
+        python-pip \
+        python-setuptools \
+        sqlite3 && \
+    apt-get clean
+
+RUN pip install --upgrade pip
+
+# Install Python requirements
+ADD requirements.txt /tmp/requirements.txt
+ADD requirements.server.txt /tmp/requirements.server.txt
+RUN pip install -r /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.server.txt
+
+# Create runtime user
+RUN    useradd pi -d /home/pi \
+    && /usr/sbin/usermod -a -G video pi
+
+USER pi
+
+WORKDIR /home/pi/screenly
+
+CMD python server.py

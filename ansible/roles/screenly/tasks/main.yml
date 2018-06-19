@@ -6,8 +6,7 @@
     group: pi
   with_items:
     - .screenly
-    - .config
-    - .config/uzbl
+    - screenly_assets
 
 - name: Copy Screenly default config
   copy:
@@ -23,22 +22,8 @@
     state: absent
     dest: /home/pi/.screenly/screenly.conf
 
-- name: Copy in GTK config
-  copy:
-    owner: pi
-    group: pi
-    src: gtkrc-2.0
-    dest: /home/pi/.gtkrc-2.0
-
-- name: Copy in UZBL config
-  copy:
-    owner: pi
-    group: pi
-    src: uzbl-config
-    dest: /home/pi/.config/uzbl/config-screenly
-
 - name: Install pip dependencies
-  pip: requirements=/home/pi/screenly/requirements.txt
+  pip: requirements=/home/pi/screenly/requirements.host.txt
 
 - name: Create default assets database if does not exists
   copy:
@@ -78,12 +63,68 @@
     owner: root
     group: root
 
-- name: Copy screenly systemd units
-  copy:
-    src: "{{ item }}"
-    dest: "/etc/systemd/system/{{ item }}"
+- name: Check if deprecated systemd services exists
+  stat:
+    path: /etc/systemd/system/X.service
+  register: x_service
+
+- set_fact: x_service_exist="{{x_service.stat.exists}}"
+
+- name: Disable deprecated systemd services
+  systemd:
+    name: "{{ item }}"
+    enabled: no
+  with_items: "{{ screenly_systemd_units }}"
+  when: x_service_exist
+
+- name: Remove deprecated systemd units
+  file:
+    path: "/etc/systemd/system/{{ item }}"
+    state: absent
   with_items: "{{ screenly_systemd_units }}"
 
-- name: Enable screenly systemd services
-  command: systemctl enable {{ item }} chdir=/etc/systemd/system
-  with_items: "{{ screenly_systemd_units }}"
+- debug:
+    msg: "Use {{ lookup('env', 'DOCKER_TAG') }} version of images."
+
+- name: Create screenly-server container
+  docker_container:
+    name: screenly-ose-server
+    image: "screenly/screenly-ose-server:{{ lookup('env', 'DOCKER_TAG') }}"
+    pull: true
+    state: present
+    recreate: true
+    restart_policy: unless-stopped
+    network_mode: host
+    privileged: yes
+    volumes:
+      - /home/pi/screenly:/home/pi/screenly
+      - /home/pi/.screenly:/home/pi/.screenly
+      - /home/pi/screenly_assets:/home/pi/screenly_assets
+
+- name: Create screenly-viewer container
+  docker_container:
+    name: screenly-ose-viewer
+    image: "screenly/screenly-ose-viewer:{{ lookup('env', 'DOCKER_TAG') }}"
+    pull: true
+    state: present
+    recreate: true
+    restart_policy: unless-stopped
+    network_mode: host
+    privileged: yes
+    volumes:
+      - /home/pi/screenly:/home/pi/screenly
+      - /home/pi/.screenly:/home/pi/.screenly
+      - /home/pi/screenly_assets:/home/pi/screenly_assets
+
+- name: Create screenly-websocket-server container
+  docker_container:
+    name: screenly-ose-websocket
+    image: "screenly/screenly-ose-websocket:{{ lookup('env', 'DOCKER_TAG') }}"
+    pull: true
+    state: present
+    recreate: true
+    restart_policy: unless-stopped
+    network_mode: host
+    volumes:
+      - /home/pi/screenly:/home/pi/screenly
+      - /home/pi/.screenly:/home/pi/.screenly
