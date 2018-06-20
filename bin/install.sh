@@ -35,12 +35,21 @@ if [ "$?" = "1" ]; then
   exit 1
 fi
 
-echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
-if [ "$DEV" != 'y'  ]; then
-  BRANCH="production"
+echo && read -p "Would you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to the docker (y/N)" -n 1 -r -s EXP && echo
+if [ "$EXP" != 'y'  ]; then
+  echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
+  if [ "$DEV" != 'y'  ]; then
+    export DOCKER_TAG="production"
+    BRANCH="production"
+  else
+    export DOCKER_TAG="latest"
+    BRANCH="master"
+  fi
 else
-  BRANCH="master"
+  export DOCKER_TAG="experimental"
+  BRANCH="experimental"
 fi
+
 
 echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
 if [ "$UPGRADE" != 'y' ]; then
@@ -65,7 +74,8 @@ sudo apt-get update
 sudo apt-get purge -y python-setuptools python-pip python-pyasn1
 sudo apt-get install -y python-dev git-core libffi-dev libssl-dev
 curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
-sudo pip install ansible==2.1.0.0
+
+sudo pip install ansible==2.5.3
 
 ansible localhost -m git -a "repo=${1:-https://github.com/screenly/screenly-ose.git} dest=/home/pi/screenly version=$BRANCH"
 cd /home/pi/screenly/ansible
@@ -81,8 +91,6 @@ sudo find /usr/share/locale -type f ! -name 'en' ! -name 'de*' ! -name 'es*' ! -
 sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' -exec rm -r {} \;
 
 cd ~/screenly && git rev-parse HEAD > ~/.screenly/latest_screenly_sha
-
-if test -f ~/.screenly/wifi_set; then  rm ~/.screenly/wifi_set; fi
 
 set +x
 echo "Installation completed."
