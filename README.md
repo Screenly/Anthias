@@ -17,10 +17,9 @@ $ bash <(curl -sL https://www.screenly.io/install-ose.sh)
 
 **This installation will take 15 minutes to several hours**, depending on variables such as:
 
- * Raspberry Pi version
+ * The Raspberry Pi hardware version
  * The SD card
  * The internet connection
-
 
 During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast internet connection), the installation normally takes 15-30 minutes. On a Raspberry Pi Zero or Raspberry Pi Model B with a class 4 SD card, the installation will take hours. As such, it is usually a lot faster to use the provided disk images.
 
