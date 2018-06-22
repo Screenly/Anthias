@@ -411,6 +411,9 @@ def main():
     subscriber.daemon = True
     subscriber.start()
 
+    # We don't want to show splash_page if there are active assets but all of them are not available
+    view_image(HOME + LOAD_SCREEN)
+
     logging.debug('Entering infinite loop.')
     while True:
         asset_loop(scheduler)
