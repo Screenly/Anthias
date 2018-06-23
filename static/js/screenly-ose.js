@@ -803,6 +803,7 @@
 
     AssetRowView.prototype.events = {
       'change .is_enabled-toggle input': 'toggleIsEnabled',
+      'click .download-asset-button': 'download',
       'click .edit-asset-button': 'edit',
       'click .delete-asset-button': 'showPopover'
     };
@@ -843,6 +844,11 @@
         this.$el.addClass('warning');
         return (this.$('input, button')).prop('disabled', true);
       }
+    };
+
+    AssetRowView.prototype.download = function(e) {
+      window.open('/asset_content/' + this.model.id);
+      return false;
     };
 
     AssetRowView.prototype.edit = function(e) {

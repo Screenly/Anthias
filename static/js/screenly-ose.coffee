@@ -444,6 +444,7 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
 
   events:
     'change .is_enabled-toggle input': 'toggleIsEnabled'
+    'click .download-asset-button': 'download'
     'click .edit-asset-button': 'edit'
     'click .delete-asset-button': 'showPopover'
 
@@ -468,6 +469,10 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
       @undelegateEvents()
       @$el.addClass 'warning'
       (@$ 'input, button').prop 'disabled', on
+
+  download: (e) =>
+    window.open('/asset_content/' + @model.id);
+    no 
 
   edit: (e) =>
     new EditAssetView model: @model

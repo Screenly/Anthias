@@ -1184,6 +1184,28 @@ def splash_page():
     return template('splash_page.html', ip_lookup=ip_lookup, msg=msg)
 
 
+@app.route('/asset_content/<asset_id>/')
+@auth_basic
+def asset_content(asset_id):
+    with db.conn(settings['database']) as conn:
+        asset = assets_helper.read(conn, asset_id)
+
+    if isinstance(asset, list):
+        return "No asset with this ID exists", 404
+
+    with open(asset['uri'], 'rb') as f:
+        content = f.read()
+
+    fn = asset['name']
+    mimetype = guess_type(fn)[0]
+    if not mimetype:
+        mimetype = 'application/octet-stream'
+
+    return content, {
+        'Content-Type': mimetype,
+        'Content-Disposition': 'attachment; filename="{}"'.format(fn)}
+
+
 @app.errorhandler(403)
 def mistake403(code):
     return 'The parameter you passed has the wrong format!'
