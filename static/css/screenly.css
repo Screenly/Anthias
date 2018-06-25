@@ -211,11 +211,12 @@ input[name="file_upload"] {
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
-  max-width: 320px;
-  min-width: 320px; }
+  max-width: 290px;
+  min-width: 290px; }
 
 .asset_row_btns {
-  padding: 6px 8px 10px 8px !important; }
+  padding: 6px 8px 10px 8px !important;
+  white-space: nowrap; }
 
 .table td {
   vertical-align: middle !important; }

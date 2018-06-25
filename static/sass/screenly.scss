@@ -252,10 +252,13 @@ input[name="file_upload"] {
 #inactive-assets img { display: none; }
 .asset_row_name {
     @include ellip();
-    max-width: 320px;
-    min-width: 320px;
+    max-width: 290px;
+    min-width: 290px;
 }
-.asset_row_btns { padding: 6px 8px 10px 8px !important; }
+
+.asset_row_btns { padding: 6px 8px 10px 8px !important;
+    white-space: nowrap;
+}
 
 .table {
   td { 
