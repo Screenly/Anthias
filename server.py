@@ -21,7 +21,7 @@ import traceback
 import uuid
 import hashlib
 
-from flask import Flask, make_response, render_template, request, send_from_directory
+from flask import Flask, make_response, render_template, request, send_from_directory, redirect
 from flask_cors import CORS
 from flask_restful_swagger_2 import Api, Resource, Schema, swagger
 from flask_swagger_ui import get_swaggerui_blueprint
@@ -964,12 +964,39 @@ class AssetsControl(Resource):
         return "Asset switched"
 
 
+class AssetContent(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    def get(self, asset_id):
+        with db.conn(settings['database']) as conn:
+            asset = assets_helper.read(conn, asset_id)
+
+        if isinstance(asset, list):
+            return {'error': 'Invalid asset ID provided'}, 404
+
+        if not path.isfile(asset['uri']):
+            return redirect(asset['uri'])
+
+        with open(asset['uri'], 'rb') as f:
+            content = f.read()
+
+        fn = asset['name']
+        mimetype = guess_type(fn)[0]
+        if not mimetype:
+            mimetype = 'application/octet-stream'
+
+        return make_response((content, {
+            'Content-Type': mimetype,
+            'Content-Disposition': 'attachment; filename="{}"'.format(fn)}))
+
+
 api.add_resource(Assets, '/api/v1/assets')
 api.add_resource(Asset, '/api/v1/assets/<asset_id>')
 api.add_resource(AssetsV1_1, '/api/v1.1/assets')
 api.add_resource(AssetV1_1, '/api/v1.1/assets/<asset_id>')
 api.add_resource(AssetsV1_2, '/api/v1.2/assets')
 api.add_resource(AssetV1_2, '/api/v1.2/assets/<asset_id>')
+api.add_resource(AssetContent, '/api/v1.2/assets/<asset_id>/content')
 api.add_resource(FileAsset, '/api/v1/file_asset')
 api.add_resource(PlaylistOrder, '/api/v1/assets/order')
 api.add_resource(Backup, '/api/v1/backup')
@@ -1182,28 +1209,6 @@ def splash_page():
 
     msg = url if url else error_msg
     return template('splash_page.html', ip_lookup=ip_lookup, msg=msg)
-
-
-@app.route('/asset_content/<asset_id>/')
-@auth_basic
-def asset_content(asset_id):
-    with db.conn(settings['database']) as conn:
-        asset = assets_helper.read(conn, asset_id)
-
-    if isinstance(asset, list):
-        return "No asset with this ID exists", 404
-
-    with open(asset['uri'], 'rb') as f:
-        content = f.read()
-
-    fn = asset['name']
-    mimetype = guess_type(fn)[0]
-    if not mimetype:
-        mimetype = 'application/octet-stream'
-
-    return content, {
-        'Content-Type': mimetype,
-        'Content-Disposition': 'attachment; filename="{}"'.format(fn)}
 
 
 @app.errorhandler(403)

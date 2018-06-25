@@ -847,7 +847,7 @@
     };
 
     AssetRowView.prototype.download = function(e) {
-      window.open('/asset_content/' + this.model.id);
+      window.open('/api/v1.2/assets/' + this.model.id + '/content');
       return false;
     };
 

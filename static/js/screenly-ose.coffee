@@ -209,7 +209,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         add: (e, data) ->
           (that.$ '.status').hide()
           (that.$ '.progress').show()
-          
+
           model =  new Asset {}, {collection: API.assets}
           filename = data['files'][0]['name']
           that.$fv 'name', filename
@@ -471,8 +471,8 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
       (@$ 'input, button').prop 'disabled', on
 
   download: (e) =>
-    window.open('/asset_content/' + @model.id);
-    no 
+    window.open('/api/v1.2/assets/' + @model.id + '/content');
+    no
 
   edit: (e) =>
     new EditAssetView model: @model
