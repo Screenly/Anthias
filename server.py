@@ -967,6 +967,21 @@ class AssetsControl(Resource):
 class AssetContent(Resource):
     method_decorators = [api_response, auth_basic]
 
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset'
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'The binary content of the asset'
+            }
+        }
+    })
     def get(self, asset_id):
         with db.conn(settings['database']) as conn:
             asset = assets_helper.read(conn, asset_id)
