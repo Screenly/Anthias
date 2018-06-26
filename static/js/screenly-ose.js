@@ -755,6 +755,7 @@
       this.showPopover = bind(this.showPopover, this);
       this["delete"] = bind(this["delete"], this);
       this.edit = bind(this.edit, this);
+      this.download = bind(this.download, this);
       this.setEnabled = bind(this.setEnabled, this);
       this.toggleIsEnabled = bind(this.toggleIsEnabled, this);
       this.render = bind(this.render, this);
