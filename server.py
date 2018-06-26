@@ -20,8 +20,9 @@ from time import sleep
 import traceback
 import uuid
 import hashlib
+from base64 import b64encode
 
-from flask import Flask, make_response, render_template, request, send_from_directory, redirect
+from flask import Flask, make_response, render_template, request, send_from_directory
 from flask_cors import CORS
 from flask_restful_swagger_2 import Api, Resource, Schema, swagger
 from flask_swagger_ui import get_swaggerui_blueprint
@@ -184,6 +185,21 @@ class AssetRequestModel(Schema):
         }
     }
     required = ['name', 'uri', 'mimetype', 'is_enabled', 'start_date', 'end_date']
+
+
+class AssetContentModel(Schema):
+    type = 'object'
+    properties = {
+        'type': {'type': 'string'},
+        'url': {'type': 'string'},
+        'filename': {'type': 'string'},
+        'mimetype': {'type': 'string'},
+        'content': {
+            'type': 'string',
+            'format': 'byte'
+        },
+    }
+    required = ['type', 'filename']
 
 
 ################################
@@ -978,7 +994,16 @@ class AssetContent(Resource):
         ],
         'responses': {
             '200': {
-                'description': 'The binary content of the asset'
+                'description':
+                '''
+                The content of the asset.
+
+                'type' can either be 'file' or 'url'.
+
+                In case of a file, the fields 'mimetype', 'filename', and 'content'  will be present.
+                In case of a URL, the field 'url' will be present.
+                ''',
+                'schema': AssetContentModel
             }
         }
     })
@@ -989,23 +1014,31 @@ class AssetContent(Resource):
         if isinstance(asset, list):
             raise Exception('Invalid asset ID provided')
 
-        if not path.isfile(asset['uri']):
-            return redirect(asset['uri'])
+        uri = asset['uri']
 
-        with open(asset['uri'], 'rb') as f:
-            content = f.read()
+        if path.isfile(uri):
+            fn = asset['name']
 
-        fn = asset['name']
-        mimetype = guess_type(fn)[0]
-        if not mimetype:
-            mimetype = 'application/octet-stream'
+            with open(uri, 'rb') as f:
+                content = f.read()
 
-        headers = {
-            'Content-Type': mimetype,
-            'Content-Disposition': 'attachment; filename="{}"'.format(fn)
-        }
+            mimetype = guess_type(fn)[0]
+            if not mimetype:
+                mimetype = 'application/octet-stream'
 
-        return make_response(content, headers)
+            result = {
+                'type': 'file',
+                'filename': fn,
+                'content': b64encode(content),
+                'mimetype': mimetype
+            }
+        else:
+            result = {
+                'type': 'url',
+                'url': uri
+            }
+
+        return result
 
 
 api.add_resource(Assets, '/api/v1/assets')

@@ -471,7 +471,26 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
       (@$ 'input, button').prop 'disabled', on
 
   download: (e) =>
-    window.open('/api/v1.2/assets/' + @model.id + '/content');
+    r = $.get '/api/v1.2/assets/' + @model.id + '/content'
+        .success (result) ->
+            switch result['type']
+                when 'url'
+                    window.open(result['url'])
+                when 'file'
+                    content = atob(result['content'])
+                    mimetype = result['mimetype']
+                    fn = result['filename']
+
+                    blob = new Blob([content], {type: mimetype})
+                    url = URL.createObjectURL(blob)
+
+                    a  = document.createElement('a')
+                    a.download = fn
+                    a.href = url
+                    a.click()
+
+                    URL.revokeObjectURL(url)
+                    a.remove()
     no
 
   edit: (e) =>

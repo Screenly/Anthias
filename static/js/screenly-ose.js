@@ -848,7 +848,28 @@
     };
 
     AssetRowView.prototype.download = function(e) {
-      window.open('/api/v1.2/assets/' + this.model.id + '/content');
+      var r;
+      r = $.get('/api/v1.2/assets/' + this.model.id + '/content').success(function(result) {
+        var a, blob, content, fn, mimetype, url;
+        switch (result['type']) {
+          case 'url':
+            return window.open(result['url']);
+          case 'file':
+            content = atob(result['content']);
+            mimetype = result['mimetype'];
+            fn = result['filename'];
+            blob = new Blob([content], {
+              type: mimetype
+            });
+            url = URL.createObjectURL(blob);
+            a = document.createElement('a');
+            a.download = fn;
+            a.href = url;
+            a.click();
+            URL.revokeObjectURL(url);
+            return a.remove();
+        }
+      });
       return false;
     };
 
