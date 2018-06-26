@@ -1000,9 +1000,12 @@ class AssetContent(Resource):
         if not mimetype:
             mimetype = 'application/octet-stream'
 
-        return make_response((content, {
+        headers = {
             'Content-Type': mimetype,
-            'Content-Disposition': 'attachment; filename="{}"'.format(fn)}))
+            'Content-Disposition': 'attachment; filename="{}"'.format(fn)
+        }
+
+        return make_response(content, headers)
 
 
 api.add_resource(Assets, '/api/v1/assets')
