@@ -987,7 +987,7 @@ class AssetContent(Resource):
             asset = assets_helper.read(conn, asset_id)
 
         if isinstance(asset, list):
-            return {'error': 'Invalid asset ID provided'}, 404
+            raise Exception('Invalid asset ID provided')
 
         if not path.isfile(asset['uri']):
             return redirect(asset['uri'])
