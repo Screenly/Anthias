@@ -209,7 +209,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         add: (e, data) ->
           (that.$ '.status').hide()
           (that.$ '.progress').show()
-          
+
           model =  new Asset {}, {collection: API.assets}
           filename = data['files'][0]['name']
           that.$fv 'name', filename
@@ -444,6 +444,7 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
 
   events:
     'change .is_enabled-toggle input': 'toggleIsEnabled'
+    'click .download-asset-button': 'download'
     'click .edit-asset-button': 'edit'
     'click .delete-asset-button': 'showPopover'
 
@@ -468,6 +469,31 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
       @undelegateEvents()
       @$el.addClass 'warning'
       (@$ 'input, button').prop 'disabled', on
+
+  download: (e) =>
+    r = $.get '/api/v1/assets/' + @model.id + '/content'
+        .success (result) ->
+          switch result['type']
+            when 'url'
+              window.open(result['url'])
+            when 'file'
+              content = base64js.toByteArray(result['content'])
+
+              mimetype = result['mimetype']
+              fn = result['filename']
+
+              blob = new Blob([content], {type: mimetype})
+              url = URL.createObjectURL(blob)
+
+              a = document.createElement('a')
+              document.body.appendChild(a)
+              a.download = fn
+              a.href = url
+              a.click()
+
+              URL.revokeObjectURL(url)
+              a.remove()
+    no
 
   edit: (e) =>
     new EditAssetView model: @model

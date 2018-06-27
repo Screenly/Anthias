@@ -8,7 +8,7 @@
     {% else %}
       <title>Screenly OSE</title>
     {% endif %}
-      
+
     <link href="/static/favicons/apple-touch-icon-57x57.png" rel="apple-touch-icon-precomposed" sizes="57x57" />
     <link href="/static/favicons/apple-touch-icon-114x114.png" rel="apple-touch-icon-precomposed" sizes="114x114" />
     <link href="/static/favicons/apple-touch-icon-72x72.png" rel="apple-touch-icon-precomposed" sizes="72x72" />
@@ -53,6 +53,8 @@
     <script src="/static/js/jquery-1.9.1.min.js"></script>
     <script src="/static/js/jquery.iframe-transport.js"></script>
 
+    <script src="/static/js/base64js.min.js"></script>
+
     <script src="/static/js/backbone-0.9.10.min.js"></script> <!-- needs jquery -->
 
     <script src="/static/js/jquery-ui-1.10.1.custom.min.js"></script>
@@ -78,7 +80,10 @@
       <td style="width:21%">
         <%= end_date %>
       </td>
-      <td class="asset_row_btns" style="width:13%">
+      <td class="asset_row_btns">
+        <button class="download-asset-button btn" type="button">
+          <i class="icon-download-alt"></i>
+        </button>
         <button class="edit-asset-button btn" type="button">
           <i class="icon-pencil"></i>
         </button>

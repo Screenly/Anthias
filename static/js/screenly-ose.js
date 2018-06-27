@@ -755,6 +755,7 @@
       this.showPopover = bind(this.showPopover, this);
       this["delete"] = bind(this["delete"], this);
       this.edit = bind(this.edit, this);
+      this.download = bind(this.download, this);
       this.setEnabled = bind(this.setEnabled, this);
       this.toggleIsEnabled = bind(this.toggleIsEnabled, this);
       this.render = bind(this.render, this);
@@ -803,6 +804,7 @@
 
     AssetRowView.prototype.events = {
       'change .is_enabled-toggle input': 'toggleIsEnabled',
+      'click .download-asset-button': 'download',
       'click .edit-asset-button': 'edit',
       'click .delete-asset-button': 'showPopover'
     };
@@ -843,6 +845,33 @@
         this.$el.addClass('warning');
         return (this.$('input, button')).prop('disabled', true);
       }
+    };
+
+    AssetRowView.prototype.download = function(e) {
+      var r;
+      r = $.get('/api/v1/assets/' + this.model.id + '/content').success(function(result) {
+        var a, blob, content, fn, mimetype, url;
+        switch (result['type']) {
+          case 'url':
+            return window.open(result['url']);
+          case 'file':
+            content = base64js.toByteArray(result['content']);
+            mimetype = result['mimetype'];
+            fn = result['filename'];
+            blob = new Blob([content], {
+              type: mimetype
+            });
+            url = URL.createObjectURL(blob);
+            a = document.createElement('a');
+            document.body.appendChild(a);
+            a.download = fn;
+            a.href = url;
+            a.click();
+            URL.revokeObjectURL(url);
+            return a.remove();
+        }
+      });
+      return false;
     };
 
     AssetRowView.prototype.edit = function(e) {

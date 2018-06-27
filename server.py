@@ -20,6 +20,7 @@ from time import sleep
 import traceback
 import uuid
 import hashlib
+from base64 import b64encode
 
 from flask import Flask, make_response, render_template, request, send_from_directory
 from flask_cors import CORS
@@ -184,6 +185,21 @@ class AssetRequestModel(Schema):
         }
     }
     required = ['name', 'uri', 'mimetype', 'is_enabled', 'start_date', 'end_date']
+
+
+class AssetContentModel(Schema):
+    type = 'object'
+    properties = {
+        'type': {'type': 'string'},
+        'url': {'type': 'string'},
+        'filename': {'type': 'string'},
+        'mimetype': {'type': 'string'},
+        'content': {
+            'type': 'string',
+            'format': 'byte'
+        },
+    }
+    required = ['type', 'filename']
 
 
 ################################
@@ -964,12 +980,72 @@ class AssetsControl(Resource):
         return "Asset switched"
 
 
+class AssetContent(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset'
+            }
+        ],
+        'responses': {
+            '200': {
+                'description':
+                '''
+                The content of the asset.
+
+                'type' can either be 'file' or 'url'.
+
+                In case of a file, the fields 'mimetype', 'filename', and 'content'  will be present.
+                In case of a URL, the field 'url' will be present.
+                ''',
+                'schema': AssetContentModel
+            }
+        }
+    })
+    def get(self, asset_id):
+        with db.conn(settings['database']) as conn:
+            asset = assets_helper.read(conn, asset_id)
+
+        if isinstance(asset, list):
+            raise Exception('Invalid asset ID provided')
+
+        if path.isfile(asset['uri']):
+            filename = asset['name']
+
+            with open(asset['uri'], 'rb') as f:
+                content = f.read()
+
+            mimetype = guess_type(filename)[0]
+            if not mimetype:
+                mimetype = 'application/octet-stream'
+
+            result = {
+                'type': 'file',
+                'filename': filename,
+                'content': b64encode(content),
+                'mimetype': mimetype
+            }
+        else:
+            result = {
+                'type': 'url',
+                'url': asset['uri']
+            }
+
+        return result
+
+
 api.add_resource(Assets, '/api/v1/assets')
 api.add_resource(Asset, '/api/v1/assets/<asset_id>')
 api.add_resource(AssetsV1_1, '/api/v1.1/assets')
 api.add_resource(AssetV1_1, '/api/v1.1/assets/<asset_id>')
 api.add_resource(AssetsV1_2, '/api/v1.2/assets')
 api.add_resource(AssetV1_2, '/api/v1.2/assets/<asset_id>')
+api.add_resource(AssetContent, '/api/v1/assets/<asset_id>/content')
 api.add_resource(FileAsset, '/api/v1/file_asset')
 api.add_resource(PlaylistOrder, '/api/v1/assets/order')
 api.add_resource(Backup, '/api/v1/backup')
