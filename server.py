@@ -1014,28 +1014,26 @@ class AssetContent(Resource):
         if isinstance(asset, list):
             raise Exception('Invalid asset ID provided')
 
-        uri = asset['uri']
+        if path.isfile(asset['uri']):
+            filename = asset['name']
 
-        if path.isfile(uri):
-            fn = asset['name']
-
-            with open(uri, 'rb') as f:
+            with open(asset['uri'], 'rb') as f:
                 content = f.read()
 
-            mimetype = guess_type(fn)[0]
+            mimetype = guess_type(filename)[0]
             if not mimetype:
                 mimetype = 'application/octet-stream'
 
             result = {
                 'type': 'file',
-                'filename': fn,
+                'filename': filename,
                 'content': b64encode(content),
                 'mimetype': mimetype
             }
         else:
             result = {
                 'type': 'url',
-                'url': uri
+                'url': asset['uri']
             }
 
         return result
@@ -1047,7 +1045,7 @@ api.add_resource(AssetsV1_1, '/api/v1.1/assets')
 api.add_resource(AssetV1_1, '/api/v1.1/assets/<asset_id>')
 api.add_resource(AssetsV1_2, '/api/v1.2/assets')
 api.add_resource(AssetV1_2, '/api/v1.2/assets/<asset_id>')
-api.add_resource(AssetContent, '/api/v1.2/assets/<asset_id>/content')
+api.add_resource(AssetContent, '/api/v1/assets/<asset_id>/content')
 api.add_resource(FileAsset, '/api/v1/file_asset')
 api.add_resource(PlaylistOrder, '/api/v1/assets/order')
 api.add_resource(Backup, '/api/v1/backup')

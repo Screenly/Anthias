@@ -849,13 +849,13 @@
 
     AssetRowView.prototype.download = function(e) {
       var r;
-      r = $.get('/api/v1.2/assets/' + this.model.id + '/content').success(function(result) {
+      r = $.get('/api/v1/assets/' + this.model.id + '/content').success(function(result) {
         var a, blob, content, fn, mimetype, url;
         switch (result['type']) {
           case 'url':
             return window.open(result['url']);
           case 'file':
-            content = atob(result['content']);
+            content = base64js.toByteArray(result['content']);
             mimetype = result['mimetype'];
             fn = result['filename'];
             blob = new Blob([content], {
@@ -863,6 +863,7 @@
             });
             url = URL.createObjectURL(blob);
             a = document.createElement('a');
+            document.body.appendChild(a);
             a.download = fn;
             a.href = url;
             a.click();
