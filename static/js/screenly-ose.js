@@ -11,35 +11,8 @@
     slice = [].slice;
 
   $().ready(function() {
-    var hide_popover, popover_shown, show_popover;
-    popover_shown = false;
-    hide_popover = function() {
-      $('#subsribe-form-container').html('');
-      popover_shown = false;
-      $(window).off('keyup.email_popover');
-      return $(window).off('click.email_popover');
-    };
-    show_popover = function() {
-      $('#subsribe-form-container').html($('#subscribe-form-template').html());
-      popover_shown = true;
-      $(window).on('keyup.email_popover', function(event) {
-        if (event.keyCode === 27) {
-          return hide_popover();
-        }
-      });
-      return $(window).on('click.email_popover', function(event) {
-        var pop;
-        pop = document.getElementById('subscribe-popover');
-        if (!$.contains(pop, event.target)) {
-          return hide_popover();
-        }
-      });
-    };
-    return $('#show-email-popover').click(function() {
-      if (!popover_shown) {
-        show_popover();
-      }
-      return false;
+    return $('#subsribe-form-container').popover({
+      content: get_template('subscribe-form')
     });
   });
 
@@ -352,9 +325,9 @@
     AddAssetView.prototype.clickTabNavUpload = function(e) {
       var that;
       if (!(this.$('#tab-file_upload')).hasClass('active')) {
-        (this.$('ul.nav-tabs li')).removeClass('active');
+        (this.$('ul.nav-tabs li')).removeClass('active show');
         (this.$('.tab-pane')).removeClass('active');
-        (this.$('.tabnav-file_upload')).addClass('active');
+        (this.$('.tabnav-file_upload')).addClass('active show');
         (this.$('#tab-file_upload')).addClass('active');
         (this.$('.uri')).hide();
         (this.$('#save-asset')).hide();
@@ -420,9 +393,9 @@
     AddAssetView.prototype.clickTabNavUri = function(e) {
       if (!(this.$('#tab-uri')).hasClass('active')) {
         (this.$("[name='file_upload']")).fileupload('destroy');
-        (this.$('ul.nav-tabs li')).removeClass('active');
+        (this.$('ul.nav-tabs li')).removeClass('active show');
         (this.$('.tab-pane')).removeClass('active');
-        (this.$('.tabnav-uri')).addClass('active');
+        (this.$('.tabnav-uri')).addClass('active show');
         (this.$('#tab-uri')).addClass('active');
         (this.$('#save-asset')).show();
         (this.$('.uri')).show();
@@ -480,15 +453,15 @@
         }
         return results;
       }).call(this);
-      (this.$(".control-group.warning .help-inline.warning")).remove();
-      (this.$(".control-group")).removeClass('warning');
+      (this.$(".form-group .help-inline.invalid-feedback")).remove();
+      (this.$(".form-group .form-control")).removeClass('is-invalid');
       (this.$('[type=submit]')).prop('disabled', false);
       results = [];
       for (k = 0, len = errors.length; k < len; k++) {
         ref = errors[k], field = ref[0], v = ref[1];
         (this.$('[type=submit]')).prop('disabled', true);
-        (this.$(".control-group." + field)).addClass('warning');
-        results.push((this.$(".control-group." + field + " .controls")).append($("<span class='help-inline warning'>" + v + "</span>")));
+        (this.$(".form-group." + field + " .form-control")).addClass('is-invalid');
+        results.push((this.$(".form-group." + field + " .controls")).append($("<span class='help-inline invalid-feedback'>" + v + "</span>")));
       }
       return results;
     };
@@ -711,15 +684,15 @@
         }
         return results;
       }).call(this);
-      (this.$(".control-group.warning .help-inline.warning")).remove();
-      (this.$(".control-group")).removeClass('warning');
+      (this.$(".form-group .help-inline.invalid-feedback")).remove();
+      (this.$(".form-group .form-control")).removeClass('is-invalid');
       (this.$('[type=submit]')).prop('disabled', false);
       results = [];
       for (k = 0, len = errors.length; k < len; k++) {
         ref = errors[k], field = ref[0], v = ref[1];
         (this.$('[type=submit]')).prop('disabled', true);
-        (this.$(".control-group." + field)).addClass('warning');
-        results.push((this.$(".control-group." + field + " .controls")).append($("<span class='help-inline warning'>" + v + "</span>")));
+        (this.$(".form-group." + field + " .form-control")).addClass('is-invalid');
+        results.push((this.$(".form-group." + field + " .controls")).append($("<span class='help-inline invalid-feedback'>" + v + "</span>")));
       }
       return results;
     };
@@ -730,8 +703,8 @@
     };
 
     EditAssetView.prototype.toggleAdvanced = function() {
-      (this.$('.icon-play')).toggleClass('rotated');
-      (this.$('.icon-play')).toggleClass('unrotated');
+      (this.$('.fa-play')).toggleClass('rotated');
+      (this.$('.fa-play')).toggleClass('unrotated');
       return (this.$('.collapse-advanced')).collapse('toggle');
     };
 
@@ -784,13 +757,13 @@
       (this.$(".asset-icon")).addClass((function() {
         switch (this.model.get("mimetype")) {
           case "video":
-            return "icon-facetime-video";
+            return "fas fa-video";
           case "streaming":
-            return "icon-facetime-video";
+            return "fas fa-video";
           case "image":
-            return "icon-picture";
+            return "far fa-image";
           case "webpage":
-            return "icon-globe";
+            return "fas fa-globe-americas";
           default:
             return "";
         }
