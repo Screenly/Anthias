@@ -16,7 +16,7 @@ $().ready ->
         window.location = "static_with_mime/" + data + "?mime=application/x-tgz"
 
     .fail  (data, e) ->
-      $('#request-error .alert').addClass 'alert-error'
+      $('#request-error .alert').addClass 'alert-danger'
       $('#request-error .alert').removeClass 'alert-success'
       $('#request-error .alert').show()
       if (data.responseText != "") and (j = $.parseJSON data.responseText) and (err = j.error)
@@ -50,11 +50,11 @@ $().ready ->
       if (data.jqXHR.responseText != "") and (message = $.parseJSON data.jqXHR.responseText)
         $('#request-error .alert').show()
         $('#request-error .alert').addClass 'alert-success'
-        $('#request-error .alert').removeClass 'alert-error'
+        $('#request-error .alert').removeClass 'alert-danger'
         ($ '#request-error .msg').text message
     fail: (e, data) ->
       $('#request-error .alert').show()
-      $('#request-error .alert').addClass 'alert-error'
+      $('#request-error .alert').addClass 'alert-danger'
       $('#request-error .alert').removeClass 'alert-success'
       if (data.jqXHR.responseText != "") and (j = $.parseJSON data.jqXHR.responseText) and (err = j.error)
         ($ '#request-error .msg').text 'Server Error: ' + err
@@ -70,7 +70,7 @@ $().ready ->
     .done  (e) ->
       $('#request-error .alert').show()
       $('#request-error .alert').addClass 'alert-success'
-      $('#request-error .alert').removeClass 'alert-error'
+      $('#request-error .alert').removeClass 'alert-danger'
       ($ '#request-error .msg').text 'Reset was successful. Please reboot the device.'
 
   $('#auth_checkbox p span').click (e) ->

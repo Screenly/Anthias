@@ -8,47 +8,48 @@
     {% else %}
       <title>Screenly OSE</title>
     {% endif %}
-    <link href="/static/css/bootstrap.css" rel="stylesheet" />
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet" />
     <link href="/static/css/screenly.css" rel="stylesheet" />
+
+    <link href="/static/fontawesome/css/all.css" rel="stylesheet" />
+
     <script src="/static/js/jquery-1.9.1.min.js"></script>
   </head>
   <body>
-    <div class="navbar navbar-fixed-top">
-      <div class="navbar-inner">
-        <div class="container">
-          <a class="brand" href="/">
-            <img src="static/img/screenly_ose_logo.png" />
-          </a>
-          <ul class="nav pull-right">
-            {% if not context.up_to_date %}
+    <div class="navbar navbar-expand-lg fixed-top bg-primary">
+      <div class="container">
+        <a class="brand" href="/">
+          <img src="static/img/screenly_ose_logo.png" />
+        </a>
+        <ul class="nav float-right">
+          {% if not context.up_to_date %}
             <li class="update-available">
               <a href="http://www.screenlyapp.com/ose.html#upgrade">
-                <i class="icon-circle-arrow-down icon-white"></i>
+                <i class="fas fa-arrow-circle-down"></i>
                 Update Available
               </a>
             </li>
-            {% endif %}
-            <li>
-              <a href="/settings">
-                <i class="icon-cog icon-white"></i>
-                Settings
-              </a>
-            </li>
-            <li class="divider-vertical"></li>
-            <li>
-              <a href="/system_info">
-                <i class="icon-tasks icon-white"></i>
-                System Info
-              </a>
-            </li>
-          </ul>
-        </div>
+          {% endif %}
+          <li>
+            <a href="/settings">
+              <i class="fas fa-cogs"></i>
+              Settings
+            </a>
+          </li>
+          <li class="divider-vertical"></li>
+          <li>
+            <a href="/system_info">
+              <i class="fas fa-tasks"></i>
+              System Info
+            </a>
+          </li>
+        </ul>
       </div>
     </div>
 
     <div class="container">
       <div class="row">
-        <div class="span12">
+        <div class="col-12">
 
           <h1 class="page-header">
             System Info
@@ -76,7 +77,7 @@
           </table>
 
           <section>
-            <div class="header">Latest Viewer Logs</div>
+            <div class="header bg-primary">Latest Viewer Logs</div>
           </section>
 
           {% if context.viewlog %}

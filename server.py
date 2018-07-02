@@ -1178,11 +1178,11 @@ def settings_page():
             publisher.send_to_viewer('reload')
             context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
         except ValueError as e:
-            context['flash'] = {'class': "error", 'message': e}
+            context['flash'] = {'class': "danger", 'message': e}
         except IOError as e:
-            context['flash'] = {'class': "error", 'message': e}
+            context['flash'] = {'class': "danger", 'message': e}
         except OSError as e:
-            context['flash'] = {'class': "error", 'message': e}
+            context['flash'] = {'class': "danger", 'message': e}
     else:
         settings.load()
     for field, default in DEFAULTS['viewer'].items():
