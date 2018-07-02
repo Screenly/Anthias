@@ -89,7 +89,9 @@ def url_fails(url):
     try:
         if validate_url(url):
             obj = requests.head(url, allow_redirects=True)
-            assert obj.status_code == 200
+            if not obj.status_code == 200:
+                obj = requests.get(url, allow_redirects=True)
+                assert obj.status_code == 200
     except (requests.ConnectionError, AssertionError):
         return True
     else:
