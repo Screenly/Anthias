@@ -45,6 +45,9 @@ from lib.utils import validate_url
 from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
 
 
+HOME = getenv('HOME', '/home/pi')
+DISABLE_MANAGE_NETWORK = '.screenly/disable_manage_network'
+
 app = Flask(__name__)
 CORS(app)
 api = Api(app, api_version="v1", title="Screenly OSE API")
@@ -1190,6 +1193,8 @@ def settings_page():
 
     context['user'] = settings['user']
     context['password'] = "password" if settings['password'] != "" else ""
+
+    context['reset_button_state'] = "disabled" if path.isfile(path.join(HOME, DISABLE_MANAGE_NETWORK)) else ""
 
     if not settings['user'] or not settings['password']:
         context['use_auth'] = False

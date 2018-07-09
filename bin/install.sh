@@ -50,6 +50,12 @@ else
   BRANCH="experimental"
 fi
 
+echo && read -p "Do you want Screenly to manage your network? This is recommended for most users. (y/N)" -n 1 -r -s NETWORK && echo
+if [ "$NETWORK" != 'y' ]; then
+  export MANAGE_NETWORK=false
+else
+  export MANAGE_NETWORK=true
+fi
 
 echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
 if [ "$UPGRADE" != 'y' ]; then
