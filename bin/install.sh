@@ -29,12 +29,6 @@ if [ "$INSTALL" != 'y' ]; then
   exit 1
 fi
 
-dpkg -s network-manager > /dev/null 2>&1
-if [ "$?" = "1" ]; then
-  echo -e "\n\nIt looks like NetworkManager is not installed. Please install it by running 'sudo apt install -y network-manager' and then re-run the installation."
-  exit 1
-fi
-
 echo && read -p "Would you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to the docker (y/N)" -n 1 -r -s EXP && echo
 if [ "$EXP" != 'y'  ]; then
   echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
@@ -54,6 +48,12 @@ echo && read -p "Do you want Screenly to manage your network? This is recommende
 if [ "$NETWORK" != 'y' ]; then
   export MANAGE_NETWORK=false
 else
+  dpkg -s network-manager > /dev/null 2>&1
+  if [ "$?" = "1" ]; then
+    echo -e "\n\nIt looks like NetworkManager is not installed. Please install it by running 'sudo apt install -y network-manager' and then re-run the installation."
+    exit 1
+  fi
+  
   export MANAGE_NETWORK=true
 fi
 
