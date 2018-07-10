@@ -44,7 +44,7 @@ else
   BRANCH="experimental"
 fi
 
-echo && read -p "Do you want Screenly to manage your network? This is recommended for most users. (y/N)" -n 1 -r -s NETWORK && echo
+echo && read -p "Do you want Screenly to manage your network? This is recommended for most users. (Y/n)" -n 1 -r -s NETWORK && echo
 if [ "$NETWORK" != 'y' ]; then
   export MANAGE_NETWORK=false
 else
