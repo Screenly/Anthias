@@ -45,7 +45,7 @@ else
 fi
 
 echo && read -p "Do you want Screenly to manage your network? This is recommended for most users. (Y/n)" -n 1 -r -s NETWORK && echo
-if [ "$NETWORK" != 'y' ]; then
+if [ "$NETWORK" == 'n' ]; then
   export MANAGE_NETWORK=false
 else
   dpkg -s network-manager > /dev/null 2>&1
