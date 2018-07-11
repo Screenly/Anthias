@@ -1,30 +1,8 @@
 ### screenly-ose ui ###
 
 $().ready ->
-  popover_shown = off
+  $('#subsribe-form-container').popover content: get_template 'subscribe-form'
 
-  hide_popover = ->
-    $('#subsribe-form-container').html('')
-    popover_shown = off
-    $(window).off('keyup.email_popover')
-    $(window).off('click.email_popover')
-
-  show_popover = ->
-    $('#subsribe-form-container').html($('#subscribe-form-template').html())
-    popover_shown = on
-
-    $(window).on 'keyup.email_popover', (event) ->
-      if event.keyCode == 27
-        hide_popover()
-
-    $(window).on 'click.email_popover', (event) ->
-      pop = document.getElementById('subscribe-popover')
-      if !$.contains(pop, event.target)
-        hide_popover()
-
-  $('#show-email-popover').click ->
-    if !popover_shown then show_popover()
-    off
 
 API = (window.Screenly ||= {}) # exports
 
@@ -91,7 +69,7 @@ API.Asset = class Asset extends Backbone.Model
     name: ''
     mimetype: 'webpage'
     uri: ''
-    is_active: false
+    is_active: 1
     start_date: ''
     end_date: ''
     duration: default_duration
@@ -121,7 +99,7 @@ API.Asset = class Asset extends Backbone.Model
 
 
 API.Assets = class Assets extends Backbone.Collection
-  url: "/api/v1.1/assets"
+  url: "/api/v1.2/assets"
   model: Asset
   comparator: 'play_order'
 
@@ -192,9 +170,9 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
 
   clickTabNavUpload: (e) =>
     if not (@$ '#tab-file_upload').hasClass 'active'
-      (@$ 'ul.nav-tabs li').removeClass 'active'
+      (@$ 'ul.nav-tabs li').removeClass 'active show'
       (@$ '.tab-pane').removeClass 'active'
-      (@$ '.tabnav-file_upload').addClass 'active'
+      (@$ '.tabnav-file_upload').addClass 'active show'
       (@$ '#tab-file_upload').addClass 'active'
       (@$ '.uri').hide()
       (@$ '#save-asset').hide()
@@ -209,7 +187,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         add: (e, data) ->
           (that.$ '.status').hide()
           (that.$ '.progress').show()
-          
+
           model =  new Asset {}, {collection: API.assets}
           filename = data['files'][0]['name']
           that.$fv 'name', filename
@@ -239,9 +217,9 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
   clickTabNavUri: (e) => # TODO: clean
     if not (@$ '#tab-uri').hasClass 'active'
       (@$ "[name='file_upload']").fileupload 'destroy'
-      (@$ 'ul.nav-tabs li').removeClass 'active'
+      (@$ 'ul.nav-tabs li').removeClass 'active show'
       (@$ '.tab-pane').removeClass 'active'
-      (@$ '.tabnav-uri').addClass 'active'
+      (@$ '.tabnav-uri').addClass 'active show'
       (@$ '#tab-uri').addClass 'active'
       (@$ '#save-asset').show()
       (@$ '.uri').show()
@@ -268,14 +246,14 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
           'please enter a valid URL'
     errors = ([field, v] for field, fn of validators when v = fn (@$fv field))
 
-    (@$ ".control-group.warning .help-inline.warning").remove()
-    (@$ ".control-group").removeClass 'warning'
+    (@$ ".form-group .help-inline.invalid-feedback").remove()
+    (@$ ".form-group .form-control").removeClass 'is-invalid'
     (@$ '[type=submit]').prop 'disabled', no
     for [field, v] in errors
       (@$ '[type=submit]').prop 'disabled', yes
-      (@$ ".control-group.#{field}").addClass 'warning'
-      (@$ ".control-group.#{field} .controls").append \
-        $ ("<span class='help-inline warning'>#{v}</span>")
+      (@$ ".form-group.#{field} .form-control").addClass 'is-invalid'
+      (@$ ".form-group.#{field} .controls").append \
+        $ ("<span class='help-inline invalid-feedback'>#{v}</span>")
 
   cancel: (e) =>
     (@$el.children ":first").modal 'hide'
@@ -389,14 +367,14 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
           'end date should be after start date'
     errors = ([field, v] for field, fn of validators when v = fn (@$fv field))
 
-    (@$ ".control-group.warning .help-inline.warning").remove()
-    (@$ ".control-group").removeClass 'warning'
+    (@$ ".form-group .help-inline.invalid-feedback").remove()
+    (@$ ".form-group .form-control").removeClass 'is-invalid'
     (@$ '[type=submit]').prop 'disabled', no
     for [field, v] in errors
       (@$ '[type=submit]').prop 'disabled', yes
-      (@$ ".control-group.#{field}").addClass 'warning'
-      (@$ ".control-group.#{field} .controls").append \
-        $ ("<span class='help-inline warning'>#{v}</span>")
+      (@$ ".form-group.#{field} .form-control").addClass 'is-invalid'
+      (@$ ".form-group.#{field} .controls").append \
+        $ ("<span class='help-inline invalid-feedback'>#{v}</span>")
 
 
   cancel: (e) =>
@@ -404,8 +382,8 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     (@$el.children ":first").modal 'hide'
 
   toggleAdvanced: =>
-    (@$ '.icon-play').toggleClass 'rotated'
-    (@$ '.icon-play').toggleClass 'unrotated'
+    (@$ '.fa-play').toggleClass 'rotated'
+    (@$ '.fa-play').toggleClass 'unrotated'
     (@$ '.collapse-advanced').collapse 'toggle'
 
   displayAdvanced: =>
@@ -430,10 +408,10 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
     (@$ ".delete-asset-button").popover content: get_template 'confirm-delete'
     (@$ ".toggle input").prop "checked", @model.get 'is_enabled'
     (@$ ".asset-icon").addClass switch @model.get "mimetype"
-      when "video"     then "icon-facetime-video"
-      when "streaming" then "icon-facetime-video"
-      when "image"     then "icon-picture"
-      when "webpage"   then "icon-globe"
+      when "video"     then "fas fa-video"
+      when "streaming" then "fas fa-video"
+      when "image"     then "far fa-image"
+      when "webpage"   then "fas fa-globe-americas"
       else ""
 
     if (@model.get "is_processing") == 1
@@ -444,6 +422,7 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
 
   events:
     'change .is_enabled-toggle input': 'toggleIsEnabled'
+    'click .download-asset-button': 'download'
     'click .edit-asset-button': 'edit'
     'click .delete-asset-button': 'showPopover'
 
@@ -468,6 +447,31 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
       @undelegateEvents()
       @$el.addClass 'warning'
       (@$ 'input, button').prop 'disabled', on
+
+  download: (e) =>
+    r = $.get '/api/v1/assets/' + @model.id + '/content'
+        .success (result) ->
+          switch result['type']
+            when 'url'
+              window.open(result['url'])
+            when 'file'
+              content = base64js.toByteArray(result['content'])
+
+              mimetype = result['mimetype']
+              fn = result['filename']
+
+              blob = new Blob([content], {type: mimetype})
+              url = URL.createObjectURL(blob)
+
+              a = document.createElement('a')
+              document.body.appendChild(a)
+              a.download = fn
+              a.href = url
+              a.click()
+
+              URL.revokeObjectURL(url)
+              a.remove()
+    no
 
   edit: (e) =>
     new EditAssetView model: @model

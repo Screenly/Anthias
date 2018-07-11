@@ -16,6 +16,8 @@ from sh import git
 from subprocess import check_output
 import traceback
 import uuid
+import hashlib
+from base64 import b64encode
 
 from flask import Flask, make_response, render_template, request, send_from_directory
 from flask_cors import CORS
@@ -39,6 +41,9 @@ from lib.utils import validate_url
 
 from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
 
+
+HOME = getenv('HOME', '/home/pi')
+DISABLE_MANAGE_NETWORK = '.screenly/disable_manage_network'
 
 app = Flask(__name__)
 CORS(app)
@@ -128,7 +133,10 @@ class AssetModel(Schema):
         },
         'duration': {'type': 'string'},
         'mimetype': {'type': 'string'},
-        'is_active': {'type': 'boolean'},
+        'is_active': {
+            'type': 'integer',
+            'format': 'int64',
+        },
         'is_enabled': {
             'type': 'integer',
             'format': 'int64',
@@ -146,6 +154,52 @@ class AssetModel(Schema):
             'format': 'int64',
         }
     }
+
+
+class AssetRequestModel(Schema):
+    type = 'object'
+    properties = {
+        'name': {'type': 'string'},
+        'uri': {'type': 'string'},
+        'start_date': {
+            'type': 'string',
+            'format': 'date-time'
+        },
+        'end_date': {
+            'type': 'string',
+            'format': 'date-time'
+        },
+        'duration': {'type': 'string'},
+        'mimetype': {'type': 'string'},
+        'is_enabled': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'nocache': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'play_order': {
+            'type': 'integer',
+            'format': 'int64',
+        }
+    }
+    required = ['name', 'uri', 'mimetype', 'is_enabled', 'start_date', 'end_date']
+
+
+class AssetContentModel(Schema):
+    type = 'object'
+    properties = {
+        'type': {'type': 'string'},
+        'url': {'type': 'string'},
+        'filename': {'type': 'string'},
+        'mimetype': {'type': 'string'},
+        'content': {
+            'type': 'string',
+            'format': 'byte'
+        },
+    }
+    required = ['type', 'filename']
 
 
 ################################
@@ -228,6 +282,75 @@ def prepare_asset(request):
     return asset
 
 
+def prepare_asset_v1_2(request, asset_id=None):
+    req = Request(request.environ)
+
+    data = json.loads(req.data)
+
+    def get(key):
+        val = data.get(key, '')
+        if isinstance(val, unicode):
+            return val.strip()
+        elif isinstance(val, basestring):
+            return val.strip().decode('utf-8')
+        else:
+            return val
+
+    if not all([get('name'),
+                get('uri'),
+                get('mimetype'),
+                str(get('is_enabled')),
+                get('start_date'),
+                get('end_date')]):
+        raise Exception("Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
+
+    asset = {
+        'name': get('name'),
+        'mimetype': get('mimetype'),
+        'is_enabled': get('is_enabled'),
+        'nocache': get('nocache')
+    }
+
+    uri = get('uri')
+
+    if uri.startswith('/'):
+        if not path.isfile(uri):
+            raise Exception("Invalid file path. Failed to add asset.")
+    else:
+        if not validate_url(uri):
+            raise Exception("Invalid URL. Failed to add asset.")
+
+    if not asset_id:
+        asset['asset_id'] = uuid.uuid4().hex
+        if uri.startswith('/'):
+            rename(uri, path.join(settings['assetdir'], asset['asset_id']))
+            uri = path.join(settings['assetdir'], asset['asset_id'])
+
+    if 'youtube_asset' in asset['mimetype']:
+        uri, asset['name'], asset['duration'] = download_video_from_youtube(uri, asset['asset_id'])
+        asset['mimetype'] = 'video'
+        asset['is_processing'] = 1
+
+    asset['uri'] = uri
+
+    if "video" in asset['mimetype']:
+        if get('duration') == 'N/A' or int(get('duration')) == 0:
+            asset['duration'] = int(get_video_duration(uri).total_seconds())
+    elif get('duration'):
+        # Crashes if it's not an int. We want that.
+        asset['duration'] = int(get('duration'))
+    else:
+        asset['duration'] = 10
+
+    asset['play_order'] = get('play_order') if get('play_order') else 0
+
+    # parse date via python-dateutil and remove timezone info
+    asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
+    asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
+
+    return asset
+
+
 # api view decorator. handles errors
 def api_response(view):
     @wraps(view)
@@ -275,7 +398,7 @@ class Assets(Resource):
                         "name": "Website",
                         "mimetype": "webpage",
                         "uri": "http://example.com",
-                        "is_active": false,
+                        "is_active": 0,
                         "start_date": "2017-02-02T00:33:00.000Z",
                         "end_date": "2017-03-01T00:33:00.000Z",
                         "duration": "10",
@@ -345,7 +468,7 @@ class Asset(Resource):
                         "name": "Website",
                         "mimetype": "webpage",
                         "uri": "http://example.com",
-                        "is_active": false,
+                        "is_active": 0,
                         "start_date": "2017-02-02T00:33:00.000Z",
                         "end_date": "2017-03-01T00:33:00.000Z",
                         "duration": "10",
@@ -395,7 +518,7 @@ class Asset(Resource):
             return '', 204  # return an OK with no content
 
 
-class AssetsNewVersion(Resource):
+class AssetsV1_1(Resource):
     method_decorators = [auth_basic]
 
     @swagger.doc({
@@ -441,7 +564,7 @@ class AssetsNewVersion(Resource):
             return assets_helper.create(conn, asset), 201
 
 
-class AssetNewVersion(Resource):
+class AssetV1_1(Resource):
     method_decorators = [api_response, auth_basic]
 
     @swagger.doc({
@@ -476,7 +599,7 @@ class AssetNewVersion(Resource):
             {
                 'in': 'body',
                 'name': 'model',
-                'description': 'Adds a asset',
+                'description': 'Adds an asset',
                 'schema': AssetModel,
                 'required': True
             }
@@ -491,6 +614,152 @@ class AssetNewVersion(Resource):
     def put(self, asset_id):
         with db.conn(settings['database']) as conn:
             return assets_helper.update(conn, asset_id, prepare_asset(request))
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset',
+                'required': True
+
+            },
+        ],
+        'responses': {
+            '204': {
+                'description': 'Deleted'
+            }
+        }
+    })
+    def delete(self, asset_id):
+        with db.conn(settings['database']) as conn:
+            asset = assets_helper.read(conn, asset_id)
+            try:
+                if asset['uri'].startswith(settings['assetdir']):
+                    remove(asset['uri'])
+            except OSError:
+                pass
+            assets_helper.delete(conn, asset_id)
+            return '', 204  # return an OK with no content
+
+
+class AssetsV1_2(Resource):
+    method_decorators = [auth_basic]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'List of assets',
+                'schema': {
+                    'type': 'array',
+                    'items': AssetModel
+                }
+            }
+        }
+    })
+    def get(self):
+        with db.conn(settings['database']) as conn:
+            return assets_helper.read(conn)
+
+    @api_response
+    @swagger.doc({
+        'parameters': [
+            {
+                'in': 'body',
+                'name': 'model',
+                'description': 'Adds an asset',
+                'schema': AssetRequestModel,
+                'required': True
+            }
+        ],
+        'responses': {
+            '201': {
+                'description': 'Asset created',
+                'schema': AssetModel
+            }
+        }
+    })
+    def post(self):
+        asset = prepare_asset_v1_2(request)
+        if url_fails(asset['uri']):
+            raise Exception("Could not retrieve file. Check the asset URL.")
+        with db.conn(settings['database']) as conn:
+            assets = assets_helper.read(conn)
+            ids_of_active_assets = [x['asset_id'] for x in assets if x['is_active']]
+
+            asset = assets_helper.create(conn, asset)
+
+            if asset['is_active']:
+                ids_of_active_assets.insert(asset['play_order'], asset['asset_id'])
+            assets_helper.save_ordering(conn, ids_of_active_assets)
+            return assets_helper.read(conn, asset['asset_id']), 201
+
+
+class AssetV1_2(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset'
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'Asset',
+                'schema': AssetModel
+            }
+        }
+    })
+    def get(self, asset_id):
+        with db.conn(settings['database']) as conn:
+            return assets_helper.read(conn, asset_id)
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset',
+                'required': True
+            },
+            {
+                'in': 'body',
+                'name': 'model',
+                'description': 'Adds an asset',
+                'schema': AssetRequestModel,
+                'required': True
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'Asset updated',
+                'schema': AssetModel
+            }
+        }
+    })
+    def put(self, asset_id):
+        asset = prepare_asset_v1_2(request, asset_id)
+        with db.conn(settings['database']) as conn:
+            assets = assets_helper.read(conn)
+            ids_of_active_assets = [x['asset_id'] for x in assets if x['is_active']]
+
+            asset = assets_helper.update(conn, asset_id, asset)
+
+            try:
+                ids_of_active_assets.remove(asset['asset_id'])
+            except ValueError:
+                pass
+            if asset['is_active']:
+                ids_of_active_assets.insert(asset['play_order'], asset['asset_id'])
+
+            assets_helper.save_ordering(conn, ids_of_active_assets)
+            return assets_helper.read(conn, asset_id)
 
     @swagger.doc({
         'parameters': [
@@ -710,10 +979,73 @@ class AssetsControl(Resource):
         publisher.send_to_viewer(command)
         return "Asset switched"
 
+
+class AssetContent(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'id of an asset'
+            }
+        ],
+        'responses': {
+            '200': {
+                'description':
+                '''
+                The content of the asset.
+
+                'type' can either be 'file' or 'url'.
+
+                In case of a file, the fields 'mimetype', 'filename', and 'content'  will be present.
+                In case of a URL, the field 'url' will be present.
+                ''',
+                'schema': AssetContentModel
+            }
+        }
+    })
+    def get(self, asset_id):
+        with db.conn(settings['database']) as conn:
+            asset = assets_helper.read(conn, asset_id)
+
+        if isinstance(asset, list):
+            raise Exception('Invalid asset ID provided')
+
+        if path.isfile(asset['uri']):
+            filename = asset['name']
+
+            with open(asset['uri'], 'rb') as f:
+                content = f.read()
+
+            mimetype = guess_type(filename)[0]
+            if not mimetype:
+                mimetype = 'application/octet-stream'
+
+            result = {
+                'type': 'file',
+                'filename': filename,
+                'content': b64encode(content),
+                'mimetype': mimetype
+            }
+        else:
+            result = {
+                'type': 'url',
+                'url': asset['uri']
+            }
+
+        return result
+
+
 api.add_resource(Assets, '/api/v1/assets')
 api.add_resource(Asset, '/api/v1/assets/<asset_id>')
-api.add_resource(AssetsNewVersion, '/api/v1.1/assets')
-api.add_resource(AssetNewVersion, '/api/v1.1/assets/<asset_id>')
+api.add_resource(AssetsV1_1, '/api/v1.1/assets')
+api.add_resource(AssetV1_1, '/api/v1.1/assets/<asset_id>')
+api.add_resource(AssetsV1_2, '/api/v1.2/assets')
+api.add_resource(AssetV1_2, '/api/v1.2/assets/<asset_id>')
+api.add_resource(AssetContent, '/api/v1/assets/<asset_id>/content')
 api.add_resource(FileAsset, '/api/v1/file_asset')
 api.add_resource(PlaylistOrder, '/api/v1/assets/order')
 api.add_resource(Backup, '/api/v1/backup')
@@ -779,24 +1111,92 @@ def settings_page():
     context = {'flash': None}
 
     if request.method == "POST":
-        for field, default in CONFIGURABLE_SETTINGS.items():
-            value = request.form.get(field, default)
-            if isinstance(default, bool):
-                value = value == 'on'
-            settings[field] = value
         try:
+            # put some request variables in local variables to make easier to read
+            current_pass = request.form.get('curpassword', '')
+            new_pass = request.form.get('password', '')
+            new_pass2 = request.form.get('password2', '')
+            current_pass = '' if current_pass == '' else hashlib.sha256(current_pass).hexdigest()
+            new_pass = '' if new_pass == '' else hashlib.sha256(new_pass).hexdigest()
+            new_pass2 = '' if new_pass2 == '' else hashlib.sha256(new_pass2).hexdigest()
+
+            new_user = request.form.get('user', '')
+            use_auth = request.form.get('use_auth', '') == 'on'
+
+            # Handle auth components
+            if settings['password'] != '':    # if password currently set,
+                if new_user != settings['user']:    # trying to change user
+                    # should have current password set. Optionally may change password.
+                    if current_pass == '':
+                        if not use_auth:
+                            raise ValueError("Must supply current password to disable authentication")
+                        raise ValueError("Must supply current password to change username")
+                    if current_pass != settings['password']:
+                        raise ValueError("Incorrect current password.")
+
+                    settings['user'] = new_user
+
+                if new_pass != '' and use_auth:
+                    if current_pass == '':
+                        raise ValueError("Must supply current password to change password")
+                    if current_pass != settings['password']:
+                        raise ValueError("Incorrect current password.")
+
+                    if new_pass2 != new_pass:  # changing password
+                        raise ValueError("New passwords do not match!")
+
+                    settings['password'] = new_pass
+
+                if new_pass == '' and not use_auth and new_pass2 == '':
+                    # trying to disable authentication
+                    if current_pass == '':
+                        raise ValueError("Must supply current password to disable authentication")
+                    settings['password'] = ''
+
+            else:        # no current password
+                if new_user != '':    # setting username and password
+                    if new_pass != '' and new_pass != new_pass2:
+                        raise ValueError("New passwords do not match!")
+                    if new_pass == '':
+                        raise ValueError("Must provide password")
+                    settings['user'] = new_user
+                    settings['password'] = new_pass
+
+            for field, default in CONFIGURABLE_SETTINGS.items():
+                value = request.form.get(field, default)
+
+                # skip user and password as they should be handled already.
+                if field == "user" or field == "password":
+                    continue
+
+                if isinstance(default, bool):
+                    value = value == 'on'
+                settings[field] = value
+
             settings.save()
             publisher = ZmqPublisher.get_instance()
             publisher.send_to_viewer('reload')
             context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
+        except ValueError as e:
+            context['flash'] = {'class': "danger", 'message': e}
         except IOError as e:
-            context['flash'] = {'class': "error", 'message': e}
+            context['flash'] = {'class': "danger", 'message': e}
         except OSError as e:
-            context['flash'] = {'class': "error", 'message': e}
+            context['flash'] = {'class': "danger", 'message': e}
     else:
         settings.load()
     for field, default in DEFAULTS['viewer'].items():
         context[field] = settings[field]
+
+    context['user'] = settings['user']
+    context['password'] = "password" if settings['password'] != "" else ""
+
+    context['reset_button_state'] = "disabled" if path.isfile(path.join(HOME, DISABLE_MANAGE_NETWORK)) else ""
+
+    if not settings['user'] or not settings['password']:
+        context['use_auth'] = False
+    else:
+        context['use_auth'] = True
 
     return template('settings.html', **context)
 

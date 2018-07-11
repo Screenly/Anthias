@@ -10,6 +10,7 @@ from UserDict import IterableUserDict
 from flask import request, Response
 from functools import wraps
 import zmq
+import hashlib
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -38,7 +39,9 @@ DEFAULTS = {
         'password': ''
     }
 }
-CONFIGURABLE_SETTINGS = DEFAULTS['viewer']
+CONFIGURABLE_SETTINGS = DEFAULTS['viewer'].copy()
+CONFIGURABLE_SETTINGS['user'] = DEFAULTS['auth']['user']
+CONFIGURABLE_SETTINGS['password'] = DEFAULTS['auth']['password']
 CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock']
 
 PORT = int(getenv('PORT', 8080))
@@ -66,8 +69,9 @@ class ScreenlySettings(IterableUserDict):
         self.conf_file = self.get_configfile()
 
         if not path.isfile(self.conf_file):
-            logging.error('Config-file %s missing', self.conf_file)
-            exit(1)
+            logging.error('Config-file %s missing. Using defaults.', self.conf_file)
+            self.use_defaults()
+            self.save()
         else:
             self.load()
 
@@ -79,6 +83,8 @@ class ScreenlySettings(IterableUserDict):
                 self[field] = config.getint(section, field)
             else:
                 self[field] = config.get(section, field)
+                if field == 'password' and self[field] != '' and len(self[field]) != 64:   # likely not a hashed password.
+                    self[field] = hashlib.sha256(self[field]).hexdigest()   # hash the original password.
         except ConfigParser.Error as e:
             logging.debug("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (section, field, unicode(e), default))
             self[field] = default
@@ -100,6 +106,11 @@ class ScreenlySettings(IterableUserDict):
         for section, defaults in DEFAULTS.items():
             for field, default in defaults.items():
                 self._get(config, section, field, default)
+
+    def use_defaults(self):
+        for defaults in DEFAULTS.items():
+            for field, default in defaults[1].items():
+                self[field] = default
 
     def save(self):
         # Write new settings to disk.
@@ -156,7 +167,8 @@ class ZmqPublisher:
 
 
 def authenticate():
-    return Response("Access denied", 401, {"WWW-Authenticate": "Basic realm=private"})
+    realm = "Screenly OSE" + (" " + settings['player_name'] if settings['player_name'] else "")
+    return Response("Access denied", 401, {"WWW-Authenticate": 'Basic realm="' + realm + '"'})
 
 
 def auth_basic(orig):
@@ -165,7 +177,7 @@ def auth_basic(orig):
         if not settings['user'] or not settings['password']:
             return orig(*args, **kwargs)
         auth = request.authorization
-        if not auth or not settings.check_user(auth.username, auth.password):
+        if not auth or not settings.check_user(auth.username, hashlib.sha256(auth.password).hexdigest()):
             return authenticate()
         return orig(*args, **kwargs)
     return decorated
