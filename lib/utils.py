@@ -92,7 +92,7 @@ def get_video_duration(file):
     time = None
 
     if arch in ('armv6l', 'armv7l'):
-        run_player = omxplayer(file, info=True, _err_to_out=True, _ok_code=[0, 1])
+        run_player = omxplayer(file, info=True, _err_to_out=True, _ok_code=[0, 1], _decode_errors='ignore')
     else:
         run_player = ffprobe('-i', file, _err_to_out=True)
 
