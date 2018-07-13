@@ -64,6 +64,14 @@ else
   EXTRA_ARGS="--skip-tags enable-ssl"
 fi
 
+if grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
+   export DEVICE_TYPE="pi3"
+elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
+   export DEVICE_TYPE="pi2"
+else
+   export DEVICE_TYPE="pi1"
+fi
+
 set -x
 sudo mkdir -p /etc/ansible
 echo -e "[local]\nlocalhost ansible_connection=local" | sudo tee /etc/ansible/hosts > /dev/null
