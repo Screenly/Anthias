@@ -32,7 +32,10 @@ RUN pip install -r /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.viewer.txt
 
 # QtBase from packages does not support eglfs
-RUN curl -L https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase.tar.gz > /tmp/qtbase.tar.gz
+ARG PI_VERSION=pi1
+RUN curl -L \
+    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase-$PI_VERSION.tar.gz" \
+    > /tmp/qtbase.tar.gz
 RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
 RUN echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf
 RUN ldconfig
@@ -53,7 +56,9 @@ RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so
 ENV QT_QPA_PLATFORM eglfs
 
 RUN mkdir /usr/local/share/ScreenlyWebview
-RUN curl -L https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/screenly-webview-v0.1.tar.gz > /tmp/screenly-webview-v0.1.tar.gz
+RUN curl -L  \
+    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/screenly-webview-v0.1.tar.gz" \
+    > /tmp/screenly-webview-v0.1.tar.gz
 RUN tar -xzf /tmp/screenly-webview-v0.1.tar.gz -C /tmp
 
 RUN cp -r /tmp/res /usr/local/share/ScreenlyWebview/res

@@ -83,13 +83,20 @@
     state: absent
   with_items: "{{ screenly_systemd_units }}"
 
+- name: Check /proc/device-tree/model file
+  command: cat /proc/device-tree/model
+  register: model_file
+
 - debug:
-    msg: "Use {{ lookup('env', 'DOCKER_TAG') }} version of images."
+    msg: "Device type: {{ device_type }}"
+
+- debug:
+    msg: "Use {{ docker_tag }} version of images."
 
 - name: Create screenly-server container
   docker_container:
     name: screenly-ose-server
-    image: "screenly/screenly-ose-server:{{ lookup('env', 'DOCKER_TAG') }}"
+    image: "screenly/screenly-ose-server:{{ docker_tag }}"
     pull: true
     state: present
     recreate: true
@@ -104,7 +111,7 @@
 - name: Create screenly-viewer container
   docker_container:
     name: screenly-ose-viewer
-    image: "screenly/screenly-ose-viewer:{{ lookup('env', 'DOCKER_TAG') }}"
+    image: "screenly/screenly-ose-viewer:{{ docker_tag }}-{{ device_type }}"
     pull: true
     state: present
     recreate: true
@@ -119,7 +126,7 @@
 - name: Create screenly-websocket-server container
   docker_container:
     name: screenly-ose-websocket
-    image: "screenly/screenly-ose-websocket:{{ lookup('env', 'DOCKER_TAG') }}"
+    image: "screenly/screenly-ose-websocket:{{ docker_tag }}"
     pull: true
     state: present
     recreate: true
