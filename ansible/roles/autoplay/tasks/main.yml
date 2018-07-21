@@ -1,0 +1,25 @@
+---
+
+- name: Installs autoplay script
+  copy:
+    src: autoplay.sh
+    dest: /usr/local/bin/autoplay.sh
+    mode: 755
+    owner: root
+    group: root
+
+- name: Installs autoplay udev rule
+  copy:
+    src: 50-autoplay.rules
+    dest: /etc/udev/rules.d/50-autoplay.rules
+    mode: 644
+    owner: root
+    group: root
+
+- name: Installs autoplay service
+  copy:
+    src: autoplay@.service
+    dest: /etc/systemd/system/autoplay@.service
+    mode: 644
+    owner: root
+    group: root

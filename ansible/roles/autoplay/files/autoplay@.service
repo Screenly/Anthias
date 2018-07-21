@@ -1,0 +1,7 @@
+[Unit]
+Description=Mount USB Drive and play items
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/local/bin/autoplay.sh add %i
+ExecStop=/usr/local/bin/autoplay.sh remove %i
