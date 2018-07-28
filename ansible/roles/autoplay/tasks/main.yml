@@ -16,10 +16,21 @@
     owner: root
     group: root
 
-- name: Installs autoplay service
+- name: Installs udev restart service
   copy:
-    src: autoplay@.service
-    dest: /etc/systemd/system/autoplay@.service
+    src: udev-restart.service
+    dest: /etc/systemd/system/udev-restart.service
     mode: 644
     owner: root
     group: root
+
+- name: Copy systemd-udevd service
+  copy: 
+    src: /lib/systemd/system/systemd-udevd.service
+    dest: /etc/systemd/system/systemd-udevd.service
+
+- name: Configure systemd-udevd service
+  lineinfile:
+    dest: /etc/systemd/system/systemd-udevd.service
+    regexp: '^MountFlags='
+    line: 'MountFlags=shared'
