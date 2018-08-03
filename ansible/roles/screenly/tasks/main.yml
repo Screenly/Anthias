@@ -73,6 +73,7 @@
 - name: Disable deprecated systemd services
   systemd:
     name: "{{ item }}"
+    state: stopped
     enabled: no
   with_items: "{{ screenly_systemd_units }}"
   when: x_service_exist
@@ -98,7 +99,7 @@
     name: screenly-ose-server
     image: "screenly/screenly-ose-server:{{ docker_tag }}"
     pull: true
-    state: present
+    state: started
     recreate: true
     restart_policy: unless-stopped
     network_mode: host
@@ -113,7 +114,7 @@
     name: screenly-ose-viewer
     image: "screenly/screenly-ose-viewer:{{ docker_tag }}-{{ device_type }}"
     pull: true
-    state: present
+    state: started
     recreate: true
     restart_policy: unless-stopped
     network_mode: host
@@ -128,7 +129,7 @@
     name: screenly-ose-websocket
     image: "screenly/screenly-ose-websocket:{{ docker_tag }}"
     pull: true
-    state: present
+    state: started
     recreate: true
     restart_policy: unless-stopped
     network_mode: host
