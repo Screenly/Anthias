@@ -9,6 +9,7 @@ import requests
 from datetime import datetime, timedelta
 from distutils.util import strtobool
 from netifaces import ifaddresses
+from netifaces import gateways
 from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
@@ -78,16 +79,12 @@ def get_node_ip():
         that is being used as the default gateway.
         This should work on both MacOS X and Linux."""
         try:
-            default_interface = grep(netstat('-6nr'), '-e', '^::/0.*UG').split()[-1]
-            my_ip = ifaddresses(default_interface)[10][0]['addr']
+            interface_id = next(iter([gateways()][0]['default']), None)
+            default_interface = [gateways()][0]['default'][interface_id][1]
+            my_ip = ifaddresses(default_interface)[min(ifaddresses(default_interface))][0]['addr']
             return my_ip
         except:
-          try:
-              default_interface = grep(netstat('-nr'), '-e', '^default', '-e' '^0.0.0.0').split()[-1]
-              my_ip = ifaddresses(default_interface)[2][0]['addr']
-              return my_ip
-          except:
-              raise Exception("Unable to resolve local IP address.")
+            raise Exception("Unable to resolve local IP address.")
 
 
 def get_video_duration(file):
