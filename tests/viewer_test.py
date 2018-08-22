@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 
 from nose.tools import ok_, eq_
 from nose.plugins.attrib import attr
