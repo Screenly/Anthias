@@ -79,9 +79,9 @@ def get_node_ip():
         that is being used as the default gateway.
         This should work on both MacOS X and Linux."""
         try:
-            interface_id = next(iter([gateways()][0]['default']), None)
+            interface_id = max(list(gateways()['default']))
             default_interface = [gateways()][0]['default'][interface_id][1]
-            my_ip = ifaddresses(default_interface)[min(ifaddresses(default_interface))][0]['addr']
+            my_ip = ifaddresses(default_interface)[interface_id][0]['addr']
             return my_ip
         except:
             raise Exception("Unable to resolve local IP address.")
