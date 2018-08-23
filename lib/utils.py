@@ -78,6 +78,8 @@ def get_node_ip():
         that is being used as the default gateway.
         This should work on both MacOS X and Linux."""
         try:
+            if settings['my_ip'] != '':
+                return settings['my_ip']
             address_family_id = max(list(gateways()['default']))
             default_interface = gateways()['default'][address_family_id][1]
             my_ip = ifaddresses(default_interface)[address_family_id][0]['addr']
