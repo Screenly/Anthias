@@ -78,6 +78,8 @@ def get_node_ip():
         that is being used as the default gateway.
         This should work on both MacOS X and Linux."""
         try:
+            if settings['my_ip'] != '':
+                return settings['my_ip']
             default_interface = grep(netstat('-nr'), '-e', '^default', '-e' '^0.0.0.0').split()[-1]
             my_ip = ifaddresses(default_interface)[2][0]['addr']
             return my_ip

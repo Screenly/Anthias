@@ -21,7 +21,8 @@ DEFAULTS = {
         'use_24_hour_clock': False,
         'websocket_port': '9999',
         'use_ssl': False,
-        'analytics_opt_out': False
+        'analytics_opt_out': False,
+        'my_ip': ''
     },
     'viewer': {
         'player_name': '',
