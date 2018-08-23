@@ -8,8 +8,7 @@ import requests
 
 from datetime import datetime, timedelta
 from distutils.util import strtobool
-from netifaces import ifaddresses
-from netifaces import gateways
+from netifaces import ifaddresses, gateways
 from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
