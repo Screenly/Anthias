@@ -25,7 +25,6 @@
 ################################################################################
 
 
-
 """
 
 Cooperative multitasking and asynchronous I/O using generators
@@ -144,10 +143,9 @@ import time
 import types
 
 
-__author__   = 'Christopher Stawarz <cstawarz@csail.mit.edu>'
-__version__  = '0.2.0'
+__author__ = 'Christopher Stawarz <cstawarz@csail.mit.edu>'
+__version__ = '0.2.0'
 # __revision__ = int('$Revision$'.split()[1])
-
 
 
 ################################################################################
@@ -157,11 +155,9 @@ __version__  = '0.2.0'
 ################################################################################
 
 
-
 class Timeout(Exception):
     'Raised in a yielding task when an operation times out'
     pass
-
 
 
 ################################################################################
@@ -169,7 +165,6 @@ class Timeout(Exception):
 # _ChildTask class
 #
 ################################################################################
-
 
 
 class _ChildTask(object):
@@ -185,13 +180,11 @@ class _ChildTask(object):
         return self.task.throw(type, value, traceback)
 
 
-
 ################################################################################
 #
 # YieldCondition class
 #
 ################################################################################
-
 
 
 class YieldCondition(object):
@@ -227,13 +220,11 @@ class YieldCondition(object):
         return (self.expiration is not None)
 
 
-
 ################################################################################
 #
 # _SleepDelay class and related functions
 #
 ################################################################################
-
 
 
 class _SleepDelay(YieldCondition):
@@ -260,13 +251,11 @@ def sleep(seconds):
     return _SleepDelay(seconds)
 
 
-
 ################################################################################
 #
 # FDReady class and related functions
 #
 ################################################################################
-
 
 
 class FDReady(YieldCondition):
@@ -362,13 +351,11 @@ def writable(fd, timeout=None):
     return FDReady(fd, write=True, timeout=timeout)
 
 
-
 ################################################################################
 #
 # FDAction class and related functions
 #
 ################################################################################
-
 
 
 class FDAction(FDReady):
@@ -586,13 +573,11 @@ def sendto(sock, *args, **kwargs):
     return FDAction(sock, sock.sendto, args, kwargs, write=True)
 
 
-
 ################################################################################
 #
 # Queue and _QueueAction classes
 #
 ################################################################################
-
 
 
 class Queue(object):
@@ -693,7 +678,6 @@ class _QueueAction(YieldCondition):
 ################################################################################
 
 
-
 class SmartQueue(object):
 
     """
@@ -704,7 +688,7 @@ class SmartQueue(object):
     on get and allows multiple get to be signalled for the same put. 
     On the downside, this uses list instead of deque and has lower
     performance.
-    
+
     """
 
     def __init__(self, contents=(), maxsize=0):
@@ -719,17 +703,18 @@ class SmartQueue(object):
         """
 
         self.maxsize = int(maxsize)
-        self._pending =  list(contents)
+        self._pending = list(contents)
 
     def __len__(self):
         'Return the number of items in the queue'
         return len(self._pending)
 
     def _get(self, criteria=None):
-        #self._pending = filter(lambda x: x[1]<=now, self._pending) # remove expired ones
+        # self._pending = filter(lambda x: x[1]<=now, self._pending) # remove expired ones
         if criteria:
-            found = filter(lambda x: criteria(x), self._pending)   # check any matching criteria
-            if found: 
+            # check any matching criteria
+            found = filter(lambda x: criteria(x), self._pending)
+            if found:
                 self._pending.remove(found[0])
                 return found[0]
             else:
@@ -811,7 +796,6 @@ class _SmartQueueAction(YieldCondition):
 ################################################################################
 
 
-
 class TaskManager(object):
 
     """
@@ -831,12 +815,12 @@ class TaskManager(object):
 
         """
 
-        self._queue       = collections.deque()
-        self._read_waits  = set()
+        self._queue = collections.deque()
+        self._read_waits = set()
         self._write_waits = set()
-        self._exc_waits   = set()
+        self._exc_waits = set()
         self._queue_waits = collections.defaultdict(self._double_deque)
-        self._timeouts    = []
+        self._timeouts = []
 
     @staticmethod
     def _double_deque():
@@ -856,9 +840,9 @@ class TaskManager(object):
 
         # Merge the data structures
         self._queue.extend(other._queue)
-        self._read_waits  |= other._read_waits
+        self._read_waits |= other._read_waits
         self._write_waits |= other._write_waits
-        self._exc_waits   |= other._exc_waits
+        self._exc_waits |= other._exc_waits
         self._queue_waits.update(other._queue_waits)
         self._timeouts.extend(other._timeouts)
         heapq.heapify(self._timeouts)
@@ -866,12 +850,12 @@ class TaskManager(object):
         # Make other reference the merged data structures.  This is
         # necessary because other's tasks may reference and use other
         # (e.g. to add a new task in response to an event).
-        other._queue       = self._queue
-        other._read_waits  = self._read_waits
+        other._queue = self._queue
+        other._read_waits = self._read_waits
         other._write_waits = self._write_waits
-        other._exc_waits   = self._exc_waits
+        other._exc_waits = self._exc_waits
         other._queue_waits = self._queue_waits
-        other._timeouts    = self._timeouts
+        other._timeouts = self._timeouts
 
     def add(self, task):
         'Add a new task (i.e. a generator instance) to the run queue'
@@ -948,13 +932,14 @@ class TaskManager(object):
         """
 
         while self.has_io_waits():
-            if self._handle_io_waits(self._fix_run_timeout(timeout)) or self.has_runnable(): break
+            if self._handle_io_waits(self._fix_run_timeout(timeout)) or self.has_runnable():
+                break
 
         if self.has_timeouts():
             self._handle_timeouts(self._fix_run_timeout(timeout))
 
         # Run all tasks currently in the queue
-        #for dummy in xrange(len(self._queue)):
+        # for dummy in xrange(len(self._queue)):
         while len(self._queue) > 0:
             task, input, exc_info = self._queue.popleft()
             try:
@@ -1129,7 +1114,6 @@ class TaskManager(object):
                     if action._expires():
                         self._remove_timeout(action)
 
-
     def _handle_smart_queue_action(self, task, output):
         get_waits, put_waits = self._queue_waits[output.queue]
 
@@ -1165,12 +1149,11 @@ class TaskManager(object):
                         item = output.queue._get(criteria=action.criteria)
                         if item is not None:
                             actions.append((action, item))
-                    for action,item in actions:
+                    for action, item in actions:
                         get_waits.remove(action)
                         self._enqueue(action.task, input=item)
                         if action._expires():
                             self._remove_timeout(action)
-
 
 
 ################################################################################
@@ -1178,7 +1161,6 @@ class TaskManager(object):
 # Default TaskManager instance
 #
 ################################################################################
-
 
 
 _default_task_manager = None
@@ -1202,13 +1184,11 @@ def run():
     get_default_task_manager().run()
 
 
-
 ################################################################################
 #
 # Test routine
 #
 ################################################################################
-
 
 
 if __name__ == '__main__':
