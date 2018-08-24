@@ -28,14 +28,16 @@ HTTP_OK = xrange(200, 299)
 # Travis can run.
 try:
     from sh import omxplayer
-except:
+# FIXME find an expected exception
+except Exception:
     pass
 
 # This will work on x86-based machines
 if machine() in ['x86', 'x86_64']:
     try:
         from sh import ffprobe, mplayer
-    except:
+    # FIXME find an expected exception
+    except Exception:
         pass
 
 
@@ -78,10 +80,19 @@ def get_node_ip():
         that is being used as the default gateway.
         This should work on both MacOS X and Linux."""
         try:
-            default_interface = grep(netstat('-nr'), '-e', '^default', '-e' '^0.0.0.0').split()[-1]
+            # FIXME netstat no longer installed by default
+            # on stretch+ systems.  Should we assure net-tools
+            # package installed or use "ip" command to retrieve
+            # default interface?
+            # ip route  | grep ^default | awk '{print $5}'
+            default_interface = grep(netstat('-nr'),
+                                     '-e',
+                                     '^default',
+                                     '-e' '^0.0.0.0').split()[-1]
             my_ip = ifaddresses(default_interface)[2][0]['addr']
             return my_ip
-        except:
+        # FIXME find an expected exception
+        except Exception:
             raise Exception("Unable to resolve local IP address.")
 
 
