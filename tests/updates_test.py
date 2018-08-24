@@ -34,7 +34,7 @@ class UpdateTest(unittest.TestCase):
     def test_if_sha_file_not_exists__is_up_to_date__should_return_false(self):
         self.assertEqual(server.is_up_to_date(), True)
 
-    def test_if_sha_file_not_equals_to_branch_hash__is_up_to_date__should_return_false(self):
+    def test_if_sha_file_not_equals_to_branch_hash__is_up_to_date__should_return_false(self):  # noqa
         with open(self.sha_file, 'w+') as f:
             f.write(fancy_sha)
         self.assertEqual(server.is_up_to_date(), False)
@@ -51,7 +51,7 @@ class UpdateTest(unittest.TestCase):
     @patch('viewer.req_get', side_effect=mocked_req_get)
     @patch('viewer.remote_branch_available', side_effect=lambda _: True)
     @patch('viewer.fetch_remote_hash', side_effect=lambda _: 'master')
-    def test_if_sha_file_is_empty__check_update__should_return_true(self, req_get, remote_branch_available, fetch_remote_hash):
+    def test_if_sha_file_is_empty__check_update__should_return_true(self, req_get, remote_branch_available, fetch_remote_hash):  # noqa
         with open(self.sha_file, 'w+') as f:
             pass
 

@@ -9,8 +9,9 @@ from threading import Thread
 
 from mixpanel import Mixpanel, MixpanelException
 from netifaces import gateways
-# FIXME unused import (consider using flake8 to find these types of problems)
-# from requests import get as req_get
+# FIXME unused import here, but used in tests/updates_test.py
+# should we import requests in that file and @patch requests.get?
+from requests import get as req_get  # noqa
 from signal import signal, SIGUSR1
 from time import sleep
 import logging
