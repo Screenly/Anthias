@@ -113,7 +113,7 @@ class TestWatchdog(ViewerTestCase):
         try:
             os.remove(self.u.WATCHDOG_PATH)
         # FIXME find an expected exception
-        except Exception:
+        except BaseException:
             pass
         self.u.watchdog()
         self.assertEqual(os.path.exists(self.u.WATCHDOG_PATH), True)

@@ -100,7 +100,7 @@ def is_up_to_date():
         with open(sha_file, 'r') as f:
             latest_sha = f.read().strip()
     # FIXME find an expected exception
-    except Exception:
+    except BaseException:
         latest_sha = None
 
     if latest_sha:
@@ -976,7 +976,7 @@ class Info(Resource):
             viewlog = [line.decode('utf-8') for line in
                        check_output(cmd).split('\n')]
         # FIXME find an expected exception
-        except Exception:
+        except BaseException:
             pass
 
         # Calculate disk space
@@ -1100,7 +1100,7 @@ api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
 try:
     my_ip = get_node_ip()
 # FIXME find an expected exception
-except Exception:
+except BaseException:
     pass
 else:
     SWAGGER_URL = '/api/docs'
@@ -1260,12 +1260,13 @@ def settings_page():
 def system_info():
     viewlog = None
     # FIXME still new to systemd  is sudo really necessary for
-    # systemctl status?
+    # systemctl status? Was the fact that jessie wears a red hat
+    # an inside joke?
     try:
         viewlog = [line.decode('utf-8') for line in
                    check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]  # noqa
     # FIXME find an expected execption
-    except Exception:
+    except BaseException:
         pass
 
     loadavg = diagnostics.get_load_avg()['15 min']

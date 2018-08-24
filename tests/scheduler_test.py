@@ -97,7 +97,7 @@ class SchedulerTest(unittest.TestCase):
         try:
             os.remove(FAKE_DB_PATH)
         # FIXME find an expected exception
-        except Exception:
+        except BaseException:
             pass
 
     def test_generate_asset_list_assets_should_be_y_and_x(self):

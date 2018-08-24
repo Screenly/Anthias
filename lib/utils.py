@@ -29,7 +29,7 @@ HTTP_OK = xrange(200, 299)
 try:
     from sh import omxplayer
 # FIXME find an expected exception
-except Exception:
+except BaseException:
     pass
 
 # This will work on x86-based machines
@@ -37,7 +37,7 @@ if machine() in ['x86', 'x86_64']:
     try:
         from sh import ffprobe, mplayer
     # FIXME find an expected exception
-    except Exception:
+    except BaseException:
         pass
 
 
@@ -92,7 +92,7 @@ def get_node_ip():
             my_ip = ifaddresses(default_interface)[2][0]['addr']
             return my_ip
         # FIXME find an expected exception
-        except Exception:
+        except BaseException:
             raise Exception("Unable to resolve local IP address.")
 
 

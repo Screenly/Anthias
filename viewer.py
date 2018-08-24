@@ -196,7 +196,7 @@ class Scheduler(object):
         try:
             return path.getmtime(settings['database'])
         # FIXME, this is really just as bad as a bare except statement
-        except Exception:
+        except BaseException:
             return 0
 
 
@@ -495,6 +495,6 @@ if __name__ == "__main__":
     try:
         main()
     # FIXME, this is really just as bad as a bare except statement
-    except Exception:
+    except BaseException:
         logging.exception("Viewer crashed.")
         raise
