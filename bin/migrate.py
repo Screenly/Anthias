@@ -85,6 +85,8 @@ def migrate_add_column(col, script):
                 asset.update({'play_order': 0})
                 update(cursor, asset['asset_id'], asset)
                 conn.commit()
+
+
 # ✂--------
 query_create_assets_table = """
 create table assets(
