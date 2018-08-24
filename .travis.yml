@@ -35,7 +35,6 @@ before_script:
 
 script:
   - find . ! -path "*/rtmplite/*" -name \*.py -exec pycodestyle --ignore=E402,E501,E722,E731 {} +
-  #- find . -name \*.py -exec pycodestyle --ignore=E402,E501,E722,E731 {} +
   - nosetests -v -a '!fixme' --with-isolation
   - ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml
   - python -m SimpleHTTPServer 8080 &
