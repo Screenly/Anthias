@@ -8,11 +8,10 @@ import requests
 
 from datetime import datetime, timedelta
 from distutils.util import strtobool
-from netifaces import ifaddresses
+from netifaces import ifaddresses, gateways
 from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
-from sh import grep, netstat
 from subprocess import check_output, call
 from threading import Thread
 from urlparse import urlparse
@@ -72,7 +71,8 @@ def validate_url(string):
     """
 
     checker = urlparse(string)
-    return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
+    valid_schemes = ('http', 'https', 'rtsp', 'rtmp')
+    return bool(checker.scheme in valid_schemes and checker.netloc)
 
 
 def get_node_ip():
@@ -80,16 +80,9 @@ def get_node_ip():
         that is being used as the default gateway.
         This should work on both MacOS X and Linux."""
         try:
-            # FIXME netstat no longer installed by default
-            # on stretch+ systems.  Should we assure net-tools
-            # package installed or use "ip" command to retrieve
-            # default interface?
-            # ip route  | grep ^default | awk '{print $5}'
-            default_interface = grep(netstat('-nr'),
-                                     '-e',
-                                     '^default',
-                                     '-e' '^0.0.0.0').split()[-1]
-            my_ip = ifaddresses(default_interface)[2][0]['addr']
+            address_family_id = max(list(gateways()['default']))
+            default_interface = gateways()['default'][address_family_id][1]
+            my_ip = ifaddresses(default_interface)[address_family_id][0]['addr']
             return my_ip
         # FIXME find an expected exception
         except BaseException:
@@ -103,7 +96,10 @@ def get_video_duration(file):
     time = None
 
     if arch in ('armv6l', 'armv7l'):
-        run_player = omxplayer(file, info=True, _err_to_out=True, _ok_code=[0, 1], _decode_errors='ignore')
+        run_player = omxplayer(file, info=True,
+                               _err_to_out=True,
+                               _ok_code=[0, 1],
+                               _decode_errors='ignore')
     else:
         run_player = ffprobe('-i', file, _err_to_out=True)
 
@@ -128,7 +124,7 @@ def handler(obj):
         with_tz = obj.replace(tzinfo=pytz.utc)
         return with_tz.isoformat()
     else:
-        raise TypeError('Object of type %s with value of %s is not JSON serializable' % (type(obj), repr(obj)))
+        raise TypeError('Object of type %s with value of %s is not JSON serializable' % (type(obj), repr(obj)))  # noqa
 
 
 def json_dump(obj):
@@ -141,7 +137,10 @@ def url_fails(url):
     """
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
         if arch in ('armv6l', 'armv7l'):
-            run_omxplayer = omxplayer(url, info=True, _err_to_out=True, _ok_code=[0, 1])
+            run_omxplayer = omxplayer(url,
+                                      info=True,
+                                      _err_to_out=True,
+                                      _ok_code=[0, 1])
             for line in run_omxplayer.split('\n'):
                 if 'Input #0' in line:
                     return False
@@ -164,7 +163,7 @@ def url_fails(url):
         verify = False
 
     headers = {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15',  # noqa
     }
     try:
         if not validate_url(url):
@@ -219,7 +218,9 @@ class YoutubeDownloadThread(Thread):
         publisher = ZmqPublisher.get_instance()
         call(['youtube-dl', '-f', 'mp4', '-o', self.location, self.uri])
         with db.conn(settings['database']) as conn:
-            update(conn, self.asset_id, {'asset_id': self.asset_id, 'is_processing': 0})
+            update(conn,
+                   self.asset_id,
+                   {'asset_id': self.asset_id, 'is_processing': 0})
 
         publisher.send_to_ws_server(self.asset_id)
 
