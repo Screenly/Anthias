@@ -9,7 +9,7 @@ from threading import Thread
 
 from mixpanel import Mixpanel, MixpanelException
 from netifaces import gateways
-# FIXME unused import
+# FIXME unused import (consider using flake8 to find these types of problems)
 # from requests import get as req_get
 from signal import signal, SIGUSR1
 from time import sleep
