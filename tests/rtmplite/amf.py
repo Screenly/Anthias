@@ -55,10 +55,11 @@ class BytesIO(StringIO):
             return None
         else:
             c = self.read(1)
-            self.seek(self.tell()-1)
+            self.seek(self.tell() - 1)
             return c
 
-    for type, T, bytes in (('u8', 'B', 1), ('s8', 'b', 1), ('u16', 'H', 2), ('s16', 'h', 2), ('u32', 'L', 4), ('s32', 'l', 4), ('double', 'd', 8)):
+    for type, T, bytes in (('u8', 'B', 1), ('s8', 'b', 1), ('u16', 'H', 2),
+                           ('s16', 'h', 2), ('u32', 'L', 4), ('s32', 'l', 4), ('double', 'd', 8)):
         exec '''def read_%s(self): return struct.unpack("!%s", self.read(%d))[0]''' % (type, T, bytes)
         exec '''def write_%s(self, c): self.write(struct.pack("!%s", c))''' % (type, T)
 
@@ -164,7 +165,7 @@ class AMF0(object):
             return AMF3(self.data).read()
         else:
             raise ValueError('Invalid AMF0 marker 0x%02x at %d' %
-                             (marker, self.data.tell()-1))
+                             (marker, self.data.tell() - 1))
 
     def write(self, data):
         global undefined
@@ -284,7 +285,7 @@ class AMF0(object):
             def dst(self, dt): return None
 
             def tzname(self, dt): return None
-        return datetime.datetime.fromtimestamp(ms/1000.0, TZ())
+        return datetime.datetime.fromtimestamp(ms / 1000.0, TZ())
 
     def writeDate(self, data):
         if isinstance(data, datetime.date):
@@ -292,7 +293,7 @@ class AMF0(object):
         self.data.write_u8(AMF0.DATE)
         ms = time.mktime(data.timetuple)
         tz = 0 if not data.tzinfo else (
-            data.tzinfo.utcoffset.days*1440 + data.tzinfo.utcoffset.seconds/60)
+            data.tzinfo.utcoffset.days * 1440 + data.tzinfo.utcoffset.seconds / 60)
         self.data.write_double(ms)
         self.data.write_s16(tz)
 
@@ -363,7 +364,7 @@ class AMF3(object):
             return self.readByteArray()
         else:
             raise ValueError('Invalid AMF3 type 0x%02x at %d' %
-                             (type, self.data.tell()-1))
+                             (type, self.data.tell() - 1))
 
     def write(self, data):
         global undefined
@@ -422,7 +423,8 @@ class AMF3(object):
         result = self.data.read(length)
         if decode:
             try:
-                # Try decoding as regular utf8 first. TODO: will it always raise exception?
+                # Try decoding as regular utf8 first. TODO: will it always
+                # raise exception?
                 result = unicode(result, 'utf8')
             except UnicodeDecodeError:
                 result = AMF3._decode_utf8_modified(result)
@@ -438,7 +440,7 @@ class AMF3(object):
         if len(data) == 0:
             self.data.write_u8(0x01)
         elif not self._writePossibleReference(data, refs):
-            if encode and type(data) is unicode:
+            if encode and isinstance(data, unicode):
                 data = unicode(data).encode('utf8')
             self.data.write_u29((len(data) << 1) & 0x01)
             self.data.write(data)
@@ -451,14 +453,16 @@ class AMF3(object):
             refs.append(data)
 
     # Ported from http://viewvc.rubyforge.mmmultiworks.com/cgi/viewvc.cgi/trunk/lib/ruva/class.rb
-    # Ruby version is Copyright (c) 2006 Ross Bamford (rosco AT roscopeco DOT co DOT uk). The string is first converted to UTF16 BE
+    # Ruby version is Copyright (c) 2006 Ross Bamford (rosco AT roscopeco DOT
+    # co DOT uk). The string is first converted to UTF16 BE
     @staticmethod
-    # Modified UTF-8 data. See http://en.wikipedia.org/wiki/UTF-8#Java for details
+    # Modified UTF-8 data. See http://en.wikipedia.org/wiki/UTF-8#Java for
+    # details
     def _decode_utf8_modified(data):
         utf16, i, b = [], 0, map(ord, data)
         while i < len(b):
-            c = b[i:i+1] if b[i] & 0x80 == 0 else b[i:i+2] if b[i] & 0xc0 == 0xc0 else b[i:i +
-                                                                                         3] if b[i] & 0xe0 == 0xe0 else b[i:i+4] if b[i] & 0xf8 == 0xf8 else []
+            c = b[i:i + 1] if b[i] & 0x80 == 0 else b[i:i + 2] if b[i] & 0xc0 == 0xc0 else b[i:i +
+                                                                                             3] if b[i] & 0xe0 == 0xe0 else b[i:i + 4] if b[i] & 0xf8 == 0xf8 else []
             if len(c) == 0:
                 raise ValueError('invalid modified utf-8')
             utf16.append(c[0] if len(c) == 1 else (((c[0] & 0x1f) << 6) | (c[1] & 0x3f)) if len(c) == 2 else (((c[0] & 0x0f) << 12) | ((c[1] & 0x3f) << 6) | (
@@ -466,12 +470,13 @@ class AMF3(object):
         for c in utf16:
             if c > 0xffff:
                 raise ValueError('does not implement more than 16 bit unicode')
-        return unicode(''.join([chr((c >> 8) & 0xff) + chr(c & 0xff) for c in utf16]), 'utf_16_be')
+        return unicode(
+            ''.join([chr((c >> 8) & 0xff) + chr(c & 0xff) for c in utf16]), 'utf_16_be')
 
     @staticmethod
     def _encode_utf8_modified(data):
         ch = [ord(i) for i in unicode(data).encode('utf_16_be')]
-        utf16 = [(((ch[i] & 0xff) << 8) + (ch[i+1] & 0xff))
+        utf16 = [(((ch[i] & 0xff) << 8) + (ch[i + 1] & 0xff))
                  for i in xrange(0, len(ch), 2)]
         b = [(struct.pack('>B', c) if c <= 0x7f else struct.pack('>BB', 0xc0 | (c >> 6) & 0x1f, 0x80 | c & 0x3f) if c <= 0x7ff else struct.pack('>BBB', 0xe0 | (c >> 12) & 0xf, 0x80 | (c >> 6) & 0x3f,
                                                                                                                                                 0x80 | c & 0x3f) if c <= 0xffff else struct.pack('!B', 0xf0 | (c >> 18) & 0x7, 0x80 | (c >> 12) & 0x3f, 0x80 | (c >> 6) & 0x3f, 0x80 | c & 0x3f) if c <= 0x10ffff else None) for c in utf16]
@@ -482,7 +487,7 @@ class AMF3(object):
         if is_reference:
             return self._obj_refs[length]
         ms = self.data.read_double(),
-        ts = datetime.datetime.fromtimestamp(ms/1000.0)
+        ts = datetime.datetime.fromtimestamp(ms / 1000.0)
         self._obj_refs.append(ts)
         return ts
 
@@ -537,7 +542,8 @@ class AMF3(object):
                 if len(int_keys) + len(str_keys) < len(keys):
                     raise ValueError('non-int or str key found in dict')
                 # not dense
-                if len(int_keys) <= 0 or int_keys[0] != 0 or int_keys[-1] != len(int_keys) - 1:
+                if len(
+                        int_keys) <= 0 or int_keys[0] != 0 or int_keys[-1] != len(int_keys) - 1:
                     str_keys.extend(int_keys)
                     int_keys[:] = []
             else:
