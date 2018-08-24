@@ -9,7 +9,8 @@ from threading import Thread
 
 from mixpanel import Mixpanel, MixpanelException
 from netifaces import gateways
-from requests import get as req_get
+# FIXME unused import
+# from requests import get as req_get
 from signal import signal, SIGUSR1
 from time import sleep
 import logging
@@ -104,7 +105,8 @@ class ZmqSubscriber(Thread):
             msg = socket.recv()
             topic, message = msg.split()
 
-            # If the command consists of 2 parts, then the first is the function, the second is the argument
+            # If the command consists of 2 parts,
+            # then the first is the function, the second is the argument
             parts = message.split('&')
             command = parts[0]
             parameter = parts[1] if len(parts) > 1 else None
@@ -145,7 +147,9 @@ class Scheduler(object):
         else:
             idx = self.index
             self.index = (self.index + 1) % len(self.assets)
-        logging.debug('get_next_asset counter %s returning asset %s of %s', self.counter, idx + 1, len(self.assets))
+        logging.debug(
+            'get_next_asset counter %s returning asset %s of %s',
+            self.counter, idx + 1, len(self.assets))
         if settings['shuffle_playlist'] and self.index == 0:
             self.counter += 1
         return self.assets[idx]
@@ -153,7 +157,9 @@ class Scheduler(object):
     def refresh_playlist(self):
         logging.debug('refresh_playlist')
         time_cur = datetime.utcnow()
-        logging.debug('refresh: counter: (%s) deadline (%s) timecur (%s)', self.counter, self.deadline, time_cur)
+        logging.debug(
+            'refresh: counter: (%s) deadline (%s) timecur (%s)',
+            self.counter, self.deadline, time_cur)
         if self.get_db_mtime() > self.last_update_db_mtime:
             logging.debug('updating playlist due to database modification')
             self.update_playlist()
@@ -172,16 +178,24 @@ class Scheduler(object):
 
         self.assets, self.deadline = new_assets, new_deadline
         self.counter = 0
-        # Try to keep the same position in the play list. E.g. if a new asset is added to the end of the list, we
+        # Try to keep the same position in the play list.
+        # E.g. if a new asset is added to the end of the list, we
         # don't want to start over from the beginning.
         self.index = self.index % len(self.assets) if self.assets else 0
-        logging.debug('update_playlist done, count %s, counter %s, index %s, deadline %s', len(self.assets), self.counter, self.index, self.deadline)
+        debug_msg = 'update_playlist done, count {}, counter {}, '
+        debug_msg += 'index {}, deadline {}'
+        logging.debug(
+            debug_msg.format(len(self.assets),
+                             self.counter,
+                             self.index,
+                             self.deadline))
 
     def get_db_mtime(self):
         # get database file last modification time
         try:
             return path.getmtime(settings['database'])
-        except:
+        # FIXME, this is really just as bad as a bare except statement
+        except Exception:
             return 0
 
 
@@ -192,12 +206,14 @@ def get_specific_asset(asset_id):
 
 def generate_asset_list():
     """Choose deadline via:
-        1. Map assets to deadlines with rule: if asset is active then 'end_date' else 'start_date'
+        1. Map assets to deadlines with rule:
+           if asset is active then 'end_date' else 'start_date'
         2. Get nearest deadline
     """
     logging.info('Generating asset-list...')
     assets = assets_helper.read(db_conn)
-    deadlines = [asset['end_date'] if assets_helper.is_active(asset) else asset['start_date'] for asset in assets]
+    deadlines = [asset['end_date'] if assets_helper.is_active(asset)
+                 else asset['start_date'] for asset in assets]
 
     playlist = filter(assets_helper.is_active, assets)
     deadline = sorted(deadlines)[0] if len(deadlines) > 0 else None
@@ -230,10 +246,15 @@ def load_browser(url=None):
 
     # --config=-       read commands (and config) from stdin
     # --print-events   print events to stdout
-    browser = sh.Command('uzbl-browser')(print_events=True, config='-', uri=current_browser_url, _bg=True)
-    logging.info('Browser loading %s. Running as PID %s.', current_browser_url, browser.pid)
+    browser = sh.Command('uzbl-browser')(print_events=True,
+                                         config='-',
+                                         uri=current_browser_url,
+                                         _bg=True)
+    logging.info('Browser loading %s. Running as PID %s.',
+                 current_browser_url, browser.pid)
 
-    uzbl_rc = 'set ssl_verify = {}\n'.format('1' if settings['verify_ssl'] else '0')
+    uzbl_rc = 'set ssl_verify = {}\n'
+    uzbl_rc = uzbl_rc.format('1' if settings['verify_ssl'] else '0')
     with open(HOME + UZBLRC) as f:  # load uzbl.rc
         uzbl_rc = f.read() + uzbl_rc
     browser_send(uzbl_rc)
@@ -255,7 +276,7 @@ def browser_send(command, cb=lambda _: True):
 
 def browser_clear(force=False):
     """Load a black page. Default cb waits for the page to load."""
-    browser_url('file://' + BLACK_PAGE, force=force, cb=lambda buf: 'LOAD_FINISH' in buf and BLACK_PAGE in buf)
+    browser_url('file://' + BLACK_PAGE, force=force, cb=lambda buf: 'LOAD_FINISH' in buf and BLACK_PAGE in buf)  # noqa
 
 
 def browser_url(url, cb=lambda _: True, force=False):
@@ -266,8 +287,9 @@ def browser_url(url, cb=lambda _: True, force=False):
     else:
         current_browser_url = url
 
-        """Uzbl handles full URI format incorrect: scheme://uname:passwd@domain:port/path
-        We need to escape @"""
+        # Uzbl handles full URI format incorrect:
+        # scheme://uname:passwd@domain:port/path
+        # We need to escape @
         escaped_url = current_browser_url.replace('@', '\\@')
 
         browser_send('uri ' + escaped_url, cb=cb)
@@ -276,7 +298,7 @@ def browser_url(url, cb=lambda _: True, force=False):
 
 def view_image(uri):
     browser_clear()
-    browser_send('js window.setimg("{0}")'.format(uri), cb=lambda b: 'COMMAND_EXECUTED' in b and 'setimg' in b)
+    browser_send('js window.setimg("{0}")'.format(uri), cb=lambda b: 'COMMAND_EXECUTED' in b and 'setimg' in b)  # noqa
 
 
 def view_video(uri, duration):
@@ -284,13 +306,15 @@ def view_video(uri, duration):
 
     if arch in ('armv6l', 'armv7l'):
         player_args = ['omxplayer', uri]
-        player_kwargs = {'o': settings['audio_output'], '_bg': True, '_ok_code': [0, 124, 143]}
+        player_kwargs = dict(o=settings['audio_output'], _bg=True,
+                             _ok_code=[0, 124, 143])
     else:
         player_args = ['mplayer', uri, '-nosound']
-        player_kwargs = {'_bg': True, '_ok_code': [0, 124]}
+        player_kwargs = dict(_bg=True, _ok_code=[0, 124])
 
     if duration and duration != 'N/A':
-        player_args = ['timeout', VIDEO_TIMEOUT + int(duration.split('.')[0])] + player_args
+        timeout = VIDEO_TIMEOUT + int(duration.split('.')[0])
+        player_args = ['timeout', timeout] + player_args
 
     run = sh.Command(player_args[0])(*player_args[1:], **player_kwargs)
 
@@ -302,7 +326,7 @@ def view_video(uri, duration):
         if run.exit_code == 124:
             logging.error('omxplayer timed out')
     except sh.ErrorReturnCode_1:
-        logging.info('Resource URI is not correct, remote host is not responding or request was rejected.')
+        logging.info('Resource URI is not correct, remote host is not responding or request was rejected.')  # noqa
 
 
 def check_update():
@@ -323,7 +347,8 @@ def check_update():
         last_update = None
 
     if not path.isfile(device_id_file):
-        device_id = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(15))
+        namechars = string.ascii_lowercase + string.digits
+        device_id = ''.join(random.choice(namechars) for _ in range(15))
         with open(device_id_file, 'w') as f:
             f.write(device_id)
     else:
@@ -334,8 +359,8 @@ def check_update():
 
     git_branch = sh.git('rev-parse', '--abbrev-ref', 'HEAD').strip()
     git_hash = sh.git('rev-parse', '--short', 'HEAD').strip()
-
-    if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
+    yesterday = datetime.now() - timedelta(days=1)
+    if last_update is None or last_update < yesterday:
 
         if not settings['analytics_opt_out'] and not is_ci():
             mp = Mixpanel('d18d9143e39ffdb2a4ee9dcc5ed16c56')
@@ -361,7 +386,8 @@ def check_update():
                 return
         else:
             touch(sha_file)
-            logging.debug('Unable to check if branch exist. Checking again tomorrow.')
+            logging.debug(
+                'Unable to check if branch exist. Checking again tomorrow.')
             return
     else:
         return False
@@ -370,7 +396,8 @@ def check_update():
 def load_settings():
     """Load settings and set the log level."""
     settings.load()
-    logging.getLogger().setLevel(logging.DEBUG if settings['debug_logging'] else logging.INFO)
+    logging.getLogger().setLevel(
+        logging.DEBUG if settings['debug_logging'] else logging.INFO)
 
 
 def asset_loop(scheduler):
@@ -380,7 +407,8 @@ def asset_loop(scheduler):
     asset = scheduler.get_next_asset()
 
     if asset is None:
-        logging.info('Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY)
+        logging.info('Playlist is empty. Sleeping for %s seconds',
+                     EMPTY_PL_DELAY)
         view_image(HOME + LOAD_SCREEN)
         sleep(EMPTY_PL_DELAY)
 
@@ -393,7 +421,8 @@ def asset_loop(scheduler):
         if 'image' in mime:
             view_image(uri)
         elif 'web' in mime:
-            # FIXME If we want to force periodic reloads of repeated web assets, force=True could be used here.
+            # FIXME If we want to force periodic reloads of repeated
+            # web assets, force=True could be used here.
             # See e38e6fef3a70906e7f8739294ffd523af6ce66be.
             browser_url(uri)
         elif 'video' or 'streaming' in mime:
@@ -406,7 +435,9 @@ def asset_loop(scheduler):
             logging.info('Sleeping for %s', duration)
             sleep(duration)
     else:
-        logging.info('Asset %s at %s is not available, skipping.', asset['name'], asset['uri'])
+        logging.info('Asset %s at %s is not available, skipping.',
+                     asset['name'],
+                     asset['uri'])
         sleep(0.5)
 
 
@@ -426,15 +457,18 @@ def setup():
 
 def main():
     setup()
-
-    if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
+    init_file = HOME + INITIALIZED_FILE
+    if not path.isfile(init_file) and not gateways().get('default'):
         url = 'http://{0}/hotspot'.format(LISTEN)
         load_browser(url=url)
 
-        while not path.isfile(HOME + INITIALIZED_FILE):
+        while not path.isfile(init_file):
             sleep(1)
 
-    url = 'http://{0}:{1}/splash_page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
+    if settings['show_splash']:
+        url = 'http://{0}:{1}/splash_page'.format(LISTEN, PORT)
+    else:
+        url = 'file://' + BLACK_PAGE
     browser_url(url=url)
 
     if settings['show_splash']:
@@ -447,7 +481,8 @@ def main():
     subscriber.daemon = True
     subscriber.start()
 
-    # We don't want to show splash_page if there are active assets but all of them are not available
+    # We don't want to show splash_page if there are active assets,
+    # but all of them are not available
     view_image(HOME + LOAD_SCREEN)
 
     logging.debug('Entering infinite loop.')
@@ -458,6 +493,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except:
+    # FIXME, this is really just as bad as a bare except statement
+    except Exception:
         logging.exception("Viewer crashed.")
         raise
