@@ -1,10 +1,11 @@
+from __future__ import absolute_import
 import certifi
-import db
 import json
 import os
 import pytz
 import re
 import requests
+import six
 
 from datetime import datetime, timedelta
 from distutils.util import strtobool
@@ -12,12 +13,13 @@ from netifaces import ifaddresses, gateways
 from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
-from sh import grep, netstat
 from subprocess import check_output, call
 from threading import Thread
-from urlparse import urlparse
+from six.moves.urllib.parse import urlparse
+from six.moves import xrange
 
-from assets_helper import update
+from . import db
+from .assets_helper import update
 
 arch = machine()
 
@@ -28,14 +30,16 @@ HTTP_OK = xrange(200, 299)
 # Travis can run.
 try:
     from sh import omxplayer
-except:
+# FIXME find an expected exception
+except BaseException:
     pass
 
 # This will work on x86-based machines
 if machine() in ['x86', 'x86_64']:
     try:
         from sh import ffprobe, mplayer
-    except:
+    # FIXME find an expected exception
+    except BaseException:
         pass
 
 
@@ -70,7 +74,8 @@ def validate_url(string):
     """
 
     checker = urlparse(string)
-    return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
+    valid_schemes = ('http', 'https', 'rtsp', 'rtmp')
+    return bool(checker.scheme in valid_schemes and checker.netloc)
 
 
 def get_node_ip():
@@ -82,7 +87,8 @@ def get_node_ip():
             default_interface = gateways()['default'][address_family_id][1]
             my_ip = ifaddresses(default_interface)[address_family_id][0]['addr']
             return my_ip
-        except:
+        # FIXME find an expected exception
+        except BaseException:
             raise Exception("Unable to resolve local IP address.")
 
 
@@ -93,7 +99,10 @@ def get_video_duration(file):
     time = None
 
     if arch in ('armv6l', 'armv7l'):
-        run_player = omxplayer(file, info=True, _err_to_out=True, _ok_code=[0, 1], _decode_errors='ignore')
+        run_player = omxplayer(file, info=True,
+                               _err_to_out=True,
+                               _ok_code=[0, 1],
+                               _decode_errors='ignore')
     else:
         run_player = ffprobe('-i', file, _err_to_out=True)
 
@@ -118,7 +127,7 @@ def handler(obj):
         with_tz = obj.replace(tzinfo=pytz.utc)
         return with_tz.isoformat()
     else:
-        raise TypeError('Object of type %s with value of %s is not JSON serializable' % (type(obj), repr(obj)))
+        raise TypeError('Object of type %s with value of %s is not JSON serializable' % (type(obj), repr(obj)))  # noqa
 
 
 def json_dump(obj):
@@ -131,7 +140,10 @@ def url_fails(url):
     """
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
         if arch in ('armv6l', 'armv7l'):
-            run_omxplayer = omxplayer(url, info=True, _err_to_out=True, _ok_code=[0, 1])
+            run_omxplayer = omxplayer(url,
+                                      info=True,
+                                      _err_to_out=True,
+                                      _ok_code=[0, 1])
             for line in run_omxplayer.split('\n'):
                 if 'Input #0' in line:
                     return False
@@ -154,7 +166,7 @@ def url_fails(url):
         verify = False
 
     headers = {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15',  # noqa
     }
     try:
         if not validate_url(url):
@@ -209,12 +221,17 @@ class YoutubeDownloadThread(Thread):
         publisher = ZmqPublisher.get_instance()
         call(['youtube-dl', '-f', 'mp4', '-o', self.location, self.uri])
         with db.conn(settings['database']) as conn:
-            update(conn, self.asset_id, {'asset_id': self.asset_id, 'is_processing': 0})
+            update(conn,
+                   self.asset_id,
+                   {'asset_id': self.asset_id, 'is_processing': 0})
 
         publisher.send_to_ws_server(self.asset_id)
 
 
 def template_handle_unicode(value):
     if isinstance(value, str):
-        return value.decode('utf-8')
+        if six.PY2:
+            return value.decode('utf-8')
+        else:
+            return value
     return unicode(value)

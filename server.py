@@ -5,6 +5,13 @@ __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2017, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
+try:
+    from builtins import str as unicode
+except ImportError:
+    pass
+
+import six
+
 from datetime import timedelta
 from dateutil import parser as date_parser
 from functools import wraps
@@ -12,17 +19,24 @@ from hurry.filesize import size
 import json
 from mimetypes import guess_type
 from os import getenv, makedirs, mkdir, path, remove, rename, statvfs
-from pwgen import pwgen
-import sh
+# FIXME unused imports (consider using flake8 to find these types of problems)
+# from pwgen import pwgen
+# import sh
 from sh import git
 from subprocess import check_output
-from time import sleep
+# from time import sleep
 import traceback
 import uuid
 import hashlib
 from base64 import b64encode
 
-from flask import Flask, make_response, render_template, request, send_from_directory
+from flask import (
+    Flask,
+    make_response,
+    render_template,
+    request,
+    send_from_directory,
+)
 from flask_cors import CORS
 from flask_restful_swagger_2 import Api, Resource, Schema, swagger
 from flask_swagger_ui import get_swaggerui_blueprint
@@ -42,7 +56,15 @@ from lib.utils import download_video_from_youtube, json_dump
 from lib.utils import url_fails
 from lib.utils import validate_url
 
-from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
+from settings import (
+    auth_basic,
+    CONFIGURABLE_SETTINGS,
+    DEFAULTS,
+    LISTEN,
+    PORT,
+    settings,
+    ZmqPublisher,
+)
 
 
 HOME = getenv('HOME', '/home/pi')
@@ -84,7 +106,8 @@ def is_up_to_date():
     try:
         with open(sha_file, 'r') as f:
             latest_sha = f.read().strip()
-    except:
+    # FIXME find an expected exception
+    except BaseException:
         latest_sha = None
 
     if latest_sha:
@@ -105,9 +128,10 @@ def template(template_name, **context):
 
     # Add global contexts
     context['up_to_date'] = is_up_to_date()
-    context['default_duration'] = settings['default_duration']
-    context['default_streaming_duration'] = settings['default_streaming_duration']
-    context['use_24_hour_clock'] = settings['use_24_hour_clock']
+    for opt in ['default_duration',
+                'default_streaming_duration',
+                'use_24_hour_clock']:
+        context[opt] = settings[opt]
     context['template_settings'] = {
         'imports': ['from lib.utils import template_handle_unicode'],
         'default_filters': ['template_handle_unicode'],
@@ -187,7 +211,8 @@ class AssetRequestModel(Schema):
             'format': 'int64',
         }
     }
-    required = ['name', 'uri', 'mimetype', 'is_enabled', 'start_date', 'end_date']
+    required = ['name', 'uri', 'mimetype',
+                'is_enabled', 'start_date', 'end_date']
 
 
 class AssetContentModel(Schema):
@@ -225,13 +250,13 @@ def prepare_asset(request):
         val = data.get(key, '')
         if isinstance(val, unicode):
             return val.strip()
-        elif isinstance(val, basestring):
+        elif isinstance(val, six.binary_type):
             return val.strip().decode('utf-8')
         else:
             return val
 
     if not all([get('name'), get('uri'), get('mimetype')]):
-        raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
+        raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")  # noqa
 
     asset = {
         'name': get('name'),
@@ -258,7 +283,8 @@ def prepare_asset(request):
             uri = path.join(settings['assetdir'], asset['asset_id'])
 
     if 'youtube_asset' in asset['mimetype']:
-        uri, asset['name'], asset['duration'] = download_video_from_youtube(uri, asset['asset_id'])
+        uri, asset['name'], asset['duration'] = download_video_from_youtube(
+            uri, asset['asset_id'])
         asset['mimetype'] = 'video'
         asset['is_processing'] = 1
 
@@ -273,12 +299,14 @@ def prepare_asset(request):
 
     # parse date via python-dateutil and remove timezone info
     if get('start_date'):
-        asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
+        asset['start_date'] = date_parser.parse(
+            get('start_date')).replace(tzinfo=None)
     else:
         asset['start_date'] = ""
 
     if get('end_date'):
-        asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
+        asset['end_date'] = date_parser.parse(
+            get('end_date')).replace(tzinfo=None)
     else:
         asset['end_date'] = ""
 
@@ -288,13 +316,19 @@ def prepare_asset(request):
 def prepare_asset_v1_2(request, asset_id=None):
     req = Request(request.environ)
 
-    data = json.loads(req.data)
+    if six.PY2:
+        data = json.loads(req.data)
+    else:
+        if isinstance(req.data, six.binary_type):
+            data = json.loads(req.data.decode())
+        else:
+            data = json.loads(req.data)
 
     def get(key):
         val = data.get(key, '')
         if isinstance(val, unicode):
             return val.strip()
-        elif isinstance(val, basestring):
+        elif isinstance(val, six.binary_type):
             return val.strip().decode('utf-8')
         else:
             return val
@@ -305,7 +339,7 @@ def prepare_asset_v1_2(request, asset_id=None):
                 str(get('is_enabled')),
                 get('start_date'),
                 get('end_date')]):
-        raise Exception("Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
+        raise Exception("Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")  # noqa
 
     asset = {
         'name': get('name'),
@@ -330,7 +364,8 @@ def prepare_asset_v1_2(request, asset_id=None):
             uri = path.join(settings['assetdir'], asset['asset_id'])
 
     if 'youtube_asset' in asset['mimetype']:
-        uri, asset['name'], asset['duration'] = download_video_from_youtube(uri, asset['asset_id'])
+        uri, asset['name'], asset['duration'] = download_video_from_youtube(
+            uri, asset['asset_id'])
         asset['mimetype'] = 'video'
         asset['is_processing'] = 1
 
@@ -348,8 +383,10 @@ def prepare_asset_v1_2(request, asset_id=None):
     asset['play_order'] = get('play_order') if get('play_order') else 0
 
     # parse date via python-dateutil and remove timezone info
-    asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
-    asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
+    asset['start_date'] = date_parser.parse(
+        get('start_date')).replace(tzinfo=None)
+    asset['end_date'] = date_parser.parse(
+        get('end_date')).replace(tzinfo=None)
 
     return asset
 
@@ -395,7 +432,8 @@ class Assets(Resource):
                 'type': 'string',
                 'description':
                     '''
-                    Yes, that is just a string of JSON not JSON itself it will be parsed on the other end.
+                    Yes, that is just a string of JSON not JSON itself \
+                    it will be parsed on the other end.
                     Content-Type: application/x-www-form-urlencoded
                     model: "{
                         "name": "Website",
@@ -689,12 +727,14 @@ class AssetsV1_2(Resource):
             raise Exception("Could not retrieve file. Check the asset URL.")
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
-            ids_of_active_assets = [x['asset_id'] for x in assets if x['is_active']]
+            ids_of_active_assets = [x['asset_id'] for x in assets
+                                    if x['is_active']]
 
             asset = assets_helper.create(conn, asset)
 
             if asset['is_active']:
-                ids_of_active_assets.insert(asset['play_order'], asset['asset_id'])
+                ids_of_active_assets.insert(asset['play_order'],
+                                            asset['asset_id'])
             assets_helper.save_ordering(conn, ids_of_active_assets)
             return assets_helper.read(conn, asset['asset_id']), 201
 
@@ -750,7 +790,8 @@ class AssetV1_2(Resource):
         asset = prepare_asset_v1_2(request, asset_id)
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
-            ids_of_active_assets = [x['asset_id'] for x in assets if x['is_active']]
+            ids_of_active_assets = [x['asset_id'] for x in assets
+                                    if x['is_active']]
 
             asset = assets_helper.update(conn, asset_id, asset)
 
@@ -759,7 +800,8 @@ class AssetV1_2(Resource):
             except ValueError:
                 pass
             if asset['is_active']:
-                ids_of_active_assets.insert(asset['play_order'], asset['asset_id'])
+                ids_of_active_assets.insert(asset['play_order'],
+                                            asset['asset_id'])
 
             assets_helper.save_ordering(conn, ids_of_active_assets)
             return assets_helper.read(conn, asset_id)
@@ -827,7 +869,10 @@ class FileAsset(Resource):
         if 'Content-Range' in request.headers:
             range_str = request.headers['Content-Range']
             start_bytes = int(range_str.split(' ')[1].split('-')[0])
-            with open(file_path, 'a') as f:
+            fmode = 'a'
+            if not six.PY2:
+                fmode = 'ab'
+            with open(file_path, fmode) as f:
                 f.seek(start_bytes)
                 f.write(file_upload.read())
         else:
@@ -848,7 +893,9 @@ class PlaylistOrder(Resource):
                 'description':
                     '''
                     Content-Type: application/x-www-form-urlencoded
-                    ids: "793406aa1fd34b85aa82614004c0e63a,1c5cfa719d1f4a9abae16c983a18903b,9c41068f3b7e452baf4dc3f9b7906595"
+                    ids: "793406aa1fd34b85aa82614004c0e63a,\
+                    1c5cfa719d1f4a9abae16c983a18903b,\
+                    9c41068f3b7e452baf4dc3f9b7906595"
                     comma separated ids
                     '''
             },
@@ -861,7 +908,8 @@ class PlaylistOrder(Resource):
     })
     def post(self):
         with db.conn(settings['database']) as conn:
-            assets_helper.save_ordering(conn, request.form.get('ids', '').split(','))
+            idlist = request.form.get('ids', '').split(',')
+            assets_helper.save_ordering(conn, idlist)
 
 
 class Backup(Resource):
@@ -938,10 +986,13 @@ class Info(Resource):
 
     def get(self):
         viewlog = None
+        cmd = ['sudo', 'systemctl', 'status', 'screenly-viewer.service',
+               '-n', '20']
         try:
             viewlog = [line.decode('utf-8') for line in
-                       check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
-        except:
+                       check_output(cmd).split('\n')]
+        # FIXME find an expected exception
+        except BaseException:
             pass
 
         # Calculate disk space
@@ -1007,7 +1058,8 @@ class AssetContent(Resource):
 
                 'type' can either be 'file' or 'url'.
 
-                In case of a file, the fields 'mimetype', 'filename', and 'content'  will be present.
+                In case of a file, the fields 'mimetype', 'filename', \
+                and 'content'  will be present.
                 In case of a URL, the field 'url' will be present.
                 ''',
                 'schema': AssetContentModel
@@ -1063,7 +1115,8 @@ api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
 
 try:
     my_ip = get_node_ip()
-except:
+# FIXME find an expected exception
+except BaseException:
     pass
 else:
     SWAGGER_URL = '/api/docs'
@@ -1108,7 +1161,9 @@ def viewIndex():
     if resin_uuid:
         ws_addresses.append('wss://{}.resindevice.io/ws/'.format(resin_uuid))
 
-    return template('index.html', ws_addresses=ws_addresses, player_name=player_name)
+    return template('index.html',
+                    ws_addresses=ws_addresses,
+                    player_name=player_name)
 
 
 @app.route('/settings', methods=["GET", "POST"])
@@ -1119,13 +1174,17 @@ def settings_page():
 
     if request.method == "POST":
         try:
-            # put some request variables in local variables to make easier to read
+            # put some request variables in local variables
+            # to make easier to read
             current_pass = request.form.get('curpassword', '')
             new_pass = request.form.get('password', '')
             new_pass2 = request.form.get('password2', '')
-            current_pass = '' if current_pass == '' else hashlib.sha256(current_pass).hexdigest()
-            new_pass = '' if new_pass == '' else hashlib.sha256(new_pass).hexdigest()
-            new_pass2 = '' if new_pass2 == '' else hashlib.sha256(new_pass2).hexdigest()
+            if current_pass != '':
+                current_pass = hashlib.sha256(current_pass).hexdigest()
+            if new_pass != '':
+                new_pass = hashlib.sha256(new_pass).hexdigest()
+            if new_pass2 != '':
+                new_pass2 = hashlib.sha256(new_pass2).hexdigest()
 
             new_user = request.form.get('user', '')
             use_auth = request.form.get('use_auth', '') == 'on'
@@ -1133,11 +1192,12 @@ def settings_page():
             # Handle auth components
             if settings['password'] != '':    # if password currently set,
                 if new_user != settings['user']:    # trying to change user
-                    # should have current password set. Optionally may change password.
+                    # should have current password set.
+                    # Optionally may change password.
                     if current_pass == '':
                         if not use_auth:
-                            raise ValueError("Must supply current password to disable authentication")
-                        raise ValueError("Must supply current password to change username")
+                            raise ValueError("Must supply current password to disable authentication")  # noqa
+                        raise ValueError("Must supply current password to change username")  # noqa
                     if current_pass != settings['password']:
                         raise ValueError("Incorrect current password.")
 
@@ -1145,7 +1205,8 @@ def settings_page():
 
                 if new_pass != '' and use_auth:
                     if current_pass == '':
-                        raise ValueError("Must supply current password to change password")
+                        raise ValueError(
+                            "Must supply current password to change password")
                     if current_pass != settings['password']:
                         raise ValueError("Incorrect current password.")
 
@@ -1157,7 +1218,7 @@ def settings_page():
                 if new_pass == '' and not use_auth and new_pass2 == '':
                     # trying to disable authentication
                     if current_pass == '':
-                        raise ValueError("Must supply current password to disable authentication")
+                        raise ValueError("Must supply current password to disable authentication")  # noqa
                     settings['password'] = ''
 
             else:        # no current password
@@ -1183,7 +1244,8 @@ def settings_page():
             settings.save()
             publisher = ZmqPublisher.get_instance()
             publisher.send_to_viewer('reload')
-            context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
+            context['flash'] = {'class': "success",
+                                'message': "Settings were successfully saved."}
         except ValueError as e:
             context['flash'] = {'class': "danger", 'message': e}
         except IOError as e:
@@ -1197,8 +1259,9 @@ def settings_page():
 
     context['user'] = settings['user']
     context['password'] = "password" if settings['password'] != "" else ""
-
-    context['reset_button_state'] = "disabled" if path.isfile(path.join(HOME, DISABLE_MANAGE_NETWORK)) else ""
+    context['reset_button_state'] = ""
+    if path.isfile(path.join(HOME, DISABLE_MANAGE_NETWORK)):
+        context['reset_button_state'] = 'disabled'
 
     if not settings['user'] or not settings['password']:
         context['use_auth'] = False
@@ -1212,10 +1275,14 @@ def settings_page():
 @auth_basic
 def system_info():
     viewlog = None
+    # FIXME still new to systemd  is sudo really necessary for
+    # systemctl status? Was the fact that jessie wears a red hat
+    # an inside joke?
     try:
         viewlog = [line.decode('utf-8') for line in
-                   check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
-    except:
+                   check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]  # noqa
+    # FIXME find an expected execption
+    except BaseException:
         pass
 
     loadavg = diagnostics.get_load_avg()['15 min']
@@ -1286,7 +1353,9 @@ def mistake404(code):
 @app.route('/static_with_mime/<string:path>')
 def static_with_mime(path):
     mimetype = request.args['mime'] if 'mime' in request.args else 'auto'
-    return send_from_directory(directory='static', filename=path, mimetype=mimetype)
+    return send_from_directory(directory='static',
+                               filename=path,
+                               mimetype=mimetype)
 
 
 if __name__ == "__main__":

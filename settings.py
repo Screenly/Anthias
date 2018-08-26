@@ -1,16 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from os import path, getenv
+from os import path, getenv, makedirs
 from sys import exit
 from time import sleep
-import ConfigParser
+import six
+from six.moves import configparser as ConfigParser
 import logging
-from UserDict import IterableUserDict
+from six.moves import UserDict as IterableUserDict
 from flask import request, Response
 from functools import wraps
 import zmq
 import hashlib
+
+# replace unicode with str in py > 2
+if not six.PY2:
+    from builtins import str as unicode
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -42,7 +47,7 @@ DEFAULTS = {
 CONFIGURABLE_SETTINGS = DEFAULTS['viewer'].copy()
 CONFIGURABLE_SETTINGS['user'] = DEFAULTS['auth']['user']
 CONFIGURABLE_SETTINGS['password'] = DEFAULTS['auth']['password']
-CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock']
+CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock']  # noqa
 
 PORT = int(getenv('PORT', 8080))
 LISTEN = getenv('LISTEN', '127.0.0.1')
@@ -69,8 +74,11 @@ class ScreenlySettings(IterableUserDict):
         self.conf_file = self.get_configfile()
 
         if not path.isfile(self.conf_file):
-            logging.error('Config-file %s missing. Using defaults.', self.conf_file)
+            logging.error('Config-file %s missing. Using defaults.',
+                          self.conf_file)
             self.use_defaults()
+            # ensure parent directories exist.
+            makedirs(path.dirname(self.conf_file))
             self.save()
         else:
             self.load()

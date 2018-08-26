@@ -1,14 +1,15 @@
 #!/usr/bin/env python
+from __future__ import absolute_import
 
 import netifaces
 import os
 import sh
 import socket
 import sqlite3
-import utils
 from pprint import pprint
 from uptime import uptime
 from datetime import datetime
+from . import utils
 
 
 def parse_cpu_info():

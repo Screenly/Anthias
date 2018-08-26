@@ -95,11 +95,17 @@ class SettingsTest(unittest.TestCase):
 
     def test_default_settings(self):
         with fake_settings(empty_settings) as (mod_settings, settings):
-            self.assertEquals(settings['player_name'], mod_settings.DEFAULTS['viewer']['player_name'])
-            self.assertEquals(settings['show_splash'], mod_settings.DEFAULTS['viewer']['show_splash'])
-            self.assertEquals(settings['shuffle_playlist'], mod_settings.DEFAULTS['viewer']['shuffle_playlist'])
-            self.assertEquals(settings['debug_logging'], mod_settings.DEFAULTS['viewer']['debug_logging'])
-            self.assertEquals(settings['default_duration'], mod_settings.DEFAULTS['viewer']['default_duration'])
+            viewer_defaults = mod_settings.DEFAULTS['viewer']
+            self.assertEquals(settings['player_name'],
+                              viewer_defaults['player_name'])
+            self.assertEquals(settings['show_splash'],
+                              viewer_defaults['show_splash'])
+            self.assertEquals(settings['shuffle_playlist'],
+                              viewer_defaults['shuffle_playlist'])
+            self.assertEquals(settings['debug_logging'],
+                              viewer_defaults['debug_logging'])
+            self.assertEquals(settings['default_duration'],
+                              viewer_defaults['default_duration'])
 
     def broken_settings_should_raise_value_error(self):
         with self.assertRaises(ValueError):

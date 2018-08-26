@@ -112,7 +112,8 @@ class TestWatchdog(ViewerTestCase):
     def test_watchdog_should_create_file_if_not_exists(self):
         try:
             os.remove(self.u.WATCHDOG_PATH)
-        except:
+        # FIXME find an expected exception
+        except BaseException:
             pass
         self.u.watchdog()
         self.assertEqual(os.path.exists(self.u.WATCHDOG_PATH), True)

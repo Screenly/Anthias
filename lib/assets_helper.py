@@ -1,6 +1,8 @@
-import db
-import queries
+from __future__ import absolute_import
+
 import datetime
+from . import db
+from . import queries
 
 FIELDS = ["asset_id", "name", "uri", "start_date",
           "end_date", "duration", "mimetype", "is_enabled", "is_processing", "nocache", "play_order"]
@@ -36,7 +38,9 @@ def is_active(asset, at_time=None):
 
 def get_playlist(conn):
     """Returns all currently active assets."""
-    return filter(is_active, read(conn))
+    # FIXME is this the best place to cast into list()?
+    # If so, should we use list comprehension to create list?
+    return list(filter(is_active, read(conn)))
 
 
 def mkdict(keys):
@@ -53,7 +57,7 @@ def create(conn, asset):
     if 'is_active' in asset:
         asset.pop('is_active')
     with db.commit(conn) as c:
-        c.execute(queries.create(asset.keys()), asset.values())
+        c.execute(queries.create(list(asset.keys())), list(asset.values()))
     asset.update({'is_active': is_active(asset)})
     return asset
 
@@ -69,8 +73,10 @@ def create_multiple(conn, assets):
         for asset in assets:
             if 'is_active' in asset:
                 asset.pop('is_active')
-
-            c.execute(queries.create(asset.keys()), asset.values())
+            # NOTE: order of keys, values guaranteed
+            # https://stackoverflow.com/a/835430/1869821
+            c.execute(queries.create(list(asset.keys())),
+                      list(asset.values()))
 
             asset.update({'is_active': is_active(asset)})
 
@@ -108,7 +114,8 @@ def update(conn, asset_id, asset):
     if 'is_active' in asset:
         asset.pop('is_active')
     with db.commit(conn) as c:
-        c.execute(queries.update(asset.keys()), asset.values() + [asset_id])
+        c.execute(queries.update(list(asset.keys())),
+                  list(asset.values()) + [asset_id])
     asset.update({'asset_id': asset_id})
     if 'start_date' in asset:
         asset.update({'is_active': is_active(asset)})

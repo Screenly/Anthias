@@ -1,6 +1,8 @@
+from __future__ import absolute_import
+
 import sqlite3
 from contextlib import contextmanager
-import queries
+from . import queries
 
 conn = lambda db: sqlite3.connect(db, detect_types=sqlite3.PARSE_DECLTYPES)
 

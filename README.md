@@ -45,7 +45,7 @@ To simplify development of the server module of Screenly OSE, we've created a Do
 Assuming you're in the source code repository, simply run:
 
 ```
-$ docker run --rm -it \
+$ docker run --rm -ti \
     --name=screenly-dev \
     -e 'LISTEN=0.0.0.0' \
     -p 8080:8080 \
