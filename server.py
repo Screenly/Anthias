@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 
 __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2017, Screenly, Inc"

@@ -183,7 +183,8 @@
     - system-upgrade
 
 - name: Clean up unused packages
-  command: apt-get -y autoremove
+  apt:
+    autoremove: yes
   tags:
     - system-upgrade
 
