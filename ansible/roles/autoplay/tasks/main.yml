@@ -3,7 +3,7 @@
 - name: Installs autoplay script
   copy:
     src: autoplay.sh
-    dest: /usr/local/bin/autoplay.sh
+    dest: /usr/local/bin/autoplay.py
     mode: 755
     owner: root
     group: root
