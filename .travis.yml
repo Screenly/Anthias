@@ -37,6 +37,7 @@ script:
   - find . ! -path "*/rtmplite/*" -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
   - nosetests -v -a '!fixme' --with-isolation
   - ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml
+  - python -m SimpleHTTPServer 8081 &
   - sleep 3
   - bash static/spec/runner.sh
 
