@@ -222,13 +222,12 @@ def template_handle_unicode(value):
 
 def is_demo_node():
     """
-    Check if the environment variable IS_DEMO NODE is set to 1
+    Check if the environment variable IS_DEMO_NODE is set to 1
     :return: bool
     """
-    try:
-        if os.environ['IS_DEMO_NODE'] == '1':
-            return True
-        else:
-            return False
-    except KeyError:
+    is_demo_node_env = os.getenv('IS_DEMO_NODE', False)
+    if isinstance(is_demo_node_env, str) and is_demo_node_env == '1':
+        return True
+    else:
         return False
+
