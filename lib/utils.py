@@ -218,3 +218,11 @@ def template_handle_unicode(value):
     if isinstance(value, str):
         return value.decode('utf-8')
     return unicode(value)
+
+
+def is_demo_node():
+    """
+    Check if the environment variable IS_DEMO_NODE is set to 1
+    :return: bool
+    """
+    return string_to_bool(os.getenv('IS_DEMO_NODE', False))

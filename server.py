@@ -41,6 +41,7 @@ from lib.utils import get_video_duration
 from lib.utils import download_video_from_youtube, json_dump
 from lib.utils import url_fails
 from lib.utils import validate_url
+from lib.utils import is_demo_node
 
 from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
 
@@ -1096,6 +1097,7 @@ else:
 def viewIndex():
     player_name = settings['player_name']
     my_ip = get_node_ip()
+    is_demo = is_demo_node()
     resin_uuid = getenv("RESIN_UUID", None)
 
     ws_addresses = []
@@ -1108,7 +1110,7 @@ def viewIndex():
     if resin_uuid:
         ws_addresses.append('wss://{}.resindevice.io/ws/'.format(resin_uuid))
 
-    return template('index.html', ws_addresses=ws_addresses, player_name=player_name)
+    return template('index.html', ws_addresses=ws_addresses, player_name=player_name, is_demo=is_demo)
 
 
 @app.route('/settings', methods=["GET", "POST"])
