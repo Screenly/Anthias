@@ -220,9 +220,15 @@ def template_handle_unicode(value):
     return unicode(value)
 
 
-def is_running_in_docker():
+def is_demo_node():
     """
-    Check if running in the docker
+    Check if the environment variable IS_DEMO NODE is set to 1
     :return: bool
     """
-    return os.path.isfile('/.dockerenv')
+    try:
+        if os.environ['IS_DEMO_NODE'] == '1':
+            return True
+        else:
+            return False
+    except KeyError:
+        return False
