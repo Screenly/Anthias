@@ -218,3 +218,11 @@ def template_handle_unicode(value):
     if isinstance(value, str):
         return value.decode('utf-8')
     return unicode(value)
+
+
+def is_running_in_docker():
+    """
+    Check if running in the docker
+    :return: bool
+    """
+    return os.path.isfile('/.dockerenv')
