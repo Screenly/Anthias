@@ -1098,7 +1098,6 @@ def viewIndex():
     player_name = settings['player_name']
     my_ip = get_node_ip()
     is_docker = is_running_in_docker()
-    ga_id = settings['google_analytics']['id']
     resin_uuid = getenv("RESIN_UUID", None)
 
     ws_addresses = []
@@ -1111,7 +1110,7 @@ def viewIndex():
     if resin_uuid:
         ws_addresses.append('wss://{}.resindevice.io/ws/'.format(resin_uuid))
 
-    return template('index.html', ws_addresses=ws_addresses, player_name=player_name, is_docker=is_docker, ga_id=ga_id)
+    return template('index.html', ws_addresses=ws_addresses, player_name=player_name, is_docker=is_docker)
 
 
 @app.route('/settings', methods=["GET", "POST"])
