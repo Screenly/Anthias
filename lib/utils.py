@@ -225,9 +225,4 @@ def is_demo_node():
     Check if the environment variable IS_DEMO_NODE is set to 1
     :return: bool
     """
-    is_demo_node_env = os.getenv('IS_DEMO_NODE', False)
-    if isinstance(is_demo_node_env, str) and is_demo_node_env == '1':
-        return True
-    else:
-        return False
-
+    return string_to_bool(os.getenv('IS_DEMO_NODE', False))
