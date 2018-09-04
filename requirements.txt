@@ -1,13 +1,13 @@
 Mako==0.7.3
 MarkupSafe==1.0
-ansible==2.5.3
+ansible==2.6.3
 certifi==2018.4.16
 cffi==1.7.0
 configparser==3.5.0
 Flask-Cors==3.0.4
 flask-restful-swagger-2==0.35
 flask-swagger-ui==3.0.12
-flask==0.12.2
+flask==1.0.2
 flask_restful==0.3.6
 futures==3.0.5
 gevent-websocket==0.10.1
@@ -25,5 +25,5 @@ requests[security]==2.18.4
 sh==1.08
 six==1.11.0
 uptime==2.0.2
-werkzeug==0.10.4
+werkzeug==0.14.1
 youtube_dl>=2017.7.2
