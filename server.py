@@ -1285,10 +1285,12 @@ def mistake404(code):
 ################################
 
 
-@app.route('/static_with_mime/<string:path>')
-def static_with_mime(path):
+@app.route('/static_with_mime/<string:file_path>')
+def static_with_mime(file_path):
     mimetype = request.args['mime'] if 'mime' in request.args else 'auto'
-    return send_from_directory(directory='static', filename=path, mimetype=mimetype)
+    home = getenv('HOME')
+    static_dir_path = path.join(home, 'screenly/static')
+    return send_from_directory(directory=static_dir_path, filename=file_path, mimetype=mimetype)
 
 
 if __name__ == "__main__":

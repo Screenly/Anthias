@@ -1,3 +1,4 @@
+
 import tarfile
 from os import path, getenv, remove
 import sh
@@ -13,15 +14,10 @@ def create_backup():
     if path.isfile(file_path):
         remove(file_path)
 
-    try:
-        with tarfile.open(file_path, "w:gz") as tar:
-
-            for directory in directories:
-                path_to_dir = path.join(home, directory)
-                tar.add(path_to_dir, arcname=directory)
-    except IOError as e:
-        remove(file_path)
-        raise e
+    with tarfile.open(file_path, "w:gz") as tar:
+        for directory in directories:
+            path_to_dir = path.join(home, directory)
+            tar.add(path_to_dir, arcname=directory)
 
     return archive_name
 
@@ -32,6 +28,7 @@ def recover(file_path):
             if directory not in tar.getnames():
                 raise Exception("Archive is wrong.")
 
-    sh.sudo('/usr/local/bin/screenly_utils.sh', 'recover', path.abspath(file_path))
+    screenly_utils = sh.Command('sh')
+    screenly_utils('/usr/local/bin/screenly_utils.sh', 'recover', path.abspath(file_path), getenv('HOME'))
 
     remove(file_path)

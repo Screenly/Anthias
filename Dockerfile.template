@@ -62,6 +62,7 @@ RUN    useradd pi -d /home/pi \
 # Install config file and file structure
 RUN mkdir -p /home/pi/screenly
 COPY ansible/roles/screenly/files/gtkrc-2.0 /home/pi/.gtkrc-2.0
+COPY ansible/roles/screenly/files/screenly_utils.sh /usr/local/bin/
 
 # Copy in code base
 COPY . /home/pi/screenly

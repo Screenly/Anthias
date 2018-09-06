@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 recover(){
-    sudo service screenly-viewer stop
-    rm -rf /home/pi/.screenly /home/pi/screenly_assets
-    tar -xvf "$1" -C /home/pi/
-    sudo service screenly-viewer start
+    service screenly-viewer stop
+    rm -rf "$2/.screenly" "$2/screenly_assets"
+    tar -xvf "$1" -C "$2"
+    service screenly-viewer start
 }
 
 cleanup(){
@@ -15,7 +15,7 @@ while :; do
     case $1 in
         recover)
             if [ -f "$2" ]; then
-                recover "$2"
+                recover "$2" "$3"
                 shift
                 exit 0
             else

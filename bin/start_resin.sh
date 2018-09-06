@@ -5,6 +5,7 @@ mkdir -p \
     /data/.config/uzbl \
     /data/.screenly \
     /data/screenly \
+    /data/screenly/static \
     /data/screenly_assets
 
 cp -n ansible/roles/screenly/files/screenly.conf /data/.screenly/screenly.conf
@@ -19,6 +20,9 @@ fi
 
 # Make sure the right permission is set
 chown -R pi:pi /data
+
+
+echo 127.0.0.1 $HOSTNAME >> /etc/hosts
 
 # Set management page's user and password from environment variables,
 # but only if both of them are provided. Can have empty values provided.
