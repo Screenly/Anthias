@@ -819,8 +819,7 @@ class FileAsset(Resource):
         req = Request(request.environ)
         file_upload = req.files.get('file_upload')
         filename = file_upload.filename
-
-        if guess_type(filename)[0].split('/')[0] not in ['image', 'video']:
+        if guess_type(filename)[0].split('/')[0] not in ['image', 'video', 'text']:
             raise Exception("Invalid file type.")
 
         file_path = path.join(settings['assetdir'], filename) + ".tmp"
