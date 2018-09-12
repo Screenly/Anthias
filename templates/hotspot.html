@@ -17,10 +17,16 @@
     </div>
     <div class="row">
         <div class="col-12 text-center">
-            <p class="lead">No network connection were found. An access point has been created. <br>To configure WiFi
-                networking, simply connect to the access point <br>using your computer or mobile device</p>
-            <div class="form-actions lead">
-                <span>SSID: {{ context.network }}<br>Password: {{ context.ssid_pswd }} <br>Address: {{ context.address }}</span>
+            <p>No network connection were found. An access point has been created. <br>To configure WiFi networking,
+                simply connect to the access point <br>using your computer or mobile device</p>
+            <div class="form-actions">
+                <span>
+                    SSID: {{ context.network }}
+                    <br>
+                    Password: {{ context.ssid_pswd }}
+                    <br>
+                    Address: {{ context.address }}
+                </span>
             </div>
         </div>
     </div>
