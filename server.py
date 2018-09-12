@@ -11,7 +11,7 @@ from functools import wraps
 from hurry.filesize import size
 import json
 from mimetypes import guess_type
-from os import getenv, makedirs, mkdir, path, remove, rename, statvfs
+from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
 from pwgen import pwgen
 import sh
 from sh import git
@@ -22,7 +22,7 @@ import uuid
 import hashlib
 from base64 import b64encode
 
-from flask import Flask, make_response, render_template, request, send_from_directory
+from flask import Flask, make_response, render_template, request, send_from_directory, url_for
 from flask_cors import CORS
 from flask_restful_swagger_2 import Api, Resource, Schema, swagger
 from flask_swagger_ui import get_swaggerui_blueprint
@@ -1283,6 +1283,22 @@ def mistake404(code):
 ################################
 # Static
 ################################
+
+
+@app.context_processor
+def override_url_for():
+    return dict(url_for=dated_url_for)
+
+
+def dated_url_for(endpoint, **values):
+    if endpoint == 'static':
+        filename = values.get('filename', None)
+        if filename:
+            file_path = path.join(app.root_path,
+                                  endpoint, filename)
+            if path.isfile(file_path):
+                values['q'] = int(stat(file_path).st_mtime)
+    return url_for(endpoint, **values)
 
 
 @app.route('/static_with_mime/<string:path>')
