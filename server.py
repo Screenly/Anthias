@@ -1325,13 +1325,11 @@ if __name__ == "__main__":
         'timeout': 20
     }
 
-
     class GunicornApplication(Application):
         def init(self, parser, opts, args):
             return config
 
         def load(self):
             return app
-
 
     GunicornApplication().run()
