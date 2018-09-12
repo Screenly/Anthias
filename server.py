@@ -12,11 +12,8 @@ from hurry.filesize import size
 import json
 from mimetypes import guess_type
 from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
-from pwgen import pwgen
-import sh
 from sh import git
 from subprocess import check_output
-from time import sleep
 import traceback
 import uuid
 import hashlib
@@ -44,7 +41,6 @@ from lib.utils import validate_url
 from lib.utils import is_demo_node
 
 from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
-
 
 HOME = getenv('HOME', '/home/pi')
 DISABLE_MANAGE_NETWORK = '.screenly/disable_manage_network'
@@ -306,7 +302,8 @@ def prepare_asset_v1_2(request, asset_id=None):
                 str(get('is_enabled')),
                 get('start_date'),
                 get('end_date')]):
-        raise Exception("Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
+        raise Exception(
+            "Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
 
     asset = {
         'name': get('name'),
@@ -364,6 +361,7 @@ def api_response(view):
         except Exception as e:
             traceback.print_exc()
             return api_error(unicode(e))
+
     return api_view
 
 
@@ -1003,14 +1001,14 @@ class AssetContent(Resource):
         'responses': {
             '200': {
                 'description':
-                '''
-                The content of the asset.
-
-                'type' can either be 'file' or 'url'.
-
-                In case of a file, the fields 'mimetype', 'filename', and 'content'  will be present.
-                In case of a URL, the field 'url' will be present.
-                ''',
+                    '''
+                    The content of the asset.
+    
+                    'type' can either be 'file' or 'url'.
+    
+                    In case of a file, the fields 'mimetype', 'filename', and 'content'  will be present.
+                    In case of a URL, the field 'url' will be present.
+                    ''',
                 'schema': AssetContentModel
             }
         }
@@ -1116,7 +1114,6 @@ def viewIndex():
 @app.route('/settings', methods=["GET", "POST"])
 @auth_basic
 def settings_page():
-
     context = {'flash': None}
 
     if request.method == "POST":
@@ -1133,8 +1130,8 @@ def settings_page():
             use_auth = request.form.get('use_auth', '') == 'on'
 
             # Handle auth components
-            if settings['password'] != '':    # if password currently set,
-                if new_user != settings['user']:    # trying to change user
+            if settings['password'] != '':  # if password currently set,
+                if new_user != settings['user']:  # trying to change user
                     # should have current password set. Optionally may change password.
                     if current_pass == '':
                         if not use_auth:
@@ -1162,8 +1159,8 @@ def settings_page():
                         raise ValueError("Must supply current password to disable authentication")
                     settings['password'] = ''
 
-            else:        # no current password
-                if new_user != '':    # setting username and password
+            else:  # no current password
+                if new_user != '':  # setting username and password
                     if new_pass != '' and new_pass != new_pass2:
                         raise ValueError("New passwords do not match!")
                     if new_pass == '':
@@ -1280,6 +1277,7 @@ def mistake403(code):
 def mistake404(code):
     return 'Sorry, this page does not exist!'
 
+
 ################################
 # Static
 ################################
@@ -1327,11 +1325,13 @@ if __name__ == "__main__":
         'timeout': 20
     }
 
+
     class GunicornApplication(Application):
         def init(self, parser, opts, args):
             return config
 
         def load(self):
             return app
+
 
     GunicornApplication().run()
