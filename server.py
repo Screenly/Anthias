@@ -1003,9 +1003,9 @@ class AssetContent(Resource):
                 'description':
                     '''
                     The content of the asset.
-    
+
                     'type' can either be 'file' or 'url'.
-    
+
                     In case of a file, the fields 'mimetype', 'filename', and 'content'  will be present.
                     In case of a URL, the field 'url' will be present.
                     ''',
