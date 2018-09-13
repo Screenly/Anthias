@@ -484,6 +484,8 @@
     extend(EditAssetView, superClass);
 
     function EditAssetView() {
+      this.setDisabledDatepicker = bind(this.setDisabledDatepicker, this);
+      this.setLoopDateTime = bind(this.setLoopDateTime, this);
       this.displayAdvanced = bind(this.displayAdvanced, this);
       this.toggleAdvanced = bind(this.toggleAdvanced, this);
       this.cancel = bind(this.cancel, this);
@@ -528,7 +530,7 @@
     };
 
     EditAssetView.prototype.render = function() {
-      var button, d, f, field, k, l, len, len1, len2, len3, m, n, ref, ref1, ref2, ref3, which;
+      var d, f, field, k, l, len, len1, len2, m, ref, ref1, ref2, which;
       this.undelegateEvents();
       ref = 'mimetype uri file_upload'.split(' ');
       for (k = 0, len = ref.length; k < len; k++) {
@@ -540,28 +542,20 @@
       (this.$('.uri')).hide();
       (this.$('.asset-location.edit')).show();
       (this.$('.mime-select')).prop('disabled', 'true');
-      ref1 = (this.$('#loop-times')).find('input');
-      for (l = 0, len1 = ref1.length; l < len1; l++) {
-        button = ref1[l];
-        if ((button.getAttribute('data-loop-time')) === 'manual') {
-          button.classList.add('active');
-          break;
-        }
-      }
       if ((this.model.get('mimetype')) === 'video') {
         (this.$f('duration')).prop('disabled', true);
       }
-      ref2 = this.model.fields;
-      for (m = 0, len2 = ref2.length; m < len2; m++) {
-        field = ref2[m];
+      ref1 = this.model.fields;
+      for (l = 0, len1 = ref1.length; l < len1; l++) {
+        field = ref1[l];
         if ((this.$fv(field)) !== this.model.get(field)) {
           this.$fv(field, this.model.get(field));
         }
       }
       (this.$('.uri-text')).html(insertWbr(this.model.get('uri')));
-      ref3 = ['start', 'end'];
-      for (n = 0, len3 = ref3.length; n < len3; n++) {
-        which = ref3[n];
+      ref2 = ['start', 'end'];
+      for (m = 0, len2 = ref2.length; m < len2; m++) {
+        which = ref2[m];
         d = date_to(this.model.get(which + "_date"));
         this.$fv(which + "_date_date", d.date());
         (this.$f(which + "_date_date")).datepicker({
@@ -601,99 +595,39 @@
       'click .cancel': 'cancel',
       'change': 'change',
       'keyup': 'change',
-      'click .advanced-toggle': 'toggleAdvanced',
-      'click #loop-times>input': 'changeLoopTimes'
+      'click .advanced-toggle': 'toggleAdvanced'
     };
 
-    EditAssetView.prototype.changeLoopTimes = function(e) {
-      var button, c_d, current_date, e_d, end_date, k, l, len, len1, len2, len3, len4, len5, len6, m, n, o, p, q, ref, ref1, ref2, ref3, ref4, ref5, ref6, which;
-      ref = (this.$('#loop-times')).find('input');
-      for (k = 0, len = ref.length; k < len; k++) {
-        button = ref[k];
-        button.classList.remove('active');
-      }
-      e.target.classList.add('active');
+    EditAssetView.prototype.changeLoopTimes = function() {
+      var current_date, end_date;
       current_date = new Date();
       end_date = new Date();
-      switch (e.target.getAttribute('data-loop-time')) {
+      switch (this.$('#loop_times').val()) {
         case "day":
-          ref1 = ['start', 'end'];
-          for (l = 0, len1 = ref1.length; l < len1; l++) {
-            which = ref1[l];
-            (this.$f(which + "_date_date")).attr('disabled', true);
-            (this.$f(which + "_date_time")).attr('disabled', true);
-          }
-          (this.$("#manul_date")).hide();
-          c_d = date_to(current_date);
-          e_d = date_to(end_date.setDate(current_date.getDate() + 1));
+          this.setLoopDateTime(date_to(current_date), date_to(end_date.setDate(current_date.getDate() + 1)));
           break;
         case "week":
-          ref2 = ['start', 'end'];
-          for (m = 0, len2 = ref2.length; m < len2; m++) {
-            which = ref2[m];
-            (this.$f(which + "_date_date")).attr('disabled', true);
-            (this.$f(which + "_date_time")).attr('disabled', true);
-          }
-          (this.$("#manul_date")).hide();
-          c_d = date_to(current_date);
-          e_d = date_to(end_date.setDate(current_date.getDate() + 7));
+          this.setLoopDateTime(date_to(current_date), date_to(end_date.setDate(current_date.getDate() + 7)));
           break;
         case "month":
-          ref3 = ['start', 'end'];
-          for (n = 0, len3 = ref3.length; n < len3; n++) {
-            which = ref3[n];
-            (this.$f(which + "_date_date")).attr('disabled', true);
-            (this.$f(which + "_date_time")).attr('disabled', true);
-          }
-          (this.$("#manul_date")).hide();
-          c_d = date_to(current_date);
-          e_d = date_to(end_date.setMonth(current_date.getMonth() + 1));
+          this.setLoopDateTime(date_to(current_date), date_to(end_date.setMonth(current_date.getMonth() + 1)));
           break;
         case "year":
-          ref4 = ['start', 'end'];
-          for (o = 0, len4 = ref4.length; o < len4; o++) {
-            which = ref4[o];
-            (this.$f(which + "_date_date")).attr('disabled', true);
-            (this.$f(which + "_date_time")).attr('disabled', true);
-          }
-          (this.$("#manul_date")).hide();
-          c_d = date_to(current_date);
-          e_d = date_to(end_date.setFullYear(current_date.getFullYear() + 1));
+          this.setLoopDateTime(date_to(current_date), date_to(end_date.setFullYear(current_date.getFullYear() + 1)));
           break;
         case "forever":
-          ref5 = ['start', 'end'];
-          for (p = 0, len5 = ref5.length; p < len5; p++) {
-            which = ref5[p];
-            (this.$f(which + "_date_date")).attr('disabled', true);
-            (this.$f(which + "_date_time")).attr('disabled', true);
-          }
-          (this.$("#manul_date")).hide();
-          c_d = date_to(current_date);
-          e_d = date_to(end_date.setFullYear(current_date.getFullYear() + 10000));
+          this.setLoopDateTime(date_to(current_date), date_to(end_date.setFullYear(current_date.getFullYear() + 10000)));
           break;
         case "manual":
-          ref6 = ['start', 'end'];
-          for (q = 0, len6 = ref6.length; q < len6; q++) {
-            which = ref6[q];
-            (this.$f(which + "_date_date")).attr('disabled', false);
-            (this.$f(which + "_date_time")).attr('disabled', false);
-          }
+          this.setLoopDateTime(date_to(current_date), date_to(end_date.setDate(current_date.getDate() + 30)));
+          this.setDisabledDatepicker(false);
           (this.$("#manul_date")).show();
-          c_d = date_to(current_date);
-          e_d = date_to(end_date.setDate(current_date.getDate() + 30));
-          break;
+          return;
         default:
           return;
       }
-      this.$fv("start_date_date", c_d.date());
-      (this.$f("start_date_date")).datepicker('setDate', new Date(c_d.date()));
-      this.$fv("start_date_time", c_d.time());
-      this.$fv("end_date_date", e_d.date());
-      (this.$f("end_date_date")).datepicker('setDate', new Date(e_d.date()));
-      this.$fv("end_date_time", e_d.time());
-      (this.$(".form-group .help-inline.invalid-feedback")).remove();
-      (this.$(".form-group .form-control")).removeClass('is-invalid');
-      return (this.$('[type=submit]')).prop('disabled', false);
+      this.setDisabledDatepicker(true);
+      return (this.$("#manul_date")).hide();
     };
 
     EditAssetView.prototype.save = function(e) {
@@ -746,6 +680,7 @@
     EditAssetView.prototype.change = function(e) {
       this._change || (this._change = _.throttle(((function(_this) {
         return function() {
+          _this.changeLoopTimes();
           _this.viewmodel();
           _this.model.trigger('change');
           _this.validate();
@@ -815,6 +750,30 @@
       edit = url_test(this.model.get('uri'));
       has_nocache = img && edit;
       return (this.$('.advanced-accordion')).toggle(has_nocache === true);
+    };
+
+    EditAssetView.prototype.setLoopDateTime = function(start_date, end_date) {
+      this.$fv("start_date_date", start_date.date());
+      (this.$f("start_date_date")).datepicker('setDate', new Date(start_date.date()));
+      this.$fv("start_date_time", start_date.time());
+      this.$fv("end_date_date", end_date.date());
+      (this.$f("end_date_date")).datepicker('setDate', new Date(end_date.date()));
+      this.$fv("end_date_time", end_date.time());
+      (this.$(".form-group .help-inline.invalid-feedback")).remove();
+      (this.$(".form-group .form-control")).removeClass('is-invalid');
+      return (this.$('[type=submit]')).prop('disabled', false);
+    };
+
+    EditAssetView.prototype.setDisabledDatepicker = function(b) {
+      var k, len, ref, results, which;
+      ref = ['start', 'end'];
+      results = [];
+      for (k = 0, len = ref.length; k < len; k++) {
+        which = ref[k];
+        (this.$f(which + "_date_date")).attr('disabled', b);
+        results.push((this.$f(which + "_date_time")).attr('disabled', b));
+      }
+      return results;
     };
 
     return EditAssetView;

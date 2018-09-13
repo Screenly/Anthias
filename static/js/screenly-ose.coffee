@@ -290,10 +290,6 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     (@$ '#modalLabel').text "Edit Asset"
     (@$ '.asset-location').hide(); (@$ '.uri').hide(); (@$ '.asset-location.edit').show()
     (@$ '.mime-select').prop('disabled', 'true')
-    for button in (@$ '#loop-times').find('input')
-      if (button.getAttribute('data-loop-time')) == 'manual'
-        button.classList.add('active')
-        break
 
     if (@model.get 'mimetype') == 'video'
       (@$f 'duration').prop 'disabled', on
@@ -326,72 +322,31 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     'change': 'change'
     'keyup': 'change'
     'click .advanced-toggle': 'toggleAdvanced'
-    'click #loop-times>input': 'changeLoopTimes'
 
-  changeLoopTimes: (e) =>
-    for button in (@$ '#loop-times').find('input')
-      button.classList.remove('active')
-    e.target.classList.add('active')
-
+  changeLoopTimes: =>
     current_date = new Date()
     end_date = new Date()
 
-    switch e.target.getAttribute('data-loop-time')
+    switch @$('#loop_times').val()
       when "day"
-        for which in ['start', 'end']
-          (@$f "#{which}_date_date").attr  'disabled', true
-          (@$f "#{which}_date_time").attr  'disabled', true
-        (@$ "#manul_date").hide()
-        c_d = date_to current_date
-        e_d = date_to (end_date.setDate(current_date.getDate() + 1))
+        @setLoopDateTime (date_to current_date), (date_to end_date.setDate(current_date.getDate() + 1))
       when "week"
-        for which in ['start', 'end']
-          (@$f "#{which}_date_date").attr  'disabled', true
-          (@$f "#{which}_date_time").attr  'disabled', true
-        (@$ "#manul_date").hide()
-        c_d = date_to current_date
-        e_d = date_to (end_date.setDate(current_date.getDate() + 7))
+        @setLoopDateTime (date_to current_date), (date_to end_date.setDate(current_date.getDate() + 7))
       when "month"
-        for which in ['start', 'end']
-          (@$f "#{which}_date_date").attr  'disabled', true
-          (@$f "#{which}_date_time").attr  'disabled', true
-        (@$ "#manul_date").hide()
-        c_d = date_to current_date
-        e_d = date_to (end_date.setMonth(current_date.getMonth() + 1))
+        @setLoopDateTime (date_to current_date), (date_to end_date.setMonth(current_date.getMonth() + 1))
       when "year"
-        for which in ['start', 'end']
-          (@$f "#{which}_date_date").attr  'disabled', true
-          (@$f "#{which}_date_time").attr  'disabled', true
-        (@$ "#manul_date").hide()
-        c_d = date_to current_date
-        e_d = date_to (end_date.setFullYear(current_date.getFullYear() + 1))
+        @setLoopDateTime (date_to current_date), (date_to end_date.setFullYear(current_date.getFullYear() + 1))
       when "forever"
-        for which in ['start', 'end']
-          (@$f "#{which}_date_date").attr  'disabled', true
-          (@$f "#{which}_date_time").attr  'disabled', true
-        (@$ "#manul_date").hide()
-        c_d = date_to current_date
-        e_d = date_to (end_date.setFullYear(current_date.getFullYear() + 10000))
+        @setLoopDateTime (date_to current_date), (date_to end_date.setFullYear(current_date.getFullYear() + 10000))
       when "manual"
-        for which in ['start', 'end']
-          (@$f "#{which}_date_date").attr  'disabled', false
-          (@$f "#{which}_date_time").attr  'disabled', false
+        @setLoopDateTime (date_to current_date), (date_to end_date.setDate(current_date.getDate() + 30))
+        @setDisabledDatepicker(false)
         (@$ "#manul_date").show()
-        c_d = date_to current_date
-        e_d = date_to (end_date.setDate(current_date.getDate() + 30))
+        return
       else
         return
-
-    @$fv "start_date_date", c_d.date()
-    (@$f "start_date_date").datepicker 'setDate', new Date(c_d.date())
-    @$fv "start_date_time", c_d.time()
-    @$fv "end_date_date", e_d.date()
-    (@$f "end_date_date").datepicker 'setDate', new Date(e_d.date())
-    @$fv "end_date_time", e_d.time()
-
-    (@$ ".form-group .help-inline.invalid-feedback").remove()
-    (@$ ".form-group .form-control").removeClass 'is-invalid'
-    (@$ '[type=submit]').prop 'disabled', no
+    @setDisabledDatepicker(true)
+    (@$ "#manul_date").hide()
 
   save: (e) =>
     @viewmodel()
@@ -420,6 +375,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
 
   change: (e) =>
     @_change  ||= _.throttle (=>
+      @changeLoopTimes()
       @viewmodel()
       @model.trigger 'change'
       @validate()
@@ -462,6 +418,22 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     has_nocache = img and edit
     (@$ '.advanced-accordion').toggle has_nocache is on
 
+  setLoopDateTime: (start_date, end_date) =>
+    @$fv "start_date_date", start_date.date()
+    (@$f "start_date_date").datepicker 'setDate', new Date(start_date.date())
+    @$fv "start_date_time", start_date.time()
+    @$fv "end_date_date", end_date.date()
+    (@$f "end_date_date").datepicker 'setDate', new Date(end_date.date())
+    @$fv "end_date_time", end_date.time()
+
+    (@$ ".form-group .help-inline.invalid-feedback").remove()
+    (@$ ".form-group .form-control").removeClass 'is-invalid'
+    (@$ '[type=submit]').prop 'disabled', no
+
+  setDisabledDatepicker: (b) =>
+    for which in ['start', 'end']
+      (@$f "#{which}_date_date").attr  'disabled', b
+      (@$f "#{which}_date_time").attr  'disabled', b
 
 API.View.AssetRowView = class AssetRowView extends Backbone.View
   tagName: "tr"

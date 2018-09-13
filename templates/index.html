@@ -211,32 +211,15 @@
                                     <hr/>
                                     <div class="row form-group loop_date">
                                         <label class="col-4 col-form-label">Play for</label>
-                                        <div id="loop-times" class="controls col-7">
-                                            <input type="button" class="btn btn-outline-secondary"
-                                                   data-loop-time="day"
-                                                   style="margin-right: 5px;margin-bottom: 1rem;"
-                                                   value="1 Day">
-                                            <input type="button" class="btn btn-outline-secondary"
-                                                   data-loop-time="week"
-                                                   style="margin-bottom: 1rem;"
-                                                   value="1 Week">
-                                            <input type="button" class="btn btn-outline-secondary"
-                                                   data-loop-time="month"
-                                                   style="margin-right: 5px;margin-bottom: 1rem;"
-                                                   value="1 Month">
-                                            <input type="button" class="btn btn-outline-secondary"
-                                                   data-loop-time="year"
-                                                   style="margin-bottom: 1rem;"
-                                                   value="1 Year">
-                                            <input type="button" class="btn btn-outline-secondary"
-                                                   data-loop-time="forever"
-                                                   style="margin-right: 5px;"
-                                                   value="Forever">
-                                            <input type="button" class="btn btn-outline-secondary"
-                                                   data-loop-time="manual"
-                                                   value="Manual">
-                                        </div>
                                         <div class="controls col-7">
+                                            <select class="form-control" id="loop_times">
+                                                <option value="day">1 Day</option>
+                                                <option value="week">1 Week</option>
+                                                <option value="month">1 Month</option>
+                                                <option value="year">1 Year</option>
+                                                <option value="forever">Forever</option>
+                                                <option value="manual" selected="selected">Manual</option>
+                                            </select>
                                         </div>
                                     </div>
                                     <div id="manul_date">
@@ -457,7 +440,7 @@
                  data-placement="top">
                 <strong>Get the latest Screenly news directly in your mailbox.</strong>
               </a>
-            </span
+            </span>
             </div>
         </div>
     </div>
