@@ -150,7 +150,7 @@ input[name="file_upload"] {
   top: 0;
   left: 0; }
 
-.end_date input, .start_date input {
+.end_date input, .start_date input, .loop_date input {
   float: left;
   width: 47%; }
 

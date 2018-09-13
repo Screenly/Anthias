@@ -183,7 +183,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         maxChunkSize: 5000000 #5 MB
         url: 'api/v1/file_asset'
         progressall: (e, data) => if data.loaded and data.total
-          (@$ '.progress .bar').css 'width', "#{data.loaded/data.total*100}%"
+          (@$ '.progress .bar').css 'width', '#{data.loaded/data.total*100}%'
         add: (e, data) ->
           (that.$ '.status').hide()
           (that.$ '.progress').show()
@@ -290,6 +290,10 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     (@$ '#modalLabel').text "Edit Asset"
     (@$ '.asset-location').hide(); (@$ '.uri').hide(); (@$ '.asset-location.edit').show()
     (@$ '.mime-select').prop('disabled', 'true')
+    for button in (@$ '#loop-times').find('input')
+      if (button.getAttribute('data-loop-time')) == 'range'
+        button.classList.add('active')
+        break
 
     if (@model.get 'mimetype') == 'video'
       (@$f 'duration').prop 'disabled', on
@@ -322,6 +326,47 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     'change': 'change'
     'keyup': 'change'
     'click .advanced-toggle': 'toggleAdvanced'
+    'click #loop-times>input': 'changeLoopTimes'
+
+  changeLoopTimes: (e) =>
+    for button in (@$ '#loop-times').find('input')
+      button.classList.remove('active')
+    e.target.classList.add('active')
+
+    current_date = new Date(new Date(@$fv "start_date_date"))
+    end_date = new Date()
+
+    switch e.target.getAttribute('data-loop-time')
+      when "day"
+        for which in ['start', 'end']
+          (@$f "#{which}_date_date").attr  'disabled', true
+          (@$f "#{which}_date_time").attr  'disabled', true
+        d = date_to (end_date.setDate(current_date.getDate() + 1))
+      when "week"
+        for which in ['start', 'end']
+          (@$f "#{which}_date_date").attr  'disabled', true
+          (@$f "#{which}_date_time").attr  'disabled', true
+        d = date_to (end_date.setDate(current_date.getDate() + 7))
+      when "month"
+        for which in ['start', 'end']
+          (@$f "#{which}_date_date").attr  'disabled', true
+          (@$f "#{which}_date_time").attr  'disabled', true
+        d = date_to (end_date.setMonth(current_date.getMonth() + 1))
+      when "range"
+        for which in ['start', 'end']
+          (@$f "#{which}_date_date").attr  'disabled', false
+          (@$f "#{which}_date_time").attr  'disabled', false
+        return
+      else
+        return
+
+    @$fv "end_date_date", d.date()
+    (@$f "end_date_date").datepicker 'setDate', new Date(d.date())
+    @$fv "end_date_time", d.time()
+
+    (@$ ".form-group .help-inline.invalid-feedback").remove()
+    (@$ ".form-group .form-control").removeClass 'is-invalid'
+    (@$ '[type=submit]').prop 'disabled', no
 
   save: (e) =>
     @viewmodel()

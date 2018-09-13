@@ -340,7 +340,7 @@
           progressall: (function(_this) {
             return function(e, data) {
               if (data.loaded && data.total) {
-                return (_this.$('.progress .bar')).css('width', (data.loaded / data.total * 100) + "%");
+                return (_this.$('.progress .bar')).css('width', '#{data.loaded/data.total*100}%');
               }
             };
           })(this),
@@ -490,6 +490,7 @@
       this.validate = bind(this.validate, this);
       this.change = bind(this.change, this);
       this.save = bind(this.save, this);
+      this.changeLoopTimes = bind(this.changeLoopTimes, this);
       this.viewmodel = bind(this.viewmodel, this);
       this.render = bind(this.render, this);
       this.initialize = bind(this.initialize, this);
@@ -527,7 +528,7 @@
     };
 
     EditAssetView.prototype.render = function() {
-      var d, f, field, k, l, len, len1, len2, m, ref, ref1, ref2, which;
+      var button, d, f, field, k, l, len, len1, len2, len3, m, n, ref, ref1, ref2, ref3, which;
       this.undelegateEvents();
       ref = 'mimetype uri file_upload'.split(' ');
       for (k = 0, len = ref.length; k < len; k++) {
@@ -539,20 +540,28 @@
       (this.$('.uri')).hide();
       (this.$('.asset-location.edit')).show();
       (this.$('.mime-select')).prop('disabled', 'true');
+      ref1 = (this.$('#loop-times')).find('input');
+      for (l = 0, len1 = ref1.length; l < len1; l++) {
+        button = ref1[l];
+        if ((button.getAttribute('data-loop-time')) === 'range') {
+          button.classList.add('active');
+          break;
+        }
+      }
       if ((this.model.get('mimetype')) === 'video') {
         (this.$f('duration')).prop('disabled', true);
       }
-      ref1 = this.model.fields;
-      for (l = 0, len1 = ref1.length; l < len1; l++) {
-        field = ref1[l];
+      ref2 = this.model.fields;
+      for (m = 0, len2 = ref2.length; m < len2; m++) {
+        field = ref2[m];
         if ((this.$fv(field)) !== this.model.get(field)) {
           this.$fv(field, this.model.get(field));
         }
       }
       (this.$('.uri-text')).html(insertWbr(this.model.get('uri')));
-      ref2 = ['start', 'end'];
-      for (m = 0, len2 = ref2.length; m < len2; m++) {
-        which = ref2[m];
+      ref3 = ['start', 'end'];
+      for (n = 0, len3 = ref3.length; n < len3; n++) {
+        which = ref3[n];
         d = date_to(this.model.get(which + "_date"));
         this.$fv(which + "_date_date", d.date());
         (this.$f(which + "_date_date")).datepicker({
@@ -592,7 +601,65 @@
       'click .cancel': 'cancel',
       'change': 'change',
       'keyup': 'change',
-      'click .advanced-toggle': 'toggleAdvanced'
+      'click .advanced-toggle': 'toggleAdvanced',
+      'click #loop-times>input': 'changeLoopTimes'
+    };
+
+    EditAssetView.prototype.changeLoopTimes = function(e) {
+      var button, current_date, d, end_date, k, l, len, len1, len2, len3, len4, m, n, o, ref, ref1, ref2, ref3, ref4, which;
+      ref = (this.$('#loop-times')).find('input');
+      for (k = 0, len = ref.length; k < len; k++) {
+        button = ref[k];
+        button.classList.remove('active');
+      }
+      e.target.classList.add('active');
+      current_date = new Date(new Date(this.$fv("start_date_date")));
+      end_date = new Date();
+      switch (e.target.getAttribute('data-loop-time')) {
+        case "day":
+          ref1 = ['start', 'end'];
+          for (l = 0, len1 = ref1.length; l < len1; l++) {
+            which = ref1[l];
+            (this.$f(which + "_date_date")).attr('disabled', true);
+            (this.$f(which + "_date_time")).attr('disabled', true);
+          }
+          d = date_to(end_date.setDate(current_date.getDate() + 1));
+          break;
+        case "week":
+          ref2 = ['start', 'end'];
+          for (m = 0, len2 = ref2.length; m < len2; m++) {
+            which = ref2[m];
+            (this.$f(which + "_date_date")).attr('disabled', true);
+            (this.$f(which + "_date_time")).attr('disabled', true);
+          }
+          d = date_to(end_date.setDate(current_date.getDate() + 7));
+          break;
+        case "month":
+          ref3 = ['start', 'end'];
+          for (n = 0, len3 = ref3.length; n < len3; n++) {
+            which = ref3[n];
+            (this.$f(which + "_date_date")).attr('disabled', true);
+            (this.$f(which + "_date_time")).attr('disabled', true);
+          }
+          d = date_to(end_date.setMonth(current_date.getMonth() + 1));
+          break;
+        case "range":
+          ref4 = ['start', 'end'];
+          for (o = 0, len4 = ref4.length; o < len4; o++) {
+            which = ref4[o];
+            (this.$f(which + "_date_date")).attr('disabled', false);
+            (this.$f(which + "_date_time")).attr('disabled', false);
+          }
+          return;
+        default:
+          return;
+      }
+      this.$fv("end_date_date", d.date());
+      (this.$f("end_date_date")).datepicker('setDate', new Date(d.date()));
+      this.$fv("end_date_time", d.time());
+      (this.$(".form-group .help-inline.invalid-feedback")).remove();
+      (this.$(".form-group .form-control")).removeClass('is-invalid');
+      return (this.$('[type=submit]')).prop('disabled', false);
     };
 
     EditAssetView.prototype.save = function(e) {
@@ -1034,3 +1101,5 @@
   })(Backbone.View);
 
 }).call(this);
+
+//# sourceMappingURL=screenly-ose.js.map
