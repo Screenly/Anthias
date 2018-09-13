@@ -116,7 +116,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
     (@$el.children ":first").modal()
     (@$ '.cancel').val 'Back to Assets'
 
-    deadlines = start: now(), end: (moment().add 'days', 7).toDate()
+    deadlines = start: now(), end: (moment().add 'days', 30).toDate()
     for own tag, deadline of deadlines
       d = date_to deadline
       @.$fv "#{tag}_date_date", d.date()
@@ -291,7 +291,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     (@$ '.asset-location').hide(); (@$ '.uri').hide(); (@$ '.asset-location.edit').show()
     (@$ '.mime-select').prop('disabled', 'true')
     for button in (@$ '#loop-times').find('input')
-      if (button.getAttribute('data-loop-time')) == 'range'
+      if (button.getAttribute('data-loop-time')) == 'manual'
         button.classList.add('active')
         break
 
@@ -333,7 +333,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
       button.classList.remove('active')
     e.target.classList.add('active')
 
-    current_date = new Date(new Date(@$fv "start_date_date"))
+    current_date = new Date()
     end_date = new Date()
 
     switch e.target.getAttribute('data-loop-time')
@@ -341,28 +341,53 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
         for which in ['start', 'end']
           (@$f "#{which}_date_date").attr  'disabled', true
           (@$f "#{which}_date_time").attr  'disabled', true
-        d = date_to (end_date.setDate(current_date.getDate() + 1))
+        (@$ "#manul_date").hide()
+        c_d = date_to current_date
+        e_d = date_to (end_date.setDate(current_date.getDate() + 1))
       when "week"
         for which in ['start', 'end']
           (@$f "#{which}_date_date").attr  'disabled', true
           (@$f "#{which}_date_time").attr  'disabled', true
-        d = date_to (end_date.setDate(current_date.getDate() + 7))
+        (@$ "#manul_date").hide()
+        c_d = date_to current_date
+        e_d = date_to (end_date.setDate(current_date.getDate() + 7))
       when "month"
         for which in ['start', 'end']
           (@$f "#{which}_date_date").attr  'disabled', true
           (@$f "#{which}_date_time").attr  'disabled', true
-        d = date_to (end_date.setMonth(current_date.getMonth() + 1))
-      when "range"
+        (@$ "#manul_date").hide()
+        c_d = date_to current_date
+        e_d = date_to (end_date.setMonth(current_date.getMonth() + 1))
+      when "year"
+        for which in ['start', 'end']
+          (@$f "#{which}_date_date").attr  'disabled', true
+          (@$f "#{which}_date_time").attr  'disabled', true
+        (@$ "#manul_date").hide()
+        c_d = date_to current_date
+        e_d = date_to (end_date.setFullYear(current_date.getFullYear() + 1))
+      when "forever"
+        for which in ['start', 'end']
+          (@$f "#{which}_date_date").attr  'disabled', true
+          (@$f "#{which}_date_time").attr  'disabled', true
+        (@$ "#manul_date").hide()
+        c_d = date_to current_date
+        e_d = date_to (end_date.setFullYear(current_date.getFullYear() + 10000))
+      when "manual"
         for which in ['start', 'end']
           (@$f "#{which}_date_date").attr  'disabled', false
           (@$f "#{which}_date_time").attr  'disabled', false
-        return
+        (@$ "#manul_date").show()
+        c_d = date_to current_date
+        e_d = date_to (end_date.setDate(current_date.getDate() + 30))
       else
         return
 
-    @$fv "end_date_date", d.date()
-    (@$f "end_date_date").datepicker 'setDate', new Date(d.date())
-    @$fv "end_date_time", d.time()
+    @$fv "start_date_date", c_d.date()
+    (@$f "start_date_date").datepicker 'setDate', new Date(c_d.date())
+    @$fv "start_date_time", c_d.time()
+    @$fv "end_date_date", e_d.date()
+    (@$f "end_date_date").datepicker 'setDate', new Date(e_d.date())
+    @$fv "end_date_time", e_d.time()
 
     (@$ ".form-group .help-inline.invalid-feedback").remove()
     (@$ ".form-group .form-control").removeClass 'is-invalid'

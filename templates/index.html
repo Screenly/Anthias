@@ -210,7 +210,7 @@
                                     </div>
                                     <hr/>
                                     <div class="row form-group loop_date">
-                                        <label class="col-4 col-form-label">Date</label>
+                                        <label class="col-4 col-form-label">Play for</label>
                                         <div id="loop-times" class="controls col-7">
                                             <input type="button" class="btn btn-outline-secondary"
                                                    data-loop-time="day"
@@ -222,32 +222,42 @@
                                                    value="1 Week">
                                             <input type="button" class="btn btn-outline-secondary"
                                                    data-loop-time="month"
-                                                   style="margin-right: 5px;"
+                                                   style="margin-right: 5px;margin-bottom: 1rem;"
                                                    value="1 Month">
                                             <input type="button" class="btn btn-outline-secondary"
-                                                   data-loop-time="range"
-                                                   value="Range">
+                                                   data-loop-time="year"
+                                                   style="margin-bottom: 1rem;"
+                                                   value="1 Year">
+                                            <input type="button" class="btn btn-outline-secondary"
+                                                   data-loop-time="forever"
+                                                   style="margin-right: 5px;"
+                                                   value="Forever">
+                                            <input type="button" class="btn btn-outline-secondary"
+                                                   data-loop-time="manual"
+                                                   value="Manual">
                                         </div>
                                         <div class="controls col-7">
                                         </div>
                                     </div>
-                                    <div class="form-group row start_date">
-                                        <label class="col-4 col-form-label">Start Date</label>
-                                        <div class="controls col-7">
-                                            <input class="form-control date" name="start_date_date" type="text"
-                                                   style="margin-right:5px"/>
-                                            <input class="form-control time" name="start_date_time" type="text"/>
+                                    <div id="manul_date">
+                                        <div class="form-group row start_date">
+                                            <label class="col-4 col-form-label">Start Date</label>
+                                            <div class="controls col-7">
+                                                <input class="form-control date" name="start_date_date" type="text"
+                                                       style="margin-right:5px"/>
+                                                <input class="form-control time" name="start_date_time" type="text"/>
+                                            </div>
+                                            <input name="start_date" type="hidden"/>
                                         </div>
-                                        <input name="start_date" type="hidden"/>
-                                    </div>
-                                    <div class="form-group row end_date">
-                                        <label class="col-4 col-form-label">End Date</label>
-                                        <div class="controls col-7">
-                                            <input class="form-control date" name="end_date_date" type="text"
-                                                   style="margin-right:5px"/>
-                                            <input class="form-control time" name="end_date_time" type="text"/>
+                                        <div class="form-group row end_date">
+                                            <label class="col-4 col-form-label">End Date</label>
+                                            <div class="controls col-7">
+                                                <input class="form-control date" name="end_date_date" type="text"
+                                                       style="margin-right:5px"/>
+                                                <input class="form-control time" name="end_date_time" type="text"/>
+                                            </div>
+                                            <input name="end_date" type="hidden"/>
                                         </div>
-                                        <input name="end_date" type="hidden"/>
                                     </div>
                                     <div class="form-group row duration">
                                         <label class="col-4 col-form-label">Duration</label>
