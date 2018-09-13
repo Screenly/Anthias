@@ -234,7 +234,7 @@
       (this.$('.cancel')).val('Back to Assets');
       deadlines = {
         start: now(),
-        end: (moment().add('days', 7)).toDate()
+        end: (moment().add('days', 30)).toDate()
       };
       for (tag in deadlines) {
         if (!hasProp.call(deadlines, tag)) continue;
@@ -484,12 +484,15 @@
     extend(EditAssetView, superClass);
 
     function EditAssetView() {
+      this.setDisabledDatepicker = bind(this.setDisabledDatepicker, this);
+      this.setLoopDateTime = bind(this.setLoopDateTime, this);
       this.displayAdvanced = bind(this.displayAdvanced, this);
       this.toggleAdvanced = bind(this.toggleAdvanced, this);
       this.cancel = bind(this.cancel, this);
       this.validate = bind(this.validate, this);
       this.change = bind(this.change, this);
       this.save = bind(this.save, this);
+      this.changeLoopTimes = bind(this.changeLoopTimes, this);
       this.viewmodel = bind(this.viewmodel, this);
       this.render = bind(this.render, this);
       this.initialize = bind(this.initialize, this);
@@ -595,6 +598,38 @@
       'click .advanced-toggle': 'toggleAdvanced'
     };
 
+    EditAssetView.prototype.changeLoopTimes = function() {
+      var current_date, end_date;
+      current_date = new Date();
+      end_date = new Date();
+      switch (this.$('#loop_times').val()) {
+        case "day":
+          this.setLoopDateTime(date_to(current_date), date_to(end_date.setDate(current_date.getDate() + 1)));
+          break;
+        case "week":
+          this.setLoopDateTime(date_to(current_date), date_to(end_date.setDate(current_date.getDate() + 7)));
+          break;
+        case "month":
+          this.setLoopDateTime(date_to(current_date), date_to(end_date.setMonth(current_date.getMonth() + 1)));
+          break;
+        case "year":
+          this.setLoopDateTime(date_to(current_date), date_to(end_date.setFullYear(current_date.getFullYear() + 1)));
+          break;
+        case "forever":
+          this.setLoopDateTime(date_to(current_date), date_to(end_date.setFullYear(current_date.getFullYear() + 10000)));
+          break;
+        case "manual":
+          this.setLoopDateTime(date_to(current_date), date_to(end_date.setDate(current_date.getDate() + 30)));
+          this.setDisabledDatepicker(false);
+          (this.$("#manul_date")).show();
+          return;
+        default:
+          return;
+      }
+      this.setDisabledDatepicker(true);
+      return (this.$("#manul_date")).hide();
+    };
+
     EditAssetView.prototype.save = function(e) {
       var save;
       this.viewmodel();
@@ -645,6 +680,7 @@
     EditAssetView.prototype.change = function(e) {
       this._change || (this._change = _.throttle(((function(_this) {
         return function() {
+          _this.changeLoopTimes();
           _this.viewmodel();
           _this.model.trigger('change');
           _this.validate();
@@ -714,6 +750,30 @@
       edit = url_test(this.model.get('uri'));
       has_nocache = img && edit;
       return (this.$('.advanced-accordion')).toggle(has_nocache === true);
+    };
+
+    EditAssetView.prototype.setLoopDateTime = function(start_date, end_date) {
+      this.$fv("start_date_date", start_date.date());
+      (this.$f("start_date_date")).datepicker('setDate', new Date(start_date.date()));
+      this.$fv("start_date_time", start_date.time());
+      this.$fv("end_date_date", end_date.date());
+      (this.$f("end_date_date")).datepicker('setDate', new Date(end_date.date()));
+      this.$fv("end_date_time", end_date.time());
+      (this.$(".form-group .help-inline.invalid-feedback")).remove();
+      (this.$(".form-group .form-control")).removeClass('is-invalid');
+      return (this.$('[type=submit]')).prop('disabled', false);
+    };
+
+    EditAssetView.prototype.setDisabledDatepicker = function(b) {
+      var k, len, ref, results, which;
+      ref = ['start', 'end'];
+      results = [];
+      for (k = 0, len = ref.length; k < len; k++) {
+        which = ref[k];
+        (this.$f(which + "_date_date")).attr('disabled', b);
+        results.push((this.$f(which + "_date_time")).attr('disabled', b));
+      }
+      return results;
     };
 
     return EditAssetView;
@@ -1034,3 +1094,5 @@
   })(Backbone.View);
 
 }).call(this);
+
+//# sourceMappingURL=screenly-ose.js.map

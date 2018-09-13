@@ -116,7 +116,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
     (@$el.children ":first").modal()
     (@$ '.cancel').val 'Back to Assets'
 
-    deadlines = start: now(), end: (moment().add 'days', 7).toDate()
+    deadlines = start: now(), end: (moment().add 'days', 30).toDate()
     for own tag, deadline of deadlines
       d = date_to deadline
       @.$fv "#{tag}_date_date", d.date()
@@ -183,7 +183,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         maxChunkSize: 5000000 #5 MB
         url: 'api/v1/file_asset'
         progressall: (e, data) => if data.loaded and data.total
-          (@$ '.progress .bar').css 'width', "#{data.loaded/data.total*100}%"
+          (@$ '.progress .bar').css 'width', "#{data.loaded / data.total * 100}%"
         add: (e, data) ->
           (that.$ '.status').hide()
           (that.$ '.progress').show()
@@ -323,6 +323,31 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     'keyup': 'change'
     'click .advanced-toggle': 'toggleAdvanced'
 
+  changeLoopTimes: =>
+    current_date = new Date()
+    end_date = new Date()
+
+    switch @$('#loop_times').val()
+      when "day"
+        @setLoopDateTime (date_to current_date), (date_to end_date.setDate(current_date.getDate() + 1))
+      when "week"
+        @setLoopDateTime (date_to current_date), (date_to end_date.setDate(current_date.getDate() + 7))
+      when "month"
+        @setLoopDateTime (date_to current_date), (date_to end_date.setMonth(current_date.getMonth() + 1))
+      when "year"
+        @setLoopDateTime (date_to current_date), (date_to end_date.setFullYear(current_date.getFullYear() + 1))
+      when "forever"
+        @setLoopDateTime (date_to current_date), (date_to end_date.setFullYear(current_date.getFullYear() + 10000))
+      when "manual"
+        @setLoopDateTime (date_to current_date), (date_to end_date.setDate(current_date.getDate() + 30))
+        @setDisabledDatepicker(false)
+        (@$ "#manul_date").show()
+        return
+      else
+        return
+    @setDisabledDatepicker(true)
+    (@$ "#manul_date").hide()
+
   save: (e) =>
     @viewmodel()
     save = null
@@ -350,6 +375,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
 
   change: (e) =>
     @_change  ||= _.throttle (=>
+      @changeLoopTimes()
       @viewmodel()
       @model.trigger 'change'
       @validate()
@@ -392,6 +418,22 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     has_nocache = img and edit
     (@$ '.advanced-accordion').toggle has_nocache is on
 
+  setLoopDateTime: (start_date, end_date) =>
+    @$fv "start_date_date", start_date.date()
+    (@$f "start_date_date").datepicker 'setDate', new Date(start_date.date())
+    @$fv "start_date_time", start_date.time()
+    @$fv "end_date_date", end_date.date()
+    (@$f "end_date_date").datepicker 'setDate', new Date(end_date.date())
+    @$fv "end_date_time", end_date.time()
+
+    (@$ ".form-group .help-inline.invalid-feedback").remove()
+    (@$ ".form-group .form-control").removeClass 'is-invalid'
+    (@$ '[type=submit]').prop 'disabled', no
+
+  setDisabledDatepicker: (b) =>
+    for which in ['start', 'end']
+      (@$f "#{which}_date_date").attr  'disabled', b
+      (@$f "#{which}_date_time").attr  'disabled', b
 
 API.View.AssetRowView = class AssetRowView extends Backbone.View
   tagName: "tr"
