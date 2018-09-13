@@ -183,7 +183,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         maxChunkSize: 5000000 #5 MB
         url: 'api/v1/file_asset'
         progressall: (e, data) => if data.loaded and data.total
-          (@$ '.progress .bar').css 'width', '#{data.loaded/data.total*100}%'
+          (@$ '.progress .bar').css 'width', "#{data.loaded / data.total * 100}%"
         add: (e, data) ->
           (that.$ '.status').hide()
           (that.$ '.progress').show()

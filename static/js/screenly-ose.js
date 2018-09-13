@@ -340,7 +340,7 @@
           progressall: (function(_this) {
             return function(e, data) {
               if (data.loaded && data.total) {
-                return (_this.$('.progress .bar')).css('width', '#{data.loaded/data.total*100}%');
+                return (_this.$('.progress .bar')).css('width', (data.loaded / data.total * 100) + "%");
               }
             };
           })(this),
