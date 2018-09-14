@@ -616,7 +616,7 @@
           this.setLoopDateTime(date_to(current_date), date_to(end_date.setFullYear(current_date.getFullYear() + 1)));
           break;
         case "forever":
-          this.setLoopDateTime(date_to(current_date), date_to(end_date.setFullYear(current_date.getFullYear() + 10000)));
+          this.setLoopDateTime(date_to(current_date), date_to(end_date.setFullYear(9999)));
           break;
         case "manual":
           this.setLoopDateTime(date_to(current_date), date_to(end_date.setDate(current_date.getDate() + 30)));
