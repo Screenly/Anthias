@@ -1,0 +1,15 @@
+[Unit]
+Description=Screenly Web UI
+After=network-online.target
+
+[Service]
+WorkingDirectory=/home/pi/screenly
+User=pi
+ExecStartPre=/usr/bin/python /home/pi/screenly/bin/wait.py
+ExecStart=/usr/bin/python /home/pi/screenly/server.py
+Restart=always
+RestartSec=5
+Environment=PYTHONPATH=/home/pi/screenly
+
+[Install]
+WantedBy=multi-user.target

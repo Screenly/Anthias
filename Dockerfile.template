@@ -1,4 +1,4 @@
-FROM resin/%%RESIN_MACHINE_NAME%%-debian
+FROM resin/rpi-raspbian:stretch
 MAINTAINER Anton Molodykh <amolodykh@screenly.io>
 
 RUN apt-get update && \
@@ -6,6 +6,7 @@ RUN apt-get update && \
         build-essential \
         curl \
         git-core \
+        gstreamer0.10-plugins-good \
         libffi-dev \
         libssl-dev \
         matchbox \
@@ -14,13 +15,20 @@ RUN apt-get update && \
         omxplayer \
         psmisc \
         python-dev \
+        libdbus-1-dev \
+        libdbus-glib-1-dev \
         python-imaging \
         python-netifaces \
         python-simplejson \
+        pkg-config \
         sqlite3 \
         uzbl \
         x11-xserver-utils \
-        xserver-xorg && \
+        xserver-xorg \
+        libpng16-16 \
+        libqt5webkit5 \
+        libraspberrypi0 \
+        libts-dev && \
     apt-get clean
 
 RUN rm /etc/nginx/sites-enabled/default
@@ -55,6 +63,49 @@ COPY ansible/roles/screenly/files/matchbox.service /etc/systemd/system/matchbox.
 COPY ansible/roles/screenly/files/screenly-viewer.service /etc/systemd/system/screenly-viewer.service
 RUN sed -i '/\[Service\]/ a\Environment=HOME=/data' /etc/systemd/system/screenly-viewer.service
 RUN sed -i '/\[Service\]/ a\Environment=DISABLE_UPDATE_CHECK=True' /etc/systemd/system/screenly-viewer.service
+
+
+ENV QT_QPA_EGLFS_PHYSICAL_WIDTH=154
+ENV QT_QPA_EGLFS_PHYSICAL_HEIGHT=86
+ENV QT_QPA_EGLFS_WIDTH=1280
+ENV QT_QPA_EGLFS_HEIGHT=1024
+
+
+# QtBase from packages does not support eglfs
+ARG PI_VERSION=pi1
+RUN curl -L \
+    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase-$PI_VERSION.tar.gz" \
+    > /tmp/qtbase.tar.gz
+RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
+RUN echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf
+RUN ldconfig
+
+# Fix symlinks
+RUN rm /usr/lib/arm-linux-gnueabihf/libEGL.so.1
+RUN rm /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
+RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so
+RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1
+RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
+
+RUN rm /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
+RUN rm /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
+RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so
+RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
+RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
+
+ENV QT_QPA_PLATFORM eglfs
+
+RUN mkdir /usr/local/share/ScreenlyWebview
+RUN curl -L  \
+    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/screenly-webview-v0.1.tar.gz" \
+    > /tmp/screenly-webview-v0.1.tar.gz
+RUN tar -xzf /tmp/screenly-webview-v0.1.tar.gz -C /tmp
+
+RUN cp -r /tmp/res /usr/local/share/ScreenlyWebview/res
+RUN cp /tmp/ScreenlyWebview /usr/local/bin/ScreenlyWebview
+
+
+
 
 # Enable container init system.
 ENV INITSYSTEM on
