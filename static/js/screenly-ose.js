@@ -619,7 +619,6 @@
           this.setLoopDateTime(date_to(current_date), date_to(end_date.setFullYear(9999)));
           break;
         case "manual":
-          this.setLoopDateTime(date_to(current_date), date_to(end_date.setDate(current_date.getDate() + 30)));
           this.setDisabledDatepicker(false);
           (this.$("#manul_date")).show();
           return;
@@ -754,9 +753,17 @@
 
     EditAssetView.prototype.setLoopDateTime = function(start_date, end_date) {
       this.$fv("start_date_date", start_date.date());
+      (this.$f("start_date_date")).datepicker({
+        autoclose: true,
+        format: date_settings.datepicker_format
+      });
       (this.$f("start_date_date")).datepicker('setDate', new Date(start_date.date()));
       this.$fv("start_date_time", start_date.time());
       this.$fv("end_date_date", end_date.date());
+      (this.$f("end_date_date")).datepicker({
+        autoclose: true,
+        format: date_settings.datepicker_format
+      });
       (this.$f("end_date_date")).datepicker('setDate', new Date(end_date.date()));
       this.$fv("end_date_time", end_date.time());
       (this.$(".form-group .help-inline.invalid-feedback")).remove();

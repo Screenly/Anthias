@@ -339,7 +339,6 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
       when "forever"
         @setLoopDateTime (date_to current_date), (date_to end_date.setFullYear(9999))
       when "manual"
-        @setLoopDateTime (date_to current_date), (date_to end_date.setDate(current_date.getDate() + 30))
         @setDisabledDatepicker(false)
         (@$ "#manul_date").show()
         return
@@ -420,9 +419,11 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
 
   setLoopDateTime: (start_date, end_date) =>
     @$fv "start_date_date", start_date.date()
+    (@$f "start_date_date").datepicker autoclose: yes, format: date_settings.datepicker_format
     (@$f "start_date_date").datepicker 'setDate', new Date(start_date.date())
     @$fv "start_date_time", start_date.time()
     @$fv "end_date_date", end_date.date()
+    (@$f "end_date_date").datepicker autoclose: yes, format: date_settings.datepicker_format
     (@$f "end_date_date").datepicker 'setDate', new Date(end_date.date())
     @$fv "end_date_time", end_date.time()
 
