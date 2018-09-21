@@ -1175,6 +1175,9 @@ def settings_page():
                 if field == "user" or field == "password":
                     continue
 
+                if not value and field in ['default_duration', 'default_streaming_duration']:
+                    value = str(0)
+
                 if isinstance(default, bool):
                     value = value == 'on'
                 settings[field] = value
