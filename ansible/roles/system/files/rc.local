@@ -4,8 +4,6 @@
 ssh-keygen -A
 
 # Disable wifi power management
-if [ "$(iwconfig | grep wlan" ]; then
-  iwconfig wlan0 power off
-fi
+iwconfig wlan0 power off
 
 exit 0
