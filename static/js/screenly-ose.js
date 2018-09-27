@@ -304,7 +304,7 @@
         })(this));
         save.fail((function(_this) {
           return function() {
-            (_this.$('input')).prop('disable', false);
+            (_this.$('input')).prop('disabled', false);
             return model.destroy();
           };
         })(this));

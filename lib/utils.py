@@ -12,7 +12,7 @@ from netifaces import ifaddresses, gateways
 from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
-from sh import grep, netstat
+from sh import grep, netstat, ErrorReturnCode_1
 from subprocess import check_output, call
 from threading import Thread
 from urlparse import urlparse
@@ -28,14 +28,14 @@ HTTP_OK = xrange(200, 299)
 # Travis can run.
 try:
     from sh import omxplayer
-except:
+except ImportError:
     pass
 
 # This will work on x86-based machines
 if machine() in ['x86', 'x86_64']:
     try:
         from sh import ffprobe, mplayer
-    except:
+    except ImportError:
         pass
 
 
@@ -82,7 +82,7 @@ def get_node_ip():
             default_interface = gateways()['default'][address_family_id][1]
             my_ip = ifaddresses(default_interface)[address_family_id][0]['addr']
             return my_ip
-        except:
+        except ValueError:
             raise Exception("Unable to resolve local IP address.")
 
 
@@ -92,10 +92,13 @@ def get_video_duration(file):
     """
     time = None
 
-    if arch in ('armv6l', 'armv7l'):
-        run_player = omxplayer(file, info=True, _err_to_out=True, _ok_code=[0, 1], _decode_errors='ignore')
-    else:
-        run_player = ffprobe('-i', file, _err_to_out=True)
+    try:
+        if arch in ('armv6l', 'armv7l'):
+            run_player = omxplayer(file, info=True, _err_to_out=True, _ok_code=[0, 1], _decode_errors='ignore')
+        else:
+            run_player = ffprobe('-i', file, _err_to_out=True)
+    except ErrorReturnCode_1:
+        raise Exception('Bad video format')
 
     for line in run_player.split('\n'):
         if 'Duration' in line:
@@ -154,7 +157,7 @@ def url_fails(url):
         verify = False
 
     headers = {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15'
     }
     try:
         if not validate_url(url):
