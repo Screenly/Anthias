@@ -113,9 +113,7 @@ section .header {
 #request-error {
   z-index: 10000; }
   #request-error .alert {
-    position: fixed;
     margin-left: 300px;
-    margin-top: 23px;
     width: 500px; }
 
 #add-form .uri-text {

@@ -156,7 +156,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         _.extend model.attributes, data
         model.collection.add model
       save.fail =>
-        (@$ 'input').prop 'disable', off
+        (@$ 'input').prop 'disabled', off
         model.destroy()
     no
 
