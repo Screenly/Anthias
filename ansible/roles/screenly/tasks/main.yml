@@ -84,6 +84,22 @@
     dest: "/etc/systemd/system/{{ item }}"
   with_items: "{{ screenly_systemd_units }}"
 
+- name: Copy plymouth-quit-wait.service
+  copy:
+    src: plymouth-quit-wait.service
+    dest: /lib/systemd/system/plymouth-quit-wait.service
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Copy plymouth-quit.service
+  copy:
+    src: plymouth-quit.service
+    dest: /lib/systemd/system/plymouth-quit.service
+    mode: 0755
+    owner: root
+    group: root
+
 - name: Enable screenly systemd services
   command: systemctl enable {{ item }} chdir=/etc/systemd/system
   with_items: "{{ screenly_systemd_units }}"
