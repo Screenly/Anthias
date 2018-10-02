@@ -3,6 +3,8 @@
 
 # Screenly OSE - Digital Signage for the Raspberry Pi
 
+[Which Screenly version is right for me?](https://www.screenly.io/screenly-ose-vs-pro/)
+
 ## Disk images
 
 The recommended installation method is to grab the latest disk image from [here](https://github.com/Screenly/screenly-ose/releases).
