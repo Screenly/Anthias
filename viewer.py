@@ -250,13 +250,13 @@ def browser_send(command, cb=lambda _: True):
         browser.process.stdin.put(command + '\n')
         while True:  # loop until cb returns True
             try:
-                event = browser.next()
+                browser_event = browser.next()
             except StopIteration:
                 break
-            if 'FOCUS_LOST' in event:
+            if 'FOCUS_LOST' in str(browser_event):
                 browser_focus_lost = True
                 break
-            if cb(event):
+            if cb(browser_event):
                 break
     else:
         logging.info('browser found dead, restarting')
