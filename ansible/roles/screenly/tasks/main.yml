@@ -124,6 +124,9 @@
       - /home/pi/.screenly:/home/pi/.screenly
       - /home/pi/screenly_assets:/home/pi/screenly_assets
 
+- name: Pause screenly-viewer container
+  command: docker pause screenly-ose-viewer
+
 - name: Create screenly-websocket-server container
   docker_container:
     name: screenly-ose-websocket
