@@ -414,9 +414,7 @@
     AddAssetView.prototype.updateMimetype = function(filename) {
       var mt;
       mt = get_mimetype(filename);
-      if (mt) {
-        this.$fv('mimetype', mt);
-      }
+      this.$fv('mimetype', mt ? mt : new Asset().defaults()['mimetype']);
       return this.change_mimetype();
     };
 
@@ -1034,3 +1032,5 @@
   })(Backbone.View);
 
 }).call(this);
+
+//# sourceMappingURL=screenly-ose.js.map
