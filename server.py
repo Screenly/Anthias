@@ -684,8 +684,9 @@ class AssetsV1_2(Resource):
     })
     def post(self):
         asset = prepare_asset_v1_2(request)
-        if url_fails(asset['uri']):
-            raise Exception("Could not retrieve file. Check the asset URL.")
+        if not settings['skip_asset_check']:
+            if url_fails(asset['uri']):
+                raise Exception("Could not retrieve file. Check the asset URL.")
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
             ids_of_active_assets = [x['asset_id'] for x in assets if x['is_active']]
