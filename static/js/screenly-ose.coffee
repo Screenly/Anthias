@@ -229,7 +229,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
   updateFileUploadMimetype: (filename) => @updateMimetype filename
   updateMimetype: (filename) =>
     mt = get_mimetype filename
-    @$fv 'mimetype', mt if mt
+    @$fv 'mimetype', if mt then mt else new Asset().defaults()['mimetype']
     @change_mimetype()
 
   change: (e) =>
