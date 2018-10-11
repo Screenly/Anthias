@@ -282,10 +282,8 @@ def prepare_asset(request):
     return asset
 
 
-def prepare_asset_v1_2(request, asset_id=None):
-    req = Request(request.environ)
-
-    data = json.loads(req.data)
+def prepare_asset_v1_2(request_environ, asset_id=None):
+    data = json.loads(request_environ.data)
 
     def get(key):
         val = data.get(key, '')
@@ -350,6 +348,11 @@ def prepare_asset_v1_2(request, asset_id=None):
     asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
 
     return asset
+
+
+def skip_asset_check(request_environ):
+    skip_asset_check_value = json.loads(request_environ.data).get('skip_asset_check')
+    return skip_asset_check_value == 'on'
 
 
 # api view decorator. handles errors
@@ -683,8 +686,9 @@ class AssetsV1_2(Resource):
         }
     })
     def post(self):
-        asset = prepare_asset_v1_2(request)
-        if not settings['skip_asset_check']:
+        request_environ = Request(request.environ)
+        asset = prepare_asset_v1_2(request_environ)
+        if not skip_asset_check(request_environ):
             if url_fails(asset['uri']):
                 raise Exception("Could not retrieve file. Check the asset URL.")
         with db.conn(settings['database']) as conn:

@@ -64,7 +64,7 @@ Backbone.emulateJSON = off
 # Models
 API.Asset = class Asset extends Backbone.Model
   idAttribute: "asset_id"
-  fields: 'name mimetype uri start_date end_date duration'.split ' '
+  fields: 'name mimetype uri start_date end_date duration skip_asset_check'.split ' '
   defaults: =>
     name: ''
     mimetype: 'webpage'
@@ -77,6 +77,7 @@ API.Asset = class Asset extends Backbone.Model
     is_processing: 0
     nocache: 0
     play_order: 0
+    skip_asset_check: 'off'
   active: =>
     if @get('is_enabled') and @get('start_date') and @get('end_date')
       at = now()
@@ -137,6 +138,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
     'hidden.bs.modal': 'destroyFileUploadWidget'
     'click .tabnav-uri': 'clickTabNavUri'
     'click .tabnav-file_upload': 'clickTabNavUpload'
+    'change .is_enabled-skip_asset_check_checkbox': 'toggleSkipAssetCheck'
 
   save: (e) =>
     if ((@$fv 'uri') == '')
@@ -160,6 +162,9 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         model.destroy()
     no
 
+  toggleSkipAssetCheck: (e) =>
+    @$fv 'skip_asset_check', if (@$fv 'skip_asset_check') == 'on' then 'off' else 'on'
+
   change_mimetype: =>
     if (@$fv 'mimetype') == "video"
       @$fv 'duration', 0
@@ -175,6 +180,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
       (@$ '.tabnav-file_upload').addClass 'active show'
       (@$ '#tab-file_upload').addClass 'active'
       (@$ '.uri').hide()
+      (@$ '.skip_asset_check_checkbox').hide()
       (@$ '#save-asset').hide()
       that = this
       (@$ "[name='file_upload']").fileupload
@@ -223,6 +229,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
       (@$ '#tab-uri').addClass 'active'
       (@$ '#save-asset').show()
       (@$ '.uri').show()
+      (@$ '.skip_asset_check_checkbox').show()
       (@$f 'uri').focus()
 
   updateUriMimetype: => @updateMimetype @$fv 'uri'
@@ -242,8 +249,9 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
     that = this
     validators =
       uri: (v) =>
-        if ((that.$ '#tab-uri').hasClass 'active') and not url_test v
-          'please enter a valid URL'
+        if v
+          if ((that.$ '#tab-uri').hasClass 'active') and not url_test v
+            'please enter a valid URL'
     errors = ([field, v] for field, fn of validators when v = fn (@$fv field))
 
     (@$ ".form-group .help-inline.invalid-feedback").remove()
