@@ -125,7 +125,7 @@
 
     Asset.prototype.idAttribute = "asset_id";
 
-    Asset.prototype.fields = 'name mimetype uri start_date end_date duration'.split(' ');
+    Asset.prototype.fields = 'name mimetype uri start_date end_date duration skip_asset_check'.split(' ');
 
     Asset.prototype.defaults = function() {
       return {
@@ -139,7 +139,8 @@
         is_enabled: 0,
         is_processing: 0,
         nocache: 0,
-        play_order: 0
+        play_order: 0,
+        skip_asset_check: 'off'
       };
     };
 
@@ -209,6 +210,7 @@
       this.clickTabNavUri = bind(this.clickTabNavUri, this);
       this.clickTabNavUpload = bind(this.clickTabNavUpload, this);
       this.change_mimetype = bind(this.change_mimetype, this);
+      this.toggleSkipAssetCheck = bind(this.toggleSkipAssetCheck, this);
       this.save = bind(this.save, this);
       this.viewmodel = bind(this.viewmodel, this);
       this.initialize = bind(this.initialize, this);
@@ -272,7 +274,8 @@
       'click .cancel': 'cancel',
       'hidden.bs.modal': 'destroyFileUploadWidget',
       'click .tabnav-uri': 'clickTabNavUri',
-      'click .tabnav-file_upload': 'clickTabNavUpload'
+      'click .tabnav-file_upload': 'clickTabNavUpload',
+      'change .is_enabled-skip_asset_check_checkbox': 'toggleSkipAssetCheck'
     };
 
     AddAssetView.prototype.save = function(e) {
@@ -312,6 +315,10 @@
       return false;
     };
 
+    AddAssetView.prototype.toggleSkipAssetCheck = function(e) {
+      return this.$fv('skip_asset_check', (this.$fv('skip_asset_check')) === 'on' ? 'off' : 'on');
+    };
+
     AddAssetView.prototype.change_mimetype = function() {
       if ((this.$fv('mimetype')) === "video") {
         return this.$fv('duration', 0);
@@ -330,6 +337,7 @@
         (this.$('.tabnav-file_upload')).addClass('active show');
         (this.$('#tab-file_upload')).addClass('active');
         (this.$('.uri')).hide();
+        (this.$('.skip_asset_check_checkbox')).hide();
         (this.$('#save-asset')).hide();
         that = this;
         (this.$("[name='file_upload']")).fileupload({
@@ -399,6 +407,7 @@
         (this.$('#tab-uri')).addClass('active');
         (this.$('#save-asset')).show();
         (this.$('.uri')).show();
+        (this.$('.skip_asset_check_checkbox')).show();
         return (this.$f('uri')).focus();
       }
     };
@@ -434,8 +443,10 @@
       validators = {
         uri: (function(_this) {
           return function(v) {
-            if (((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
-              return 'please enter a valid URL';
+            if (v) {
+              if (((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
+                return 'please enter a valid URL';
+              }
             }
           };
         })(this)
