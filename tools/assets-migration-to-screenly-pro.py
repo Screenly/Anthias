@@ -9,6 +9,8 @@ import click
 import requests
 import time
 
+from requests.auth import HTTPBasicAuth
+
 HOME = os.getenv('HOME', '/home/pi')
 
 BASE_API_SCREENLY_URL = 'https://api.screenlyapp.com'
@@ -90,8 +92,19 @@ def set_ngrok_public_url(value):
 ################################
 
 def get_assets_by_screenly_ose_api():
-    response = requests.get(ASSETS_SCREENLY_OSE_API, timeout=10)
-    return response.json()
+    if click.confirm('Do you need authentication to access Screenly-OSE API?'):
+        login = click.prompt('Login')
+        password = click.prompt('Password', hide_input=True)
+        auth = HTTPBasicAuth(login, password)
+    else:
+        auth = None
+    response = requests.get(ASSETS_SCREENLY_OSE_API, timeout=10, auth=auth)
+    if response.status_code == 200:
+        return response.json()
+    elif response.status_code == 401:
+        raise Exception('Access denied')
+    else:
+        return None
 
 
 ################################
@@ -151,6 +164,7 @@ def start_migration():
         click.echo('\n')
         start_http_ngrok_process()
         set_ngrok_public_url(get_ngrock_public_url())
+        click.echo('\n')
         assets_migration()
 
 
@@ -162,49 +176,38 @@ def assets_migration():
         asset_name = str(asset['name'])
         progress_bar(index + 1, assets_length, text='Asset in migration progress: %s' % asset_name)
         status = send_asset(asset)
+        if not status:
+            click.echo(click.style('\n%s asset was failed migration' % asset_name, fg='red'))
     click.echo('\n')
     click.echo(click.style('Migration completed successfully', fg='green'))
 
 
-@click.group(invoke_without_command=True)
+@click.command()
 @click.option('--method',
               prompt='What do you want to use for migration?\n1.API token\n2.Credentials\n0.Exit\nYour choice',
               type=click.Choice(['1', '2', '0']))
 def main(method):
     try:
+        valid_token = None
+
         if method == '1':
-            migrate_with_api_key()
+            api_key = click.prompt('Your API key')
+            valid_token = check_validate_token(api_key)
         elif method == '2':
-            migrate_with_credentials()
+            username = click.prompt('Your username')
+            password = click.prompt('Your password', hide_input=True)
+            valid_token = get_api_key_by_credentials(username, password)
         elif method == '0':
             sys.exit(0)
+
+        if valid_token:
+            set_token(valid_token)
+            click.echo(click.style('Successfull authentication', fg='green'))
+            start_migration()
+        else:
+            click.echo(click.style('Failed authentication', fg='red'))
     except Exception:
         traceback.print_exc()
-
-
-@main.command()
-@click.option('--api_key', prompt='Your API key')
-def migrate_with_api_key(api_key):
-    valid_token = check_validate_token(api_key)
-    if valid_token:
-        set_token(valid_token)
-        click.echo(click.style('Successfull authentication', fg='green'))
-        start_migration()
-    else:
-        click.echo(click.style('Failed authentication', fg='red'))
-
-
-@main.command()
-@click.option('--username', prompt='Your username')
-@click.option('--password', prompt='Your password', hide_input=True)
-def migrate_with_credentials(username, password):
-    valid_token = get_api_key_by_credentials(username, password)
-    if valid_token:
-        set_token(valid_token)
-        click.echo(click.style('Successfull authentication', fg='green'))
-        start_migration()
-    else:
-        click.echo(click.style('Failed authentication', fg='red'))
 
 
 if __name__ == '__main__':
