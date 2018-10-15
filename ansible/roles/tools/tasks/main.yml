@@ -1,7 +1,7 @@
-- name: Download ngrok
+- name: Download and unarchive ngrok
   unarchive:
     src: https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-arm.zip
-    dest: /home/pi/screenly/bin/
+    dest: /usr/local/bin/
     remote_src: yes
 
 - name: Installs nginx config
@@ -11,8 +11,3 @@
     mode: 644
     owner: root
     group: root
-
-- name: Add custom-path to /etc/profile.d.
-  copy:
-    dest: /etc/profile.d/custom-path.sh
-    content: 'PATH=$PATH:/home/pi/screenly/bin/'
