@@ -19,8 +19,6 @@ ASSETS_SCREENLY_OSE_API = 'http://127.0.0.1:8080/api/v1.1/assets'
 PORT_NGROK = 4040
 PORT = 8000
 
-ngrok_process = None
-
 token = None
 ngrok_public_url = None
 
@@ -30,9 +28,10 @@ ngrok_public_url = None
 ################################
 
 def start_http_ngrok_process(try_connection=100):
-    global ngrok_process
     click.echo(click.style("Ngrok starting ...", fg='yellow'))
-    ngrok_process = sh.ngrok('http', str(PORT), _bg=True, _in=os.devnull, _out=os.devnull, _err=sys.stderr)
+
+    sh.ngrok('http', str(PORT), _bg=True, _in=os.devnull, _out=os.devnull, _err=sys.stderr)
+
     try_count = 0
     while True:
         if try_count >= try_connection:
@@ -43,7 +42,7 @@ def start_http_ngrok_process(try_connection=100):
         except requests.exceptions.ConnectionError:
             try_count += 1
             time.sleep(0.1)
-            continue
+
     click.echo(click.style("Ngrok successfull started", fg='green'))
 
 
@@ -103,8 +102,6 @@ def get_assets_by_screenly_ose_api():
         return response.json()
     elif response.status_code == 401:
         raise Exception('Access denied')
-    else:
-        return None
 
 
 ################################
@@ -121,14 +118,10 @@ def send_asset(asset):
         asset_uri = os.path.join(ngrok_public_url, asset['asset_id'])
     data = {
         'title': asset['name'],
-        'source_url': asset_uri,
-        # 'duration': asset['duration'] #CURRENTLY DOESN'T WORK
+        'source_url': asset_uri
     }
     response = requests.post(endpoind_url, data=data, headers=headers)
-    if response.status_code == 200:
-        return True
-    else:
-        return False
+    return response.status_code == 200
 
 
 def check_validate_token(api_key):
