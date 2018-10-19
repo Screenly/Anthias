@@ -1,60 +1,77 @@
-FROM resin/%%RESIN_MACHINE_NAME%%-debian
+FROM resin/%%RESIN_MACHINE_NAME%%-debian:stretch
 MAINTAINER Anton Molodykh <amolodykh@screenly.io>
 
 RUN apt-get update && \
     apt-get -y install \
         build-essential \
         curl \
+        git \
         git-core \
         libffi-dev \
+        libraspberrypi0 \
         libssl-dev \
-        matchbox \
         net-tools \
         nginx-light \
         omxplayer \
-        psmisc \
         python-dev \
-        python-imaging \
         python-netifaces \
-        python-simplejson \
+        python-pip \
+        python-setuptools \
         sqlite3 \
-        uzbl \
-        x11-xserver-utils \
-        xserver-xorg && \
+        gstreamer0.10-plugins-good \
+        libdbus-glib-1-dev \
+        libqt5webkit5 \
+        libts-dev \
+        psmisc && \
     apt-get clean
 
-RUN rm /etc/nginx/sites-enabled/default
+RUN rm -f /etc/nginx/sites-enabled/default
 COPY ansible/roles/ssl/files/nginx_resin.conf /etc/nginx/sites-enabled/screenly.conf
 
+RUN pip install --upgrade pip setuptools
+
 # Install Python requirements
-ADD requirements.viewer.txt /tmp/requirements.viewer.txt
+ADD requirements.txt /tmp/requirements.txt
 ADD requirements.server.txt /tmp/requirements.server.txt
 ADD requirements.websocket_server.txt /tmp/requirements.websocket_server.txt
-RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
-    pip install --upgrade -r /tmp/requirements.viewer.txt && \
-    pip install --upgrade -r /tmp/requirements.server.txt && \
-    pip install --upgrade -r /tmp/requirements.websocket_server.txt
+ADD requirements.viewer.txt /tmp/requirements.viewer.txt
+RUN pip install -r /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.server.txt
+RUN pip install -r /tmp/requirements.websocket_server.txt
+RUN pip install -r /tmp/requirements.viewer.txt
 
-# Screenly Websocker Server
-COPY ansible/roles/screenly/files/screenly-websocket_server_layer.service /etc/systemd/system/screenly-websocket_server_layer.service
-RUN sed -i '/\[Service\]/ a\Environment=HOME=/data' /etc/systemd/system/screenly-websocket_server_layer.service
+# QtBase from packages does not support eglfs
+RUN curl -L \
+    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase.tar.gz" \
+    > /tmp/qtbase.tar.gz
+RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
+RUN echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf
+RUN ldconfig
 
-# Screenly Server
-COPY ansible/roles/screenly/files/screenly-web.service /etc/systemd/system/screenly-web.service
-RUN sed -i '/\[Service\]/ a\Environment=HOME=/data' /etc/systemd/system/screenly-web.service
-RUN sed -i '/\[Service\]/ a\Environment=Environment=LISTEN=0.0.0.0' /etc/systemd/system/screenly-web.service
-RUN sed -i '/\[Service\]/ a\Environment=Environment=SWAGGER_HOST=ose.demo.screenlyapp.com' /etc/systemd/system/screenly-web.service
+# Fix symlinks
+RUN rm /usr/lib/arm-linux-gnueabihf/libEGL.so.1
+RUN rm /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
+RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so
+RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1
+RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
 
-# X11
-COPY ansible/roles/screenly/files/X.service /etc/systemd/system/X.service
+RUN rm /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
+RUN rm /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
+RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so
+RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
+RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
 
-# Matchbox
-COPY ansible/roles/screenly/files/matchbox.service /etc/systemd/system/matchbox.service
+RUN mkdir /usr/local/share/ScreenlyWebview
+RUN curl -L  \
+    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/screenly-webview-v0.1.tar.gz" \
+    > /tmp/screenly-webview-v0.1.tar.gz
+RUN tar -xzf /tmp/screenly-webview-v0.1.tar.gz -C /tmp
 
-#Screenly Viewer
-COPY ansible/roles/screenly/files/screenly-viewer.service /etc/systemd/system/screenly-viewer.service
-RUN sed -i '/\[Service\]/ a\Environment=HOME=/data' /etc/systemd/system/screenly-viewer.service
-RUN sed -i '/\[Service\]/ a\Environment=DISABLE_UPDATE_CHECK=True' /etc/systemd/system/screenly-viewer.service
+RUN cp -r /tmp/res /usr/local/share/ScreenlyWebview/res
+RUN cp /tmp/ScreenlyWebview /usr/local/bin/ScreenlyWebview
+
+# Fix white flickering in omxplayer
+ENV NOREFRESH 1
 
 # Enable container init system.
 ENV INITSYSTEM on
@@ -65,7 +82,6 @@ RUN    useradd pi -d /home/pi \
 
 # Install config file and file structure
 RUN mkdir -p /home/pi/screenly
-COPY ansible/roles/screenly/files/gtkrc-2.0 /home/pi/.gtkrc-2.0
 
 # Copy in code base
 COPY . /home/pi/screenly
