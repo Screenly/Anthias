@@ -1062,7 +1062,7 @@
       })(this));
       ($(window)).ajaxSuccess((function(_this) {
         return function(event, request, settings) {
-          if ((settings.url === '/api/v1.2/assets') && (settings.type === 'POST')) {
+          if ((settings.url === new Assets().url) && (settings.type === 'POST')) {
             ($('#request-error')).html((get_template('request-success'))());
             ($('#request-error .msg')).text('Info: The asset has been successfully uploaded.');
             ($('#request-error')).show();
