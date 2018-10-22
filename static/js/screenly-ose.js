@@ -1052,13 +1052,24 @@
           var err, j;
           ($('#request-error')).html((get_template('request-error'))());
           if ((j = $.parseJSON(r.responseText)) && (err = j.error)) {
-            return ($('#request-error .msg')).text('Server Error: ' + err);
+            ($('#request-error .msg')).text('Server Error: ' + err);
           }
+          ($('#request-error')).show();
+          return setTimeout(function() {
+            return ($('#request-error')).fadeOut('slow');
+          }, 5000);
         };
       })(this));
       ($(window)).ajaxSuccess((function(_this) {
-        return function(data) {
-          return ($('#request-error')).html('');
+        return function(event, request, settings) {
+          if ((settings.url === '/api/v1.2/assets') && (settings.type === 'POST')) {
+            ($('#request-error')).html((get_template('request-success'))());
+            ($('#request-error .msg')).text('Info: The asset has been successfully uploaded.');
+            ($('#request-error')).show();
+            return setTimeout(function() {
+              return ($('#request-error')).fadeOut('slow');
+            }, 5000);
+          }
         };
       })(this));
       (API.assets = new Assets()).fetch();
@@ -1110,5 +1121,3 @@
   })(Backbone.View);
 
 }).call(this);
-
-//# sourceMappingURL=screenly-ose.js.map

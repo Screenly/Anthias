@@ -588,8 +588,18 @@ API.App = class App extends Backbone.View
       ($ '#request-error').html (get_template 'request-error')()
       if (j = $.parseJSON r.responseText) and (err = j.error)
         ($ '#request-error .msg').text 'Server Error: ' + err
-    ($ window).ajaxSuccess (data) =>
-      ($ '#request-error').html ''
+      ($ '#request-error').show()
+      setTimeout ->
+        ($ '#request-error').fadeOut('slow')
+      , 5000
+    ($ window).ajaxSuccess (event, request, settings) =>
+      if (settings.url == '/api/v1.2/assets') and (settings.type == 'POST')
+          ($ '#request-error').html (get_template 'request-success')()
+          ($ '#request-error .msg').text 'Info: The asset has been successfully uploaded.'
+          ($ '#request-error').show()
+          setTimeout ->
+            ($ '#request-error').fadeOut('slow')
+          , 5000
 
     (API.assets = new Assets()).fetch()
     API.assetsView = new AssetsView
