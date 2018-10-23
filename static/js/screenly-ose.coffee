@@ -592,10 +592,10 @@ API.App = class App extends Backbone.View
       setTimeout ->
         ($ '#request-error').fadeOut('slow')
       , 5000
-    ($ window).ajaxSuccess (event, request, settings) =>
+    ($ window).ajaxSuccess (event, request, settings) ->
       if (settings.url == new Assets().url) and (settings.type == 'POST')
         ($ '#request-error').html (get_template 'request-success')()
-        ($ '#request-error .msg').text 'Info: The asset has been successfully uploaded.'
+        ($ '#request-error .msg').text 'Asset has been successfully uploaded.'
         ($ '#request-error').show()
         setTimeout ->
           ($ '#request-error').fadeOut('slow')
