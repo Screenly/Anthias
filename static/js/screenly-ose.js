@@ -140,7 +140,7 @@
         is_processing: 0,
         nocache: 0,
         play_order: 0,
-        skip_asset_check: 'off'
+        skip_asset_check: 0
       };
     };
 
@@ -316,7 +316,7 @@
     };
 
     AddAssetView.prototype.toggleSkipAssetCheck = function(e) {
-      return this.$fv('skip_asset_check', (this.$fv('skip_asset_check')) === 'on' ? 'off' : 'on');
+      return this.$fv('skip_asset_check', parseInt(this.$fv('skip_asset_check')) === 1 ? 0 : 1);
     };
 
     AddAssetView.prototype.change_mimetype = function() {

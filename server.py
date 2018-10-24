@@ -152,6 +152,10 @@ class AssetModel(Schema):
         'play_order': {
             'type': 'integer',
             'format': 'int64',
+        },
+        'skip_asset_check': {
+            'type': 'integer',
+            'format': 'int64',
         }
     }
 
@@ -180,6 +184,10 @@ class AssetRequestModel(Schema):
             'format': 'int64',
         },
         'play_order': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'skip_asset_check': {
             'type': 'integer',
             'format': 'int64',
         }
@@ -268,6 +276,8 @@ def prepare_asset(request):
         # Crashes if it's not an int. We want that.
         asset['duration'] = int(get('duration'))
 
+    asset['skip_asset_check'] = int(get('skip_asset_check')) if int(get('skip_asset_check')) else 0
+
     # parse date via python-dateutil and remove timezone info
     if get('start_date'):
         asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
@@ -343,16 +353,13 @@ def prepare_asset_v1_2(request_environ, asset_id=None):
 
     asset['play_order'] = get('play_order') if get('play_order') else 0
 
+    asset['skip_asset_check'] = int(get('skip_asset_check')) if int(get('skip_asset_check')) else 0
+
     # parse date via python-dateutil and remove timezone info
     asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
     asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
 
     return asset
-
-
-def skip_asset_check(request_environ):
-    skip_asset_check_value = json.loads(request_environ.data).get('skip_asset_check')
-    return skip_asset_check_value == 'on'
 
 
 # api view decorator. handles errors
@@ -410,7 +417,8 @@ class Assets(Resource):
                         "is_enabled": 0,
                         "is_processing": 0,
                         "nocache": 0,
-                        "play_order": 0
+                        "play_order": 0,
+                        "skip_asset_check": 0
                     }"
                     '''
             }
@@ -480,7 +488,8 @@ class Asset(Resource):
                         "is_enabled": 0,
                         "is_processing": 0,
                         "nocache": 0,
-                        "play_order": 0
+                        "play_order": 0,
+                        "skip_asset_check": 0
                     }"
                     '''
             }
@@ -688,9 +697,8 @@ class AssetsV1_2(Resource):
     def post(self):
         request_environ = Request(request.environ)
         asset = prepare_asset_v1_2(request_environ)
-        if not skip_asset_check(request_environ):
-            if url_fails(asset['uri']):
-                raise Exception("Could not retrieve file. Check the asset URL.")
+        if not asset['skip_asset_check'] and url_fails(asset['uri']):
+            raise Exception("Could not retrieve file. Check the asset URL.")
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
             ids_of_active_assets = [x['asset_id'] for x in assets if x['is_active']]

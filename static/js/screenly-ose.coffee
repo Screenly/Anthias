@@ -77,7 +77,7 @@ API.Asset = class Asset extends Backbone.Model
     is_processing: 0
     nocache: 0
     play_order: 0
-    skip_asset_check: 'off'
+    skip_asset_check: 0
   active: =>
     if @get('is_enabled') and @get('start_date') and @get('end_date')
       at = now()
@@ -163,7 +163,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
     no
 
   toggleSkipAssetCheck: (e) =>
-    @$fv 'skip_asset_check', if (@$fv 'skip_asset_check') == 'on' then 'off' else 'on'
+    @$fv 'skip_asset_check', if parseInt((@$fv 'skip_asset_check')) == 1 then 0 else 1
 
   change_mimetype: =>
     if (@$fv 'mimetype') == "video"
