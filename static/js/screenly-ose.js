@@ -389,9 +389,14 @@
           },
           stop: function(e) {
             (that.$('.progress')).hide();
-            (that.$('.progress .bar')).css('width', "0");
+            return (that.$('.progress .bar')).css('width', "0");
+          },
+          done: function(e, data) {
             (that.$('.status')).show();
-            return (that.$('.status')).html('Upload completed.');
+            (that.$('.status')).html('Upload completed.');
+            return setTimeout(function() {
+              return (that.$('.status')).fadeOut('slow');
+            }, 5000);
           }
         });
       }
@@ -408,6 +413,7 @@
         (this.$('#save-asset')).show();
         (this.$('.uri')).show();
         (this.$('.skip_asset_check_checkbox')).show();
+        (this.$('.status')).hide();
         return (this.$f('uri')).focus();
       }
     };
@@ -549,6 +555,7 @@
       (this.$('#modalLabel')).text("Edit Asset");
       (this.$('.asset-location')).hide();
       (this.$('.uri')).hide();
+      (this.$('.skip_asset_check_checkbox')).hide();
       (this.$('.asset-location.edit')).show();
       (this.$('.mime-select')).prop('disabled', 'true');
       if ((this.model.get('mimetype')) === 'video') {

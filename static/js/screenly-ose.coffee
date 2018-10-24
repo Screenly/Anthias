@@ -216,8 +216,12 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         stop: (e) ->
           (that.$ '.progress').hide()
           (that.$ '.progress .bar').css 'width', "0"
+        done: (e, data) ->
           (that.$ '.status').show()
           (that.$ '.status').html 'Upload completed.'
+          setTimeout ->
+            (that.$ '.status').fadeOut('slow')
+          , 5000
     no
 
   clickTabNavUri: (e) => # TODO: clean
@@ -230,6 +234,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
       (@$ '#save-asset').show()
       (@$ '.uri').show()
       (@$ '.skip_asset_check_checkbox').show()
+      (@$ '.status').hide()
       (@$f 'uri').focus()
 
   updateUriMimetype: => @updateMimetype @$fv 'uri'
@@ -296,7 +301,8 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     @undelegateEvents()
     (@$ f).attr 'disabled', on for f in 'mimetype uri file_upload'.split ' '
     (@$ '#modalLabel').text "Edit Asset"
-    (@$ '.asset-location').hide(); (@$ '.uri').hide(); (@$ '.asset-location.edit').show()
+    (@$ '.asset-location').hide(); (@$ '.uri').hide(); (@$ '.skip_asset_check_checkbox').hide()
+    (@$ '.asset-location.edit').show()
     (@$ '.mime-select').prop('disabled', 'true')
 
     if (@model.get 'mimetype') == 'video'
