@@ -253,7 +253,7 @@ def browser_send(command, cb=lambda _: True):
                 browser_event = browser.next()
             except StopIteration:
                 break
-            if 'FOCUS_LOST' in str(browser_event):
+            if 'FOCUS_LOST' in browser_event:
                 browser_focus_lost = True
                 break
             if cb(browser_event):
