@@ -396,7 +396,7 @@ def asset_loop(scheduler):
         view_image(HOME + LOAD_SCREEN)
         sleep(EMPTY_PL_DELAY)
 
-    elif path.isfile(asset['uri']) or not url_fails(asset['uri']):
+    elif path.isfile(asset['uri']) or (not url_fails(asset['uri']) or asset['skip_asset_check']):
         name, mime, uri = asset['name'], asset['mimetype'], asset['uri']
         logging.info('Showing asset %s (%s)', name, mime)
         logging.debug('Asset URI %s', uri)

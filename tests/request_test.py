@@ -6,19 +6,19 @@ import mock
 
 request_ok_json = """{"name": "https://mail.ru", "mimetype": "webpage", "uri": "https://mail.ru", "is_active": false,
                 "start_date": "2016-07-19T12:42:00.000Z", "end_date": "2016-07-26T12:42:00.000Z", "duration": "30",
-                "is_enabled": 0, "nocache": 0, "play_order": 0}"""
+                "is_enabled": 0, "nocache": 0, "play_order": 0, "skip_asset_check": 0}"""
 
 request_json_no_name = """{"name": null, "mimetype": "webpage", "uri": "https://mail.ru", "is_active": false,
                 "start_date": "2016-07-19T12:42:00.000Z", "end_date": "2016-07-26T12:42:00.000Z", "duration": "30",
-                "is_enabled": 0, "nocache": 0, "play_order": 0}"""
+                "is_enabled": 0, "nocache": 0, "play_order": 0, "skip_asset_check": 0}"""
 
 request_json_no_mime = """{"name": "https://mail.ru", "mimetype": null, "uri": "https://mail.ru", "is_active": false,
                 "start_date": "2016-07-19T12:42:00.000Z", "end_date": "2016-07-26T12:42:00.000Z", "duration": "30",
-                "is_enabled": 0, "nocache": 0, "play_order": 0}"""
+                "is_enabled": 0, "nocache": 0, "play_order": 0, "skip_asset_check": 0}"""
 
 request_json2 = """{"name": null, "mimetype": null, "uri": null, "is_active": false,
                 "start_date": "2016-07-19T12:42:00.000Z", "end_date": "2016-07-26T12:42:00.000Z", "duration": "30",
-                "is_enabled": 0, "nocache": 0, "play_order": 0}"""
+                "is_enabled": 0, "nocache": 0, "play_order": 0, "skip_asset_check": 0}"""
 
 
 class RequestParseTest(unittest.TestCase):
