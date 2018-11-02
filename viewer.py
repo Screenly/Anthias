@@ -40,9 +40,11 @@ WATCHDOG_PATH = '/tmp/screenly.watchdog'
 SCREENLY_HTML = '/tmp/screenly_html/'
 LOAD_SCREEN = '/screenly/loading.png'  # relative to $HOME
 UZBLRC = '/.config/uzbl/config-screenly'  # relative to $HOME
+UZBLRC_KEYBOARD = '/.config/uzbl/config-screenly-keyboard-enable'
 INTRO = '/screenly/intro-template.html'
 
 current_browser_url = None
+current_browser_config_keyboard_enable = False
 browser = None
 browser_focus_lost = False
 
@@ -219,8 +221,8 @@ def watchdog():
         utime(WATCHDOG_PATH, None)
 
 
-def load_browser(url=None):
-    global browser, current_browser_url
+def load_browser(url=None, config_with_use_keyboard=False):
+    global browser, current_browser_url, current_browser_config_keyboard_enable
     logging.info('Loading browser...')
 
     if browser:
@@ -236,9 +238,11 @@ def load_browser(url=None):
     logging.info('Browser loading %s. Running as PID %s.', current_browser_url, browser.pid)
 
     uzbl_rc = 'set ssl_verify = {}\n'.format('1' if settings['verify_ssl'] else '0')
-    with open(HOME + UZBLRC) as f:  # load uzbl.rc
+    config_path = UZBLRC_KEYBOARD if config_with_use_keyboard else UZBLRC
+    with open(HOME + config_path) as f:  # load uzbl.rc
         uzbl_rc = f.read() + uzbl_rc
     browser_send(uzbl_rc)
+    current_browser_config_keyboard_enable = config_with_use_keyboard
 
 
 def browser_send(command, cb=lambda _: True):
@@ -261,7 +265,7 @@ def browser_send(command, cb=lambda _: True):
                 break
     else:
         logging.info('browser found dead, restarting')
-        load_browser()
+        load_browser(config_with_use_keyboard=settings['use_keyboard'])
 
 
 def browser_clear(force=False):
@@ -444,7 +448,7 @@ def main():
 
     if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
         url = 'http://{0}/hotspot'.format(LISTEN)
-        load_browser(url=url)
+        load_browser(url=url, config_with_use_keyboard=settings['use_keyboard'])
 
         while not path.isfile(HOME + INITIALIZED_FILE):
             sleep(1)
@@ -468,6 +472,9 @@ def main():
     logging.debug('Entering infinite loop.')
     while True:
         asset_loop(scheduler)
+        load_settings()
+        if settings['use_keyboard'] != current_browser_config_keyboard_enable:
+            browser_send('exit')
 
 
 if __name__ == "__main__":

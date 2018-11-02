@@ -1,0 +1,65 @@
+set show_status = 0
+
+# === Core settings ==========================================================
+
+# common directory locations
+set prefix      = @(echo $PREFIX)@
+set data_home   = @(echo $XDG_DATA_HOME)@
+set cache_home  = @(echo $XDG_CACHE_HOME)@
+set config_home = @(echo $XDG_CONFIG_HOME)@
+
+# Interface paths.
+set fifo_dir   = /tmp
+set socket_dir = /tmp
+
+set shell_cmd       = sh -c
+
+# === General config aliases =================================================
+
+# Config related events (use the request function):
+# request MODE_CONFIG <mode> <key> = <value>
+set mode_config     = request MODE_CONFIG
+# request ON_EVENT <EVENT_NAME> <command>
+set on_event        = request ON_EVENT
+
+set set_mode        = set mode =
+set set_status      = set status_message =
+
+# Spawn path shortcuts. In spawn the first dir+path match is used in "dir1:dir2:dir3:executable"
+set scripts_dir      = @data_home/uzbl:@prefix/share/uzbl/examples/data:scripts
+
+# === Dynamic event handlers =================================================
+
+# Switch to insert mode if a (editable) html form is clicked
+@on_event   FOCUS_ELEMENT  sh 'if [ "$1" = INPUT -o "$1" = TEXTAREA -o "$1" = SELECT ]; then echo "@set_mode insert" > $UZBL_FIFO; fi' %s
+
+
+# === Mode configuration =====================================================
+
+# Define some mode specific uzbl configurations.
+set command  = @mode_config command
+set insert   = @mode_config insert
+set stack    = @mode_config stack
+
+# Command mode config.
+@command  keycmd_events       = 1
+@command  forward_keys        = 0
+@command  modcmd_updates      = 1
+
+# Insert mode config.
+@insert   forward_keys        = 1
+@insert   keycmd_events       = 0
+@insert   modcmd_updates      = 0
+
+# Multi-stage-binding mode config.
+@stack    keycmd_events       = 1
+@stack    modcmd_updates      = 1
+@stack    forward_keys        = 0
+
+set default_mode = command
+
+
+# === SCRIPTS =================================================================
+
+@on_event   LOAD_START         js alert=function(e){return true};confirm=function(e){return true};prompt=function(e){return true};
+@on_event   LOAD_COMMIT        js alert=function(e){return true};confirm=function(e){return true};prompt=function(e){return true};

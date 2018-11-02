@@ -37,6 +37,13 @@
     src: uzbl-config
     dest: /home/pi/.config/uzbl/config-screenly
 
+- name: Copy in UZBL config keyboard enable
+  copy:
+    owner: pi
+    group: pi
+    src: uzbl-config-keyboard-enable
+    dest: /home/pi/.config/uzbl/config-screenly-keyboard-enable
+
 - name: Install pip dependencies
   pip: requirements=/home/pi/screenly/requirements.txt
 

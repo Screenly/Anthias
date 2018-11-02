@@ -193,6 +193,24 @@
                 </div>
 
                 <div class="form-group row">
+                    <label class="col-2 col-form-label">Use keyboard</label>
+                    <div class="col-3">
+                        <label id="use_keyboard_checkbox" class="checkbox toggle card card-body bg-light">
+                            {% if context.use_keyboard %}
+                                <input name="use_keyboard" checked="checked" type="checkbox">
+                            {% else %}
+                                <input name="use_keyboard" type="checkbox">
+                            {% endif %}
+                            <p>
+                                <span class="on">On</span>
+                                <span class="off">Off</span>
+                            </p>
+                            <a class="btn btn-primary slide-button"></a>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group row">
                     <label class="col-2 col-form-label">Use Authentication</label>
                     <div class="col-3">
                         <label id="auth_checkbox" class="checkbox toggle card card-body bg-light">
