@@ -35,6 +35,12 @@ def is_active(asset, at_time=None):
     return 0
 
 
+def get_names_of_assets(conn):
+    with db.cursor(conn) as c:
+        c.execute(queries.read_all(['name', ]))
+        return [asset[0] for asset in c.fetchall()]
+
+
 def get_playlist(conn):
     """Returns all currently active assets."""
     return filter(is_active, read(conn))
