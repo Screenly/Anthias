@@ -54,6 +54,19 @@ get_mimetype = (filename) =>
   mt = _.find mimetypes, (mt) -> ext in mt[0]
   if mt then mt[1] else null
 
+duration_seconds_to_human_readable = (secs) =>
+  duration_string = ''
+  sec_int = parseInt(secs)
+
+  if ((hours = Math.floor(sec_int / 3600)) > 0)
+    duration_string += hours + ' hours '
+  if ((minutes = Math.floor(sec_int / 60) % 60) > 0)
+    duration_string += minutes + ' min '
+  if ((seconds = (sec_int % 60)) > 0)
+    duration_string += seconds + ' sec'
+
+  return duration_string
+
 url_test = (v) -> /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test v
 get_filename = (v) -> (v.replace /[\/\\\s]+$/g, '').replace /^.*[\\\/]/g, ''
 insertWbr = (v) -> (v.replace /\//g, '/<wbr>').replace /\&/g, '&amp;<wbr>'
@@ -459,7 +472,7 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
   render: =>
     @$el.html @template _.extend json = @model.toJSON(),
       name: insertWbr json.name # word break urls at slashes
-      duration: json.duration
+      duration: duration_seconds_to_human_readable(json.duration)
       start_date: (date_to json.start_date).string()
       end_date: (date_to json.end_date).string()
     @$el.prop 'id', @model.get 'asset_id'

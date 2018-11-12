@@ -3,7 +3,7 @@
 /* screenly-ose ui */
 
 (function() {
-  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_settings, date_settings_12hour, date_settings_24hour, date_to, delay, domains, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, viduris,
+  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_settings, date_settings_12hour, date_settings_24hour, date_to, delay, domains, duration_seconds_to_human_readable, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, viduris,
     indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -94,6 +94,24 @@
       } else {
         return null;
       }
+    };
+  })(this);
+
+  duration_seconds_to_human_readable = (function(_this) {
+    return function(secs) {
+      var duration_string, hours, minutes, sec_int, seconds;
+      duration_string = '';
+      sec_int = parseInt(secs);
+      if ((hours = Math.floor(sec_int / 3600)) > 0) {
+        duration_string += hours + ' hours ';
+      }
+      if ((minutes = Math.floor(sec_int / 60) % 60) > 0) {
+        duration_string += minutes + ' min ';
+      }
+      if ((seconds = sec_int % 60) > 0) {
+        duration_string += seconds + ' sec';
+      }
+      return duration_string;
     };
   })(this);
 
@@ -829,7 +847,7 @@
       var json;
       this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
         name: insertWbr(json.name),
-        duration: json.duration,
+        duration: duration_seconds_to_human_readable(json.duration),
         start_date: (date_to(json.start_date)).string(),
         end_date: (date_to(json.end_date)).string()
       })));
