@@ -459,6 +459,7 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
   render: =>
     @$el.html @template _.extend json = @model.toJSON(),
       name: insertWbr json.name # word break urls at slashes
+      duration: json.duration
       start_date: (date_to json.start_date).string()
       end_date: (date_to json.end_date).string()
     @$el.prop 'id', @model.get 'asset_id'
