@@ -238,8 +238,21 @@ def prepare_asset(request):
     if not all([get('name'), get('uri'), get('mimetype')]):
         raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
 
+    name = get('name')
+    with db.conn(settings['database']) as conn:
+        names = assets_helper.get_names_of_assets(conn)
+    if name in names:
+        i = 1
+        while True:
+            new_name = '%s-%i' % (name, i)
+            if new_name in names:
+                i += 1
+            else:
+                name = new_name
+                break
+
     asset = {
-        'name': get('name'),
+        'name': name,
         'mimetype': get('mimetype'),
         'asset_id': get('asset_id'),
         'is_enabled': get('is_enabled'),
@@ -313,8 +326,21 @@ def prepare_asset_v1_2(request_environ, asset_id=None):
         raise Exception(
             "Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
 
+    name = get('name')
+    with db.conn(settings['database']) as conn:
+        names = assets_helper.get_names_of_assets(conn)
+    if name in names:
+        i = 1
+        while True:
+            new_name = '%s-%i' % (name, i)
+            if new_name in names:
+                i += 1
+            else:
+                name = new_name
+                break
+
     asset = {
-        'name': get('name'),
+        'name': name,
         'mimetype': get('mimetype'),
         'is_enabled': get('is_enabled'),
         'nocache': get('nocache')
