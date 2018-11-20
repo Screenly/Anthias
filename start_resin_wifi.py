@@ -1,9 +1,10 @@
 #!/usr/bin/python
 
 from jinja2 import Template
-from netifaces import gateways
+from netifaces import gateways, interfaces
 from os import getenv, path
 from pwgen import pwgen
+import re
 import sh
 
 
@@ -24,7 +25,9 @@ def generate_page(ssid, pswd, address):
 
 
 if __name__ == "__main__":
-    if not gateways().get('default'):
+    r = re.compile("wlan*")
+
+    if not gateways().get('default') and filter(r.match, interfaces()):
         ssid = 'ScreenlyOSE-{}'.format(pwgen(4, symbols=False))
         ssid_password = pwgen(8, symbols=False)
         generate_page(ssid, ssid_password, 'screenly.io/wifi')

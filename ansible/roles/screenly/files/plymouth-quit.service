@@ -1,0 +1,8 @@
+[Unit]
+Description=Terminate Plymouth Boot Screen
+After=rc-local.service plymouth-start.service systemd-user-sessions.service screenly-viewer.service
+
+[Service]
+ExecStart=-/bin/plymouth quit
+Type=oneshot
+TimeoutSec=20

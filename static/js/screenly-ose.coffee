@@ -1,30 +1,8 @@
 ### screenly-ose ui ###
 
 $().ready ->
-  popover_shown = off
+  $('#subsribe-form-container').popover content: get_template 'subscribe-form'
 
-  hide_popover = ->
-    $('#subsribe-form-container').html('')
-    popover_shown = off
-    $(window).off('keyup.email_popover')
-    $(window).off('click.email_popover')
-
-  show_popover = ->
-    $('#subsribe-form-container').html($('#subscribe-form-template').html())
-    popover_shown = on
-
-    $(window).on 'keyup.email_popover', (event) ->
-      if event.keyCode == 27
-        hide_popover()
-
-    $(window).on 'click.email_popover', (event) ->
-      pop = document.getElementById('subscribe-popover')
-      if !$.contains(pop, event.target)
-        hide_popover()
-
-  $('#show-email-popover').click ->
-    if !popover_shown then show_popover()
-    off
 
 API = (window.Screenly ||= {}) # exports
 
@@ -76,6 +54,19 @@ get_mimetype = (filename) =>
   mt = _.find mimetypes, (mt) -> ext in mt[0]
   if mt then mt[1] else null
 
+duration_seconds_to_human_readable = (secs) =>
+  duration_string = ''
+  sec_int = parseInt(secs)
+
+  if ((hours = Math.floor(sec_int / 3600)) > 0)
+    duration_string += hours + ' hours '
+  if ((minutes = Math.floor(sec_int / 60) % 60) > 0)
+    duration_string += minutes + ' min '
+  if ((seconds = (sec_int % 60)) > 0)
+    duration_string += seconds + ' sec'
+
+  return duration_string
+
 url_test = (v) -> /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test v
 get_filename = (v) -> (v.replace /[\/\\\s]+$/g, '').replace /^.*[\\\/]/g, ''
 insertWbr = (v) -> (v.replace /\//g, '/<wbr>').replace /\&/g, '&amp;<wbr>'
@@ -86,12 +77,12 @@ Backbone.emulateJSON = off
 # Models
 API.Asset = class Asset extends Backbone.Model
   idAttribute: "asset_id"
-  fields: 'name mimetype uri start_date end_date duration'.split ' '
+  fields: 'name mimetype uri start_date end_date duration skip_asset_check'.split ' '
   defaults: =>
     name: ''
     mimetype: 'webpage'
     uri: ''
-    is_active: false
+    is_active: 1
     start_date: ''
     end_date: ''
     duration: default_duration
@@ -99,6 +90,7 @@ API.Asset = class Asset extends Backbone.Model
     is_processing: 0
     nocache: 0
     play_order: 0
+    skip_asset_check: 0
   active: =>
     if @get('is_enabled') and @get('start_date') and @get('end_date')
       at = now()
@@ -121,7 +113,7 @@ API.Asset = class Asset extends Backbone.Model
 
 
 API.Assets = class Assets extends Backbone.Collection
-  url: "/api/v1.1/assets"
+  url: "/api/v1.2/assets"
   model: Asset
   comparator: 'play_order'
 
@@ -138,7 +130,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
     (@$el.children ":first").modal()
     (@$ '.cancel').val 'Back to Assets'
 
-    deadlines = start: now(), end: (moment().add 'days', 7).toDate()
+    deadlines = start: now(), end: (moment().add 'days', 30).toDate()
     for own tag, deadline of deadlines
       d = date_to deadline
       @.$fv "#{tag}_date_date", d.date()
@@ -159,6 +151,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
     'hidden.bs.modal': 'destroyFileUploadWidget'
     'click .tabnav-uri': 'clickTabNavUri'
     'click .tabnav-file_upload': 'clickTabNavUpload'
+    'change .is_enabled-skip_asset_check_checkbox': 'toggleSkipAssetCheck'
 
   save: (e) =>
     if ((@$fv 'uri') == '')
@@ -178,9 +171,12 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         _.extend model.attributes, data
         model.collection.add model
       save.fail =>
-        (@$ 'input').prop 'disable', off
+        (@$ 'input').prop 'disabled', off
         model.destroy()
     no
+
+  toggleSkipAssetCheck: (e) =>
+    @$fv 'skip_asset_check', if parseInt((@$fv 'skip_asset_check')) == 1 then 0 else 1
 
   change_mimetype: =>
     if (@$fv 'mimetype') == "video"
@@ -192,11 +188,12 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
 
   clickTabNavUpload: (e) =>
     if not (@$ '#tab-file_upload').hasClass 'active'
-      (@$ 'ul.nav-tabs li').removeClass 'active'
+      (@$ 'ul.nav-tabs li').removeClass 'active show'
       (@$ '.tab-pane').removeClass 'active'
-      (@$ '.tabnav-file_upload').addClass 'active'
+      (@$ '.tabnav-file_upload').addClass 'active show'
       (@$ '#tab-file_upload').addClass 'active'
       (@$ '.uri').hide()
+      (@$ '.skip_asset_check_checkbox').hide()
       (@$ '#save-asset').hide()
       that = this
       (@$ "[name='file_upload']").fileupload
@@ -205,11 +202,11 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         maxChunkSize: 5000000 #5 MB
         url: 'api/v1/file_asset'
         progressall: (e, data) => if data.loaded and data.total
-          (@$ '.progress .bar').css 'width', "#{data.loaded/data.total*100}%"
+          (@$ '.progress .bar').css 'width', "#{data.loaded / data.total * 100}%"
         add: (e, data) ->
           (that.$ '.status').hide()
           (that.$ '.progress').show()
-          
+
           model =  new Asset {}, {collection: API.assets}
           filename = data['files'][0]['name']
           that.$fv 'name', filename
@@ -232,26 +229,32 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         stop: (e) ->
           (that.$ '.progress').hide()
           (that.$ '.progress .bar').css 'width', "0"
+        done: (e, data) ->
           (that.$ '.status').show()
           (that.$ '.status').html 'Upload completed.'
+          setTimeout ->
+            (that.$ '.status').fadeOut('slow')
+          , 5000
     no
 
   clickTabNavUri: (e) => # TODO: clean
     if not (@$ '#tab-uri').hasClass 'active'
       (@$ "[name='file_upload']").fileupload 'destroy'
-      (@$ 'ul.nav-tabs li').removeClass 'active'
+      (@$ 'ul.nav-tabs li').removeClass 'active show'
       (@$ '.tab-pane').removeClass 'active'
-      (@$ '.tabnav-uri').addClass 'active'
+      (@$ '.tabnav-uri').addClass 'active show'
       (@$ '#tab-uri').addClass 'active'
       (@$ '#save-asset').show()
       (@$ '.uri').show()
+      (@$ '.skip_asset_check_checkbox').show()
+      (@$ '.status').hide()
       (@$f 'uri').focus()
 
   updateUriMimetype: => @updateMimetype @$fv 'uri'
   updateFileUploadMimetype: (filename) => @updateMimetype filename
   updateMimetype: (filename) =>
     mt = get_mimetype filename
-    @$fv 'mimetype', mt if mt
+    @$fv 'mimetype', if mt then mt else new Asset().defaults()['mimetype']
     @change_mimetype()
 
   change: (e) =>
@@ -264,18 +267,19 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
     that = this
     validators =
       uri: (v) =>
-        if ((that.$ '#tab-uri').hasClass 'active') and not url_test v
-          'please enter a valid URL'
+        if v
+          if ((that.$ '#tab-uri').hasClass 'active') and not url_test v
+            'please enter a valid URL'
     errors = ([field, v] for field, fn of validators when v = fn (@$fv field))
 
-    (@$ ".control-group.warning .help-inline.warning").remove()
-    (@$ ".control-group").removeClass 'warning'
+    (@$ ".form-group .help-inline.invalid-feedback").remove()
+    (@$ ".form-group .form-control").removeClass 'is-invalid'
     (@$ '[type=submit]').prop 'disabled', no
     for [field, v] in errors
       (@$ '[type=submit]').prop 'disabled', yes
-      (@$ ".control-group.#{field}").addClass 'warning'
-      (@$ ".control-group.#{field} .controls").append \
-        $ ("<span class='help-inline warning'>#{v}</span>")
+      (@$ ".form-group.#{field} .form-control").addClass 'is-invalid'
+      (@$ ".form-group.#{field} .controls").append \
+        $ ("<span class='help-inline invalid-feedback'>#{v}</span>")
 
   cancel: (e) =>
     (@$el.children ":first").modal 'hide'
@@ -310,7 +314,8 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     @undelegateEvents()
     (@$ f).attr 'disabled', on for f in 'mimetype uri file_upload'.split ' '
     (@$ '#modalLabel').text "Edit Asset"
-    (@$ '.asset-location').hide(); (@$ '.uri').hide(); (@$ '.asset-location.edit').show()
+    (@$ '.asset-location').hide(); (@$ '.uri').hide(); (@$ '.skip_asset_check_checkbox').hide()
+    (@$ '.asset-location.edit').show()
     (@$ '.mime-select').prop('disabled', 'true')
 
     if (@model.get 'mimetype') == 'video'
@@ -345,6 +350,30 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     'keyup': 'change'
     'click .advanced-toggle': 'toggleAdvanced'
 
+  changeLoopTimes: =>
+    current_date = new Date()
+    end_date = new Date()
+
+    switch @$('#loop_times').val()
+      when "day"
+        @setLoopDateTime (date_to current_date), (date_to end_date.setDate(current_date.getDate() + 1))
+      when "week"
+        @setLoopDateTime (date_to current_date), (date_to end_date.setDate(current_date.getDate() + 7))
+      when "month"
+        @setLoopDateTime (date_to current_date), (date_to end_date.setMonth(current_date.getMonth() + 1))
+      when "year"
+        @setLoopDateTime (date_to current_date), (date_to end_date.setFullYear(current_date.getFullYear() + 1))
+      when "forever"
+        @setLoopDateTime (date_to current_date), (date_to end_date.setFullYear(9999))
+      when "manual"
+        @setDisabledDatepicker(false)
+        (@$ "#manul_date").show()
+        return
+      else
+        return
+    @setDisabledDatepicker(true)
+    (@$ "#manul_date").hide()
+
   save: (e) =>
     @viewmodel()
     save = null
@@ -372,6 +401,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
 
   change: (e) =>
     @_change  ||= _.throttle (=>
+      @changeLoopTimes()
       @viewmodel()
       @model.trigger 'change'
       @validate()
@@ -389,14 +419,14 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
           'end date should be after start date'
     errors = ([field, v] for field, fn of validators when v = fn (@$fv field))
 
-    (@$ ".control-group.warning .help-inline.warning").remove()
-    (@$ ".control-group").removeClass 'warning'
+    (@$ ".form-group .help-inline.invalid-feedback").remove()
+    (@$ ".form-group .form-control").removeClass 'is-invalid'
     (@$ '[type=submit]').prop 'disabled', no
     for [field, v] in errors
       (@$ '[type=submit]').prop 'disabled', yes
-      (@$ ".control-group.#{field}").addClass 'warning'
-      (@$ ".control-group.#{field} .controls").append \
-        $ ("<span class='help-inline warning'>#{v}</span>")
+      (@$ ".form-group.#{field} .form-control").addClass 'is-invalid'
+      (@$ ".form-group.#{field} .controls").append \
+        $ ("<span class='help-inline invalid-feedback'>#{v}</span>")
 
 
   cancel: (e) =>
@@ -404,8 +434,8 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     (@$el.children ":first").modal 'hide'
 
   toggleAdvanced: =>
-    (@$ '.icon-play').toggleClass 'rotated'
-    (@$ '.icon-play').toggleClass 'unrotated'
+    (@$ '.fa-play').toggleClass 'rotated'
+    (@$ '.fa-play').toggleClass 'unrotated'
     (@$ '.collapse-advanced').collapse 'toggle'
 
   displayAdvanced: =>
@@ -414,6 +444,24 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     has_nocache = img and edit
     (@$ '.advanced-accordion').toggle has_nocache is on
 
+  setLoopDateTime: (start_date, end_date) =>
+    @$fv "start_date_date", start_date.date()
+    (@$f "start_date_date").datepicker autoclose: yes, format: date_settings.datepicker_format
+    (@$f "start_date_date").datepicker 'setDate', new Date(start_date.date())
+    @$fv "start_date_time", start_date.time()
+    @$fv "end_date_date", end_date.date()
+    (@$f "end_date_date").datepicker autoclose: yes, format: date_settings.datepicker_format
+    (@$f "end_date_date").datepicker 'setDate', new Date(end_date.date())
+    @$fv "end_date_time", end_date.time()
+
+    (@$ ".form-group .help-inline.invalid-feedback").remove()
+    (@$ ".form-group .form-control").removeClass 'is-invalid'
+    (@$ '[type=submit]').prop 'disabled', no
+
+  setDisabledDatepicker: (b) =>
+    for which in ['start', 'end']
+      (@$f "#{which}_date_date").attr  'disabled', b
+      (@$f "#{which}_date_time").attr  'disabled', b
 
 API.View.AssetRowView = class AssetRowView extends Backbone.View
   tagName: "tr"
@@ -424,16 +472,17 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
   render: =>
     @$el.html @template _.extend json = @model.toJSON(),
       name: insertWbr json.name # word break urls at slashes
+      duration: duration_seconds_to_human_readable(json.duration)
       start_date: (date_to json.start_date).string()
       end_date: (date_to json.end_date).string()
     @$el.prop 'id', @model.get 'asset_id'
     (@$ ".delete-asset-button").popover content: get_template 'confirm-delete'
     (@$ ".toggle input").prop "checked", @model.get 'is_enabled'
     (@$ ".asset-icon").addClass switch @model.get "mimetype"
-      when "video"     then "icon-facetime-video"
-      when "streaming" then "icon-facetime-video"
-      when "image"     then "icon-picture"
-      when "webpage"   then "icon-globe"
+      when "video"     then "fas fa-video"
+      when "streaming" then "fas fa-video"
+      when "image"     then "far fa-image"
+      when "webpage"   then "fas fa-globe-americas"
       else ""
 
     if (@model.get "is_processing") == 1
@@ -444,6 +493,7 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
 
   events:
     'change .is_enabled-toggle input': 'toggleIsEnabled'
+    'click .download-asset-button': 'download'
     'click .edit-asset-button': 'edit'
     'click .delete-asset-button': 'showPopover'
 
@@ -468,6 +518,31 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
       @undelegateEvents()
       @$el.addClass 'warning'
       (@$ 'input, button').prop 'disabled', on
+
+  download: (e) =>
+    r = $.get '/api/v1/assets/' + @model.id + '/content'
+        .success (result) ->
+          switch result['type']
+            when 'url'
+              window.open(result['url'])
+            when 'file'
+              content = base64js.toByteArray(result['content'])
+
+              mimetype = result['mimetype']
+              fn = result['filename']
+
+              blob = new Blob([content], {type: mimetype})
+              url = URL.createObjectURL(blob)
+
+              a = document.createElement('a')
+              document.body.appendChild(a)
+              a.download = fn
+              a.href = url
+              a.click()
+
+              URL.revokeObjectURL(url)
+              a.remove()
+    no
 
   edit: (e) =>
     new EditAssetView model: @model
@@ -533,8 +608,18 @@ API.App = class App extends Backbone.View
       ($ '#request-error').html (get_template 'request-error')()
       if (j = $.parseJSON r.responseText) and (err = j.error)
         ($ '#request-error .msg').text 'Server Error: ' + err
-    ($ window).ajaxSuccess (data) =>
-      ($ '#request-error').html ''
+      ($ '#request-error').show()
+      setTimeout ->
+        ($ '#request-error').fadeOut('slow')
+      , 5000
+    ($ window).ajaxSuccess (event, request, settings) ->
+      if (settings.url == new Assets().url) and (settings.type == 'POST')
+        ($ '#request-error').html (get_template 'request-success')()
+        ($ '#request-error .msg').text 'Asset has been successfully uploaded.'
+        ($ '#request-error').show()
+        setTimeout ->
+          ($ '#request-error').fadeOut('slow')
+        , 5000
 
     (API.assets = new Assets()).fetch()
     API.assetsView = new AssetsView

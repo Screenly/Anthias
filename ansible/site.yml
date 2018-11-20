@@ -2,6 +2,8 @@
   hosts: all
   user: pi
   become: yes
+  vars:
+    manage_network: "{{ lookup('env', 'MANAGE_NETWORK') }}"
 
   handlers:
     - name: restart-nginx
@@ -29,9 +31,10 @@
 
   roles:
     - system
-    - network
     - rpi-update
     - screenly
+    - network
     - splashscreen
     - nginx
     - ssl
+    - tools

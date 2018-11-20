@@ -1,0 +1,13 @@
+- name: Download and unarchive ngrok
+  unarchive:
+    src: https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-arm.zip
+    dest: /usr/local/bin/
+    remote_src: yes
+
+- name: Installs nginx config
+  copy:
+    src: nginx.conf
+    dest:  /etc/nginx/sites-enabled/screenly_assets.conf
+    mode: 644
+    owner: root
+    group: root

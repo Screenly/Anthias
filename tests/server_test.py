@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 
 import datetime
 import functools
@@ -42,6 +42,7 @@ asset_w = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 1,
+    'skip_asset_check': 0
 }
 
 asset_w_diff = {
@@ -60,6 +61,7 @@ asset_x = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 1,
+    'skip_asset_check': 0
 }
 
 asset_x_diff = {
@@ -78,6 +80,7 @@ asset_y = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 0,
+    'skip_asset_check': 0
 }
 asset_y_diff = {
     'duration': u'324'
@@ -92,6 +95,7 @@ asset_z = {
     'is_enabled': 1,
     'nocache': 0,
     'is_processing': 0,
+    'skip_asset_check': 0
 }
 url_fail = 'http://doesnotwork.example.com'
 url_redir = 'http://example.com'

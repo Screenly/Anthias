@@ -1,0 +1,5 @@
+# Distribution defaults. Changes to this file will get overwritten during
+# upgrades.
+[Daemon]
+Theme=screenly
+ShowDelay=0
