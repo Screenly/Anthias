@@ -63,9 +63,9 @@ RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so
 
 RUN mkdir /usr/local/share/ScreenlyWebview
 RUN curl -L  \
-    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/screenly-webview-v0.1.tar.gz" \
-    > /tmp/screenly-webview-v0.1.tar.gz
-RUN tar -xzf /tmp/screenly-webview-v0.1.tar.gz -C /tmp
+    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.2/screenly-webview-v0.2.tar.gz" \
+    > /tmp/screenly-webview-v0.2.tar.gz
+RUN tar -xzf /tmp/screenly-webview-v0.2.tar.gz -C /tmp
 
 RUN cp -r /tmp/res /usr/local/share/ScreenlyWebview/res
 RUN cp /tmp/ScreenlyWebview /usr/local/bin/ScreenlyWebview
