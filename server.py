@@ -101,7 +101,6 @@ def template(template_name, **context):
     but also injects some global context."""
 
     # Add global contexts
-    context['player_name'] = context['player_name'].decode('utf-8')
     context['up_to_date'] = is_up_to_date()
     context['default_duration'] = settings['default_duration']
     context['default_streaming_duration'] = settings['default_streaming_duration']

@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import codecs
+
 from os import path, getenv
 from sys import exit
 from time import sleep
 import ConfigParser
-from lib.unicode_configparser import UnicodeConfigParser
 import logging
 from UserDict import IterableUserDict
 from flask import request, Response
@@ -115,14 +114,13 @@ class ScreenlySettings(IterableUserDict):
 
     def save(self):
         # Write new settings to disk.
-        config = UnicodeConfigParser()
+        config = ConfigParser.ConfigParser()
         for section, defaults in DEFAULTS.items():
             config.add_section(section)
             for field, default in defaults.items():
                 self._set(config, section, field, default)
-        config_file = codecs.open(self.conf_file, 'w', 'utf-8')
-        config.write(config_file)
-        config_file.close()
+        with open(self.conf_file, "w") as f:
+            config.write(f)
         self.load()
 
     def get_configdir(self):
