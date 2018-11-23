@@ -214,7 +214,7 @@ class AssetContentModel(Schema):
 # API
 ################################
 
-def prepare_asset(request):
+def prepare_asset(request, unique_name=False):
     req = Request(request.environ)
     data = None
 
@@ -239,17 +239,18 @@ def prepare_asset(request):
         raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
 
     name = get('name')
-    with db.conn(settings['database']) as conn:
-        names = assets_helper.get_names_of_assets(conn)
-    if name in names:
-        i = 1
-        while True:
-            new_name = '%s-%i' % (name, i)
-            if new_name in names:
-                i += 1
-            else:
-                name = new_name
-                break
+    if unique_name:
+        with db.conn(settings['database']) as conn:
+            names = assets_helper.get_names_of_assets(conn)
+        if name in names:
+            i = 1
+            while True:
+                new_name = '%s-%i' % (name, i)
+                if new_name in names:
+                    i += 1
+                else:
+                    name = new_name
+                    break
 
     asset = {
         'name': name,
@@ -305,7 +306,7 @@ def prepare_asset(request):
     return asset
 
 
-def prepare_asset_v1_2(request_environ, asset_id=None):
+def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
     data = json.loads(request_environ.data)
 
     def get(key):
@@ -327,17 +328,18 @@ def prepare_asset_v1_2(request_environ, asset_id=None):
             "Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
 
     name = get('name')
-    with db.conn(settings['database']) as conn:
-        names = assets_helper.get_names_of_assets(conn)
-    if name in names:
-        i = 1
-        while True:
-            new_name = '%s-%i' % (name, i)
-            if new_name in names:
-                i += 1
-            else:
-                name = new_name
-                break
+    if unique_name:
+        with db.conn(settings['database']) as conn:
+            names = assets_helper.get_names_of_assets(conn)
+        if name in names:
+            i = 1
+            while True:
+                new_name = '%s-%i' % (name, i)
+                if new_name in names:
+                    i += 1
+                else:
+                    name = new_name
+                    break
 
     asset = {
         'name': name,
@@ -597,7 +599,7 @@ class AssetsV1_1(Resource):
         }
     })
     def post(self):
-        asset = prepare_asset(request)
+        asset = prepare_asset(request, unique_name=True)
         if url_fails(asset['uri']):
             raise Exception("Could not retrieve file. Check the asset URL.")
         with db.conn(settings['database']) as conn:
@@ -722,7 +724,7 @@ class AssetsV1_2(Resource):
     })
     def post(self):
         request_environ = Request(request.environ)
-        asset = prepare_asset_v1_2(request_environ)
+        asset = prepare_asset_v1_2(request_environ, unique_name=True)
         if not asset['skip_asset_check'] and url_fails(asset['uri']):
             raise Exception("Could not retrieve file. Check the asset URL.")
         with db.conn(settings['database']) as conn:
