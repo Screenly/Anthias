@@ -354,6 +354,7 @@ def check_update():
                 mp.track(device_id, 'Version', {
                     'Branch': str(git_branch),
                     'Hash': str(git_hash),
+                    'NOOBS': path.isfile('/boot/os_config.json'),
                 })
             except MixpanelException:
                 pass
