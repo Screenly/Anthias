@@ -243,7 +243,7 @@ def load_browser(url=None):
 
 def browser_send(command, cb=lambda _: True):
     global browser_focus_lost
-    fl = lambda e: 'FOCUS_LOST' in unicode(e.decode('utf-8'))
+    fl = lambda e: 'FOCUS_LOST' in unicode(e, encoding='utf-8')
     if not (browser is None) and browser.process.alive:
         while not browser.process._pipe_queue.empty():  # flush stdout
             browser.next()
