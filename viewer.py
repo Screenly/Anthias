@@ -266,8 +266,9 @@ def browser_send(command, cb=lambda _: True):
 
 def browser_clear(force=False):
     """Load a black page. Default cb waits for the page to load."""
-    browser_url('file://' + BLACK_PAGE, force=force, cb=lambda buf: 'LOAD_FINISH' in unicode(buf.decode('utf-8'))
-                                                                    and BLACK_PAGE in unicode(buf.decode('utf-8')))
+    browser_url('file://' + BLACK_PAGE, force=force,
+                cb=lambda buf: 'LOAD_FINISH' in unicode(buf.decode('utf-8')) and
+                               BLACK_PAGE in unicode(buf.decode('utf-8')))
 
 
 def browser_url(url, cb=lambda _: True, force=False):
@@ -288,8 +289,9 @@ def browser_url(url, cb=lambda _: True, force=False):
 
 def view_image(uri):
     browser_clear()
-    browser_send('js window.setimg("{0}")'.format(uri), cb=lambda b: 'COMMAND_EXECUTED' in unicode(b.decode('utf-8'))
-                                                                     and 'setimg' in unicode(b.decode('utf-8')))
+    browser_send('js window.setimg("{0}")'.format(uri),
+                 cb=lambda b: 'COMMAND_EXECUTED' in unicode(b.decode('utf-8')) and
+                              'setimg' in unicode(b.decode('utf-8')))
 
 
 def view_video(uri, duration):
