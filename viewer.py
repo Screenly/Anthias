@@ -243,7 +243,7 @@ def load_browser(url=None):
 
 def browser_send(command, cb=lambda _: True):
     global browser_focus_lost
-    fl = lambda e: 'FOCUS_LOST' in unicode(e, encoding='utf-8')
+    fl = lambda e: 'FOCUS_LOST' in unicode(e.decode('utf-8'))
     if not (browser is None) and browser.process.alive:
         while not browser.process._pipe_queue.empty():  # flush stdout
             browser.next()
@@ -266,7 +266,8 @@ def browser_send(command, cb=lambda _: True):
 
 def browser_clear(force=False):
     """Load a black page. Default cb waits for the page to load."""
-    browser_url('file://' + BLACK_PAGE, force=force, cb=lambda buf: 'LOAD_FINISH' in buf and BLACK_PAGE in buf)
+    browser_url('file://' + BLACK_PAGE, force=force, cb=lambda buf: 'LOAD_FINISH' in unicode(buf.decode('utf-8'))
+                                                                    and BLACK_PAGE in unicode(buf.decode('utf-8')))
 
 
 def browser_url(url, cb=lambda _: True, force=False):
@@ -287,7 +288,8 @@ def browser_url(url, cb=lambda _: True, force=False):
 
 def view_image(uri):
     browser_clear()
-    browser_send('js window.setimg("{0}")'.format(uri), cb=lambda b: 'COMMAND_EXECUTED' in b and 'setimg' in b)
+    browser_send('js window.setimg("{0}")'.format(uri), cb=lambda b: 'COMMAND_EXECUTED' in unicode(b.decode('utf-8'))
+                                                                     and 'setimg' in unicode(b.decode('utf-8')))
 
 
 def view_video(uri, duration):
@@ -408,7 +410,7 @@ def asset_loop(scheduler):
         elif 'web' in mime:
             # FIXME If we want to force periodic reloads of repeated web assets, force=True could be used here.
             # See e38e6fef3a70906e7f8739294ffd523af6ce66be.
-            browser_url(uri, cb=lambda b: 'LOAD_FINISH' in b)
+            browser_url(uri, cb=lambda b: 'LOAD_FINISH' in unicode(b.decode('utf-8')))
         elif 'video' or 'streaming' in mime:
             view_video(uri, asset['duration'])
         else:
