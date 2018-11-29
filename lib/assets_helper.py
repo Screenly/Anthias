@@ -130,12 +130,12 @@ def delete(conn, asset_id):
 
 def save_ordering(db_conn, ids):
     """Order assets. Move to last position assets which not presented in list of id"""
-    assets = read(db_conn)
 
-    for play_order, asset_id in enumerate(ids):
-        update(db_conn, asset_id, {'asset_id': asset_id, 'play_order': play_order})
+    if ids:
+        with db.commit(db_conn) as c:
+            c.execute(queries.multiple_update_with_case(['play_order', ], len(ids)),
+                      sum([[asset_id, play_order] for play_order, asset_id in enumerate(ids)], []) + ids)
 
     # Set the play order to a high value for all inactive assets.
-    for asset in assets:
-        if asset['asset_id'] not in ids:
-            update(db_conn, asset['asset_id'], {'asset_id': asset['asset_id'], 'play_order': len(ids)})
+    with db.commit(db_conn) as c:
+        c.execute(queries.multiple_update_not_in(['play_order', ], len(ids)), [len(ids)] + ids)
