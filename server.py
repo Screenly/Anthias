@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from celery import Celery
 
 __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2017, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
+from celery import Celery
 from datetime import timedelta
 from dateutil import parser as date_parser
 from functools import wraps
