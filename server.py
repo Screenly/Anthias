@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from celery import Celery
 
 __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2017, Screenly, Inc"
@@ -44,11 +45,13 @@ from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, 
 
 HOME = getenv('HOME', '/home/pi')
 DISABLE_MANAGE_NETWORK = '.screenly/disable_manage_network'
+CELERY_BROKER_URL = 'amqp://pi:raspberry@localhost:5672/screenly_vhost'
 
 app = Flask(__name__)
 CORS(app)
 api = Api(app, api_version="v1", title="Screenly OSE API")
 
+celery = Celery(app.name, broker=CELERY_BROKER_URL)
 
 ################################
 # Utilities

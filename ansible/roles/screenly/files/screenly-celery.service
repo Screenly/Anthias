@@ -1,0 +1,13 @@
+[Unit]
+Description=Screenly celery worker
+After=rabbitmq-server.service
+
+[Service]
+WorkingDirectory=/home/pi/screenly
+User=pi
+ExecStart=/usr/local/bin/celery worker -A server.celery --loglevel=info
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

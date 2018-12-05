@@ -155,6 +155,7 @@
     - python-dev
     - python-netifaces
     - python-simplejson
+    - rabbitmq-server
     - rpi-update
     - sqlite3
     - systemd
