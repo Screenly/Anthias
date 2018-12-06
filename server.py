@@ -57,6 +57,7 @@ celery = Celery(app.name, broker=CELERY_BROKER_URL)
 # Utilities
 ################################
 
+
 @api.representation('application/json')
 def output_json(data, code, headers=None):
     response = make_response(json_dump(data), code)
