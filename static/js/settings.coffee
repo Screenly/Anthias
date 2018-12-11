@@ -91,3 +91,46 @@ $().ready ->
     $('#user_group, #password_group, #password2_group, #curpassword_group').show()
   else
     $('#user_group, #password_group, #password2_group, #curpassword_group').hide()
+
+  $('#btn-upgrade').click (e) ->
+    $('#upgrade-modal').modal 'show'
+  $('#close-upgrade-btn').click (e) ->
+    $('#upgrade-modal').modal 'hide'
+  $('#start-upgrade-btn').click (e) ->
+    $('#start-upgrade-btn').prop 'disabled', yes
+    $.post "api/v1/upgrade_screenly" ,
+      branch: $('#branch-group-radio input:radio:checked').val()
+      manage_network: $('input:checkbox[name="manage_network"]').is(':checked')
+      system_upgrade: $('input:checkbox[name="system_upgrade"]').is(':checked')
+    .done  (data, e) ->
+      get_status = (id) ->
+        $.get "/upgrade_status/" + id
+        .done  (data, e, jqXHR) ->
+          if data.status
+            ($ '#upgrade_logs').text data.status
+            ($ '#upgrade_logs').scrollTop(($ '#upgrade_logs').prop 'scrollHeight')
+          if jqXHR.status == 202
+            setTimeout ->
+              get_status(id)
+            ,1000
+          else
+            ($ '#upgrade_logs').append 'Screenly-OSE update was finished'
+            ($ '#upgrade_logs').scrollTop(($ '#upgrade_logs').prop 'scrollHeight')
+            window.onbeforeunload = null
+            $('#start-upgrade-btn').prop 'disabled', no
+        .fail  (data, e) ->
+          if (data.responseText != "") and (j = $.parseJSON data.responseText) and (err = j.error)
+            ($ '#upgrade_logs').append 'Server Error: ' + err
+          else
+            ($ '#upgrade_logs').append 'The operation failed. Please reload the page and try again.'
+
+      ($ '#upgrade_logs').text 'Screenly-OSE upgrade has started successfully.'
+      window.onbeforeunload = ->
+        no
+      get_status(data.id)
+    .fail  (data, e) ->
+      if (data.responseText != "") and (j = $.parseJSON data.responseText) and (err = j.error)
+        ($ '#upgrade_logs').append 'Server Error: ' + err
+      else
+        ($ '#upgrade_logs').append 'The operation failed. Please reload the page and try again.'
+      $('#start-upgrade-btn').prop 'disabled', no

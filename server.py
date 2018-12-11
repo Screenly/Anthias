@@ -13,14 +13,15 @@ from hurry.filesize import size
 import json
 from mimetypes import guess_type
 from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
-from sh import git
+import sh
 from subprocess import check_output
+import time
 import traceback
 import uuid
 import hashlib
 from base64 import b64encode
 
-from flask import Flask, make_response, render_template, request, send_from_directory, url_for
+from flask import Flask, make_response, render_template, request, send_from_directory, url_for, jsonify
 from flask_cors import CORS
 from flask_restful_swagger_2 import Api, Resource, Schema, swagger
 from flask_swagger_ui import get_swaggerui_blueprint
@@ -51,7 +52,28 @@ app = Flask(__name__)
 CORS(app)
 api = Api(app, api_version="v1", title="Screenly OSE API")
 
-celery = Celery(app.name, broker=CELERY_BROKER_URL)
+celery = Celery(app.name, backend='amqp', broker=CELERY_BROKER_URL)
+
+
+################################
+# Celery tasks
+################################
+
+@celery.task(bind=True)
+def upgrade_screenly(self, branch, manage_network, upgrade_system):
+    """Background task to upgrade Screenly-OSE."""
+    upgrade_process = sh.sudo('/usr/local/sbin/upgrade_screenly.sh', branch, manage_network, upgrade_system, _bg=True)
+    while True:
+        if not upgrade_process.process.alive:
+            break
+        self.update_state(state="PROGRESS", meta={'status': upgrade_process.process.stdout})
+        time.sleep(1)
+
+    if upgrade_process.process.stderr:
+        return {'status': '%s\nError: %s' % (upgrade_process.process.stdout, upgrade_process.process.stderr)}
+
+    return {'status': upgrade_process.process.stdout}
+
 
 ################################
 # Utilities
@@ -89,7 +111,7 @@ def is_up_to_date():
         latest_sha = None
 
     if latest_sha:
-        branch_sha = git('rev-parse', 'HEAD')
+        branch_sha = sh.git('rev-parse', 'HEAD')
         return branch_sha.stdout.strip() == latest_sha
 
     # If we weren't able to verify with remote side,
@@ -981,6 +1003,53 @@ class ResetWifiConfig(Resource):
         return '', 204
 
 
+class UpgradeScreenly(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Upgrade system'
+            }
+        }
+    })
+    def post(self):
+        branch = request.form.get('branch')
+        manage_network = request.form.get('manage_network')
+        system_upgrade = request.form.get('system_upgrade')
+        task = upgrade_screenly.apply_async(args=(branch, manage_network, system_upgrade))
+        return jsonify({'id': task.id})
+
+
+@app.route('/upgrade_status/<task_id>')
+def upgrade_screenly_status(task_id):
+    status_code = 200
+    task = upgrade_screenly.AsyncResult(task_id)
+    if task.state == 'PENDING':
+        response = {
+            'state': task.state,
+            'status': ''
+        }
+        status_code = 202
+    elif task.state == 'PROGRESS':
+        response = {
+            'state': task.state,
+            'status': task.info.get('status', '')
+        }
+        status_code = 202
+    elif task.state != 'FAILURE':
+        response = {
+            'state': task.state,
+            'status': task.info.get('status', '')
+        }
+    else:
+        response = {
+            'state': task.state,
+            'status': str(task.info)
+        }
+    return jsonify(response), status_code
+
+
 class Info(Resource):
     method_decorators = [api_response, auth_basic]
 
@@ -1108,6 +1177,7 @@ api.add_resource(Recover, '/api/v1/recover')
 api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 api.add_resource(Info, '/api/v1/info')
 api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
+api.add_resource(UpgradeScreenly, '/api/v1/upgrade_screenly')
 
 try:
     my_ip = get_node_ip()

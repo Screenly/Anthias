@@ -70,6 +70,14 @@
     job: "/usr/local/bin/screenly_utils.sh cleanup"
     user: pi
 
+- name: Copy upgrade_screenly.sh
+  copy:
+    src: upgrade_screenly.sh
+    dest: /usr/local/sbin/upgrade_screenly.sh
+    mode: 0700
+    owner: root
+    group: root
+
 - name: Copy screenly_overrides
   copy:
     src: screenly_overrides

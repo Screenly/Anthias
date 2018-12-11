@@ -99,10 +99,64 @@
       }
     });
     if ($('input:checkbox[name="use_auth"]').is(':checked')) {
-      return $('#user_group, #password_group, #password2_group, #curpassword_group').show();
+      $('#user_group, #password_group, #password2_group, #curpassword_group').show();
     } else {
-      return $('#user_group, #password_group, #password2_group, #curpassword_group').hide();
+      $('#user_group, #password_group, #password2_group, #curpassword_group').hide();
     }
+    $('#btn-upgrade').click(function(e) {
+      return $('#upgrade-modal').modal('show');
+    });
+    $('#close-upgrade-btn').click(function(e) {
+      return $('#upgrade-modal').modal('hide');
+    });
+    return $('#start-upgrade-btn').click(function(e) {
+      $('#start-upgrade-btn').prop('disabled', true);
+      return $.post("api/v1/upgrade_screenly", {
+        branch: $('#branch-group-radio input:radio:checked').val(),
+        manage_network: $('input:checkbox[name="manage_network"]').is(':checked'),
+        system_upgrade: $('input:checkbox[name="system_upgrade"]').is(':checked')
+      }).done(function(data, e) {
+        var get_status;
+        get_status = function(id) {
+          return $.get("/upgrade_status/" + id).done(function(data, e, jqXHR) {
+            if (data.status) {
+              ($('#upgrade_logs')).text(data.status);
+              ($('#upgrade_logs')).scrollTop(($('#upgrade_logs')).prop('scrollHeight'));
+            }
+            if (jqXHR.status === 202) {
+              return setTimeout(function() {
+                return get_status(id);
+              }, 1000);
+            } else {
+              ($('#upgrade_logs')).append('Screenly-OSE update was finished');
+              ($('#upgrade_logs')).scrollTop(($('#upgrade_logs')).prop('scrollHeight'));
+              window.onbeforeunload = null;
+              return $('#start-upgrade-btn').prop('disabled', false);
+            }
+          }).fail(function(data, e) {
+            var err, j;
+            if ((data.responseText !== "") && (j = $.parseJSON(data.responseText)) && (err = j.error)) {
+              return ($('#upgrade_logs')).append('Server Error: ' + err);
+            } else {
+              return ($('#upgrade_logs')).append('The operation failed. Please reload the page and try again.');
+            }
+          });
+        };
+        ($('#upgrade_logs')).text('Screenly-OSE upgrade has started successfully.');
+        window.onbeforeunload = function() {
+          return false;
+        };
+        return get_status(data.id);
+      }).fail(function(data, e) {
+        var err, j;
+        if ((data.responseText !== "") && (j = $.parseJSON(data.responseText)) && (err = j.error)) {
+          ($('#upgrade_logs')).append('Server Error: ' + err);
+        } else {
+          ($('#upgrade_logs')).append('The operation failed. Please reload the page and try again.');
+        }
+        return $('#start-upgrade-btn').prop('disabled', false);
+      });
+    });
   });
 
 }).call(this);

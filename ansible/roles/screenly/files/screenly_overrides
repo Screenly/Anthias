@@ -1,1 +1,1 @@
-pi ALL=NOPASSWD:/usr/local/bin/screenly_utils.sh
+pi ALL=NOPASSWD: /usr/local/bin/screenly_utils.sh, /usr/local/sbin/upgrade_screenly.sh
