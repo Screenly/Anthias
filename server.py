@@ -46,13 +46,14 @@ from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, 
 
 HOME = getenv('HOME', '/home/pi')
 DISABLE_MANAGE_NETWORK = '.screenly/disable_manage_network'
-CELERY_BROKER_URL = 'amqp://pi:raspberry@localhost:5672/screenly_vhost'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
 
 app = Flask(__name__)
 CORS(app)
 api = Api(app, api_version="v1", title="Screenly OSE API")
 
-celery = Celery(app.name, backend='amqp', broker=CELERY_BROKER_URL)
+celery = Celery(app.name, backend=CELERY_RESULT_BACKEND, broker=CELERY_BROKER_URL)
 
 
 ################################

@@ -1,6 +1,6 @@
 [Unit]
 Description=Screenly celery worker
-After=rabbitmq-server.service
+After=redis-server.service
 
 [Service]
 WorkingDirectory=/home/pi/screenly
