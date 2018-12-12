@@ -70,13 +70,14 @@
     job: "/usr/local/bin/screenly_utils.sh cleanup"
     user: pi
 
-- name: Copy upgrade_screenly.sh
-  copy:
-    src: upgrade_screenly.sh
+- name: Download upgrade_screenly.sh from github repository
+  get_url:
+    url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/upgrade_screenly.sh
     dest: /usr/local/sbin/upgrade_screenly.sh
     mode: 0700
     owner: root
     group: root
+    force: yes
 
 - name: Copy screenly_overrides
   copy:
