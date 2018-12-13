@@ -12,7 +12,7 @@ from netifaces import ifaddresses, gateways
 from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
-from sh import grep, netstat, ErrorReturnCode_1
+import sh
 from subprocess import check_output, call
 from threading import Thread
 from urlparse import urlparse
@@ -97,7 +97,7 @@ def get_video_duration(file):
             run_player = omxplayer(file, info=True, _err_to_out=True, _ok_code=[0, 1], _decode_errors='ignore')
         else:
             run_player = ffprobe('-i', file, _err_to_out=True)
-    except ErrorReturnCode_1:
+    except sh.ErrorReturnCode_1:
         raise Exception('Bad video format')
 
     for line in run_player.split('\n'):

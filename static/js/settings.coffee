@@ -114,7 +114,7 @@ $().ready ->
               get_status(id)
             ,1000
           else
-            ($ '#upgrade_logs').append 'Screenly-OSE update was finished'
+            ($ '#upgrade_logs').append '\nScreenly-OSE update was finished'
             ($ '#upgrade_logs').scrollTop(($ '#upgrade_logs').prop 'scrollHeight')
             window.onbeforeunload = null
             $('#start-upgrade-btn').prop 'disabled', no
