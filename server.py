@@ -42,7 +42,7 @@ from lib.utils import url_fails
 from lib.utils import validate_url
 from lib.utils import is_demo_node
 
-from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
+from settings import auth_basic, auth_system, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
 
 HOME = getenv('HOME', '/home/pi')
 DISABLE_MANAGE_NETWORK = '.screenly/disable_manage_network'
@@ -1005,7 +1005,7 @@ class ResetWifiConfig(Resource):
 
 
 class UpgradeScreenly(Resource):
-    method_decorators = [api_response, auth_basic]
+    method_decorators = [api_response, auth_system]
 
     @swagger.doc({
         'responses': {
@@ -1248,13 +1248,14 @@ def settings_page():
 
             new_user = request.form.get('user', '')
             use_auth = request.form.get('use_auth', '') == 'on'
+            use_system_commands = request.form.get('use_system_commands', '') == 'on'
 
             # Handle auth components
             if settings['password'] != '':  # if password currently set,
                 if new_user != settings['user']:  # trying to change user
                     # should have current password set. Optionally may change password.
                     if current_pass == '':
-                        if not use_auth:
+                        if not use_auth and not use_system_commands:
                             raise ValueError("Must supply current password to disable authentication")
                         raise ValueError("Must supply current password to change username")
                     if current_pass != settings['password']:
@@ -1262,7 +1263,7 @@ def settings_page():
 
                     settings['user'] = new_user
 
-                if new_pass != '' and use_auth:
+                if new_pass != '' and (use_auth or use_system_commands):
                     if current_pass == '':
                         raise ValueError("Must supply current password to change password")
                     if current_pass != settings['password']:
@@ -1273,7 +1274,7 @@ def settings_page():
 
                     settings['password'] = new_pass
 
-                if new_pass == '' and not use_auth and new_pass2 == '':
+                if new_pass == '' and (not use_auth and not use_system_commands) and new_pass2 == '':
                     # trying to disable authentication
                     if current_pass == '':
                         raise ValueError("Must supply current password to disable authentication")
@@ -1324,8 +1325,7 @@ def settings_page():
 
     if not settings['user'] or not settings['password']:
         context['use_auth'] = False
-    else:
-        context['use_auth'] = True
+        context['use_system_commands'] = False
 
     return template('settings.html', **context)
 

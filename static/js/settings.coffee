@@ -1,5 +1,7 @@
 $().ready ->
 
+  current_username = $('input:text[name="user"]').val()
+
   $('#request-error .close').click (e) ->
     $('#request-error .alert').hide()
 
@@ -79,15 +81,35 @@ $().ready ->
       ($ '#request-error .msg').text 'Reset was successful. Please reboot the device.'
 
   $('#auth_checkbox p span').click (e) ->
-    if $('input:checkbox[name="use_auth"]').is(':checked')
+    if $('input:checkbox[name="use_system_commands"]').is(':checked')
+      $('input:text[name="user"]').val(current_username)
+      $('#user_group, #password_group, #password2_group, #curpassword_group').show()
+    else if  $('input:checkbox[name="use_auth"]').is(':checked') or
+    $('input:checkbox[name="use_system_commands"]').is(':checked')
       $('#user_group, #password_group, #password2_group').hide()
       $('input:text[name="user"]').val('')
       $('input:password[name="password"]').val('')
       $('input:password[name="password2"]').val('')
     else
+      $('input:text[name="user"]').val(current_username)
       $('#user_group, #password_group, #password2_group, #curpassword_group').show()
 
-  if $('input:checkbox[name="use_auth"]').is(':checked')
+  $('#use_system_commands_checkbox p span').click (e) ->
+    if $('input:checkbox[name="use_auth"]').is(':checked')
+      $('input:text[name="user"]').val(current_username)
+      $('#user_group, #password_group, #password2_group, #curpassword_group').show()
+    else if $('input:checkbox[name="use_auth"]').is(':checked') or
+    $('input:checkbox[name="use_system_commands"]').is(':checked')
+      $('#user_group, #password_group, #password2_group').hide()
+      $('input:text[name="user"]').val('')
+      $('input:password[name="password"]').val('')
+      $('input:password[name="password2"]').val('')
+    else
+      $('input:text[name="user"]').val(current_username)
+      $('#user_group, #password_group, #password2_group, #curpassword_group').show()
+
+  if $('input:checkbox[name="use_auth"]').is(':checked') or
+  $('input:checkbox[name="use_system_commands"]').is(':checked')
     $('#user_group, #password_group, #password2_group, #curpassword_group').show()
   else
     $('#user_group, #password_group, #password2_group, #curpassword_group').hide()
@@ -98,6 +120,7 @@ $().ready ->
     $('#upgrade-modal').modal 'hide'
   $('#start-upgrade-btn').click (e) ->
     $('#start-upgrade-btn').prop 'disabled', yes
+    ($ '#upgrade_logs').text ''
     $.post "api/v1/upgrade_screenly" ,
       branch: $('#branch-group-radio input:radio:checked').val()
       manage_network: $('input:checkbox[name="manage_network"]').is(':checked')

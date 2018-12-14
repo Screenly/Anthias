@@ -7,6 +7,7 @@ from time import sleep
 import ConfigParser
 import logging
 from UserDict import IterableUserDict
+import json
 from flask import request, Response
 from functools import wraps
 import zmq
@@ -32,7 +33,9 @@ DEFAULTS = {
         'default_duration': '10',
         'default_streaming_duration': '300',
         'debug_logging': False,
-        'verify_ssl': True
+        'verify_ssl': True,
+        'use_auth': False,
+        'use_system_commands': False
     },
     'auth': {
         'user': '',
@@ -174,8 +177,21 @@ def authenticate():
 def auth_basic(orig):
     @wraps(orig)
     def decorated(*args, **kwargs):
-        if not settings['user'] or not settings['password']:
+        if not settings['use_auth']:
             return orig(*args, **kwargs)
+        auth = request.authorization
+        if not auth or not settings.check_user(auth.username, hashlib.sha256(auth.password).hexdigest()):
+            return authenticate()
+        return orig(*args, **kwargs)
+    return decorated
+
+
+def auth_system(orig):
+    @wraps(orig)
+    def decorated(*args, **kwargs):
+        if not settings['use_system_commands']:
+            error = "You need to enable the 'Use system commands' parameter to perform this action"
+            return Response(json.dumps({"error": error}), 403)
         auth = request.authorization
         if not auth or not settings.check_user(auth.username, hashlib.sha256(auth.password).hexdigest()):
             return authenticate()

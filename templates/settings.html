@@ -209,6 +209,25 @@
                         </label>
                     </div>
                 </div>
+
+                <div class="form-group row">
+                    <label class="col-2 col-form-label">Use system commands</label>
+                    <div class="col-3">
+                        <label id="use_system_commands_checkbox" class="checkbox toggle card card-body bg-light">
+                            {% if context.use_system_commands %}
+                                <input name="use_system_commands" checked="checked" type="checkbox"/>
+                            {% else %}
+                                <input name="use_system_commands" type="checkbox"/>
+                            {% endif %}
+                            <p>
+                                <span class="on">On</span>
+                                <span class="off">Off</span>
+                            </p>
+                            <a class="btn btn-primary slide-button"></a>
+                        </label>
+                    </div>
+                </div>
+
                 <div class="form-group row" id="user_group">
                     <label class="col-2 col-form-label">User</label>
                     <div class="col-3">
