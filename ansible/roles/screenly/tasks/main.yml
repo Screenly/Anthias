@@ -49,7 +49,7 @@
     force: no
 
 - name: Run database migration
-  become: no
+  become_user: pi
   command: python /home/pi/screenly/bin/migrate.py
   register: migrate
 
@@ -72,7 +72,7 @@
 
 - name: Download upgrade_screenly.sh from github repository
   get_url:
-    url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/upgrade_screenly.sh
+    url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/install.sh
     dest: /usr/local/sbin/upgrade_screenly.sh
     mode: 0700
     owner: root

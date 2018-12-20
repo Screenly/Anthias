@@ -240,18 +240,3 @@
   file:
     path: /var/swap
     state: absent
-
-- name: Remove pi-nopasswd file
-  file:
-    path: /etc/sudoers.d/010_pi-nopasswd
-    state: absent
-
-- name: Disable sudo password
-  copy:
-    src: 010_pi-nopasswd
-    dest: /etc/sudoers.d/010_pi-nopasswd
-    mode: 0440
-    owner: root
-    group: root
-  tags:
-    - no-sudo-password

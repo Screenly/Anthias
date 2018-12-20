@@ -63,7 +63,12 @@ celery = Celery(app.name, backend=CELERY_RESULT_BACKEND, broker=CELERY_BROKER_UR
 @celery.task(bind=True)
 def upgrade_screenly(self, branch, manage_network, upgrade_system):
     """Background task to upgrade Screenly-OSE."""
-    upgrade_process = sh.sudo('/usr/local/sbin/upgrade_screenly.sh', branch, manage_network, upgrade_system, _bg=True)
+    upgrade_process = sh.sudo('/usr/local/sbin/upgrade_screenly.sh',
+                              '-w', 'true',
+                              '-b', branch,
+                              '-n', manage_network,
+                              '-s', upgrade_system,
+                              _bg=True)
     while True:
         if not upgrade_process.process.alive:
             break
