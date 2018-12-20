@@ -6,7 +6,7 @@ from server import upgrade_screenly
 
 class CeleryTasksTestCase(unittest.TestCase):
     def setUp(self):
-        celeryapp.conf.update(CELERY_ALWAYS_EAGER=True)
+        celeryapp.conf.update(CELERY_ALWAYS_EAGER=True, CELERY_RESULT_BACKEND='', CELERY_BROKER_URL='')
         self.upgrade_screenly_task = upgrade_screenly.apply(args=['test', 'true', 'true'])
         self.upgrade_screenly_result = self.upgrade_screenly_task.get()
 
