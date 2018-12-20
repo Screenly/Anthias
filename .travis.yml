@@ -22,6 +22,7 @@ before_script:
   - cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
   - cp ansible/roles/screenly/files/screenly.db ~/.screenly/
   - cp ansible/roles/screenly/files/screenly_utils.sh /tmp/screenly_utils.sh
+  - cp bin/install.sh /usr/local/sbin/upgrade_screenly.sh
   - echo -e "[local]\nlocalhost ansible_connection=local" > ansible/localhost
   - curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
   - curl https://www.screenly.io/upload/ose-logo.png > ~/screenly_assets/image.tmp

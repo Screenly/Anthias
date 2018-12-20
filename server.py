@@ -63,6 +63,8 @@ celery = Celery(app.name, backend=CELERY_RESULT_BACKEND, broker=CELERY_BROKER_UR
 @celery.task(bind=True)
 def upgrade_screenly(self, branch, manage_network, upgrade_system):
     """Background task to upgrade Screenly-OSE."""
+    if not path.isfile('/usr/local/sbin/upgrade_screenly.sh'):
+        raise Exception('File /usr/local/sbin/upgrade_screenly.sh does not exist.')
     upgrade_process = sh.sudo('/usr/local/sbin/upgrade_screenly.sh',
                               '-w', 'true',
                               '-b', branch,
