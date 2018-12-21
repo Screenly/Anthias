@@ -22,7 +22,7 @@ while getopts ":w:b:n:s:" arg; do
   esac
 done
 
-if [ $WEB_UPGRADE = false ]; then
+if [ "$WEB_UPGRADE" = false ]; then
 
   # Make sure the command is launched interactive.
   if ! [ -t 0  ]; then
@@ -86,7 +86,7 @@ EOF
     EXTRA_ARGS="--skip-tags enable-ssl"
   fi
 
-elif [ $WEB_UPGRADE = true ]; then
+elif [ "$WEB_UPGRADE" = true ]; then
 
   if [ "$BRANCH_VERSION" = "latest" ]; then
     export DOCKER_TAG="latest"
@@ -138,7 +138,7 @@ else
   export DEVICE_TYPE="pi1"
 fi
 
-if [ $WEB_UPGRADE = false ]; then
+if [ "$WEB_UPGRADE" = false ]; then
   set -x
 else
   set -e
@@ -178,7 +178,7 @@ cd /home/pi/screenly && git rev-parse HEAD > /home/pi/.screenly/latest_screenly_
 sudo chown -R pi:pi /home/pi
 
 # Need a password for commands with sudo
-if [ $BRANCH = "master" ]; then
+if [ "$BRANCH" = "master" ]; then
   sudo rm -f /etc/sudoers.d/010_pi-nopasswd
 else
   #Temporarily necessary cause web upgrade only for master branch
@@ -186,7 +186,7 @@ else
   sudo chmod 0440 /etc/sudoers.d/010_pi-nopasswd
 fi
 
-if [ $WEB_UPGRADE = false ]; then
+if [ "$WEB_UPGRADE" = false ]; then
   set +x
 else
   set +e
@@ -194,7 +194,7 @@ fi
 
 echo "Installation completed."
 
-if [ $WEB_UPGRADE = false ]; then
+if [ "$WEB_UPGRADE" = false ]; then
   read -p "You need to reboot the system for the installation to complete. Would you like to reboot now? (y/N)" -n 1 -r -s REBOOT && echo
   if [ "$REBOOT" == 'y' ]; then
     sudo reboot
