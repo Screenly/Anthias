@@ -1,12 +1,12 @@
 $().ready ->
 
-  current_username = $("input:text[name='user']").val()
+  currentUsername = $("input:text[name='user']").val()
 
   $("#request-error .close").click (e) ->
     $("#request-error .alert").hide()
 
   $("#btn-backup").click (e) ->
-    btn_text = $("#btn-backup").text()
+    btnText = $("#btn-backup").text()
     $("#btn-backup").text "Preparing archive..."
 
     $("#btn-upload").prop "disabled", yes
@@ -32,7 +32,7 @@ $().ready ->
         ($ "#request-error .msg").text "The operation failed. Please reload the page and try again."
 
     .always (data, e) ->
-      $("#btn-backup").text btn_text
+      $("#btn-backup").text btnText
       $("#btn-upload").prop "disabled", no
       $("#btn-backup").prop "disabled", no
 
@@ -82,7 +82,7 @@ $().ready ->
 
   $("#auth_checkbox p span").click (e) ->
     if $("input:checkbox[name='use_system_commands']").is(":checked")
-      $("input:text[name='user']").val(current_username)
+      $("input:text[name='user']").val(currentUsername)
       $("#user_group, #password_group, #password2_group, #curpassword_group").show()
     else if  $("input:checkbox[name='use_auth']").is(":checked") or
     $("input:checkbox[name='use_system_commands']").is(":checked")
@@ -91,12 +91,12 @@ $().ready ->
       $("input:password[name='password']").val("")
       $("input:password[name='password2']").val("")
     else
-      $("input:text[name='user']").val(current_username)
+      $("input:text[name='user']").val(currentUsername)
       $("#user_group, #password_group, #password2_group, #curpassword_group").show()
 
   $("#use_system_commands_checkbox p span").click (e) ->
     if $("input:checkbox[name='use_auth']").is(":checked")
-      $("input:text[name='user']").val(current_username)
+      $("input:text[name='user']").val(currentUsername)
       $("#user_group, #password_group, #password2_group, #curpassword_group").show()
     else if $("input:checkbox[name='use_auth']").is(":checked") or
     $("input:checkbox[name='use_system_commands']").is(":checked")
@@ -105,7 +105,7 @@ $().ready ->
       $("input:password[name='password']").val("")
       $("input:password[name='password2']").val("")
     else
-      $("input:text[name='user']").val(current_username)
+      $("input:text[name='user']").val(currentUsername)
       $("#user_group, #password_group, #password2_group, #curpassword_group").show()
 
   if $("input:checkbox[name='use_auth']").is(":checked") or
@@ -122,11 +122,11 @@ $().ready ->
     $("#start-upgrade-btn").prop "disabled", yes
     ($ "#upgrade_logs").text ""
     $.post "api/v1/upgrade_screenly" ,
-      branch: $("#branch-group-radio input:radio:checked").val()
-      manage_network: $("input:checkbox[name='manage_network']").is(":checked")
-      system_upgrade: $("input:checkbox[name='system_upgrade']").is(":checked")
+      "branch": $("#branch-group-radio input:radio:checked").val()
+      "manage_network": $("input:checkbox[name='manage_network']").is(":checked")
+      "system_upgrade": $("input:checkbox[name='system_upgrade']").is(":checked")
     .done  (data, e) ->
-      get_status = (id) ->
+      getStatus = (id) ->
         $.get "/upgrade_status/" + id
         .done  (data, e, jqXHR) ->
           if data.status
@@ -134,7 +134,7 @@ $().ready ->
             ($ "#upgrade_logs").scrollTop(($ "#upgrade_logs").prop "scrollHeight")
           if jqXHR.status == 202
             setTimeout ->
-              get_status(id)
+              getStatus(id)
             ,1000
           else
             ($ "#upgrade_logs").append "\nScreenly-OSE update was finished"
@@ -150,7 +150,7 @@ $().ready ->
       ($ "#upgrade_logs").text "Screenly-OSE upgrade has started successfully."
       window.onbeforeunload = ->
         no
-      get_status(data.id)
+      getStatus(data.id)
     .fail  (data, e) ->
       if (data.responseText != "") and (j = $.parseJSON data.responseText) and (err = j.error)
         ($ "#upgrade_logs").append "Server Error: " + err
