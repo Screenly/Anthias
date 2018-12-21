@@ -88,13 +88,13 @@ EOF
 
 elif [ $WEB_UPGRADE = true ]; then
 
-  if [ $BRANCH_VERSION = "latest" ]; then
+  if [ "$BRANCH_VERSION" = "latest" ]; then
     export DOCKER_TAG="latest"
     BRANCH="master"
-#  elif [ $BRANCH_VERSION = "experimental" ]; then
+#  elif [ "$BRANCH_VERSION" = "experimental" ]; then
 #    export DOCKER_TAG="experimental"
 #    BRANCH="experimental"
-#  elif [ $BRANCH_VERSION = "production" ]; then
+#  elif [ "$BRANCH_VERSION" = "production" ]; then
 #    export DOCKER_TAG="production"
 #    BRANCH="production"
   else
@@ -102,9 +102,9 @@ elif [ $WEB_UPGRADE = true ]; then
     exit 1
   fi
 
-  if [ $MANAGE_NETWORK = false ]; then
+  if [ "$MANAGE_NETWORK" = false ]; then
     export MANAGE_NETWORK=false
-  elif [ $MANAGE_NETWORK = true ]; then
+  elif [ "$MANAGE_NETWORK" = true ]; then
     dpkg -s network-manager > /dev/null 2>&1
     if [ "$?" = "1" ]; then
       echo -e "\n\nIt looks like NetworkManager is not installed. Please install it by running 'sudo apt install -y network-manager' and then re-run the installation."
@@ -116,9 +116,9 @@ elif [ $WEB_UPGRADE = true ]; then
     exit 1
   fi
 
-  if [ $UPGRADE_SYSTEM = false ]; then
+  if [ "$UPGRADE_SYSTEM" = false ]; then
     EXTRA_ARGS="--skip-tags enable-ssl,system-upgrade"
-  elif [ $$UPGRADE_SYSTEM = true ]; then
+  elif [ "$UPGRADE_SYSTEM" = true ]; then
     EXTRA_ARGS="--skip-tags enable-ssl"
   else
     echo -e "Invalid -s parameter."
@@ -164,7 +164,7 @@ sudo pip install ansible==2.7.1
 sudo -u pi ansible localhost -m git -a "repo=${1:-https://github.com/screenly/screenly-ose.git} dest=/home/pi/screenly version=$BRANCH"
 cd /home/pi/screenly/ansible
 
-sudo ansible-playbook site.yml $EXTRA_ARGS
+sudo ansible-playbook site.yml "$EXTRA_ARGS"
 
 sudo apt-get autoclean
 sudo apt-get clean
@@ -178,7 +178,7 @@ cd /home/pi/screenly && git rev-parse HEAD > /home/pi/.screenly/latest_screenly_
 sudo chown -R pi:pi /home/pi
 
 # Need a password for commands with sudo
-if [ $BRANCH="master" ]; then
+if [ $BRANCH = "master" ]; then
   sudo rm -f /etc/sudoers.d/010_pi-nopasswd
 else
   #Temporarily necessary cause web upgrade only for master branch
