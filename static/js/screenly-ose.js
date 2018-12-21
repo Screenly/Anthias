@@ -1065,6 +1065,7 @@
 
     function App() {
       this.next = bind(this.next, this);
+      this.pause = bind(this.pause, this);
       this.previous = bind(this.previous, this);
       this.add = bind(this.add, this);
       this.initialize = bind(this.initialize, this);
@@ -1124,6 +1125,7 @@
     App.prototype.events = {
       'click #add-asset-button': 'add',
       'click #previous-asset-button': 'previous',
+      'click #pause-asset-button': 'pause',
       'click #next-asset-button': 'next'
     };
 
@@ -1134,6 +1136,10 @@
 
     App.prototype.previous = function(e) {
       return $.get('/api/v1/assets/control/previous');
+    };
+
+    App.prototype.pause = function(e) {
+      return $.get('/api/v1/assets/control/pause');
     };
 
     App.prototype.next = function(e) {

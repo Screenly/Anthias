@@ -10,7 +10,7 @@ from threading import Thread
 from mixpanel import Mixpanel, MixpanelException
 from netifaces import gateways
 from requests import get as req_get
-from signal import signal, SIGUSR1
+from signal import signal, SIGUSR1, SIGUSR2
 from time import sleep
 import logging
 import random
@@ -31,7 +31,8 @@ __copyright__ = "Copyright 2012-2017, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 
-SPLASH_DELAY = 60  # secs
+#SPLASH_DELAY = 60  # secs
+SPLASH_DELAY = 12  # secs
 EMPTY_PL_DELAY = 5  # secs
 
 INITIALIZED_FILE = '/.screenly/initialized'
@@ -45,6 +46,10 @@ INTRO = '/screenly/intro-template.html'
 current_browser_url = None
 browser = None
 browser_focus_lost = False
+
+PAUSE_DELAY = 60.0 * 60.0 * 24.0 # secs
+paused = False
+skip = False
 
 VIDEO_TIMEOUT = 20  # secs
 
@@ -62,10 +67,31 @@ def sigusr1(signum, frame):
     omxplayer is killed to skip any currently playing video assets.
     """
     logging.info('USR1 received, skipping.')
+    global skip
+    skip = True
     try:
         sh.killall('omxplayer.bin', _ok_code=[1])
     except OSError:
         pass
+
+def sigusr2(signum, frame):
+    """
+    The signal interrupts sleep() calls
+    omxplayer is paused using the same approach used by dbuscontrol.sh
+    """
+    logging.info('USR2 received,')
+    #try:
+    #    # dbus-send --print-reply=literal --session --dest=org.mpris.MediaPlayer2.omxplayer /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Action int32:16 >/dev/null
+    system("./dbuscontrol.sh pause")
+    #except OSError:
+    global paused
+    if paused:
+        paused = False
+        logging.info('USR2 received, resuming.')
+    else:
+        paused = True
+        logging.info('USR2 received, pausing.')
+    #pass
 
 
 def skip_asset(back=False):
@@ -73,6 +99,8 @@ def skip_asset(back=False):
         scheduler.reverse = True
     system('pkill -SIGUSR1 -f viewer.py')
 
+def play_pause():
+    system('pkill -SIGUSR2 -f viewer.py')
 
 def navigate_to_asset(asset_id):
     scheduler.extra_asset = asset_id
@@ -87,6 +115,7 @@ commands = {
     'next': lambda _: skip_asset(),
     'previous': lambda _: skip_asset(back=True),
     'asset': lambda id: navigate_to_asset(id),
+    'pause': lambda _: play_pause(),
     'reload': lambda _: load_settings(),
     'unknown': lambda _: command_not_found()
 }
@@ -390,7 +419,7 @@ def load_settings():
 
 
 def asset_loop(scheduler):
-    global browser_focus_lost
+    global browser_focus_lost, paused, skip
     disable_update_check = getenv("DISABLE_UPDATE_CHECK", False)
     if not disable_update_check:
         check_update()
@@ -422,8 +451,32 @@ def asset_loop(scheduler):
 
         if 'image' in mime or 'web' in mime:
             duration = int(asset['duration'])
-            logging.info('Sleeping for %s', duration)
-            sleep(duration)
+
+            #logging.info('Sleeping for %s', duration)
+            #sleep(duration)
+
+            while True:
+                start = datetime.now()
+                logging.info("Sleeping for {}".format(duration))
+                sleep(duration)
+                end = datetime.now()
+
+                logging.info("Slept for %f", (end - start).total_seconds())
+                duration -= (end - start).total_seconds()
+
+                if paused:
+                    # Sleep for a long time until unpaused
+                    logging.info("Paused")
+                    sleep(PAUSE_DELAY)
+                    logging.info("Resuming")
+
+                if skip:
+                    skip = False
+                    break
+
+                if duration < 0.0:
+                    break
+
             if browser_focus_lost:
                 browser_focus_lost = False
                 browser_send('exit')
@@ -438,6 +491,7 @@ def setup():
     arch = machine()
 
     signal(SIGUSR1, sigusr1)
+    signal(SIGUSR2, sigusr2)
 
     load_settings()
     db_conn = db.conn(settings['database'])

@@ -1016,6 +1016,7 @@ class AssetsControl(Resource):
                     next - show next asset
                     previous - show previous asset
                     asset&asset_id - show asset with `asset_id` id
+                    pause - [TODO: write succinct description]
                     '''
             }
         ],
