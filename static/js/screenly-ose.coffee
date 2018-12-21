@@ -69,7 +69,7 @@ duration_seconds_to_human_readable = (secs) =>
 
 url_test = (v) -> /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test v
 get_filename = (v) -> (v.replace /[\/\\\s]+$/g, '').replace /^.*[\\\/]/g, ''
-truncate_str = (v, c) -> v.substring(0, c) + (if v.length > c then '...'  else '')
+truncate_str = (v) -> v.replace /(.{100})..+/, "$1..."
 insertWbr = (v) -> (v.replace /\//g, '/<wbr>').replace /\&/g, '&amp;<wbr>'
 
 # Tell Backbone to send its saves as JSON-encoded.
@@ -325,7 +325,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     for field in @model.fields
       if (@$fv field) != @model.get field
         @$fv field, @model.get field
-    (@$ '.uri-text').html insertWbr truncate_str (@model.get 'uri'), 100
+    (@$ '.uri-text').html insertWbr truncate_str (@model.get 'uri')
 
     for which in ['start', 'end']
       d = date_to @model.get "#{which}_date"
@@ -472,7 +472,7 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
 
   render: =>
     @$el.html @template _.extend json = @model.toJSON(),
-      name: insertWbr truncate_str json.name, 100 # word break urls at slashes
+      name: insertWbr truncate_str json.name # word break urls at slashes
       duration: duration_seconds_to_human_readable(json.duration)
       start_date: (date_to json.start_date).string()
       end_date: (date_to json.end_date).string()

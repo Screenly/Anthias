@@ -123,8 +123,8 @@
     return (v.replace(/[\/\\\s]+$/g, '')).replace(/^.*[\\\/]/g, '');
   };
 
-  truncate_str = function(v, c) {
-    return v.substring(0, c) + (v.length > c ? '...' : '');
+  truncate_str = function(v) {
+    return v.replace(/(.{100})..+/, "$1...");
   };
 
   insertWbr = function(v) {
@@ -590,7 +590,7 @@
           this.$fv(field, this.model.get(field));
         }
       }
-      (this.$('.uri-text')).html(insertWbr(truncate_str(this.model.get('uri'), 100)));
+      (this.$('.uri-text')).html(insertWbr(truncate_str(this.model.get('uri'))));
       ref2 = ['start', 'end'];
       for (m = 0, len2 = ref2.length; m < len2; m++) {
         which = ref2[m];
@@ -850,7 +850,7 @@
     AssetRowView.prototype.render = function() {
       var json;
       this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
-        name: insertWbr(truncate_str(json.name, 100)),
+        name: insertWbr(truncate_str(json.name)),
         duration: duration_seconds_to_human_readable(json.duration),
         start_date: (date_to(json.start_date)).string(),
         end_date: (date_to(json.end_date)).string()
