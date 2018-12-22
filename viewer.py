@@ -31,8 +31,7 @@ __copyright__ = "Copyright 2012-2017, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 
-#SPLASH_DELAY = 60  # secs
-SPLASH_DELAY = 12  # secs
+SPLASH_DELAY = 60  # secs
 EMPTY_PL_DELAY = 5  # secs
 
 INITIALIZED_FILE = '/.screenly/initialized'
@@ -76,14 +75,12 @@ def sigusr1(signum, frame):
 
 def sigusr2(signum, frame):
     """
-    The signal interrupts sleep() calls
-    omxplayer is paused using the same approach used by dbuscontrol.sh
+    The signal interrupts sleep() calls,
+    images or web pages pause by sleeping for a long time.
+    omxplayer is paused using dbuscontrol.sh
     """
     logging.info('USR2 received,')
-    #try:
-    #    # dbus-send --print-reply=literal --session --dest=org.mpris.MediaPlayer2.omxplayer /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Action int32:16 >/dev/null
-    system("bin/dbuscontrol.sh pause")
-    #except OSError:
+
     global paused
     if paused:
         paused = False
@@ -91,7 +88,11 @@ def sigusr2(signum, frame):
     else:
         paused = True
         logging.info('USR2 received, pausing.')
-    #pass
+
+    try:
+        system("bin/dbuscontrol.sh pause")
+    except OSError:
+        pass
 
 
 def skip_asset(back=False):
@@ -451,9 +452,6 @@ def asset_loop(scheduler):
 
         if 'image' in mime or 'web' in mime:
             duration = int(asset['duration'])
-
-            #logging.info('Sleeping for %s', duration)
-            #sleep(duration)
 
             while True:
                 start = datetime.now()
