@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# https://github.com/popcornmix/omxplayer/blob/master/dbuscontrol.sh
+#
 
 #set -x
 
