@@ -46,7 +46,7 @@ current_browser_url = None
 browser = None
 browser_focus_lost = False
 
-PAUSE_DELAY = 60.0 * 60.0 * 24.0 # secs
+PAUSE_DELAY = 60.0 * 60.0 * 24.0  # secs
 paused = False
 skip = False
 
@@ -72,6 +72,7 @@ def sigusr1(signum, frame):
         sh.killall('omxplayer.bin', _ok_code=[1])
     except OSError:
         pass
+
 
 def sigusr2(signum, frame):
     """
@@ -100,8 +101,10 @@ def skip_asset(back=False):
         scheduler.reverse = True
     system('pkill -SIGUSR1 -f viewer.py')
 
+
 def play_pause():
     system('pkill -SIGUSR2 -f viewer.py')
+
 
 def navigate_to_asset(asset_id):
     scheduler.extra_asset = asset_id
