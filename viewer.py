@@ -82,7 +82,7 @@ def sigusr2(signum, frame):
     logging.info('USR2 received,')
     #try:
     #    # dbus-send --print-reply=literal --session --dest=org.mpris.MediaPlayer2.omxplayer /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Action int32:16 >/dev/null
-    system("./dbuscontrol.sh pause")
+    system("bin/dbuscontrol.sh pause")
     #except OSError:
     global paused
     if paused:
