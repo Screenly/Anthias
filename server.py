@@ -1348,6 +1348,7 @@ def dated_url_for(endpoint, **values):
 
 
 @app.route('/static_with_mime/<string:path>')
+@auth_basic
 def static_with_mime(path):
     mimetype = request.args['mime'] if 'mime' in request.args else 'auto'
     return send_from_directory(directory='static', filename=path, mimetype=mimetype)
