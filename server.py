@@ -6,13 +6,13 @@ __copyright__ = "Copyright 2012-2017, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 from celery import Celery
-from datetime import timedelta
+from datetime import datetime, timedelta
 from dateutil import parser as date_parser
 from functools import wraps
 from hurry.filesize import size
 import json
 from mimetypes import guess_type
-from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
+from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat, walk
 import sh
 from subprocess import check_output
 import time
@@ -81,6 +81,26 @@ def upgrade_screenly(self, branch, manage_network, upgrade_system):
         return {'status': '%s\nError: %s' % (upgrade_process.process.stdout, upgrade_process.process.stderr)}
 
     return {'status': upgrade_process.process.stdout}
+
+
+@celery.task
+def append_usb_assets(mountpoint):
+    settings.load()
+    files = ['%s/%s' % (x[0], y) for x in walk(mountpoint) for y in x[2]]
+    with db.conn(settings['database']) as conn:
+        for filepath in files:
+            asset = prepare_usb_asset(filepath)
+            if asset:
+                assets_helper.create(conn, asset)
+
+
+@celery.task
+def remove_usb_assets(mountpoint):
+    settings.load()
+    with db.conn(settings['database']) as conn:
+        for asset in assets_helper.read(conn):
+            if asset['uri'].startswith(mountpoint):
+                assets_helper.delete(conn, asset['asset_id'])
 
 
 ################################
@@ -422,6 +442,33 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
     asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
 
     return asset
+
+
+def prepare_usb_asset(filepath):
+    filetype = guess_type(filepath)[0].split('/')[0]
+    start_date = datetime.now()
+
+    if not filetype:
+        return
+
+    if filetype not in ['image', 'video']:
+        return
+
+    return {
+        'asset_id': uuid.uuid4().hex,
+        'duration': int(get_video_duration(filepath).total_seconds()) if "video" == filetype else 10,
+        'end_date': start_date + timedelta(days=7),
+        'is_active': 1,
+        'is_enabled': 0,
+        'is_processing': 0,
+        'mimetype': filetype,
+        'name': path.basename(filepath),
+        'nocache': 0,
+        'play_order': 0,
+        'skip_asset_check': 0,
+        'start_date': start_date,
+        'uri': filepath,
+    }
 
 
 # api view decorator. handles errors
