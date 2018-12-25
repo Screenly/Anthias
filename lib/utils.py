@@ -245,4 +245,4 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
     ppp_letters = '!#%+23456789:=?@ABCDEFGHJKLMNPRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
     if not has_symbols:
         ppp_letters = ''.join(set(ppp_letters) - set(string.punctuation))
-    return "".join(random.choice(ppp_letters) for _ in range(pw_length))
+    return "".join(random.SystemRandom().choice(ppp_letters) for _ in range(pw_length))
