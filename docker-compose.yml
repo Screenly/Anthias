@@ -11,9 +11,10 @@ services:
       - screenly-volume:/home/pi/.screenly
       - screenly-assets-volume:/home/pi/screenly_assets
     environment:
-      - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - PYTHONUNBUFFERED=1
+      - LISTEN=0.0.0.0
     depends_on:
       - redis
       - worker
