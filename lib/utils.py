@@ -3,8 +3,10 @@ import db
 import json
 import os
 import pytz
+import random
 import re
 import requests
+import string
 
 from datetime import datetime, timedelta
 from distutils.util import strtobool
@@ -229,3 +231,18 @@ def is_demo_node():
     :return: bool
     """
     return string_to_bool(os.getenv('IS_DEMO_NODE', False))
+
+
+def generate_perfect_paper_password(pw_length=10, has_symbols=True):
+    """
+    Generates a password using 64 characters from
+    "Perfect Paper Password" system by Steve Gibson
+
+    :param pw_length: int
+    :param has_symbols: bool
+    :return: string
+    """
+    ppp_letters = '!#%+23456789:=?@ABCDEFGHJKLMNPRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+    if not has_symbols:
+        ppp_letters = ''.join(set(ppp_letters) - set(string.punctuation))
+    return "".join(random.choice(ppp_letters) for _ in range(pw_length))
