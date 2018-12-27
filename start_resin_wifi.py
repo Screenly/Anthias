@@ -3,9 +3,10 @@
 from jinja2 import Template
 from netifaces import gateways, interfaces
 from os import getenv, path
-from pwgen import pwgen
 import re
 import sh
+
+from lib.utils import generate_perfect_paper_password
 
 
 def generate_page(ssid, pswd, address):
@@ -28,8 +29,8 @@ if __name__ == "__main__":
     r = re.compile("wlan*")
 
     if not gateways().get('default') and filter(r.match, interfaces()):
-        ssid = 'ScreenlyOSE-{}'.format(pwgen(4, symbols=False))
-        ssid_password = pwgen(8, symbols=False)
+        ssid = 'ScreenlyOSE-{}'.format(generate_perfect_paper_password(pw_length=4, has_symbols=False))
+        ssid_password = generate_perfect_paper_password(pw_length=8, has_symbols=False)
         generate_page(ssid, ssid_password, 'screenly.io/wifi')
 
         wifi_connect = sh.sudo('wifi-connect', '-s', ssid, '-p', ssid_password, '-o', '9090')
