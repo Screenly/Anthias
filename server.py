@@ -83,6 +83,18 @@ def upgrade_screenly(self, branch, manage_network, upgrade_system):
     return {'status': upgrade_process.process.stdout}
 
 
+@celery.task
+def reboot_screenly():
+    """Background task to reboot Screenly-OSE."""
+    sh.sudo('shutdown', '-r', 'now', _bg=True)
+
+
+@celery.task
+def shutdown_screenly():
+    """Background task to shutdown Screenly-OSE."""
+    sh.sudo('shutdown', 'now', _bg=True)
+
+
 ################################
 # Utilities
 ################################
@@ -1058,6 +1070,36 @@ def upgrade_screenly_status(task_id):
     return jsonify(response), status_code
 
 
+class RebootScreenly(Resource):
+    method_decorators = [api_response, auth_system]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Reboot system'
+            }
+        }
+    })
+    def post(self):
+        reboot_screenly.apply_async()
+        return '', 200
+
+
+class ShutdownScreenly(Resource):
+    method_decorators = [api_response, auth_system]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Shutdown system'
+            }
+        }
+    })
+    def post(self):
+        shutdown_screenly.apply_async()
+        return '', 200
+
+
 class Info(Resource):
     method_decorators = [api_response, auth_basic]
 
@@ -1186,6 +1228,8 @@ api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 api.add_resource(Info, '/api/v1/info')
 api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
 api.add_resource(UpgradeScreenly, '/api/v1/upgrade_screenly')
+api.add_resource(RebootScreenly, '/api/v1/reboot_screenly')
+api.add_resource(ShutdownScreenly, '/api/v1/shutdown_screenly')
 
 try:
     my_ip = get_node_ip()

@@ -157,3 +157,37 @@ $().ready ->
       else
         ($ "#upgrade_logs").append "The operation failed. Please reload the page and try again."
       $("#start-upgrade-btn").prop "disabled", no
+
+  $("#btn-reboot-system").click (e) ->
+    if confirm "Are you sure you want to reboot your Screenly?"
+      $.post "/api/v1/reboot_screenly"
+      .done  (e) ->
+        ($ "#request-error .alert").show()
+        ($ "#request-error .alert").addClass "alert-success"
+        ($ "#request-error .alert").removeClass "alert-danger"
+        ($ "#request-error .msg").text "Screenly reboot has started successfully."
+      .fail (data, e) ->
+        ($ "#request-error .alert").show()
+        ($ "#request-error .alert").addClass "alert-danger"
+        ($ "#request-error .alert").removeClass "alert-success"
+        if (data.responseText != "") and (j = $.parseJSON data.responseText) and (err = j.error)
+          ($ "#request-error .msg").text "Server Error: " + err
+        else
+          ($ "#request-error .msg").text "The operation failed. Please reload the page and try again."
+
+  $("#btn-shutdown-system").click (e) ->
+    if confirm "Are you sure you want to shutdown your Screenly?"
+      $.post "/api/v1/shutdown_screenly"
+      .done  (e) ->
+        ($ "#request-error .alert").show()
+        ($ "#request-error .alert").addClass "alert-success"
+        ($ "#request-error .alert").removeClass "alert-danger"
+        ($ "#request-error .msg").text "Screenly shutdown has started successfully."
+      .fail (data, e) ->
+        ($ "#request-error .alert").show()
+        ($ "#request-error .alert").addClass "alert-danger"
+        ($ "#request-error .alert").removeClass "alert-success"
+        if (data.responseText != "") and (j = $.parseJSON data.responseText) and (err = j.error)
+          ($ "#request-error .msg").text "Server Error: " + err
+        else
+          ($ "#request-error .msg").text "The operation failed. Please reload the page and try again."
