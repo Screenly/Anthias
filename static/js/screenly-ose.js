@@ -3,7 +3,7 @@
 /* screenly-ose ui */
 
 (function() {
-  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_settings, date_settings_12hour, date_settings_24hour, date_to, delay, domains, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, viduris,
+  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_settings, date_settings_12hour, date_settings_24hour, date_to, delay, domains, duration_seconds_to_human_readable, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, truncate_str, url_test, viduris,
     indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -97,12 +97,34 @@
     };
   })(this);
 
+  duration_seconds_to_human_readable = (function(_this) {
+    return function(secs) {
+      var duration_string, hours, minutes, sec_int, seconds;
+      duration_string = '';
+      sec_int = parseInt(secs);
+      if ((hours = Math.floor(sec_int / 3600)) > 0) {
+        duration_string += hours + ' hours ';
+      }
+      if ((minutes = Math.floor(sec_int / 60) % 60) > 0) {
+        duration_string += minutes + ' min ';
+      }
+      if ((seconds = sec_int % 60) > 0) {
+        duration_string += seconds + ' sec';
+      }
+      return duration_string;
+    };
+  })(this);
+
   url_test = function(v) {
     return /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test(v);
   };
 
   get_filename = function(v) {
     return (v.replace(/[\/\\\s]+$/g, '')).replace(/^.*[\\\/]/g, '');
+  };
+
+  truncate_str = function(v) {
+    return v.replace(/(.{100})..+/, "$1...");
   };
 
   insertWbr = function(v) {
@@ -125,7 +147,7 @@
 
     Asset.prototype.idAttribute = "asset_id";
 
-    Asset.prototype.fields = 'name mimetype uri start_date end_date duration'.split(' ');
+    Asset.prototype.fields = 'name mimetype uri start_date end_date duration skip_asset_check'.split(' ');
 
     Asset.prototype.defaults = function() {
       return {
@@ -139,7 +161,8 @@
         is_enabled: 0,
         is_processing: 0,
         nocache: 0,
-        play_order: 0
+        play_order: 0,
+        skip_asset_check: 0
       };
     };
 
@@ -209,6 +232,7 @@
       this.clickTabNavUri = bind(this.clickTabNavUri, this);
       this.clickTabNavUpload = bind(this.clickTabNavUpload, this);
       this.change_mimetype = bind(this.change_mimetype, this);
+      this.toggleSkipAssetCheck = bind(this.toggleSkipAssetCheck, this);
       this.save = bind(this.save, this);
       this.viewmodel = bind(this.viewmodel, this);
       this.initialize = bind(this.initialize, this);
@@ -272,7 +296,8 @@
       'click .cancel': 'cancel',
       'hidden.bs.modal': 'destroyFileUploadWidget',
       'click .tabnav-uri': 'clickTabNavUri',
-      'click .tabnav-file_upload': 'clickTabNavUpload'
+      'click .tabnav-file_upload': 'clickTabNavUpload',
+      'change .is_enabled-skip_asset_check_checkbox': 'toggleSkipAssetCheck'
     };
 
     AddAssetView.prototype.save = function(e) {
@@ -312,6 +337,10 @@
       return false;
     };
 
+    AddAssetView.prototype.toggleSkipAssetCheck = function(e) {
+      return this.$fv('skip_asset_check', parseInt(this.$fv('skip_asset_check')) === 1 ? 0 : 1);
+    };
+
     AddAssetView.prototype.change_mimetype = function() {
       if ((this.$fv('mimetype')) === "video") {
         return this.$fv('duration', 0);
@@ -330,6 +359,7 @@
         (this.$('.tabnav-file_upload')).addClass('active show');
         (this.$('#tab-file_upload')).addClass('active');
         (this.$('.uri')).hide();
+        (this.$('.skip_asset_check_checkbox')).hide();
         (this.$('#save-asset')).hide();
         that = this;
         (this.$("[name='file_upload']")).fileupload({
@@ -381,9 +411,14 @@
           },
           stop: function(e) {
             (that.$('.progress')).hide();
-            (that.$('.progress .bar')).css('width', "0");
+            return (that.$('.progress .bar')).css('width', "0");
+          },
+          done: function(e, data) {
             (that.$('.status')).show();
-            return (that.$('.status')).html('Upload completed.');
+            (that.$('.status')).html('Upload completed.');
+            return setTimeout(function() {
+              return (that.$('.status')).fadeOut('slow');
+            }, 5000);
           }
         });
       }
@@ -399,6 +434,8 @@
         (this.$('#tab-uri')).addClass('active');
         (this.$('#save-asset')).show();
         (this.$('.uri')).show();
+        (this.$('.skip_asset_check_checkbox')).show();
+        (this.$('.status')).hide();
         return (this.$f('uri')).focus();
       }
     };
@@ -414,9 +451,7 @@
     AddAssetView.prototype.updateMimetype = function(filename) {
       var mt;
       mt = get_mimetype(filename);
-      if (mt) {
-        this.$fv('mimetype', mt);
-      }
+      this.$fv('mimetype', mt ? mt : new Asset().defaults()['mimetype']);
       return this.change_mimetype();
     };
 
@@ -436,8 +471,10 @@
       validators = {
         uri: (function(_this) {
           return function(v) {
-            if (((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
-              return 'please enter a valid URL';
+            if (v) {
+              if (((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
+                return 'please enter a valid URL';
+              }
             }
           };
         })(this)
@@ -540,6 +577,7 @@
       (this.$('#modalLabel')).text("Edit Asset");
       (this.$('.asset-location')).hide();
       (this.$('.uri')).hide();
+      (this.$('.skip_asset_check_checkbox')).hide();
       (this.$('.asset-location.edit')).show();
       (this.$('.mime-select')).prop('disabled', 'true');
       if ((this.model.get('mimetype')) === 'video') {
@@ -552,7 +590,7 @@
           this.$fv(field, this.model.get(field));
         }
       }
-      (this.$('.uri-text')).html(insertWbr(this.model.get('uri')));
+      (this.$('.uri-text')).html(insertWbr(truncate_str(this.model.get('uri'))));
       ref2 = ['start', 'end'];
       for (m = 0, len2 = ref2.length; m < len2; m++) {
         which = ref2[m];
@@ -812,7 +850,8 @@
     AssetRowView.prototype.render = function() {
       var json;
       this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
-        name: insertWbr(json.name),
+        name: insertWbr(truncate_str(json.name)),
+        duration: duration_seconds_to_human_readable(json.duration),
         start_date: (date_to(json.start_date)).string(),
         end_date: (date_to(json.end_date)).string()
       })));
@@ -1043,15 +1082,24 @@
           var err, j;
           ($('#request-error')).html((get_template('request-error'))());
           if ((j = $.parseJSON(r.responseText)) && (err = j.error)) {
-            return ($('#request-error .msg')).text('Server Error: ' + err);
+            ($('#request-error .msg')).text('Server Error: ' + err);
           }
+          ($('#request-error')).show();
+          return setTimeout(function() {
+            return ($('#request-error')).fadeOut('slow');
+          }, 5000);
         };
       })(this));
-      ($(window)).ajaxSuccess((function(_this) {
-        return function(data) {
-          return ($('#request-error')).html('');
-        };
-      })(this));
+      ($(window)).ajaxSuccess(function(event, request, settings) {
+        if ((settings.url === new Assets().url) && (settings.type === 'POST')) {
+          ($('#request-error')).html((get_template('request-success'))());
+          ($('#request-error .msg')).text('Asset has been successfully uploaded.');
+          ($('#request-error')).show();
+          return setTimeout(function() {
+            return ($('#request-error')).fadeOut('slow');
+          }, 5000);
+        }
+      });
       (API.assets = new Assets()).fetch();
       API.assetsView = new AssetsView({
         collection: API.assets,

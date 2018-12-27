@@ -152,6 +152,10 @@ class AssetModel(Schema):
         'play_order': {
             'type': 'integer',
             'format': 'int64',
+        },
+        'skip_asset_check': {
+            'type': 'integer',
+            'format': 'int64',
         }
     }
 
@@ -182,6 +186,10 @@ class AssetRequestModel(Schema):
         'play_order': {
             'type': 'integer',
             'format': 'int64',
+        },
+        'skip_asset_check': {
+            'type': 'integer',
+            'format': 'int64',
         }
     }
     required = ['name', 'uri', 'mimetype', 'is_enabled', 'start_date', 'end_date']
@@ -206,7 +214,7 @@ class AssetContentModel(Schema):
 # API
 ################################
 
-def prepare_asset(request):
+def prepare_asset(request, unique_name=False):
     req = Request(request.environ)
     data = None
 
@@ -230,8 +238,22 @@ def prepare_asset(request):
     if not all([get('name'), get('uri'), get('mimetype')]):
         raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
 
+    name = get('name')
+    if unique_name:
+        with db.conn(settings['database']) as conn:
+            names = assets_helper.get_names_of_assets(conn)
+        if name in names:
+            i = 1
+            while True:
+                new_name = '%s-%i' % (name, i)
+                if new_name in names:
+                    i += 1
+                else:
+                    name = new_name
+                    break
+
     asset = {
-        'name': get('name'),
+        'name': name,
         'mimetype': get('mimetype'),
         'asset_id': get('asset_id'),
         'is_enabled': get('is_enabled'),
@@ -268,6 +290,8 @@ def prepare_asset(request):
         # Crashes if it's not an int. We want that.
         asset['duration'] = int(get('duration'))
 
+    asset['skip_asset_check'] = int(get('skip_asset_check')) if int(get('skip_asset_check')) else 0
+
     # parse date via python-dateutil and remove timezone info
     if get('start_date'):
         asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
@@ -282,10 +306,8 @@ def prepare_asset(request):
     return asset
 
 
-def prepare_asset_v1_2(request, asset_id=None):
-    req = Request(request.environ)
-
-    data = json.loads(req.data)
+def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
+    data = json.loads(request_environ.data)
 
     def get(key):
         val = data.get(key, '')
@@ -305,8 +327,22 @@ def prepare_asset_v1_2(request, asset_id=None):
         raise Exception(
             "Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
 
+    name = get('name')
+    if unique_name:
+        with db.conn(settings['database']) as conn:
+            names = assets_helper.get_names_of_assets(conn)
+        if name in names:
+            i = 1
+            while True:
+                new_name = '%s-%i' % (name, i)
+                if new_name in names:
+                    i += 1
+                else:
+                    name = new_name
+                    break
+
     asset = {
-        'name': get('name'),
+        'name': name,
         'mimetype': get('mimetype'),
         'is_enabled': get('is_enabled'),
         'nocache': get('nocache')
@@ -344,6 +380,8 @@ def prepare_asset_v1_2(request, asset_id=None):
         asset['duration'] = 10
 
     asset['play_order'] = get('play_order') if get('play_order') else 0
+
+    asset['skip_asset_check'] = int(get('skip_asset_check')) if int(get('skip_asset_check')) else 0
 
     # parse date via python-dateutil and remove timezone info
     asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
@@ -407,7 +445,8 @@ class Assets(Resource):
                         "is_enabled": 0,
                         "is_processing": 0,
                         "nocache": 0,
-                        "play_order": 0
+                        "play_order": 0,
+                        "skip_asset_check": 0
                     }"
                     '''
             }
@@ -477,7 +516,8 @@ class Asset(Resource):
                         "is_enabled": 0,
                         "is_processing": 0,
                         "nocache": 0,
-                        "play_order": 0
+                        "play_order": 0,
+                        "skip_asset_check": 0
                     }"
                     '''
             }
@@ -559,7 +599,7 @@ class AssetsV1_1(Resource):
         }
     })
     def post(self):
-        asset = prepare_asset(request)
+        asset = prepare_asset(request, unique_name=True)
         if url_fails(asset['uri']):
             raise Exception("Could not retrieve file. Check the asset URL.")
         with db.conn(settings['database']) as conn:
@@ -683,8 +723,9 @@ class AssetsV1_2(Resource):
         }
     })
     def post(self):
-        asset = prepare_asset_v1_2(request)
-        if url_fails(asset['uri']):
+        request_environ = Request(request.environ)
+        asset = prepare_asset_v1_2(request_environ, unique_name=True)
+        if not asset['skip_asset_check'] and url_fails(asset['uri']):
             raise Exception("Could not retrieve file. Check the asset URL.")
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
@@ -817,8 +858,12 @@ class FileAsset(Resource):
         req = Request(request.environ)
         file_upload = req.files.get('file_upload')
         filename = file_upload.filename
+        file_type = guess_type(filename)[0]
 
-        if guess_type(filename)[0].split('/')[0] not in ['image', 'video']:
+        if not file_type:
+            raise Exception("Invalid file type.")
+
+        if file_type.split('/')[0] not in ['image', 'video']:
             raise Exception("Invalid file type.")
 
         file_path = path.join(settings['assetdir'], filename) + ".tmp"

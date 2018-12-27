@@ -83,6 +83,9 @@
         <td style="width:21%">
             <%= end_date %>
         </td>
+        <td style="width:13%">
+            <%= duration %>
+        </td>
         <td class="asset_row_btns">
             <button class="download-asset-button btn btn-outline-secondary" type="button">
                 <i class="fas fa-download"></i>
@@ -129,6 +132,15 @@
                 <span class="msg">
             The operation failed. Please reload the page and try again.
           </span>
+            </div>
+        </div>
+    </script>
+
+    <script id="request-success-template" type="text/template">
+        <div class="container">
+            <div class="alert alert-success">
+                <button class="close" data-dismiss="alert" type="button">&times;</button>
+                <span class="msg"></span>
             </div>
         </div>
     </script>
@@ -180,6 +192,12 @@
                                     <div class="col-7 controls">
                                         <input class="form-control" name="uri"
                                                placeholder="Public URL to this asset's location" type="text"/>
+                                    </div>
+                                </div>
+                                <div class="form-group row skip_asset_check_checkbox">
+                                    <label class="col-4 small">Skip asset check</label>
+                                    <div class="col-7 is_enabled-skip_asset_check_checkbox checkbox">
+                                        <input name="skip_asset_check" type="checkbox" value="0">
                                     </div>
                                 </div>
                                 <div class="asset-location edit" style="display:none">
@@ -394,6 +412,7 @@
                         <th class="asset_row_name">Name</th>
                         <th style="width:21%">Start</th>
                         <th style="width:21%">End</th>
+                        <th style="width:13%">Duration</th>
                         <th style="width:13%"></th>
                         <th style="width:7%"></th>
                     </tr>
@@ -413,6 +432,7 @@
                         <th class="asset_row_name">Name</th>
                         <th style="width:21%">Start</th>
                         <th style="width:21%">End</th>
+                        <th style="width:13%">Duration</th>
                         <th style="width:13%"></th>
                         <th style="width:7%"></th>
                     </tr>

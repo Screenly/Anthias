@@ -20,6 +20,7 @@ asset_x = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 1,
+    'skip_asset_check': 0
 }
 
 asset_x_diff = {
@@ -38,6 +39,7 @@ asset_y = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 0,
+    'skip_asset_check': 0
 }
 
 asset_z = {
@@ -52,6 +54,7 @@ asset_z = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 2,
+    'skip_asset_check': 0
 }
 
 asset_tomorrow = {
@@ -66,6 +69,7 @@ asset_tomorrow = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 2,
+    'skip_asset_check': 0
 }
 
 FAKE_DB_PATH = '/tmp/fakedb'

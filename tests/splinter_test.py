@@ -18,6 +18,7 @@ asset_x = {
     'is_enabled': 0,
     'nocache': 0,
     'play_order': 1,
+    'skip_asset_check': 0
 }
 
 asset_y = {
@@ -31,6 +32,7 @@ asset_y = {
     'is_enabled': 1,
     'nocache': 0,
     'play_order': 0,
+    'skip_asset_check': 0
 }
 
 main_page_url = 'http://foo:bar@localhost:8080'
