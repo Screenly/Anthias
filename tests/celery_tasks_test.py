@@ -21,8 +21,5 @@ class TestUpgradeScreenly(CeleryTasksTestCase):
 
     def test_cleanup(self):
         cleanup.apply()
-
-        home = getenv('HOME')
-        dir = path.join(home, 'screenly_assets')
-        tmp_files = filter(lambda x: x.endswith('.tmp'), listdir(dir))
+        tmp_files = filter(lambda x: x.endswith('.tmp'), listdir(path.join(getenv('HOME'), 'screenly_assets')))
         self.assertEqual(len(tmp_files), 0)
