@@ -68,7 +68,7 @@ def setup_periodic_tasks(sender, **kwargs):
 
 @celery.task
 def cleanup():
-    sh.find('/home/pi/screenly_assets/', '-name', '*.tmp', '-delete')
+    sh.find(path.join(HOME, 'screenly_assets'), '-name', '*.tmp', '-delete')
 
 
 @celery.task(bind=True)
