@@ -20,7 +20,7 @@ class TestUpgradeScreenly(CeleryTasksTestCase):
         self.assertEqual(self.upgrade_screenly_result, {'status': 'Invalid -b parameter.\n'})
 
     def test_cleanup(self):
-        self.upgrade_screenly_task = cleanup.apply().get()
+        cleanup.apply()
 
         home = os.getenv('HOME')
         dir = os.path.join(home, 'screenly_assets')
