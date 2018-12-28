@@ -21,7 +21,6 @@ before_script:
   - cp ansible/roles/screenly/files/uzbl-config ~/.config/uzbl/config-screenly
   - cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
   - cp ansible/roles/screenly/files/screenly.db ~/.screenly/
-  - cp ansible/roles/screenly/files/screenly_utils.sh /tmp/screenly_utils.sh
   - sudo cp bin/install.sh /usr/local/sbin/upgrade_screenly.sh
   - sudo chmod 0700 /usr/local/sbin/upgrade_screenly.sh
   - echo -e "[local]\nlocalhost ansible_connection=local" > ansible/localhost

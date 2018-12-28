@@ -60,6 +60,17 @@ celery = Celery(app.name, backend=CELERY_RESULT_BACKEND, broker=CELERY_BROKER_UR
 # Celery tasks
 ################################
 
+@celery.on_after_configure.connect
+def setup_periodic_tasks(sender, **kwargs):
+    # Calls cleanup() every hour.
+    sender.add_periodic_task(3600, cleanup.s(), name='cleanup')
+
+
+@celery.task
+def cleanup():
+    sh.find('/home/pi/screenly_assets/', '-name', '*.tmp', '-delete')
+
+
 @celery.task(bind=True)
 def upgrade_screenly(self, branch, manage_network, upgrade_system):
     """Background task to upgrade Screenly-OSE."""
@@ -978,17 +989,21 @@ class Recover(Resource):
         }
     })
     def post(self):
+        publisher = ZmqPublisher.get_instance()
         req = Request(request.environ)
         file_upload = (req.files['backup_upload'])
         filename = file_upload.filename
 
         if guess_type(filename)[0] != 'application/x-tar':
             raise Exception("Incorrect file extension.")
-
-        location = path.join("static", filename)
-        file_upload.save(location)
-        backup_helper.recover(location)
-        return "Recovery successful."
+        try:
+            publisher.send_to_viewer('stop')
+            location = path.join("static", filename)
+            file_upload.save(location)
+            backup_helper.recover(location)
+            return "Recovery successful."
+        finally:
+            publisher.send_to_viewer('play')
 
 
 class ResetWifiConfig(Resource):
