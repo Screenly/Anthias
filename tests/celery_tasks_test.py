@@ -1,4 +1,4 @@
-import os
+from os import getenv, path, listdir
 import unittest
 
 from server import celery as celeryapp
@@ -22,7 +22,7 @@ class TestUpgradeScreenly(CeleryTasksTestCase):
     def test_cleanup(self):
         cleanup.apply()
 
-        home = os.getenv('HOME')
-        dir = os.path.join(home, 'screenly_assets')
-        tmp_files = filter(lambda x: x.endswith('.tmp'), os.listdir(dir))
+        home = getenv('HOME')
+        dir = path.join(home, 'screenly_assets')
+        tmp_files = filter(lambda x: x.endswith('.tmp'), listdir(dir))
         self.assertEqual(len(tmp_files), 0)

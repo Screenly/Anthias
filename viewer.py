@@ -9,6 +9,7 @@ from threading import Thread
 
 from mixpanel import Mixpanel, MixpanelException
 from netifaces import gateways
+from requests import get as req_get
 from signal import signal, SIGUSR1
 from time import sleep
 import logging
