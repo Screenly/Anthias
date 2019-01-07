@@ -5,6 +5,7 @@ __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2017, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
+from celery import Celery
 from datetime import timedelta
 from dateutil import parser as date_parser
 from functools import wraps
@@ -12,14 +13,15 @@ from hurry.filesize import size
 import json
 from mimetypes import guess_type
 from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
-from sh import git
+import sh
 from subprocess import check_output
+import time
 import traceback
 import uuid
 import hashlib
 from base64 import b64encode
 
-from flask import Flask, make_response, render_template, request, send_from_directory, url_for
+from flask import Flask, make_response, render_template, request, send_from_directory, url_for, jsonify
 from flask_cors import CORS
 from flask_restful_swagger_2 import Api, Resource, Schema, swagger
 from flask_swagger_ui import get_swaggerui_blueprint
@@ -40,19 +42,62 @@ from lib.utils import url_fails
 from lib.utils import validate_url
 from lib.utils import is_demo_node
 
-from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
+from settings import auth_basic, auth_system, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
 
 HOME = getenv('HOME', '/home/pi')
 DISABLE_MANAGE_NETWORK = '.screenly/disable_manage_network'
+CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 
 app = Flask(__name__)
 CORS(app)
 api = Api(app, api_version="v1", title="Screenly OSE API")
 
+celery = Celery(app.name, backend=CELERY_RESULT_BACKEND, broker=CELERY_BROKER_URL)
+
+
+################################
+# Celery tasks
+################################
+
+@celery.on_after_configure.connect
+def setup_periodic_tasks(sender, **kwargs):
+    # Calls cleanup() every hour.
+    sender.add_periodic_task(3600, cleanup.s(), name='cleanup')
+
+
+@celery.task
+def cleanup():
+    sh.find(path.join(HOME, 'screenly_assets'), '-name', '*.tmp', '-delete')
+
+
+@celery.task(bind=True)
+def upgrade_screenly(self, branch, manage_network, upgrade_system):
+    """Background task to upgrade Screenly-OSE."""
+    if not path.isfile('/usr/local/sbin/upgrade_screenly.sh'):
+        raise Exception('File /usr/local/sbin/upgrade_screenly.sh does not exist.')
+    upgrade_process = sh.sudo('/usr/local/sbin/upgrade_screenly.sh',
+                              '-w', 'true',
+                              '-b', branch,
+                              '-n', manage_network,
+                              '-s', upgrade_system,
+                              _bg=True)
+    while True:
+        if not upgrade_process.process.alive:
+            break
+        self.update_state(state="PROGRESS", meta={'status': upgrade_process.process.stdout})
+        time.sleep(1)
+
+    if upgrade_process.process.stderr:
+        return {'status': '%s\nError: %s' % (upgrade_process.process.stdout, upgrade_process.process.stderr)}
+
+    return {'status': upgrade_process.process.stdout}
+
 
 ################################
 # Utilities
 ################################
+
 
 @api.representation('application/json')
 def output_json(data, code, headers=None):
@@ -85,7 +130,7 @@ def is_up_to_date():
         latest_sha = None
 
     if latest_sha:
-        branch_sha = git('rev-parse', 'HEAD')
+        branch_sha = sh.git('rev-parse', 'HEAD')
         return branch_sha.stdout.strip() == latest_sha
 
     # If we weren't able to verify with remote side,
@@ -944,17 +989,21 @@ class Recover(Resource):
         }
     })
     def post(self):
+        publisher = ZmqPublisher.get_instance()
         req = Request(request.environ)
         file_upload = (req.files['backup_upload'])
         filename = file_upload.filename
 
         if guess_type(filename)[0] != 'application/x-tar':
             raise Exception("Incorrect file extension.")
-
-        location = path.join("static", filename)
-        file_upload.save(location)
-        backup_helper.recover(location)
-        return "Recovery successful."
+        try:
+            publisher.send_to_viewer('stop')
+            location = path.join("static", filename)
+            file_upload.save(location)
+            backup_helper.recover(location)
+            return "Recovery successful."
+        finally:
+            publisher.send_to_viewer('play')
 
 
 class ResetWifiConfig(Resource):
@@ -975,6 +1024,53 @@ class ResetWifiConfig(Resource):
             remove(file_path)
 
         return '', 204
+
+
+class UpgradeScreenly(Resource):
+    method_decorators = [api_response, auth_system]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Upgrade system'
+            }
+        }
+    })
+    def post(self):
+        branch = request.form.get('branch')
+        manage_network = request.form.get('manage_network')
+        system_upgrade = request.form.get('system_upgrade')
+        task = upgrade_screenly.apply_async(args=(branch, manage_network, system_upgrade))
+        return jsonify({'id': task.id})
+
+
+@app.route('/upgrade_status/<task_id>')
+def upgrade_screenly_status(task_id):
+    status_code = 200
+    task = upgrade_screenly.AsyncResult(task_id)
+    if task.state == 'PENDING':
+        response = {
+            'state': task.state,
+            'status': ''
+        }
+        status_code = 202
+    elif task.state == 'PROGRESS':
+        response = {
+            'state': task.state,
+            'status': task.info.get('status', '')
+        }
+        status_code = 202
+    elif task.state != 'FAILURE':
+        response = {
+            'state': task.state,
+            'status': task.info.get('status', '')
+        }
+    else:
+        response = {
+            'state': task.state,
+            'status': str(task.info)
+        }
+    return jsonify(response), status_code
 
 
 class Info(Resource):
@@ -1104,6 +1200,7 @@ api.add_resource(Recover, '/api/v1/recover')
 api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 api.add_resource(Info, '/api/v1/info')
 api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
+api.add_resource(UpgradeScreenly, '/api/v1/upgrade_screenly')
 
 try:
     my_ip = get_node_ip()
@@ -1173,13 +1270,14 @@ def settings_page():
 
             new_user = request.form.get('user', '')
             use_auth = request.form.get('use_auth', '') == 'on'
+            use_system_commands = request.form.get('use_system_commands', '') == 'on'
 
             # Handle auth components
             if settings['password'] != '':  # if password currently set,
                 if new_user != settings['user']:  # trying to change user
                     # should have current password set. Optionally may change password.
                     if current_pass == '':
-                        if not use_auth:
+                        if not use_auth and not use_system_commands:
                             raise ValueError("Must supply current password to disable authentication")
                         raise ValueError("Must supply current password to change username")
                     if current_pass != settings['password']:
@@ -1187,7 +1285,7 @@ def settings_page():
 
                     settings['user'] = new_user
 
-                if new_pass != '' and use_auth:
+                if new_pass != '' and (use_auth or use_system_commands):
                     if current_pass == '':
                         raise ValueError("Must supply current password to change password")
                     if current_pass != settings['password']:
@@ -1198,7 +1296,7 @@ def settings_page():
 
                     settings['password'] = new_pass
 
-                if new_pass == '' and not use_auth and new_pass2 == '':
+                if new_pass == '' and (not use_auth and not use_system_commands) and new_pass2 == '':
                     # trying to disable authentication
                     if current_pass == '':
                         raise ValueError("Must supply current password to disable authentication")
@@ -1249,8 +1347,7 @@ def settings_page():
 
     if not settings['user'] or not settings['password']:
         context['use_auth'] = False
-    else:
-        context['use_auth'] = True
+        context['use_system_commands'] = False
 
     return template('settings.html', **context)
 

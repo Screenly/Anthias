@@ -17,6 +17,7 @@ RUN apt-get update && \
         python-imaging \
         python-netifaces \
         python-simplejson \
+        redis-server \
         sqlite3 \
         uzbl \
         x11-xserver-utils \
@@ -34,6 +35,10 @@ RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
 # Screenly Websocker Server
 COPY ansible/roles/screenly/files/screenly-websocket_server_layer.service /etc/systemd/system/screenly-websocket_server_layer.service
 RUN sed -i '/\[Service\]/ a\Environment=HOME=/data' /etc/systemd/system/screenly-websocket_server_layer.service
+
+#Screenly Celery Worker
+COPY ansible/roles/screenly/files/screenly-celery.service /etc/systemd/system/screenly-celery.service
+RUN sed -i '/\[Service\]/ a\Environment=HOME=/data' /etc/systemd/system/screenly-celery.service
 
 # Screenly Server
 COPY ansible/roles/screenly/files/screenly-web.service /etc/systemd/system/screenly-web.service

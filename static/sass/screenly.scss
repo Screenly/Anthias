@@ -217,7 +217,6 @@ section {
 }
 
 #backup-section {
-  margin-bottom: 50px;
   .progress {
     margin-top: 5px;
     width: 50%;
@@ -359,3 +358,16 @@ input[name="file_upload"] {
   }
 }
 .is_enabled-toggle { margin: 5px 0 5px 0 !important; }
+
+#upgrade-modal {
+  .modal-dialog {
+    max-width: 800px;
+  }
+
+  #upgrade_logs_block {
+    textarea {
+      font-size: 0.8em;
+      height: 180px;
+    }
+  }
+}

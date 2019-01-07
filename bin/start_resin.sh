@@ -33,6 +33,7 @@ systemctl start matchbox.service
 systemctl start screenly-viewer.service
 systemctl start screenly-web.service
 systemctl start screenly-websocket_server_layer.service
+systemctl start screenly-celery.service
 
 # By default docker gives us 64MB of shared memory size but to display heavy
 # pages we need more.

@@ -1,0 +1,39 @@
+version: "3"
+services:
+  screenly-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+     - "8080:8080"
+    volumes:
+      - ./:/home/pi/screenly
+      - screenly-volume:/home/pi/.screenly
+      - screenly-assets-volume:/home/pi/screenly_assets
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - PYTHONUNBUFFERED=1
+      - LISTEN=0.0.0.0
+    depends_on:
+      - redis
+      - worker
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    volumes:
+      - ./:/home/pi/screenly
+      - screenly-volume:/home/pi/.screenly
+      - screenly-assets-volume:/home/pi/screenly_assets
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+  redis:
+    image: redis
+
+volumes:
+  screenly-volume:
+  screenly-assets-volume:

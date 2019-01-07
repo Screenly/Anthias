@@ -49,26 +49,30 @@
     force: no
 
 - name: Run database migration
-  become: no
+  become_user: pi
   command: python /home/pi/screenly/bin/migrate.py
   register: migrate
 
 - debug: msg="{{ migrate.stdout }}"
 
-- name: Copy screenly_utils.sh
-  copy:
-    src: screenly_utils.sh
-    dest: /usr/local/bin/screenly_utils.sh
-    mode: 0755
-    owner: root
-    group: root
+- name: Remove screenly_utils.sh
+  file:
+    state: absent
+    path: /usr/local/bin/screenly_utils.sh
 
 - cron:
     name: Cleanup screenly_assets
-    minute: 0
-    hour: 1
-    job: "/usr/local/bin/screenly_utils.sh cleanup"
+    state : absent
     user: pi
+
+- name: Download upgrade_screenly.sh from github repository
+  get_url:
+    url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/install.sh
+    dest: /usr/local/sbin/upgrade_screenly.sh
+    mode: 0700
+    owner: root
+    group: root
+    force: yes
 
 - name: Copy screenly_overrides
   copy:

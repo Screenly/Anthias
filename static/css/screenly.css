@@ -129,13 +129,11 @@ section .header {
   margin-bottom: 0px;
   width: 69%; }
 
-#backup-section {
-  margin-bottom: 50px; }
-  #backup-section .progress {
-    margin-top: 5px;
-    width: 50%;
-    margin-bottom: 5px;
-    display: inline-block; }
+#backup-section .progress {
+  margin-top: 5px;
+  width: 50%;
+  margin-bottom: 5px;
+  display: inline-block; }
 
 #assets table td {
   line-height: 32px; }
@@ -269,5 +267,11 @@ input[name="file_upload"] {
 
 .is_enabled-toggle {
   margin: 5px 0 5px 0 !important; }
+
+#upgrade-modal .modal-dialog {
+  max-width: 800px; }
+#upgrade-modal #upgrade_logs_block textarea {
+  font-size: 0.8em;
+  height: 180px; }
 
 /*# sourceMappingURL=screenly.css.map */
