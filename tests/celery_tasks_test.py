@@ -1,7 +1,8 @@
+from os import getenv, path, listdir
 import unittest
 
 from server import celery as celeryapp
-from server import upgrade_screenly
+from server import cleanup, upgrade_screenly
 
 
 class CeleryTasksTestCase(unittest.TestCase):
@@ -17,3 +18,8 @@ class TestUpgradeScreenly(CeleryTasksTestCase):
 
     def test_result(self):
         self.assertEqual(self.upgrade_screenly_result, {'status': 'Invalid -b parameter.\n'})
+
+    def test_cleanup(self):
+        cleanup.apply()
+        tmp_files = filter(lambda x: x.endswith('.tmp'), listdir(path.join(getenv('HOME'), 'screenly_assets')))
+        self.assertEqual(len(tmp_files), 0)

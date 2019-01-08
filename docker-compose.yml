@@ -23,6 +23,7 @@ services:
       context: .
       dockerfile: Dockerfile.worker
     volumes:
+      - ./:/home/pi/screenly
       - screenly-volume:/home/pi/.screenly
       - screenly-assets-volume:/home/pi/screenly_assets
     environment:
