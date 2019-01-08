@@ -1,18 +1,10 @@
 ---
 
-- name: Installs autoplay script
-  copy:
-    src: autoplay.sh
-    dest: /usr/local/bin/autoplay.py
-    mode: 755
-    owner: root
-    group: root
-
 - name: Installs autoplay udev rule
   copy:
     src: 50-autoplay.rules
     dest: /etc/udev/rules.d/50-autoplay.rules
-    mode: 644
+    mode: 0644
     owner: root
     group: root
 
@@ -20,9 +12,12 @@
   copy:
     src: udev-restart.service
     dest: /etc/systemd/system/udev-restart.service
-    mode: 644
+    mode: 0644
     owner: root
     group: root
+
+- name: Enable udev restart services
+  command: systemctl enable udev-restart
 
 - name: Copy systemd-udevd service
   copy: 

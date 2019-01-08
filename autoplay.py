@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import binascii
-from glob import glob
+import datetime
+import glob
 import mimetypes
 import os
 import sys
@@ -23,27 +24,26 @@ db_conn = db.conn(settings['database'])
 
 
 def add(mountpoint):
-    files = [y for x in os.walk(mountpoint) for y in glob(os.path.join(mountpoint, '*.*'))]
+    files = [y for x in os.walk(mountpoint) for y in glob.glob(os.path.join(mountpoint, '*.*'))]
 
     for entry in files:
         asset = {
             'asset_id': binascii.b2a_hex(os.urandom(16)),
             'name': os.path.basename(entry),
             'uri': entry,
-            'start_date': '1970-01-01T00:00:00.000Z',
-            'end_date': '2100-01-01T00:00:00.000Z',
-            'duration': '10',
+            'start_date': datetime.now(),
+            'end_date': datetime.datetime(datetime.MAXYEAR, 12, 31),
             'mimetype': mimetypes.guess_type(entry)[0],
             'is_enabled': 1
         }
 
         if asset['mimetype'] and asset['mimetype'].startswith('image/'):
-            assets_helper.add(db_conn, asset)
+            assets_helper.create(db_conn, asset)
 
 def remove(mountpoint):
     for asset in assets_helper.read(db_conn):
         if asset['uri'].startswith(mountpoint):
-            assets_helper.remove(db_conn, asset['id'])
+            assets_helper.delete(db_conn, asset['id'])
 
 
 if __name__ == "__main__":
