@@ -1037,6 +1037,9 @@ class UpgradeScreenly(Resource):
         }
     })
     def post(self):
+        for task in celery.control.inspect().active().get('worker@screenly'):
+            if task.get('type') == 'server.upgrade_screenly':
+                return jsonify({'id': task.get('id')})
         branch = request.form.get('branch')
         manage_network = request.form.get('manage_network')
         system_upgrade = request.form.get('system_upgrade')
