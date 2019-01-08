@@ -10,7 +10,7 @@ from threading import Thread
 from mixpanel import Mixpanel, MixpanelException
 from netifaces import gateways
 from requests import get as req_get
-from signal import signal, SIGUSR1
+from signal import alarm, signal, SIGALRM, SIGUSR1
 from time import sleep
 import logging
 import random
@@ -18,6 +18,7 @@ import sh
 import string
 import zmq
 
+from lib.errors import SigalrmException
 from settings import settings, LISTEN, PORT
 import html_templates
 from lib.github import fetch_remote_hash, remote_branch_available
@@ -53,6 +54,13 @@ arch = None
 db_conn = None
 
 scheduler = None
+
+
+def sigalrm(signum, frame):
+    """
+    Signal just throw an SigalrmException
+    """
+    raise SigalrmException("SigalrmException")
 
 
 def sigusr1(signum, frame):
@@ -241,18 +249,30 @@ def load_browser(url=None):
     browser_send(uzbl_rc)
 
 
+def browser_get_event():
+    alarm(10)
+    try:
+        event = browser.next()
+    except SigalrmException:
+        return None
+    alarm(0)
+    return event
+
+
 def browser_send(command, cb=lambda _: True):
     global browser_focus_lost
     fl = lambda e: 'FOCUS_LOST' in unicode(e.decode('utf-8'))
     if not (browser is None) and browser.process.alive:
         while not browser.process._pipe_queue.empty():  # flush stdout
-            browser.next()
+            browser_get_event()
 
         browser.process.stdin.put(command + '\n')
         while True:  # loop until cb returns True
             try:
-                browser_event = browser.next()
+                browser_event = browser_get_event()
             except StopIteration:
+                break
+            if not browser_event:
                 break
             if fl(browser_event):
                 browser_focus_lost = True
@@ -438,6 +458,7 @@ def setup():
     arch = machine()
 
     signal(SIGUSR1, sigusr1)
+    signal(SIGALRM, sigalrm)
 
     load_settings()
     db_conn = db.conn(settings['database'])
