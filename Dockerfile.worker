@@ -16,4 +16,4 @@ RUN chown -R pi:pi /home/pi
 USER pi
 WORKDIR /home/pi/screenly
 
-CMD celery worker -A server.celery --loglevel=info
+CMD celery worker -A server.celery -B -n worker@screenly --loglevel=info
