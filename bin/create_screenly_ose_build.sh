@@ -20,16 +20,17 @@ sudo mount "${SD_DEV}2" "$ROOT"
 
 echo "Cleaning up logfiles..."
 for i in \
+  "$ROOT/boot.bak" \
+  "$ROOT/home/pi/.bash_history" \
+  "$ROOT/home/pi/.screenly/initialized" \
+  "$ROOT/home/pi/.screenly/wifi_set" \
+  "$ROOT/home/pi/.viminfo" \
+  "$ROOT/home/pi/omxplayer.log" \
+  "$ROOT/lib/modules.bak" \
+  "$ROOT/lib/modules/3.6.11"+ \
+  "$ROOT/omxplayer*.log" \
   "$ROOT/tmp/*" \
   "$ROOT/var/lib/dhcp/*" \
-  "$ROOT/home/pi/.screenly/wifi_set" \
-  "$ROOT/home/pi/omxplayer.log" \
-  "$ROOT/home/pi/.bash_history" \
-  "$ROOT/home/pi/.viminfo" \
-  "$ROOT/omxplayer*.log" \
-  "$ROOT/boot.bak" \
-  "$ROOT/lib/modules/3.6.11"+ \
-  "$ROOT/lib/modules.bak" \
   "$ROOT/root/.rpi-firmware"; \
   do
   sudo rm -vrf "$i"

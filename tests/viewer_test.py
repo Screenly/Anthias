@@ -67,6 +67,9 @@ class TestBrowserSend(ViewerTestCase):
         self.u.browser_send('test_cmd')
         m_put.assert_called_once_with('test_cmd\n')
 
+        self.u.browser_send('event TITLE 标题')
+        m_put.assert_called_with('event TITLE \xe6\xa0\x87\xe9\xa2\x98\n')
+
     def test_dead(self):
         self.p_loadb.start()
         self.u.browser_send(None)

@@ -10,7 +10,7 @@ from threading import Thread
 from mixpanel import Mixpanel, MixpanelException
 from netifaces import gateways
 from requests import get as req_get
-from signal import signal, SIGUSR1
+from signal import alarm, signal, SIGALRM, SIGUSR1
 from time import sleep
 import logging
 import random
@@ -18,6 +18,7 @@ import sh
 import string
 import zmq
 
+from lib.errors import SigalrmException
 from settings import settings, LISTEN, PORT
 import html_templates
 from lib.github import fetch_remote_hash, remote_branch_available
@@ -44,6 +45,7 @@ INTRO = '/screenly/intro-template.html'
 
 current_browser_url = None
 browser = None
+browser_focus_lost = False
 
 VIDEO_TIMEOUT = 20  # secs
 
@@ -52,6 +54,13 @@ arch = None
 db_conn = None
 
 scheduler = None
+
+
+def sigalrm(signum, frame):
+    """
+    Signal just throw an SigalrmException
+    """
+    raise SigalrmException("SigalrmException")
 
 
 def sigusr1(signum, frame):
@@ -175,13 +184,14 @@ class Scheduler(object):
         # Try to keep the same position in the play list. E.g. if a new asset is added to the end of the list, we
         # don't want to start over from the beginning.
         self.index = self.index % len(self.assets) if self.assets else 0
-        logging.debug('update_playlist done, count %s, counter %s, index %s, deadline %s', len(self.assets), self.counter, self.index, self.deadline)
+        logging.debug('update_playlist done, count %s, counter %s, index %s, deadline %s', len(self.assets),
+                      self.counter, self.index, self.deadline)
 
     def get_db_mtime(self):
         # get database file last modification time
         try:
             return path.getmtime(settings['database'])
-        except:
+        except (OSError, TypeError):
             return 0
 
 
@@ -239,14 +249,35 @@ def load_browser(url=None):
     browser_send(uzbl_rc)
 
 
+def browser_get_event():
+    alarm(10)
+    try:
+        event = browser.next()
+    except SigalrmException:
+        return None
+    alarm(0)
+    return event
+
+
 def browser_send(command, cb=lambda _: True):
+    global browser_focus_lost
+    fl = lambda e: 'FOCUS_LOST' in unicode(e.decode('utf-8'))
     if not (browser is None) and browser.process.alive:
         while not browser.process._pipe_queue.empty():  # flush stdout
-            browser.next()
+            browser_get_event()
 
         browser.process.stdin.put(command + '\n')
         while True:  # loop until cb returns True
-            if cb(browser.next()):
+            try:
+                browser_event = browser_get_event()
+            except StopIteration:
+                break
+            if not browser_event:
+                break
+            if fl(browser_event):
+                browser_focus_lost = True
+                break
+            if cb(browser_event):
                 break
     else:
         logging.info('browser found dead, restarting')
@@ -255,7 +286,9 @@ def browser_send(command, cb=lambda _: True):
 
 def browser_clear(force=False):
     """Load a black page. Default cb waits for the page to load."""
-    browser_url('file://' + BLACK_PAGE, force=force, cb=lambda buf: 'LOAD_FINISH' in buf and BLACK_PAGE in buf)
+    browser_url('file://' + BLACK_PAGE, force=force,
+                cb=lambda buf: 'LOAD_FINISH' in unicode(buf.decode('utf-8')) and
+                               BLACK_PAGE in unicode(buf.decode('utf-8')))
 
 
 def browser_url(url, cb=lambda _: True, force=False):
@@ -276,7 +309,9 @@ def browser_url(url, cb=lambda _: True, force=False):
 
 def view_image(uri):
     browser_clear()
-    browser_send('js window.setimg("{0}")'.format(uri), cb=lambda b: 'COMMAND_EXECUTED' in b and 'setimg' in b)
+    browser_send('js window.setimg("{0}")'.format(uri),
+                 cb=lambda b: 'COMMAND_EXECUTED' in unicode(b.decode('utf-8')) and
+                              'setimg' in unicode(b.decode('utf-8')))
 
 
 def view_video(uri, duration):
@@ -343,6 +378,7 @@ def check_update():
                 mp.track(device_id, 'Version', {
                     'Branch': str(git_branch),
                     'Hash': str(git_hash),
+                    'NOOBS': path.isfile('/boot/os_config.json'),
                 })
             except MixpanelException:
                 pass
@@ -374,6 +410,7 @@ def load_settings():
 
 
 def asset_loop(scheduler):
+    global browser_focus_lost
     disable_update_check = getenv("DISABLE_UPDATE_CHECK", False)
     if not disable_update_check:
         check_update()
@@ -384,7 +421,7 @@ def asset_loop(scheduler):
         view_image(HOME + LOAD_SCREEN)
         sleep(EMPTY_PL_DELAY)
 
-    elif path.isfile(asset['uri']) or not url_fails(asset['uri']):
+    elif path.isfile(asset['uri']) or (not url_fails(asset['uri']) or asset['skip_asset_check']):
         name, mime, uri = asset['name'], asset['mimetype'], asset['uri']
         logging.info('Showing asset %s (%s)', name, mime)
         logging.debug('Asset URI %s', uri)
@@ -395,7 +432,9 @@ def asset_loop(scheduler):
         elif 'web' in mime:
             # FIXME If we want to force periodic reloads of repeated web assets, force=True could be used here.
             # See e38e6fef3a70906e7f8739294ffd523af6ce66be.
-            browser_url(uri)
+            browser_url(uri,
+                        cb=lambda b: 'LOAD_FINISH' in unicode(b.decode('utf-8')) or
+                                     'LOAD_ERROR' in unicode(b.decode('utf-8')))
         elif 'video' or 'streaming' in mime:
             view_video(uri, asset['duration'])
         else:
@@ -405,6 +444,9 @@ def asset_loop(scheduler):
             duration = int(asset['duration'])
             logging.info('Sleeping for %s', duration)
             sleep(duration)
+            if browser_focus_lost:
+                browser_focus_lost = False
+                browser_send('exit')
     else:
         logging.info('Asset %s at %s is not available, skipping.', asset['name'], asset['uri'])
         sleep(0.5)
@@ -416,6 +458,7 @@ def setup():
     arch = machine()
 
     signal(SIGUSR1, sigusr1)
+    signal(SIGALRM, sigalrm)
 
     load_settings()
     db_conn = db.conn(settings['database'])
@@ -458,6 +501,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except:
+    except Exception:
         logging.exception("Viewer crashed.")
         raise

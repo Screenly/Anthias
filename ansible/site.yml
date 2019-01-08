@@ -37,4 +37,5 @@
     - splashscreen
     - nginx
     - ssl
+    - tools
     - autoplay

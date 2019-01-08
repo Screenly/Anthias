@@ -1,6 +1,6 @@
 var webPage = require('webpage');
 var page = webPage.create();
-var url = 'http://localhost:8080/static/spec/runner.html';
+var url = 'http://localhost:8081/static/spec/runner.html';
 
 page.onConsoleMessage = function(msg, lineNum, sourceId) {
   console.log(msg);

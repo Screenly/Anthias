@@ -11,18 +11,15 @@ from functools import wraps
 from hurry.filesize import size
 import json
 from mimetypes import guess_type
-from os import getenv, makedirs, mkdir, path, remove, rename, statvfs
-from pwgen import pwgen
-import sh
+from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
 from sh import git
 from subprocess import check_output
-from time import sleep
 import traceback
 import uuid
 import hashlib
 from base64 import b64encode
 
-from flask import Flask, make_response, render_template, request, send_from_directory
+from flask import Flask, make_response, render_template, request, send_from_directory, url_for
 from flask_cors import CORS
 from flask_restful_swagger_2 import Api, Resource, Schema, swagger
 from flask_swagger_ui import get_swaggerui_blueprint
@@ -41,9 +38,9 @@ from lib.utils import get_video_duration
 from lib.utils import download_video_from_youtube, json_dump
 from lib.utils import url_fails
 from lib.utils import validate_url
+from lib.utils import is_demo_node
 
 from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
-
 
 HOME = getenv('HOME', '/home/pi')
 DISABLE_MANAGE_NETWORK = '.screenly/disable_manage_network'
@@ -155,6 +152,10 @@ class AssetModel(Schema):
         'play_order': {
             'type': 'integer',
             'format': 'int64',
+        },
+        'skip_asset_check': {
+            'type': 'integer',
+            'format': 'int64',
         }
     }
 
@@ -185,6 +186,10 @@ class AssetRequestModel(Schema):
         'play_order': {
             'type': 'integer',
             'format': 'int64',
+        },
+        'skip_asset_check': {
+            'type': 'integer',
+            'format': 'int64',
         }
     }
     required = ['name', 'uri', 'mimetype', 'is_enabled', 'start_date', 'end_date']
@@ -209,7 +214,7 @@ class AssetContentModel(Schema):
 # API
 ################################
 
-def prepare_asset(request):
+def prepare_asset(request, unique_name=False):
     req = Request(request.environ)
     data = None
 
@@ -233,8 +238,22 @@ def prepare_asset(request):
     if not all([get('name'), get('uri'), get('mimetype')]):
         raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
 
+    name = get('name')
+    if unique_name:
+        with db.conn(settings['database']) as conn:
+            names = assets_helper.get_names_of_assets(conn)
+        if name in names:
+            i = 1
+            while True:
+                new_name = '%s-%i' % (name, i)
+                if new_name in names:
+                    i += 1
+                else:
+                    name = new_name
+                    break
+
     asset = {
-        'name': get('name'),
+        'name': name,
         'mimetype': get('mimetype'),
         'asset_id': get('asset_id'),
         'is_enabled': get('is_enabled'),
@@ -271,6 +290,8 @@ def prepare_asset(request):
         # Crashes if it's not an int. We want that.
         asset['duration'] = int(get('duration'))
 
+    asset['skip_asset_check'] = int(get('skip_asset_check')) if int(get('skip_asset_check')) else 0
+
     # parse date via python-dateutil and remove timezone info
     if get('start_date'):
         asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
@@ -285,10 +306,8 @@ def prepare_asset(request):
     return asset
 
 
-def prepare_asset_v1_2(request, asset_id=None):
-    req = Request(request.environ)
-
-    data = json.loads(req.data)
+def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
+    data = json.loads(request_environ.data)
 
     def get(key):
         val = data.get(key, '')
@@ -305,10 +324,25 @@ def prepare_asset_v1_2(request, asset_id=None):
                 str(get('is_enabled')),
                 get('start_date'),
                 get('end_date')]):
-        raise Exception("Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
+        raise Exception(
+            "Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
+
+    name = get('name')
+    if unique_name:
+        with db.conn(settings['database']) as conn:
+            names = assets_helper.get_names_of_assets(conn)
+        if name in names:
+            i = 1
+            while True:
+                new_name = '%s-%i' % (name, i)
+                if new_name in names:
+                    i += 1
+                else:
+                    name = new_name
+                    break
 
     asset = {
-        'name': get('name'),
+        'name': name,
         'mimetype': get('mimetype'),
         'is_enabled': get('is_enabled'),
         'nocache': get('nocache')
@@ -347,6 +381,8 @@ def prepare_asset_v1_2(request, asset_id=None):
 
     asset['play_order'] = get('play_order') if get('play_order') else 0
 
+    asset['skip_asset_check'] = int(get('skip_asset_check')) if int(get('skip_asset_check')) else 0
+
     # parse date via python-dateutil and remove timezone info
     asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
     asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
@@ -363,6 +399,7 @@ def api_response(view):
         except Exception as e:
             traceback.print_exc()
             return api_error(unicode(e))
+
     return api_view
 
 
@@ -408,7 +445,8 @@ class Assets(Resource):
                         "is_enabled": 0,
                         "is_processing": 0,
                         "nocache": 0,
-                        "play_order": 0
+                        "play_order": 0,
+                        "skip_asset_check": 0
                     }"
                     '''
             }
@@ -478,7 +516,8 @@ class Asset(Resource):
                         "is_enabled": 0,
                         "is_processing": 0,
                         "nocache": 0,
-                        "play_order": 0
+                        "play_order": 0,
+                        "skip_asset_check": 0
                     }"
                     '''
             }
@@ -560,7 +599,7 @@ class AssetsV1_1(Resource):
         }
     })
     def post(self):
-        asset = prepare_asset(request)
+        asset = prepare_asset(request, unique_name=True)
         if url_fails(asset['uri']):
             raise Exception("Could not retrieve file. Check the asset URL.")
         with db.conn(settings['database']) as conn:
@@ -684,8 +723,9 @@ class AssetsV1_2(Resource):
         }
     })
     def post(self):
-        asset = prepare_asset_v1_2(request)
-        if url_fails(asset['uri']):
+        request_environ = Request(request.environ)
+        asset = prepare_asset_v1_2(request_environ, unique_name=True)
+        if not asset['skip_asset_check'] and url_fails(asset['uri']):
             raise Exception("Could not retrieve file. Check the asset URL.")
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
@@ -818,8 +858,12 @@ class FileAsset(Resource):
         req = Request(request.environ)
         file_upload = req.files.get('file_upload')
         filename = file_upload.filename
+        file_type = guess_type(filename)[0]
 
-        if guess_type(filename)[0].split('/')[0] not in ['image', 'video']:
+        if not file_type:
+            raise Exception("Invalid file type.")
+
+        if file_type.split('/')[0] not in ['image', 'video']:
             raise Exception("Invalid file type.")
 
         file_path = path.join(settings['assetdir'], filename) + ".tmp"
@@ -1002,14 +1046,14 @@ class AssetContent(Resource):
         'responses': {
             '200': {
                 'description':
-                '''
-                The content of the asset.
+                    '''
+                    The content of the asset.
 
-                'type' can either be 'file' or 'url'.
+                    'type' can either be 'file' or 'url'.
 
-                In case of a file, the fields 'mimetype', 'filename', and 'content'  will be present.
-                In case of a URL, the field 'url' will be present.
-                ''',
+                    In case of a file, the fields 'mimetype', 'filename', and 'content'  will be present.
+                    In case of a URL, the field 'url' will be present.
+                    ''',
                 'schema': AssetContentModel
             }
         }
@@ -1096,6 +1140,7 @@ else:
 def viewIndex():
     player_name = settings['player_name']
     my_ip = get_node_ip()
+    is_demo = is_demo_node()
     resin_uuid = getenv("RESIN_UUID", None)
 
     ws_addresses = []
@@ -1108,13 +1153,12 @@ def viewIndex():
     if resin_uuid:
         ws_addresses.append('wss://{}.resindevice.io/ws/'.format(resin_uuid))
 
-    return template('index.html', ws_addresses=ws_addresses, player_name=player_name)
+    return template('index.html', ws_addresses=ws_addresses, player_name=player_name, is_demo=is_demo)
 
 
 @app.route('/settings', methods=["GET", "POST"])
 @auth_basic
 def settings_page():
-
     context = {'flash': None}
 
     if request.method == "POST":
@@ -1131,8 +1175,8 @@ def settings_page():
             use_auth = request.form.get('use_auth', '') == 'on'
 
             # Handle auth components
-            if settings['password'] != '':    # if password currently set,
-                if new_user != settings['user']:    # trying to change user
+            if settings['password'] != '':  # if password currently set,
+                if new_user != settings['user']:  # trying to change user
                     # should have current password set. Optionally may change password.
                     if current_pass == '':
                         if not use_auth:
@@ -1160,8 +1204,8 @@ def settings_page():
                         raise ValueError("Must supply current password to disable authentication")
                     settings['password'] = ''
 
-            else:        # no current password
-                if new_user != '':    # setting username and password
+            else:  # no current password
+                if new_user != '':  # setting username and password
                     if new_pass != '' and new_pass != new_pass2:
                         raise ValueError("New passwords do not match!")
                     if new_pass == '':
@@ -1175,6 +1219,9 @@ def settings_page():
                 # skip user and password as they should be handled already.
                 if field == "user" or field == "password":
                     continue
+
+                if not value and field in ['default_duration', 'default_streaming_duration']:
+                    value = str(0)
 
                 if isinstance(default, bool):
                     value = value == 'on'
@@ -1278,12 +1325,30 @@ def mistake403(code):
 def mistake404(code):
     return 'Sorry, this page does not exist!'
 
+
 ################################
 # Static
 ################################
 
 
+@app.context_processor
+def override_url_for():
+    return dict(url_for=dated_url_for)
+
+
+def dated_url_for(endpoint, **values):
+    if endpoint == 'static':
+        filename = values.get('filename', None)
+        if filename:
+            file_path = path.join(app.root_path,
+                                  endpoint, filename)
+            if path.isfile(file_path):
+                values['q'] = int(stat(file_path).st_mtime)
+    return url_for(endpoint, **values)
+
+
 @app.route('/static_with_mime/<string:path>')
+@auth_basic
 def static_with_mime(path):
     mimetype = request.args['mime'] if 'mime' in request.args else 'auto'
     return send_from_directory(directory='static', filename=path, mimetype=mimetype)

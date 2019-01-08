@@ -1,0 +1,8 @@
+[Unit]
+Description=Hold until boot process finishes up
+After=rc-local.service plymouth-start.service systemd-user-sessions.service screenly-viewer.service
+
+[Service]
+ExecStart=-/bin/plymouth --wait
+Type=oneshot
+TimeoutSec=0

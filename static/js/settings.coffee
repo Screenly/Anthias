@@ -10,7 +10,12 @@ $().ready ->
     $('#btn-upload').prop 'disabled', yes
     $('#btn-backup').prop 'disabled', yes
 
-    $.post "api/v1/backup"
+    $.ajax({
+      method: "POST"
+      url: "api/v1/backup"
+      timeout: 1800 * 1000
+    })
+
     .done  (data, e) ->
       if (data)
         window.location = "static_with_mime/" + data + "?mime=application/x-tgz"

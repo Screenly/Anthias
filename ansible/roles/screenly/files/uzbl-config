@@ -1,2 +1,5 @@
 set show_status = 0
-set ssl_verify = 1
+set on_event    = request ON_EVENT
+
+@on_event   LOAD_START         js alert=function(e){return true};confirm=function(e){return true};prompt=function(e){return true};
+@on_event   LOAD_COMMIT        js alert=function(e){return true};confirm=function(e){return true};prompt=function(e){return true};

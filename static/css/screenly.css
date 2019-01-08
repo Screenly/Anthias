@@ -14,15 +14,17 @@ label {
   text-align: right; }
 
 .splash {
-  margin-top: 0px; }
+  margin-top: 0;
+  font-size: calc((1.5vw + 1.5vh) / 2); }
   .splash .row {
     display: block; }
   .splash .logo-container {
-    padding: 20px 0px 40px 0px;
+    height: 30vh;
     border-bottom: 1px solid #eee;
-    margin: 20px 0 30px; }
+    padding: 3vh 0;
+    margin-bottom: 3vh; }
     .splash .logo-container img {
-      max-width: 450px; }
+      height: 100%; }
   @media (max-width: 767px) {
     .splash .logo-container {
       padding: 10px 0px 10px 0px; }
@@ -111,9 +113,7 @@ section .header {
 #request-error {
   z-index: 10000; }
   #request-error .alert {
-    position: fixed;
     margin-left: 300px;
-    margin-top: 23px;
     width: 500px; }
 
 #add-form .uri-text {
@@ -148,7 +148,7 @@ input[name="file_upload"] {
   top: 0;
   left: 0; }
 
-.end_date input, .start_date input {
+.end_date input, .start_date input, .loop_date input {
   float: left;
   width: 47%; }
 
