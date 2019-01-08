@@ -5,13 +5,15 @@ ADD requirements.worker.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
 
 RUN useradd pi
-COPY requirements.worker.txt server.py settings.py /home/pi/worker/
-COPY lib /home/pi/worker/lib
+
+RUN mkdir -p /home/pi/.screenly /home/pi/screenly /home/pi/screenly_assets
 COPY ansible/roles/screenly/files/screenly.conf /home/pi/.screenly/screenly.conf
 
+# Copy in code base
+COPY . /home/pi/screenly
 RUN chown -R pi:pi /home/pi
 
 USER pi
-WORKDIR /home/pi/worker
+WORKDIR /home/pi/screenly
 
-CMD celery worker -A server.celery --loglevel=info
+CMD celery worker -A server.celery -B -n worker@screenly --loglevel=info

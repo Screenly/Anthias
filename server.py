@@ -60,6 +60,17 @@ celery = Celery(app.name, backend=CELERY_RESULT_BACKEND, broker=CELERY_BROKER_UR
 # Celery tasks
 ################################
 
+@celery.on_after_configure.connect
+def setup_periodic_tasks(sender, **kwargs):
+    # Calls cleanup() every hour.
+    sender.add_periodic_task(3600, cleanup.s(), name='cleanup')
+
+
+@celery.task
+def cleanup():
+    sh.find(path.join(HOME, 'screenly_assets'), '-name', '*.tmp', '-delete')
+
+
 @celery.task(bind=True)
 def upgrade_screenly(self, branch, manage_network, upgrade_system):
     """Background task to upgrade Screenly-OSE."""
@@ -84,6 +95,17 @@ def upgrade_screenly(self, branch, manage_network, upgrade_system):
 
 
 @celery.task
+def reboot_screenly():
+    """Background task to reboot Screenly-OSE."""
+    sh.sudo('shutdown', '-r', 'now', _bg=True)
+
+
+@celery.task
+def shutdown_screenly():
+    """Background task to shutdown Screenly-OSE."""
+    sh.sudo('shutdown', 'now', _bg=True)
+
+
 def append_usb_assets(mountpoint):
     settings.load()
     files = ['%s/%s' % (x[0], y) for x in walk(mountpoint) for y in x[2]]
@@ -1025,17 +1047,21 @@ class Recover(Resource):
         }
     })
     def post(self):
+        publisher = ZmqPublisher.get_instance()
         req = Request(request.environ)
         file_upload = (req.files['backup_upload'])
         filename = file_upload.filename
 
         if guess_type(filename)[0] != 'application/x-tar':
             raise Exception("Incorrect file extension.")
-
-        location = path.join("static", filename)
-        file_upload.save(location)
-        backup_helper.recover(location)
-        return "Recovery successful."
+        try:
+            publisher.send_to_viewer('stop')
+            location = path.join("static", filename)
+            file_upload.save(location)
+            backup_helper.recover(location)
+            return "Recovery successful."
+        finally:
+            publisher.send_to_viewer('play')
 
 
 class ResetWifiConfig(Resource):
@@ -1069,6 +1095,9 @@ class UpgradeScreenly(Resource):
         }
     })
     def post(self):
+        for task in celery.control.inspect().active().get('worker@screenly'):
+            if task.get('type') == 'server.upgrade_screenly':
+                return jsonify({'id': task.get('id')})
         branch = request.form.get('branch')
         manage_network = request.form.get('manage_network')
         system_upgrade = request.form.get('system_upgrade')
@@ -1103,6 +1132,36 @@ def upgrade_screenly_status(task_id):
             'status': str(task.info)
         }
     return jsonify(response), status_code
+
+
+class RebootScreenly(Resource):
+    method_decorators = [api_response, auth_system]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Reboot system'
+            }
+        }
+    })
+    def post(self):
+        reboot_screenly.apply_async()
+        return '', 200
+
+
+class ShutdownScreenly(Resource):
+    method_decorators = [api_response, auth_system]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Shutdown system'
+            }
+        }
+    })
+    def post(self):
+        shutdown_screenly.apply_async()
+        return '', 200
 
 
 class Info(Resource):
@@ -1233,6 +1292,8 @@ api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 api.add_resource(Info, '/api/v1/info')
 api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
 api.add_resource(UpgradeScreenly, '/api/v1/upgrade_screenly')
+api.add_resource(RebootScreenly, '/api/v1/reboot_screenly')
+api.add_resource(ShutdownScreenly, '/api/v1/shutdown_screenly')
 
 try:
     my_ip = get_node_ip()
@@ -1477,6 +1538,7 @@ def dated_url_for(endpoint, **values):
 
 
 @app.route('/static_with_mime/<string:path>')
+@auth_basic
 def static_with_mime(path):
     mimetype = request.args['mime'] if 'mime' in request.args else 'auto'
     return send_from_directory(directory='static', filename=path, mimetype=mimetype)

@@ -45,6 +45,7 @@ INTRO = '/screenly/intro-template.html'
 current_browser_url = None
 browser = None
 browser_focus_lost = False
+loop_is_stopped = False
 
 VIDEO_TIMEOUT = 20  # secs
 
@@ -79,6 +80,18 @@ def navigate_to_asset(asset_id):
     system('pkill -SIGUSR1 -f viewer.py')
 
 
+def stop_loop():
+    global db_conn, loop_is_stopped
+    loop_is_stopped = True
+    skip_asset()
+    db_conn = None
+
+
+def play_loop():
+    global loop_is_stopped
+    loop_is_stopped = False
+
+
 def command_not_found():
     logging.error("Command not found")
 
@@ -88,6 +101,8 @@ commands = {
     'previous': lambda _: skip_asset(back=True),
     'asset': lambda id: navigate_to_asset(id),
     'reload': lambda _: load_settings(),
+    'stop': lambda _: stop_loop(),
+    'play': lambda _: play_loop(),
     'unknown': lambda _: command_not_found()
 }
 
@@ -447,7 +462,14 @@ def setup():
 
 
 def main():
+    global db_conn, scheduler
     setup()
+
+    subscriber = ZmqSubscriber()
+    subscriber.daemon = True
+    subscriber.start()
+
+    scheduler = Scheduler()
 
     if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
         url = 'http://{0}/hotspot'.format(LISTEN)
@@ -462,18 +484,18 @@ def main():
     if settings['show_splash']:
         sleep(SPLASH_DELAY)
 
-    global scheduler
-    scheduler = Scheduler()
-
-    subscriber = ZmqSubscriber()
-    subscriber.daemon = True
-    subscriber.start()
-
     # We don't want to show splash_page if there are active assets but all of them are not available
     view_image(HOME + LOAD_SCREEN)
 
     logging.debug('Entering infinite loop.')
     while True:
+        if loop_is_stopped:
+            sleep(0.1)
+            continue
+        if not db_conn:
+            load_settings()
+            db_conn = db.conn(settings['database'])
+
         asset_loop(scheduler)
 
 

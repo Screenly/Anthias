@@ -1,6 +1,6 @@
 Mako==0.7.3
 MarkupSafe==1.0
-ansible==2.7.1
+ansible==2.7.5
 celery==4.2.1
 certifi==2018.4.16
 cffi==1.7.0
@@ -18,7 +18,6 @@ gunicorn==19.8.1
 hurry.filesize==0.9
 mixpanel==4.3.2
 netifaces==0.10.4
-pwgen==0.8.2.post0
 pyasn1==0.1.8
 python-dateutil==2.4.2
 pytz==2012d
@@ -28,5 +27,6 @@ requests[security]==2.20.0
 sh==1.08
 six==1.11.0
 uptime==2.0.2
+urllib3==1.24.1
 werkzeug==0.14.1
 youtube_dl>=2017.7.2

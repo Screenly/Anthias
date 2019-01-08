@@ -5,7 +5,7 @@ After=redis-server.service
 [Service]
 WorkingDirectory=/home/pi/screenly
 User=pi
-ExecStart=/usr/local/bin/celery worker -A server.celery --loglevel=info
+ExecStart=/usr/local/bin/celery worker -A server.celery -B -n worker@screenly --loglevel=info
 Restart=always
 RestartSec=5
 

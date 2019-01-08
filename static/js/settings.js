@@ -129,7 +129,7 @@
     $("#close-upgrade-btn").click(function(e) {
       return $("#upgrade-modal").modal("hide");
     });
-    return $("#start-upgrade-btn").click(function(e) {
+    $("#start-upgrade-btn").click(function(e) {
       $("#start-upgrade-btn").prop("disabled", true);
       ($("#upgrade_logs")).text("");
       return $.post("api/v1/upgrade_screenly", {
@@ -177,6 +177,46 @@
         }
         return $("#start-upgrade-btn").prop("disabled", false);
       });
+    });
+    $("#btn-reboot-system").click(function(e) {
+      if (confirm("Are you sure you want to reboot your Screenly?")) {
+        return $.post("/api/v1/reboot_screenly").done(function(e) {
+          ($("#request-error .alert")).show();
+          ($("#request-error .alert")).addClass("alert-success");
+          ($("#request-error .alert")).removeClass("alert-danger");
+          return ($("#request-error .msg")).text("Screenly reboot has started successfully.");
+        }).fail(function(data, e) {
+          var err, j;
+          ($("#request-error .alert")).show();
+          ($("#request-error .alert")).addClass("alert-danger");
+          ($("#request-error .alert")).removeClass("alert-success");
+          if ((data.responseText !== "") && (j = $.parseJSON(data.responseText)) && (err = j.error)) {
+            return ($("#request-error .msg")).text("Server Error: " + err);
+          } else {
+            return ($("#request-error .msg")).text("The operation failed. Please reload the page and try again.");
+          }
+        });
+      }
+    });
+    return $("#btn-shutdown-system").click(function(e) {
+      if (confirm("Are you sure you want to shutdown your Screenly?")) {
+        return $.post("/api/v1/shutdown_screenly").done(function(e) {
+          ($("#request-error .alert")).show();
+          ($("#request-error .alert")).addClass("alert-success");
+          ($("#request-error .alert")).removeClass("alert-danger");
+          return ($("#request-error .msg")).text("Screenly shutdown has started successfully.");
+        }).fail(function(data, e) {
+          var err, j;
+          ($("#request-error .alert")).show();
+          ($("#request-error .alert")).addClass("alert-danger");
+          ($("#request-error .alert")).removeClass("alert-success");
+          if ((data.responseText !== "") && (j = $.parseJSON(data.responseText)) && (err = j.error)) {
+            return ($("#request-error .msg")).text("Server Error: " + err);
+          } else {
+            return ($("#request-error .msg")).text("The operation failed. Please reload the page and try again.");
+          }
+        });
+      }
     });
   });
 
