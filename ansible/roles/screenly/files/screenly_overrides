@@ -1,1 +1,4 @@
 pi ALL=NOPASSWD: /usr/local/sbin/upgrade_screenly.sh
+
+#SystemCommands
+pi ALL=NOPASSWD: /sbin/shutdown
