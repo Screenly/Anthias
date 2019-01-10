@@ -17,7 +17,7 @@ install:
   - pip install -r requirements.txt
   - pip install -r requirements.dev.txt
 before_script:
-  - mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets
+  - mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets /tmp/USB/cleanup_folder
   - cp ansible/roles/screenly/files/uzbl-config ~/.config/uzbl/config-screenly
   - cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
   - cp ansible/roles/screenly/files/screenly.db ~/.screenly/
@@ -25,6 +25,8 @@ before_script:
   - sudo chmod 0700 /usr/local/sbin/upgrade_screenly.sh
   - echo -e "[local]\nlocalhost ansible_connection=local" > ansible/localhost
   - curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
+  - cp /tmp/image.png /tmp/USB/image.png
+  - cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
   - curl https://www.screenly.io/upload/ose-logo.png > ~/screenly_assets/image.tmp
   - curl https://www.screenly.io/upload/big_buck_bunny_720p_10mb.flv > /tmp/video.flv
   - export DISPLAY=:99.0

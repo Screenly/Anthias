@@ -114,6 +114,30 @@ $().ready ->
   else
     $("#user_group, #password_group, #password2_group, #curpassword_group").hide()
 
+    $("#btn-view-usb-assets-key").click (e) ->
+      $("#view-usb-assets-key-modal").modal "show"
+    $("#close-view-usb-assets-key-btn").click (e) ->
+      $("#view-usb-assets-key-modal").modal "hide"
+    $("#generate-usb-assets-key-btn").click (e) ->
+      $.get("/api/v1/generate_usb_assets_key")
+      .done (data, e) ->
+        if (data)
+          $("#usb-assets-key-badge").text data
+    $("#btn-download-usb-assets-key").click (e) ->
+      filename = "usb_assets_key.yaml"
+      text = "screenly:\r\n"
+      text += "  key: \"" + ($("#usb-assets-key-badge")).text() + "\""
+      blob = new Blob([text], {type: 'text/csv'})
+      if (window.navigator.msSaveOrOpenBlob)
+        window.navigator.msSaveBlob(blob, filename)
+      else
+        elem = window.document.createElement('a');
+        elem.href = window.URL.createObjectURL(blob);
+        elem.download = filename;
+        document.body.appendChild(elem);
+        elem.click();
+        document.body.removeChild(elem);
+
   $("#btn-upgrade").click (e) ->
     $("#upgrade-modal").modal "show"
   $("#close-upgrade-btn").click (e) ->

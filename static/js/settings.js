@@ -122,6 +122,38 @@
       $("#user_group, #password_group, #password2_group, #curpassword_group").show();
     } else {
       $("#user_group, #password_group, #password2_group, #curpassword_group").hide();
+      $("#btn-view-usb-assets-key").click(function(e) {
+        return $("#view-usb-assets-key-modal").modal("show");
+      });
+      $("#close-view-usb-assets-key-btn").click(function(e) {
+        return $("#view-usb-assets-key-modal").modal("hide");
+      });
+      $("#generate-usb-assets-key-btn").click(function(e) {
+        return $.get("/api/v1/generate_usb_assets_key").done(function(data, e) {
+          if (data) {
+            return $("#usb-assets-key-badge").text(data);
+          }
+        });
+      });
+      $("#btn-download-usb-assets-key").click(function(e) {
+        var blob, elem, filename, text;
+        filename = "usb_assets_key.yaml";
+        text = "screenly:\r\n";
+        text += "  key: \"" + ($("#usb-assets-key-badge")).text() + "\"";
+        blob = new Blob([text], {
+          type: 'text/csv'
+        });
+        if (window.navigator.msSaveOrOpenBlob) {
+          return window.navigator.msSaveBlob(blob, filename);
+        } else {
+          elem = window.document.createElement('a');
+          elem.href = window.URL.createObjectURL(blob);
+          elem.download = filename;
+          document.body.appendChild(elem);
+          elem.click();
+          return document.body.removeChild(elem);
+        }
+      });
     }
     $("#btn-upgrade").click(function(e) {
       return $("#upgrade-modal").modal("show");

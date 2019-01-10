@@ -282,6 +282,43 @@
     </div>
 
     <div class="row">
+        <div id="usb-assets-key-section" class="col-12">
+            <h1 class="page-header">
+                USB assets
+            </h1>
+            <p>Put file with the generated key in USB to use the USB assets.</p>
+            <div class="form-actions">
+                <button id="btn-view-usb-assets-key" class="btn btn-primary" type="button">View key</button>
+                <button id="btn-download-usb-assets-key" class="btn btn-outline-secondary" type="button">
+                    Download file with key
+                </button>
+            </div>
+        </div>
+        <div id="view-usb-assets-key-modal" class="modal hide fade" role="dialog" tabindex="-1">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="form-horizontal">
+                        <div class="modal-header">
+                            <h3 id="modalLabel">Usb assets key</h3>
+                        </div>
+                        <div class="modal-body">
+                            <span id="usb-assets-key-badge" class="badge badge-light w-100" style="font-size:20px;">{{ context.usb_assets_key }}</span>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="generate-usb-assets-key-btn" class="btn btn-primary" type="button">
+                                Generate new key
+                            </button>
+                            <button id="close-view-usb-assets-key-btn" class="btn btn-secondary" type="button">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
         <div id="backup-section" class="col-12">
             <h1 class="page-header">
                 Backup

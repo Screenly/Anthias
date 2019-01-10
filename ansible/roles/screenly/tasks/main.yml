@@ -109,14 +109,6 @@
     regexp: '^MountFlags='
     line: 'MountFlags=shared'
 
-- name: Installs udev restart service
-  copy:
-    src: udev-restart.service
-    dest: /etc/systemd/system/udev-restart.service
-    mode: 644
-    owner: root
-    group: root
-
 - name: Copy screenly systemd units
   copy:
     src: "{{ item }}"
