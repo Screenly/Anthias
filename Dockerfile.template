@@ -17,6 +17,8 @@ RUN apt-get update && \
         python-imaging \
         python-netifaces \
         python-simplejson \
+        libraspberrypi0 \
+        ifupdown \
         sqlite3 \
         uzbl \
         x11-xserver-utils \
@@ -70,4 +72,5 @@ RUN chown -R pi:pi /home/pi
 
 WORKDIR /home/pi/screenly
 
+CMD ["bash", "chmod 777 /dev/vchiq"]
 CMD ["bash", "bin/start_resin.sh"]
