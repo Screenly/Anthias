@@ -379,6 +379,7 @@ def check_update():
                     'Branch': str(git_branch),
                     'Hash': str(git_hash),
                     'NOOBS': path.isfile('/boot/os_config.json'),
+                    'Balena': bool(getenv('RESIN_APP_NAME', False)) or bool(getenv('BALENA_APP_NAME', False))
                 })
             except MixpanelException:
                 pass
