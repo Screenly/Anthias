@@ -45,7 +45,6 @@ INTRO = '/screenly/intro-template.html'
 
 current_browser_url = None
 browser = None
-browser_focus_lost = False
 
 VIDEO_TIMEOUT = 20  # secs
 
@@ -260,8 +259,6 @@ def browser_get_event():
 
 
 def browser_send(command, cb=lambda _: True):
-    global browser_focus_lost
-    fl = lambda e: 'FOCUS_LOST' in unicode(e.decode('utf-8'))
     if not (browser is None) and browser.process.alive:
         while not browser.process._pipe_queue.empty():  # flush stdout
             browser_get_event()
@@ -274,9 +271,6 @@ def browser_send(command, cb=lambda _: True):
                 break
             if not browser_event:
                 break
-            if fl(browser_event):
-                browser_focus_lost = True
-                break
             if cb(browser_event):
                 break
     else:
@@ -287,8 +281,7 @@ def browser_send(command, cb=lambda _: True):
 def browser_clear(force=False):
     """Load a black page. Default cb waits for the page to load."""
     browser_url('file://' + BLACK_PAGE, force=force,
-                cb=lambda buf: 'LOAD_FINISH' in unicode(buf.decode('utf-8')) and
-                               BLACK_PAGE in unicode(buf.decode('utf-8')))
+                cb=lambda buf: 'LOAD_FINISH' in buf and BLACK_PAGE in buf)
 
 
 def browser_url(url, cb=lambda _: True, force=False):
@@ -310,8 +303,7 @@ def browser_url(url, cb=lambda _: True, force=False):
 def view_image(uri):
     browser_clear()
     browser_send('js window.setimg("{0}")'.format(uri),
-                 cb=lambda b: 'COMMAND_EXECUTED' in unicode(b.decode('utf-8')) and
-                              'setimg' in unicode(b.decode('utf-8')))
+                 cb=lambda b: 'COMMAND_EXECUTED' in b and 'setimg' in b)
 
 
 def view_video(uri, duration):
@@ -411,7 +403,6 @@ def load_settings():
 
 
 def asset_loop(scheduler):
-    global browser_focus_lost
     disable_update_check = getenv("DISABLE_UPDATE_CHECK", False)
     if not disable_update_check:
         check_update()
@@ -433,9 +424,7 @@ def asset_loop(scheduler):
         elif 'web' in mime:
             # FIXME If we want to force periodic reloads of repeated web assets, force=True could be used here.
             # See e38e6fef3a70906e7f8739294ffd523af6ce66be.
-            browser_url(uri,
-                        cb=lambda b: 'LOAD_FINISH' in unicode(b.decode('utf-8')) or
-                                     'LOAD_ERROR' in unicode(b.decode('utf-8')))
+            browser_url(uri)
         elif 'video' or 'streaming' in mime:
             view_video(uri, asset['duration'])
         else:
@@ -445,9 +434,7 @@ def asset_loop(scheduler):
             duration = int(asset['duration'])
             logging.info('Sleeping for %s', duration)
             sleep(duration)
-            if browser_focus_lost:
-                browser_focus_lost = False
-                browser_send('exit')
+
     else:
         logging.info('Asset %s at %s is not available, skipping.', asset['name'], asset['uri'])
         sleep(0.5)
