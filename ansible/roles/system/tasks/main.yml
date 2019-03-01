@@ -146,6 +146,8 @@
   apt:
     name: "{{ item }}"
     state: latest
+    async: 1200
+    poll: 10
   with_items:
     - console-data
     - libffi-dev
