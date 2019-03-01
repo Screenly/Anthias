@@ -39,6 +39,8 @@
 
 - name: Install pip dependencies
   pip: requirements=/home/pi/screenly/requirements.txt
+    async: 1200
+    poll: 10
 
 - name: Create default assets database if does not exists
   copy:
@@ -88,7 +90,7 @@
   copy:
     src: plymouth-quit-wait.service
     dest: /lib/systemd/system/plymouth-quit-wait.service
-    mode: 0755
+    mode: 0644
     owner: root
     group: root
 
@@ -96,7 +98,7 @@
   copy:
     src: plymouth-quit.service
     dest: /lib/systemd/system/plymouth-quit.service
-    mode: 0755
+    mode: 0644
     owner: root
     group: root
 
