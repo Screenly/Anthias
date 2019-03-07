@@ -26,6 +26,12 @@ if [ -n "${MANAGEMENT_USER+x}" ] && [ -n "${MANAGEMENT_PASSWORD+x}" ]; then
     sed -i -e "s/^user=.*/user=${MANAGEMENT_USER}/" -e "s/^password=.*/password=${MANAGEMENT_PASSWORD}/" /data/.screenly/screenly.conf
 fi
 
+if [ -n "${PLAYER_NAME+x}" ]; then
+    sed -i -e "s/^player_name=.*/player_name=${PLAYER_NAME}/" /data/.screenly/screenly.conf
+else
+    sed -i -e "s/^player_name=.*/player_name=${BALENA_DEVICE_NAME_AT_INIT}/" /data/.screenly/screenly.conf
+fi
+
 sed -i "/\[Service\]/ a\Environment=RESIN_UUID=${RESIN_DEVICE_UUID}" /etc/systemd/system/screenly-web.service
 
 systemctl start X.service
