@@ -19,7 +19,7 @@ echo "(This might take a while.)"
 sudo apt-get -y -qq upgrade > /dev/null
 
 echo "Installing dependencies..."
-sudo apt-get -y -qq install git-core python-pip python-netifaces python-simplejson python-imaging python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev watchdog chkconfig feh libffi-dev libwebkit2gtk-4.0-dev libgnutls28-dev libsoup2.4-dev python3-pip libssl-dev > /dev/null
+sudo apt-get -y -qq install git-core python-netifaces python-simplejson python-imaging python-dev uzbl sqlite3 supervisor omxplayer x11-xserver-utils libx11-dev watchdog chkconfig feh libffi-dev libwebkit2gtk-4.0-dev libgnutls28-dev libsoup2.4-dev python3-pip libssl-dev > /dev/null
 
 echo "Downloading PiSign..."
 git clone git://github.com/jameskirsop/pisign.git "$HOME/pisign" > /dev/null
@@ -32,6 +32,11 @@ echo "Compiling and Installing UZBL Next Release"
 (cd "$HOME/uzbl-next" && exec git checkout next > /dev/null)
 (cd "$HOME/uzbl-next" && exec make > /dev/null)
 (cd "$HOME/uzbl-next" && exec sudo make install > /dev/null)
+
+
+echo "Replacing unsupported pip with latest version"
+sudo apt-get -y -qq remove python-pip
+sudo easy_install pip
 
 echo "Installing more dependencies..."
 sudo pip install -r "$HOME/pisign/requirements.txt" -q > /dev/null
@@ -82,9 +87,6 @@ sudo sed -e 's/^#xserver-command=X$/xserver-command=X -nocursor -s 0 dpms/g' -i 
 
 echo "Setting uzbl browser to start in full screen mode"
 sudo sed -i '/<\/applications>/ i\ <application name="uzbl*">\n<fullscreen>yes</fullscreen>\n</application>' $HOME/.config/openbox/lxde-pi-rc.xml
-
-# echo "Removing default lxpanel profile"
-# sed -i 's/^@lxpanel/#&/' /etc/xdg/lxsession/LXDE-pi/autostart
 
 # Make sure we have proper framebuffer depth.
 if grep -q framebuffer_depth /boot/config.txt; then
