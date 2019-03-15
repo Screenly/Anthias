@@ -62,7 +62,6 @@ class TestUsbAssets(CeleryTasksTestCase):
 
     def tearDown(self):
         remove(self.key_file)
-        remove(self.cleanup_asset_file)
 
     def test_append_usb_assets(self):
         append_usb_assets.apply(args=[self.mountpoint])
