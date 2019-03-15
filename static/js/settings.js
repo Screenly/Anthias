@@ -157,7 +157,7 @@
       text += "  key: \"" + (($('#usb-assets-key-badge')).text().trim()) + "\"\r\n";
       text += "  activate: " + (Boolean($('input[name=\"activate_assets\"]').prop('checked'))) + "\r\n";
       text += "  copy: " + (Boolean($('input[name=\"copy_assets\"]').prop('checked'))) + "\r\n";
-      text += "  begin_date: " + (new Date(start_date_usb_file.val()).getTime() / 1000) + "\r\n";
+      text += "  start_date: " + (new Date(start_date_usb_file.val()).getTime() / 1000) + "\r\n";
       text += "  end_date: " + (new Date(end_date_usb_file.val()).getTime() / 1000) + "\r\n";
       text += "  duration: " + ($('input[name=\"duration\"]').val());
       blob = new Blob([text], {
