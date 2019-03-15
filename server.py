@@ -866,7 +866,7 @@ class FileAsset(Resource):
         if file_type.split('/')[0] not in ['image', 'video']:
             raise Exception("Invalid file type.")
 
-        file_path = path.join(settings['assetdir'], filename) + ".tmp"
+        file_path = path.join(settings['assetdir'], uuid.uuid4().hex) + ".tmp"
 
         if 'Content-Range' in request.headers:
             range_str = request.headers['Content-Range']
