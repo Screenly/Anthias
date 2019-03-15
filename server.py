@@ -15,6 +15,7 @@ from mimetypes import guess_type
 from os import getenv, listdir, makedirs, mkdir, path, remove, rename, statvfs, stat, walk
 import re
 import sh
+import shutil
 from subprocess import check_output
 import time
 import traceback
@@ -112,23 +113,51 @@ def shutdown_screenly():
 
 @celery.task
 def append_usb_assets(mountpoint):
-    possible_append_usb_assets = False
     settings.load()
+
+    datetime_now = datetime.now()
+    usb_assets_settings = {
+        'activate': False,
+        'copy': False,
+        'start_date': datetime_now,
+        'end_date': datetime_now + timedelta(days=7),
+        'duration': settings['default_duration']
+    }
 
     for root, _, filenames in walk(mountpoint):
         if 'usb_assets_key.yaml' in filenames:
             with open("%s/%s" % (root, 'usb_assets_key.yaml'), 'r') as yaml_file:
-                if yaml.load(yaml_file).get('screenly').get('key') == settings['usb_assets_key']:
-                    possible_append_usb_assets = True
-                    break
+                usb_file_settings = yaml.load(yaml_file).get('screenly')
+                if usb_file_settings.get('key') == settings['usb_assets_key']:
+                    if usb_file_settings.get('activate'):
+                        usb_assets_settings.update({
+                            'activate': usb_file_settings.get('activate')
+                        })
+                    if usb_file_settings.get('copy'):
+                        usb_assets_settings.update({
+                            'copy': usb_file_settings.get('copy')
+                        })
+                    if usb_file_settings.get('start_date'):
+                        usb_assets_settings.update({
+                            'start_date': datetime.utcfromtimestamp(usb_file_settings.get('start_date'))
+                        })
+                    if usb_file_settings.get('end_date'):
+                        usb_assets_settings.update({
+                            'end_date': datetime.utcfromtimestamp(usb_file_settings.get('end_date'))
+                        })
+                    if usb_file_settings.get('duration'):
+                        usb_assets_settings.update({
+                            'duration': usb_file_settings.get('duration')
+                        })
 
-    if possible_append_usb_assets:
-        files = ['%s/%s' % (root, y) for root, _, filenames in walk(mountpoint) for y in filenames]
-        with db.conn(settings['database']) as conn:
-            for filepath in files:
-                asset = prepare_usb_asset(filepath, settings['default_duration'])
-                if asset:
-                    assets_helper.create(conn, asset)
+                    files = ['%s/%s' % (root, y) for root, _, filenames in walk(mountpoint) for y in filenames]
+                    with db.conn(settings['database']) as conn:
+                        for filepath in files:
+                            asset = prepare_usb_asset(filepath, **usb_assets_settings)
+                            if asset:
+                                assets_helper.create(conn, asset)
+
+                    break
 
 
 @celery.task
@@ -494,9 +523,8 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
     return asset
 
 
-def prepare_usb_asset(filepath, duration=10):
+def prepare_usb_asset(filepath, **kwargs):
     filetype = guess_type(filepath)[0]
-    start_date = datetime.now()
 
     if not filetype:
         return
@@ -506,19 +534,27 @@ def prepare_usb_asset(filepath, duration=10):
     if filetype not in ['image', 'video']:
         return
 
+    asset_id = uuid.uuid4().hex
+    asset_name = path.basename(filepath)
+    duration = int(get_video_duration(filepath).total_seconds()) if "video" == filetype else int(kwargs['duration'])
+
+    if kwargs['copy']:
+        shutil.copy(filepath, path.join(settings['assetdir'], asset_id))
+        filepath = path.join(settings['assetdir'], asset_id)
+
     return {
-        'asset_id': uuid.uuid4().hex,
-        'duration': int(get_video_duration(filepath).total_seconds()) if "video" == filetype else int(duration),
-        'end_date': start_date + timedelta(days=7),
+        'asset_id': asset_id,
+        'duration': duration,
+        'end_date': kwargs['end_date'],
         'is_active': 1,
-        'is_enabled': 0,
+        'is_enabled': kwargs['activate'],
         'is_processing': 0,
         'mimetype': filetype,
-        'name': path.basename(filepath),
+        'name': asset_name,
         'nocache': 0,
         'play_order': 0,
         'skip_asset_check': 0,
-        'start_date': start_date,
+        'start_date': kwargs['start_date'],
         'uri': filepath,
     }
 

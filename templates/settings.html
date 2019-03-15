@@ -10,6 +10,7 @@
     {% endif %}
     <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet"/>
     <link href="{{ url_for('static', filename='css/screenly.css') }}" rel="stylesheet"/>
+    <link href="{{ url_for('static', filename='css/datepicker.css') }}" rel="stylesheet"/>
     <link href="{{ url_for('static', filename='css/toggle-switch.css') }}" rel="stylesheet"/>
 
     <link href="{{ url_for('static', filename='fontawesome/css/all.css') }}" rel="stylesheet"/>
@@ -20,6 +21,7 @@
     <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script> <!-- needs jquery -->
     <script src="{{ url_for('static', filename='js/jquery-ui-1.10.1.custom.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/jquery.fileupload.js') }}"></script> <!-- needs jqueryui.widget -->
+    <script src="{{ url_for('static', filename='js/bootstrap-datepicker.js') }}"></script>
 
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
 </head>
@@ -288,27 +290,89 @@
             </h1>
             <p>Put file with the generated key in USB to use the USB assets.</p>
             <div class="form-actions">
-                <button id="btn-view-usb-assets-key" class="btn btn-primary" type="button">View key</button>
-                <button id="btn-download-usb-assets-key" class="btn btn-outline-secondary" type="button">
-                    Download file with key
-                </button>
+                <button id="btn-view-usb-assets-file" class="btn btn-primary" type="button">Generate file</button>
             </div>
         </div>
-        <div id="view-usb-assets-key-modal" class="modal hide fade" role="dialog" tabindex="-1">
+        <div id="view-usb-assets-file-modal" class="modal hide fade" role="dialog" tabindex="-1">
             <div class="modal-dialog" role="document">
                 <div class="modal-content">
                     <div class="form-horizontal">
                         <div class="modal-header">
-                            <h3 id="modalLabel">Usb assets key</h3>
+                            <h3 id="modalLabel">Usb assets file</h3>
                         </div>
                         <div class="modal-body">
-                            <span id="usb-assets-key-badge" class="badge badge-light w-100" style="font-size:20px;">{{ context.usb_assets_key }}</span>
+                            <div class="form-group row">
+                                <label class="col-4 col-form-label">Activate assets</label>
+                                <div class="col-6">
+                                    <label id="use_system_commands_checkbox"
+                                           class="checkbox toggle card card-body bg-light">
+                                            <input name="activate_assets" type="checkbox"/>
+                                        <p>
+                                            <span class="on">On</span>
+                                            <span class="off">Off</span>
+                                        </p>
+                                        <a class="btn btn-primary slide-button"></a>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-group row">
+                                <label class="col-4 col-form-label">Copy assets to internal memory</label>
+                                <div class="col-6">
+                                    <label id="use_system_commands_checkbox"
+                                           class="checkbox toggle card card-body bg-light">
+                                            <input name="copy_assets" type="checkbox"/>
+                                        <p>
+                                            <span class="on">On</span>
+                                            <span class="off">Off</span>
+                                        </p>
+                                        <a class="btn btn-primary slide-button"></a>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-group row start_date">
+                                <label class="col-4 col-form-label">Start Date</label>
+                                <div class="controls col-6">
+                                    <input class="form-control date" name="start_date_date" type="text"
+                                           style="margin-right:5px"/>
+                                </div>
+                                <input name="start_date" type="hidden"/>
+                            </div>
+                            <div class="form-group row end_date">
+                                <label class="col-4 col-form-label">End Date</label>
+                                <div class="controls col-6">
+                                    <input class="form-control date" name="end_date_date" type="text"
+                                           style="margin-right:5px"/>
+                                </div>
+                                <input name="end_date" type="hidden"/>
+                            </div>
+
+                            <div class="form-group row duration">
+                                <label class="col-4 col-form-label">Duration</label>
+                                <div class="col-6 controls">
+                                    <input class="form-control" name="duration" type="number" value="10"/>
+                                    seconds
+                                    &nbsp;
+                                </div>
+                            </div>
+                            <hr>
+                            <div class="form-group row">
+                                <div class="col-12 text-center mb-4">
+                                    <button id="generate-usb-assets-key-btn"
+                                            class="btn btn-primary text-right"
+                                            type="button">
+                                        Generate new key
+                                    </button>
+                                </div>
+                                <div id="usb-assets-key-badge" class="col-12 badge badge-light w-100"
+                                     style="font-size:20px;">{{ context.usb_assets_key }}
+                                </div>
+                            </div>
                         </div>
-                        <div class="modal-footer">
-                            <button id="generate-usb-assets-key-btn" class="btn btn-primary" type="button">
-                                Generate new key
+                        <div class="modal-footer text-right">
+                            <button id="btn-download-usb-assets-key" class="btn btn-primary" type="button">
+                                Download file with key
                             </button>
-                            <button id="close-view-usb-assets-key-btn" class="btn btn-secondary" type="button">
+                            <button id="close-view-usb-assets-file-btn" class="btn btn-secondary" type="button">
                                 Close
                             </button>
                         </div>
@@ -316,6 +380,7 @@
                 </div>
             </div>
         </div>
+
     </div>
 
     <div class="row">
