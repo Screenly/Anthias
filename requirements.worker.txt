@@ -10,6 +10,7 @@ gunicorn==19.8.1
 hurry.filesize==0.9
 netifaces==0.10.7
 python-dateutil==2.4.2
+PyYAML==3.13
 pyzmq==16.0.2
 redis==3.2.0
 requests[security]==2.20.0

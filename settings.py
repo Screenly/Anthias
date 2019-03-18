@@ -34,6 +34,7 @@ DEFAULTS = {
         'default_streaming_duration': '300',
         'debug_logging': False,
         'verify_ssl': True,
+        'usb_assets_key': '',
         'use_auth': False,
         'use_system_commands': False
     },

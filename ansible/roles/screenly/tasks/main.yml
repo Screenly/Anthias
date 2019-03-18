@@ -89,6 +89,33 @@
     owner: root
     group: root
 
+- name: Copy screenly_usb_assets.sh
+  copy:
+    src: screenly_usb_assets.sh
+    dest: /usr/local/bin/screenly_usb_assets.sh
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Installs autoplay udev rule
+  copy:
+    src: 50-autoplay.rules
+    dest: /etc/udev/rules.d/50-autoplay.rules
+    mode: 644
+    owner: root
+    group: root
+
+- name: Copy systemd-udevd service
+  copy:
+    src: /lib/systemd/system/systemd-udevd.service
+    dest: /etc/systemd/system/systemd-udevd.service
+
+- name: Configure systemd-udevd service
+  lineinfile:
+    dest: /etc/systemd/system/systemd-udevd.service
+    regexp: '^MountFlags='
+    line: 'MountFlags=shared'
+
 - name: Copy screenly systemd units
   copy:
     src: "{{ item }}"
