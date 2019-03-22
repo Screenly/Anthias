@@ -108,6 +108,8 @@
       - /home/pi/screenly:/home/pi/screenly
       - /home/pi/.screenly:/home/pi/.screenly
       - /home/pi/screenly_assets:/home/pi/screenly_assets
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
 
 - name: Create screenly-viewer container
   docker_container:
@@ -123,6 +125,8 @@
       - /home/pi/screenly:/home/pi/screenly
       - /home/pi/.screenly:/home/pi/.screenly
       - /home/pi/screenly_assets:/home/pi/screenly_assets
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
 
 - name: Pause screenly-viewer container
   command: docker pause screenly-ose-viewer
@@ -139,3 +143,5 @@
     volumes:
       - /home/pi/screenly:/home/pi/screenly
       - /home/pi/.screenly:/home/pi/.screenly
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
