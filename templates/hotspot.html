@@ -5,13 +5,19 @@
     <title>Hotspot Page</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet"/>
     <link href="/static/css/screenly.css" rel="stylesheet"/>
+    <style type="text/css">
+        html, body {
+            height: 100%;
+            overflow-y: hidden;
+        }
+    </style>
 </head>
-<body class="splash">
-<div class="container">
+<body class="splash container d-flex h-100">
+<div class="splash-body col-12 justify-content-center align-self-center p-5">
     <div class="row">
         <div class="col-12">
             <div class="logo-container page-header text-center">
-                <img src="/static/img/screenly_ose_logo_large.png" class="img-fluid"/>
+                <img src="/static/img/screenly_ose_logo_white_large.png" class="img-fluid"/>
             </div>
         </div>
     </div>
@@ -30,7 +36,6 @@
             </div>
         </div>
     </div>
-    <hr/>
 </div>
 </body>
 </html>
