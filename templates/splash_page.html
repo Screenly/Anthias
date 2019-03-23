@@ -12,25 +12,27 @@
         }
     </style>
 </head>
-<body class="splash container d-flex h-100">
-<div class="splash-body col-12 justify-content-center align-self-center p-5">
-    <div class="row">
-        <div class="col-12">
-            <div class="logo-container page-header text-center">
-                <img src="/static/img/screenly_ose_logo_white_large.png" class="img-fluid"/>
+<body class="splash container d-table">
+<div class="col-12 d-table-cell align-middle">
+    <div class="splash-body p-5">
+        <div class="row">
+            <div class="col-12">
+                <div class="logo-container page-header text-center">
+                    <img src="/static/img/screenly_ose_logo_white_large.png" class="img-fluid"/>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="row">
-        <div class="col-12 text-center">
-            {% if context.ip_lookup %}
-                <p>To manage the content on this screen, just point your browser to:</p>
-                <div class="form-actions">
-                    <a href="{{ context.msg }}">{{ context.msg }}</a>
-                </div>
-            {% else %}
-                <p>{{ context.msg }}</p>
-            {% endif %}
+        <div class="row">
+            <div class="col-12 text-center">
+                {% if context.ip_lookup %}
+                    <p>To manage the content on this screen, just point your browser to:</p>
+                    <div class="form-actions">
+                        <a href="{{ context.msg }}">{{ context.msg }}</a>
+                    </div>
+                {% else %}
+                    <p>{{ context.msg }}</p>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>

@@ -12,20 +12,21 @@
         }
     </style>
 </head>
-<body class="splash container d-flex h-100">
-<div class="splash-body col-12 justify-content-center align-self-center p-5">
-    <div class="row">
-        <div class="col-12">
-            <div class="logo-container page-header text-center">
-                <img src="/static/img/screenly_ose_logo_white_large.png" class="img-fluid"/>
+<body class="splash container d-table">
+<div class="col-12 d-table-cell align-middle">
+    <div class="splash-body p-5">
+        <div class="row">
+            <div class="col-12">
+                <div class="logo-container page-header text-center">
+                    <img src="/static/img/screenly_ose_logo_white_large.png" class="img-fluid"/>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="row">
-        <div class="col-12 text-center">
-            <p>No network connection were found. An access point has been created. <br>To configure WiFi networking,
-                simply connect to the access point <br>using your computer or mobile device</p>
-            <div class="form-actions">
+        <div class="row">
+            <div class="col-12 text-center">
+                <p>No network connection were found. An access point has been created. <br>To configure WiFi networking,
+                    simply connect to the access point <br>using your computer or mobile device</p>
+                <div class="form-actions">
                 <span>
                     SSID: {{ context.network }}
                     <br>
@@ -33,6 +34,7 @@
                     <br>
                     Address: {{ context.address }}
                 </span>
+                </div>
             </div>
         </div>
     </div>
