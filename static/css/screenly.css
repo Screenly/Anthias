@@ -1,7 +1,7 @@
 body {
   margin-top: 60px;
   margin-bottom: 60px;
-  font-family: "Helvetica Neue",Helvetica,Arial,sans-serif; }
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
 
 @media (max-width: 1199px) {
   .container {
@@ -14,13 +14,18 @@ label {
   text-align: right; }
 
 .splash {
+  background: url(../img/bg.jpg) center center no-repeat #370c6c;
+  background-size: 100% 100%;
   margin-top: 0;
   font-size: calc((1.5vw + 1.5vh) / 2); }
+  .splash .splash-body {
+    background-color: rgba(0, 0, 0, 0.4);
+    border-radius: 10px;
+    color: white; }
   .splash .row {
     display: block; }
   .splash .logo-container {
     height: 30vh;
-    border-bottom: 1px solid #eee;
     padding: 3vh 0;
     margin-bottom: 3vh; }
     .splash .logo-container img {
@@ -173,7 +178,10 @@ input[name="file_upload"] {
   margin-top: 20px;
   margin-bottom: 20px;
   background-color: #f5f5f5;
-  border-top: 1px solid #e5e5e5; }
+  border-top: 1px solid #e5e5e5;
+  border-radius: .25rem; }
+  .form-actions a, .form-actions span {
+    color: #300952; }
 
 .filedrop {
   position: relative;
