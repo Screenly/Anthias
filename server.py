@@ -138,12 +138,14 @@ def append_usb_assets(mountpoint):
                             'copy': usb_file_settings.get('copy')
                         })
                     if usb_file_settings.get('start_date'):
+                        ts = time.mktime(datetime.strptime(usb_file_settings.get('start_date'), "%m/%d/%Y").timetuple())
                         usb_assets_settings.update({
-                            'start_date': datetime.utcfromtimestamp(usb_file_settings.get('start_date'))
+                            'start_date': datetime.utcfromtimestamp(ts)
                         })
                     if usb_file_settings.get('end_date'):
+                        ts = time.mktime(datetime.strptime(usb_file_settings.get('end_date'), "%m/%d/%Y").timetuple())
                         usb_assets_settings.update({
-                            'end_date': datetime.utcfromtimestamp(usb_file_settings.get('end_date'))
+                            'end_date': datetime.utcfromtimestamp(ts)
                         })
                     if usb_file_settings.get('duration'):
                         usb_assets_settings.update({
