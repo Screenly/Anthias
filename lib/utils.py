@@ -10,7 +10,7 @@ import string
 
 from datetime import datetime, timedelta
 from distutils.util import strtobool
-from netifaces import ifaddresses, gateways
+from netifaces import ifaddresses, gateways, AF_INET
 from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
@@ -80,9 +80,8 @@ def get_node_ip():
         that is being used as the default gateway.
         This should work on both MacOS X and Linux."""
         try:
-            address_family_id = max(list(gateways()['default']))
-            default_interface = gateways()['default'][address_family_id][1]
-            my_ip = ifaddresses(default_interface)[address_family_id][0]['addr']
+            default_interface = gateways()['default'][AF_INET][1]
+            my_ip = ifaddresses(default_interface)[AF_INET][0]['addr']
             return my_ip
         except ValueError:
             raise Exception("Unable to resolve local IP address.")
