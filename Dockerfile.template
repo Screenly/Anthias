@@ -1,4 +1,4 @@
-FROM resin/%%RESIN_MACHINE_NAME%%-debian
+FROM balenalib/%%BALENA_MACHINE_NAME%%
 MAINTAINER Anton Molodykh <amolodykh@screenly.io>
 
 RUN apt-get update && \
