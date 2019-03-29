@@ -9,6 +9,7 @@ RUN apt-get update && \
         libffi-dev \
         libssl-dev \
         matchbox \
+        nano \
         net-tools \
         nginx-light \
         omxplayer \
@@ -16,11 +17,14 @@ RUN apt-get update && \
         python-dev \
         python-imaging \
         python-netifaces \
+        python-requests \
         python-simplejson \
+        python-urllib3 \
         sqlite3 \
         uzbl \
         x11-xserver-utils \
         xserver-xorg && \
+    apt full-upgrade \
     apt-get clean
 
 RUN rm /etc/nginx/sites-enabled/default
