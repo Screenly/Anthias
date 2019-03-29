@@ -66,13 +66,20 @@
     user: pi
 
 - name: Download upgrade_screenly.sh from github repository
-  get_url:
-    url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/install.sh
+  # Uncomment before merge with master branch
+  #get_url:
+  #  url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/install.sh
+  #  dest: /usr/local/sbin/upgrade_screenly.sh
+  #  mode: 0700
+  #  owner: root
+  #  group: root
+  #  force: yes
+  copy:
+    src: /home/pi/screenly/bin/install.sh
     dest: /usr/local/sbin/upgrade_screenly.sh
     mode: 0700
     owner: root
     group: root
-    force: yes
 
 - name: Copy screenly_overrides
   copy:
@@ -81,6 +88,33 @@
     mode: 0440
     owner: root
     group: root
+
+- name: Copy screenly_usb_assets.sh
+  copy:
+    src: screenly_usb_assets.sh
+    dest: /usr/local/bin/screenly_usb_assets.sh
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Installs autoplay udev rule
+  copy:
+    src: 50-autoplay.rules
+    dest: /etc/udev/rules.d/50-autoplay.rules
+    mode: 644
+    owner: root
+    group: root
+
+- name: Copy systemd-udevd service
+  copy:
+    src: /lib/systemd/system/systemd-udevd.service
+    dest: /etc/systemd/system/systemd-udevd.service
+
+- name: Configure systemd-udevd service
+  lineinfile:
+    dest: /etc/systemd/system/systemd-udevd.service
+    regexp: '^MountFlags='
+    line: 'MountFlags=shared'
 
 - name: Copy screenly systemd units
   copy:

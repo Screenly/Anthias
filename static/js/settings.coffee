@@ -114,6 +114,50 @@ $().ready ->
   else
     $("#user_group, #password_group, #password2_group, #curpassword_group").hide()
 
+  start_date = new Date()
+  start_date_usb_file = $("#view-usb-assets-file-modal [name='start_date_date']")
+  start_date_usb_file.datepicker autoclose: yes, format: 'mm/dd/yyyy'
+  start_date_usb_file.datepicker 'setDate', start_date
+
+  end_date = new Date(new Date().setDate(start_date.getDate() + 7))
+  end_date_usb_file = $("#view-usb-assets-file-modal [name='end_date_date']")
+  end_date_usb_file.datepicker autoclose: yes, format: 'mm/dd/yyyy'
+  end_date_usb_file.datepicker 'setDate', end_date
+
+  $("#btn-view-usb-assets-file").click (e) ->
+    $("#view-usb-assets-file-modal").modal "show"
+
+  $("#close-view-usb-assets-file-btn").click (e) ->
+    $("#view-usb-assets-file-modal").modal "hide"
+
+  $("#generate-usb-assets-key-btn").click (e) ->
+    $.get("/api/v1/generate_usb_assets_key")
+    .done (data, e) ->
+      if (data)
+        $("#usb-assets-key-badge").text data
+
+  $("#btn-download-usb-assets-key").click (e) ->
+    filename = "usb_assets_key.yaml"
+
+    text = "screenly:\r\n"
+    text += "  key: \"#{($('#usb-assets-key-badge')).text().trim()}\"\r\n"
+    text += "  activate: #{Boolean($('input[name=\"activate_assets\"]').prop 'checked')}\r\n"
+    text += "  copy: #{Boolean($('input[name=\"copy_assets\"]').prop 'checked')}\r\n"
+    text += "  start_date: \"#{start_date_usb_file.val()}\"\r\n"
+    text += "  end_date: \"#{end_date_usb_file.val()}\"\r\n"
+    text += "  duration: #{$('input[name=\"duration\"]').val()}"
+
+    blob = new Blob([text], {type: 'text/csv'})
+    if (window.navigator.msSaveOrOpenBlob)
+      window.navigator.msSaveBlob(blob, filename)
+    else
+      elem = window.document.createElement('a');
+      elem.href = window.URL.createObjectURL(blob);
+      elem.download = filename;
+      document.body.appendChild(elem);
+      elem.click();
+      document.body.removeChild(elem);
+
   $("#btn-upgrade").click (e) ->
     $("#upgrade-modal").modal "show"
   $("#close-upgrade-btn").click (e) ->
@@ -157,3 +201,37 @@ $().ready ->
       else
         ($ "#upgrade_logs").append "The operation failed. Please reload the page and try again."
       $("#start-upgrade-btn").prop "disabled", no
+
+  $("#btn-reboot-system").click (e) ->
+    if confirm "Are you sure you want to reboot your Screenly?"
+      $.post "/api/v1/reboot_screenly"
+      .done  (e) ->
+        ($ "#request-error .alert").show()
+        ($ "#request-error .alert").addClass "alert-success"
+        ($ "#request-error .alert").removeClass "alert-danger"
+        ($ "#request-error .msg").text "Screenly reboot has started successfully."
+      .fail (data, e) ->
+        ($ "#request-error .alert").show()
+        ($ "#request-error .alert").addClass "alert-danger"
+        ($ "#request-error .alert").removeClass "alert-success"
+        if (data.responseText != "") and (j = $.parseJSON data.responseText) and (err = j.error)
+          ($ "#request-error .msg").text "Server Error: " + err
+        else
+          ($ "#request-error .msg").text "The operation failed. Please reload the page and try again."
+
+  $("#btn-shutdown-system").click (e) ->
+    if confirm "Are you sure you want to shutdown your Screenly?"
+      $.post "/api/v1/shutdown_screenly"
+      .done  (e) ->
+        ($ "#request-error .alert").show()
+        ($ "#request-error .alert").addClass "alert-success"
+        ($ "#request-error .alert").removeClass "alert-danger"
+        ($ "#request-error .msg").text "Screenly shutdown has started successfully."
+      .fail (data, e) ->
+        ($ "#request-error .alert").show()
+        ($ "#request-error .alert").addClass "alert-danger"
+        ($ "#request-error .alert").removeClass "alert-success"
+        if (data.responseText != "") and (j = $.parseJSON data.responseText) and (err = j.error)
+          ($ "#request-error .msg").text "Server Error: " + err
+        else
+          ($ "#request-error .msg").text "The operation failed. Please reload the page and try again."

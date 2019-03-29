@@ -1,0 +1,9 @@
+[Unit]
+Description=Make sure udev is operating on ReadWrite disk
+After=network-online.target
+
+[Service]
+ExecStart=/bin/systemctl restart systemd-udevd.service
+
+[Install]
+WantedBy=multi-user.target
