@@ -8,6 +8,26 @@
     {% else %}
         <title>Screenly OSE</title>
     {% endif %}
+    <link href="/static/favicons/apple-touch-icon-57x57.png" rel="apple-touch-icon-precomposed" sizes="57x57"/>
+    <link href="/static/favicons/apple-touch-icon-114x114.png" rel="apple-touch-icon-precomposed" sizes="114x114"/>
+    <link href="/static/favicons/apple-touch-icon-72x72.png" rel="apple-touch-icon-precomposed" sizes="72x72"/>
+    <link href="/static/favicons/apple-touch-icon-144x144.png" rel="apple-touch-icon-precomposed" sizes="144x144"/>
+    <link href="/static/favicons/apple-touch-icon-60x60.png" rel="apple-touch-icon-precomposed" sizes="60x60"/>
+    <link href="/static/favicons/apple-touch-icon-120x120.png" rel="apple-touch-icon-precomposed" sizes="120x120"/>
+    <link href="/static/favicons/apple-touch-icon-76x76.png" rel="apple-touch-icon-precomposed" sizes="76x76"/>
+    <link href="/static/favicons/apple-touch-icon-152x152.png" rel="apple-touch-icon-precomposed" sizes="152x152"/>
+    <link href="/static/favicons/favicon-196x196.png" rel="icon" sizes="196x196" type="image/png"/>
+    <link href="/static/favicons/favicon-96x96.png" rel="icon" sizes="96x96" type="image/png"/>
+    <link href="/static/favicons/favicon-32x32.png" rel="icon" sizes="32x32" type="image/png"/>
+    <link href="/static/favicons/favicon-16x16.png" rel="icon" sizes="16x16" type="image/png"/>
+    <link href="/static/favicons/favicon-128.png" rel="icon" sizes="128x128" type="image/png"/>
+    <meta content="screenly-ose;" name="application-name"/>
+    <meta content="#FFFFFF" name="msapplication-TileColor"/>
+    <meta content="/static/favicons/mstile-144x144.png" name="msapplication-TileImage"/>
+    <meta content="/static/favicons/mstile-70x70.png" name="msapplication-square70x70logo"/>
+    <meta content="/static/favicons/mstile-150x150.png" name="msapplication-square150x150logo"/>
+    <meta content="/static/favicons/mstile-310x150.png" name="msapplication-wide310x150logo"/>
+    <meta content="/static/favicons/mstile-310x310.png" name="msapplication-square310x310logo"/>
     <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet"/>
     <link href="{{ url_for('static', filename='css/screenly.css') }}" rel="stylesheet"/>
     <link href="{{ url_for('static', filename='css/datepicker.css') }}" rel="stylesheet"/>
@@ -212,24 +232,6 @@
                     </div>
                 </div>
 
-                <div class="form-group row">
-                    <label class="col-2 col-form-label">Use system commands</label>
-                    <div class="col-3">
-                        <label id="use_system_commands_checkbox" class="checkbox toggle card card-body bg-light">
-                            {% if context.use_system_commands %}
-                                <input name="use_system_commands" checked="checked" type="checkbox"/>
-                            {% else %}
-                                <input name="use_system_commands" type="checkbox"/>
-                            {% endif %}
-                            <p>
-                                <span class="on">On</span>
-                                <span class="off">Off</span>
-                            </p>
-                            <a class="btn btn-primary slide-button"></a>
-                        </label>
-                    </div>
-                </div>
-
                 <div class="form-group row" id="user_group">
                     <label class="col-2 col-form-label">User</label>
                     <div class="col-3">
@@ -304,8 +306,7 @@
                             <div class="form-group row">
                                 <label class="col-4 col-form-label">Activate assets</label>
                                 <div class="col-6">
-                                    <label id="use_system_commands_checkbox"
-                                           class="checkbox toggle card card-body bg-light">
+                                    <label class="checkbox toggle card card-body bg-light">
                                             <input name="activate_assets" type="checkbox"/>
                                         <p>
                                             <span class="on">On</span>
@@ -318,8 +319,7 @@
                             <div class="form-group row">
                                 <label class="col-4 col-form-label">Copy assets to internal memory</label>
                                 <div class="col-6">
-                                    <label id="use_system_commands_checkbox"
-                                           class="checkbox toggle card card-body bg-light">
+                                    <label class="checkbox toggle card card-body bg-light">
                                             <input name="copy_assets" type="checkbox"/>
                                         <p>
                                             <span class="on">On</span>

@@ -91,34 +91,16 @@
       });
     });
     $("#auth_checkbox p span").click(function(e) {
-      if ($("input:checkbox[name='use_system_commands']").is(":checked")) {
-        $("input:text[name='user']").val(currentUsername);
-        return $("#user_group, #password_group, #password2_group, #curpassword_group").show();
-      } else if ($("input:checkbox[name='use_auth']").is(":checked") || $("input:checkbox[name='use_system_commands']").is(":checked")) {
-        $("#user_group, #password_group, #password2_group").hide();
-        $("input:text[name='user']").val("");
-        $("input:password[name='password']").val("");
-        return $("input:password[name='password2']").val("");
-      } else {
-        $("input:text[name='user']").val(currentUsername);
-        return $("#user_group, #password_group, #password2_group, #curpassword_group").show();
-      }
-    });
-    $("#use_system_commands_checkbox p span").click(function(e) {
       if ($("input:checkbox[name='use_auth']").is(":checked")) {
-        $("input:text[name='user']").val(currentUsername);
-        return $("#user_group, #password_group, #password2_group, #curpassword_group").show();
-      } else if ($("input:checkbox[name='use_auth']").is(":checked") || $("input:checkbox[name='use_system_commands']").is(":checked")) {
         $("#user_group, #password_group, #password2_group").hide();
         $("input:text[name='user']").val("");
         $("input:password[name='password']").val("");
         return $("input:password[name='password2']").val("");
       } else {
-        $("input:text[name='user']").val(currentUsername);
         return $("#user_group, #password_group, #password2_group, #curpassword_group").show();
       }
     });
-    if ($("input:checkbox[name='use_auth']").is(":checked") || $("input:checkbox[name='use_system_commands']").is(":checked")) {
+    if ($("input:checkbox[name='use_auth']").is(":checked")) {
       $("#user_group, #password_group, #password2_group, #curpassword_group").show();
     } else {
       $("#user_group, #password_group, #password2_group, #curpassword_group").hide();
