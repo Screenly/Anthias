@@ -83,6 +83,8 @@
                     <th>Uptime</th>
                     <th>Monitor Info</th>
                     <th>Display Power</th>
+                    <th>Raspberry Model</th>
+                    <th>Screenly Version</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -92,6 +94,8 @@
                     <td>{{ context.uptime.days }} days and {{ (context.uptime.seconds / 3600)|round(2) }} hours</td>
                     <td>{{ context.display_info }}</td>
                     <td>{{ context.display_power }}</td>
+                    <td>{{ context.raspberry_model }}</td>
+                    <td>{{ context.screenly_version }}</td>
                 </tr>
                 </tbody>
             </table>

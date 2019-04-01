@@ -5,6 +5,7 @@ import os
 import sh
 import socket
 import sqlite3
+import re
 import utils
 from pprint import pprint
 from uptime import uptime
@@ -111,6 +112,34 @@ def get_load_avg():
     return load_avg
 
 
+def get_git_branch():
+    screenly_path = os.path.join(os.getenv('HOME'), 'screenly', '.git')
+    try:
+        get_hash = sh.git(
+            '--git-dir={}'.format(screenly_path),
+            'rev-parse',
+            '--abbrev-ref',
+            'HEAD'
+        )
+        return get_hash.stdout.strip()
+    except:
+        return 'Unable to get git branch.'
+
+
+def get_git_short_hash():
+    screenly_path = os.path.join(os.getenv('HOME'), 'screenly', '.git')
+    try:
+        get_hash = sh.git(
+            '--git-dir={}'.format(screenly_path),
+            'rev-parse',
+            '--short',
+            'HEAD'
+        )
+        return get_hash.stdout.strip()
+    except:
+        return 'Unable to get git hash.'
+
+
 def get_git_hash():
     screenly_path = os.path.join(os.getenv('HOME'), 'screenly', '.git')
     try:
@@ -157,6 +186,124 @@ def get_debian_version():
                 return str(line).strip()
     else:
         return 'Unable to get Debian version.'
+
+
+def get_raspberry_code():
+    matches = re.findall(r'\:(.*)', sh.grep('Revision', '/proc/cpuinfo').stdout)
+    if matches:
+        return matches[0].strip()
+
+
+def get_raspberry_model():
+    """
+    Data source
+    https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
+    """
+    models = {
+        '900021': 'Model A+',
+        '900032': 'Model B+',
+        '900092': 'Model Zero',
+        '920092': 'Model Zero',
+        '900093': 'Model Zero',
+        '9000c1': 'Model Zero W',
+        '920093': 'Model Zero',
+        'a01040': 'Model 2B',
+        'a01041': 'Model 2B',
+        'a02082': 'Model 3B',
+        'a020a0': 'Model CM3',
+        'a21041': 'Model 2B',
+        'a22042': 'Model 2B (with BCM2837)',
+        'a22082': 'Model 3B',
+        'a32082': 'Model 3B',
+        'a52082': 'Model 3B',
+        'a020d3': 'Model 3B+',
+        '9020e0': 'Model 3A+'
+    }
+    return models.get(get_raspberry_code())
+
+
+def get_raspberry_revision():
+    """
+    Data source
+    https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
+    """
+    revisions = {
+        '900021': '1.1',
+        '900032': '1.2',
+        '900092': '1.2',
+        '920092': '1.2',
+        '900093': '1.3',
+        '9000c1': '1.1',
+        '920093': '1.3',
+        'a01040': '1.0',
+        'a01041': '1.1',
+        'a02082': '1.2',
+        'a020a0': '1.0',
+        'a21041': '1.1',
+        'a22042': '1.2',
+        'a22082': '1.2',
+        'a32082': '1.2',
+        'a52082': '1.2',
+        'a020d3': '1.3',
+        '9020e0': '1.0'
+    }
+    return revisions.get(get_raspberry_code())
+
+
+def get_raspberry_ram():
+    """
+    Data source
+    https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
+    """
+    rams = {
+        '900021': '512 MB',
+        '900032': '512 MB',
+        '900092': '512 MB',
+        '920092': '512 MB',
+        '900093': '512 MB',
+        '9000c1': '512 MB',
+        '920093': '512 MB',
+        'a01040': '1 GB',
+        'a01041': '1 GB',
+        'a02082': '1 GB',
+        'a020a0': '1 GB',
+        'a21041': '1 GB',
+        'a22042': '1 GB',
+        'a22082': '1 GB',
+        'a32082': '1 GB',
+        'a52082': '1 GB',
+        'a020d3': '1 GB',
+        '9020e0': '512 MB'
+    }
+    return rams.get(get_raspberry_code())
+
+
+def get_raspberry_manufacturer():
+    """
+    Data source
+    https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
+    """
+    manufacturers = {
+        '900021': 'Sony UK',
+        '900032': 'Sony UK',
+        '900092': 'Sony UK',
+        '920092': 'Embest',
+        '900093': 'Sony UK',
+        '9000c1': 'Sony UK',
+        '920093': 'Embest',
+        'a01040': 'Sony UK',
+        'a01041': 'Sony UK',
+        'a02082': 'Sony UK',
+        'a020a0': 'Sony UK',
+        'a21041': 'Embest',
+        'a22042': 'Embest',
+        'a22082': 'Embest',
+        'a32082': 'Sony Japan',
+        'a52082': 'Stadium',
+        'a020d3': 'Sony UK',
+        '9020e0': 'Sony UK'
+    }
+    return manufacturers.get(get_raspberry_code())
 
 
 def compile_report():

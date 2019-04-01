@@ -1282,6 +1282,14 @@ def system_info():
     # Player name for title
     player_name = settings['player_name']
 
+    raspberry_model = '%s Revision: %s Ram: %s %s' % (diagnostics.get_raspberry_model(),
+                                                      diagnostics.get_raspberry_revision(),
+                                                      diagnostics.get_raspberry_ram(),
+                                                      diagnostics.get_raspberry_manufacturer())
+
+    branch = 'development' if diagnostics.get_git_branch() == 'master' else diagnostics.get_git_branch()
+    screenly_version = '%s@%s' % (branch, diagnostics.get_git_short_hash())
+
     return template(
         'system_info.html',
         player_name=player_name,
@@ -1290,7 +1298,9 @@ def system_info():
         free_space=free_space,
         uptime=system_uptime,
         display_info=display_info,
-        display_power=display_power
+        display_power=display_power,
+        raspberry_model=raspberry_model,
+        screenly_version=screenly_version
     )
 
 
