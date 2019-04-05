@@ -1,117 +1,36 @@
 set show_status = 0
 set on_event    = request ON_EVENT
 
-@on_event   LOAD_START         js alert=function(e){return true};confirm=function(e){return true};prompt=function(e){return true};
-@on_event   LOAD_COMMIT        js alert=function(e){return true};confirm=function(e){return true};prompt=function(e){return true};
-
-
-# Example uzbl config. All settings are optional. You can use uzbl without
-# any config at all (but it won't do much).
+@on_event   LOAD_START    js alert=function(e){return true};confirm=function(e){return true};prompt=function(e){return true};
+@on_event   LOAD_COMMIT   js alert=function(e){return true};confirm=function(e){return true};prompt=function(e){return true};
+@on_event   LOAD_ERROR    sh 'reload full'
 
 # === Core settings ==========================================================
-
-# common directory locations
-set prefix      = @(echo $PREFIX)@
-#set data_home   = @(echo $XDG_DATA_HOME)@
-#set cache_home  = @(echo $XDG_CACHE_HOME)@
-#set config_home = @(echo $XDG_CONFIG_HOME)@
-
-# Interface paths.
+set prefix     = @(echo $PREFIX)@
 set fifo_dir   = /tmp
 set socket_dir = /tmp
-
-set shell_cmd       = sh -c
+set shell_cmd = sh -c
 
 # === General config aliases =================================================
 
-# Config related events (use the request function):
-# request MODE_CONFIG <mode> <key> = <value>
 set mode_config     = request MODE_CONFIG
-# request ON_EVENT <EVENT_NAME> <command>
 set on_event        = request ON_EVENT
-# request ON_SET   <key/glob> <command>
 set on_set          = request ON_SET
-# request MODMAP <From> <To>
 set modmap          = request MODMAP
-# request IGNORE_KEY <glob>
 set ignore_key      = request IGNORE_KEY
-# request TOGGLE_MODES <mode1> <mode2> ... <moden>
 set toggle_modes    = request TOGGLE_MODES
-
 set set_mode        = set mode =
 set set_status      = set status_message =
+set scripts_dir     = @data_home/uzbl:@prefix/share/uzbl/examples/data:scripts
 
-# Spawn path shortcuts. In spawn the first dir+path match is used in "dir1:dir2:dir3:executable"
-set scripts_dir      = @data_home/uzbl:@prefix/share/uzbl/examples/data:scripts
-
-# === Hardcoded handlers =====================================================
-
-# These handlers can't be moved to the new event system yet as we don't
-# support events that can wait for a response from a script.
-set scheme_handler      = sync_spawn @scripts_dir/scheme.py
-#set request_handler     = sync_spawn @scripts_dir/request.py
-set authentication_handler = sync_spawn @scripts_dir/auth.py
-set download_handler    = sync_spawn @scripts_dir/download.sh
-
-# === Dynamic event handlers =================================================
-
-#   What to do when a website wants to open a new window:
-# Open link in new window
-@on_event   NEW_WINDOW     sh 'uzbl-browser ${1:+-u "$1"}' %r
-# Open in current window (also see the REQ_NEW_WINDOW event handler below)
-#@on_event   NEW_WINDOW     uri %s
-# Open in new tab. Other options are NEW_TAB_NEXT, NEW_BG_TAB and NEW_BG_TAB_NEXT.
-#@on_event   NEW_WINDOW     event NEW_TAB %s
-
-#   What to do when the user requests a new window:
-# If your the NEW_WINDOW handler opens the uri in the current window, you'll
-# probably want to change this handler to open a new window or tab.
-@on_event   REQ_NEW_WINDOW event NEW_WINDOW %s
-
-# Load start handler
-@on_event   LOAD_START     @set_status <span foreground="khaki">wait</span>
-# Reset the keycmd on navigation
 @on_event   LOAD_START     @set_mode
-
-# Load commit handlers
-@on_event   LOAD_COMMIT    @set_status <span foreground="green">recv</span>
-
-  # add some javascript to the page for other 'js' and 'script' commands to access later.
-@on_event   LOAD_COMMIT    js uzbl = {};
-@on_event   LOAD_COMMIT    script @scripts_dir/formfiller.js
-@on_event   LOAD_COMMIT    script @scripts_dir/follow.js
-
-# Userscripts/per-site-settings. See the script and the example configuration for details
-#@on_event   LOAD_COMMIT    spawn @scripts_dir/per-site-settings.py @data_home/uzbl/per-site-settings
-
-# Load finish handlers
-@on_event   LOAD_FINISH    @set_status <span foreground="gold">done</span>
-@on_event   LOAD_FINISH    spawn @scripts_dir/history.sh
 
 # Switch to insert mode if a (editable) html form is clicked
 @on_event   FOCUS_ELEMENT  sh 'if [ "$1" = INPUT -o "$1" = TEXTAREA -o "$1" = SELECT ]; then echo "@set_mode insert" > $UZBL_FIFO; fi' %s
 # Switch to command mode if anything else is clicked
 @on_event   ROOT_ACTIVE    @set_mode command
 
-# Example CONFIG_CHANGED event handler
-#@on_event  CONFIG_CHANGED print Config changed: %1 = %2
-
-# Scroll percentage calculation
-@on_event   SCROLL_VERT    set scroll_message = \@<(function(curr, min, max, size){if(max == size) return '--'; var p=(curr/(max - size)); return Math.round(10000*p)/100;})(%1,%2,%3,%4)>\@%
-
-# === Useragent setup ========================================================
-
-set useragent         = Uzbl (Webkit @{WEBKIT_MAJOR}.@{WEBKIT_MINOR}) (@(+uname -sm)@ [@ARCH_UZBL])
-
-# === SSL related configuration ==============================================
-
-# Set it to certificates store of your distribution, or your own CAfile.
-set ssl_ca_file = /etc/ssl/certs/ca-certificates.crt
-set ssl_verify = 0
-# Command to toggle ssl_verify value:
-@cbind  !ssl = chain 'toggle ssl_verify' 'reload'
-# Example SSL error handler:
-@on_event   LOAD_ERROR    js var patt=new RegExp('SSL handshake failed'); if (patt.test('%3')) {alert ('%3');}
+set useragent = Uzbl (Webkit @{WEBKIT_MAJOR}.@{WEBKIT_MINOR}) (@(+uname -sm)@ [@ARCH_UZBL])
 
 # === Key binding configuration ==============================================
 # --- Internal modmapping and ignoring ---------------------------------------
@@ -220,32 +139,6 @@ set ebind     = @mode_bind global,-insert
 @cbind  r   = reload
 @cbind  R   = reload_ign_cache
 
-# Zoom binds
-@cbind  +   = zoom_in
-@cbind  -   = zoom_out
-@cbind  T   = toggle zoom_type
-@cbind  1   = set zoom_level = 1.0
-@cbind  2   = set zoom_level = 2.0
-
-# Appearance binds
-@cbind  t   = toggle show_status
-
-# Page searching binds
-@cbind  /*  = search %s
-@cbind  ?*  = search_reverse %s
-# Jump to next and previous items
-@cbind  n   = search
-@cbind  N   = search_reverse
-
-# Print pages to a printer
-@cbind  <Ctrl>p = hardcopy
-
-# Web searching binds
-@cbind  gg<Google:>_         = uri http://www.google.com/search?q=\@<encodeURIComponent(%r)>\@
-@cbind  ddg<DuckDuckGo:>_    = uri http://duckduckgo.com/?q=%s
-@cbind  \\awiki<Archwiki:>_  = uri http://wiki.archlinux.org/index.php/Special:Search?search=\@<encodeURIComponent(%r)>\@&go=Go
-@cbind  \\wiki<Wikipedia:>_  = uri http://en.wikipedia.org/w/index.php?title=Special:Search&search=\@<encodeURIComponent(%r)>\@&go=Go
-
 # Handy binds
 # Set function shortcut
 @cbind  s<var:>_<value:>_  = set %1 = %2
@@ -259,7 +152,6 @@ set ebind     = @mode_bind global,-insert
 # Use socat to directly inject commands into uzbl-core and view events
 # raised by uzbl-core:
 @cbind  <Ctrl><Mod1>t  = sh 'xterm -e "socat unix-connect:\"$UZBL_SOCKET\" -"'
-#@cbind  <Ctrl><Mod1>t  = sh 'urxvt -e socat unix-connect:"$UZBL_SOCKET" -'
 
 # Uri opening prompts
 @cbind  o<uri:>_       = uri %s
@@ -269,22 +161,6 @@ set ebind     = @mode_bind global,-insert
 # Mode setting binds
 @cbind  i        = @set_mode insert
 @bind   <Ctrl>i  = @set_mode insert
-
-# Hard-bound bookmarks
-@cbind  gh  = uri http://www.uzbl.org
-
-# New window binds
-@cbind  gw  = event REQ_NEW_WINDOW
-
-# SSL-ify bindings
-@cbind  zs  = uri \@(echo "$UZBL_URI" | sed -e 's/^http:/https:/')\@
-@cbind  zS  = event REQ_NEW_WINDOW \@(echo "$UZBL_URI" | sed -e 's/^http:/https:/')\@
-
-# Yanking & pasting binds
-@cbind  yu  = sh 'echo -n "$UZBL_URI" | xclip'
-@cbind  yU  = sh 'echo -n "$1" | xclip' '\@SELECTED_URI'
-@cbind  yy  = sh 'echo -n "$UZBL_TITLE" | xclip'
-@cbind  ys  = spawn @scripts_dir/follow.sh \@< uzbl.follow.followSelection('returnuri') >\@ clipboard
 
 # Clone current window
 @cbind  c   = event REQ_NEW_WINDOW \@uri
@@ -296,54 +172,6 @@ set ebind     = @mode_bind global,-insert
 @cbind  'p  = sh 'echo "event REQ_NEW_WINDOW $(xclip -o)" > "$UZBL_FIFO"'
 # paste primary selection into keycmd at the cursor position
 @bind <Shift><Insert> = sh 'echo "event INJECT_KEYCMD $(xclip -o | sed s/\\\@/%40/g)" > "$UZBL_FIFO"'
-
-# Bookmark inserting binds
-@cbind <Ctrl>m<tags:>_  = sh 'echo "$UZBL_URI $1" >> "$XDG_DATA_HOME"/uzbl/bookmarks' '%s'
-# Or use a script to insert a bookmark.
-@cbind  M  = spawn @scripts_dir/insert_bookmark.sh
-
-# Bookmark/history loading
-@cbind  U  = spawn @scripts_dir/load_url_from_history.sh
-@cbind  u  = spawn @scripts_dir/load_url_from_bookmarks.sh
-
-# Temporary bookmarks
-@cbind  <Ctrl>d  = spawn @scripts_dir/insert_temp.sh
-@cbind  D        = spawn @scripts_dir/load_url_from_temps.sh
-
-# Link following (similar to vimperator and konqueror)
-# Set custom keys you wish to use for navigation. Some common examples:
-set follow_hint_keys = 0123456789
-#set follow_hint_keys = qwerty
-#set follow_hint_keys = asdfghjkl;
-#set follow_hint_keys = thsnd-rcgmvwb/;789aefijkopquxyz234
-@cbind  fl*  = spawn @scripts_dir/follow.sh \@< uzbl.follow("\@follow_hint_keys", "%s", 'click') >\@
-@cbind  Fl*  = spawn @scripts_dir/follow.sh \@< uzbl.follow("\@follow_hint_keys", "%s", 'newwindow') >\@
-@cbind  fL*  = spawn @scripts_dir/follow.sh \@< uzbl.follow("\@follow_hint_keys", "%s", 'returnuri') >\@ set
-@cbind  FL*  = spawn @scripts_dir/follow.sh \@< uzbl.follow("\@follow_hint_keys", "%s", 'returnuri') >\@ clipboard
-@cbind  fi   = spawn @scripts_dir/go_input.sh
-
-@cbind  fs  = spawn @scripts_dir/follow.sh \@< uzbl.follow.followSelection('returnuri') >\@ set
-@cbind  fS  = spawn @scripts_dir/follow.sh \@< uzbl.follow.followSelection('click') >\@
-@cbind  Fs  = spawn @scripts_dir/follow.sh \@< uzbl.follow.followSelection('newwindow') >\@
-@cbind  FS  = spawn @scripts_dir/follow.sh \@< uzbl.follow.followSelection('returnuri') >\@ clipboard
-
-@cbind  ft*  = spawn @scripts_dir/follow.sh \@< uzbl.follow.followTextContent("%s", 'returnuri') >\@ set
-@cbind  fT*  = spawn @scripts_dir/follow.sh \@< uzbl.follow.followTextContent("%s", 'click') >\@
-@cbind  Ft*  = spawn @scripts_dir/follow.sh \@< uzbl.follow.followTextContent("%s", 'newwindow') >\@
-@cbind  FT*  = spawn @scripts_dir/follow.sh \@< uzbl.follow.followTextContent("%s", 'returnuri') >\@ clipboard
-
-@cbind  '*  = spawn @scripts_dir/follow.sh \@< uzbl.follow.followTextContent("%s", 'click') >\@
-
-# Form filler binds
-# This script allows you to configure (per domain) values to fill in form
-# fields (eg login information) and to fill in these values automatically.
-# This implementation allows you to save multiple profiles for each form
-# (think about multiple accounts on some website).
-set formfiller = spawn @scripts_dir/formfiller.sh
-@cbind  ze  = @formfiller edit
-@cbind  zn  = @formfiller new
-@cbind  zl  = @formfiller load
-@cbind  zo  = @formfiller once
 
 # === Mode configuration =====================================================
 
@@ -377,7 +205,3 @@ set stack    = @mode_config stack
 @stack    forward_keys        = 0
 
 set default_mode = command
-
-# === Post-load misc commands ================================================
-sync_spawn_exec @scripts_dir/load_cookies.sh
-sync_spawn_exec @scripts_dir/load_cookies.sh @data_home/uzbl/session-cookies.txt
