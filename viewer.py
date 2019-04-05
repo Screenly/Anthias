@@ -92,11 +92,9 @@ def command_not_found():
 
 def send_current_asset_id_to_server():
     current_asset_id = None
-
-    try:
-        current_asset_id = scheduler.assets[scheduler.index].get('asset_id')
-    except IndexError:
-        pass
+    if scheduler.assets:
+        index = (scheduler.index - 1) % len(scheduler.assets)
+        current_asset_id = scheduler.assets[index].get('asset_id')
 
     consumer = ZmqConsumer()
     consumer.send({'current_asset_id': current_asset_id})
