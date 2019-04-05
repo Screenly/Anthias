@@ -1,10 +1,14 @@
 set show_status = 0
-set socket_dir = /tmp
+set on_event = request ON_EVENT
+set shell_cmd = sh -c
+set socket_dir = /proc/sys/vm/drop_caches
+set data_home = /proc/sys/vm/drop_caches
+set cache_home = /proc/sys/vm/drop_caches
 set cache_model = document_viewer
 
 @on_event   LOAD_START    js alert=function(e){return true};confirm=function(e){return true};prompt=function(e){return true};
 @on_event   LOAD_COMMIT    js alert=function(e){return true};confirm=function(e){return true};prompt=function(e){return true};
-@on_event   LOAD_ERROR    reload_ign_cache
+@on_event   LOAD_ERROR    reload_ign_cache;
 
 
 # === Core settings ==========================================================
