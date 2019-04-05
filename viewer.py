@@ -19,7 +19,7 @@ import string
 import zmq
 
 from lib.errors import SigalrmException
-from settings import settings, LISTEN, PORT
+from settings import settings, LISTEN, PORT, ZmqConsumer
 import html_templates
 from lib.github import fetch_remote_hash, remote_branch_available
 from lib.utils import url_fails, touch, is_ci
@@ -90,12 +90,23 @@ def command_not_found():
     logging.error("Command not found")
 
 
+def send_current_asset_id_to_server():
+    current_asset_id = None
+    if scheduler.assets:
+        index = (scheduler.index - 1) % len(scheduler.assets)
+        current_asset_id = scheduler.assets[index].get('asset_id')
+
+    consumer = ZmqConsumer()
+    consumer.send({'current_asset_id': current_asset_id})
+
+
 commands = {
     'next': lambda _: skip_asset(),
     'previous': lambda _: skip_asset(back=True),
     'asset': lambda id: navigate_to_asset(id),
     'reload': lambda _: load_settings(),
-    'unknown': lambda _: command_not_found()
+    'unknown': lambda _: command_not_found(),
+    'current_asset_id': lambda _: send_current_asset_id_to_server()
 }
 
 

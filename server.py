@@ -40,7 +40,7 @@ from lib.utils import url_fails
 from lib.utils import validate_url
 from lib.utils import is_demo_node
 
-from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
+from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
 
 HOME = getenv('HOME', '/home/pi')
 DISABLE_MANAGE_NETWORK = '.screenly/disable_manage_network'
@@ -1090,6 +1090,33 @@ class AssetContent(Resource):
         return result
 
 
+class ViewerCurrentAsset(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Currently displayed asset in viewer',
+                'schema': AssetModel
+            }
+        }
+    })
+    def get(self):
+        collector = ZmqCollector.get_instance()
+
+        publisher = ZmqPublisher.get_instance()
+        publisher.send_to_viewer('current_asset_id')
+
+        collector_result = collector.recv_json(2000)
+        current_asset_id = collector_result.get('current_asset_id')
+
+        if not current_asset_id:
+            return []
+
+        with db.conn(settings['database']) as conn:
+            return assets_helper.read(conn, current_asset_id)
+
+
 api.add_resource(Assets, '/api/v1/assets')
 api.add_resource(Asset, '/api/v1/assets/<asset_id>')
 api.add_resource(AssetsV1_1, '/api/v1.1/assets')
@@ -1104,6 +1131,7 @@ api.add_resource(Recover, '/api/v1/recover')
 api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 api.add_resource(Info, '/api/v1/info')
 api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
+api.add_resource(ViewerCurrentAsset, '/api/v1/viewer_current_asset')
 
 try:
     my_ip = get_node_ip()
