@@ -1,26 +1,22 @@
 set show_status = 0
 set on_event = request ON_EVENT
-set shell_cmd = sh -c
-set socket_dir = /proc/sys/vm/drop_caches
-set data_home = /proc/sys/vm/drop_caches
-set cache_home = /proc/sys/vm/drop_caches
+set fifo_dir = /tmp
+set socket_dir = /tmp
+set data_home = /tmp
+set cache_home = /tmp
 set cache_model = document_viewer
 
 @on_event   LOAD_START    js alert=function(e){return true};confirm=function(e){return true};prompt=function(e){return true};
-@on_event   LOAD_COMMIT    js alert=function(e){return true};confirm=function(e){return true};prompt=function(e){return true};
-@on_event   LOAD_ERROR    reload_ign_cache;
+@on_event   LOAD_COMMIT   js alert=function(e){return true};confirm=function(e){return true};prompt=function(e){return true};
+@on_event   LOAD_ERROR    exit
 
-
-# === Core settings ==========================================================
-set prefix     = @(echo $PREFIX)@
-set fifo_dir   = /tmp
-set socket_dir = /tmp
-set shell_cmd = sh -c
+#set ssl_ca_file /etc/ssl/certs/cacert.pem
+#set ssl_policy fail
+#set ssl_verify = 0
 
 # === General config aliases =================================================
 
 set mode_config     = request MODE_CONFIG
-set on_event        = request ON_EVENT
 set on_set          = request ON_SET
 set modmap          = request MODMAP
 set ignore_key      = request IGNORE_KEY
