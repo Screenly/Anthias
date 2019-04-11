@@ -34,15 +34,21 @@ if [ "$EXP" != 'y'  ]; then
   echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
   if [ "$DEV" != 'y'  ]; then
     export DOCKER_TAG="production"
+    echo "Screenly OSE version: Production" > ~/OSE_version.md
     BRANCH="production"
   else
     export DOCKER_TAG="latest"
+    echo "Screenly OSE version: Development" > ~/OSE_version.md
     BRANCH="master"
   fi
 else
   export DOCKER_TAG="experimental"
+  echo "Screenly OSE version: Experimental" > ~/OSE_version.md
   BRANCH="experimental"
 fi
+
+#Add reference of what linux flavor is running to OSE_version file
+cat /etc/os-release | grep "PRETTY_NAME" >> ~/OSE_version.md
 
 echo && read -p "Do you want Screenly to manage your network? This is recommended for most users. (Y/n)" -n 1 -r -s NETWORK && echo
 if [ "$NETWORK" == 'n' ]; then
