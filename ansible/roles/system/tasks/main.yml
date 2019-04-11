@@ -143,9 +143,12 @@
   when: not cc1plus_exist
 
 - name: Install Screenly dependencies
+  async: 1200
+  poll: 10
   apt:
     name: "{{ item }}"
     state: latest
+
   with_items:
     - console-data
     - libffi-dev
@@ -167,9 +170,12 @@
   when: ansible_distribution_release == "wheezy"
 
 - name: Remove deprecated apt dependencies
+  async: 1200
+  poll: 10
   apt:
     name: "{{ item }}"
     state: absent
+
   with_items:
     - supervisor
     - lightdm
@@ -189,6 +195,8 @@
     - system-upgrade
 
 - name: Remove deprecated pip dependencies
+  async: 1200
+  poll: 10
   pip:
     name: supervisor
     state: absent

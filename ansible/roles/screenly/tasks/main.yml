@@ -39,6 +39,8 @@
 
 - name: Install pip dependencies
   pip: requirements=/home/pi/screenly/requirements.txt
+    async: 1200
+    poll: 10
 
 - name: Create default assets database if does not exists
   copy:
