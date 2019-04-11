@@ -33,14 +33,14 @@ echo && read -p "Would you like to use the experimental branch? It contains the 
 if [ "$EXP" != 'y'  ]; then
   echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
   if [ "$DEV" != 'y'  ]; then
-    export DOCKER_TAG="production"
+    export DOCKER_TAG="production" && echo "Screenly OSE version: Production" > ~/OSE_version.md
     BRANCH="production"
   else
-    export DOCKER_TAG="latest"
+    export DOCKER_TAG="latest" && echo "Screenly OSE version: Development" > ~/OSE_version.md
     BRANCH="master"
   fi
 else
-  export DOCKER_TAG="experimental"
+  export DOCKER_TAG="experimental" && echo "Screenly OSE version: Experimental" > ~/OSE_version.md
   BRANCH="experimental"
 fi
 
