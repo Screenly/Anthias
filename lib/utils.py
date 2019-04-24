@@ -10,7 +10,7 @@ import string
 
 from datetime import datetime, timedelta
 from distutils.util import strtobool
-from netifaces import ifaddresses, gateways, AF_INET
+from netifaces import ifaddresses, gateways, AF_INET, AF_LINK
 from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
@@ -77,15 +77,27 @@ def validate_url(string):
 
 
 def get_node_ip():
-        """Returns the node's IP, for the interface
-        that is being used as the default gateway.
-        This should work on both MacOS X and Linux."""
-        try:
-            default_interface = gateways()['default'][AF_INET][1]
-            my_ip = ifaddresses(default_interface)[AF_INET][0]['addr']
-            return my_ip
-        except ValueError:
-            raise Exception("Unable to resolve local IP address.")
+    """Returns the node's IP, for the interface
+    that is being used as the default gateway.
+    This should work on both MacOS X and Linux."""
+    try:
+        default_interface = gateways()['default'][AF_INET][1]
+        my_ip = ifaddresses(default_interface)[AF_INET][0]['addr']
+        return my_ip
+    except (KeyError, ValueError):
+        raise Exception("Unable to resolve local IP address.")
+
+
+def get_node_mac_address():
+    """Returns the node's MAC address, for the interface
+    that is being used as the default gateway.
+    This should work on both MacOS X and Linux."""
+    try:
+        default_interface = gateways()['default'][AF_INET][1]
+        mac_address = ifaddresses(default_interface)[AF_LINK][0]['addr']
+        return mac_address
+    except (KeyError, ValueError):
+        pass
 
 
 def get_video_duration(file):

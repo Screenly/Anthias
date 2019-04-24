@@ -33,7 +33,7 @@ from lib import db
 from lib import diagnostics
 from lib import queries
 
-from lib.utils import get_node_ip
+from lib.utils import get_node_ip, get_node_mac_address
 from lib.utils import get_video_duration
 from lib.utils import download_video_from_youtube, json_dump
 from lib.utils import url_fails
@@ -1328,7 +1328,8 @@ def system_info():
         display_info=display_info,
         display_power=display_power,
         raspberry_model=raspberry_model,
-        screenly_version=screenly_version
+        screenly_version=screenly_version,
+        mac_address=get_node_mac_address()
     )
 
 
