@@ -261,7 +261,7 @@ def prepare_asset(request, unique_name=False):
         'nocache': get('nocache'),
     }
 
-    uri = get('uri')
+    uri = get('uri').encode('utf-8')
 
     if uri.startswith('/'):
         if not path.isfile(uri):
@@ -857,7 +857,7 @@ class FileAsset(Resource):
     def post(self):
         req = Request(request.environ)
         file_upload = req.files.get('file_upload')
-        filename = file_upload.filename
+        filename = file_upload.filename.encode('utf-8')
         file_type = guess_type(filename)[0]
 
         if not file_type:
@@ -866,7 +866,7 @@ class FileAsset(Resource):
         if file_type.split('/')[0] not in ['image', 'video']:
             raise Exception("Invalid file type.")
 
-        file_path = path.join(settings['assetdir'], uuid.uuid5(uuid.NAMESPACE_URL, filename.encode()).hex) + ".tmp"
+        file_path = path.join(settings['assetdir'], uuid.uuid5(uuid.NAMESPACE_URL, filename).hex) + ".tmp"
 
         if 'Content-Range' in request.headers:
             range_str = request.headers['Content-Range']
