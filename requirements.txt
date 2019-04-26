@@ -1,6 +1,6 @@
 Mako==0.7.3
 MarkupSafe==1.0
-ansible==2.7.5
+ansible==2.7.10
 certifi==2018.4.16
 cffi==1.7.0
 click==6.7
@@ -15,6 +15,7 @@ gevent-websocket==0.10.1
 gevent==1.2.2
 gunicorn==19.8.1
 hurry.filesize==0.9
+jinja2==2.10.1
 mixpanel==4.3.2
 netifaces==0.10.4
 pyasn1==0.1.8
@@ -25,6 +26,6 @@ requests[security]==2.20.0
 sh==1.08
 six==1.11.0
 uptime==2.0.2
-urllib3==1.24.1
+urllib3==1.25.1
 werkzeug==0.14.1
 youtube_dl>=2017.7.2
