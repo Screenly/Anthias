@@ -2,13 +2,13 @@
 Description=Wifi Connect
 Wants=network-online.target
 After=network-online.target
-ConditionPathExists=!/home/pi/.screenly/initialized
 
 [Service]
 WorkingDirectory=/home/pi/screenly
 User=pi
 Type=oneshot
 
+ExecStartPre=/bin/rm -f /home/pi/.screenly/initialized
 ExecStart=/usr/bin/python /home/pi/screenly/start_resin_wifi.py
 ExecStartPost=/usr/bin/touch /home/pi/.screenly/initialized
 

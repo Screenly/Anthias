@@ -22,7 +22,7 @@ from lib.errors import SigalrmException
 from settings import settings, LISTEN, PORT, ZmqConsumer
 import html_templates
 from lib.github import fetch_remote_hash, remote_branch_available
-from lib.utils import url_fails, touch, is_ci
+from lib.utils import nmcli_get_connections, url_fails, touch, is_ci, get_node_ip
 from lib import db
 from lib import assets_helper
 
@@ -466,15 +466,29 @@ def setup():
     html_templates.black_page(BLACK_PAGE)
 
 
+def wait_for_node_ip(seconds):
+    for _ in range(seconds):
+        try:
+            get_node_ip()
+            break
+        except Exception:
+            sleep(1)
+
+
 def main():
     setup()
 
-    if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
+    wireless_connections = nmcli_get_connections('wlan*', 'ScreenlyOSE-*', active=True)
+
+    if not wireless_connections and not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
         url = 'http://{0}/hotspot'.format(LISTEN)
         load_browser(url=url)
 
-        while not path.isfile(HOME + INITIALIZED_FILE):
+        while not wireless_connections and not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
             sleep(1)
+            wireless_connections = nmcli_get_connections('wlan*', 'ScreenlyOSE-*', active=True)
+
+    wait_for_node_ip(5)
 
     url = 'http://{0}:{1}/splash_page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
     browser_url(url=url)
