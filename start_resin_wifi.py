@@ -6,7 +6,7 @@ from os import getenv, path
 import re
 import sh
 
-from lib.utils import generate_perfect_paper_password
+from lib.utils import generate_perfect_paper_password, nmcli_get_connections
 
 
 def generate_page(ssid, pswd, address):
@@ -28,7 +28,9 @@ def generate_page(ssid, pswd, address):
 if __name__ == "__main__":
     r = re.compile("wlan*")
 
-    if not gateways().get('default') and filter(r.match, interfaces()):
+    wireless_connections = nmcli_get_connections('wlan*', 'ScreenlyOSE-*', active=True)
+
+    if not wireless_connections and not gateways().get('default') and filter(r.match, interfaces()):
         ssid = 'ScreenlyOSE-{}'.format(generate_perfect_paper_password(pw_length=4, has_symbols=False))
         ssid_password = generate_perfect_paper_password(pw_length=8, has_symbols=False)
         generate_page(ssid, ssid_password, 'screenly.io/wifi')

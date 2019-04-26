@@ -7,6 +7,7 @@ import random
 import re
 import requests
 import string
+import sh
 
 from datetime import datetime, timedelta
 from distutils.util import strtobool
@@ -14,7 +15,6 @@ from netifaces import ifaddresses, gateways, AF_INET, AF_LINK
 from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
-from sh import grep, netstat, ErrorReturnCode_1
 from subprocess import check_output, call
 from threading import Thread
 from urlparse import urlparse
@@ -100,6 +100,47 @@ def get_node_mac_address():
         pass
 
 
+def nmcli_get_connections(pattern=None, pattern_ignore=None, fields=None, active=False):
+    """
+    Gets the connections using nmcli
+
+    :param pattern: string
+    :param pattern_ignore: string
+    :param fields: iterable objects
+    :param active: boolean
+    :return: list
+    """
+    escape_color_pattern = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+
+    if not fields:
+        fields = ['name', 'uuid', 'type', 'device']
+
+    params = list()
+
+    if active:
+        params.append('--active')
+
+    out = sh.nmcli('-t', '-f', ','.join(fields), 'c', 'show', *params)
+    connections = re.sub(escape_color_pattern, '', out.encode('utf-8')).splitlines()
+
+    if pattern:
+        connections = filter(re.compile(pattern).search, connections)
+
+    if pattern_ignore:
+        connections = filter(lambda x: re.compile(pattern_ignore).search(x) is None, connections)
+
+    return connections
+
+
+def nmcli_remove_connection(connection):
+    """
+    :param connection: str
+    :return: str
+    """
+
+    return sh.sudo.nmcli('c', 'delete', connection)
+
+
 def get_video_duration(file):
     """
     Returns the duration of a video file in timedelta.
@@ -111,7 +152,7 @@ def get_video_duration(file):
             run_player = omxplayer(file, info=True, _err_to_out=True, _ok_code=[0, 1], _decode_errors='ignore')
         else:
             run_player = ffprobe('-i', file, _err_to_out=True)
-    except ErrorReturnCode_1:
+    except sh.ErrorReturnCode_1:
         raise Exception('Bad video format')
 
     for line in run_player.split('\n'):

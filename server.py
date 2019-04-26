@@ -33,6 +33,7 @@ from lib import db
 from lib import diagnostics
 from lib import queries
 
+from lib.utils import nmcli_get_connections, nmcli_remove_connection
 from lib.utils import get_node_ip, get_node_mac_address
 from lib.utils import get_video_duration
 from lib.utils import download_video_from_youtube, json_dump
@@ -973,6 +974,22 @@ class ResetWifiConfig(Resource):
 
         if path.isfile(file_path):
             remove(file_path)
+
+        device_uuid = None
+
+        wireless_connections = nmcli_get_connections(
+            'wlan*',
+            'ScreenlyOSE-*',
+            fields=['name', 'device', 'uuid'],
+            active=True
+        )
+        if wireless_connections:
+            _, _, device_uuid = wireless_connections[0].split(':')
+
+        if not device_uuid:
+            raise Exception('The device has no active connection.')
+
+        nmcli_remove_connection(device_uuid)
 
         return '', 204
 
