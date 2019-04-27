@@ -3,16 +3,18 @@ import db
 import json
 import os
 import pytz
+import random
 import re
 import requests
+import string
+import sh
 
 from datetime import datetime, timedelta
 from distutils.util import strtobool
-from netifaces import ifaddresses, gateways
+from netifaces import ifaddresses, gateways, AF_INET, AF_LINK
 from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
-from sh import grep, netstat, ErrorReturnCode_1
 from subprocess import check_output, call
 from threading import Thread
 from urlparse import urlparse
@@ -21,7 +23,8 @@ from assets_helper import update
 
 arch = machine()
 
-HTTP_OK = xrange(200, 299)
+# 300 level HTTP responses are also ok, such as redirects, which many sites have and load
+HTTP_OK = xrange(200, 399)
 
 # This will only work on the Raspberry Pi,
 # so let's wrap it in a try/except so that
@@ -74,16 +77,68 @@ def validate_url(string):
 
 
 def get_node_ip():
-        """Returns the node's IP, for the interface
-        that is being used as the default gateway.
-        This should work on both MacOS X and Linux."""
-        try:
-            address_family_id = max(list(gateways()['default']))
-            default_interface = gateways()['default'][address_family_id][1]
-            my_ip = ifaddresses(default_interface)[address_family_id][0]['addr']
-            return my_ip
-        except ValueError:
-            raise Exception("Unable to resolve local IP address.")
+    """Returns the node's IP, for the interface
+    that is being used as the default gateway.
+    This should work on both MacOS X and Linux."""
+    try:
+        default_interface = gateways()['default'][AF_INET][1]
+        my_ip = ifaddresses(default_interface)[AF_INET][0]['addr']
+        return my_ip
+    except (KeyError, ValueError):
+        raise Exception("Unable to resolve local IP address.")
+
+
+def get_node_mac_address():
+    """Returns the node's MAC address, for the interface
+    that is being used as the default gateway.
+    This should work on both MacOS X and Linux."""
+    try:
+        default_interface = gateways()['default'][AF_INET][1]
+        mac_address = ifaddresses(default_interface)[AF_LINK][0]['addr']
+        return mac_address
+    except (KeyError, ValueError):
+        pass
+
+
+def nmcli_get_connections(pattern=None, pattern_ignore=None, fields=None, active=False):
+    """
+    Gets the connections using nmcli
+
+    :param pattern: string
+    :param pattern_ignore: string
+    :param fields: iterable objects
+    :param active: boolean
+    :return: list
+    """
+    escape_color_pattern = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+
+    if not fields:
+        fields = ['name', 'uuid', 'type', 'device']
+
+    params = list()
+
+    if active:
+        params.append('--active')
+
+    out = sh.nmcli('-t', '-f', ','.join(fields), 'c', 'show', *params)
+    connections = re.sub(escape_color_pattern, '', out.encode('utf-8')).splitlines()
+
+    if pattern:
+        connections = filter(re.compile(pattern).search, connections)
+
+    if pattern_ignore:
+        connections = filter(lambda x: re.compile(pattern_ignore).search(x) is None, connections)
+
+    return connections
+
+
+def nmcli_remove_connection(connection):
+    """
+    :param connection: str
+    :return: str
+    """
+
+    return sh.sudo.nmcli('c', 'delete', connection)
 
 
 def get_video_duration(file):
@@ -97,7 +152,7 @@ def get_video_duration(file):
             run_player = omxplayer(file, info=True, _err_to_out=True, _ok_code=[0, 1], _decode_errors='ignore')
         else:
             run_player = ffprobe('-i', file, _err_to_out=True)
-    except ErrorReturnCode_1:
+    except sh.ErrorReturnCode_1:
         raise Exception('Bad video format')
 
     for line in run_player.split('\n'):
@@ -150,11 +205,11 @@ def url_fails(url):
     Try HEAD and GET for URL availability check.
     """
 
-    # Use Certifi module
+    # Use Certifi module and set to True as default so users stop seeing InsecureRequestWarning in logs
     if settings['verify_ssl']:
         verify = certifi.where()
     else:
-        verify = False
+        verify = True
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15'
@@ -229,3 +284,18 @@ def is_demo_node():
     :return: bool
     """
     return string_to_bool(os.getenv('IS_DEMO_NODE', False))
+
+
+def generate_perfect_paper_password(pw_length=10, has_symbols=True):
+    """
+    Generates a password using 64 characters from
+    "Perfect Paper Password" system by Steve Gibson
+
+    :param pw_length: int
+    :param has_symbols: bool
+    :return: string
+    """
+    ppp_letters = '!#%+23456789:=?@ABCDEFGHJKLMNPRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+    if not has_symbols:
+        ppp_letters = ''.join(set(ppp_letters) - set(string.punctuation))
+    return "".join(random.SystemRandom().choice(ppp_letters) for _ in range(pw_length))

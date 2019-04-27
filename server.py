@@ -33,14 +33,15 @@ from lib import db
 from lib import diagnostics
 from lib import queries
 
-from lib.utils import get_node_ip
+from lib.utils import nmcli_get_connections, nmcli_remove_connection
+from lib.utils import get_node_ip, get_node_mac_address
 from lib.utils import get_video_duration
 from lib.utils import download_video_from_youtube, json_dump
 from lib.utils import url_fails
 from lib.utils import validate_url
 from lib.utils import is_demo_node
 
-from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
+from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
 
 HOME = getenv('HOME', '/home/pi')
 DISABLE_MANAGE_NETWORK = '.screenly/disable_manage_network'
@@ -261,7 +262,7 @@ def prepare_asset(request, unique_name=False):
         'nocache': get('nocache'),
     }
 
-    uri = get('uri')
+    uri = get('uri').encode('utf-8')
 
     if uri.startswith('/'):
         if not path.isfile(uri):
@@ -857,7 +858,7 @@ class FileAsset(Resource):
     def post(self):
         req = Request(request.environ)
         file_upload = req.files.get('file_upload')
-        filename = file_upload.filename
+        filename = file_upload.filename.encode('utf-8')
         file_type = guess_type(filename)[0]
 
         if not file_type:
@@ -866,7 +867,7 @@ class FileAsset(Resource):
         if file_type.split('/')[0] not in ['image', 'video']:
             raise Exception("Invalid file type.")
 
-        file_path = path.join(settings['assetdir'], filename) + ".tmp"
+        file_path = path.join(settings['assetdir'], uuid.uuid5(uuid.NAMESPACE_URL, filename).hex) + ".tmp"
 
         if 'Content-Range' in request.headers:
             range_str = request.headers['Content-Range']
@@ -973,6 +974,22 @@ class ResetWifiConfig(Resource):
 
         if path.isfile(file_path):
             remove(file_path)
+
+        device_uuid = None
+
+        wireless_connections = nmcli_get_connections(
+            'wlan*',
+            'ScreenlyOSE-*',
+            fields=['name', 'device', 'uuid'],
+            active=True
+        )
+        if wireless_connections:
+            _, _, device_uuid = wireless_connections[0].split(':')
+
+        if not device_uuid:
+            raise Exception('The device has no active connection.')
+
+        nmcli_remove_connection(device_uuid)
 
         return '', 204
 
@@ -1090,6 +1107,33 @@ class AssetContent(Resource):
         return result
 
 
+class ViewerCurrentAsset(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Currently displayed asset in viewer',
+                'schema': AssetModel
+            }
+        }
+    })
+    def get(self):
+        collector = ZmqCollector.get_instance()
+
+        publisher = ZmqPublisher.get_instance()
+        publisher.send_to_viewer('current_asset_id')
+
+        collector_result = collector.recv_json(2000)
+        current_asset_id = collector_result.get('current_asset_id')
+
+        if not current_asset_id:
+            return []
+
+        with db.conn(settings['database']) as conn:
+            return assets_helper.read(conn, current_asset_id)
+
+
 api.add_resource(Assets, '/api/v1/assets')
 api.add_resource(Asset, '/api/v1/assets/<asset_id>')
 api.add_resource(AssetsV1_1, '/api/v1.1/assets')
@@ -1104,6 +1148,7 @@ api.add_resource(Recover, '/api/v1/recover')
 api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 api.add_resource(Info, '/api/v1/info')
 api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
+api.add_resource(ViewerCurrentAsset, '/api/v1/viewer_current_asset')
 
 try:
     my_ip = get_node_ip()
@@ -1282,6 +1327,14 @@ def system_info():
     # Player name for title
     player_name = settings['player_name']
 
+    raspberry_model = '%s Revision: %s Ram: %s %s' % (diagnostics.get_raspberry_model(),
+                                                      diagnostics.get_raspberry_revision(),
+                                                      diagnostics.get_raspberry_ram(),
+                                                      diagnostics.get_raspberry_manufacturer())
+
+    branch = 'development' if diagnostics.get_git_branch() == 'master' else diagnostics.get_git_branch()
+    screenly_version = '%s@%s' % (branch, diagnostics.get_git_short_hash())
+
     return template(
         'system_info.html',
         player_name=player_name,
@@ -1290,7 +1343,10 @@ def system_info():
         free_space=free_space,
         uptime=system_uptime,
         display_info=display_info,
-        display_power=display_power
+        display_power=display_power,
+        raspberry_model=raspberry_model,
+        screenly_version=screenly_version,
+        mac_address=get_node_mac_address()
     )
 
 
@@ -1348,6 +1404,7 @@ def dated_url_for(endpoint, **values):
 
 
 @app.route('/static_with_mime/<string:path>')
+@auth_basic
 def static_with_mime(path):
     mimetype = request.args['mime'] if 'mime' in request.args else 'auto'
     return send_from_directory(directory='static', filename=path, mimetype=mimetype)

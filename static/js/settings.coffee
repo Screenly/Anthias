@@ -10,7 +10,12 @@ $().ready ->
     $('#btn-upload').prop 'disabled', yes
     $('#btn-backup').prop 'disabled', yes
 
-    $.post "api/v1/backup"
+    $.ajax({
+      method: "POST"
+      url: "api/v1/backup"
+      timeout: 1800 * 1000
+    })
+
     .done  (data, e) ->
       if (data)
         window.location = "static_with_mime/" + data + "?mime=application/x-tgz"
@@ -72,6 +77,8 @@ $().ready ->
       $('#request-error .alert').addClass 'alert-success'
       $('#request-error .alert').removeClass 'alert-danger'
       ($ '#request-error .msg').text 'Reset was successful. Please reboot the device.'
+    .error (e) ->
+        document.location.reload()
 
   $('#auth_checkbox p span').click (e) ->
     if $('input:checkbox[name="use_auth"]').is(':checked')

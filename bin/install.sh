@@ -29,20 +29,26 @@ if [ "$INSTALL" != 'y' ]; then
   exit 1
 fi
 
-echo && read -p "Would you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to the docker (y/N)" -n 1 -r -s EXP && echo
+echo && read -p "Would you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to Docker (y/N)" -n 1 -r -s EXP && echo
 if [ "$EXP" != 'y'  ]; then
   echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
   if [ "$DEV" != 'y'  ]; then
     export DOCKER_TAG="production"
+    echo "Screenly OSE version: Production" > ~/OSE_version.md
     BRANCH="production"
   else
     export DOCKER_TAG="latest"
+    echo "Screenly OSE version: Development" > ~/OSE_version.md
     BRANCH="master"
   fi
 else
   export DOCKER_TAG="experimental"
+  echo "Screenly OSE version: Experimental" > ~/OSE_version.md
   BRANCH="experimental"
 fi
+
+#Add reference of what linux flavor is running to OSE_version file
+cat /etc/os-release | grep "PRETTY_NAME" >> ~/OSE_version.md
 
 echo && read -p "Do you want Screenly to manage your network? This is recommended for most users. (Y/n)" -n 1 -r -s NETWORK && echo
 if [ "$NETWORK" == 'n' ]; then
@@ -53,7 +59,7 @@ else
     echo -e "\n\nIt looks like NetworkManager is not installed. Please install it by running 'sudo apt install -y network-manager' and then re-run the installation."
     exit 1
   fi
-  
+
   export MANAGE_NETWORK=true
 fi
 
@@ -89,7 +95,7 @@ sudo apt-get purge -y python-setuptools python-pip python-pyasn1
 sudo apt-get install -y python-dev git-core libffi-dev libssl-dev
 curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 
-sudo pip install ansible==2.6.3
+sudo pip install ansible==2.7.10
 
 ansible localhost -m git -a "repo=${1:-https://github.com/screenly/screenly-ose.git} dest=/home/pi/screenly version=$BRANCH"
 cd /home/pi/screenly/ansible

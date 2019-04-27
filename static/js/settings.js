@@ -10,7 +10,11 @@
       $('#btn-backup').text("Preparing archive...");
       $('#btn-upload').prop('disabled', true);
       $('#btn-backup').prop('disabled', true);
-      return $.post("api/v1/backup").done(function(data, e) {
+      return $.ajax({
+        method: "POST",
+        url: "api/v1/backup",
+        timeout: 1800 * 1000
+      }).done(function(data, e) {
         if (data) {
           return window.location = "static_with_mime/" + data + "?mime=application/x-tgz";
         }
@@ -82,6 +86,8 @@
         $('#request-error .alert').addClass('alert-success');
         $('#request-error .alert').removeClass('alert-danger');
         return ($('#request-error .msg')).text('Reset was successful. Please reboot the device.');
+      }).error(function(e) {
+        return document.location.reload();
       });
     });
     $('#auth_checkbox p span').click(function(e) {
@@ -102,3 +108,5 @@
   });
 
 }).call(this);
+
+//# sourceMappingURL=settings.js.map
