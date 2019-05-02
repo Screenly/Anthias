@@ -53,6 +53,10 @@ run_setup () {
 }
 
 run_viewer () {
+    # By default docker gives us 64MB of shared memory size but to display heavy
+    # pages we need more.
+    umount /dev/shm && mount -t tmpfs shm /dev/shm
+
     /usr/bin/X 0<&- &>/dev/null &
     /usr/bin/matchbox-window-manager -use_titlebar no -use_cursor no 0<&- &>/dev/null &
 
