@@ -22,7 +22,7 @@ from lib.errors import SigalrmException
 from settings import settings, LISTEN, PORT, ZmqConsumer
 import html_templates
 from lib.github import fetch_remote_hash, remote_branch_available
-from lib.utils import nmcli_get_connections, url_fails, touch, is_ci, get_node_ip
+from lib.utils import nmcli_get_connections, url_fails, touch, is_balena_app, is_ci, get_node_ip
 from lib import db
 from lib import assets_helper
 
@@ -382,7 +382,7 @@ def check_update():
                     'Branch': str(git_branch),
                     'Hash': str(git_hash),
                     'NOOBS': path.isfile('/boot/os_config.json'),
-                    'Balena': bool(getenv('RESIN_APP_NAME', False)) or bool(getenv('BALENA_APP_NAME', False))
+                    'Balena': is_balena_app()
                 })
             except MixpanelException:
                 pass
@@ -466,6 +466,18 @@ def setup():
     html_templates.black_page(BLACK_PAGE)
 
 
+def setup_hotspot():
+    wireless_connections = nmcli_get_connections('wlan*', 'ScreenlyOSE-*', active=True)
+
+    if not wireless_connections and not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
+        url = 'http://{0}/hotspot'.format(LISTEN)
+        load_browser(url=url)
+
+        while not wireless_connections and not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
+            sleep(1)
+            wireless_connections = nmcli_get_connections('wlan*', 'ScreenlyOSE-*', active=True)
+
+
 def wait_for_node_ip(seconds):
     for _ in range(seconds):
         try:
@@ -478,15 +490,10 @@ def wait_for_node_ip(seconds):
 def main():
     setup()
 
-    wireless_connections = nmcli_get_connections('wlan*', 'ScreenlyOSE-*', active=True)
-
-    if not wireless_connections and not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
-        url = 'http://{0}/hotspot'.format(LISTEN)
-        load_browser(url=url)
-
-        while not wireless_connections and not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
-            sleep(1)
-            wireless_connections = nmcli_get_connections('wlan*', 'ScreenlyOSE-*', active=True)
+    if is_balena_app():
+        load_browser()
+    else:
+        setup_hotspot()
 
     wait_for_node_ip(5)
 

@@ -266,6 +266,7 @@
         </div>
     </div>
 
+    {% if not context.is_balena_app %}
     <div class="row">
         <div id="wifi-section" class="col-12">
             <h1 class="page-header">
@@ -281,6 +282,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <div class="row">
         <div id="backup-section" class="col-12">

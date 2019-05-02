@@ -39,7 +39,7 @@ from lib.utils import get_video_duration
 from lib.utils import download_video_from_youtube, json_dump
 from lib.utils import url_fails
 from lib.utils import validate_url
-from lib.utils import is_demo_node
+from lib.utils import is_balena_app, is_demo_node
 
 from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
 
@@ -1289,6 +1289,8 @@ def settings_page():
 
     context['user'] = settings['user']
     context['password'] = "password" if settings['password'] != "" else ""
+
+    context['is_balena_app'] = is_balena_app()
 
     context['reset_button_state'] = "disabled" if path.isfile(path.join(HOME, DISABLE_MANAGE_NETWORK)) else ""
 
