@@ -120,7 +120,11 @@ def nmcli_get_connections(pattern=None, pattern_ignore=None, fields=None, active
     if active:
         params.append('--active')
 
-    out = sh.nmcli('-t', '-f', ','.join(fields), 'c', 'show', *params)
+    try:
+        out = sh.nmcli('-t', '-f', ','.join(fields), 'c', 'show', *params)
+    except sh.CommandNotFound:
+        return None
+
     connections = re.sub(escape_color_pattern, '', out.encode('utf-8')).splitlines()
 
     if pattern:
@@ -137,8 +141,10 @@ def nmcli_remove_connection(connection):
     :param connection: str
     :return: str
     """
-
-    return sh.sudo.nmcli('c', 'delete', connection)
+    try:
+        sh.sudo.nmcli('c', 'delete', connection)
+    except sh.CommandNotFound:
+        pass
 
 
 def get_video_duration(file):

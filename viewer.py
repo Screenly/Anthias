@@ -480,13 +480,19 @@ def main():
 
     wireless_connections = nmcli_get_connections('wlan*', 'ScreenlyOSE-*', active=True)
 
-    if not wireless_connections and not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
-        url = 'http://{0}/hotspot'.format(LISTEN)
-        load_browser(url=url)
+    # Displays the hotspot page
+    if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
+        if wireless_connections is None or len(wireless_connections) == 0:
+            url = 'http://{0}/hotspot'.format(LISTEN)
+            load_browser(url=url)
 
-        while not wireless_connections and not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
+    # Wait until the network is configured
+    while not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
+        if wireless_connections is None or len(wireless_connections) == 0:
             sleep(1)
             wireless_connections = nmcli_get_connections('wlan*', 'ScreenlyOSE-*', active=True)
+            continue
+        break
 
     wait_for_node_ip(5)
 

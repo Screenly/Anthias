@@ -30,11 +30,12 @@ if __name__ == "__main__":
 
     wireless_connections = nmcli_get_connections('wlan*', 'ScreenlyOSE-*', active=True)
 
-    if not wireless_connections and not gateways().get('default') and filter(r.match, interfaces()):
-        ssid = 'ScreenlyOSE-{}'.format(generate_perfect_paper_password(pw_length=4, has_symbols=False))
-        ssid_password = generate_perfect_paper_password(pw_length=8, has_symbols=False)
-        generate_page(ssid, ssid_password, 'screenly.io/wifi')
+    if not gateways().get('default') and filter(r.match, interfaces()):
+        if wireless_connections is None or len(wireless_connections) == 0:
+            ssid = 'ScreenlyOSE-{}'.format(generate_perfect_paper_password(pw_length=4, has_symbols=False))
+            ssid_password = generate_perfect_paper_password(pw_length=8, has_symbols=False)
+            generate_page(ssid, ssid_password, 'screenly.io/wifi')
 
-        wifi_connect = sh.sudo('wifi-connect', '-s', ssid, '-p', ssid_password, '-o', '9090')
+            wifi_connect = sh.sudo('wifi-connect', '-s', ssid, '-p', ssid_password, '-o', '9090')
     else:
         pass

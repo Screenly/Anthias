@@ -975,21 +975,22 @@ class ResetWifiConfig(Resource):
         if path.isfile(file_path):
             remove(file_path)
 
-        device_uuid = None
-
         wireless_connections = nmcli_get_connections(
             'wlan*',
             'ScreenlyOSE-*',
             fields=['name', 'device', 'uuid'],
             active=True
         )
-        if wireless_connections:
-            _, _, device_uuid = wireless_connections[0].split(':')
+        if wireless_connections is not None:
+            device_uuid = None
 
-        if not device_uuid:
-            raise Exception('The device has no active connection.')
+            if len(wireless_connections) > 0:
+                _, _, device_uuid = wireless_connections[0].split(':')
 
-        nmcli_remove_connection(device_uuid)
+            if not device_uuid:
+                raise Exception('The device has no active connection.')
+
+            nmcli_remove_connection(device_uuid)
 
         return '', 204
 
