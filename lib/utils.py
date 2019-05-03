@@ -138,8 +138,7 @@ def nmcli_get_connections(pattern=None, pattern_ignore=None, fields=None, active
 
 def nmcli_remove_connection(connection):
     """
-    :param connection: str
-    :return: str
+    :param connection: string
     """
     try:
         sh.sudo.nmcli('c', 'delete', connection)
