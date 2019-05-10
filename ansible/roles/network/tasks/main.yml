@@ -1,3 +1,8 @@
+- name: Installs NetworkManager
+  apt:
+    name: network-manager
+    state: latest
+
 - name: Check if screenly-network-manager files exist
   stat:
     path: /usr/sbin/screenly_net_mgr.py
@@ -36,20 +41,15 @@
 
 # Use resin-wifi-connect if Stretch
 
-- debug:
-    msg: "Manage network: {{ manage_network }}"
-
 - name: Disable dhcpcd
   command: systemctl disable dhcpcd
   when:
     - ansible_distribution_major_version|int >= 9
-    - manage_network|bool == true
 
 - name: Activate NetworkManager
   command: systemctl enable NetworkManager
   when:
     - ansible_distribution_major_version|int >= 9
-    - manage_network|bool == true
 
 - name: Check if resin-wifi-connect required version exist
   stat:
@@ -67,7 +67,6 @@
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
-    - manage_network|bool == true
 
 - name: Unarchive resin-wifi-connect release
   unarchive:
@@ -78,7 +77,6 @@
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
-    - manage_network|bool == true
 
 - name: Copy "ui" folder
   copy:
@@ -88,7 +86,6 @@
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
-    - manage_network|bool == true
 
 - name: Copy wifi-connect file
   copy:
@@ -98,7 +95,6 @@
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
-    - manage_network|bool == true
 
 - name: Touch resin-wifi-connect version file
   file:
@@ -107,7 +103,6 @@
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
-    - manage_network|bool == true
 
 - name: Remove unarchive files
   file:
@@ -120,60 +115,33 @@
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
-    - manage_network|bool == true
 
 - name: Copy wifi-connect systemd unit
   copy:
     src: "wifi-connect.service"
     dest: "/etc/systemd/system/wifi-connect.service"
-  when: manage_network|bool == true
 
 - name: Enable wifi-connect systemd service
   systemd:
     name: wifi-connect.service
     enabled: yes
-  when: manage_network|bool == true
-
-- name: Remove disable_manage_network file
-  file:
-    state: absent
-    path: "/home/pi/.screenly/disable_manage_network"
-  when: manage_network|bool == true
-
-# Disable resin-wifi-connect
-
-# If disable_manage_network file exist the state is always "initialized".
-# To avoid changing the state the "Re-run network detection" button will be locked
-
-- name: Check if deprecated systemd services exists
-  stat:
-    path: /etc/systemd/system/wifi-connect.service
-  register: wifi_service
-
-- set_fact: wifi_service_exist="{{wifi_service.stat.exists}}"
-
-- name: Disable wifi-connect systemd service
-  systemd:
-    name: wifi-connect.service
-    enabled: no
-  when:
-    - manage_network|bool != true
-    - wifi_service_exist
-
-- name: Remove wifi-connect systemd unit
-  file:
-    state: absent
-    path: "/etc/systemd/system/wifi-connect.service"
-  when: manage_network|bool != true
 
 - name: Touch initialized file
   file:
     state: touch
     path: "/home/pi/.screenly/initialized"
-  when: manage_network|bool != true
 
-- name: Touch disable_manage_network file
-  file:
-    state: touch
-    path: "/home/pi/.screenly/disable_manage_network"
-  when: manage_network|bool != true
+- name: Add pi user to Identity
+  replace:
+    regexp: '^Identity=.*'
+    replace: 'Identity=unix-group:netdev;unix-group:sudo:pi'
+    dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
+
+- name: Set ResultAny to yes
+  replace:
+    regexp: '^ResultAny=.*'
+    replace: 'ResultAny=yes'
+    dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
+
+- name: Copy org.freedesktop.NetworkManager.pkla to 50-local.d
+  command: cp -f /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla /etc/polkit-1/localauthority/50-local.d
