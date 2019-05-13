@@ -1,31 +1,5 @@
 #!/bin/bash
 
-SETUP=
-VIEWER=
-SERVER=
-WEBSOCKET=
-
-while [[ $# -gt 0 ]]
-do
-    case "$1" in
-        --setup)
-            SETUP=1
-            ;;
-        --viewer)
-            VIEWER=1
-            ;;
-        --server)
-            SERVER=1
-            ;;
-        --websocket)
-            WEBSOCKET=1
-            ;;
-      *)
-            ;;
-    esac
-    shift
-done
-
 run_setup () {
     mkdir -p \
         /data/.config \
@@ -57,20 +31,33 @@ run_viewer () {
     # pages we need more.
     umount /dev/shm && mount -t tmpfs shm /dev/shm
 
-    /usr/bin/X 0<&- &>/dev/null &
-    /usr/bin/matchbox-window-manager -use_titlebar no -use_cursor no 0<&- &>/dev/null &
-
     while true; do
+
+        /usr/bin/X 0<&- &>/dev/null &
+        /usr/bin/matchbox-window-manager -use_titlebar no -use_cursor no 0<&- &>/dev/null &
+
         error=$(/usr/bin/xset s off 2>&1 | grep -c "unable to open display")
             if [[ "$error" -eq 0 ]]; then
             break
         fi
+
         echo "Still continue..."
         sleep 1
     done
 
     /usr/bin/xset -dpms
     /usr/bin/xset s noblank
+
+    while true; do
+
+        error=$(curl 127.0.0.1:8080 2>&1 | grep -c "Failed to connect")
+            if [[ "$error" -eq 0 ]]; then
+            break
+        fi
+
+        echo "Still continue..."
+        sleep 1
+    done
 
     /usr/bin/python /data/screenly/viewer.py
 }
@@ -87,18 +74,15 @@ run_websocket () {
     /usr/bin/python /data/screenly/websocket_server_layer.py
 }
 
-if [[ "$SETUP" = 1 ]]; then
+if [[ "$SCREENLYSERVICE" = "server" ]]; then
     run_setup
-fi
-
-if [[ "$VIEWER" = 1 ]]; then
-    run_viewer
-fi
-
-if [[ "$SERVER" = 1 ]]; then
     run_server
 fi
 
-if [[ "$WEBSOCKET" = 1 ]]; then
+if [[ "$SCREENLYSERVICE" = "viewer" ]]; then
+    run_viewer
+fi
+
+if [[ "$SCREENLYSERVICE" = "websocket" ]]; then
     run_websocket
 fi

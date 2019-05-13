@@ -1301,8 +1301,6 @@ def settings_page():
 
     context['is_balena_app'] = is_balena_app()
 
-    context['reset_button_state'] = "disabled" if path.isfile(path.join(HOME, DISABLE_MANAGE_NETWORK)) else ""
-
     if not settings['user'] or not settings['password']:
         context['use_auth'] = False
     else:
