@@ -13,6 +13,7 @@ RUN apt-get update && \
         net-tools \
         procps \
         python-dev \
+        python-gobject \
         python-imaging \
         python-netifaces \
         python-simplejson \
@@ -22,8 +23,10 @@ RUN apt-get update && \
 
 # Install Python requirements
 ADD requirements.txt /tmp/requirements.txt
+ADD requirements.dev.txt /tmp/requirements.dev.txt
 RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
-    pip install -r /tmp/requirements.txt
+    pip install -r /tmp/requirements.txt && \
+    pip install -r /tmp/requirements.dev.txt
 
 # Create runtime user
 RUN useradd pi

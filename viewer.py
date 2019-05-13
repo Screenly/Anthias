@@ -1,30 +1,32 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import logging
+import pydbus
+import random
+import re
+import sh
+import string
+import zmq
 from datetime import datetime, timedelta
+from mixpanel import Mixpanel, MixpanelException
+from netifaces import gateways
 from os import path, getenv, utime, system
 from platform import machine
 from random import shuffle
 from threading import Thread
-
-from mixpanel import Mixpanel, MixpanelException
-from netifaces import gateways
 from requests import get as req_get
 from signal import alarm, signal, SIGALRM, SIGUSR1
 from time import sleep
-import logging
-import random
-import sh
-import string
-import zmq
 
-from lib.errors import SigalrmException
-from settings import settings, LISTEN, PORT, ZmqConsumer
 import html_templates
-from lib.github import fetch_remote_hash, remote_branch_available
-from lib.utils import nmcli_get_connections, url_fails, touch, is_balena_app, is_ci, get_node_ip
-from lib import db
+from settings import settings, LISTEN, PORT, ZmqConsumer
+
 from lib import assets_helper
+from lib import db
+from lib.github import fetch_remote_hash, remote_branch_available
+from lib.errors import SigalrmException
+from lib.utils import get_active_connections, url_fails, touch, is_balena_app, is_ci, get_node_ip
 
 
 __author__ = "Screenly, Inc"
@@ -467,15 +469,41 @@ def setup():
 
 
 def setup_hotspot():
-    wireless_connections = nmcli_get_connections('wlan*', 'ScreenlyOSE-*', active=True)
+    bus = pydbus.SystemBus()
 
-    if not wireless_connections and not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
-        url = 'http://{0}/hotspot'.format(LISTEN)
-        load_browser(url=url)
+    pattern_include = re.compile("wlan*")
+    pattern_exclude = re.compile("ScreenlyOSE-*")
 
-        while not wireless_connections and not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
+    wireless_connections = filter(
+        lambda c: not pattern_exclude.search(str(c['Id'])),
+        filter(
+            lambda c: pattern_include.search(str(c['Devices'])),
+            get_active_connections(bus)
+        )
+    )
+
+    # Displays the hotspot page
+    if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
+        if wireless_connections is None or len(wireless_connections) == 0:
+            url = 'http://{0}/hotspot'.format(LISTEN)
+            load_browser(url=url)
+
+    # Wait until the network is configured
+    while not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
+        if len(wireless_connections) == 0:
             sleep(1)
-            wireless_connections = nmcli_get_connections('wlan*', 'ScreenlyOSE-*', active=True)
+            wireless_connections = filter(
+                lambda c: not pattern_exclude.search(str(c['Id'])),
+                filter(
+                    lambda c: pattern_include.search(str(c['Devices'])),
+                    get_active_connections(bus)
+                )
+            )
+            continue
+        if wireless_connections is None:
+            sleep(1)
+            continue
+        break
 
 
 def wait_for_node_ip(seconds):

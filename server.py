@@ -5,19 +5,21 @@ __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2017, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
+import hashlib
+import json
+import pydbus
+import re
+import traceback
+import uuid
+from base64 import b64encode
 from datetime import timedelta
 from dateutil import parser as date_parser
 from functools import wraps
 from hurry.filesize import size
-import json
 from mimetypes import guess_type
 from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
 from sh import git
 from subprocess import check_output
-import traceback
-import uuid
-import hashlib
-from base64 import b64encode
 
 from flask import Flask, make_response, render_template, request, send_from_directory, url_for
 from flask_cors import CORS
@@ -33,7 +35,7 @@ from lib import db
 from lib import diagnostics
 from lib import queries
 
-from lib.utils import nmcli_get_connections, nmcli_remove_connection
+from lib.utils import get_active_connections, remove_connection
 from lib.utils import get_node_ip, get_node_mac_address
 from lib.utils import get_video_duration
 from lib.utils import download_video_from_youtube, json_dump
@@ -44,7 +46,6 @@ from lib.utils import is_balena_app, is_demo_node
 from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
 
 HOME = getenv('HOME', '/home/pi')
-DISABLE_MANAGE_NETWORK = '.screenly/disable_manage_network'
 
 app = Flask(__name__)
 CORS(app)
@@ -975,21 +976,29 @@ class ResetWifiConfig(Resource):
         if path.isfile(file_path):
             remove(file_path)
 
-        device_uuid = None
+        bus = pydbus.SystemBus()
 
-        wireless_connections = nmcli_get_connections(
-            'wlan*',
-            'ScreenlyOSE-*',
-            fields=['name', 'device', 'uuid'],
-            active=True
+        pattern_include = re.compile("wlan*")
+        pattern_exclude = re.compile("ScreenlyOSE-*")
+
+        wireless_connections = filter(
+            lambda c: not pattern_exclude.search(str(c['Id'])),
+            filter(
+                lambda c: pattern_include.search(str(c['Devices'])),
+                get_active_connections(bus)
+            )
         )
-        if wireless_connections:
-            _, _, device_uuid = wireless_connections[0].split(':')
 
-        if not device_uuid:
-            raise Exception('The device has no active connection.')
+        if wireless_connections is not None:
+            device_uuid = None
 
-        nmcli_remove_connection(device_uuid)
+            if len(wireless_connections) > 0:
+                device_uuid = wireless_connections[0].get('Uuid')
+
+            if not device_uuid:
+                raise Exception('The device has no active connection.')
+
+            remove_connection(bus, device_uuid)
 
         return '', 204
 
