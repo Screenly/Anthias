@@ -153,6 +153,7 @@
     - matchbox
     - omxplayer
     - python-dev
+    - python-gobject
     - python-netifaces
     - python-simplejson
     - rpi-update
