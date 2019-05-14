@@ -321,3 +321,11 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
     if not has_symbols:
         ppp_letters = ''.join(set(ppp_letters) - set(string.punctuation))
     return "".join(random.SystemRandom().choice(ppp_letters) for _ in range(pw_length))
+
+
+def is_balena_app():
+    """
+    Checks the application is running on Balena Cloud
+    :return: bool
+    """
+    return bool(getenv('RESIN_APP_NAME', False)) or bool(getenv('BALENA_APP_NAME', False))

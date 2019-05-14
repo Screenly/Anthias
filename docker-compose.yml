@@ -1,0 +1,52 @@
+version: "2"
+services:
+  screenly-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.template
+    environment:
+      - HOME=/data
+      - LISTEN=0.0.0.0
+      - PYTHONPATH=/data/screenly
+      - SCREENLYSERVICE=server
+      - SWAGGER_HOST=ose.demo.screenlyapp.com
+    network_mode: "host"
+    privileged: true
+    volumes:
+      - resin-data:/data
+
+  screenly-viewer:
+    build:
+      context: .
+      dockerfile: Dockerfile.template
+    depends_on:
+      - screenly-server
+    environment:
+      - DISABLE_UPDATE_CHECK=True
+      - DISPLAY=:0.0
+      - HOME=/data
+      - NOREFRESH=1
+      - PYTHONPATH=/data/screenly
+      - SCREENLYSERVICE=viewer
+    network_mode: "host"
+    privileged: true
+    volumes:
+      - resin-data:/data
+
+  screenly-websocket:
+    build:
+      context: .
+      dockerfile: Dockerfile.template
+    depends_on:
+      - screenly-server
+    environment:
+      - HOME=/data
+      - PYTHONPATH=/data/screenly
+      - SCREENLYSERVICE=websocket
+    network_mode: "host"
+    privileged: true
+    volumes:
+      - resin-data:/data
+
+volumes:
+    resin-data:

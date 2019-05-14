@@ -26,7 +26,7 @@ from lib import assets_helper
 from lib import db
 from lib.github import fetch_remote_hash, remote_branch_available
 from lib.errors import SigalrmException
-from lib.utils import get_active_connections, url_fails, touch, is_ci, get_node_ip
+from lib.utils import get_active_connections, url_fails, touch, is_balena_app, is_ci, get_node_ip
 
 
 __author__ = "Screenly, Inc"
@@ -384,7 +384,7 @@ def check_update():
                     'Branch': str(git_branch),
                     'Hash': str(git_hash),
                     'NOOBS': path.isfile('/boot/os_config.json'),
-                    'Balena': bool(getenv('RESIN_APP_NAME', False)) or bool(getenv('BALENA_APP_NAME', False))
+                    'Balena': is_balena_app()
                 })
             except MixpanelException:
                 pass
@@ -468,18 +468,7 @@ def setup():
     html_templates.black_page(BLACK_PAGE)
 
 
-def wait_for_node_ip(seconds):
-    for _ in range(seconds):
-        try:
-            get_node_ip()
-            break
-        except Exception:
-            sleep(1)
-
-
-def main():
-    setup()
-
+def setup_hotspot():
     bus = pydbus.SystemBus()
 
     pattern_include = re.compile("wlan*")
@@ -515,6 +504,24 @@ def main():
             sleep(1)
             continue
         break
+
+
+def wait_for_node_ip(seconds):
+    for _ in range(seconds):
+        try:
+            get_node_ip()
+            break
+        except Exception:
+            sleep(1)
+
+
+def main():
+    setup()
+
+    if is_balena_app():
+        load_browser()
+    else:
+        setup_hotspot()
 
     wait_for_node_ip(5)
 
