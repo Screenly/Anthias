@@ -328,4 +328,4 @@ def is_balena_app():
     Checks the application is running on Balena Cloud
     :return: bool
     """
-    return bool(getenv('RESIN_APP_NAME', False)) or bool(getenv('BALENA_APP_NAME', False))
+    return bool(getenv('RESIN', False)) or bool(getenv('BALENA', False))
