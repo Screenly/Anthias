@@ -30,7 +30,7 @@ from lib.utils import get_active_connections, url_fails, touch, is_balena_app, i
 
 
 __author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2017, Screenly, Inc"
+__copyright__ = "Copyright 2012-2019, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 
