@@ -1299,7 +1299,7 @@ def settings_page():
     context['user'] = settings['user']
     context['password'] = "password" if settings['password'] != "" else ""
 
-    context['is_balena_app'] = is_balena_app()
+    context['is_balena'] = is_balena_app()
 
     if not settings['user'] or not settings['password']:
         context['use_auth'] = False
@@ -1357,6 +1357,25 @@ def system_info():
         screenly_version=screenly_version,
         mac_address=get_node_mac_address()
     )
+
+
+@app.route('/integrations')
+@auth_basic
+def integrations():
+
+    context = {
+        'is_balena': is_balena_app(),
+    }
+
+    if context['is_balena']:
+        context['balena_device_id'] = getenv('BALENA_DEVICE_UUID')
+        context['balena_app_id'] = getenv('BALENA_APP_ID')
+        context['balena_app_name'] = getenv('BALENA_APP_NAME')
+        context['balena_supervisor_version'] = getenv('BALENA_SUPERVISOR_VERSION')
+        context['balena_host_os_version'] = getenv('BALENA_HOST_OS_VERSION')
+        context['balena_device_name_at_init'] = getenv('BALENA_DEVICE_NAME_AT_INIT')
+
+    return template('integrations.html', **context)
 
 
 @app.route('/splash-page')
