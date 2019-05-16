@@ -1309,7 +1309,7 @@ def settings_page():
     return template('settings.html', **context)
 
 
-@app.route('/system_info')
+@app.route('/system-info')
 @auth_basic
 def system_info():
     viewlog = None
@@ -1345,7 +1345,7 @@ def system_info():
     screenly_version = '%s@%s' % (branch, diagnostics.get_git_short_hash())
 
     return template(
-        'system_info.html',
+        'system-info.html',
         player_name=player_name,
         viewlog=viewlog,
         loadavg=loadavg,
@@ -1359,7 +1359,7 @@ def system_info():
     )
 
 
-@app.route('/splash_page')
+@app.route('/splash-page')
 def splash_page():
     url = None
     try:
@@ -1378,7 +1378,7 @@ def splash_page():
             url = "http://{}:{}".format(my_ip, PORT)
 
     msg = url if url else error_msg
-    return template('splash_page.html', ip_lookup=ip_lookup, msg=msg)
+    return template('splash-page.html', ip_lookup=ip_lookup, msg=msg)
 
 
 @app.errorhandler(403)

@@ -525,7 +525,7 @@ def main():
 
     wait_for_node_ip(5)
 
-    url = 'http://{0}:{1}/splash_page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
+    url = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
     browser_url(url=url)
 
     if settings['show_splash']:
@@ -538,7 +538,7 @@ def main():
     subscriber.daemon = True
     subscriber.start()
 
-    # We don't want to show splash_page if there are active assets but all of them are not available
+    # We don't want to show splash-page if there are active assets but all of them are not available
     view_image(HOME + LOAD_SCREEN)
 
     logging.debug('Entering infinite loop.')
