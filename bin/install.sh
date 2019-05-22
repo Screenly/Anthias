@@ -50,7 +50,7 @@ fi
 #Add reference of what linux flavor is running to OSE_version file
 cat /etc/os-release | grep "PRETTY_NAME" >> ~/OSE_version.md
 
-echo && read -p "Do you want to install network-manager? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK_MANAGER && echo
+echo && read -p "Do you want Screenly to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
 
 echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
 if [ "$UPGRADE" != 'y' ]; then
@@ -84,7 +84,7 @@ sudo apt-get purge -y python-setuptools python-pip python-pyasn1
 sudo apt-get install -y python-dev git-core libffi-dev libssl-dev
 curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 
-if [ "$NETWORK_MANAGER" == 'y' ]; then
+if [ "$NETWORK" == 'y' ]; then
   export MANAGE_NETWORK=true
   sudo apt-get install -y network_manager
 else
