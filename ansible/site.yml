@@ -2,6 +2,8 @@
   hosts: all
   user: pi
   become: yes
+  vars:
+    manage_network: "{{ lookup('env', 'MANAGE_NETWORK') }}"
 
   handlers:
     - name: restart-nginx
