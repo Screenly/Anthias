@@ -474,17 +474,22 @@ def setup_hotspot():
     pattern_include = re.compile("wlan*")
     pattern_exclude = re.compile("ScreenlyOSE-*")
 
+    wireless_connections = get_active_connections(bus)
+
+    if wireless_connections is None:
+        return
+
     wireless_connections = filter(
         lambda c: not pattern_exclude.search(str(c['Id'])),
         filter(
             lambda c: pattern_include.search(str(c['Devices'])),
-            get_active_connections(bus)
+            wireless_connections
         )
     )
 
     # Displays the hotspot page
     if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
-        if wireless_connections is None or len(wireless_connections) == 0:
+        if len(wireless_connections) == 0:
             url = 'http://{0}/hotspot'.format(LISTEN)
             load_browser(url=url)
 
@@ -505,6 +510,8 @@ def setup_hotspot():
             continue
         break
 
+    wait_for_node_ip(5)
+
 
 def wait_for_node_ip(seconds):
     for _ in range(seconds):
@@ -523,9 +530,7 @@ def main():
     else:
         setup_hotspot()
 
-    wait_for_node_ip(5)
-
-    url = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
+    url = 'http://{0}:{1}/splash_page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
     browser_url(url=url)
 
     if settings['show_splash']:

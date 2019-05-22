@@ -1,8 +1,3 @@
-- name: Installs NetworkManager
-  apt:
-    name: network-manager
-    state: latest
-
 - name: Check if screenly-network-manager files exist
   stat:
     path: /usr/sbin/screenly_net_mgr.py
@@ -40,25 +35,54 @@
     path: /etc/systemd/system/screenly-net-watchdog.timer
 
 # Use resin-wifi-connect if Stretch
+- debug:
+    msg: "Manage network: {{ manage_network }}"
+
+- name: Add pi user to Identity
+  replace:
+    regexp: '^Identity=.*'
+    replace: 'Identity=unix-group:netdev;unix-group:sudo:pi'
+    dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
+  when:
+    - manage_network|bool == true
+
+- name: Set ResultAny to yes
+  replace:
+    regexp: '^ResultAny=.*'
+    replace: 'ResultAny=yes'
+    dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
+  when:
+    - manage_network|bool == true
+
+- name: Copy org.freedesktop.NetworkManager.pkla to 50-local.d
+  command: cp -f /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla /etc/polkit-1/localauthority/50-local.d
+  when:
+    - manage_network|bool == true
 
 - name: Disable dhcpcd
   command: systemctl disable dhcpcd
   when:
     - ansible_distribution_major_version|int >= 9
+    - manage_network|bool == true
 
 - name: Activate NetworkManager
   command: systemctl enable NetworkManager
   when:
     - ansible_distribution_major_version|int >= 9
+    - manage_network|bool == true
 
 - name: Check if resin-wifi-connect required version exist
   stat:
     path: "/usr/local/share/wifi-connect/ui/{{ resin_wifi_connect_version }}"
   register: resin_wifi_version_file
-  when: ansible_distribution_major_version|int >= 9
+  when:
+    - ansible_distribution_major_version|int >= 9
+    - manage_network|bool == true
 
 - set_fact: resin_wifi_version_file_exist="{{resin_wifi_version_file.stat.exists}}"
-  when: ansible_distribution_major_version|int >= 9
+  when:
+    - ansible_distribution_major_version|int >= 9
+    - manage_network|bool == true
 
 - name: Download resin-wifi-connect release
   get_url:
@@ -67,6 +91,7 @@
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
+    - manage_network|bool == true
 
 - name: Unarchive resin-wifi-connect release
   unarchive:
@@ -77,6 +102,7 @@
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
+    - manage_network|bool == true
 
 - name: Copy "ui" folder
   copy:
@@ -86,6 +112,7 @@
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
+    - manage_network|bool == true
 
 - name: Copy wifi-connect file
   copy:
@@ -95,6 +122,7 @@
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
+    - manage_network|bool == true
 
 - name: Touch resin-wifi-connect version file
   file:
@@ -103,6 +131,7 @@
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
+    - manage_network|bool == true
 
 - name: Remove unarchive files
   file:
@@ -115,6 +144,7 @@
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
+    - manage_network|bool == true
 
 - name: Copy wifi-connect systemd unit
   copy:
@@ -130,18 +160,3 @@
   file:
     state: touch
     path: "/home/pi/.screenly/initialized"
-
-- name: Add pi user to Identity
-  replace:
-    regexp: '^Identity=.*'
-    replace: 'Identity=unix-group:netdev;unix-group:sudo:pi'
-    dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
-
-- name: Set ResultAny to yes
-  replace:
-    regexp: '^ResultAny=.*'
-    replace: 'ResultAny=yes'
-    dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
-
-- name: Copy org.freedesktop.NetworkManager.pkla to 50-local.d
-  command: cp -f /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla /etc/polkit-1/localauthority/50-local.d

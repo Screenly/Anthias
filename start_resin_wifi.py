@@ -32,11 +32,16 @@ if __name__ == "__main__":
     pattern_include = re.compile("wlan*")
     pattern_exclude = re.compile("ScreenlyOSE-*")
 
+    wireless_connections = get_active_connections(bus)
+
+    if wireless_connections is None:
+        exit()
+
     wireless_connections = filter(
         lambda c: not pattern_exclude.search(str(c['Id'])),
         filter(
             lambda c: pattern_include.search(str(c['Devices'])),
-            get_active_connections(bus)
+            wireless_connections
         )
     )
 

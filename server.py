@@ -981,16 +981,18 @@ class ResetWifiConfig(Resource):
         pattern_include = re.compile("wlan*")
         pattern_exclude = re.compile("ScreenlyOSE-*")
 
-        wireless_connections = filter(
-            lambda c: not pattern_exclude.search(str(c['Id'])),
-            filter(
-                lambda c: pattern_include.search(str(c['Devices'])),
-                get_active_connections(bus)
-            )
-        )
+        wireless_connections = get_active_connections(bus)
 
         if wireless_connections is not None:
             device_uuid = None
+
+            wireless_connections = filter(
+                lambda c: not pattern_exclude.search(str(c['Id'])),
+                filter(
+                    lambda c: pattern_include.search(str(c['Devices'])),
+                    wireless_connections
+                )
+            )
 
             if len(wireless_connections) > 0:
                 device_uuid = wireless_connections[0].get('Uuid')
