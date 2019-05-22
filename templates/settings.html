@@ -69,6 +69,12 @@
                 </li>
             {% endif %}
             <li>
+                <a href="/integrations">
+                    <i class="far fa-plus-square"></i>
+                    Integrations
+                </a>
+            </li>
+            <li>
                 <a href="/settings">
                     <i class="fas fa-cogs"></i>
                     Settings
@@ -76,7 +82,7 @@
             </li>
             <li class="divider-vertical"></li>
             <li>
-                <a href="/system_info">
+                <a href="/system-info">
                     <i class="fas fa-tasks"></i>
                     System Info
                 </a>
@@ -266,7 +272,7 @@
         </div>
     </div>
 
-    {% if not context.is_balena_app %}
+    {% if not context.is_balena %}
     <div class="row">
         <div id="wifi-section" class="col-12">
             <h1 class="page-header">

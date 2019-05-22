@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 __author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2017, Screenly, Inc"
+__copyright__ = "Copyright 2012-2019, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 import hashlib
@@ -1301,7 +1301,7 @@ def settings_page():
     context['user'] = settings['user']
     context['password'] = "password" if settings['password'] != "" else ""
 
-    context['is_balena_app'] = is_balena_app()
+    context['is_balena'] = is_balena_app()
 
     if not settings['user'] or not settings['password']:
         context['use_auth'] = False
@@ -1311,7 +1311,7 @@ def settings_page():
     return template('settings.html', **context)
 
 
-@app.route('/system_info')
+@app.route('/system-info')
 @auth_basic
 def system_info():
     viewlog = None
@@ -1347,7 +1347,7 @@ def system_info():
     screenly_version = '%s@%s' % (branch, diagnostics.get_git_short_hash())
 
     return template(
-        'system_info.html',
+        'system-info.html',
         player_name=player_name,
         viewlog=viewlog,
         loadavg=loadavg,
@@ -1361,7 +1361,26 @@ def system_info():
     )
 
 
-@app.route('/splash_page')
+@app.route('/integrations')
+@auth_basic
+def integrations():
+
+    context = {
+        'is_balena': is_balena_app(),
+    }
+
+    if context['is_balena']:
+        context['balena_device_id'] = getenv('BALENA_DEVICE_UUID')
+        context['balena_app_id'] = getenv('BALENA_APP_ID')
+        context['balena_app_name'] = getenv('BALENA_APP_NAME')
+        context['balena_supervisor_version'] = getenv('BALENA_SUPERVISOR_VERSION')
+        context['balena_host_os_version'] = getenv('BALENA_HOST_OS_VERSION')
+        context['balena_device_name_at_init'] = getenv('BALENA_DEVICE_NAME_AT_INIT')
+
+    return template('integrations.html', **context)
+
+
+@app.route('/splash-page')
 def splash_page():
     url = None
     try:
@@ -1380,7 +1399,7 @@ def splash_page():
             url = "http://{}:{}".format(my_ip, PORT)
 
     msg = url if url else error_msg
-    return template('splash_page.html', ip_lookup=ip_lookup, msg=msg)
+    return template('splash-page.html', ip_lookup=ip_lookup, msg=msg)
 
 
 @app.errorhandler(403)
