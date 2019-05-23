@@ -530,7 +530,7 @@ def main():
     else:
         setup_hotspot()
 
-    url = 'http://{0}:{1}/splash_page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
+    url = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
     browser_url(url=url)
 
     if settings['show_splash']:
