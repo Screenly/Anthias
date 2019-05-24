@@ -24,6 +24,7 @@ from settings import settings, LISTEN, PORT, ZmqConsumer
 
 from lib import assets_helper
 from lib import db
+from lib.diagnostics import get_git_branch, get_git_short_hash
 from lib.github import fetch_remote_hash, remote_branch_available
 from lib.errors import SigalrmException
 from lib.utils import get_active_connections, url_fails, touch, is_balena_app, is_ci, get_node_ip
@@ -372,8 +373,8 @@ def check_update():
 
     logging.debug('Last update: %s' % str(last_update))
 
-    git_branch = sh.git('rev-parse', '--abbrev-ref', 'HEAD').strip()
-    git_hash = sh.git('rev-parse', '--short', 'HEAD').strip()
+    git_branch = get_git_branch()
+    git_hash = get_git_short_hash()
 
     if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
 
