@@ -86,7 +86,7 @@ curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 
 if [ "$NETWORK" == 'y' ]; then
   export MANAGE_NETWORK=true
-  sudo apt-get install -y network_manager
+  sudo apt-get install -y network-manager
 else
   export MANAGE_NETWORK=false
 fi
