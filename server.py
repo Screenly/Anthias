@@ -86,8 +86,7 @@ def is_up_to_date():
         latest_sha = None
 
     if latest_sha:
-        branch_sha = diagnostics.get_git_hash()
-        return branch_sha.stdout.strip() == latest_sha
+        return diagnostics.get_git_hash() == latest_sha
 
     # If we weren't able to verify with remote side,
     # we'll set up_to_date to true in order to hide
