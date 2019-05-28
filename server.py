@@ -18,7 +18,6 @@ from functools import wraps
 from hurry.filesize import size
 from mimetypes import guess_type
 from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
-from sh import git
 from subprocess import check_output
 
 from flask import Flask, make_response, render_template, request, send_from_directory, url_for
@@ -87,7 +86,7 @@ def is_up_to_date():
         latest_sha = None
 
     if latest_sha:
-        branch_sha = git('rev-parse', 'HEAD')
+        branch_sha = diagnostics.get_git_hash()
         return branch_sha.stdout.strip() == latest_sha
 
     # If we weren't able to verify with remote side,
