@@ -7,14 +7,14 @@ import random
 import re
 import requests
 import string
+import sh
 
 from datetime import datetime, timedelta
 from distutils.util import strtobool
-from netifaces import ifaddresses, gateways, AF_INET
+from netifaces import ifaddresses, gateways, AF_INET, AF_LINK
 from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
-import sh
 from subprocess import check_output, call
 from threading import Thread
 from urlparse import urlparse
@@ -23,7 +23,8 @@ from assets_helper import update
 
 arch = machine()
 
-HTTP_OK = xrange(200, 299)
+# 300 level HTTP responses are also ok, such as redirects, which many sites have and load
+HTTP_OK = xrange(200, 399)
 
 # This will only work on the Raspberry Pi,
 # so let's wrap it in a try/except so that
@@ -76,15 +77,90 @@ def validate_url(string):
 
 
 def get_node_ip():
-        """Returns the node's IP, for the interface
-        that is being used as the default gateway.
-        This should work on both MacOS X and Linux."""
-        try:
-            default_interface = gateways()['default'][AF_INET][1]
-            my_ip = ifaddresses(default_interface)[AF_INET][0]['addr']
-            return my_ip
-        except ValueError:
-            raise Exception("Unable to resolve local IP address.")
+    """Returns the node's IP, for the interface
+    that is being used as the default gateway.
+    This should work on both MacOS X and Linux."""
+    try:
+        default_interface = gateways()['default'][AF_INET][1]
+        my_ip = ifaddresses(default_interface)[AF_INET][0]['addr']
+        return my_ip
+    except (KeyError, ValueError):
+        raise Exception("Unable to resolve local IP address.")
+
+
+def get_node_mac_address():
+    """Returns the node's MAC address, for the interface
+    that is being used as the default gateway.
+    This should work on both MacOS X and Linux."""
+    try:
+        default_interface = gateways()['default'][AF_INET][1]
+        mac_address = ifaddresses(default_interface)[AF_LINK][0]['addr']
+        return mac_address
+    except (KeyError, ValueError):
+        pass
+
+
+def get_active_connections(bus, fields=None):
+    """
+
+    :param bus: pydbus.bus.Bus
+    :param fields: list
+    :return: list
+    """
+    if not fields:
+        fields = ['Id', 'Uuid', 'Type', 'Devices']
+
+    connections = list()
+
+    try:
+        nm_proxy = bus.get("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager")
+    except Exception:
+        return None
+
+    nm_properties = nm_proxy["org.freedesktop.DBus.Properties"]
+    active_connections = nm_properties.Get("org.freedesktop.NetworkManager", "ActiveConnections")
+    for active_connection in active_connections:
+        active_connection_proxy = bus.get("org.freedesktop.NetworkManager", active_connection)
+        active_connection_properties = active_connection_proxy["org.freedesktop.DBus.Properties"]
+
+        connection = dict()
+        for field in fields:
+            field_value = active_connection_properties.Get("org.freedesktop.NetworkManager.Connection.Active", field)
+
+            if field == 'Devices':
+                devices = list()
+                for device_path in field_value:
+                    device_proxy = bus.get("org.freedesktop.NetworkManager", device_path)
+                    device_properties = device_proxy["org.freedesktop.DBus.Properties"]
+                    devices.append(device_properties.Get("org.freedesktop.NetworkManager.Device", "Interface"))
+                field_value = devices
+
+            connection.update({field: field_value})
+        connections.append(connection)
+
+    return connections
+
+
+def remove_connection(bus, uuid):
+    """
+
+    :param bus: pydbus.bus.Bus
+    :param uuid: string
+    :return: boolean
+    """
+    try:
+        nm_proxy = bus.get("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings")
+    except Exception:
+        return False
+
+    nm_settings = nm_proxy["org.freedesktop.NetworkManager.Settings"]
+
+    connection_path = nm_settings.GetConnectionByUuid(uuid)
+    connection_proxy = bus.get("org.freedesktop.NetworkManager", connection_path)
+    connection = connection_proxy["org.freedesktop.NetworkManager.Settings.Connection"]
+    connection.Delete()
+
+    return True
 
 
 def get_video_duration(file):
@@ -151,11 +227,11 @@ def url_fails(url):
     Try HEAD and GET for URL availability check.
     """
 
-    # Use Certifi module
+    # Use Certifi module and set to True as default so users stop seeing InsecureRequestWarning in logs
     if settings['verify_ssl']:
         verify = certifi.where()
     else:
-        verify = False
+        verify = True
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15'
@@ -245,3 +321,11 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
     if not has_symbols:
         ppp_letters = ''.join(set(ppp_letters) - set(string.punctuation))
     return "".join(random.SystemRandom().choice(ppp_letters) for _ in range(pw_length))
+
+
+def is_balena_app():
+    """
+    Checks the application is running on Balena Cloud
+    :return: bool
+    """
+    return bool(getenv('RESIN', False)) or bool(getenv('BALENA', False))

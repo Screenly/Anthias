@@ -71,6 +71,12 @@
                 </li>
             {% endif %}
             <li>
+                <a href="/integrations">
+                    <i class="far fa-plus-square"></i>
+                    Integrations
+                </a>
+            </li>
+            <li>
                 <a href="/settings">
                     <i class="fas fa-cogs"></i>
                     Settings
@@ -78,7 +84,7 @@
             </li>
             <li class="divider-vertical"></li>
             <li>
-                <a href="/system_info">
+                <a href="/system-info">
                     <i class="fas fa-tasks"></i>
                     System Info
                 </a>
@@ -269,6 +275,7 @@
         </div>
     </div>
 
+    {% if not context.is_balena %}
     <div class="row">
         <div id="wifi-section" class="col-12">
             <h1 class="page-header">
@@ -278,12 +285,13 @@
                 network. <br><b>Warning:</b> after pressing, a reboot is required. Web interface will not be available
                 until reboot.</p>
             <div class="form-actions">
-                <button id="btn-reset" class="btn btn-primary" type="button" {{ context.reset_button_state }}>Re-run
+                <button id="btn-reset" class="btn btn-primary" type="button">Re-run
                     network detection
                 </button>
             </div>
         </div>
     </div>
+    {% endif %}
 
     <div class="row">
         <div id="usb-assets-key-section" class="col-12">

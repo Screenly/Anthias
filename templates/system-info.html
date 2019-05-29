@@ -51,6 +51,12 @@
                 </li>
             {% endif %}
             <li>
+                <a href="/integrations">
+                    <i class="far fa-plus-square"></i>
+                    Integrations
+                </a>
+            </li>
+            <li>
                 <a href="/settings">
                     <i class="fas fa-cogs"></i>
                     Settings
@@ -83,6 +89,9 @@
                     <th>Uptime</th>
                     <th>Monitor Info</th>
                     <th>Display Power</th>
+                    <th>Raspberry Model</th>
+                    <th>Screenly Version</th>
+                    <th>MAC Address</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -92,6 +101,9 @@
                     <td>{{ context.uptime.days }} days and {{ (context.uptime.seconds / 3600)|round(2) }} hours</td>
                     <td>{{ context.display_info }}</td>
                     <td>{{ context.display_power }}</td>
+                    <td>{{ context.raspberry_model }}</td>
+                    <td>{{ context.screenly_version }}</td>
+                    <td>{{ context.mac_address }}</td>
                 </tr>
                 </tbody>
             </table>
