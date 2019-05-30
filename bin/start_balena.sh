@@ -59,7 +59,8 @@ run_viewer () {
         sleep 1
     done
 
-    /usr/bin/python /data/screenly/viewer.py
+    cd /data/screenly
+    /usr/bin/python viewer.py
 }
 
 run_server () {
@@ -67,11 +68,19 @@ run_server () {
 
     export RESIN_UUID=${RESIN_DEVICE_UUID}
 
-    /usr/bin/python /data/screenly/server.py
+    cd /data/screenly
+    /usr/bin/python server.py
 }
 
 run_websocket () {
-    /usr/bin/python /data/screenly/websocket_server_layer.py
+    cd /data/screenly
+    /usr/bin/python websocket_server_layer.py
+}
+
+run_celery () {
+    redis-server --daemonize yes
+    cd /data/screenly
+    celery worker -A server.celery -B -n worker@screenly --loglevel=info --schedule /tmp/celerybeat-schedule
 }
 
 if [[ "$SCREENLYSERVICE" = "server" ]]; then
@@ -85,4 +94,8 @@ fi
 
 if [[ "$SCREENLYSERVICE" = "websocket" ]]; then
     run_websocket
+fi
+
+if [[ "$SCREENLYSERVICE" = "celery" ]]; then
+    run_celery
 fi
