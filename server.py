@@ -19,6 +19,7 @@ from hurry.filesize import size
 from mimetypes import guess_type
 from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
 from subprocess import check_output
+from urlparse import urlparse
 
 from flask import Flask, make_response, render_template, request, send_from_directory, url_for
 from flask_cors import CORS
@@ -1193,7 +1194,7 @@ else:
 @auth_basic
 def viewIndex():
     player_name = settings['player_name']
-    my_ip = get_node_ip()
+    my_ip = urlparse(request.host_url).hostname
     is_demo = is_demo_node()
     resin_uuid = getenv("RESIN_UUID", None)
 
