@@ -9,6 +9,7 @@ RUN apt-get update && \
         git-core \
         libffi-dev \
         libssl-dev \
+        lsb-release \
         mplayer \
         net-tools \
         procps \
