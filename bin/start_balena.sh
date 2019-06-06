@@ -24,8 +24,6 @@ run_setup () {
     if [ -n "${MANAGEMENT_USER+x}" ] && [ -n "${MANAGEMENT_PASSWORD+x}" ]; then
         sed -i -e "s/^user=.*/user=${MANAGEMENT_USER}/" -e "s/^password=.*/password=${MANAGEMENT_PASSWORD}/" /data/.screenly/screenly.conf
     fi
-
-    /usr/bin/python /data/screenly/bin/migrate.py
 }
 
 run_viewer () {
