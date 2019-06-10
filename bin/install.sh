@@ -102,7 +102,7 @@ sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'de*' 
 
 cd ~/screenly && git rev-parse HEAD > ~/.screenly/latest_screenly_sha
 
-echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse HEAD)\n$(lsb_release -a)" > ~/version.md
+echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
 
 set +x
 echo "Installation completed."
