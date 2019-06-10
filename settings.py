@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import json
 from os import path, getenv
 from sys import exit
 from time import sleep
@@ -11,6 +11,8 @@ from flask import request, Response
 from functools import wraps
 import zmq
 import hashlib
+
+from lib.errors import ZmqCollectorTimeout
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -166,6 +168,50 @@ class ZmqPublisher:
 
     def send_to_viewer(self, msg):
         self.socket.send_string("viewer {}".format(msg))
+
+
+class ZmqConsumer:
+    def __init__(self):
+        self.context = zmq.Context()
+
+        self.socket = self.context.socket(zmq.PUSH)
+        self.socket.setsockopt(zmq.LINGER, 0)
+        self.socket.connect('tcp://127.0.0.1:5558')
+
+        sleep(1)
+
+    def send(self, msg):
+        self.socket.send_json(msg, flags=zmq.NOBLOCK)
+
+
+class ZmqCollector:
+    INSTANCE = None
+
+    def __init__(self):
+        if self.INSTANCE is not None:
+            raise ValueError("An instantiation already exists!")
+
+        self.context = zmq.Context()
+
+        self.socket = self.context.socket(zmq.PULL)
+        self.socket.bind('tcp://127.0.0.1:5558')
+
+        self.poller = zmq.Poller()
+        self.poller.register(self.socket, zmq.POLLIN)
+
+        sleep(1)
+
+    @classmethod
+    def get_instance(cls):
+        if cls.INSTANCE is None:
+            cls.INSTANCE = ZmqCollector()
+        return cls.INSTANCE
+
+    def recv_json(self, timeout):
+        if self.poller.poll(timeout):
+            return json.loads(self.socket.recv(zmq.NOBLOCK))
+
+        raise ZmqCollectorTimeout
 
 
 def authenticate():

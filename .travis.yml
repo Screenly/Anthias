@@ -1,12 +1,15 @@
 language: python
 python:
   - "2.7"
+virtualenv:
+  system_site_packages: true
 addons:
   firefox: "45.0"
   apt:
     packages:
       - net-tools
       - mplayer
+      - python-gobject
       - python-setuptools
 before_install:
   - sudo add-apt-repository ppa:mc3man/trusty-media -y
@@ -38,7 +41,7 @@ before_script:
 
 script:
   - find . ! -path "*/rtmplite/*" -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
-  - nosetests -v -a '!fixme' --with-isolation
+  - nosetests -v -a '!fixme'
   - ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml
   - python -m SimpleHTTPServer 8081 &
   - sleep 3

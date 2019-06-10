@@ -1,0 +1,34 @@
+FROM debian:stretch
+MAINTAINER Viktor Petersson <vpetersson@screenly.io>
+
+RUN apt-get update && \
+    apt-get -y install \
+        build-essential \
+        curl \
+        git-core \
+        libffi-dev \
+        libssl-dev \
+        net-tools \
+        procps \
+        python-dev \
+        python-gobject \
+        python-imaging \
+        python-netifaces \
+        python-simplejson \
+        redis-server \
+        sqlite3 && \
+    apt-get clean
+
+# Install Python requirements
+ADD requirements.txt /tmp/requirements.txt
+RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && pip install -r /tmp/requirements.txt
+
+RUN useradd pi
+
+RUN mkdir -p /home/pi/.screenly /home/pi/screenly /home/pi/screenly_assets
+RUN chown -R pi:pi /home/pi/.screenly /home/pi/screenly_assets
+
+USER pi
+WORKDIR /home/pi/screenly
+
+CMD celery worker -A server.celery -B -n worker@screenly --loglevel=info --schedule /tmp/celerybeat-schedule

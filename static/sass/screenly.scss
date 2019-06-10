@@ -146,10 +146,16 @@ label {
     #screenly-logo {
       position: absolute;
       right: 0;
-      top: $topOffset;
-      color: #535d79;
-      font-weight: bold;
-      text-decoration: none;
+
+      a {
+        color: #535d79;
+        font-weight: bold;
+        text-decoration: none;
+      }
+
+      #github-stars {
+        margin-top: $topOffset / 2;
+      }
     }
 
     .copy {

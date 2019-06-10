@@ -2,27 +2,29 @@
 # -*- coding: utf-8 -*-
 
 __author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2017, Screenly, Inc"
+__copyright__ = "Copyright 2012-2019, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
+import hashlib
+import json
+import pydbus
+import re
+import sh
+import shutil
+import time
+import traceback
+import yaml
+import uuid
+from base64 import b64encode
 from celery import Celery
 from datetime import datetime, timedelta
 from dateutil import parser as date_parser
 from functools import wraps
 from hurry.filesize import size
-import json
 from mimetypes import guess_type
 from os import getenv, listdir, makedirs, mkdir, path, remove, rename, statvfs, stat, walk
-import re
-import sh
-import shutil
 from subprocess import check_output
-import time
-import traceback
-import uuid
-import hashlib
-from base64 import b64encode
-import yaml
+from urlparse import urlparse
 
 from flask import Flask, make_response, render_template, request, send_from_directory, url_for, jsonify
 from flask_cors import CORS
@@ -39,17 +41,17 @@ from lib import diagnostics
 from lib import queries
 
 from lib.utils import generate_perfect_paper_password
-from lib.utils import get_node_ip
+from lib.utils import get_active_connections, remove_connection
+from lib.utils import get_node_ip, get_node_mac_address
 from lib.utils import get_video_duration
 from lib.utils import download_video_from_youtube, json_dump
 from lib.utils import url_fails
 from lib.utils import validate_url
-from lib.utils import is_demo_node
+from lib.utils import is_balena_app, is_demo_node
 
-from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
+from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
 
 HOME = getenv('HOME', '/home/pi')
-DISABLE_MANAGE_NETWORK = '.screenly/disable_manage_network'
 CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 
@@ -220,8 +222,7 @@ def is_up_to_date():
         latest_sha = None
 
     if latest_sha:
-        branch_sha = sh.git('rev-parse', 'HEAD')
-        return branch_sha.stdout.strip() == latest_sha
+        return diagnostics.get_git_hash() == latest_sha
 
     # If we weren't able to verify with remote side,
     # we'll set up_to_date to true in order to hide
@@ -396,7 +397,7 @@ def prepare_asset(request, unique_name=False):
         'nocache': get('nocache'),
     }
 
-    uri = get('uri')
+    uri = get('uri').encode('utf-8')
 
     if uri.startswith('/'):
         if not path.isfile(uri):
@@ -1028,7 +1029,7 @@ class FileAsset(Resource):
     def post(self):
         req = Request(request.environ)
         file_upload = req.files.get('file_upload')
-        filename = file_upload.filename
+        filename = file_upload.filename.encode('utf-8')
         file_type = guess_type(filename)[0]
 
         if not file_type:
@@ -1037,7 +1038,7 @@ class FileAsset(Resource):
         if file_type.split('/')[0] not in ['image', 'video']:
             raise Exception("Invalid file type.")
 
-        file_path = path.join(settings['assetdir'], uuid.uuid5(uuid.NAMESPACE_URL, filename.encode()).hex) + ".tmp"
+        file_path = path.join(settings['assetdir'], uuid.uuid5(uuid.NAMESPACE_URL, filename).hex) + ".tmp"
 
         if 'Content-Range' in request.headers:
             range_str = request.headers['Content-Range']
@@ -1148,6 +1149,32 @@ class ResetWifiConfig(Resource):
 
         if path.isfile(file_path):
             remove(file_path)
+
+        bus = pydbus.SystemBus()
+
+        pattern_include = re.compile("wlan*")
+        pattern_exclude = re.compile("ScreenlyOSE-*")
+
+        wireless_connections = get_active_connections(bus)
+
+        if wireless_connections is not None:
+            device_uuid = None
+
+            wireless_connections = filter(
+                lambda c: not pattern_exclude.search(str(c['Id'])),
+                filter(
+                    lambda c: pattern_include.search(str(c['Devices'])),
+                    wireless_connections
+                )
+            )
+
+            if len(wireless_connections) > 0:
+                device_uuid = wireless_connections[0].get('Uuid')
+
+            if not device_uuid:
+                raise Exception('The device has no active connection.')
+
+            remove_connection(bus, device_uuid)
 
         return '', 204
 
@@ -1365,6 +1392,33 @@ class AssetContent(Resource):
         return result
 
 
+class ViewerCurrentAsset(Resource):
+    method_decorators = [api_response, auth_basic]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Currently displayed asset in viewer',
+                'schema': AssetModel
+            }
+        }
+    })
+    def get(self):
+        collector = ZmqCollector.get_instance()
+
+        publisher = ZmqPublisher.get_instance()
+        publisher.send_to_viewer('current_asset_id')
+
+        collector_result = collector.recv_json(2000)
+        current_asset_id = collector_result.get('current_asset_id')
+
+        if not current_asset_id:
+            return []
+
+        with db.conn(settings['database']) as conn:
+            return assets_helper.read(conn, current_asset_id)
+
+
 api.add_resource(Assets, '/api/v1/assets')
 api.add_resource(Asset, '/api/v1/assets/<asset_id>')
 api.add_resource(AssetsV1_1, '/api/v1.1/assets')
@@ -1383,6 +1437,7 @@ api.add_resource(GenerateUsbAssetsKey, '/api/v1/generate_usb_assets_key')
 api.add_resource(UpgradeScreenly, '/api/v1/upgrade_screenly')
 api.add_resource(RebootScreenly, '/api/v1/reboot_screenly')
 api.add_resource(ShutdownScreenly, '/api/v1/shutdown_screenly')
+api.add_resource(ViewerCurrentAsset, '/api/v1/viewer_current_asset')
 
 try:
     my_ip = get_node_ip()
@@ -1418,7 +1473,7 @@ else:
 @auth_basic
 def viewIndex():
     player_name = settings['player_name']
-    my_ip = get_node_ip()
+    my_ip = urlparse(request.host_url).hostname
     is_demo = is_demo_node()
     resin_uuid = getenv("RESIN_UUID", None)
 
@@ -1528,7 +1583,7 @@ def settings_page():
     context['user'] = settings['user']
     context['password'] = "password" if settings['password'] != "" else ""
 
-    context['reset_button_state'] = "disabled" if path.isfile(path.join(HOME, DISABLE_MANAGE_NETWORK)) else ""
+    context['is_balena'] = is_balena_app()
 
     if not settings['user'] or not settings['password']:
         context['use_auth'] = False
@@ -1538,7 +1593,7 @@ def settings_page():
     return template('settings.html', **context)
 
 
-@app.route('/system_info')
+@app.route('/system-info')
 @auth_basic
 def system_info():
     viewlog = None
@@ -1565,19 +1620,49 @@ def system_info():
     # Player name for title
     player_name = settings['player_name']
 
+    raspberry_model = '%s Revision: %s Ram: %s %s' % (diagnostics.get_raspberry_model(),
+                                                      diagnostics.get_raspberry_revision(),
+                                                      diagnostics.get_raspberry_ram(),
+                                                      diagnostics.get_raspberry_manufacturer())
+
+    branch = 'development' if diagnostics.get_git_branch() == 'master' else diagnostics.get_git_branch()
+    screenly_version = '%s@%s' % (branch, diagnostics.get_git_short_hash())
+
     return template(
-        'system_info.html',
+        'system-info.html',
         player_name=player_name,
         viewlog=viewlog,
         loadavg=loadavg,
         free_space=free_space,
         uptime=system_uptime,
         display_info=display_info,
-        display_power=display_power
+        display_power=display_power,
+        raspberry_model=raspberry_model,
+        screenly_version=screenly_version,
+        mac_address=get_node_mac_address()
     )
 
 
-@app.route('/splash_page')
+@app.route('/integrations')
+@auth_basic
+def integrations():
+
+    context = {
+        'is_balena': is_balena_app(),
+    }
+
+    if context['is_balena']:
+        context['balena_device_id'] = getenv('BALENA_DEVICE_UUID')
+        context['balena_app_id'] = getenv('BALENA_APP_ID')
+        context['balena_app_name'] = getenv('BALENA_APP_NAME')
+        context['balena_supervisor_version'] = getenv('BALENA_SUPERVISOR_VERSION')
+        context['balena_host_os_version'] = getenv('BALENA_HOST_OS_VERSION')
+        context['balena_device_name_at_init'] = getenv('BALENA_DEVICE_NAME_AT_INIT')
+
+    return template('integrations.html', **context)
+
+
+@app.route('/splash-page')
 def splash_page():
     url = None
     try:
@@ -1596,7 +1681,7 @@ def splash_page():
             url = "http://{}:{}".format(my_ip, PORT)
 
     msg = url if url else error_msg
-    return template('splash_page.html', ip_lookup=ip_lookup, msg=msg)
+    return template('splash-page.html', ip_lookup=ip_lookup, msg=msg)
 
 
 @app.errorhandler(403)

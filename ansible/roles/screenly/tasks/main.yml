@@ -126,7 +126,7 @@
   copy:
     src: plymouth-quit-wait.service
     dest: /lib/systemd/system/plymouth-quit-wait.service
-    mode: 0755
+    mode: 0644
     owner: root
     group: root
 
@@ -134,7 +134,7 @@
   copy:
     src: plymouth-quit.service
     dest: /lib/systemd/system/plymouth-quit.service
-    mode: 0755
+    mode: 0644
     owner: root
     group: root
 

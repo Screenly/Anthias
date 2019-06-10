@@ -79,6 +79,8 @@ $().ready ->
       $("#request-error .alert").addClass "alert-success"
       $("#request-error .alert").removeClass "alert-danger"
       ($ "#request-error .msg").text "Reset was successful. Please reboot the device."
+    .error (e) ->
+      document.location.reload()
 
   $("#auth_checkbox p span").click (e) ->
     if $("input:checkbox[name='use_auth']").is(":checked")

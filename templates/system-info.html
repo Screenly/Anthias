@@ -33,6 +33,8 @@
 
     <link href="{{ url_for('static', filename='fontawesome/css/all.css') }}" rel="stylesheet"/>
 
+    <script async defer src="https://buttons.github.io/buttons.js"></script>
+
     <script src="{{ url_for('static', filename='js/jquery-1.9.1.min.js') }}"></script>
 </head>
 <body>
@@ -50,6 +52,12 @@
                     </a>
                 </li>
             {% endif %}
+            <li>
+                <a href="/integrations">
+                    <i class="far fa-plus-square"></i>
+                    Integrations
+                </a>
+            </li>
             <li>
                 <a href="/settings">
                     <i class="fas fa-cogs"></i>
@@ -83,6 +91,9 @@
                     <th>Uptime</th>
                     <th>Monitor Info</th>
                     <th>Display Power</th>
+                    <th>Raspberry Model</th>
+                    <th>Screenly Version</th>
+                    <th>MAC Address</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -92,6 +103,9 @@
                     <td>{{ context.uptime.days }} days and {{ (context.uptime.seconds / 3600)|round(2) }} hours</td>
                     <td>{{ context.display_info }}</td>
                     <td>{{ context.display_power }}</td>
+                    <td>{{ context.raspberry_model }}</td>
+                    <td>{{ context.screenly_version }}</td>
+                    <td>{{ context.mac_address }}</td>
                 </tr>
                 </tbody>
             </table>
@@ -121,9 +135,28 @@
         <div class="copy">
             &copy; Screenly, Inc.
         </div>
-        <a id="screenly-logo" href="http://screenly.io/" target="_blank">
-            Screenly.io
-        </a>
+        <div id="screenly-logo" class="row">
+            <a href="/api/docs/" target="_blank" class="mr-4 justify-content-center align-self-center">
+                API
+            </a>
+            <a href="https://support.screenly.io/hc/en-us/sections/202652366-Frequently-Asked-Questions-FAQ-"
+               target="_blank" class="mr-4 justify-content-center align-self-center">
+                Knowledge Base
+            </a>
+            <a href="http://screenly.io/" target="_blank" class="mr-4 justify-content-center align-self-center">
+                Screenly.io
+            </a>
+            <a href="https://forums.screenly.io/" target="_blank" class="mr-4 justify-content-center align-self-center">
+                Support
+            </a>
+            <div id="github-stars">
+                <a class="github-button"
+                   href="https://github.com/screenly/screenly-ose" data-size="large" data-show-count="true"
+                   aria-label="Star screenly/screenly-ose on GitHub">
+                    Star
+                </a>
+            </div>
+        </div>
     </div>
 </div>
 

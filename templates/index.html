@@ -38,6 +38,7 @@
 
     <link href="{{ url_for('static', filename='fontawesome/css/all.css') }}" rel="stylesheet"/>
 
+    <script async defer src="https://buttons.github.io/buttons.js"></script>
     <script type="text/javascript">
         var default_duration = {{context.default_duration}};
         var default_streaming_duration = {{context.default_streaming_duration}};
@@ -358,6 +359,12 @@
                 </li>
             {% endif %}
             <li>
+                <a href="/integrations">
+                    <i class="far fa-plus-square"></i>
+                    Integrations
+                </a>
+            </li>
+            <li>
                 <a href="/settings">
                     <i class="fas fa-cogs"></i>
                     Settings
@@ -365,7 +372,7 @@
             </li>
             <li class="divider-vertical"></li>
             <li>
-                <a href="/system_info">
+                <a href="/system-info">
                     <i class="fas fa-tasks"></i>
                     System Info
                 </a>
@@ -449,7 +456,7 @@
             <div class="col-6">
             <span>Want to get more out of Screenly?
               <a class="brand"
-                 href="http://www.screenlyapp.com/?utm_source=Screenly-OSE&amp;utm_medium=root-page&amp;utm_campaign=OSE"
+                 href="https://www.screenly.io/?utm_source=Screenly-OSE&amp;utm_medium=root-page&amp;utm_campaign=OSE"
                  target="_blank">
                 <strong>Try Screenly Pro.</strong>
               </a></span>
@@ -471,9 +478,28 @@
         <div class="copy">
             &copy; Screenly, Inc.
         </div>
-        <a id="screenly-logo" href="http://screenly.io/" target="_blank">
-            Screenly.io
-        </a>
+        <div id="screenly-logo" class="row">
+            <a href="/api/docs/" target="_blank" class="mr-4 justify-content-center align-self-center">
+                API
+            </a>
+            <a href="https://support.screenly.io/hc/en-us/sections/202652366-Frequently-Asked-Questions-FAQ-"
+               target="_blank" class="mr-4 justify-content-center align-self-center">
+                Knowledge Base
+            </a>
+            <a href="http://screenly.io/" target="_blank" class="mr-4 justify-content-center align-self-center">
+                Screenly.io
+            </a>
+            <a href="https://forums.screenly.io/" target="_blank" class="mr-4 justify-content-center align-self-center">
+                Support
+            </a>
+            <div id="github-stars">
+                <a class="github-button"
+                   href="https://github.com/screenly/screenly-ose" data-size="large" data-show-count="true"
+                   aria-label="Star screenly/screenly-ose on GitHub">
+                    Star
+                </a>
+            </div>
+        </div>
     </div>
 </div>
 

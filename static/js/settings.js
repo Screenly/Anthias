@@ -88,6 +88,8 @@
         $("#request-error .alert").addClass("alert-success");
         $("#request-error .alert").removeClass("alert-danger");
         return ($("#request-error .msg")).text("Reset was successful. Please reboot the device.");
+      }).error(function(e) {
+        return document.location.reload();
       });
     });
     $("#auth_checkbox p span").click(function(e) {

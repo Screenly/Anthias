@@ -1,39 +1,65 @@
-version: "3"
+version: "2"
 services:
-  screenly-dev:
+  screenly-server:
     build:
       context: .
-      dockerfile: Dockerfile
-    ports:
-     - "8080:8080"
-    volumes:
-      - ./:/home/pi/screenly
-      - screenly-volume:/home/pi/.screenly
-      - screenly-assets-volume:/home/pi/screenly_assets
+      dockerfile: docker/Dockerfile.server.template
     environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - PYTHONUNBUFFERED=1
+      - HOME=/data
       - LISTEN=0.0.0.0
-    depends_on:
-      - redis
-      - worker
-  worker:
+      - PYTHONPATH=/data/screenly
+      - SCREENLYSERVICE=server
+    network_mode: "host"
+    privileged: true
+    volumes:
+      - resin-data:/data
+
+  screenly-viewer:
     build:
       context: .
-      dockerfile: Dockerfile.worker
-    volumes:
-      - ./:/home/pi/screenly
-      - screenly-volume:/home/pi/.screenly
-      - screenly-assets-volume:/home/pi/screenly_assets
-    environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      dockerfile: docker/Dockerfile.viewer.template
     depends_on:
-      - redis
-  redis:
-    image: redis
+      - screenly-server
+    environment:
+      - DISPLAY=:0.0
+      - HOME=/data
+      - NOREFRESH=1
+      - PYTHONPATH=/data/screenly
+      - SCREENLYSERVICE=viewer
+    network_mode: "host"
+    privileged: true
+    volumes:
+      - resin-data:/data
+
+  screenly-websocket:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.websocket.template
+    depends_on:
+      - screenly-server
+    environment:
+      - HOME=/data
+      - PYTHONPATH=/data/screenly
+      - SCREENLYSERVICE=websocket
+    network_mode: "host"
+    privileged: true
+    volumes:
+      - resin-data:/data
+
+  screenly-celery:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.celery.template
+    depends_on:
+      - screenly-server
+    environment:
+      - HOME=/data
+      - PYTHONPATH=/data/screenly
+      - SCREENLYSERVICE=celery
+    network_mode: "host"
+    privileged: true
+    volumes:
+      - resin-data:/data
 
 volumes:
-  screenly-volume:
-  screenly-assets-volume:
+    resin-data:
