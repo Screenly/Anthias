@@ -8,6 +8,7 @@ RUN apt-get update && \
         git-core \
         libffi-dev \
         libssl-dev \
+        lsb-release \
         net-tools \
         procps \
         python-dev \

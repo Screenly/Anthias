@@ -57,16 +57,13 @@ EOF
     echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
     if [ "$DEV" != 'y'  ]; then
       export DOCKER_TAG="production"
-      echo "Screenly OSE version: Production" > ~/OSE_version.md
       BRANCH="production"
     else
       export DOCKER_TAG="latest"
-      echo "Screenly OSE version: Development" > ~/OSE_version.md
       BRANCH="master"
     fi
   else
     export DOCKER_TAG="experimental"
-    echo "Screenly OSE version: Experimental" > ~/OSE_version.md
     BRANCH="experimental"
   fi
 
@@ -83,15 +80,12 @@ elif [ "$WEB_UPGRADE" = true ]; then
 
   if [ "$BRANCH_VERSION" = "latest" ]; then
     export DOCKER_TAG="latest"
-    echo "Screenly OSE version: Development" > ~/OSE_version.md
     BRANCH="master"
 #  elif [ "$BRANCH_VERSION" = "experimental" ]; then
 #    export DOCKER_TAG="experimental"
-#    echo "Screenly OSE version: Experimental" > ~/OSE_version.md
 #    BRANCH="experimental"
 #  elif [ "$BRANCH_VERSION" = "production" ]; then
 #    export DOCKER_TAG="production"
-#    echo "Screenly OSE version: Production" > ~/OSE_version.md
 #    BRANCH="production"
   else
     echo -e "Invalid -b parameter."
@@ -120,9 +114,6 @@ else
   echo -e "Invalid -w parameter."
   exit 1
 fi
-
-#Add reference of what linux flavor is running to OSE_version file
-cat /etc/os-release | grep "PRETTY_NAME" >> ~/OSE_version.md
 
 if grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
   export DEVICE_TYPE="pi3"
@@ -155,7 +146,7 @@ curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 
 if [ "$NETWORK" == 'y' ]; then
   export MANAGE_NETWORK=true
-  sudo apt-get install -y network_manager
+  sudo apt-get install -y network-manager
 else
   export MANAGE_NETWORK=false
 fi
@@ -187,6 +178,8 @@ else
   echo "pi ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/010_pi-nopasswd > /dev/null
   sudo chmod 0440 /etc/sudoers.d/010_pi-nopasswd
 fi
+
+echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
 
 if [ "$WEB_UPGRADE" = false ]; then
   set +x

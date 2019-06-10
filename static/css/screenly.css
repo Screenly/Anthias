@@ -75,11 +75,13 @@ label {
     position: relative; }
     #footer .container #screenly-logo {
       position: absolute;
-      right: 0;
-      top: 10px;
-      color: #535d79;
-      font-weight: bold;
-      text-decoration: none; }
+      right: 0; }
+      #footer .container #screenly-logo a {
+        color: #535d79;
+        font-weight: bold;
+        text-decoration: none; }
+      #footer .container #screenly-logo #github-stars {
+        margin-top: 5px; }
     #footer .container .copy {
       position: absolute;
       left: 0;

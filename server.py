@@ -24,6 +24,7 @@ from hurry.filesize import size
 from mimetypes import guess_type
 from os import getenv, listdir, makedirs, mkdir, path, remove, rename, statvfs, stat, walk
 from subprocess import check_output
+from urlparse import urlparse
 
 from flask import Flask, make_response, render_template, request, send_from_directory, url_for, jsonify
 from flask_cors import CORS
@@ -221,8 +222,7 @@ def is_up_to_date():
         latest_sha = None
 
     if latest_sha:
-        branch_sha = sh.git('rev-parse', 'HEAD')
-        return branch_sha.stdout.strip() == latest_sha
+        return diagnostics.get_git_hash() == latest_sha
 
     # If we weren't able to verify with remote side,
     # we'll set up_to_date to true in order to hide
@@ -1473,7 +1473,7 @@ else:
 @auth_basic
 def viewIndex():
     player_name = settings['player_name']
-    my_ip = get_node_ip()
+    my_ip = urlparse(request.host_url).hostname
     is_demo = is_demo_node()
     resin_uuid = getenv("RESIN_UUID", None)
 
