@@ -18,6 +18,7 @@ RUN apt-get update && \
         python-netifaces \
         python-simplejson \
         libraspberrypi0 \
+        lsb-release \
         ifupdown \
         sqlite3 \
         uzbl \
