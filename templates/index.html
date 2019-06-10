@@ -1,59 +1,11 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8"/>
+{% extends "base.html" %}
 
-    {% if context.player_name %}
-        <title>Screenly OSE - {{ context.player_name }}</title>
-    {% else %}
-        <title>Screenly OSE</title>
-    {% endif %}
-
-    <link href="/static/favicons/apple-touch-icon-57x57.png" rel="apple-touch-icon-precomposed" sizes="57x57"/>
-    <link href="/static/favicons/apple-touch-icon-114x114.png" rel="apple-touch-icon-precomposed" sizes="114x114"/>
-    <link href="/static/favicons/apple-touch-icon-72x72.png" rel="apple-touch-icon-precomposed" sizes="72x72"/>
-    <link href="/static/favicons/apple-touch-icon-144x144.png" rel="apple-touch-icon-precomposed" sizes="144x144"/>
-    <link href="/static/favicons/apple-touch-icon-60x60.png" rel="apple-touch-icon-precomposed" sizes="60x60"/>
-    <link href="/static/favicons/apple-touch-icon-120x120.png" rel="apple-touch-icon-precomposed" sizes="120x120"/>
-    <link href="/static/favicons/apple-touch-icon-76x76.png" rel="apple-touch-icon-precomposed" sizes="76x76"/>
-    <link href="/static/favicons/apple-touch-icon-152x152.png" rel="apple-touch-icon-precomposed" sizes="152x152"/>
-    <link href="/static/favicons/favicon-196x196.png" rel="icon" sizes="196x196" type="image/png"/>
-    <link href="/static/favicons/favicon-96x96.png" rel="icon" sizes="96x96" type="image/png"/>
-    <link href="/static/favicons/favicon-32x32.png" rel="icon" sizes="32x32" type="image/png"/>
-    <link href="/static/favicons/favicon-16x16.png" rel="icon" sizes="16x16" type="image/png"/>
-    <link href="/static/favicons/favicon-128.png" rel="icon" sizes="128x128" type="image/png"/>
-    <meta content="screenly-ose;" name="application-name"/>
-    <meta content="#FFFFFF" name="msapplication-TileColor"/>
-    <meta content="/static/favicons/mstile-144x144.png" name="msapplication-TileImage"/>
-    <meta content="/static/favicons/mstile-70x70.png" name="msapplication-square70x70logo"/>
-    <meta content="/static/favicons/mstile-150x150.png" name="msapplication-square150x150logo"/>
-    <meta content="/static/favicons/mstile-310x150.png" name="msapplication-wide310x150logo"/>
-    <meta content="/static/favicons/mstile-310x310.png" name="msapplication-square310x310logo"/>
-
-    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet"/>
+{% block head %}
     <link href="{{ url_for('static', filename='css/datepicker.css') }}" rel="stylesheet"/>
     <link href="{{ url_for('static', filename='css/timepicker.css') }}" rel="stylesheet"/>
     <link href="{{ url_for('static', filename='css/toggle-switch.css') }}" rel="stylesheet"/>
-    <link href="{{ url_for('static', filename='css/screenly.css') }}" rel="stylesheet"/>
-
-    <link href="{{ url_for('static', filename='fontawesome/css/all.css') }}" rel="stylesheet"/>
-
-    <script async defer src="https://buttons.github.io/buttons.js"></script>
-    <script type="text/javascript">
-        var default_duration = {{context.default_duration}};
-        var default_streaming_duration = {{context.default_streaming_duration}};
-
-        {% if context.use_24_hour_clock %}
-            var use_24_hour_clock = true
-        {% else %}
-            var use_24_hour_clock = false
-        {% endif %}
-
-        var ws_addresses = {{context.ws_addresses|tojson}};
-    </script>
 
     <script src="{{ url_for('static', filename='js/underscore-1.4.3.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/jquery-1.9.1.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/jquery.iframe-transport.js') }}"></script>
 
@@ -62,13 +14,27 @@
     <script src="{{ url_for('static', filename='js/backbone-0.9.10.min.js') }}"></script> <!-- needs jquery -->
 
     <script src="{{ url_for('static', filename='js/jquery-ui-1.10.1.custom.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/jquery.fileupload.js') }}"></script> <!-- needs jqueryui.widget -->
+    <script src="{{ url_for('static', filename='js/jquery.fileupload.js') }}"></script>
+    <!-- needs jqueryui.widget -->
 
     <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script> <!-- needs jquery -->
     <script src="{{ url_for('static', filename='js/bootstrap-datepicker.js') }}"></script>
     <script src="{{ url_for('static', filename='js/bootstrap-timepicker.js') }}"></script>
 
     <script src="{{ url_for('static', filename='js/moment.js') }}"></script>
+
+    <script type="text/javascript">
+        var default_duration = {{context.default_duration}};
+        var default_streaming_duration = {{context.default_streaming_duration}};
+
+        {% if context.use_24_hour_clock %}
+            var use_24_hour_clock = true;
+        {% else %}
+            var use_24_hour_clock = false;
+        {% endif %}
+
+        var ws_addresses = {{context.ws_addresses|tojson}};
+    </script>
     <script src="{{ url_for('static', filename='js/screenly-ose.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
@@ -340,185 +306,98 @@
                    value="Subscribe"/>
         </form>
     </script>
-</head>
+{% endblock %}
 
-<body>
-<div id="request-error" class="navbar fixed-top"></div>
-<div class="navbar navbar-expand-lg fixed-top bg-primary">
-    <div class="container">
-        <a class="brand" href="/">
-            <img src="static/img/screenly_ose_logo.png"/>
-        </a>
-        <ul class="nav float-right">
-            {% if not context.up_to_date %}
-                <li class="update-available">
-                    <a href="http://www.screenlyapp.com/ose.html#upgrade">
-                        <i class="fas fa-arrow-circle-down"></i>
-                        Update Available
-                    </a>
-                </li>
-            {% endif %}
-            <li>
-                <a href="/integrations">
-                    <i class="far fa-plus-square"></i>
-                    Integrations
-                </a>
-            </li>
-            <li>
-                <a href="/settings">
-                    <i class="fas fa-cogs"></i>
-                    Settings
-                </a>
-            </li>
-            <li class="divider-vertical"></li>
-            <li>
-                <a href="/system-info">
-                    <i class="fas fa-tasks"></i>
-                    System Info
-                </a>
-            </li>
-        </ul>
-    </div>
-</div>
-
-<div class="container">
-    <div class="row">
-        <div class="col-12">
-            <h1 class="page-header">
-                <div class="float-right">
-                    <a id="previous-asset-button" class="btn btn-outline-secondary" href="#">
-                        <i class="fas fa-fast-backward"></i>
-                        Previous Asset
-                    </a>
-                    <a id="next-asset-button" class="btn btn-outline-secondary" href="#">
-                        <i class="fas fa-fast-forward"></i>
-                        Next Asset
-                    </a>
-                    <a id="add-asset-button" class="btn btn-primary" href="#">
-                        <i class="fas fa-plus"></i>
-                        Add Asset
-                    </a>
-                </div>
-                Schedule Overview
-            </h1>
-            {% if context.player_name %}
-                <h2>{{ context.player_name }}</h2>
-            {% endif %}
-        </div>
-    </div>
-
-    <div id="assets" class="row">
-        <div class="col-12">
-            <section>
-                <div class="header bg-primary">
-                    Active assets
-                </div>
-                <table class="table table-striped active-table">
-                    <thead style="display:none">
-                    <tr>
-                        <th class="asset_row_name">Name</th>
-                        <th style="width:21%">Start</th>
-                        <th style="width:21%">End</th>
-                        <th style="width:13%">Duration</th>
-                        <th style="width:13%"></th>
-                        <th style="width:7%"></th>
-                    </tr>
-                    </thead>
-                    <tbody id="active-assets"></tbody>
-                </table>
-            </section>
-        </div>
-        <div class="col-12">
-            <section>
-                <div class="header bg-primary">
-                    Inactive assets
-                </div>
-                <table class="table table-striped inactive-table">
-                    <thead style="display:none">
-                    <tr>
-                        <th class="asset_row_name">Name</th>
-                        <th style="width:21%">Start</th>
-                        <th style="width:21%">End</th>
-                        <th style="width:13%">Duration</th>
-                        <th style="width:13%"></th>
-                        <th style="width:7%"></th>
-                    </tr>
-                    </thead>
-                    <tbody id="inactive-assets"></tbody>
-                </table>
-            </section>
-        </div>
-    </div>
-
-    <hr/>
+{% block content %}
     <div class="container">
         <div class="row">
-            <div class="col-6">
+            <div class="col-12">
+                <h1 class="page-header">
+                    <div class="float-right">
+                        <a id="previous-asset-button" class="btn btn-outline-secondary" href="#">
+                            <i class="fas fa-fast-backward"></i>
+                            Previous Asset
+                        </a>
+                        <a id="next-asset-button" class="btn btn-outline-secondary" href="#">
+                            <i class="fas fa-fast-forward"></i>
+                            Next Asset
+                        </a>
+                        <a id="add-asset-button" class="btn btn-primary" href="#">
+                            <i class="fas fa-plus"></i>
+                            Add Asset
+                        </a>
+                    </div>
+                    Schedule Overview
+                </h1>
+                {% if context.player_name %}
+                    <h2>{{ context.player_name }}</h2>
+                {% endif %}
+            </div>
+        </div>
+
+        <div id="assets" class="row">
+            <div class="col-12">
+                <section>
+                    <div class="header bg-primary">
+                        Active assets
+                    </div>
+                    <table class="table table-striped active-table">
+                        <thead style="display:none">
+                        <tr>
+                            <th class="asset_row_name">Name</th>
+                            <th style="width:21%">Start</th>
+                            <th style="width:21%">End</th>
+                            <th style="width:13%">Duration</th>
+                            <th style="width:13%"></th>
+                            <th style="width:7%"></th>
+                        </tr>
+                        </thead>
+                        <tbody id="active-assets"></tbody>
+                    </table>
+                </section>
+            </div>
+            <div class="col-12">
+                <section>
+                    <div class="header bg-primary">
+                        Inactive assets
+                    </div>
+                    <table class="table table-striped inactive-table">
+                        <thead style="display:none">
+                        <tr>
+                            <th class="asset_row_name">Name</th>
+                            <th style="width:21%">Start</th>
+                            <th style="width:21%">End</th>
+                            <th style="width:13%">Duration</th>
+                            <th style="width:13%"></th>
+                            <th style="width:7%"></th>
+                        </tr>
+                        </thead>
+                        <tbody id="inactive-assets"></tbody>
+                    </table>
+                </section>
+            </div>
+        </div>
+
+        <hr/>
+        <div class="container">
+            <div class="row">
+                <div class="col-6">
             <span>Want to get more out of Screenly?
               <a class="brand"
                  href="https://www.screenly.io/?utm_source=Screenly-OSE&amp;utm_medium=root-page&amp;utm_campaign=OSE"
                  target="_blank">
                 <strong>Try Screenly Pro.</strong>
               </a></span>
-            </div>
-            <div class="col-6">
+                </div>
+                <div class="col-6">
             <span>
               <a href="javascript://" id="subsribe-form-container" data-html="true" data-trigger="focus"
                  data-placement="top">
                 <strong>Get the latest Screenly news directly in your mailbox.</strong>
               </a>
             </span>
+                </div>
             </div>
         </div>
     </div>
-</div>
-</div>
-<div id="footer">
-    <div class="container">
-        <div class="copy">
-            &copy; Screenly, Inc.
-        </div>
-        <div id="screenly-logo" class="row">
-            <a href="/api/docs/" target="_blank" class="mr-4 justify-content-center align-self-center">
-                API
-            </a>
-            <a href="https://support.screenly.io/hc/en-us/sections/202652366-Frequently-Asked-Questions-FAQ-"
-               target="_blank" class="mr-4 justify-content-center align-self-center">
-                Knowledge Base
-            </a>
-            <a href="http://screenly.io/" target="_blank" class="mr-4 justify-content-center align-self-center">
-                Screenly.io
-            </a>
-            <a href="https://forums.screenly.io/" target="_blank" class="mr-4 justify-content-center align-self-center">
-                Support
-            </a>
-            <div id="github-stars">
-                <a class="github-button"
-                   href="https://github.com/screenly/screenly-ose" data-size="large" data-show-count="true"
-                   aria-label="Star screenly/screenly-ose on GitHub">
-                    Star
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-
-{% if is_demo %}
-    <!-- Global Site Tag (gtag.js) - Google Analytics -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-37846380-3"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-
-        function gtag() {
-            dataLayer.push(arguments);
-        }
-
-        gtag('js', new Date());
-
-        gtag('config', 'UA-37846380-3');
-    </script>
-{% endif %}
-
-</body>
-
-</html>
+{% endblock %}

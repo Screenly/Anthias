@@ -1,188 +1,66 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8"/>
+{% extends "base.html" %}
 
-    {% if context.player_name %}
-        <title>Screenly OSE - {{ context.player_name }}</title>
-    {% else %}
-        <title>Screenly OSE</title>
-    {% endif %}
-    <link href="/static/favicons/apple-touch-icon-57x57.png" rel="apple-touch-icon-precomposed" sizes="57x57"/>
-    <link href="/static/favicons/apple-touch-icon-114x114.png" rel="apple-touch-icon-precomposed" sizes="114x114"/>
-    <link href="/static/favicons/apple-touch-icon-72x72.png" rel="apple-touch-icon-precomposed" sizes="72x72"/>
-    <link href="/static/favicons/apple-touch-icon-144x144.png" rel="apple-touch-icon-precomposed" sizes="144x144"/>
-    <link href="/static/favicons/apple-touch-icon-60x60.png" rel="apple-touch-icon-precomposed" sizes="60x60"/>
-    <link href="/static/favicons/apple-touch-icon-120x120.png" rel="apple-touch-icon-precomposed" sizes="120x120"/>
-    <link href="/static/favicons/apple-touch-icon-76x76.png" rel="apple-touch-icon-precomposed" sizes="76x76"/>
-    <link href="/static/favicons/apple-touch-icon-152x152.png" rel="apple-touch-icon-precomposed" sizes="152x152"/>
-    <link href="/static/favicons/favicon-196x196.png" rel="icon" sizes="196x196" type="image/png"/>
-    <link href="/static/favicons/favicon-96x96.png" rel="icon" sizes="96x96" type="image/png"/>
-    <link href="/static/favicons/favicon-32x32.png" rel="icon" sizes="32x32" type="image/png"/>
-    <link href="/static/favicons/favicon-16x16.png" rel="icon" sizes="16x16" type="image/png"/>
-    <link href="/static/favicons/favicon-128.png" rel="icon" sizes="128x128" type="image/png"/>
-    <meta content="screenly-ose;" name="application-name"/>
-    <meta content="#FFFFFF" name="msapplication-TileColor"/>
-    <meta content="/static/favicons/mstile-144x144.png" name="msapplication-TileImage"/>
-    <meta content="/static/favicons/mstile-70x70.png" name="msapplication-square70x70logo"/>
-    <meta content="/static/favicons/mstile-150x150.png" name="msapplication-square150x150logo"/>
-    <meta content="/static/favicons/mstile-310x150.png" name="msapplication-wide310x150logo"/>
-    <meta content="/static/favicons/mstile-310x310.png" name="msapplication-square310x310logo"/>
-    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet"/>
-    <link href="{{ url_for('static', filename='css/screenly.css') }}" rel="stylesheet"/>
-    <link href="{{ url_for('static', filename='css/toggle-switch.css') }}" rel="stylesheet"/>
-
-    <link href="{{ url_for('static', filename='fontawesome/css/all.css') }}" rel="stylesheet"/>
-
-    <script async defer src="https://buttons.github.io/buttons.js"></script>
-
-    <script src="{{ url_for('static', filename='js/jquery-1.9.1.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
-
-    <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script> <!-- needs jquery -->
-    <script src="{{ url_for('static', filename='js/jquery-ui-1.10.1.custom.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/jquery.fileupload.js') }}"></script> <!-- needs jqueryui.widget -->
-
-    <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
-</head>
-
-<body>
-<div id="request-error" class="navbar navbar fixed-top">
+{% block content %}
     <div class="container">
-        <div class="alert" style="display:none">
-            <button class="close" type="button">&times;</button>
-            <span class="msg"></span>
-        </div>
-    </div>
-</div>
-
-<div class="navbar navbar-expand-lg fixed-top bg-primary">
-    <div class="container">
-        <a class="brand" href="/">
-            <img src="static/img/screenly_ose_logo.png"/>
-        </a>
-        <ul class="nav float-right">
-            {% if not context.up_to_date %}
-                <li class="update-available">
-                    <a href="http://www.screenlyapp.com/ose.html#upgrade">
-                        <i class="fas fa-arrow-circle-down"></i>
-                        Update Available
-                    </a>
-                </li>
-            {% endif %}
-            <li>
-                <a href="/integrations">
-                    <i class="far fa-plus-square"></i>
+        <div class="row">
+            <div class="col-12">
+                <h1 class="page-header">
                     Integrations
-                </a>
-            </li>
-            <li>
-                <a href="/settings">
-                    <i class="fas fa-cogs"></i>
-                    Settings
-                </a>
-            </li>
-            <li class="divider-vertical"></li>
-            <li>
-                <a href="/system-info">
-                    <i class="fas fa-tasks"></i>
-                    System Info
-                </a>
-            </li>
-        </ul>
-    </div>
-</div>
-
-<div class="container">
-    <div class="row">
-        <div class="col-12">
-            <h1 class="page-header">
-                Integrations
-            </h1>
-        </div>
-    </div>
-
-    {% if context.is_balena %}
-    <div class="row">
-        <div id="balena-section" class="col-12">
-            <h1 class="page-header">
-                Balena
-            </h1>
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th scope="col">Option</th>
-                        <th scope="col">Value</th>
-                        <th scope="col">Description</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <th scope="row">Device Name</th>
-                        <td>{{ context.balena_device_name_at_init }}</td>
-                        <td>The name of the device on first initialisation.</td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Device UUID</th>
-                        <td>{{ context.balena_device_id }}</td>
-                        <td>The unique identification number for the device. This is used to identify it on balena.</td>
-                    </tr>
-                    <tr>
-                        <th scope="row">App ID</th>
-                        <td>{{ context.balena_app_id }}</td>
-                        <td>ID number of the balena application the device is associated.</td>
-                    </tr>
-                    <tr>
-                        <th scope="row">App Name</th>
-                        <td>{{ context.balena_app_name }}</td>
-                        <td>The name of the balena application the device is associated with.</td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Supervisor Version</th>
-                        <td>{{ context.balena_supervisor_version }}</td>
-                        <td>The current version of the supervisor agent running on the device.</td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Host OS Version</th>
-                        <td>{{ context.balena_host_os_version }}</td>
-                        <td>The version of the host OS.</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endif %}
-
-</div>
-
-<div id="footer">
-    <div class="container">
-        <div class="copy">
-            &copy; Screenly, Inc.
-        </div>
-        <div id="screenly-logo" class="row">
-            <a href="/api/docs/" target="_blank" class="mr-4 justify-content-center align-self-center">
-                API
-            </a>
-            <a href="https://support.screenly.io/hc/en-us/sections/202652366-Frequently-Asked-Questions-FAQ-"
-               target="_blank" class="mr-4 justify-content-center align-self-center">
-                Knowledge Base
-            </a>
-            <a href="http://screenly.io/" target="_blank" class="mr-4 justify-content-center align-self-center">
-                Screenly.io
-            </a>
-            <a href="https://forums.screenly.io/" target="_blank" class="mr-4 justify-content-center align-self-center">
-                Support
-            </a>
-            <div id="github-stars">
-                <a class="github-button"
-                   href="https://github.com/screenly/screenly-ose" data-size="large" data-show-count="true"
-                   aria-label="Star screenly/screenly-ose on GitHub">
-                    Star
-                </a>
+                </h1>
             </div>
         </div>
+
+        {% if context.is_balena %}
+            <div class="row">
+                <div id="balena-section" class="col-12">
+                    <h1 class="page-header">
+                        Balena
+                    </h1>
+                    <table class="table table-striped">
+                        <thead>
+                        <tr>
+                            <th scope="col">Option</th>
+                            <th scope="col">Value</th>
+                            <th scope="col">Description</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr>
+                            <th scope="row">Device Name</th>
+                            <td>{{ context.balena_device_name_at_init }}</td>
+                            <td>The name of the device on first initialisation.</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Device UUID</th>
+                            <td>{{ context.balena_device_id }}</td>
+                            <td>The unique identification number for the device. This is used to identify it on
+                                balena.
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">App ID</th>
+                            <td>{{ context.balena_app_id }}</td>
+                            <td>ID number of the balena application the device is associated.</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">App Name</th>
+                            <td>{{ context.balena_app_name }}</td>
+                            <td>The name of the balena application the device is associated with.</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Supervisor Version</th>
+                            <td>{{ context.balena_supervisor_version }}</td>
+                            <td>The current version of the supervisor agent running on the device.</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Host OS Version</th>
+                            <td>{{ context.balena_host_os_version }}</td>
+                            <td>The version of the host OS.</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% endif %}
     </div>
-</div>
-</body>
-</html>
+{% endblock %}
