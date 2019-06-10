@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    {% include "head.html" %}
+
+    {% block head %}
+    {% endblock %}
+</head>
+
+<body>
+
+{% include 'header.html' %}
+
+{% block content %}
+{% endblock %}
+
+{% include 'footer.html' %}
+
+</body>
+
+</html>

@@ -1,42 +1,8 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8"/>
+{% extends "base.html" %}
 
-    {% if context.player_name %}
-        <title>Screenly OSE - {{ context.player_name }}</title>
-    {% else %}
-        <title>Screenly OSE</title>
-    {% endif %}
-    <link href="/static/favicons/apple-touch-icon-57x57.png" rel="apple-touch-icon-precomposed" sizes="57x57"/>
-    <link href="/static/favicons/apple-touch-icon-114x114.png" rel="apple-touch-icon-precomposed" sizes="114x114"/>
-    <link href="/static/favicons/apple-touch-icon-72x72.png" rel="apple-touch-icon-precomposed" sizes="72x72"/>
-    <link href="/static/favicons/apple-touch-icon-144x144.png" rel="apple-touch-icon-precomposed" sizes="144x144"/>
-    <link href="/static/favicons/apple-touch-icon-60x60.png" rel="apple-touch-icon-precomposed" sizes="60x60"/>
-    <link href="/static/favicons/apple-touch-icon-120x120.png" rel="apple-touch-icon-precomposed" sizes="120x120"/>
-    <link href="/static/favicons/apple-touch-icon-76x76.png" rel="apple-touch-icon-precomposed" sizes="76x76"/>
-    <link href="/static/favicons/apple-touch-icon-152x152.png" rel="apple-touch-icon-precomposed" sizes="152x152"/>
-    <link href="/static/favicons/favicon-196x196.png" rel="icon" sizes="196x196" type="image/png"/>
-    <link href="/static/favicons/favicon-96x96.png" rel="icon" sizes="96x96" type="image/png"/>
-    <link href="/static/favicons/favicon-32x32.png" rel="icon" sizes="32x32" type="image/png"/>
-    <link href="/static/favicons/favicon-16x16.png" rel="icon" sizes="16x16" type="image/png"/>
-    <link href="/static/favicons/favicon-128.png" rel="icon" sizes="128x128" type="image/png"/>
-    <meta content="screenly-ose;" name="application-name"/>
-    <meta content="#FFFFFF" name="msapplication-TileColor"/>
-    <meta content="/static/favicons/mstile-144x144.png" name="msapplication-TileImage"/>
-    <meta content="/static/favicons/mstile-70x70.png" name="msapplication-square70x70logo"/>
-    <meta content="/static/favicons/mstile-150x150.png" name="msapplication-square150x150logo"/>
-    <meta content="/static/favicons/mstile-310x150.png" name="msapplication-wide310x150logo"/>
-    <meta content="/static/favicons/mstile-310x310.png" name="msapplication-square310x310logo"/>
-    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet"/>
-    <link href="{{ url_for('static', filename='css/screenly.css') }}" rel="stylesheet"/>
+{% block head %}
     <link href="{{ url_for('static', filename='css/toggle-switch.css') }}" rel="stylesheet"/>
 
-    <link href="{{ url_for('static', filename='fontawesome/css/all.css') }}" rel="stylesheet"/>
-
-    <script async defer src="https://buttons.github.io/buttons.js"></script>
-
-    <script src="{{ url_for('static', filename='js/jquery-1.9.1.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
 
     <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script> <!-- needs jquery -->
@@ -44,299 +10,225 @@
     <script src="{{ url_for('static', filename='js/jquery.fileupload.js') }}"></script> <!-- needs jqueryui.widget -->
 
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
-</head>
+{% endblock %}
 
-<body>
-<div id="request-error" class="navbar navbar fixed-top">
+{% block content %}
     <div class="container">
-        <div class="alert" style="display:none">
-            <button class="close" type="button">&times;</button>
-            <span class="msg"></span>
-        </div>
-    </div>
-</div>
-
-<div class="navbar navbar-expand-lg fixed-top bg-primary">
-    <div class="container">
-        <a class="brand" href="/">
-            <img src="static/img/screenly_ose_logo.png"/>
-        </a>
-        <ul class="nav float-right">
-            {% if not context.up_to_date %}
-                <li class="update-available">
-                    <a href="http://www.screenlyapp.com/ose.html#upgrade">
-                        <i class="fas fa-arrow-circle-down"></i>
-                        Update Available
-                    </a>
-                </li>
-            {% endif %}
-            <li>
-                <a href="/integrations">
-                    <i class="far fa-plus-square"></i>
-                    Integrations
-                </a>
-            </li>
-            <li>
-                <a href="/settings">
-                    <i class="fas fa-cogs"></i>
+        <div class="row">
+            <div class="col-12">
+                <h1 class="page-header">
                     Settings
-                </a>
-            </li>
-            <li class="divider-vertical"></li>
-            <li>
-                <a href="/system-info">
-                    <i class="fas fa-tasks"></i>
-                    System Info
-                </a>
-            </li>
-        </ul>
-    </div>
-</div>
-
-<div class="container">
-    <div class="row">
-        <div class="col-12">
-            <h1 class="page-header">
-                Settings
-            </h1>
+                </h1>
+            </div>
         </div>
-    </div>
 
-    <div class="row">
-        <div class="col-12">
-            {% if context.flash %}
-                <div class="alert alert-{{ context.flash['class'] }}">
-                    {{ context.flash['message'] }}
-                </div>
-            {% endif %}
-            <form method="post">
-                <div class="form-group row">
-                    <label class="col-2 col-form-label">Player name</label>
-                    <div class="col-3">
-                        <input class="form-control" name="player_name" type="text" value="{{ context.player_name }}">
-                    </div>
-                </div>
-
-                <div class="form-group row">
-                    <label class="col-2 col-form-label">Show splash screen</label>
-                    <div class="col-3">
-                        <label id="splash_checkbox" class="checkbox toggle card card-body bg-light form-control">
-                            {% if context.show_splash %}
-                                <input name="show_splash" checked="checked" type="checkbox"/>
-                            {% else %}
-                                <input name="show_splash" type="checkbox"/>
-                            {% endif %}
-                            <p>
-                                <span class="on">On</span>
-                                <span class="off">Off</span>
-                            </p>
-                            <a class="btn btn-primary slide-button"></a>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="form-group row">
-                    <label class="col-2 col-form-label">Shuffle playlist</label>
-                    <div class="col-3">
-                        <label id="shuffle_checkbox" class="checkbox toggle card card-body bg-light">
-                            {% if context.shuffle_playlist %}
-                                <input name="shuffle_playlist" checked="checked" type="checkbox"/>
-                            {% else %}
-                                <input name="shuffle_playlist" type="checkbox"/>
-                            {% endif %}
-                            <p>
-                                <span class="on">On</span>
-                                <span class="off">Off</span>
-                            </p>
-                            <a class="btn btn-primary slide-button"></a>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="form-group row">
-                    <label class="col-2 col-form-label">Audio output</label>
-                    <div class="col-2">
-                        <select class="form-control" name="audio_output">
-                            {% if context.audio_output == 'hdmi' %}
-                                <option value="hdmi" selected="selected">HDMI</option>
-                                <option value="local">3.5mm jack</option>
-                            {% else %}
-                                <option value="hdmi">HDMI</option>
-                                <option value="local" selected="selected">3.5mm jack</option>
-                            {% endif %}
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-group row">
-                    <label class="col-2 col-form-label">Default duration</label>
-                    <div class="col-1">
-                        <input class="form-control" name="default_duration" type="number"
-                               value={{ context.default_duration }} />
-                    </div>
-                </div>
-
-                <div class="form-group row">
-                    <label class="col-2 col-form-label">Default streaming duration</label>
-                    <div class="col-1">
-                        <input class="form-control" name="default_streaming_duration" type="number"
-                               value={{ context.default_streaming_duration }} />
-                    </div>
-                </div>
-
-                <div class="form-group row">
-                    <label class="col-2 col-form-label">Use 24-hour clock</label>
-                    <div class="col-3">
-                        <label id="use_24_hour_clock_checkbox" class="checkbox toggle card card-body bg-light">
-                            {% if context.use_24_hour_clock %}
-                                <input name="use_24_hour_clock" checked="checked" type="checkbox"/>
-                            {% else %}
-                                <input name="use_24_hour_clock" type="checkbox"/>
-                            {% endif %}
-                            <p>
-                                <span class="on">On</span>
-                                <span class="off">Off</span>
-                            </p>
-                            <a class="btn btn-primary slide-button"></a>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="form-group row">
-                    <label class="col-2 col-form-label">Debug logging</label>
-                    <div class="col-3">
-                        <label id="debug_checkbox" class="checkbox toggle card card-body bg-light">
-                            {% if context.debug_logging %}
-                                <input name="debug_logging" checked="checked" type="checkbox">
-                            {% else %}
-                                <input name="debug_logging" type="checkbox">
-                            {% endif %}
-                            <p>
-                                <span class="on">On</span>
-                                <span class="off">Off</span>
-                            </p>
-                            <a class="btn btn-primary slide-button"></a>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="form-group row">
-                    <label class="col-2 col-form-label">Use Authentication</label>
-                    <div class="col-3">
-                        <label id="auth_checkbox" class="checkbox toggle card card-body bg-light">
-                            {% if context.use_auth %}
-                                <input name="use_auth" checked="checked" type="checkbox"/>
-                            {% else %}
-                                <input name="use_auth" type="checkbox"/>
-                            {% endif %}
-                            <p>
-                                <span class="on">On</span>
-                                <span class="off">Off</span>
-                            </p>
-                            <a class="btn btn-primary slide-button"></a>
-                        </label>
-                    </div>
-                </div>
-                <div class="form-group row" id="user_group">
-                    <label class="col-2 col-form-label">User</label>
-                    <div class="col-3">
-                        <input class="form-control" name="user" type="text" value="{{ context.user }}">
-                    </div>
-                </div>
-                {% if context.password != "" %}
-                    <div class="form-group row" id="curpassword_group">
-                        <label class="col-2 col-form-label">Current Password</label>
-                        <div class="col-3">
-                            <input class="form-control" name="curpassword" type="password" value="">
-                        </div>
+        <div class="row">
+            <div class="col-12">
+                {% if context.flash %}
+                    <div class="alert alert-{{ context.flash['class'] }}">
+                        {{ context.flash['message'] }}
                     </div>
                 {% endif %}
-                <div class="form-group row" id="password_group">
-                    <label class="col-2 col-form-label">Password</label>
-                    <div class="col-3">
-                        <input class="form-control" name="password" type="password" value="">
+                <form method="post">
+                    <div class="form-group row">
+                        <label class="col-2 col-form-label">Player name</label>
+                        <div class="col-3">
+                            <input class="form-control" name="player_name" type="text"
+                                   value="{{ context.player_name }}">
+                        </div>
                     </div>
-                </div>
-                <div class="form-group row" id="password2_group">
-                    <label class="col-2 col-form-label">Confirm Password</label>
-                    <div class="col-3">
-                        <input class="form-control" name="password2" type="password" value="">
-                    </div>
-                </div>
 
-                <div class="form-actions form-group row">
-                    <div class="offset-1 col-3">
-                        <input class="btn btn-primary" type="submit" value="Save Settings">
-                        <a class="btn btn-outline-secondary" href="/">Cancel</a>
+                    <div class="form-group row">
+                        <label class="col-2 col-form-label">Show splash screen</label>
+                        <div class="col-3">
+                            <label id="splash_checkbox" class="checkbox toggle card card-body bg-light form-control">
+                                {% if context.show_splash %}
+                                    <input name="show_splash" checked="checked" type="checkbox"/>
+                                {% else %}
+                                    <input name="show_splash" type="checkbox"/>
+                                {% endif %}
+                                <p>
+                                    <span class="on">On</span>
+                                    <span class="off">Off</span>
+                                </p>
+                                <a class="btn btn-primary slide-button"></a>
+                            </label>
+                        </div>
                     </div>
-                </div>
-            </form>
+
+                    <div class="form-group row">
+                        <label class="col-2 col-form-label">Shuffle playlist</label>
+                        <div class="col-3">
+                            <label id="shuffle_checkbox" class="checkbox toggle card card-body bg-light">
+                                {% if context.shuffle_playlist %}
+                                    <input name="shuffle_playlist" checked="checked" type="checkbox"/>
+                                {% else %}
+                                    <input name="shuffle_playlist" type="checkbox"/>
+                                {% endif %}
+                                <p>
+                                    <span class="on">On</span>
+                                    <span class="off">Off</span>
+                                </p>
+                                <a class="btn btn-primary slide-button"></a>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group row">
+                        <label class="col-2 col-form-label">Audio output</label>
+                        <div class="col-2">
+                            <select class="form-control" name="audio_output">
+                                {% if context.audio_output == 'hdmi' %}
+                                    <option value="hdmi" selected="selected">HDMI</option>
+                                    <option value="local">3.5mm jack</option>
+                                {% else %}
+                                    <option value="hdmi">HDMI</option>
+                                    <option value="local" selected="selected">3.5mm jack</option>
+                                {% endif %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group row">
+                        <label class="col-2 col-form-label">Default duration</label>
+                        <div class="col-1">
+                            <input class="form-control" name="default_duration" type="number"
+                                   value="{{ context.default_duration }}"/>
+                        </div>
+                    </div>
+
+                    <div class="form-group row">
+                        <label class="col-2 col-form-label">Default streaming duration</label>
+                        <div class="col-1">
+                            <input class="form-control" name="default_streaming_duration" type="number"
+                                   value="{{ context.default_streaming_duration }}"/>
+                        </div>
+                    </div>
+
+                    <div class="form-group row">
+                        <label class="col-2 col-form-label">Use 24-hour clock</label>
+                        <div class="col-3">
+                            <label id="use_24_hour_clock_checkbox" class="checkbox toggle card card-body bg-light">
+                                {% if context.use_24_hour_clock %}
+                                    <input name="use_24_hour_clock" checked="checked" type="checkbox"/>
+                                {% else %}
+                                    <input name="use_24_hour_clock" type="checkbox"/>
+                                {% endif %}
+                                <p>
+                                    <span class="on">On</span>
+                                    <span class="off">Off</span>
+                                </p>
+                                <a class="btn btn-primary slide-button"></a>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group row">
+                        <label class="col-2 col-form-label">Debug logging</label>
+                        <div class="col-3">
+                            <label id="debug_checkbox" class="checkbox toggle card card-body bg-light">
+                                {% if context.debug_logging %}
+                                    <input name="debug_logging" checked="checked" type="checkbox">
+                                {% else %}
+                                    <input name="debug_logging" type="checkbox">
+                                {% endif %}
+                                <p>
+                                    <span class="on">On</span>
+                                    <span class="off">Off</span>
+                                </p>
+                                <a class="btn btn-primary slide-button"></a>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group row">
+                        <label class="col-2 col-form-label">Use Authentication</label>
+                        <div class="col-3">
+                            <label id="auth_checkbox" class="checkbox toggle card card-body bg-light">
+                                {% if context.use_auth %}
+                                    <input name="use_auth" checked="checked" type="checkbox"/>
+                                {% else %}
+                                    <input name="use_auth" type="checkbox"/>
+                                {% endif %}
+                                <p>
+                                    <span class="on">On</span>
+                                    <span class="off">Off</span>
+                                </p>
+                                <a class="btn btn-primary slide-button"></a>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group row" id="user_group">
+                        <label class="col-2 col-form-label">User</label>
+                        <div class="col-3">
+                            <input class="form-control" name="user" type="text" value="{{ context.user }}">
+                        </div>
+                    </div>
+                    {% if context.password != "" %}
+                        <div class="form-group row" id="curpassword_group">
+                            <label class="col-2 col-form-label">Current Password</label>
+                            <div class="col-3">
+                                <input class="form-control" name="curpassword" type="password" value="">
+                            </div>
+                        </div>
+                    {% endif %}
+                    <div class="form-group row" id="password_group">
+                        <label class="col-2 col-form-label">Password</label>
+                        <div class="col-3">
+                            <input class="form-control" name="password" type="password" value="">
+                        </div>
+                    </div>
+                    <div class="form-group row" id="password2_group">
+                        <label class="col-2 col-form-label">Confirm Password</label>
+                        <div class="col-3">
+                            <input class="form-control" name="password2" type="password" value="">
+                        </div>
+                    </div>
+
+                    <div class="form-actions form-group row">
+                        <div class="offset-1 col-3">
+                            <input class="btn btn-primary" type="submit" value="Save Settings">
+                            <a class="btn btn-outline-secondary" href="/">Cancel</a>
+                        </div>
+                    </div>
+                </form>
+            </div>
         </div>
-    </div>
 
-    {% if not context.is_balena %}
-    <div class="row">
-        <div id="wifi-section" class="col-12">
-            <h1 class="page-header">
-                Reset wifi config
-            </h1>
-            <p>Run it, and if the next boot does not have a network connection, you will be prompted to select a WiFi
-                network. <br><b>Warning:</b> after pressing, a reboot is required. Web interface will not be available
-                until reboot.</p>
-            <div class="form-actions">
-                <button id="btn-reset" class="btn btn-primary" type="button">Re-run
-                    network detection
-                </button>
+        {% if not context.is_balena %}
+            <div class="row">
+                <div id="wifi-section" class="col-12">
+                    <h1 class="page-header">
+                        Reset wifi config
+                    </h1>
+                    <p>Run it, and if the next boot does not have a network connection, you will be prompted to select a
+                        WiFi
+                        network. <br><b>Warning:</b> after pressing, a reboot is required. Web interface will not be
+                        available
+                        until reboot.</p>
+                    <div class="form-actions">
+                        <button id="btn-reset" class="btn btn-primary" type="button">Re-run
+                            network detection
+                        </button>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        <div class="row">
+            <div id="backup-section" class="col-12">
+                <h1 class="page-header">
+                    Backup
+                </h1>
+                <div class="form-actions">
+                    <input name="backup_upload" style="display:none" type="file">
+                    <button id="btn-upload" class="btn btn-primary" type="button">Upload and Recover</button>
+                    <button id="btn-backup" class="btn btn-outline-secondary">Get backup</button>
+                    <div class="progress-bar progress-bar-striped progress active" style="display:none">
+                        <div class="bar"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    {% endif %}
-
-    <div class="row">
-        <div id="backup-section" class="col-12">
-            <h1 class="page-header">
-                Backup
-            </h1>
-            <div class="form-actions">
-                <input name="backup_upload" style="display:none" type="file">
-                <button id="btn-upload" class="btn btn-primary" type="button">Upload and Recover</button>
-                <button id="btn-backup" class="btn btn-outline-secondary">Get backup</button>
-                <div class="progress-bar progress-bar-striped progress active" style="display:none">
-                    <div class="bar"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div id="footer">
-    <div class="container">
-        <div class="copy">
-            &copy; Screenly, Inc.
-        </div>
-        <div id="screenly-logo" class="row">
-            <a href="/api/docs/" target="_blank" class="mr-4 justify-content-center align-self-center">
-                API
-            </a>
-            <a href="https://support.screenly.io/hc/en-us/sections/202652366-Frequently-Asked-Questions-FAQ-"
-               target="_blank" class="mr-4 justify-content-center align-self-center">
-                Knowledge Base
-            </a>
-            <a href="http://screenly.io/" target="_blank" class="mr-4 justify-content-center align-self-center">
-                Screenly.io
-            </a>
-            <a href="https://forums.screenly.io/" target="_blank" class="mr-4 justify-content-center align-self-center">
-                Support
-            </a>
-            <div id="github-stars">
-                <a class="github-button"
-                   href="https://github.com/screenly/screenly-ose" data-size="large" data-show-count="true"
-                   aria-label="Star screenly/screenly-ose on GitHub">
-                    Star
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-</body>
-</html>
+{% endblock %}
