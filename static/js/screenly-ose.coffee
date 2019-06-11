@@ -405,7 +405,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
       @changeLoopTimes()
       @viewmodel()
       @model.trigger 'change'
-      @validate()
+      @validate(e)
       yes), 500
     @_change arguments...
 
@@ -414,10 +414,16 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     validators =
       duration: (v) =>
         if ('video' isnt @model.get 'mimetype') and (not (_.isNumber v*1 ) or v*1 < 1)
-          'please enter a valid number'
+          'Please enter a valid number.'
       end_date: (v) =>
         unless (new Date @$fv 'start_date') < (new Date @$fv 'end_date')
-          'end date should be after start date'
+          if $(e?.target)?.attr("name") == "start_date_date"
+            start_date = new Date @$fv 'start_date'
+            end_date = new Date(start_date.getTime() + Math.max(parseInt(@$fv 'duration'), 60) * 1000)
+            @setLoopDateTime (date_to start_date), (date_to end_date)
+            return
+
+          'End date should be after start date.'
     errors = ([field, v] for field, fn of validators when v = fn (@$fv field))
 
     (@$ ".form-group .help-inline.invalid-feedback").remove()

@@ -720,7 +720,7 @@
           _this.changeLoopTimes();
           _this.viewmodel();
           _this.model.trigger('change');
-          _this.validate();
+          _this.validate(e);
           return true;
         };
       })(this)), 500));
@@ -734,14 +734,21 @@
         duration: (function(_this) {
           return function(v) {
             if (('video' !== _this.model.get('mimetype')) && (!(_.isNumber(v * 1)) || v * 1 < 1)) {
-              return 'please enter a valid number';
+              return 'Please enter a valid number.';
             }
           };
         })(this),
         end_date: (function(_this) {
           return function(v) {
+            var end_date, ref, start_date;
             if (!((new Date(_this.$fv('start_date'))) < (new Date(_this.$fv('end_date'))))) {
-              return 'end date should be after start date';
+              if (((ref = $(e != null ? e.target : void 0)) != null ? ref.attr("name") : void 0) === "start_date_date") {
+                start_date = new Date(_this.$fv('start_date'));
+                end_date = new Date(start_date.getTime() + Math.max(parseInt(_this.$fv('duration')), 60) * 1000);
+                _this.setLoopDateTime(date_to(start_date), date_to(end_date));
+                return;
+              }
+              return 'End date should be after start date.';
             }
           };
         })(this)
