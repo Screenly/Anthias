@@ -239,7 +239,7 @@
           ($("#request-error .alert")).show();
           ($("#request-error .alert")).addClass("alert-success");
           ($("#request-error .alert")).removeClass("alert-danger");
-          return ($("#request-error .msg")).text("Screenly shutdown has started successfully.");
+          return ($("#request-error .msg")).text("Screenly shutdown has started successfully. Soon you will be able to turn off the device manually.");
         }).fail(function(data, e) {
           var err, j;
           ($("#request-error .alert")).show();
