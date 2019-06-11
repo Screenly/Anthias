@@ -102,6 +102,7 @@ def template(template_name, **context):
     but also injects some global context."""
 
     # Add global contexts
+    context['is_balena'] = is_balena_app()
     context['up_to_date'] = is_up_to_date()
     context['default_duration'] = settings['default_duration']
     context['default_streaming_duration'] = settings['default_streaming_duration']
@@ -1300,8 +1301,6 @@ def settings_page():
     context['user'] = settings['user']
     context['password'] = "password" if settings['password'] != "" else ""
 
-    context['is_balena'] = is_balena_app()
-
     if not settings['user'] or not settings['password']:
         context['use_auth'] = False
     else:
@@ -1363,12 +1362,9 @@ def system_info():
 @app.route('/integrations')
 @auth_basic
 def integrations():
+    context = {}
 
-    context = {
-        'is_balena': is_balena_app(),
-    }
-
-    if context['is_balena']:
+    if is_balena_app():
         context['balena_device_id'] = getenv('BALENA_DEVICE_UUID')
         context['balena_app_id'] = getenv('BALENA_APP_ID')
         context['balena_app_name'] = getenv('BALENA_APP_NAME')
