@@ -734,7 +734,7 @@
         duration: (function(_this) {
           return function(v) {
             if (('video' !== _this.model.get('mimetype')) && (!(_.isNumber(v * 1)) || v * 1 < 1)) {
-              return 'please enter a valid number';
+              return 'Please enter a valid number.';
             }
           };
         })(this),
@@ -748,7 +748,7 @@
                 _this.setLoopDateTime(date_to(start_date), date_to(end_date));
                 return;
               }
-              return 'end date should be after start date';
+              return 'End date should be after start date.';
             }
           };
         })(this)
