@@ -6,29 +6,29 @@ $().ready ->
 
 API = (window.Screenly ||= {}) # exports
 
-date_settings = {}
+dateSettings = {}
 
-if use_24_hour_clock
-  date_settings.time = 'HH:mm'
-  date_settings.full_time = 'HH:mm:ss'
-  date_settings.show_meridian = false
+if use24HourClock
+  dateSettings.time = "HH:mm"
+  dateSettings.full_time = "HH:mm:ss"
+  dateSettings.show_meridian = false
 else
-  date_settings.time = 'hh:mm A'
-  date_settings.full_time = 'hh:mm:ss A'
-  date_settings.show_meridian = true
+  dateSettings.time = "hh:mm A"
+  dateSettings.full_time = "hh:mm:ss A"
+  dateSettings.show_meridian = true
 
-date_settings.date = date_format.toUpperCase()
-date_settings.datepicker_format = date_format
+dateSettings.date = dateFormat.toUpperCase()
+dateSettings.datepicker_format = dateFormat
 
-date_settings.full_date = "#{date_settings.date} #{date_settings.full_time}"
+dateSettings.full_date = "#{dateSettings.date} #{dateSettings.full_time}"
 
 
 API.date_to = date_to = (d) ->
   # Cross-browser UTC to localtime conversion
   dd = moment.utc(d).local()
-  string: -> dd.format date_settings.full_date
-  date: -> dd.format date_settings.date
-  time: -> dd.format date_settings.time
+  string: -> dd.format dateSettings.full_date
+  date: -> dd.format dateSettings.date
+  time: -> dd.format dateSettings.time
 
 now = -> new Date()
 
@@ -86,7 +86,7 @@ API.Asset = class Asset extends Backbone.Model
     is_active: 1
     start_date: ''
     end_date: ''
-    duration: default_duration
+    duration: defaultDuration
     is_enabled: 0
     is_processing: 0
     nocache: 0
@@ -141,7 +141,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
 
   viewmodel:(model) =>
     for which in ['start', 'end']
-      @$fv "#{which}_date", (moment (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time"), date_settings.full_date).toDate().toISOString()
+      @$fv "#{which}_date", (moment (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time"), dateSettings.full_date).toDate().toISOString()
     for field in model.fields when not (@$f field).prop 'disabled'
       model.set field, (@$fv field), silent:yes
 
@@ -183,9 +183,9 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
     if (@$fv 'mimetype') == "video"
       @$fv 'duration', 0
     else if (@$fv 'mimetype') == "streaming"
-      @$fv 'duration', default_streaming_duration
+      @$fv 'duration', defaultStreamingDuration
     else
-      @$fv 'duration', default_duration
+      @$fv 'duration', defaultDuration
 
   clickTabNavUpload: (e) =>
     if not (@$ '#tab-file_upload').hasClass 'active'
@@ -297,7 +297,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
   initialize: (options) =>
     ($ 'body').append @$el.html get_template 'asset-modal'
     (@$ 'input.time').timepicker
-      minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: date_settings.show_meridian
+      minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: dateSettings.show_meridian
 
     (@$ 'input[name="nocache"]').prop 'checked', @model.get 'nocache'
     (@$ '.modal-header .close').remove()
@@ -330,7 +330,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     for which in ['start', 'end']
       d = date_to @model.get "#{which}_date"
       @$fv "#{which}_date_date", d.date()
-      (@$f "#{which}_date_date").datepicker autoclose: yes, format: date_settings.datepicker_format
+      (@$f "#{which}_date_date").datepicker autoclose: yes, format: dateSettings.datepicker_format
       (@$f "#{which}_date_date").datepicker 'setValue', d.date()
       @$fv "#{which}_date_time", d.time()
 
@@ -340,7 +340,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
 
   viewmodel: =>
     for which in ['start', 'end']
-      @$fv "#{which}_date", (moment (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time"), date_settings.full_date).toDate().toISOString()
+      @$fv "#{which}_date", (moment (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time"), dateSettings.full_date).toDate().toISOString()
     for field in @model.fields when not (@$f field).prop 'disabled'
       @model.set field, (@$fv field), silent:yes
 
@@ -453,12 +453,12 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
 
   setLoopDateTime: (start_date, end_date) =>
     @$fv "start_date_date", start_date.date()
-    (@$f "start_date_date").datepicker autoclose: yes, format: date_settings.datepicker_format
-    (@$f "start_date_date").datepicker 'setDate', moment(start_date.date(), date_settings.date).toDate()
+    (@$f "start_date_date").datepicker autoclose: yes, format: dateSettings.datepicker_format
+    (@$f "start_date_date").datepicker 'setDate', moment(start_date.date(), dateSettings.date).toDate()
     @$fv "start_date_time", start_date.time()
     @$fv "end_date_date", end_date.date()
-    (@$f "end_date_date").datepicker autoclose: yes, format: date_settings.datepicker_format
-    (@$f "end_date_date").datepicker 'setDate', moment(end_date.date(), date_settings.date).toDate()
+    (@$f "end_date_date").datepicker autoclose: yes, format: dateSettings.datepicker_format
+    (@$f "end_date_date").datepicker 'setDate', moment(end_date.date(), dateSettings.date).toDate()
     @$fv "end_date_time", end_date.time()
 
     (@$ ".form-group .help-inline.invalid-feedback").remove()
@@ -633,7 +633,7 @@ API.App = class App extends Backbone.View
       collection: API.assets
       el: @$ '#assets'
 
-    for address in ws_addresses
+    for address in wsAddresses
       try
         ws = new WebSocket address
         ws.onmessage = (x) ->
