@@ -12,6 +12,7 @@ import zmq
 import hashlib
 
 from lib.errors import ZmqCollectorTimeout
+from auth import WoTTAuth
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -42,8 +43,6 @@ DEFAULTS = {
     }
 }
 CONFIGURABLE_SETTINGS = DEFAULTS['viewer'].copy()
-CONFIGURABLE_SETTINGS['user'] = DEFAULTS['auth']['user']
-CONFIGURABLE_SETTINGS['password'] = DEFAULTS['auth']['password']
 CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock']
 CONFIGURABLE_SETTINGS['date_format'] = DEFAULTS['main']['date_format']
 
@@ -70,6 +69,7 @@ class ScreenlySettings(IterableUserDict):
         IterableUserDict.__init__(self, *args, **kwargs)
         self.home = getenv('HOME')
         self.conf_file = self.get_configfile()
+        self._auth = WoTTAuth(self)
 
         if not path.isfile(self.conf_file):
             logging.error('Config-file %s missing. Using defaults.', self.conf_file)
@@ -132,12 +132,9 @@ class ScreenlySettings(IterableUserDict):
     def get_configfile(self):
         return path.join(self.home, CONFIG_DIR, CONFIG_FILE)
 
-    def check_user(self, user, password):
-        if not self['user'] or not self['password']:
-            logging.debug('Username or password not configured: skip authentication')
-            return True
-
-        return self['user'] == user and self['password'] == password
+    @property
+    def auth(self):
+        return self._auth
 
 
 settings = ScreenlySettings()
@@ -211,20 +208,3 @@ class ZmqCollector:
             return json.loads(self.socket.recv(zmq.NOBLOCK))
 
         raise ZmqCollectorTimeout
-
-
-def authenticate():
-    realm = "Screenly OSE" + (" " + settings['player_name'] if settings['player_name'] else "")
-    return Response("Access denied", 401, {"WWW-Authenticate": 'Basic realm="' + realm + '"'})
-
-
-def auth_basic(orig):
-    @wraps(orig)
-    def decorated(*args, **kwargs):
-        if not settings['user'] or not settings['password']:
-            return orig(*args, **kwargs)
-        auth = request.authorization
-        if not auth or not settings.check_user(auth.username, hashlib.sha256(auth.password).hexdigest()):
-            return authenticate()
-        return orig(*args, **kwargs)
-    return decorated
