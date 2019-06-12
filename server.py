@@ -924,7 +924,7 @@ class Backup(Resource):
         }
     })
     def post(self):
-        filename = backup_helper.create_backup()
+        filename = backup_helper.create_backup(name=settings['player_name'])
         return filename, 201
 
 
