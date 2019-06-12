@@ -12,13 +12,25 @@ class Auth(object):
 
     @abstractmethod
     def authenticate(self):
+        """
+        Let the user authenticate himself.
+        :return: a Response which initiates authentication.
+        """
         pass
 
     @abstractmethod
     def is_authorized(self):
+        """
+        See if the user is authorized for the request.
+        :return: bool
+        """
         pass
 
-    def auth(self):
+    def authorize(self):
+        """
+        If the request is not authorized, let the user authenticate himself.
+        :return: a Response which initiates authentication or None if authorized.
+        """
         if not self.is_authorized:
             return self.authenticate()
 
@@ -53,5 +65,5 @@ def authorized(orig):
     def decorated(*args, **kwargs):
         if not settings.auth:
             return orig(*args, **kwargs)
-        return settings.auth.auth() or orig(*args, **kwargs)
+        return settings.auth.authorize() or orig(*args, **kwargs)
     return decorated
