@@ -1,14 +1,19 @@
 import tarfile
+from datetime import datetime
 from os import path, getenv, remove
 import sh
 
 directories = ['.screenly', 'screenly_assets']
-archive_name = "screenly-backup.tar.gz"
+default_archive_name = "screenly-backup"
 static_dir = "screenly/static"
 
 
-def create_backup():
+def create_backup(name=default_archive_name):
     home = getenv('HOME')
+    archive_name = "{}-{}.tar.gz".format(
+        name if name else default_archive_name,
+        datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    )
     file_path = path.join(home, static_dir, archive_name)
     if path.isfile(file_path):
         remove(file_path)
