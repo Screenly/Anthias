@@ -3,7 +3,7 @@
 /* screenly-ose ui */
 
 (function() {
-  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_settings, date_settings_12hour, date_settings_24hour, date_to, delay, domains, duration_seconds_to_human_readable, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, truncate_str, url_test, viduris,
+  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_settings, date_to, delay, domains, duration_seconds_to_human_readable, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, truncate_str, url_test, viduris,
     indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -18,23 +18,23 @@
 
   API = (window.Screenly || (window.Screenly = {}));
 
-  date_settings_12hour = {
-    full_date: 'MM/DD/YYYY hh:mm:ss A',
-    date: 'MM/DD/YYYY',
-    time: 'hh:mm A',
-    show_meridian: true,
-    date_picker_format: 'mm/dd/yyyy'
-  };
+  date_settings = {};
 
-  date_settings_24hour = {
-    full_date: 'MM/DD/YYYY HH:mm:ss',
-    date: 'MM/DD/YYYY',
-    time: 'HH:mm',
-    show_meridian: false,
-    datepicker_format: 'mm/dd/yyyy'
-  };
+  if (use_24_hour_clock) {
+    date_settings.time = 'HH:mm';
+    date_settings.full_time = 'HH:mm:ss';
+    date_settings.show_meridian = false;
+  } else {
+    date_settings.time = 'hh:mm A';
+    date_settings.full_time = 'hh:mm:ss A';
+    date_settings.show_meridian = true;
+  }
 
-  date_settings = use_24_hour_clock ? date_settings_24hour : date_settings_12hour;
+  date_settings.date = date_format.toUpperCase();
+
+  date_settings.datepicker_format = date_format;
+
+  date_settings.full_date = date_settings.date + " " + date_settings.full_time;
 
   API.date_to = date_to = function(d) {
     var dd;
@@ -275,7 +275,7 @@
       ref = ['start', 'end'];
       for (k = 0, len = ref.length; k < len; k++) {
         which = ref[k];
-        this.$fv(which + "_date", (new Date((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")))).toISOString());
+        this.$fv(which + "_date", (moment((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")), date_settings.full_date)).toDate().toISOString());
       }
       ref1 = model.fields;
       results = [];
@@ -613,7 +613,7 @@
       ref = ['start', 'end'];
       for (k = 0, len = ref.length; k < len; k++) {
         which = ref[k];
-        this.$fv(which + "_date", (new Date((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")))).toISOString());
+        this.$fv(which + "_date", (moment((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")), date_settings.full_date)).toDate().toISOString());
       }
       ref1 = this.model.fields;
       results = [];
@@ -802,14 +802,14 @@
         autoclose: true,
         format: date_settings.datepicker_format
       });
-      (this.$f("start_date_date")).datepicker('setDate', new Date(start_date.date()));
+      (this.$f("start_date_date")).datepicker('setDate', moment(start_date.date(), date_settings.date).toDate());
       this.$fv("start_date_time", start_date.time());
       this.$fv("end_date_date", end_date.date());
       (this.$f("end_date_date")).datepicker({
         autoclose: true,
         format: date_settings.datepicker_format
       });
-      (this.$f("end_date_date")).datepicker('setDate', new Date(end_date.date()));
+      (this.$f("end_date_date")).datepicker('setDate', moment(end_date.date(), date_settings.date).toDate());
       this.$fv("end_date_time", end_date.time());
       (this.$(".form-group .help-inline.invalid-feedback")).remove();
       (this.$(".form-group .form-control")).removeClass('is-invalid');

@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 import json
 from os import path, getenv
-from sys import exit
 from time import sleep
 import ConfigParser
 import logging
@@ -18,22 +17,23 @@ CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
 DEFAULTS = {
     'main': {
-        'database': CONFIG_DIR + 'screenly.db',
+        'analytics_opt_out': False,
         'assetdir': 'screenly_assets',
+        'database': CONFIG_DIR + 'screenly.db',
+        'date_format': 'mm/dd/yyyy',
         'use_24_hour_clock': False,
-        'websocket_port': '9999',
         'use_ssl': False,
-        'analytics_opt_out': False
+        'websocket_port': '9999'
     },
     'viewer': {
-        'player_name': '',
-        'show_splash': True,
         'audio_output': 'hdmi',
-        'shuffle_playlist': False,
-        'resolution': '1920x1080',
+        'debug_logging': False,
         'default_duration': '10',
         'default_streaming_duration': '300',
-        'debug_logging': False,
+        'player_name': '',
+        'resolution': '1920x1080',
+        'show_splash': True,
+        'shuffle_playlist': False,
         'verify_ssl': True
     },
     'auth': {
@@ -45,6 +45,7 @@ CONFIGURABLE_SETTINGS = DEFAULTS['viewer'].copy()
 CONFIGURABLE_SETTINGS['user'] = DEFAULTS['auth']['user']
 CONFIGURABLE_SETTINGS['password'] = DEFAULTS['auth']['password']
 CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock']
+CONFIGURABLE_SETTINGS['date_format'] = DEFAULTS['main']['date_format']
 
 PORT = int(getenv('PORT', 8080))
 LISTEN = getenv('LISTEN', '127.0.0.1')
