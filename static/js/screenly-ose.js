@@ -3,7 +3,7 @@
 /* screenly-ose ui */
 
 (function() {
-  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_settings, date_settings_12hour, date_settings_24hour, date_to, delay, domains, duration_seconds_to_human_readable, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, truncate_str, url_test, viduris,
+  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, dateSettings, date_to, delay, domains, duration_seconds_to_human_readable, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, truncate_str, url_test, viduris,
     indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -18,36 +18,36 @@
 
   API = (window.Screenly || (window.Screenly = {}));
 
-  date_settings_12hour = {
-    full_date: 'MM/DD/YYYY hh:mm:ss A',
-    date: 'MM/DD/YYYY',
-    time: 'hh:mm A',
-    show_meridian: true,
-    date_picker_format: 'mm/dd/yyyy'
-  };
+  dateSettings = {};
 
-  date_settings_24hour = {
-    full_date: 'MM/DD/YYYY HH:mm:ss',
-    date: 'MM/DD/YYYY',
-    time: 'HH:mm',
-    show_meridian: false,
-    datepicker_format: 'mm/dd/yyyy'
-  };
+  if (use24HourClock) {
+    dateSettings.time = "HH:mm";
+    dateSettings.fullTime = "HH:mm:ss";
+    dateSettings.showMeridian = false;
+  } else {
+    dateSettings.time = "hh:mm A";
+    dateSettings.fullTime = "hh:mm:ss A";
+    dateSettings.showMeridian = true;
+  }
 
-  date_settings = use_24_hour_clock ? date_settings_24hour : date_settings_12hour;
+  dateSettings.date = dateFormat.toUpperCase();
+
+  dateSettings.datepickerFormat = dateFormat;
+
+  dateSettings.fullDate = dateSettings.date + " " + dateSettings.fullTime;
 
   API.date_to = date_to = function(d) {
     var dd;
     dd = moment.utc(d).local();
     return {
       string: function() {
-        return dd.format(date_settings.full_date);
+        return dd.format(dateSettings.fullDate);
       },
       date: function() {
-        return dd.format(date_settings.date);
+        return dd.format(dateSettings.date);
       },
       time: function() {
-        return dd.format(date_settings.time);
+        return dd.format(dateSettings.time);
       }
     };
   };
@@ -157,7 +157,7 @@
         is_active: 1,
         start_date: '',
         end_date: '',
-        duration: default_duration,
+        duration: defaultDuration,
         is_enabled: 0,
         is_processing: 0,
         nocache: 0,
@@ -275,7 +275,7 @@
       ref = ['start', 'end'];
       for (k = 0, len = ref.length; k < len; k++) {
         which = ref[k];
-        this.$fv(which + "_date", (new Date((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")))).toISOString());
+        this.$fv(which + "_date", (moment((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")), dateSettings.fullDate)).toDate().toISOString());
       }
       ref1 = model.fields;
       results = [];
@@ -345,9 +345,9 @@
       if ((this.$fv('mimetype')) === "video") {
         return this.$fv('duration', 0);
       } else if ((this.$fv('mimetype')) === "streaming") {
-        return this.$fv('duration', default_streaming_duration);
+        return this.$fv('duration', defaultStreamingDuration);
       } else {
-        return this.$fv('duration', default_duration);
+        return this.$fv('duration', defaultDuration);
       }
     };
 
@@ -554,7 +554,7 @@
         minuteStep: 5,
         showInputs: true,
         disableFocus: true,
-        showMeridian: date_settings.show_meridian
+        showMeridian: dateSettings.showMeridian
       });
       (this.$('input[name="nocache"]')).prop('checked', this.model.get('nocache'));
       (this.$('.modal-header .close')).remove();
@@ -598,7 +598,7 @@
         this.$fv(which + "_date_date", d.date());
         (this.$f(which + "_date_date")).datepicker({
           autoclose: true,
-          format: date_settings.datepicker_format
+          format: dateSettings.datepickerFormat
         });
         (this.$f(which + "_date_date")).datepicker('setValue', d.date());
         this.$fv(which + "_date_time", d.time());
@@ -613,7 +613,7 @@
       ref = ['start', 'end'];
       for (k = 0, len = ref.length; k < len; k++) {
         which = ref[k];
-        this.$fv(which + "_date", (new Date((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")))).toISOString());
+        this.$fv(which + "_date", (moment((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")), dateSettings.fullDate)).toDate().toISOString());
       }
       ref1 = this.model.fields;
       results = [];
@@ -800,16 +800,16 @@
       this.$fv("start_date_date", start_date.date());
       (this.$f("start_date_date")).datepicker({
         autoclose: true,
-        format: date_settings.datepicker_format
+        format: dateSettings.datepickerFormat
       });
-      (this.$f("start_date_date")).datepicker('setDate', new Date(start_date.date()));
+      (this.$f("start_date_date")).datepicker('setDate', moment(start_date.date(), dateSettings.date).toDate());
       this.$fv("start_date_time", start_date.time());
       this.$fv("end_date_date", end_date.date());
       (this.$f("end_date_date")).datepicker({
         autoclose: true,
-        format: date_settings.datepicker_format
+        format: dateSettings.datepickerFormat
       });
-      (this.$f("end_date_date")).datepicker('setDate', new Date(end_date.date()));
+      (this.$f("end_date_date")).datepicker('setDate', moment(end_date.date(), dateSettings.date).toDate());
       this.$fv("end_date_time", end_date.time());
       (this.$(".form-group .help-inline.invalid-feedback")).remove();
       (this.$(".form-group .form-control")).removeClass('is-invalid');
@@ -1113,8 +1113,8 @@
         el: this.$('#assets')
       });
       results = [];
-      for (k = 0, len = ws_addresses.length; k < len; k++) {
-        address = ws_addresses[k];
+      for (k = 0, len = wsAddresses.length; k < len; k++) {
+        address = wsAddresses[k];
         try {
           ws = new WebSocket(address);
           results.push(ws.onmessage = function(x) {

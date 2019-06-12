@@ -102,14 +102,15 @@ def template(template_name, **context):
     but also injects some global context."""
 
     # Add global contexts
-    context['up_to_date'] = is_up_to_date()
+    context['date_format'] = settings['date_format']
     context['default_duration'] = settings['default_duration']
     context['default_streaming_duration'] = settings['default_streaming_duration']
-    context['use_24_hour_clock'] = settings['use_24_hour_clock']
     context['template_settings'] = {
         'imports': ['from lib.utils import template_handle_unicode'],
         'default_filters': ['template_handle_unicode'],
     }
+    context['up_to_date'] = is_up_to_date()
+    context['use_24_hour_clock'] = settings['use_24_hour_clock']
 
     return render_template(template_name, context=context)
 

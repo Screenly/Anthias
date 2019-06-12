@@ -106,6 +106,38 @@
                     </div>
 
                     <div class="form-group row">
+                        <label class="col-2 col-form-label">Date format</label>
+                        <div class="col-2">
+                            <select class="form-control" name="date_format">
+                                <option value="mm/dd/yyyy"
+                                        {% if context.date_format == 'mm/dd/yyyy' %} selected="selected" {% endif %}>
+                                    month/day/year
+                                </option>
+                                <option value="dd/mm/yyyy"
+                                        {% if context.date_format == 'dd/mm/yyyy' %} selected="selected" {% endif %}>
+                                    day/month/year
+                                </option>
+                                <option value="mm-dd-yyyy"
+                                        {% if context.date_format == 'mm-dd-yyyy' %} selected="selected" {% endif %}>
+                                    month-day-year
+                                </option>
+                                <option value="dd-mm-yyyy"
+                                        {% if context.date_format == 'dd-mm-yyyy' %} selected="selected" {% endif %}>
+                                    day-month-year
+                                </option>
+                                <option value="mm.dd.yyyy"
+                                        {% if context.date_format == 'mm.dd.yyyy' %} selected="selected" {% endif %}>
+                                    month.day.year
+                                </option>
+                                <option value="dd.mm.yyyy"
+                                        {% if context.date_format == 'dd.mm.yyyy' %} selected="selected" {% endif %}>
+                                    day.month.year
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group row">
                         <label class="col-2 col-form-label">Use 24-hour clock</label>
                         <div class="col-3">
                             <label id="use_24_hour_clock_checkbox" class="checkbox toggle card card-body bg-light">

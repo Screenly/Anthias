@@ -24,16 +24,11 @@
     <script src="{{ url_for('static', filename='js/moment.js') }}"></script>
 
     <script type="text/javascript">
-        var default_duration = {{context.default_duration}};
-        var default_streaming_duration = {{context.default_streaming_duration}};
-
-        {% if context.use_24_hour_clock %}
-            var use_24_hour_clock = true;
-        {% else %}
-            var use_24_hour_clock = false;
-        {% endif %}
-
-        var ws_addresses = {{context.ws_addresses|tojson}};
+        var dateFormat = "{{ context.date_format }}";
+        var defaultDuration = {{ context.default_duration }};
+        var defaultStreamingDuration = {{ context.default_streaming_duration }};
+        var use24HourClock = {% if context.use_24_hour_clock %} true; {% else %} false; {% endif %}
+        var wsAddresses = {{ context.ws_addresses|tojson }};
     </script>
     <script src="{{ url_for('static', filename='js/screenly-ose.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
