@@ -10,23 +10,23 @@ dateSettings = {}
 
 if use24HourClock
   dateSettings.time = "HH:mm"
-  dateSettings.full_time = "HH:mm:ss"
-  dateSettings.show_meridian = false
+  dateSettings.fullTime = "HH:mm:ss"
+  dateSettings.showMeridian = false
 else
   dateSettings.time = "hh:mm A"
-  dateSettings.full_time = "hh:mm:ss A"
-  dateSettings.show_meridian = true
+  dateSettings.fullTime = "hh:mm:ss A"
+  dateSettings.showMeridian = true
 
 dateSettings.date = dateFormat.toUpperCase()
-dateSettings.datepicker_format = dateFormat
+dateSettings.datepickerFormat = dateFormat
 
-dateSettings.full_date = "#{dateSettings.date} #{dateSettings.full_time}"
+dateSettings.fullDate = "#{dateSettings.date} #{dateSettings.fullTime}"
 
 
 API.date_to = date_to = (d) ->
   # Cross-browser UTC to localtime conversion
   dd = moment.utc(d).local()
-  string: -> dd.format dateSettings.full_date
+  string: -> dd.format dateSettings.fullDate
   date: -> dd.format dateSettings.date
   time: -> dd.format dateSettings.time
 
@@ -141,7 +141,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
 
   viewmodel:(model) =>
     for which in ['start', 'end']
-      @$fv "#{which}_date", (moment (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time"), dateSettings.full_date).toDate().toISOString()
+      @$fv "#{which}_date", (moment (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time"), dateSettings.fullDate).toDate().toISOString()
     for field in model.fields when not (@$f field).prop 'disabled'
       model.set field, (@$fv field), silent:yes
 
@@ -297,7 +297,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
   initialize: (options) =>
     ($ 'body').append @$el.html get_template 'asset-modal'
     (@$ 'input.time').timepicker
-      minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: dateSettings.show_meridian
+      minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: dateSettings.showMeridian
 
     (@$ 'input[name="nocache"]').prop 'checked', @model.get 'nocache'
     (@$ '.modal-header .close').remove()
@@ -330,7 +330,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     for which in ['start', 'end']
       d = date_to @model.get "#{which}_date"
       @$fv "#{which}_date_date", d.date()
-      (@$f "#{which}_date_date").datepicker autoclose: yes, format: dateSettings.datepicker_format
+      (@$f "#{which}_date_date").datepicker autoclose: yes, format: dateSettings.datepickerFormat
       (@$f "#{which}_date_date").datepicker 'setValue', d.date()
       @$fv "#{which}_date_time", d.time()
 
@@ -340,7 +340,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
 
   viewmodel: =>
     for which in ['start', 'end']
-      @$fv "#{which}_date", (moment (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time"), dateSettings.full_date).toDate().toISOString()
+      @$fv "#{which}_date", (moment (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time"), dateSettings.fullDate).toDate().toISOString()
     for field in @model.fields when not (@$f field).prop 'disabled'
       @model.set field, (@$fv field), silent:yes
 
@@ -453,11 +453,11 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
 
   setLoopDateTime: (start_date, end_date) =>
     @$fv "start_date_date", start_date.date()
-    (@$f "start_date_date").datepicker autoclose: yes, format: dateSettings.datepicker_format
+    (@$f "start_date_date").datepicker autoclose: yes, format: dateSettings.datepickerFormat
     (@$f "start_date_date").datepicker 'setDate', moment(start_date.date(), dateSettings.date).toDate()
     @$fv "start_date_time", start_date.time()
     @$fv "end_date_date", end_date.date()
-    (@$f "end_date_date").datepicker autoclose: yes, format: dateSettings.datepicker_format
+    (@$f "end_date_date").datepicker autoclose: yes, format: dateSettings.datepickerFormat
     (@$f "end_date_date").datepicker 'setDate', moment(end_date.date(), dateSettings.date).toDate()
     @$fv "end_date_time", end_date.time()
 

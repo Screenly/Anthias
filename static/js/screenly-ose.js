@@ -22,26 +22,26 @@
 
   if (use24HourClock) {
     dateSettings.time = "HH:mm";
-    dateSettings.full_time = "HH:mm:ss";
-    dateSettings.show_meridian = false;
+    dateSettings.fullTime = "HH:mm:ss";
+    dateSettings.showMeridian = false;
   } else {
     dateSettings.time = "hh:mm A";
-    dateSettings.full_time = "hh:mm:ss A";
-    dateSettings.show_meridian = true;
+    dateSettings.fullTime = "hh:mm:ss A";
+    dateSettings.showMeridian = true;
   }
 
   dateSettings.date = dateFormat.toUpperCase();
 
-  dateSettings.datepicker_format = dateFormat;
+  dateSettings.datepickerFormat = dateFormat;
 
-  dateSettings.full_date = dateSettings.date + " " + dateSettings.full_time;
+  dateSettings.fullDate = dateSettings.date + " " + dateSettings.fullTime;
 
   API.date_to = date_to = function(d) {
     var dd;
     dd = moment.utc(d).local();
     return {
       string: function() {
-        return dd.format(dateSettings.full_date);
+        return dd.format(dateSettings.fullDate);
       },
       date: function() {
         return dd.format(dateSettings.date);
@@ -275,7 +275,7 @@
       ref = ['start', 'end'];
       for (k = 0, len = ref.length; k < len; k++) {
         which = ref[k];
-        this.$fv(which + "_date", (moment((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")), dateSettings.full_date)).toDate().toISOString());
+        this.$fv(which + "_date", (moment((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")), dateSettings.fullDate)).toDate().toISOString());
       }
       ref1 = model.fields;
       results = [];
@@ -554,7 +554,7 @@
         minuteStep: 5,
         showInputs: true,
         disableFocus: true,
-        showMeridian: dateSettings.show_meridian
+        showMeridian: dateSettings.showMeridian
       });
       (this.$('input[name="nocache"]')).prop('checked', this.model.get('nocache'));
       (this.$('.modal-header .close')).remove();
@@ -598,7 +598,7 @@
         this.$fv(which + "_date_date", d.date());
         (this.$f(which + "_date_date")).datepicker({
           autoclose: true,
-          format: dateSettings.datepicker_format
+          format: dateSettings.datepickerFormat
         });
         (this.$f(which + "_date_date")).datepicker('setValue', d.date());
         this.$fv(which + "_date_time", d.time());
@@ -613,7 +613,7 @@
       ref = ['start', 'end'];
       for (k = 0, len = ref.length; k < len; k++) {
         which = ref[k];
-        this.$fv(which + "_date", (moment((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")), dateSettings.full_date)).toDate().toISOString());
+        this.$fv(which + "_date", (moment((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")), dateSettings.fullDate)).toDate().toISOString());
       }
       ref1 = this.model.fields;
       results = [];
@@ -800,14 +800,14 @@
       this.$fv("start_date_date", start_date.date());
       (this.$f("start_date_date")).datepicker({
         autoclose: true,
-        format: dateSettings.datepicker_format
+        format: dateSettings.datepickerFormat
       });
       (this.$f("start_date_date")).datepicker('setDate', moment(start_date.date(), dateSettings.date).toDate());
       this.$fv("start_date_time", start_date.time());
       this.$fv("end_date_date", end_date.date());
       (this.$f("end_date_date")).datepicker({
         autoclose: true,
-        format: dateSettings.datepicker_format
+        format: dateSettings.datepickerFormat
       });
       (this.$f("end_date_date")).datepicker('setDate', moment(end_date.date(), dateSettings.date).toDate());
       this.$fv("end_date_time", end_date.time());
