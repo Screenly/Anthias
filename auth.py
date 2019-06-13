@@ -40,6 +40,12 @@ class BasicAuth(Auth):
         self.settings = settings
 
     def _check(self, username, password):
+        """
+        Check username/password combo against database.
+        :param username: str
+        :param password: str
+        :return: True if the check passes.
+        """
         hashed_password = hashlib.sha256(password).hexdigest()
         return self.settings['user'] == username and self.settings['password'] == hashed_password
 
@@ -56,9 +62,19 @@ class BasicAuth(Auth):
 class WoTTAuth(BasicAuth):
     def __init__(self, settings):
         super(WoTTAuth, self).__init__(settings)
+        # TODO: read credentials, store them into self.username and self.password
+
+    def _check(self, username, password):
+        # TODO: compare username and password with self.username and self.password
+        return super(WoTTAuth, self)._check(username, password)
 
 
 def authorized(orig):
+    """
+    Annotation which initiates authentication if the request is unauthorized.
+    :param orig: Flask function
+    :return: Response
+    """
     from settings import settings
 
     @wraps(orig)
