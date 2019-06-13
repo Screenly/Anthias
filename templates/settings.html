@@ -196,7 +196,7 @@
                             <input class="form-control" name="user" type="text" value="{{ context.user }}">
                         </div>
                     </div>
-                    {% if context.password != "" %}
+                    {% if context.need_current_password %}
                         <div class="form-group row" id="curpassword_group">
                             <label class="col-2 col-form-label">Current Password</label>
                             <div class="col-3">

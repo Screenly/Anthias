@@ -39,7 +39,7 @@ class BasicAuth(Auth):
     @classmethod
     def config(cls):
         return {
-            'auth': {
+            'auth_basic': {
                 'user': '',
                 'password': ''
             }
@@ -72,7 +72,7 @@ class WoTTAuth(BasicAuth):
     @classmethod
     def config(cls):
         return {
-            'wott': {
+            'auth_wott': {
                 # TODO: return real settings
             }
         }

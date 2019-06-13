@@ -24,7 +24,7 @@ DEFAULTS = {
         'date_format': 'mm/dd/yyyy',
         'use_24_hour_clock': False,
         'use_ssl': False,
-        'auth_backend': 'auth',
+        'auth_backend': '',
         'websocket_port': '9999'
     },
     'viewer': {
@@ -136,7 +136,9 @@ class ScreenlySettings(IterableUserDict):
 
     @property
     def auth(self):
-        return self.auth_backends[ self['auth_backend'] ]
+        backend_name = self['auth_backend']
+        if backend_name in self.auth_backends:
+            return self.auth_backends[ self['auth_backend'] ]
 
 
 settings = ScreenlySettings()

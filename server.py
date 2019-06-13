@@ -1227,48 +1227,49 @@ def settings_page():
             current_pass = '' if current_pass == '' else hashlib.sha256(current_pass).hexdigest()
             new_pass = '' if new_pass == '' else hashlib.sha256(new_pass).hexdigest()
             new_pass2 = '' if new_pass2 == '' else hashlib.sha256(new_pass2).hexdigest()
+            current_pass_correct = current_pass == settings['password']
 
             new_user = request.form.get('user', '')
             use_auth = request.form.get('use_auth', '') == 'on'
 
-            # Handle auth components
-            if settings['password'] != '':  # if password currently set,
-                if new_user != settings['user']:  # trying to change user
-                    # should have current password set. Optionally may change password.
-                    if current_pass == '':
-                        if not use_auth:
-                            raise ValueError("Must supply current password to disable authentication")
-                        raise ValueError("Must supply current password to change username")
-                    if current_pass != settings['password']:
-                        raise ValueError("Incorrect current password.")
+            if use_auth:
+                # Handle auth components
+                if settings['password'] != '':  # if password currently set,
+                    if new_user != settings['user']:  # trying to change user
+                        # should have current password set. Optionally may change password.
+                        if not current_pass:
+                            raise ValueError("Must supply current password to change username")
+                        if not current_pass_correct:
+                            raise ValueError("Incorrect current password.")
 
-                    settings['user'] = new_user
+                        settings['user'] = new_user
 
-                if new_pass != '' and use_auth:
-                    if current_pass == '':
-                        raise ValueError("Must supply current password to change password")
-                    if current_pass != settings['password']:
-                        raise ValueError("Incorrect current password.")
+                    if new_pass != '':
+                        if not current_pass:
+                            raise ValueError("Must supply current password to change password")
+                        if not current_pass_correct:
+                            raise ValueError("Incorrect current password.")
 
-                    if new_pass2 != new_pass:  # changing password
-                        raise ValueError("New passwords do not match!")
+                        if new_pass2 != new_pass:  # changing password
+                            raise ValueError("New passwords do not match!")
 
-                    settings['password'] = new_pass
+                        settings['password'] = new_pass
 
-                if new_pass == '' and not use_auth and new_pass2 == '':
-                    # trying to disable authentication
-                    if current_pass == '':
-                        raise ValueError("Must supply current password to disable authentication")
-                    settings['password'] = ''
-
-            else:  # no current password
-                if new_user != '':  # setting username and password
-                    if new_pass != '' and new_pass != new_pass2:
-                        raise ValueError("New passwords do not match!")
-                    if new_pass == '':
-                        raise ValueError("Must provide password")
-                    settings['user'] = new_user
-                    settings['password'] = new_pass
+                else:  # no current password
+                    if new_user != '':  # setting username and password
+                        if new_pass != '' and new_pass != new_pass2:
+                            raise ValueError("New passwords do not match!")
+                        if new_pass == '':
+                            raise ValueError("Must provide password")
+                        settings['user'] = new_user
+                        settings['password'] = new_pass
+                    else:
+                        raise ValueError("Must provide username")
+            elif settings['auth_backend'] != '':
+                if not current_pass:
+                    raise ValueError("Must supply current password to disable authentication")
+                if not current_pass_correct:
+                    raise ValueError("Incorrect current password.")
 
             for field, default in CONFIGURABLE_SETTINGS.items():
                 value = request.form.get(field, default)
@@ -1280,6 +1281,7 @@ def settings_page():
                     value = value == 'on'
                 settings[field] = value
 
+            settings['auth_backend'] = 'auth_basic' if use_auth else ''
             settings.save()
             publisher = ZmqPublisher.get_instance()
             publisher.send_to_viewer('reload')
@@ -1295,15 +1297,12 @@ def settings_page():
     for field, default in DEFAULTS['viewer'].items():
         context[field] = settings[field]
 
-    context['user'] = settings['user']
-    context['password'] = "password" if settings['password'] != "" else ""
-
-    context['is_balena'] = is_balena_app()
-
-    if not settings['user'] or not settings['password']:
-        context['use_auth'] = False
-    else:
-        context['use_auth'] = True
+    context.update({
+        'user': settings['user'],
+        'need_current_password': settings['password'] != "",
+        'is_balena': is_balena_app(),
+        'use_auth': bool(settings['auth_backend'])
+    })
 
     return template('settings.html', **context)
 
