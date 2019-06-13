@@ -223,11 +223,6 @@ class WoTTAuth(BasicAuth):
 
 
 def authorized(orig):
-    """
-    Annotation which initiates authentication if the request is unauthorized.
-    :param orig: Flask function
-    :return: Response
-    """
     from settings import settings
 
     @wraps(orig)
