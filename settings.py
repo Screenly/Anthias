@@ -12,7 +12,7 @@ import zmq
 import hashlib
 
 from lib.errors import ZmqCollectorTimeout
-from auth import WoTTAuth
+from auth import WoTTAuth, BasicAuth
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -24,6 +24,7 @@ DEFAULTS = {
         'date_format': 'mm/dd/yyyy',
         'use_24_hour_clock': False,
         'use_ssl': False,
+        'auth_backend': 'auth',
         'websocket_port': '9999'
     },
     'viewer': {
@@ -36,10 +37,6 @@ DEFAULTS = {
         'show_splash': True,
         'shuffle_playlist': False,
         'verify_ssl': True
-    },
-    'auth': {
-        'user': '',
-        'password': ''
     }
 }
 CONFIGURABLE_SETTINGS = DEFAULTS['viewer'].copy()
@@ -69,7 +66,12 @@ class ScreenlySettings(IterableUserDict):
         IterableUserDict.__init__(self, *args, **kwargs)
         self.home = getenv('HOME')
         self.conf_file = self.get_configfile()
-        self._auth = WoTTAuth(self)
+        auth_backends = [BasicAuth(self), WoTTAuth(self)]
+        self.auth_backends = {}
+        for b in auth_backends:
+            c = b.config()
+            DEFAULTS.update(c)
+            self.auth_backends[c.keys()[0]] = b
 
         if not path.isfile(self.conf_file):
             logging.error('Config-file %s missing. Using defaults.', self.conf_file)
@@ -134,7 +136,7 @@ class ScreenlySettings(IterableUserDict):
 
     @property
     def auth(self):
-        return self._auth
+        return self.auth_backends[ self['auth_backend'] ]
 
 
 settings = ScreenlySettings()

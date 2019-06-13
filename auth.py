@@ -36,6 +36,15 @@ class Auth(object):
 
 
 class BasicAuth(Auth):
+    @classmethod
+    def config(cls):
+        return {
+            'auth': {
+                'user': '',
+                'password': ''
+            }
+        }
+
     def __init__(self, settings):
         self.settings = settings
 
@@ -60,6 +69,14 @@ class BasicAuth(Auth):
 
 
 class WoTTAuth(BasicAuth):
+    @classmethod
+    def config(cls):
+        return {
+            'wott': {
+                # TODO: return real settings
+            }
+        }
+
     def __init__(self, settings):
         super(WoTTAuth, self).__init__(settings)
         # TODO: read credentials, store them into self.username and self.password
