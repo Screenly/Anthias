@@ -6,8 +6,6 @@ from time import sleep
 import ConfigParser
 import logging
 from UserDict import IterableUserDict
-from flask import request, Response
-from functools import wraps
 import zmq
 import hashlib
 
@@ -138,7 +136,7 @@ class ScreenlySettings(IterableUserDict):
     def auth(self):
         backend_name = self['auth_backend']
         if backend_name in self.auth_backends:
-            return self.auth_backends[ self['auth_backend'] ]
+            return self.auth_backends[self['auth_backend']]
 
 
 settings = ScreenlySettings()
