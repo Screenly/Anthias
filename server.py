@@ -1298,11 +1298,17 @@ def settings_page():
     for field, default in DEFAULTS['viewer'].items():
         context[field] = settings[field]
 
+    auth_backends = [{
+        'name': backend.id,
+        'text': backend.name,
+        'selected': 'selected' if settings['auth_backend'] == backend.id else ''}
+    for backend in settings.auth_backends_list]
     context.update({
         'user': settings['user'],
         'need_current_password': bool(settings['auth_backend']),
         'is_balena': is_balena_app(),
-        'auth_backend': settings['auth_backend']
+        'auth_backend': settings['auth_backend'],
+        'auth_backends': auth_backends
     })
 
     return template('settings.html', **context)

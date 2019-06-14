@@ -177,9 +177,9 @@
                         <label class="col-2 col-form-label">Authentication</label>
                         <div class="col-3">
                             <select class="custom-select my-1 mr-sm-2" id="auth_backend" name="auth_backend">
-                              <option value="" {% if context.auth_backend == "" %} selected {% endif %}>Disabled</option>
-                              <option value="auth_basic" {% if context.auth_backend == "auth_basic" %} selected {% endif %}>Basic</option>
-                              <option value="auth_wott" {% if context.auth_backend == "auth_wott" %} selected {% endif %}>WoTT</option>
+                            {% for opt in context.auth_backends %}
+                              <option value="{{ opt.name }}" {{ opt.selected }}>{{ opt.text }}</option>
+                            {% endfor %}
                             </select>
                         </div>
                     </div>

@@ -10,7 +10,7 @@ import zmq
 import hashlib
 
 from lib.errors import ZmqCollectorTimeout
-from auth import WoTTAuth, BasicAuth
+from auth import WoTTAuth, BasicAuth, NoAuth
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -64,12 +64,12 @@ class ScreenlySettings(IterableUserDict):
         IterableUserDict.__init__(self, *args, **kwargs)
         self.home = getenv('HOME')
         self.conf_file = self.get_configfile()
-        auth_backends = [BasicAuth(self), WoTTAuth(self)]
+        self.auth_backends_list = [NoAuth(), BasicAuth(self), WoTTAuth(self)]
         self.auth_backends = {}
-        for b in auth_backends:
-            c = b.config()
+        for b in self.auth_backends_list:
+            c = b.config
             DEFAULTS.update(c)
-            self.auth_backends[c.keys()[0]] = b
+            self.auth_backends[b.id] = b
 
         if not path.isfile(self.conf_file):
             logging.error('Config-file %s missing. Using defaults.', self.conf_file)

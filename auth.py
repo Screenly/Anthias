@@ -35,10 +35,22 @@ class Auth(object):
             return self.authenticate()
 
 
+class NoAuth(Auth):
+    name = 'Disabled'
+    id = ''
+    config = {}
+
+    def is_authorized(self):
+        return True
+
+    def authenticate(self):
+        pass
+
+
 class BasicAuth(Auth):
-    @classmethod
-    def config(cls):
-        return {
+    name = 'Basic'
+    id = 'auth_basic'
+    config = {
             'auth_basic': {
                 'user': '',
                 'password': ''
@@ -69,9 +81,9 @@ class BasicAuth(Auth):
 
 
 class WoTTAuth(BasicAuth):
-    @classmethod
-    def config(cls):
-        return {
+    name = 'WoTT'
+    id = 'auth_wott'
+    config = {
             'auth_wott': {
                 # TODO: return real settings
             }
