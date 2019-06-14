@@ -81,7 +81,7 @@ $().ready ->
         document.location.reload()
 
   $('#auth_backend').change (e) ->
-    if $('#auth_backend').val() == ''
+    if $('#auth_backend').val() != 'auth_basic'
       $('#user_group, #password_group, #password2_group').hide()
       $('input:text[name="user"]').val('')
       $('input:password[name="password"]').val('')
@@ -89,5 +89,5 @@ $().ready ->
     else
       $('#user_group, #password_group, #password2_group, #curpassword_group').show()
 
-  $('#user_group, #password_group, #password2_group, #curpassword_group').toggle $('#auth_backend').val() != ''
+  $('#user_group, #password_group, #password2_group').toggle $('#auth_backend').val() == 'auth_basic'
 

@@ -91,7 +91,7 @@
       });
     });
     $('#auth_backend').change(function(e) {
-      if ($('#auth_backend').val() === '') {
+      if ($('#auth_backend').val() !== 'auth_basic') {
         $('#user_group, #password_group, #password2_group').hide();
         $('input:text[name="user"]').val('');
         $('input:password[name="password"]').val('');
@@ -100,7 +100,7 @@
         return $('#user_group, #password_group, #password2_group, #curpassword_group').show();
       }
     });
-    return $('#user_group, #password_group, #password2_group, #curpassword_group').toggle($('#auth_backend').val() !== '');
+    return $('#user_group, #password_group, #password2_group').toggle($('#auth_backend').val() === 'auth_basic');
   });
 
 }).call(this);
