@@ -51,11 +51,11 @@ class BasicAuth(Auth):
     name = 'Basic'
     id = 'auth_basic'
     config = {
-            'auth_basic': {
-                'user': '',
-                'password': ''
-            }
+        'auth_basic': {
+            'user': '',
+            'password': ''
         }
+    }
 
     def __init__(self, settings):
         self.settings = settings
@@ -84,10 +84,10 @@ class WoTTAuth(BasicAuth):
     name = 'WoTT'
     id = 'auth_wott'
     config = {
-            'auth_wott': {
-                # TODO: return real settings
-            }
+        'auth_wott': {
+            # TODO: return real settings
         }
+    }
 
     def __init__(self, settings):
         super(WoTTAuth, self).__init__(settings)

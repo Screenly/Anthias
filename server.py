@@ -1302,7 +1302,7 @@ def settings_page():
         'name': backend.id,
         'text': backend.name,
         'selected': 'selected' if settings['auth_backend'] == backend.id else ''}
-    for backend in settings.auth_backends_list]
+        for backend in settings.auth_backends_list]
     context.update({
         'user': settings['user'],
         'need_current_password': bool(settings['auth_backend']),
