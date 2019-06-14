@@ -1230,9 +1230,9 @@ def settings_page():
             current_pass_correct = current_pass == settings['password']
 
             new_user = request.form.get('user', '')
-            use_auth = request.form.get('use_auth', '') == 'on'
+            auth_backend = request.form.get('auth_backend', '')
 
-            if use_auth:
+            if auth_backend == 'auth_basic':
                 # Handle auth components
                 if settings['password'] != '':  # if password currently set,
                     if new_user != settings['user']:  # trying to change user
@@ -1265,9 +1265,10 @@ def settings_page():
                         settings['password'] = new_pass
                     else:
                         raise ValueError("Must provide username")
-            elif settings['auth_backend'] != '':
+
+            if auth_backend != settings['auth_backend'] and settings['auth_backend']:
                 if not current_pass:
-                    raise ValueError("Must supply current password to disable authentication")
+                    raise ValueError("Must supply current password to change authentication method")
                 if not current_pass_correct:
                     raise ValueError("Incorrect current password.")
 
@@ -1281,7 +1282,7 @@ def settings_page():
                     value = value == 'on'
                 settings[field] = value
 
-            settings['auth_backend'] = 'auth_basic' if use_auth else ''
+            settings['auth_backend'] = auth_backend
             settings.save()
             publisher = ZmqPublisher.get_instance()
             publisher.send_to_viewer('reload')
@@ -1299,9 +1300,9 @@ def settings_page():
 
     context.update({
         'user': settings['user'],
-        'need_current_password': settings['password'] != "",
+        'need_current_password': bool(settings['auth_backend']),
         'is_balena': is_balena_app(),
-        'use_auth': bool(settings['auth_backend'])
+        'auth_backend': settings['auth_backend']
     })
 
     return template('settings.html', **context)

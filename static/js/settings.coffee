@@ -80,8 +80,8 @@ $().ready ->
     .error (e) ->
         document.location.reload()
 
-  $('#auth_checkbox p span').click (e) ->
-    if $('input:checkbox[name="use_auth"]').is(':checked')
+  $('#auth_backend').change (e) ->
+    if $('#auth_backend').val() == ''
       $('#user_group, #password_group, #password2_group').hide()
       $('input:text[name="user"]').val('')
       $('input:password[name="password"]').val('')
@@ -89,7 +89,5 @@ $().ready ->
     else
       $('#user_group, #password_group, #password2_group, #curpassword_group').show()
 
-  if $('input:checkbox[name="use_auth"]').is(':checked')
-    $('#user_group, #password_group, #password2_group, #curpassword_group').show()
-  else
-    $('#user_group, #password_group, #password2_group, #curpassword_group').hide()
+  $('#user_group, #password_group, #password2_group, #curpassword_group').toggle $('#auth_backend').val() != ''
+

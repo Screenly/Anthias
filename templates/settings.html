@@ -174,20 +174,13 @@
                     </div>
 
                     <div class="form-group row">
-                        <label class="col-2 col-form-label">Use Authentication</label>
+                        <label class="col-2 col-form-label">Authentication</label>
                         <div class="col-3">
-                            <label id="auth_checkbox" class="checkbox toggle card card-body bg-light">
-                                {% if context.use_auth %}
-                                    <input name="use_auth" checked="checked" type="checkbox"/>
-                                {% else %}
-                                    <input name="use_auth" type="checkbox"/>
-                                {% endif %}
-                                <p>
-                                    <span class="on">On</span>
-                                    <span class="off">Off</span>
-                                </p>
-                                <a class="btn btn-primary slide-button"></a>
-                            </label>
+                            <select class="custom-select my-1 mr-sm-2" id="auth_backend" name="auth_backend">
+                              <option value="" {% if context.auth_backend == "" %} selected {% endif %}>Disabled</option>
+                              <option value="auth_basic" {% if context.auth_backend == "auth_basic" %} selected {% endif %}>Basic</option>
+                              <option value="auth_wott" {% if context.auth_backend == "auth_wott" %} selected {% endif %}>WoTT</option>
+                            </select>
                         </div>
                     </div>
                     <div class="form-group row" id="user_group">
