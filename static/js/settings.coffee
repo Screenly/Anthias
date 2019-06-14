@@ -80,14 +80,13 @@ $().ready ->
     .error (e) ->
         document.location.reload()
 
+  toggle_chunk = () ->
+    $("[id^=auth_chunk]").hide()
+    $.each $('#auth_backend option'), (e, t) ->
+      console.log t.value
+      $('#auth_backend-'+t.value).toggle $('#auth_backend').val() == t.value
+
   $('#auth_backend').change (e) ->
-    if $('#auth_backend').val() != 'auth_basic'
-      $('#user_group, #password_group, #password2_group').hide()
-      $('input:text[name="user"]').val('')
-      $('input:password[name="password"]').val('')
-      $('input:password[name="password2"]').val('')
-    else
-      $('#user_group, #password_group, #password2_group, #curpassword_group').show()
+    toggle_chunk()
 
-  $('#user_group, #password_group, #password2_group').toggle $('#auth_backend').val() == 'auth_basic'
-
+  toggle_chunk()

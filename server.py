@@ -1222,55 +1222,16 @@ def settings_page():
         try:
             # put some request variables in local variables to make easier to read
             current_pass = request.form.get('curpassword', '')
-            new_pass = request.form.get('password', '')
-            new_pass2 = request.form.get('password2', '')
-            current_pass = '' if current_pass == '' else hashlib.sha256(current_pass).hexdigest()
-            new_pass = '' if new_pass == '' else hashlib.sha256(new_pass).hexdigest()
-            new_pass2 = '' if new_pass2 == '' else hashlib.sha256(new_pass2).hexdigest()
-            current_pass_correct = current_pass == settings['password']
-
-            new_user = request.form.get('user', '')
             auth_backend = request.form.get('auth_backend', '')
-
-            if auth_backend == 'auth_basic':
-                # Handle auth components
-                if settings['password'] != '':  # if password currently set,
-                    if new_user != settings['user']:  # trying to change user
-                        # should have current password set. Optionally may change password.
-                        if not current_pass:
-                            raise ValueError("Must supply current password to change username")
-                        if not current_pass_correct:
-                            raise ValueError("Incorrect current password.")
-
-                        settings['user'] = new_user
-
-                    if new_pass != '':
-                        if not current_pass:
-                            raise ValueError("Must supply current password to change password")
-                        if not current_pass_correct:
-                            raise ValueError("Incorrect current password.")
-
-                        if new_pass2 != new_pass:  # changing password
-                            raise ValueError("New passwords do not match!")
-
-                        settings['password'] = new_pass
-
-                else:  # no current password
-                    if new_user != '':  # setting username and password
-                        if new_pass != '' and new_pass != new_pass2:
-                            raise ValueError("New passwords do not match!")
-                        if new_pass == '':
-                            raise ValueError("Must provide password")
-                        settings['user'] = new_user
-                        settings['password'] = new_pass
-                    else:
-                        raise ValueError("Must provide username")
 
             if auth_backend != settings['auth_backend'] and settings['auth_backend']:
                 if not current_pass:
                     raise ValueError("Must supply current password to change authentication method")
-                if not current_pass_correct:
+                if not settings.auth.check_password(current_pass):
                     raise ValueError("Incorrect current password.")
+
+            settings['auth_backend'] = auth_backend
+            settings.auth.update_settings(current_pass)
 
             for field, default in CONFIGURABLE_SETTINGS.items():
                 value = request.form.get(field, default)
@@ -1282,7 +1243,6 @@ def settings_page():
                     value = value == 'on'
                 settings[field] = value
 
-            settings['auth_backend'] = auth_backend
             settings.save()
             publisher = ZmqPublisher.get_instance()
             publisher.send_to_viewer('reload')
@@ -1298,11 +1258,20 @@ def settings_page():
     for field, default in DEFAULTS['viewer'].items():
         context[field] = settings[field]
 
-    auth_backends = [{
-        'name': backend.id,
-        'text': backend.name,
-        'selected': 'selected' if settings['auth_backend'] == backend.id else ''}
-        for backend in settings.auth_backends_list]
+    auth_backends = []
+    for backend in settings.auth_backends_list:
+        if backend.template:
+            html, ctx = backend.template
+            context.update(ctx)
+        else:
+            html = None
+        auth_backends.append({
+            'name': backend.id,
+            'text': backend.name,
+            'template': html,
+            'selected': 'selected' if settings['auth_backend'] == backend.id else ''
+        })
+
     context.update({
         'user': settings['user'],
         'need_current_password': bool(settings['auth_backend']),

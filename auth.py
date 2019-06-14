@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta, abstractmethod, abstractproperty
 from functools import wraps
 import hashlib
 
@@ -18,7 +18,7 @@ class Auth(object):
         """
         pass
 
-    @abstractmethod
+    @abstractproperty
     def is_authorized(self):
         """
         See if the user is authorized for the request.
@@ -33,6 +33,13 @@ class Auth(object):
         """
         if not self.is_authorized:
             return self.authenticate()
+
+    def update_settings(self, current_password):
+        pass
+
+    @property
+    def template(self):
+        pass
 
 
 class NoAuth(Auth):
@@ -67,17 +74,64 @@ class BasicAuth(Auth):
         :param password: str
         :return: True if the check passes.
         """
+        return self.settings['user'] == username and self.check_password(password)
+
+    def check_password(self, password):
         hashed_password = hashlib.sha256(password).hexdigest()
-        return self.settings['user'] == username and self.settings['password'] == hashed_password
+        return self.settings['password'] == hashed_password
 
     @property
     def is_authorized(self):
         auth = request.authorization
         return auth and self._check(auth.username, auth.password)
 
+    @property
+    def template(self):
+        return 'auth_basic.html', {'user': self.settings['user']}
+
     def authenticate(self):
         realm = "Screenly OSE {}".format(self.settings['player_name'])
         return Response("Access denied", 401, {"WWW-Authenticate": 'Basic realm="{}"'.format(realm)})
+
+    def update_settings(self, current_pass):
+        current_pass_correct = self.check_password(current_pass)
+        new_user = request.form.get('user', '')
+        new_pass = request.form.get('password', '')
+        new_pass2 = request.form.get('password2', '')
+        new_pass = '' if new_pass == '' else hashlib.sha256(new_pass).hexdigest()
+        new_pass2 = '' if new_pass2 == '' else hashlib.sha256(new_pass2).hexdigest()
+        # Handle auth components
+        if self.settings['password'] != '':  # if password currently set,
+            if new_user != self.settings['user']:  # trying to change user
+                # should have current password set. Optionally may change password.
+                if not current_pass:
+                    raise ValueError("Must supply current password to change username")
+                if not current_pass_correct:
+                    raise ValueError("Incorrect current password.")
+
+                self.settings['user'] = new_user
+
+            if new_pass != '':
+                if not current_pass:
+                    raise ValueError("Must supply current password to change password")
+                if not current_pass_correct:
+                    raise ValueError("Incorrect current password.")
+
+                if new_pass2 != new_pass:  # changing password
+                    raise ValueError("New passwords do not match!")
+
+                self.settings['password'] = new_pass
+
+        else:  # no current password
+            if new_user != '':  # setting username and password
+                if new_pass != '' and new_pass != new_pass2:
+                    raise ValueError("New passwords do not match!")
+                if new_pass == '':
+                    raise ValueError("Must provide password")
+                self.settings['user'] = new_user
+                self.settings['password'] = new_pass
+            else:
+                raise ValueError("Must provide username")
 
 
 class WoTTAuth(BasicAuth):
@@ -96,6 +150,10 @@ class WoTTAuth(BasicAuth):
     def _check(self, username, password):
         # TODO: compare username and password with self.username and self.password
         return super(WoTTAuth, self)._check(username, password)
+
+    @property
+    def template(self):
+        return None
 
 
 def authorized(orig):
