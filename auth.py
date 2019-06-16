@@ -98,7 +98,9 @@ class BasicAuth(Auth):
         return Response("Access denied", 401, {"WWW-Authenticate": 'Basic realm="{}"'.format(realm)})
 
     def update_settings(self, current_pass):
-        current_pass_correct = self.check_password(current_pass)
+        auth_backend = self.settings['auth_backend']
+        current_pass_correct = True if auth_backend == '' \
+            else self.settings.auth_backends[auth_backend].check_password(current_pass)
         new_user = request.form.get('user', '')
         new_pass = request.form.get('password', '')
         new_pass2 = request.form.get('password2', '')
@@ -149,9 +151,30 @@ class WoTTAuth(BasicAuth):
 
     def __init__(self, settings):
         super(WoTTAuth, self).__init__(settings)
+        self._fetch_credentials()
+
+    def update_settings(self, current_pass):
+        auth_backend = self.settings['auth_backend']
+        current_pass_correct = True if auth_backend == '' \
+            else self.settings.auth_backends[auth_backend].check_password(current_pass)
+
+        if not current_pass and auth_backend:
+            raise ValueError("Must supply current password to change username")
+        if not current_pass_correct:
+            raise ValueError("Incorrect current password.")
+
+        if not self._fetch_credentials():
+            raise ValueError("Can not read WoTT credential file")
+
+        # self.settings['user'] = self.user
+        # self.settings['password'] = self.password
+        # self.settings['openpass'] = self.openpass
+
+    def _fetch_credentials(self):
         wott_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, WOTT_SCREENLY_CREDENTIAL_NAME + ".json")
-        if 'screenly_credentials' in settings:
-            screenly_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, settings['screenly_credentials'] + ".json")
+
+        if 'screenly_credentials' in self.settings and self.settings['screenly_credentials']:
+            screenly_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, self.settings['screenly_credentials'] + ".json")
             if os.path.isfile(screenly_credentials_path):
                 wott_credentials_path = screenly_credentials_path
 
@@ -159,13 +182,19 @@ class WoTTAuth(BasicAuth):
             with open(wott_credentials_path, "r") as credentials_file:
                 credentials = json.load(credentials_file)
                 self.user = credentials['username']
-                self.password = hashlib.sha256(credentials['password']).hexdigest()
-                self.credentials_ok = True
+                new_pass = credentials['password']
+                self.openpass = new_pass
+                self.password = '' if new_pass == '' else hashlib.sha256(new_pass).hexdigest()
+                return True
         else:
-            self.user = 'pi'
-            self.password = hashlib.sha256('raspberry').hexdigest()
-            self.credentials_ok = False
+            self.user = ''
+            self.password = ''
+            self.openpass = ''
+            return False
 
+    def check_password(self, password):
+        hashed_password = hashlib.sha256(password).hexdigest()
+        return self.password == hashed_password
 
     def _check(self, username, password):
         """
@@ -176,11 +205,13 @@ class WoTTAuth(BasicAuth):
         :param password: str
         :return: True if the check passes.
         """
-        hashed_password = hashlib.sha256(password).hexdigest()
-        return self.user == username and self.password == hashed_password
+        return self.user == username and self.check_password(password)
+
     @property
     def template(self):
         return None
+
+
 def authorized(orig):
     """
     Annotation which initiates authentication if the request is unauthorized.
