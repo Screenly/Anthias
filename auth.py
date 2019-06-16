@@ -3,9 +3,13 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 from functools import wraps
 import hashlib
+import os.path
+import json
 
 from flask import request, Response
 
+WOTT_CREDENTIALS_PATH = '/opt/wott/credentials'
+WOTT_SCREENLY_CREDENTIAL_NAME = 'screenly_credentials'
 
 class Auth(object):
     __metaclass__ = ABCMeta
@@ -139,23 +143,44 @@ class WoTTAuth(BasicAuth):
     id = 'auth_wott'
     config = {
         'auth_wott': {
-            # TODO: return real settings
+            'screenly_credentials': '',
         }
     }
 
     def __init__(self, settings):
         super(WoTTAuth, self).__init__(settings)
-        # TODO: read credentials, store them into self.username and self.password
+        wott_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, WOTT_SCREENLY_CREDENTIAL_NAME + ".json")
+        if 'screenly_credentials' in settings:
+            screenly_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, settings['screenly_credentials'] + ".json")
+            if os.path.isfile(screenly_credentials_path):
+                wott_credentials_path = screenly_credentials_path
+
+        if os.path.isfile(wott_credentials_path):
+            with open(wott_credentials_path, "r") as credentials_file:
+                credentials = json.load(credentials_file)
+                self.user = credentials['username']
+                self.password = hashlib.sha256(credentials['password']).hexdigest()
+                self.credentials_ok = True
+        else:
+            self.user = 'pi'
+            self.password = hashlib.sha256('raspberry').hexdigest()
+            self.credentials_ok = False
+
 
     def _check(self, username, password):
-        # TODO: compare username and password with self.username and self.password
-        return super(WoTTAuth, self)._check(username, password)
-
+        """
+        Check username/password combo against WoTT Credentials.
+        Used credentials with name 'screenly_credentials' or name
+        which defined in value of 'screenly_credentials' settings
+        :param username: str
+        :param password: str
+        :return: True if the check passes.
+        """
+        hashed_password = hashlib.sha256(password).hexdigest()
+        return self.user == username and self.password == hashed_password
     @property
     def template(self):
         return None
-
-
 def authorized(orig):
     """
     Annotation which initiates authentication if the request is unauthorized.
