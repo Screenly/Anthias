@@ -220,8 +220,6 @@ class WoTTAuth(BasicAuth):
     @property
     def template(self):
         return None
-
-
 def authorized(orig):
     from settings import settings
 
