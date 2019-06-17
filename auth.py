@@ -184,6 +184,8 @@ class WoTTAuth(BasicAuth):
         if os.path.isfile(wott_credentials_path):
             with open(wott_credentials_path, "r") as credentials_file:
                 credentials = json.load(credentials_file)
+                if 'login_credentials' not in credentials:
+                    return False
                 login_record = credentials['login_credentials']
                 match = re.match(re_split_login, login_record)
                 if login_record and match:
