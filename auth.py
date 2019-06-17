@@ -12,6 +12,7 @@ from flask import request, Response
 WOTT_CREDENTIALS_PATH = '/opt/wott/credentials'
 WOTT_SCREENLY_CREDENTIAL_NAME = 'screenly_credentials'
 
+
 class Auth(object):
     __metaclass__ = ABCMeta
 
