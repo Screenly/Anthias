@@ -329,3 +329,24 @@ def is_balena_app():
     :return: bool
     """
     return bool(getenv('RESIN', False)) or bool(getenv('BALENA', False))
+
+
+def is_wott_integrated():
+    """
+    Chacks if wott-agent installed or not
+    :return:
+    """
+    result = os.popen('ps ax | grep "wott-agent"').read()
+    lines = result.split('\n')
+    for line in lines:
+        if 'wott-agent daemon' in line:
+            return True
+    return False
+
+
+def get_wott_device_id():
+    """
+    :return: WoTT Device id of this device
+    """
+    result = os.popen('sudo wott-agent whoami').read()
+    return result if result.endswith("d.wott.local") else '---'

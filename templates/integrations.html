@@ -62,5 +62,31 @@
                 </div>
             </div>
         {% endif %}
+
+        {% if context.is_wott_installed %}
+            <div class="row">
+                <div id="wott-section" class="col-12">
+                    <h1 class="page-header">
+                        WoTT
+                    </h1>
+                    <table class="table table-striped">
+                        <thead>
+                        <tr>
+                            <th scope="col">Option</th>
+                            <th scope="col">Value</th>
+                            <th scope="col">Description</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr>
+                            <th scope="row">Device ID</th>
+                            <td>{{ context.wott_device_id }}</td>
+                            <td>WoTT Device ID.</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% endif %}
     </div>
 {% endblock %}
