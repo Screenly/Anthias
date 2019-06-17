@@ -185,7 +185,7 @@ class WoTTAuth(BasicAuth):
                 credentials = json.load(credentials_file)
                 login_record = credentials['login_credentials']
                 match = re.match(re_split_login, login_record)
-                if match:
+                if login_record and match:
                     self.user = match.group(1)
                     new_pass = match.group(2)
                     self.openpass = new_pass
