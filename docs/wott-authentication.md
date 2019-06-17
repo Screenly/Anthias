@@ -6,14 +6,14 @@ Access to Screenly web configuration interface can be restricted via an [*HTTP b
 ## Configuration
 
 After installing [*wott-agent*](https://www.wott.io/) and claiming the device in [*wott-dashboard*](https://dash.wott.io).
-Create two credentials with keys `username` and `password` and the same name, by default it is `screenly_credentials`.
-If you want, you can change it name for any you like, but it would be lowercase unicode alphanuerics and `_.\-:` characters.
+Create credential with name `screenly_credentials` and key `login_credentials` contains colon separated username and password ( for example `pi:raspberry` ).
+If you want, you can name for any you like, but it would be consist of lowercase unicode alphanuerics and `_.\-:` characters.
 And you also need to set up this name in `~/.screenly/screenly.conf` configuration file, in the `[auth_wott]` part as shown below: 
 
 ```
 [auth_wott]
-; change if you want your own credential name
-screenly_credentials=
+
+wott_secret_name=screenly_credentials
 ```
 
 After you set up this two credentials in wott-dashboard it would be automatically fetched by wott-agent daemon in two hours.
