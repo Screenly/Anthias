@@ -5,6 +5,7 @@ from functools import wraps
 import hashlib
 import os.path
 import json
+import re
 
 from flask import request, Response
 
@@ -145,7 +146,7 @@ class WoTTAuth(BasicAuth):
     id = 'auth_wott'
     config = {
         'auth_wott': {
-            'screenly_credentials': '',
+            'wott_secret_name': 'screenly_credentials',
         }
     }
 
@@ -164,33 +165,37 @@ class WoTTAuth(BasicAuth):
             raise ValueError("Incorrect current password.")
 
         if not self._fetch_credentials():
-            raise ValueError("Can not read WoTT credential file")
+            raise ValueError("Can not read WoTT credential file or login credentials record is incorrect")
 
         # self.settings['user'] = self.user
         # self.settings['password'] = self.password
         # self.settings['openpass'] = self.openpass
 
     def _fetch_credentials(self):
+        re_split_login = re.compile("^([\w\.\-]+):(\S+)$", re.UNICODE)
         wott_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, WOTT_SCREENLY_CREDENTIAL_NAME + ".json")
 
-        if 'screenly_credentials' in self.settings and self.settings['screenly_credentials']:
-            screenly_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, self.settings['screenly_credentials'] + ".json")
+        if 'wott_secret_name' in self.settings and self.settings['wott_secret_name']:
+            screenly_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, self.settings['wott_secret_name'] + ".json")
             if os.path.isfile(screenly_credentials_path):
                 wott_credentials_path = screenly_credentials_path
 
         if os.path.isfile(wott_credentials_path):
             with open(wott_credentials_path, "r") as credentials_file:
                 credentials = json.load(credentials_file)
-                self.user = credentials['username']
-                new_pass = credentials['password']
-                self.openpass = new_pass
-                self.password = '' if new_pass == '' else hashlib.sha256(new_pass).hexdigest()
-                return True
-        else:
-            self.user = ''
-            self.password = ''
-            self.openpass = ''
-            return False
+                login_record = credentials['login_credentials']
+                match = re.match(re_split_login, login_record)
+                if match:
+                    self.user = match.group(1)
+                    new_pass = match.group(2)
+                    self.openpass = new_pass
+                    self.password = '' if new_pass == '' else hashlib.sha256(new_pass).hexdigest()
+                    return True
+
+        self.user = ''
+        self.password = ''
+        self.openpass = ''
+        return False
 
     def check_password(self, password):
         hashed_password = hashlib.sha256(password).hexdigest()
