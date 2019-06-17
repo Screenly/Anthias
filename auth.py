@@ -14,6 +14,7 @@ WOTT_USER_CREDENTIALS_PATH = os.path.join(WOTT_CREDENTIALS_PATH, LINUX_USER)
 WOTT_SCREENLY_CREDENTIAL_NAME = 'screenly'
 
 
+
 class Auth(object):
     __metaclass__ = ABCMeta
 
