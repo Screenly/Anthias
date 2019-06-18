@@ -59,6 +59,9 @@ class NoAuth(Auth):
     def authenticate(self):
         pass
 
+    def check_password(self, password):
+        return True
+
 
 class BasicAuth(Auth):
     name = 'Basic'
@@ -99,10 +102,7 @@ class BasicAuth(Auth):
         realm = "Screenly OSE {}".format(self.settings['player_name'])
         return Response("Access denied", 401, {"WWW-Authenticate": 'Basic realm="{}"'.format(realm)})
 
-    def update_settings(self, current_password):
-        auth_backend = self.settings['auth_backend']
-        current_pass_correct = True if auth_backend == '' \
-            else self.settings.auth_backends[auth_backend].check_password(current_password)
+    def update_settings(self, current_pass_correct):
         new_user = request.form.get('user', '')
         new_pass = request.form.get('password', '')
         new_pass2 = request.form.get('password2', '')
@@ -112,7 +112,7 @@ class BasicAuth(Auth):
         if self.settings['password'] != '':  # if password currently set,
             if new_user != self.settings['user']:  # trying to change user
                 # should have current password set. Optionally may change password.
-                if not current_password:
+                if current_pass_correct is None:
                     raise ValueError("Must supply current password to change username")
                 if not current_pass_correct:
                     raise ValueError("Incorrect current password.")
@@ -120,7 +120,7 @@ class BasicAuth(Auth):
                 self.settings['user'] = new_user
 
             if new_pass != '':
-                if not current_password:
+                if current_pass_correct is None:
                     raise ValueError("Must supply current password to change password")
                 if not current_pass_correct:
                     raise ValueError("Incorrect current password.")
@@ -155,22 +155,9 @@ class WoTTAuth(BasicAuth):
         super(WoTTAuth, self).__init__(settings)
         self._fetch_credentials()
 
-    def update_settings(self, current_password):
-        auth_backend = self.settings['auth_backend']
-        current_pass_correct = True if auth_backend == '' \
-            else self.settings.auth_backends[auth_backend].check_password(current_password)
-
-        if not current_password and auth_backend:
-            raise ValueError("Must supply current password to change username")
-        if not current_pass_correct:
-            raise ValueError("Incorrect current password.")
-
+    def update_settings(self, current_pass_correct):
         if not self._fetch_credentials():
             raise ValueError("Can not read WoTT credential file or login credentials record is incorrect")
-
-        # self.settings['user'] = self.user
-        # self.settings['password'] = self.password
-        # self.settings['openpass'] = self.openpass
 
     def _fetch_credentials(self):
         wott_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, WOTT_SCREENLY_CREDENTIAL_NAME + ".json")

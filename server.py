@@ -1230,7 +1230,13 @@ def settings_page():
                 if not settings.auth.check_password(current_pass):
                     raise ValueError("Incorrect current password.")
 
-            settings.auth_backends[auth_backend].update_settings(current_pass)
+            prev_auth_backend = settings['auth_backend']
+            if not current_pass:
+                current_pass_correct = None
+            else:
+                current_pass_correct = settings.auth_backends[prev_auth_backend].check_password(current_pass)
+            next_auth_backend = settings.auth_backends[auth_backend]
+            next_auth_backend.update_settings(current_pass_correct)
             settings['auth_backend'] = auth_backend
 
             for field, default in CONFIGURABLE_SETTINGS.items():
