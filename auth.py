@@ -173,7 +173,6 @@ class WoTTAuth(BasicAuth):
         # self.settings['openpass'] = self.openpass
 
     def _fetch_credentials(self):
-        re_split_login = re.compile("^([\w\.\-]+):(\S+)$", re.UNICODE)
         wott_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, WOTT_SCREENLY_CREDENTIAL_NAME + ".json")
 
         if 'wott_secret_name' in self.settings and self.settings['wott_secret_name']:
@@ -184,20 +183,17 @@ class WoTTAuth(BasicAuth):
         if os.path.isfile(wott_credentials_path):
             with open(wott_credentials_path, "r") as credentials_file:
                 credentials = json.load(credentials_file)
-                if 'login_credentials' not in credentials:
+                login_record = credentials.get('login_credentials', '')
+                if not login_record:
                     return False
-                login_record = credentials['login_credentials']
-                match = re.match(re_split_login, login_record)
-                if login_record and match:
-                    self.user = match.group(1)
-                    new_pass = match.group(2)
-                    self.openpass = new_pass
-                    self.password = '' if new_pass == '' else hashlib.sha256(new_pass).hexdigest()
+                login_record = login_record.split(':', 1)
+                if len(login_record) == 2:
+                    self.user, password = login_record
+                    self.password = '' if password == '' else hashlib.sha256(password).hexdigest()
                     return True
 
         self.user = ''
         self.password = ''
-        self.openpass = ''
         return False
 
     def check_password(self, password):
