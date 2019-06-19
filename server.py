@@ -1231,7 +1231,7 @@ def settings_page():
                     raise ValueError("Incorrect current password.")
 
             prev_auth_backend = settings['auth_backend']
-            if not current_pass:
+            if not current_pass and prev_auth_backend:
                 current_pass_correct = None
             else:
                 current_pass_correct = settings.auth_backends[prev_auth_backend].check_password(current_pass)
