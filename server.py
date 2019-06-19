@@ -1359,8 +1359,6 @@ def integrations():
     if context['is_wott_installed']:
         context['wott_device_id'] = get_wott_device_id()
 
-
-
     return template('integrations.html', **context)
 
 
