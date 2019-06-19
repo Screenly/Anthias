@@ -25,26 +25,35 @@ class Auth(object):
         pass
 
     @abstractproperty
-    def is_authorized(self):
+    def is_authenticated(self):
         """
-        See if the user is authorized for the request.
+        See if the user is authenticated for the request.
         :return: bool
         """
         pass
 
-    def authorize(self):
+    def authenticate_if_needed(self):
         """
-        If the request is not authorized, let the user authenticate himself.
-        :return: a Response which initiates authentication or None if authorized.
+        If the user performing the request is not authenticated, initiate authentication.
+        :return: a Response which initiates authentication or None if already authenticated.
         """
-        if not self.is_authorized:
+        if not self.is_authenticated:
             return self.authenticate()
 
     def update_settings(self, current_password):
+        """
+        Submit updated values from Settings page.
+        :param current_password: the value of "Current Password" field or None if empty.
+        :return:
+        """
         pass
 
     @property
     def template(self):
+        """
+        Get HTML template and its context object to be displayed in Settings page.
+        :return: (template, context)
+        """
         pass
 
 
@@ -53,7 +62,7 @@ class NoAuth(Auth):
     name = ''
     config = {}
 
-    def is_authorized(self):
+    def is_authenticated(self):
         return True
 
     def authenticate(self):
@@ -90,7 +99,7 @@ class BasicAuth(Auth):
         return self.settings['password'] == hashed_password
 
     @property
-    def is_authorized(self):
+    def is_authenticated(self):
         auth = request.authorization
         return auth and self._check(auth.username, auth.password)
 
@@ -215,5 +224,5 @@ def authorized(orig):
     def decorated(*args, **kwargs):
         if not settings.auth:
             return orig(*args, **kwargs)
-        return settings.auth.authorize() or orig(*args, **kwargs)
+        return settings.auth.authenticate_if_needed() or orig(*args, **kwargs)
     return decorated
