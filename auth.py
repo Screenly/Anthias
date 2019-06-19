@@ -49,8 +49,8 @@ class Auth(object):
 
 
 class NoAuth(Auth):
-    name = 'Disabled'
-    id = ''
+    display_name = 'Disabled'
+    name = ''
     config = {}
 
     def is_authorized(self):
@@ -64,8 +64,8 @@ class NoAuth(Auth):
 
 
 class BasicAuth(Auth):
-    name = 'Basic'
-    id = 'auth_basic'
+    display_name = 'Basic'
+    name = 'auth_basic'
     config = {
         'auth_basic': {
             'user': '',
@@ -143,8 +143,8 @@ class BasicAuth(Auth):
 
 
 class WoTTAuth(BasicAuth):
-    name = 'WoTT'
-    id = 'auth_wott'
+    display_name = 'WoTT'
+    name = 'auth_wott'
     config = {
         'auth_wott': {
             'wott_secret_name': 'screenly_credentials',

@@ -66,10 +66,9 @@ class ScreenlySettings(IterableUserDict):
         self.conf_file = self.get_configfile()
         self.auth_backends_list = [NoAuth(), BasicAuth(self), WoTTAuth(self)]
         self.auth_backends = {}
-        for b in self.auth_backends_list:
-            c = b.config
-            DEFAULTS.update(c)
-            self.auth_backends[b.id] = b
+        for backend in self.auth_backends_list:
+            DEFAULTS.update(backend.config)
+            self.auth_backends[backend.name] = backend
 
         if not path.isfile(self.conf_file):
             logging.error('Config-file %s missing. Using defaults.', self.conf_file)

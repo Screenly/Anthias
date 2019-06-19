@@ -1272,10 +1272,10 @@ def settings_page():
         else:
             html = None
         auth_backends.append({
-            'name': backend.id,
-            'text': backend.name,
+            'name': backend.name,
+            'text': backend.display_name,
             'template': html,
-            'selected': 'selected' if settings['auth_backend'] == backend.id else ''
+            'selected': 'selected' if settings['auth_backend'] == backend.name else ''
         })
 
     context.update({
