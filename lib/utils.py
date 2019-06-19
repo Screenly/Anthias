@@ -336,10 +336,11 @@ def is_wott_integrated():
     Chacks if wott-agent installed or not
     :return:
     """
-    result = os.popen('ps ax | grep "wott-agent"').read()
-    lines = result.split('\n')
-    for line in lines:
-        if 'wott-agent daemon' in line:
+    proc_list = sh.ps('ax')
+    re_wottagent = re.compile(r'^.*wott-agent.*$', re.MULTILINE)
+    result = re.findall(re_wottagent, proc_list.stdout)
+    for match in result:
+        if 'wott-agent daemon' in match:
             return True
     return False
 
@@ -348,5 +349,8 @@ def get_wott_device_id():
     """
     :return: WoTT Device id of this device
     """
-    result = os.popen('wott-agent whoami').read().strip()
+    try:
+        result = sh.wott_agent("whoami").stdout.strip()
+    except:
+        result = ''
     return result if result.endswith("d.wott.local") else '-- can not read device id --'
