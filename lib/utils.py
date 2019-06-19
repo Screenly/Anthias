@@ -348,5 +348,5 @@ def get_wott_device_id():
     """
     :return: WoTT Device id of this device
     """
-    result = os.popen('sudo wott-agent whoami').read()
-    return result if result.endswith("d.wott.local") else '---'
+    result = os.popen('wott-agent whoami').read().strip()
+    return result if result.endswith("d.wott.local") else '-- can not read device id --'
