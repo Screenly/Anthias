@@ -353,8 +353,8 @@ def get_wott_device_id():
     """
     metadata_path = os.path.join(WOTT_PATH, 'metadata.json')
     if os.path.isfile(metadata_path):
-        with open(metadata_path) as file:
-            metadata =  json.load(file)
+        with open(metadata_path) as metadata_file:
+            metadata = json.load(metadata_file)
         if 'device_id' in metadata:
             return metadata['device_id']
     return '-- can not read device id --'
