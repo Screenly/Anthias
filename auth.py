@@ -175,7 +175,7 @@ class WoTTAuth(BasicAuth):
         wott_credentials_path = os.path.join(WOTT_USER_CREDENTIALS_PATH, WOTT_SCREENLY_CREDENTIAL_NAME + ".json")
 
         if 'wott_secret_name' in self.settings and self.settings['wott_secret_name']:
-            screenly_credentials_path = os.path.join(WOTT_USER_CREDENTIALS_PATH, self.settings['wott_secret_name'] + ".json")
+            screenly_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, self.settings['wott_secret_name'] + ".json")
             if os.path.isfile(screenly_credentials_path):
                 wott_credentials_path = screenly_credentials_path
 
@@ -200,6 +200,12 @@ class WoTTAuth(BasicAuth):
         hashed_password = hashlib.sha256(password).hexdigest()
         return self.password == hashed_password
 
+    @property
+    def is_authenticated(self):
+        if not self._fetch_credentials():
+            raise ValueError('Cannot load credentials')
+        return super(WoTTAuth, self).is_authenticated
+
     def _check(self, username, password):
         """
         Check username/password combo against WoTT Credentials.
@@ -209,8 +215,6 @@ class WoTTAuth(BasicAuth):
         :param password: str
         :return: True if the check passes.
         """
-        if not self._fetch_credentials():
-            raise ValueError('Cannot load credentials')
         return self.user == username and self.check_password(password)
 
     @property
