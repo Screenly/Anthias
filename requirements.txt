@@ -2,7 +2,7 @@ Mako==0.7.3
 MarkupSafe==1.0
 ansible==2.8.1
 certifi==2018.4.16
-cffi==1.8.2
+cffi==1.7.0
 click==6.7
 configparser==3.5.0
 Flask-Cors==3.0.4
@@ -27,6 +27,6 @@ requests[security]==2.20.0
 sh==1.08
 six==1.11.0
 uptime==2.0.2
-urllib3==1.24.3
+urllib3==1.25.1
 werkzeug==0.14.1
 youtube_dl>=2017.7.2
