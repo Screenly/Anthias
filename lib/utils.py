@@ -21,6 +21,8 @@ from urlparse import urlparse
 
 from assets_helper import update
 
+WOTT_PATH = '/opt/wott'
+
 arch = machine()
 
 # 300 level HTTP responses are also ok, such as redirects, which many sites have and load
@@ -336,7 +338,7 @@ def is_wott_integrated():
     Chacks if wott-agent installed or not
     :return:
     """
-    proc_list = sh.ps('ax')
+    proc_list = sh.ps('axw')
     re_wottagent = re.compile(r'^.*wott-agent.*$', re.MULTILINE)
     result = re.findall(re_wottagent, proc_list.stdout)
     for match in result:
@@ -349,8 +351,10 @@ def get_wott_device_id():
     """
     :return: WoTT Device id of this device
     """
-    try:
-        result = sh.wott_agent("whoami").stdout.strip()
-    except:
-        result = ''
-    return result if result.endswith("d.wott.local") else '-- can not read device id --'
+    metadata_path = os.path.join(WOTT_PATH, 'metadata.json')
+    if os.path.isfile(metadata_path):
+        with open(metadata_path) as file:
+            metadata =  json.load(file)
+        if 'device_id' in metadata:
+            return metadata['device_id']
+    return '-- can not read device id --'
