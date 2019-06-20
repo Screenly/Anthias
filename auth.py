@@ -42,7 +42,7 @@ class Auth(object):
             if not self.is_authenticated:
                 return self.authenticate()
         except ValueError as e:
-            return Response("Authorization backend is unavailable: "+str(e), 503)
+            return Response("Authorization backend is unavailable: " + str(e), 503)
 
     def update_settings(self, current_password):
         """
