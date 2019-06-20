@@ -9,7 +9,10 @@ import re
 
 from flask import request, Response
 
+LINUX_USER = os.getenv('USER', 'pi')
 WOTT_CREDENTIALS_PATH = '/opt/wott/credentials'
+WOTT_USER_CREDENTIALS_PATH = os.path.join(WOTT_CREDENTIALS_PATH, LINUX_USER)
+
 WOTT_SCREENLY_CREDENTIAL_NAME = 'screenly_credentials'
 
 
@@ -169,10 +172,10 @@ class WoTTAuth(BasicAuth):
             raise ValueError("Can not read WoTT credential file or login credentials record is incorrect")
 
     def _fetch_credentials(self):
-        wott_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, WOTT_SCREENLY_CREDENTIAL_NAME + ".json")
+        wott_credentials_path = os.path.join(WOTT_USER_CREDENTIALS_PATH, WOTT_SCREENLY_CREDENTIAL_NAME + ".json")
 
         if 'wott_secret_name' in self.settings and self.settings['wott_secret_name']:
-            screenly_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, self.settings['wott_secret_name'] + ".json")
+            screenly_credentials_path = os.path.join(WOTT_USER_CREDENTIALS_PATH, self.settings['wott_secret_name'] + ".json")
             if os.path.isfile(screenly_credentials_path):
                 wott_credentials_path = screenly_credentials_path
 
