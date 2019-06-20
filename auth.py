@@ -5,7 +5,6 @@ from functools import wraps
 import hashlib
 import os.path
 import json
-import re
 
 from flask import request, Response
 
