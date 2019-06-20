@@ -8,6 +8,7 @@ import logging
 from UserDict import IterableUserDict
 import zmq
 import hashlib
+import os
 
 from lib.errors import ZmqCollectorTimeout
 from auth import WoTTAuth, BasicAuth, NoAuth
@@ -64,7 +65,9 @@ class ScreenlySettings(IterableUserDict):
         IterableUserDict.__init__(self, *args, **kwargs)
         self.home = getenv('HOME')
         self.conf_file = self.get_configfile()
-        self.auth_backends_list = [NoAuth(), BasicAuth(self), WoTTAuth(self)]
+        self.auth_backends_list = [NoAuth(), BasicAuth(self)]
+        if os.path.isdir('/opt/wott'):
+            self.auth_backends_list.append(WoTTAuth(self))
         self.auth_backends = {}
         for backend in self.auth_backends_list:
             DEFAULTS.update(backend.config)

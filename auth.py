@@ -11,8 +11,7 @@ from flask import request, Response
 LINUX_USER = os.getenv('USER', 'pi')
 WOTT_CREDENTIALS_PATH = '/opt/wott/credentials'
 WOTT_USER_CREDENTIALS_PATH = os.path.join(WOTT_CREDENTIALS_PATH, LINUX_USER)
-
-WOTT_SCREENLY_CREDENTIAL_NAME = 'screenly_credentials'
+WOTT_SCREENLY_CREDENTIAL_NAME = 'screenly'
 
 
 class Auth(object):
@@ -39,8 +38,11 @@ class Auth(object):
         If the user performing the request is not authenticated, initiate authentication.
         :return: a Response which initiates authentication or None if already authenticated.
         """
-        if not self.is_authenticated:
-            return self.authenticate()
+        try:
+            if not self.is_authenticated:
+                return self.authenticate()
+        except ValueError as e:
+            return Response("Authorization backend is unavailable: "+str(e), 503)
 
     def update_settings(self, current_password):
         """
@@ -164,11 +166,10 @@ class WoTTAuth(BasicAuth):
 
     def __init__(self, settings):
         super(WoTTAuth, self).__init__(settings)
-        self._fetch_credentials()
 
     def update_settings(self, current_pass_correct):
         if not self._fetch_credentials():
-            raise ValueError("Can not read WoTT credential file or login credentials record is incorrect")
+            raise ValueError("Can not read WoTT credentials file or login credentials record is incorrect")
 
     def _fetch_credentials(self):
         wott_credentials_path = os.path.join(WOTT_USER_CREDENTIALS_PATH, WOTT_SCREENLY_CREDENTIAL_NAME + ".json")
@@ -178,21 +179,22 @@ class WoTTAuth(BasicAuth):
             if os.path.isfile(screenly_credentials_path):
                 wott_credentials_path = screenly_credentials_path
 
-        if os.path.isfile(wott_credentials_path):
-            with open(wott_credentials_path, "r") as credentials_file:
-                credentials = json.load(credentials_file)
-                login_record = credentials.get('login_credentials', '')
-                if not login_record:
-                    return False
-                login_record = login_record.split(':', 1)
-                if len(login_record) == 2:
-                    self.user, password = login_record
-                    self.password = '' if password == '' else hashlib.sha256(password).hexdigest()
-                    return True
+        self.user = self.password = ''
 
-        self.user = ''
-        self.password = ''
-        return False
+        if not os.path.isfile(wott_credentials_path):
+            return False
+
+        with open(wott_credentials_path, "r") as credentials_file:
+            credentials = json.load(credentials_file)
+            login_record = credentials.get('login', '')
+            if not login_record:
+                return False
+            login_record = login_record.split(':', 1)
+            if len(login_record) == 2:
+                self.user, password = login_record
+                self.password = '' if password == '' else hashlib.sha256(password).hexdigest()
+
+        return True
 
     def check_password(self, password):
         hashed_password = hashlib.sha256(password).hexdigest()
@@ -207,6 +209,8 @@ class WoTTAuth(BasicAuth):
         :param password: str
         :return: True if the check passes.
         """
+        if not self._fetch_credentials():
+            raise ValueError('Cannot load credentials')
         return self.user == username and self.check_password(password)
 
     @property
