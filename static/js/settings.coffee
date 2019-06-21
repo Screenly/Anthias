@@ -80,16 +80,13 @@ $().ready ->
     .error (e) ->
         document.location.reload()
 
-  $('#auth_checkbox p span').click (e) ->
-    if $('input:checkbox[name="use_auth"]').is(':checked')
-      $('#user_group, #password_group, #password2_group').hide()
-      $('input:text[name="user"]').val('')
-      $('input:password[name="password"]').val('')
-      $('input:password[name="password2"]').val('')
-    else
-      $('#user_group, #password_group, #password2_group, #curpassword_group').show()
+  toggle_chunk = () ->
+    $("[id^=auth_chunk]").hide()
+    $.each $('#auth_backend option'), (e, t) ->
+      console.log t.value
+      $('#auth_backend-'+t.value).toggle $('#auth_backend').val() == t.value
 
-  if $('input:checkbox[name="use_auth"]').is(':checked')
-    $('#user_group, #password_group, #password2_group, #curpassword_group').show()
-  else
-    $('#user_group, #password_group, #password2_group, #curpassword_group').hide()
+  $('#auth_backend').change (e) ->
+    toggle_chunk()
+
+  toggle_chunk()
