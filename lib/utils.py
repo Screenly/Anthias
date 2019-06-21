@@ -18,6 +18,7 @@ from settings import settings, ZmqPublisher
 from subprocess import check_output, call
 from threading import Thread
 from urlparse import urlparse
+import logging
 
 from assets_helper import update
 
@@ -338,13 +339,7 @@ def is_wott_integrated():
     Chacks if wott-agent installed or not
     :return:
     """
-    proc_list = sh.ps('axw')
-    re_wottagent = re.compile(r'^.*wott-agent.*$', re.MULTILINE)
-    result = re.findall(re_wottagent, proc_list.stdout)
-    for match in result:
-        if 'wott-agent daemon' in match:
-            return True
-    return False
+    return os.path.isdir(WOTT_PATH)
 
 
 def get_wott_device_id():
@@ -357,4 +352,5 @@ def get_wott_device_id():
             metadata = json.load(metadata_file)
         if 'device_id' in metadata:
             return metadata['device_id']
-    return '-- can not read device id --'
+    logging.warning("Could not read WoTT Device ID")
+    return 'Could not read WoTT Device ID'
