@@ -229,9 +229,11 @@ def authorized(orig):
     :return: Response
     """
     from settings import settings
+
     @wraps(orig)
     def decorated(*args, **kwargs):
         if not settings.auth:
             return orig(*args, **kwargs)
         return settings.auth.authenticate_if_needed() or orig(*args, **kwargs)
+
     return decorated
