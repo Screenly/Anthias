@@ -235,4 +235,5 @@ def authorized(orig):
         if not settings.auth:
             return orig(*args, **kwargs)
         return settings.auth.authenticate_if_needed() or orig(*args, **kwargs)
+
     return decorated
