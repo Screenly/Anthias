@@ -5,7 +5,6 @@ __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2019, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
-import hashlib
 import json
 import pydbus
 import re
@@ -1221,7 +1220,7 @@ def settings_page():
     if request.method == "POST":
         try:
             # put some request variables in local variables to make easier to read
-            current_pass = request.form.get('curpassword', '')
+            current_pass = request.form.get('current-password', '')
             auth_backend = request.form.get('auth_backend', '')
 
             if auth_backend != settings['auth_backend'] and settings['auth_backend']:
