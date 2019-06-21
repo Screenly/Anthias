@@ -220,9 +220,15 @@ class WoTTAuth(BasicAuth):
     @property
     def template(self):
         return None
-def authorized(orig):
-    from settings import settings
 
+
+def authorized(orig):
+    """
+    Annotation which initiates authentication if the request is unauthorized.
+    :param orig: Flask function
+    :return: Response
+    """
+    from settings import settings
     @wraps(orig)
     def decorated(*args, **kwargs):
         if not settings.auth:
