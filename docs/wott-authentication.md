@@ -26,6 +26,8 @@ on the Screenly OSE device and enter these details into the 'Claim Device' segme
 
 ![claim device](https://github.com/Screenly/screenly-ose/blob/master/docs/images/claim-device.png)
 
+After this, navigate to the main dashboard and select the Raspberry Pi. Add `screenly-pi` to Tags.
+
 ## Configuring WoTT credentials
 
 With the agent set up, you now need to add the desired credentials for authentication of the Screenly management page. 
@@ -47,7 +49,7 @@ Some notes regarding the fields:
 - Name is `screenly` as the config file calls the credential by this field. If changed, you will need to manually alter the screenly config file
 -  The Key refers to the fact that this is a `login`. Value must be in the form `username:password` but you can change this to your own authentication values of choice
 - Owner is the Linux user of the raspberry pi, so `pi` 
-- Tags is how WoTT identifies the device it is downloading the credentials on
+- Tags is how WoTT identifies the device it is downloading the credentials on. Make sure it matches the Tag you assigned the Pi earlier
 
 Information from WoTT is fetched every 15 minutes, however you can force download it immediately by: 
 
