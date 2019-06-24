@@ -6,6 +6,7 @@ Access to Screenly's web configuration interface (management page) can be restri
 $ bash <(curl -sL https://www.screenly.io/install-ose.sh)
 ```
 
+Sister documentation [here](https://github.com/WoTTsecurity/agent/tree/master/docs/examples/screenly). Denotes use-case where Screenly OSE authentication can be managed by WoTT credentials.
 
 ## Installing WoTT agent onto Screenly OSE 
 
