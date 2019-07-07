@@ -1155,7 +1155,7 @@ class FlashServer(object):
             if client.path in self.clients:
                 inst = self.clients[client.path][0]
                 self.clients[client.path].remove(client)
-            for stream in list(client.streams.values()): # for all streams of this client
+            for stream in client.streams.values(): # for all streams of this client
                 self.closehandler(stream)
             client.streams.clear() # and clear the collection of streams
             if client.path in self.clients and len(self.clients[client.path]) == 1: # no more clients left, delete the instance.

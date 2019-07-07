@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 class Object(object): # a typed object or received object. Typed object has _classname attr.
     def __init__(self, **kwargs):
-        for key, val in list(kwargs.items()): setattr(self, key, val)
+        for key, val in kwargs.items(): setattr(self, key, val)
 
 class Class:
     __slots__ = ('name', 'encoding', 'attrs')
@@ -133,7 +133,7 @@ class AMF0(object):
     def writeObject(self, data):
         if not self.writePossibleReference(data):
             self.data.write_u8(AMF0.OBJECT)
-            for key, val in list(data.__dict__.items()): 
+            for key, val in data.__dict__.items():
                 if not key.startswith('_'): self.writeString(key, False); self.write(val)
             self.writeString('', False); self.data.write_u8(AMF0.OBJECT_END)
 
@@ -154,7 +154,7 @@ class AMF0(object):
     def writeEcmaArray(self, data):
         if not self.writePossibleReference(data):
             self.data.write_u8(AMF0.ECMA_ARRAY); self.data.write_u32(len(data))
-            for key, val in list(data.items()): self.writeString(key, writeType=False); self.write(val)
+            for key, val in data.items(): self.writeString(key, writeType=False); self.write(val)
             self.writeString('', writeType=False); self.data.write_u8(AMF0.OBJECT_END)
          
     def readArray(self):
@@ -190,7 +190,7 @@ class AMF0(object):
         if not self.writePossibleReference(data):
             self.data.write_u8(AMF0.TYPED_OBJECT)
             self.data.writeString(data._classname)
-            for key, val in list(data.__dict__.items()): 
+            for key, val in data.__dict__.items():
                 if not key.startswith('_'): self.writeString(key, False); self.write(val)
             self.writeString('', False); self.data.write_u8(AMF0.OBJECT_END)
 
@@ -330,8 +330,8 @@ class AMF3(object):
         self.data.write_u8(AMF3.ARRAY)
         if not self._writePossibleReference(data, refs=self._obj_refs):
             if mixed:
-                keys, int_keys, str_keys = list(data.keys()), [], []
-                int_keys = sorted([x for x in keys if isinstance(x, int)]) # assume max of 256 values
+                keys = list(data.keys())
+                int_keys = sorted(x for x in keys if isinstance(x, int)) # assume max of 256 values
                 str_keys = [x for x in keys if isinstance(x, str)]
                 if len(int_keys) + len(str_keys) < len(keys): raise ValueError('non-int or str key found in dict')
                 if len(int_keys) <= 0 or int_keys[0] != 0 or int_keys[-1] != len(int_keys) - 1: # not dense
@@ -382,7 +382,7 @@ class AMF3(object):
                     self._class_refs.append(class_)
                 for attr in class_.attrs: self.write(getattr(data, attr))
                 if class_.encoding & AMF3.DYNAMIC:
-                    for key, value in list(data.__dict__.items()):
+                    for key, value in data.__dict__.items():
                         if key not in class_.attrs:
                             self.writeString(key, writeType=False)
                             self.write(getattr(data, key))
@@ -390,7 +390,7 @@ class AMF3(object):
             else: # encode as anonymous and dynamic object.
                 self.data.write_u29(0x0b) # no typed attr, dynamic, class def
                 self.data.write_u8(0x01)  # anonymous
-                for key, value in list(data.__dict__.items()):
+                for key, value in data.__dict__.items():
                     self.writeString(key, writeType=False)
                     self.write(getattr(data, key)) 
                 self.data.write_u8(0x01) 
