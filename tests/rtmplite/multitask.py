@@ -1218,7 +1218,7 @@ if __name__ == '__main__':
 
     def printer(name):
         for i in range(1, 4):
-            print '%s:\t%d' % (name, i)
+            print('%s:\t%d' % (name, i))
             yield
 
     t = TaskManager()
@@ -1229,33 +1229,33 @@ if __name__ == '__main__':
     queue = Queue()
 
     def receiver():
-        print 'receiver started'
-        print 'receiver received: %s' % (yield queue.get())
-        print 'receiver finished'
+        print('receiver started')
+        print('receiver received: %s' % (yield queue.get()))
+        print('receiver finished')
 
     def sender():
-        print 'sender started'
+        print('sender started')
         yield queue.put('from sender')
-        print 'sender finished'
+        print('sender finished')
 
     def bad_descriptor():
-        print 'bad_descriptor running'
+        print('bad_descriptor running')
         try:
             yield readable(12)
         except:
-            print 'exception in bad_descriptor:', sys.exc_info()[1]
+            print('exception in bad_descriptor:', sys.exc_info()[1])
 
     def sleeper():
-        print 'sleeper started'
+        print('sleeper started')
         yield sleep(1)
-        print 'sleeper finished'
+        print('sleeper finished')
 
     def timeout_immediately():
-        print 'timeout_immediately running'
+        print('timeout_immediately running')
         try:
             yield Queue().get(timeout=0)
         except Timeout:
-            print 'timeout_immediately timed out'
+            print('timeout_immediately timed out')
 
     t2 = TaskManager()
     t2.add(receiver())
@@ -1265,11 +1265,11 @@ if __name__ == '__main__':
     t2.add(timeout_immediately())
 
     def parent():
-        print 'child returned: %s' % ((yield child()),)
+        print('child returned: %s' % ((yield child()),))
         try:
             yield child(raise_exc=True)
         except:
-            print 'exception in child:', sys.exc_info()[1]
+            print('exception in child:', sys.exc_info()[1])
 
     def child(raise_exc=False):
         yield
