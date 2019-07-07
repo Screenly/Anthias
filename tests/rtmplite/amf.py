@@ -264,7 +264,7 @@ class AMF3(object):
         if refs is None: refs = self._str_refs
         if len(data) == 0: self.data.write_u8(0x01)
         elif not self._writePossibleReference(data, refs):
-            if encode and type(data) is str: data = str(data).encode('utf8')
+            if encode and isinstance(data, str): data = data.encode('utf8')
             self.data.write_u29((len(data) << 1) & 0x01)
             self.data.write(data)
         
