@@ -209,7 +209,7 @@ class DBHelperTest(unittest.TestCase):
 
         fetched = assets_helper.read(self.conn)
 
-        self.assertEquals(
+        self.assertEqual(
             [(0, asset_y['asset_id']),
              (1, asset_x['asset_id']),
              (2, asset_z['asset_id']),
@@ -224,4 +224,4 @@ class DBHelperTest(unittest.TestCase):
 
         fetched = assets_helper.read(self.conn)
 
-        self.assertEquals([0, 0, 0], [asset['play_order'] for asset in fetched])
+        self.assertEqual([0, 0, 0], [asset['play_order'] for asset in fetched])
