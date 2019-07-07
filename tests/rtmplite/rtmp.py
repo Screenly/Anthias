@@ -1250,7 +1250,7 @@ class FlashServer(object):
             if stream.name and '?' in stream.name: stream.name = stream.name.partition('?')[0]
             inst = self.clients[stream.client.path][0]
             if (stream.name in inst.publishers):
-                raise ValueError, 'Stream name already in use'
+                raise ValueError('Stream name already in use')
             inst.publishers[stream.name] = stream # store the client for publisher
             inst.onPublish(stream.client, stream)
             
@@ -1279,7 +1279,7 @@ class FlashServer(object):
                 if stream.playfile:
                     if start > 0: stream.playfile.seek(start)
                     task = stream.playfile.reader(stream)
-                elif start >= 0: raise ValueError, 'Stream name not found'
+                elif start >= 0: raise ValueError('Stream name not found')
             if _debug: print 'playing stream=', name, 'start=', start
             inst.onPlay(stream.client, stream)
             
@@ -1318,7 +1318,7 @@ class FlashServer(object):
         try:
             offset = cmd.args[0]
             if stream.playfile is None or stream.playfile.type != 'read': 
-                raise ValueError, 'Stream is not seekable'
+                raise ValueError('Stream is not seekable')
             stream.playfile.seek(offset)
             response = Command(name='onStatus', id=cmd.id, tm=stream.client.relativeTime, args=[amf.Object(level='status',code='NetStream.Seek.Notify', description=stream.name, details=None)])
             yield stream.send(response)
