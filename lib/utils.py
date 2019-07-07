@@ -278,7 +278,7 @@ def download_video_from_youtube(uri, asset_id):
     thread.daemon = True
     thread.start()
 
-    return location, unicode(name.decode('utf-8')), duration
+    return location, name.decode('utf-8'), duration
 
 
 class YoutubeDownloadThread(Thread):
@@ -298,9 +298,9 @@ class YoutubeDownloadThread(Thread):
 
 
 def template_handle_unicode(value):
-    if isinstance(value, str):
+    if isinstance(value, bytes):
         return value.decode('utf-8')
-    return unicode(value)
+    return str(value)
 
 
 def is_demo_node():

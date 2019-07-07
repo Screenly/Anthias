@@ -8,13 +8,13 @@ import unittest
 from datetime import datetime, timedelta
 
 asset_x = {
-    'mimetype': u'web',
-    'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d',
-    'name': u'WireLoad',
-    'uri': u'http://www.wireload.net',
+    'mimetype': 'web',
+    'asset_id': '4c8dbce552edb5812d3a866cfe5f159d',
+    'name': 'WireLoad',
+    'uri': 'http://www.wireload.net',
     'start_date': datetime.now() - timedelta(days=1),
     'end_date': datetime.now() + timedelta(days=1),
-    'duration': u'5',
+    'duration': '5',
     'is_enabled': 0,
     'nocache': 0,
     'play_order': 1,
@@ -22,13 +22,13 @@ asset_x = {
 }
 
 asset_y = {
-    'mimetype': u'image',
-    'asset_id': u'7e978f8c1204a6f70770a1eb54a76e9b',
-    'name': u'Google',
-    'uri': u'https://www.google.com/images/srpr/logo3w.png',
+    'mimetype': 'image',
+    'asset_id': '7e978f8c1204a6f70770a1eb54a76e9b',
+    'name': 'Google',
+    'uri': 'https://www.google.com/images/srpr/logo3w.png',
     'start_date': datetime.now() - timedelta(days=1),
     'end_date': datetime.now() + timedelta(days=1),
-    'duration': u'6',
+    'duration': '6',
     'is_enabled': 1,
     'nocache': 0,
     'play_order': 0,
@@ -86,9 +86,9 @@ class WebTest(unittest.TestCase):
             self.assertEqual(len(assets), 1)
             asset = assets[0]
 
-            self.assertEqual(asset['name'], u'http://example.com')
-            self.assertEqual(asset['uri'], u'http://example.com')
-            self.assertEqual(asset['mimetype'], u'webpage')
+            self.assertEqual(asset['name'], 'http://example.com')
+            self.assertEqual(asset['uri'], 'http://example.com')
+            self.assertEqual(asset['mimetype'], 'webpage')
             self.assertEqual(asset['duration'], settings['default_duration'])
 
     def test_edit_asset(self):
@@ -115,7 +115,7 @@ class WebTest(unittest.TestCase):
             self.assertEqual(len(assets), 1)
             asset = assets[0]
 
-            self.assertEqual(asset['duration'], u'333')
+            self.assertEqual(asset['duration'], '333')
 
     def test_add_asset_image_upload(self):
         image_file = '/tmp/image.png'
@@ -138,8 +138,8 @@ class WebTest(unittest.TestCase):
             self.assertEqual(len(assets), 1)
             asset = assets[0]
 
-            self.assertEqual(asset['name'], u'image.png')
-            self.assertEqual(asset['mimetype'], u'image')
+            self.assertEqual(asset['name'], 'image.png')
+            self.assertEqual(asset['mimetype'], 'image')
             self.assertEqual(asset['duration'], settings['default_duration'])
 
     def test_add_asset_video_upload(self):
@@ -163,9 +163,9 @@ class WebTest(unittest.TestCase):
             self.assertEqual(len(assets), 1)
             asset = assets[0]
 
-            self.assertEqual(asset['name'], u'video.flv')
-            self.assertEqual(asset['mimetype'], u'video')
-            self.assertEqual(asset['duration'], u'54')
+            self.assertEqual(asset['name'], 'video.flv')
+            self.assertEqual(asset['mimetype'], 'video')
+            self.assertEqual(asset['duration'], '54')
 
     def test_add_two_assets_upload(self):
         video_file = '/tmp/video.flv'
@@ -188,13 +188,13 @@ class WebTest(unittest.TestCase):
 
             self.assertEqual(len(assets), 2)
 
-            self.assertEqual(assets[0]['name'], u'image.png')
-            self.assertEqual(assets[0]['mimetype'], u'image')
+            self.assertEqual(assets[0]['name'], 'image.png')
+            self.assertEqual(assets[0]['mimetype'], 'image')
             self.assertEqual(assets[0]['duration'], settings['default_duration'])
 
-            self.assertEqual(assets[1]['name'], u'video.flv')
-            self.assertEqual(assets[1]['mimetype'], u'video')
-            self.assertEqual(assets[1]['duration'], u'54')
+            self.assertEqual(assets[1]['name'], 'video.flv')
+            self.assertEqual(assets[1]['mimetype'], 'video')
+            self.assertEqual(assets[1]['duration'], '54')
 
     def test_add_asset_streaming(self):
         with Browser() as browser:
@@ -218,9 +218,9 @@ class WebTest(unittest.TestCase):
             self.assertEqual(len(assets), 1)
             asset = assets[0]
 
-            self.assertEqual(asset['name'], u'rtmp://localhost:1935/app/video.flv')
-            self.assertEqual(asset['uri'], u'rtmp://localhost:1935/app/video.flv')
-            self.assertEqual(asset['mimetype'], u'streaming')
+            self.assertEqual(asset['name'], 'rtmp://localhost:1935/app/video.flv')
+            self.assertEqual(asset['uri'], 'rtmp://localhost:1935/app/video.flv')
+            self.assertEqual(asset['mimetype'], 'streaming')
             self.assertEqual(asset['duration'], settings['default_streaming_duration'])
 
     def test_rm_asset(self):

@@ -9,13 +9,13 @@ import settings
 import os
 
 asset_x = {
-    'mimetype': u'web',
-    'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d',
-    'name': u'WireLoad',
-    'uri': u'http://www.wireload.net',
+    'mimetype': 'web',
+    'asset_id': '4c8dbce552edb5812d3a866cfe5f159d',
+    'name': 'WireLoad',
+    'uri': 'http://www.wireload.net',
     'start_date': datetime.now() - timedelta(days=3),
     'end_date': datetime.now() + timedelta(days=3),
-    'duration': u'5',
+    'duration': '5',
     'is_enabled': 1,
     'nocache': 0,
     'is_processing': 0,
@@ -24,17 +24,17 @@ asset_x = {
 }
 
 asset_x_diff = {
-    'duration': u'10'
+    'duration': '10'
 }
 
 asset_y = {
-    'mimetype': u'image',
-    'asset_id': u'7e978f8c1204a6f70770a1eb54a76e9b',
-    'name': u'Google',
-    'uri': u'https://www.google.com/images/srpr/logo3w.png',
+    'mimetype': 'image',
+    'asset_id': '7e978f8c1204a6f70770a1eb54a76e9b',
+    'name': 'Google',
+    'uri': 'https://www.google.com/images/srpr/logo3w.png',
     'start_date': datetime.now() - timedelta(days=1),
     'end_date': datetime.now() + timedelta(days=2),
-    'duration': u'6',
+    'duration': '6',
     'is_enabled': 1,
     'nocache': 0,
     'is_processing': 0,
@@ -43,13 +43,13 @@ asset_y = {
 }
 
 asset_z = {
-    'mimetype': u'image',
-    'asset_id': u'7e978f8c1204a6f70770a1eb54a76e9c',
-    'name': u'Google',
-    'uri': u'https://www.google.com/images/srpr/logo3w.png',
+    'mimetype': 'image',
+    'asset_id': '7e978f8c1204a6f70770a1eb54a76e9c',
+    'name': 'Google',
+    'uri': 'https://www.google.com/images/srpr/logo3w.png',
     'start_date': datetime.now() - timedelta(days=1),
     'end_date': datetime.now() + timedelta(days=1),
-    'duration': u'6',
+    'duration': '6',
     'is_enabled': 1,
     'nocache': 0,
     'is_processing': 0,
@@ -58,13 +58,13 @@ asset_z = {
 }
 
 asset_tomorrow = {
-    'mimetype': u'image',
-    'asset_id': u'7e978f8c1204a6f70770a1eb54a76e9c',
-    'name': u'Google',
-    'uri': u'https://www.google.com/images/srpr/logo3w.png',
+    'mimetype': 'image',
+    'asset_id': '7e978f8c1204a6f70770a1eb54a76e9c',
+    'name': 'Google',
+    'uri': 'https://www.google.com/images/srpr/logo3w.png',
     'start_date': datetime.now() + timedelta(days=1),
     'end_date': datetime.now() + timedelta(days=1),
-    'duration': u'6',
+    'duration': '6',
     'is_enabled': 1,
     'nocache': 0,
     'is_processing': 0,

@@ -42,7 +42,7 @@ class BytesIO(StringIO): # raise EOFError if needed, allow read with optional le
         exec('''def read_%s(self): return struct.unpack("!%s", self.read(%d))[0]'''%(type, T, bytes))
         exec('''def write_%s(self, c): self.write(struct.pack("!%s", c))'''%(type, T))
         
-    def read_utf8(self, length): return unicode(self.read(length), 'utf8')
+    def read_utf8(self, length): return self.read(length).decode('utf8')
     def write_utf8(self, c): self.write(c.encode('utf8'))
     
     def read_u29(self):
@@ -118,7 +118,7 @@ class AMF0(object):
     def readString(self): return self.data.read_utf8(self.data.read_u16())
     def readLongString(self): return self.data.read_utf8(self.data.read_u32())
     def writeString(self, data, writeType=True):
-        data = unicode(data).encode('utf8') if isinstance(data, unicode) else data
+        data = data.encode('utf8') if isinstance(data, str) else data
         if writeType: self.data.write_u8(AMF0.LONG_STRING if len(data) > 0xffff else AMF0.STRING)
         if len(data) > 0xffff: self.data.write_u32(len(data))
         else: self.data.write_u16(len(data))
@@ -255,7 +255,7 @@ class AMF3(object):
         if length == 0: return ''
         result = self.data.read(length)
         if decode:
-            try: result = unicode(result, 'utf8') # Try decoding as regular utf8 first. TODO: will it always raise exception?
+            try: result = result.decode('utf8') # Try decoding as regular utf8 first. TODO: will it always raise exception?
             except UnicodeDecodeError: result = AMF3._decode_utf8_modified(result)
         if len(result) > 0: refs.append(result)
         return result
@@ -264,7 +264,7 @@ class AMF3(object):
         if refs is None: refs = self._str_refs
         if len(data) == 0: self.data.write_u8(0x01)
         elif not self._writePossibleReference(data, refs):
-            if encode and type(data) is unicode: data = unicode(data).encode('utf8')
+            if encode and type(data) is str: data = str(data).encode('utf8')
             self.data.write_u29((len(data) << 1) & 0x01)
             self.data.write(data)
         
@@ -283,10 +283,10 @@ class AMF3(object):
             utf16.append(c[0] if len(c) == 1 else (((c[0] & 0x1f) << 6) | (c[1] & 0x3f)) if len(c) == 2 else (((c[0] & 0x0f) << 12) | ((c[1] & 0x3f) << 6) | (c[2] & 0x3f)) if len(c) == 3 else (((c[0] & 0x07) << 18) | ((c[1] & 0x3f) << 12) | ((c[2] & 0x3f) << 6) | (c[3] & 0x3f)) if len(c) == 4 else -1)
         for c in utf16: 
             if c > 0xffff: raise ValueError('does not implement more than 16 bit unicode')
-        return unicode(''.join([chr((c >> 8) & 0xff) + chr(c & 0xff) for c in utf16]), 'utf_16_be')
+        return b''.join(bytes([(c >> 8) & 0xff, c & 0xff]) for c in utf16).decode('utf_16_be')
     @staticmethod
     def _encode_utf8_modified(data):
-        ch = [ord(i) for i in unicode(data).encode('utf_16_be')]
+        ch = [ord(i) for i in str(data).encode('utf_16_be')]
         utf16 = [(((ch[i] & 0xff) << 8) + (ch[i+1] & 0xff)) for i in range(0, len(ch), 2)]
         b = [(struct.pack('>B', c) if c <= 0x7f else struct.pack('>BB', 0xc0 | (c >> 6) & 0x1f, 0x80 | c & 0x3f) if c <= 0x7ff else struct.pack('>BBB', 0xe0 | (c >> 12) & 0xf, 0x80 | (c >> 6) & 0x3f, 0x80 | c & 0x3f) if c <= 0xffff else struct.pack('!B', 0xf0 | (c >> 18) & 0x7, 0x80 | (c >> 12) & 0x3f, 0x80 | (c >> 6) & 0x3f, 0x80 | c & 0x3f) if c <= 0x10ffff else None) for c in utf16]
         return ''.join(b)

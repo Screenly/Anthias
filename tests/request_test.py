@@ -33,8 +33,8 @@ class RequestParseTest(unittest.TestCase):
         asset = server.prepare_asset(mock.Mock(environ={}))
         self.assertEqual(asset['duration'], 30)
         self.assertEqual(asset['is_enabled'], 0)
-        self.assertEqual(asset['mimetype'], u'webpage')
-        self.assertEqual(asset['name'], u'https://mail.ru')
+        self.assertEqual(asset['mimetype'], 'webpage')
+        self.assertEqual(asset['name'], 'https://mail.ru')
         self.assertEqual(asset['end_date'], datetime(2016, 7, 26, 12, 42))
         self.assertEqual(asset['start_date'], datetime(2016, 7, 19, 12, 42))
 
@@ -53,8 +53,8 @@ class RequestParseTest(unittest.TestCase):
         asset = server.prepare_asset(mock.Mock(environ={}))
         self.assertEqual(asset['duration'], 30)
         self.assertEqual(asset['is_enabled'], 0)
-        self.assertEqual(asset['mimetype'], u'webpage')
-        self.assertEqual(asset['name'], u'https://mail.ru')
+        self.assertEqual(asset['mimetype'], 'webpage')
+        self.assertEqual(asset['name'], 'https://mail.ru')
         self.assertEqual(asset['end_date'], datetime(2016, 7, 26, 12, 42))
         self.assertEqual(asset['start_date'], datetime(2016, 7, 19, 12, 42))
 

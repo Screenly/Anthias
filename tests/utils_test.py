@@ -8,8 +8,8 @@ from subprocess import call
 
 class UtilsTest(unittest.TestCase):
     def test_unicode_correctness_in_bottle_templates(self):
-        self.assertEqual(utils.template_handle_unicode('hello'), u'hello')
-        self.assertEqual(utils.template_handle_unicode('Привет'), u'\u041f\u0440\u0438\u0432\u0435\u0442')
+        self.assertEqual(utils.template_handle_unicode('hello'), 'hello')
+        self.assertEqual(utils.template_handle_unicode('Привет'), '\u041f\u0440\u0438\u0432\u0435\u0442')
 
     def test_json_tz(self):
         json_str = utils.handler(datetime(2016, 7, 19, 12, 42))

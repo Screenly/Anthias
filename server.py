@@ -230,9 +230,9 @@ def prepare_asset(request, unique_name=False):
 
     def get(key):
         val = data.get(key, '')
-        if isinstance(val, unicode):
+        if isinstance(val, str):
             return val.strip()
-        elif isinstance(val, basestring):
+        elif isinstance(val, bytes):
             return val.strip().decode('utf-8')
         else:
             return val
@@ -313,9 +313,9 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
 
     def get(key):
         val = data.get(key, '')
-        if isinstance(val, unicode):
+        if isinstance(val, str):
             return val.strip()
-        elif isinstance(val, basestring):
+        elif isinstance(val, bytes):
             return val.strip().decode('utf-8')
         else:
             return val
@@ -400,7 +400,7 @@ def api_response(view):
             return view(*args, **kwargs)
         except Exception as e:
             traceback.print_exc()
-            return api_error(unicode(e))
+            return api_error(str(e))
 
     return api_view
 
