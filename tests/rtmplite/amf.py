@@ -105,8 +105,8 @@ class AMF0(object):
         if   data is None:                         self.data.write_u8(AMF0.NULL)
         elif data == undefined:                    self.data.write_u8(AMF0.UNDEFINED)
         elif isinstance(data, bool):               self.data.write_u8(AMF0.BOOL); self.data.write_u8(1 if data else 0)
-        elif isinstance(data, (int, int, float)): self.data.write_u8(AMF0.NUMBER); self.data.write_double(float(data))
-        elif isinstance(data, (str,)):  self.writeString(data)
+        elif isinstance(data, (int, float)): self.data.write_u8(AMF0.NUMBER); self.data.write_double(float(data))
+        elif isinstance(data, str):  self.writeString(data)
         elif isinstance(data, (list, tuple)): self.writeArray(data)
         elif isinstance(data, (datetime.date, datetime.datetime)): self.writeDate(data)
         elif isinstance(data, ET._ElementInterface): self.writeXML(data)
@@ -226,8 +226,8 @@ class AMF3(object):
         if data is None:              self.data.write_u8(AMF3.NULL)
         elif data == undefined:       self.data.write_u8(AMF3.UNDEFINED)
         elif isinstance(data, bool):  self.data.write_u8(AMF3.BOOL_FALSE if data is False else AMF3.BOOL_TRUE)
-        elif isinstance(data, (int, int, float)): self.writeNumber(data)
-        elif isinstance(data, (str,)): self.writeString(data)
+        elif isinstance(data, (int, float)): self.writeNumber(data)
+        elif isinstance(data, str): self.writeString(data)
         elif isinstance(data, ET._ElementInterface): self.writeXML(data)
         elif isinstance(data, (datetime.date, datetime.datetime)): self.writeDate(data)
         elif isinstance(data, (list, tuple)): self.writeList(data)
@@ -243,7 +243,7 @@ class AMF3(object):
     def readInteger(self, signed=True):
         self.data.read_u29() if not signed else self.data.read_s29()
     def writeNumber(self, data, writeType=True, type=None):
-        if type is None: type = AMF3.INTEGER if isinstance(data, (int, int)) and -0x10000000 <= data <= 0x0FFFFFFF else AMF3.NUMBER
+        if type is None: type = AMF3.INTEGER if isinstance(data, int) and -0x10000000 <= data <= 0x0FFFFFFF else AMF3.NUMBER
         if writeType: self.data.write_u8(type)
         if type == AMF3.INTEGER: self.data.write_s29(data)
         else: self.data.write_double(float(data))
@@ -331,8 +331,8 @@ class AMF3(object):
         if not self._writePossibleReference(data, refs=self._obj_refs):
             if mixed:
                 keys, int_keys, str_keys = data.keys(), [], []
-                int_keys = sorted([x for x in keys if isinstance(x, (int, int))]) # assume max of 256 values
-                str_keys = [x for x in keys if isinstance(x, (str,))]
+                int_keys = sorted([x for x in keys if isinstance(x, int)]) # assume max of 256 values
+                str_keys = [x for x in keys if isinstance(x, str)]
                 if len(int_keys) + len(str_keys) < len(keys): raise ValueError('non-int or str key found in dict')
                 if len(int_keys) <= 0 or int_keys[0] != 0 or int_keys[-1] != len(int_keys) - 1: # not dense
                     str_keys.extend(int_keys); int_keys[:] = []

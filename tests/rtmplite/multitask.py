@@ -321,7 +321,7 @@ class FDReady(YieldCondition):
 
 
 def _is_file_descriptor(fd):
-    return isinstance(fd, (int, int))
+    return isinstance(fd, int)
 
 
 def readable(fd, timeout=None):
