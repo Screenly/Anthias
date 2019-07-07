@@ -223,7 +223,7 @@ def generate_asset_list():
     assets = assets_helper.read(db_conn)
     deadlines = [asset['end_date'] if assets_helper.is_active(asset) else asset['start_date'] for asset in assets]
 
-    playlist = filter(assets_helper.is_active, assets)
+    playlist = list(filter(assets_helper.is_active, assets))
     deadline = sorted(deadlines)[0] if len(deadlines) > 0 else None
     logging.debug('generate_asset_list deadline: %s', deadline)
 
@@ -481,13 +481,11 @@ def setup_hotspot():
     if wireless_connections is None:
         return
 
-    wireless_connections = filter(
-        lambda c: not pattern_exclude.search(str(c['Id'])),
-        filter(
-            lambda c: pattern_include.search(str(c['Devices'])),
-            wireless_connections
-        )
-    )
+    wireless_connections = [
+        c for c in wireless_connections
+        if pattern_include.search(str(c['Devices']))
+            and not pattern_exclude.search(str(c['Id']))
+    ]
 
     # Displays the hotspot page
     if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
@@ -499,13 +497,11 @@ def setup_hotspot():
     while not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
         if len(wireless_connections) == 0:
             sleep(1)
-            wireless_connections = filter(
-                lambda c: not pattern_exclude.search(str(c['Id'])),
-                filter(
-                    lambda c: pattern_include.search(str(c['Devices'])),
-                    get_active_connections(bus)
-                )
-            )
+            wireless_connections = [
+                 c for c in get_active_connections(bus)
+                 if pattern_include.search(str(c['Devices']))
+                     and not pattern_exclude.search(str(c['Id']))
+            ]
             continue
         if wireless_connections is None:
             sleep(1)

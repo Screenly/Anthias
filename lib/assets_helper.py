@@ -43,7 +43,7 @@ def get_names_of_assets(conn):
 
 def get_playlist(conn):
     """Returns all currently active assets."""
-    return filter(is_active, read(conn))
+    return list(filter(is_active, read(conn)))
 
 
 def mkdict(keys):

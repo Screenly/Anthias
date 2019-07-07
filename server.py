@@ -986,13 +986,11 @@ class ResetWifiConfig(Resource):
         if wireless_connections is not None:
             device_uuid = None
 
-            wireless_connections = filter(
-                lambda c: not pattern_exclude.search(str(c['Id'])),
-                filter(
-                    lambda c: pattern_include.search(str(c['Devices'])),
-                    wireless_connections
-                )
-            )
+            wireless_connections = [
+                c for c in wireless_connections
+                if pattern_include.search(str(c['Devices']))
+                    and not pattern_exclude.search(str(c['Id']))
+            ]
 
             if len(wireless_connections) > 0:
                 device_uuid = wireless_connections[0].get('Uuid')

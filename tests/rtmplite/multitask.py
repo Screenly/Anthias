@@ -728,7 +728,7 @@ class SmartQueue(object):
     def _get(self, criteria=None):
         #self._pending = filter(lambda x: x[1]<=now, self._pending) # remove expired ones
         if criteria:
-            found = filter(lambda x: criteria(x), self._pending)   # check any matching criteria
+            found = [x for x in self._pending if criteria(x)]   # check any matching criteria
             if found: 
                 self._pending.remove(found[0])
                 return found[0]

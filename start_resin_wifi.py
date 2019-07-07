@@ -37,15 +37,13 @@ if __name__ == "__main__":
     if wireless_connections is None:
         exit()
 
-    wireless_connections = filter(
-        lambda c: not pattern_exclude.search(str(c['Id'])),
-        filter(
-            lambda c: pattern_include.search(str(c['Devices'])),
-            wireless_connections
-        )
-    )
+    wireless_connections = [
+        c for c in wireless_connections
+        if pattern_include.search(str(c['Devices']))
+            and not pattern_exclude.search(str(c['Id']))
+    ]
 
-    if not gateways().get('default') and filter(pattern_include.match, interfaces()):
+    if not gateways().get('default') and any(pattern_include.match(i) for i in interfaces()):
         if wireless_connections is None or len(wireless_connections) == 0:
             ssid = 'ScreenlyOSE-{}'.format(generate_perfect_paper_password(pw_length=4, has_symbols=False))
             ssid_password = generate_perfect_paper_password(pw_length=8, has_symbols=False)

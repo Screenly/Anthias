@@ -20,5 +20,5 @@ class UtilsTest(unittest.TestCase):
 
         home = getenv('HOME')
         dir = path.join(home, 'screenly_assets')
-        tmp_files = filter(lambda x: x.endswith('.tmp'), listdir(dir))
+        tmp_files = [x for x in listdir(dir) if x.endswith('.tmp')]
         self.assertEqual(len(tmp_files), 0)
