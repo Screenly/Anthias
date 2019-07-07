@@ -250,13 +250,13 @@ class Message(object):
                 
 class Protocol(object):
     PING_SIZE, DEFAULT_CHUNK_SIZE, HIGH_WRITE_CHUNK_SIZE, PROTOCOL_CHANNEL_ID = 1536, 128, 4096, 2 # constants
-    READ_WIN_SIZE, WRITE_WIN_SIZE = 1000000L, 1073741824L
+    READ_WIN_SIZE, WRITE_WIN_SIZE = 1000000, 1073741824
     
     def __init__(self, sock):
         self.stream = SockStream(sock)
         self.lastReadHeaders, self.incompletePackets, self.lastWriteHeaders = dict(), dict(), dict()
         self.readChunkSize = self.writeChunkSize = Protocol.DEFAULT_CHUNK_SIZE
-        self.readWinSize0, self.readWinSize, self.writeWinSize0, self.writeWinSize = 0L, self.READ_WIN_SIZE, 0L, self.WRITE_WIN_SIZE
+        self.readWinSize0, self.readWinSize, self.writeWinSize0, self.writeWinSize = 0, self.READ_WIN_SIZE, 0, self.WRITE_WIN_SIZE
         self.nextChannelId = Protocol.PROTOCOL_CHANNEL_ID + 1
         self._time0 = time.time()
         self.writeQueue = multitask.Queue()
@@ -644,7 +644,7 @@ class FLV(object):
         self.fname = self.fp = self.type = None
         self.tsp = self.tsr = 0; self.tsr0 = None
     
-    def open(self, path, type='read', mode=0775):
+    def open(self, path, type='read', mode=0o775):
         '''Open the file for reading (type=read) or writing (type=record or append).'''
         if str(path).find('/../') >= 0 or str(path).find('\\..\\') >= 0: raise ValueError('Must not contain .. in name')
         if _debug: print 'opening file', path
