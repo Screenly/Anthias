@@ -72,7 +72,7 @@ class BytesIO(StringIO): # raise EOFError if needed, allow read with optional le
 
 
 class AMF0(object):
-    NUMBER, BOOL, STRING, OBJECT, MOVIECLIP, NULL, UNDEFINED, REFERENCE, ECMA_ARRAY, OBJECT_END, ARRAY, DATE, LONG_STRING, UNSUPPORTED, RECORDSET, XML, TYPED_OBJECT, TYPE_AMF3 = list(range(0x12))
+    NUMBER, BOOL, STRING, OBJECT, MOVIECLIP, NULL, UNDEFINED, REFERENCE, ECMA_ARRAY, OBJECT_END, ARRAY, DATE, LONG_STRING, UNSUPPORTED, RECORDSET, XML, TYPED_OBJECT, TYPE_AMF3 = range(0x12)
 
     def __init__(self, data=None):
         self._obj_refs, self.data = list(), data if isinstance(data, BytesIO) else BytesIO(data) if data is not None else BytesIO()
@@ -196,7 +196,7 @@ class AMF0(object):
 
     
 class AMF3(object):
-    UNDEFINED, NULL, BOOL_FALSE, BOOL_TRUE, INTEGER, NUMBER, STRING, XML, DATE, ARRAY, OBJECT, XMLSTRING, BYTEARRAY = list(range(0x0d))
+    UNDEFINED, NULL, BOOL_FALSE, BOOL_TRUE, INTEGER, NUMBER, STRING, XML, DATE, ARRAY, OBJECT, XMLSTRING, BYTEARRAY = range(0x0d)
     ANONYMOUS, TYPED, DYNAMIC, EXTERNALIZABLE = 0x01, 0x02, 0x04, 0x08
     
     def __init__(self, data=None):
