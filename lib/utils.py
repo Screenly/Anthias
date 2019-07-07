@@ -17,7 +17,7 @@ from platform import machine
 from settings import settings, ZmqPublisher
 from subprocess import check_output, call
 from threading import Thread
-from urlparse import urlparse
+from urllib.parse import urlparse
 import logging
 
 from assets_helper import update

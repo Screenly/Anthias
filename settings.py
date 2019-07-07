@@ -3,7 +3,7 @@
 import json
 from os import path, getenv
 from time import sleep
-import ConfigParser
+import configparser
 import logging
 from UserDict import IterableUserDict
 import zmq
@@ -90,7 +90,7 @@ class ScreenlySettings(IterableUserDict):
                 self[field] = config.get(section, field)
                 if field == 'password' and self[field] != '' and len(self[field]) != 64:   # likely not a hashed password.
                     self[field] = hashlib.sha256(self[field]).hexdigest()   # hash the original password.
-        except ConfigParser.Error as e:
+        except configparser.Error as e:
             logging.debug("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (section, field, unicode(e), default))
             self[field] = default
         if field in ['database', 'assetdir']:
@@ -105,7 +105,7 @@ class ScreenlySettings(IterableUserDict):
     def load(self):
         """Loads the latest settings from screenly.conf into memory."""
         logging.debug('Reading config-file...')
-        config = ConfigParser.ConfigParser()
+        config = configparser.ConfigParser()
         config.read(self.conf_file)
 
         for section, defaults in DEFAULTS.items():
@@ -119,7 +119,7 @@ class ScreenlySettings(IterableUserDict):
 
     def save(self):
         # Write new settings to disk.
-        config = ConfigParser.ConfigParser()
+        config = configparser.ConfigParser()
         for section, defaults in DEFAULTS.items():
             config.add_section(section)
             for field, default in defaults.items():

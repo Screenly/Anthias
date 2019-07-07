@@ -5,7 +5,7 @@
 # http://opensource.adobe.com/wiki/download/attachments/1114283/amf3_spec_121207.pdf
 
 import struct, datetime, time, types
-from StringIO import StringIO
+from io import StringIO
 import xml.etree.ElementTree as ET
 
 class Object(object): # a typed object or received object. Typed object has _classname attr.

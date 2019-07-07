@@ -18,7 +18,7 @@ from hurry.filesize import size
 from mimetypes import guess_type
 from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
 from subprocess import check_output
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 from flask import Flask, make_response, render_template, request, send_from_directory, url_for
 from flask_cors import CORS
