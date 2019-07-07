@@ -392,7 +392,7 @@ class Protocol(object):
                 channel = 64 + ord(data[0]) + 256 * ord(data[1])
 
             hdrtype = hdrsize & Header.MASK   # read header type byte
-            if hdrtype == Header.FULL or not self.lastReadHeaders.has_key(channel):
+            if hdrtype == Header.FULL or channel not in self.lastReadHeaders:
                 header = Header(channel)
                 self.lastReadHeaders[channel] = header
             else:
@@ -519,7 +519,7 @@ class Protocol(object):
                 break
             
             # get the header stored for the stream
-            if self.lastWriteHeaders.has_key(message.streamId):
+            if message.streamId in self.lastWriteHeaders:
                 header = self.lastWriteHeaders[message.streamId]
             else:
                 if self.nextChannelId <= Protocol.PROTOCOL_CHANNEL_ID: self.nextChannelId = Protocol.PROTOCOL_CHANNEL_ID+1
