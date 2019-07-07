@@ -236,9 +236,9 @@ class Message(object):
     
     # define properties type, streamId and time to access self.header.(property)
     for p in ['type', 'streamId', 'time']:
-        exec 'def _g%s(self): return self.header.%s'%(p, p)
-        exec 'def _s%s(self, %s): self.header.%s = %s'%(p, p, p, p)
-        exec '%s = property(fget=_g%s, fset=_s%s)'%(p, p, p)
+        exec('def _g%s(self): return self.header.%s'%(p, p))
+        exec('def _s%s(self, %s): self.header.%s = %s'%(p, p, p, p))
+        exec('%s = property(fget=_g%s, fset=_s%s)'%(p, p, p))
     @property
     def size(self): return len(self.data)
             
