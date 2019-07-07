@@ -266,7 +266,7 @@ def load_browser(url=None):
 def browser_get_event():
     alarm(10)
     try:
-        event = browser.next()
+        event = next(browser)
     except SigalrmException:
         return None
     alarm(0)
