@@ -988,8 +988,8 @@ class ResetWifiConfig(Resource):
 
             wireless_connections = [
                 c for c in wireless_connections
-                if pattern_include.search(str(c['Devices']))
-                    and not pattern_exclude.search(str(c['Id']))
+                if pattern_include.search(str(c['Devices'])) and
+                    not pattern_exclude.search(str(c['Id']))
             ]
 
             if len(wireless_connections) > 0:
