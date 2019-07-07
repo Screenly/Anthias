@@ -106,11 +106,11 @@ class AMF0(object):
         elif data == undefined:                    self.data.write_u8(AMF0.UNDEFINED)
         elif isinstance(data, bool):               self.data.write_u8(AMF0.BOOL); self.data.write_u8(1 if data else 0)
         elif isinstance(data, (int, long, float)): self.data.write_u8(AMF0.NUMBER); self.data.write_double(float(data))
-        elif isinstance(data, types.StringTypes):  self.writeString(data)
-        elif isinstance(data, (types.ListType, types.TupleType)): self.writeArray(data)
+        elif isinstance(data, (str,)):  self.writeString(data)
+        elif isinstance(data, (list, tuple)): self.writeArray(data)
         elif isinstance(data, (datetime.date, datetime.datetime)): self.writeDate(data)
         elif isinstance(data, ET._ElementInterface): self.writeXML(data)
-        elif isinstance(data, types.DictType):     self.writeEcmaArray(data)
+        elif isinstance(data, dict):     self.writeEcmaArray(data)
         elif isinstance(data, Object) and hasattr(data, '_classname'): self.writeTypedObject(data)
         elif isinstance(data, (Object, object)):   self.writeObject(data)
         else: raise ValueError('Invalid AMF0 data %r type %r' % (data, type(data)))
@@ -227,11 +227,11 @@ class AMF3(object):
         elif data == undefined:       self.data.write_u8(AMF3.UNDEFINED)
         elif isinstance(data, bool):  self.data.write_u8(AMF3.BOOL_FALSE if data is False else AMF3.BOOL_TRUE)
         elif isinstance(data, (int, long, float)): self.writeNumber(data)
-        elif isinstance(data, types.StringTypes): self.writeString(data)
+        elif isinstance(data, (str,)): self.writeString(data)
         elif isinstance(data, ET._ElementInterface): self.writeXML(data)
         elif isinstance(data, (datetime.date, datetime.datetime)): self.writeDate(data)
-        elif isinstance(data, (types.ListType, types.TupleType)): self.writeList(data)
-        elif isinstance(data, types.DictType): self.writeDict(data)
+        elif isinstance(data, (list, tuple)): self.writeList(data)
+        elif isinstance(data, dict): self.writeDict(data)
         elif isinstance(data, (types.InstanceType, Object)): self.writeObject(data)
         # no implicit way to invoke writeXMLString and writeByteArray
         else: raise ValueError('Invalid AMF3 data %r type %r'%(data, type(data)))
@@ -332,7 +332,7 @@ class AMF3(object):
             if mixed:
                 keys, int_keys, str_keys = data.keys(), [], []
                 int_keys = sorted([x for x in keys if isinstance(x, (int, long))]) # assume max of 256 values
-                str_keys = [x for x in keys if isinstance(x, types.StringTypes)]
+                str_keys = [x for x in keys if isinstance(x, (str,))]
                 if len(int_keys) + len(str_keys) < len(keys): raise ValueError('non-int or str key found in dict')
                 if len(int_keys) <= 0 or int_keys[0] != 0 or int_keys[-1] != len(int_keys) - 1: # not dense
                     str_keys.extend(int_keys); int_keys[:] = []
