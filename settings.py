@@ -108,21 +108,21 @@ class ScreenlySettings(IterableUserDict):
         config = configparser.ConfigParser()
         config.read(self.conf_file)
 
-        for section, defaults in DEFAULTS.items():
-            for field, default in defaults.items():
+        for section, defaults in list(DEFAULTS.items()):
+            for field, default in list(defaults.items()):
                 self._get(config, section, field, default)
 
     def use_defaults(self):
-        for defaults in DEFAULTS.items():
-            for field, default in defaults[1].items():
+        for defaults in list(DEFAULTS.items()):
+            for field, default in list(defaults[1].items()):
                 self[field] = default
 
     def save(self):
         # Write new settings to disk.
         config = configparser.ConfigParser()
-        for section, defaults in DEFAULTS.items():
+        for section, defaults in list(DEFAULTS.items()):
             config.add_section(section)
-            for field, default in defaults.items():
+            for field, default in list(defaults.items()):
                 self._set(config, section, field, default)
         with open(self.conf_file, "w") as f:
             config.write(f)

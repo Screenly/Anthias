@@ -1238,7 +1238,7 @@ def settings_page():
             next_auth_backend.update_settings(current_pass_correct)
             settings['auth_backend'] = auth_backend
 
-            for field, default in CONFIGURABLE_SETTINGS.items():
+            for field, default in list(CONFIGURABLE_SETTINGS.items()):
                 value = request.form.get(field, default)
 
                 if not value and field in ['default_duration', 'default_streaming_duration']:
@@ -1260,7 +1260,7 @@ def settings_page():
             context['flash'] = {'class': "danger", 'message': e}
     else:
         settings.load()
-    for field, default in DEFAULTS['viewer'].items():
+    for field, default in list(DEFAULTS['viewer'].items()):
         context[field] = settings[field]
 
     auth_backends = []

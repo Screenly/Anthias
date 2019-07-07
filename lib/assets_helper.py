@@ -60,7 +60,7 @@ def create(conn, asset):
     if 'is_active' in asset:
         asset.pop('is_active')
     with db.commit(conn) as c:
-        c.execute(queries.create(asset.keys()), asset.values())
+        c.execute(queries.create(list(asset.keys())), list(asset.values()))
     asset.update({'is_active': is_active(asset)})
     return asset
 
@@ -77,7 +77,7 @@ def create_multiple(conn, assets):
             if 'is_active' in asset:
                 asset.pop('is_active')
 
-            c.execute(queries.create(asset.keys()), asset.values())
+            c.execute(queries.create(list(asset.keys())), list(asset.values()))
 
             asset.update({'is_active': is_active(asset)})
 
@@ -115,7 +115,7 @@ def update(conn, asset_id, asset):
     if 'is_active' in asset:
         asset.pop('is_active')
     with db.commit(conn) as c:
-        c.execute(queries.update(asset.keys()), asset.values() + [asset_id])
+        c.execute(queries.update(list(asset.keys())), list(asset.values()) + [asset_id])
     asset.update({'asset_id': asset_id})
     if 'start_date' in asset:
         asset.update({'is_active': is_active(asset)})

@@ -35,7 +35,7 @@ def read(c):
 
 def update(c, asset_id, asset):
     del asset['asset_id']
-    c.execute(query_update(asset.keys()), asset.values() + [asset_id])
+    c.execute(query_update(list(asset.keys())), list(asset.values()) + [asset_id])
 
 
 def test_column(col, cursor):
