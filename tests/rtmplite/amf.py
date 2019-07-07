@@ -276,7 +276,7 @@ class AMF3(object):
     # Ruby version is Copyright (c) 2006 Ross Bamford (rosco AT roscopeco DOT co DOT uk). The string is first converted to UTF16 BE
     @staticmethod
     def _decode_utf8_modified(data): # Modified UTF-8 data. See http://en.wikipedia.org/wiki/UTF-8#Java for details
-        utf16, i, b = [], 0, map(ord, data)
+        utf16, i, b = [], 0, list(map(ord, data))
         while i < len(b):
             c = b[i:i+1] if b[i] & 0x80 == 0 else b[i:i+2] if b[i] & 0xc0 == 0xc0 else b[i:i+3] if b[i] & 0xe0 == 0xe0 else b[i:i+4] if b[i] & 0xf8 == 0xf8 else []
             if len(c) == 0: raise ValueError('invalid modified utf-8')
