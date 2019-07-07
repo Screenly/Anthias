@@ -353,7 +353,7 @@ class Protocol(object):
                 scheme = 0
             client_dh_offset = (sum([ord(data[i]) for i in range(768, 772)]) % 632 + 8) if scheme == 1 else (sum([ord(data[i]) for i in range(1532, 1536)]) % 632 + 772)
             outgoingKp = data[client_dh_offset:client_dh_offset+128]
-            handshake = struct.pack('>IBBBB', 0, 1, 2, 3, 4) + ''.join([chr(random.randint(0, 255)) for i in xrange(Protocol.PING_SIZE-8)])
+            handshake = struct.pack('>IBBBB', 0, 1, 2, 3, 4) + ''.join([chr(random.randint(0, 255)) for i in range(Protocol.PING_SIZE-8)])
             server_dh_offset = (sum([ord(handshake[i]) for i in range(768, 772)]) % 632 + 8) if scheme == 1 else (sum([ord(handshake[i]) for i in range(1532, 1536)]) % 632 + 772)
             keys = Protocol._generateKeyPair() # (public, private)
             handshake = handshake[:server_dh_offset] + keys[0][0:128] + handshake[server_dh_offset+128:]
@@ -366,7 +366,7 @@ class Protocol(object):
             key_challenge_offset = (sum([ord(buffer[i]) for i in range(772, 776)]) % 728 + 776) if scheme == 1 else (sum([ord(buffer[i]) for i in range(8, 12)]) % 728 + 12)
             challenge_key = data[key_challenge_offset:key_challenge_offset+32]
             hash = Protocol._calculateHash(challenge_key, Protocol.SERVER_KEY[:68])
-            rand_bytes = ''.join([chr(random.randint(0, 255)) for i in xrange(Protocol.PING_SIZE-32)])
+            rand_bytes = ''.join([chr(random.randint(0, 255)) for i in range(Protocol.PING_SIZE-32)])
             last_hash = Protocol._calculateHash(rand_bytes, hash[:32])
             output = chr(type) + handshake + rand_bytes + last_hash
             return output
@@ -377,7 +377,7 @@ class Protocol(object):
         
     @staticmethod
     def _generateKeyPair(): # dummy key pair since we don't support encryption
-        return (''.join([chr(random.randint(0, 255)) for i in xrange(128)]), '')
+        return (''.join([chr(random.randint(0, 255)) for i in range(128)]), '')
         
     def parseMessages(self):
         '''Parses complete messages until connection closed. Raises ConnectionLost exception.'''

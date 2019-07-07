@@ -1217,7 +1217,7 @@ if __name__ == '__main__':
         import socket
 
     def printer(name):
-        for i in xrange(1, 4):
+        for i in range(1, 4):
             print '%s:\t%d' % (name, i)
             yield
 

@@ -72,7 +72,7 @@ class BytesIO(StringIO): # raise EOFError if needed, allow read with optional le
 
 
 class AMF0(object):
-    NUMBER, BOOL, STRING, OBJECT, MOVIECLIP, NULL, UNDEFINED, REFERENCE, ECMA_ARRAY, OBJECT_END, ARRAY, DATE, LONG_STRING, UNSUPPORTED, RECORDSET, XML, TYPED_OBJECT, TYPE_AMF3 = range(0x12)
+    NUMBER, BOOL, STRING, OBJECT, MOVIECLIP, NULL, UNDEFINED, REFERENCE, ECMA_ARRAY, OBJECT_END, ARRAY, DATE, LONG_STRING, UNSUPPORTED, RECORDSET, XML, TYPED_OBJECT, TYPE_AMF3 = list(range(0x12))
 
     def __init__(self, data=None):
         self._obj_refs, self.data = list(), data if isinstance(data, BytesIO) else BytesIO(data) if data is not None else BytesIO()
@@ -159,7 +159,7 @@ class AMF0(object):
          
     def readArray(self):
         count, obj = self.data.read_u32(), self._created([])
-        obj.extend(self.read() for i in xrange(count)) 
+        obj.extend(self.read() for i in range(count)) 
         return obj
     def writeArray(self, data):
         if not self.writePossibleReference(data):
@@ -196,7 +196,7 @@ class AMF0(object):
 
     
 class AMF3(object):
-    UNDEFINED, NULL, BOOL_FALSE, BOOL_TRUE, INTEGER, NUMBER, STRING, XML, DATE, ARRAY, OBJECT, XMLSTRING, BYTEARRAY = range(0x0d)
+    UNDEFINED, NULL, BOOL_FALSE, BOOL_TRUE, INTEGER, NUMBER, STRING, XML, DATE, ARRAY, OBJECT, XMLSTRING, BYTEARRAY = list(range(0x0d))
     ANONYMOUS, TYPED, DYNAMIC, EXTERNALIZABLE = 0x01, 0x02, 0x04, 0x08
     
     def __init__(self, data=None):
@@ -287,7 +287,7 @@ class AMF3(object):
     @staticmethod
     def _encode_utf8_modified(data):
         ch = [ord(i) for i in unicode(data).encode('utf_16_be')]
-        utf16 = [(((ch[i] & 0xff) << 8) + (ch[i+1] & 0xff)) for i in xrange(0, len(ch), 2)]
+        utf16 = [(((ch[i] & 0xff) << 8) + (ch[i+1] & 0xff)) for i in range(0, len(ch), 2)]
         b = [(struct.pack('>B', c) if c <= 0x7f else struct.pack('>BB', 0xc0 | (c >> 6) & 0x1f, 0x80 | c & 0x3f) if c <= 0x7ff else struct.pack('>BBB', 0xe0 | (c >> 12) & 0xf, 0x80 | (c >> 6) & 0x3f, 0x80 | c & 0x3f) if c <= 0xffff else struct.pack('!B', 0xf0 | (c >> 18) & 0x7, 0x80 | (c >> 12) & 0x3f, 0x80 | (c >> 6) & 0x3f, 0x80 | c & 0x3f) if c <= 0x10ffff else None) for c in utf16]
         return ''.join(b)
         
@@ -312,11 +312,11 @@ class AMF3(object):
         if is_reference: return self._obj_refs[length]
         key = self.readString(refs=self._str_refs)
         if key == '': # return python list since only integer index
-            result = [self.read() for i in xrange(length)]
+            result = [self.read() for i in range(length)]
         else: # return python dict with key, value
             result = {}
             while key != '': result[key] = self.read(); key = self.readString(refs=self._str_refs)
-            for i in xrange(length): result[i] = self.read()
+            for i in range(length): result[i] = self.read()
         self._obj_refs.append(result)
         return result
     def writeList(self, data):
@@ -353,7 +353,7 @@ class AMF3(object):
         elif type & 0x03 == 0x01: # class information
             class_ = Class()
             class_.name = self.readString()
-            class_.attrs = [self.read() for i in xrange(type >> 3)]
+            class_.attrs = [self.read() for i in range(type >> 3)]
             if type & 0x04 != 0: class_.encoding |= AMF3.DYNAMIC
             if not class_.name: class_.encoding |= AMF3.ANONYMOUS
             if len(class_.attrs) > 0: class_.encoding |= AMF3.TYPED
