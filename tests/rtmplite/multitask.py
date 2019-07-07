@@ -962,7 +962,7 @@ class TaskManager(object):
                     output = task.throw(*exc_info)
                 else:
                     output = task.send(input)
-            except StopIteration, e:
+            except StopIteration as e:
                 if isinstance(task, _ChildTask):
                     if not e.args:
                         output = None
@@ -1003,7 +1003,7 @@ class TaskManager(object):
         except (TypeError, ValueError):
             self._remove_bad_file_descriptors()
             return False
-        except (select.error, IOError), err:
+        except (select.error, IOError) as err:
             if err[0] == errno.EINTR:
                 return False
             elif ((err[0] == errno.EBADF) or

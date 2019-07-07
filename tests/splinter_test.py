@@ -48,7 +48,7 @@ def wait_for_and_do(browser, query, callback):
         try:
             callback(browser.find_by_css(query).first)
             not_filled = False
-        except ElementNotVisibleException, e:
+        except ElementNotVisibleException as e:
             if n > 20:
                 raise e
             n += 1

@@ -1257,7 +1257,7 @@ class FlashServer(object):
             stream.recordfile = inst.getfile(stream.client.path, stream.name, self.root, stream.mode)
             response = Command(name='onStatus', id=cmd.id, tm=stream.client.relativeTime, args=[amf.Object(level='status', code='NetStream.Publish.Start', description='', details=None)])
             yield stream.send(response)
-        except ValueError, E: # some error occurred. inform the app.
+        except ValueError as E: # some error occurred. inform the app.
             if _debug: print 'error in publishing stream', str(E)
             response = Command(name='onStatus', id=cmd.id, tm=stream.client.relativeTime, args=[amf.Object(level='error',code='NetStream.Publish.BadName',description=str(E),details=None)])
             yield stream.send(response)
@@ -1308,7 +1308,7 @@ class FlashServer(object):
 #            yield stream.send(response)
             
             if task is not None: multitask.add(task)
-        except ValueError, E: # some error occurred. inform the app.
+        except ValueError as E: # some error occurred. inform the app.
             if _debug: print 'error in playing stream', str(E)
             response = Command(name='onStatus', id=cmd.id, tm=stream.client.relativeTime, args=[amf.Object(level='error',code='NetStream.Play.StreamNotFound',description=str(E),details=None)])
             yield stream.send(response)
@@ -1322,7 +1322,7 @@ class FlashServer(object):
             stream.playfile.seek(offset)
             response = Command(name='onStatus', id=cmd.id, tm=stream.client.relativeTime, args=[amf.Object(level='status',code='NetStream.Seek.Notify', description=stream.name, details=None)])
             yield stream.send(response)
-        except ValueError, E: # some error occurred. inform the app.
+        except ValueError as E: # some error occurred. inform the app.
             if _debug: print 'error in seeking stream', str(E)
             response = Command(name='onStatus', id=cmd.id, tm=stream.client.relativeTime, args=[amf.Object(level='error',code='NetStream.Seek.Failed',description=str(E),details=None)])
             yield stream.send(response)
