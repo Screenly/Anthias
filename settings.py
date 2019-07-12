@@ -5,7 +5,6 @@ from os import path, getenv
 from time import sleep
 import configparser
 import logging
-from UserDict import IterableUserDict
 import zmq
 import hashlib
 import os
@@ -58,11 +57,11 @@ requests_log.setLevel(logging.WARNING)
 logging.debug('Starting viewer.py')
 
 
-class ScreenlySettings(IterableUserDict):
+class ScreenlySettings(dict):
     """Screenly OSE's Settings."""
 
     def __init__(self, *args, **kwargs):
-        IterableUserDict.__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.home = getenv('HOME')
         self.conf_file = self.get_configfile()
         self.auth_backends_list = [NoAuth(), BasicAuth(self)]
