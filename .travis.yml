@@ -8,6 +8,7 @@ addons:
   apt:
     packages:
       - net-tools
+      - libgirepository1.0-dev
       - mplayer
       - python3-gi
       - python3-setuptools
