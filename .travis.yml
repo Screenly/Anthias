@@ -1,8 +1,8 @@
 language: python
 python:
   - "3.6"
-virtualenv:
-  system_site_packages: true
+# virtualenv:
+#   system_site_packages: true  # Broke during py2 to py3 migration.
 addons:
   firefox: "45.0"
   apt:
