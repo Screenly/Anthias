@@ -152,10 +152,10 @@
     - libssl-dev
     - matchbox
     - omxplayer
-    - python-dev
-    - python-gobject
-    - python-netifaces
-    - python-simplejson
+    - python3-dev
+    - python3-gobject
+    - python3-netifaces
+    - python3-simplejson
     - rpi-update
     - sqlite3
     - systemd

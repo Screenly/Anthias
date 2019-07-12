@@ -50,7 +50,7 @@
 
 - name: Run database migration
   become: no
-  command: python /home/pi/screenly/bin/migrate.py
+  command: python3 /home/pi/screenly/bin/migrate.py
   register: migrate
 
 - debug: msg="{{ migrate.stdout }}"

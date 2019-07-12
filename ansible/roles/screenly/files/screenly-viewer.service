@@ -22,7 +22,7 @@ ExecStartPre=/usr/bin/xset -dpms
 # Don't blank the video device
 ExecStartPre=/usr/bin/xset s noblank
 
-ExecStart=/usr/bin/python /home/pi/screenly/viewer.py
+ExecStart=/usr/bin/python3 /home/pi/screenly/viewer.py
 Restart=on-failure
 
 ExecStartPost=/bin/rm -f /tmp/uzbl_*
