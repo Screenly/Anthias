@@ -1,10 +1,10 @@
-FROM ubuntu:18.04
+FROM debian:stretch
 MAINTAINER Viktor Petersson <vpetersson@screenly.io>
 
 RUN apt-get update && apt-get -y install \
         build-essential \
         curl \
-        firefox \
+        firefox-esr \
         ffmpeg \
         git-core \
         libffi-dev \
