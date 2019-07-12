@@ -484,7 +484,7 @@ def setup_hotspot():
     wireless_connections = [
         c for c in wireless_connections
         if pattern_include.search(str(c['Devices'])) and
-            not pattern_exclude.search(str(c['Id']))
+        not pattern_exclude.search(str(c['Id']))
     ]
 
     # Displays the hotspot page
@@ -498,9 +498,9 @@ def setup_hotspot():
         if len(wireless_connections) == 0:
             sleep(1)
             wireless_connections = [
-                 c for c in get_active_connections(bus)
-                 if pattern_include.search(str(c['Devices'])) and
-                     not pattern_exclude.search(str(c['Id']))
+                c for c in get_active_connections(bus)
+                if pattern_include.search(str(c['Devices'])) and
+                not pattern_exclude.search(str(c['Id']))
             ]
             continue
         if wireless_connections is None:

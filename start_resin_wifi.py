@@ -40,7 +40,7 @@ if __name__ == "__main__":
     wireless_connections = [
         c for c in wireless_connections
         if pattern_include.search(str(c['Devices'])) and
-            not pattern_exclude.search(str(c['Id']))
+        not pattern_exclude.search(str(c['Id']))
     ]
 
     if not gateways().get('default') and any(pattern_include.match(i) for i in interfaces()):
