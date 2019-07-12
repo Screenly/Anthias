@@ -9,7 +9,7 @@ addons:
     packages:
       - net-tools
       - mplayer
-      - python3-gobject
+      - python3-gi
       - python3-pip
 before_install:
   - sudo add-apt-repository ppa:mc3man/bionic-media -y
