@@ -46,10 +46,14 @@ fi
 
 echo && read -p "Do you want Screenly to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
 
-echo && read -p "Would you like to install the WoTT agent to help you manage security of your Raspberry Pi? (y/N)" -n 1 -r -s WOTT && echo
-if [ "$WOTT" = 'y' ]; then
-    curl -s https://packagecloud.io/install/repositories/wott/agent/script.deb.sh | sudo bash
-    sudo apt install wott-agent
+# Remove check when wott-agent will be supports buster
+if [ "$(lsb_release -c -s)" != "buster" ]
+then
+    echo && read -p "Would you like to install the WoTT agent to help you manage security of your Raspberry Pi? (y/N)" -n 1 -r -s WOTT && echo
+    if [ "$WOTT" = 'y' ]; then
+        curl -s https://packagecloud.io/install/repositories/wott/agent/script.deb.sh | sudo bash
+        sudo apt install wott-agent
+    fi
 fi
 
 echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
@@ -79,14 +83,14 @@ fi
 
 
 sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' /etc/apt/sources.list
-sudo apt-get update
-sudo apt-get purge -y python-setuptools python-pip python-pyasn1
-sudo apt-get install -y python-dev git-core libffi-dev libssl-dev
+sudo apt update --allow-releaseinfo-change
+sudo apt purge -y python-setuptools python-pip python-pyasn1
+sudo apt install -y python-dev git-core libffi-dev libssl-dev
 curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 
 if [ "$NETWORK" == 'y' ]; then
   export MANAGE_NETWORK=true
-  sudo apt-get install -y network-manager
+  sudo apt install -y network-manager
 else
   export MANAGE_NETWORK=false
 fi
@@ -98,8 +102,8 @@ cd /home/pi/screenly/ansible
 
 ansible-playbook site.yml $EXTRA_ARGS
 
-sudo apt-get autoclean
-sudo apt-get clean
+sudo apt autoclean
+sudo apt clean
 sudo find /usr/share/doc -depth -type f ! -name copyright -delete
 sudo find /usr/share/doc -empty -delete
 sudo rm -rf /usr/share/man /usr/share/groff /usr/share/info /usr/share/lintian /usr/share/linda /var/cache/man
