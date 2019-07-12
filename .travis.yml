@@ -10,13 +10,13 @@ addons:
       - net-tools
       - mplayer
       - python3-gobject
-      - python3-setuptools
+      - python3-pip
 before_install:
   - sudo add-apt-repository ppa:mc3man/trusty-media -y
   - sudo apt-get update -q
   - sudo apt-get install ffmpeg
 install:
-  - pip install -U pip
+  - pip3 install -U pip
   - pip install -r requirements.txt
   - pip install -r requirements.dev.txt
 before_script:
@@ -45,4 +45,4 @@ script:
   - bash static/spec/runner.sh
 
 sudo: false
-dist: trusty
+dist: bionic
