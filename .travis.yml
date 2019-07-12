@@ -1,6 +1,6 @@
 language: python
 python:
-  - "2.7"
+  - "3.7"
 virtualenv:
   system_site_packages: true
 addons:
@@ -9,8 +9,8 @@ addons:
     packages:
       - net-tools
       - mplayer
-      - python-gobject
-      - python-setuptools
+      - python3-gobject
+      - python3-setuptools
 before_install:
   - sudo add-apt-repository ppa:mc3man/trusty-media -y
   - sudo apt-get update -q
@@ -31,16 +31,16 @@ before_script:
   - curl https://www.screenly.io/upload/big_buck_bunny_720p_10mb.flv > /tmp/video.flv
   - export DISPLAY=:99.0
   - /sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -ac -screen 0 1280x1024x16
-  - python tests/rtmplite/rtmp.py -r /tmp/ &
+  - python3 tests/rtmplite/rtmp.py -r /tmp/ &
   - sleep 3
-  - python server.py &
+  - python3 server.py &
   - sleep 3 # give xvfb some time to start
 
 script:
   - find . ! -path "*/rtmplite/*" -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
   - nosetests -v -a '!fixme'
   - ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml
-  - python -m SimpleHTTPServer 8081 &
+  - python3 -m http.server 8081 &
   - sleep 3
   - bash static/spec/runner.sh
 
