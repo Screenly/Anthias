@@ -77,12 +77,10 @@
   register: resin_wifi_version_file
   when:
     - ansible_distribution_major_version|int >= 9
-    - manage_network|bool == true
 
 - set_fact: resin_wifi_version_file_exist="{{resin_wifi_version_file.stat.exists}}"
   when:
     - ansible_distribution_major_version|int >= 9
-    - manage_network|bool == true
 
 - name: Download resin-wifi-connect release
   get_url:

@@ -1,4 +1,5 @@
 #!/usr/bin/python
+import time
 
 import pydbus
 import re
@@ -49,6 +50,9 @@ if __name__ == "__main__":
             ssid_password = generate_perfect_paper_password(pw_length=8, has_symbols=False)
             generate_page(ssid, ssid_password, 'screenly.io/wifi')
 
-            wifi_connect = sh.sudo('wifi-connect', '-s', ssid, '-p', ssid_password, '-o', '9090')
+            wifi_connect = sh.sudo('wifi-connect', '-s', ssid, '-p', ssid_password, '-o', '9090', _bg=True)
     else:
-        pass
+        exit()
+
+    while not gateways().get('default') and any(pattern_include.match(i) for i in interfaces()):
+        time.sleep(.5)

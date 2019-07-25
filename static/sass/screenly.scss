@@ -14,9 +14,14 @@
   box-shadow: $shadow;
 }
 
-$footerHeight: 40px;
+$footerHeight: 140px;
 $secondaryColor: #6c757d;
 $baseLineHeight: 20px !default;
+
+html {
+  position: relative;
+  min-height: 100%;
+}
 
 body {
   margin-top: 60px;
@@ -126,47 +131,34 @@ label {
 }
 
 #footer {
-  height: $footerHeight;
-  background: url(../img/screenly-bg.jpeg);
-  border-top: 1px #ccc solid;
-  @include box-shadow(0 -2px 9px rgba(0, 0, 0, 0.05));
-  opacity: 0.9;
-  z-index: 10;
-
-  position: fixed;
   bottom: 0;
+  height: $footerHeight;
+  position: absolute;
   width: 100%;
-  text-shadow: #fff 0px 1px 1px;
 
-  .container {
-    position: relative;
-
-    $topOffset: $footerHeight * 0.25;
-
-    #screenly-logo {
-      position: absolute;
-      right: 0;
-
-      a {
-        color: #535d79;
-        font-weight: bold;
-        text-decoration: none;
-      }
-
-      #github-stars {
-        margin-top: $topOffset / 2;
-      }
-    }
-
-    .copy {
-      position: absolute;
-      left: 0;
-      top: $topOffset;
-      color: #535d79;
-      font-size: 12px;
+  .logo {
+    img {
+      max-height: 75px;
     }
   }
 
+  .links {
+    a {
+      color: rgba(54, 54, 54, 0.45);
+      font-weight: bold;
+      text-transform: uppercase;
+
+      &:hover {
+        text-decoration: none;
+      }
+    }
+  }
+
+  .copy {
+    border-top: 1px solid rgba(0, 0, 0, .1);
+    color: rgba(54, 54, 54, 0.45);
+    font-size: 0.7em;
+  }
 }
 
 h1.page-header {
