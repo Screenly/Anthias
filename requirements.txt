@@ -12,7 +12,7 @@ flask==1.0.2
 flask_restful==0.3.6
 futures==3.0.5
 gevent-websocket==0.10.1
-gevent==1.2.2
+gevent==1.4.0
 gunicorn==19.8.1
 hurry.filesize==0.9
 jinja2==2.10.1
