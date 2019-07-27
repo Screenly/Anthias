@@ -3,13 +3,13 @@ python:
   # "3.5"  # PEP-478 for schedule; default for raspbian stretch; debian EOL@~2020
   - "3.7"  # PEP-537: EOL@2023-06; default for raspbian buster;  debian EOL@~2022
 virtualenv:
-  system_site_packages: true
+  system_site_packages: false  # apparently doesn't exist for bionic
 addons:
   firefox: "45.0"
 before_install:
   - sudo add-apt-repository ppa:mc3man/bionic-media -y
   - sudo apt-get update -q
-  - sudo apt-get install ffmpeg net-tools libgirepository1.0-dev mplayer python3-setuptools python3-pip
+  - sudo apt-get install ffmpeg net-tools libgirepository1.0-dev mplayer python3-gi python3-setuptools python3-pip
 install:
   - pip3 install -U pip
   - pip install -r requirements.txt
