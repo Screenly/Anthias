@@ -9,7 +9,7 @@ addons:
 before_install:
   - sudo add-apt-repository ppa:mc3man/bionic-media -y
   - sudo apt-get update -q
-  - sudo apt-get install ffmpeg net-tools libgirepository1.0-dev mplayer python3-gi python3-setuptools python3-pip
+  - sudo apt-get install ffmpeg net-tools libgirepository1.0-dev mplayer python3-gi python3-setuptools python3-pip libczmq-dev
 install:
   - pip3 install -U pip
   - pip install -r requirements.txt
