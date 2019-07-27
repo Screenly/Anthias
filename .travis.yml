@@ -1,14 +1,15 @@
 language: python
 python:
-  - "3.5"  # default for raspbian stretch
+  # "3.5"  # PEP-478 for schedule; default for raspbian stretch; debian EOL@~2020
+  - "3.7"  # PEP-537: EOL@2023-06; default for raspbian buster;  debian EOL@~2022
 virtualenv:
-  system_site_packages: false  # It's better to have things explicitly listed in requirements anyway.
+  system_site_packages: true
 addons:
   firefox: "45.0"
 before_install:
   - sudo add-apt-repository ppa:mc3man/bionic-media -y
   - sudo apt-get update -q
-  - sudo apt-get install ffmpeg net-tools libgirepository1.0-dev mplayer python3-gi python3-setuptools python3-pip
+  - sudo apt-get install ffmpeg net-tools libgirepository1.0-dev mplayer python3-setuptools python3-pip
 install:
   - pip3 install -U pip
   - pip install -r requirements.txt
@@ -39,4 +40,7 @@ script:
   - bash static/spec/runner.sh
 
 sudo: false
-dist: bionic
+dist:
+  # trusty  # Ubuntu 14.04 LTS; EOL@2019-04-30
+  # xenial  # Ubuntu 16.04 LTS; EOL@2021-04
+  bionic    # Ubuntu 18.04 LTS; EOL@2023-04
