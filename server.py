@@ -263,7 +263,7 @@ def prepare_asset(request, unique_name=False):
         'nocache': get('nocache'),
     }
 
-    uri = get('uri').encode('utf-8')
+    uri = get('uri')
 
     if uri.startswith('/'):
         if not path.isfile(uri):
@@ -859,7 +859,7 @@ class FileAsset(Resource):
     def post(self):
         req = Request(request.environ)
         file_upload = req.files.get('file_upload')
-        filename = file_upload.filename.encode('utf-8')
+        filename = file_upload.filename
         file_type = guess_type(filename)[0]
 
         if not file_type:
