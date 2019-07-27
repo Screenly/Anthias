@@ -71,7 +71,7 @@ class ConnectionClosed:
 def truncate(data, max=100):
     return data and len(data)>max and data[:max] + '...(%d)'%(len(data),) or data
     
-class SockStream(object):
+class SockStream:
     '''A class that represents a socket as a stream'''
     def __init__(self, sock):
         self.sock, self.buffer = sock, ''
@@ -179,7 +179,7 @@ present. Type 3 chunks MUST NOT have this field. This field if transmitted is lo
 and before the chunk data. 
 
 '''
-class Header(object):
+class Header:
     # Chunk type 0 = FULL
     # Chunk type 1 = MESSAGE
     # Chunk type 2 = TIME
@@ -225,7 +225,7 @@ class Header(object):
         return Header(channel=self.channel, time=self.time, size=self.size, type=self.type, streamId=self.streamId)
 
 
-class Message(object):
+class Message:
     # message types: RPC3, DATA3,and SHAREDOBJECT3 are used with AMF3
     CHUNK_SIZE,   ABORT,   ACK,   USER_CONTROL, WIN_ACK_SIZE, SET_PEER_BW, AUDIO, VIDEO, DATA3, SHAREDOBJ3, RPC3, DATA, SHAREDOBJ, RPC, AGGREGATE = \
     0x01,         0x02,    0x03,  0x04,         0x05,         0x06,        0x08,  0x09,  0x0F,  0x10,       0x11, 0x12, 0x13,      0x14, 0x16
@@ -248,7 +248,7 @@ class Message(object):
     def dup(self):
         return Message(self.header.dup(), self.data[:])
                 
-class Protocol(object):
+class Protocol:
     PING_SIZE, DEFAULT_CHUNK_SIZE, HIGH_WRITE_CHUNK_SIZE, PROTOCOL_CHANNEL_ID = 1536, 128, 4096, 2 # constants
     READ_WIN_SIZE, WRITE_WIN_SIZE = 1000000, 1073741824
     
@@ -556,7 +556,7 @@ class Protocol(object):
             except:
                 print(traceback.print_exc())
 
-class Command(object):
+class Command:
     ''' Class for command / data messages'''
     def __init__(self, type=Message.RPC, name=None, id=None, tm=0, cmdData=None, args=[]):
         '''Create a new command with given type, name, id, cmdData and args list.'''
@@ -638,7 +638,7 @@ def getfilename(path, name, root):
     if _debug: print('filename=', result)
     return result
 
-class FLV(object):
+class FLV:
     '''An FLV file which converts between RTMP message and FLV tags.'''
     def __init__(self):
         self.fname = self.fp = self.type = None
@@ -784,7 +784,7 @@ class FLV(object):
             if _debug: print('FLV.seek() new ts=', ts, 'tell', self.fp.tell())
                 
         
-class Stream(object):
+class Stream:
     '''The stream object that is used for RTMP stream.'''
     count = 0;
     def __init__(self, client):
@@ -921,7 +921,7 @@ class Client(Protocol):
         return stream
 
 
-class Server(object):
+class Server:
     '''A RTMP server listens for incoming connections and informs the app.'''
     def __init__(self, sock):
         '''Create an RTMP server on the given bound TCP socket. The server will terminate
@@ -956,7 +956,7 @@ class Server(object):
             yield self.queue.put((None, None))
             self.queue = None
 
-class App(object):
+class App:
     '''An application instance containing any number of streams. Except for constructor all methods are generators.'''
     count = 0
     def __init__(self):
@@ -1049,7 +1049,7 @@ class Wirecast(App):
                 return False # drop until next intra video is sent
         return True
 
-class FlashServer(object):
+class FlashServer:
     '''A RTMP server to record and stream Flash video.'''
     def __init__(self):
         '''Construct a new FlashServer. It initializes the local members.'''

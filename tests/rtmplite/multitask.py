@@ -172,7 +172,7 @@ class Timeout(Exception):
 
 
 
-class _ChildTask(object):
+class _ChildTask:
 
     def __init__(self, parent, task):
         self.parent = parent
@@ -194,7 +194,7 @@ class _ChildTask(object):
 
 
 
-class YieldCondition(object):
+class YieldCondition:
 
     """
 
@@ -595,7 +595,7 @@ def sendto(sock, *args, **kwargs):
 
 
 
-class Queue(object):
+class Queue:
 
     """
 
@@ -694,7 +694,7 @@ class _QueueAction(YieldCondition):
 
 
 
-class SmartQueue(object):
+class SmartQueue:
 
     """
 
@@ -812,7 +812,7 @@ class _SmartQueueAction(YieldCondition):
 
 
 
-class TaskManager(object):
+class TaskManager:
 
     """
 

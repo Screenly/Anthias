@@ -7,7 +7,7 @@ import zmq.green as zmq
 from settings import settings
 
 
-class WebSocketTranslator(object):
+class WebSocketTranslator:
     def __init__(self, context):
         self.context = context
 

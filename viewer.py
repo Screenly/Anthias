@@ -129,7 +129,7 @@ class ZmqSubscriber(Thread):
             commands.get(command, commands.get('unknown'))(parameter)
 
 
-class Scheduler(object):
+class Scheduler:
     def __init__(self, *args, **kwargs):
         logging.debug('Scheduler init')
         self.assets = []

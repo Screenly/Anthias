@@ -8,14 +8,14 @@ import struct, datetime, time, types
 from io import StringIO
 import xml.etree.ElementTree as ET
 
-class Object(object): # a typed object or received object. Typed object has _classname attr.
+class Object: # a typed object or received object. Typed object has _classname attr.
     def __init__(self, **kwargs):
         for key, val in kwargs.items(): setattr(self, key, val)
 
 class Class:
     __slots__ = ('name', 'encoding', 'attrs')
 
-class _Undefined(object):
+class _Undefined:
     def __bool__(self): return False # always treated as False
     def __repr__(self): return 'amf.undefined'
 
@@ -71,7 +71,7 @@ class BytesIO(StringIO): # raise EOFError if needed, allow read with optional le
         self.write_u29(c)
 
 
-class AMF0(object):
+class AMF0:
     NUMBER, BOOL, STRING, OBJECT, MOVIECLIP, NULL, UNDEFINED, REFERENCE, ECMA_ARRAY, OBJECT_END, ARRAY, DATE, LONG_STRING, UNSUPPORTED, RECORDSET, XML, TYPED_OBJECT, TYPE_AMF3 = range(0x12)
 
     def __init__(self, data=None):
@@ -195,7 +195,7 @@ class AMF0(object):
             self.writeString('', False); self.data.write_u8(AMF0.OBJECT_END)
 
     
-class AMF3(object):
+class AMF3:
     UNDEFINED, NULL, BOOL_FALSE, BOOL_TRUE, INTEGER, NUMBER, STRING, XML, DATE, ARRAY, OBJECT, XMLSTRING, BYTEARRAY = range(0x0d)
     ANONYMOUS, TYPED, DYNAMIC, EXTERNALIZABLE = 0x01, 0x02, 0x04, 0x08
     
