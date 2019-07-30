@@ -212,6 +212,42 @@ class AssetContentModel(Schema):
     required = ['type', 'filename']
 
 
+class AssetPropertiesModel(Schema):
+    type = 'object'
+    properties = {
+        'name': {'type': 'string'},
+        'start_date': {
+            'type': 'string',
+            'format': 'date-time'
+        },
+        'end_date': {
+            'type': 'string',
+            'format': 'date-time'
+        },
+        'duration': {'type': 'string'},
+        'is_active': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'is_enabled': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'nocache': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'play_order': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'skip_asset_check': {
+            'type': 'integer',
+            'format': 'int64',
+        }
+    }
+
+
 ################################
 # API
 ################################
@@ -390,6 +426,26 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
     asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
 
     return asset
+
+
+def update_asset(asset, data):
+    for key, value in data.items():
+
+        if key in ['asset_id', 'is_processing', 'mimetype', 'uri'] or key not in asset:
+            continue
+
+        if key in ['start_date', 'end_date']:
+            value = date_parser.parse(value).replace(tzinfo=None)
+
+        if key in ['play_order', 'skip_asset_check', 'is_enabled', 'is_active', 'nocache']:
+            value = int(value)
+
+        if key == 'duration':
+            if "video" not in asset['mimetype']:
+                continue
+            value = int(value)
+
+        asset.update({key: value})
 
 
 # api view decorator. handles errors
@@ -762,6 +818,54 @@ class AssetV1_2(Resource):
     })
     def get(self, asset_id):
         with db.conn(settings['database']) as conn:
+            return assets_helper.read(conn, asset_id)
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'ID of an asset',
+                'required': True
+            },
+            {
+                'in': 'body',
+                'name': 'properties',
+                'description': 'Properties of an asset',
+                'schema': AssetPropertiesModel,
+                'required': True
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'Asset updated',
+                'schema': AssetModel
+            }
+        }
+    })
+    def patch(self, asset_id):
+        data = json.loads(request.data)
+        with db.conn(settings['database']) as conn:
+
+            asset = assets_helper.read(conn, asset_id)
+            if not asset:
+                raise Exception('Asset not found.')
+            update_asset(asset, data)
+
+            assets = assets_helper.read(conn)
+            ids_of_active_assets = [x['asset_id'] for x in assets if x['is_active']]
+
+            asset = assets_helper.update(conn, asset_id, asset)
+
+            try:
+                ids_of_active_assets.remove(asset['asset_id'])
+            except ValueError:
+                pass
+            if asset['is_active']:
+                ids_of_active_assets.insert(asset['play_order'], asset['asset_id'])
+
+            assets_helper.save_ordering(conn, ids_of_active_assets)
             return assets_helper.read(conn, asset_id)
 
     @swagger.doc({
