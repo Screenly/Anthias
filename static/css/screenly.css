@@ -273,6 +273,25 @@ input[name="file_upload"] {
   max-width: 800px; }
 #upgrade-modal #upgrade_logs_block textarea {
   font-size: 0.8em;
-  height: 180px; }
+  height: 180px;
+  resize: none; }
+
+.terminal {
+  background-color: #000 !important;
+  border: 1px solid #000;
+  color: #00ff00;
+  padding: 8px;
+  font-family: courier new, Helvetica, Arial, sans-serif;
+  font-weight: bold; }
+  .terminal:hover, .terminal:active, .terminal:focus {
+    background-color: #000 !important;
+    border: 1px solid #000;
+    color: #00ff00;
+    padding: 8px;
+    font-family: courier new, Helvetica, Arial, sans-serif;
+    font-weight: bold;
+    box-shadow: none !important;
+    outline: 0 !important;
+    -webkit-appearance: none; }
 
 /*# sourceMappingURL=screenly.css.map */
