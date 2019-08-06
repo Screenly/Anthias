@@ -217,3 +217,14 @@ $().ready ->
           ($ "#request-error .msg").text "Server Error: " + err
         else
           ($ "#request-error .msg").text "The operation failed. Please reload the page and try again."
+
+  toggle_chunk = () ->
+    $("[id^=auth_chunk]").hide()
+    $.each $('#auth_backend option'), (e, t) ->
+      console.log t.value
+      $('#auth_backend-'+t.value).toggle $('#auth_backend').val() == t.value
+
+  $('#auth_backend').change (e) ->
+    toggle_chunk()
+
+  toggle_chunk()

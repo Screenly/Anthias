@@ -1,6 +1,10 @@
+html {
+  position: relative;
+  min-height: 100%; }
+
 body {
   margin-top: 60px;
-  margin-bottom: 60px;
+  margin-bottom: 160px;
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
 
 @media (max-width: 1199px) {
@@ -59,35 +63,22 @@ label {
     text-shadow: #555 0px 1px 1px !important; }
 
 #footer {
-  height: 40px;
-  background: url(../img/screenly-bg.jpeg);
-  border-top: 1px #ccc solid;
-  -webkit-box-shadow: 0 -2px 9px rgba(0, 0, 0, 0.05);
-  -moz-box-shadow: 0 -2px 9px rgba(0, 0, 0, 0.05);
-  box-shadow: 0 -2px 9px rgba(0, 0, 0, 0.05);
-  opacity: 0.9;
-  z-index: 10;
-  position: fixed;
   bottom: 0;
-  width: 100%;
-  text-shadow: #fff 0px 1px 1px; }
-  #footer .container {
-    position: relative; }
-    #footer .container #screenly-logo {
-      position: absolute;
-      right: 0; }
-      #footer .container #screenly-logo a {
-        color: #535d79;
-        font-weight: bold;
-        text-decoration: none; }
-      #footer .container #screenly-logo #github-stars {
-        margin-top: 5px; }
-    #footer .container .copy {
-      position: absolute;
-      left: 0;
-      top: 10px;
-      color: #535d79;
-      font-size: 12px; }
+  height: 140px;
+  position: absolute;
+  width: 100%; }
+  #footer .logo img {
+    max-height: 75px; }
+  #footer .links a {
+    color: rgba(54, 54, 54, 0.45);
+    font-weight: bold;
+    text-transform: uppercase; }
+    #footer .links a:hover {
+      text-decoration: none; }
+  #footer .copy {
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    color: rgba(54, 54, 54, 0.45);
+    font-size: 0.7em; }
 
 h1.page-header {
   padding-bottom: 9px;

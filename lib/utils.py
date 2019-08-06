@@ -18,8 +18,11 @@ from settings import settings, ZmqPublisher
 from subprocess import check_output, call
 from threading import Thread
 from urlparse import urlparse
+import logging
 
 from assets_helper import update
+
+WOTT_PATH = '/opt/wott'
 
 arch = machine()
 
@@ -329,3 +332,25 @@ def is_balena_app():
     :return: bool
     """
     return bool(getenv('RESIN', False)) or bool(getenv('BALENA', False))
+
+
+def is_wott_integrated():
+    """
+    Chacks if wott-agent installed or not
+    :return:
+    """
+    return os.path.isdir(WOTT_PATH)
+
+
+def get_wott_device_id():
+    """
+    :return: WoTT Device id of this device
+    """
+    metadata_path = os.path.join(WOTT_PATH, 'metadata.json')
+    if os.path.isfile(metadata_path):
+        with open(metadata_path) as metadata_file:
+            metadata = json.load(metadata_file)
+        if 'device_id' in metadata:
+            return metadata['device_id']
+    logging.warning("Could not read WoTT Device ID")
+    return 'Could not read WoTT Device ID'
