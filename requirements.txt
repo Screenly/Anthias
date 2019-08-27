@@ -1,6 +1,6 @@
 Mako==0.7.3
 MarkupSafe==1.0
-ansible==2.7.10
+ansible==2.8.1
 celery==4.2.1
 certifi==2018.4.16
 cffi==1.7.0

@@ -5,6 +5,8 @@
 
 [Which Screenly version is right for me?](https://www.screenly.io/screenly-ose-vs-pro/)
 
+**PLEASE NOTE:** Screenly OSE and the commercial version of Screenly (formerly known as Screenly Pro) are **two completely separate products**. They **do not share any code base and behave very differently** both with regards to management and performance. Hence do not use one to evaluate the other.
+
 ## Disk images
 
 The recommended installation method is to grab the latest disk image from [here](https://github.com/Screenly/screenly-ose/releases).
@@ -24,6 +26,12 @@ $ bash <(curl -sL https://www.screenly.io/install-ose.sh)
  * The internet connection
 
 During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast internet connection), the installation normally takes 15-30 minutes. On a Raspberry Pi Zero or Raspberry Pi Model B with a class 4 SD card, the installation will take hours. As such, it is usually a lot faster to use the provided disk images.
+
+## Upgrading on Screenly OSE
+
+The releases are based on the [Sprints](https://github.com/Screenly/screenly-ose/projects). At the end of each sprint, we merge the master branch (also known as the developer version), into the production branch and generate a new disk image.
+
+Should you want to upgrade to the latest development version (for instance if you want to try a bug-fix), you can do this by simply re-running the installation script and select that you want to install the development version. Re-running the installation script should normally not take more than a few minutes (depending on how much changed).
 
 To learn more about Screenly, please visit the official website at [Screenly.io](http://www.screenly.io).
 
