@@ -598,6 +598,7 @@ def prepare_usb_asset(filepath, **kwargs):
         'uri': filepath,
     }
 
+
 def update_asset(asset, data):
     for key, value in data.items():
 
