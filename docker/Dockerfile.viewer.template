@@ -1,5 +1,4 @@
 FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:jessie
-MAINTAINER Pavel Safronov
 
 RUN apt-get update && \
     apt-get -y install \

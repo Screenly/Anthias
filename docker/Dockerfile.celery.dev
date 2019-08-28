@@ -1,5 +1,4 @@
 FROM debian:stretch
-MAINTAINER Viktor Petersson <vpetersson@screenly.io>
 
 RUN apt-get update && \
     apt-get -y install \
