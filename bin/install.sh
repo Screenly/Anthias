@@ -180,9 +180,16 @@ sudo chown -R pi:pi /home/pi
 if [ "$BRANCH" = "master" ]; then
   sudo rm -f /etc/sudoers.d/010_pi-nopasswd
 else
-  #Temporarily necessary cause web upgrade only for master branch
+  # Temporarily necessary because web upgrade only for the master branch
   echo "pi ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/010_pi-nopasswd > /dev/null
   sudo chmod 0440 /etc/sudoers.d/010_pi-nopasswd
+fi
+
+# Setup a new pi password
+if [ "$BRANCH" = "master" ] && [ "$WEB_UPGRADE" = false ]; then
+  set +e
+  passwd
+  set -e
 fi
 
 echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
