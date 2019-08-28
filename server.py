@@ -52,8 +52,8 @@ from settings import CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, Zm
 from auth import authorized
 
 HOME = getenv('HOME', '/home/pi')
-CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
-CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'rpc://')
+CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'amqp://')
 
 app = Flask(__name__)
 CORS(app)

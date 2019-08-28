@@ -15,7 +15,6 @@ RUN apt-get update && \
         python-imaging \
         python-netifaces \
         python-simplejson \
-        redis-server \
         sqlite3 && \
     apt-get clean
 

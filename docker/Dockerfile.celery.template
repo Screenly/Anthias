@@ -15,7 +15,6 @@ RUN apt-get update && \
         python-imaging \
         python-netifaces \
         python-simplejson \
-        redis-server \
         libraspberrypi0 \
         ifupdown \
         sqlite3 && \
