@@ -80,7 +80,6 @@ run_websocket () {
 }
 
 run_celery () {
-    redis-server --daemonize yes
     cd /data/screenly
     celery worker -A server.celery -B -n worker@screenly --loglevel=info --schedule /tmp/celerybeat-schedule
 }
