@@ -221,7 +221,6 @@ $().ready ->
   toggle_chunk = () ->
     $("[id^=auth_chunk]").hide()
     $.each $('#auth_backend option'), (e, t) ->
-      console.log t.value
       $('#auth_backend-'+t.value).toggle $('#auth_backend').val() == t.value
 
   $('#auth_backend').change (e) ->

@@ -256,7 +256,6 @@
     toggle_chunk = function() {
       $("[id^=auth_chunk]").hide();
       return $.each($('#auth_backend option'), function(e, t) {
-        console.log(t.value);
         return $('#auth_backend-' + t.value).toggle($('#auth_backend').val() === t.value);
       });
     };
