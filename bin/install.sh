@@ -163,7 +163,7 @@ sudo pip install ansible==2.8.1
 #sudo -u pi ansible localhost -m git -a "repo=${1:-https://github.com/screenly/screenly-ose.git} dest=/home/pi/screenly version=$BRANCH"
 cd /home/pi/screenly/ansible
 
-sudo ansible-playbook site.yml $EXTRA_ARGS
+sudo -E ansible-playbook site.yml $EXTRA_ARGS
 
 sudo apt-get autoclean
 sudo apt-get clean
