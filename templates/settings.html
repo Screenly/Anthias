@@ -313,6 +313,23 @@
 
         </div>
 
+        {# Backup #}
+        <div class="row">
+            <div id="backup-section" class="col-12">
+                <h1 class="page-header">
+                    Backup
+                </h1>
+                <div class="form-actions">
+                    <input name="backup_upload" style="display:none" type="file">
+                    <button id="btn-upload" class="btn btn-primary" type="button">Upload and Recover</button>
+                    <button id="btn-backup" class="btn btn-outline-secondary">Get backup</button>
+                    <div class="progress-bar progress-bar-striped progress active" style="display:none">
+                        <div class="bar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {# Upgrade #}
         <div class="row">
             <div id="upgrade-section" class="col-12">
@@ -407,19 +424,6 @@
             </div>
         </div>
 
-        {# System controls #}
-        <div class="row">
-            <div id="system-controls-section" class="col-12">
-                <h1 class="page-header">
-                    System Controls
-                </h1>
-                <div class="form-actions">
-                    <button id="btn-reboot-system" class="btn btn-danger" type="button">Reboot Screenly</button>
-                    <button id="btn-shutdown-system" class="btn btn-danger" type="button">Shutdown Screenly</button>
-                </div>
-            </div>
-        </div>
-
         {# Reset Wifi #}
         {% if not context.is_balena %}
             <div class="row">
@@ -441,19 +445,15 @@
             </div>
         {% endif %}
 
-        {# Backup #}
+        {# System controls #}
         <div class="row">
-            <div id="backup-section" class="col-12">
+            <div id="system-controls-section" class="col-12">
                 <h1 class="page-header">
-                    Backup
+                    System Controls
                 </h1>
                 <div class="form-actions">
-                    <input name="backup_upload" style="display:none" type="file">
-                    <button id="btn-upload" class="btn btn-primary" type="button">Upload and Recover</button>
-                    <button id="btn-backup" class="btn btn-outline-secondary">Get backup</button>
-                    <div class="progress-bar progress-bar-striped progress active" style="display:none">
-                        <div class="bar"></div>
-                    </div>
+                    <button id="btn-reboot-system" class="btn btn-danger" type="button">Reboot Screenly</button>
+                    <button id="btn-shutdown-system" class="btn btn-danger" type="button">Shutdown Screenly</button>
                 </div>
             </div>
         </div>
