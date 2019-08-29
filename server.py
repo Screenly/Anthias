@@ -88,15 +88,13 @@ def upgrade_screenly(self, branch, manage_network, upgrade_system):
                               '-b', branch,
                               '-n', manage_network,
                               '-s', upgrade_system,
-                              _bg=True)
+                              _bg=True,
+                              _err_to_out=True)
     while True:
         if not upgrade_process.process.alive:
             break
         self.update_state(state="PROGRESS", meta={'status': upgrade_process.process.stdout})
         time.sleep(1)
-
-    if upgrade_process.process.stderr:
-        return {'status': '%s\nError: %s' % (upgrade_process.process.stdout, upgrade_process.process.stderr)}
 
     return {'status': upgrade_process.process.stdout}
 
@@ -1315,7 +1313,7 @@ class UpgradeScreenly(Resource):
         }
     })
     def post(self):
-        for task in celery.control.inspect().active().get('worker@screenly'):
+        for task in celery.control.inspect(timeout=2.0).active().get('worker@screenly'):
             if task.get('type') == 'server.upgrade_screenly':
                 return jsonify({'id': task.get('id')})
         branch = request.form.get('branch')
