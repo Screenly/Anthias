@@ -63,7 +63,7 @@ services:
       - resin-data:/data
 
   rabbitmq:
-    image: rabbitmq
+    image: arm32v7/rabbitmq
     command: rabbitmq-server
     network_mode: "host"
 
