@@ -278,14 +278,14 @@ input[name="file_upload"] {
 
 .terminal {
   background-color: #000 !important;
-  border: 1px solid #000;
+  border: none;
   color: #00ff00;
   padding: 8px;
   font-family: courier new, Helvetica, Arial, sans-serif;
   font-weight: bold; }
   .terminal:hover, .terminal:active, .terminal:focus {
     background-color: #000 !important;
-    border: 1px solid #000;
+    border: none;
     color: #00ff00;
     padding: 8px;
     font-family: courier new, Helvetica, Arial, sans-serif;

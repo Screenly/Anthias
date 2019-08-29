@@ -175,9 +175,13 @@
         var getStatus;
         getStatus = function(id) {
           return $.get("/upgrade_status/" + id).done(function(data, e, jqXHR) {
+            var scroll_to_bottom;
             if (data.status) {
+              scroll_to_bottom = ($("#upgrade_logs")).scrollTop() + ($("#upgrade_logs")).outerHeight() === ($("#upgrade_logs")).prop("scrollHeight");
               ($("#upgrade_logs")).text(data.status);
-              ($("#upgrade_logs")).scrollTop(($("#upgrade_logs")).prop("scrollHeight"));
+              if (scroll_to_bottom) {
+                ($("#upgrade_logs")).scrollTop(($("#upgrade_logs")).prop("scrollHeight"));
+              }
             }
             if (jqXHR.status === 202) {
               return setTimeout(function() {
