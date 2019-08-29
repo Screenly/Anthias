@@ -131,8 +131,10 @@ fi
 
 if [ "$WEB_UPGRADE" = false ]; then
   set -x
+  REPOSITORY=${1:-https://github.com/screenly/screenly-ose.git}
 else
   set -e
+  REPOSITORY=https://github.com/screenly/screenly-ose.git
 fi
 
 sudo mkdir -p /etc/ansible
@@ -160,7 +162,7 @@ fi
 sudo pip install ansible==2.8.1
 
 # Uncomment before merge with master branch
-#sudo -u pi ansible localhost -m git -a "repo=${1:-https://github.com/screenly/screenly-ose.git} dest=/home/pi/screenly version=$BRANCH"
+#sudo -u pi ansible localhost -m git -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH"
 cd /home/pi/screenly/ansible
 
 sudo -E ansible-playbook site.yml $EXTRA_ARGS
