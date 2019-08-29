@@ -17,8 +17,8 @@ before_install:
   - sudo apt-get install ffmpeg
 install:
   - pip install -U pip
-  - pip install -r requirements.txt
-  - pip install -r requirements.dev.txt
+  - pip install -r requirements/requirements.txt
+  - pip install -r requirements/requirements.dev.txt
 before_script:
   - mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets /tmp/USB/cleanup_folder
   - cp ansible/roles/screenly/files/uzbl-config ~/.config/uzbl/config-screenly

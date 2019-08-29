@@ -39,6 +39,7 @@ from lib import db
 from lib import diagnostics
 from lib import queries
 
+from lib.auth import authorized
 from lib.utils import generate_perfect_paper_password
 from lib.utils import get_active_connections, remove_connection
 from lib.utils import get_node_ip, get_node_mac_address
@@ -49,7 +50,6 @@ from lib.utils import validate_url
 from lib.utils import is_balena_app, is_demo_node, is_wott_integrated, get_wott_device_id
 
 from settings import CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
-from auth import authorized
 
 HOME = getenv('HOME', '/home/pi')
 CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'rpc://')

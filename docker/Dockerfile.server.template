@@ -22,7 +22,7 @@ RUN apt-get update && \
     apt-get clean
 
 # Install Python requirements
-ADD requirements.txt /tmp/requirements.txt
+ADD requirements/requirements.txt /tmp/requirements.txt
 RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
     pip install --upgrade -r /tmp/requirements.txt
 
