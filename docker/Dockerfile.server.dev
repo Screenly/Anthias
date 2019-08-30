@@ -9,6 +9,7 @@ RUN apt-get update && \
         libssl-dev \
         lsb-release \
         net-tools \
+        omxplayer \
         procps \
         python-dev \
         python-gobject \

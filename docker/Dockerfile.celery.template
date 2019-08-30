@@ -8,6 +8,7 @@ RUN apt-get update && \
         libffi-dev \
         libssl-dev \
         net-tools \
+        omxplayer \
         psmisc \
         python-dev \
         python-gobject \
