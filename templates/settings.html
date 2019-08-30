@@ -214,105 +214,6 @@
             </div>
         </div>
 
-        {# USB assets #}
-        <div class="row">
-            <div id="usb-assets-key-section" class="col-12">
-                <h1 class="page-header">
-                    USB assets
-                </h1>
-                <p>Put file with the generated key in USB to use the USB assets.</p>
-                <div class="form-actions">
-                    <button id="btn-view-usb-assets-file" class="btn btn-primary" type="button">Generate file</button>
-                </div>
-            </div>
-            <div id="view-usb-assets-file-modal" class="modal hide fade" role="dialog" tabindex="-1">
-                <div class="modal-dialog" role="document">
-                    <div class="modal-content">
-                        <div class="form-horizontal">
-                            <div class="modal-header">
-                                <h3 id="modalLabel">Usb assets file</h3>
-                            </div>
-                            <div class="modal-body">
-                                <div class="form-group row">
-                                    <label class="col-4 col-form-label">Activate assets</label>
-                                    <div class="col-6">
-                                        <label class="checkbox toggle card card-body bg-light">
-                                            <input name="activate_assets" type="checkbox"/>
-                                            <p>
-                                                <span class="on">On</span>
-                                                <span class="off">Off</span>
-                                            </p>
-                                            <a class="btn btn-primary slide-button"></a>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="form-group row">
-                                    <label class="col-4 col-form-label">Copy assets to internal memory</label>
-                                    <div class="col-6">
-                                        <label class="checkbox toggle card card-body bg-light">
-                                            <input name="copy_assets" type="checkbox"/>
-                                            <p>
-                                                <span class="on">On</span>
-                                                <span class="off">Off</span>
-                                            </p>
-                                            <a class="btn btn-primary slide-button"></a>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="form-group row start_date">
-                                    <label class="col-4 col-form-label">Start Date</label>
-                                    <div class="controls col-6">
-                                        <input class="form-control date" name="start_date_date" type="text"
-                                               style="margin-right:5px"/>
-                                    </div>
-                                    <input name="start_date" type="hidden"/>
-                                </div>
-                                <div class="form-group row end_date">
-                                    <label class="col-4 col-form-label">End Date</label>
-                                    <div class="controls col-6">
-                                        <input class="form-control date" name="end_date_date" type="text"
-                                               style="margin-right:5px"/>
-                                    </div>
-                                    <input name="end_date" type="hidden"/>
-                                </div>
-
-                                <div class="form-group row duration">
-                                    <label class="col-4 col-form-label">Duration</label>
-                                    <div class="col-6 controls">
-                                        <input class="form-control" name="duration" type="number" value="10"/>
-                                        seconds
-                                        &nbsp;
-                                    </div>
-                                </div>
-                                <hr>
-                                <div class="form-group row">
-                                    <div class="col-12 text-center mb-4">
-                                        <button id="generate-usb-assets-key-btn"
-                                                class="btn btn-primary text-right"
-                                                type="button">
-                                            Generate new key
-                                        </button>
-                                    </div>
-                                    <div id="usb-assets-key-badge" class="col-12 badge badge-light w-100"
-                                         style="font-size:20px;">{{ context.usb_assets_key }}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="modal-footer text-right">
-                                <button id="btn-download-usb-assets-key" class="btn btn-primary" type="button">
-                                    Download file with key
-                                </button>
-                                <button id="close-view-usb-assets-file-btn" class="btn btn-secondary" type="button">
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-
         {# Backup #}
         <div class="row">
             <div id="backup-section" class="col-12">
@@ -330,57 +231,32 @@
             </div>
         </div>
 
-        {# Upgrade #}
-        <div class="row">
-            <div id="upgrade-section" class="col-12">
-                <h1 class="page-header">
-                    Upgrade Screenly
-                </h1>
-                <div class="form-actions">
-                    <button id="btn-upgrade" class="btn btn-primary" type="button">Screenly Upgrade</button>
+        {% if not context.is_balena %}
+            {# USB assets #}
+            <div class="row">
+                <div id="usb-assets-key-section" class="col-12">
+                    <h1 class="page-header">
+                        USB assets
+                    </h1>
+                    <p>Put file with the generated key in USB to use the USB assets.</p>
+                    <div class="form-actions">
+                        <button id="btn-view-usb-assets-file" class="btn btn-primary" type="button">Generate file
+                        </button>
+                    </div>
                 </div>
-            </div>
-            <div id="upgrade-modal" class="modal hide fade" aria-hidden="true"
-                 data-backdrop="static" data-keyboard="false" role="dialog" tabindex="-1">
-                <div class="modal-dialog" role="document">
-                    <div class="modal-content">
-                        <div class="form-horizontal">
-                            <div class="modal-header">
-                                <h3 id="modalLabel">Upgrade Screenly</h3>
-                            </div>
-                            <div class="modal-body">
-                                <form id="upgrade-form">
-                                    <div id="branch-group-radio" class="form-group">
-                                        <label>Choose the branch you want to use</label>
-                                        <div class="custom-control custom-radio">
-                                            <input type="radio" class="custom-control-input" id="latest_branch"
-                                                   name="groupOfBranch" value="latest" checked>
-                                            <label class="custom-control-label" for="latest_branch">Latest</label>
-                                        </div>
-
-                                        {#                                    <div class="custom-control custom-radio">#}
-                                        {#                                        <input type="radio" class="custom-control-input" id="production_branch"#}
-                                        {#                                               name="groupOfBranch" value="production">#}
-                                        {#                                        <label class="custom-control-label"#}
-                                        {#                                               for="production_branch">Production</label>#}
-                                        {#                                    </div>#}
-
-
-                                        {#                                    <div class="custom-control custom-radio">#}
-                                        {#                                        <input type="radio" class="custom-control-input" id="experimental_branch"#}
-                                        {#                                               name="groupOfBranch" value="experimental">#}
-                                        {#                                        <label class="custom-control-label"#}
-                                        {#                                               for="experimental_branch">Experimental</label>#}
-                                        {#                                    </div>#}
-                                    </div>
+                <div id="view-usb-assets-file-modal" class="modal hide fade" role="dialog" tabindex="-1">
+                    <div class="modal-dialog" role="document">
+                        <div class="modal-content">
+                            <div class="form-horizontal">
+                                <div class="modal-header">
+                                    <h3 id="modalLabel">Usb assets file</h3>
+                                </div>
+                                <div class="modal-body">
                                     <div class="form-group row">
-                                        <label class="col-12 col-form-label text-left">Do you want Screenly to manage
-                                            your
-                                            network? This is recommended for most users.</label>
-                                        <div class="col-3">
-                                            <label id="manage_network_checkbox"
-                                                   class="checkbox toggle card card-body bg-light">
-                                                <input name="manage_network" checked="checked" type="checkbox"/>
+                                        <label class="col-4 col-form-label">Activate assets</label>
+                                        <div class="col-6">
+                                            <label class="checkbox toggle card card-body bg-light">
+                                                <input name="activate_assets" type="checkbox"/>
                                                 <p>
                                                     <span class="on">On</span>
                                                     <span class="off">Off</span>
@@ -390,12 +266,10 @@
                                         </div>
                                     </div>
                                     <div class="form-group row">
-                                        <label class="col-12 col-form-label text-left">Would you like to perform a full
-                                            system upgrade as well?</label>
-                                        <div class="col-3">
-                                            <label id="system_upgrade_checkbox"
-                                                   class="checkbox toggle card card-body bg-light">
-                                                <input name="system_upgrade" type="checkbox"/>
+                                        <label class="col-4 col-form-label">Copy assets to internal memory</label>
+                                        <div class="col-6">
+                                            <label class="checkbox toggle card card-body bg-light">
+                                                <input name="copy_assets" type="checkbox"/>
                                                 <p>
                                                     <span class="on">On</span>
                                                     <span class="off">Off</span>
@@ -404,31 +278,60 @@
                                             </label>
                                         </div>
                                     </div>
-                                    <div class="form-group" id="upgrade_logs_block">
-                                        <label for="upgrade_logs">Logs:</label>
-                                        <textarea readonly class="form-control terminal" rows="5" id="upgrade_logs"></textarea>
+                                    <div class="form-group row start_date">
+                                        <label class="col-4 col-form-label">Start Date</label>
+                                        <div class="controls col-6">
+                                            <input class="form-control date" name="start_date_date" type="text"
+                                                   style="margin-right:5px"/>
+                                        </div>
+                                        <input name="start_date" type="hidden"/>
                                     </div>
-                                    <div class="form-group">
-                                        <label class="text-left"><small>Notice: If you leave the page before the upgrade is complete, don't worry. The next time click "Start upgrade" you will see logs of the last upgrade if it's not finished yet.</small></label>
+                                    <div class="form-group row end_date">
+                                        <label class="col-4 col-form-label">End Date</label>
+                                        <div class="controls col-6">
+                                            <input class="form-control date" name="end_date_date" type="text"
+                                                   style="margin-right:5px"/>
+                                        </div>
+                                        <input name="end_date" type="hidden"/>
                                     </div>
-                                </form>
-                            </div>
-                            <div class="modal-footer">
-                                <button id="start-upgrade-btn" class="btn btn-primary" type="button">
-                                    Start upgrade
-                                </button>
-                                <button id="close-upgrade-btn" class="btn btn-secondary" type="button">
-                                    Close
-                                </button>
+
+                                    <div class="form-group row duration">
+                                        <label class="col-4 col-form-label">Duration</label>
+                                        <div class="col-6 controls">
+                                            <input class="form-control" name="duration" type="number" value="10"/>
+                                            seconds
+                                            &nbsp;
+                                        </div>
+                                    </div>
+                                    <hr>
+                                    <div class="form-group row">
+                                        <div class="col-12 text-center mb-4">
+                                            <button id="generate-usb-assets-key-btn"
+                                                    class="btn btn-primary text-right"
+                                                    type="button">
+                                                Generate new key
+                                            </button>
+                                        </div>
+                                        <div id="usb-assets-key-badge" class="col-12 badge badge-light w-100"
+                                             style="font-size:20px;">{{ context.usb_assets_key }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer text-right">
+                                    <button id="btn-download-usb-assets-key" class="btn btn-primary" type="button">
+                                        Download file with key
+                                    </button>
+                                    <button id="close-view-usb-assets-file-btn" class="btn btn-secondary" type="button">
+                                        Close
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        {# Reset Wifi #}
-        {% if not context.is_balena %}
+            {# Reset Wifi #}
             <div class="row">
                 <div id="wifi-section" class="col-12">
                     <h1 class="page-header">
@@ -446,19 +349,107 @@
                     </div>
                 </div>
             </div>
-        {% endif %}
 
-        {# System controls #}
-        <div class="row">
-            <div id="system-controls-section" class="col-12">
-                <h1 class="page-header">
-                    System Controls
-                </h1>
-                <div class="form-actions">
-                    <button id="btn-reboot-system" class="btn btn-danger" type="button">Reboot Screenly</button>
-                    <button id="btn-shutdown-system" class="btn btn-danger" type="button">Shutdown Screenly</button>
+            {# Upgrade #}
+            <div class="row">
+                <div id="upgrade-section" class="col-12">
+                    <h1 class="page-header">
+                        Upgrade Screenly
+                    </h1>
+                    <div class="form-actions">
+                        <button id="btn-upgrade" class="btn btn-primary" type="button">Screenly Upgrade</button>
+                    </div>
+                </div>
+                <div id="upgrade-modal" class="modal hide fade" aria-hidden="true"
+                     data-backdrop="static" data-keyboard="false" role="dialog" tabindex="-1">
+                    <div class="modal-dialog" role="document">
+                        <div class="modal-content">
+                            <div class="form-horizontal">
+                                <div class="modal-header">
+                                    <h3 id="modalLabel">Upgrade Screenly</h3>
+                                </div>
+                                <div class="modal-body">
+                                    <form id="upgrade-form">
+                                        <div id="branch-group-radio" class="form-group">
+                                            <label>Choose the branch you want to use</label>
+                                            <div class="custom-control custom-radio">
+                                                <input type="radio" class="custom-control-input" id="latest_branch"
+                                                       name="groupOfBranch" value="latest" checked>
+                                                <label class="custom-control-label" for="latest_branch">Latest</label>
+                                            </div>
+                                        </div>
+                                        <div class="form-group row">
+                                            <label class="col-12 col-form-label text-left">Do you want Screenly to
+                                                manage
+                                                your
+                                                network? This is recommended for most users.</label>
+                                            <div class="col-3">
+                                                <label id="manage_network_checkbox"
+                                                       class="checkbox toggle card card-body bg-light">
+                                                    <input name="manage_network" checked="checked" type="checkbox"/>
+                                                    <p>
+                                                        <span class="on">On</span>
+                                                        <span class="off">Off</span>
+                                                    </p>
+                                                    <a class="btn btn-primary slide-button"></a>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="form-group row">
+                                            <label class="col-12 col-form-label text-left">Would you like to perform a
+                                                full
+                                                system upgrade as well?</label>
+                                            <div class="col-3">
+                                                <label id="system_upgrade_checkbox"
+                                                       class="checkbox toggle card card-body bg-light">
+                                                    <input name="system_upgrade" type="checkbox"/>
+                                                    <p>
+                                                        <span class="on">On</span>
+                                                        <span class="off">Off</span>
+                                                    </p>
+                                                    <a class="btn btn-primary slide-button"></a>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="form-group" id="upgrade_logs_block">
+                                            <label for="upgrade_logs">Logs:</label>
+                                            <textarea readonly class="form-control terminal" rows="5"
+                                                      id="upgrade_logs"></textarea>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="text-left"><small>Notice: If you leave the page before the
+                                                upgrade is complete, don't worry. The next time click "Start upgrade"
+                                                you will see logs of the last upgrade if it's not finished yet.</small></label>
+                                        </div>
+                                    </form>
+                                </div>
+                                <div class="modal-footer">
+                                    <button id="start-upgrade-btn" class="btn btn-primary" type="button">
+                                        Start upgrade
+                                    </button>
+                                    <button id="close-upgrade-btn" class="btn btn-secondary" type="button">
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
+
+            {# System controls #}
+            <div class="row">
+                <div id="system-controls-section" class="col-12">
+                    <h1 class="page-header">
+                        System Controls
+                    </h1>
+                    <div class="form-actions">
+                        <button id="btn-reboot-system" class="btn btn-danger" type="button">Reboot Screenly</button>
+                        <button id="btn-shutdown-system" class="btn btn-danger" type="button">Shutdown Screenly</button>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
     </div>
 {% endblock %}
