@@ -4,18 +4,20 @@ RUN apt-get update && \
     apt-get -y install \
         build-essential \
         curl \
+        ffmpeg \
         git-core \
         libffi-dev \
         libssl-dev \
+        mplayer \
         net-tools \
-        omxplayer \
         procps \
         python-dev \
         python-gobject \
         python-imaging \
         python-netifaces \
         python-simplejson \
-        sqlite3 && \
+        sqlite3 \
+    && \
     apt-get clean
 
 # Install Python requirements

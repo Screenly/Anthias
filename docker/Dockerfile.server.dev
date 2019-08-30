@@ -4,12 +4,13 @@ RUN apt-get update && \
     apt-get -y install \
         build-essential \
         curl \
+        ffmpeg \
         git-core \
         libffi-dev \
         libssl-dev \
         lsb-release \
+        mplayer \
         net-tools \
-        omxplayer \
         procps \
         python-dev \
         python-gobject \
