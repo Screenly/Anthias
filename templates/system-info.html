@@ -1,25 +1,29 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <div class="container">
+    <div class="container pt-3 pb-3">
         <div class="row">
             <div class="col-12">
-
-                <h1 class="page-header">
-                    System Info
-                </h1>
-
-                <table class="table table-bordered" style="width: 100%">
+                <h5 class="page-header">
+                    <b>System Info</b>
+                </h5>
+            </div>
+        </div>
+    </div>
+    <div class="container content">
+        <div class="row">
+            <div class="col-12">
+                <table class="table table-bordered mb-5" style="width: 100%">
                     <thead>
                     <tr>
-                        <th>Load Average</th>
-                        <th>Free Space</th>
-                        <th>Uptime</th>
-                        <th>Monitor Info</th>
-                        <th>Display Power</th>
-                        <th>Raspberry Model</th>
-                        <th>Screenly Version</th>
-                        <th>MAC Address</th>
+                        <th class="text-secondary font-weight-normal">Load Average</th>
+                        <th class="text-secondary font-weight-normal">Free Space</th>
+                        <th class="text-secondary font-weight-normal">Uptime</th>
+                        <th class="text-secondary font-weight-normal">Monitor Info</th>
+                        <th class="text-secondary font-weight-normal">Display Power</th>
+                        <th class="text-secondary font-weight-normal">Raspberry Model</th>
+                        <th class="text-secondary font-weight-normal">Screenly Version</th>
+                        <th class="text-secondary font-weight-normal">MAC Address</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -37,7 +41,8 @@
                 </table>
 
                 <section>
-                    <div class="header bg-primary">Latest Viewer Logs</div>
+                    <h4><b>Latest Viewer Logs</b></h4>
+                    <hr>
                 </section>
 
                 {% if context.viewlog %}
