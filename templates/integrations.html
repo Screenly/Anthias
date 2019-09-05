@@ -1,27 +1,28 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <div class="container">
+    <div class="container pt-3 pb-3">
         <div class="row">
             <div class="col-12">
-                <h1 class="page-header">
-                    Integrations
-                </h1>
+                <h5 class="page-header">
+                    <b>Integrations</b>
+                </h5>
             </div>
         </div>
-
-        {% if context.is_balena %}
-            <div class="row">
+    </div>
+    <div class="container">
+        <div class="row content">
+            {% if context.is_balena %}
                 <div id="balena-section" class="col-12">
-                    <h1 class="page-header">
-                        Balena
-                    </h1>
-                    <table class="table table-striped">
-                        <thead>
+                    <h4 class="page-header">
+                        <b>Balena</b>
+                    </h4>
+                    <table class="table">
+                        <thead class="table-borderless">
                         <tr>
-                            <th scope="col">Option</th>
-                            <th scope="col">Value</th>
-                            <th scope="col">Description</th>
+                            <th class="text-secondary font-weight-normal" scope="col">Option</th>
+                            <th class="text-secondary font-weight-normal" scope="col">Value</th>
+                            <th class="text-secondary font-weight-normal" scope="col">Description</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -60,21 +61,19 @@
                         </tbody>
                     </table>
                 </div>
-            </div>
-        {% endif %}
+            {% endif %}
 
-        {% if context.is_wott_installed %}
-            <div class="row">
+            {% if context.is_wott_installed %}
                 <div id="wott-section" class="col-12">
-                    <h1 class="page-header">
-                        WoTT
-                    </h1>
-                    <table class="table table-striped">
-                        <thead>
+                    <h4 class="page-header">
+                        <b>WoTT</b>
+                    </h4>
+                    <table class="table">
+                        <thead class="table-borderless">
                         <tr>
-                            <th scope="col">Option</th>
-                            <th scope="col">Value</th>
-                            <th scope="col">Description</th>
+                            <th class="text-secondary font-weight-normal" scope="col">Option</th>
+                            <th class="text-secondary font-weight-normal" scope="col">Value</th>
+                            <th class="text-secondary font-weight-normal" scope="col">Description</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -86,7 +85,7 @@
                         </tbody>
                     </table>
                 </div>
-            </div>
-        {% endif %}
+            {% endif %}
+        </div>
     </div>
 {% endblock %}

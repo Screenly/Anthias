@@ -601,6 +601,12 @@ API.View.AssetsView = class AssetsView extends Backbone.View
       which = if model.active() then 'active' else 'inactive'
       (@$ "##{which}-assets").append (new AssetRowView model: model).render()
 
+    for which in ['active', 'inactive']
+      if (@$ "##{which}-assets tr").length == 0
+        (@$ "##{which}-assets-section .table-assets-help-text").show()
+      else
+        (@$ "##{which}-assets-section .table-assets-help-text").hide()
+
     for which in ['inactive', 'active']
       @$(".#{which}-table thead").toggle !!(@$("##{which}-assets tr").length)
 
@@ -644,7 +650,7 @@ API.App = class App extends Backbone.View
         no
 
   events:
-    'click #add-asset-button': 'add',
+    'click .add-asset-button': 'add',
     'click #previous-asset-button': 'previous',
     'click #next-asset-button': 'next'
 
