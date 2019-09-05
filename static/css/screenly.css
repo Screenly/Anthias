@@ -7598,15 +7598,16 @@ html {
 body {
   background-color: #f0f0f0;
   margin-top: 95px;
-  margin-bottom: 120px;
+  margin-bottom: 104px;
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
 
-.content.container {
+.content {
   background-color: white;
   border-radius: 4px;
   box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.12);
-  padding: 15px;
-  min-height: 60vh; }
+  padding: 15px 0;
+  min-height: 60vh;
+  margin: 0; }
 
 @media (max-width: 1199px) {
   .container {
@@ -7653,13 +7654,15 @@ label {
   padding: 5px 0px; }
   .navbar.navbar-header {
     height: 85px; }
-  .navbar .container ul.nav li > a {
+  .navbar .container ul.nav li a {
     padding: 10px 15px 10px;
     color: #fff;
     opacity: 0.5; }
-    .navbar .container ul.nav li > a.active, .navbar .container ul.nav li > a:hover {
+    .navbar .container ul.nav li a.active, .navbar .container ul.nav li a:hover {
       opacity: 1;
       text-decoration: none; }
+  .navbar .container ul.nav li:last-child a {
+    padding-right: 0; }
   .navbar .container a.brand {
     text-shadow: 0 1px 0 #000;
     padding: 4px 0px; }
@@ -7672,7 +7675,7 @@ label {
 
 #footer {
   bottom: 0;
-  height: 100px;
+  height: 84px;
   position: absolute;
   width: 100%; }
   #footer .logo img {
@@ -7855,6 +7858,8 @@ input[name="file_upload"] {
   overflow: hidden;
   max-width: 290px;
   min-width: 290px; }
+  .asset_row_name img {
+    cursor: move; }
 
 .asset_row_btns {
   padding: 6px 8px 10px 8px !important;

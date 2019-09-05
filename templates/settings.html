@@ -20,9 +20,9 @@
             </div>
         </div>
     </div>
-    <div class="container content">
-        <div class="row mb-5">
-            <div class="col-12">
+    <div class="container">
+        <div class="row content">
+            <div class="col-12 mb-5">
                 {% if context.flash %}
                     <div class="alert alert-{{ context.flash['class'] }}">
                         {{ context.flash['message'] }}
@@ -182,11 +182,9 @@
                     </div>
                 </form>
             </div>
-        </div>
 
-        {% if not context.is_balena %}
-            <div class="row mb-5">
-                <div id="wifi-section" class="col-12">
+            {% if not context.is_balena %}
+                <div id="wifi-section" class="col-12  mb-5">
                     <h4 class="page-header">
                         <b>Reset wifi config</b>
                     </h4>
@@ -201,10 +199,8 @@
                         </button>
                     </div>
                 </div>
-            </div>
-        {% endif %}
+            {% endif %}
 
-        <div class="row">
             <div id="backup-section" class="col-12">
                 <h4 class="page-header">
                     <b>Backup</b>
@@ -221,5 +217,6 @@
                 </div>
             </div>
         </div>
+
     </div>
 {% endblock %}

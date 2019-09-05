@@ -51,8 +51,8 @@
             <label class="is_enabled-toggle toggle switch-light switch-ios small m-0">
                 <input type="checkbox"/>
                 <span>
-                    <span></span>
-                    <span></span>
+                    <span class="off"></span>
+                    <span class="on"></span>
                     <a></a>
                 </span>
             </label>
@@ -239,15 +239,10 @@
                                                 <div class="accordion-inner">
                                                     <div class="form-group row">
                                                         <label class="col-4 col-form-label">Disable cache</label>
-                                                        <div class="col-8 nocache controls">
-                                                            <label class="nocache-toggle checkbox toggle card card-body bg-light">
-                                                                <input name="nocache" class="form-control"
-                                                                       type="checkbox"/>
-                                                                <p>
-                                                                    <span class="on">Yes</span>
-                                                                    <span class="off">No</span>
-                                                                </p>
-                                                                <a class="slide-button btn btn-primary"></a>
+                                                        <div class="col-8 nocache controls justify-content-center align-self-center">
+                                                            <label class="nocache-toggle toggle switch-light switch-ios small m-0">
+                                                                <input type="checkbox"/>
+                                                                <span><span></span><span></span><a></a></span>
                                                             </label>
                                                         </div>
                                                     </div>
@@ -328,14 +323,14 @@
             </div>
         </div>
     </div>
-    <div class="container content">
-        <div id="assets" class="row">
+    <div class="container">
+        <div id="assets" class="row content">
             <div class="col-12 mb-5">
                 <section id="active-assets-section">
                     <h4>
                         <b>Active assets</b>
                     </h4>
-                    <table class="table table-striped">
+                    <table class="table">
                         <thead class="table-borderless">
                         <tr>
                             <th class="text-secondary font-weight-normal asset_row_name">Name</th>
@@ -356,7 +351,7 @@
                     <h4>
                         <b>Inactive assets</b>
                     </h4>
-                    <table class="table table-striped">
+                    <table class="table">
                         <thead class="table-borderless">
                         <tr>
                             <th class="text-secondary font-weight-normal asset_row_name">Name</th>

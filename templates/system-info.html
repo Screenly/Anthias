@@ -10,31 +10,48 @@
             </div>
         </div>
     </div>
-    <div class="container content">
-        <div class="row">
+    <div class="container">
+        <div class="row content">
             <div class="col-12">
-                <table class="table table-bordered mb-5" style="width: 100%">
-                    <thead>
+
+                <table class="table mb-5">
+                    <thead class="table-borderless">
                     <tr>
-                        <th class="text-secondary font-weight-normal">Load Average</th>
-                        <th class="text-secondary font-weight-normal">Free Space</th>
-                        <th class="text-secondary font-weight-normal">Uptime</th>
-                        <th class="text-secondary font-weight-normal">Monitor Info</th>
-                        <th class="text-secondary font-weight-normal">Display Power</th>
-                        <th class="text-secondary font-weight-normal">Raspberry Model</th>
-                        <th class="text-secondary font-weight-normal">Screenly Version</th>
-                        <th class="text-secondary font-weight-normal">MAC Address</th>
+                        <th class="text-secondary font-weight-normal" scope="col" style="width: 20%">Option</th>
+                        <th class="text-secondary font-weight-normal" scope="col">Value</th>
                     </tr>
                     </thead>
                     <tbody>
                     <tr>
+                        <th scope="row">Load Average</th>
                         <td>{{ context.loadavg }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Free Space</th>
                         <td>{{ context.free_space }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Uptime</th>
                         <td>{{ context.uptime.days }} days and {{ (context.uptime.seconds / 3600)|round(2) }} hours</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Monitor Info</th>
                         <td>{{ context.display_info }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Display Power</th>
                         <td>{{ context.display_power }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Raspberry Model</th>
                         <td>{{ context.raspberry_model }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Screenly Version</th>
                         <td>{{ context.screenly_version }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">MAC Address</th>
                         <td>{{ context.mac_address }}</td>
                     </tr>
                     </tbody>
@@ -46,7 +63,7 @@
                 </section>
 
                 {% if context.viewlog %}
-                    <table class="table table-striped">
+                    <table class="table table-borderless">
                         {% for line in context.viewlog %}
                             <tr>
                                 <td>{{ line }}</td>

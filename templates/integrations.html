@@ -10,19 +10,19 @@
             </div>
         </div>
     </div>
-    <div class="container content">
-        {% if context.is_balena %}
-            <div class="row">
+    <div class="container">
+        <div class="row content">
+            {% if context.is_balena %}
                 <div id="balena-section" class="col-12">
                     <h4 class="page-header">
                         <b>Balena</b>
                     </h4>
-                    <table class="table table-striped">
-                        <thead>
+                    <table class="table">
+                        <thead class="table-borderless">
                         <tr>
-                            <th scope="col">Option</th>
-                            <th scope="col">Value</th>
-                            <th scope="col">Description</th>
+                            <th class="text-secondary font-weight-normal" scope="col">Option</th>
+                            <th class="text-secondary font-weight-normal" scope="col">Value</th>
+                            <th class="text-secondary font-weight-normal" scope="col">Description</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -61,21 +61,19 @@
                         </tbody>
                     </table>
                 </div>
-            </div>
-        {% endif %}
+            {% endif %}
 
-        {% if context.is_wott_installed %}
-            <div class="row">
+            {% if context.is_wott_installed %}
                 <div id="wott-section" class="col-12">
                     <h4 class="page-header">
                         <b>WoTT</b>
                     </h4>
-                    <table class="table table-striped">
-                        <thead>
+                    <table class="table">
+                        <thead class="table-borderless">
                         <tr>
-                            <th scope="col">Option</th>
-                            <th scope="col">Value</th>
-                            <th scope="col">Description</th>
+                            <th class="text-secondary font-weight-normal" scope="col">Option</th>
+                            <th class="text-secondary font-weight-normal" scope="col">Value</th>
+                            <th class="text-secondary font-weight-normal" scope="col">Description</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -87,7 +85,7 @@
                         </tbody>
                     </table>
                 </div>
-            </div>
-        {% endif %}
+            {% endif %}
+        </div>
     </div>
 {% endblock %}
