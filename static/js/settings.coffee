@@ -73,14 +73,15 @@ $().ready ->
       $("#btn-backup").show()
 
   $("#btn-reset").click (e) ->
-    $.get "/api/v1/reset_wifi"
-    .done  (e) ->
-      $("#request-error .alert").show()
-      $("#request-error .alert").addClass "alert-success"
-      $("#request-error .alert").removeClass "alert-danger"
-      ($ "#request-error .msg").text "Reset was successful. Please reboot the device."
-    .error (e) ->
-      document.location.reload()
+    if confirm "Are you sure you want to reset your wifi configuration?"
+      $.get "/api/v1/reset_wifi"
+      .done  (e) ->
+        $("#request-error .alert").show()
+        $("#request-error .alert").addClass "alert-success"
+        $("#request-error .alert").removeClass "alert-danger"
+        ($ "#request-error .msg").text "Reset was successful. Please reboot the device."
+      .error (e) ->
+        document.location.reload()
 
   $("#auth_checkbox p span").click (e) ->
     if $("input:checkbox[name='use_auth']").is(":checked")
@@ -116,13 +117,13 @@ $().ready ->
     $.get("/api/v1/generate_usb_assets_key")
     .done (data, e) ->
       if (data)
-        $("#usb-assets-key-badge").text data
+        $("#usb-assets-key-badge").val data
 
   $("#btn-download-usb-assets-key").click (e) ->
     filename = "usb_assets_key.yaml"
 
     text = "screenly:\r\n"
-    text += "  key: \"#{($('#usb-assets-key-badge')).text().trim()}\"\r\n"
+    text += "  key: \"#{($('#usb-assets-key-badge')).val().trim()}\"\r\n"
     text += "  activate: #{Boolean($('input[name=\"activate_assets\"]').prop 'checked')}\r\n"
     text += "  copy: #{Boolean($('input[name=\"copy_assets\"]').prop 'checked')}\r\n"
     text += "  start_date: \"#{start_date_usb_file.val()}\"\r\n"

@@ -83,14 +83,16 @@
       }
     });
     $("#btn-reset").click(function(e) {
-      return $.get("/api/v1/reset_wifi").done(function(e) {
-        $("#request-error .alert").show();
-        $("#request-error .alert").addClass("alert-success");
-        $("#request-error .alert").removeClass("alert-danger");
-        return ($("#request-error .msg")).text("Reset was successful. Please reboot the device.");
-      }).error(function(e) {
-        return document.location.reload();
-      });
+      if (confirm("Are you sure you want to reset your wifi configuration?")) {
+        return $.get("/api/v1/reset_wifi").done(function(e) {
+          $("#request-error .alert").show();
+          $("#request-error .alert").addClass("alert-success");
+          $("#request-error .alert").removeClass("alert-danger");
+          return ($("#request-error .msg")).text("Reset was successful. Please reboot the device.");
+        }).error(function(e) {
+          return document.location.reload();
+        });
+      }
     });
     $("#auth_checkbox p span").click(function(e) {
       if ($("input:checkbox[name='use_auth']").is(":checked")) {
@@ -130,7 +132,7 @@
     $("#generate-usb-assets-key-btn").click(function(e) {
       return $.get("/api/v1/generate_usb_assets_key").done(function(data, e) {
         if (data) {
-          return $("#usb-assets-key-badge").text(data);
+          return $("#usb-assets-key-badge").val(data);
         }
       });
     });
@@ -138,7 +140,7 @@
       var blob, elem, filename, text;
       filename = "usb_assets_key.yaml";
       text = "screenly:\r\n";
-      text += "  key: \"" + (($('#usb-assets-key-badge')).text().trim()) + "\"\r\n";
+      text += "  key: \"" + (($('#usb-assets-key-badge')).val().trim()) + "\"\r\n";
       text += "  activate: " + (Boolean($('input[name=\"activate_assets\"]').prop('checked'))) + "\r\n";
       text += "  copy: " + (Boolean($('input[name=\"copy_assets\"]').prop('checked'))) + "\r\n";
       text += "  start_date: \"" + (start_date_usb_file.val()) + "\"\r\n";

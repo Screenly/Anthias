@@ -1032,7 +1032,7 @@
     };
 
     AssetsView.prototype.render = function() {
-      var k, l, len, len1, ref, ref1, which;
+      var k, l, len, len1, len2, m, ref, ref1, ref2, which;
       this.collection.sort();
       ref = ['active', 'inactive'];
       for (k = 0, len = ref.length; k < len; k++) {
@@ -1047,9 +1047,18 @@
           })).render());
         };
       })(this));
-      ref1 = ['inactive', 'active'];
+      ref1 = ['active', 'inactive'];
       for (l = 0, len1 = ref1.length; l < len1; l++) {
         which = ref1[l];
+        if ((this.$("#" + which + "-assets tr")).length === 0) {
+          (this.$("#" + which + "-assets-section .table-assets-help-text")).show();
+        } else {
+          (this.$("#" + which + "-assets-section .table-assets-help-text")).hide();
+        }
+      }
+      ref2 = ['inactive', 'active'];
+      for (m = 0, len2 = ref2.length; m < len2; m++) {
+        which = ref2[m];
         this.$("." + which + "-table thead").toggle(!!(this.$("#" + which + "-assets tr").length));
       }
       this.update_order();
@@ -1117,7 +1126,7 @@
     };
 
     App.prototype.events = {
-      'click #add-asset-button': 'add',
+      'click .add-asset-button': 'add',
       'click #previous-asset-button': 'previous',
       'click #next-asset-button': 'next'
     };

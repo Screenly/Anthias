@@ -6,7 +6,7 @@
         </div>
     </div>
 </div>
-<div class="navbar navbar-expand-lg fixed-top bg-primary">
+<div class="navbar navbar-header navbar-expand-lg fixed-top bg-dark">
     <div class="container">
         <a class="brand" href="/">
             <img src="static/img/screenly_ose_logo.png"/>
@@ -15,27 +15,33 @@
             {% if not context.up_to_date %}
                 <li class="update-available">
                     <a href="/settings#upgrade-section">
-                        <i class="fas fa-arrow-circle-down"></i>
+                        <i class="fas fa-arrow-circle-down pr-1"></i>
                         Update Available
                     </a>
                 </li>
             {% endif %}
             <li>
+                <a href="/">
+                    <i class="far fa-clock pr-1"></i>
+                    Schedule overview
+                </a>
+            </li>
+            <li>
                 <a href="/integrations">
-                    <i class="far fa-plus-square"></i>
+                    <i class="far fa-plus-square pr-1"></i>
                     Integrations
                 </a>
             </li>
             <li>
                 <a href="/settings">
-                    <i class="fas fa-cogs"></i>
+                    <i class="fas fa-cogs pr-1"></i>
                     Settings
                 </a>
             </li>
             <li class="divider-vertical"></li>
             <li>
                 <a href="/system-info">
-                    <i class="fas fa-tasks"></i>
+                    <i class="fas fa-tasks pr-1"></i>
                     System Info
                 </a>
             </li>
