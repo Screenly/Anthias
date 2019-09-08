@@ -1,3 +1,4 @@
+from nose.plugins.attrib import attr
 from splinter import Browser
 from time import sleep
 from selenium.common.exceptions import ElementNotVisibleException
@@ -244,7 +245,7 @@ class WebTest(unittest.TestCase):
 
         with Browser() as browser:
             browser.visit(main_page_url)
-            wait_for_and_do(browser, 'span[class="on"]', lambda btn: btn.click())
+            wait_for_and_do(browser, '.toggle', lambda btn: btn.click())
             sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
@@ -263,7 +264,7 @@ class WebTest(unittest.TestCase):
         with Browser() as browser:
             browser.visit(main_page_url)
 
-            wait_for_and_do(browser, 'span[class="off"]', lambda btn: btn.click())
+            wait_for_and_do(browser, '.toggle', lambda btn: btn.click())
             sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
@@ -273,6 +274,7 @@ class WebTest(unittest.TestCase):
             asset = assets[0]
             self.assertEqual(asset['is_enabled'], 0)
 
+    @attr('fixme')
     def test_reorder_asset(self):
         with db.conn(settings['database']) as conn:
             _asset_x = asset_x.copy()

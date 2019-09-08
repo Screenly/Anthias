@@ -3,7 +3,6 @@
 {% block head %}
     <link href="{{ url_for('static', filename='css/datepicker.css') }}" rel="stylesheet"/>
     <link href="{{ url_for('static', filename='css/timepicker.css') }}" rel="stylesheet"/>
-    <link href="{{ url_for('static', filename='css/toggle-switch.css') }}" rel="stylesheet"/>
 
     <script src="{{ url_for('static', filename='js/underscore-1.4.3.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
@@ -48,27 +47,27 @@
         <td style="width:13%">
             <%= duration %>
         </td>
+        <td class="asset-toggle" style="width:7%">
+            <label class="is_enabled-toggle toggle switch-light switch-ios small m-0">
+                <input type="checkbox"/>
+                <span>
+                    <span class="off"></span>
+                    <span class="on"></span>
+                    <a></a>
+                </span>
+            </label>
+        </td>
         <td class="asset_row_btns">
-            <button class="download-asset-button btn btn-outline-secondary" type="button">
+            <button class="download-asset-button btn btn-outline-dark" type="button">
                 <i class="fas fa-download"></i>
             </button>
-            <button class="edit-asset-button btn btn-outline-secondary" type="button">
+            <button class="edit-asset-button btn btn-outline-dark" type="button">
                 <i class="fas fa-pencil-alt"></i>
             </button>
-            <button class="delete-asset-button btn btn-outline-secondary" data-html="true" data-placement="left"
+            <button class="delete-asset-button btn btn-outline-dark" data-html="true" data-placement="left"
                     data-title="Are you sure?" data-trigger="manual" type="button">
                 <i class="far fa-trash-alt"></i>
             </button>
-        </td>
-        <td class="asset-toggle" style="width:7%">
-            <label class="is_enabled-toggle checkbox toggle card card-body bg-light">
-                <input type="checkbox"/>
-                <p>
-                    <span class="on">On</span>
-                    <span class="off">Off</span>
-                </p>
-                <a class="slide-button btn btn-primary"></a>
-            </label>
         </td>
     </script>
 
@@ -78,7 +77,7 @@
                 <a class="confirm-delete btn btn-danger" href="#">Delete</a>
             </div>
             <div class="float-right">
-                <a class="cancel-delete btn btn-outline-secondary" href="#">Cancel</a>
+                <a class="cancel-delete btn btn-outline-dark" href="#">Cancel</a>
             </div>
         </div>
     </script>
@@ -133,7 +132,7 @@
                                                 <div class="control-group">
                                                     <div class="filedrop">
                                                         <div class="upload-header">
-                                                            <button class="btn">Add Files..</button>
+                                                            <button class="btn btn-primary">Add Files..</button>
                                                             <input name="file_upload" type="file"/>
                                                             <br/>
                                                             or
@@ -240,15 +239,10 @@
                                                 <div class="accordion-inner">
                                                     <div class="form-group row">
                                                         <label class="col-4 col-form-label">Disable cache</label>
-                                                        <div class="col-8 nocache controls">
-                                                            <label class="nocache-toggle checkbox toggle card card-body bg-light">
-                                                                <input name="nocache" class="form-control"
-                                                                       type="checkbox"/>
-                                                                <p>
-                                                                    <span class="on">Yes</span>
-                                                                    <span class="off">No</span>
-                                                                </p>
-                                                                <a class="slide-button btn btn-primary"></a>
+                                                        <div class="col-8 nocache controls justify-content-center align-self-center">
+                                                            <label class="nocache-toggle toggle switch-light switch-ios small m-0">
+                                                                <input type="checkbox"/>
+                                                                <span><span></span><span></span><a></a></span>
                                                             </label>
                                                         </div>
                                                     </div>
@@ -264,7 +258,7 @@
                             <div class="float-left progress active" style="display:none">
                                 <div class="bar progress-bar-striped progress-bar progress-bar-animated"></div>
                             </div>
-                            <input class="btn btn-outline-secondary cancel" type="button" value="Cancel"/>
+                            <input class="btn btn-outline-dark cancel" type="button" value="Cancel"/>
                             <input id="save-asset" class="btn btn-primary" type="submit" value="Save"/>
                         </div>
                     </div>
@@ -297,101 +291,81 @@
             <div hidden="true" style="position absolute; left -5000px;">
                 <input name="b_adb4f752497b0d86b3b1b79d7_5c47388076" tabindex="-1" type="text"/>
             </div>
-            <input id="mc-embedded-subscribe" class="button btn btn-outline-secondary" name="subscribe" type="submit"
+            <input id="mc-embedded-subscribe" class="button btn btn-outline-dark" name="subscribe" type="submit"
                    value="Subscribe"/>
         </form>
     </script>
 {% endblock %}
 
 {% block content %}
-    <div class="container">
+    <div class="container pt-3 pb-3">
         <div class="row">
             <div class="col-12">
-                <h1 class="page-header">
-                    <div class="float-right">
-                        <a id="previous-asset-button" class="btn btn-outline-secondary" href="#">
-                            <i class="fas fa-fast-backward"></i>
+                <h5 class="d-flex">
+                    <b class="justify-content-center align-self-center">Schedule Overview</b>
+                    <div class="ml-auto">
+                        <a id="previous-asset-button" class="btn btn-long btn-outline-dark" href="#">
+                            <i class="fas fa-long-arrow-alt-left pr-2"></i>
                             Previous Asset
                         </a>
-                        <a id="next-asset-button" class="btn btn-outline-secondary" href="#">
-                            <i class="fas fa-fast-forward"></i>
+                        <a id="next-asset-button" class="btn btn-long btn-outline-dark" href="#">
                             Next Asset
+                            <i class="fas fa-long-arrow-alt-right pl-2"></i>
                         </a>
-                        <a id="add-asset-button" class="btn btn-primary" href="#">
-                            <i class="fas fa-plus"></i>
+                        <a id="add-asset-button" class="add-asset-button btn btn-long btn-primary" href="#">
                             Add Asset
                         </a>
                     </div>
-                    Schedule Overview
-                </h1>
+                </h5>
                 {% if context.player_name %}
                     <h2>{{ context.player_name }}</h2>
                 {% endif %}
             </div>
         </div>
-
-        <div id="assets" class="row">
-            <div class="col-12">
-                <section>
-                    <div class="header bg-primary">
-                        Active assets
-                    </div>
-                    <table class="table table-striped active-table">
-                        <thead style="display:none">
+    </div>
+    <div class="container">
+        <div id="assets" class="row content">
+            <div class="col-12 mb-5">
+                <section id="active-assets-section">
+                    <h4>
+                        <b>Active assets</b>
+                    </h4>
+                    <table class="table">
+                        <thead class="table-borderless">
                         <tr>
-                            <th class="asset_row_name">Name</th>
-                            <th style="width:21%">Start</th>
-                            <th style="width:21%">End</th>
-                            <th style="width:13%">Duration</th>
-                            <th style="width:13%"></th>
-                            <th style="width:7%"></th>
+                            <th class="text-secondary font-weight-normal asset_row_name">Name</th>
+                            <th class="text-secondary font-weight-normal" style="width:21%">Start</th>
+                            <th class="text-secondary font-weight-normal" style="width:21%">End</th>
+                            <th class="text-secondary font-weight-normal" style="width:13%">Duration</th>
+                            <th class="text-secondary font-weight-normal" style="width:7%">Activity</th>
+                            <th class="text-secondary font-weight-normal" style="width:13%"></th>
                         </tr>
                         </thead>
                         <tbody id="active-assets"></tbody>
                     </table>
+                    <div class="table-assets-help-text text-secondary">Currently there are no assets. <a class="add-asset-button" href="#">Add asset</a> now.</div>
                 </section>
             </div>
             <div class="col-12">
-                <section>
-                    <div class="header bg-primary">
-                        Inactive assets
-                    </div>
-                    <table class="table table-striped inactive-table">
-                        <thead style="display:none">
+                <section id="inactive-assets-section">
+                    <h4>
+                        <b>Inactive assets</b>
+                    </h4>
+                    <table class="table">
+                        <thead class="table-borderless">
                         <tr>
-                            <th class="asset_row_name">Name</th>
-                            <th style="width:21%">Start</th>
-                            <th style="width:21%">End</th>
-                            <th style="width:13%">Duration</th>
-                            <th style="width:13%"></th>
-                            <th style="width:7%"></th>
+                            <th class="text-secondary font-weight-normal asset_row_name">Name</th>
+                            <th class="text-secondary font-weight-normal" style="width:21%">Start</th>
+                            <th class="text-secondary font-weight-normal" style="width:21%">End</th>
+                            <th class="text-secondary font-weight-normal" style="width:13%">Duration</th>
+                            <th class="text-secondary font-weight-normal" style="width:7%">Activity</th>
+                            <th class="text-secondary font-weight-normal" style="width:13%"></th>
                         </tr>
                         </thead>
                         <tbody id="inactive-assets"></tbody>
                     </table>
+                    <div class="table-assets-help-text text-secondary">Currently there are no assets. <a class="add-asset-button" href="#">Add asset</a> now.</div>
                 </section>
-            </div>
-        </div>
-
-        <hr/>
-        <div class="container">
-            <div class="row">
-                <div class="col-6">
-            <span>Want to get more out of Screenly?
-              <a class="brand"
-                 href="https://www.screenly.io/?utm_source=Screenly-OSE&amp;utm_medium=root-page&amp;utm_campaign=OSE"
-                 target="_blank">
-                <strong>Try Screenly Pro.</strong>
-              </a></span>
-                </div>
-                <div class="col-6">
-            <span>
-              <a href="javascript://" id="subsribe-form-container" data-html="true" data-trigger="focus"
-                 data-placement="top">
-                <strong>Get the latest Screenly news directly in your mailbox.</strong>
-              </a>
-            </span>
-                </div>
             </div>
         </div>
     </div>
