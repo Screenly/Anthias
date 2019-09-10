@@ -28,5 +28,5 @@ sh==1.08
 six==1.11.0
 uptime==2.0.2
 urllib3==1.25.1
-werkzeug==0.14.1
+werkzeug==0.15.3
 youtube_dl>=2017.7.2
