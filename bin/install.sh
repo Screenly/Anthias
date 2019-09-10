@@ -91,7 +91,7 @@ else
   export MANAGE_NETWORK=false
 fi
 
-sudo pip install ansible==2.8.1
+sudo pip install ansible==2.8.2
 
 ansible localhost -m git -a "repo=${1:-https://github.com/screenly/screenly-ose.git} dest=/home/pi/screenly version=$BRANCH"
 cd /home/pi/screenly/ansible
