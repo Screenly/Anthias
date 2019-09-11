@@ -1680,7 +1680,7 @@ def system_info():
     try:
         viewlog = [line.decode('utf-8') for line in
                    check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
-    except:
+    except Exception:
         pass
 
     loadavg = diagnostics.get_load_avg()['15 min']
@@ -1694,19 +1694,26 @@ def system_info():
     free_space = size(slash.f_bavail * slash.f_frsize)
 
     # Get uptime
-    uptime_in_seconds = diagnostics.get_uptime()
-    system_uptime = timedelta(seconds=uptime_in_seconds)
+    system_uptime = timedelta(seconds=diagnostics.get_uptime())
 
     # Player name for title
     player_name = settings['player_name']
 
-    raspberry_model = '%s Revision: %s Ram: %s %s' % (diagnostics.get_raspberry_model(),
-                                                      diagnostics.get_raspberry_revision(),
-                                                      diagnostics.get_raspberry_ram(),
-                                                      diagnostics.get_raspberry_manufacturer())
+    try:
+        raspberry_code = diagnostics.get_raspberry_code()
+        raspberry_model = '{} Revision: {} Ram: {} {}'.format(
+            diagnostics.get_raspberry_model(raspberry_code),
+            diagnostics.get_raspberry_revision(raspberry_code),
+            diagnostics.get_raspberry_ram(raspberry_code),
+            diagnostics.get_raspberry_manufacturer(raspberry_code)
+        )
+    except sh.ErrorReturnCode_1:
+        raspberry_model = 'Unable to determine raspberry model.'
 
-    branch = 'development' if diagnostics.get_git_branch() == 'master' else diagnostics.get_git_branch()
-    screenly_version = '%s@%s' % (branch, diagnostics.get_git_short_hash())
+    screenly_version = '{}@{}'.format(
+        diagnostics.get_git_branch(),
+        diagnostics.get_git_short_hash()
+    )
 
     return template(
         'system-info.html',
@@ -1728,6 +1735,7 @@ def system_info():
 def integrations():
 
     context = {
+        'player_name': settings['player_name'],
         'is_balena': is_balena_app(),
         'is_wott_installed': is_wott_integrated(),
     }

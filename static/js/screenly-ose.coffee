@@ -59,13 +59,13 @@ getMimetype = (filename) ->
 
 durationSecondsToHumanReadable = (secs) ->
   durationString = ""
-  sec_int = parseInt(secs)
+  secInt = parseInt(secs)
 
-  if ((hours = Math.floor(sec_int / 3600)) > 0)
+  if ((hours = Math.floor(secInt / 3600)) > 0)
     durationString += hours + " hours "
-  if ((minutes = Math.floor(sec_int / 60) % 60) > 0)
+  if ((minutes = Math.floor(secInt / 60) % 60) > 0)
     durationString += minutes + " min "
-  if ((seconds = (sec_int % 60)) > 0)
+  if ((seconds = (secInt % 60)) > 0)
     durationString += seconds + " sec"
 
   return durationString
