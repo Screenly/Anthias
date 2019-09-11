@@ -153,7 +153,7 @@ else
   export MANAGE_NETWORK=false
 fi
 
-sudo pip install ansible==2.8.1
+sudo pip install ansible==2.8.2
 
 # Uncomment before merge with master branch
 #sudo -u pi ansible localhost -m git -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH"
