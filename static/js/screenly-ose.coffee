@@ -41,29 +41,32 @@ viduris   = ('rtsp rtmp'.split ' ')
 domains = [ [('www.youtube.com youtu.be'.split ' '), 'youtube_asset']]
 
 
-get_mimetype = (filename) ->
+getMimetype = (filename) ->
   scheme = (_.first filename.split ':').toLowerCase()
   match = scheme in viduris
-  if match then return 'streaming'
+  if match
+    return 'streaming'
 
   domain = (_.first ((_.last filename.split '//').toLowerCase()).split '/')
   mt = _.find domains, (mt) -> domain in mt[0]
-  if mt and domain in mt[0] then return mt[1]
+  if mt and domain in mt[0]
+    return mt[1]
 
   ext = (_.last filename.split '.').toLowerCase()
   mt = _.find mimetypes, (mt) -> ext in mt[0]
-  if mt then mt[1] else null
+  if mt
+    return mt[1]
 
-duration_seconds_to_human_readable = (secs) ->
-  duration_string = ''
+durationSecondsToHumanReadable = (secs) ->
+  duration_string = ""
   sec_int = parseInt(secs)
 
   if ((hours = Math.floor(sec_int / 3600)) > 0)
-    duration_string += hours + ' hours '
+    duration_string += hours + " hours "
   if ((minutes = Math.floor(sec_int / 60) % 60) > 0)
-    duration_string += minutes + ' min '
+    duration_string += minutes + " min "
   if ((seconds = (sec_int % 60)) > 0)
-    duration_string += seconds + ' sec'
+    duration_string += seconds + " sec"
 
   return duration_string
 
@@ -254,7 +257,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
   updateUriMimetype: => @updateMimetype @$fv 'uri'
   updateFileUploadMimetype: (filename) => @updateMimetype filename
   updateMimetype: (filename) =>
-    mt = get_mimetype filename
+    mt = getMimetype filename
     @$fv 'mimetype', if mt then mt else new Asset().defaults()['mimetype']
     @change_mimetype()
 
@@ -383,7 +386,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     if not @model.get 'name'
       if @model.old_name()
         @model.set {name: @model.old_name()}, silent:yes
-      else if get_mimetype @model.get 'uri'
+      else if getMimetype @model.get 'uri'
         @model.set {name: get_filename @model.get 'uri'}, silent:yes
       else
         @model.set {name: @model.get 'uri'}, silent:yes
@@ -479,7 +482,7 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
   render: =>
     @$el.html @template _.extend json = @model.toJSON(),
       name: insertWbr truncate_str json.name # word break urls at slashes
-      duration: duration_seconds_to_human_readable(json.duration)
+      duration: durationSecondsToHumanReadable(json.duration)
       start_date: (date_to json.start_date).string()
       end_date: (date_to json.end_date).string()
     @$el.prop 'id', @model.get 'asset_id'

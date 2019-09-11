@@ -44,10 +44,10 @@ class Auth(object):
         except ValueError as e:
             return Response("Authorization backend is unavailable: " + str(e), 503)
 
-    def update_settings(self, current_password):
+    def update_settings(self, current_pass_correct):
         """
         Submit updated values from Settings page.
-        :param current_password: the value of "Current Password" field or None if empty.
+        :param current_pass_correct: the value of "Current Password" field or None if empty.
         :return:
         """
         pass
@@ -57,6 +57,14 @@ class Auth(object):
         """
         Get HTML template and its context object to be displayed in Settings page.
         :return: (template, context)
+        """
+        pass
+
+    def check_password(self, password):
+        """
+        Checks if password correct.
+        :param password: str
+        :return: bool
         """
         pass
 
@@ -119,10 +127,10 @@ class BasicAuth(Auth):
         new_user = request.form.get('user', '')
         new_pass = request.form.get('password', '')
         new_pass2 = request.form.get('password2', '')
-        new_pass = '' if new_pass == '' else hashlib.sha256(new_pass).hexdigest()
-        new_pass2 = '' if new_pass2 == '' else hashlib.sha256(new_pass2).hexdigest()
+        new_pass = hashlib.sha256(new_pass).hexdigest() if new_pass else None
+        new_pass2 = hashlib.sha256(new_pass2).hexdigest() if new_pass else None
         # Handle auth components
-        if self.settings['password'] != '':  # if password currently set,
+        if self.settings['password']:  # if password currently set,
             if new_user != self.settings['user']:  # trying to change user
                 # should have current password set. Optionally may change password.
                 if current_pass_correct is None:
@@ -132,7 +140,7 @@ class BasicAuth(Auth):
 
                 self.settings['user'] = new_user
 
-            if new_pass != '':
+            if new_pass:
                 if current_pass_correct is None:
                     raise ValueError("Must supply current password to change password")
                 if not current_pass_correct:
@@ -144,10 +152,10 @@ class BasicAuth(Auth):
                 self.settings['password'] = new_pass
 
         else:  # no current password
-            if new_user != '':  # setting username and password
-                if new_pass != '' and new_pass != new_pass2:
+            if new_user:  # setting username and password
+                if new_pass and new_pass != new_pass2:
                     raise ValueError("New passwords do not match!")
-                if new_pass == '':
+                if not new_pass:
                     raise ValueError("Must provide password")
                 self.settings['user'] = new_user
                 self.settings['password'] = new_pass

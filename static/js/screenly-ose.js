@@ -3,7 +3,7 @@
 /* screenly-ose ui */
 
 (function() {
-  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, dateSettings, date_to, delay, domains, duration_seconds_to_human_readable, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, truncate_str, url_test, viduris,
+  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, dateSettings, date_to, delay, domains, durationSecondsToHumanReadable, getMimetype, get_filename, get_template, insertWbr, mimetypes, now, truncate_str, url_test, viduris,
     indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -70,7 +70,7 @@
 
   domains = [['www.youtube.com youtu.be'.split(' '), 'youtube_asset']];
 
-  get_mimetype = function(filename) {
+  getMimetype = function(filename) {
     var domain, ext, match, mt, scheme;
     scheme = (_.first(filename.split(':'))).toLowerCase();
     match = indexOf.call(viduris, scheme) >= 0;
@@ -90,23 +90,21 @@
     });
     if (mt) {
       return mt[1];
-    } else {
-      return null;
     }
   };
 
-  duration_seconds_to_human_readable = function(secs) {
+  durationSecondsToHumanReadable = function(secs) {
     var duration_string, hours, minutes, sec_int, seconds;
-    duration_string = '';
+    duration_string = "";
     sec_int = parseInt(secs);
     if ((hours = Math.floor(sec_int / 3600)) > 0) {
-      duration_string += hours + ' hours ';
+      duration_string += hours + " hours ";
     }
     if ((minutes = Math.floor(sec_int / 60) % 60) > 0) {
-      duration_string += minutes + ' min ';
+      duration_string += minutes + " min ";
     }
     if ((seconds = sec_int % 60) > 0) {
-      duration_string += seconds + ' sec';
+      duration_string += seconds + " sec";
     }
     return duration_string;
   };
@@ -441,7 +439,7 @@
 
     AddAssetView.prototype.updateMimetype = function(filename) {
       var mt;
-      mt = get_mimetype(filename);
+      mt = getMimetype(filename);
       this.$fv('mimetype', mt ? mt : new Asset().defaults()['mimetype']);
       return this.change_mimetype();
     };
@@ -668,7 +666,7 @@
           }, {
             silent: true
           });
-        } else if (get_mimetype(this.model.get('uri'))) {
+        } else if (getMimetype(this.model.get('uri'))) {
           this.model.set({
             name: get_filename(this.model.get('uri'))
           }, {
@@ -847,7 +845,7 @@
       var json;
       this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
         name: insertWbr(truncate_str(json.name)),
-        duration: duration_seconds_to_human_readable(json.duration),
+        duration: durationSecondsToHumanReadable(json.duration),
         start_date: (date_to(json.start_date)).string(),
         end_date: (date_to(json.end_date)).string()
       })));

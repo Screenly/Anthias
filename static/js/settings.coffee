@@ -1,7 +1,5 @@
 $().ready ->
 
-  currentUsername = $("input:text[name='user']").val()
-
   $("#request-error .close").click (e) ->
     $("#request-error .alert").hide()
 
@@ -83,20 +81,6 @@ $().ready ->
       .error (e) ->
         document.location.reload()
 
-  $("#auth_checkbox p span").click (e) ->
-    if $("input:checkbox[name='use_auth']").is(":checked")
-      $("#user_group, #password_group, #password2_group").hide()
-      $("input:text[name='user']").val("")
-      $("input:password[name='password']").val("")
-      $("input:password[name='password2']").val("")
-    else
-      $("#user_group, #password_group, #password2_group, #curpassword_group").show()
-
-  if $("input:checkbox[name='use_auth']").is(":checked")
-    $("#user_group, #password_group, #password2_group, #curpassword_group").show()
-  else
-    $("#user_group, #password_group, #password2_group, #curpassword_group").hide()
-
   start_date = new Date()
   start_date_usb_file = $("#view-usb-assets-file-modal [name='start_date_date']")
   start_date_usb_file.datepicker autoclose: yes, format: 'mm/dd/yyyy'
@@ -123,12 +107,12 @@ $().ready ->
     filename = "usb_assets_key.yaml"
 
     text = "screenly:\r\n"
-    text += "  key: \"#{($('#usb-assets-key-badge')).val().trim()}\"\r\n"
-    text += "  activate: #{Boolean($('input[name=\"activate_assets\"]').prop 'checked')}\r\n"
-    text += "  copy: #{Boolean($('input[name=\"copy_assets\"]').prop 'checked')}\r\n"
+    text += "  key: \"#{($("#usb-assets-key-badge")).val().trim()}\"\r\n"
+    text += "  activate: #{Boolean($("input[name=\"activate_assets\"]").prop 'checked')}\r\n"
+    text += "  copy: #{Boolean($("input[name=\"copy_assets\"]").prop 'checked')}\r\n"
     text += "  start_date: \"#{start_date_usb_file.val()}\"\r\n"
     text += "  end_date: \"#{end_date_usb_file.val()}\"\r\n"
-    text += "  duration: #{$('input[name=\"duration\"]').val()}"
+    text += "  duration: #{$("input[name=\"duration\"]").val()}"
 
     blob = new Blob([text], {type: 'text/csv'})
     if (window.navigator.msSaveOrOpenBlob)
@@ -143,8 +127,10 @@ $().ready ->
 
   $("#btn-upgrade").click (e) ->
     $("#upgrade-modal").modal "show"
+
   $("#close-upgrade-btn").click (e) ->
     $("#upgrade-modal").modal "hide"
+
   $("#start-upgrade-btn").click (e) ->
     $("#start-upgrade-btn").prop "disabled", yes
     ($ "#upgrade_logs").text ""
@@ -157,9 +143,9 @@ $().ready ->
         $.get "/upgrade_status/" + id
         .done  (data, e, jqXHR) ->
           if data.status
-            scroll_to_bottom = ($ "#upgrade_logs").scrollTop() + ($ "#upgrade_logs").outerHeight() == ($ "#upgrade_logs").prop "scrollHeight"
+            scrollToBottom = ($ "#upgrade_logs").scrollTop() + ($ "#upgrade_logs").outerHeight() == ($ "#upgrade_logs").prop "scrollHeight"
             ($ "#upgrade_logs").text data.status
-            if scroll_to_bottom then ($ "#upgrade_logs").scrollTop(($ "#upgrade_logs").prop "scrollHeight")
+            if scrollToBottom then ($ "#upgrade_logs").scrollTop(($ "#upgrade_logs").prop "scrollHeight")
           if jqXHR.status == 202
             setTimeout ->
               getStatus(id)
