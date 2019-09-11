@@ -58,17 +58,17 @@ getMimetype = (filename) ->
     return mt[1]
 
 durationSecondsToHumanReadable = (secs) ->
-  duration_string = ""
+  durationString = ""
   sec_int = parseInt(secs)
 
   if ((hours = Math.floor(sec_int / 3600)) > 0)
-    duration_string += hours + " hours "
+    durationString += hours + " hours "
   if ((minutes = Math.floor(sec_int / 60) % 60) > 0)
-    duration_string += minutes + " min "
+    durationString += minutes + " min "
   if ((seconds = (sec_int % 60)) > 0)
-    duration_string += seconds + " sec"
+    durationString += seconds + " sec"
 
-  return duration_string
+  return durationString
 
 url_test = (v) -> /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test v
 get_filename = (v) -> (v.replace /[\/\\\s]+$/g, '').replace /^.*[\\\/]/g, ''

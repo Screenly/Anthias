@@ -94,19 +94,19 @@
   };
 
   durationSecondsToHumanReadable = function(secs) {
-    var duration_string, hours, minutes, sec_int, seconds;
-    duration_string = "";
+    var durationString, hours, minutes, sec_int, seconds;
+    durationString = "";
     sec_int = parseInt(secs);
     if ((hours = Math.floor(sec_int / 3600)) > 0) {
-      duration_string += hours + " hours ";
+      durationString += hours + " hours ";
     }
     if ((minutes = Math.floor(sec_int / 60) % 60) > 0) {
-      duration_string += minutes + " min ";
+      durationString += minutes + " min ";
     }
     if ((seconds = sec_int % 60) > 0) {
-      duration_string += seconds + " sec";
+      durationString += seconds + " sec";
     }
-    return duration_string;
+    return durationString;
   };
 
   url_test = function(v) {

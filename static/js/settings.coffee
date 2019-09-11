@@ -108,8 +108,8 @@ $().ready ->
 
     text = "screenly:\r\n"
     text += "  key: \"#{($("#usb-assets-key-badge")).val().trim()}\"\r\n"
-    text += "  activate: #{Boolean($("input[name=\"activate_assets\"]").prop 'checked')}\r\n"
-    text += "  copy: #{Boolean($("input[name=\"copy_assets\"]").prop 'checked')}\r\n"
+    text += "  activate: #{Boolean($("input[name=\"activate_assets\"]").prop "checked")}\r\n"
+    text += "  copy: #{Boolean($("input[name=\"copy_assets\"]").prop "checked")}\r\n"
     text += "  start_date: \"#{start_date_usb_file.val()}\"\r\n"
     text += "  end_date: \"#{end_date_usb_file.val()}\"\r\n"
     text += "  duration: #{$("input[name=\"duration\"]").val()}"

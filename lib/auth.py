@@ -200,7 +200,10 @@ class WoTTAuth(BasicAuth):
             login_record = login_record.split(':', 1)
             if len(login_record) == 2:
                 self.user, password = login_record
-                self.password = '' if password == '' else hashlib.sha256(password).hexdigest()
+                if password:
+                    self.password = hashlib.sha256(password).hexdigest()
+                else:
+                    self.password = password
 
         return True
 
