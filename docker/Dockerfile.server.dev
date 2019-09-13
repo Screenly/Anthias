@@ -1,14 +1,15 @@
 FROM debian:stretch
-MAINTAINER Viktor Petersson <vpetersson@screenly.io>
 
 RUN apt-get update && \
     apt-get -y install \
         build-essential \
         curl \
+        ffmpeg \
         git-core \
         libffi-dev \
         libssl-dev \
         lsb-release \
+        mplayer \
         net-tools \
         procps \
         python-dev \
@@ -21,8 +22,8 @@ RUN apt-get update && \
     apt-get clean
 
 # Install Python requirements
-ADD requirements.txt /tmp/requirements.txt
-ADD requirements.dev.txt /tmp/requirements.dev.txt
+ADD requirements/requirements.txt /tmp/requirements.txt
+ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
 RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
     pip install -r /tmp/requirements.txt && \
     pip install -r /tmp/requirements.dev.txt

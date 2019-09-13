@@ -52,6 +52,7 @@ services:
       dockerfile: docker/Dockerfile.celery.template
     depends_on:
       - screenly-server
+      - rabbitmq
     environment:
       - HOME=/data
       - PYTHONPATH=/data/screenly
@@ -60,6 +61,11 @@ services:
     privileged: true
     volumes:
       - resin-data:/data
+
+  rabbitmq:
+    image: arm32v7/rabbitmq
+    command: rabbitmq-server
+    network_mode: "host"
 
 volumes:
     resin-data:

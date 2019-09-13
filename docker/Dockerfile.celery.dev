@@ -1,13 +1,14 @@
 FROM debian:stretch
-MAINTAINER Viktor Petersson <vpetersson@screenly.io>
 
 RUN apt-get update && \
     apt-get -y install \
         build-essential \
         curl \
+        ffmpeg \
         git-core \
         libffi-dev \
         libssl-dev \
+        mplayer \
         net-tools \
         procps \
         python-dev \
@@ -15,12 +16,12 @@ RUN apt-get update && \
         python-imaging \
         python-netifaces \
         python-simplejson \
-        redis-server \
-        sqlite3 && \
+        sqlite3 \
+    && \
     apt-get clean
 
 # Install Python requirements
-ADD requirements.txt /tmp/requirements.txt
+ADD requirements/requirements.txt /tmp/requirements.txt
 RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && pip install -r /tmp/requirements.txt
 
 RUN useradd pi

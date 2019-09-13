@@ -1,5 +1,4 @@
 FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:jessie
-MAINTAINER Pavel Safronov
 
 RUN apt-get update && \
     apt-get -y install \
@@ -11,6 +10,7 @@ RUN apt-get update && \
         lsb-release \
         net-tools \
         nginx-light \
+        omxplayer \
         psmisc \
         python-dev \
         python-gobject \
@@ -23,7 +23,7 @@ RUN apt-get update && \
     apt-get clean
 
 # Install Python requirements
-ADD requirements.txt /tmp/requirements.txt
+ADD requirements/requirements.txt /tmp/requirements.txt
 RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
     pip install --upgrade -r /tmp/requirements.txt
 

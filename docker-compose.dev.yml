@@ -35,12 +35,21 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.celery.dev
+    depends_on:
+      - rabbitmq
     image: screenly-ose-celery
     network_mode: "host"
     volumes:
       - ./:/home/pi/screenly:ro
       - screenly-volume:/home/pi/.screenly
       - screenly-assets-volume:/home/pi/screenly_assets
+
+  rabbitmq:
+    image: rabbitmq
+    command: rabbitmq-server
+    network_mode: "host"
+    logging:
+      driver: none
 
 volumes:
   screenly-volume:

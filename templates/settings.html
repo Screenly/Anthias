@@ -1,9 +1,6 @@
 {% extends "base.html" %}
 
 {% block head %}
-
-    <link href="{{ url_for('static', filename='css/toggle-switch.css') }}" rel="stylesheet"/>
-
     <script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
 
     <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script> <!-- needs jquery -->
@@ -15,72 +12,103 @@
 {% endblock %}
 
 {% block content %}
-    <div class="container">
-        {# Title #}
+    <div class="container pt-3 pb-3">
         <div class="row">
             <div class="col-12">
-                <h1 class="page-header">
-                    Settings
-                </h1>
+                <h5 class="page-header">
+                    <b>Settings</b>
+                </h5>
             </div>
         </div>
-
-        {# Main settings #}
-        <div class="row">
-            <div class="col-12">
+    </div>
+    <div class="container">
+        <div class="row content">
+            <div class="col-12 mb-5">
                 {% if context.flash %}
                     <div class="alert alert-{{ context.flash['class'] }}">
                         {{ context.flash['message'] }}
                     </div>
                 {% endif %}
-                <form method="post">
-                    <div class="form-group row">
-                        <label class="col-2 col-form-label">Player name</label>
-                        <div class="col-3">
+                <form method="post" class="row">
+                    <div class="form-group col-6 d-flex flex-column justify-content-between">
+                        <div class="form-group">
+                            <label class="small text-secondary">Player name</label>
                             <input class="form-control" name="player_name" type="text"
                                    value="{{ context.player_name }}">
                         </div>
-                    </div>
-
-                    <div class="form-group row">
-                        <label class="col-2 col-form-label">Show splash screen</label>
-                        <div class="col-3">
-                            <label id="splash_checkbox" class="checkbox toggle card card-body bg-light form-control">
-                                {% if context.show_splash %}
-                                    <input name="show_splash" checked="checked" type="checkbox"/>
-                                {% else %}
-                                    <input name="show_splash" type="checkbox"/>
-                                {% endif %}
-                                <p>
-                                    <span class="on">On</span>
-                                    <span class="off">Off</span>
-                                </p>
-                                <a class="btn btn-primary slide-button"></a>
-                            </label>
+                        <div class="form-inline">
+                            <label>Show splash screen</label>
+                            <div class="ml-auto">
+                                <label id="splash_checkbox"
+                                       class="is_enabled-toggle toggle switch-light switch-ios small m-0">
+                                    {% if context.show_splash %}
+                                        <input name="show_splash" checked="checked" type="checkbox"/>
+                                    {% else %}
+                                        <input name="show_splash" type="checkbox"/>
+                                    {% endif %}
+                                    <span><span></span><span></span><a></a></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-inline">
+                            <label>Shuffle playlist</label>
+                            <div class="ml-auto">
+                                <label id="shuffle_checkbox"
+                                       class="is_enabled-toggle toggle switch-light switch-ios small m-0">
+                                    {% if context.shuffle_playlist %}
+                                        <input name="shuffle_playlist" checked="checked" type="checkbox"/>
+                                    {% else %}
+                                        <input name="shuffle_playlist" type="checkbox"/>
+                                    {% endif %}
+                                    <span><span></span><span></span><a></a></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-inline">
+                            <label>Use 24-hour clock</label>
+                            <div class="ml-auto">
+                                <label id="use_24_hour_clock_checkbox"
+                                       class="is_enabled-toggle toggle switch-light switch-ios small m-0">
+                                    {% if context.use_24_hour_clock %}
+                                        <input name="use_24_hour_clock" checked="checked" type="checkbox"/>
+                                    {% else %}
+                                        <input name="use_24_hour_clock" type="checkbox"/>
+                                    {% endif %}
+                                    <span><span></span><span></span><a></a></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-inline">
+                            <label>Debug logging</label>
+                            <div class="ml-auto">
+                                <label id="debug_checkbox"
+                                       class="is_enabled-toggle toggle switch-light switch-ios small m-0">
+                                    {% if context.debug_logging %}
+                                        <input name="debug_logging" checked="checked" type="checkbox">
+                                    {% else %}
+                                        <input name="debug_logging" type="checkbox">
+                                    {% endif %}
+                                    <span><span></span><span></span><a></a></span>
+                                </label>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="form-group row">
-                        <label class="col-2 col-form-label">Shuffle playlist</label>
-                        <div class="col-3">
-                            <label id="shuffle_checkbox" class="checkbox toggle card card-body bg-light">
-                                {% if context.shuffle_playlist %}
-                                    <input name="shuffle_playlist" checked="checked" type="checkbox"/>
-                                {% else %}
-                                    <input name="shuffle_playlist" type="checkbox"/>
-                                {% endif %}
-                                <p>
-                                    <span class="on">On</span>
-                                    <span class="off">Off</span>
-                                </p>
-                                <a class="btn btn-primary slide-button"></a>
-                            </label>
+                    <div class="form-group col-6 d-flex flex-column justify-content-between">
+                        <div class="row">
+                            <div class="form-group col-6">
+                                <label class="small text-secondary">Default duration</label>
+                                <input class="form-control" name="default_duration" type="number"
+                                       value="{{ context.default_duration }}"/>
+                            </div>
+                            <div class="form-group col-6">
+                                <label class="small text-secondary">Default streaming duration</label>
+                                <input class="form-control" name="default_streaming_duration" type="number"
+                                       value="{{ context.default_streaming_duration }}"/>
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="form-group row">
-                        <label class="col-2 col-form-label">Audio output</label>
-                        <div class="col-2">
+                        <div class="form-group">
+                            <label class="small text-secondary">Audio output</label>
                             <select class="form-control" name="audio_output">
                                 {% if context.audio_output == 'hdmi' %}
                                     <option value="hdmi" selected="selected">HDMI</option>
@@ -91,27 +119,8 @@
                                 {% endif %}
                             </select>
                         </div>
-                    </div>
-
-                    <div class="form-group row">
-                        <label class="col-2 col-form-label">Default duration</label>
-                        <div class="col-1">
-                            <input class="form-control" name="default_duration" type="number"
-                                   value="{{ context.default_duration }}"/>
-                        </div>
-                    </div>
-
-                    <div class="form-group row">
-                        <label class="col-2 col-form-label">Default streaming duration</label>
-                        <div class="col-1">
-                            <input class="form-control" name="default_streaming_duration" type="number"
-                                   value="{{ context.default_streaming_duration }}"/>
-                        </div>
-                    </div>
-
-                    <div class="form-group row">
-                        <label class="col-2 col-form-label">Date format</label>
-                        <div class="col-2">
+                        <div class="form-group">
+                            <label class="small text-secondary">Date format</label>
                             <select class="form-control" name="date_format">
                                 <option value="mm/dd/yyyy"
                                         {% if context.date_format == 'mm/dd/yyyy' %} selected="selected" {% endif %}>
@@ -139,323 +148,254 @@
                                 </option>
                             </select>
                         </div>
-                    </div>
-
-                    <div class="form-group row">
-                        <label class="col-2 col-form-label">Use 24-hour clock</label>
-                        <div class="col-3">
-                            <label id="use_24_hour_clock_checkbox" class="checkbox toggle card card-body bg-light">
-                                {% if context.use_24_hour_clock %}
-                                    <input name="use_24_hour_clock" checked="checked" type="checkbox"/>
-                                {% else %}
-                                    <input name="use_24_hour_clock" type="checkbox"/>
-                                {% endif %}
-                                <p>
-                                    <span class="on">On</span>
-                                    <span class="off">Off</span>
-                                </p>
-                                <a class="btn btn-primary slide-button"></a>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="form-group row">
-                        <label class="col-2 col-form-label">Debug logging</label>
-                        <div class="col-3">
-                            <label id="debug_checkbox" class="checkbox toggle card card-body bg-light">
-                                {% if context.debug_logging %}
-                                    <input name="debug_logging" checked="checked" type="checkbox">
-                                {% else %}
-                                    <input name="debug_logging" type="checkbox">
-                                {% endif %}
-                                <p>
-                                    <span class="on">On</span>
-                                    <span class="off">Off</span>
-                                </p>
-                                <a class="btn btn-primary slide-button"></a>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="form-group row">
-                        <label class="col-2 col-form-label">Authentication</label>
-                        <div class="col-3">
-                            <select class="custom-select my-1 mr-sm-2" id="auth_backend" name="auth_backend">
+                        <div class="form-group mb-0">
+                            <label class="small text-secondary">Authentication</label>
+                            <select class="form-control" id="auth_backend" name="auth_backend">
                                 {% for opt in context.auth_backends %}
                                     <option value="{{ opt.name }}" {{ opt.selected }}>{{ opt.text }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                     </div>
-                    {% if context.need_current_password %}
-                        <div class="form-group row" id="curpassword_group">
-                            <label class="col-2 col-form-label">Current Password</label>
-                            <div class="col-3">
+
+                    <div class="form-group col-6 offset-6">
+                        {% if context.need_current_password %}
+                            <div class="form-group" id="curpassword_group">
+                                <label class="small text-secondary">Current Password</label>
                                 <input class="form-control" name="current-password" type="password" value="">
                             </div>
-                        </div>
-                    {% endif %}
-
-                    {% for backend in context.auth_backends %}
-                        {% if backend.template %}
-                            <div id="auth_backend-{{ backend.name }}">
-                                {% include backend.template %}
-                            </div>
                         {% endif %}
-                    {% endfor %}
 
-                    <div class="form-actions form-group row">
-                        <div class="offset-1 col-3">
-                            <input class="btn btn-primary" type="submit" value="Save Settings">
-                            <a class="btn btn-outline-secondary" href="/">Cancel</a>
+                        {% for backend in context.auth_backends %}
+                            {% if backend.template %}
+                                <div id="auth_backend-{{ backend.name }}">
+                                    {% include backend.template %}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    <div class="form-group col-12">
+                        <div class="text-right">
+                            <a class="btn btn-long btn-outline-dark" href="/">Cancel</a>
+                            <input class="btn btn-long btn-primary" type="submit" value="Save Settings">
                         </div>
                     </div>
                 </form>
             </div>
-        </div>
 
-        {# USB assets #}
-        <div class="row">
-            <div id="usb-assets-key-section" class="col-12">
-                <h1 class="page-header">
-                    USB assets
-                </h1>
-                <p>Put file with the generated key in USB to use the USB assets.</p>
-                <div class="form-actions">
-                    <button id="btn-view-usb-assets-file" class="btn btn-primary" type="button">Generate file</button>
+            {# Backup #}
+            <div id="backup-section" class="col-12 mb-5">
+                <h4 class="page-header">
+                    <b>Backup</b>
+                </h4>
+                <hr>
+                <div class="text-right">
+                    <input name="backup_upload" style="display:none" type="file">
+                    <button id="btn-backup" class="btn btn-long btn-outline-dark">Get backup</button>
+                    <button id="btn-upload" class="btn btn-primary" type="button">Upload and Recover
+                    </button>
                 </div>
-            </div>
-            <div id="view-usb-assets-file-modal" class="modal hide fade" role="dialog" tabindex="-1">
-                <div class="modal-dialog" role="document">
-                    <div class="modal-content">
-                        <div class="form-horizontal">
-                            <div class="modal-header">
-                                <h3 id="modalLabel">Usb assets file</h3>
-                            </div>
-                            <div class="modal-body">
-                                <div class="form-group row">
-                                    <label class="col-4 col-form-label">Activate assets</label>
-                                    <div class="col-6">
-                                        <label class="checkbox toggle card card-body bg-light">
-                                            <input name="activate_assets" type="checkbox"/>
-                                            <p>
-                                                <span class="on">On</span>
-                                                <span class="off">Off</span>
-                                            </p>
-                                            <a class="btn btn-primary slide-button"></a>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="form-group row">
-                                    <label class="col-4 col-form-label">Copy assets to internal memory</label>
-                                    <div class="col-6">
-                                        <label class="checkbox toggle card card-body bg-light">
-                                            <input name="copy_assets" type="checkbox"/>
-                                            <p>
-                                                <span class="on">On</span>
-                                                <span class="off">Off</span>
-                                            </p>
-                                            <a class="btn btn-primary slide-button"></a>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="form-group row start_date">
-                                    <label class="col-4 col-form-label">Start Date</label>
-                                    <div class="controls col-6">
-                                        <input class="form-control date" name="start_date_date" type="text"
-                                               style="margin-right:5px"/>
-                                    </div>
-                                    <input name="start_date" type="hidden"/>
-                                </div>
-                                <div class="form-group row end_date">
-                                    <label class="col-4 col-form-label">End Date</label>
-                                    <div class="controls col-6">
-                                        <input class="form-control date" name="end_date_date" type="text"
-                                               style="margin-right:5px"/>
-                                    </div>
-                                    <input name="end_date" type="hidden"/>
-                                </div>
-
-                                <div class="form-group row duration">
-                                    <label class="col-4 col-form-label">Duration</label>
-                                    <div class="col-6 controls">
-                                        <input class="form-control" name="duration" type="number" value="10"/>
-                                        seconds
-                                        &nbsp;
-                                    </div>
-                                </div>
-                                <hr>
-                                <div class="form-group row">
-                                    <div class="col-12 text-center mb-4">
-                                        <button id="generate-usb-assets-key-btn"
-                                                class="btn btn-primary text-right"
-                                                type="button">
-                                            Generate new key
-                                        </button>
-                                    </div>
-                                    <div id="usb-assets-key-badge" class="col-12 badge badge-light w-100"
-                                         style="font-size:20px;">{{ context.usb_assets_key }}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="modal-footer text-right">
-                                <button id="btn-download-usb-assets-key" class="btn btn-primary" type="button">
-                                    Download file with key
-                                </button>
-                                <button id="close-view-usb-assets-file-btn" class="btn btn-secondary" type="button">
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                <div class="progress-bar progress-bar-striped progress active w-100" style="display:none">
+                    <div class="bar"></div>
                 </div>
             </div>
 
-        </div>
+            {% if not context.is_balena %}
 
-        {# Upgrade #}
-        <div class="row">
-            <div id="upgrade-section" class="col-12">
-                <h1 class="page-header">
-                    Upgrade Screenly
-                </h1>
-                <div class="form-actions">
-                    <button id="btn-upgrade" class="btn btn-primary" type="button">Screenly Upgrade</button>
-                </div>
-            </div>
-            <div id="upgrade-modal" class="modal hide fade" aria-hidden="true"
-                 data-backdrop="static" data-keyboard="false" role="dialog" tabindex="-1">
-                <div class="modal-dialog" role="document">
-                    <div class="modal-content">
-                        <div class="form-horizontal">
-                            <div class="modal-header">
-                                <h3 id="modalLabel">Upgrade Screenly</h3>
-                            </div>
-                            <div class="modal-body">
-                                <form id="upgrade-form">
-                                    <div id="branch-group-radio" class="form-group">
-                                        <label>Choose the branch you want to use</label>
-                                        <div class="custom-control custom-radio">
-                                            <input type="radio" class="custom-control-input" id="latest_branch"
-                                                   name="groupOfBranch" value="latest" checked>
-                                            <label class="custom-control-label" for="latest_branch">Latest</label>
-                                        </div>
-
-                                        {#                                    <div class="custom-control custom-radio">#}
-                                        {#                                        <input type="radio" class="custom-control-input" id="production_branch"#}
-                                        {#                                               name="groupOfBranch" value="production">#}
-                                        {#                                        <label class="custom-control-label"#}
-                                        {#                                               for="production_branch">Production</label>#}
-                                        {#                                    </div>#}
-
-
-                                        {#                                    <div class="custom-control custom-radio">#}
-                                        {#                                        <input type="radio" class="custom-control-input" id="experimental_branch"#}
-                                        {#                                               name="groupOfBranch" value="experimental">#}
-                                        {#                                        <label class="custom-control-label"#}
-                                        {#                                               for="experimental_branch">Experimental</label>#}
-                                        {#                                    </div>#}
-                                    </div>
-                                    <div class="form-group row">
-                                        <label class="col-12 col-form-label text-left">Do you want Screenly to manage
-                                            your
-                                            network? This is recommended for most users.</label>
-                                        <div class="col-3">
-                                            <label id="manage_network_checkbox"
-                                                   class="checkbox toggle card card-body bg-light">
-                                                <input name="manage_network" checked="checked" type="checkbox"/>
-                                                <p>
-                                                    <span class="on">On</span>
-                                                    <span class="off">Off</span>
-                                                </p>
-                                                <a class="btn btn-primary slide-button"></a>
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <div class="form-group row">
-                                        <label class="col-12 col-form-label text-left">Would you like to perform a full
-                                            system upgrade as well?</label>
-                                        <div class="col-3">
-                                            <label id="system_upgrade_checkbox"
-                                                   class="checkbox toggle card card-body bg-light">
-                                                <input name="system_upgrade" type="checkbox"/>
-                                                <p>
-                                                    <span class="on">On</span>
-                                                    <span class="off">Off</span>
-                                                </p>
-                                                <a class="btn btn-primary slide-button"></a>
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <div class="form-group" id="upgrade_logs_block">
-                                        <label for="upgrade_logs">Logs:</label>
-                                        <textarea readonly class="form-control" rows="5" id="upgrade_logs"></textarea>
-                                    </div>
-                                </form>
-                            </div>
-                            <div class="modal-footer">
-                                <button id="start-upgrade-btn" class="btn btn-primary" type="button">
-                                    Start upgrade
-                                </button>
-                                <button id="close-upgrade-btn" class="btn btn-secondary" type="button">
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {# System controls #}
-        <div class="row">
-            <div id="system-controls-section" class="col-12">
-                <h1 class="page-header">
-                    System Controls
-                </h1>
-                <div class="form-actions">
-                    <button id="btn-reboot-system" class="btn btn-danger" type="button">Reboot Screenly</button>
-                    <button id="btn-shutdown-system" class="btn btn-danger" type="button">Shutdown Screenly</button>
-                </div>
-            </div>
-        </div>
-
-        {# Reset Wifi #}
-        {% if not context.is_balena %}
-            <div class="row">
-                <div id="wifi-section" class="col-12">
-                    <h1 class="page-header">
-                        Reset wifi config
-                    </h1>
-                    <p>Run it, and if the next boot does not have a network connection, you will be prompted to select a
-                        WiFi
-                        network. <br><b>Warning:</b> after pressing, a reboot is required. Web interface will not be
-                        available
-                        until reboot.</p>
-                    <div class="form-actions">
-                        <button id="btn-reset" class="btn btn-primary" type="button">Re-run
-                            network detection
+                {# USB assets #}
+                <div id="usb-assets-key-section" class="col-12 mb-5">
+                    <h4 class="page-header">
+                        <b>USB assets</b>
+                    </h4>
+                    <hr>
+                    <p>Put file with the generated key in USB to use the USB assets.</p>
+                    <div class="text-right">
+                        <button id="btn-view-usb-assets-file" class="btn btn-primary btn-long" type="button">Generate file
                         </button>
                     </div>
                 </div>
-            </div>
-        {% endif %}
+                <div id="view-usb-assets-file-modal" class="modal hide fade" role="dialog" tabindex="-1">
+                    <div class="modal-dialog" role="document">
+                        <div class="modal-content">
+                            <div class="form-horizontal">
+                                <div class="modal-header">
+                                    <h3 id="modalLabel">Usb assets file</h3>
+                                </div>
+                                <div class="modal-body pb-0 row">
 
-        {# Backup #}
-        <div class="row">
-            <div id="backup-section" class="col-12">
-                <h1 class="page-header">
-                    Backup
-                </h1>
-                <div class="form-actions">
-                    <input name="backup_upload" style="display:none" type="file">
-                    <button id="btn-upload" class="btn btn-primary" type="button">Upload and Recover</button>
-                    <button id="btn-backup" class="btn btn-outline-secondary">Get backup</button>
-                    <div class="progress-bar progress-bar-striped progress active" style="display:none">
-                        <div class="bar"></div>
+                                    <div class="form-group col-6">
+                                        <label class="small text-secondary">Start Date</label>
+                                        <input class="form-control date" name="start_date_date" type="text"/>
+                                        <input name="start_date" type="hidden"/>
+                                    </div>
+
+                                    <div class="form-inline col-6">
+                                        <label>Activate assets</label>
+                                        <div class="ml-auto">
+                                            <label class="toggle switch-light switch-ios small m-0">
+                                                <input name="activate_assets" type="checkbox"/>
+                                                <span><span></span><span></span><a></a></span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group col-6">
+                                        <label class="small text-secondary">End Date</label>
+                                        <input class="form-control date" name="end_date_date" type="text"/>
+                                        <input name="end_date" type="hidden"/>
+                                    </div>
+
+                                    <div class="form-inline col-6">
+                                        <label>Copy to internal memory</label>
+                                        <div class="ml-auto">
+                                            <label class="toggle switch-light switch-ios small m-0">
+                                                <input name="copy_assets" type="checkbox"/>
+                                                <span><span></span><span></span><a></a></span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group col-6">
+                                        <label class="small text-secondary">Duration</label>
+                                        <input class="form-control" name="duration" type="number" value="10"/>
+                                    </div>
+
+                                    <div class="form-group col-6">
+                                        <label class="small text-secondary">Usb assets key</label>
+                                        <input id="usb-assets-key-badge" class="form-control mb-3" type="text" value="{{ context.usb_assets_key }}" readonly>
+                                    </div>
+
+                                    <div class="form-group col-12">
+                                        <div class="text-right">
+                                            <button id="generate-usb-assets-key-btn" class="btn btn-primary btn-long"
+                                                    type="button">
+                                                Generate new key
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer text-right">
+                                    <button id="close-view-usb-assets-file-btn" class="btn btn-outline-dark btn-long"
+                                            type="button">
+                                        Close
+                                    </button>
+                                    <button id="btn-download-usb-assets-key" class="btn btn-primary btn-long" type="button">
+                                        Download file
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
+
+                {# Upgrade #}
+                <div id="upgrade-section" class="col-12 mb-5">
+                    <h4 class="page-header">
+                        <b>Upgrade Screenly</b>
+                    </h4>
+                    <hr>
+                    <div class="text-right">
+                        <button id="btn-upgrade" class="btn btn-primary btn-long" type="button">Upgrade</button>
+                    </div>
+                </div>
+                <div id="upgrade-modal" class="modal hide fade" aria-hidden="true"
+                     data-backdrop="static" data-keyboard="false" role="dialog" tabindex="-1">
+                    <div class="modal-dialog" role="document">
+                        <div class="modal-content">
+                            <div class="form-horizontal">
+                                <div class="modal-header">
+                                    <h3 id="modalLabel">Upgrade Screenly</h3>
+                                </div>
+                                <div class="modal-body">
+                                    <form id="upgrade-form">
+                                        <div id="branch-group-radio" class="form-group">
+                                            <label>Choose the branch you want to use</label>
+                                            <div class="custom-control custom-radio">
+                                                <input type="radio" class="custom-control-input" id="latest_branch"
+                                                       name="groupOfBranch" value="latest" checked>
+                                                <label class="custom-control-label"
+                                                       for="latest_branch">Latest</label>
+                                            </div>
+                                        </div>
+                                        <div class="form-group row">
+                                            <label class="col-12 col-form-label text-left">Do you want Screenly to
+                                                manage
+                                                your
+                                                network? This is recommended for most users.</label>
+                                            <div class="col-3">
+                                                <label id="manage_network_checkbox" class="toggle switch-light switch-ios small m-0">
+                                                    <input name="manage_network" checked="checked" type="checkbox"/>
+                                                    <span><span></span><span></span><a></a></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="form-group row">
+                                            <label class="col-12 col-form-label text-left">Would you like to perform a full system upgrade as well?</label>
+                                            <div class="col-3">
+                                                <label id="system_upgrade_checkbox" class="toggle switch-light switch-ios small m-0">
+                                                    <input name="system_upgrade" type="checkbox"/>
+                                                    <span><span></span><span></span><a></a></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="form-group" id="upgrade_logs_block">
+                                            <label for="upgrade_logs">Logs:</label>
+                                            <textarea readonly class="form-control terminal" rows="5"
+                                                      id="upgrade_logs"></textarea>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="text-left"><small>Notice: If you leave the page before the
+                                                upgrade is complete, don't worry. The next time click "Start
+                                                upgrade"
+                                                you will see logs of the last upgrade if it's not finished
+                                                yet.</small></label>
+                                        </div>
+                                    </form>
+                                </div>
+                                <div class="modal-footer">
+                                    <button id="close-upgrade-btn" class="btn btn-outline-dark btn-long" type="button">
+                                        Close
+                                    </button>
+                                    <button id="start-upgrade-btn" class="btn btn-primary btn-long" type="button">
+                                        Start upgrade
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {# Reset Wifi #}
+                <div id="wifi-section" class="col-12  mb-5">
+                    <h4 class="page-header">
+                        <b>Reset wifi config</b>
+                    </h4>
+                    <hr>
+                    <p>Run it, and if the next boot does not have a network connection, you will be prompted to select a
+                        WiFi
+                        network. <b>Warning:</b> after pressing, a reboot is required. Web interface will not be
+                        available
+                        until reboot.</p>
+                    <div class="text-right">
+                        <button id="btn-reset" class="btn btn-danger btn-long" type="button">Reset wifi</button>
+                    </div>
+                </div>
+
+                {# System controls #}
+                <div id="system-controls-section" class="col-12 mb-5">
+                    <h4 class="page-header">
+                        <b>System Controls</b>
+                    </h4>
+                    <hr>
+                    <div class="text-right">
+                        <button id="btn-reboot-system" class="btn btn-danger btn-long" type="button">Reboot Screenly</button>
+                        <button id="btn-shutdown-system" class="btn btn-danger btn-long" type="button">Shutdown Screenly
+                        </button>
+                    </div>
+                </div>
+
+            {% endif %}
         </div>
     </div>
 {% endblock %}

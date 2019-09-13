@@ -154,7 +154,7 @@
       - python-gobject
       - python-netifaces
       - python-simplejson
-      - redis-server
+      - rabbitmq-server
       - rpi-update
       - sqlite3
       - systemd

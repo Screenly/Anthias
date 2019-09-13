@@ -38,7 +38,7 @@
     dest: /home/pi/.config/uzbl/config-screenly
 
 - name: Install pip dependencies
-  pip: requirements=/home/pi/screenly/requirements.txt
+  pip: requirements=/home/pi/screenly/requirements/requirements.txt
 
 - name: Create default assets database if does not exists
   copy:
@@ -66,20 +66,13 @@
     user: pi
 
 - name: Download upgrade_screenly.sh from github repository
-  # Uncomment before merge with master branch
-  #get_url:
-  #  url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/install.sh
-  #  dest: /usr/local/sbin/upgrade_screenly.sh
-  #  mode: 0700
-  #  owner: root
-  #  group: root
-  #  force: yes
-  copy:
-    src: /home/pi/screenly/bin/install.sh
+  get_url:
+    url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/install.sh
     dest: /usr/local/sbin/upgrade_screenly.sh
     mode: 0700
     owner: root
     group: root
+    force: yes
 
 - name: Copy screenly_overrides
   copy:

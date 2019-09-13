@@ -9,7 +9,7 @@ User=pi
 Type=oneshot
 
 ExecStartPre=/bin/rm -f /home/pi/.screenly/initialized
-ExecStart=/usr/bin/python /home/pi/screenly/start_resin_wifi.py
+ExecStart=/usr/bin/python /home/pi/screenly/tools/start_resin_wifi.py
 ExecStartPost=/usr/bin/touch /home/pi/.screenly/initialized
 
 [Install]

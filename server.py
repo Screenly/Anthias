@@ -39,6 +39,7 @@ from lib import db
 from lib import diagnostics
 from lib import queries
 
+from lib.auth import authorized
 from lib.utils import generate_perfect_paper_password
 from lib.utils import get_active_connections, remove_connection
 from lib.utils import get_node_ip, get_node_mac_address
@@ -49,11 +50,10 @@ from lib.utils import validate_url
 from lib.utils import is_balena_app, is_demo_node, is_wott_integrated, get_wott_device_id
 
 from settings import CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
-from auth import authorized
 
 HOME = getenv('HOME', '/home/pi')
-CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
-CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'rpc://')
+CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'amqp://')
 
 app = Flask(__name__)
 CORS(app)
@@ -88,15 +88,13 @@ def upgrade_screenly(self, branch, manage_network, upgrade_system):
                               '-b', branch,
                               '-n', manage_network,
                               '-s', upgrade_system,
-                              _bg=True)
+                              _bg=True,
+                              _err_to_out=True)
     while True:
         if not upgrade_process.process.alive:
             break
         self.update_state(state="PROGRESS", meta={'status': upgrade_process.process.stdout})
         time.sleep(1)
-
-    if upgrade_process.process.stderr:
-        return {'status': '%s\nError: %s' % (upgrade_process.process.stdout, upgrade_process.process.stderr)}
 
     return {'status': upgrade_process.process.stdout}
 
@@ -1315,7 +1313,7 @@ class UpgradeScreenly(Resource):
         }
     })
     def post(self):
-        for task in celery.control.inspect().active().get('worker@screenly'):
+        for task in celery.control.inspect(timeout=2.0).active().get('worker@screenly'):
             if task.get('type') == 'server.upgrade_screenly':
                 return jsonify({'id': task.get('id')})
         branch = request.form.get('branch')
@@ -1678,12 +1676,11 @@ def settings_page():
 @app.route('/system-info')
 @authorized
 def system_info():
-    viewlog = None
     try:
         viewlog = [line.decode('utf-8') for line in
                    check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
-    except:
-        pass
+    except Exception:
+        viewlog = None
 
     loadavg = diagnostics.get_load_avg()['15 min']
 
@@ -1696,19 +1693,26 @@ def system_info():
     free_space = size(slash.f_bavail * slash.f_frsize)
 
     # Get uptime
-    uptime_in_seconds = diagnostics.get_uptime()
-    system_uptime = timedelta(seconds=uptime_in_seconds)
+    system_uptime = timedelta(seconds=diagnostics.get_uptime())
 
     # Player name for title
     player_name = settings['player_name']
 
-    raspberry_model = '%s Revision: %s Ram: %s %s' % (diagnostics.get_raspberry_model(),
-                                                      diagnostics.get_raspberry_revision(),
-                                                      diagnostics.get_raspberry_ram(),
-                                                      diagnostics.get_raspberry_manufacturer())
+    try:
+        raspberry_code = diagnostics.get_raspberry_code()
+        raspberry_model = '{} Revision: {} Ram: {} {}'.format(
+            diagnostics.get_raspberry_model(raspberry_code),
+            diagnostics.get_raspberry_revision(raspberry_code),
+            diagnostics.get_raspberry_ram(raspberry_code),
+            diagnostics.get_raspberry_manufacturer(raspberry_code)
+        )
+    except sh.ErrorReturnCode_1:
+        raspberry_model = 'Unable to determine raspberry model.'
 
-    branch = 'development' if diagnostics.get_git_branch() == 'master' else diagnostics.get_git_branch()
-    screenly_version = '%s@%s' % (branch, diagnostics.get_git_short_hash())
+    screenly_version = '{}@{}'.format(
+        diagnostics.get_git_branch(),
+        diagnostics.get_git_short_hash()
+    )
 
     return template(
         'system-info.html',
@@ -1730,6 +1734,7 @@ def system_info():
 def integrations():
 
     context = {
+        'player_name': settings['player_name'],
         'is_balena': is_balena_app(),
         'is_wott_installed': is_wott_integrated(),
     }

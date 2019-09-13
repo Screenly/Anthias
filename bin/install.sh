@@ -87,12 +87,6 @@ elif [ "$WEB_UPGRADE" = true ]; then
   if [ "$BRANCH_VERSION" = "latest" ]; then
     export DOCKER_TAG="latest"
     BRANCH="master"
-#  elif [ "$BRANCH_VERSION" = "experimental" ]; then
-#    export DOCKER_TAG="experimental"
-#    BRANCH="experimental"
-#  elif [ "$BRANCH_VERSION" = "production" ]; then
-#    export DOCKER_TAG="production"
-#    BRANCH="production"
   else
     echo -e "Invalid -b parameter."
     exit 1
@@ -131,8 +125,10 @@ fi
 
 if [ "$WEB_UPGRADE" = false ]; then
   set -x
+  REPOSITORY=${1:-https://github.com/screenly/screenly-ose.git}
 else
   set -e
+  REPOSITORY=https://github.com/screenly/screenly-ose.git
 fi
 
 sudo mkdir -p /etc/ansible
@@ -157,13 +153,12 @@ else
   export MANAGE_NETWORK=false
 fi
 
-sudo pip install ansible==2.8.1
+sudo pip install ansible==2.8.2
 
-# Uncomment before merge with master branch
-#sudo -u pi ansible localhost -m git -a "repo=${1:-https://github.com/screenly/screenly-ose.git} dest=/home/pi/screenly version=$BRANCH"
+sudo -u pi ansible localhost -m git -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH"
 cd /home/pi/screenly/ansible
 
-sudo ansible-playbook site.yml $EXTRA_ARGS
+sudo -E ansible-playbook site.yml $EXTRA_ARGS
 
 sudo apt-get autoclean
 sudo apt-get clean
@@ -180,9 +175,16 @@ sudo chown -R pi:pi /home/pi
 if [ "$BRANCH" = "master" ]; then
   sudo rm -f /etc/sudoers.d/010_pi-nopasswd
 else
-  #Temporarily necessary cause web upgrade only for master branch
+  # Temporarily necessary because web upgrade only for the master branch
   echo "pi ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/010_pi-nopasswd > /dev/null
   sudo chmod 0440 /etc/sudoers.d/010_pi-nopasswd
+fi
+
+# Setup a new pi password
+if [ "$BRANCH" = "master" ] && [ "$WEB_UPGRADE" = false ]; then
+  set +e
+  passwd
+  set -e
 fi
 
 echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md

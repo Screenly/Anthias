@@ -19,10 +19,9 @@ from requests import get as req_get
 from signal import alarm, signal, SIGALRM, SIGUSR1
 from time import sleep
 
-import html_templates
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
-from lib import assets_helper
+from lib import assets_helper, html_templates
 from lib import db
 from lib.diagnostics import get_git_branch, get_git_short_hash
 from lib.github import fetch_remote_hash, remote_branch_available
@@ -42,7 +41,7 @@ INITIALIZED_FILE = '/.screenly/initialized'
 BLACK_PAGE = '/tmp/screenly_html/black_page.html'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 SCREENLY_HTML = '/tmp/screenly_html/'
-LOAD_SCREEN = '/screenly/loading.png'  # relative to $HOME
+LOAD_SCREEN = '/screenly/static/img/loading.png'  # relative to $HOME
 UZBLRC = '/.config/uzbl/config-screenly'  # relative to $HOME
 INTRO = '/screenly/intro-template.html'
 

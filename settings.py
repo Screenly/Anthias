@@ -1,17 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import hashlib
 import json
+import logging
+import os
+import zmq
+import ConfigParser
 from os import path, getenv
 from time import sleep
-import ConfigParser
-import logging
 from UserDict import IterableUserDict
-import zmq
-import hashlib
-import os
 
+from lib.auth import WoTTAuth, BasicAuth, NoAuth
 from lib.errors import ZmqCollectorTimeout
-from auth import WoTTAuth, BasicAuth, NoAuth
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
