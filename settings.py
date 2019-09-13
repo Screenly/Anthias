@@ -1,17 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import hashlib
 import json
+import logging
+import os
+import zmq
+import ConfigParser
 from os import path, getenv
 from time import sleep
-import ConfigParser
-import logging
 from UserDict import IterableUserDict
-import zmq
-import hashlib
-import os
 
+from lib.auth import WoTTAuth, BasicAuth, NoAuth
 from lib.errors import ZmqCollectorTimeout
-from auth import WoTTAuth, BasicAuth, NoAuth
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -35,7 +35,8 @@ DEFAULTS = {
         'resolution': '1920x1080',
         'show_splash': True,
         'shuffle_playlist': False,
-        'verify_ssl': True
+        'verify_ssl': True,
+        'usb_assets_key': ''
     }
 }
 CONFIGURABLE_SETTINGS = DEFAULTS['viewer'].copy()
@@ -212,3 +213,20 @@ class ZmqCollector:
             return json.loads(self.socket.recv(zmq.NOBLOCK))
 
         raise ZmqCollectorTimeout
+
+
+def authenticate():
+    realm = "Screenly OSE" + (" " + settings['player_name'] if settings['player_name'] else "")
+    return Response("Access denied", 401, {"WWW-Authenticate": 'Basic realm="' + realm + '"'})
+
+
+def auth_basic(orig):
+    @wraps(orig)
+    def decorated(*args, **kwargs):
+        if not settings['use_auth']:
+            return orig(*args, **kwargs)
+        auth = request.authorization
+        if not auth or not settings.check_user(auth.username, hashlib.sha256(auth.password).hexdigest()):
+            return authenticate()
+        return orig(*args, **kwargs)
+    return decorated

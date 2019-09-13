@@ -6,6 +6,7 @@
     <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script> <!-- needs jquery -->
     <script src="{{ url_for('static', filename='js/jquery-ui-1.10.1.custom.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/jquery.fileupload.js') }}"></script> <!-- needs jqueryui.widget -->
+    <script src="{{ url_for('static', filename='js/bootstrap-datepicker.js') }}"></script>
 
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
 {% endblock %}
@@ -183,25 +184,8 @@
                 </form>
             </div>
 
-            {% if not context.is_balena %}
-                <div id="wifi-section" class="col-12  mb-5">
-                    <h4 class="page-header">
-                        <b>Reset wifi config</b>
-                    </h4>
-                    <hr>
-                    <p>Run it, and if the next boot does not have a network connection, you will be prompted to select a
-                        WiFi
-                        network. <b>Warning:</b> after pressing, a reboot is required. Web interface will not be
-                        available
-                        until reboot.</p>
-                    <div class="text-right">
-                        <button id="btn-reset" class="btn btn-primary" type="button">Re-run network detection
-                        </button>
-                    </div>
-                </div>
-            {% endif %}
-
-            <div id="backup-section" class="col-12">
+            {# Backup #}
+            <div id="backup-section" class="col-12 mb-5">
                 <h4 class="page-header">
                     <b>Backup</b>
                 </h4>
@@ -216,7 +200,202 @@
                     <div class="bar"></div>
                 </div>
             </div>
-        </div>
 
+            {% if not context.is_balena %}
+
+                {# USB assets #}
+                <div id="usb-assets-key-section" class="col-12 mb-5">
+                    <h4 class="page-header">
+                        <b>USB assets</b>
+                    </h4>
+                    <hr>
+                    <p>Put file with the generated key in USB to use the USB assets.</p>
+                    <div class="text-right">
+                        <button id="btn-view-usb-assets-file" class="btn btn-primary btn-long" type="button">Generate file
+                        </button>
+                    </div>
+                </div>
+                <div id="view-usb-assets-file-modal" class="modal hide fade" role="dialog" tabindex="-1">
+                    <div class="modal-dialog" role="document">
+                        <div class="modal-content">
+                            <div class="form-horizontal">
+                                <div class="modal-header">
+                                    <h3 id="modalLabel">Usb assets file</h3>
+                                </div>
+                                <div class="modal-body pb-0 row">
+
+                                    <div class="form-group col-6">
+                                        <label class="small text-secondary">Start Date</label>
+                                        <input class="form-control date" name="start_date_date" type="text"/>
+                                        <input name="start_date" type="hidden"/>
+                                    </div>
+
+                                    <div class="form-inline col-6">
+                                        <label>Activate assets</label>
+                                        <div class="ml-auto">
+                                            <label class="toggle switch-light switch-ios small m-0">
+                                                <input name="activate_assets" type="checkbox"/>
+                                                <span><span></span><span></span><a></a></span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group col-6">
+                                        <label class="small text-secondary">End Date</label>
+                                        <input class="form-control date" name="end_date_date" type="text"/>
+                                        <input name="end_date" type="hidden"/>
+                                    </div>
+
+                                    <div class="form-inline col-6">
+                                        <label>Copy to internal memory</label>
+                                        <div class="ml-auto">
+                                            <label class="toggle switch-light switch-ios small m-0">
+                                                <input name="copy_assets" type="checkbox"/>
+                                                <span><span></span><span></span><a></a></span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group col-6">
+                                        <label class="small text-secondary">Duration</label>
+                                        <input class="form-control" name="duration" type="number" value="10"/>
+                                    </div>
+
+                                    <div class="form-group col-6">
+                                        <label class="small text-secondary">Usb assets key</label>
+                                        <input id="usb-assets-key-badge" class="form-control mb-3" type="text" value="{{ context.usb_assets_key }}" readonly>
+                                    </div>
+
+                                    <div class="form-group col-12">
+                                        <div class="text-right">
+                                            <button id="generate-usb-assets-key-btn" class="btn btn-primary btn-long"
+                                                    type="button">
+                                                Generate new key
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer text-right">
+                                    <button id="close-view-usb-assets-file-btn" class="btn btn-outline-dark btn-long"
+                                            type="button">
+                                        Close
+                                    </button>
+                                    <button id="btn-download-usb-assets-key" class="btn btn-primary btn-long" type="button">
+                                        Download file
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {# Upgrade #}
+                <div id="upgrade-section" class="col-12 mb-5">
+                    <h4 class="page-header">
+                        <b>Upgrade Screenly</b>
+                    </h4>
+                    <hr>
+                    <div class="text-right">
+                        <button id="btn-upgrade" class="btn btn-primary btn-long" type="button">Upgrade</button>
+                    </div>
+                </div>
+                <div id="upgrade-modal" class="modal hide fade" aria-hidden="true"
+                     data-backdrop="static" data-keyboard="false" role="dialog" tabindex="-1">
+                    <div class="modal-dialog" role="document">
+                        <div class="modal-content">
+                            <div class="form-horizontal">
+                                <div class="modal-header">
+                                    <h3 id="modalLabel">Upgrade Screenly</h3>
+                                </div>
+                                <div class="modal-body">
+                                    <form id="upgrade-form">
+                                        <div id="branch-group-radio" class="form-group">
+                                            <label>Choose the branch you want to use</label>
+                                            <div class="custom-control custom-radio">
+                                                <input type="radio" class="custom-control-input" id="latest_branch"
+                                                       name="groupOfBranch" value="latest" checked>
+                                                <label class="custom-control-label"
+                                                       for="latest_branch">Latest</label>
+                                            </div>
+                                        </div>
+                                        <div class="form-group row">
+                                            <label class="col-12 col-form-label text-left">Do you want Screenly to
+                                                manage
+                                                your
+                                                network? This is recommended for most users.</label>
+                                            <div class="col-3">
+                                                <label id="manage_network_checkbox" class="toggle switch-light switch-ios small m-0">
+                                                    <input name="manage_network" checked="checked" type="checkbox"/>
+                                                    <span><span></span><span></span><a></a></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="form-group row">
+                                            <label class="col-12 col-form-label text-left">Would you like to perform a full system upgrade as well?</label>
+                                            <div class="col-3">
+                                                <label id="system_upgrade_checkbox" class="toggle switch-light switch-ios small m-0">
+                                                    <input name="system_upgrade" type="checkbox"/>
+                                                    <span><span></span><span></span><a></a></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="form-group" id="upgrade_logs_block">
+                                            <label for="upgrade_logs">Logs:</label>
+                                            <textarea readonly class="form-control terminal" rows="5"
+                                                      id="upgrade_logs"></textarea>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="text-left"><small>Notice: If you leave the page before the
+                                                upgrade is complete, don't worry. The next time click "Start
+                                                upgrade"
+                                                you will see logs of the last upgrade if it's not finished
+                                                yet.</small></label>
+                                        </div>
+                                    </form>
+                                </div>
+                                <div class="modal-footer">
+                                    <button id="close-upgrade-btn" class="btn btn-outline-dark btn-long" type="button">
+                                        Close
+                                    </button>
+                                    <button id="start-upgrade-btn" class="btn btn-primary btn-long" type="button">
+                                        Start upgrade
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {# Reset Wifi #}
+                <div id="wifi-section" class="col-12  mb-5">
+                    <h4 class="page-header">
+                        <b>Reset wifi config</b>
+                    </h4>
+                    <hr>
+                    <p>Run it, and if the next boot does not have a network connection, you will be prompted to select a
+                        WiFi
+                        network. <b>Warning:</b> after pressing, a reboot is required. Web interface will not be
+                        available
+                        until reboot.</p>
+                    <div class="text-right">
+                        <button id="btn-reset" class="btn btn-danger btn-long" type="button">Reset wifi</button>
+                    </div>
+                </div>
+
+                {# System controls #}
+                <div id="system-controls-section" class="col-12 mb-5">
+                    <h4 class="page-header">
+                        <b>System Controls</b>
+                    </h4>
+                    <hr>
+                    <div class="text-right">
+                        <button id="btn-reboot-system" class="btn btn-danger btn-long" type="button">Reboot Screenly</button>
+                        <button id="btn-shutdown-system" class="btn btn-danger btn-long" type="button">Shutdown Screenly
+                        </button>
+                    </div>
+                </div>
+
+            {% endif %}
+        </div>
     </div>
 {% endblock %}

@@ -8,19 +8,24 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 import json
 import pydbus
 import re
+import sh
+import shutil
+import time
 import traceback
+import yaml
 import uuid
 from base64 import b64encode
-from datetime import timedelta
+from celery import Celery
+from datetime import datetime, timedelta
 from dateutil import parser as date_parser
 from functools import wraps
 from hurry.filesize import size
 from mimetypes import guess_type
-from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
+from os import getenv, listdir, makedirs, mkdir, path, remove, rename, statvfs, stat, walk
 from subprocess import check_output
 from urlparse import urlparse
 
-from flask import Flask, make_response, render_template, request, send_from_directory, url_for
+from flask import Flask, make_response, render_template, request, send_from_directory, url_for, jsonify
 from flask_cors import CORS
 from flask_restful_swagger_2 import Api, Resource, Schema, swagger
 from flask_swagger_ui import get_swaggerui_blueprint
@@ -34,6 +39,8 @@ from lib import db
 from lib import diagnostics
 from lib import queries
 
+from lib.auth import authorized
+from lib.utils import generate_perfect_paper_password
 from lib.utils import get_active_connections, remove_connection
 from lib.utils import get_node_ip, get_node_mac_address
 from lib.utils import get_video_duration
@@ -43,18 +50,144 @@ from lib.utils import validate_url
 from lib.utils import is_balena_app, is_demo_node, is_wott_integrated, get_wott_device_id
 
 from settings import CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
-from auth import authorized
 
 HOME = getenv('HOME', '/home/pi')
+CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'rpc://')
+CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'amqp://')
 
 app = Flask(__name__)
 CORS(app)
 api = Api(app, api_version="v1", title="Screenly OSE API")
 
+celery = Celery(app.name, backend=CELERY_RESULT_BACKEND, broker=CELERY_BROKER_URL)
+
+
+################################
+# Celery tasks
+################################
+
+@celery.on_after_configure.connect
+def setup_periodic_tasks(sender, **kwargs):
+    # Calls cleanup() every hour.
+    sender.add_periodic_task(3600, cleanup.s(), name='cleanup')
+    sender.add_periodic_task(3600, cleanup_usb_assets.s(), name='cleanup_usb_assets')
+
+
+@celery.task
+def cleanup():
+    sh.find(path.join(HOME, 'screenly_assets'), '-name', '*.tmp', '-delete')
+
+
+@celery.task(bind=True)
+def upgrade_screenly(self, branch, manage_network, upgrade_system):
+    """Background task to upgrade Screenly-OSE."""
+    if not path.isfile('/usr/local/sbin/upgrade_screenly.sh'):
+        raise Exception('File /usr/local/sbin/upgrade_screenly.sh does not exist.')
+    upgrade_process = sh.sudo('/usr/local/sbin/upgrade_screenly.sh',
+                              '-w', 'true',
+                              '-b', branch,
+                              '-n', manage_network,
+                              '-s', upgrade_system,
+                              _bg=True,
+                              _err_to_out=True)
+    while True:
+        if not upgrade_process.process.alive:
+            break
+        self.update_state(state="PROGRESS", meta={'status': upgrade_process.process.stdout})
+        time.sleep(1)
+
+    return {'status': upgrade_process.process.stdout}
+
+
+@celery.task
+def reboot_screenly():
+    """Background task to reboot Screenly-OSE."""
+    sh.sudo('shutdown', '-r', 'now', _bg=True)
+
+
+@celery.task
+def shutdown_screenly():
+    """Background task to shutdown Screenly-OSE."""
+    sh.sudo('shutdown', 'now', _bg=True)
+
+
+@celery.task
+def append_usb_assets(mountpoint):
+    settings.load()
+
+    datetime_now = datetime.now()
+    usb_assets_settings = {
+        'activate': False,
+        'copy': False,
+        'start_date': datetime_now,
+        'end_date': datetime_now + timedelta(days=7),
+        'duration': settings['default_duration']
+    }
+
+    for root, _, filenames in walk(mountpoint):
+        if 'usb_assets_key.yaml' in filenames:
+            with open("%s/%s" % (root, 'usb_assets_key.yaml'), 'r') as yaml_file:
+                usb_file_settings = yaml.load(yaml_file).get('screenly')
+                if usb_file_settings.get('key') == settings['usb_assets_key']:
+                    if usb_file_settings.get('activate'):
+                        usb_assets_settings.update({
+                            'activate': usb_file_settings.get('activate')
+                        })
+                    if usb_file_settings.get('copy'):
+                        usb_assets_settings.update({
+                            'copy': usb_file_settings.get('copy')
+                        })
+                    if usb_file_settings.get('start_date'):
+                        ts = time.mktime(datetime.strptime(usb_file_settings.get('start_date'), "%m/%d/%Y").timetuple())
+                        usb_assets_settings.update({
+                            'start_date': datetime.utcfromtimestamp(ts)
+                        })
+                    if usb_file_settings.get('end_date'):
+                        ts = time.mktime(datetime.strptime(usb_file_settings.get('end_date'), "%m/%d/%Y").timetuple())
+                        usb_assets_settings.update({
+                            'end_date': datetime.utcfromtimestamp(ts)
+                        })
+                    if usb_file_settings.get('duration'):
+                        usb_assets_settings.update({
+                            'duration': usb_file_settings.get('duration')
+                        })
+
+                    files = ['%s/%s' % (root, y) for root, _, filenames in walk(mountpoint) for y in filenames]
+                    with db.conn(settings['database']) as conn:
+                        for filepath in files:
+                            asset = prepare_usb_asset(filepath, **usb_assets_settings)
+                            if asset:
+                                assets_helper.create(conn, asset)
+
+                    break
+
+
+@celery.task
+def remove_usb_assets(mountpoint):
+    settings.load()
+    with db.conn(settings['database']) as conn:
+        for asset in assets_helper.read(conn):
+            if asset['uri'].startswith(mountpoint):
+                assets_helper.delete(conn, asset['asset_id'])
+
+
+@celery.task
+def cleanup_usb_assets(media_dir='/media'):
+    settings.load()
+    mountpoints = ['%s/%s' % (media_dir, x) for x in listdir(media_dir) if path.isdir('%s/%s' % (media_dir, x))]
+    with db.conn(settings['database']) as conn:
+        for asset in assets_helper.read(conn):
+            if asset['uri'].startswith(media_dir):
+                location = re.search(r'^(/\w+/\w+[^/])', asset['uri'])
+                if location:
+                    if location.group() not in mountpoints:
+                        assets_helper.delete(conn, asset['asset_id'])
+
 
 ################################
 # Utilities
 ################################
+
 
 @api.representation('application/json')
 def output_json(data, code, headers=None):
@@ -426,6 +559,42 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
     asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
 
     return asset
+
+
+def prepare_usb_asset(filepath, **kwargs):
+    filetype = guess_type(filepath)[0]
+
+    if not filetype:
+        return
+
+    filetype = filetype.split('/')[0]
+
+    if filetype not in ['image', 'video']:
+        return
+
+    asset_id = uuid.uuid4().hex
+    asset_name = path.basename(filepath)
+    duration = int(get_video_duration(filepath).total_seconds()) if "video" == filetype else int(kwargs['duration'])
+
+    if kwargs['copy']:
+        shutil.copy(filepath, path.join(settings['assetdir'], asset_id))
+        filepath = path.join(settings['assetdir'], asset_id)
+
+    return {
+        'asset_id': asset_id,
+        'duration': duration,
+        'end_date': kwargs['end_date'],
+        'is_active': 1,
+        'is_enabled': kwargs['activate'],
+        'is_processing': 0,
+        'mimetype': filetype,
+        'name': asset_name,
+        'nocache': 0,
+        'play_order': 0,
+        'skip_asset_check': 0,
+        'start_date': kwargs['start_date'],
+        'uri': filepath,
+    }
 
 
 def update_asset(asset, data):
@@ -1050,17 +1219,21 @@ class Recover(Resource):
         }
     })
     def post(self):
+        publisher = ZmqPublisher.get_instance()
         req = Request(request.environ)
         file_upload = (req.files['backup_upload'])
         filename = file_upload.filename
 
         if guess_type(filename)[0] != 'application/x-tar':
             raise Exception("Incorrect file extension.")
-
-        location = path.join("static", filename)
-        file_upload.save(location)
-        backup_helper.recover(location)
-        return "Recovery successful."
+        try:
+            publisher.send_to_viewer('stop')
+            location = path.join("static", filename)
+            file_upload.save(location)
+            backup_helper.recover(location)
+            return "Recovery successful."
+        finally:
+            publisher.send_to_viewer('play')
 
 
 class ResetWifiConfig(Resource):
@@ -1107,6 +1280,106 @@ class ResetWifiConfig(Resource):
             remove_connection(bus, device_uuid)
 
         return '', 204
+
+
+class GenerateUsbAssetsKey(Resource):
+    method_decorators = [api_response, authorized]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Usb assets key generated',
+                'schema': {
+                    'type': 'string'
+                }
+            }
+        }
+    })
+    def get(self):
+        settings['usb_assets_key'] = generate_perfect_paper_password(20, False)
+        settings.save()
+
+        return settings['usb_assets_key']
+
+
+class UpgradeScreenly(Resource):
+    method_decorators = [api_response, authorized]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Upgrade system'
+            }
+        }
+    })
+    def post(self):
+        for task in celery.control.inspect(timeout=2.0).active().get('worker@screenly'):
+            if task.get('type') == 'server.upgrade_screenly':
+                return jsonify({'id': task.get('id')})
+        branch = request.form.get('branch')
+        manage_network = request.form.get('manage_network')
+        system_upgrade = request.form.get('system_upgrade')
+        task = upgrade_screenly.apply_async(args=(branch, manage_network, system_upgrade))
+        return jsonify({'id': task.id})
+
+
+@app.route('/upgrade_status/<task_id>')
+def upgrade_screenly_status(task_id):
+    status_code = 200
+    task = upgrade_screenly.AsyncResult(task_id)
+    if task.state == 'PENDING':
+        response = {
+            'state': task.state,
+            'status': ''
+        }
+        status_code = 202
+    elif task.state == 'PROGRESS':
+        response = {
+            'state': task.state,
+            'status': task.info.get('status', '')
+        }
+        status_code = 202
+    elif task.state != 'FAILURE':
+        response = {
+            'state': task.state,
+            'status': task.info.get('status', '')
+        }
+    else:
+        response = {
+            'state': task.state,
+            'status': str(task.info)
+        }
+    return jsonify(response), status_code
+
+
+class RebootScreenly(Resource):
+    method_decorators = [api_response, authorized]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Reboot system'
+            }
+        }
+    })
+    def post(self):
+        reboot_screenly.apply_async()
+        return '', 200
+
+
+class ShutdownScreenly(Resource):
+    method_decorators = [api_response, authorized]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Shutdown system'
+            }
+        }
+    })
+    def post(self):
+        shutdown_screenly.apply_async()
+        return '', 200
 
 
 class Info(Resource):
@@ -1263,6 +1536,10 @@ api.add_resource(Recover, '/api/v1/recover')
 api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 api.add_resource(Info, '/api/v1/info')
 api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
+api.add_resource(GenerateUsbAssetsKey, '/api/v1/generate_usb_assets_key')
+api.add_resource(UpgradeScreenly, '/api/v1/upgrade_screenly')
+api.add_resource(RebootScreenly, '/api/v1/reboot_screenly')
+api.add_resource(ShutdownScreenly, '/api/v1/shutdown_screenly')
 api.add_resource(ViewerCurrentAsset, '/api/v1/viewer_current_asset')
 
 try:
@@ -1365,6 +1642,10 @@ def settings_page():
     else:
         settings.load()
     for field, default in DEFAULTS['viewer'].items():
+        if field == 'usb_assets_key':
+            if not settings[field]:
+                settings[field] = generate_perfect_paper_password(20, False)
+                settings.save()
         context[field] = settings[field]
 
     auth_backends = []
@@ -1395,12 +1676,11 @@ def settings_page():
 @app.route('/system-info')
 @authorized
 def system_info():
-    viewlog = None
     try:
         viewlog = [line.decode('utf-8') for line in
                    check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
-    except:
-        pass
+    except Exception:
+        viewlog = None
 
     loadavg = diagnostics.get_load_avg()['15 min']
 
@@ -1413,19 +1693,26 @@ def system_info():
     free_space = size(slash.f_bavail * slash.f_frsize)
 
     # Get uptime
-    uptime_in_seconds = diagnostics.get_uptime()
-    system_uptime = timedelta(seconds=uptime_in_seconds)
+    system_uptime = timedelta(seconds=diagnostics.get_uptime())
 
     # Player name for title
     player_name = settings['player_name']
 
-    raspberry_model = '%s Revision: %s Ram: %s %s' % (diagnostics.get_raspberry_model(),
-                                                      diagnostics.get_raspberry_revision(),
-                                                      diagnostics.get_raspberry_ram(),
-                                                      diagnostics.get_raspberry_manufacturer())
+    try:
+        raspberry_code = diagnostics.get_raspberry_code()
+        raspberry_model = '{} Revision: {} Ram: {} {}'.format(
+            diagnostics.get_raspberry_model(raspberry_code),
+            diagnostics.get_raspberry_revision(raspberry_code),
+            diagnostics.get_raspberry_ram(raspberry_code),
+            diagnostics.get_raspberry_manufacturer(raspberry_code)
+        )
+    except sh.ErrorReturnCode_1:
+        raspberry_model = 'Unable to determine raspberry model.'
 
-    branch = 'development' if diagnostics.get_git_branch() == 'master' else diagnostics.get_git_branch()
-    screenly_version = '%s@%s' % (branch, diagnostics.get_git_short_hash())
+    screenly_version = '{}@{}'.format(
+        diagnostics.get_git_branch(),
+        diagnostics.get_git_short_hash()
+    )
 
     return template(
         'system-info.html',
@@ -1447,6 +1734,7 @@ def system_info():
 def integrations():
 
     context = {
+        'player_name': settings['player_name'],
         'is_balena': is_balena_app(),
         'is_wott_installed': is_wott_integrated(),
     }

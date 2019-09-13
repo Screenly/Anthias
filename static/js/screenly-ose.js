@@ -3,7 +3,7 @@
 /* screenly-ose ui */
 
 (function() {
-  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, dateSettings, date_to, delay, domains, duration_seconds_to_human_readable, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, truncate_str, url_test, viduris,
+  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, dateSettings, date_to, delay, domains, durationSecondsToHumanReadable, getMimetype, get_filename, get_template, insertWbr, mimetypes, now, truncate_str, url_test, viduris,
     indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -70,50 +70,44 @@
 
   domains = [['www.youtube.com youtu.be'.split(' '), 'youtube_asset']];
 
-  get_mimetype = (function(_this) {
-    return function(filename) {
-      var domain, ext, match, mt, scheme;
-      scheme = (_.first(filename.split(':'))).toLowerCase();
-      match = indexOf.call(viduris, scheme) >= 0;
-      if (match) {
-        return 'streaming';
-      }
-      domain = _.first(((_.last(filename.split('//'))).toLowerCase()).split('/'));
-      mt = _.find(domains, function(mt) {
-        return indexOf.call(mt[0], domain) >= 0;
-      });
-      if (mt && indexOf.call(mt[0], domain) >= 0) {
-        return mt[1];
-      }
-      ext = (_.last(filename.split('.'))).toLowerCase();
-      mt = _.find(mimetypes, function(mt) {
-        return indexOf.call(mt[0], ext) >= 0;
-      });
-      if (mt) {
-        return mt[1];
-      } else {
-        return null;
-      }
-    };
-  })(this);
+  getMimetype = function(filename) {
+    var domain, ext, match, mt, scheme;
+    scheme = (_.first(filename.split(':'))).toLowerCase();
+    match = indexOf.call(viduris, scheme) >= 0;
+    if (match) {
+      return 'streaming';
+    }
+    domain = _.first(((_.last(filename.split('//'))).toLowerCase()).split('/'));
+    mt = _.find(domains, function(mt) {
+      return indexOf.call(mt[0], domain) >= 0;
+    });
+    if (mt && indexOf.call(mt[0], domain) >= 0) {
+      return mt[1];
+    }
+    ext = (_.last(filename.split('.'))).toLowerCase();
+    mt = _.find(mimetypes, function(mt) {
+      return indexOf.call(mt[0], ext) >= 0;
+    });
+    if (mt) {
+      return mt[1];
+    }
+  };
 
-  duration_seconds_to_human_readable = (function(_this) {
-    return function(secs) {
-      var duration_string, hours, minutes, sec_int, seconds;
-      duration_string = '';
-      sec_int = parseInt(secs);
-      if ((hours = Math.floor(sec_int / 3600)) > 0) {
-        duration_string += hours + ' hours ';
-      }
-      if ((minutes = Math.floor(sec_int / 60) % 60) > 0) {
-        duration_string += minutes + ' min ';
-      }
-      if ((seconds = sec_int % 60) > 0) {
-        duration_string += seconds + ' sec';
-      }
-      return duration_string;
-    };
-  })(this);
+  durationSecondsToHumanReadable = function(secs) {
+    var durationString, hours, minutes, secInt, seconds;
+    durationString = "";
+    secInt = parseInt(secs);
+    if ((hours = Math.floor(secInt / 3600)) > 0) {
+      durationString += hours + " hours ";
+    }
+    if ((minutes = Math.floor(secInt / 60) % 60) > 0) {
+      durationString += minutes + " min ";
+    }
+    if ((seconds = secInt % 60) > 0) {
+      durationString += seconds + " sec";
+    }
+    return durationString;
+  };
 
   url_test = function(v) {
     return /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test(v);
@@ -141,7 +135,6 @@
       this.rollback = bind(this.rollback, this);
       this.backup = bind(this.backup, this);
       this.active = bind(this.active, this);
-      this.defaults = bind(this.defaults, this);
       return Asset.__super__.constructor.apply(this, arguments);
     }
 
@@ -385,29 +378,25 @@
             that.$fv('name', filename);
             that.updateFileUploadMimetype(filename);
             that.viewmodel(model);
-            return data.submit().success((function(_this) {
-              return function(uri) {
-                var save;
-                model.set({
-                  uri: uri
-                }, {
-                  silent: true
-                });
-                save = model.save();
-                save.done(function(data) {
-                  model.id = data.asset_id;
-                  _.extend(model.attributes, data);
-                  return model.collection.add(model);
-                });
-                return save.fail(function() {
-                  return model.destroy();
-                });
-              };
-            })(this)).error((function(_this) {
-              return function() {
+            return data.submit().success(function(uri) {
+              var save;
+              model.set({
+                uri: uri
+              }, {
+                silent: true
+              });
+              save = model.save();
+              save.done(function(data) {
+                model.id = data.asset_id;
+                _.extend(model.attributes, data);
+                return model.collection.add(model);
+              });
+              return save.fail(function() {
                 return model.destroy();
-              };
-            })(this));
+              });
+            }).error(function() {
+              return model.destroy();
+            });
           },
           stop: function(e) {
             (that.$('.progress')).hide();
@@ -450,7 +439,7 @@
 
     AddAssetView.prototype.updateMimetype = function(filename) {
       var mt;
-      mt = get_mimetype(filename);
+      mt = getMimetype(filename);
       this.$fv('mimetype', mt ? mt : new Asset().defaults()['mimetype']);
       return this.change_mimetype();
     };
@@ -469,15 +458,13 @@
       var errors, field, fn, k, len, ref, results, that, v, validators;
       that = this;
       validators = {
-        uri: (function(_this) {
-          return function(v) {
-            if (v) {
-              if (((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
-                return 'please enter a valid URL';
-              }
+        uri: function(v) {
+          if (v) {
+            if (((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
+              return 'please enter a valid URL';
             }
-          };
-        })(this)
+          }
+        }
       };
       errors = (function() {
         var results;
@@ -679,7 +666,7 @@
           }, {
             silent: true
           });
-        } else if (get_mimetype(this.model.get('uri'))) {
+        } else if (getMimetype(this.model.get('uri'))) {
           this.model.set({
             name: get_filename(this.model.get('uri'))
           }, {
@@ -858,7 +845,7 @@
       var json;
       this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
         name: insertWbr(truncate_str(json.name)),
-        duration: duration_seconds_to_human_readable(json.duration),
+        duration: durationSecondsToHumanReadable(json.duration),
         start_date: (date_to(json.start_date)).string(),
         end_date: (date_to(json.end_date)).string()
       })));
@@ -1084,28 +1071,23 @@
     extend(App, superClass);
 
     function App() {
-      this.next = bind(this.next, this);
-      this.previous = bind(this.previous, this);
-      this.add = bind(this.add, this);
       this.initialize = bind(this.initialize, this);
       return App.__super__.constructor.apply(this, arguments);
     }
 
     App.prototype.initialize = function() {
       var address, error, k, len, results, ws;
-      ($(window)).ajaxError((function(_this) {
-        return function(e, r) {
-          var err, j;
-          ($('#request-error')).html((get_template('request-error'))());
-          if ((j = $.parseJSON(r.responseText)) && (err = j.error)) {
-            ($('#request-error .msg')).text('Server Error: ' + err);
-          }
-          ($('#request-error')).show();
-          return setTimeout(function() {
-            return ($('#request-error')).fadeOut('slow');
-          }, 5000);
-        };
-      })(this));
+      ($(window)).ajaxError(function(e, r) {
+        var err, j;
+        ($('#request-error')).html((get_template('request-error'))());
+        if ((j = $.parseJSON(r.responseText)) && (err = j.error)) {
+          ($('#request-error .msg')).text('Server Error: ' + err);
+        }
+        ($('#request-error')).show();
+        return setTimeout(function() {
+          return ($('#request-error')).fadeOut('slow');
+        }, 5000);
+      });
       ($(window)).ajaxSuccess(function(event, request, settings) {
         if ((settings.url === new Assets().url) && (settings.type === 'POST')) {
           ($('#request-error')).html((get_template('request-success'))());

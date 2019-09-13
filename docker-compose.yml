@@ -3,7 +3,7 @@ services:
   screenly-server:
     build:
       context: .
-      dockerfile: Dockerfile.template
+      dockerfile: docker/Dockerfile.server.template
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -17,7 +17,7 @@ services:
   screenly-viewer:
     build:
       context: .
-      dockerfile: Dockerfile.template
+      dockerfile: docker/Dockerfile.viewer.template
     depends_on:
       - screenly-server
     environment:
@@ -34,7 +34,7 @@ services:
   screenly-websocket:
     build:
       context: .
-      dockerfile: Dockerfile.template
+      dockerfile: docker/Dockerfile.websocket.template
     depends_on:
       - screenly-server
     environment:
@@ -45,6 +45,27 @@ services:
     privileged: true
     volumes:
       - resin-data:/data
+
+  screenly-celery:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.celery.template
+    depends_on:
+      - screenly-server
+      - rabbitmq
+    environment:
+      - HOME=/data
+      - PYTHONPATH=/data/screenly
+      - SCREENLYSERVICE=celery
+    network_mode: "host"
+    privileged: true
+    volumes:
+      - resin-data:/data
+
+  rabbitmq:
+    image: arm32v7/rabbitmq
+    command: rabbitmq-server
+    network_mode: "host"
 
 volumes:
     resin-data:

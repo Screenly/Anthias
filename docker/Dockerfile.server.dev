@@ -1,5 +1,4 @@
 FROM debian:stretch
-MAINTAINER Viktor Petersson <vpetersson@screenly.io>
 
 RUN apt-get update && \
     apt-get -y install \
@@ -23,8 +22,8 @@ RUN apt-get update && \
     apt-get clean
 
 # Install Python requirements
-ADD requirements.txt /tmp/requirements.txt
-ADD requirements.dev.txt /tmp/requirements.dev.txt
+ADD requirements/requirements.txt /tmp/requirements.txt
+ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
 RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
     pip install -r /tmp/requirements.txt && \
     pip install -r /tmp/requirements.dev.txt
@@ -35,10 +34,7 @@ RUN useradd pi
 # Install config file and file structure
 RUN mkdir -p /home/pi/.screenly /home/pi/screenly /home/pi/screenly_assets
 COPY ansible/roles/screenly/files/screenly.conf /home/pi/.screenly/screenly.conf
-
-# Copy in code base
-COPY . /home/pi/screenly
-RUN chown -R pi:pi /home/pi
+RUN chown -R pi:pi /home/pi/.screenly /home/pi/screenly_assets
 
 USER pi
 WORKDIR /home/pi/screenly

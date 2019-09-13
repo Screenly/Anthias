@@ -19,10 +19,9 @@ from requests import get as req_get
 from signal import alarm, signal, SIGALRM, SIGUSR1
 from time import sleep
 
-import html_templates
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
-from lib import assets_helper
+from lib import assets_helper, html_templates
 from lib import db
 from lib.diagnostics import get_git_branch, get_git_short_hash
 from lib.github import fetch_remote_hash, remote_branch_available
@@ -42,12 +41,13 @@ INITIALIZED_FILE = '/.screenly/initialized'
 BLACK_PAGE = '/tmp/screenly_html/black_page.html'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 SCREENLY_HTML = '/tmp/screenly_html/'
-LOAD_SCREEN = '/screenly/loading.png'  # relative to $HOME
+LOAD_SCREEN = '/screenly/static/img/loading.png'  # relative to $HOME
 UZBLRC = '/.config/uzbl/config-screenly'  # relative to $HOME
 INTRO = '/screenly/intro-template.html'
 
 current_browser_url = None
 browser = None
+loop_is_stopped = False
 
 VIDEO_TIMEOUT = 20  # secs
 
@@ -89,6 +89,18 @@ def navigate_to_asset(asset_id):
     system('pkill -SIGUSR1 -f viewer.py')
 
 
+def stop_loop():
+    global db_conn, loop_is_stopped
+    loop_is_stopped = True
+    skip_asset()
+    db_conn = None
+
+
+def play_loop():
+    global loop_is_stopped
+    loop_is_stopped = False
+
+
 def command_not_found():
     logging.error("Command not found")
 
@@ -103,6 +115,8 @@ commands = {
     'previous': lambda _: skip_asset(back=True),
     'asset': lambda id: navigate_to_asset(id),
     'reload': lambda _: load_settings(),
+    'stop': lambda _: stop_loop(),
+    'play': lambda _: play_loop(),
     'unknown': lambda _: command_not_found(),
     'current_asset_id': lambda _: send_current_asset_id_to_server()
 }
@@ -490,6 +504,7 @@ def setup_hotspot():
     )
 
     # Displays the hotspot page
+
     if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
         if len(wireless_connections) == 0:
             url = 'http://{0}/hotspot'.format(LISTEN)
@@ -525,7 +540,14 @@ def wait_for_node_ip(seconds):
 
 
 def main():
+    global db_conn, scheduler
     setup()
+
+    subscriber = ZmqSubscriber()
+    subscriber.daemon = True
+    subscriber.start()
+
+    scheduler = Scheduler()
 
     if is_balena_app():
         load_browser()
@@ -538,18 +560,18 @@ def main():
     if settings['show_splash']:
         sleep(SPLASH_DELAY)
 
-    global scheduler
-    scheduler = Scheduler()
-
-    subscriber = ZmqSubscriber()
-    subscriber.daemon = True
-    subscriber.start()
-
     # We don't want to show splash-page if there are active assets but all of them are not available
     view_image(HOME + LOAD_SCREEN)
 
     logging.debug('Entering infinite loop.')
     while True:
+        if loop_is_stopped:
+            sleep(0.1)
+            continue
+        if not db_conn:
+            load_settings()
+            db_conn = db.conn(settings['database'])
+
         asset_loop(scheduler)
 
 
