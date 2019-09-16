@@ -18,8 +18,11 @@ from settings import settings, ZmqPublisher
 from subprocess import check_output, call
 from threading import Thread
 from urlparse import urlparse
+import logging
 
 from assets_helper import update
+
+WOTT_PATH = '/opt/wott'
 
 arch = machine()
 
@@ -100,45 +103,67 @@ def get_node_mac_address():
         pass
 
 
-def nmcli_get_connections(pattern=None, pattern_ignore=None, fields=None, active=False):
+def get_active_connections(bus, fields=None):
     """
-    Gets the connections using nmcli
 
-    :param pattern: string
-    :param pattern_ignore: string
-    :param fields: iterable objects
-    :param active: boolean
+    :param bus: pydbus.bus.Bus
+    :param fields: list
     :return: list
     """
-    escape_color_pattern = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
-
     if not fields:
-        fields = ['name', 'uuid', 'type', 'device']
+        fields = ['Id', 'Uuid', 'Type', 'Devices']
 
-    params = list()
+    connections = list()
 
-    if active:
-        params.append('--active')
+    try:
+        nm_proxy = bus.get("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager")
+    except Exception:
+        return None
 
-    out = sh.nmcli('-t', '-f', ','.join(fields), 'c', 'show', *params)
-    connections = re.sub(escape_color_pattern, '', out.encode('utf-8')).splitlines()
+    nm_properties = nm_proxy["org.freedesktop.DBus.Properties"]
+    active_connections = nm_properties.Get("org.freedesktop.NetworkManager", "ActiveConnections")
+    for active_connection in active_connections:
+        active_connection_proxy = bus.get("org.freedesktop.NetworkManager", active_connection)
+        active_connection_properties = active_connection_proxy["org.freedesktop.DBus.Properties"]
 
-    if pattern:
-        connections = filter(re.compile(pattern).search, connections)
+        connection = dict()
+        for field in fields:
+            field_value = active_connection_properties.Get("org.freedesktop.NetworkManager.Connection.Active", field)
 
-    if pattern_ignore:
-        connections = filter(lambda x: re.compile(pattern_ignore).search(x) is None, connections)
+            if field == 'Devices':
+                devices = list()
+                for device_path in field_value:
+                    device_proxy = bus.get("org.freedesktop.NetworkManager", device_path)
+                    device_properties = device_proxy["org.freedesktop.DBus.Properties"]
+                    devices.append(device_properties.Get("org.freedesktop.NetworkManager.Device", "Interface"))
+                field_value = devices
+
+            connection.update({field: field_value})
+        connections.append(connection)
 
     return connections
 
 
-def nmcli_remove_connection(connection):
-    """
-    :param connection: str
-    :return: str
+def remove_connection(bus, uuid):
     """
 
-    return sh.sudo.nmcli('c', 'delete', connection)
+    :param bus: pydbus.bus.Bus
+    :param uuid: string
+    :return: boolean
+    """
+    try:
+        nm_proxy = bus.get("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings")
+    except Exception:
+        return False
+
+    nm_settings = nm_proxy["org.freedesktop.NetworkManager.Settings"]
+
+    connection_path = nm_settings.GetConnectionByUuid(uuid)
+    connection_proxy = bus.get("org.freedesktop.NetworkManager", connection_path)
+    connection = connection_proxy["org.freedesktop.NetworkManager.Settings.Connection"]
+    connection.Delete()
+
+    return True
 
 
 def get_video_duration(file):
@@ -299,3 +324,33 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
     if not has_symbols:
         ppp_letters = ''.join(set(ppp_letters) - set(string.punctuation))
     return "".join(random.SystemRandom().choice(ppp_letters) for _ in range(pw_length))
+
+
+def is_balena_app():
+    """
+    Checks the application is running on Balena Cloud
+    :return: bool
+    """
+    return bool(getenv('RESIN', False)) or bool(getenv('BALENA', False))
+
+
+def is_wott_integrated():
+    """
+    Chacks if wott-agent installed or not
+    :return:
+    """
+    return os.path.isdir(WOTT_PATH)
+
+
+def get_wott_device_id():
+    """
+    :return: WoTT Device id of this device
+    """
+    metadata_path = os.path.join(WOTT_PATH, 'metadata.json')
+    if os.path.isfile(metadata_path):
+        with open(metadata_path) as metadata_file:
+            metadata = json.load(metadata_file)
+        if 'device_id' in metadata:
+            return metadata['device_id']
+    logging.warning("Could not read WoTT Device ID")
+    return 'Could not read WoTT Device ID'

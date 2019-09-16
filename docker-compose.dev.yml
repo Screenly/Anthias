@@ -1,0 +1,56 @@
+version: "3"
+services:
+  screenly-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.server.dev
+    depends_on:
+      - screenly-celery
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LISTEN=0.0.0.0
+    image: screenly-ose-server
+    network_mode: "host"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./:/home/pi/screenly:ro
+      - screenly-volume:/home/pi/.screenly
+      - screenly-assets-volume:/home/pi/screenly_assets
+
+  screenly-websocket:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.websocket.dev
+    depends_on:
+      - screenly-server
+    image: screenly-ose-websocket
+    network_mode: "host"
+    volumes:
+      - ./:/home/pi/screenly:ro
+      - screenly-volume:/home/pi/.screenly
+      - screenly-assets-volume:/home/pi/screenly_assets
+
+  screenly-celery:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.celery.dev
+    depends_on:
+      - rabbitmq
+    image: screenly-ose-celery
+    network_mode: "host"
+    volumes:
+      - ./:/home/pi/screenly:ro
+      - screenly-volume:/home/pi/.screenly
+      - screenly-assets-volume:/home/pi/screenly_assets
+
+  rabbitmq:
+    image: rabbitmq
+    command: rabbitmq-server
+    network_mode: "host"
+    logging:
+      driver: none
+
+volumes:
+  screenly-volume:
+  screenly-assets-volume:

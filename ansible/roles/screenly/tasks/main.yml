@@ -38,7 +38,7 @@
     dest: /home/pi/.config/uzbl/config-screenly
 
 - name: Install pip dependencies
-  pip: requirements=/home/pi/screenly/requirements.txt
+  pip: requirements=/home/pi/screenly/requirements/requirements.txt
 
 - name: Create default assets database if does not exists
   copy:
@@ -49,26 +49,30 @@
     force: no
 
 - name: Run database migration
-  become: no
+  become_user: pi
   command: python /home/pi/screenly/bin/migrate.py
   register: migrate
 
 - debug: msg="{{ migrate.stdout }}"
 
-- name: Copy screenly_utils.sh
-  copy:
-    src: screenly_utils.sh
-    dest: /usr/local/bin/screenly_utils.sh
-    mode: 0755
-    owner: root
-    group: root
+- name: Remove screenly_utils.sh
+  file:
+    state: absent
+    path: /usr/local/bin/screenly_utils.sh
 
 - cron:
     name: Cleanup screenly_assets
-    minute: 0
-    hour: 1
-    job: "/usr/local/bin/screenly_utils.sh cleanup"
+    state : absent
     user: pi
+
+- name: Download upgrade_screenly.sh from github repository
+  get_url:
+    url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/install.sh
+    dest: /usr/local/sbin/upgrade_screenly.sh
+    mode: 0700
+    owner: root
+    group: root
+    force: yes
 
 - name: Copy screenly_overrides
   copy:
@@ -77,6 +81,33 @@
     mode: 0440
     owner: root
     group: root
+
+- name: Copy screenly_usb_assets.sh
+  copy:
+    src: screenly_usb_assets.sh
+    dest: /usr/local/bin/screenly_usb_assets.sh
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Installs autoplay udev rule
+  copy:
+    src: 50-autoplay.rules
+    dest: /etc/udev/rules.d/50-autoplay.rules
+    mode: 644
+    owner: root
+    group: root
+
+- name: Copy systemd-udevd service
+  copy:
+    src: /lib/systemd/system/systemd-udevd.service
+    dest: /etc/systemd/system/systemd-udevd.service
+
+- name: Configure systemd-udevd service
+  lineinfile:
+    dest: /etc/systemd/system/systemd-udevd.service
+    regexp: '^MountFlags='
+    line: 'MountFlags=shared'
 
 - name: Copy screenly systemd units
   copy:

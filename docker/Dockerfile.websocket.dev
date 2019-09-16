@@ -1,0 +1,28 @@
+FROM debian:stretch
+
+RUN apt-get update && \
+    apt-get -y install \
+        build-essential \
+        curl \
+        python-dev && \
+    apt-get clean
+
+# Install Python requirements
+RUN curl -s https://bootstrap.pypa.io/get-pip.py | python
+RUN pip install \
+    flask==1.0.2 \
+    gevent-websocket==0.10.1 \
+    gevent==1.2.2 \
+    pyzmq==16.0.2
+
+# Create runtime user
+RUN useradd pi
+
+# Install config file and file structure
+RUN mkdir -p /home/pi/.screenly /home/pi/screenly /home/pi/screenly_assets
+RUN chown -R pi:pi /home/pi/.screenly /home/pi/screenly_assets
+
+USER pi
+WORKDIR /home/pi/screenly
+
+CMD python websocket_server_layer.py

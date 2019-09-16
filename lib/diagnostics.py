@@ -22,7 +22,7 @@ def parse_cpu_info():
             try:
                 key = line.split(':')[0].strip()
                 value = line.split(':')[1].strip()
-            except:
+            except Exception:
                 pass
 
             if key == 'processor':
@@ -40,7 +40,7 @@ def get_kernel_modules():
             if 'Module' not in line:
                 modules.append(line.split()[0])
         return modules
-    except:
+    except Exception:
         return 'Unable to run lsmod.'
 
 
@@ -50,14 +50,14 @@ def get_gpu_version():
         for line in version:
             if 'version' in line:
                 return line.strip().replace('version ', '')
-    except:
+    except Exception:
         return 'Unable to run vcgencmd.'
 
 
 def get_monitor_status():
     try:
         return sh.tvservice('-s').stdout.strip()
-    except:
+    except Exception:
         return 'Unable to run tvservice.'
 
 
@@ -70,7 +70,7 @@ def get_display_power():
             return 'Off'
         else:
             return 'Unknown'
-    except:
+    except Exception:
         return 'Unable to determine display power.'
 
 
@@ -122,7 +122,7 @@ def get_git_branch():
             'HEAD'
         )
         return get_hash.stdout.strip()
-    except:
+    except Exception:
         return 'Unable to get git branch.'
 
 
@@ -136,7 +136,7 @@ def get_git_short_hash():
             'HEAD'
         )
         return get_hash.stdout.strip()
-    except:
+    except Exception:
         return 'Unable to get git hash.'
 
 
@@ -149,7 +149,7 @@ def get_git_hash():
             'HEAD'
         )
         return get_hash.stdout.strip()
-    except:
+    except Exception:
         return 'Unable to get git hash.'
 
 
@@ -194,7 +194,7 @@ def get_raspberry_code():
         return matches[0].strip()
 
 
-def get_raspberry_model():
+def get_raspberry_model(raspberry_code):
     """
     Data source
     https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
@@ -213,16 +213,24 @@ def get_raspberry_model():
         'a020a0': 'Model CM3',
         'a21041': 'Model 2B',
         'a22042': 'Model 2B (with BCM2837)',
+        '9020e0': 'Model 3A+',
         'a22082': 'Model 3B',
         'a32082': 'Model 3B',
         'a52082': 'Model 3B',
+        'a22083': 'Model 3B',
         'a020d3': 'Model 3B+',
-        '9020e0': 'Model 3A+'
+        'a03111': 'Model 4B',
+        'b03111': 'Model 4B',
+        'c03111': 'Model 4B',
+        '900061': 'Model CM',
+        'a220a0': 'Model CM3',
+        'a02100': 'Model CM3+'
     }
-    return models.get(get_raspberry_code())
+
+    return models.get(raspberry_code, 'Unable to determine raspberry model.')
 
 
-def get_raspberry_revision():
+def get_raspberry_revision(raspberry_code):
     """
     Data source
     https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
@@ -241,16 +249,24 @@ def get_raspberry_revision():
         'a020a0': '1.0',
         'a21041': '1.1',
         'a22042': '1.2',
+        '9020e0': '1.0',
         'a22082': '1.2',
         'a32082': '1.2',
         'a52082': '1.2',
+        'a22083': '1.3',
         'a020d3': '1.3',
-        '9020e0': '1.0'
+        'a03111': '1.1',
+        'b03111': '1.1',
+        'c03111': '1.1',
+        '900061': '1.1',
+        'a220a0': '1.0',
+        'a02100': '1.0'
     }
-    return revisions.get(get_raspberry_code())
+
+    return revisions.get(raspberry_code, 'Unable to determine raspberry revision.')
 
 
-def get_raspberry_ram():
+def get_raspberry_ram(raspberry_code):
     """
     Data source
     https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
@@ -269,16 +285,24 @@ def get_raspberry_ram():
         'a020a0': '1 GB',
         'a21041': '1 GB',
         'a22042': '1 GB',
+        '9020e0': '512MB',
         'a22082': '1 GB',
         'a32082': '1 GB',
         'a52082': '1 GB',
+        'a22083': '1GB',
         'a020d3': '1 GB',
-        '9020e0': '512 MB'
+        'a03111': '1GB',
+        'b03111': '2GB',
+        'c03111': '4GB',
+        '900061': '512MB',
+        'a220a0': '1GB',
+        'a02100': '1GB'
     }
-    return rams.get(get_raspberry_code())
+
+    return rams.get(raspberry_code, 'Unable to determine raspberry RAM.')
 
 
-def get_raspberry_manufacturer():
+def get_raspberry_manufacturer(raspberry_code):
     """
     Data source
     https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
@@ -297,13 +321,21 @@ def get_raspberry_manufacturer():
         'a020a0': 'Sony UK',
         'a21041': 'Embest',
         'a22042': 'Embest',
+        '9020e0': 'Sony UK',
         'a22082': 'Embest',
         'a32082': 'Sony Japan',
         'a52082': 'Stadium',
+        'a22083': 'Embest',
         'a020d3': 'Sony UK',
-        '9020e0': 'Sony UK'
+        'a03111': 'Sony UK',
+        'b03111': 'Sony UK',
+        'c03111': 'Sony UK',
+        '900061': 'Sony UK',
+        'a220a0': 'Embest',
+        'a02100': 'Sony UK'
     }
-    return manufacturers.get(get_raspberry_code())
+
+    return manufacturers.get(raspberry_code, 'Unable to determine raspberry manufacturer.')
 
 
 def compile_report():

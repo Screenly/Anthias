@@ -3,7 +3,7 @@
 /* screenly-ose ui */
 
 (function() {
-  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_settings, date_settings_12hour, date_settings_24hour, date_to, delay, domains, duration_seconds_to_human_readable, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, truncate_str, url_test, viduris,
+  var API, AddAssetView, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, dateSettings, date_to, delay, domains, durationSecondsToHumanReadable, getMimetype, get_filename, get_template, insertWbr, mimetypes, now, truncate_str, url_test, viduris,
     indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -18,36 +18,36 @@
 
   API = (window.Screenly || (window.Screenly = {}));
 
-  date_settings_12hour = {
-    full_date: 'MM/DD/YYYY hh:mm:ss A',
-    date: 'MM/DD/YYYY',
-    time: 'hh:mm A',
-    show_meridian: true,
-    date_picker_format: 'mm/dd/yyyy'
-  };
+  dateSettings = {};
 
-  date_settings_24hour = {
-    full_date: 'MM/DD/YYYY HH:mm:ss',
-    date: 'MM/DD/YYYY',
-    time: 'HH:mm',
-    show_meridian: false,
-    datepicker_format: 'mm/dd/yyyy'
-  };
+  if (use24HourClock) {
+    dateSettings.time = "HH:mm";
+    dateSettings.fullTime = "HH:mm:ss";
+    dateSettings.showMeridian = false;
+  } else {
+    dateSettings.time = "hh:mm A";
+    dateSettings.fullTime = "hh:mm:ss A";
+    dateSettings.showMeridian = true;
+  }
 
-  date_settings = use_24_hour_clock ? date_settings_24hour : date_settings_12hour;
+  dateSettings.date = dateFormat.toUpperCase();
+
+  dateSettings.datepickerFormat = dateFormat;
+
+  dateSettings.fullDate = dateSettings.date + " " + dateSettings.fullTime;
 
   API.date_to = date_to = function(d) {
     var dd;
     dd = moment.utc(d).local();
     return {
       string: function() {
-        return dd.format(date_settings.full_date);
+        return dd.format(dateSettings.fullDate);
       },
       date: function() {
-        return dd.format(date_settings.date);
+        return dd.format(dateSettings.date);
       },
       time: function() {
-        return dd.format(date_settings.time);
+        return dd.format(dateSettings.time);
       }
     };
   };
@@ -70,50 +70,44 @@
 
   domains = [['www.youtube.com youtu.be'.split(' '), 'youtube_asset']];
 
-  get_mimetype = (function(_this) {
-    return function(filename) {
-      var domain, ext, match, mt, scheme;
-      scheme = (_.first(filename.split(':'))).toLowerCase();
-      match = indexOf.call(viduris, scheme) >= 0;
-      if (match) {
-        return 'streaming';
-      }
-      domain = _.first(((_.last(filename.split('//'))).toLowerCase()).split('/'));
-      mt = _.find(domains, function(mt) {
-        return indexOf.call(mt[0], domain) >= 0;
-      });
-      if (mt && indexOf.call(mt[0], domain) >= 0) {
-        return mt[1];
-      }
-      ext = (_.last(filename.split('.'))).toLowerCase();
-      mt = _.find(mimetypes, function(mt) {
-        return indexOf.call(mt[0], ext) >= 0;
-      });
-      if (mt) {
-        return mt[1];
-      } else {
-        return null;
-      }
-    };
-  })(this);
+  getMimetype = function(filename) {
+    var domain, ext, match, mt, scheme;
+    scheme = (_.first(filename.split(':'))).toLowerCase();
+    match = indexOf.call(viduris, scheme) >= 0;
+    if (match) {
+      return 'streaming';
+    }
+    domain = _.first(((_.last(filename.split('//'))).toLowerCase()).split('/'));
+    mt = _.find(domains, function(mt) {
+      return indexOf.call(mt[0], domain) >= 0;
+    });
+    if (mt && indexOf.call(mt[0], domain) >= 0) {
+      return mt[1];
+    }
+    ext = (_.last(filename.split('.'))).toLowerCase();
+    mt = _.find(mimetypes, function(mt) {
+      return indexOf.call(mt[0], ext) >= 0;
+    });
+    if (mt) {
+      return mt[1];
+    }
+  };
 
-  duration_seconds_to_human_readable = (function(_this) {
-    return function(secs) {
-      var duration_string, hours, minutes, sec_int, seconds;
-      duration_string = '';
-      sec_int = parseInt(secs);
-      if ((hours = Math.floor(sec_int / 3600)) > 0) {
-        duration_string += hours + ' hours ';
-      }
-      if ((minutes = Math.floor(sec_int / 60) % 60) > 0) {
-        duration_string += minutes + ' min ';
-      }
-      if ((seconds = sec_int % 60) > 0) {
-        duration_string += seconds + ' sec';
-      }
-      return duration_string;
-    };
-  })(this);
+  durationSecondsToHumanReadable = function(secs) {
+    var durationString, hours, minutes, secInt, seconds;
+    durationString = "";
+    secInt = parseInt(secs);
+    if ((hours = Math.floor(secInt / 3600)) > 0) {
+      durationString += hours + " hours ";
+    }
+    if ((minutes = Math.floor(secInt / 60) % 60) > 0) {
+      durationString += minutes + " min ";
+    }
+    if ((seconds = secInt % 60) > 0) {
+      durationString += seconds + " sec";
+    }
+    return durationString;
+  };
 
   url_test = function(v) {
     return /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test(v);
@@ -141,7 +135,6 @@
       this.rollback = bind(this.rollback, this);
       this.backup = bind(this.backup, this);
       this.active = bind(this.active, this);
-      this.defaults = bind(this.defaults, this);
       return Asset.__super__.constructor.apply(this, arguments);
     }
 
@@ -157,7 +150,7 @@
         is_active: 1,
         start_date: '',
         end_date: '',
-        duration: default_duration,
+        duration: defaultDuration,
         is_enabled: 0,
         is_processing: 0,
         nocache: 0,
@@ -275,7 +268,7 @@
       ref = ['start', 'end'];
       for (k = 0, len = ref.length; k < len; k++) {
         which = ref[k];
-        this.$fv(which + "_date", (new Date((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")))).toISOString());
+        this.$fv(which + "_date", (moment((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")), dateSettings.fullDate)).toDate().toISOString());
       }
       ref1 = model.fields;
       results = [];
@@ -345,9 +338,9 @@
       if ((this.$fv('mimetype')) === "video") {
         return this.$fv('duration', 0);
       } else if ((this.$fv('mimetype')) === "streaming") {
-        return this.$fv('duration', default_streaming_duration);
+        return this.$fv('duration', defaultStreamingDuration);
       } else {
-        return this.$fv('duration', default_duration);
+        return this.$fv('duration', defaultDuration);
       }
     };
 
@@ -385,29 +378,25 @@
             that.$fv('name', filename);
             that.updateFileUploadMimetype(filename);
             that.viewmodel(model);
-            return data.submit().success((function(_this) {
-              return function(uri) {
-                var save;
-                model.set({
-                  uri: uri
-                }, {
-                  silent: true
-                });
-                save = model.save();
-                save.done(function(data) {
-                  model.id = data.asset_id;
-                  _.extend(model.attributes, data);
-                  return model.collection.add(model);
-                });
-                return save.fail(function() {
-                  return model.destroy();
-                });
-              };
-            })(this)).error((function(_this) {
-              return function() {
+            return data.submit().success(function(uri) {
+              var save;
+              model.set({
+                uri: uri
+              }, {
+                silent: true
+              });
+              save = model.save();
+              save.done(function(data) {
+                model.id = data.asset_id;
+                _.extend(model.attributes, data);
+                return model.collection.add(model);
+              });
+              return save.fail(function() {
                 return model.destroy();
-              };
-            })(this));
+              });
+            }).error(function() {
+              return model.destroy();
+            });
           },
           stop: function(e) {
             (that.$('.progress')).hide();
@@ -450,7 +439,7 @@
 
     AddAssetView.prototype.updateMimetype = function(filename) {
       var mt;
-      mt = get_mimetype(filename);
+      mt = getMimetype(filename);
       this.$fv('mimetype', mt ? mt : new Asset().defaults()['mimetype']);
       return this.change_mimetype();
     };
@@ -469,15 +458,13 @@
       var errors, field, fn, k, len, ref, results, that, v, validators;
       that = this;
       validators = {
-        uri: (function(_this) {
-          return function(v) {
-            if (v) {
-              if (((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
-                return 'please enter a valid URL';
-              }
+        uri: function(v) {
+          if (v) {
+            if (((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
+              return 'please enter a valid URL';
             }
-          };
-        })(this)
+          }
+        }
       };
       errors = (function() {
         var results;
@@ -554,7 +541,7 @@
         minuteStep: 5,
         showInputs: true,
         disableFocus: true,
-        showMeridian: date_settings.show_meridian
+        showMeridian: dateSettings.showMeridian
       });
       (this.$('input[name="nocache"]')).prop('checked', this.model.get('nocache'));
       (this.$('.modal-header .close')).remove();
@@ -598,7 +585,7 @@
         this.$fv(which + "_date_date", d.date());
         (this.$f(which + "_date_date")).datepicker({
           autoclose: true,
-          format: date_settings.datepicker_format
+          format: dateSettings.datepickerFormat
         });
         (this.$f(which + "_date_date")).datepicker('setValue', d.date());
         this.$fv(which + "_date_time", d.time());
@@ -613,7 +600,7 @@
       ref = ['start', 'end'];
       for (k = 0, len = ref.length; k < len; k++) {
         which = ref[k];
-        this.$fv(which + "_date", (new Date((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")))).toISOString());
+        this.$fv(which + "_date", (moment((this.$fv(which + "_date_date")) + " " + (this.$fv(which + "_date_time")), dateSettings.fullDate)).toDate().toISOString());
       }
       ref1 = this.model.fields;
       results = [];
@@ -679,7 +666,7 @@
           }, {
             silent: true
           });
-        } else if (get_mimetype(this.model.get('uri'))) {
+        } else if (getMimetype(this.model.get('uri'))) {
           this.model.set({
             name: get_filename(this.model.get('uri'))
           }, {
@@ -720,7 +707,7 @@
           _this.changeLoopTimes();
           _this.viewmodel();
           _this.model.trigger('change');
-          _this.validate();
+          _this.validate(e);
           return true;
         };
       })(this)), 500));
@@ -734,14 +721,21 @@
         duration: (function(_this) {
           return function(v) {
             if (('video' !== _this.model.get('mimetype')) && (!(_.isNumber(v * 1)) || v * 1 < 1)) {
-              return 'please enter a valid number';
+              return 'Please enter a valid number.';
             }
           };
         })(this),
         end_date: (function(_this) {
           return function(v) {
+            var end_date, ref, start_date;
             if (!((new Date(_this.$fv('start_date'))) < (new Date(_this.$fv('end_date'))))) {
-              return 'end date should be after start date';
+              if (((ref = $(e != null ? e.target : void 0)) != null ? ref.attr("name") : void 0) === "start_date_date") {
+                start_date = new Date(_this.$fv('start_date'));
+                end_date = new Date(start_date.getTime() + Math.max(parseInt(_this.$fv('duration')), 60) * 1000);
+                _this.setLoopDateTime(date_to(start_date), date_to(end_date));
+                return;
+              }
+              return 'End date should be after start date.';
             }
           };
         })(this)
@@ -793,16 +787,16 @@
       this.$fv("start_date_date", start_date.date());
       (this.$f("start_date_date")).datepicker({
         autoclose: true,
-        format: date_settings.datepicker_format
+        format: dateSettings.datepickerFormat
       });
-      (this.$f("start_date_date")).datepicker('setDate', new Date(start_date.date()));
+      (this.$f("start_date_date")).datepicker('setDate', moment(start_date.date(), dateSettings.date).toDate());
       this.$fv("start_date_time", start_date.time());
       this.$fv("end_date_date", end_date.date());
       (this.$f("end_date_date")).datepicker({
         autoclose: true,
-        format: date_settings.datepicker_format
+        format: dateSettings.datepickerFormat
       });
-      (this.$f("end_date_date")).datepicker('setDate', new Date(end_date.date()));
+      (this.$f("end_date_date")).datepicker('setDate', moment(end_date.date(), dateSettings.date).toDate());
       this.$fv("end_date_time", end_date.time());
       (this.$(".form-group .help-inline.invalid-feedback")).remove();
       (this.$(".form-group .form-control")).removeClass('is-invalid');
@@ -851,7 +845,7 @@
       var json;
       this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
         name: insertWbr(truncate_str(json.name)),
-        duration: duration_seconds_to_human_readable(json.duration),
+        duration: durationSecondsToHumanReadable(json.duration),
         start_date: (date_to(json.start_date)).string(),
         end_date: (date_to(json.end_date)).string()
       })));
@@ -1036,7 +1030,7 @@
     };
 
     AssetsView.prototype.render = function() {
-      var k, l, len, len1, ref, ref1, which;
+      var k, l, len, len1, len2, m, ref, ref1, ref2, which;
       this.collection.sort();
       ref = ['active', 'inactive'];
       for (k = 0, len = ref.length; k < len; k++) {
@@ -1051,9 +1045,18 @@
           })).render());
         };
       })(this));
-      ref1 = ['inactive', 'active'];
+      ref1 = ['active', 'inactive'];
       for (l = 0, len1 = ref1.length; l < len1; l++) {
         which = ref1[l];
+        if ((this.$("#" + which + "-assets tr")).length === 0) {
+          (this.$("#" + which + "-assets-section .table-assets-help-text")).show();
+        } else {
+          (this.$("#" + which + "-assets-section .table-assets-help-text")).hide();
+        }
+      }
+      ref2 = ['inactive', 'active'];
+      for (m = 0, len2 = ref2.length; m < len2; m++) {
+        which = ref2[m];
         this.$("." + which + "-table thead").toggle(!!(this.$("#" + which + "-assets tr").length));
       }
       this.update_order();
@@ -1068,28 +1071,23 @@
     extend(App, superClass);
 
     function App() {
-      this.next = bind(this.next, this);
-      this.previous = bind(this.previous, this);
-      this.add = bind(this.add, this);
       this.initialize = bind(this.initialize, this);
       return App.__super__.constructor.apply(this, arguments);
     }
 
     App.prototype.initialize = function() {
       var address, error, k, len, results, ws;
-      ($(window)).ajaxError((function(_this) {
-        return function(e, r) {
-          var err, j;
-          ($('#request-error')).html((get_template('request-error'))());
-          if ((j = $.parseJSON(r.responseText)) && (err = j.error)) {
-            ($('#request-error .msg')).text('Server Error: ' + err);
-          }
-          ($('#request-error')).show();
-          return setTimeout(function() {
-            return ($('#request-error')).fadeOut('slow');
-          }, 5000);
-        };
-      })(this));
+      ($(window)).ajaxError(function(e, r) {
+        var err, j;
+        ($('#request-error')).html((get_template('request-error'))());
+        if ((j = $.parseJSON(r.responseText)) && (err = j.error)) {
+          ($('#request-error .msg')).text('Server Error: ' + err);
+        }
+        ($('#request-error')).show();
+        return setTimeout(function() {
+          return ($('#request-error')).fadeOut('slow');
+        }, 5000);
+      });
       ($(window)).ajaxSuccess(function(event, request, settings) {
         if ((settings.url === new Assets().url) && (settings.type === 'POST')) {
           ($('#request-error')).html((get_template('request-success'))());
@@ -1106,8 +1104,8 @@
         el: this.$('#assets')
       });
       results = [];
-      for (k = 0, len = ws_addresses.length; k < len; k++) {
-        address = ws_addresses[k];
+      for (k = 0, len = wsAddresses.length; k < len; k++) {
+        address = wsAddresses[k];
         try {
           ws = new WebSocket(address);
           results.push(ws.onmessage = function(x) {
@@ -1126,7 +1124,7 @@
     };
 
     App.prototype.events = {
-      'click #add-asset-button': 'add',
+      'click .add-asset-button': 'add',
       'click #previous-asset-button': 'previous',
       'click #next-asset-button': 'next'
     };

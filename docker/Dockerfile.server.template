@@ -1,0 +1,36 @@
+FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:jessie
+
+RUN apt-get update && \
+    apt-get -y install \
+        build-essential \
+        curl \
+        git-core \
+        libffi-dev \
+        libssl-dev \
+        lsb-release \
+        net-tools \
+        nginx-light \
+        omxplayer \
+        psmisc \
+        python-dev \
+        python-gobject \
+        python-imaging \
+        python-netifaces \
+        python-simplejson \
+        libraspberrypi0 \
+        ifupdown \
+        sqlite3 && \
+    apt-get clean
+
+# Install Python requirements
+ADD requirements/requirements.txt /tmp/requirements.txt
+RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
+    pip install --upgrade -r /tmp/requirements.txt
+
+# Setup nginx
+RUN rm /etc/nginx/sites-enabled/default
+COPY ansible/roles/ssl/files/nginx_resin.conf /etc/nginx/sites-enabled/screenly.conf
+
+COPY . /tmp/screenly
+
+CMD ["bash", "/tmp/screenly/bin/start_balena.sh"]
