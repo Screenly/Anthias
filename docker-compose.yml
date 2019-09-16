@@ -65,7 +65,9 @@ services:
   rabbitmq:
     image: arm32v7/rabbitmq
     command: rabbitmq-server
-    network_mode: "host"
+    ports:
+      - 5672:5672
+      - 15672:15672
 
 volumes:
     resin-data:
