@@ -213,20 +213,3 @@ class ZmqCollector:
             return json.loads(self.socket.recv(zmq.NOBLOCK))
 
         raise ZmqCollectorTimeout
-
-
-def authenticate():
-    realm = "Screenly OSE" + (" " + settings['player_name'] if settings['player_name'] else "")
-    return Response("Access denied", 401, {"WWW-Authenticate": 'Basic realm="' + realm + '"'})
-
-
-def auth_basic(orig):
-    @wraps(orig)
-    def decorated(*args, **kwargs):
-        if not settings['use_auth']:
-            return orig(*args, **kwargs)
-        auth = request.authorization
-        if not auth or not settings.check_user(auth.username, hashlib.sha256(auth.password).hexdigest()):
-            return authenticate()
-        return orig(*args, **kwargs)
-    return decorated
