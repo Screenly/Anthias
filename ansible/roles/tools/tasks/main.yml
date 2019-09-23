@@ -1,8 +1,10 @@
-- name: Download and unarchive ngrok
-  unarchive:
-    src: https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-arm.zip
+- name: Copy ngrok binary
+  copy:
+    src: ngrok
     dest: /usr/local/bin/
-    remote_src: yes
+    mode: 0755
+    owner: root
+    group: root
 
 - name: Installs nginx config
   copy:
