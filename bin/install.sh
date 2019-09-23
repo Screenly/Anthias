@@ -172,7 +172,7 @@ cd /home/pi/screenly && git rev-parse HEAD > /home/pi/.screenly/latest_screenly_
 sudo chown -R pi:pi /home/pi
 
 # Need a password for commands with sudo
-if [ "$BRANCH" = "master" ]; then
+if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ]; then
   sudo rm -f /etc/sudoers.d/010_pi-nopasswd
 else
   # Temporarily necessary because web upgrade only for the master branch
@@ -181,7 +181,7 @@ else
 fi
 
 # Setup a new pi password
-if [ "$BRANCH" = "master" ] && [ "$WEB_UPGRADE" = false ]; then
+if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ] && [ "$WEB_UPGRADE" = false ]; then
   set +e
   passwd
   set -e
