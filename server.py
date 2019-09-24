@@ -598,7 +598,6 @@ def prepare_usb_asset(filepath, **kwargs):
 
 
 def prepare_default_asset(**kwargs):
-    print(kwargs)
     if kwargs['mimetype'] not in ['image', 'video', 'webpage']:
         return
 
