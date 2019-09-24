@@ -635,7 +635,7 @@ def add_default_assets():
     default_assets_yaml = path.join(HOME, '.screenly/default_assets.yml')
 
     with open(default_assets_yaml, 'r') as yaml_file:
-        default_assets = yaml.load(yaml_file).get('assets')
+        default_assets = yaml.safe_load(yaml_file).get('assets')
         with db.conn(settings['database']) as conn:
             for default_asset in default_assets:
                 default_asset_settings.update({
