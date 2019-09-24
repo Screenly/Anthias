@@ -33,6 +33,7 @@ RUN useradd pi
 
 # Install config file and file structure
 RUN mkdir -p /home/pi/.screenly /home/pi/screenly /home/pi/screenly_assets
+COPY ansible/roles/screenly/files/default_assets.yml /home/pi/.screenly/default_assets.yml
 COPY ansible/roles/screenly/files/screenly.conf /home/pi/.screenly/screenly.conf
 RUN chown -R pi:pi /home/pi/.screenly /home/pi/screenly_assets
 
