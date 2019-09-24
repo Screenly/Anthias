@@ -51,6 +51,20 @@
                             </div>
                         </div>
                         <div class="form-inline">
+                            <label>Default assets</label>
+                            <div class="ml-auto">
+                                <label id="default_assets_checkbox"
+                                       class="is_enabled-toggle toggle switch-light switch-ios small m-0">
+                                    {% if context.default_assets %}
+                                        <input name="default_assets" checked="checked" type="checkbox"/>
+                                    {% else %}
+                                        <input name="default_assets" type="checkbox"/>
+                                    {% endif %}
+                                    <span><span></span><span></span><a></a></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-inline">
                             <label>Shuffle playlist</label>
                             <div class="ml-auto">
                                 <label id="shuffle_checkbox"
