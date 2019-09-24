@@ -17,6 +17,14 @@
     dest: /home/pi/.screenly/screenly.conf
     force: no
 
+- name: Copy Screenly default assets file
+  copy:
+    owner: pi
+    group: pi
+    src: default_assets.yml
+    dest: /home/pi/.screenly/default_assets.yml
+    force: yes
+
 - name: Remove deprecated parameter "listen"
   lineinfile:
     regexp: '^.*listen.*'

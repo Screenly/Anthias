@@ -9,6 +9,7 @@ run_setup () {
         /data/screenly_assets
 
     cp -n /tmp/screenly/ansible/roles/screenly/files/screenly.conf /data/.screenly/screenly.conf
+    cp -n /tmp/screenly/ansible/roles/screenly/files/default_assets.yml /data/.screenly/default_assets.yml
     cp -n /tmp/screenly/ansible/roles/screenly/files/screenly.db /data/.screenly/screenly.db
     cp -n /tmp/screenly/ansible/roles/screenly/files/uzbl-config /data/.config/uzbl/config-screenly
 
