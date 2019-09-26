@@ -627,7 +627,7 @@ def add_default_assets():
     datetime_now = datetime.now()
     default_asset_settings = {
         'start_date': datetime_now,
-        'end_date': datetime_now + timedelta(days=7),
+        'end_date': datetime_now.replace(year=datetime_now.year + 6),
         'duration': settings['default_duration']
     }
 
