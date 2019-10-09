@@ -164,6 +164,7 @@
     restart_policy: unless-stopped
     network_mode: host
     privileged: yes
+    log_driver: journald
     volumes:
       - /home/pi/screenly:/home/pi/screenly
       - /home/pi/.screenly:/home/pi/.screenly
