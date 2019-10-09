@@ -4,6 +4,8 @@
   become: yes
   vars:
     manage_network: "{{ lookup('env', 'MANAGE_NETWORK') }}"
+    docker_tag: "{{ lookup('env', 'DOCKER_TAG') }}"
+    device_type: "{{ lookup('env', 'DEVICE_TYPE') }}"
 
   handlers:
     - name: restart-nginx
@@ -20,14 +22,8 @@
     - name: restart-screenly-server
       command: systemctl restart screenly-web.service
 
-    - name: restart-x-server
-      command: "systemctl restart {{ item }}"
-      with_items:
-      - X.service
-      - matchbox.service
-
-    - name: restart-screenly-viewer
-      command: systemctl restart screenly-viewer.service
+    - name: restart-screenly-celery
+      command: systemctl restart screenly-celery.service
 
   roles:
     - system

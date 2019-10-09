@@ -78,5 +78,6 @@
     - reload systemctl
     - restart-screenly-websocket_server_layer
     - restart-screenly-server
+    - restart-screenly-celery
   tags:
     - enable-ssl

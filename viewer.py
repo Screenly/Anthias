@@ -16,12 +16,12 @@ from platform import machine
 from random import shuffle
 from threading import Thread
 from requests import get as req_get
-from signal import alarm, signal, SIGALRM, SIGUSR1
+from signal import signal, SIGALRM, SIGUSR1
 from time import sleep
 
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
-from lib import assets_helper, html_templates
+from lib import assets_helper
 from lib import db
 from lib.diagnostics import get_git_branch, get_git_short_hash
 from lib.github import fetch_remote_hash, remote_branch_available
@@ -40,14 +40,12 @@ EMPTY_PL_DELAY = 5  # secs
 INITIALIZED_FILE = '/.screenly/initialized'
 BLACK_PAGE = '/tmp/screenly_html/black_page.html'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
-SCREENLY_HTML = '/tmp/screenly_html/'
 LOAD_SCREEN = '/screenly/static/img/loading.png'  # relative to $HOME
-UZBLRC = '/.config/uzbl/config-screenly'  # relative to $HOME
-INTRO = '/screenly/intro-template.html'
 
 current_browser_url = None
 browser = None
 loop_is_stopped = False
+browser_bus = None
 
 VIDEO_TIMEOUT = 20  # secs
 
@@ -212,8 +210,7 @@ class Scheduler(object):
         # Try to keep the same position in the play list. E.g. if a new asset is added to the end of the list, we
         # don't want to start over from the beginning.
         self.index = self.index % len(self.assets) if self.assets else 0
-        logging.debug('update_playlist done, count %s, counter %s, index %s, deadline %s', len(self.assets),
-                      self.counter, self.index, self.deadline)
+        logging.debug('update_playlist done, count %s, counter %s, index %s, deadline %s', len(self.assets), self.counter, self.index, self.deadline)
 
     def get_db_mtime(self):
         # get database file last modification time
@@ -255,84 +252,35 @@ def watchdog():
         utime(WATCHDOG_PATH, None)
 
 
-def load_browser(url=None):
-    global browser, current_browser_url
+def load_browser():
+    global browser
     logging.info('Loading browser...')
 
-    if browser:
-        logging.info('killing previous uzbl %s', browser.pid)
-        browser.process.kill()
-
-    if url is not None:
-        current_browser_url = url
-
-    # --config=-       read commands (and config) from stdin
-    # --print-events   print events to stdout
-    browser = sh.Command('uzbl-browser')(print_events=True, config='-', uri=current_browser_url, _bg=True)
-    logging.info('Browser loading %s. Running as PID %s.', current_browser_url, browser.pid)
-
-    uzbl_rc = 'set ssl_verify = {}\n'.format('1' if settings['verify_ssl'] else '0')
-    with open(HOME + UZBLRC) as f:  # load uzbl.rc
-        uzbl_rc = f.read() + uzbl_rc
-    browser_send(uzbl_rc)
+    browser = sh.Command('ScreenlyWebview')(_bg=True, _err_to_out=True)
+    while 'Screenly service start' not in browser.process.stdout:
+        sleep(1)
 
 
-def browser_get_event():
-    alarm(10)
-    try:
-        event = browser.next()
-    except SigalrmException:
-        return None
-    alarm(0)
-    return event
-
-
-def browser_send(command, cb=lambda _: True):
-    if not (browser is None) and browser.process.alive:
-        while not browser.process._pipe_queue.empty():  # flush stdout
-            browser_get_event()
-
-        browser.process.stdin.put(command + '\n')
-        while True:  # loop until cb returns True
-            try:
-                browser_event = browser_get_event()
-            except StopIteration:
-                break
-            if not browser_event:
-                break
-            if cb(browser_event):
-                break
-    else:
-        logging.info('browser found dead, restarting')
-        load_browser()
-
-
-def browser_clear(force=False):
-    """Load a black page. Default cb waits for the page to load."""
-    browser_url('file://' + BLACK_PAGE, force=force,
-                cb=lambda buf: 'LOAD_FINISH' in buf and BLACK_PAGE in buf)
-
-
-def browser_url(url, cb=lambda _: True, force=False):
+def view_webpage(uri):
     global current_browser_url
 
-    if url == current_browser_url and not force:
-        logging.debug('Already showing %s, reloading it.', current_browser_url)
-    else:
-        current_browser_url = url
-
-        """Uzbl handles full URI format incorrect: scheme://uname:passwd@domain:port/path
-        We need to escape @"""
-        escaped_url = current_browser_url.replace('@', '\\@')
-
-        browser_send('uri ' + escaped_url, cb=cb)
-        logging.info('current url is %s', current_browser_url)
+    if browser is None or not browser.process.alive:
+        load_browser()
+    if current_browser_url is not uri:
+        browser_bus.loadPage(uri)
+        current_browser_url = uri
+    logging.info('current url is {0}'.format(current_browser_url))
 
 
 def view_image(uri):
-    browser_clear()
-    browser_send('js window.setimg("{0}")'.format(uri),
-                 cb=lambda b: 'COMMAND_EXECUTED' in b and 'setimg' in b)
+    global current_browser_url
+
+    if browser is None or not browser.process.alive:
+        load_browser()
+    if current_browser_url is not uri:
+        browser_bus.loadImage(uri)
+        current_browser_url = uri
+    logging.info('current url is {0}'.format(current_browser_url))
 
 
 def view_video(uri, duration):
@@ -340,7 +288,7 @@ def view_video(uri, duration):
 
     if arch in ('armv6l', 'armv7l'):
         player_args = ['omxplayer', uri]
-        player_kwargs = {'o': settings['audio_output'], '_bg': True, '_ok_code': [0, 124, 143]}
+        player_kwargs = {'o': settings['audio_output'], 'layer': 1, '_bg': True, '_ok_code': [0, 124, 143]}
     else:
         player_args = ['mplayer', uri, '-nosound']
         player_kwargs = {'_bg': True, '_ok_code': [0, 124]}
@@ -350,7 +298,7 @@ def view_video(uri, duration):
 
     run = sh.Command(player_args[0])(*player_args[1:], **player_kwargs)
 
-    browser_clear(force=True)
+    view_image('null')
     try:
         while run.process.alive:
             watchdog()
@@ -451,9 +399,7 @@ def asset_loop(scheduler):
         if 'image' in mime:
             view_image(uri)
         elif 'web' in mime:
-            # FIXME If we want to force periodic reloads of repeated web assets, force=True could be used here.
-            # See e38e6fef3a70906e7f8739294ffd523af6ce66be.
-            browser_url(uri)
+            view_webpage(uri)
         elif 'video' or 'streaming' in mime:
             view_video(uri, asset['duration'])
         else:
@@ -470,7 +416,7 @@ def asset_loop(scheduler):
 
 
 def setup():
-    global HOME, arch, db_conn
+    global HOME, arch, db_conn, browser_bus
     HOME = getenv('HOME', '/home/pi')
     arch = machine()
 
@@ -480,8 +426,9 @@ def setup():
     load_settings()
     db_conn = db.conn(settings['database'])
 
-    sh.mkdir(SCREENLY_HTML, p=True)
-    html_templates.black_page(BLACK_PAGE)
+    load_browser()
+    bus = pydbus.SessionBus()
+    browser_bus = bus.get('screenly.webview', '/Screenly')
 
 
 def setup_hotspot():
@@ -508,7 +455,7 @@ def setup_hotspot():
     if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
         if len(wireless_connections) == 0:
             url = 'http://{0}/hotspot'.format(LISTEN)
-            load_browser(url=url)
+            view_webpage(url)
 
     # Wait until the network is configured
     while not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
@@ -549,15 +496,12 @@ def main():
 
     scheduler = Scheduler()
 
-    if is_balena_app():
-        load_browser()
-    else:
+    if not is_balena_app():
         setup_hotspot()
 
-    url = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
-    browser_url(url=url)
-
     if settings['show_splash']:
+        url = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
+        view_webpage(url)
         sleep(SPLASH_DELAY)
 
     # We don't want to show splash-page if there are active assets but all of them are not available

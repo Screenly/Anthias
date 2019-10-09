@@ -18,8 +18,7 @@ install:
   - pip install -r requirements/requirements.txt
   - pip install -r requirements/requirements.dev.txt
 before_script:
-  - mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets /tmp/USB/cleanup_folder
-  - cp ansible/roles/screenly/files/uzbl-config ~/.config/uzbl/config-screenly
+  - mkdir -p ~/.screenly ~/screenly_assets /tmp/USB/cleanup_folder
   - cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
   - cp ansible/roles/screenly/files/screenly.db ~/.screenly/
   - sudo cp bin/install.sh /usr/local/sbin/upgrade_screenly.sh

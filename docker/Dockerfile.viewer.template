@@ -18,7 +18,6 @@ RUN apt-get update && \
         libraspberrypi0 \
         ifupdown \
         sqlite3 \
-        uzbl \
         x11-xserver-utils \
         xserver-xorg && \
     apt-get clean
