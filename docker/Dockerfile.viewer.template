@@ -1,35 +1,64 @@
-FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:jessie
+FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:stretch
 
 RUN apt-get update && \
     apt-get -y install \
         build-essential \
         curl \
         git-core \
+        gstreamer1.0-plugins-good \
+        libdbus-glib-1-dev \
         libffi-dev \
+        libqt5webkit5 \
+        libraspberrypi0 \
         libssl-dev \
-        matchbox \
+        libts-dev \
         net-tools \
         omxplayer \
         psmisc \
         python-dev \
-        python-imaging \
+        python-gobject \
         python-netifaces \
-        python-simplejson \
-        libraspberrypi0 \
-        ifupdown \
-        sqlite3 \
-        x11-xserver-utils \
-        xserver-xorg && \
+        python-pip \
+        python-setuptools \
+        sqlite3 && \
     apt-get clean
 
 # Install Python requirements
-ADD requirements/requirements.txt /tmp/requirements.txt
+ADD requirements/requirements.viewer.txt /tmp/requirements.txt
 RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
     pip install --upgrade -r /tmp/requirements.txt
 
-COPY ansible/roles/screenly/files/gtkrc-2.0 /data/.gtkrc-2.0
+# QtBase from packages does not support eglfs
+ARG PI_VERSION=pi3
+RUN curl -L \
+    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase-$PI_VERSION.tar.gz" \
+    > /tmp/qtbase.tar.gz
+RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
+RUN echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf
+RUN ldconfig
+
+# Fix symlinks
+RUN rm -f /usr/lib/arm-linux-gnueabihf/libEGL.so.1
+RUN rm -f /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
+RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so
+RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1
+RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
+
+RUN rm -f /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
+RUN rm -f /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
+RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so
+RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
+RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
+
+RUN mkdir /usr/local/share/ScreenlyWebview
+RUN curl -L  \
+    "https://github.com/Screenly/screenly-ose-webview/releases/download/0.2/screenly-webview-0.2.tar.gz" \
+    > /tmp/screenly-webview-0.2.tar.gz
+RUN tar -xzf /tmp/screenly-webview-0.2.tar.gz -C /tmp
+
+RUN cp -r /tmp/res /usr/local/share/ScreenlyWebview/res
+RUN cp /tmp/ScreenlyWebview /usr/local/bin/ScreenlyWebview
 
 COPY . /tmp/screenly
 
-CMD ["bash", "chmod 777 /dev/vchiq"]
 CMD ["bash", "/tmp/screenly/bin/start_balena.sh"]

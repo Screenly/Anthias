@@ -34,23 +34,6 @@ run_viewer () {
 
     while true; do
 
-        /usr/bin/X 0<&- &>/dev/null &
-        /usr/bin/matchbox-window-manager -use_titlebar no -use_cursor no 0<&- &>/dev/null &
-
-        error=$(/usr/bin/xset s off 2>&1 | grep -c "unable to open display")
-            if [[ "$error" -eq 0 ]]; then
-            break
-        fi
-
-        echo "Still continue..."
-        sleep 1
-    done
-
-    /usr/bin/xset -dpms
-    /usr/bin/xset s noblank
-
-    while true; do
-
         error=$(curl 127.0.0.1:8080 2>&1 | grep -c "Failed to connect")
             if [[ "$error" -eq 0 ]]; then
             break
@@ -60,8 +43,23 @@ run_viewer () {
         sleep 1
     done
 
-    cd /data/screenly
-    /usr/bin/python viewer.py
+    trap '' 16
+
+    cd /data/screenly && QT_QPA_EGLFS_FORCE888=1 HOME=/data dbus-run-session python viewer.py &
+
+    # Waiting for the viewer
+    while true; do
+      PID=$(pidof python)
+      if [ "$?" == '0' ]; then
+        break
+      fi
+      sleep 0.5
+    done
+
+    # Exit when the viewer falls
+    while kill -0 "$PID"; do
+      sleep 1
+    done
 }
 
 run_server () {
