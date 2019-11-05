@@ -34,7 +34,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.celery.dev
     depends_on:
-      - rabbitmq
+      - redis
       - screenly-server
     image: screenly-ose-celery
     network_mode: "host"
@@ -43,10 +43,11 @@ services:
       - screenly-volume:/home/pi/.screenly
       - screenly-assets-volume:/home/pi/screenly_assets
 
-  rabbitmq:
-    image: rabbitmq
-    command: rabbitmq-server
-    network_mode: "host"
+  redis:
+    restart: always
+    image: redis:alpine
+    expose:
+      - 6379
     logging:
       driver: none
 
