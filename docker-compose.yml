@@ -52,7 +52,7 @@ services:
       dockerfile: docker/Dockerfile.celery.template
     depends_on:
       - screenly-server
-      - rabbitmq
+      - redis
     environment:
       - HOME=/data
       - PYTHONPATH=/data/screenly
@@ -62,12 +62,11 @@ services:
     volumes:
       - resin-data:/data
 
-  rabbitmq:
-    image: arm32v7/rabbitmq
-    command: rabbitmq-server
+  redis:
+    restart: always
+    image: arm32v7/redis
     ports:
-      - 5672:5672
-      - 15672:15672
+      - 6379:6379
 
 volumes:
     resin-data:
