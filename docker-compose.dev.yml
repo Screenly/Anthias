@@ -7,10 +7,11 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - LISTEN=0.0.0.0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     image: screenly-ose-server
-    network_mode: "host"
     ports:
-      - "8080:8080"
+      - 8080:8080
     volumes:
       - ./:/home/pi/screenly:ro
       - screenly-volume:/home/pi/.screenly
@@ -23,11 +24,12 @@ services:
     depends_on:
       - screenly-server
     image: screenly-ose-websocket
-    network_mode: "host"
+    ports:
+      - 9999:9999
     volumes:
       - ./:/home/pi/screenly:ro
-      - screenly-volume:/home/pi/.screenly
       - screenly-assets-volume:/home/pi/screenly_assets
+      - screenly-volume:/home/pi/.screenly
 
   screenly-celery:
     build:
@@ -36,21 +38,21 @@ services:
     depends_on:
       - redis
       - screenly-server
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     image: screenly-ose-celery
-    network_mode: "host"
     volumes:
       - ./:/home/pi/screenly:ro
-      - screenly-volume:/home/pi/.screenly
       - screenly-assets-volume:/home/pi/screenly_assets
+      - screenly-volume:/home/pi/.screenly
 
   redis:
-    restart: always
     image: redis:alpine
-    expose:
-      - 6379
     logging:
       driver: none
+    restart: always
 
 volumes:
-  screenly-volume:
   screenly-assets-volume:
+  screenly-volume:
