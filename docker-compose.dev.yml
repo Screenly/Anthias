@@ -51,8 +51,6 @@ services:
     image: redis:alpine
     logging:
       driver: none
-    ports:
-      - 6379:6379
     restart: always
 
 volumes:
