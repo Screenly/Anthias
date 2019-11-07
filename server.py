@@ -1466,7 +1466,8 @@ class Info(Resource):
             'loadavg': diagnostics.get_load_avg()['15 min'],
             'free_space': free_space,
             'display_info': diagnostics.get_monitor_status(),
-            'display_power': diagnostics.get_display_power()
+            'display_power': diagnostics.get_display_power(),
+            'up_to_date': is_up_to_date()
         }
 
 
