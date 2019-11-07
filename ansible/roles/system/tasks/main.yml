@@ -179,7 +179,7 @@
     - python-gobject
     - python-netifaces
     - python-simplejson
-    - rabbitmq-server
+    - redis-server
     - rpi-update
     - sqlite3
     - systemd
@@ -193,6 +193,7 @@
     - lightdm
     - lightdm-gtk-greeter
     - matchbox
+    - rabbitmq-server
     - uzbl
     - x11-xserver-utils
     - xserver-xorg

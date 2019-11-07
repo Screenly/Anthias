@@ -52,14 +52,20 @@ from lib.utils import is_balena_app, is_demo_node, is_wott_integrated, get_wott_
 from settings import CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
 
 HOME = getenv('HOME', '/home/pi')
-CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'rpc://')
-CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'amqp://')
+CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_TASK_RESULT_EXPIRES = timedelta(hours=6)
 
 app = Flask(__name__)
 CORS(app)
 api = Api(app, api_version="v1", title="Screenly OSE API")
 
-celery = Celery(app.name, backend=CELERY_RESULT_BACKEND, broker=CELERY_BROKER_URL)
+celery = Celery(
+    app.name,
+    backend=CELERY_RESULT_BACKEND,
+    broker=CELERY_BROKER_URL,
+    result_expires=CELERY_TASK_RESULT_EXPIRES
+)
 
 
 ################################
