@@ -9,8 +9,12 @@ services:
       - LISTEN=0.0.0.0
       - PYTHONPATH=/data/screenly
       - SCREENLYSERVICE=server
-    network_mode: "host"
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    ports:
+      - 80:8080
     privileged: true
+    restart: always
     volumes:
       - resin-data:/data
 
@@ -26,8 +30,10 @@ services:
       - NOREFRESH=1
       - PYTHONPATH=/data/screenly
       - SCREENLYSERVICE=viewer
-    network_mode: "host"
+      - LISTEN=screenly-server
+      - PORT=80
     privileged: true
+    restart: always
     volumes:
       - resin-data:/data
 
@@ -41,8 +47,11 @@ services:
       - HOME=/data
       - PYTHONPATH=/data/screenly
       - SCREENLYSERVICE=websocket
-    network_mode: "host"
+      - LISTEN=screenly-server
+    ports:
+      - 9999:9999
     privileged: true
+    restart: always
     volumes:
       - resin-data:/data
 
@@ -57,16 +66,16 @@ services:
       - HOME=/data
       - PYTHONPATH=/data/screenly
       - SCREENLYSERVICE=celery
-    network_mode: "host"
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     privileged: true
+    restart: always
     volumes:
       - resin-data:/data
 
   redis:
-    restart: always
     image: arm32v7/redis
-    ports:
-      - 6379:6379
+    restart: always
 
 volumes:
     resin-data:
