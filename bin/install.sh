@@ -54,7 +54,7 @@ EOF
 
   echo && read -p "Would you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to Docker (y/N)" -n 1 -r -s EXP && echo
   if [ "$EXP" != 'y'  ]; then
-    echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
+    echo && read -p "Would you like to use the development (master) branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
     if [ "$DEV" != 'y'  ]; then
       export DOCKER_TAG="production"
       BRANCH="production"
