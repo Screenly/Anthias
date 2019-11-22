@@ -8,6 +8,7 @@ import re
 import requests
 import string
 import sh
+import time
 
 from datetime import datetime, timedelta
 from distutils.util import strtobool
@@ -84,6 +85,7 @@ def get_node_ip():
     that is being used as the default gateway.
     This should work on both MacOS X and Linux."""
     try:
+        time.sleep(15)
         default_interface = gateways()['default'][AF_INET][1]
         my_ip = ifaddresses(default_interface)[AF_INET][0]['addr']
         return my_ip
