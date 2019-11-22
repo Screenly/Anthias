@@ -34,7 +34,7 @@ run_viewer () {
 
     while true; do
 
-        error=$(curl 127.0.0.1:8080 2>&1 | grep -c "Failed to connect")
+        error=$(curl screenly-server:80 2>&1 | grep -c "Failed to connect")
             if [[ "$error" -eq 0 ]]; then
             break
         fi

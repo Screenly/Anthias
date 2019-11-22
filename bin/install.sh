@@ -54,7 +54,7 @@ EOF
 
   echo && read -p "Would you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to Docker (y/N)" -n 1 -r -s EXP && echo
   if [ "$EXP" != 'y'  ]; then
-    echo && read -p "Would you like to use the development branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
+    echo && read -p "Would you like to use the development (master) branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
     if [ "$DEV" != 'y'  ]; then
       export DOCKER_TAG="production"
       BRANCH="production"
@@ -144,7 +144,7 @@ if [ ! -f /etc/locale.gen ]; then
 fi
 
 sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' /etc/apt/sources.list
-sudo apt-get update
+sudo apt update -y
 sudo apt-get purge -y python-setuptools python-pip python-pyasn1
 sudo apt-get install -y python-dev git-core libffi-dev libssl-dev
 curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
