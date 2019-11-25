@@ -85,9 +85,9 @@ def get_node_ip():
     that is being used as the default gateway.
     This should work on both MacOS X and Linux."""
     try:
-        time.sleep(15)
         default_interface = gateways()['default'][AF_INET][1]
         my_ip = ifaddresses(default_interface)[AF_INET][0]['addr']
+        time.sleep(5)
         return my_ip
     except (KeyError, ValueError):
         raise Exception("Unable to resolve local IP address.")
