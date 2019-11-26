@@ -4,7 +4,7 @@ from geventwebsocket.handler import WebSocketHandler
 from threading import Thread
 import zmq.green as zmq
 
-from settings import settings
+from settings import settings, LISTEN
 
 
 class WebSocketTranslator:
@@ -34,7 +34,7 @@ class ScreenlyServerListener(Thread):
         socket_incoming = self.context.socket(zmq.SUB)
         socket_outgoing = self.context.socket(zmq.PUB)
 
-        socket_incoming.connect('tcp://127.0.0.1:10001')
+        socket_incoming.connect('tcp://{}:10001'.format(LISTEN))
         socket_outgoing.bind('inproc://queue')
 
         socket_incoming.setsockopt(zmq.SUBSCRIBE, "")

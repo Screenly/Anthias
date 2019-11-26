@@ -1,0 +1,20 @@
+FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:jessie
+
+RUN apt-get update && \
+    apt-get -y install \
+        build-essential \
+        curl \
+        python-dev && \
+    apt-get clean
+
+# Install Python requirements
+RUN curl -s https://bootstrap.pypa.io/get-pip.py | python
+RUN pip install \
+    flask==1.0.2 \
+    gevent-websocket==0.10.1 \
+    gevent==1.2.2 \
+    pyzmq==16.0.2
+
+COPY . /tmp/screenly
+
+CMD ["bash", "/tmp/screenly/bin/start_balena.sh"]

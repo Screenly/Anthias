@@ -37,6 +37,6 @@ def recover(file_path):
             if directory not in tar.getnames():
                 raise Exception("Archive is wrong.")
 
-    sh.sudo('/usr/local/bin/screenly_utils.sh', 'recover', path.abspath(file_path))
+        tar.extractall(path=getenv('HOME', '/home/pi'))
 
     remove(file_path)

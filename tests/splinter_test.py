@@ -204,7 +204,7 @@ class WebTest(unittest.TestCase):
             wait_for_and_do(browser, '#add-asset-button', lambda btn: btn.click())
             sleep(1)
 
-            wait_for_and_do(browser, 'input[name="uri"]', lambda field: field.fill('rtmp://localhost:1935/app/video.flv'))
+            wait_for_and_do(browser, 'input[name="uri"]', lambda field: field.fill('rtsp://localhost:8091/asset.mov'))
             sleep(1)
 
             wait_for_and_do(browser, '#add-form', lambda form: form.click())
@@ -219,8 +219,8 @@ class WebTest(unittest.TestCase):
             self.assertEqual(len(assets), 1)
             asset = assets[0]
 
-            self.assertEqual(asset['name'], 'rtmp://localhost:1935/app/video.flv')
-            self.assertEqual(asset['uri'], 'rtmp://localhost:1935/app/video.flv')
+            self.assertEqual(asset['name'], 'rtsp://localhost:8091/asset.mov')
+            self.assertEqual(asset['uri'], 'rtsp://localhost:8091/asset.mov')
             self.assertEqual(asset['mimetype'], 'streaming')
             self.assertEqual(asset['duration'], settings['default_streaming_duration'])
 

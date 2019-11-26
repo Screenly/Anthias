@@ -10,7 +10,7 @@ import hashlib
 import os
 
 from lib.errors import ZmqCollectorTimeout
-from auth import WoTTAuth, BasicAuth, NoAuth
+from lib.auth import WoTTAuth, BasicAuth, NoAuth
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -34,7 +34,9 @@ DEFAULTS = {
         'resolution': '1920x1080',
         'show_splash': True,
         'shuffle_playlist': False,
-        'verify_ssl': True
+        'verify_ssl': True,
+        'usb_assets_key': '',
+        'default_assets': False
     }
 }
 CONFIGURABLE_SETTINGS = DEFAULTS['viewer'].copy()
@@ -175,7 +177,7 @@ class ZmqConsumer:
 
         self.socket = self.context.socket(zmq.PUSH)
         self.socket.setsockopt(zmq.LINGER, 0)
-        self.socket.connect('tcp://127.0.0.1:5558')
+        self.socket.connect('tcp://{}:5558'.format(LISTEN))
 
         sleep(1)
 

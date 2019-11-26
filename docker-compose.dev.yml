@@ -1,0 +1,58 @@
+version: "3"
+services:
+  screenly-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.server.dev
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LISTEN=0.0.0.0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    image: screenly-ose-server
+    ports:
+      - 8080:8080
+    volumes:
+      - ./:/home/pi/screenly:ro
+      - screenly-volume:/home/pi/.screenly
+      - screenly-assets-volume:/home/pi/screenly_assets
+
+  screenly-websocket:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.websocket.dev
+    depends_on:
+      - screenly-server
+    image: screenly-ose-websocket
+    ports:
+      - 9999:9999
+    volumes:
+      - ./:/home/pi/screenly:ro
+      - screenly-assets-volume:/home/pi/screenly_assets
+      - screenly-volume:/home/pi/.screenly
+
+  screenly-celery:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.celery.dev
+    depends_on:
+      - redis
+      - screenly-server
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    image: screenly-ose-celery
+    volumes:
+      - ./:/home/pi/screenly:ro
+      - screenly-assets-volume:/home/pi/screenly_assets
+      - screenly-volume:/home/pi/.screenly
+
+  redis:
+    image: redis:alpine
+    logging:
+      driver: none
+    restart: always
+
+volumes:
+  screenly-assets-volume:
+  screenly-volume:

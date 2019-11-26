@@ -9,6 +9,7 @@ run_setup () {
         /data/screenly_assets
 
     cp -n /tmp/screenly/ansible/roles/screenly/files/screenly.conf /data/.screenly/screenly.conf
+    cp -n /tmp/screenly/ansible/roles/screenly/files/default_assets.yml /data/.screenly/default_assets.yml
     cp -n /tmp/screenly/ansible/roles/screenly/files/screenly.db /data/.screenly/screenly.db
     cp -n /tmp/screenly/ansible/roles/screenly/files/uzbl-config /data/.config/uzbl/config-screenly
 
@@ -52,7 +53,7 @@ run_viewer () {
 
     while true; do
 
-        error=$(curl 127.0.0.1:8080 2>&1 | grep -c "Failed to connect")
+        error=$(curl screenly-server:80 2>&1 | grep -c "Failed to connect")
             if [[ "$error" -eq 0 ]]; then
             break
         fi
@@ -61,7 +62,8 @@ run_viewer () {
         sleep 1
     done
 
-    /usr/bin/python /data/screenly/viewer.py
+    cd /data/screenly
+    /usr/bin/python viewer.py
 }
 
 run_server () {
@@ -69,11 +71,18 @@ run_server () {
 
     export RESIN_UUID=${RESIN_DEVICE_UUID}
 
-    /usr/bin/python /data/screenly/server.py
+    cd /data/screenly
+    /usr/bin/python server.py
 }
 
 run_websocket () {
-    /usr/bin/python /data/screenly/websocket_server_layer.py
+    cd /data/screenly
+    /usr/bin/python websocket_server_layer.py
+}
+
+run_celery () {
+    cd /data/screenly
+    celery worker -A server.celery -B -n worker@screenly --loglevel=info --schedule /tmp/celerybeat-schedule
 }
 
 if [[ "$SCREENLYSERVICE" = "server" ]]; then
@@ -87,4 +96,8 @@ fi
 
 if [[ "$SCREENLYSERVICE" = "websocket" ]]; then
     run_websocket
+fi
+
+if [[ "$SCREENLYSERVICE" = "celery" ]]; then
+    run_celery
 fi

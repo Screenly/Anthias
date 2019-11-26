@@ -41,31 +41,34 @@ viduris   = ('rtsp rtmp'.split ' ')
 domains = [ [('www.youtube.com youtu.be'.split ' '), 'youtube_asset']]
 
 
-get_mimetype = (filename) =>
+getMimetype = (filename) ->
   scheme = (_.first filename.split ':').toLowerCase()
   match = scheme in viduris
-  if match then return 'streaming'
+  if match
+    return 'streaming'
 
   domain = (_.first ((_.last filename.split '//').toLowerCase()).split '/')
   mt = _.find domains, (mt) -> domain in mt[0]
-  if mt and domain in mt[0] then return mt[1]
+  if mt and domain in mt[0]
+    return mt[1]
 
   ext = (_.last filename.split '.').toLowerCase()
   mt = _.find mimetypes, (mt) -> ext in mt[0]
-  if mt then mt[1] else null
+  if mt
+    return mt[1]
 
-duration_seconds_to_human_readable = (secs) =>
-  duration_string = ''
-  sec_int = parseInt(secs)
+durationSecondsToHumanReadable = (secs) ->
+  durationString = ""
+  secInt = parseInt(secs)
 
-  if ((hours = Math.floor(sec_int / 3600)) > 0)
-    duration_string += hours + ' hours '
-  if ((minutes = Math.floor(sec_int / 60) % 60) > 0)
-    duration_string += minutes + ' min '
-  if ((seconds = (sec_int % 60)) > 0)
-    duration_string += seconds + ' sec'
+  if ((hours = Math.floor(secInt / 3600)) > 0)
+    durationString += hours + " hours "
+  if ((minutes = Math.floor(secInt / 60) % 60) > 0)
+    durationString += minutes + " min "
+  if ((seconds = (secInt % 60)) > 0)
+    durationString += seconds + " sec"
 
-  return duration_string
+  return durationString
 
 url_test = (v) -> /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test v
 get_filename = (v) -> (v.replace /[\/\\\s]+$/g, '').replace /^.*[\\\/]/g, ''
@@ -79,7 +82,7 @@ Backbone.emulateJSON = off
 API.Asset = class Asset extends Backbone.Model
   idAttribute: "asset_id"
   fields: 'name mimetype uri start_date end_date duration skip_asset_check'.split ' '
-  defaults: =>
+  defaults: ->
     name: ''
     mimetype: 'webpage'
     uri: ''
@@ -215,17 +218,17 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
           that.viewmodel model
 
           data.submit()
-          .success (uri) =>
+          .success (uri) ->
             model.set {uri: uri}, silent:yes
 
             save = model.save()
-            save.done (data) =>
+            save.done (data) ->
               model.id = data.asset_id
               _.extend model.attributes, data
               model.collection.add model
-            save.fail =>
+            save.fail ->
               model.destroy()
-          .error =>
+          .error ->
             model.destroy()
         stop: (e) ->
           (that.$ '.progress').hide()
@@ -254,7 +257,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
   updateUriMimetype: => @updateMimetype @$fv 'uri'
   updateFileUploadMimetype: (filename) => @updateMimetype filename
   updateMimetype: (filename) =>
-    mt = get_mimetype filename
+    mt = getMimetype filename
     @$fv 'mimetype', if mt then mt else new Asset().defaults()['mimetype']
     @change_mimetype()
 
@@ -267,7 +270,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
   validate: (e) =>
     that = this
     validators =
-      uri: (v) =>
+      uri: (v) ->
         if v
           if ((that.$ '#tab-uri').hasClass 'active') and not url_test v
             'please enter a valid URL'
@@ -383,7 +386,7 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     if not @model.get 'name'
       if @model.old_name()
         @model.set {name: @model.old_name()}, silent:yes
-      else if get_mimetype @model.get 'uri'
+      else if getMimetype @model.get 'uri'
         @model.set {name: get_filename @model.get 'uri'}, silent:yes
       else
         @model.set {name: @model.get 'uri'}, silent:yes
@@ -479,7 +482,7 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
   render: =>
     @$el.html @template _.extend json = @model.toJSON(),
       name: insertWbr truncate_str json.name # word break urls at slashes
-      duration: duration_seconds_to_human_readable(json.duration)
+      duration: durationSecondsToHumanReadable(json.duration)
       start_date: (date_to json.start_date).string()
       end_date: (date_to json.end_date).string()
     @$el.prop 'id', @model.get 'asset_id'
@@ -517,38 +520,38 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
     yes
 
   setEnabled: (enabled) => if enabled
-      @$el.removeClass 'warning'
-      @delegateEvents()
-      (@$ 'input, button').prop 'disabled', off
-    else
-      @hidePopover()
-      @undelegateEvents()
-      @$el.addClass 'warning'
-      (@$ 'input, button').prop 'disabled', on
+    @$el.removeClass 'warning'
+    @delegateEvents()
+    (@$ 'input, button').prop 'disabled', off
+  else
+    @hidePopover()
+    @undelegateEvents()
+    @$el.addClass 'warning'
+    (@$ 'input, button').prop 'disabled', on
 
   download: (e) =>
     r = $.get '/api/v1/assets/' + @model.id + '/content'
-        .success (result) ->
-          switch result['type']
-            when 'url'
-              window.open(result['url'])
-            when 'file'
-              content = base64js.toByteArray(result['content'])
+      .success (result) ->
+        switch result['type']
+          when 'url'
+            window.open(result['url'])
+          when 'file'
+            content = base64js.toByteArray(result['content'])
 
-              mimetype = result['mimetype']
-              fn = result['filename']
+            mimetype = result['mimetype']
+            fn = result['filename']
 
-              blob = new Blob([content], {type: mimetype})
-              url = URL.createObjectURL(blob)
+            blob = new Blob([content], {type: mimetype})
+            url = URL.createObjectURL(blob)
 
-              a = document.createElement('a')
-              document.body.appendChild(a)
-              a.download = fn
-              a.href = url
-              a.click()
+            a = document.createElement('a')
+            document.body.appendChild(a)
+            a.download = fn
+            a.href = url
+            a.click()
 
-              URL.revokeObjectURL(url)
-              a.remove()
+            URL.revokeObjectURL(url)
+            a.remove()
     no
 
   edit: (e) =>
@@ -617,7 +620,7 @@ API.View.AssetsView = class AssetsView extends Backbone.View
 
 API.App = class App extends Backbone.View
   initialize: =>
-    ($ window).ajaxError (e,r) =>
+    ($ window).ajaxError (e,r) ->
       ($ '#request-error').html (get_template 'request-error')()
       if (j = $.parseJSON r.responseText) and (err = j.error)
         ($ '#request-error .msg').text 'Server Error: ' + err
@@ -654,12 +657,12 @@ API.App = class App extends Backbone.View
     'click #previous-asset-button': 'previous',
     'click #next-asset-button': 'next'
 
-  add: (e) =>
+  add: (e) ->
     new AddAssetView
     no
 
-  previous: (e) =>
+  previous: (e) ->
     $.get '/api/v1/assets/control/previous'
 
-  next: (e) =>
+  next: (e) ->
     $.get '/api/v1/assets/control/next'

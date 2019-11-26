@@ -1,0 +1,6 @@
+nose==1.2.1
+mock==1.0.1
+pep8==1.7.0
+selenium==2.53.6
+setuptools==34.4.0
+splinter==0.7.4

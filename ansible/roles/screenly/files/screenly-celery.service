@@ -1,0 +1,13 @@
+[Unit]
+Description=Screenly celery worker
+After=redis-server.service
+
+[Service]
+WorkingDirectory=/home/pi/screenly
+User=pi
+ExecStart=/usr/local/bin/celery worker -A server.celery -B -n worker@screenly --loglevel=info --schedule /home/pi/.screenly/celerybeat-schedule
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
