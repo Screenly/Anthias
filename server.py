@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import psutil
 
 __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2019, Screenly, Inc"
@@ -8,6 +7,7 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 
 import json
 import pydbus
+import psutil
 import re
 import sh
 import shutil
