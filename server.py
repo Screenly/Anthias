@@ -25,7 +25,7 @@ from os import getenv, listdir, makedirs, mkdir, path, remove, rename, statvfs, 
 from subprocess import check_output
 from urlparse import urlparse
 
-from flask import Flask, make_response, render_template, request, send_from_directory, url_for, jsonify
+from flask import Flask, escape, make_response, render_template, request, send_from_directory, url_for, jsonify
 from flask_cors import CORS
 from flask_restful_swagger_2 import Api, Resource, Schema, swagger
 from flask_swagger_ui import get_swaggerui_blueprint
@@ -415,7 +415,7 @@ def prepare_asset(request, unique_name=False):
     if not all([get('name'), get('uri'), get('mimetype')]):
         raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
 
-    name = get('name')
+    name = escape(get('name'))
     if unique_name:
         with db.conn(settings['database']) as conn:
             names = assets_helper.get_names_of_assets(conn)
@@ -438,7 +438,7 @@ def prepare_asset(request, unique_name=False):
         'nocache': get('nocache'),
     }
 
-    uri = get('uri').encode('utf-8')
+    uri = escape(get('uri').encode('utf-8'))
 
     if uri.startswith('/'):
         if not path.isfile(uri):
@@ -504,7 +504,7 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
         raise Exception(
             "Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
 
-    name = get('name')
+    name = escape(get('name'))
     if unique_name:
         with db.conn(settings['database']) as conn:
             names = assets_helper.get_names_of_assets(conn)
@@ -525,7 +525,7 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
         'nocache': get('nocache')
     }
 
-    uri = get('uri')
+    uri = escape(get('uri'))
 
     if uri.startswith('/'):
         if not path.isfile(uri):
