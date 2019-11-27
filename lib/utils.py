@@ -79,16 +79,20 @@ def validate_url(string):
     return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
 
 
-def get_node_ip():
+def get_node_ip(retry=3, timeout=0.5):
     """Returns the node's IP, for the interface
     that is being used as the default gateway.
     This should work on both MacOS X and Linux."""
-    try:
-        default_interface = gateways()['default'][AF_INET][1]
-        my_ip = ifaddresses(default_interface)[AF_INET][0]['addr']
-        return my_ip
-    except (KeyError, ValueError):
-        raise Exception("Unable to resolve local IP address.")
+    for attempt in range(1, retry + 1):
+        try:
+            default_interface = gateways()['default'][AF_INET][1]
+            my_ip = ifaddresses(default_interface)[AF_INET][0]['addr']
+            return my_ip
+        except (KeyError, ValueError):
+            if attempt == retry:
+                break
+            time.sleep(timeout)
+    raise Exception("Unable to resolve local IP address.")
 
 
 def get_node_mac_address():
