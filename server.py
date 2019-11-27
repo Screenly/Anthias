@@ -7,6 +7,7 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 
 import json
 import pydbus
+import psutil
 import re
 import sh
 import shutil
@@ -1763,6 +1764,17 @@ def system_info():
     slash = statvfs("/")
     free_space = size(slash.f_bavail * slash.f_frsize)
 
+    # Memory
+    virtual_memory = psutil.virtual_memory()
+    memory = "Total: {} | Used: {} | Free: {} | Shared: {} | Buff: {} | Available: {}".format(
+        virtual_memory.total >> 20,
+        virtual_memory.used >> 20,
+        virtual_memory.free >> 20,
+        virtual_memory.shared >> 20,
+        virtual_memory.buffers >> 20,
+        virtual_memory.available >> 20
+    )
+
     # Get uptime
     system_uptime = timedelta(seconds=diagnostics.get_uptime())
 
@@ -1792,6 +1804,7 @@ def system_info():
         loadavg=loadavg,
         free_space=free_space,
         uptime=system_uptime,
+        memory=memory,
         display_info=display_info,
         display_power=display_power,
         raspberry_model=raspberry_model,
