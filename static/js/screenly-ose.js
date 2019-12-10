@@ -1126,7 +1126,9 @@
     App.prototype.events = {
       'click .add-asset-button': 'add',
       'click #previous-asset-button': 'previous',
-      'click #next-asset-button': 'next'
+      'click #next-asset-button': 'next',
+      'click #display-on-button': 'display_on',
+      'click #display-off-button': 'display_off'
     };
 
     App.prototype.add = function(e) {
@@ -1140,6 +1142,14 @@
 
     App.prototype.next = function(e) {
       return $.get('/api/v1/assets/control/next');
+    };
+
+    App.prototype.display_on = function(e) {
+      return $.post('/api/v1/display_on');
+    };
+
+    App.prototype.display_off = function(e) {
+      return $.post('/api/v1/display_off');
     };
 
     return App;
