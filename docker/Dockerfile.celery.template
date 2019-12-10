@@ -3,6 +3,7 @@ FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:jessie
 RUN apt-get update && \
     apt-get -y install \
         build-essential \
+        cec-utils \
         curl \
         git-core \
         libffi-dev \
