@@ -8,6 +8,7 @@ import re
 import requests
 import string
 import sh
+import time
 
 from datetime import datetime, timedelta
 from distutils.util import strtobool
@@ -79,7 +80,7 @@ def validate_url(string):
     return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
 
 
-def get_node_ip(retry=3, timeout=0.5):
+def get_node_ip(retry=3, timeout=1):
     """Returns the node's IP, for the interface
     that is being used as the default gateway.
     This should work on both MacOS X and Linux."""
