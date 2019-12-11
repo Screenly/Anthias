@@ -655,7 +655,9 @@ API.App = class App extends Backbone.View
   events:
     'click .add-asset-button': 'add',
     'click #previous-asset-button': 'previous',
-    'click #next-asset-button': 'next'
+    'click #next-asset-button': 'next',
+    'click #display-on-button': 'display_on',
+    'click #display-off-button': 'display_off'
 
   add: (e) ->
     new AddAssetView
