@@ -190,15 +190,40 @@ def cleanup_usb_assets(media_dir='/media'):
                     if location.group() not in mountpoints:
                         assets_helper.delete(conn, asset['asset_id'])
 
+
+@celery.task
+def display_status():
+    """Request power status of primary CEC device."""
+    cmd = sh.Command('/usr/bin/cec-client')
+    # cec-client parameters:
+    #   -d 1   log level error
+    #   -s     exit after first command
+    res = cmd(sh.echo('pow 0'), '-d', '1', '-s')
+    if('power status: on' in res):
+      return 'on'
+    elif('power status: standby' in res):
+      return 'off'
+    else:
+      return 'unknown'
+
+
 @celery.task
 def display_on():
-    cmd = sh.Command("/usr/bin/cec-client")
+    """Set primary CEC device as <active source>."""
+    cmd = sh.Command('/usr/bin/cec-client')
+    # cec-client parameters:
+    #   -d 1   log level error
+    #   -s     exit after first command
     cmd(sh.echo('as 0'), '-d', '1', '-s')
 
 
 @celery.task
 def display_off():
-    cmd = sh.Command("/usr/bin/cec-client")
+    """Set power status of primary CEC device to <standby>."""
+    cmd = sh.Command('/usr/bin/cec-client')
+    # cec-client parameters:
+    #   -d 1   log level error
+    #   -s     exit after first command
     cmd(sh.echo('standby 0'), '-d', '1', '-s')
 
 
@@ -1458,6 +1483,24 @@ class ShutdownScreenly(Resource):
         return '', 200
 
 
+class DisplayStatus(Resource):
+    method_decorators = [api_response, authorized]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Switch display on'
+            }
+        }
+    })
+    def get(self):
+        status = display_status.apply_async().get(timeout=10)
+        response = {
+            'status': status
+        }
+        return response, 200
+
+
 class DisplayOn(Resource):
     method_decorators = [api_response, authorized]
 
@@ -1648,6 +1691,7 @@ api.add_resource(UpgradeScreenly, '/api/v1/upgrade_screenly')
 api.add_resource(RebootScreenly, '/api/v1/reboot_screenly')
 api.add_resource(ShutdownScreenly, '/api/v1/shutdown_screenly')
 api.add_resource(ViewerCurrentAsset, '/api/v1/viewer_current_asset')
+api.add_resource(DisplayStatus, '/api/v1/display_status')
 api.add_resource(DisplayOn, '/api/v1/display_on')
 api.add_resource(DisplayOff, '/api/v1/display_off')
 
