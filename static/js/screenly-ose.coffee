@@ -668,3 +668,9 @@ API.App = class App extends Backbone.View
 
   next: (e) ->
     $.get '/api/v1/assets/control/next'
+
+  display_on: (e) ->
+    $.post '/api/v1/display_on'
+
+  display_off: (e) ->
+    $.post '/api/v1/display_off'
