@@ -655,7 +655,9 @@ API.App = class App extends Backbone.View
   events:
     'click .add-asset-button': 'add',
     'click #previous-asset-button': 'previous',
-    'click #next-asset-button': 'next'
+    'click #next-asset-button': 'next',
+    'click #display-on-button': 'display_on',
+    'click #display-off-button': 'display_off'
 
   add: (e) ->
     new AddAssetView
@@ -666,3 +668,12 @@ API.App = class App extends Backbone.View
 
   next: (e) ->
     $.get '/api/v1/assets/control/next'
+
+  display_status: (e) ->
+    $.get '/api/v1/display_status'
+
+  display_on: (e) ->
+    $.post '/api/v1/display_on'
+
+  display_off: (e) ->
+    $.post '/api/v1/display_off'
