@@ -93,7 +93,7 @@
         });
       }
     });
-    use24HourClock = $('input[name="use_24_hour_clock"]').prop("checked");
+    use24HourClock = $("input[name=\"use_24_hour_clock\"]").prop("checked");
     dateSettings = {};
     if (use24HourClock) {
       dateSettings.time = "HH:mm";
@@ -104,7 +104,7 @@
       dateSettings.fullTime = "hh:mm:ss A";
       dateSettings.showMeridian = true;
     }
-    $('input.time').timepicker({
+    $("input.time").timepicker({
       defaultTime: false,
       minuteStep: 5,
       showInputs: true,

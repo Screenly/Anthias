@@ -81,7 +81,7 @@ $().ready ->
       .error (e) ->
         document.location.reload()
 
-  use24HourClock = $('input[name="use_24_hour_clock"]').prop "checked"
+  use24HourClock = $("input[name=\"use_24_hour_clock\"]").prop "checked"
   dateSettings = {}
   if use24HourClock
     dateSettings.time = "HH:mm"
@@ -91,7 +91,7 @@ $().ready ->
     dateSettings.time = "hh:mm A"
     dateSettings.fullTime = "hh:mm:ss A"
     dateSettings.showMeridian = true
-  $('input.time').timepicker
+  $("input.time").timepicker
     defaultTime: no, minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: dateSettings.showMeridian
 
   start_date = new Date()
