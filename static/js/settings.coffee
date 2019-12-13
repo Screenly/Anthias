@@ -81,6 +81,19 @@ $().ready ->
       .error (e) ->
         document.location.reload()
 
+  use24HourClock = $('input[name="use_24_hour_clock"]').prop "checked"
+  dateSettings = {}
+  if use24HourClock
+    dateSettings.time = "HH:mm"
+    dateSettings.fullTime = "HH:mm:ss"
+    dateSettings.showMeridian = false
+  else
+    dateSettings.time = "hh:mm A"
+    dateSettings.fullTime = "hh:mm:ss A"
+    dateSettings.showMeridian = true
+  $('input.time').timepicker
+    defaultTime: no, minuteStep: 5, showInputs: yes, disableFocus: yes, showMeridian: dateSettings.showMeridian
+
   start_date = new Date()
   start_date_usb_file = $("#view-usb-assets-file-modal [name='start_date_date']")
   start_date_usb_file.datepicker autoclose: yes, format: 'mm/dd/yyyy'
