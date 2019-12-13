@@ -145,6 +145,7 @@
 - name: Install Screenly dependencies
   apt:
     name:
+      - cec-utils
       - console-data
       - libffi-dev
       - libssl-dev

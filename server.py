@@ -194,11 +194,10 @@ def cleanup_usb_assets(media_dir='/media'):
 @celery.task
 def display_status():
     """Request power status of primary CEC device."""
-    cmd = sh.Command('/usr/bin/cec-client')
     # cec-client parameters:
     #   -d 1   log level error
     #   -s     exit after first command
-    res = cmd(sh.echo('pow 0'), '-d', '1', '-s')
+    res = sh.Command('/usr/bin/cec-client')(sh.echo('pow 0'), '-d', '1', '-s')
     if('power status: on' in res):
       return 'on'
     elif('power status: standby' in res):
@@ -210,21 +209,19 @@ def display_status():
 @celery.task
 def display_on():
     """Set primary CEC device as <active source>."""
-    cmd = sh.Command('/usr/bin/cec-client')
     # cec-client parameters:
     #   -d 1   log level error
     #   -s     exit after first command
-    cmd(sh.echo('as 0'), '-d', '1', '-s')
+    sh.Command('/usr/bin/cec-client')(sh.echo('as 0'), '-d', '1', '-s')
 
 
 @celery.task
 def display_off():
     """Set power status of primary CEC device to <standby>."""
-    cmd = sh.Command('/usr/bin/cec-client')
     # cec-client parameters:
     #   -d 1   log level error
     #   -s     exit after first command
-    cmd(sh.echo('standby 0'), '-d', '1', '-s')
+    sh.Command('/usr/bin/cec-client')(sh.echo('standby 0'), '-d', '1', '-s')
 
 
 ################################
