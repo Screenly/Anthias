@@ -199,11 +199,11 @@ def display_status():
     #   -s     exit after first command
     res = sh.Command('/usr/bin/cec-client')(sh.echo('pow 0'), '-d', '1', '-s')
     if('power status: on' in res):
-      return 'on'
+        return 'on'
     elif('power status: standby' in res):
-      return 'off'
+        return 'off'
     else:
-      return 'unknown'
+        return 'unknown'
 
 
 @celery.task
