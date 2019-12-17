@@ -6,6 +6,7 @@ __copyright__ = "Copyright 2012-2019, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 import json
+import logging
 import pydbus
 import psutil
 import re
@@ -17,6 +18,7 @@ import yaml
 import uuid
 from base64 import b64encode
 from celery import Celery
+from celery.schedules import crontab
 from datetime import datetime, timedelta
 from dateutil import parser as date_parser
 from functools import wraps
@@ -78,6 +80,8 @@ def setup_periodic_tasks(sender, **kwargs):
     # Calls cleanup() every hour.
     sender.add_periodic_task(3600, cleanup.s(), name='cleanup')
     sender.add_periodic_task(3600, cleanup_usb_assets.s(), name='cleanup_usb_assets')
+    # Set display power schedule.
+    display_schedule()
 
 
 @celery.task
@@ -190,10 +194,9 @@ def cleanup_usb_assets(media_dir='/media'):
                     if location.group() not in mountpoints:
                         assets_helper.delete(conn, asset['asset_id'])
 
-
 @celery.task
 def display_status():
-    """Request power status of primary CEC device."""
+    """Request power status of TV."""
     # cec-client parameters:
     #   -d 1   log level error
     #   -s     exit after first command
@@ -208,20 +211,55 @@ def display_status():
 
 @celery.task
 def display_on():
-    """Set primary CEC device as <active source>."""
+    """Set TV as <active source>."""
     # cec-client parameters:
     #   -d 1   log level error
     #   -s     exit after first command
-    sh.Command('/usr/bin/cec-client')(sh.echo('as 0'), '-d', '1', '-s')
+    sh.Command('/usr/bin/cec-client')(sh.echo('as 0'), '-d', '1', '-s', _bg=True)
 
 
 @celery.task
 def display_off():
-    """Set power status of primary CEC device to <standby>."""
+    """Set power status of TV to <standby>."""
     # cec-client parameters:
     #   -d 1   log level error
     #   -s     exit after first command
-    sh.Command('/usr/bin/cec-client')(sh.echo('standby 0'), '-d', '1', '-s')
+    sh.Command('/usr/bin/cec-client')(sh.echo('standby 0'), '-d', '1', '-s', _bg=True)
+
+
+@celery.task
+def display_schedule():
+    """Set display power schedule."""
+    task_name_on = 'display.on'
+    task_name_off = 'display.off'
+    settings.load()
+
+    # create or update tasks
+    if settings['display_automatic_power']:
+        if settings['use_24_hour_clock']:
+            time_format = '%H:%M'
+        else:
+            time_format = '%I:%M %p'
+        try:
+            time_on = time.strptime(settings['display_on_time'], time_format)
+            time_off = time.strptime(settings['display_off_time'], time_format)
+            celery.add_periodic_task(
+                crontab(hour=time_on.tm_hour, minute=time_on.tm_min),
+                display_on.s(), name=task_name_on,
+            )
+            celery.add_periodic_task(
+                crontab(hour=time_off.tm_hour, minute=time_off.tm_min),
+                display_off.s(), name=task_name_off,
+            )
+        except ValueError as e:
+            logging.error('Unable to set display on/off times')
+
+    # delete tasks
+    else:
+        if task_name_on in celery.conf.beat_schedule:
+            del celery.conf.beat_schedule[task_name_on]
+        if task_name_off in celery.conf.beat_schedule:
+            del celery.conf.beat_schedule[task_name_off]
 
 
 ################################
@@ -1486,16 +1524,16 @@ class DisplayStatus(Resource):
     @swagger.doc({
         'responses': {
             '200': {
-                'description': 'Switch display on'
+                'description': 'Display status ("on", "off" or "unknown")',
+                'schema': {
+                    'type': 'string'
+                }
             }
         }
     })
     def get(self):
         status = display_status.apply_async().get(timeout=10)
-        response = {
-            'status': status
-        }
-        return response, 200
+        return status, 200
 
 
 class DisplayOn(Resource):
@@ -1786,6 +1824,7 @@ def settings_page():
                 settings[field] = value
 
             settings.save()
+            display_schedule.apply_async()
             publisher = ZmqPublisher.get_instance()
             publisher.send_to_viewer('reload')
             context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
