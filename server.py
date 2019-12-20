@@ -194,6 +194,7 @@ def cleanup_usb_assets(media_dir='/media'):
                     if location.group() not in mountpoints:
                         assets_helper.delete(conn, asset['asset_id'])
 
+
 @celery.task
 def display_status():
     """Request power status of TV."""
