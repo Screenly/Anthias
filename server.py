@@ -251,7 +251,7 @@ def display_schedule():
                 crontab(hour=time_off.tm_hour, minute=time_off.tm_min),
                 display_off.s(), name=task_name_off,
             )
-        except ValueError as e:
+        except ValueError:
             logging.error('Unable to set display on/off times')
 
     # delete tasks
