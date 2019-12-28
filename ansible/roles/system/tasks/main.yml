@@ -176,6 +176,17 @@
       - dphys-swapfile
       - rabbitmq-server
     state: absent
+    
+- name: Remove cups/printing related packages
+  apt:
+    name:
+      - cups
+      - cups-browsed
+      - cups-client
+      - cups-common
+      - cups-daemon
+      - cups-server-common
+    state: absent
 
 - name: Perform system upgrade
   apt:
