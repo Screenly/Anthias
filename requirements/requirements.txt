@@ -18,7 +18,7 @@ gevent==1.2.2
 gunicorn==19.8.1
 hurry.filesize==0.9
 jinja2==2.10.1
-kombu==4.6.3  # cause of downgrade https://github.com/celery/kombu/issues/1063
+kombu==4.6.7 #supposedly fixes issue it had with celery https://github.com/celery/kombu/issues/1063
 mixpanel==4.3.2
 netifaces==0.10.4
 psutil==5.6.7
