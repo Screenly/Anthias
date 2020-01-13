@@ -165,6 +165,7 @@ sudo -E ansible-playbook site.yml $EXTRA_ARGS
 
 sudo apt-get autoclean
 sudo apt-get clean
+sudo apt autoremove -y
 sudo find /usr/share/doc -depth -type f ! -name copyright -delete
 sudo find /usr/share/doc -empty -delete
 sudo rm -rf /usr/share/man /usr/share/groff /usr/share/info /usr/share/lintian /usr/share/linda /var/cache/man
