@@ -1,0 +1,5 @@
+FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:jessie
+
+RUN apt-get update && apt-get -y install redis-server && apt-get clean
+
+CMD ["redis-server"]

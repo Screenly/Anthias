@@ -75,7 +75,9 @@ services:
       - resin-data:/data
 
   redis:
-    image: arm32v7/redis
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.redis.template
     restart: always
 
 volumes:
