@@ -32,4 +32,4 @@ RUN chown -R pi:pi /home/pi/.screenly /home/pi/screenly_assets
 USER pi
 WORKDIR /home/pi/screenly
 
-CMD celery worker -A server.celery -B -n worker@screenly --loglevel=info --schedule /tmp/celerybeat-schedule
+CMD celery worker -A server.celery -B --loglevel=debug --scheduler redbeat.RedBeatScheduler
