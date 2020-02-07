@@ -1,15 +1,13 @@
-FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:jessie
+FROM balenalib/%%BALENA_MACHINE_NAME%%-alpine
 
-RUN apt-get update && \
-    apt-get -y install \
-        build-essential \
+RUN apk --no-cache add \
+        build-base \
         curl \
-        python-dev && \
-    apt-get clean
+        python2-dev
 
 # Install Python requirements
-RUN curl -s https://bootstrap.pypa.io/get-pip.py | python
-RUN pip install \
+RUN curl -s https://bootstrap.pypa.io/get-pip.py | python2
+RUN pip2 install \
     flask==1.0.2 \
     gevent-websocket==0.10.1 \
     gevent==1.2.2 \
