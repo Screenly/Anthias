@@ -82,7 +82,7 @@ run_websocket () {
 
 run_celery () {
     cd /data/screenly
-    celery beat -S redbeat.RedBeatScheduler -n beat@screenly --detach
+    celery beat -S redbeat.RedBeatScheduler -n beat@screenly --detach --loglevel=info
     celery worker -A server.celery -n worker@screenly --loglevel=info
 }
 
