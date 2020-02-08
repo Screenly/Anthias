@@ -25,6 +25,7 @@ from functools import wraps
 from hurry.filesize import size
 from mimetypes import guess_type
 from os import getenv, listdir, makedirs, mkdir, path, remove, rename, statvfs, stat, walk
+from redbeat import RedBeatScheduler, RedBeatSchedulerEntry
 from subprocess import check_output
 from urlparse import urlparse
 
@@ -243,24 +244,23 @@ def display_schedule():
             time_format = '%I:%M %p'
         try:
             time_on = time.strptime(settings['display_on_time'], time_format)
+            intrvl_on = crontab(hour=time_on.tm_hour, minute=time_on.tm_min)
+            RedBeatSchedulerEntry(task_name_on, 'server.display_on', intrvl_on, app=celery).save()
+            logging.info("scheduled display_on for %s", intrvl_on)
             time_off = time.strptime(settings['display_off_time'], time_format)
-            celery.add_periodic_task(
-                crontab(hour=time_on.tm_hour, minute=time_on.tm_min),
-                display_on.s(), name=task_name_on,
-            )
-            celery.add_periodic_task(
-                crontab(hour=time_off.tm_hour, minute=time_off.tm_min),
-                display_off.s(), name=task_name_off,
-            )
+            intrvl_off = crontab(hour=time_off.tm_hour, minute=time_off.tm_min)
+            RedBeatSchedulerEntry(task_name_off, 'server.display_off', intrvl_off, app=celery).save()
+            logging.info("scheduled display_off for %s", intrvl_off)
         except ValueError:
             logging.error('Unable to set display on/off times')
 
     # delete tasks
     else:
-        if task_name_on in celery.conf.beat_schedule:
-            del celery.conf.beat_schedule[task_name_on]
-        if task_name_off in celery.conf.beat_schedule:
-            del celery.conf.beat_schedule[task_name_off]
+        RedBeatSchedulerEntry(name=task_name_on, app=celery).delete()
+        RedBeatSchedulerEntry(name=task_name_off, app=celery).delete()
+        logging.info("removed display_on/off schedules")
+
+    RedBeatScheduler(celery).tick()
 
 
 ################################

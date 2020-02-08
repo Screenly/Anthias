@@ -82,8 +82,7 @@ run_websocket () {
 
 run_celery () {
     cd /data/screenly
-    celery beat -A server.celery -S redbeat.RedBeatScheduler -l debug --pidfile "$RANDOM$RANDOM.pid" &
-    celery worker -A server.celery -n worker@screenly -l info
+    celery worker -A server.celery -B -n worker@screenly -l info --scheduler redbeat.RedBeatScheduler
 }
 
 if [[ "$SCREENLYSERVICE" = "server" ]]; then
