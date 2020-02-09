@@ -2,4 +2,4 @@ FROM balenalib/%%BALENA_MACHINE_NAME%%-alpine
 
 RUN apk --no-cache add redis
 
-CMD ["redis-server"]
+CMD ["redis-server", "--protected-mode", "no"]
