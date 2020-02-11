@@ -7,8 +7,8 @@ RUN apk --no-cache add \
         libcec
 
 # Install Python requirements
-RUN curl -s https://bootstrap.pypa.io/get-pip.py | python
-RUN pip install \
+RUN curl -s https://bootstrap.pypa.io/get-pip.py | python2
+RUN pip2 install \
     celery-redbeat==0.13.0
 
 COPY . /tmp/screenly
