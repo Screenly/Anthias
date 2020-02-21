@@ -8,6 +8,9 @@ User=pi
 ExecStart=/usr/local/bin/celery worker -A server.celery -B -n worker@screenly --loglevel=info --schedule /home/pi/.screenly/celerybeat-schedule
 Restart=always
 RestartSec=5
+MemoryLimit=50M
+MemoryAccounting=yes
+KillMode=control-group
 
 [Install]
 WantedBy=multi-user.target
