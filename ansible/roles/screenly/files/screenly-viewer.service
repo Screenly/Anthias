@@ -5,9 +5,9 @@ After=matchbox.service screenly-web.service
 [Service]
 WorkingDirectory=/home/pi/screenly
 User=pi
-MemoryLimit=65%
+MemoryLimit=60%
 MemoryAccounting=yes
-KillMode=mixed
+KillMode=control-group
 
 Environment=DISPLAY=:0.0
 
