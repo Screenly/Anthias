@@ -15,6 +15,7 @@ addons:
       - python-setuptools
 install:
   - pip install -U pip
+  - pip install ansible
   - pip install -r requirements/requirements.txt
   - pip install -r requirements/requirements.dev.txt
 before_script:
