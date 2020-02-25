@@ -16,4 +16,5 @@ Steps to reproduce this issue, eg:
 ### Environment
 
 * Raspberry Pi Hardware Version:
+* Raspberry Pi Network Setup: (ex. built-in WiFi, Ethernet, USB WiFi Adapter)
 * Screenly OSE Version:
