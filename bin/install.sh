@@ -100,7 +100,6 @@ elif [ "$WEB_UPGRADE" = true ]; then
     EXTRA_ARGS="--skip-tags enable-ssl"
   else
     echo -e "Invalid -s parameter."
-	whiptail --title "Screenly OSE" --msgbox  "$logo\n\nDetected old installation command. Please use:\n$ bash <(curl -sL https://www.screenlyapp.com/install-ose.sh)"  17 78
     exit 1
   fi
 
