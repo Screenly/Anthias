@@ -33,17 +33,16 @@ if [ "$WEB_UPGRADE" = false ]; then
 
   # Make sure the command is launched interactive.
   if ! [ -t 0  ]; then
-    whiptail --title "Screenly OSE" --msgbox  "$logo\n\nDetected old installation command. Please use:\n$ bash <(curl -sL https://www.screenlyapp.com/install-ose.sh)"  17 78
+    whiptail --title "Screenly OSE" --msgbox  "$logo\n\nDetected old installation command. Please use:\n$ bash <(curl -sL https://www.screenlyapp.com/install-ose.sh)" --defaultno 17 78
     exit 1
   fi
 
-  if !(whiptail --title "Screenly OSE" --yesno "$logo\n\nScreenly OSE requires a dedicated Raspberry Pi / SD card. You will not be able to use the regular desktop environment once installed.\n\nDo you still want to continue?" 17 78); then
+  if !(whiptail --title "Screenly OSE" --yesno "$logo\n\nScreenly OSE requires a dedicated Raspberry Pi / SD card. You will not be able to use the regular desktop environment once installed.\n\nDo you still want to continue?" --defaultno 17 78); then
     echo
     exit 1
   fi
 
-  if !(whiptail --title "Screenly OSE" --yesno "$logo\n\nWould you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to Docker" 17 78); then
-    if !(whiptail --title "Screenly OSE" --yesno "$logo\n\nWould you like to use the development (master) branch? You will get the latest features, but things may break." 17 78); then
+    if !(whiptail --title "Screenly OSE" --yesno "$logo\n\nWould you like to use the development (master) branch? You will get the latest features, but things may break." --defaultno 17 78); then
       export DOCKER_TAG="production"
       BRANCH="production"
     else
@@ -55,7 +54,7 @@ if [ "$WEB_UPGRADE" = false ]; then
     BRANCH="experimental"
   fi
 
-  if !(whiptail --title "Screenly OSE" --yesno "$logo\n\nWould you like to install the WoTT agent to help you manage security of your Raspberry Pi?" 17 78); then
+  if !(whiptail --title "Screenly OSE" --yesno "$logo\n\nWould you like to install the WoTT agent to help you manage security of your Raspberry Pi?" --defaultno 17 78); then
       curl -s https://packagecloud.io/install/repositories/wott/agent/script.deb.sh | sudo bash
       sudo apt install wott-agent
   fi
@@ -66,7 +65,7 @@ if [ "$WEB_UPGRADE" = false ]; then
       NETWORK="n"
   fi
 
-  if !(whiptail --title "Screenly OSE" --yesno "$logo\n\nWould you like to perform a full system upgrade as well?" 17 78); then
+  if !(whiptail --title "Screenly OSE" --yesno "$logo\n\nWould you like to perform a full system upgrade as well?" --defaultno 17 78); then
     EXTRA_ARGS="--skip-tags enable-ssl,system-upgrade"
   else
     EXTRA_ARGS="--skip-tags enable-ssl"
