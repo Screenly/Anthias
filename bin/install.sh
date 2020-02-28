@@ -54,7 +54,7 @@ if [ "$WEB_UPGRADE" = false ]; then
     BRANCH="experimental"
   fi
 
-  if !(whiptail --title "Screenly OSE" --yesno "$logo\n\nWould you like to install the WoTT agent to help you manage security of your Raspberry Pi?" --defaultno 17 78); then
+  if (whiptail --title "Screenly OSE" --yesno "$logo\n\nWould you like to install the WoTT agent to help you manage security of your Raspberry Pi?" --defaultno 17 78); then
       curl -s https://packagecloud.io/install/repositories/wott/agent/script.deb.sh | sudo bash
       sudo apt install wott-agent
   fi
