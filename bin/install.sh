@@ -42,6 +42,7 @@ if [ "$WEB_UPGRADE" = false ]; then
     exit 1
   fi
 
+  if !(whiptail --title "Screenly OSE" --yesno "$logo\n\nWould you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to Docker" --defaultno 17 78); then
     if !(whiptail --title "Screenly OSE" --yesno "$logo\n\nWould you like to use the development (master) branch? You will get the latest features, but things may break." --defaultno 17 78); then
       export DOCKER_TAG="production"
       BRANCH="production"
