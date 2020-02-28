@@ -60,7 +60,7 @@ if [ "$WEB_UPGRADE" = false ]; then
   fi
 
   if (whiptail --title "Screenly OSE" --yesno "$logo\n\nDo you want Screenly to manage your network? This is recommended for most users because this adds features to manage your network." 17 78); then
-	  NETWORK="y"
+      NETWORK="y"
   else
       NETWORK="n"
   fi
@@ -190,8 +190,8 @@ fi
 echo "Installation completed."
 
 if [ "$WEB_UPGRADE" = false ]; then
-  read -p "You need to reboot the system for the installation to complete. Would you like to reboot now? (y/N)" -n 1 -r -s REBOOT && echo
-  if [ "$REBOOT" == 'y' ]; then
+  
+  if (whiptail --title "Screenly OSE" --yesno "$logo\n\nYou need to reboot the system for the installation to complete. Would you like to reboot now?" --defaultno 17 78); then
     sudo reboot
   fi
 fi
