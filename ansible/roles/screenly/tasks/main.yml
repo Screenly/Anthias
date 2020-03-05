@@ -80,7 +80,7 @@
     mode: '0700'
     owner: root
     group: root
-   # force: yes
+    force: yes
 
 - name: Copy screenly_overrides
   copy:
