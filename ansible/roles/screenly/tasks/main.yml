@@ -73,7 +73,7 @@
     state : absent
     user: pi
 
-- name: Download upgrade_screenly.sh from github repository
+- name: Download upgrade_screenly.sh from github repository (ealmonte)
   get_url:
     url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/install.sh
     dest: /usr/local/sbin/upgrade_screenly.sh
