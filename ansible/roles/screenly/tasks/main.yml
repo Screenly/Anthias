@@ -8,6 +8,13 @@
     - .screenly
     - .config
     - .config/uzbl
+    
+- name: Ensure /usr/local/sbin exist
+  file:
+    path: "/usr/local/sbin"
+    state: directory
+    owner: root
+    group: staff
 
 - name: Copy Screenly default config
   copy:
@@ -73,7 +80,7 @@
     state : absent
     user: pi
 
-- name: Download upgrade_screenly.sh from github repository (ealmonte)
+- name: Download upgrade_screenly.sh from github repository
   get_url:
     url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/install.sh
     dest: /usr/local/sbin/upgrade_screenly.sh
