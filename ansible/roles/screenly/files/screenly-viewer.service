@@ -9,11 +9,10 @@ User=pi
 # CPU Limits
 CPUAccounting=yes
 CPUQuota=100%
-CPUQuotaPeriodSec=60
 
 # Memory Limits
 MemoryAccounting=yes
-MemoryLimit=60%
+MemoryLimit=65%
 
 # Kill Signal control
 KillMode=control-group
