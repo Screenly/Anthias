@@ -10,12 +10,13 @@ User=pi
 CPUAccounting=yes
 CPUQuota=100%
 
-# Memory Limits
+# Memory Limits as stopgap to prevent system lockup due to resource exhaustion
 MemoryAccounting=yes
-MemoryLimit=65%
+MemoryLimit=60%
 
 # Kill Signal control
 KillMode=control-group
+KillSignal=SIGKILL
 SendSIGHUP=yes
 
 Environment=DISPLAY=:0.0
