@@ -9,9 +9,9 @@ ExecStart=/usr/local/bin/celery worker -A server.celery -B -n worker@screenly --
 Restart=always
 RestartSec=5
 
-# Memory Limits
+# Memory Limits as stopgap to prevent system lockup due to resource exhaustion
 MemoryAccounting=yes
-MemoryLimit=100M
+MemoryLimit=16%
 
 # Kill Signal control
 KillMode=control-group
