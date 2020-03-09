@@ -163,8 +163,8 @@ else
   export MANAGE_NETWORK=false
 fi
 
-# playbook requires ansible
-sudo pip install ansible
+# playbook requires ansible (sourcing version from master requirements to keep version constant)
+sudo pip install $(curl -s https://raw.githubusercontent.com/Screenly/screenly-ose/master/requirements/requirements.txt | grep "ansible" | cat)
 
 sudo -u pi ansible localhost -m git -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH"
 cd /home/pi/screenly/ansible
