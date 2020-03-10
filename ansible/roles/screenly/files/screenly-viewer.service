@@ -5,19 +5,19 @@ After=matchbox.service screenly-web.service
 [Service]
 WorkingDirectory=/home/pi/screenly
 User=pi
+PrivateTmp=yes
 
 # CPU Limits
+Delegate=yes
 CPUAccounting=yes
-CPUQuota=100%
+LimitCPU=300s
 
-# Memory Limits as stopgap to prevent system lockup due to resource exhaustion
+# Memory Limits
 MemoryAccounting=yes
-MemoryLimit=60%
+MemoryLimit=65%
 
-# Kill Signal control
+# Process control
 KillMode=control-group
-KillSignal=SIGKILL
-SendSIGHUP=yes
 
 Environment=DISPLAY=:0.0
 
@@ -37,9 +37,13 @@ ExecStartPre=/usr/bin/xset s noblank
 
 ExecStart=/usr/bin/python /home/pi/screenly/viewer.py
 Restart=always
+RestartSec=5
+StartLimitInterval=30
+StartLimitBurst=3
 
-ExecStartPost=/bin/rm -f /tmp/uzbl_*
-ExecStartPost=/bin/rm -f /tmp/screenly_html/*
+# Not needed since using PrivateTmp
+#ExecStartPost=/bin/rm -f /tmp/uzbl_*
+#ExecStartPost=/bin/rm -f /tmp/screenly_html/*
 
 [Install]
 WantedBy=multi-user.target
