@@ -28,7 +28,7 @@ pytz==2012d
 pyzmq==18.1.1
 redis==3.4.1
 requests[security]==2.23.0
-sh==1.12.14
+sh==1.08
 six==1.14.0
 uptime==2.0.2
 urllib3==1.25.8
