@@ -38,7 +38,7 @@ ExecStartPre=/usr/bin/xset s noblank
 ExecStart=/usr/bin/python /home/pi/screenly/viewer.py
 Restart=always
 RestartSec=5
-StartLimitInterval=30
+StartLimitIntervalSec=60
 StartLimitBurst=3
 
 # Not needed since using PrivateTmp
