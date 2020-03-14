@@ -168,32 +168,30 @@
 
 - name: Install Screenly dependencies
   apt:
-    name: "{{ item }}"
+    name:
+      - console-data
+      - libffi-dev
+      - libssl-dev
+      - python-dev
+      - python-netifaces
+      - rpi-update
+      - systemd
     state: latest
-  with_items:
-    - console-data
-    - libffi-dev
-    - libssl-dev
-    - python-dev
-    - python-netifaces
-    - rpi-update
-    - systemd
 
 - name: Remove deprecated apt dependencies
   apt:
-    name: "{{ item }}"
+    name:
+      - dphys-swapfile
+      - lightdm
+      - lightdm-gtk-greeter
+      - matchbox
+      - omxplayer
+      - sqlite3
+      - supervisor
+      - uzbl
+      - x11-xserver-utils
+      - xserver-xorg
     state: absent
-  with_items:
-    - dphys-swapfile
-    - lightdm
-    - lightdm-gtk-greeter
-    - matchbox
-    - omxplayer
-    - sqlite3
-    - supervisor
-    - uzbl
-    - x11-xserver-utils
-    - xserver-xorg
 
 - name: Add docker apt key
   apt_key:
