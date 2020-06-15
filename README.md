@@ -7,7 +7,7 @@
 
 **PLEASE NOTE:** Screenly OSE and the commercial version of Screenly (formerly known as Screenly Pro) are **two completely separate products**. They **do not share any code base and behave very differently** both with regards to management and performance. Hence do not use one to evaluate the other.
 
-Want to help OSE thrive? Support us using [Github Sponsor](https://github.com/sponsors/Screenly).
+Want to help OSE thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
 
 ## Disk images
 
