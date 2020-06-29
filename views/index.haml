@@ -10,20 +10,20 @@
     %link(href="/static/css/timepicker.css", rel="stylesheet")
     %link(href="/static/css/toggle-switch.css", rel="stylesheet")
     %link(href="/static/css/screenly.css", rel="stylesheet")
+    %link(href="/static/css/open-iconic-bootstrap.css", rel="stylesheet")
 
     :javascript
       var default_duration = ${default_duration};
 
-    %script(src="/static/js/underscore-1.4.3.min.js")
+    %script(src="/static/js/underscore.js")
 
-    %script(src="/static/js/jquery-1.9.1.min.js")
-    %script(src="/static/js/jquery.iframe-transport.js")
+    %script(src="/static/js/jquery-3.2.1.js")
 
     %script(src="/static/js/backbone.min.js") /needs jquery
 
     %script(src="/static/js/jquery-ui-1.10.1.custom.min.js")
-    %script(src="/static/js/jquery.fileupload.js") /needs jqueryui.widget
 
+    %script(src="/static/js/popper.js")
     %script(src="/static/js/bootstrap.min.js") /needs jquery
     %script(src="/static/js/bootstrap-datepicker.js")
     %script(src="/static/js/bootstrap-timepicker.js")
@@ -39,19 +39,27 @@
           <%= name %>
       %td.asset_row_btns(style="width:23%")
         %button.edit-schedule-button.btn(type="button")
-          %i.icon-time
+          %span.oi.oi-time
+
           Schedule
         %button.edit-asset-button.btn(type="button")
-          %i.icon-pencil
+          %span.oi.oi-pencil
         %button.delete-asset-button.btn(type="button", dataTitle="Are you sure?", dataPlacement="left", dataHtml="true", dataTrigger="manual")
-          %i.icon-trash
-      %td(style="width:7%")
-        %label.is_enabled-toggle.checkbox.toggle.well
+          %span.oi.oi-trash
+      %td.asset_row_toggle(style="width:7%")
+        %label.switch-light.is_enabled-toggle
+          :plain
+            <% if (is_enabled) { %>
+          %input(type="checkbox", checked="true")
+          :plain
+            <% } else { %>
           %input(type="checkbox")
-          %p
-            %span.on On
+          :plain
+            <% } %>
+          %span.alert.alert-light
             %span.off Off
-          %a.slide-button.btn.btn-primary
+            %span.on On
+            %a.btn.btn-toggle
 
     %script(type="text/template", id="confirm-delete-template")
       .clearfix
@@ -70,137 +78,140 @@
 
     %script(type="text/template", id="asset-modal-template")
       .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
-        %form.form-horizontal#add-form
-          %input(type="hidden", name="duration")
-          .modal-header
-            %h3#modalLabel Add Asset
-          .modal-body
-            %fieldset
-              .control-group.name
-                %label.control-label Name
-                .controls
-                  %input.span4(type="text", name="name", placeholder="Nickname for this asset")
-            .asset-location.add
-              %fieldset
-                .tabbable
-                  %ul.nav.nav-tabs
-                    %li.active.tabnav-uri(style="margin-left:180px")
-                      %a(href="#tab-uri", dataToggle="tab") URL
-                    %li.tabnav-file_upload
-                      %a(href="#tab-file_upload", dataToggle="tab") Upload
+        .modal-dialog(role="document")
+          .modal-content
+            .modal-header
+              %h3#modalLabel Add Asset
+            .modal-body
+              %form#add-form
+                %input(type="hidden", name="duration")
+                %div.form-group
+                    %label.control-label Name
+                    %input.form-control(type="text", name="name", placeholder="Nickname for this asset")
+                .asset-location.add
+                  -# %div.form-group
+                  %ul.nav.nav-tabs(role="tablist")
+                    %li.nav-item
+                      %a#tabUri-tab.nav-link.active(href="#tabUri", dataToggle="tab", role="tab", ariaControls="tabUri", ariaSelected="true") URL
+                    %li.nav-item
+                      %a#tabFile-tab.nav-link(href="#tabFile", dataToggle="tab", role="tab", ariaControls="tabFile", ariaSelected="false") Upload
                   .tab-content
-                    #tab-uri.tab-pane.active
-                      .control-group.uri
+                    #tabUri.tab-pane.active(role="tabpanel", ariaLabelledby="tabUri-tab")
+                      %div.form-group
                         %label.control-label Asset URL
-                        .controls
-                          %input.span4(type="text", name="uri", placeholder="Public URL to this asset's location")
-                    #tab-file_upload.tab-pane
-                      .control-group
-                        %label.control-label Upload Asset
-                        .controls
-                          %div
-                            %button.btn Choose file
-                            %input(type="file", name="file_upload")
-                          #file_upload_label
-            .asset-location.edit(style="display:none")
-              %fieldset
-                .control-group
-                  %label.control-label Asset Location
-                  .controls
-                    .uri-text.span4.first
+                        %input.form-control(type="text", name="uri", placeholder="Public URL to this asset's location")
+                    #tabFile.tab-pane(role="tabpanel", ariaLabelledby="tabFile-tab")
+                      .custom-file.form-group
+                        %input.custom-file-input(type="file", name="file_upload", id="customFile")
+                        %label.custom-file-label(For="customFile") Upload Asset
+                      -# Hello World
+                      -# %div.form-group
+                        -# #file_upload_label
+                -# .asset-location.edit(style="display:none")
+                -#   %div.form-group
+                -#       %label.control-label Asset Location
+                -#       .controls
+                -#         .uri-text.first
 
-            %fieldset
-              .control-group.mimetype
-                %label.control-label Asset Type
-                .controls
-                  %select.span2(name="mimetype")
-                    %option(value="image") Image
-                    %option(value="video") Video
-                    %option(value="webpage") Webpage
-            %fieldset
-              .advanced-accordion.accordion
-                .accordion-group
-                  .accrodion-heading
-                    %i.icon-play.unrotated
-                    %a.advanced-toggle(href="#") Advanced
-                  .collapse-advanced.accordion-body.collapse
-                    .accordion-inner
-                      .control-group
-                        %label.control-label Disable cache
-                        .controls.nocache
-                          %label.nocache-toggle.checkbox.toggle.well
-                            %input(type="checkbox", name="nocache")
-                            %p
-                              %span.on Yes
-                              %span.off No
-                            %a.slide-button.btn.btn-primary
+                %div.form-group
+                  .control-group.mimetype
+                    %label.control-label Asset Type
+                    %select.form-control(name="mimetype")
+                      %option(value="image") Image
+                      %option(value="video") Video
+                      %option(value="webpage") Webpage
+                %fieldset
+                  .advanced-accordion.accordion
+                    .accordion-group
+                      .accrodion-heading
+                        %i.icon-play.unrotated
+                        %a.advanced-toggle(href="#") Advanced
+                      .collapse-advanced.accordion-body.collapse
+                        .accordion-inner
+                          .control-group
+                            %label.control-label Disable cache
+                            .controls.nocache
+                              %label.nocache-toggle.checkbox.toggle.well
+                                %input(type="checkbox", name="nocache")
+                                %p
+                                  %span.on Yes
+                                  %span.off No
+                                %a.slide-button.btn.btn-primary
 
-          .modal-footer
-            .pull-left.progress.progress-striped.active(style="display:none")
-              .bar
-            %input.btn.cancel(type="button", value="Cancel")
-            %input.btn.btn-primary(type="submit", value="Save")
+            .modal-footer
+              -# .pull-left.progress.progress-striped.active(style="display:none")
+              -#   .bar
+              %input.btn.cancel(type="button", value="Cancel")
+              %input.btn.btn-primary(type="submit", value="Save")
 
 
   %body
-    #request-error.navbar.navbar-fixed-top
-    .navbar.navbar-fixed-top
-      .navbar-inner
-        .container
-          %a.brand(href="/")
-            &Pi;
-            %strong Pi
-            Sign
+    %nav.navbar.navbar-expand-lg.navbar-dark.bg-primary
+      .container
+        %a.navbar-brand(href="/")
+          &Pi;
+          %strong Pi
+          Sign
 
-          %ul.nav.pull-right
+        .collapse.navbar-collapse
+          %ul.navbar-nav.mr-auto
             - if not up_to_date:
               %li.update-available
                 %a(href="http://www.screenlyapp.com/ose.html#upgrade")
                   %i.icon-circle-arrow-down.icon-white
                   Update Available
-            %li
-              %a(href="/settings")
+            
+            %li.nav-item
+              %a.nav-link(href="/settings")
                 %i.icon-cog.icon-white
                 Settings
-            %li.divider-vertical
-            %li
-              %a(href="/system_info")
+            %li.nav-item
+              %a.nav-link(href="/system_info")
                 %i.icon-tasks.icon-white
                 System Info
 
+            %li.nav-item
+              %a.nav-link(href="/shutdown")
+                %i.icon-off.icon-white
+                Shutdown
+
+
     .container
       .row
-        .span12
+        .col
           %h1.page-header
-            .pull-right
-              %a#add-asset-button.btn.btn-success(href="#")
-                %i.icon-plus.icon-white
+            .float-right
+              %a#add-asset-button.btn.btn-primary(href="#")
+                %span.oi.oi-plus
                 Add Asset
             Asset Overview
 
       #assets.row
-        .span12
-          %section
-            .header
-              Active assets
-            %table.table.table-striped.active-table
-              %thead(style="display:none")
-                %tr
-                  %th.asset_row_name Name
-                  %th(style="width:13%")
-                  %th(style="width:7%")
-              %tbody#active-assets
-        .span12
-          %section
-            .header
-              Inactive assets
-            %table.table.table-striped.inactive-table
-              %thead(style="display:none")
-                %tr
-                  %th.asset_row_name Name
-                  %th(style="width:13%")
-                  %th(style="width:7%")
-              %tbody#inactive-assets
+        .col
+          .row
+            .col
+              %section
+                .header
+                  Active assets
+                %table.table-striped.active-table
+                  %thead(style="display:none")
+                    %tr
+                      %th.asset_row_name Name
+                      %th(style="width:13%")
+                      %th(style="width:7%")
+                  %tbody#active-assets
+          .row
+            .col
+              %section
+                .header
+                  Inactive assets
+                %table.table-striped.inactive-table
+                  %thead(style="display:none")
+                    %tr
+                      %th.asset_row_name Name
+                      %th(style="width:13%")
+                      %th(style="width:7%")
+                  %tbody#inactive-assets
 
     #footer
       .container

@@ -1,0 +1,43 @@
+/* Shared
+ */
+
+@mixin switch-shared() {
+  @include clearfix;
+  position: relative;
+  display: block;
+
+  *,
+  *:before,
+  *:after {
+    box-sizing: border-box;
+  }
+
+  a {
+    display: block;
+    transition: all 0.2s ease-out;
+  }
+
+  label,
+  > span {
+    /* breathing room for bootstrap/foundation classes.
+     */
+    line-height: 2em;
+  }
+
+  /* simulate default browser focus outlines on the switch,
+   * when the inputs are focused.
+   */
+  input:focus ~ span a,
+  input:focus + label {
+    outline-width: 2px;
+    outline-style: solid;
+    outline-color: Highlight;
+
+    /* Chrome/Opera gets its native focus styles.
+     */
+    @media (-webkit-min-device-pixel-ratio:0) {
+      outline-color: -webkit-focus-ring-color;
+      outline-style: auto;
+    }
+  }
+}

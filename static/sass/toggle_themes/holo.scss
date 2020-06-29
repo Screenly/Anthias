@@ -1,0 +1,53 @@
+/* Holo Theme
+ */
+
+.switch-toggle.switch-holo,
+.switch-light.switch-holo > span {
+  background-color: #464747;
+  border-radius: 1px;
+  box-shadow: inset rgba(0, 0, 0, 0.1) 0 1px 0;
+
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.switch-holo label {
+  color: #fff;
+}
+
+.switch-holo > span span {
+  opacity: 0;
+
+  transition: all 0.1s;
+
+  &:first-of-type {
+    opacity: 1;
+  }
+}
+
+.switch-holo > span span,
+.switch-holo label {
+  font-size: 85%;
+  line-height: size(30) + size(0.3 * 15);
+}
+
+.switch-holo a {
+  background-color: #666;
+  border-radius: 1px;
+  box-shadow: inset rgba(255, 255, 255, 0.2) 0 1px 0,
+    inset rgba(0, 0, 0, 0.3) 0 -1px 0;
+}
+
+/* Selected ON switch-light
+*/
+.switch-holo.switch-light input:checked ~ span a {
+  background-color: #0E88B1;
+}
+
+.switch-holo.switch-light input:checked ~ span span:first-of-type {
+  opacity: 0;
+}
+
+.switch-holo.switch-light input:checked ~ span span:last-of-type {
+  opacity: 1;
+}

@@ -11,34 +11,39 @@
     %script(src="/static/js/jquery-1.9.1.min.js")
 
   %body
+    %nav.navbar.navbar-expand-lg.navbar-dark.bg-primary
+      .container
+        %a.navbar-brand(href="/")
+          &Pi;
+          %strong Pi
+          Sign
 
-    .navbar.navbar-fixed-top
-      .navbar-inner
-        .container
-          %a.brand(href="/")
-            &Pi;
-            %strong Pi
-            Sign
-
-          %ul.nav.pull-right
+        .collapse.navbar-collapse
+          %ul.navbar-nav.mr-auto
             - if not up_to_date:
               %li.update-available
                 %a(href="http://www.screenlyapp.com/ose.html#upgrade")
                   %i.icon-circle-arrow-down.icon-white
                   Update Available
-            %li
-              %a(href="/settings")
+            
+            %li.nav-item
+              %a.nav-link(href="/settings")
                 %i.icon-cog.icon-white
                 Settings
-            %li.divider-vertical
-            %li
-              %a(href="/system_info")
+            %li.nav-item
+              %a.nav-link(href="/system_info")
                 %i.icon-tasks.icon-white
                 System Info
 
+            %li.nav-item
+              %a.nav-link(href="/shutdown")
+                %i.icon-off.icon-white
+                Shutdown
+
+
     .container
       .row
-        .span12
+        .col`
           %h1.page-header
             Settings
 
@@ -49,37 +54,38 @@
             </div>
 
           %form.form-horizontal(method="post")
-            .control-group
-              %label.control-label Show splash screen
-              .controls
-                %label.checkbox.toggle.well#splash_checkbox
+            .form-group.row
+              %label.col-form-label.col-sm-2 Show splash screen
+              .col-sm-4
+                -# %label.checkbox.toggle.well#splash_checkbox
+                %label.switch-light.is_enabled-toggle
                   - if show_splash:
                     %input(type="checkbox", checked="checked", name="show_splash")
                   - else:
                     %input(type="checkbox", name="show_splash")
-                  %p
-                    %span.on On
+                  %span.alert.alert-light
                     %span.off Off
-                  %a.btn.btn-primary.slide-button
+                    %span.on On
+                    %a.btn.btn-toggle
 
-            .control-group
-              %label.control-label Shuffle playlist
-              .controls
+            .form-group.row
+              %label.col-form-label.col-sm-2 Shuffle playlist
+              .col-sm-4
 
-                %label.checkbox.toggle.well#shuffle_checkbox
+                %label.switch-light.is_enabled-toggle#shuffle_checkbox
                   - if shuffle_playlist:
                     %input(type="checkbox", checked="checked", name="shuffle_playlist")
                   - else:
                     %input(type="checkbox", name="shuffle_playlist")
-                  %p
-                    %span.on On
+                  %span.alert.alert-light
                     %span.off Off
-                  %a.btn.btn-primary.slide-button
+                    %span.on On
+                    %a.btn.btn-toggle
 
-            .control-group
-              %label.control-label Audio output
-              .controls
-                %select.span2(name="audio_output")
+            .form-group.row
+              %label.col-form-label.col-sm-2 Audio output
+              .col-sm-4
+                %select.form-control(name="audio_output")
                   - if audio_output == 'hdmi':
                     %option(value="hdmi", selected="selected") HDMI
                     %option(value="local") 3.5mm jack
@@ -87,24 +93,24 @@
                     %option(value="hdmi") HDMI
                     %option(value="local", selected="selected") 3.5mm jack
 
-            .control-group
-              %label.control-label Default duration
-              .controls
-                %input.span1(type="number", name="default_duration", value=default_duration)
+            .form-group.row
+              %label.col-form-label.col-sm-2 Default duration
+              .col-sm-4
+                %input.form-control(type="number", name="default_duration", value=default_duration)
 
-            .control-group
-              %label.control-label Debug logging
-              .controls
+            .form-group.row
+              %label.col-form-label.col-sm-2 Debug logging
+              .col-sm-4
 
-                %label.checkbox.toggle.well#debug_checkbox
+                %label.switch-light.is_enabled-toggle#debug_checkbox
                   - if debug_logging:
                     %input(type="checkbox", checked="checked", name="debug_logging")
                   - else:
                     %input(type="checkbox", name="debug_logging")
-                  %p
-                    %span.on On
+                  %span.alert.alert-light
                     %span.off Off
-                  %a.btn.btn-primary.slide-button
+                    %span.on On
+                    %a.btn.btn-toggle
 
             .form-actions
               %input.btn.btn-primary(type="submit", value="Save Settings")

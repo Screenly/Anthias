@@ -1,0 +1,126 @@
+!!! 5
+%html
+
+  %head
+    %meta(charset="utf-8")
+    %title &Pi; PiSign - Shutdown
+
+    %link(href="/static/css/bootstrap.css", rel="stylesheet")
+    %link(href="/static/css/datepicker.css", rel="stylesheet")
+    %link(href="/static/css/timepicker.css", rel="stylesheet")
+    %link(href="/static/css/toggle-switch.css", rel="stylesheet")
+    %link(href="/static/css/screenly.css", rel="stylesheet")
+
+    :javascript
+      var default_duration = ${default_duration};
+
+    %script(src="/static/js/underscore-1.4.3.min.js")
+
+    %script(src="/static/js/jquery-1.9.1.min.js")
+    %script(src="/static/js/jquery.iframe-transport.js")
+
+    %script(src="/static/js/backbone.min.js") /needs jquery
+
+    %script(src="/static/js/jquery-ui-1.10.1.custom.min.js")
+    %script(src="/static/js/jquery.fileupload.js") /needs jqueryui.widget
+
+    %script(src="/static/js/bootstrap.min.js") /needs jquery
+    %script(src="/static/js/bootstrap-datepicker.js")
+    %script(src="/static/js/bootstrap-timepicker.js")
+
+    %script(src="/static/js/moment.js")
+    %script(src="/static/js/screenly-ose.js")
+
+
+    %script(type="text/template", id="shutdown-confirmation-template")
+      .modal(role="dialog", ariaHidden="true")
+        .modal-body
+          .alert.alert-error
+            %span.msg
+              Are you sure you would like to shutdown?
+        .modal-footer
+          %input.btn.cancel(type="button", value="Cancel")
+          %input.btn.btn-primary(type="submit", value="Shutdown")
+
+
+  %body
+    %nav.navbar.navbar-expand-lg.navbar-dark.bg-primary
+      .container
+        %a.navbar-brand(href="/")
+          &Pi;
+          %strong Pi
+          Sign
+
+        .collapse.navbar-collapse
+          %ul.navbar-nav.mr-auto
+            - if not up_to_date:
+              %li.update-available
+                %a(href="http://www.screenlyapp.com/ose.html#upgrade")
+                  %i.icon-circle-arrow-down.icon-white
+                  Update Available
+            
+            %li.nav-item
+              %a.nav-link(href="/settings")
+                %i.icon-cog.icon-white
+                Settings
+            %li.nav-item
+              %a.nav-link(href="/system_info")
+                %i.icon-tasks.icon-white
+                System Info
+
+            %li.nav-item
+              %a.nav-link(href="/shutdown")
+                %i.icon-off.icon-white
+                Shutdown
+
+    .container
+      - if message:
+        .row
+          .col
+            .alert.alert-danger
+              = message
+      .row
+        .col
+          %h1.page-header
+            .float-right
+              %form(method="POST")
+                %input(type="hidden", name="shutnow", value="1")
+                %button#shutdown-now-button.btn.btn-danger(type="submit")
+                  %i.icon-off.icon-white
+                  Shutdown Now
+            Shutdown PiSign
+
+      .row
+        .col
+          %p
+            .float-right
+              %a#add-shutdown-button.btn.btn-success(href="#")
+                %i.icon-off.icon-white
+                Add Shutdown Time
+            If you require your PiSign to shutdown at particular times, you can define those times below.
+          %p
+            Your PiSign will commence shut down after the asset playing at the designated time has finished being displayed.
+
+          %section
+            .header
+                Shutdown Times
+            %table.table.table-striped
+              %thead
+                %tr
+                  %th Day
+                  %th Time
+                  %th
+              %tbody
+                %tr
+                  %td Wednesday
+                  %td 18:00
+                  %td(style="width:7%")
+                    %button.delete-shutdown.btn.btn-danger Delete
+                      %i.icon-trash.icon-white
+
+
+
+    #footer
+      .container
+        .copy
+          Some components &copy; <strong>2012-2013.</strong> WireLoad, Inc.

@@ -1,228 +1,185 @@
 //
-// Tables
-// --------------------------------------------------
-
-
-// BASE TABLES
-// -----------------
-
-table {
-  max-width: 100%;
-  background-color: $tableBackground;
-  border-collapse: collapse;
-  border-spacing: 0;
-}
-
-// BASELINE STYLES
-// ---------------
+// Basic Bootstrap table
+//
 
 .table {
   width: 100%;
-  margin-bottom: $baseLineHeight;
-  // Cells
+  margin-bottom: $spacer;
+  color: $table-color;
+  background-color: $table-bg; // Reset for nesting within parents with `background-color`.
+
   th,
   td {
-    padding: 8px;
-    line-height: $baseLineHeight;
-    text-align: left;
+    padding: $table-cell-padding;
     vertical-align: top;
-    border-top: 1px solid $tableBorder;
+    border-top: $table-border-width solid $table-border-color;
   }
-  th {
-    font-weight: bold;
-  }
-  // Bottom align for column headings
+
   thead th {
     vertical-align: bottom;
-  }
-  // Remove top border from thead by default
-  caption + thead tr:first-child th,
-  caption + thead tr:first-child td,
-  colgroup + thead tr:first-child th,
-  colgroup + thead tr:first-child td,
-  thead:first-child tr:first-child th,
-  thead:first-child tr:first-child td {
-    border-top: 0;
-  }
-  // Account for multiple tbody instances
-  tbody + tbody {
-    border-top: 2px solid $tableBorder;
+    border-bottom: (2 * $table-border-width) solid $table-border-color;
   }
 
-  // Nesting
-  .table {
-    background-color: $bodyBackground;
+  tbody + tbody {
+    border-top: (2 * $table-border-width) solid $table-border-color;
   }
 }
 
 
+//
+// Condensed table w/ half padding
+//
 
-// CONDENSED TABLE W/ HALF PADDING
-// -------------------------------
-
-.table-condensed {
+.table-sm {
   th,
   td {
-    padding: 4px 5px;
+    padding: $table-cell-padding-sm;
   }
 }
 
 
-// BORDERED VERSION
-// ----------------
+// Border versions
+//
+// Add or remove borders all around the table and between all the columns.
 
 .table-bordered {
-  border: 1px solid $tableBorder;
-  border-collapse: separate; // Done so we can round those corners!
-  *border-collapse: collapse; // IE7 can't round corners anyway
-  border-left: 0;
-  @include border-radius($baseBorderRadius);
+  border: $table-border-width solid $table-border-color;
+
   th,
   td {
-    border-left: 1px solid $tableBorder;
-  }
-  // Prevent a double border
-  caption + thead tr:first-child th,
-  caption + tbody tr:first-child th,
-  caption + tbody tr:first-child td,
-  colgroup + thead tr:first-child th,
-  colgroup + tbody tr:first-child th,
-  colgroup + tbody tr:first-child td,
-  thead:first-child tr:first-child th,
-  tbody:first-child tr:first-child th,
-  tbody:first-child tr:first-child td {
-    border-top: 0;
-  }
-  // For first th or td in the first row in the first thead or tbody
-  thead:first-child tr:first-child > th:first-child,
-  tbody:first-child tr:first-child > td:first-child {
-    @include border-top-left-radius($baseBorderRadius);
-  }
-  thead:first-child tr:first-child > th:last-child,
-  tbody:first-child tr:first-child > td:last-child {
-    @include border-top-right-radius($baseBorderRadius);
-  }
-  // For first th or td in the last row in the last thead or tbody
-  thead:last-child tr:last-child > th:first-child,
-  tbody:last-child tr:last-child > td:first-child,
-  tfoot:last-child tr:last-child > td:first-child {
-    @include border-bottom-left-radius($baseBorderRadius);
-  }
-  thead:last-child tr:last-child > th:last-child,
-  tbody:last-child tr:last-child > td:last-child,
-  tfoot:last-child tr:last-child > td:last-child {
-    @include border-bottom-right-radius($baseBorderRadius);
+    border: $table-border-width solid $table-border-color;
   }
 
-  // Clear border-radius for first and last td in the last row in the last tbody for table with tfoot
-  tfoot + tbody:last-child tr:last-child td:first-child {
-    @include border-bottom-left-radius(0);
+  thead {
+    th,
+    td {
+      border-bottom-width: 2 * $table-border-width;
+    }
   }
-  tfoot + tbody:last-child tr:last-child td:last-child {
-    @include border-bottom-right-radius(0);
-  }
-
-
-  // Special fixes to round the left border on the first td/th
-  caption + thead tr:first-child th:first-child,
-  caption + tbody tr:first-child td:first-child,
-  colgroup + thead tr:first-child th:first-child,
-  colgroup + tbody tr:first-child td:first-child {
-    @include border-top-left-radius($baseBorderRadius);
-  }
-  caption + thead tr:first-child th:last-child,
-  caption + tbody tr:first-child td:last-child,
-  colgroup + thead tr:first-child th:last-child,
-  colgroup + tbody tr:first-child td:last-child {
-    @include border-top-right-radius($baseBorderRadius);
-  }
-
 }
 
+.table-borderless {
+  th,
+  td,
+  thead th,
+  tbody + tbody {
+    border: 0;
+  }
+}
 
-
-
-// ZEBRA-STRIPING
-// --------------
-
+// Zebra-striping
+//
 // Default zebra-stripe styles (alternating gray and transparent backgrounds)
+
 .table-striped {
-  tbody {
-    > tr:nth-child(odd) > td,
-    > tr:nth-child(odd) > th {
-      background-color: $tableBackgroundAccent;
-    }
+  tbody tr:nth-of-type(#{$table-striped-order}) {
+    background-color: $table-accent-bg;
   }
 }
 
 
-// HOVER EFFECT
-// ------------
+// Hover effect
+//
 // Placed here since it has to come after the potential zebra striping
+
 .table-hover {
-  tbody {
-    tr:hover td,
-    tr:hover th {
-      background-color: $tableBackgroundHover;
+  tbody tr {
+    @include hover() {
+      color: $table-hover-color;
+      background-color: $table-hover-bg;
     }
   }
 }
 
 
-// TABLE CELL SIZING
-// -----------------
+// Table backgrounds
+//
+// Exact selectors below required to override `.table-striped` and prevent
+// inheritance to nested tables.
 
-// Reset default grid behavior
-table td[class*="span"],
-table th[class*="span"],
-.row-fluid table td[class*="span"],
-.row-fluid table th[class*="span"] {
-  display: table-cell;
-  float: none; // undo default grid column styles
-  margin-left: 0; // undo default grid column styles
+@each $color, $value in $theme-colors {
+  @include table-row-variant($color, theme-color-level($color, $table-bg-level), theme-color-level($color, $table-border-level));
 }
 
-// Change the column widths to account for td/th padding
-.table td,
-.table th {
-  @for $i from 1 through 12 {
-    &.span#{$i} { @include tableColumns($i); }
-  }
-}
+@include table-row-variant(active, $table-active-bg);
 
 
+// Dark styles
+//
+// Same table markup, but inverted color scheme: dark background and light text.
 
-// TABLE BACKGROUNDS
-// -----------------
-// Exact selectors below required to override .table-striped
+// stylelint-disable-next-line no-duplicate-selectors
+.table {
+  .thead-dark {
+    th {
+      color: $table-dark-color;
+      background-color: $table-dark-bg;
+      border-color: $table-dark-border-color;
+    }
+  }
 
-.table tbody tr {
-  &.success td {
-    background-color: $successBackground;
-  }
-  &.error td {
-    background-color: $errorBackground;
-  }
-  &.warning td {
-    background-color: $warningBackground;
-  }
-  &.info td {
-    background-color: $infoBackground;
+  .thead-light {
+    th {
+      color: $table-head-color;
+      background-color: $table-head-bg;
+      border-color: $table-border-color;
+    }
   }
 }
 
-// Hover states for .table-hover
-.table-hover tbody tr {
-  &.success:hover td {
-    background-color: darken($successBackground, 5%);
+.table-dark {
+  color: $table-dark-color;
+  background-color: $table-dark-bg;
+
+  th,
+  td,
+  thead th {
+    border-color: $table-dark-border-color;
   }
-  &.error:hover td {
-    background-color: darken($errorBackground, 5%);
+
+  &.table-bordered {
+    border: 0;
   }
-  &.warning:hover td {
-    background-color: darken($warningBackground, 5%);
+
+  &.table-striped {
+    tbody tr:nth-of-type(#{$table-striped-order}) {
+      background-color: $table-dark-accent-bg;
+    }
   }
-  &.info:hover td {
-    background-color: darken($infoBackground, 5%);
+
+  &.table-hover {
+    tbody tr {
+      @include hover() {
+        color: $table-dark-hover-color;
+        background-color: $table-dark-hover-bg;
+      }
+    }
+  }
+}
+
+
+// Responsive tables
+//
+// Generate series of `.table-responsive-*` classes for configuring the screen
+// size of where your table will overflow.
+
+.table-responsive {
+  @each $breakpoint in map-keys($grid-breakpoints) {
+    $next: breakpoint-next($breakpoint, $grid-breakpoints);
+    $infix: breakpoint-infix($next, $grid-breakpoints);
+
+    &#{$infix} {
+      @include media-breakpoint-down($breakpoint) {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+
+        // Prevent double border on horizontal scroll due to use of `display: block;`
+        > .table-bordered {
+          border: 0;
+        }
+      }
+    }
   }
 }

@@ -1,0 +1,66 @@
+/* Functions
+ */
+
+@function strip-unit($num) {
+  @return $num / ($num * 0 + 1);
+}
+
+@function convert-to-em($value)  {
+  $value: strip-unit($value) / strip-unit($em-base) * 1em;
+  @if ($value == 0em) { $value: 0; }
+  @return $value;
+}
+
+@function em-calc($values) {
+  $max: length($values);
+  @if $max == 1 { @return convert-to-em(nth($values, 1)); }
+  $em-values: ();
+  @for $i from 1 through $max {
+    $em-values: append($em-values, convert-to-em(nth($values, $i)));
+  }
+  @return $em-values;
+}
+
+@function convert-to-rem($value)  {
+  $value: strip-unit($value) / strip-unit($em-base) * 1rem;
+  @if ($value == 0rem) { $value: 0; }
+  @return $value;
+}
+
+@function rem-calc($values) {
+  $max: length($values);
+  @if $max == 1 { @return convert-to-rem(nth($values, 1)); }
+  $rem-values: ();
+  @for $i from 1 through $max {
+    $rem-values: append($rem-values, convert-to-rem(nth($values, $i)));
+  }
+  @return $rem-values;
+}
+
+@function convert-to-px($value)  {
+  $value: strip-unit($value) * 1px;
+  @if ($value == 0px) { $value: 0; }
+  @return $value;
+}
+
+@function px-calc($values) {
+  $max: length($values);
+  @if $max == 1 { @return convert-to-px(nth($values, 1)); }
+  $px-values: ();
+  @for $i from 1 through $max {
+    $px-values: append($px-values, convert-to-px(nth($values, $i)));
+  }
+  @return $px-values;
+}
+
+@function size($value) {
+  @if $size-unit == px {
+    @return px-calc($value)
+  }
+  @if $size-unit == rem {
+    @return rem-calc($value)
+  }
+  @if $size-unit == em {
+    @return em-calc($value)
+  }
+}

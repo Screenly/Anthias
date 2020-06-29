@@ -1,0 +1,71 @@
+/* Checkbox
+ */
+
+.switch-light {
+  @include switch-shared();
+}
+
+/* don't hide the input from screen-readers and keyboard access
+ */
+.switch-light input {
+  position: absolute;
+  opacity: 0;
+  z-index: 3;
+}
+
+.switch-light input:checked ~ span a {
+  right: 0%;
+}
+
+/* inherit from label
+ */
+.switch-light strong {
+  font-weight: inherit;
+}
+
+.switch-light > span {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  min-height: 2em;
+  /* overwrite 3rd party classes padding
+   * eg. bootstrap .alert
+   */
+  padding: 0;
+
+  text-align: left;
+}
+
+.switch-light span span {
+  position: relative;
+  z-index: 2;
+  display: block;
+  float: left;
+  width: 50%;
+
+  text-align: center;
+
+  user-select: none;
+}
+
+.switch-light a {
+  position: absolute;
+  right: 50%;
+  top: 0;
+  z-index: 1;
+  display: block;
+  width: 50%;
+  height: 100%;
+  padding: 0;
+}
+
+/* bootstrap 4 tweaks
+*/
+.switch-light.row {
+  display: flex;
+}
+
+.switch-light .alert-light {
+  color: #333;
+  margin-bottom:0;
+}

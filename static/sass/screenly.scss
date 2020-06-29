@@ -1,22 +1,26 @@
-@import "variables";
-@import "mixins";
+@import "bootstrap";
 
 $footerHeight: 40px;
 
-body {
-  margin-top: 60px;
-  margin-bottom: $footerHeight + $baseLineHeight;
+// body {
+//   margin-top: 60px;
+//   margin-bottom: $footerHeight + $baseLineHeight;
+// }
+
+table{
+  @extend .table;
+  @extend .table-sm;
 }
 
 .navbar .container {
 
-  ul.nav li > a {
-    text-shadow: 0 1px 0 #000;
-  }
+  // ul.nav li > a {
+  //   text-shadow: 0 1px 0 #000;
+  // }
 
   a {
     &.brand {
-      text-shadow: 0 1px 0 #000;
+      // text-shadow: 0 1px 0 #000;
       span {
         font-size: 15px;
       }
@@ -26,7 +30,7 @@ body {
   li.update-available {
     a {
       font-weight: bold;
-      text-shadow: #555 0px 1px 1px !important;
+      // text-shadow: #555 0px 1px 1px !important;
     }
   }
 }
@@ -35,14 +39,14 @@ body {
   height: $footerHeight;
   background: url(../img/wireload-bg.jpeg);
   border-top: 1px #ccc solid;
-  @include box-shadow(0 -2px 9px rgba(0, 0, 0, 0.05));
+  // @include box-shadow(0 -2px 9px rgba(0, 0, 0, 0.05));
   opacity: 0.9;
   z-index: 10;
 
   position: fixed;
   bottom: 0;
   width: 100%;
-  text-shadow: #fff 0px 1px 1px;
+  // text-shadow: #fff 0px 1px 1px;
 
   .container {
     position: relative;
@@ -74,15 +78,15 @@ h1.page-header {
 
 section {
   .header {
-    background: $navbarBackgroundHighlight;
+    @extend .bg-primary;
     color: #fff;
     padding: 6px 9px;
     margin-bottom: 9px;
-    @include gradient-vertical($navbarBackgroundHighlight, $navbarBackground);
-    @include border-radius($baseBorderRadius);
-    @include box-shadow(0 1px 4px rgba(0,0,0,.065));
-    font-weight: bold;
-    text-shadow: #555 0px 1px 1px !important;
+    // @include gradient-vertical($navbarBackgroundHighlight, $navbarBackground);
+    // @include border-radius($baseBorderRadius);
+    // @include box-shadow(0 1px 4px rgba(0,0,0,.065));
+    // font-weight: bold;
+    // text-shadow: #555 0px 1px 1px !important;
     text-transform: uppercase;
   }
 }
@@ -139,6 +143,10 @@ form .control-group .controls {
   }
 }
 
+// form .control-label {
+//   @extend .col-sm-2;
+// }
+
 input[name="file_upload"] {
     opacity: 0;
     position: absolute;
@@ -162,7 +170,7 @@ input[name="file_upload"] {
     top: 5px;
     left: 105px;
     right: 0;
-    @include ellip();
+    // @include ellip();
 }
 
 .accordion-inner { padding: 9px 0 0 0; }
@@ -176,8 +184,8 @@ input[name="file_upload"] {
     transition: all $time linear;
     transform: rotate($angle);
 }
-.unrotated { @include rota(0deg,.15s); }
-.rotated { @include rota(90deg,.15s); }
+// .unrotated { @include rota(0deg,.15s); }
+// .rotated { @include rota(90deg,.15s); }
 .nocache-toggle { padding-top: 0 !important; }
 .advanced-accordion { display: none; }
 .modal-body { max-height: 600px !important; }
@@ -187,10 +195,20 @@ input[name="file_upload"] {
 .asset-icon { margin-left: 5px; }
 #inactive-assets img { display: none; }
 .asset_row_name {
-    @include ellip();
+    // @include ellip();
     max-width: 320px;
     min-width: 320px;
 }
 .asset_row_btns { padding: 6px 8px 10px 8px !important; }
+.asset_row_toggle { padding-top: 6px}
 .table td { vertical-align: middle !important; }
-.is_enabled-toggle { margin: 5px 0 5px 0 !important; }
+.is_enabled-toggle { margin: 0.375rem 0 !important; }
+
+input[type="checkbox"] ~ span a.btn-toggle{
+  transition: background-color 0.2s ease, right 0.5s ease;
+  background-color: #E9E9E9;
+}
+
+input[type="checkbox"]:checked ~ span a.btn-toggle{
+  background-color: #24D824;
+}

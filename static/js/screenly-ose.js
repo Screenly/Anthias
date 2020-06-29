@@ -28,6 +28,9 @@
       },
       time: function() {
         return dd.format('hh:mm A');
+      },
+      moment: function() {
+        return dd;
       }
     };
   };
@@ -157,12 +160,12 @@
       this.updateUriMimetype = function() {
         return EditAssetView.prototype.updateUriMimetype.apply(_this, arguments);
       };
-      this.clickTabNavUpload = function(e) {
-        return EditAssetView.prototype.clickTabNavUpload.apply(_this, arguments);
-      };
-      this.clickTabNavUri = function(e) {
-        return EditAssetView.prototype.clickTabNavUri.apply(_this, arguments);
-      };
+      // this.clickTabNavUpload = function(e) {
+      //   return EditAssetView.prototype.clickTabNavUpload.apply(_this, arguments);
+      // };
+      // this.clickTabNavUri = function(e) {
+      //   return EditAssetView.prototype.clickTabNavUri.apply(_this, arguments);
+      // };
       this.cancel = function(e) {
         return EditAssetView.prototype.cancel.apply(_this, arguments);
       };
@@ -288,10 +291,10 @@
       'click .cancel': 'cancel',
       'change': 'change',
       'keyup': 'change',
-      'click .tabnav-uri': 'clickTabNavUri',
-      'click .tabnav-file_upload': 'clickTabNavUpload',
-      'click .tabnav-file_upload, .tabnav-uri': 'displayAdvanced',
-      'click .advanced-toggle': 'toggleAdvanced',
+      // 'click #tabUri-tab': 'clickTabNavUri',
+      // 'click #tabFile-tab': 'clickTabNavUpload',
+      // 'click #tabUri-nav, #tabFile-nav': 'displayAdvanced',
+      // 'click .advanced-toggle': 'toggleAdvanced',
       'paste [name=uri]': 'updateUriMimetype',
       'change [name=file_upload]': 'updateFileUploadMimetype'
     };
@@ -303,7 +306,7 @@
       this.viewmodel();
       save = null;
       this.model.set('nocache', (this.$('input[name="nocache"]')).prop('checked') ? 1 : 0);
-      if ((this.$('#tab-file_upload')).hasClass('active')) {
+      if ((this.$('#tabFile')).hasClass('active')) {
         if (!this.$fv('name')) {
           this.$fv('name', get_filename(this.$fv('file_upload')));
         }
@@ -373,12 +376,12 @@
       that = this;
       validators = {
         uri: function(v) {
-          if (_this.model.isNew() && ((that.$('#tab-uri')).hasClass('active')) && !url_test(v)) {
+          if (_this.model.isNew() && ((that.$('#tabUri')).hasClass('active')) && !url_test(v)) {
             return 'please enter a valid URL';
           }
         },
         file_upload: function(v) {
-          if (_this.model.isNew() && !v && !(that.$('#tab-uri')).hasClass('active')) {
+          if (_this.model.isNew() && !v && !(that.$('#tabUri')).hasClass('active')) {
             return 'please select a file';
           }
         }
@@ -416,28 +419,26 @@
     };
 
     EditAssetView.prototype.clickTabNavUri = function(e) {
-      if (!(this.$('#tab-uri')).hasClass('active')) {
-        (this.$('ul.nav-tabs li')).removeClass('active');
-        (this.$('.tab-pane')).removeClass('active');
-        (this.$('.tabnav-uri')).addClass('active');
-        (this.$('#tab-uri')).addClass('active');
-        (this.$f('uri')).focus();
-        this.updateUriMimetype();
-      }
+    //   if (!(this.$('#tabUri')).hasClass('active')) {
+    //     (this.$('.tab-pane')).removeClass('active');
+    //     (this.$('#tabUri-tab')).addClass('active');
+    //     (this.$('#tabUri')).addClass('active');
+    //     (this.$f('uri')).focus();
+    //     this.updateUriMimetype();
+    //   }
       return false;
     };
 
     EditAssetView.prototype.clickTabNavUpload = function(e) {
-      if (!(this.$('#tab-file_upload')).hasClass('active')) {
-        (this.$('ul.nav-tabs li')).removeClass('active');
-        (this.$('.tab-pane')).removeClass('active');
-        (this.$('.tabnav-file_upload')).addClass('active');
-        (this.$('#tab-file_upload')).addClass('active');
-        if ((this.$fv('mimetype')) === 'webpage') {
-          this.$fv('mimetype', 'image');
-        }
-        this.updateFileUploadMimetype;
-      }
+    //   if (!(this.$('#tabFile')).hasClass('active')) {
+    //     (this.$('.tab-pane')).removeClass('active');
+    //     (this.$('#tabFile-tab')).addClass('active');
+    //     (this.$('#tabFile')).addClass('active');
+    //     if ((this.$fv('mimetype')) === 'webpage') {
+    //       this.$fv('mimetype', 'image');
+    //     }
+    //     this.updateFileUploadMimetype;
+    //   }
       return false;
     };
 
@@ -527,6 +528,7 @@
 
     AssetRowView.prototype.render = function() {
       var json;
+      console.log(this.model);
       this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
         name: insertWbr(json.name),
       })));
@@ -789,7 +791,6 @@
           this.$fieldValue("" + which + "_date", moment.utc(this.$fieldValue("" + which + "_date"),"MM/DD/YYYY").toISOString());        
         }
         if (this.$fieldValue("" + which + "_time").length > 0){
-          console.log(moment(this.$fieldValue("" + which + "_time"),"hh:mm A").utc().format("hh:mm A"));
           this.$fieldValue("" + which + "_time", moment.utc(this.$fieldValue("" + which + "_time"),"hh:mm A").format("hh:mm A"));        
         }
       }
@@ -805,6 +806,7 @@
         alert(error);
       });
       this.edit = options.edit;
+      console.log('getting a template');
       ($('body')).append(this.$el.html(get_template('schedule-modal')));
       (this.$el.children(":first")).modal();
       (this.$('input[name="repeat"]')).prop('checked', this.model.get('repeat'));
@@ -819,6 +821,12 @@
         disableFocus: true,
         showMeridian: true,
         defaultTime: false
+      });
+      (this.$('input.date')).datepicker({
+        format: 'mm/dd/yyyy',
+        autoclose: true,
+        todayHighlight: true,
+        clearBtn: true,
       });
       return false;
     }
@@ -843,15 +851,10 @@
         for (_k = 0, _len2 = _ref2.length; _k < _len2; _k++) {
           which = _ref2[_k];
           if(this.model.get("" + which + "_date")){
-            (this.$f("" + which + "_date")).datepicker({
-              autoclose: true,
-              todayHighlight: true,
-              clearBtn: true,
-            });
             if(this.model.get("" + which + "_date")){
               // this.$fieldValue("" + which + "_date", d.date());
-              d = date_to(this.model.get("" + which + "_date"));
-              (this.$f("" + which + "_date")).datepicker('setValue', d.date());
+              d = date_to(this.model.get("" + which + "_date")).moment();
+              (this.$f("" + which + "_date")).datepicker('setDate', d.toDate());
             }
           }
           if(this.model.get("" + which + "_time")){
@@ -1032,7 +1035,6 @@
     __extends(SchedulesView, _super);
 
     function SchedulesView() {
-      console.log(this);
       var _this = this;
       this.render = function() {
         return SchedulesView.prototype.render.apply(_this, arguments);
@@ -1192,7 +1194,9 @@
 
     App.prototype.events = {
       'click #add-asset-button': 'add',
-      'click #add-schedule-button': 'addSchedule'
+      'click #add-schedule-button': 'addSchedule',
+      'click #shutdown-now-button': 'shutdownNow',
+      'click #add-shutdown-button': 'addShutdown'
     };
 
     App.prototype.add = function(e) {
@@ -1212,6 +1216,14 @@
       });
       return false;
     };
+
+    App.prototype.shutdownNow = function(e){
+      $('body').append(this.$el.html(get_template('shutdown-confirmation')))
+    }
+
+    App.prototype.addShutdown = function(e){
+      alert('Hello')
+    }
 
     return App;
 

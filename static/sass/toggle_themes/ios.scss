@@ -1,0 +1,105 @@
+/* iOS Theme
+*/
+.switch-ios {
+  $green: #4BD865;
+
+  &.switch-light {
+    span span {
+      color: darken(#D8D9DB, 30%);
+    }
+
+    a {
+      left: 0;
+      top: 0;
+      width: size(32);
+      height: size(32);
+      background-color: #fff;
+      border-radius: 100%;
+      border: size(4) solid #D8D9DB;
+
+      transition: all .2s ease-out;
+    }
+
+    > span {
+      display: block;
+      width: 100%;
+      height: size(32);
+      background-color: #D8D9DB;
+      border-radius: size(28);
+
+      transition: all .4s ease-out;
+    }
+
+    > span span {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      opacity: 0;
+
+      line-height: size(30);
+      vertical-align: middle;
+
+      transition: all .2s ease-out;
+
+      &:first-of-type {
+        opacity: 1;
+        padding-left: size(30);
+      }
+
+      &:last-of-type {
+        padding-right: size(30);
+      }
+    }
+
+    input:checked {
+      ~ span a {
+        left: 100%;
+        border-color: $green;
+        margin-left: size(-32);
+      }
+
+      ~ span {
+        border-color: $green;
+        box-shadow: inset 0 0 0 30px $green;
+      }
+
+      ~ span span {
+        &:first-of-type {
+          opacity: 0;
+        }
+
+        &:last-of-type {
+          opacity: 1;
+          color: #fff;
+        }
+      }
+    }
+  }
+
+  &.switch-toggle {
+    background-color: #D8D9DB;
+    border-radius: 30px;
+    box-shadow: inset rgba(0, 0, 0, 0.1) 0 1px 0;
+
+    a {
+      background-color: $green;
+      border: size(2) solid #D8D9DB;
+      border-radius: size(28);
+
+      transition: all 0.12s ease-out;
+    }
+
+    label {
+      height: 2.4em;
+
+      color: darken(#D8D9DB, 30%);
+      line-height: 2.4em;
+      vertical-align: middle;
+    }
+  }
+
+  input:checked + label {
+    color: darken(#D8D9DB, 60%);
+  }
+}

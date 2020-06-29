@@ -1,45 +1,18 @@
-//
-// Utility classes
-// --------------------------------------------------
-
-
-// Quick floats
-.pull-right {
-  float: right;
-}
-.pull-left {
-  float: left;
-}
-
-// Toggling content
-.hide {
-  display: none;
-}
-.show {
-  display: block;
-}
-
-// Visibility
-.invisible {
-  visibility: hidden;
-}
-
-// For Affix plugin
-.affix {
-  position: fixed;
-}
-
-// Clearing floats
-.clearfix {
-  @include clearfix();
-}
-
-// Accessible yet invisible text
-.hide-text {
-  @include hide-text();
-}
-
-// Uses box-sizing mixin, so must be defined here
-.input-block-level {
-  @include input-block-level();
-}
+@import "utilities/align";
+@import "utilities/background";
+@import "utilities/borders";
+@import "utilities/clearfix";
+@import "utilities/display";
+@import "utilities/embed";
+@import "utilities/flex";
+@import "utilities/float";
+@import "utilities/interactions";
+@import "utilities/overflow";
+@import "utilities/position";
+@import "utilities/screenreaders";
+@import "utilities/shadows";
+@import "utilities/sizing";
+@import "utilities/spacing";
+@import "utilities/stretched-link";
+@import "utilities/text";
+@import "utilities/visibility";

@@ -1,0 +1,139 @@
+/* Radio Switch
+ */
+
+.switch-toggle {
+  @include switch-shared();
+
+  /* For callout panels in foundation
+  */
+  padding: 0 !important;
+
+  input {
+    position: absolute;
+    left: 0;
+    opacity: 0;
+  }
+
+  input + label {
+    position: relative;
+    z-index: 2;
+    display: block;
+    float: left;
+    padding: 0 size(8);
+    margin: 0;
+
+    text-align: center;
+  }
+
+  a {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 0;
+    z-index: 1;
+    width: 10px;
+    height: 100%;
+  }
+
+  /* 2 items
+   */
+  label:nth-child(2):nth-last-child(4),
+  label:nth-child(2):nth-last-child(4) ~ label,
+  label:nth-child(2):nth-last-child(4) ~ a {
+    width: 50%;
+  }
+
+  label:nth-child(2):nth-last-child(4) ~ input:checked:nth-child(3) + label ~ a {
+    left: 50%;
+  }
+
+  /* 3 items
+   */
+  label:nth-child(2):nth-last-child(6),
+  label:nth-child(2):nth-last-child(6) ~ label,
+  label:nth-child(2):nth-last-child(6) ~ a {
+    width: 33.33%;
+  }
+
+  label:nth-child(2):nth-last-child(6) ~ input:checked:nth-child(3) + label ~ a {
+    left: 33.33%;
+  }
+
+  label:nth-child(2):nth-last-child(6) ~ input:checked:nth-child(5) + label ~ a {
+    left: 66.66%;
+  }
+
+  /* 4 items
+   */
+  label:nth-child(2):nth-last-child(8),
+  label:nth-child(2):nth-last-child(8) ~ label,
+  label:nth-child(2):nth-last-child(8) ~ a {
+    width: 25%;
+  }
+
+  label:nth-child(2):nth-last-child(8) ~ input:checked:nth-child(3) + label ~ a {
+    left: 25%;
+  }
+
+  label:nth-child(2):nth-last-child(8) ~ input:checked:nth-child(5) + label ~ a {
+    left: 50%;
+  }
+
+  label:nth-child(2):nth-last-child(8) ~ input:checked:nth-child(7) + label ~ a {
+    left: 75%;
+  }
+
+  /* 5 items
+   */
+  label:nth-child(2):nth-last-child(10),
+  label:nth-child(2):nth-last-child(10) ~ label,
+  label:nth-child(2):nth-last-child(10) ~ a {
+    width: 20%;
+  }
+
+  label:nth-child(2):nth-last-child(10) ~ input:checked:nth-child(3) + label ~ a {
+    left: 20%;
+  }
+
+  label:nth-child(2):nth-last-child(10) ~ input:checked:nth-child(5) + label ~ a {
+    left: 40%;
+  }
+
+  label:nth-child(2):nth-last-child(10) ~ input:checked:nth-child(7) + label ~ a {
+    left: 60%;
+  }
+
+  label:nth-child(2):nth-last-child(10) ~ input:checked:nth-child(9) + label ~ a {
+    left: 80%;
+  }
+
+  /* 6 items
+   */
+  label:nth-child(2):nth-last-child(12),
+  label:nth-child(2):nth-last-child(12) ~ label,
+  label:nth-child(2):nth-last-child(12) ~ a {
+    width: 16.6%;
+  }
+
+  label:nth-child(2):nth-last-child(12) ~ input:checked:nth-child(3) + label ~ a {
+    left: 16.6%;
+  }
+
+  label:nth-child(2):nth-last-child(12) ~ input:checked:nth-child(5) + label ~ a {
+    left: 33.2%;
+  }
+
+  label:nth-child(2):nth-last-child(12) ~ input:checked:nth-child(7) + label ~ a {
+    left: 49.8%;
+  }
+
+  label:nth-child(2):nth-last-child(12) ~ input:checked:nth-child(9) + label ~ a {
+    left: 66.4%;
+  }
+
+  label:nth-child(2):nth-last-child(12) ~ input:checked:nth-child(11) + label ~ a {
+    left: 83%;
+  }
+
+
+}

@@ -1,341 +1,653 @@
-/* ------------------------------------------
-CSS TOGGLE SWITCHES (Ionuț Colceriu)
-Licensed under Unlicense 
-https://github.com/ghinda/css-toggle-switch
------------------------------------------- */
-
-/* Hide by default */
-
-.toggle p span {
-	display: none;
+@charset "UTF-8";
+/*
+* CSS TOGGLE SWITCH
+*
+* Ionuț Colceriu - ghinda.net
+* https://github.com/ghinda/css-toggle-switch
+*
+*/
+/* supported values are px, rem-calc, em-calc
+ */
+/* imports
+  */
+/* Functions
+ */
+/* Shared
+ */
+/* Hide by default
+  */
+.switch-toggle a,
+.switch-light span span {
+  display: none;
 }
-
-/* Toggle Switches */
 
 /* We can't test for a specific feature,
- * so we only target browsers with support for media queries.
- */
+  * so we only target browsers with support for media queries.
+  */
 @media only screen {
-
-	/* Checkbox
-	 */
-	.toggle {
-		position: relative;
-		padding: 0;
-		/*margin-left: 100px;*/
-		width: 115px;
-	}
-
-	/* Position the label over all the elements, except the slide-button
-	 * Clicking anywhere on the label will change the switch-state
-	 */
-	.toggle label {
-		position: relative;
-		z-index: 3;
-		
-		display: block;
-		width: 100%;
-	}
-
-	/* Don't hide the input from screen-readers and keyboard access
-	 */
-	.toggle input {
-		position: absolute;
-		opacity: 0;
-		z-index: 5;
-	}
-	
-	.toggle p {
-		position: absolute;
-		left: -100px;
-		
-		width: 100%;
-		margin: 0;
-		padding-right: 100px;
-		
-		text-align: left;
-	}
-	
-	.toggle p span {
-		position: absolute;
-		top: 0;
-		left: 0;
-		z-index: 5;
-		
-		display: block;
-		width: 50%;
-		margin-left: 100px;
-		
-		text-align: center;
-		color: #fff;
-	}
-
-	.toggle p span.on {
-		color: #000;
-	}
-	
-	.toggle p span:last-child {
-		left: 50%;
-	}
-
-	.toggle .slide-button {
-		position: absolute;
-		right: 0;
-		top: 0;
-		z-index: 4;
-		
-		display: block;
-		width: 50%;
-		height: 100%;
-		padding: 0;
-	}
-
-	.checkbox.toggle.well { 
-  		cursor: pointer;
-	}
-
-	/* Shared */
-	.toggle {
-		display: block;
-		height: 30px;
-	}
-	
-	.toggle * {
-		-webkit-box-sizing: border-box;
-		-moz-box-sizing: border-box;
-		-ms-box-sizing: border-box;
-		-o-box-sizing: border-box;
-		box-sizing: border-box;
-	}
-	
-	.toggle .slide-button {
-		display: block;
-		
-		-webkit-transition: all 0.3s ease-out;
-		-moz-transition: all 0.3s ease-out;
-		-ms-transition: all 0.3s ease-out;
-		-o-transition: all 0.3s ease-out;
-		transition: all 0.3s ease-out;
-	}
-	
-	.toggle label,
-	.toggle p {
-		line-height: 30px;
-		vertical-align: middle;
-	}
-	
-	.toggle input:checked ~ .slide-button {
-		right: 50%;
-	}
-
-	.toggle input:checked ~ p span.on {
-		color: #fff;
-	}
-
-	.toggle input:checked ~ p span.off {
-		color: #000;
-	}
-	
-	/* Outline the toggles when the inputs are focused */
-	.toggle input:focus ~ .slide-button
-	{
-		outline: 1px dotted #888;
-	}
-	
-	/* Bugfix for older Webkit, including mobile Webkit. Adapted from:
-	 * http://css-tricks.com/webkit-sibling-bug/
-	 */
-	.toggle {
-		-webkit-animation: bugfix infinite 1s;
-	}
-	
-	@-webkit-keyframes bugfix { from { position: relative; } to { position: relative; } }
-
-
-	/* Standalone Themes */
-
-
-	/* Candy Theme
-	 * Based on the "Sort Switches / Toggles (PSD)" by Ormal Clarck
-	 * http://www.premiumpixels.com/freebies/sort-switches-toggles-psd/
-	 */
-	 
-	.candy {
-		background-color: #2d3035;
-		
-		color: #fff;
-		font-weight: bold;
-		text-align: center;
-		text-shadow: 1px 1px 1px #191b1e;
-			
-		border-radius: 3px;	
-		
-		box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3), 0 1px 0px rgba(255, 255, 255, 0.2);
-	}
-
-	.candy input:checked + label {
-		color: #333;
-		text-shadow: 0 1px 0 rgba(255,255,255,0.5);
-	}
-		
-	.candy .slide-button {
-		border: 1px solid #333;
-
-		background-color: #E4CC37;
-		
-/*		background-image: -webkit-linear-gradient(top, rgba(255, 255, 255, 0.2), rgba(0, 0, 0, 0));
-		background-image:    -moz-linear-gradient(top, rgba(255, 255, 255, 0.2), rgba(0, 0, 0, 0));
-		background-image:     -ms-linear-gradient(top, rgba(255, 255, 255, 0.2), rgba(0, 0, 0, 0));
-		background-image:      -o-linear-gradient(top, rgba(255, 255, 255, 0.2), rgba(0, 0, 0, 0));
-		background-image:         linear-gradient(top, rgba(255, 255, 255, 0.2), rgba(0, 0, 0, 0));
-		*/
-		box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.45);
-		
-		border-radius: 3px;
-	}
-
-	.candy p {
-		color: #333;
-		
-		text-shadow: none;
-	}
-
-	.candy span {
-		color: #fff;
-	}
-
-	.candy.blue .slide-button {
-		background-color: #38a3d4;
-	}
-
-	.candy.yellow .slide-button {
-		background-color: #f5e560;
-	}
-
-	/* Android Theme
-	 * Based on Holo
-	 */
-	 
-	.android {
-		background-color: #b6b6b6;
-		
-		color: #fff;
-	}
-
-	.android.toggle {
-		border: 2px solid #b6b6b6;
-	}
-
-	.android.switch {
-		overflow: hidden;
-	}
-		
-	.android.switch .slide-button {
-		background-color: #279fca;
-		
-		-webkit-transform: skew(20deg) translateX(10px);
-		-moz-transform: skew(20deg) translateX(10px);
-		-ms-transform: skew(20deg) translateX(10px);
-		-o-transform: skew(20deg) translateX(10px);
-		transform: skew(20deg);
-	}
-
-	.android.toggle .slide-button {
-		border-radius: 2px;
-		
-		background-color: #848484;
-	}
-
-	/* Selected ON toggle */
-	.android.toggle input:first-of-type:checked ~ .slide-button {
-		background-color: #279fca;
-	}
-
-	.android.switch input:first-of-type:checked ~ .slide-button {
-		-webkit-transform: skew(20deg) translateX(-10px);
-		-moz-transform: skew(20deg) translateX(-10px);
-		-ms-transform: skew(20deg) translateX(-10px);
-		-o-transform: skew(20deg) translateX(-10px);
-		transform: skew(20deg) translateX(-10px);
-	}
-
-	.android p {
-		color: #333;
-	}
-
-	.android span {
-		color: #fff;
-	}
-
-	.android.switch,
-	.android span {
-		text-transform: uppercase;
-	}
-
-	/* iOS Theme
-	 * Similar to iOS but more accessible
-	 */ 
-
-	.ios {
-		background: -webkit-linear-gradient(top, #cfcfcf, #efefef 50%, #f9f9f9 50%, #fefefe);
-		background: -moz-linear-gradient(top, #cfcfcf, #efefef 50%, #f9f9f9 50%, #fefefe);
-		background: -o-linear-gradient(top, #cfcfcf, #efefef 50%, #f9f9f9 50%, #fefefe);
-		background: -ms-linear-gradient(top, #cfcfcf, #efefef 50%, #f9f9f9 50%, #fefefe);
-		background: linear-gradient(top, #cfcfcf, #efefef 50%, #f9f9f9 50%, #fefefe);
-		
-		-webkit-box-shadow: inset 0 2px 2px #b6b6b6, inset 3px 0 3px #b6b6b6;
-		box-shadow: inset 0 2px 2px #b6b6b6, inset 3px 0 3px #b6b6b6;
-
-		border: 1px solid #efefef;
-		border-radius: 3px;
-		
-		color: #7f7f7f;
-		font: bold 14px sans-serif; 
-		text-align: center;
-		text-shadow: none;
-	}
-
-	.ios.toggle .slide-button {
-		border: 1px solid #919191;
-		background: -webkit-linear-gradient(top, #cdcdcd, #fbfbfb);
-		background: -moz-linear-gradient(top, #cdcdcd, #fbfbfb);
-		background: -o-linear-gradient(top, #cdcdcd, #fbfbfb);
-		background: -ms-linear-gradient(top, #cdcdcd, #fbfbfb);
-		background: linear-gradient(top, #cdcdcd, #fbfbfb);
-		
-		border-radius: 3px;
-		
-		-webkit-box-shadow: inset 0 1px 0 #f0f0f0;
-		box-shadow: inset 0 1px 0 #f0f0f0;
-	}
-
-	/* Selected ON toggle */
-	.ios.toggle input:first-of-type:checked ~ p span:first-child,
-	.ios.switch input:checked + label {
-		color: #fff;
-		text-shadow: 0 -1px 0 #1b3b6f;
-	}
-
-	.ios.toggle input:first-of-type:checked ~ .slide-button,
-	.ios.switch .slide-button {
-		background: -webkit-linear-gradient(top, #3672dc, #4085ec 50%, #4d8fef 50%, #76adfc);
-		background: -moz-linear-gradient(top, #3672dc, #4085ec 50%, #4d8fef 50%, #76adfc);
-		background: -o-linear-gradient(top, #3672dc, #4085ec 50%, #4d8fef 50%, #76adfc);
-		background: -ms-linear-gradient(top, #3672dc, #4085ec 50%, #4d8fef 50%, #76adfc);
-		background: linear-gradient(top, #3672dc, #4085ec 50%, #4d8fef 50%, #76adfc);
-		
-		border-radius: 3px;
-		border: 1px solid #1654b5;
-		
-		text-align: center;
-		color: #fff;
-		
-		font: bold 14px sans-serif; 
-		text-shadow: 0 -1px 0 #1b3b6f;
-	}
-	
-	.ios.toggle p span {
-		color: #7f7f7f;
-	}
-	
+  /* Checkbox
+ */
+  .switch-light {
+    position: relative;
+    display: block;
+    /* simulate default browser focus outlines on the switch,
+   * when the inputs are focused.
+   */
+  }
+  .switch-light::after {
+    clear: both;
+    content: '';
+    display: table;
+  }
+  .switch-light *,
+  .switch-light *:before,
+  .switch-light *:after {
+    -webkit-box-sizing: border-box;
+            box-sizing: border-box;
+  }
+  .switch-light a {
+    display: block;
+    -webkit-transition: all 0.2s ease-out;
+    transition: all 0.2s ease-out;
+  }
+  .switch-light label,
+  .switch-light > span {
+    /* breathing room for bootstrap/foundation classes.
+     */
+    line-height: 2em;
+  }
+  .switch-light input:focus ~ span a,
+  .switch-light input:focus + label {
+    outline-width: 2px;
+    outline-style: solid;
+    outline-color: Highlight;
+    /* Chrome/Opera gets its native focus styles.
+     */
+  }
 }
+
+@media only screen and (-webkit-min-device-pixel-ratio: 0) {
+  .switch-light input:focus ~ span a,
+  .switch-light input:focus + label {
+    outline-color: -webkit-focus-ring-color;
+    outline-style: auto;
+  }
+}
+
+@media only screen {
+  /* don't hide the input from screen-readers and keyboard access
+ */
+  .switch-light input {
+    position: absolute;
+    opacity: 0;
+    z-index: 3;
+  }
+  .switch-light input:checked ~ span a {
+    right: 0%;
+  }
+  /* inherit from label
+ */
+  .switch-light strong {
+    font-weight: inherit;
+  }
+  .switch-light > span {
+    position: relative;
+    overflow: hidden;
+    display: block;
+    min-height: 2em;
+    /* overwrite 3rd party classes padding
+   * eg. bootstrap .alert
+   */
+    padding: 0;
+    text-align: left;
+  }
+  .switch-light span span {
+    position: relative;
+    z-index: 2;
+    display: block;
+    float: left;
+    width: 50%;
+    text-align: center;
+    -webkit-user-select: none;
+       -moz-user-select: none;
+        -ms-user-select: none;
+            user-select: none;
+  }
+  .switch-light a {
+    position: absolute;
+    right: 50%;
+    top: 0;
+    z-index: 1;
+    display: block;
+    width: 50%;
+    height: 100%;
+    padding: 0;
+  }
+  /* bootstrap 4 tweaks
+*/
+  .switch-light.row {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+  }
+  .switch-light .alert-light {
+    color: #333;
+    margin-bottom: 0;
+  }
+  /* Radio Switch
+ */
+  .switch-toggle {
+    position: relative;
+    display: block;
+    /* simulate default browser focus outlines on the switch,
+   * when the inputs are focused.
+   */
+    /* For callout panels in foundation
+  */
+    padding: 0 !important;
+    /* 2 items
+   */
+    /* 3 items
+   */
+    /* 4 items
+   */
+    /* 5 items
+   */
+    /* 6 items
+   */
+  }
+  .switch-toggle::after {
+    clear: both;
+    content: '';
+    display: table;
+  }
+  .switch-toggle *,
+  .switch-toggle *:before,
+  .switch-toggle *:after {
+    -webkit-box-sizing: border-box;
+            box-sizing: border-box;
+  }
+  .switch-toggle a {
+    display: block;
+    -webkit-transition: all 0.2s ease-out;
+    transition: all 0.2s ease-out;
+  }
+  .switch-toggle label,
+  .switch-toggle > span {
+    /* breathing room for bootstrap/foundation classes.
+     */
+    line-height: 2em;
+  }
+  .switch-toggle input:focus ~ span a,
+  .switch-toggle input:focus + label {
+    outline-width: 2px;
+    outline-style: solid;
+    outline-color: Highlight;
+    /* Chrome/Opera gets its native focus styles.
+     */
+  }
+}
+
+@media only screen and (-webkit-min-device-pixel-ratio: 0) {
+  .switch-toggle input:focus ~ span a,
+  .switch-toggle input:focus + label {
+    outline-color: -webkit-focus-ring-color;
+    outline-style: auto;
+  }
+}
+
+@media only screen {
+  .switch-toggle input {
+    position: absolute;
+    left: 0;
+    opacity: 0;
+  }
+  .switch-toggle input + label {
+    position: relative;
+    z-index: 2;
+    display: block;
+    float: left;
+    padding: 0 0.5em;
+    margin: 0;
+    text-align: center;
+  }
+  .switch-toggle a {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 0;
+    z-index: 1;
+    width: 10px;
+    height: 100%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(4),
+  .switch-toggle label:nth-child(2):nth-last-child(4) ~ label,
+  .switch-toggle label:nth-child(2):nth-last-child(4) ~ a {
+    width: 50%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(4) ~ input:checked:nth-child(3) + label ~ a {
+    left: 50%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(6),
+  .switch-toggle label:nth-child(2):nth-last-child(6) ~ label,
+  .switch-toggle label:nth-child(2):nth-last-child(6) ~ a {
+    width: 33.33%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(6) ~ input:checked:nth-child(3) + label ~ a {
+    left: 33.33%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(6) ~ input:checked:nth-child(5) + label ~ a {
+    left: 66.66%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(8),
+  .switch-toggle label:nth-child(2):nth-last-child(8) ~ label,
+  .switch-toggle label:nth-child(2):nth-last-child(8) ~ a {
+    width: 25%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(8) ~ input:checked:nth-child(3) + label ~ a {
+    left: 25%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(8) ~ input:checked:nth-child(5) + label ~ a {
+    left: 50%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(8) ~ input:checked:nth-child(7) + label ~ a {
+    left: 75%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(10),
+  .switch-toggle label:nth-child(2):nth-last-child(10) ~ label,
+  .switch-toggle label:nth-child(2):nth-last-child(10) ~ a {
+    width: 20%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(10) ~ input:checked:nth-child(3) + label ~ a {
+    left: 20%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(10) ~ input:checked:nth-child(5) + label ~ a {
+    left: 40%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(10) ~ input:checked:nth-child(7) + label ~ a {
+    left: 60%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(10) ~ input:checked:nth-child(9) + label ~ a {
+    left: 80%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(12),
+  .switch-toggle label:nth-child(2):nth-last-child(12) ~ label,
+  .switch-toggle label:nth-child(2):nth-last-child(12) ~ a {
+    width: 16.6%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(12) ~ input:checked:nth-child(3) + label ~ a {
+    left: 16.6%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(12) ~ input:checked:nth-child(5) + label ~ a {
+    left: 33.2%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(12) ~ input:checked:nth-child(7) + label ~ a {
+    left: 49.8%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(12) ~ input:checked:nth-child(9) + label ~ a {
+    left: 66.4%;
+  }
+  .switch-toggle label:nth-child(2):nth-last-child(12) ~ input:checked:nth-child(11) + label ~ a {
+    left: 83%;
+  }
+  /* Candy Theme
+ * Based on the "Sort Switches / Toggles (PSD)" by Ormal Clarck
+ * http://www.premiumpixels.com/freebies/sort-switches-toggles-psd/
+ */
+  .switch-toggle.switch-candy,
+  .switch-light.switch-candy > span {
+    background-color: #2d3035;
+    border-radius: 3px;
+    -webkit-box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3), 0 1px 0 rgba(255, 255, 255, 0.2);
+            box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3), 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+  .switch-light.switch-candy span span,
+  .switch-light.switch-candy input:checked ~ span span:first-child,
+  .switch-toggle.switch-candy label {
+    color: #fff;
+    font-weight: bold;
+    text-align: center;
+    text-shadow: 1px 1px 1px #191b1e;
+  }
+  .switch-light.switch-candy input ~ span span:first-child,
+  .switch-light.switch-candy input:checked ~ span span:nth-child(2),
+  .switch-candy input:checked + label {
+    color: #333;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+  .switch-candy a {
+    border: 1px solid #333;
+    border-radius: 3px;
+    -webkit-box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.45);
+            box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.45);
+    background-color: #70c66b;
+    background-image: -webkit-gradient(linear, left top, left bottom, from(rgba(255, 255, 255, 0.2)), to(rgba(0, 0, 0, 0)));
+    background-image: linear-gradient(rgba(255, 255, 255, 0.2), rgba(0, 0, 0, 0));
+  }
+  .switch-candy-blue a {
+    background-color: #38a3d4;
+  }
+  .switch-candy-yellow a {
+    background-color: #f5e560;
+  }
+  /* iOS Theme
+*/
+  .switch-ios.switch-light span span {
+    color: #888b92;
+  }
+  .switch-ios.switch-light a {
+    left: 0;
+    top: 0;
+    width: 2em;
+    height: 2em;
+    background-color: #fff;
+    border-radius: 100%;
+    border: 0.25em solid #D8D9DB;
+    -webkit-transition: all .2s ease-out;
+    transition: all .2s ease-out;
+  }
+  .switch-ios.switch-light > span {
+    display: block;
+    width: 100%;
+    height: 2em;
+    background-color: #D8D9DB;
+    border-radius: 1.75em;
+    -webkit-transition: all .4s ease-out;
+    transition: all .4s ease-out;
+  }
+  .switch-ios.switch-light > span span {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    opacity: 0;
+    line-height: 1.875em;
+    vertical-align: middle;
+    -webkit-transition: all .2s ease-out;
+    transition: all .2s ease-out;
+  }
+  .switch-ios.switch-light > span span:first-of-type {
+    opacity: 1;
+    padding-left: 1.875em;
+  }
+  .switch-ios.switch-light > span span:last-of-type {
+    padding-right: 1.875em;
+  }
+  .switch-ios.switch-light input:checked ~ span a {
+    left: 100%;
+    border-color: #4BD865;
+    margin-left: -2em;
+  }
+  .switch-ios.switch-light input:checked ~ span {
+    border-color: #4BD865;
+    -webkit-box-shadow: inset 0 0 0 30px #4BD865;
+            box-shadow: inset 0 0 0 30px #4BD865;
+  }
+  .switch-ios.switch-light input:checked ~ span span:first-of-type {
+    opacity: 0;
+  }
+  .switch-ios.switch-light input:checked ~ span span:last-of-type {
+    opacity: 1;
+    color: #fff;
+  }
+  .switch-ios.switch-toggle {
+    background-color: #D8D9DB;
+    border-radius: 30px;
+    -webkit-box-shadow: inset rgba(0, 0, 0, 0.1) 0 1px 0;
+            box-shadow: inset rgba(0, 0, 0, 0.1) 0 1px 0;
+  }
+  .switch-ios.switch-toggle a {
+    background-color: #4BD865;
+    border: 0.125em solid #D8D9DB;
+    border-radius: 1.75em;
+    -webkit-transition: all 0.12s ease-out;
+    transition: all 0.12s ease-out;
+  }
+  .switch-ios.switch-toggle label {
+    height: 2.4em;
+    color: #888b92;
+    line-height: 2.4em;
+    vertical-align: middle;
+  }
+  .switch-ios input:checked + label {
+    color: #3e4043;
+  }
+  /* Holo Theme
+ */
+  .switch-toggle.switch-holo,
+  .switch-light.switch-holo > span {
+    background-color: #464747;
+    border-radius: 1px;
+    -webkit-box-shadow: inset rgba(0, 0, 0, 0.1) 0 1px 0;
+            box-shadow: inset rgba(0, 0, 0, 0.1) 0 1px 0;
+    color: #fff;
+    text-transform: uppercase;
+  }
+  .switch-holo label {
+    color: #fff;
+  }
+  .switch-holo > span span {
+    opacity: 0;
+    -webkit-transition: all 0.1s;
+    transition: all 0.1s;
+  }
+  .switch-holo > span span:first-of-type {
+    opacity: 1;
+  }
+  .switch-holo > span span,
+  .switch-holo label {
+    font-size: 85%;
+    line-height: 2.15625em;
+  }
+  .switch-holo a {
+    background-color: #666;
+    border-radius: 1px;
+    -webkit-box-shadow: inset rgba(255, 255, 255, 0.2) 0 1px 0, inset rgba(0, 0, 0, 0.3) 0 -1px 0;
+            box-shadow: inset rgba(255, 255, 255, 0.2) 0 1px 0, inset rgba(0, 0, 0, 0.3) 0 -1px 0;
+  }
+  /* Selected ON switch-light
+*/
+  .switch-holo.switch-light input:checked ~ span a {
+    background-color: #0E88B1;
+  }
+  .switch-holo.switch-light input:checked ~ span span:first-of-type {
+    opacity: 0;
+  }
+  .switch-holo.switch-light input:checked ~ span span:last-of-type {
+    opacity: 1;
+  }
+  /* Material Theme
+ */
+  /* switch-light
+ */
+  .switch-light.switch-material a {
+    top: -0.1875em;
+    width: 1.75em;
+    height: 1.75em;
+    border-radius: 50%;
+    background: #fafafa;
+    -webkit-box-shadow: 0 0.125em 0.125em 0 rgba(0, 0, 0, 0.14), 0 0.1875em 0.125em -0.125em rgba(0, 0, 0, 0.2), 0 0.125em 0.25em 0 rgba(0, 0, 0, 0.12);
+            box-shadow: 0 0.125em 0.125em 0 rgba(0, 0, 0, 0.14), 0 0.1875em 0.125em -0.125em rgba(0, 0, 0, 0.2), 0 0.125em 0.25em 0 rgba(0, 0, 0, 0.12);
+    -webkit-transition: right 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: right 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .switch-material.switch-light {
+    overflow: visible;
+  }
+  .switch-material.switch-light::after {
+    clear: both;
+    content: '';
+    display: table;
+  }
+  .switch-material.switch-light > span {
+    overflow: visible;
+    position: relative;
+    top: 0.1875em;
+    width: 3.25em;
+    height: 1.5em;
+    min-height: auto;
+    border-radius: 1em;
+    background: rgba(0, 0, 0, 0.26);
+  }
+  .switch-material.switch-light span span {
+    position: absolute;
+    clip: rect(0 0 0 0);
+  }
+  .switch-material.switch-light input:checked ~ span a {
+    right: 0;
+    background: #3f51b5;
+    -webkit-box-shadow: 0 0.1875em 0.25em 0 rgba(0, 0, 0, 0.14), 0 0.1875em 0.1875em -0.125em rgba(0, 0, 0, 0.2), 0 0.0625em 0.375em 0 rgba(0, 0, 0, 0.12);
+            box-shadow: 0 0.1875em 0.25em 0 rgba(0, 0, 0, 0.14), 0 0.1875em 0.1875em -0.125em rgba(0, 0, 0, 0.2), 0 0.0625em 0.375em 0 rgba(0, 0, 0, 0.12);
+  }
+  .switch-material.switch-light input:checked ~ span {
+    background: rgba(63, 81, 181, 0.5);
+  }
+  /* switch-toggle
+ */
+  .switch-toggle.switch-material {
+    overflow: visible;
+  }
+  .switch-toggle.switch-material::after {
+    clear: both;
+    content: '';
+    display: table;
+  }
+  .switch-toggle.switch-material a {
+    top: 48%;
+    width: 0.375em !important;
+    height: 0.375em;
+    margin-left: 0.25em;
+    background: #3f51b5;
+    border-radius: 100%;
+    -webkit-transform: translateY(-50%);
+            transform: translateY(-50%);
+    -webkit-transition: -webkit-transform .4s ease-in;
+    transition: -webkit-transform .4s ease-in;
+    transition: transform .4s ease-in;
+    transition: transform .4s ease-in, -webkit-transform .4s ease-in;
+  }
+  .switch-toggle.switch-material label {
+    color: rgba(0, 0, 0, 0.54);
+    font-size: 1em;
+  }
+  .switch-toggle.switch-material label:before {
+    content: '';
+    position: absolute;
+    top: 48%;
+    left: 0;
+    display: block;
+    width: 0.875em;
+    height: 0.875em;
+    border-radius: 100%;
+    border: 0.125em solid rgba(0, 0, 0, 0.54);
+    -webkit-transform: translateY(-50%);
+            transform: translateY(-50%);
+  }
+  .switch-toggle.switch-material input:checked + label:before {
+    border-color: #3f51b5;
+  }
+  /* ripple
+ */
+  .switch-light.switch-material > span:before,
+  .switch-light.switch-material > span:after,
+  .switch-toggle.switch-material label:after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 3;
+    display: block;
+    width: 4em;
+    height: 4em;
+    border-radius: 100%;
+    background: #3f51b5;
+    opacity: .4;
+    margin-left: -1.25em;
+    margin-top: -1.25em;
+    -webkit-transform: scale(0);
+            transform: scale(0);
+    -webkit-transition: opacity .4s ease-in;
+    transition: opacity .4s ease-in;
+  }
+  .switch-light.switch-material > span:after {
+    left: auto;
+    right: 0;
+    margin-left: 0;
+    margin-right: -1.25em;
+  }
+  .switch-toggle.switch-material label:after {
+    width: 3.25em;
+    height: 3.25em;
+    margin-top: -0.75em;
+  }
+  @-webkit-keyframes materialRipple {
+    0% {
+      -webkit-transform: scale(0);
+              transform: scale(0);
+    }
+    20% {
+      -webkit-transform: scale(1);
+              transform: scale(1);
+    }
+    100% {
+      opacity: 0;
+      -webkit-transform: scale(1);
+              transform: scale(1);
+    }
+  }
+  @keyframes materialRipple {
+    0% {
+      -webkit-transform: scale(0);
+              transform: scale(0);
+    }
+    20% {
+      -webkit-transform: scale(1);
+              transform: scale(1);
+    }
+    100% {
+      opacity: 0;
+      -webkit-transform: scale(1);
+              transform: scale(1);
+    }
+  }
+  .switch-material.switch-light input:not(:checked) ~ span:after,
+  .switch-material.switch-light input:checked ~ span:before,
+  .switch-toggle.switch-material input:checked + label:after {
+    -webkit-animation: materialRipple .4s ease-in;
+            animation: materialRipple .4s ease-in;
+  }
+  /* trick to prevent the default checked ripple animation from showing
+ * when the page loads.
+ * the ripples are hidden by default, and shown only when the input is focused.
+ */
+  .switch-light.switch-material.switch-light input ~ span:before,
+  .switch-light.switch-material.switch-light input ~ span:after,
+  .switch-material.switch-toggle input + label:after {
+    visibility: hidden;
+  }
+  .switch-light.switch-material.switch-light input:focus:checked ~ span:before,
+  .switch-light.switch-material.switch-light input:focus:not(:checked) ~ span:after,
+  .switch-material.switch-toggle input:focus:checked + label:after {
+    visibility: visible;
+  }
+}
+
+/* Bugfix for older Webkit, including mobile Webkit. Adapted from
+  * http://css-tricks.com/webkit-sibling-bug/
+  */
+@media only screen and (-webkit-max-device-pixel-ratio: 2) and (max-device-width: 80em) {
+  .switch-light,
+  .switch-toggle {
+    -webkit-animation: webkitSiblingBugfix infinite 1s;
+  }
+}
+
+@-webkit-keyframes webkitSiblingBugfix {
+  from {
+    -webkit-transform: translate3d(0, 0, 0);
+  }
+  to {
+    -webkit-transform: translate3d(0, 0, 0);
+  }
+}
+/*# sourceMappingURL=toggle-switch.css.map */

@@ -1,0 +1,169 @@
+/* Material Theme
+ */
+
+/* switch-light
+ */
+
+.switch-light.switch-material a {
+  top: size(-3);
+  width: size(28);
+  height: size(28);
+  border-radius: 50%;
+  background: #fafafa;
+  box-shadow:
+    0 size(2) size(2) 0 rgba(0, 0, 0, .14),
+    0 size(3) size(2) size(-2) rgba(0, 0, 0, .2),
+    0 size(2) size(4) 0 rgba(0, 0, 0, .12);
+
+  transition: right .28s cubic-bezier(.4, 0, .2, 1);
+}
+
+.switch-material.switch-light {
+  @include clearfix;
+  overflow: visible;
+}
+
+.switch-material.switch-light > span {
+  overflow: visible;
+  position: relative;
+  top: size(3);
+  width: size(52);
+  height: size(24);
+  min-height: auto;
+  border-radius: size(16);
+  background: rgba(0, 0, 0, .26);
+}
+
+.switch-material.switch-light span span {
+  position: absolute;
+  clip: rect(0 0 0 0);
+}
+
+.switch-material.switch-light input:checked ~ span a {
+  right: 0;
+
+  background: #3f51b5;
+  box-shadow:
+    0 size(3) size(4) 0 rgba(0, 0, 0, .14),
+    0 size(3) size(3) size(-2) rgba(0, 0, 0, .2),
+    0 size(1) size(6) 0 rgba(0,0,0,.12);
+}
+
+.switch-material.switch-light input:checked ~ span {
+  background: rgba(63, 81, 181, .5);
+}
+
+/* switch-toggle
+ */
+
+.switch-toggle.switch-material {
+  @include clearfix;
+  overflow: visible;
+}
+
+.switch-toggle.switch-material a {
+  top: 48%;
+  width: size(6) !important;
+  height: size(6);
+  margin-left: size(4);
+  background: #3f51b5;
+  border-radius: 100%;
+
+  transform: translateY(-50%);
+  transition: transform .4s ease-in;
+}
+
+.switch-toggle.switch-material label {
+  color: rgba(0, 0, 0, .54);
+  font-size: 1em;
+}
+
+.switch-toggle.switch-material label:before {
+  content: '';
+  position: absolute;
+  top: 48%;
+  left: 0;
+  display: block;
+  width: size(14);
+  height: size(14);
+  border-radius: 100%;
+  border: size(2) solid rgba(0, 0, 0, .54);
+
+  transform: translateY(-50%);
+}
+
+.switch-toggle.switch-material input:checked + label:before {
+  border-color: #3f51b5;
+}
+
+/* ripple
+ */
+
+.switch-light.switch-material > span:before,
+.switch-light.switch-material > span:after,
+.switch-toggle.switch-material label:after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  display: block;
+  width: size(64);
+  height: size(64);
+  border-radius: 100%;
+  background: #3f51b5;
+  opacity: .4;
+  margin-left: size(-20);
+  margin-top: size(-20);
+
+  transform: scale(0);
+  transition: opacity .4s ease-in;
+}
+
+.switch-light.switch-material > span:after {
+  left: auto;
+  right: 0;
+  margin-left: 0;
+  margin-right: size(-20);
+}
+
+.switch-toggle.switch-material label:after {
+  width: size(52);
+  height: size(52);
+  margin-top: size(-12);
+}
+
+@keyframes materialRipple {
+  0% {
+    transform: scale(0);
+  }
+  20% {
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+.switch-material.switch-light input:not(:checked) ~ span:after,
+.switch-material.switch-light input:checked ~ span:before,
+.switch-toggle.switch-material input:checked + label:after {
+  animation: materialRipple .4s ease-in;
+}
+
+/* trick to prevent the default checked ripple animation from showing
+ * when the page loads.
+ * the ripples are hidden by default, and shown only when the input is focused.
+ */
+.switch-light.switch-material.switch-light input ~ span:before,
+.switch-light.switch-material.switch-light input ~ span:after,
+.switch-material.switch-toggle input + label:after {
+  visibility: hidden;
+}
+
+.switch-light.switch-material.switch-light input:focus:checked ~ span:before,
+.switch-light.switch-material.switch-light input:focus:not(:checked) ~ span:after,
+.switch-material.switch-toggle input:focus:checked + label:after {
+  visibility: visible;
+}

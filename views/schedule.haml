@@ -11,16 +11,15 @@
     %link(href="/static/css/toggle-switch.css", rel="stylesheet")
     %link(href="/static/css/screenly.css", rel="stylesheet")
 
-    %script(src="/static/js/underscore-1.5.2.js")
+    %script(src="/static/js/underscore.js")
 
-    %script(src="/static/js/jquery-1.9.1.min.js")
-    %script(src="/static/js/jquery.iframe-transport.js")
+    %script(src="/static/js/jquery-3.2.1.js")
 
     %script(src="/static/js/backbone.min.js") /needs jquery
 
     %script(src="/static/js/jquery-ui-1.10.1.custom.min.js")
-    %script(src="/static/js/jquery.fileupload.js") /needs jqueryui.widget
 
+    %script(src="/static/js/popper.js")
     %script(src="/static/js/bootstrap.min.js") /needs jquery
     %script(src="/static/js/bootstrap-datepicker.js")
     %script(src="/static/js/bootstrap-timepicker.js")
@@ -89,14 +88,14 @@
                       %label.control-label Start Date
                       .controls
                         .date.input-append
-                          %input.span2(type="text", name="start_date")
+                          %input.span2.date(type="text", name="start_date")
                           %input(type="hidden", name="start_date")
                           %span.add-on
                             %i.icon-th
                       %label.control-label End Date
                       .controls
                         .date.input-append
-                          %input.span2(type="text", name="end_date")
+                          %input.span2.date(type="text", name="end_date")
                           %input(type="hidden", name="end_date")
                           %span.add-on
                             %i.icon-th
@@ -155,43 +154,47 @@
 
 
   %body
-    #request-error.navbar.navbar-fixed-top
-    .navbar.navbar-fixed-top
-      .navbar-inner
-        .container
-          %a.brand(href="/")
-            &Pi;
-            %strong Pi
-            Sign
+    %nav.navbar.navbar-expand-lg.navbar-dark.bg-primary
+      .container
+        %a.navbar-brand(href="/")
+          &Pi;
+          %strong Pi
+          Sign
 
-          %ul.nav.pull-right
-            / - if not up_to_date:
-            /   %li.update-available
-            /     %a(href="http://www.screenlyapp.com/ose.html#upgrade")
-            /       %i.icon-circle-arrow-down.icon-white
-            /       Update Available
-            %li
-              %a(href="/settings")
+        .collapse.navbar-collapse
+          %ul.navbar-nav.mr-auto
+            - if not up_to_date:
+              %li.update-available
+                %a(href="http://www.screenlyapp.com/ose.html#upgrade")
+                  %i.icon-circle-arrow-down.icon-white
+                  Update Available
+            
+            %li.nav-item
+              %a.nav-link(href="/settings")
                 %i.icon-cog.icon-white
                 Settings
-            %li.divider-vertical
-            %li
-              %a(href="/system_info")
+            %li.nav-item
+              %a.nav-link(href="/system_info")
                 %i.icon-tasks.icon-white
                 System Info
 
+            %li.nav-item
+              %a.nav-link(href="/shutdown")
+                %i.icon-off.icon-white
+                Shutdown
+
     .container
       .row
-        .span12
+        .col
           %h1.page-header
-            .pull-right
+            .float-right
               %a#add-schedule-button.btn.btn-primary(href="#")
                 %i.icon-plus.icon-white
                 Add Schedule
             Schedules for 
             %span#assetName
       #schedules.row
-        .span12
+        .col
           %section
             .header
               Schedules

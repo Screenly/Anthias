@@ -10,34 +10,38 @@
     %script(src="/static/js/jquery-1.9.1.min.js")
 
   %body
+    %nav.navbar.navbar-expand-lg.navbar-dark.bg-primary
+      .container
+        %a.navbar-brand(href="/")
+          &Pi;
+          %strong Pi
+          Sign
 
-    .navbar.navbar-fixed-top
-      .navbar-inner
-        .container
-          %a.brand(href="/")
-            &Pi;
-            %strong Pi
-            Sign
-
-          %ul.nav.pull-right
+        .collapse.navbar-collapse
+          %ul.navbar-nav.mr-auto
             - if not up_to_date:
               %li.update-available
                 %a(href="http://www.screenlyapp.com/ose.html#upgrade")
                   %i.icon-circle-arrow-down.icon-white
                   Update Available
-            %li
-              %a(href="/settings")
+            
+            %li.nav-item
+              %a.nav-link(href="/settings")
                 %i.icon-cog.icon-white
                 Settings
-            %li.divider-vertical
-            %li
-              %a(href="/system_info")
+            %li.nav-item
+              %a.nav-link(href="/system_info")
                 %i.icon-tasks.icon-white
                 System Info
 
+            %li.nav-item
+              %a.nav-link(href="/shutdown")
+                %i.icon-off.icon-white
+                Shutdown
+
     .container
       .row
-        .span12
+        .col
           %h1.page-header
             System Info
 
