@@ -3,7 +3,7 @@ import json
 import re
 from netifaces import ifaddresses
 from sh import grep, netstat
-from urlparse import urlparse
+from urllib.parse import urlparse
 from datetime import timedelta
 
 # This will only work on the Raspberry Pi,

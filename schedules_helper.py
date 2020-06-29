@@ -2,6 +2,7 @@ import db
 import queries
 import datetime
 from classes import AvailableDays
+
 import logging
 
 FIELDS = ["id", "asset_id", "name", "start_date", "start_time", "end_date", "end_time", "duration", "repeat", "priority", "pattern_type", "pattern_days"] 
@@ -26,7 +27,7 @@ def asset_has_active_schedule(asset, conn, at_date=None, at_time=None):
             if schedule['start_date'] <= at_d and (schedule['end_date'] and at_d <= schedule['end_date']):
                 if schedule['repeat']:
                     if schedule['pattern_type'] == 'weekly':
-                        for name, member in AvailableDays.__members__.items():
+                        for name, member in list(AvailableDays.__members__.items()):
                             if ((int(schedule['pattern_days']) & member.value) > 0) and (member.name == datetime.datetime.now().strftime('%A')):
                                 return scheduled_withinTimePeriod(at_t, schedule)
                         return False
@@ -43,7 +44,7 @@ def scheduled_withinTimePeriod(at_t, schedule):
 
 def get_schedules(asset_id, conn):
     """Returns all currently active schedules for an asset."""
-    return filter(is_active, read(conn, asset_id))
+    return list(filter(is_active, read(conn, asset_id)))
 
 
 def mkdict(keys):
@@ -58,7 +59,7 @@ def create(conn, schedule):
     Asset's is_active field is updated before returning.
     """
     with db.commit(conn) as c:
-        c.execute(queries.create_schedule(schedule.keys()), schedule.values())
+        c.execute(queries.create_schedule(schedule.keys()), list(schedule.values()))
     return schedule
 
 
@@ -82,7 +83,7 @@ def update(conn, id, schedule):
     schedule's id field is updated before returning.
     """
     with db.commit(conn) as c:
-        c.execute(queries.update_schedule(schedule.keys()), schedule.values() + [id])
+        c.execute(queries.update_schedule(schedule.keys()), list(schedule.values()) + [id])
     return schedule
 
 

@@ -4,7 +4,7 @@
 __author__ = "Viktor Petersson"
 __copyright__ = "Copyright 2012-2013, WireLoad Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
-__additions__ = "James Kirsop - 2013-2015"
+__additions__ = "James Kirsop - 2013-2020"
 
 from datetime import datetime, timedelta
 from glob import glob
@@ -20,7 +20,7 @@ import sh
 import signal
 from ctypes import cdll
 
-from Queue import Queue
+from queue import Queue
 
 from settings import settings
 import html_templates
@@ -216,12 +216,12 @@ def browser_send(command, cb=lambda _: True):
     if not browser.process.exit_code:
         logging.info('Browser is alive')
         while not browser.process._pipe_queue.empty():  # flush stdout
-            browser.next()
+            next(browser)
 
         stdinqueue.put(command + '\n')
 
         while True:  # loop until cb returns True
-            if cb(browser.next()):
+            if cb(next(browser)):
                 break
     else:
         logging.info('browser found dead, restarting')
@@ -443,7 +443,7 @@ def asset_loop(scheduler):
         elif "web" in asset["mimetype"]:
             browser_url(asset["uri"])
         else:
-            print "Unknown MimeType, or MimeType missing"
+            print("Unknown MimeType, or MimeType missing")
         if "image" in asset["mimetype"] or "web" in asset["mimetype"]:
             logging.debug('Duration:'+str(asset["duration"]))
             if (not asset["duration"] == None) and (not int(asset["duration"]) == 0) :

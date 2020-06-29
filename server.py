@@ -33,6 +33,8 @@ import json
 import os
 import traceback
 import uuid
+from sh import sh, sudo
+from functools import reduce
 
 from bottle import route, run, request, error, static_file, response
 from bottle import HTTPResponse
@@ -42,6 +44,8 @@ import db
 import queries
 import assets_helper
 import schedules_helper
+import shutdown_helper
+
 
 from utils import json_dump
 from utils import get_node_ip
@@ -134,14 +138,14 @@ def prepare_asset(request):
 
     def get(key):
         val = data.get(key, '')
-        return val.strip() if isinstance(val, basestring) else val
+        return val.strip() if isinstance(val, str) else val
 
     if all([get('name'),
             get('uri') or (request.files.file_upload != ""),
             get('mimetype')]):
 
         asset = {
-            'name': get('name').decode('UTF-8'),
+            'name': get('name'),
             'mimetype': get('mimetype'),
             'asset_id': get('asset_id'),
             'is_enabled': get('is_enabled'),
@@ -213,7 +217,7 @@ def prepare_schedule(request):
 
     def get(key):
         val = data.get(key, '')
-        return val.strip() if isinstance(val, basestring) else val
+        return val.strip() if isinstance(val, str) else val
 
     if all([get('name')]):
         if get('pattern_days'):
@@ -223,7 +227,7 @@ def prepare_schedule(request):
             pattern_days = None
         schedule = {
             'asset_id' : get('asset_id'),
-            'name': get('name').decode('UTF-8'),
+            'name': get('name'),
             'duration': get('duration'),
             'repeat': get('repeat'),
             'priority': get('priority'),
@@ -273,7 +277,7 @@ def api(view):
             raise
         except Exception as e:
             traceback.print_exc()
-            return api_error(unicode(e))
+            return api_error(str(e))
     return api_view
 
 
@@ -326,8 +330,8 @@ def api_schedules(asset_id):
     schedules = schedules_helper.read(db_conn, asset_id)
     for schedule in schedules:
         tList = []
-        if(isinstance(schedule['pattern_days'],(int,long,float))):
-            for name, member in AvailableDays.__members__.items():
+        if(isinstance(schedule['pattern_days'],(int,float))):
+            for name, member in list(AvailableDays.__members__.items()):
                 if schedule['pattern_days'] & member.value:
                     tList.append(member.value)
         schedule['pattern_days'] = tList
@@ -373,7 +377,7 @@ def settings_page():
     context = {'flash': None}
 
     if request.method == "POST":
-        for field, default in DEFAULTS['viewer'].items():
+        for field, default in list(DEFAULTS['viewer'].items()):
             value = request.POST.get(field, default)
             if isinstance(default, bool):
                 value = value == 'on'
@@ -385,7 +389,7 @@ def settings_page():
             context['flash'] = {'class': "error", 'message': e}
     else:
         settings.load()
-    for field, default in DEFAULTS['viewer'].items():
+    for field, default in list(DEFAULTS['viewer'].items()):
         context[field] = settings[field]
 
     return template('settings', **context)
@@ -395,7 +399,7 @@ def settings_page():
 def system_info():
     viewer_log_file = '/tmp/screenly_viewer.log'
     if path.exists(viewer_log_file):
-        viewlog = check_output(['tail', '-n', '20', viewer_log_file]).split('\n')
+        viewlog = check_output(['tail', '-n', '20', viewer_log_file]).split(b"\n")
     else:
         viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
 
@@ -419,6 +423,16 @@ def system_info():
     return template('system_info', viewlog=viewlog, loadavg=loadavg, free_space=free_space, uptime=system_uptime, display_info=display_info)
 
 
+@route('/shutdown', method=["GET","POST"])
+def shutdown():
+    if request.method == "POST":
+        if request.POST.get('shutnow', '1') == "1":
+            # sudo("shutdown", "-h", "-t now")
+            pass
+        return template('shutdown', message='Shutting Down!')
+    return template('shutdown')
+
+
 @route('/splash_page')
 def splash_page():
     my_ip = get_node_ip()
@@ -429,7 +443,12 @@ def splash_page():
         ip_lookup = False
         url = "Unable to look up your installation's IP address."
 
-    return template('splash_page', ip_lookup=ip_lookup, url=url)
+    system_time = f'{datetime.now().astimezone().strftime("%c")} {str(datetime.now().astimezone().tzinfo)}'
+    return template('splash_page',
+        ip_lookup=ip_lookup,
+        url=url,
+        system_time = system_time
+        )
 
 
 @error(403)

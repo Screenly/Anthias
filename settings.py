@@ -3,9 +3,9 @@
 
 from os import path, getenv
 from sys import exit
-import ConfigParser
+import configparser
 import logging
-from UserDict import IterableUserDict
+from collections import UserDict
 
 CONFIG_DIR = '.pisign/'
 CONFIG_FILE = 'pisign.conf'
@@ -40,11 +40,11 @@ requests_log.setLevel(logging.WARNING)
 logging.debug('Starting viewer.py')
 
 
-class ScreenlySettings(IterableUserDict):
+class ScreenlySettings(UserDict):
     "Screenly OSE's Settings."
 
     def __init__(self, *args, **kwargs):
-        rv = IterableUserDict.__init__(self, *args, **kwargs)
+        rv = UserDict.__init__(self, *args, **kwargs)
         self.home = getenv('HOME')
         self.conf_file = self.get_configfile()
 
@@ -63,8 +63,8 @@ class ScreenlySettings(IterableUserDict):
                 self[field] = config.getint(section, field)
             else:
                 self[field] = config.get(section, field)
-        except ConfigParser.Error as e:
-            logging.debug("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (section, field, unicode(e), default))
+        except configparser.Error as e:
+            logging.debug("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (section, field, str(e), default))
             self[field] = default
         if field in ['database', 'assetdir']:
             self[field] = str(path.join(self.home, self[field]))
@@ -73,30 +73,30 @@ class ScreenlySettings(IterableUserDict):
         if isinstance(default, bool):
             config.set(section, field, self.get(field, default) and 'on' or 'off')
         else:
-            config.set(section, field, unicode(self.get(field, default)))
+            config.set(section, field, str(self.get(field, default)))
 
     def load(self):
         "Loads the latest settings from screenly.conf into memory."
         logging.debug('Reading config-file...')
-        config = ConfigParser.ConfigParser()
+        config = configparser.ConfigParser()
         config.read(self.conf_file)
 
-        for section, defaults in DEFAULTS.items():
-            for field, default in defaults.items():
+        for section, defaults in list(DEFAULTS.items()):
+            for field, default in list(defaults.items()):
                 self._get(config, section, field, default)
         try:
             self.get_listen_ip()
             int(self.get_listen_port())
         except ValueError as e:
-            logging.info("Could not parse setting 'listen': %s. Using default value: '%s'." % (unicode(e), DEFAULTS['main']['listen']))
+            logging.info("Could not parse setting 'listen': %s. Using default value: '%s'." % (str(e), DEFAULTS['main']['listen']))
             self['listen'] = DEFAULTS['main']['listen']
 
     def save(self):
         # Write new settings to disk.
-        config = ConfigParser.ConfigParser()
-        for section, defaults in DEFAULTS.items():
+        config = configparser.ConfigParser()
+        for section, defaults in list(DEFAULTS.items()):
             config.add_section(section)
-            for field, default in defaults.items():
+            for field, default in list(defaults.items()):
                 self._set(config, section, field, default)
         with open(self.conf_file, "w") as f:
             config.write(f)

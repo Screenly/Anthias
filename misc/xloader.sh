@@ -21,5 +21,5 @@ do
 	rm -f /tmp/screenly_html/*
 
 	# Launch the viewer
-	python ~/pisign/viewer.py >> $LOG 2>&1
+	python3 ~/pisign/viewer.py >> $LOG 2>&1
 done
