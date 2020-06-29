@@ -8,7 +8,9 @@ It was found that the original Screenly missed many useful features including ti
 
 Development is happening in the 'development' branch (and sub branches). Commits will be made to master once I think things are stable and functional.
 
-You'll want to use Raspbian Stretch as your underlying OS. Jessie and earlier OS's will most likely not work. We've tested the Development branch on a Raspberry Pi 2.
+You'll want to use Raspbian Buster as your underlying OS. Stretch should work but Jessie and earlier OS's will most likely not work due to a number of requirements. We've tested the Development branch on Raspberry Pi 2 and 3.
+
+Installation instructions are available at [http://jameskirsop.github.io/pisign/](http://jameskirsop.github.io/pisign/)
 
 ### Running the Unit Tests
 
