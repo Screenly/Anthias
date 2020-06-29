@@ -82,12 +82,12 @@
           .modal-content
             .modal-header
               %h3#modalLabel Add Asset
-            .modal-body
-              %form#add-form
-                %input(type="hidden", name="duration")
-                %div.form-group
-                    %label.control-label Name
-                    %input.form-control(type="text", name="name", placeholder="Nickname for this asset")
+            %form#add-form
+              .modal-body
+                .container-fluid
+                  %input(type="hidden", name="duration")
+                  %div.form-group
+                      %input.form-control(type="text", name="name", placeholder="A name for this asset")
                 .asset-location.add
                   -# %div.form-group
                   %ul.nav.nav-tabs(role="tablist")
@@ -138,11 +138,11 @@
                                   %span.off No
                                 %a.slide-button.btn.btn-primary
 
-            .modal-footer
-              -# .pull-left.progress.progress-striped.active(style="display:none")
-              -#   .bar
-              %input.btn.cancel(type="button", value="Cancel")
-              %input.btn.btn-primary(type="submit", value="Save")
+              .modal-footer
+                -# .pull-left.progress.progress-striped.active(style="display:none")
+                -#   .bar
+                %input.btn.cancel(type="button", value="Cancel")
+                %input.btn.btn-primary(type="submit", value="Save")
 
 
   %body

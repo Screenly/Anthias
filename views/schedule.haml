@@ -10,6 +10,8 @@
     %link(href="/static/css/timepicker.css", rel="stylesheet")
     %link(href="/static/css/toggle-switch.css", rel="stylesheet")
     %link(href="/static/css/screenly.css", rel="stylesheet")
+    %link(href="/static/css/open-iconic-bootstrap.css", rel="stylesheet")
+
 
     %script(src="/static/js/underscore.js")
 
@@ -51,9 +53,9 @@
           <%= pattern_days %>
       %td.schedule_row_buttons
       	%button.edit-schedule-button.btn(type="button")
-      		%i.icon-wrench
+      		%span.oi.oi-wrench
       	%button.delete-schedule-button.btn(type="button", dataTitle="Are you sure?", dataPlacement="left", dataHtml="true", dataTrigger="manual")
-          %i.icon-trash
+          %span.oi.oi-trash
 
     %script(type="text/template", id="confirm-delete-template")
       .clearfix
@@ -64,93 +66,87 @@
 
     %script(type="text/template", id="schedule-modal-template")
       .modal.hide.fade.modalWide(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
-        %form.form-horizontal.form-condensed#add-form
-          .modal-header
-            %h3#modalLabel Add Schedule
-          .modal-body
-            %input(type="hidden", name="asset_id")
-            %fieldset
-              .control-group.name
-                %label.control-label Name
-                .controls
-                  %input.span4(type="text", name="name")
-            %hr
-              .tabbable
-                %ul.nav.nav-tabs
-                  %li.active
-                    %a(dataToggle="tab", href="#scheduleEdit_Tab1") Summary
-                  %li
-                    %a(dataToggle="tab", href="#scheduleEdit_Tab2") Advanced
-              .span6.tab-content
-                #scheduleEdit_Tab1.tab-pane.active
-                  %fieldset
-                    .control-group.start_date
-                      %label.control-label Start Date
-                      .controls
-                        .date.input-append
-                          %input.span2.date(type="text", name="start_date")
-                          %input(type="hidden", name="start_date")
-                          %span.add-on
-                            %i.icon-th
-                      %label.control-label End Date
-                      .controls
-                        .date.input-append
-                          %input.span2.date(type="text", name="end_date")
-                          %input(type="hidden", name="end_date")
-                          %span.add-on
-                            %i.icon-th
-                    .control-group
-                      %label.control-label Start Time
-                      .controls
-                        .bootstrap-timepicker.input-append
-                          %input.span2.time(type="text", name="start_time")
-                          %span.add-on
-                            %i.icon-time
-                      %label.control-label End Time
-                      .controls
-                        .bootstrap-timepicker.input-append
-                          %input.span2.time(type="text", name="end_time")
-                          %span.add-on
-                            %i.icon-time
-                    .control-group.duration
-                      %label.control-label Duration
-                      .controls
-                        %input.span1(type="number", min=1, name="duration")
-                        seconds
-                    .control-group
-                      %label.control-label Repeat
-                      .controls.repeat
-                        %label.repeat-toggle.checkbox.toggle.well
+        .modal-dialog(role="document")
+          .modal-content
+            .modal-header
+              %h3#modalLabel Add Schedule
+            %form.form-horizontal.form-condensed#add-form
+              .modal-body
+                .container-fluid 
+                  .form-group
+                    %input.form-control(type="hidden", name="asset_id")
+                    %input.form-control(type="text", name="name", placeholder="Schedule Name")
+                %hr
+                  %ul.nav.nav-tabs.mb-3(role="tablist")
+                    %li.nav-item
+                      %a#tabEdit_1tab.nav-link.active(dataToggle="tab", href="#scheduleEdit_Tab1", role="tab", ariaControls="scheduleEdit_Tab1", ariaSelected="true") Summary
+                    %li.nav-item
+                      %a#tabEdit_2tab.nav-link(dataToggle="tab", href="#scheduleEdit_Tab2", role="tab", ariaControls="scheduleEdit_Tab2", ariaSelected="false") Advanced
+                  .tab-content
+                    #scheduleEdit_Tab1.tab-pane.active(role="tabpanel", ariaLabelledby="tabEdit_1tab")
+                      .form-group.start_date
+                        %label Start Date
+                        .date.input-group(dataProvide="datepicker")
+                          %input.form-control(type="text", name="start_date")
+                          -# %input.form-control(type="hidden", name="start_date")
+                          %span.input-group-append
+                            %span.input-group-text.oi.oi-calendar
+                      .form-group.end_date
+                        %label End Date
+                        .date.input-group(dataProvide="datepicker")
+                          %input.form-control.date(type="text", name="end_date")
+                          -# %input.form-control(type="hidden", name="end_date")
+                          %span.input-group-append
+                            %span.input-group-text.oi.oi-calendar
+                      .form-group
+                        %label.control-label Start Time
+                        .bootstrap-timepicker.input-group
+                          %input.form-control.span2.time(type="text", name="start_time")
+                          %span.input-group-append
+                            %span.input-group-text.oi.oi-clock
+                      .form-group
+                        %label.control-label End Time
+                        .bootstrap-timepicker.input-group
+                          %input.form-control.span2.time(type="text", name="end_time")
+                          %span.input-group-append
+                            %span.input-group-text.oi.oi-clock
+                      .form-group.duration
+                        %label.control-label Duration
+                        .input-group
+                          %input.form-control.span1(type="number", min=1, name="duration")
+                          %span.input-group-append
+                              %span.input-group-text seconds
+                      .form-group
+                        %label.control-label Repeat
+                        %label.switch-light.is_enabled-toggle
                           %input(type="checkbox", name="repeat")
-                          %p
-                            %span.on Yes
+                          %span.alert.alert-light
                             %span.off No
-                          %a.slide-button.btn.btn-primary
-                #scheduleEdit_Tab2.tab-pane
-                  %fieldset
-                    .control-group.pattern_type
-                      %label.control-label Pattern Type
-                      .controls
-                        %select.span2(name="pattern_type")
-                          %option(value="daily") Daily
-                          %option(value="weekly") Weekly
-                  %fieldset
-                    .control-group.pattern_days
-                      %label.control-label Days of Week
-                      .controls
-                        %select(multiple="multiple", name="pattern_days")
-                          %option(value="2") Monday
-                          %option(value="4") Tuesday
-                          %option(value="8") Wednesday
-                          %option(value="16") Thursday
-                          %option(value="32") Friday
-                          %option(value="64") Saturday
-                          %option(value="128") Sunday
-          .modal-footer
-            .pull-left.progress.progress-striped.active(style="display:none")
-              .bar
-            %input.btn.cancel(type="button", value="Cancel")
-            %input.btn.btn-primary(type="submit", value="Save")
+                            %span.on Yes
+                            %a.btn.btn-toggle
+                    #scheduleEdit_Tab2.tab-pane(role="tabpanel", ariaLabelledby="tabEdit_2tab")
+                      .form-group.pattern_type
+                        %label.control-label Pattern Type
+                        .input-group
+                          %select.form-control(name="pattern_type")
+                            %option(value="daily") Daily
+                            %option(value="weekly") Weekly
+                      .form-group.pattern_days
+                        %label.control-label Days of Week
+                        .input-group
+                          %select.form-control(multiple="multiple", name="pattern_days")
+                            %option(value="2") Monday
+                            %option(value="4") Tuesday
+                            %option(value="8") Wednesday
+                            %option(value="16") Thursday
+                            %option(value="32") Friday
+                            %option(value="64") Saturday
+                            %option(value="128") Sunday
+              .modal-footer
+                .pull-left.progress.progress-striped.active(style="display:none")
+                  .bar
+                %input.btn.cancel(type="button", value="Cancel")
+                %input.btn.btn-primary(type="submit", value="Save")
 
 
   %body
@@ -189,7 +185,7 @@
           %h1.page-header
             .float-right
               %a#add-schedule-button.btn.btn-primary(href="#")
-                %i.icon-plus.icon-white
+                %span.oi.oi-plus
                 Add Schedule
             Schedules for 
             %span#assetName

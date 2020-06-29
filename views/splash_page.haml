@@ -12,13 +12,13 @@
 
     .container
       .row
-        .span12
+        .col
           .page-header.text-center
             %h2 Welcome to PiSign
             %h1 &Pi;
 
       .row
-        .span12.text-center
+        .col.text-center
           - if ip_lookup:
             %p.lead To manage the content on this screen, just point your browser to:
 
@@ -26,11 +26,14 @@
               %a(href="${url}") ${url}
           - else:
             %p.lead Unable to resolve management IP.
+          
+          %strong System Time
+          %br ${system_time}
 
       %hr
 
       .row
-        .span12.text-center
+        .col.text-center
           %p.lead For more information or help visit<br />
             %a(href="http://jameskirsop.github.io/pisign/")
               http://jameskirsop.github.io/pisign/
