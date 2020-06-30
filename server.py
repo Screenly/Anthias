@@ -399,7 +399,7 @@ def settings_page():
 def system_info():
     viewer_log_file = '/tmp/screenly_viewer.log'
     if path.exists(viewer_log_file):
-        viewlog = check_output(['tail', '-n', '20', viewer_log_file]).split(b"\n")
+        viewlog = check_output(['tail', '-n', '20', viewer_log_file]).decode('ascii').split("\n")
     else:
         viewlog = ["(no viewer log present -- is only the screenly server running?)\n"]
 
@@ -407,8 +407,8 @@ def system_info():
     loadavg = round(getloadavg()[2], 2)
 
     try:
-        run_tvservice = check_output(['tvservice', '-s'])
-        display_info = re_split('\||,', run_tvservice.strip('state:'))
+        run_tvservice = check_output(['tvservice', '-s']).decode('ascii')
+        display_info = re_split('\||,', run_tvservice.strip('state: 0xa'))
     except:
         display_info = False
 
@@ -443,7 +443,7 @@ def splash_page():
         ip_lookup = False
         url = "Unable to look up your installation's IP address."
 
-    system_time = f'{datetime.now().astimezone().strftime("%c")} {str(datetime.now().astimezone().tzinfo)}'
+    system_time = '%s %s' % (datetime.now().astimezone().strftime('%c'), str(datetime.now().astimezone().tzinfo))
     return template('splash_page',
         ip_lookup=ip_lookup,
         url=url,

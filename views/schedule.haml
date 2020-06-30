@@ -7,26 +7,24 @@
 
     %link(href="/static/css/bootstrap.css", rel="stylesheet")
     %link(href="/static/css/datepicker.css", rel="stylesheet")
-    %link(href="/static/css/timepicker.css", rel="stylesheet")
     %link(href="/static/css/toggle-switch.css", rel="stylesheet")
     %link(href="/static/css/screenly.css", rel="stylesheet")
     %link(href="/static/css/open-iconic-bootstrap.css", rel="stylesheet")
+    %link(href="/static/css/fontawesome.min.css", rel="stylesheet")
+    %link(src="/static/js/tempusdominus-bootstrap-4.min.css", rel="stylesheet")
 
-
+    -# A bunch of libraries that are required...
     %script(src="/static/js/underscore.js")
-
     %script(src="/static/js/jquery-3.2.1.js")
-
     %script(src="/static/js/backbone.min.js") /needs jquery
-
-    %script(src="/static/js/jquery-ui-1.10.1.custom.min.js")
-
     %script(src="/static/js/popper.js")
     %script(src="/static/js/bootstrap.min.js") /needs jquery
-    %script(src="/static/js/bootstrap-datepicker.js")
-    %script(src="/static/js/bootstrap-timepicker.js")
-
     %script(src="/static/js/moment.js")
+    %script(src="/static/js/jquery-ui-1.10.1.custom.min.js")
+
+    %script(src="/static/js/bootstrap-datepicker.js")
+    %script(src="/static/js/tempusdominus-bootstrap-4.min.js")
+
     %script(src="/static/js/screenly-ose.js")
 
     %script(type="text/template", id="schedule-row-template")
@@ -85,7 +83,8 @@
                   .tab-content
                     #scheduleEdit_Tab1.tab-pane.active(role="tabpanel", ariaLabelledby="tabEdit_1tab")
                       .form-group.start_date
-                        %label Start Date
+                        %label Start Date 
+                          %span.small.strong *Required
                         .date.input-group(dataProvide="datepicker")
                           %input.form-control(type="text", name="start_date")
                           -# %input.form-control(type="hidden", name="start_date")
@@ -100,16 +99,18 @@
                             %span.input-group-text.oi.oi-calendar
                       .form-group
                         %label.control-label Start Time
-                        .bootstrap-timepicker.input-group
-                          %input.form-control.span2.time(type="text", name="start_time")
-                          %span.input-group-append
-                            %span.input-group-text.oi.oi-clock
+                        #dialogStartTime.input-group.date(dataTargetInput="nearest")
+                          %input.form-control.span2.datetimepicker-input(type="text", name="start_time", dataTarget="#dialogStartTime")
+                          %span.input-group-append(dataTarget="#dialogStartTime", dataToggle="datetimepicker")
+                            .input-group-text
+                              %i.fa.fa-clock-o
                       .form-group
                         %label.control-label End Time
-                        .bootstrap-timepicker.input-group
-                          %input.form-control.span2.time(type="text", name="end_time")
-                          %span.input-group-append
-                            %span.input-group-text.oi.oi-clock
+                        #dialogEndTime.input-group.date(dataTargetInput="nearest")
+                          %input.form-control.span2.datetimepicker-input(type="text", name="end_time", dataTarget="#dialogEndTime")
+                          %div.input-group-append(dataTarget="#dialogEndTime", dataToggle="datetimepicker")
+                            .input-group-text
+                              %i.fa.fa-clock-o
                       .form-group.duration
                         %label.control-label Duration
                         .input-group
@@ -158,7 +159,7 @@
           Sign
 
         .collapse.navbar-collapse
-          %ul.navbar-nav.mr-auto
+          %ul.navbar-nav.ml-auto
             - if not up_to_date:
               %li.update-available
                 %a(href="http://www.screenlyapp.com/ose.html#upgrade")
@@ -167,16 +168,16 @@
             
             %li.nav-item
               %a.nav-link(href="/settings")
-                %i.icon-cog.icon-white
+                %span.oi.oi-cog
                 Settings
             %li.nav-item
               %a.nav-link(href="/system_info")
-                %i.icon-tasks.icon-white
+                %span.oi.oi-info
                 System Info
 
             %li.nav-item
               %a.nav-link(href="/shutdown")
-                %i.icon-off.icon-white
+                %span.oi.oi-power-standby
                 Shutdown
 
     .container

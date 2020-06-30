@@ -409,7 +409,7 @@ def reload_settings():
 
 def wait_for_splash_page(url):
     max_retries = 20
-    retries = 0
+    retries = int(0)
     while retries < max_retries:
         fetch_head = req_head(url)
         if fetch_head.status_code == 200:
@@ -417,7 +417,7 @@ def wait_for_splash_page(url):
         else:
             sleep(1)
             retries += 1
-            logging.debug('Waiting for splash-page. Retry %d') % retries
+            logging.debug('Waiting for splash-page. Retry %d' % retries)
 
 
 

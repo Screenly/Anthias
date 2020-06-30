@@ -806,7 +806,6 @@
         alert(error);
       });
       this.edit = options.edit;
-      console.log('getting a template');
       ($('body')).append(this.$el.html(get_template('schedule-modal')));
       (this.$el.children(":first")).modal();
       (this.$('input[name="repeat"]')).prop('checked', this.model.get('repeat'));
@@ -815,18 +814,14 @@
       _.delay((function() {
         return (_this.$f('uri')).focus();
       }), 300);
-      (this.$('input.time')).timepicker({
-        minuteStep: 1,
-        showInputs: true,
-        disableFocus: true,
-        showMeridian: true,
-        defaultTime: false
-      });
-      (this.$('input.date')).datepicker({
-        format: 'mm/dd/yyyy',
-        autoclose: true,
-        todayHighlight: true,
-        clearBtn: true,
+      this.$('.input-group.date').datetimepicker({
+        format: 'HH:mm',
+        allowInputToggle: true,
+      //   // minuteStep: 1,
+      //   // showInputs: true,
+      //   // disableFocus: true,
+      //   // showMeridian: true,
+      //   // defaultTime: false
       });
       return false;
     }
@@ -857,11 +852,11 @@
               (this.$f("" + which + "_date")).datepicker('setDate', d.toDate());
             }
           }
-          if(this.model.get("" + which + "_time")){
-            d = date_to(this.model.get("" + which + "_time")).time();
-            this.$fieldValue("" + which + "_time",d.toString());
-            (this.$f("" + which + "_time")).timepicker('setTime', d.toString());
-          }
+          // if(this.model.get("" + which + "_time")){
+            // d = date_to(this.model.get("" + which + "_time")).time();
+            // this.$fieldValue("" + which + "_time",d.toString());
+            // (this.$f("" + which + "_time")).timepicker('setTime', d.toString());
+          // }
         }
       this.switchPatternType();
       this.delegateEvents();
@@ -1093,8 +1088,8 @@
     Schedule.prototype.defaults = function(){
       return {
         name: '',
-        start_time: now(),
-        end_time: now().setHours(now().getHours() + 1 > 23 ? 0 : now().getHours() + 1),
+        // start_time: now(),
+        // end_time: now().setHours(now().getHours() + 1 > 23 ? 0 : now().getHours() + 1),
         repeat: 0,
         duration: 30,
         priority: 0,

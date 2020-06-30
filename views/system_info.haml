@@ -8,6 +8,7 @@
     %link(href="/static/css/bootstrap.css", rel="stylesheet")
     %link(href="/static/css/screenly.css", rel="stylesheet")
     %script(src="/static/js/jquery-1.9.1.min.js")
+    %link(href="/static/css/open-iconic-bootstrap.css", rel="stylesheet")
 
   %body
     %nav.navbar.navbar-expand-lg.navbar-dark.bg-primary
@@ -18,7 +19,7 @@
           Sign
 
         .collapse.navbar-collapse
-          %ul.navbar-nav.mr-auto
+          %ul.navbar-nav.ml-auto
             - if not up_to_date:
               %li.update-available
                 %a(href="http://www.screenlyapp.com/ose.html#upgrade")
@@ -27,16 +28,16 @@
             
             %li.nav-item
               %a.nav-link(href="/settings")
-                %i.icon-cog.icon-white
+                %span.oi.oi-cog
                 Settings
             %li.nav-item
               %a.nav-link(href="/system_info")
-                %i.icon-tasks.icon-white
+                %span.oi.oi-info
                 System Info
 
             %li.nav-item
               %a.nav-link(href="/shutdown")
-                %i.icon-off.icon-white
+                %span.oi.oi-power-standby
                 Shutdown
 
     .container

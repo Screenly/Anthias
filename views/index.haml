@@ -154,7 +154,7 @@
           Sign
 
         .collapse.navbar-collapse
-          %ul.navbar-nav.mr-auto
+          %ul.navbar-nav.ml-auto
             - if not up_to_date:
               %li.update-available
                 %a(href="http://www.screenlyapp.com/ose.html#upgrade")
@@ -163,16 +163,16 @@
             
             %li.nav-item
               %a.nav-link(href="/settings")
-                %i.icon-cog.icon-white
+                %span.oi.oi-cog
                 Settings
             %li.nav-item
               %a.nav-link(href="/system_info")
-                %i.icon-tasks.icon-white
+                %span.oi.oi-info
                 System Info
 
             %li.nav-item
               %a.nav-link(href="/shutdown")
-                %i.icon-off.icon-white
+                %span.oi.oi-power-standby
                 Shutdown
 
 
@@ -217,3 +217,4 @@
       .container
         .copy
           Some components &copy; <strong>2012-2013.</strong> WireLoad, Inc.
+          %a(href="https://github.com/jameskirsop/pisign") Visit the PiSign GitHub Project
