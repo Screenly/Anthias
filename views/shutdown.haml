@@ -10,20 +10,20 @@
     %link(href="/static/css/timepicker.css", rel="stylesheet")
     %link(href="/static/css/toggle-switch.css", rel="stylesheet")
     %link(href="/static/css/screenly.css", rel="stylesheet")
+    %link(href="/static/css/open-iconic-bootstrap.css", rel="stylesheet")
 
     :javascript
       var default_duration = ${default_duration};
 
-    %script(src="/static/js/underscore-1.4.3.min.js")
+    %script(src="/static/js/underscore.js")
 
-    %script(src="/static/js/jquery-1.9.1.min.js")
-    %script(src="/static/js/jquery.iframe-transport.js")
+    %script(src="/static/js/jquery-3.2.1.js")
 
     %script(src="/static/js/backbone.min.js") /needs jquery
 
     %script(src="/static/js/jquery-ui-1.10.1.custom.min.js")
-    %script(src="/static/js/jquery.fileupload.js") /needs jqueryui.widget
 
+    %script(src="/static/js/popper.js")
     %script(src="/static/js/bootstrap.min.js") /needs jquery
     %script(src="/static/js/bootstrap-datepicker.js")
     %script(src="/static/js/bootstrap-timepicker.js")
@@ -32,16 +32,7 @@
     %script(src="/static/js/screenly-ose.js")
 
 
-    %script(type="text/template", id="shutdown-confirmation-template")
-      .modal(role="dialog", ariaHidden="true")
-        .modal-body
-          .alert.alert-error
-            %span.msg
-              Are you sure you would like to shutdown?
-        .modal-footer
-          %input.btn.cancel(type="button", value="Cancel")
-          %input.btn.btn-primary(type="submit", value="Shutdown")
-
+    -# %script(type="text/template", id="shutdown-confirmation-template")
 
   %body
     %nav.navbar.navbar-expand-lg.navbar-dark.bg-primary
@@ -83,10 +74,11 @@
         .col
           %h1.page-header
             .float-right
-              %form(method="POST")
+              %form#shutdownForm(method="POST")
                 %input(type="hidden", name="shutnow", value="1")
-                %button#shutdown-now-button.btn.btn-danger(type="submit")
-                  %i.icon-off.icon-white
+                -# %button#shutdown-now-button.btn.btn-danger(type="submit")
+                %button.btn.btn-danger(type="button",dataToggle="modal",dataTarget="#shutdownModal")
+                  %span.oi.oi-power-standby
                   Shutdown Now
             Shutdown PiSign
 
@@ -124,4 +116,15 @@
       .container
         .copy
           Some components &copy; <strong>2012-2013.</strong> WireLoad, Inc.
-          %a(href="https://github.com/jameskirsop/pisign") Visit the PiSign GitHub Project
+          %a(href="https://github.com/jameskirsop/pisign") Visit the PiSign's GitHub Project
+
+    #shutdownModal.modal(role="dialog", tabindex="-1", ariaHidden="true", areaLabelledby="shutdownModalLabel")
+      .modal-dialog(role="document")
+        .modal-content
+          .modal-body
+            .alert.alert-error
+              %span.msg
+                Are you sure you would like to shutdown?
+          .modal-footer
+            %input.btn.cancel(type="button", value="Cancel", dataDismiss="modal")
+            %input#confirmShutdown.btn.btn-danger(type="submit", value="Shutdown")

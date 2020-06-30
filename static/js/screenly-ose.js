@@ -1190,7 +1190,6 @@
     App.prototype.events = {
       'click #add-asset-button': 'add',
       'click #add-schedule-button': 'addSchedule',
-      'click #shutdown-now-button': 'shutdownNow',
       'click #add-shutdown-button': 'addShutdown'
     };
 
@@ -1213,11 +1212,14 @@
     };
 
     App.prototype.shutdownNow = function(e){
-      $('body').append(this.$el.html(get_template('shutdown-confirmation')))
+      console.log('hello');
+      ($('body')).append(this.$el.html(get_template('shutdown-confirmation')));
+      return false;
     }
 
     App.prototype.addShutdown = function(e){
-      alert('Hello')
+      alert('Hello');
+      return false;
     }
 
     return App;
@@ -1230,3 +1232,10 @@
     });
   });
 }).call(this);
+
+jQuery(document).ready(function(){
+  document.getElementById('confirmShutdown').onclick = function(){
+    console.log('Shut!!');
+    document.getElementById('shutdownForm').submit();
+  }
+});

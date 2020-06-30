@@ -426,10 +426,9 @@ def system_info():
 @route('/shutdown', method=["GET","POST"])
 def shutdown():
     if request.method == "POST":
-        if request.POST.get('shutnow', '1') == "1":
-            # sudo("shutdown", "-h", "-t now")
-            pass
-        return template('shutdown', message='Shutting Down!')
+        if request.forms.get('shutnow') == "1":
+            sudo("shutdown", "-h", "-t now")
+            return template('shutdown', message='The Pi is shutting down. It will take a minute or two for this to complete.')
     return template('shutdown')
 
 
