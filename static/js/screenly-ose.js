@@ -3,7 +3,7 @@
 
 
 (function() {
-  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, bool_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, routes, Schedule, EditScheduleView, ScheduleRowView, Schedules, SchedulesView, assetNiceName
+  var API, App, Asset, AssetRowView, Assets, AssetsView, EditAssetView, date_to, bool_to, delay, get_filename, get_mimetype, get_template, insertWbr, mimetypes, now, url_test, routes, Schedule, EditScheduleView, ScheduleRowView, Schedules, SchedulesView, assetNiceName, Shutdown, Shutdowns, ShutdownRowView, ShutdownsView, EditShutdownView
     _this = this,
     __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; },
     __hasProp = {}.hasOwnProperty,
@@ -817,11 +817,6 @@
       this.$('.input-group.date').datetimepicker({
         format: 'HH:mm',
         allowInputToggle: true,
-      //   // minuteStep: 1,
-      //   // showInputs: true,
-      //   // disableFocus: true,
-      //   // showMeridian: true,
-      //   // defaultTime: false
       });
       return false;
     }
@@ -1131,6 +1126,357 @@
 
   })(Backbone.Collection);
 
+  API.Shutdown = Shutdown = (function(_super) {
+
+    __extends(Shutdown, _super);
+
+    function Shutdown() {
+      var _this = this;
+      this.defaults = function() {
+        return Shutdown.prototype.defaults.apply(_this, arguments);
+      };
+      return Shutdown.__super__.constructor.apply(this, arguments);
+    }
+
+    Shutdown.prototype.idAttribute = "id";
+
+    Shutdown.prototype.fields = 'day time'.split(' ');
+
+    Shutdown.prototype.defaults = function() {
+      return {
+        // name: '',
+        // mimetype: 'webpage',
+      };
+    };
+
+    return Shutdown;
+
+  })(Backbone.Model);
+
+  API.Shutdowns = Shutdowns = (function(_super) {
+
+    __extends(Shutdowns, _super);
+
+    function Shutdowns() {
+      return Shutdowns.__super__.constructor.apply(this, arguments);
+    }
+    Shutdowns.prototype.url = "/api/shutdowns";
+    Shutdowns.prototype.model = Shutdown;
+    return Shutdowns;
+  })(Backbone.Collection);
+
+  ShutdownRowView = (function(_super) {
+
+    __extends(ShutdownRowView, _super);
+
+    function ShutdownRowView() {
+      var _this = this;
+      this.hidePopover = function() {
+        return ShutdownRowView.prototype.hidePopover.apply(_this, arguments);
+      };
+      this.showPopover = function() {
+        return ShutdownRowView.prototype.showPopover.apply(_this, arguments);
+      };
+      this["delete"] = function(e) {
+        return ShutdownRowView.prototype.delete.apply(_this, arguments);
+      };
+      this.redirectSchedule = function(e) {
+        return ShutdownRowView.prototype.redirectSchedule.apply(_this, arguments);
+      };
+      this.edit = function(e) {
+        return ShutdownRowView.prototype.edit.apply(_this, arguments);
+      };
+      this.setEnabled = function(enabled) {
+        return ShutdownRowView.prototype.setEnabled.apply(_this, arguments);
+      };
+      this.toggleIsEnabled = function(e) {
+        return ShutdownRowView.prototype.toggleIsEnabled.apply(_this, arguments);
+      };
+      this.render = function() {
+        return ShutdownRowView.prototype.render.apply(_this, arguments);
+      };
+      this.initialize = function(options) {
+        return ShutdownRowView.prototype.initialize.apply(_this, arguments);
+      };
+      return ShutdownRowView.__super__.constructor.apply(this, arguments);
+    }
+
+    ShutdownRowView.prototype.tagName = "tr";
+
+    ShutdownRowView.prototype.initialize = function(options) {
+      return this.template = get_template('shutdown-row');
+    };
+
+    ShutdownRowView.prototype.render = function() {
+      var json;
+      console.log(this.model);
+      this.$el.html(this.template(_.extend(json = this.model.toJSON(), {
+        day: {0:'Monday',1:'Tuesday',2:'Wednesday',3:'Thursday',4:'Friday',5:'Saturday',6:'Sunday'}[json.day]
+      })));
+      this.$el.prop('id', this.model.get('id'));
+      (this.$("button.delete-shutdown")).popover({
+        content: get_template('confirm-delete')
+      });
+      return this.el;
+    };
+
+    ShutdownRowView.prototype.events = {
+      // 'change .is_enabled-toggle input': 'toggleIsEnabled',
+      // 'click .edit-asset-button': 'edit',
+      'click button.delete-shutdown': 'showPopover',
+      // 'click .edit-schedule-button': 'redirectSchedule'
+    };
+
+    ShutdownRowView.prototype.edit = function(e) {
+      // new EditAssetView({
+      //   model: this.model,
+      //   edit: true
+      // });
+      return false;
+    };
+
+    ShutdownRowView.prototype["delete"] = function(e) {
+      var xhr,
+        _this = this;
+      this.hidePopover();
+      console.log('outside-delete');
+      console.log(this.model);
+      if ((xhr = this.model.destroy()) === !false) {
+        console.log('inside-delete');
+        xhr.done(function() {
+          return _this.remove();
+        });
+      } else {
+        this.remove();
+      }
+      return false;
+    };
+
+    ShutdownRowView.prototype.showPopover = function() {
+      if (!($('.popover')).length) {
+        (this.$("button.delete-shutdown")).popover('show');
+        ($('.confirm-delete')).click(this["delete"]);
+        ($(window)).one('click', this.hidePopover);
+      }
+      return false;
+    };
+
+    ShutdownRowView.prototype.hidePopover = function() {
+      (this.$("button.delete-shutdown")).popover('hide');
+      return false;
+    };
+
+    return ShutdownRowView;
+
+  })(Backbone.View);
+
+  ShutdownsView = (function(_super) {
+
+    __extends(ShutdownsView, _super);
+
+    function ShutdownsView() {
+      var _this = this;
+      this.render = function() {
+        return ShutdownsView.prototype.render.apply(_this, arguments);
+      };
+      this.update_order = function() {
+        return ShutdownsView.prototype.update_order.apply(_this, arguments);
+      };
+      this.initialize = function(options) {
+        return ShutdownsView.prototype.initialize.apply(_this, arguments);
+      };
+      return ShutdownsView.__super__.constructor.apply(this, arguments);
+    }
+
+    ShutdownsView.prototype.initialize = function(options) {
+      var event, _i, _len, _ref;
+      _ref = 'reset add remove sync'.split(' ');
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        event = _ref[_i];
+        this.collection.bind(event, this.render);
+      }
+    };
+
+    ShutdownsView.prototype.render = function() {
+      this.$("tbody.shutdowns").html('');
+      this.collection.each(function(model) {
+        return (_this.$("tbody.shutdowns")).append((new ShutdownRowView({
+          model: model
+        })).render());
+      });
+      return this.el;
+    };
+
+    return ShutdownsView;
+
+  })(Backbone.View);
+
+  EditShutdownView = (function(_super) {
+    __extends(EditShutdownView, _super);
+
+    function EditShutdownView() {
+      var _this = this;
+      this.initialize = function(options) {
+        return EditShutdownView.prototype.initialize.apply(_this, arguments);
+      }
+      this.cancel = function(options) {
+        return EditShutdownView.prototype.cancel.apply(_this, arguments);
+      }
+      this.render = function(options) {
+        return EditShutdownView.prototype.render.apply(_this, arguments);
+      }
+      this.save = function(e) {
+        return EditShutdownView.prototype.save.apply(_this, arguments);
+      };
+      this.$f = function(field) {
+        return EditShutdownView.prototype.$f.apply(_this, arguments);
+      };
+      this.toggleRepeat = function(e) {
+        return EditShutdownView.prototype.toggleRepeat.apply(_this, arguments);
+      };
+      this.$fieldValue = function() {
+        var field, val;
+        field = arguments[0], val = 2 <= arguments.length ? __slice.call(arguments, 1) : [];
+        return EditShutdownView.prototype.$fieldValue.apply(_this, arguments);
+      };
+      return EditShutdownView.__super__.constructor.apply(this, arguments);
+    }
+
+    EditShutdownView.prototype.$f = function(field) {
+      return this.$("[name='" + field + "']");
+    };
+
+    EditShutdownView.prototype.$fieldValue = function() {
+      var field, val, _ref;
+      field = arguments[0], val = 2 <= arguments.length ? __slice.call(arguments, 1) : [];
+      return (_ref = this.$f(field)).val.apply(_ref, val);
+    };
+
+    EditShutdownView.prototype.events = {
+      'submit form': 'save',
+      'click .cancel': 'cancel',
+    }
+
+    EditShutdownView.prototype.toggleRepeat = function() {
+      var val,
+        _this = this;
+      val = $("input[name='repeat']").val();
+      val = 1 - val;
+      $("input[name='repeat']").val(val);
+      return true;
+    }
+
+    EditShutdownView.prototype.prepareModelToSend = function(){
+      _ref1 = this.model.fields;
+      _results = [];
+      for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
+        field = _ref1[_j];
+        if (!(this.$f(field)).prop('disabled')) {
+          _results.push(this.model.set(field, this.$fieldValue(field), {
+            silent: true
+          }));
+        }
+      }
+      return _results;
+    }
+
+    EditShutdownView.prototype.viewmodel = function() {
+      var field, which, _i, _j, _len, _len1, _ref, _ref1, _results;
+      // _ref = ['start', 'end'];
+      // for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+      //   which = _ref[_i];
+      //   if (this.$fieldValue("" + which + "_time").length > 0){
+      //     this.$fieldValue("" + which + "_time", moment.utc(this.$fieldValue("" + which + "_time"),"hh:mm A").format("hh:mm A"));        
+      //   }
+      // }
+      return this.prepareModelToSend();
+    };
+
+    EditShutdownView.prototype.initialize = function(options){
+      var _this = this;
+      this.model.on("invalid", function(model, error){
+        alert(error);
+      });
+      this.edit = options.edit;
+      ($('body')).append(this.$el.html(get_template('shutdown-modal')));
+      (this.$el.children(":first")).modal();
+      this.model.bind('change', this.render);
+      this.render();
+
+      this.$('.input-group.date').datetimepicker({
+        format: 'HH:mm',
+        allowInputToggle: true,
+      });
+      return false;
+    }
+
+    EditShutdownView.prototype.render = function(){
+      var d, f, field, which, _i, _j, _k, _len, _len1, _len2, _ref, _ref1, _ref2;
+      if (this.edit) {
+        _ref = 'name'.split(' ');
+        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+          f = _ref[_i];
+          (this.$(f)).attr('disabled', true);
+        }
+      }
+      _ref1 = this.model.fields;
+        for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
+          field = _ref1[_j];
+          if ((this.$fieldValue(field)) !== this.model.get(field)) {
+            this.$fieldValue(field, this.model.get(field));
+          }
+        }
+      // this.switchPatternType();
+      this.delegateEvents();
+      return false; 
+    }
+
+    EditShutdownView.prototype.save = function(e) {
+      var save,
+        _this = this;
+      e.preventDefault();
+      this.prepareModelToSend();
+      if(!this.model.isValid()){
+        return false;
+      }
+      this.viewmodel();
+      save = null;
+      save = this.model.save();
+      if(!save){
+        return false;
+      }
+      save.done(function(data) {
+        // _this.model.id = data.asset_id;
+        if (!_this.model.collection) {
+          _this.collection.add(_this.model);
+        }
+        (_this.$el.children(":first")).modal('hide');
+        _.extend(_this.model.attributes, data);
+        if (!_this.edit) {
+          return _this.model.collection.add(_this.model);
+        }
+      });
+      return false;
+    }
+
+    EditShutdownView.prototype.cancel = function() {
+      return (this.$el.children(":first")).modal('hide');
+    }
+
+    EditShutdownView.prototype.switchPatternType = function() {
+      switch($('select[name="pattern_type"]').val()) {
+        case 'daily':
+          $('select[name="pattern_days"]').prop('disabled', true);
+          break;
+        case 'weekly':
+          $('select[name="pattern_days"]').prop('disabled', false);
+          break;
+      }
+    }
+    return EditShutdownView;
+  })(Backbone.View);
+
+
   API.App = App = (function(_super) {
 
     __extends(App, _super);
@@ -1161,11 +1507,18 @@
       Routes = Backbone.Router.extend({
         routes: {
           "asset/:asset_id/schedule": "loadSchedule",
+          "shutdown": "loadShutdowns",
           "*path": "loadAssets"
         },
         loadSchedule: function(asset_id){
           assetNiceName = asset_id;
           (API.schedules = new Schedules(Schedule, {'asset_id':asset_id})).fetch();
+        },
+        loadShutdowns: function(){
+          (API.shutdowns = new Shutdowns()).fetch();
+          document.getElementById('confirmShutdown').onclick = function(){
+            document.getElementById('shutdownForm').submit();
+          }
         },
         loadAssets: function(){
           (API.assets = new Assets()).fetch();
@@ -1177,6 +1530,12 @@
         return API.assetsView = new AssetsView({
           collection: API.assets,
           el: this.$('#assets')
+        });
+      } else if (API.shutdowns) {
+        console.log('here');
+        return API.shutdownsView = new ShutdownsView({
+          collection: API.shutdowns,
+          el: this.$('#shutdowns'),
         });
       } else if (API.schedules) {
         return API.schedulesView = new SchedulesView({
@@ -1211,14 +1570,18 @@
       return false;
     };
 
-    App.prototype.shutdownNow = function(e){
-      console.log('hello');
-      ($('body')).append(this.$el.html(get_template('shutdown-confirmation')));
+    App.prototype.addShutdown = function(e) {
+      new EditShutdownView({
+        model: new Shutdown({}, {
+          collection: API.shutdowns
+        })
+      });
       return false;
-    }
+    };
 
-    App.prototype.addShutdown = function(e){
-      alert('Hello');
+
+    App.prototype.shutdownNow = function(e){
+      ($('body')).append(this.$el.html(get_template('shutdown-confirmation')));
       return false;
     }
 
@@ -1232,10 +1595,3 @@
     });
   });
 }).call(this);
-
-jQuery(document).ready(function(){
-  document.getElementById('confirmShutdown').onclick = function(){
-    console.log('Shut!!');
-    document.getElementById('shutdownForm').submit();
-  }
-});

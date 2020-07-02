@@ -11,6 +11,8 @@
     %link(href="/static/css/toggle-switch.css", rel="stylesheet")
     %link(href="/static/css/screenly.css", rel="stylesheet")
     %link(href="/static/css/open-iconic-bootstrap.css", rel="stylesheet")
+    %link(href="/static/css/fontawesome.min.css", rel="stylesheet")
+    %link(src="/static/js/tempusdominus-bootstrap-4.min.css", rel="stylesheet")
 
     :javascript
       var default_duration = ${default_duration};
@@ -20,19 +22,80 @@
     %script(src="/static/js/jquery-3.2.1.js")
 
     %script(src="/static/js/backbone.min.js") /needs jquery
-
+    %script(src="/static/js/moment.js")
     %script(src="/static/js/jquery-ui-1.10.1.custom.min.js")
 
     %script(src="/static/js/popper.js")
     %script(src="/static/js/bootstrap.min.js") /needs jquery
     %script(src="/static/js/bootstrap-datepicker.js")
-    %script(src="/static/js/bootstrap-timepicker.js")
+    %script(src="/static/js/tempusdominus-bootstrap-4.min.js")
 
-    %script(src="/static/js/moment.js")
     %script(src="/static/js/screenly-ose.js")
 
+    %script(type="text/template", id="request-error-template")
+      .container
+        .alert.alert-error
+          %button.close(type="button", dataDismiss="alert") &times;
+          %span.msg
+            The operation failed. Please reload the page and try again.
 
     -# %script(type="text/template", id="shutdown-confirmation-template")
+    %script(type="text/template", id="shutdown-row-template")
+      %td
+        :plain
+          <%= day %>
+      %td
+        :plain
+          <%= time %>
+      %td(style="width:7%")
+        -# %button.delete-shutdown.btn.btn-danger Delete
+        %button.delete-shutdown.btn.btn-danger(type="button", dataTitle="Are you sure?", dataPlacement="left", dataHtml="true", dataTrigger="manual") Delete
+
+          %i.icon-trash.icon-white
+
+    %script(type="text/template", id="confirm-delete-template")
+      .clearfix
+        .pull-left
+          %a.confirm-delete.btn.btn-medium.btn-danger(href="#") Delete
+        .pull-right
+          %a.cancel-delete.btn.btn-medium(href="#") Cancel
+
+
+    %script(type="text/template", id="shutdown-modal-template")
+      .modal.hide.fade(tabindex="-1", role="dialog", ariaLabelledby="myModalLabel", ariaHidden="true")
+        .modal-dialog(role="document")
+          .modal-content
+            .modal-header
+              %h3#modalLabel Add Shutdown Time
+            %form#add-form
+              .modal-body
+                .container-fluid
+                  .form-group
+                    %label.control-label Day
+                    .input-group
+                      %select.form-control(name="day")
+                        %option(value="0") Monday
+                        %option(value="1") Tuesday
+                        %option(value="2") Wednesday
+                        %option(value="3") Thursday
+                        %option(value="4") Friday
+                        %option(value="5") Saturday
+                        %option(value="6") Sunday
+                  .form-group
+                    %label.control-label Start Time
+                    #dialogShutdownTime.input-group.date(dataTargetInput="nearest")
+                      %input.form-control.span2.datetimepicker-input(type="text", name="time", dataTarget="#dialogShutdownTime")
+                      %span.input-group-append(dataTarget="#dialogShutdownTime", dataToggle="datetimepicker")
+                        .input-group-text
+                          %i.fa.fa-clock-o
+
+              .modal-footer
+                -# .pull-left.progress.progress-striped.active(style="display:none")
+                -#   .bar
+                %input.btn.cancel(type="button", value="Cancel")
+                %input.btn.btn-primary(type="submit", value="Save")
+
+
 
   %body
     %nav.navbar.navbar-expand-lg.navbar-dark.bg-primary
@@ -92,7 +155,8 @@
             If you require your PiSign to shutdown at particular times, you can define those times below.
           %p
             Your PiSign will commence shut down after the asset playing at the designated time has finished being displayed.
-
+      #shutdowns.row
+        .col
           %section
             .header
                 Shutdown Times
@@ -102,13 +166,7 @@
                   %th Day
                   %th Time
                   %th
-              %tbody
-                %tr
-                  %td Wednesday
-                  %td 18:00
-                  %td(style="width:7%")
-                    %button.delete-shutdown.btn.btn-danger Delete
-                      %i.icon-trash.icon-white
+              %tbody.shutdowns
 
 
 

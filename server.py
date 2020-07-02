@@ -21,7 +21,7 @@ __author__ = "James Kirsop"
 __version__ = "0.1.5"
 __email__ = "james.kirsop@gmail.com"
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from functools import wraps
 from hurry.filesize import size
 from os import path, makedirs, getloadavg, statvfs, mkdir, getenv
@@ -260,6 +260,35 @@ def prepare_schedule(request):
 
     return schedule
 
+def prepare_shutdown(request):
+    data = request.POST or request.FORM or {}
+
+    if 'model' in data:
+        data = json.loads(data['model'])
+
+    print(data)
+
+    def get(key):
+        val = data.get(key, '')
+        return val.strip() if isinstance(val, str) else val
+
+    if all([get('day'),get('time')]):
+
+        shutdown = {
+            'day': int(get('day')),
+            'time': time(*(tuple(int(x) for x in get('time').split(':')))),
+        }
+        # shutdown['time'] = datetime.strptime(get('time'), "%H:%M")
+        # print( 
+        #     tuple(int(x) for x in get('time').split(':'))
+        # )
+        # shutdown['time'] = time(*(tuple(int(x) for x in get('time').split(':'))))
+        # print(shutdown['time'])
+        # print(shutdown)
+    else:
+        raise Exception("Please provide both Day and Time values.")
+
+    return shutdown
 
 
 @route('/api/assets', method="GET")
@@ -357,6 +386,25 @@ def remove_asset(asset_id, schedule_id):
     response.status = 204  # return an OK with no content
 
 
+################################
+# Shutdown Routes
+
+@route('/api/shutdowns', method="GET")
+def api_shutdowns():
+    assets = shutdown_helper.read(db_conn)
+    assets.sort(key=lambda x: (x['day'], x['time']))
+    return make_json_response(assets)
+
+@route('/api/shutdowns', method="POST")
+@api
+def add_shutdown():
+    return shutdown_helper.create(db_conn, prepare_shutdown(request))
+
+@route('/api/shutdowns/:shutdown_id', method="DELETE")
+@api
+def remove_shutdown(shutdown_id):
+    shutdown_helper.delete(db_conn, shutdown_id)
+    response.status = 204  # return an OK with no content
 ################################
 # Views
 ################################

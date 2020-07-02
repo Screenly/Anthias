@@ -21,5 +21,6 @@ remove_schedule = 'delete from schedules where id=?'
 exists_table_shutdown = "SELECT name FROM sqlite_master WHERE type='table' AND name='shutdown'"
 
 read_shutdown = lambda keys: 'select ' + comma(keys) + ' from shutdown'
+read_shutdown_single = lambda keys: 'select ' + comma(keys) + ' from shutdown where id=?'
 create_shutdown = lambda keys: 'insert into shutdown (' + comma(keys) + ') values (' + comma(['?'] * len(keys)) + ')'
-remove_shutdown = 'delete from shutdown where day=? AND time=?'
+remove_shutdown = 'delete from shutdown where id=?'
