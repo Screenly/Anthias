@@ -56,7 +56,6 @@ def create(conn, schedule):
     """
     Create a database record for an schedule.
     Returns the schedule.
-    Asset's is_active field is updated before returning.
     """
     with db.commit(conn) as c:
         c.execute(queries.create_schedule(schedule.keys()), list(schedule.values()))

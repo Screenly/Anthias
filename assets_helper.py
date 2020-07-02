@@ -60,12 +60,25 @@ def create(conn, asset):
     Create a database record for an asset.
     Returns the asset.
     Asset's is_active field is updated before returning.
+    A default schedule is also created.
     """
     if 'is_active' in asset:
         asset.pop('is_active')
+    print(asset)
     with db.commit(conn) as c:
         c.execute(queries.create(list(asset.keys())), list(asset.values()))
     asset.update({'is_active': is_active(asset)})
+    default_schedule = {
+        'asset_id' : asset['asset_id'],
+        'name': 'Default Schedule',
+        'start_date': datetime.date.today(),
+        'duration': 30,
+        'repeat': 0,
+        'priority': 0,
+        'pattern_type': '',
+        'pattern_days': None,
+    }
+    schedules_helper.create(conn, default_schedule)
     return asset
 
 
