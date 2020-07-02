@@ -10,30 +10,26 @@
 
   %body.splash
 
-    .container
-      .row
-        .col
-          .page-header.text-center
+    .container.h-100
+      .row.h-100.align-items-center
+        .col.text-center.my-auto
+          .page-header
             %h2 Welcome to PiSign
             %h1 &Pi;
 
-      .row
-        .col.text-center
           - if ip_lookup:
             %p.lead To manage the content on this screen, just point your browser to:
 
-            .well.lead
+            %p.lead
               %a(href="${url}") ${url}
           - else:
             %p.lead Unable to resolve management IP.
           
-          %strong System Time
-          %br ${system_time}
+          %p
+            %strong System Time
+            %br ${system_time}
 
-      %hr
-
-      .row
-        .col.text-center
+          %hr
           %p.lead For more information or help visit<br />
             %a(href="http://jameskirsop.github.io/pisign/")
               http://jameskirsop.github.io/pisign/

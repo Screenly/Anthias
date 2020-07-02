@@ -535,6 +535,9 @@ if __name__ == "__main__":
             c.execute(queries.exists_table_schedule)
             if c.fetchone() is None:
                 c.execute(schedules_helper.create_schedules_table)
+            c.execute(queries.exists_table_shutdown)
+            if c.fetchone() is None:
+                c.execute(shutdown_helper.create_shutdown_table)
         run(host=settings.get_listen_ip(),
             port=settings.get_listen_port(),
             reloader=True)

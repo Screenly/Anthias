@@ -40,7 +40,7 @@ def determine_next(conn):
 	def convert_to_date(shut):
 		today = datetime.now().today()
 		ahead = shut['day'] - today.weekday()
-		if ahead <= 0:
+		if ahead < 0 or (ahead == 0 and shut['time'] < datetime.now().time()):
 			ahead += 7
 		future_datetime = datetime.now() + timedelta(days=ahead)
 		return future_datetime.replace(hour=shut['time'].hour,minute=shut['time'].minute,second=0,microsecond=0)

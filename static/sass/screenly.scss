@@ -6,6 +6,10 @@ $footerHeight: 40px;
 //   margin-top: 60px;
 //   margin-bottom: $footerHeight + $baseLineHeight;
 // }
+html{height:100%;}
+body.splash{
+  height:100%;
+}
 
 table{
   @extend .table;

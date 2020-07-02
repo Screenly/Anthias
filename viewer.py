@@ -17,6 +17,7 @@ from time import sleep, time
 import json
 import logging
 import sh
+from sh import sudo
 import signal
 from ctypes import cdll
 
@@ -29,6 +30,7 @@ from utils import url_fails
 
 import db
 import assets_helper
+import shutdown_helper
 # Define to none to ensure we refresh
 # the settings.
 last_settings_refresh = None
@@ -423,6 +425,11 @@ def wait_for_splash_page(url):
 
 def asset_loop(scheduler):
     # check_update()
+    global next_shutdown
+    if next_shutdown and (datetime.now() > next_shutdown):
+        logging.info('Shutdown time reached. Commencing system shutdown!')
+        sudo("shutdown", "-h", "-t now")
+    next_shutdown = shutdown_helper.determine_next(db_conn)
     asset = scheduler.get_next_asset()
 
     if asset is None:
@@ -470,6 +477,8 @@ if __name__ == "__main__":
 
     global db_conn
     db_conn = db.conn(settings['database'])
+    
+    next_shutdown = None
 
     # Create folder to hold HTML-pages
     html_folder = '/tmp/screenly_html/'

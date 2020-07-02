@@ -10823,6 +10823,14 @@ a.text-dark:hover, a.text-dark:focus {
   }
 }
 
+html {
+  height: 100%;
+}
+
+body.splash {
+  height: 100%;
+}
+
 .navbar .container a.brand span {
   font-size: 15px;
 }
