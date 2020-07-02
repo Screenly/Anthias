@@ -5,6 +5,7 @@ import schedules_helper
 from classes import AvailableDays
 import operator
 import string
+from settings import settings
 
 FIELDS = ["asset_id", "name", "uri", "duration", "mimetype", "is_enabled", "nocache", "play_order"]
 
@@ -68,11 +69,12 @@ def create(conn, asset):
     with db.commit(conn) as c:
         c.execute(queries.create(list(asset.keys())), list(asset.values()))
     asset.update({'is_active': is_active(asset)})
+    settings.load()
     default_schedule = {
         'asset_id' : asset['asset_id'],
         'name': 'Default Schedule',
         'start_date': datetime.date.today(),
-        'duration': 30,
+        'duration': settings['default_duration'],
         'repeat': 0,
         'priority': 0,
         'pattern_type': '',
