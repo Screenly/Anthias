@@ -540,11 +540,11 @@
       (this.$(".asset-icon")).addClass((function() {
         switch (this.model.get("mimetype")) {
           case "video":
-            return "icon-facetime-video";
+            return "oi-video";
           case "image":
-            return "icon-picture";
+            return "oi-image";
           case "webpage":
-            return "icon-globe";
+            return "oi-globe";
           default:
             return "";
         }

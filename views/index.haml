@@ -34,14 +34,13 @@
     %script(type="text/template", id="asset-row-template")
       %td.asset_row_name
         %img(src="static/img/drag-handle.png")
-        %i.asset-icon
+        %span.asset-icon.oi
         :plain
           <%= name %>
       %td.asset_row_btns(style="width:23%")
         %button.edit-schedule-button.btn(type="button")
-          %span.oi.oi-time
-
-          Schedule
+          Schedule 
+          %span.oi.oi-clock
         %button.edit-asset-button.btn(type="button")
           %span.oi.oi-pencil
         %button.delete-asset-button.btn(type="button", dataTitle="Are you sure?", dataPlacement="left", dataHtml="true", dataTrigger="manual")
