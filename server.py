@@ -440,6 +440,7 @@ def prepare_asset(request, unique_name=False):
     }
 
     uri = escape(get('uri').encode('utf-8'))
+    uri = get('uri').replace('&amp;', '\&')
 
     if uri.startswith('/'):
         if not path.isfile(uri):
@@ -527,6 +528,7 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
     }
 
     uri = escape(get('uri'))
+    uri = get('uri').replace('&amp;', '\&')
 
     if uri.startswith('/'):
         if not path.isfile(uri):
