@@ -8,6 +8,9 @@ import re
 import sh
 import string
 import zmq
+import resource
+
+from psutil import virtual_memory
 from datetime import datetime, timedelta
 from mixpanel import Mixpanel, MixpanelException
 from netifaces import gateways
@@ -18,9 +21,7 @@ from threading import Thread
 from requests import get as req_get
 from signal import alarm, signal, SIGALRM, SIGUSR1
 from time import sleep
-
 from settings import settings, LISTEN, PORT, ZmqConsumer
-
 from lib import assets_helper, html_templates
 from lib import db
 from lib.diagnostics import get_git_branch, get_git_short_hash
@@ -28,9 +29,20 @@ from lib.github import fetch_remote_hash, remote_branch_available
 from lib.errors import SigalrmException
 from lib.utils import get_active_connections, url_fails, touch, is_balena_app, is_ci, get_node_ip
 
+# setting memory resource limits to prevent viewer from rendering the pi unresponsive due to memory consumption
+mem = virtual_memory()
+mem_soft = (mem.total * .75)
+mem_hard = (mem.total * .90)
+num_format = "{:.0f}".format
+
+setlimit = 'resource.setrlimit(resource.RLIMIT_AS, (' + num_format(mem_soft) + ',' + num_format(mem_hard) + '))'
+setlimit
+
+logging.info("The current memory resource limit is set as:")
+logging.info(setlimit)
 
 __author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2019, Screenly, Inc"
+__copyright__ = "Copyright 2012-2020, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 
