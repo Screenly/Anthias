@@ -5,8 +5,8 @@ BRANCH_VERSION=
 MANAGE_NETWORK=
 UPGRADE_SYSTEM=
 
-if [ -f config ]; then
-  source config
+if [ -f .env ]; then
+  source .env
 fi
 
 while getopts ":w:b:n:s:" arg; do
