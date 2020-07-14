@@ -30,13 +30,14 @@ from lib.errors import SigalrmException
 from lib.utils import get_active_connections, url_fails, touch, is_balena_app, is_ci, get_node_ip
 
 # setting memory resource limits to prevent viewer from rendering the pi unresponsive due to memory consumption
-mem = virtual_memory()
-mem_soft = (mem.total * .75)
-mem_hard = (mem.total * .90)
-num_format = "{:.0f}".format
+def setlimit():
+    mem = virtual_memory()
+    mem_soft = (mem.total * .75)
+    mem_hard = (mem.total * .90)
+    num_format = "{:.0f}".format
+    setlimit = 'resource.setrlimit(resource.RLIMIT_AS, (' + num_format(mem_soft) + ',' + num_format(mem_hard) + '))'
 
-setlimit = 'resource.setrlimit(resource.RLIMIT_AS, (' + num_format(mem_soft) + ',' + num_format(mem_hard) + '))'
-setlimit
+setlimit()
 
 logging.info("The current memory resource limit is set as:")
 logging.info(setlimit)
