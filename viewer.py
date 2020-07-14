@@ -37,7 +37,7 @@ mem_hard = (mem.total * .90)
 num_format = "{:.0f}".format
 
 setlimit = 'resource.setrlimit(resource.RLIMIT_AS, (' + num_format(mem_soft) + ',' + num_format(mem_hard) + '))'
-setlimit
+exec(setlimit)
 
 logging.info("The current memory resource limit is set as:")
 logging.info(setlimit)
