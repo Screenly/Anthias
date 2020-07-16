@@ -1,6 +1,6 @@
 [Unit]
 Description=Screenly Viewer
-After=matchbox.service screenly-web.service
+After=matchbox.service
 
 [Service]
 WorkingDirectory=/home/pi/screenly
