@@ -1616,7 +1616,7 @@ else:
     SWAGGER_URL = '/api/docs'
     swagger_address = getenv("SWAGGER_HOST", my_ip)
 
-    if settings['use_ssl']:
+    if settings['use_ssl'] or is_demo_node:
         API_URL = 'https://{}/api/swagger.json'.format(swagger_address)
     elif LISTEN == '127.0.0.1' or swagger_address != my_ip:
         API_URL = "http://{}/api/swagger.json".format(swagger_address)
@@ -1627,7 +1627,7 @@ else:
         SWAGGER_URL,
         API_URL,
         config={
-            'app_name': "Screenly API"
+            'app_name': "Screenly OSE API"
         }
     )
     app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)

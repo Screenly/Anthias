@@ -7,7 +7,7 @@ services:
       - SWAGGER_HOST=ose.demo.screenlyapp.com
     image: screenly/ose-dev-server:latest
     ports:
-      - 80:8080
+      - 127.0.0.1:8080:8080
     restart: always
     mem_limit: 300M
     volumes:
@@ -16,6 +16,7 @@ services:
       - screenly-volume:/home/pi/.screenly
   screenly-celery:
     image: screenly/ose-dev-celery:latest
+    restart: always
     depends_on:
       - redis
       - screenly-server
