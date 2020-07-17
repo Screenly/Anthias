@@ -144,6 +144,10 @@
                                         {% if context.date_format == 'dd/mm/yyyy' %} selected="selected" {% endif %}>
                                     day/month/year
                                 </option>
+                                <option value="yyyy/mm/dd"
+                                        {% if context.date_format == 'yyyy/mm/dd' %} selected="selected" {% endif %}>
+                                    year/month/day
+                                </option>
                                 <option value="mm-dd-yyyy"
                                         {% if context.date_format == 'mm-dd-yyyy' %} selected="selected" {% endif %}>
                                     month-day-year
@@ -152,6 +156,10 @@
                                         {% if context.date_format == 'dd-mm-yyyy' %} selected="selected" {% endif %}>
                                     day-month-year
                                 </option>
+                                <option value="yyyy-mm-dd"
+                                        {% if context.date_format == 'yyyy-mm-dd' %} selected="selected" {% endif %}>
+                                    year-month-day
+                                </option>
                                 <option value="mm.dd.yyyy"
                                         {% if context.date_format == 'mm.dd.yyyy' %} selected="selected" {% endif %}>
                                     month.day.year
@@ -159,6 +167,10 @@
                                 <option value="dd.mm.yyyy"
                                         {% if context.date_format == 'dd.mm.yyyy' %} selected="selected" {% endif %}>
                                     day.month.year
+                                </option>
+                                <option value="yyyy.mm.dd"
+                                        {% if context.date_format == 'yyyy.mm.dd' %} selected="selected" {% endif %}>
+                                    year.month.day
                                 </option>
                             </select>
                         </div>
@@ -325,11 +337,19 @@
                                     <form id="upgrade-form">
                                         <div id="branch-group-radio" class="form-group">
                                             <label>Choose the branch you want to use</label>
-                                            <div class="custom-control custom-radio">
-                                                <input type="radio" class="custom-control-input" id="latest_branch"
-                                                       name="groupOfBranch" value="latest" checked>
-                                                <label class="custom-control-label"
-                                                       for="latest_branch">Latest</label>
+                                            <div class="form-inline">
+                                                <div class="custom-control custom-radio mr-4">
+                                                    <input type="radio" class="custom-control-input" id="latest_branch"
+                                                           name="groupOfBranch" value="latest" checked>
+                                                    <label class="custom-control-label"
+                                                           for="latest_branch">Latest</label>
+                                                </div>
+                                                <div class="custom-control custom-radio">
+                                                    <input type="radio" class="custom-control-input" id="production_branch"
+                                                           name="groupOfBranch" value="production">
+                                                    <label class="custom-control-label"
+                                                           for="production_branch">Production</label>
+                                                </div>
                                             </div>
                                         </div>
                                         <div class="form-group row">

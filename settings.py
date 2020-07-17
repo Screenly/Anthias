@@ -178,7 +178,7 @@ class ZmqConsumer:
 
         self.socket = self.context.socket(zmq.PUSH)
         self.socket.setsockopt(zmq.LINGER, 0)
-        self.socket.connect('tcp://127.0.0.1:5558')
+        self.socket.connect('tcp://{}:5558'.format(LISTEN))
 
         sleep(1)
 

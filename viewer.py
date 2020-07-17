@@ -5,6 +5,8 @@ import logging
 import pydbus
 import random
 import re
+
+import requests
 import sh
 import string
 import zmq
@@ -129,7 +131,7 @@ class ZmqSubscriber(Thread):
 
     def run(self):
         socket = self.context.socket(zmq.SUB)
-        socket.connect('tcp://127.0.0.1:10001')
+        socket.connect('tcp://{}:10001'.format(LISTEN))
         socket.setsockopt(zmq.SUBSCRIBE, 'viewer')
         while True:
             msg = socket.recv()
@@ -323,7 +325,7 @@ def browser_url(url, cb=lambda _: True, force=False):
 
         """Uzbl handles full URI format incorrect: scheme://uname:passwd@domain:port/path
         We need to escape @"""
-        escaped_url = current_browser_url.replace('@', '\\@')
+        escaped_url = current_browser_url.replace('@', '\\@').replace('&amp;amp;', '\\&')
 
         browser_send('uri ' + escaped_url, cb=cb)
         logging.info('current url is %s', current_browser_url)
@@ -539,6 +541,15 @@ def wait_for_node_ip(seconds):
             sleep(1)
 
 
+def wait_for_server(retries, wt=1):
+    for _ in range(retries):
+        try:
+            requests.get('http://{0}:{1}'.format(LISTEN, PORT))
+            break
+        except requests.exceptions.ConnectionError:
+            sleep(wt)
+
+
 def main():
     global db_conn, scheduler
     setup()
@@ -548,6 +559,8 @@ def main():
     subscriber.start()
 
     scheduler = Scheduler()
+
+    wait_for_server(5)
 
     if is_balena_app():
         load_browser()
