@@ -41,7 +41,7 @@ To learn more about Screenly, please visit the official website at [Screenly.io]
 
 Quick links:
 
- * [FAQ](https://support.screenly.io/hc/en-us/sections/202652366-Frequently-Asked-Questions-FAQ-)
+ * [FAQ](https://support.screenly.io/hc/en-us/categories/360002606694-OSE)
  * [Screenly OSE Forum](https://forums.screenly.io/c/screenly-ose)
  * [Screenly OSE Home](https://www.screenly.io/ose/)
  * [Live Demo](https://ose.demo.screenlyapp.com/)
