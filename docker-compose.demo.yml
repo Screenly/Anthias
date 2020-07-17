@@ -14,6 +14,24 @@ services:
       - ./:/home/pi/screenly:ro
       - screenly-assets-volume:/home/pi/screenly_assets
       - screenly-volume:/home/pi/.screenly
+  screenly-celery:
+    image: screenly/ose-dev-celery:latest
+    depends_on:
+      - redis
+      - screenly-server
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    image: screenly-ose-celery
+    volumes:
+      - ./:/home/pi/screenly:ro
+      - screenly-assets-volume:/home/pi/screenly_assets
+      - screenly-volume:/home/pi/.screenly
+  redis:
+    image: redis:alpine
+    logging:
+      driver: none
+    restart: always
 
 volumes:
   screenly-assets-volume:

@@ -44,9 +44,9 @@ Quick links:
  * [FAQ](https://support.screenly.io/hc/en-us/sections/202652366-Frequently-Asked-Questions-FAQ-)
  * [Screenly OSE Forum](https://forums.screenly.io/c/screenly-ose)
  * [Screenly OSE Home](https://www.screenly.io/ose/)
- * [Live Demo](http://ose.demo.screenlyapp.com/)
+ * [Live Demo](https://ose.demo.screenlyapp.com/)
  * [QA Checklist](https://www.forgett.com/checklist/1789089623)
- * [API Docs](http://ose.demo.screenlyapp.com/api/docs/)
+ * [API Docs](https://ose.demo.screenlyapp.com/api/docs/)
 
 Screenly OSE works on all Raspberry Pi versions, including Raspberry Pi Zero and Raspberry Pi 3 Model B.
 
@@ -57,12 +57,7 @@ To simplify development of the server module of Screenly OSE, we've created a Do
 Assuming you're in the source code repository, simply run:
 
 ```
-$ docker run --rm -it \
-    --name=screenly-dev \
-    -e 'LISTEN=0.0.0.0' \
-    -p 8080:8080 \
-    -v $(pwd):/home/pi/screenly \
-    screenly/ose-dev-server
+$ docker-compose -f docker-compose.dev.yml up
 ```
 
 ## Running the Unit Tests
