@@ -22,7 +22,6 @@ services:
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    image: screenly-ose-celery
     volumes:
       - ./:/home/pi/screenly:ro
       - screenly-assets-volume:/home/pi/screenly_assets
