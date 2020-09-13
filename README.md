@@ -44,7 +44,7 @@ Quick links:
  * [FAQ](https://support.screenly.io/hc/en-us/categories/360002614653-FAQs)
  * [Screenly OSE Forum](https://forums.screenly.io/c/screenly-ose)
  * [Screenly OSE Home](https://www.screenly.io/ose/)
- * [Live Demo](http://ose.demo.screenlyapp.com/)
+ * [Live Demo](https://ose.demo.screenlyapp.com/)
  * [QA Checklist](https://www.forgett.com/checklist/1789089623)
  * [API Docs](https://developer.screenlyapp.com/)
  
