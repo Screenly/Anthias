@@ -167,7 +167,7 @@ sudo apt-get autoclean
 sudo apt-get clean
 sudo find /usr/share/doc -depth -type f ! -name copyright -delete
 sudo find /usr/share/doc -empty -delete
-sudo rm -rf /usr/share/man /usr/share/groff /usr/share/info /usr/share/lintian /usr/share/linda /var/cache/man
+sudo rm -rf /usr/share/man /usr/share/groff /usr/share/info/* /usr/share/lintian /usr/share/linda /var/cache/man
 sudo find /usr/share/locale -type f ! -name 'en' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' -delete
 sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' -exec rm -r {} \;
 
