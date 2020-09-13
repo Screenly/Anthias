@@ -41,7 +41,7 @@ exec(setlimit)
 
 logging.info("The current memory resource limit is set as:")
 logging.info(setlimit)
-#
+# setting memory resource limits finalized
 
 __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2020, Screenly, Inc"
