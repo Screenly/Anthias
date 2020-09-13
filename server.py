@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 __author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2019, Screenly, Inc"
+__copyright__ = "Copyright 2012-2020, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 import json
@@ -527,7 +527,7 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
         'nocache': get('nocache')
     }
 
-    uri = escape(get('uri'))
+    uri = escape(get('uri').encode('utf-8'))
     uri = get('uri').replace('&amp;', '\&')
 
     if uri.startswith('/'):
