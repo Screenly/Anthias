@@ -36,3 +36,5 @@ pip-log.txt
 venv
 node_modules
 *.retry
+
+.env

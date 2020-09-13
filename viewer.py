@@ -6,6 +6,7 @@ import pydbus
 import random
 import re
 import resource
+import requests
 import sh
 import string
 import zmq
@@ -553,6 +554,15 @@ def wait_for_node_ip(seconds):
             sleep(1)
 
 
+def wait_for_server(retries, wt=1):
+    for _ in range(retries):
+        try:
+            requests.get('http://{0}:{1}'.format(LISTEN, PORT))
+            break
+        except requests.exceptions.ConnectionError:
+            sleep(wt)
+
+
 def main():
     global db_conn, scheduler
     setup()
@@ -562,6 +572,8 @@ def main():
     subscriber.start()
 
     scheduler = Scheduler()
+
+    wait_for_server(5)
 
     if is_balena_app():
         load_browser()
