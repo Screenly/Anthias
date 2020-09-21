@@ -507,6 +507,8 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
             "Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
 
     name = escape(get('name'))
+    name = get('name').replace('&amp;', '\&')
+    
     if unique_name:
         with db.conn(settings['database']) as conn:
             names = assets_helper.get_names_of_assets(conn)
