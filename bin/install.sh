@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+clear;
+
 WEB_UPGRADE=false
 BRANCH_VERSION=
 MANAGE_NETWORK=
@@ -31,7 +33,8 @@ if [ "$WEB_UPGRADE" = false ]; then
   fi
 
   # Set color of logo
-  tput setaf 4
+  tput setaf 6
+  tput bold
 
   cat << EOF
        _____                           __         ____  _____ ______
@@ -146,7 +149,7 @@ fi
 sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' /etc/apt/sources.list
 sudo apt update -y
 sudo apt-get purge -y python-setuptools python-pip python-pyasn1
-sudo apt-get install -y python-dev git-core libffi-dev libssl-dev
+sudo apt-get install -y python-dev git-core libffi-dev libssl-dev whois
 curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 
 if [ "$NETWORK" == 'y' ]; then
@@ -183,12 +186,29 @@ else
   sudo chmod 0440 /etc/sudoers.d/010_pi-nopasswd
 fi
 
-# Setup a new pi password
-if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ] && [ "$WEB_UPGRADE" = false ]; then
+#######################################################################
+# Setup a new pi password if default password "raspberry" detected
+# clear any previous set variables used for password detection
+_CURRENTPISALT=''
+_CURRENTPIUSERPWD=''
+_DEFAULTPIPWD=''
+
+# currently only looking for $6$/sha512, will expand later on to all algorithms potentially used
+_CURRENTPISALT=$(sudo cat /etc/shadow | grep pi | awk -F '$' '{print $3}')
+_CURRENTPIUSERPWD=$(sudo cat /etc/shadow | grep pi | awk -F ':' '{print $2}')
+_DEFAULTPIPWD=$(mkpasswd -m sha-512 raspberry $_CURRENTPISALT)
+
+if [[ "$_CURRENTPIUSERPWD" == "$_DEFAULTPIPWD" ]]; then
+echo "(Warning): The default raspberry pi password was detected! - please change it now..."
+  if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ] && [ "$WEB_UPGRADE" = false ]; then
   set +e
   passwd
   set -e
+  fi
+else
+  echo "The default raspberry pi password was not detected, continuing with installation..."
 fi
+#######################################################################
 
 echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
 
