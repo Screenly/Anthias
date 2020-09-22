@@ -189,6 +189,9 @@ fi
 
 #######################################################################
 # Setup a new pi password if default password "raspberry" detected
+
+if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ] && [ "$WEB_UPGRADE" = false ]; then
+
 # clear any previous set variables used for password detection
 _CURRENTPISALT=''
 _CURRENTPIUSERPWD=''
@@ -199,15 +202,14 @@ _CURRENTPISALT=$(sudo cat /etc/shadow | grep pi | awk -F '$' '{print $3}')
 _CURRENTPIUSERPWD=$(sudo cat /etc/shadow | grep pi | awk -F ':' '{print $2}')
 _DEFAULTPIPWD=$(mkpasswd -m sha-512 raspberry $_CURRENTPISALT)
 
-if [[ "$_CURRENTPIUSERPWD" == "$_DEFAULTPIPWD" ]]; then
-echo "(Warning): The default raspberry pi password was detected! - please change it now..."
-  if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ] && [ "$WEB_UPGRADE" = false ]; then
-  set +e
-  passwd
-  set -e
+  if [[ "$_CURRENTPIUSERPWD" == "$_DEFAULTPIPWD" ]]; then
+    echo "(Warning): The default raspberry pi password was detected! - please change it now..."
+    set +e
+    passwd
+    set -e
+  else
+    echo "The default raspberry pi password was not detected, continuing with installation..."
   fi
-else
-  echo "The default raspberry pi password was not detected, continuing with installation..."
 fi
 #######################################################################
 
