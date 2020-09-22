@@ -5,6 +5,10 @@ BRANCH_VERSION=
 MANAGE_NETWORK=
 UPGRADE_SYSTEM=
 
+if [ -f .env ]; then
+  source .env
+fi
+
 while getopts ":w:b:n:s:" arg; do
   case "${arg}" in
     w)
@@ -56,19 +60,21 @@ EOF
     exit 1
   fi
 
-  echo && read -p "Would you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to Docker (y/N)" -n 1 -r -s EXP && echo
-  if [ "$EXP" != 'y'  ]; then
-    echo && read -p "Would you like to use the development (master) branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
-    if [ "$DEV" != 'y'  ]; then
-      export DOCKER_TAG="production"
-      BRANCH="production"
+  if [ -z "${BRANCH}" ]; then
+    echo && read -p "Would you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to Docker (y/N)" -n 1 -r -s EXP && echo
+    if [ "$EXP" != 'y'  ]; then
+      echo && read -p "Would you like to use the development (master) branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
+      if [ "$DEV" != 'y'  ]; then
+        export DOCKER_TAG="production"
+        BRANCH="production"
+      else
+        export DOCKER_TAG="latest"
+        BRANCH="master"
+      fi
     else
-      export DOCKER_TAG="latest"
-      BRANCH="master"
+      export DOCKER_TAG="experimental"
+      BRANCH="experimental"
     fi
-  else
-    export DOCKER_TAG="experimental"
-    BRANCH="experimental"
   fi
 
   echo && read -p "Would you like to install the WoTT agent to help you manage security of your Raspberry Pi? (y/N)" -n 1 -r -s WOTT && echo
@@ -87,16 +93,17 @@ EOF
   fi
 
 elif [ "$WEB_UPGRADE" = true ]; then
-
-  if [ "$BRANCH_VERSION" = "latest" ]; then
-    export DOCKER_TAG="latest"
-    BRANCH="master"
-  elif [ "$BRANCH_VERSION" = "production" ]; then
-    export DOCKER_TAG="production"
-    BRANCH="production"
-  else
-    echo -e "Invalid -b parameter."
-    exit 1
+  if [ -z "${BRANCH}" ]; then
+    if [ "$BRANCH_VERSION" = "latest" ]; then
+      export DOCKER_TAG="latest"
+      BRANCH="master"
+    elif [ "$BRANCH_VERSION" = "production" ]; then
+      export DOCKER_TAG="production"
+      BRANCH="production"
+    else
+      echo -e "Invalid -b parameter."
+      exit 1
+    fi
   fi
 
   if [ "$MANAGE_NETWORK" = false ]; then
@@ -130,12 +137,14 @@ else
   export DEVICE_TYPE="pi1"
 fi
 
-if [ "$WEB_UPGRADE" = false ]; then
-  set -x
-  REPOSITORY=${1:-https://github.com/screenly/screenly-ose.git}
-else
-  set -e
-  REPOSITORY=https://github.com/screenly/screenly-ose.git
+if [ -z "${REPOSITORY}" ]; then
+  if [ "$WEB_UPGRADE" = false ]; then
+    set -x
+    REPOSITORY=${1:-https://github.com/screenly/screenly-ose.git}
+  else
+    set -e
+    REPOSITORY=https://github.com/screenly/screenly-ose.git
+  fi
 fi
 
 sudo mkdir -p /etc/ansible
@@ -173,7 +182,7 @@ sudo find /usr/share/doc -depth -type f ! -name copyright -delete
 sudo find /usr/share/doc -empty -delete
 sudo rm -rf /usr/share/man /usr/share/groff /usr/share/info/* /usr/share/lintian /usr/share/linda /var/cache/man
 sudo find /usr/share/locale -type f ! -name 'en' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' -delete
-sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' -exec rm -r {} \;
+sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' ! -name 'locale.alias' -exec rm -r {} \;
 
 cd /home/pi/screenly && git rev-parse HEAD > /home/pi/.screenly/latest_screenly_sha
 sudo chown -R pi:pi /home/pi
