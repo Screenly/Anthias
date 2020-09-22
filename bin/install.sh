@@ -1,7 +1,5 @@
 #!/bin/bash -e
 
-clear;
-
 WEB_UPGRADE=false
 BRANCH_VERSION=
 MANAGE_NETWORK=
@@ -32,6 +30,9 @@ if [ "$WEB_UPGRADE" = false ]; then
     exit 1
   fi
 
+  # clear screen
+  clear;
+  
   # Set color of logo
   tput setaf 6
   tput bold
@@ -99,9 +100,9 @@ elif [ "$WEB_UPGRADE" = true ]; then
   fi
 
   if [ "$MANAGE_NETWORK" = false ]; then
-    NETWORK="y"
-  elif [ "$MANAGE_NETWORK" = true ]; then
     NETWORK="n"
+  elif [ "$MANAGE_NETWORK" = true ]; then
+    NETWORK="y"
   else
     echo -e "Invalid -n parameter."
     exit 1
