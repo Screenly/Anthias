@@ -417,6 +417,8 @@ def prepare_asset(request, unique_name=False):
         raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
 
     name = escape(get('name'))
+    name = get('name').encode('utf-8')
+    
     if unique_name:
         with db.conn(settings['database']) as conn:
             names = assets_helper.get_names_of_assets(conn)
@@ -439,8 +441,8 @@ def prepare_asset(request, unique_name=False):
         'nocache': get('nocache'),
     }
 
-    uri = escape(get('uri').encode('utf-8'))
-    uri = get('uri').replace('&amp;', '\&')
+    uri = escape(get('uri'))
+    uri = get('uri').encode('utf-8')
 
     if uri.startswith('/'):
         if not path.isfile(uri):
@@ -507,7 +509,7 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
             "Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
 
     name = escape(get('name'))
-    name = get('name').replace('&amp;', '\&')
+    name = get('name').encode('utf-8')
     
     if unique_name:
         with db.conn(settings['database']) as conn:
@@ -529,8 +531,8 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
         'nocache': get('nocache')
     }
 
-    uri = escape(get('uri').encode('utf-8'))
-    uri = get('uri').replace('&amp;', '\&')
+    uri = escape(get('uri'))
+    uri = get('uri').encode('utf-8')
 
     if uri.startswith('/'):
         if not path.isfile(uri):
