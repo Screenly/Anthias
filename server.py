@@ -416,7 +416,8 @@ def prepare_asset(request, unique_name=False):
     if not all([get('name'), get('uri'), get('mimetype')]):
         raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
 
-    name = escape(get('name').replace('&amp;', '&'))
+    ampfix = "&amp;"
+    name = escape(get('name').replace(ampfix, '&'))
     
     if unique_name:
         with db.conn(settings['database']) as conn:
@@ -441,7 +442,7 @@ def prepare_asset(request, unique_name=False):
     }
     
     # without the encoding to ascii, we raise UnicodeEncodeError, but non-ascii characters still wont be parsed
-    uri = (get('name').replace('&amp;', '&')).encode('ascii', 'backslashreplace')
+    uri = (get('name').replace(ampfix, '&')).encode('ascii', 'backslashreplace')
 
     if uri.startswith('/'):
         if not path.isfile(uri):
@@ -507,7 +508,8 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
         raise Exception(
             "Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
 
-    name = escape(get('name').replace('&amp;', '&'))
+    ampfix = "&amp;"
+    name = escape(get('name').replace(ampfix, '&'))
     
     if unique_name:
         with db.conn(settings['database']) as conn:
@@ -530,7 +532,7 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
     }
 
     # without the encoding to ascii, we raise UnicodeEncodeError, but non-ascii characters still wont be parsed
-    uri = (get('name').replace('&amp;', '&')).encode('ascii', 'backslashreplace')
+    uri = (get('name').replace(ampfix, '&')).encode('ascii', 'backslashreplace')
 
     if uri.startswith('/'):
         if not path.isfile(uri):
