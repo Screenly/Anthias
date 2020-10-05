@@ -442,7 +442,7 @@ def prepare_asset(request, unique_name=False):
     }
     
     # without the encoding to ascii, we raise UnicodeEncodeError, but non-ascii characters still wont be parsed
-    uri = (get('name').replace(ampfix, '&')).encode('ascii', 'backslashreplace')
+    uri = (get('uri').replace(ampfix, '&')).encode('ascii', 'backslashreplace')
 
     if uri.startswith('/'):
         if not path.isfile(uri):
@@ -532,7 +532,7 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
     }
 
     # without the encoding to ascii, we raise UnicodeEncodeError, but non-ascii characters still wont be parsed
-    uri = (get('name').replace(ampfix, '&')).encode('ascii', 'backslashreplace')
+    uri = (get('uri').replace(ampfix, '&')).encode('ascii', 'backslashreplace')
 
     if uri.startswith('/'):
         if not path.isfile(uri):
