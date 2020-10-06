@@ -101,3 +101,9 @@ fi
 if [[ "$SCREENLYSERVICE" = "celery" ]]; then
     run_celery
 fi
+
+# remove temp screenly files from containers
+rm -rf /tmp/screenly
+
+# remove swap to reduce wear on SD card
+swapoff -a
