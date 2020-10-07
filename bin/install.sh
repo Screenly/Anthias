@@ -77,12 +77,6 @@ EOF
     fi
   fi
 
-  echo && read -p "Would you like to install the WoTT agent to help you manage security of your Raspberry Pi? (y/N)" -n 1 -r -s WOTT && echo
-  if [ "$WOTT" = 'y' ]; then
-      curl -s https://packagecloud.io/install/repositories/wott/agent/script.deb.sh | sudo bash
-      sudo apt install wott-agent
-  fi
-
   echo && read -p "Do you want Screenly to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
 
   echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
