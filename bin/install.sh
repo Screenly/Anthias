@@ -200,7 +200,7 @@ fi
 # Setup a new pi password if default password "raspberry" detected
 
 if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ] && [ "$WEB_UPGRADE" = false ]; then
-
+set +x
 # clear any previous set variables used for password detection
 _CURRENTPISALT=''
 _CURRENTPIUSERPWD=''
@@ -216,8 +216,10 @@ _DEFAULTPIPWD=$(mkpasswd -m sha-512 raspberry $_CURRENTPISALT)
     set +e
     passwd
     set -e
+    set -x
   else
     echo "The default raspberry pi password was not detected, continuing with installation..."
+    set -x
   fi
 fi
 #######################################################################
