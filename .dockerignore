@@ -1,5 +1,9 @@
 *.py[co]
 *.git
+*.github
+docs/*
+tests/assets/*
+tests/*.py
 
 # Packages
 *.egg
