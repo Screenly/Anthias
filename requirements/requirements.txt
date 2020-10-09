@@ -1,6 +1,6 @@
 ansible==2.8.8
 celery==4.3.0
-certifi==2018.4.16
+certifi==2020.6.20
 cffi==1.13.2
 click==6.7
 configparser==3.5.0
@@ -15,7 +15,7 @@ gevent-websocket==0.10.1
 gevent==1.2.2
 gunicorn==19.8.1
 hurry.filesize==0.9
-jinja2==2.10.1
+Jinja2==2.10.1
 kombu==4.6.3  # cause of downgrade https://github.com/celery/kombu/issues/1063
 Mako==0.7.3
 MarkupSafe==1.0
@@ -24,6 +24,7 @@ netifaces==0.10.4
 psutil==5.6.7
 pyasn1==0.1.8
 pydbus==0.6.0
+pygobject==3.22.0
 pyOpenSSL==19.1.0
 python-dateutil==2.4.2
 pytz==2012d
