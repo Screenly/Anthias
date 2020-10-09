@@ -156,6 +156,11 @@ sudo apt-get purge -y python-setuptools python-pip python-pyasn1
 sudo apt-get install -y python-dev git-core libffi-dev libssl-dev whois
 curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 
+# users who chose experimental and then reverted back to master or production need docker removed
+if [ "$BRANCH" != "experimental" ]; then
+	sudo apt-get purge -y docker-ce docker-ce-cli containerd.io > /dev/null
+fi
+
 if [ "$NETWORK" == 'y' ]; then
   export MANAGE_NETWORK=true
   sudo apt-get install -y network-manager
