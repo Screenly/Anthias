@@ -28,9 +28,9 @@ pyOpenSSL==19.1.0
 python-dateutil==2.4.2
 pytz==2012d
 pyzmq==16.0.2
-redis==3.5.3
+redis==3.2.0
 requests[security]==2.22.0
-sh==1.08
+sh==1.8
 six==1.11.0
 uptime==2.0.2
 urllib3==1.25.10
