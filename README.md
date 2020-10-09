@@ -46,7 +46,7 @@ Quick links:
  * [Screenly OSE Home](https://www.screenly.io/ose/)
  * [Live Demo](https://ose.demo.screenlyapp.com/)
  * [QA Checklist](https://www.forgett.com/checklist/1789089623)
- * [API Docs](https://developer.screenlyapp.com/)
+ * [API Docs](https://ose.demo.screenlyapp.com/api/docs/)
  
 
 Screenly OSE works on all Raspberry Pi versions, including Raspberry Pi Zero and Raspberry Pi 3 Model B.
