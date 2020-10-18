@@ -83,7 +83,7 @@ EOF
         echo
         exit 1
       fi
-      LOCAL_INSTALL="true"
+      DOCKER_TAG="latest"
     else
       echo "No /home/pi/screenly/ found. Please rename or create and run this script"
       exit 1
