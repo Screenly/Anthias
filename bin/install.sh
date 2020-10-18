@@ -56,22 +56,41 @@ EOF
     exit 1
   fi
 
-  if [ -z "${BRANCH}" ]; then
-    echo && read -p "Would you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to Docker (y/N)" -n 1 -r -s EXP && echo
-    if [ "$EXP" != 'y'  ]; then
-      echo && read -p "Would you like to use the development (master) branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
-      if [ "$DEV" != 'y'  ]; then
-        export DOCKER_TAG="production"
-        BRANCH="production"
+  echo  
+  read -p "Are you executing this script from a local repository? (/home/pi/screenly/bin/install.sh) (y/N)" -n 1 -r -s LOCAL && echo
+  if [ "$LOCAL" != 'y' ]; then
+    if [ -z "${BRANCH}" ]; then
+      echo && read -p "Would you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to Docker (y/N)" -n 1 -r -s EXP && echo
+      if [ "$EXP" != 'y'  ]; then
+        echo && read -p "Would you like to use the development (master) branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
+        if [ "$DEV" != 'y'  ]; then
+          export DOCKER_TAG="production"
+          BRANCH="production"
+        else
+          export DOCKER_TAG="latest"
+          BRANCH="master"
+        fi
       else
-        export DOCKER_TAG="latest"
-        BRANCH="master"
+        export DOCKER_TAG="experimental"
+        BRANCH="experimental"
       fi
+    fi  
+  else
+    DIR="/home/pi/screenly/"
+    if [ -d "$DIR" ]; then
+      read -p "Is /home/pi/screenly your local repository? Do you still want to continue? (y/N)" -n 1 -r -s DIR_CHECK
+      if [ "$DIR_CHECK" != 'y' ]; then
+        echo
+        exit 1
+      fi
+      LOCAL_INSTALL="true"
     else
-      export DOCKER_TAG="experimental"
-      BRANCH="experimental"
+      echo "No /home/pi/screenly/ found. Please rename or create and run this script"
+      exit 1
     fi
   fi
+	
+
 
   echo && read -p "Do you want Screenly to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
 
@@ -160,8 +179,9 @@ else
 fi
 
 sudo pip install ansible==2.8.2
-
-sudo -u pi ansible localhost -m git -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH"
+if [ "$LOCAL" != 'y' ]; then
+    sudo -u pi ansible localhost -m git -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH"
+fi
 cd /home/pi/screenly/ansible
 
 sudo -E ansible-playbook site.yml $EXTRA_ARGS
