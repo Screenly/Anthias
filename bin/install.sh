@@ -58,23 +58,8 @@ EOF
 
   echo  
   read -p "Are you executing this script from a local repository? (/home/pi/screenly/bin/install.sh) (y/N)" -n 1 -r -s LOCAL && echo
-  if [ "$LOCAL" != 'y' ]; then
-    if [ -z "${BRANCH}" ]; then
-      echo && read -p "Would you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to Docker (y/N)" -n 1 -r -s EXP && echo
-      if [ "$EXP" != 'y'  ]; then
-        echo && read -p "Would you like to use the development (master) branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
-        if [ "$DEV" != 'y'  ]; then
-          export DOCKER_TAG="production"
-          BRANCH="production"
-        else
-          export DOCKER_TAG="latest"
-          BRANCH="master"
-        fi
-      else
-        export DOCKER_TAG="experimental"
-        BRANCH="experimental"
-      fi
-    fi  
+  if [ "$LOCAL" != 'y' ]; then 
+    echo "Working with GitHub repository..\n"
   else
     DIR="/home/pi/screenly/"
     if [ -d "$DIR" ]; then
@@ -82,14 +67,30 @@ EOF
       if [ "$DIR_CHECK" != 'y' ]; then
         echo
         exit 1
+      else 
+        echo "The following questions are only relevant for the Docker images.."
       fi
-      DOCKER_TAG="latest"
     else
       echo "No /home/pi/screenly/ found. Please rename or create and run this script"
       exit 1
     fi
   fi
-	
+	if [ -z "${BRANCH}" ]; then
+    echo && read -p "Would you like to use the experimental branch? It contains the last major changes, such as the new browser and migrating to Docker (y/N)" -n 1 -r -s EXP && echo
+    if [ "$EXP" != 'y'  ]; then
+      echo && read -p "Would you like to use the development (master) branch? You will get the latest features, but things may break. (y/N)" -n 1 -r -s DEV && echo
+      if [ "$DEV" != 'y'  ]; then
+        export DOCKER_TAG="production"
+        BRANCH="production"
+      else
+        export DOCKER_TAG="latest"
+        BRANCH="master"
+      fi
+    else
+      export DOCKER_TAG="experimental"
+      BRANCH="experimental"
+    fi
+  fi 
 
 
   echo && read -p "Do you want Screenly to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
