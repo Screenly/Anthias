@@ -34,8 +34,12 @@ if [ "$WEB_UPGRADE" = false ]; then
     exit 1
   fi
 
+  # clear screen
+  clear;
+  
   # Set color of logo
-  tput setaf 4
+  tput setaf 6
+  tput bold
 
   cat << EOF
        _____                           __         ____  _____ ______
@@ -97,9 +101,9 @@ elif [ "$WEB_UPGRADE" = true ]; then
   fi
 
   if [ "$MANAGE_NETWORK" = false ]; then
-    NETWORK="y"
-  elif [ "$MANAGE_NETWORK" = true ]; then
     NETWORK="n"
+  elif [ "$MANAGE_NETWORK" = true ]; then
+    NETWORK="y"
   else
     echo -e "Invalid -n parameter."
     exit 1
@@ -149,8 +153,13 @@ fi
 sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' /etc/apt/sources.list
 sudo apt update -y
 sudo apt-get purge -y python-setuptools python-pip python-pyasn1
-sudo apt-get install -y python-dev git-core libffi-dev libssl-dev
+sudo apt-get install -y python-dev git-core libffi-dev libssl-dev whois
 curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
+
+# users who chose experimental and then reverted back to master or production need docker removed
+if [ "$BRANCH" != "experimental" ]; then
+	sudo apt-get purge -y docker-ce docker-ce-cli containerd.io > /dev/null
+fi
 
 if [ "$NETWORK" == 'y' ]; then
   export MANAGE_NETWORK=true
@@ -159,9 +168,9 @@ else
   export MANAGE_NETWORK=false
 fi
 
-sudo pip install ansible==2.8.2
+sudo pip install ansible==2.8.8
 
-sudo -u pi ansible localhost -m git -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH"
+sudo -u pi ansible localhost -m git -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH force=yes"
 cd /home/pi/screenly/ansible
 
 sudo -E ansible-playbook site.yml $EXTRA_ARGS
@@ -170,9 +179,9 @@ sudo apt-get autoclean
 sudo apt-get clean
 sudo find /usr/share/doc -depth -type f ! -name copyright -delete
 sudo find /usr/share/doc -empty -delete
-sudo rm -rf /usr/share/man /usr/share/groff /usr/share/info /usr/share/lintian /usr/share/linda /var/cache/man
+sudo rm -rf /usr/share/man /usr/share/groff /usr/share/info/* /usr/share/lintian /usr/share/linda /var/cache/man
 sudo find /usr/share/locale -type f ! -name 'en' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' -delete
-sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' -exec rm -r {} \;
+sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' ! -name 'locale.alias' -exec rm -r {} \;
 
 cd /home/pi/screenly && git rev-parse HEAD > /home/pi/.screenly/latest_screenly_sha
 sudo chown -R pi:pi /home/pi
@@ -186,12 +195,33 @@ else
   sudo chmod 0440 /etc/sudoers.d/010_pi-nopasswd
 fi
 
-# Setup a new pi password
+#######################################################################
+# Setup a new pi password if default password "raspberry" detected
+
 if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ] && [ "$WEB_UPGRADE" = false ]; then
-  set +e
-  passwd
-  set -e
+set +x
+# clear any previous set variables used for password detection
+_CURRENTPISALT=''
+_CURRENTPIUSERPWD=''
+_DEFAULTPIPWD=''
+
+# currently only looking for $6$/sha512, will expand later on to all algorithms potentially used
+_CURRENTPISALT=$(sudo cat /etc/shadow | grep pi | awk -F '$' '{print $3}')
+_CURRENTPIUSERPWD=$(sudo cat /etc/shadow | grep pi | awk -F ':' '{print $2}')
+_DEFAULTPIPWD=$(mkpasswd -m sha-512 raspberry $_CURRENTPISALT)
+
+  if [[ "$_CURRENTPIUSERPWD" == "$_DEFAULTPIPWD" ]]; then
+    echo "(Warning): The default raspberry pi password was detected! - please change it now..."
+    set +e
+    passwd
+    set -e
+    set -x
+  else
+    echo "The default raspberry pi password was not detected, continuing with installation..."
+    set -x
+  fi
 fi
+#######################################################################
 
 echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
 
