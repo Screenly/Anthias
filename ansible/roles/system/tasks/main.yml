@@ -175,6 +175,7 @@
       - lightdm-gtk-greeter
       - dphys-swapfile
       - rabbitmq-server
+      - pix-plym-splash
     state: absent
     
 - name: Remove cups/printing related packages
