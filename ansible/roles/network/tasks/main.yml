@@ -13,7 +13,7 @@
   command: systemctl disable screenly-net-watchdog.timer
   when: screenly_network_manager_exist
 
-- name: Remove network manger and watchdog
+- name: Remove network manager and watchdog
   file:
     state: absent
     path: "/usr/sbin/{{ item }}"
@@ -60,16 +60,16 @@
 - set_fact: resin_wifi_version_file_exist="{{resin_wifi_version_file.stat.exists}}"
   when: ansible_distribution_major_version|int >= 9
 
-- name: Download resin-wifi-connect release
+- name: Download balena wifi-connect release
   get_url:
-    url: "https://github.com/resin-io/resin-wifi-connect/releases/download/v{{ resin_wifi_connect_version }}/wifi-connect-v{{ resin_wifi_connect_version }}-linux-rpi.tar.gz"
+    url: "https://github.com/balena-io/wifi-connect/releases/download/v{{ resin_wifi_connect_version }}/wifi-connect-v{{ resin_wifi_connect_version }}-linux-rpi.tar.gz"
     dest: /home/pi/resin-wifi-connect.tar.gz
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
     - manage_network|bool == true
 
-- name: Unarchive resin-wifi-connect release
+- name: Unarchive balena wifi-connect release
   unarchive:
     src: /home/pi/resin-wifi-connect.tar.gz
     dest: /home/pi
@@ -100,7 +100,7 @@
     - not resin_wifi_version_file_exist
     - manage_network|bool == true
 
-- name: Touch resin-wifi-connect version file
+- name: Touch balena wifi-connect version file
   file:
     state: touch
     path: "/usr/local/share/wifi-connect/ui/{{ resin_wifi_connect_version }}"
