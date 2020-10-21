@@ -37,11 +37,11 @@ Should you want to upgrade to the latest development version (for instance if yo
 
 To learn more about Screenly, please visit the official website at [Screenly.io](http://www.screenly.io).
 
-## Developer Documentation for Screenly-OSE
+## Developer Documentation for Screenly OSE
 
-If you are a developer looking for documentation about this project, please see our Wiki page here: [Dev Docs](https://github.com/Screenly/screenly-ose/wiki/Development-Documentation).
+If you are a developer looking for documentation about this project, please see our Wiki page here: [Dev Docs](https://github.com/Screenly/screenly-ose/wiki/Developer-Documentation).
 
-***
+
 
 [![An introduction to digital signage with Screenly OSE](http://img.youtube.com/vi/FQte5yP0azE/0.jpg)](http://www.youtube.com/watch?v=FQte5yP0azE)
 
