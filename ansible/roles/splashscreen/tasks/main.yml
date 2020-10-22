@@ -26,7 +26,7 @@
     creates: /etc/rcS.d/S01asplashscreen
   when: ansible_distribution_major_version|int <= 7
 
-# If Jessie or newer
+# If not Jessie
 
 - name: Remove older versions
   file:
@@ -41,7 +41,7 @@
   command: update-rc.d asplashscreen remove
   when: ansible_distribution_major_version|int > 7
 
-- name: Installs dependencies
+- name: Installs dependencies (not Jessie)
   apt:
     name:
       - plymouth
@@ -62,8 +62,8 @@
   command: plymouth-set-default-theme -R screenly
   when: ansible_distribution_major_version|int > 7
 
-#- name: Set plymouthd.default
-#  copy:
-#    src: plymouthd.default
-#    dest: /usr/share/plymouth/plymouthd.default
-#  when: ansible_distribution_major_version|int > 7
+- name: Set plymouthd.default
+  copy:
+    src: plymouthd.default
+    dest: /usr/share/plymouth/plymouthd.default
+  when: ansible_distribution_major_version|int > 7
