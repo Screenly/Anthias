@@ -1,0 +1,61 @@
+name: OSE Test Suite
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [2.7]
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install system packages
+      run: sudo apt-get install -y net-tools mplayer ffmpeg python-gobject python-setuptools
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pytest
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        if [ -f requirements.dev.txt ]; then pip install -r requirements.dev.txt; fi
+    - name: Lint with flake8
+      run: |
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Perform setup
+      run: |
+        mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets /tmp/USB/cleanup_folder
+        cp ansible/roles/screenly/files/uzbl-config ~/.config/uzbl/config-screenly
+        cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
+        cp ansible/roles/screenly/files/screenly.db ~/.screenly/
+        sudo cp bin/install.sh /usr/local/sbin/upgrade_screenly.sh
+        sudo chmod 0700 /usr/local/sbin/upgrade_screenly.sh
+        echo -e "[local]\nlocalhost ansible_connection=local" > ansible/localhost
+        curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
+        cp /tmp/image.png /tmp/USB/image.png
+        cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
+        curl https://www.screenly.io/upload/ose-logo.png > ~/screenly_assets/image.tmp
+        curl https://www.screenly.io/upload/big_buck_bunny_720p_10mb.flv > /tmp/video.flv
+        cp tests/assets/asset.mov /tmp/asset.mov
+        export DISPLAY=:99.0
+        /sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -ac -screen 0 1280x1024x16
+        sudo cp tests/config/ffserver.conf /etc/ffserver.conf
+        /usr/bin/ffserver -f /etc/ffserver.conf &
+        sleep 3
+        python server.py &
+        sleep 3 # give xvfb some time to start
+
+    - name: Test with pytest
+      run: |
+        nosetests -v -a '!fixme'
+        ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml
+        python -m SimpleHTTPServer 8081 &
+        sleep 3
+        bash static/spec/runner.sh
