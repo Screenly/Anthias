@@ -48,10 +48,11 @@
     owner: root
     group: root
 
-- cron:
-    name: Cleanup screenly_assets
-    minute: 0
-    hour: 1
+- name: Create screenly_assets cleanup cron job
+  cron:
+    name: "Cleanup screenly_assets"
+    minute: "0"
+    hour: "1"
     job: "/usr/local/bin/screenly_utils.sh cleanup"
     user: pi
 
