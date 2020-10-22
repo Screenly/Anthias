@@ -100,7 +100,7 @@ class TestLoadBrowser(ViewerTestCase):
         self.p_cmd.stop()
         self.m_cmd.assert_called_once_with('uzbl-browser')
         m_uzbl.assert_called_once_with(print_events=True, config='-', uri=None, _bg=True)
-        m_send.assert_called_once()
+        self.m_send.assert_called_once()
 
 
 class TestSignalHandlers(ViewerTestCase):
