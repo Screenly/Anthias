@@ -1,5 +1,6 @@
-nose==1.2.1
+PyGObject==3.36.1
 mock==1.0.1
+nose==1.2.1
 pep8==1.7.0
 selenium==2.53.6
 setuptools==34.4.0
