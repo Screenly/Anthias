@@ -3,8 +3,7 @@
 # If Jessie
 - name: Installs dependencies (Jessie)
   apt:
-    name:
-      - fbi
+    name: fbi
   when: ansible_distribution_major_version|int <= 7
 
 - name: Copies in splash screen
@@ -27,7 +26,6 @@
   when: ansible_distribution_major_version|int <= 7
 
 # If not Jessie
-
 - name: Remove older versions
   file:
     state: absent
@@ -43,9 +41,7 @@
 
 - name: Installs dependencies (not Jessie)
   apt:
-    name:
-      - plymouth
-      - pix-plym-splash
+    name: plymouth
   when: ansible_distribution_major_version|int > 7
 
 - name: Copies plymouth theme
