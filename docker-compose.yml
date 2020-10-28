@@ -3,7 +3,9 @@ services:
 
   screenly-ose-server:
     container_name: "screenly-ose-server"
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile.server
     image: screenly-ose-server
     network_mode: "host"
     privileged: true
@@ -22,7 +24,9 @@ services:
 
   screenly-ose-viewer:
     container_name: "screenly-ose-viewer"
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile.viewer
     image: screenly-ose-viewer
     depends_on:
       - screenly-ose-server
@@ -39,7 +43,9 @@ services:
 
   screenly-ose-websocket:
     container_name: "screenly-ose-websocket"
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile.websocket_server
     image: screenly-ose-websocket
     depends_on: 
       - screenly-ose-server
