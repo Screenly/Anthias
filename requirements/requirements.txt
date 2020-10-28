@@ -4,7 +4,7 @@ certifi==2020.6.20
 cffi==1.13.2
 click==6.7
 configparser==3.5.0
-cryptography==2.8
+cryptography==3.2
 flask_restful==0.3.6
 Flask-Cors==3.0.4
 flask-restful-swagger-2==0.35
