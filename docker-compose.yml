@@ -1,9 +1,24 @@
 version: "3"
 services:
+
+  screenly-ose-server:
+    container_name: "screenly-ose-server"
+    build: .
+    image: screenly-ose-server
+    network_mode: "host"
+    privileged: true
+    restart: unless-stopped
+    volumes:
+      - /home/pi/screenly:/home/pi/screenly
+      - /home/pi/.screenly:/home/pi/.screenly
+      - /home/pi/screenly_assets:/home/pi/screenly_assets
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+
   screenly-ose-viewer:
     container_name: "screenly-ose-viewer"
     build: .
-    image: screenly-ose-viewer:latest
+    image: screenly-ose-viewer
     environment:
       - HOME=/data
       - NOREFRESH=1
@@ -12,6 +27,20 @@ services:
       - LISTEN=screenly-server 
       - PORT=80
       - QT_QPA_PLATFORM=eglfs
+    network_mode: "host"
+    privileged: true
+    restart: unless-stopped
+    volumes:
+      - /home/pi/screenly:/home/pi/screenly
+      - /home/pi/.screenly:/home/pi/.screenly
+      - /home/pi/screenly_assets:/home/pi/screenly_assets
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+
+  screenly-ose-websocket:
+    container_name: "screenly-ose-websocket"
+    build: .
+    image: screenly-ose-websocket
     network_mode: "host"
     privileged: true
     restart: unless-stopped
