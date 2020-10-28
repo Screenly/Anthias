@@ -7,6 +7,11 @@ services:
     image: screenly-ose-server
     network_mode: "host"
     privileged: true
+    environment:
+      - LISTEN=raspberrypi 
+      - PORT=8080
+    ports:
+      - 8080:8080
     restart: unless-stopped
     volumes:
       - /home/pi/screenly:/home/pi/screenly
@@ -19,14 +24,9 @@ services:
     container_name: "screenly-ose-viewer"
     build: .
     image: screenly-ose-viewer
-    environment:
-      - HOME=/data
-      - NOREFRESH=1
-      - PYTHONPATH=/data/screenly
-      - SCREENLYSERVICE=viewer
-      - LISTEN=screenly-server 
-      - PORT=80
-      - QT_QPA_PLATFORM=eglfs
+    depends_on:
+      - screenly-ose-server
+      - screenly-ose-websocket
     network_mode: "host"
     privileged: true
     restart: unless-stopped
@@ -41,6 +41,8 @@ services:
     container_name: "screenly-ose-websocket"
     build: .
     image: screenly-ose-websocket
+    depends_on: 
+      - screenly-ose-server
     network_mode: "host"
     privileged: true
     restart: unless-stopped
