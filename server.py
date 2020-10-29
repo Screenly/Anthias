@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 __author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2019, Screenly, Inc"
+__copyright__ = "Copyright 2012-2020, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 import json
@@ -505,7 +505,8 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
         raise Exception(
             "Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
 
-    name = escape(get('name'))
+    ampfix = "&amp;"
+    name = escape(get('name').replace(ampfix, '&'))
     if unique_name:
         with db.conn(settings['database']) as conn:
             names = assets_helper.get_names_of_assets(conn)
@@ -526,7 +527,7 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
         'nocache': get('nocache')
     }
 
-    uri = escape(get('uri'))
+    uri = (get('uri')).replace(ampfix, '&').replace('<', '&lt;').replace('>', '&gt;').replace('\'', '&apos;').replace('\"', '&quot;')
 
     if uri.startswith('/'):
         if not path.isfile(uri):
