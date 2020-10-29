@@ -13,6 +13,7 @@ RUN apt-get update && \
         python-dev \
         python-gobject \
         python-pip \
+        python-setuptools \
         python-pil \
         python-simplejson \
         libraspberrypi0 \

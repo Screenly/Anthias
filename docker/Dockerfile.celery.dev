@@ -13,6 +13,7 @@ RUN apt-get update && \
         procps \
         python-dev \
         python-gobject \
+        python-setuptools \
         python-pip \
         python-pil \
         python-simplejson \
