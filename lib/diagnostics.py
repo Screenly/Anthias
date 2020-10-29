@@ -268,7 +268,7 @@ def get_raspberry_revision(raspberry_code):
 	    'b03112': '1.2',
 	    'c03111': '1.1',
 	    'c03112': '1.2',
-	    'd03114': '1.4
+	    'd03114': '1.4'
     }
 
     return revisions.get(raspberry_code, 'Unable to determine raspberry revision.')
