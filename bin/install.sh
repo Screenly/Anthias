@@ -61,7 +61,7 @@ EOF
   fi
 
 echo -e "\n________________________________________\n"
-echo -e "Which version/branch of Screenly-OSE would you like to install:\n"
+echo -e "Which version/branch of Screenly OSE would you like to install:\n"
 echo " Press (1) for the Production branch, which is the latest stable."
 echo " Press (2) for the Development/Master branch, which has the latest features and fixes, but things may break."
 echo " Press (3) for the Experimental branch, which contains the last major changes, such as the new browser and migrating to Docker."
@@ -125,7 +125,9 @@ else
   exit 1
 fi
 
-if grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
+if grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
+  export DEVICE_TYPE="pi4"
+elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
   export DEVICE_TYPE="pi3"
 elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
   export DEVICE_TYPE="pi2"
