@@ -240,14 +240,14 @@ def get_raspberry_revision(raspberry_code):
     https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
     """
     revisions = {
-        '900021': '1.1',
+	    '900021': '1.1',
 	    '900032': '1.2',
 	    '900092': '1.2',
-    	'900093': '1.3',
+	    '900093': '1.3',
 	    '9000c1': '1.1',
 	    '9020e0': '1.0',
 	    '920092': '1.2',
-    	'920093': '1.3',
+	    '920093': '1.3',
 	    '900061': '1.1',
 	    'a01040': '1.0',
 	    'a01041': '1.1',
