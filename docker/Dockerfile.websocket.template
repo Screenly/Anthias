@@ -1,19 +1,17 @@
-FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:jessie
+FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:buster
 
 RUN apt-get update && \
-    apt-get -y install \
+    apt-get -y install --no-install-recommends \
         build-essential \
         curl \
+        python-pip \
+        python-setuptools \
         python-dev && \
     apt-get clean
 
 # Install Python requirements
-RUN curl -s https://bootstrap.pypa.io/get-pip.py | python
-RUN pip install \
-    flask==1.0.2 \
-    gevent-websocket==0.10.1 \
-    gevent==1.2.2 \
-    pyzmq==16.0.2
+ADD requirements/requirements-websocket.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY . /tmp/screenly
 
