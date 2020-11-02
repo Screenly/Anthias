@@ -49,8 +49,6 @@ services:
 
   redis:
     image: redis:alpine
-    logging:
-      driver: none
     restart: always
 
 volumes:
