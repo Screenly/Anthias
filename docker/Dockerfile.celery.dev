@@ -1,11 +1,11 @@
-FROM debian:stretch
+FROM debian:buster
 
 RUN apt-get update && \
-    apt-get -y install \
+    apt-get -y install --no-install-recommends \
         build-essential \
         curl \
         ffmpeg \
-        git-core \
+        git \
         libffi-dev \
         libssl-dev \
         mplayer \
@@ -13,8 +13,9 @@ RUN apt-get update && \
         procps \
         python-dev \
         python-gobject \
-        python-imaging \
-        python-netifaces \
+        python-setuptools \
+        python-pip \
+        python-pil \
         python-simplejson \
         sqlite3 \
     && \
@@ -22,7 +23,7 @@ RUN apt-get update && \
 
 # Install Python requirements
 ADD requirements/requirements.txt /tmp/requirements.txt
-RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && pip install -r /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.txt
 
 RUN useradd pi
 

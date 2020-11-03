@@ -1,0 +1,38 @@
+version: "2"
+services:
+  screenly-server:
+    environment:
+      - LISTEN=0.0.0.0
+      - IS_DEMO_NODE=1
+      - SWAGGER_HOST=ose.demo.screenlyapp.com
+    image: screenly/ose-dev-server:latest
+    ports:
+      - 127.0.0.1:8080:8080
+    restart: always
+    mem_limit: 300M
+    volumes:
+      - ./:/home/pi/screenly:ro
+      - screenly-assets-volume:/home/pi/screenly_assets
+      - screenly-volume:/home/pi/.screenly
+  screenly-celery:
+    image: screenly/ose-dev-celery:latest
+    restart: always
+    depends_on:
+      - redis
+      - screenly-server
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ./:/home/pi/screenly:ro
+      - screenly-assets-volume:/home/pi/screenly_assets
+      - screenly-volume:/home/pi/.screenly
+  redis:
+    image: redis:alpine
+    logging:
+      driver: none
+    restart: always
+
+volumes:
+  screenly-assets-volume:
+  screenly-volume:

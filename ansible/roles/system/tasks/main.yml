@@ -168,34 +168,45 @@
 
 - name: Install Screenly dependencies
   apt:
-    name: "{{ item }}"
+    name:
+      - console-data
+      - libffi-dev
+      - libssl-dev
+      - omxplayer
+      - python-dev
+      - python-gobject
+      - python-netifaces
+      - python-simplejson
+      - redis-server
+      - rpi-update
+      - sqlite3
+      - systemd
     state: latest
-  with_items:
-    - console-data
-    - libffi-dev
-    - libssl-dev
-    - omxplayer
-    - python-dev
-    - python-gobject
-    - python-netifaces
-    - python-simplejson
-    - rabbitmq-server
-    - rpi-update
-    - sqlite3
-    - systemd
 
 - name: Remove deprecated apt dependencies
   apt:
-    name: "{{ item }}"
+    name:
+      - dphys-swapfile
+      - lightdm
+      - lightdm-gtk-greeter
+      - matchbox
+      - pix-plym-splash
+      - rabbitmq-server
+      - supervisor
+      - uzbl
+      - x11-xserver-utils
+      - xserver-xorg
     state: absent
-  with_items:
-    - dphys-swapfile
-    - lightdm
-    - lightdm-gtk-greeter
-    - matchbox
-    - uzbl
-    - x11-xserver-utils
-    - xserver-xorg
+    
+- name: Remove cups/printing related packages
+  apt:
+    name:
+      - cups
+      - cups-browsed
+      - cups-client
+      - cups-common
+      - cups-daemon
+      - cups-server-common
 
 - name: Add docker apt key
   apt_key:

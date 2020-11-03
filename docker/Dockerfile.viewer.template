@@ -1,7 +1,7 @@
-FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:stretch
+FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:buster
 
 RUN apt-get update && \
-    apt-get -y install \
+    apt-get -y install --no-install-recommends \
         build-essential \
         curl \
         git-core \
@@ -25,8 +25,7 @@ RUN apt-get update && \
 
 # Install Python requirements
 ADD requirements/requirements.viewer.txt /tmp/requirements.txt
-RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
-    pip install --upgrade -r /tmp/requirements.txt
+RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && pip install --upgrade -r /tmp/requirements.txt
 
 # QtBase from packages does not support eglfs
 ARG PI_VERSION=pi3

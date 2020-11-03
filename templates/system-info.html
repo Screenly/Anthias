@@ -32,6 +32,10 @@
                         <td>{{ context.free_space }}</td>
                     </tr>
                     <tr>
+                        <th scope="row">Memory</th>
+                        <td>{{ context.memory }}</td>
+                    </tr>
+                    <tr>
                         <th scope="row">Uptime</th>
                         <td>{{ context.uptime.days }} days and {{ (context.uptime.seconds / 3600)|round(2) }} hours</td>
                     </tr>

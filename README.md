@@ -7,6 +7,8 @@
 
 **PLEASE NOTE:** Screenly OSE and the commercial version of Screenly (formerly known as Screenly Pro) are **two completely separate products**. They **do not share any code base and behave very differently** both with regards to management and performance. Hence do not use one to evaluate the other.
 
+Want to help OSE thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
+
 ## Disk images
 
 The recommended installation method is to grab the latest disk image from [here](https://github.com/Screenly/screenly-ose/releases).
@@ -39,12 +41,13 @@ To learn more about Screenly, please visit the official website at [Screenly.io]
 
 Quick links:
 
- * [FAQ](https://support.screenly.io/hc/en-us/sections/202652366-Frequently-Asked-Questions-FAQ-)
+ * [FAQ](https://support.screenly.io/hc/en-us/categories/360002606694-OSE)
  * [Screenly OSE Forum](https://forums.screenly.io/c/screenly-ose)
  * [Screenly OSE Home](https://www.screenly.io/ose/)
- * [Live Demo](http://ose.demo.screenlyapp.com/)
- * [QA Checklist](https://www.forgett.com/checklist/1789089623)
- * [API Docs](http://ose.demo.screenlyapp.com/api/docs/)
+ * [Live Demo](https://ose.demo.screenlyapp.com/)
+ * [QA Checklist](https://github.com/Screenly/screenly-ose/blob/master/docs/qa-checklist.md)
+ * [API Docs](https://ose.demo.screenlyapp.com/api/docs/)
+ * [Developer Documentation](https://github.com/Screenly/screenly-ose/blob/master/docs/developer-documentation.md)
 
 Screenly OSE works on all Raspberry Pi versions, including Raspberry Pi Zero and Raspberry Pi 3 Model B.
 
@@ -55,12 +58,7 @@ To simplify development of the server module of Screenly OSE, we've created a Do
 Assuming you're in the source code repository, simply run:
 
 ```
-$ docker run --rm -it \
-    --name=screenly-dev \
-    -e 'LISTEN=0.0.0.0' \
-    -p 8080:8080 \
-    -v $(pwd):/home/pi/screenly \
-    screenly/ose-dev-server
+$ docker-compose -f docker-compose.dev.yml up
 ```
 
 ## Running the Unit Tests

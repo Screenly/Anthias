@@ -1,21 +1,22 @@
-FROM debian:stretch
+FROM debian:buster
 
 RUN apt-get update && \
-    apt-get -y install \
+    apt-get -y install --no-install-recommends \
         build-essential \
         curl \
         ffmpeg \
-        git-core \
+        git \
         libffi-dev \
         libssl-dev \
         lsb-release \
         mplayer \
         net-tools \
         procps \
+        python-pip \
+        python-setuptools \
         python-dev \
         python-gobject \
-        python-imaging \
-        python-netifaces \
+        python-pil \
         python-simplejson \
         sqlite3 \
     && \
@@ -23,10 +24,9 @@ RUN apt-get update && \
 
 # Install Python requirements
 ADD requirements/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
-RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
-    pip install -r /tmp/requirements.txt && \
-    pip install -r /tmp/requirements.dev.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.dev.txt
 
 # Create runtime user
 RUN useradd pi
@@ -39,6 +39,10 @@ RUN chown -R pi:pi /home/pi/.screenly /home/pi/screenly_assets
 
 USER pi
 WORKDIR /home/pi/screenly
+
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
 
 EXPOSE 8080
 
