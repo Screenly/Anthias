@@ -1,29 +1,50 @@
 language: python
 python:
   - "2.7"
-
-services:
-  - docker
-
+virtualenv:
+  system_site_packages: true
+addons:
+  firefox: "45.0"
+  apt:
+    update: true
+    packages:
+      - net-tools
+      - mplayer
+      - ffmpeg
+      - python-gobject
+      - python-setuptools
 install:
-  - docker build . -f ./docker/Dockerfile.travis -t screenly/travis-ci
-  - docker run  --name travis-ci -v $TRAVIS_BUILD_DIR:/root/screenly -td  screenly/travis-ci /bin/bash
-
+  - pip install -U pip
+  - pip install -r requirements/requirements.txt
+  - pip install -r requirements/requirements.dev.txt
 before_script:
-  - docker exec travis-ci bash -c "echo -e '[local]\nlocalhost ansible_connection=local' > ansible/localhost"
-  - docker exec travis-ci bash -c "python tests/rtmplite/rtmp.py -r /tmp/" &
+  - mkdir -p ~/.screenly ~/screenly_assets /tmp/USB/cleanup_folder
+  - cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
+  - cp ansible/roles/screenly/files/screenly.db ~/.screenly/
+  - sudo cp bin/install.sh /usr/local/sbin/upgrade_screenly.sh
+  - sudo chmod 0700 /usr/local/sbin/upgrade_screenly.sh
+  - echo -e "[local]\nlocalhost ansible_connection=local" > ansible/localhost
+  - curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
+  - cp /tmp/image.png /tmp/USB/image.png
+  - cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
+  - curl https://www.screenly.io/upload/ose-logo.png > ~/screenly_assets/image.tmp
+  - curl https://www.screenly.io/upload/big_buck_bunny_720p_10mb.flv > /tmp/video.flv
+  - cp tests/assets/asset.mov /tmp/asset.mov
+  - export DISPLAY=:99.0
+  - /sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -ac -screen 0 1280x1024x16
+  - sudo cp tests/config/ffserver.conf /etc/ffserver.conf
+  - /usr/bin/ffserver -f /etc/ffserver.conf &
   - sleep 3
-  - docker exec travis-ci bash -c "python server.py" &
-  - sleep 3
-  - docker exec travis-ci bash -c "Xvfb :99 -ac" &
-  - sleep 3
+  - python server.py &
+  - sleep 3 # give xvfb some time to start
+
 script:
-  - docker exec -ti travis-ci bash -c "find . ! -path '*/rtmplite/*' -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +"
-  - docker exec -ti travis-ci bash -c "nosetests -v -a '!fixme' --with-isolation"
-  - docker exec -ti travis-ci bash -c "ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml"
-  - python -m SimpleHTTPServer 8080 &
+  - find . ! -path "*/rtmplite/*" -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
+  - nosetests -v -a '!fixme'
+  - ansible-playbook --syntax-check -i ansible/localhost ansible/site.yml
+  - python -m SimpleHTTPServer 8081 &
   - sleep 3
   - bash static/spec/runner.sh
 
 sudo: false
-dist: trusty
+dist: xenial
