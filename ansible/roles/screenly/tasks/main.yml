@@ -159,7 +159,7 @@
 - name: Create screenly-viewer container
   docker_container:
     name: screenly-ose-viewer
-    image: "screenly/screenly-ose-viewer:{{ docker_tag }}-{{ device_type }}"
+    image: "ruskodevelop/screenly-ose-viewer:latest"
     pull: true
     state: started
     recreate: true
