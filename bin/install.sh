@@ -160,9 +160,10 @@ sudo apt-get purge -y python-setuptools python-pip python-pyasn1
 sudo apt-get install -y python-dev git-core libffi-dev libssl-dev whois
 curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 
-# users who chose experimental and then reverted back to master or production need docker removed
+# users who chose experimental then reverted back to master or production need docker pkg removed and user group reverted
 if [ "$BRANCH" != "experimental" ]; then
-	sudo apt-get purge -y docker-ce docker-ce-cli containerd.io > /dev/null
+  sudo apt-get purge -y docker-ce docker-ce-cli containerd.io > /dev/null
+  sudo usermod -g pi pi
 fi
 
 if [ "$NETWORK" == 'y' ]; then
@@ -199,22 +200,18 @@ else
   sudo chmod 0440 /etc/sudoers.d/010_pi-nopasswd
 fi
 
-#######################################################################
-# Setup a new pi password if default password "raspberry" detected
+checkdefaultpw() {
+# Ask user to set a new pi password if default password "raspberry" detected
 
 if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ] && [ "$WEB_UPGRADE" = false ]; then
 set +x
-# clear any previous set variables used for password detection
-_CURRENTPISALT=''
-_CURRENTPIUSERPWD=''
-_DEFAULTPIPWD=''
 
-# currently only looking for $6$/sha512, will expand later on to all algorithms potentially used
-_CURRENTPISALT=$(sudo cat /etc/shadow | grep pi | awk -F '$' '{print $3}')
-_CURRENTPIUSERPWD=$(sudo cat /etc/shadow | grep pi | awk -F ':' '{print $2}')
-_DEFAULTPIPWD=$(mkpasswd -m sha-512 raspberry $_CURRENTPISALT)
+# currently only looking for $6$/sha512 hash
+local var_currentpisalt=$(sudo cat /etc/shadow | grep pi | awk -F '$' '{print $3}')
+local var_currentpiuserpw=$(sudo cat /etc/shadow | grep pi | awk -F ':' '{print $2}')
+local var_defaultpipw=$(mkpasswd -m sha-512 raspberry "$var_currentpisalt")
 
-  if [[ "$_CURRENTPIUSERPWD" == "$_DEFAULTPIPWD" ]]; then
+  if [[ "$var_currentpiuserpw" == "$var_defaultpipw" ]]; then
     echo "(Warning): The default raspberry pi password was detected! - please change it now..."
     set +e
     passwd
@@ -225,7 +222,8 @@ _DEFAULTPIPWD=$(mkpasswd -m sha-512 raspberry $_CURRENTPISALT)
     set -x
   fi
 fi
-#######################################################################
+}
+checkdefaultpw;
 
 echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
 
