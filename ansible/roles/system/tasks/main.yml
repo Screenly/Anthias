@@ -197,7 +197,7 @@
       - x11-xserver-utils
       - xserver-xorg
     state: absent
-    
+
 - name: Remove cups/printing related packages
   apt:
     name:
@@ -207,6 +207,7 @@
       - cups-common
       - cups-daemon
       - cups-server-common
+    state: absent
 
 - name: Add docker apt key
   apt_key:
