@@ -110,7 +110,6 @@
     src: "{{ item }}"
     dest: "/etc/systemd/system/{{ item }}"
   with_items: "{{ screenly_systemd_units }}"
-  when: x_service_exist
 
 - name: Remove plymouth-quit-wait.service
   file:
