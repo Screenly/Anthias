@@ -1,3 +1,4 @@
+from nose.plugins.attrib import attr
 from splinter import Browser
 from time import sleep
 from selenium.common.exceptions import ElementNotVisibleException
@@ -18,6 +19,7 @@ asset_x = {
     'is_enabled': 0,
     'nocache': 0,
     'play_order': 1,
+    'skip_asset_check': 0
 }
 
 asset_y = {
@@ -31,6 +33,7 @@ asset_y = {
     'is_enabled': 1,
     'nocache': 0,
     'play_order': 0,
+    'skip_asset_check': 0
 }
 
 main_page_url = 'http://foo:bar@localhost:8080'
@@ -201,7 +204,7 @@ class WebTest(unittest.TestCase):
             wait_for_and_do(browser, '#add-asset-button', lambda btn: btn.click())
             sleep(1)
 
-            wait_for_and_do(browser, 'input[name="uri"]', lambda field: field.fill('rtmp://localhost:1935/app/video.flv'))
+            wait_for_and_do(browser, 'input[name="uri"]', lambda field: field.fill('rtsp://localhost:8091/asset.mov'))
             sleep(1)
 
             wait_for_and_do(browser, '#add-form', lambda form: form.click())
@@ -216,8 +219,8 @@ class WebTest(unittest.TestCase):
             self.assertEqual(len(assets), 1)
             asset = assets[0]
 
-            self.assertEqual(asset['name'], u'rtmp://localhost:1935/app/video.flv')
-            self.assertEqual(asset['uri'], u'rtmp://localhost:1935/app/video.flv')
+            self.assertEqual(asset['name'], u'rtsp://localhost:8091/asset.mov')
+            self.assertEqual(asset['uri'], u'rtsp://localhost:8091/asset.mov')
             self.assertEqual(asset['mimetype'], u'streaming')
             self.assertEqual(asset['duration'], settings['default_streaming_duration'])
 
@@ -242,7 +245,7 @@ class WebTest(unittest.TestCase):
 
         with Browser() as browser:
             browser.visit(main_page_url)
-            wait_for_and_do(browser, 'span[class="on"]', lambda btn: btn.click())
+            wait_for_and_do(browser, '.toggle', lambda btn: btn.click())
             sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
@@ -261,7 +264,7 @@ class WebTest(unittest.TestCase):
         with Browser() as browser:
             browser.visit(main_page_url)
 
-            wait_for_and_do(browser, 'span[class="off"]', lambda btn: btn.click())
+            wait_for_and_do(browser, '.toggle', lambda btn: btn.click())
             sleep(3)  # backend need time to process request
 
         with db.conn(settings['database']) as conn:
@@ -271,6 +274,7 @@ class WebTest(unittest.TestCase):
             asset = assets[0]
             self.assertEqual(asset['is_enabled'], 0)
 
+    @attr('fixme')
     def test_reorder_asset(self):
         with db.conn(settings['database']) as conn:
             _asset_x = asset_x.copy()

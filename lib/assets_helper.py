@@ -3,9 +3,10 @@ import queries
 import datetime
 
 FIELDS = ["asset_id", "name", "uri", "start_date",
-          "end_date", "duration", "mimetype", "is_enabled", "is_processing", "nocache", "play_order"]
+          "end_date", "duration", "mimetype", "is_enabled", "is_processing", "nocache", "play_order",
+          "skip_asset_check"]
 
-create_assets_table = 'CREATE TABLE assets(asset_id text primary key, name text, uri text, md5 text, start_date timestamp, end_date timestamp, duration text, mimetype text, is_enabled integer default 0, is_processing integer default 0, nocache integer default 0, play_order integer default 0)'
+create_assets_table = 'CREATE TABLE assets(asset_id text primary key, name text, uri text, md5 text, start_date timestamp, end_date timestamp, duration text, mimetype text, is_enabled integer default 0, is_processing integer default 0, nocache integer default 0, play_order integer default 0, skip_asset_check integer default 0)'
 
 
 # Note all times are naive for legacy reasons but always UTC.
@@ -16,7 +17,7 @@ def is_active(asset, at_time=None):
     """Accepts an asset dictionary and determines if it
     is active at the given time. If no time is specified, 'now' is used.
 
-    >>> asset = {'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d', 'mimetype': u'web', 'name': u'WireLoad', 'end_date': datetime.datetime(2013, 1, 19, 23, 59), 'uri': u'http://www.wireload.net', 'duration': u'5', 'is_enabled': True, 'nocache': 0, 'play_order': 1, 'start_date': datetime.datetime(2013, 1, 16, 0, 0)};
+    >>> asset = {'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d', 'mimetype': u'web', 'name': u'WireLoad', 'end_date': datetime.datetime(2013, 1, 19, 23, 59), 'uri': u'http://www.wireload.net', 'duration': u'5', 'is_enabled': True, 'nocache': 0, 'play_order': 1, 'start_date': datetime.datetime(2013, 1, 16, 0, 0), 'skip_asset_check': 0};
     >>> is_active(asset, datetime.datetime(2013, 1, 16, 12, 00))
     True
     >>> is_active(asset, datetime.datetime(2014, 1, 1))
@@ -32,6 +33,12 @@ def is_active(asset, at_time=None):
         at = at_time or get_time()
         return 1 if asset['start_date'] < at < asset['end_date'] else 0
     return 0
+
+
+def get_names_of_assets(conn):
+    with db.cursor(conn) as c:
+        c.execute(queries.read_all(['name', ]))
+        return [asset[0] for asset in c.fetchall()]
 
 
 def get_playlist(conn):
@@ -123,12 +130,12 @@ def delete(conn, asset_id):
 
 def save_ordering(db_conn, ids):
     """Order assets. Move to last position assets which not presented in list of id"""
-    assets = read(db_conn)
 
-    for play_order, asset_id in enumerate(ids):
-        update(db_conn, asset_id, {'asset_id': asset_id, 'play_order': play_order})
+    if ids:
+        with db.commit(db_conn) as c:
+            c.execute(queries.multiple_update_with_case(['play_order', ], len(ids)),
+                      sum([[asset_id, play_order] for play_order, asset_id in enumerate(ids)], []) + ids)
 
     # Set the play order to a high value for all inactive assets.
-    for asset in assets:
-        if asset['asset_id'] not in ids:
-            update(db_conn, asset['asset_id'], {'asset_id': asset['asset_id'], 'play_order': len(ids)})
+    with db.commit(db_conn) as c:
+        c.execute(queries.multiple_update_not_in(['play_order', ], len(ids)), [len(ids)] + ids)

@@ -1,0 +1,15 @@
+- name: Copy ngrok binary
+  copy:
+    src: ngrok
+    dest: /usr/local/bin/
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Installs nginx config
+  copy:
+    src: nginx.conf
+    dest:  /etc/nginx/sites-enabled/screenly_assets.conf
+    mode: 644
+    owner: root
+    group: root

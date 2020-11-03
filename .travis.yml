@@ -6,7 +6,7 @@ services:
   - docker
 
 install:
-  - docker build . -f Dockerfile.travis -t screenly/travis-ci
+  - docker build . -f ./docker/Dockerfile.travis -t screenly/travis-ci
   - docker run  --name travis-ci -v $TRAVIS_BUILD_DIR:/root/screenly -td  screenly/travis-ci /bin/bash
 
 before_script:

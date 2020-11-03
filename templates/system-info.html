@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="container pt-3 pb-3">
+        <div class="row">
+            <div class="col-12">
+                <h5 class="page-header">
+                    <b>System Info</b>
+                </h5>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="row content">
+            <div class="col-12">
+
+                <table class="table mb-5">
+                    <thead class="table-borderless">
+                    <tr>
+                        <th class="text-secondary font-weight-normal" scope="col" style="width: 20%">Option</th>
+                        <th class="text-secondary font-weight-normal" scope="col">Value</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <th scope="row">Load Average</th>
+                        <td>{{ context.loadavg }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Free Space</th>
+                        <td>{{ context.free_space }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Memory</th>
+                        <td>{{ context.memory }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Uptime</th>
+                        <td>{{ context.uptime.days }} days and {{ (context.uptime.seconds / 3600)|round(2) }} hours</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Monitor Info</th>
+                        <td>{{ context.display_info }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Display Power</th>
+                        <td>{{ context.display_power }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Raspberry Model</th>
+                        <td>{{ context.raspberry_model }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Screenly Version</th>
+                        <td>{{ context.screenly_version }}</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">MAC Address</th>
+                        <td>{{ context.mac_address }}</td>
+                    </tr>
+                    </tbody>
+                </table>
+
+                <section>
+                    <h4><b>Latest Viewer Logs</b></h4>
+                    <hr>
+                </section>
+
+                {% if context.viewlog %}
+                    <table class="table table-borderless">
+                        {% for line in context.viewlog %}
+                            <tr>
+                                <td>{{ line }}</td>
+                            </tr>
+                        {% endfor %}
+                    </table>
+                {% else %}
+                    <p>There are no recent log messages.</p>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+{% endblock %}

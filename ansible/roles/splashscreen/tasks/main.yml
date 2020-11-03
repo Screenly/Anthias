@@ -26,7 +26,6 @@
   when: ansible_distribution_major_version|int <= 7
 
 # If not Jessie
-
 - name: Remove older versions
   file:
     state: absent
@@ -57,4 +56,10 @@
 
 - name: Set splashscreen
   command: plymouth-set-default-theme -R screenly
+  when: ansible_distribution_major_version|int > 7
+
+- name: Set plymouthd.default
+  copy:
+    src: plymouthd.default
+    dest: /usr/share/plymouth/plymouthd.default
   when: ansible_distribution_major_version|int > 7

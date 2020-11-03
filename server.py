@@ -1,25 +1,33 @@
 #!/usr/bin/env python
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 
 __author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2017, Screenly, Inc"
+__copyright__ = "Copyright 2012-2020, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
-from datetime import timedelta
+import json
+import pydbus
+import psutil
+import re
+import sh
+import shutil
+import time
+
+import traceback
+import yaml
+import uuid
+from base64 import b64encode
+from celery import Celery
+from datetime import datetime, timedelta
 from dateutil import parser as date_parser
 from functools import wraps
 from hurry.filesize import size
-import json
 from mimetypes import guess_type
-from os import getenv, makedirs, mkdir, path, remove, rename, statvfs
-from sh import git
+from os import getenv, listdir, makedirs, mkdir, path, remove, rename, statvfs, stat, walk
 from subprocess import check_output
-import traceback
-import uuid
-import hashlib
-from base64 import b64encode
+from urlparse import urlparse
 
-from flask import Flask, make_response, render_template, request, send_from_directory
+from flask import Flask, escape, make_response, render_template, request, send_from_directory, url_for, jsonify
 from flask_cors import CORS
 from flask_restful_swagger_2 import Api, Resource, Schema, swagger
 from flask_swagger_ui import get_swaggerui_blueprint
@@ -33,26 +41,161 @@ from lib import db
 from lib import diagnostics
 from lib import queries
 
-from lib.utils import get_node_ip
+from lib.auth import authorized
+from lib.utils import generate_perfect_paper_password
+from lib.utils import get_active_connections, remove_connection
+from lib.utils import get_node_ip, get_node_mac_address
 from lib.utils import get_video_duration
 from lib.utils import download_video_from_youtube, json_dump
 from lib.utils import url_fails
 from lib.utils import validate_url
+from lib.utils import is_balena_app, is_demo_node, is_wott_integrated, get_wott_device_id
 
-from settings import auth_basic, CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher
-
+from settings import CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
 
 HOME = getenv('HOME', '/home/pi')
-DISABLE_MANAGE_NETWORK = '.screenly/disable_manage_network'
+CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_TASK_RESULT_EXPIRES = timedelta(hours=6)
 
 app = Flask(__name__)
 CORS(app)
 api = Api(app, api_version="v1", title="Screenly OSE API")
 
+celery = Celery(
+    app.name,
+    backend=CELERY_RESULT_BACKEND,
+    broker=CELERY_BROKER_URL,
+    result_expires=CELERY_TASK_RESULT_EXPIRES
+)
+
+
+################################
+# Celery tasks
+################################
+
+@celery.on_after_configure.connect
+def setup_periodic_tasks(sender, **kwargs):
+    # Calls cleanup() every hour.
+    sender.add_periodic_task(3600, cleanup.s(), name='cleanup')
+    sender.add_periodic_task(3600, cleanup_usb_assets.s(), name='cleanup_usb_assets')
+
+
+@celery.task
+def cleanup():
+    sh.find(path.join(HOME, 'screenly_assets'), '-name', '*.tmp', '-delete')
+
+
+@celery.task(bind=True)
+def upgrade_screenly(self, branch, manage_network, upgrade_system):
+    """Background task to upgrade Screenly-OSE."""
+    if not path.isfile('/usr/local/sbin/upgrade_screenly.sh'):
+        raise Exception('File /usr/local/sbin/upgrade_screenly.sh does not exist.')
+    upgrade_process = sh.sudo('/usr/local/sbin/upgrade_screenly.sh',
+                              '-w', 'true',
+                              '-b', branch,
+                              '-n', manage_network,
+                              '-s', upgrade_system,
+                              _bg=True,
+                              _err_to_out=True)
+    while True:
+        if not upgrade_process.process.alive:
+            break
+        self.update_state(state="PROGRESS", meta={'status': upgrade_process.process.stdout})
+        time.sleep(1)
+
+    return {'status': upgrade_process.process.stdout}
+
+
+@celery.task
+def reboot_screenly():
+    """Background task to reboot Screenly-OSE."""
+    sh.sudo('shutdown', '-r', 'now', _bg=True)
+
+
+@celery.task
+def shutdown_screenly():
+    """Background task to shutdown Screenly-OSE."""
+    sh.sudo('shutdown', 'now', _bg=True)
+
+
+@celery.task
+def append_usb_assets(mountpoint):
+    settings.load()
+
+    datetime_now = datetime.now()
+    usb_assets_settings = {
+        'activate': False,
+        'copy': False,
+        'start_date': datetime_now,
+        'end_date': datetime_now + timedelta(days=7),
+        'duration': settings['default_duration']
+    }
+
+    for root, _, filenames in walk(mountpoint):
+        if 'usb_assets_key.yaml' in filenames:
+            with open("%s/%s" % (root, 'usb_assets_key.yaml'), 'r') as yaml_file:
+                usb_file_settings = yaml.load(yaml_file).get('screenly')
+                if usb_file_settings.get('key') == settings['usb_assets_key']:
+                    if usb_file_settings.get('activate'):
+                        usb_assets_settings.update({
+                            'activate': usb_file_settings.get('activate')
+                        })
+                    if usb_file_settings.get('copy'):
+                        usb_assets_settings.update({
+                            'copy': usb_file_settings.get('copy')
+                        })
+                    if usb_file_settings.get('start_date'):
+                        ts = time.mktime(datetime.strptime(usb_file_settings.get('start_date'), "%m/%d/%Y").timetuple())
+                        usb_assets_settings.update({
+                            'start_date': datetime.utcfromtimestamp(ts)
+                        })
+                    if usb_file_settings.get('end_date'):
+                        ts = time.mktime(datetime.strptime(usb_file_settings.get('end_date'), "%m/%d/%Y").timetuple())
+                        usb_assets_settings.update({
+                            'end_date': datetime.utcfromtimestamp(ts)
+                        })
+                    if usb_file_settings.get('duration'):
+                        usb_assets_settings.update({
+                            'duration': usb_file_settings.get('duration')
+                        })
+
+                    files = ['%s/%s' % (root, y) for root, _, filenames in walk(mountpoint) for y in filenames]
+                    with db.conn(settings['database']) as conn:
+                        for filepath in files:
+                            asset = prepare_usb_asset(filepath, **usb_assets_settings)
+                            if asset:
+                                assets_helper.create(conn, asset)
+
+                    break
+
+
+@celery.task
+def remove_usb_assets(mountpoint):
+    settings.load()
+    with db.conn(settings['database']) as conn:
+        for asset in assets_helper.read(conn):
+            if asset['uri'].startswith(mountpoint):
+                assets_helper.delete(conn, asset['asset_id'])
+
+
+@celery.task
+def cleanup_usb_assets(media_dir='/media'):
+    settings.load()
+    mountpoints = ['%s/%s' % (media_dir, x) for x in listdir(media_dir) if path.isdir('%s/%s' % (media_dir, x))]
+    with db.conn(settings['database']) as conn:
+        for asset in assets_helper.read(conn):
+            if asset['uri'].startswith(media_dir):
+                location = re.search(r'^(/\w+/\w+[^/])', asset['uri'])
+                if location:
+                    if location.group() not in mountpoints:
+                        assets_helper.delete(conn, asset['asset_id'])
+
 
 ################################
 # Utilities
 ################################
+
 
 @api.representation('application/json')
 def output_json(data, code, headers=None):
@@ -85,8 +228,7 @@ def is_up_to_date():
         latest_sha = None
 
     if latest_sha:
-        branch_sha = git('rev-parse', 'HEAD')
-        return branch_sha.stdout.strip() == latest_sha
+        return diagnostics.get_git_hash() == latest_sha
 
     # If we weren't able to verify with remote side,
     # we'll set up_to_date to true in order to hide
@@ -101,14 +243,15 @@ def template(template_name, **context):
     but also injects some global context."""
 
     # Add global contexts
-    context['up_to_date'] = is_up_to_date()
+    context['date_format'] = settings['date_format']
     context['default_duration'] = settings['default_duration']
     context['default_streaming_duration'] = settings['default_streaming_duration']
-    context['use_24_hour_clock'] = settings['use_24_hour_clock']
     context['template_settings'] = {
         'imports': ['from lib.utils import template_handle_unicode'],
         'default_filters': ['template_handle_unicode'],
     }
+    context['up_to_date'] = is_up_to_date()
+    context['use_24_hour_clock'] = settings['use_24_hour_clock']
 
     return render_template(template_name, context=context)
 
@@ -152,6 +295,10 @@ class AssetModel(Schema):
         'play_order': {
             'type': 'integer',
             'format': 'int64',
+        },
+        'skip_asset_check': {
+            'type': 'integer',
+            'format': 'int64',
         }
     }
 
@@ -182,6 +329,10 @@ class AssetRequestModel(Schema):
         'play_order': {
             'type': 'integer',
             'format': 'int64',
+        },
+        'skip_asset_check': {
+            'type': 'integer',
+            'format': 'int64',
         }
     }
     required = ['name', 'uri', 'mimetype', 'is_enabled', 'start_date', 'end_date']
@@ -202,11 +353,47 @@ class AssetContentModel(Schema):
     required = ['type', 'filename']
 
 
+class AssetPropertiesModel(Schema):
+    type = 'object'
+    properties = {
+        'name': {'type': 'string'},
+        'start_date': {
+            'type': 'string',
+            'format': 'date-time'
+        },
+        'end_date': {
+            'type': 'string',
+            'format': 'date-time'
+        },
+        'duration': {'type': 'string'},
+        'is_active': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'is_enabled': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'nocache': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'play_order': {
+            'type': 'integer',
+            'format': 'int64',
+        },
+        'skip_asset_check': {
+            'type': 'integer',
+            'format': 'int64',
+        }
+    }
+
+
 ################################
 # API
 ################################
 
-def prepare_asset(request):
+def prepare_asset(request, unique_name=False):
     req = Request(request.environ)
     data = None
 
@@ -230,8 +417,22 @@ def prepare_asset(request):
     if not all([get('name'), get('uri'), get('mimetype')]):
         raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
 
+    name = escape(get('name'))
+    if unique_name:
+        with db.conn(settings['database']) as conn:
+            names = assets_helper.get_names_of_assets(conn)
+        if name in names:
+            i = 1
+            while True:
+                new_name = '%s-%i' % (name, i)
+                if new_name in names:
+                    i += 1
+                else:
+                    name = new_name
+                    break
+
     asset = {
-        'name': get('name'),
+        'name': name,
         'mimetype': get('mimetype'),
         'asset_id': get('asset_id'),
         'is_enabled': get('is_enabled'),
@@ -239,7 +440,7 @@ def prepare_asset(request):
         'nocache': get('nocache'),
     }
 
-    uri = get('uri')
+    uri = escape(get('uri').encode('utf-8'))
 
     if uri.startswith('/'):
         if not path.isfile(uri):
@@ -268,6 +469,8 @@ def prepare_asset(request):
         # Crashes if it's not an int. We want that.
         asset['duration'] = int(get('duration'))
 
+    asset['skip_asset_check'] = int(get('skip_asset_check')) if int(get('skip_asset_check')) else 0
+
     # parse date via python-dateutil and remove timezone info
     if get('start_date'):
         asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
@@ -282,10 +485,8 @@ def prepare_asset(request):
     return asset
 
 
-def prepare_asset_v1_2(request, asset_id=None):
-    req = Request(request.environ)
-
-    data = json.loads(req.data)
+def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
+    data = json.loads(request_environ.data)
 
     def get(key):
         val = data.get(key, '')
@@ -302,16 +503,32 @@ def prepare_asset_v1_2(request, asset_id=None):
                 str(get('is_enabled')),
                 get('start_date'),
                 get('end_date')]):
-        raise Exception("Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
+        raise Exception(
+            "Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
+
+    ampfix = "&amp;"
+    name = escape(get('name').replace(ampfix, '&'))
+    if unique_name:
+        with db.conn(settings['database']) as conn:
+            names = assets_helper.get_names_of_assets(conn)
+        if name in names:
+            i = 1
+            while True:
+                new_name = '%s-%i' % (name, i)
+                if new_name in names:
+                    i += 1
+                else:
+                    name = new_name
+                    break
 
     asset = {
-        'name': get('name'),
+        'name': name,
         'mimetype': get('mimetype'),
         'is_enabled': get('is_enabled'),
         'nocache': get('nocache')
     }
 
-    uri = get('uri')
+    uri = (get('uri')).replace(ampfix, '&').replace('<', '&lt;').replace('>', '&gt;').replace('\'', '&apos;').replace('\"', '&quot;')
 
     if uri.startswith('/'):
         if not path.isfile(uri):
@@ -344,11 +561,127 @@ def prepare_asset_v1_2(request, asset_id=None):
 
     asset['play_order'] = get('play_order') if get('play_order') else 0
 
+    asset['skip_asset_check'] = int(get('skip_asset_check')) if int(get('skip_asset_check')) else 0
+
     # parse date via python-dateutil and remove timezone info
     asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
     asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
 
     return asset
+
+
+def prepare_usb_asset(filepath, **kwargs):
+    filetype = guess_type(filepath)[0]
+
+    if not filetype:
+        return
+
+    filetype = filetype.split('/')[0]
+
+    if filetype not in ['image', 'video']:
+        return
+
+    asset_id = uuid.uuid4().hex
+    asset_name = path.basename(filepath)
+    duration = int(get_video_duration(filepath).total_seconds()) if "video" == filetype else int(kwargs['duration'])
+
+    if kwargs['copy']:
+        shutil.copy(filepath, path.join(settings['assetdir'], asset_id))
+        filepath = path.join(settings['assetdir'], asset_id)
+
+    return {
+        'asset_id': asset_id,
+        'duration': duration,
+        'end_date': kwargs['end_date'],
+        'is_active': 1,
+        'is_enabled': kwargs['activate'],
+        'is_processing': 0,
+        'mimetype': filetype,
+        'name': asset_name,
+        'nocache': 0,
+        'play_order': 0,
+        'skip_asset_check': 0,
+        'start_date': kwargs['start_date'],
+        'uri': filepath,
+    }
+
+
+def prepare_default_asset(**kwargs):
+    if kwargs['mimetype'] not in ['image', 'video', 'webpage']:
+        return
+
+    asset_id = 'default_{}'.format(uuid.uuid4().hex)
+    duration = int(get_video_duration(kwargs['uri']).total_seconds()) if "video" == kwargs['mimetype'] else kwargs['duration']
+
+    return {
+        'asset_id': asset_id,
+        'duration': duration,
+        'end_date': kwargs['end_date'],
+        'is_active': 1,
+        'is_enabled': True,
+        'is_processing': 0,
+        'mimetype': kwargs['mimetype'],
+        'name': kwargs['name'],
+        'nocache': 0,
+        'play_order': 0,
+        'skip_asset_check': 0,
+        'start_date': kwargs['start_date'],
+        'uri': kwargs['uri']
+    }
+
+
+def add_default_assets():
+    settings.load()
+
+    datetime_now = datetime.now()
+    default_asset_settings = {
+        'start_date': datetime_now,
+        'end_date': datetime_now.replace(year=datetime_now.year + 6),
+        'duration': settings['default_duration']
+    }
+
+    default_assets_yaml = path.join(HOME, '.screenly/default_assets.yml')
+
+    with open(default_assets_yaml, 'r') as yaml_file:
+        default_assets = yaml.safe_load(yaml_file).get('assets')
+        with db.conn(settings['database']) as conn:
+            for default_asset in default_assets:
+                default_asset_settings.update({
+                    'name': default_asset.get('name'),
+                    'uri': default_asset.get('uri'),
+                    'mimetype': default_asset.get('mimetype')
+                })
+                asset = prepare_default_asset(**default_asset_settings)
+                if asset:
+                    assets_helper.create(conn, asset)
+
+
+def remove_default_assets():
+    settings.load()
+    with db.conn(settings['database']) as conn:
+        for asset in assets_helper.read(conn):
+            if asset['asset_id'].startswith('default_'):
+                assets_helper.delete(conn, asset['asset_id'])
+
+
+def update_asset(asset, data):
+    for key, value in data.items():
+
+        if key in ['asset_id', 'is_processing', 'mimetype', 'uri'] or key not in asset:
+            continue
+
+        if key in ['start_date', 'end_date']:
+            value = date_parser.parse(value).replace(tzinfo=None)
+
+        if key in ['play_order', 'skip_asset_check', 'is_enabled', 'is_active', 'nocache']:
+            value = int(value)
+
+        if key == 'duration':
+            if "video" not in asset['mimetype']:
+                continue
+            value = int(value)
+
+        asset.update({key: value})
 
 
 # api view decorator. handles errors
@@ -360,11 +693,12 @@ def api_response(view):
         except Exception as e:
             traceback.print_exc()
             return api_error(unicode(e))
+
     return api_view
 
 
 class Assets(Resource):
-    method_decorators = [auth_basic]
+    method_decorators = [authorized]
 
     @swagger.doc({
         'responses': {
@@ -405,7 +739,8 @@ class Assets(Resource):
                         "is_enabled": 0,
                         "is_processing": 0,
                         "nocache": 0,
-                        "play_order": 0
+                        "play_order": 0,
+                        "skip_asset_check": 0
                     }"
                     '''
             }
@@ -426,7 +761,7 @@ class Assets(Resource):
 
 
 class Asset(Resource):
-    method_decorators = [api_response, auth_basic]
+    method_decorators = [api_response, authorized]
 
     @swagger.doc({
         'parameters': [
@@ -475,7 +810,8 @@ class Asset(Resource):
                         "is_enabled": 0,
                         "is_processing": 0,
                         "nocache": 0,
-                        "play_order": 0
+                        "play_order": 0,
+                        "skip_asset_check": 0
                     }"
                     '''
             }
@@ -519,7 +855,7 @@ class Asset(Resource):
 
 
 class AssetsV1_1(Resource):
-    method_decorators = [auth_basic]
+    method_decorators = [authorized]
 
     @swagger.doc({
         'responses': {
@@ -557,7 +893,7 @@ class AssetsV1_1(Resource):
         }
     })
     def post(self):
-        asset = prepare_asset(request)
+        asset = prepare_asset(request, unique_name=True)
         if url_fails(asset['uri']):
             raise Exception("Could not retrieve file. Check the asset URL.")
         with db.conn(settings['database']) as conn:
@@ -565,7 +901,7 @@ class AssetsV1_1(Resource):
 
 
 class AssetV1_1(Resource):
-    method_decorators = [api_response, auth_basic]
+    method_decorators = [api_response, authorized]
 
     @swagger.doc({
         'parameters': [
@@ -645,7 +981,7 @@ class AssetV1_1(Resource):
 
 
 class AssetsV1_2(Resource):
-    method_decorators = [auth_basic]
+    method_decorators = [authorized]
 
     @swagger.doc({
         'responses': {
@@ -681,8 +1017,9 @@ class AssetsV1_2(Resource):
         }
     })
     def post(self):
-        asset = prepare_asset_v1_2(request)
-        if url_fails(asset['uri']):
+        request_environ = Request(request.environ)
+        asset = prepare_asset_v1_2(request_environ, unique_name=True)
+        if not asset['skip_asset_check'] and url_fails(asset['uri']):
             raise Exception("Could not retrieve file. Check the asset URL.")
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
@@ -697,7 +1034,7 @@ class AssetsV1_2(Resource):
 
 
 class AssetV1_2(Resource):
-    method_decorators = [api_response, auth_basic]
+    method_decorators = [api_response, authorized]
 
     @swagger.doc({
         'parameters': [
@@ -717,6 +1054,54 @@ class AssetV1_2(Resource):
     })
     def get(self, asset_id):
         with db.conn(settings['database']) as conn:
+            return assets_helper.read(conn, asset_id)
+
+    @swagger.doc({
+        'parameters': [
+            {
+                'name': 'asset_id',
+                'type': 'string',
+                'in': 'path',
+                'description': 'ID of an asset',
+                'required': True
+            },
+            {
+                'in': 'body',
+                'name': 'properties',
+                'description': 'Properties of an asset',
+                'schema': AssetPropertiesModel,
+                'required': True
+            }
+        ],
+        'responses': {
+            '200': {
+                'description': 'Asset updated',
+                'schema': AssetModel
+            }
+        }
+    })
+    def patch(self, asset_id):
+        data = json.loads(request.data)
+        with db.conn(settings['database']) as conn:
+
+            asset = assets_helper.read(conn, asset_id)
+            if not asset:
+                raise Exception('Asset not found.')
+            update_asset(asset, data)
+
+            assets = assets_helper.read(conn)
+            ids_of_active_assets = [x['asset_id'] for x in assets if x['is_active']]
+
+            asset = assets_helper.update(conn, asset_id, asset)
+
+            try:
+                ids_of_active_assets.remove(asset['asset_id'])
+            except ValueError:
+                pass
+            if asset['is_active']:
+                ids_of_active_assets.insert(asset['play_order'], asset['asset_id'])
+
+            assets_helper.save_ordering(conn, ids_of_active_assets)
             return assets_helper.read(conn, asset_id)
 
     @swagger.doc({
@@ -791,7 +1176,7 @@ class AssetV1_2(Resource):
 
 
 class FileAsset(Resource):
-    method_decorators = [api_response, auth_basic]
+    method_decorators = [api_response, authorized]
 
     @swagger.doc({
         'parameters': [
@@ -814,8 +1199,16 @@ class FileAsset(Resource):
     def post(self):
         req = Request(request.environ)
         file_upload = req.files.get('file_upload')
-        filename = file_upload.filename
-        file_path = path.join(settings['assetdir'], filename) + ".tmp"
+        filename = file_upload.filename.encode('utf-8')
+        file_type = guess_type(filename)[0]
+
+        if not file_type:
+            raise Exception("Invalid file type.")
+
+        if file_type.split('/')[0] not in ['image', 'video']:
+            raise Exception("Invalid file type.")
+
+        file_path = path.join(settings['assetdir'], uuid.uuid5(uuid.NAMESPACE_URL, filename).hex) + ".tmp"
 
         if 'Content-Range' in request.headers:
             range_str = request.headers['Content-Range']
@@ -830,7 +1223,7 @@ class FileAsset(Resource):
 
 
 class PlaylistOrder(Resource):
-    method_decorators = [api_response, auth_basic]
+    method_decorators = [api_response, authorized]
 
     @swagger.doc({
         'parameters': [
@@ -858,7 +1251,7 @@ class PlaylistOrder(Resource):
 
 
 class Backup(Resource):
-    method_decorators = [api_response, auth_basic]
+    method_decorators = [api_response, authorized]
 
     @swagger.doc({
         'responses': {
@@ -871,12 +1264,12 @@ class Backup(Resource):
         }
     })
     def post(self):
-        filename = backup_helper.create_backup()
+        filename = backup_helper.create_backup(name=settings['player_name'])
         return filename, 201
 
 
 class Recover(Resource):
-    method_decorators = [api_response, auth_basic]
+    method_decorators = [api_response, authorized]
 
     @swagger.doc({
         'parameters': [
@@ -893,21 +1286,25 @@ class Recover(Resource):
         }
     })
     def post(self):
+        publisher = ZmqPublisher.get_instance()
         req = Request(request.environ)
         file_upload = (req.files['backup_upload'])
         filename = file_upload.filename
 
         if guess_type(filename)[0] != 'application/x-tar':
             raise Exception("Incorrect file extension.")
-
-        location = path.join("static", filename)
-        file_upload.save(location)
-        backup_helper.recover(location)
-        return "Recovery successful."
+        try:
+            publisher.send_to_viewer('stop')
+            location = path.join("static", filename)
+            file_upload.save(location)
+            backup_helper.recover(location)
+            return "Recovery successful."
+        finally:
+            publisher.send_to_viewer('play')
 
 
 class ResetWifiConfig(Resource):
-    method_decorators = [api_response, auth_basic]
+    method_decorators = [api_response, authorized]
 
     @swagger.doc({
         'responses': {
@@ -923,19 +1320,145 @@ class ResetWifiConfig(Resource):
         if path.isfile(file_path):
             remove(file_path)
 
+        bus = pydbus.SystemBus()
+
+        pattern_include = re.compile("wlan*")
+        pattern_exclude = re.compile("ScreenlyOSE-*")
+
+        wireless_connections = get_active_connections(bus)
+
+        if wireless_connections is not None:
+            device_uuid = None
+
+            wireless_connections = filter(
+                lambda c: not pattern_exclude.search(str(c['Id'])),
+                filter(
+                    lambda c: pattern_include.search(str(c['Devices'])),
+                    wireless_connections
+                )
+            )
+
+            if len(wireless_connections) > 0:
+                device_uuid = wireless_connections[0].get('Uuid')
+
+            if not device_uuid:
+                raise Exception('The device has no active connection.')
+
+            remove_connection(bus, device_uuid)
+
         return '', 204
 
 
+class GenerateUsbAssetsKey(Resource):
+    method_decorators = [api_response, authorized]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Usb assets key generated',
+                'schema': {
+                    'type': 'string'
+                }
+            }
+        }
+    })
+    def get(self):
+        settings['usb_assets_key'] = generate_perfect_paper_password(20, False)
+        settings.save()
+
+        return settings['usb_assets_key']
+
+
+class UpgradeScreenly(Resource):
+    method_decorators = [api_response, authorized]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Upgrade system'
+            }
+        }
+    })
+    def post(self):
+        for task in celery.control.inspect(timeout=2.0).active().get('worker@screenly'):
+            if task.get('type') == 'server.upgrade_screenly':
+                return jsonify({'id': task.get('id')})
+        branch = request.form.get('branch')
+        manage_network = request.form.get('manage_network')
+        system_upgrade = request.form.get('system_upgrade')
+        task = upgrade_screenly.apply_async(args=(branch, manage_network, system_upgrade))
+        return jsonify({'id': task.id})
+
+
+@app.route('/upgrade_status/<task_id>')
+def upgrade_screenly_status(task_id):
+    status_code = 200
+    task = upgrade_screenly.AsyncResult(task_id)
+    if task.state == 'PENDING':
+        response = {
+            'state': task.state,
+            'status': ''
+        }
+        status_code = 202
+    elif task.state == 'PROGRESS':
+        response = {
+            'state': task.state,
+            'status': task.info.get('status', '')
+        }
+        status_code = 202
+    elif task.state != 'FAILURE':
+        response = {
+            'state': task.state,
+            'status': task.info.get('status', '')
+        }
+    else:
+        response = {
+            'state': task.state,
+            'status': str(task.info)
+        }
+    return jsonify(response), status_code
+
+
+class RebootScreenly(Resource):
+    method_decorators = [api_response, authorized]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Reboot system'
+            }
+        }
+    })
+    def post(self):
+        reboot_screenly.apply_async()
+        return '', 200
+
+
+class ShutdownScreenly(Resource):
+    method_decorators = [api_response, authorized]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Shutdown system'
+            }
+        }
+    })
+    def post(self):
+        shutdown_screenly.apply_async()
+        return '', 200
+
+
 class Info(Resource):
-    method_decorators = [api_response, auth_basic]
+    method_decorators = [api_response, authorized]
 
     def get(self):
-        # viewlog = None
-        # try:
-        #     viewlog = [line.decode('utf-8') for line in
-        #                check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
-        # except:
-        #     pass
+        viewlog = None
+        try:
+            viewlog = [line.decode('utf-8') for line in
+                       check_output(['journalctl', '-b', 'CONTAINER_NAME=screenly-ose-viewer', '-n', '20']).split('\n')]
+        except Exception:
+            pass
 
         # Calculate disk space
         slash = statvfs("/")
@@ -946,12 +1469,13 @@ class Info(Resource):
             'loadavg': diagnostics.get_load_avg()['15 min'],
             'free_space': free_space,
             'display_info': diagnostics.get_monitor_status(),
-            'display_power': diagnostics.get_display_power()
+            'display_power': diagnostics.get_display_power(),
+            'up_to_date': is_up_to_date()
         }
 
 
 class AssetsControl(Resource):
-    method_decorators = [api_response, auth_basic]
+    method_decorators = [api_response, authorized]
 
     @swagger.doc({
         'parameters': [
@@ -981,7 +1505,7 @@ class AssetsControl(Resource):
 
 
 class AssetContent(Resource):
-    method_decorators = [api_response, auth_basic]
+    method_decorators = [api_response, authorized]
 
     @swagger.doc({
         'parameters': [
@@ -995,14 +1519,14 @@ class AssetContent(Resource):
         'responses': {
             '200': {
                 'description':
-                '''
-                The content of the asset.
+                    '''
+                    The content of the asset.
 
-                'type' can either be 'file' or 'url'.
+                    'type' can either be 'file' or 'url'.
 
-                In case of a file, the fields 'mimetype', 'filename', and 'content'  will be present.
-                In case of a URL, the field 'url' will be present.
-                ''',
+                    In case of a file, the fields 'mimetype', 'filename', and 'content'  will be present.
+                    In case of a URL, the field 'url' will be present.
+                    ''',
                 'schema': AssetContentModel
             }
         }
@@ -1039,6 +1563,33 @@ class AssetContent(Resource):
         return result
 
 
+class ViewerCurrentAsset(Resource):
+    method_decorators = [api_response, authorized]
+
+    @swagger.doc({
+        'responses': {
+            '200': {
+                'description': 'Currently displayed asset in viewer',
+                'schema': AssetModel
+            }
+        }
+    })
+    def get(self):
+        collector = ZmqCollector.get_instance()
+
+        publisher = ZmqPublisher.get_instance()
+        publisher.send_to_viewer('current_asset_id')
+
+        collector_result = collector.recv_json(2000)
+        current_asset_id = collector_result.get('current_asset_id')
+
+        if not current_asset_id:
+            return []
+
+        with db.conn(settings['database']) as conn:
+            return assets_helper.read(conn, current_asset_id)
+
+
 api.add_resource(Assets, '/api/v1/assets')
 api.add_resource(Asset, '/api/v1/assets/<asset_id>')
 api.add_resource(AssetsV1_1, '/api/v1.1/assets')
@@ -1053,16 +1604,21 @@ api.add_resource(Recover, '/api/v1/recover')
 api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 api.add_resource(Info, '/api/v1/info')
 api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
+api.add_resource(GenerateUsbAssetsKey, '/api/v1/generate_usb_assets_key')
+api.add_resource(UpgradeScreenly, '/api/v1/upgrade_screenly')
+api.add_resource(RebootScreenly, '/api/v1/reboot_screenly')
+api.add_resource(ShutdownScreenly, '/api/v1/shutdown_screenly')
+api.add_resource(ViewerCurrentAsset, '/api/v1/viewer_current_asset')
 
 try:
     my_ip = get_node_ip()
-except:
+except Exception:
     pass
 else:
     SWAGGER_URL = '/api/docs'
     swagger_address = getenv("SWAGGER_HOST", my_ip)
 
-    if settings['use_ssl']:
+    if settings['use_ssl'] or is_demo_node:
         API_URL = 'https://{}/api/swagger.json'.format(swagger_address)
     elif LISTEN == '127.0.0.1' or swagger_address != my_ip:
         API_URL = "http://{}/api/swagger.json".format(swagger_address)
@@ -1073,7 +1629,7 @@ else:
         SWAGGER_URL,
         API_URL,
         config={
-            'app_name': "Screenly API"
+            'app_name': "Screenly OSE API"
         }
     )
     app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
@@ -1085,10 +1641,11 @@ else:
 
 
 @app.route('/')
-@auth_basic
+@authorized
 def viewIndex():
     player_name = settings['player_name']
-    my_ip = get_node_ip()
+    my_ip = urlparse(request.host_url).hostname
+    is_demo = is_demo_node()
     resin_uuid = getenv("RESIN_UUID", None)
 
     ws_addresses = []
@@ -1101,76 +1658,49 @@ def viewIndex():
     if resin_uuid:
         ws_addresses.append('wss://{}.resindevice.io/ws/'.format(resin_uuid))
 
-    return template('index.html', ws_addresses=ws_addresses, player_name=player_name)
+    return template('index.html', ws_addresses=ws_addresses, player_name=player_name, is_demo=is_demo)
 
 
 @app.route('/settings', methods=["GET", "POST"])
-@auth_basic
+@authorized
 def settings_page():
-
     context = {'flash': None}
 
     if request.method == "POST":
         try:
             # put some request variables in local variables to make easier to read
-            current_pass = request.form.get('curpassword', '')
-            new_pass = request.form.get('password', '')
-            new_pass2 = request.form.get('password2', '')
-            current_pass = '' if current_pass == '' else hashlib.sha256(current_pass).hexdigest()
-            new_pass = '' if new_pass == '' else hashlib.sha256(new_pass).hexdigest()
-            new_pass2 = '' if new_pass2 == '' else hashlib.sha256(new_pass2).hexdigest()
+            current_pass = request.form.get('current-password', '')
+            auth_backend = request.form.get('auth_backend', '')
 
-            new_user = request.form.get('user', '')
-            use_auth = request.form.get('use_auth', '') == 'on'
+            if auth_backend != settings['auth_backend'] and settings['auth_backend']:
+                if not current_pass:
+                    raise ValueError("Must supply current password to change authentication method")
+                if not settings.auth.check_password(current_pass):
+                    raise ValueError("Incorrect current password.")
 
-            # Handle auth components
-            if settings['password'] != '':    # if password currently set,
-                if new_user != settings['user']:    # trying to change user
-                    # should have current password set. Optionally may change password.
-                    if current_pass == '':
-                        if not use_auth:
-                            raise ValueError("Must supply current password to disable authentication")
-                        raise ValueError("Must supply current password to change username")
-                    if current_pass != settings['password']:
-                        raise ValueError("Incorrect current password.")
-
-                    settings['user'] = new_user
-
-                if new_pass != '' and use_auth:
-                    if current_pass == '':
-                        raise ValueError("Must supply current password to change password")
-                    if current_pass != settings['password']:
-                        raise ValueError("Incorrect current password.")
-
-                    if new_pass2 != new_pass:  # changing password
-                        raise ValueError("New passwords do not match!")
-
-                    settings['password'] = new_pass
-
-                if new_pass == '' and not use_auth and new_pass2 == '':
-                    # trying to disable authentication
-                    if current_pass == '':
-                        raise ValueError("Must supply current password to disable authentication")
-                    settings['password'] = ''
-
-            else:        # no current password
-                if new_user != '':    # setting username and password
-                    if new_pass != '' and new_pass != new_pass2:
-                        raise ValueError("New passwords do not match!")
-                    if new_pass == '':
-                        raise ValueError("Must provide password")
-                    settings['user'] = new_user
-                    settings['password'] = new_pass
+            prev_auth_backend = settings['auth_backend']
+            if not current_pass and prev_auth_backend:
+                current_pass_correct = None
+            else:
+                current_pass_correct = settings.auth_backends[prev_auth_backend].check_password(current_pass)
+            next_auth_backend = settings.auth_backends[auth_backend]
+            next_auth_backend.update_settings(current_pass_correct)
+            settings['auth_backend'] = auth_backend
 
             for field, default in CONFIGURABLE_SETTINGS.items():
                 value = request.form.get(field, default)
 
-                # skip user and password as they should be handled already.
-                if field == "user" or field == "password":
-                    continue
-
+                if not value and field in ['default_duration', 'default_streaming_duration']:
+                    value = str(0)
                 if isinstance(default, bool):
                     value = value == 'on'
+
+                if field == 'default_assets' and settings[field] != value:
+                    if value:
+                        add_default_assets()
+                    else:
+                        remove_default_assets()
+
                 settings[field] = value
 
             settings.save()
@@ -1186,30 +1716,45 @@ def settings_page():
     else:
         settings.load()
     for field, default in DEFAULTS['viewer'].items():
+        if field == 'usb_assets_key':
+            if not settings[field]:
+                settings[field] = generate_perfect_paper_password(20, False)
+                settings.save()
         context[field] = settings[field]
 
-    context['user'] = settings['user']
-    context['password'] = "password" if settings['password'] != "" else ""
+    auth_backends = []
+    for backend in settings.auth_backends_list:
+        if backend.template:
+            html, ctx = backend.template
+            context.update(ctx)
+        else:
+            html = None
+        auth_backends.append({
+            'name': backend.name,
+            'text': backend.display_name,
+            'template': html,
+            'selected': 'selected' if settings['auth_backend'] == backend.name else ''
+        })
 
-    context['reset_button_state'] = "disabled" if path.isfile(path.join(HOME, DISABLE_MANAGE_NETWORK)) else ""
-
-    if not settings['user'] or not settings['password']:
-        context['use_auth'] = False
-    else:
-        context['use_auth'] = True
+    context.update({
+        'user': settings['user'],
+        'need_current_password': bool(settings['auth_backend']),
+        'is_balena': is_balena_app(),
+        'auth_backend': settings['auth_backend'],
+        'auth_backends': auth_backends
+    })
 
     return template('settings.html', **context)
 
 
-@app.route('/system_info')
-@auth_basic
+@app.route('/system-info')
+@authorized
 def system_info():
-    # viewlog = None
-    # try:
-    #     viewlog = [line.decode('utf-8') for line in
-    #                check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
-    # except:
-    #     pass
+    try:
+        viewlog = [line.decode('utf-8') for line in
+                   check_output(['journalctl', '-b', 'CONTAINER_NAME=screenly-ose-viewer', '-n', '20']).split('\n')]
+    except Exception:
+        viewlog = None
 
     loadavg = diagnostics.get_load_avg()['15 min']
 
@@ -1221,26 +1766,80 @@ def system_info():
     slash = statvfs("/")
     free_space = size(slash.f_bavail * slash.f_frsize)
 
+    # Memory
+    virtual_memory = psutil.virtual_memory()
+    memory = "Total: {} | Used: {} | Free: {} | Shared: {} | Buff: {} | Available: {}".format(
+        virtual_memory.total >> 20,
+        virtual_memory.used >> 20,
+        virtual_memory.free >> 20,
+        virtual_memory.shared >> 20,
+        virtual_memory.buffers >> 20,
+        virtual_memory.available >> 20
+    )
+
     # Get uptime
-    uptime_in_seconds = diagnostics.get_uptime()
-    system_uptime = timedelta(seconds=uptime_in_seconds)
+    system_uptime = timedelta(seconds=diagnostics.get_uptime())
 
     # Player name for title
     player_name = settings['player_name']
 
+    try:
+        raspberry_code = diagnostics.get_raspberry_code()
+        raspberry_model = '{} Revision: {} Ram: {} {}'.format(
+            diagnostics.get_raspberry_model(raspberry_code),
+            diagnostics.get_raspberry_revision(raspberry_code),
+            diagnostics.get_raspberry_ram(raspberry_code),
+            diagnostics.get_raspberry_manufacturer(raspberry_code)
+        )
+    except sh.ErrorReturnCode_1:
+        raspberry_model = 'Unable to determine raspberry model.'
+
+    screenly_version = '{}@{}'.format(
+        diagnostics.get_git_branch(),
+        diagnostics.get_git_short_hash()
+    )
+
     return template(
-        'system_info.html',
+        'system-info.html',
         player_name=player_name,
         # viewlog=viewlog,
         loadavg=loadavg,
         free_space=free_space,
         uptime=system_uptime,
+        memory=memory,
         display_info=display_info,
-        display_power=display_power
+        display_power=display_power,
+        raspberry_model=raspberry_model,
+        screenly_version=screenly_version,
+        mac_address=get_node_mac_address()
     )
 
 
-@app.route('/splash_page')
+@app.route('/integrations')
+@authorized
+def integrations():
+
+    context = {
+        'player_name': settings['player_name'],
+        'is_balena': is_balena_app(),
+        'is_wott_installed': is_wott_integrated(),
+    }
+
+    if context['is_balena']:
+        context['balena_device_id'] = getenv('BALENA_DEVICE_UUID')
+        context['balena_app_id'] = getenv('BALENA_APP_ID')
+        context['balena_app_name'] = getenv('BALENA_APP_NAME')
+        context['balena_supervisor_version'] = getenv('BALENA_SUPERVISOR_VERSION')
+        context['balena_host_os_version'] = getenv('BALENA_HOST_OS_VERSION')
+        context['balena_device_name_at_init'] = getenv('BALENA_DEVICE_NAME_AT_INIT')
+
+    if context['is_wott_installed']:
+        context['wott_device_id'] = get_wott_device_id()
+
+    return template('integrations.html', **context)
+
+
+@app.route('/splash-page')
 def splash_page():
     url = None
     try:
@@ -1259,7 +1858,7 @@ def splash_page():
             url = "http://{}:{}".format(my_ip, PORT)
 
     msg = url if url else error_msg
-    return template('splash_page.html', ip_lookup=ip_lookup, msg=msg)
+    return template('splash-page.html', ip_lookup=ip_lookup, msg=msg)
 
 
 @app.errorhandler(403)
@@ -1271,18 +1870,37 @@ def mistake403(code):
 def mistake404(code):
     return 'Sorry, this page does not exist!'
 
+
 ################################
 # Static
 ################################
 
 
+@app.context_processor
+def override_url_for():
+    return dict(url_for=dated_url_for)
+
+
+def dated_url_for(endpoint, **values):
+    if endpoint == 'static':
+        filename = values.get('filename', None)
+        if filename:
+            file_path = path.join(app.root_path,
+                                  endpoint, filename)
+            if path.isfile(file_path):
+                values['q'] = int(stat(file_path).st_mtime)
+    return url_for(endpoint, **values)
+
+
 @app.route('/static_with_mime/<string:path>')
+@authorized
 def static_with_mime(path):
     mimetype = request.args['mime'] if 'mime' in request.args else 'auto'
     return send_from_directory(directory='static', filename=path, mimetype=mimetype)
 
 
-if __name__ == "__main__":
+@app.before_first_request
+def main():
     # Make sure the asset folder exist. If not, create it
     if not path.isdir(settings['assetdir']):
         mkdir(settings['assetdir'])
@@ -1296,6 +1914,8 @@ if __name__ == "__main__":
             if cursor.fetchone() is None:
                 cursor.execute(assets_helper.create_assets_table)
 
+
+if __name__ == "__main__":
     config = {
         'bind': '{}:{}'.format(LISTEN, PORT),
         'threads': 2,

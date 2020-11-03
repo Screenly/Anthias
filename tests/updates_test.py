@@ -1,12 +1,13 @@
 from datetime import datetime
 from datetime import timedelta
 import unittest
-from mock import patch
-from settings import settings
+
+import mock
 import viewer
 import server
 import os
-import shutil
+
+from settings import settings
 
 fancy_sha = 'deadbeaf'
 
@@ -22,23 +23,31 @@ def mocked_req_get(*args, **kwargs):
 
 class UpdateTest(unittest.TestCase):
     def setUp(self):
-        settings.home = '/tmp/'
+        self.get_configdir_m = mock.patch('settings.ScreenlySettings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
+        self.get_configdir_m.start()
+
         self.sha_file = settings.get_configdir() + 'latest_screenly_sha'
 
         if not os.path.exists(settings.get_configdir()):
             os.mkdir(settings.get_configdir())
 
     def tearDown(self):
-        shutil.rmtree(settings.get_configdir())
+        if os.path.isfile(self.sha_file):
+            os.remove(self.sha_file)
 
+        self.get_configdir_m.stop()
+
+    @mock.patch('viewer.settings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
     def test_if_sha_file_not_exists__is_up_to_date__should_return_false(self):
         self.assertEqual(server.is_up_to_date(), True)
 
+    @mock.patch('viewer.settings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
     def test_if_sha_file_not_equals_to_branch_hash__is_up_to_date__should_return_false(self):
         with open(self.sha_file, 'w+') as f:
             f.write(fancy_sha)
         self.assertEqual(server.is_up_to_date(), False)
 
+    @mock.patch('viewer.settings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
     def test_if_sha_file_is_new__check_update__should_return_false(self):
         with open(self.sha_file, 'w+') as f:
             f.write(fancy_sha)
@@ -48,9 +57,11 @@ class UpdateTest(unittest.TestCase):
         with open(self.sha_file, 'r') as f:
             self.assertEqual(f.readline(), fancy_sha)
 
-    @patch('viewer.remote_branch_available', side_effect=lambda _: True)
-    @patch('viewer.fetch_remote_hash', side_effect=lambda _: 'master')
-    def test_if_sha_file_is_empty__check_update__should_return_true(self, remote_branch_available, fetch_remote_hash):
+    @mock.patch('viewer.req_get', side_effect=mocked_req_get)
+    @mock.patch('viewer.remote_branch_available', side_effect=lambda _: True)
+    @mock.patch('viewer.fetch_remote_hash', side_effect=lambda _: 'master')
+    @mock.patch('viewer.settings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
+    def test_if_sha_file_is_empty__check_update__should_return_true(self, req_get, remote_branch_available, fetch_remote_hash):
         with open(self.sha_file, 'w+') as f:
             pass
 

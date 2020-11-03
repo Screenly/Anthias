@@ -6,6 +6,7 @@
     group: pi
   with_items:
     - .screenly
+    - .config
     - screenly_assets
 
 - name: Copy Screenly default config
@@ -16,6 +17,14 @@
     dest: /home/pi/.screenly/screenly.conf
     force: no
 
+- name: Copy Screenly default assets file
+  copy:
+    owner: pi
+    group: pi
+    src: default_assets.yml
+    dest: /home/pi/.screenly/default_assets.yml
+    force: yes
+
 - name: Remove deprecated parameter "listen"
   lineinfile:
     regexp: '^.*listen.*'
@@ -23,7 +32,9 @@
     dest: /home/pi/.screenly/screenly.conf
 
 - name: Install pip dependencies
-  pip: requirements=/home/pi/screenly/requirements.host.txt
+  pip:
+    requirements: /home/pi/screenly/requirements/requirements.txt
+    extra_args: "--no-cache-dir --upgrade"
 
 - name: Create default assets database if does not exists
   copy:
@@ -34,27 +45,30 @@
     force: no
 
 - name: Run database migration
-  become: no
+  become_user: pi
   command: python /home/pi/screenly/bin/migrate.py
   register: migrate
 
 - debug: msg="{{ migrate.stdout }}"
 
-- name: Copy screenly_utils.sh
-  copy:
-    src: screenly_utils.sh
-    dest: /usr/local/bin/screenly_utils.sh
-    mode: 0755
+- name: Remove screenly_utils.sh
+  file:
+    state: absent
+    path: /usr/local/bin/screenly_utils.sh
+
+- cron:
+    name: Cleanup screenly_assets
+    state : absent
+    user: pi
+
+- name: Download upgrade_screenly.sh from github repository
+  get_url:
+    url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/install.sh
+    dest: /usr/local/sbin/upgrade_screenly.sh
+    mode: 0700
     owner: root
     group: root
-
-- name: Create screenly_assets cleanup cron job
-  cron:
-    name: "Cleanup screenly_assets"
-    minute: "0"
-    hour: "1"
-    job: "/usr/local/bin/screenly_utils.sh cleanup"
-    user: pi
+    force: yes
 
 - name: Copy screenly_overrides
   copy:
@@ -63,6 +77,54 @@
     mode: 0440
     owner: root
     group: root
+
+- name: Copy screenly_usb_assets.sh
+  copy:
+    src: screenly_usb_assets.sh
+    dest: /usr/local/bin/screenly_usb_assets.sh
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Installs autoplay udev rule
+  copy:
+    src: 50-autoplay.rules
+    dest: /etc/udev/rules.d/50-autoplay.rules
+    mode: 644
+    owner: root
+    group: root
+
+- name: Copy systemd-udevd service
+  copy:
+    src: /lib/systemd/system/systemd-udevd.service
+    dest: /etc/systemd/system/systemd-udevd.service
+
+- name: Configure systemd-udevd service
+  lineinfile:
+    dest: /etc/systemd/system/systemd-udevd.service
+    regexp: '^MountFlags='
+    line: 'MountFlags=shared'
+
+- name: Copy screenly systemd units
+  copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+  with_items: "{{ screenly_systemd_units }}"
+  when: x_service_exist
+
+- name: Remove plymouth-quit-wait.service
+  file:
+    state: absent
+    dest: /lib/systemd/system/plymouth-quit-wait.service
+
+- name: Remove plymouth-quit.service
+  file:
+    state: absent
+    dest: /lib/systemd/system/plymouth-quit.service
+
+- name: Enable screenly systemd services
+  command: systemctl enable {{ item }} chdir=/etc/systemd/system
+  with_items: "{{ screenly_systemd_units }}"
 
 - name: Check if deprecated systemd services exists
   stat:
@@ -76,14 +138,14 @@
     name: "{{ item }}"
     state: stopped
     enabled: no
-  with_items: "{{ screenly_systemd_units }}"
+  with_items: "{{ deprecated_screenly_systemd_units }}"
   when: x_service_exist
 
 - name: Remove deprecated systemd units
   file:
     path: "/etc/systemd/system/{{ item }}"
     state: absent
-  with_items: "{{ screenly_systemd_units }}"
+  with_items: "{{ deprecated_screenly_systemd_units }}"
 
 - name: Check /proc/device-tree/model file
   command: cat /proc/device-tree/model
@@ -95,23 +157,6 @@
 - debug:
     msg: "Use {{ docker_tag }} version of images."
 
-- name: Create screenly-server container
-  docker_container:
-    name: screenly-ose-server
-    image: "screenly/screenly-ose-server:{{ docker_tag }}"
-    pull: true
-    state: started
-    recreate: true
-    restart_policy: unless-stopped
-    network_mode: host
-    privileged: yes
-    volumes:
-      - /home/pi/screenly:/home/pi/screenly
-      - /home/pi/.screenly:/home/pi/.screenly
-      - /home/pi/screenly_assets:/home/pi/screenly_assets
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
-
 - name: Create screenly-viewer container
   docker_container:
     name: screenly-ose-viewer
@@ -122,6 +167,7 @@
     restart_policy: unless-stopped
     network_mode: host
     privileged: yes
+    log_driver: journald
     volumes:
       - /home/pi/screenly:/home/pi/screenly
       - /home/pi/.screenly:/home/pi/.screenly
@@ -131,18 +177,3 @@
 
 - name: Pause screenly-viewer container
   command: docker pause screenly-ose-viewer
-
-- name: Create screenly-websocket-server container
-  docker_container:
-    name: screenly-ose-websocket
-    image: "screenly/screenly-ose-websocket:{{ docker_tag }}"
-    pull: true
-    state: started
-    recreate: true
-    restart_policy: unless-stopped
-    network_mode: host
-    volumes:
-      - /home/pi/screenly:/home/pi/screenly
-      - /home/pi/.screenly:/home/pi/.screenly
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
