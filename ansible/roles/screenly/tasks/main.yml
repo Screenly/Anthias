@@ -163,7 +163,7 @@
       version: "2"
       services:
         screenly-server:
-          image: ruskodevelop/screenly-ose-server:latest
+          image: "screenly/screenly-ose-server:{{ docker_tag }}"
           container_name: screenly-server
           entrypoint: python server.py
           restart: unless-stopped
@@ -176,7 +176,7 @@
             - /etc/localtime:/etc/localtime:ro
 
         screenly-viewer:
-          image: ruskodevelop/screenly-ose-viewer:latest
+          image: "screenly/screenly-ose-viewer:{{ docker_tag }}-{{ device_type }}"
           container_name: screenly-viewer
           privileged: true
           restart: unless-stopped
@@ -191,7 +191,7 @@
             - screenly-server
 
         screenly-websocket:
-          image: ruskodevelop/screenly-ose-websocket:latest
+          image: "screenly/screenly-ose-websocket:{{ docker_tag }}"
           container_name: screenly-websocket
           restart: unless-stopped
           network_mode: "host"
@@ -205,7 +205,7 @@
             - screenly-server
 
         screenly-celery:
-          image: ruskodevelop/screenly-ose-server:latest
+          image: "screenly/screenly-ose-celery:{{ docker_tag }}"
           container_name: screenly-celery
           entrypoint: celery worker -A server.celery -B -n worker@screenly --loglevel=info --schedule /tmp/celerybeat-schedule
           network_mode: "host"
