@@ -138,6 +138,7 @@
     state: stopped
     enabled: no
   with_items: "{{ deprecated_screenly_systemd_units }}"
+  when: x_service_exist
 
 - name: Remove deprecated systemd units
   file:
@@ -229,4 +230,4 @@
     recreate: smart
 
 - name: Pause screenly-viewer container
-  command: docker pause screenly-ose-viewer
+  command: docker pause screenly-viewer
