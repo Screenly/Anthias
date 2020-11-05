@@ -163,7 +163,6 @@ curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 # users who chose experimental then reverted back to master or production need docker pkg removed and user group reverted
 if [ "$BRANCH" != "experimental" ]; then
   sudo apt-get purge -y docker-ce docker-ce-cli containerd.io > /dev/null
-  sudo usermod -g pi pi
 fi
 
 if [ "$NETWORK" == 'y' ]; then
