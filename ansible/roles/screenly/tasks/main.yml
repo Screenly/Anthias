@@ -164,6 +164,9 @@
       services:
         screenly-server:
           image: "screenly/screenly-ose-server:{{ docker_tag }}"
+          build:
+            context: /home/pi/screenly
+            dockerfile: /home/pi/screenly/docker/Dockerfile.server
           container_name: screenly-server
           entrypoint: python server.py
           restart: unless-stopped
@@ -177,6 +180,11 @@
 
         screenly-viewer:
           image: "screenly/screenly-ose-viewer:{{ docker_tag }}-{{ device_type }}"
+          build:
+            context: /home/pi/screenly
+            dockerfile: /home/pi/screenly/docker/Dockerfile.viewer
+            args:
+              - PI_VERSION={{ device_type }}
           container_name: screenly-viewer
           privileged: true
           restart: unless-stopped
@@ -192,6 +200,9 @@
 
         screenly-websocket:
           image: "screenly/screenly-ose-websocket:{{ docker_tag }}"
+          build:
+            context: /home/pi/screenly
+            dockerfile: /home/pi/screenly/docker/Dockerfile.websocket
           container_name: screenly-websocket
           restart: unless-stopped
           network_mode: "host"
@@ -206,6 +217,9 @@
 
         screenly-celery:
           image: "screenly/screenly-ose-celery:{{ docker_tag }}"
+          build:
+            context: /home/pi/screenly
+            dockerfile: /home/pi/screenly/docker/Dockerfile.server
           container_name: screenly-celery
           entrypoint: celery worker -A server.celery -B -n worker@screenly --loglevel=info --schedule /tmp/celerybeat-schedule
           network_mode: "host"
@@ -226,7 +240,7 @@
           ports:
             - "6379:6379"
 
-    pull: yes
+    pull: no
     recreate: smart
 
 - name: Pause screenly-viewer container
