@@ -161,6 +161,7 @@
   docker_image:
     name: "screenly/screenly-ose-server:{{ docker_tag }}"
     build:
+      pull: no
       path: /home/pi/screenly
       dockerfile: /home/pi/screenly/docker/Dockerfile.server
     source: build
@@ -169,6 +170,7 @@
   docker_image:
     name: "screenly/screenly-ose-viewer:{{ docker_tag }}-{{ device_type }}"
     build:
+      pull: no
       path: /home/pi/screenly
       dockerfile: /home/pi/screenly/docker/Dockerfile.viewer
       args:
@@ -178,6 +180,7 @@
   docker_image:
     name: "screenly/screenly-ose-websocket:{{ docker_tag }}"
     build:
+      pull: no
       path: /home/pi/screenly
       dockerfile: /home/pi/screenly/docker/Dockerfile.websocket
 
@@ -185,6 +188,7 @@
   docker_image:
     name: "screenly/screenly-ose-celery:{{ docker_tag }}"
     build:
+      pull: no
       path: /home/pi/screenly
       dockerfile: /home/pi/screenly/docker/Dockerfile.server
 
