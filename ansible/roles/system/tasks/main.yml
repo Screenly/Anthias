@@ -172,9 +172,13 @@
       - console-data
       - libffi-dev
       - libssl-dev
+      - omxplayer
       - python-dev
+      - python-gobject
       - python-netifaces
+      - python-simplejson
       - rpi-update
+      - sqlite3
       - systemd
     state: latest
 
@@ -185,12 +189,24 @@
       - lightdm
       - lightdm-gtk-greeter
       - matchbox
-      - omxplayer
-      - sqlite3
+      - pix-plym-splash
+      - rabbitmq-server
+      - redis-server
       - supervisor
       - uzbl
       - x11-xserver-utils
       - xserver-xorg
+    state: absent
+
+- name: Remove cups/printing related packages
+  apt:
+    name:
+      - cups
+      - cups-browsed
+      - cups-client
+      - cups-common
+      - cups-daemon
+      - cups-server-common
     state: absent
 
 - name: Add docker apt key
@@ -227,7 +243,8 @@
     - system-upgrade
 
 - name: Clean up unused packages
-  command: apt-get -y autoremove
+  apt:
+    autoremove: yes
   tags:
     - system-upgrade
 

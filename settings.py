@@ -1,48 +1,48 @@
 #!/usr/bin/env python
-# -*- coding: utf8 -*-
-
-from os import path, getenv
-from sys import exit
-from time import sleep
-import ConfigParser
-import logging
-from UserDict import IterableUserDict
-from flask import request, Response
-from functools import wraps
-import zmq
+# -*- coding: utf-8 -*-
 import hashlib
+import json
+import logging
+import os
+import zmq
+import ConfigParser
+from os import path, getenv
+from time import sleep
+from UserDict import IterableUserDict
+
+from lib.auth import WoTTAuth, BasicAuth, NoAuth
+from lib.errors import ZmqCollectorTimeout
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
 DEFAULTS = {
     'main': {
-        'database': CONFIG_DIR + 'screenly.db',
+        'analytics_opt_out': False,
         'assetdir': 'screenly_assets',
+        'database': CONFIG_DIR + 'screenly.db',
+        'date_format': 'mm/dd/yyyy',
         'use_24_hour_clock': False,
-        'websocket_port': '9999',
         'use_ssl': False,
-        'analytics_opt_out': False
+        'auth_backend': '',
+        'websocket_port': '9999'
     },
     'viewer': {
-        'player_name': '',
-        'show_splash': True,
         'audio_output': 'hdmi',
-        'shuffle_playlist': False,
-        'resolution': '1920x1080',
+        'debug_logging': False,
         'default_duration': '10',
         'default_streaming_duration': '300',
-        'debug_logging': False,
-        'verify_ssl': True
-    },
-    'auth': {
-        'user': '',
-        'password': ''
+        'player_name': '',
+        'resolution': '1920x1080',
+        'show_splash': True,
+        'shuffle_playlist': False,
+        'verify_ssl': True,
+        'usb_assets_key': '',
+        'default_assets': False
     }
 }
 CONFIGURABLE_SETTINGS = DEFAULTS['viewer'].copy()
-CONFIGURABLE_SETTINGS['user'] = DEFAULTS['auth']['user']
-CONFIGURABLE_SETTINGS['password'] = DEFAULTS['auth']['password']
 CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock']
+CONFIGURABLE_SETTINGS['date_format'] = DEFAULTS['main']['date_format']
 
 PORT = int(getenv('PORT', 8080))
 LISTEN = getenv('LISTEN', '127.0.0.1')
@@ -67,6 +67,13 @@ class ScreenlySettings(IterableUserDict):
         IterableUserDict.__init__(self, *args, **kwargs)
         self.home = getenv('HOME')
         self.conf_file = self.get_configfile()
+        self.auth_backends_list = [NoAuth(), BasicAuth(self)]
+        if os.path.isdir('/opt/wott'):
+            self.auth_backends_list.append(WoTTAuth(self))
+        self.auth_backends = {}
+        for backend in self.auth_backends_list:
+            DEFAULTS.update(backend.config)
+            self.auth_backends[backend.name] = backend
 
         if not path.isfile(self.conf_file):
             logging.error('Config-file %s missing. Using defaults.', self.conf_file)
@@ -129,12 +136,11 @@ class ScreenlySettings(IterableUserDict):
     def get_configfile(self):
         return path.join(self.home, CONFIG_DIR, CONFIG_FILE)
 
-    def check_user(self, user, password):
-        if not self['user'] or not self['password']:
-            logging.debug('Username or password not configured: skip authentication')
-            return True
-
-        return self['user'] == user and self['password'] == password
+    @property
+    def auth(self):
+        backend_name = self['auth_backend']
+        if backend_name in self.auth_backends:
+            return self.auth_backends[self['auth_backend']]
 
 
 settings = ScreenlySettings()
@@ -166,18 +172,45 @@ class ZmqPublisher:
         self.socket.send_string("viewer {}".format(msg))
 
 
-def authenticate():
-    realm = "Screenly OSE" + (" " + settings['player_name'] if settings['player_name'] else "")
-    return Response("Access denied", 401, {"WWW-Authenticate": 'Basic realm="' + realm + '"'})
+class ZmqConsumer:
+    def __init__(self):
+        self.context = zmq.Context()
+
+        self.socket = self.context.socket(zmq.PUSH)
+        self.socket.setsockopt(zmq.LINGER, 0)
+        self.socket.connect('tcp://{}:5558'.format(LISTEN))
+
+        sleep(1)
+
+    def send(self, msg):
+        self.socket.send_json(msg, flags=zmq.NOBLOCK)
 
 
-def auth_basic(orig):
-    @wraps(orig)
-    def decorated(*args, **kwargs):
-        if not settings['user'] or not settings['password']:
-            return orig(*args, **kwargs)
-        auth = request.authorization
-        if not auth or not settings.check_user(auth.username, hashlib.sha256(auth.password).hexdigest()):
-            return authenticate()
-        return orig(*args, **kwargs)
-    return decorated
+class ZmqCollector:
+    INSTANCE = None
+
+    def __init__(self):
+        if self.INSTANCE is not None:
+            raise ValueError("An instantiation already exists!")
+
+        self.context = zmq.Context()
+
+        self.socket = self.context.socket(zmq.PULL)
+        self.socket.bind('tcp://127.0.0.1:5558')
+
+        self.poller = zmq.Poller()
+        self.poller.register(self.socket, zmq.POLLIN)
+
+        sleep(1)
+
+    @classmethod
+    def get_instance(cls):
+        if cls.INSTANCE is None:
+            cls.INSTANCE = ZmqCollector()
+        return cls.INSTANCE
+
+    def recv_json(self, timeout):
+        if self.poller.poll(timeout):
+            return json.loads(self.socket.recv(zmq.NOBLOCK))
+
+        raise ZmqCollectorTimeout

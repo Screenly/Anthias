@@ -68,6 +68,12 @@ alter table assets add is_processing integer default 0;
 commit;
 """
 
+query_add_skip_asset_check = """
+begin transaction;
+alter table assets add skip_asset_check integer default 0;
+commit;
+"""
+
 
 def migrate_add_column(col, script):
     with open_db_get_cursor() as (cursor, conn):
@@ -159,10 +165,12 @@ def migrate_drop_filename():
             print 'Obsolete column (' + col + ') is not present'
 # ✂--------
 
+
 if __name__ == '__main__':
     migrate_drop_filename()
     migrate_add_is_enabled_and_nocache()
     migrate_make_asset_id_primary_key()
     migrate_add_column('play_order', query_add_play_order)
     migrate_add_column('is_processing', query_add_is_processing)
+    migrate_add_column('skip_asset_check', query_add_skip_asset_check)
     print "Migration done."

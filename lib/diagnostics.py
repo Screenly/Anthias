@@ -5,6 +5,7 @@ import os
 import sh
 import socket
 import sqlite3
+import re
 import utils
 from pprint import pprint
 from uptime import uptime
@@ -21,7 +22,7 @@ def parse_cpu_info():
             try:
                 key = line.split(':')[0].strip()
                 value = line.split(':')[1].strip()
-            except:
+            except Exception:
                 pass
 
             if key == 'processor':
@@ -39,7 +40,7 @@ def get_kernel_modules():
             if 'Module' not in line:
                 modules.append(line.split()[0])
         return modules
-    except:
+    except Exception:
         return 'Unable to run lsmod.'
 
 
@@ -49,14 +50,14 @@ def get_gpu_version():
         for line in version:
             if 'version' in line:
                 return line.strip().replace('version ', '')
-    except:
+    except Exception:
         return 'Unable to run vcgencmd.'
 
 
 def get_monitor_status():
     try:
         return sh.tvservice('-s').stdout.strip()
-    except:
+    except Exception:
         return 'Unable to run tvservice.'
 
 
@@ -69,7 +70,7 @@ def get_display_power():
             return 'Off'
         else:
             return 'Unknown'
-    except:
+    except Exception:
         return 'Unable to determine display power.'
 
 
@@ -111,6 +112,34 @@ def get_load_avg():
     return load_avg
 
 
+def get_git_branch():
+    screenly_path = os.path.join(os.getenv('HOME'), 'screenly', '.git')
+    try:
+        get_hash = sh.git(
+            '--git-dir={}'.format(screenly_path),
+            'rev-parse',
+            '--abbrev-ref',
+            'HEAD'
+        )
+        return get_hash.stdout.strip()
+    except Exception:
+        return 'Unable to get git branch.'
+
+
+def get_git_short_hash():
+    screenly_path = os.path.join(os.getenv('HOME'), 'screenly', '.git')
+    try:
+        get_hash = sh.git(
+            '--git-dir={}'.format(screenly_path),
+            'rev-parse',
+            '--short',
+            'HEAD'
+        )
+        return get_hash.stdout.strip()
+    except Exception:
+        return 'Unable to get git hash.'
+
+
 def get_git_hash():
     screenly_path = os.path.join(os.getenv('HOME'), 'screenly', '.git')
     try:
@@ -120,7 +149,7 @@ def get_git_hash():
             'HEAD'
         )
         return get_hash.stdout.strip()
-    except:
+    except Exception:
         return 'Unable to get git hash.'
 
 
@@ -157,6 +186,172 @@ def get_debian_version():
                 return str(line).strip()
     else:
         return 'Unable to get Debian version.'
+
+
+def get_raspberry_code():
+    matches = re.findall(r'\:(.*)', sh.grep('Revision', '/proc/cpuinfo').stdout)
+    if matches:
+        return matches[0].strip()
+
+
+def get_raspberry_model(raspberry_code):
+    """
+    Data source
+    https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
+    """
+    models = {
+        '900021': 'Model A+',
+        '900032': 'Model B+',
+        '900092': 'Model Zero',
+        '900093': 'Model Zero',
+        '9000c1': 'Model Zero W',
+        '9020e0': 'Model 3A+',
+        '920092': 'Model Zero',
+        '920093': 'Model Zero',
+        '900061': 'Model CM',
+        'a01040': 'Model 2B',
+        'a01041': 'Model 2B',
+        'a02082': 'Model 3B',
+        'a020a0': 'Model CM3',
+        'a020d3': 'Model 3B+',
+        'a02042': 'Model 2B (with BCM2837)',
+        'a21041': 'Model 2B',
+        'a22042': 'Model 2B (with BCM2837)',
+        'a22082': 'Model 3B',
+        'a220a0': 'Model CM3',
+        'a32082': 'Model 3B',
+        'a52082': 'Model 3B',
+        'a22083': 'Model 3B',
+        'a02100': 'Model CM3+',
+        'a03111': 'Model 4B',
+        'b03111': 'Model 4B',
+        'b03112': 'Model 4B',
+        'c03111': 'Model 4B',
+        'c03112': 'Model 4B',
+        'd03114': 'Model 4B'
+    }
+
+    return models.get(raspberry_code, 'Unable to determine raspberry model.')
+
+
+def get_raspberry_revision(raspberry_code):
+    """
+    Data source
+    https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
+    """
+    revisions = {
+	    '900021': '1.1',
+	    '900032': '1.2',
+	    '900092': '1.2',
+	    '900093': '1.3',
+	    '9000c1': '1.1',
+	    '9020e0': '1.0',
+	    '920092': '1.2',
+	    '920093': '1.3',
+	    '900061': '1.1',
+	    'a01040': '1.0',
+	    'a01041': '1.1',
+	    'a02082': '1.2',
+	    'a020a0': '1.0',
+	    'a020d3': '1.3',
+	    'a02042': '1.2',
+	    'a21041': '1.1',
+	    'a22042': '1.2',
+	    'a22082': '1.2',
+	    'a220a0': '1.0',
+	    'a32082': '1.2',
+	    'a52082': '1.2',
+	    'a22083': '1.3',
+	    'a02100': '1.0',
+	    'a03111': '1.1',
+	    'b03111': '1.1',
+	    'b03112': '1.2',
+	    'c03111': '1.1',
+	    'c03112': '1.2',
+	    'd03114': '1.4'
+    }
+
+    return revisions.get(raspberry_code, 'Unable to determine raspberry revision.')
+
+
+def get_raspberry_ram(raspberry_code):
+    """
+    Data source
+    https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
+    """
+    rams = {
+        '900021': '512MB',
+        '900032': '512MB',
+        '900092': '512MB',
+        '900093': '512MB',
+        '9000c1': '512MB',
+        '9020e0': '512MB',
+        '920092': '512MB',
+        '920093': '512MB',
+        '900061': '512MB',
+        'a01040': '1GB',
+        'a01041': '1GB',
+        'a02082': '1GB',
+        'a020a0': '1GB',
+        'a020d3': '1GB',
+        'a02042': '1GB',
+        'a21041': '1GB',
+        'a22042': '1GB',
+        'a22082': '1GB',
+        'a220a0': '1GB',
+        'a32082': '1GB',
+        'a52082': '1GB',
+        'a22083': '1GB',
+        'a02100': '1GB',
+        'a03111': '1GB',
+        'b03111': '2GB',
+        'b03112': '2GB',
+        'c03111': '4GB',
+        'c03112': '4GB',
+        'd03114': '8GB'
+    }
+
+    return rams.get(raspberry_code, 'Unable to determine raspberry RAM.')
+
+
+def get_raspberry_manufacturer(raspberry_code):
+    """
+    Data source
+    https://www.raspberrypi.org/documentation/hardware/raspberrypi/revision-codes/README.md
+    """
+    manufacturers = {
+        '900021': 'Sony UK',
+        '900032': 'Sony UK',
+        '900092': 'Sony UK',
+        '900093': 'Sony UK',
+        '9000c1': 'Sony UK',
+        '9020e0': 'Sony UK',
+        '920092': 'Embest',
+        '920093': 'Embest',
+        '900061': 'Sony UK',
+        'a01040': 'Sony UK',
+        'a01041': 'Sony UK',
+        'a02082': 'Sony UK',
+        'a020a0': 'Sony UK',
+        'a020d3': 'Sony UK',
+        'a02042': 'Sony UK',
+        'a21041': 'Embest',
+        'a22042': 'Embest',
+        'a22082': 'Embest',
+        'a220a0': 'Embest',
+        'a32082': 'Sony Japan',
+        'a52082': 'Stadium',
+        'a22083': 'Embest',
+        'a02100': 'Sony UK',
+        'a03111': 'Sony UK',
+        'b03111': 'Sony UK',
+        'b03112': 'Sony UK',
+        'c03111': 'Sony UK',
+        'c03112': 'Sony UK',
+        'd03114': 'Sony UK'
+    }
+
+    return manufacturers.get(raspberry_code, 'Unable to determine raspberry manufacturer.')
 
 
 def compile_report():

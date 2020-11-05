@@ -1,0 +1,11 @@
+{
+  "name": "screenly-ose",
+  "version": "1.0.0",
+  "dependencies": {
+    "bootstrap": "^4.3.1",
+    "css-toggle-switch": "^4.1.0"
+  },
+  "devDependencies": {
+    "coffee-script": "^1.12.7"
+  }
+}

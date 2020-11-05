@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 
-from nose.tools import ok_, eq_
+from nose.tools import eq_
 from nose.plugins.attrib import attr
 import mock
 import unittest
@@ -24,9 +24,6 @@ class ViewerTestCase(unittest.TestCase):
         self.m_cmd = mock.Mock(name='m_cmd')
         self.p_cmd = mock.patch.object(self.u.sh, 'Command', self.m_cmd)
 
-        self.m_send = mock.Mock(name='m_send')
-        self.p_send = mock.patch.object(self.u, 'browser_send', self.m_send)
-
         self.m_killall = mock.Mock(name='killall')
         self.p_killall = mock.patch.object(self.u.sh, 'killall', self.m_killall)
 
@@ -43,18 +40,28 @@ class ViewerTestCase(unittest.TestCase):
         self.u.SPLASH_DELAY = self.original_splash_delay
 
 
+@attr('fixme')
+class TestEmptyPl(ViewerTestCase):
+    def test_empty(self):
+        m_asset_list = mock.Mock()
+        m_asset_list.return_value = ([], None)
+        with mock.patch.object(self.u, 'generate_asset_list', m_asset_list):
+            self.u.main()
+
+
 class TestLoadBrowser(ViewerTestCase):
-    def load_browser(self):
-        m_uzbl = mock.Mock(name='ScreenlyWebview')
-        self.m_cmd.return_value = m_uzbl
+    @mock.patch('pydbus.SessionBus', mock.MagicMock())
+    def test_setup(self):
+        self.p_loadb.start()
+        self.u.setup()
+        self.p_loadb.stop()
+
+    def test_load_browser(self):
+        self.m_cmd.return_value.return_value.process.stdout = 'Screenly service start'
         self.p_cmd.start()
-        self.p_send.start()
         self.u.load_browser()
-        self.p_send.stop()
         self.p_cmd.stop()
         self.m_cmd.assert_called_once_with('ScreenlyWebview')
-        m_uzbl.assert_called_once_with(print_events=True, config='-', uri=None, _bg=True)
-        m_send.assert_called_once()
 
 
 class TestSignalHandlers(ViewerTestCase):

@@ -1,3 +1,0 @@
-configparser==3.5.0
-flask==0.12.2
-pyzmq==16.0.2

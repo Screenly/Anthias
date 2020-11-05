@@ -1,0 +1,2 @@
+docker==4.3.1
+docker-compose==1.26.2

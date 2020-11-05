@@ -3,39 +3,46 @@ import db
 import json
 import os
 import pytz
+import random
 import re
 import requests
+import string
+import sh
+import time
 
 from datetime import datetime, timedelta
 from distutils.util import strtobool
-from netifaces import ifaddresses
+from netifaces import ifaddresses, gateways, AF_INET, AF_LINK
 from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
-from sh import grep, netstat
 from subprocess import check_output, call
 from threading import Thread
 from urlparse import urlparse
+import logging
 
 from assets_helper import update
 
+WOTT_PATH = '/opt/wott'
+
 arch = machine()
 
-HTTP_OK = xrange(200, 299)
+# 300 level HTTP responses are also ok, such as redirects, which many sites have and load
+HTTP_OK = xrange(200, 399)
 
 # This will only work on the Raspberry Pi,
 # so let's wrap it in a try/except so that
 # Travis can run.
 try:
     from sh import omxplayer
-except:
+except ImportError:
     pass
 
 # This will work on x86-based machines
 if machine() in ['x86', 'x86_64']:
     try:
         from sh import ffprobe, mplayer
-    except:
+    except ImportError:
         pass
 
 
@@ -73,16 +80,95 @@ def validate_url(string):
     return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
 
 
-def get_node_ip():
-        """Returns the node's IP, for the interface
-        that is being used as the default gateway.
-        This should work on both MacOS X and Linux."""
+def get_node_ip(retry=3, timeout=1):
+    """Returns the node's IP, for the interface
+    that is being used as the default gateway.
+    This should work on both MacOS X and Linux."""
+    for attempt in range(1, retry + 1):
         try:
-            default_interface = grep(netstat('-nr'), '-e', '^default', '-e' '^0.0.0.0').split()[-1]
-            my_ip = ifaddresses(default_interface)[2][0]['addr']
+            default_interface = gateways()['default'][AF_INET][1]
+            my_ip = ifaddresses(default_interface)[AF_INET][0]['addr']
             return my_ip
-        except:
-            raise Exception("Unable to resolve local IP address.")
+        except (KeyError, ValueError):
+            if attempt == retry:
+                break
+            time.sleep(timeout)
+    raise Exception("Unable to resolve local IP address.")
+
+
+def get_node_mac_address():
+    """Returns the node's MAC address, for the interface
+    that is being used as the default gateway.
+    This should work on both MacOS X and Linux."""
+    try:
+        default_interface = gateways()['default'][AF_INET][1]
+        mac_address = ifaddresses(default_interface)[AF_LINK][0]['addr']
+        return mac_address
+    except (KeyError, ValueError):
+        pass
+
+
+def get_active_connections(bus, fields=None):
+    """
+
+    :param bus: pydbus.bus.Bus
+    :param fields: list
+    :return: list
+    """
+    if not fields:
+        fields = ['Id', 'Uuid', 'Type', 'Devices']
+
+    connections = list()
+
+    try:
+        nm_proxy = bus.get("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager")
+    except Exception:
+        return None
+
+    nm_properties = nm_proxy["org.freedesktop.DBus.Properties"]
+    active_connections = nm_properties.Get("org.freedesktop.NetworkManager", "ActiveConnections")
+    for active_connection in active_connections:
+        active_connection_proxy = bus.get("org.freedesktop.NetworkManager", active_connection)
+        active_connection_properties = active_connection_proxy["org.freedesktop.DBus.Properties"]
+
+        connection = dict()
+        for field in fields:
+            field_value = active_connection_properties.Get("org.freedesktop.NetworkManager.Connection.Active", field)
+
+            if field == 'Devices':
+                devices = list()
+                for device_path in field_value:
+                    device_proxy = bus.get("org.freedesktop.NetworkManager", device_path)
+                    device_properties = device_proxy["org.freedesktop.DBus.Properties"]
+                    devices.append(device_properties.Get("org.freedesktop.NetworkManager.Device", "Interface"))
+                field_value = devices
+
+            connection.update({field: field_value})
+        connections.append(connection)
+
+    return connections
+
+
+def remove_connection(bus, uuid):
+    """
+
+    :param bus: pydbus.bus.Bus
+    :param uuid: string
+    :return: boolean
+    """
+    try:
+        nm_proxy = bus.get("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings")
+    except Exception:
+        return False
+
+    nm_settings = nm_proxy["org.freedesktop.NetworkManager.Settings"]
+
+    connection_path = nm_settings.GetConnectionByUuid(uuid)
+    connection_proxy = bus.get("org.freedesktop.NetworkManager", connection_path)
+    connection = connection_proxy["org.freedesktop.NetworkManager.Settings.Connection"]
+    connection.Delete()
+
+    return True
 
 
 def get_video_duration(file):
@@ -91,10 +177,13 @@ def get_video_duration(file):
     """
     time = None
 
-    if arch in ('armv6l', 'armv7l'):
-        run_player = omxplayer(file, info=True, _err_to_out=True, _ok_code=[0, 1])
-    else:
-        run_player = ffprobe('-i', file, _err_to_out=True)
+    try:
+        if arch in ('armv6l', 'armv7l'):
+            run_player = omxplayer(file, info=True, _err_to_out=True, _ok_code=[0, 1], _decode_errors='ignore')
+        else:
+            run_player = ffprobe('-i', file, _err_to_out=True)
+    except sh.ErrorReturnCode_1:
+        raise Exception('Bad video format')
 
     for line in run_player.split('\n'):
         if 'Duration' in line:
@@ -146,14 +235,14 @@ def url_fails(url):
     Try HEAD and GET for URL availability check.
     """
 
-    # Use Certifi module
+    # Use Certifi module and set to True as default so users stop seeing InsecureRequestWarning in logs
     if settings['verify_ssl']:
         verify = certifi.where()
     else:
-        verify = False
+        verify = True
 
     headers = {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15'
     }
     try:
         if not validate_url(url):
@@ -217,3 +306,60 @@ def template_handle_unicode(value):
     if isinstance(value, str):
         return value.decode('utf-8')
     return unicode(value)
+
+
+def is_demo_node():
+    """
+    Check if the environment variable IS_DEMO_NODE is set to 1
+    :return: bool
+    """
+    return string_to_bool(os.getenv('IS_DEMO_NODE', False))
+
+
+def generate_perfect_paper_password(pw_length=10, has_symbols=True):
+    """
+    Generates a password using 64 characters from
+    "Perfect Paper Password" system by Steve Gibson
+
+    :param pw_length: int
+    :param has_symbols: bool
+    :return: string
+    """
+    ppp_letters = '!#%+23456789:=?@ABCDEFGHJKLMNPRSTUVWXYZabcdefghjkmnopqrstuvwxyz'
+    if not has_symbols:
+        ppp_letters = ''.join(set(ppp_letters) - set(string.punctuation))
+    return "".join(random.SystemRandom().choice(ppp_letters) for _ in range(pw_length))
+
+
+def is_docker():
+    return os.path.isfile('/.dockerenv')
+
+
+def is_balena_app():
+    """
+    Checks the application is running on Balena Cloud
+    :return: bool
+    """
+    return bool(getenv('RESIN', False)) or bool(getenv('BALENA', False))
+
+
+def is_wott_integrated():
+    """
+    Chacks if wott-agent installed or not
+    :return:
+    """
+    return os.path.isdir(WOTT_PATH)
+
+
+def get_wott_device_id():
+    """
+    :return: WoTT Device id of this device
+    """
+    metadata_path = os.path.join(WOTT_PATH, 'metadata.json')
+    if os.path.isfile(metadata_path):
+        with open(metadata_path) as metadata_file:
+            metadata = json.load(metadata_file)
+        if 'device_id' in metadata:
+            return metadata['device_id']
+    logging.warning("Could not read WoTT Device ID")
+    return 'Could not read WoTT Device ID'

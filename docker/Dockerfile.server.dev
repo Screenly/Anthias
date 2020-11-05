@@ -1,0 +1,49 @@
+FROM debian:buster
+
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+        build-essential \
+        curl \
+        ffmpeg \
+        git \
+        libffi-dev \
+        libssl-dev \
+        lsb-release \
+        mplayer \
+        net-tools \
+        procps \
+        python-pip \
+        python-setuptools \
+        python-dev \
+        python-gobject \
+        python-pil \
+        python-simplejson \
+        sqlite3 \
+    && \
+    apt-get clean
+
+# Install Python requirements
+ADD requirements/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.dev.txt
+
+# Create runtime user
+RUN useradd pi
+
+# Install config file and file structure
+RUN mkdir -p /home/pi/.screenly /home/pi/screenly /home/pi/screenly_assets
+COPY ansible/roles/screenly/files/default_assets.yml /home/pi/.screenly/default_assets.yml
+COPY ansible/roles/screenly/files/screenly.conf /home/pi/.screenly/screenly.conf
+RUN chown -R pi:pi /home/pi/.screenly /home/pi/screenly_assets
+
+USER pi
+WORKDIR /home/pi/screenly
+
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
+EXPOSE 8080
+
+CMD python server.py

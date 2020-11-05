@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 
 import datetime
 import functools
@@ -42,6 +42,7 @@ asset_w = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 1,
+    'skip_asset_check': 0
 }
 
 asset_w_diff = {
@@ -60,6 +61,7 @@ asset_x = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 1,
+    'skip_asset_check': 0
 }
 
 asset_x_diff = {
@@ -78,6 +80,7 @@ asset_y = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 0,
+    'skip_asset_check': 0
 }
 asset_y_diff = {
     'duration': u'324'
@@ -92,6 +95,7 @@ asset_z = {
     'is_enabled': 1,
     'nocache': 0,
     'is_processing': 0,
+    'skip_asset_check': 0
 }
 url_fail = 'http://doesnotwork.example.com'
 url_redir = 'http://example.com'
@@ -221,3 +225,32 @@ class DBHelperTest(unittest.TestCase):
         fetched = assets_helper.read(self.conn)
 
         self.assertEquals([0, 0, 0], [asset['play_order'] for asset in fetched])
+
+    def test_update_asset(self):
+        asset_x_ = assets_helper.create(self.conn, asset_x)
+        asset_x_copy = asset_x_.copy()
+        data = {'name': 'New name', 'mimetype': 'should not setted', 'empty': 'non exists field'}
+
+        self.assertEquals(asset_x_, asset_x_copy)
+
+        server.update_asset(asset_x_copy, data)
+        asset_x_copy = assets_helper.update(self.conn, asset_x_copy.get('id'), asset_x_copy)
+
+        self.assertEquals(asset_x_copy,
+                          {'is_enabled': 1,
+                           'asset_id': None,
+                           'end_date': datetime.datetime(2013, 1, 19, 23, 59),
+                           'is_active': 0,
+                           'duration': u'5',
+                           'is_processing': 0,
+                           'mimetype': u'web',
+                           'name': 'New name',
+                           'nocache': 0,
+                           'uri': u'http://www.wireload.net',
+                           'skip_asset_check': 0,
+                           'play_order': 1,
+                           'start_date': datetime.datetime(2013, 1, 16, 0, 0)
+                           }
+                          )
+
+        self.assertNotEqual(asset_x_, asset_x_copy)

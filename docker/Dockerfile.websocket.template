@@ -1,0 +1,18 @@
+FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:buster
+
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+        build-essential \
+        curl \
+        python-pip \
+        python-setuptools \
+        python-dev && \
+    apt-get clean
+
+# Install Python requirements
+ADD requirements/requirements-websocket.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+COPY . /tmp/screenly
+
+CMD ["bash", "/tmp/screenly/bin/start_balena.sh"]
