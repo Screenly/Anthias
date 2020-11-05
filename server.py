@@ -42,7 +42,7 @@ from lib import diagnostics
 from lib import queries
 
 from lib.auth import authorized
-from lib.utils import generate_perfect_paper_password
+from lib.utils import generate_perfect_paper_password, is_docker
 from lib.utils import get_active_connections, remove_connection
 from lib.utils import get_node_ip, get_node_mac_address
 from lib.utils import get_video_duration
@@ -1740,6 +1740,7 @@ def settings_page():
         'user': settings['user'],
         'need_current_password': bool(settings['auth_backend']),
         'is_balena': is_balena_app(),
+        'is_docker': is_docker(),
         'auth_backend': settings['auth_backend'],
         'auth_backends': auth_backends
     })

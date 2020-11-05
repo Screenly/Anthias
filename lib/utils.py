@@ -331,6 +331,10 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
     return "".join(random.SystemRandom().choice(ppp_letters) for _ in range(pw_length))
 
 
+def is_docker():
+    return os.path.isfile('/.dockerenv')
+
+
 def is_balena_app():
     """
     Checks the application is running on Balena Cloud

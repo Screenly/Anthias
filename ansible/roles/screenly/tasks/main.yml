@@ -33,7 +33,7 @@
 
 - name: Install pip dependencies
   pip:
-    requirements: /home/pi/screenly/requirements/requirements.txt
+    requirements: /home/pi/screenly/requirements/requirements.host.txt
     extra_args: "--no-cache-dir --upgrade"
 
 - name: Create default assets database if does not exists
@@ -138,7 +138,6 @@
     state: stopped
     enabled: no
   with_items: "{{ deprecated_screenly_systemd_units }}"
-  when: x_service_exist
 
 - name: Remove deprecated systemd units
   file:
@@ -156,23 +155,78 @@
 - debug:
     msg: "Use {{ docker_tag }} version of images."
 
-- name: Create screenly-viewer container
-  docker_container:
-    name: screenly-ose-viewer
-    image: "ruskodevelop/screenly-ose-viewer:latest"
-    pull: true
-    state: started
-    recreate: true
-    restart_policy: unless-stopped
-    network_mode: host
-    privileged: yes
-    log_driver: journald
-    volumes:
-      - /home/pi/screenly:/home/pi/screenly
-      - /home/pi/.screenly:/home/pi/.screenly
-      - /home/pi/screenly_assets:/home/pi/screenly_assets
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
+- name: Run docker-compose
+  docker_compose:
+    project_name: screenly
+    definition:
+      version: "2"
+      services:
+        screenly-server:
+          image: ruskodevelop/screenly-ose-server:latest
+          container_name: screenly-server
+          entrypoint: python server.py
+          restart: unless-stopped
+          network_mode: "host"
+          volumes:
+            - /home/pi/screenly_assets:/home/pi/screenly_assets
+            - /home/pi/screenly:/home/pi/screenly
+            - /home/pi/.screenly:/home/pi/.screenly
+            - /etc/timezone:/etc/timezone:ro
+            - /etc/localtime:/etc/localtime:ro
+
+        screenly-viewer:
+          image: ruskodevelop/screenly-ose-viewer:latest
+          container_name: screenly-viewer
+          privileged: true
+          restart: unless-stopped
+          network_mode: "host"
+          volumes:
+            - /home/pi/screenly_assets:/home/pi/screenly_assets
+            - /home/pi/screenly:/home/pi/screenly
+            - /home/pi/.screenly:/home/pi/.screenly
+            - /etc/timezone:/etc/timezone:ro
+            - /etc/localtime:/etc/localtime:ro
+          depends_on:
+            - screenly-server
+
+        screenly-websocket:
+          image: ruskodevelop/screenly-ose-websocket:latest
+          container_name: screenly-websocket
+          restart: unless-stopped
+          network_mode: "host"
+          volumes:
+            - /home/pi/screenly_assets:/home/pi/screenly_assets
+            - /home/pi/screenly:/home/pi/screenly
+            - /home/pi/.screenly:/home/pi/.screenly
+            - /etc/timezone:/etc/timezone:ro
+            - /etc/localtime:/etc/localtime:ro
+          depends_on:
+            - screenly-server
+
+        screenly-celery:
+          image: ruskodevelop/screenly-ose-server:latest
+          container_name: screenly-celery
+          entrypoint: celery worker -A server.celery -B -n worker@screenly --loglevel=info --schedule /tmp/celerybeat-schedule
+          network_mode: "host"
+          restart: unless-stopped
+          volumes:
+            - /home/pi/screenly_assets:/home/pi/screenly_assets
+            - /home/pi/screenly:/home/pi/screenly
+            - /home/pi/.screenly:/home/pi/.screenly
+            - /etc/timezone:/etc/timezone:ro
+            - /etc/localtime:/etc/localtime:ro
+          depends_on:
+            - screenly-server
+            - redis
+
+        redis:
+          image: redis:alpine
+          restart: unless-stopped
+          ports:
+            - "6379:6379"
+
+    pull: yes
+    recreate: smart
 
 - name: Pause screenly-viewer container
   command: docker pause screenly-ose-viewer

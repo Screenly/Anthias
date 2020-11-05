@@ -227,7 +227,7 @@
                 </div>
             </div>
 
-            {% if not context.is_balena %}
+            {% if not (context.is_balena or context.is_docker) %}
 
                 {# USB assets #}
                 <div id="usb-assets-key-section" class="col-12 mb-5">

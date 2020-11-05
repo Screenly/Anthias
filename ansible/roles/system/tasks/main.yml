@@ -177,7 +177,6 @@
       - python-gobject
       - python-netifaces
       - python-simplejson
-      - redis-server
       - rpi-update
       - sqlite3
       - systemd
@@ -192,6 +191,7 @@
       - matchbox
       - pix-plym-splash
       - rabbitmq-server
+      - redis-server
       - supervisor
       - uzbl
       - x11-xserver-utils
