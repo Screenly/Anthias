@@ -44,6 +44,7 @@
     dest: /home/pi/.screenly/screenly.db
     force: no
 
+# This needs to be moved into Docker
 - name: Run database migration
   become_user: pi
   command: python /home/pi/screenly/bin/migrate.py
@@ -156,13 +157,44 @@
 - debug:
     msg: "Use {{ docker_tag }} version of images."
 
+- name: Build screenly-ose-server
+  docker_image:
+    name: "screenly/screenly-ose-server:{{ docker_tag }}"
+    build:
+      path: /home/pi/screenly
+      dockerfile: /home/pi/screenly/docker/Dockerfile.server
+    source: build
+
+- name: Build screenly-ose-viewer
+  docker_image:
+    name: "screenly/screenly-ose-viewer:{{ docker_tag }}-{{ device_type }}"
+    build:
+      path: /home/pi/screenly
+      dockerfile: /home/pi/screenly/docker/Dockerfile.viewer
+      args:
+        - PI_VERSION={{ device_type }}
+
+- name: Build screenly-ose-websocket
+  docker_image:
+    name: "screenly/screenly-ose-websocket:{{ docker_tag }}"
+    build:
+      path: /home/pi/screenly
+      dockerfile: /home/pi/screenly/docker/Dockerfile.websocket
+
+- name: Build screenly-ose-celery
+  docker_image:
+    name: "screenly/screenly-ose-celery:{{ docker_tag }}"
+    build:
+      path: /home/pi/screenly
+      dockerfile: /home/pi/screenly/docker/Dockerfile.server
+
 - name: Run docker-compose
   docker_compose:
     project_name: screenly
     definition:
       version: "2"
       services:
-        screenly-server:
+        screenly-ose-server:
           image: "screenly/screenly-ose-server:{{ docker_tag }}"
           build:
             context: /home/pi/screenly
@@ -178,7 +210,7 @@
             - /etc/timezone:/etc/timezone:ro
             - /etc/localtime:/etc/localtime:ro
 
-        screenly-viewer:
+        screenly-ose-viewer:
           image: "screenly/screenly-ose-viewer:{{ docker_tag }}-{{ device_type }}"
           build:
             context: /home/pi/screenly
@@ -196,14 +228,14 @@
             - /etc/timezone:/etc/timezone:ro
             - /etc/localtime:/etc/localtime:ro
           depends_on:
-            - screenly-server
+            - screenly-ose-server
 
-        screenly-websocket:
+        screenly-ose-websocket:
           image: "screenly/screenly-ose-websocket:{{ docker_tag }}"
           build:
             context: /home/pi/screenly
             dockerfile: /home/pi/screenly/docker/Dockerfile.websocket
-          container_name: screenly-websocket
+          container_name: screenly-ose-websocket
           restart: unless-stopped
           network_mode: "host"
           volumes:
@@ -213,9 +245,9 @@
             - /etc/timezone:/etc/timezone:ro
             - /etc/localtime:/etc/localtime:ro
           depends_on:
-            - screenly-server
+            - screenly-ose-server
 
-        screenly-celery:
+        screenly-ose-celery:
           image: "screenly/screenly-ose-celery:{{ docker_tag }}"
           build:
             context: /home/pi/screenly
@@ -231,7 +263,7 @@
             - /etc/timezone:/etc/timezone:ro
             - /etc/localtime:/etc/localtime:ro
           depends_on:
-            - screenly-server
+            - screenly-ose-server
             - redis
 
         redis:
