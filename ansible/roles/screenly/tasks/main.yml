@@ -240,7 +240,6 @@
           ports:
             - "6379:6379"
 
-    pull: no
     recreate: smart
 
 - name: Pause screenly-viewer container
