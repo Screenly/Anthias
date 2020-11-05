@@ -234,7 +234,18 @@
 - name: Add pi to docker group
   user:
     name: pi
-    group: docker
+    group: pi
+    groups:
+      - docker
+      - adm
+      - sudo
+      - video
+      - plugdev
+      - users
+      - input
+      - netdev
+      - gpio
+      - dialout
 
 - name: Perform system upgrade
   apt:
