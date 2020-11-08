@@ -1,6 +1,7 @@
+# This is the docker-compose file for Balena.
 version: "2"
 services:
-  screenly-server:
+  screenly-ose-server:
     build:
       context: .
       dockerfile: docker/Dockerfile.server.template
@@ -18,18 +19,18 @@ services:
     volumes:
       - resin-data:/data
 
-  screenly-viewer:
+  screenly-ose-viewer:
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer.template
     depends_on:
-      - screenly-server
+      - screenly-ose-server
     environment:
       - HOME=/data
       - NOREFRESH=1
       - PYTHONPATH=/data/screenly
       - SCREENLYSERVICE=viewer
-      - LISTEN=screenly-server
+      - LISTEN=screenly-ose-server
       - PORT=80
       - QT_QPA_PLATFORM=eglfs
     network_mode: "host"
@@ -38,17 +39,17 @@ services:
     volumes:
       - resin-data:/data
 
-  screenly-websocket:
+  screenly-ose-websocket:
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket.template
     depends_on:
-      - screenly-server
+      - screenly-ose-server
     environment:
       - HOME=/data
       - PYTHONPATH=/data/screenly
       - SCREENLYSERVICE=websocket
-      - LISTEN=screenly-server
+      - LISTEN=screenly-ose-server
     ports:
       - 9999:9999
     privileged: true
@@ -56,17 +57,16 @@ services:
     volumes:
       - resin-data:/data
 
-  screenly-celery:
+  screenly-ose-celery:
     build:
       context: .
-      dockerfile: docker/Dockerfile.celery.template
+      dockerfile: docker/Dockerfile.celery
     depends_on:
-      - screenly-server
+      - screenly-ose-server
       - redis
     environment:
       - HOME=/data
       - PYTHONPATH=/data/screenly
-      - SCREENLYSERVICE=celery
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     privileged: true
