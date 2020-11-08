@@ -38,3 +38,8 @@ node_modules
 *.retry
 
 .env
+
+.git/*
+.github/
+docker/*
+docks/*
