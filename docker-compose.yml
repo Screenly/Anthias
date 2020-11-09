@@ -1,7 +1,6 @@
-# This is the docker-compose file for Balena.
 version: "2"
 services:
-  screenly-ose-server:
+  srly-ose-server:
     build:
       context: .
       dockerfile: docker/Dockerfile.server
@@ -17,16 +16,16 @@ services:
     volumes:
       - resin-data:/data
 
-  screenly-ose-viewer:
+  srly-ose-viewer:
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
     depends_on:
-      - screenly-ose-server
+      - srly-ose-server
     environment:
       - HOME=/data
       - NOREFRESH=1
-      - LISTEN=screenly-ose-server
+      - LISTEN=srly-ose-server
       - PORT=80
       - QT_QPA_PLATFORM=eglfs
     network_mode: "host"
@@ -35,15 +34,15 @@ services:
     volumes:
       - resin-data:/data
 
-  screenly-ose-websocket:
+  srly-ose-websocket:
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket
     depends_on:
-      - screenly-ose-server
+      - srly-ose-server
     environment:
       - HOME=/data
-      - LISTEN=screenly-ose-server
+      - LISTEN=srly-ose-server
     ports:
       - 9999:9999
     privileged: true
@@ -51,12 +50,12 @@ services:
     volumes:
       - resin-data:/data
 
-  screenly-ose-celery:
+  srly-ose-celery:
     build:
       context: .
       dockerfile: docker/Dockerfile.celery
     depends_on:
-      - screenly-ose-server
+      - srly-ose-server
       - redis
     environment:
       - HOME=/data
