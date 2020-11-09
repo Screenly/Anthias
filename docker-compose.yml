@@ -15,7 +15,6 @@ services:
     restart: always
     volumes:
       - resin-data:/data
-
   srly-ose-viewer:
     build:
       context: .
@@ -27,13 +26,11 @@ services:
       - NOREFRESH=1
       - LISTEN=srly-ose-server
       - PORT=80
-      - QT_QPA_PLATFORM=eglfs
     network_mode: "host"
     privileged: true
     restart: always
     volumes:
       - resin-data:/data
-
   srly-ose-websocket:
     build:
       context: .
@@ -49,7 +46,6 @@ services:
     restart: always
     volumes:
       - resin-data:/data
-
   srly-ose-celery:
     build:
       context: .
@@ -65,7 +61,6 @@ services:
     restart: always
     volumes:
       - resin-data:/data
-
   redis:
     build:
       context: .
