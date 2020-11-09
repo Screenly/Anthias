@@ -15,6 +15,7 @@ RUN apt-get update && \
         net-tools \
         omxplayer \
         psmisc \
+        ca-certificates \
         python-dev \
         python-gobject \
         python-netifaces \
