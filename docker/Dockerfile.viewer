@@ -32,23 +32,24 @@ RUN pip install --no-cache-dir -r /tmp/requirements.viewer.txt
 ARG PI_VERSION=pi1
 RUN wget \
     "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase-$PI_VERSION.tar.gz" \
-    -O  /tmp/qtbase.tar.gz
-RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
-RUN echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf
-RUN ldconfig
+    --quiet -O  /tmp/qtbase.tar.gz && \
+    tar -xzf /tmp/qtbase.tar.gz -C /usr/local && \
+    rm /tmp/qtbase.tar.gz
+    echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf && \
+    ldconfig
 
 # Fix symlinks
-RUN rm /usr/lib/arm-linux-gnueabihf/libEGL.so.1
-RUN rm /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
-RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so
-RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1
-RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
+#RUN rm /usr/lib/arm-linux-gnueabihf/libEGL.so.1
+#RUN rm /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
+#RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so
+#RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1
+#RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
 
-RUN rm /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
-RUN rm /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
-RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so
-RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
-RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
+#RUN rm /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
+#RUN rm /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
+#RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so
+#RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
+#RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
 
 # Environment varaibles
 ENV QT_QPA_PLATFORM eglfs
