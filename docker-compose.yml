@@ -46,21 +46,21 @@ services:
     restart: always
     volumes:
       - resin-data:/data
-#  srly-ose-celery:
-#    build:
-#      context: .
-#      dockerfile: docker/Dockerfile.celery
-#    depends_on:
-#      - srly-ose-server
-#      - redis
-#    environment:
-#      - HOME=/data
-#      - CELERY_BROKER_URL=redis://redis:6379/0
-#      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-#    privileged: true
-#    restart: always
-#    volumes:
-#      - resin-data:/data
+  srly-ose-celery:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.celery
+    depends_on:
+      - srly-ose-server
+      - redis
+    environment:
+      - HOME=/data
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    privileged: true
+    restart: always
+    volumes:
+      - resin-data:/data
   redis:
     build:
       context: .
