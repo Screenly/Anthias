@@ -5,7 +5,7 @@ RUN apt-get update && \
         build-essential \
         curl \
         git-core \
-        gstreamer0.10-plugins-good \
+        gstreamer1.0-plugins-good \
         libdbus-glib-1-dev \
         libffi-dev \
         libqt5webkit5 \
