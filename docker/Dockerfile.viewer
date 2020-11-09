@@ -3,7 +3,7 @@ FROM balenalib/rpi-raspbian:buster
 RUN apt-get update && \
     apt-get -y install --no-install-recommends \
         build-essential \
-        curl \
+        wget \
         git-core \
         gstreamer1.0-plugins-good \
         libdbus-glib-1-dev \
@@ -30,9 +30,9 @@ RUN pip install --no-cache-dir -r /tmp/requirements.viewer.txt
 
 # QtBase from packages does not support eglfs
 ARG PI_VERSION=pi1
-RUN curl -L \
+RUN wget \
     "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase-$PI_VERSION.tar.gz" \
-    > /tmp/qtbase.tar.gz
+    -O  /tmp/qtbase.tar.gz
 RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
 RUN echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf
 RUN ldconfig
