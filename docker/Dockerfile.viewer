@@ -1,7 +1,7 @@
 FROM balenalib/rpi-raspbian:stretch
 
 RUN apt-get update && \
-    apt-get -y install \
+    apt-get -y install --no-install-recommends \
         build-essential \
         curl \
         git-core \
@@ -22,8 +22,6 @@ RUN apt-get update && \
         python-setuptools \
         sqlite3 && \
     apt-get clean
-
-RUN pip install --upgrade pip
 
 # Install Python requirements
 ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt
@@ -51,7 +49,10 @@ RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so
 RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
 RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
 
+# Environment varaibles
 ENV QT_QPA_PLATFORM eglfs
+ENV QT_QPA_EGLFS_FORCE888=1
+ENV NOREFRESH 1 # Fix white flickering in omxplayer
 
 RUN mkdir /usr/local/share/ScreenlyWebview
 RUN curl -L  \
@@ -62,13 +63,8 @@ RUN tar -xzf /tmp/screenly-webview-0.2.tar.gz -C /tmp
 RUN cp -r /tmp/res /usr/local/share/ScreenlyWebview/res
 RUN cp /tmp/ScreenlyWebview /usr/local/bin/ScreenlyWebview
 
-# Fix white flickering in omxplayer
-ENV NOREFRESH 1
-
-# Create runtime user
-RUN    useradd pi -d /home/pi \
-    && /usr/sbin/usermod -a -G video pi
-
-WORKDIR /home/pi/screenly
+RUN mkdir -p /usr/src/app
+COPY . /usr/src/app/
+WORKDIR /usr/src/app
 
 CMD ["bash", "bin/start_viewer.sh"]

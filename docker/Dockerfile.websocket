@@ -1,5 +1,9 @@
 FROM balenalib/rpi-raspbian:buster
 
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
 RUN apt-get update && \
     apt-get -y install --no-install-recommends \
         build-essential \
@@ -10,20 +14,11 @@ RUN apt-get update && \
         python-dev && \
     apt-get clean
 
-RUN pip install --upgrade pip
-
-# Install Python requirements
 ADD requirements/requirements-websocket.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-# Create runtime user
-RUN useradd pi
+RUN mkdir -p /usr/src/app
+WORKDIR /usr/src/app
+COPY . /usr/src/app/
 
-# Install config file and file structure
-RUN mkdir -p /home/pi/.screenly /home/pi/screenly /home/pi/screenly_assets
-RUN chown -R pi:pi /home/pi/.screenly /home/pi/screenly_assets
-
-USER pi
-WORKDIR /home/pi/screenly
-
-CMD python websocket_server_layer.py
+CMD ["python", "websocket_server_layer.py"]

@@ -22,6 +22,10 @@ There are currently three versions of Screenly-OSE..
 |  Experimental | [experimental](https://github.com/Screenly/screenly-ose/tree/experimental)   | This is the branch with the experimental browser version mentioned above    |
 
 
+### Docker and Directories
+
+/
+
 ### Directories, files and their purpose with regards to Screenly
 
 ```
