@@ -41,5 +41,4 @@ node_modules
 
 .git/*
 .github/
-docker/*
 docks/*
