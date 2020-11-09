@@ -22,7 +22,7 @@ RUN apt-get update && \
     apt-get clean
 
 ADD requirements/requirements.txt /tmp/requirements.txt
-RUN pip install -U -r /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app

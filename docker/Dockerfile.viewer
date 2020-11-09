@@ -1,4 +1,4 @@
-FROM balenalib/rpi-raspbian:stretch
+FROM balenalib/rpi-raspbian:buster
 
 RUN apt-get update && \
     apt-get -y install --no-install-recommends \
@@ -25,7 +25,7 @@ RUN apt-get update && \
 
 # Install Python requirements
 ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt
-RUN pip install -r /tmp/requirements.viewer.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.viewer.txt
 
 # QtBase from packages does not support eglfs
 ARG PI_VERSION=pi1
