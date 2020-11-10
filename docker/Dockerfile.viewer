@@ -59,7 +59,7 @@ ENV NOREFRESH 1 # Fix white flickering in omxplayer
 RUN mkdir -p /usr/local/share/ScreenlyWebview
 RUN wget \
     "https://github.com/Screenly/screenly-ose-webview/releases/download/0.2/screenly-webview-0.2.tar.gz" \
-    -O /tmp/screenly-webview-0.2.tar.gz && \
+    --quiet -O /tmp/screenly-webview-0.2.tar.gz && \
     tar -xzf /tmp/screenly-webview-0.2.tar.gz -C /tmp && \
     cp -r /tmp/res /usr/local/share/ScreenlyWebview/res && \
     cp /tmp/ScreenlyWebview /usr/local/bin/ScreenlyWebview

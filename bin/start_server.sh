@@ -25,3 +25,5 @@ if [ -n ${BALENA_DEVICE_UUID+x} ]; then
     echo "Running migration..."
     python ./bin/migrate.py
 fi
+
+python server.py
