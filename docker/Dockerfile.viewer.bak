@@ -1,4 +1,4 @@
-FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:stretch
+FROM balenalib/rpi-raspbian:stretch
 
 RUN apt-get update && \
     apt-get -y install \
