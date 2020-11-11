@@ -88,10 +88,9 @@ screenly.script ->
 `/other/directories/here/.. from ansible roles`
 
 
-### Screenly-OSE-WebView
+### Debugging Screenly OSE webview
 
-The Experimental branch uses a different web browser which is maintained on a different Github repo here:
-`https://github.com/Screenly/screenly-ose-webview`
-
-_(need more details about this process and how exactly the experimental browser is installed._
-
+```
+export QT_LOGGING_DEBUG=1
+export QT_LOGGING_RULES="*.debug=true"
+```
