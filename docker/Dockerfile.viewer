@@ -1,9 +1,34 @@
+FROM balenalib/rpi-raspbian:buster as viewer-builder
+
+RUN sed -i -e 's/#deb-src/deb-src/' /etc/apt/sources.list
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+        build-essential \
+        g++ \
+        libinput-dev \
+        libqt5gui5 \
+        libqt5webkit5-dev \
+        libqt5x11extras5-dev \
+        libts-dev \
+        libudev-dev \
+        libxcb-xinerama0 \
+        libxcb-xinerama0-dev \
+        make && \
+    apt-get clean
+
+WORKDIR /build
+
+RUN mkdir /src
+COPY webview/build.sh /usr/local/bin/
+COPY webview /src
+CMD /usr/local/bin/build.sh
+
+
 FROM balenalib/rpi-raspbian:buster
 
 RUN apt-get update && \
     apt-get -y install --no-install-recommends \
         build-essential \
-        wget \
         git-core \
         gstreamer1.0-plugins-good \
         libdbus-glib-1-dev \
@@ -28,41 +53,14 @@ RUN apt-get update && \
 ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.viewer.txt
 
-# QtBase from packages does not support eglfs
-ARG PI_VERSION=pi1
-RUN wget \
-    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase-$PI_VERSION.tar.gz" \
-    --quiet -O  /tmp/qtbase.tar.gz && \
-    tar -xzf /tmp/qtbase.tar.gz -C /usr/local && \
-    rm /tmp/qtbase.tar.gz && \
-    echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf && \
-    ldconfig
-
-# Fix symlinks
-#RUN rm /usr/lib/arm-linux-gnueabihf/libEGL.so.1
-#RUN rm /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
-#RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so
-#RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1
-#RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
-
-#RUN rm /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
-#RUN rm /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
-#RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so
-#RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
-#RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
-
 # Environment varaibles
 ENV QT_QPA_PLATFORM eglfs
 ENV QT_QPA_EGLFS_FORCE888=1
 ENV NOREFRESH 1 # Fix white flickering in omxplayer
 
 RUN mkdir -p /usr/local/share/ScreenlyWebview
-RUN wget \
-    "https://github.com/Screenly/screenly-ose-webview/releases/download/0.2/screenly-webview-0.2.tar.gz" \
-    --quiet -O /tmp/screenly-webview-0.2.tar.gz && \
-    tar -xzf /tmp/screenly-webview-0.2.tar.gz -C /tmp && \
-    cp -r /tmp/res /usr/local/share/ScreenlyWebview/res && \
-    cp /tmp/ScreenlyWebview /usr/local/bin/ScreenlyWebview
+COPY --from=viewer-builder /src/ScreenlyWebview /usr/local/bin/
+COPY --from=viewer-builder /src/res /usr/local/share/ScreenlyWebview/
 
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/

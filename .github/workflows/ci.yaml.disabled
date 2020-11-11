@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+jobs:
+  buildx:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: crazy-max/ghaction-docker-buildx@v3
+        with:
+          buildx-version: latest
+          qemu-version: latest
+
+      - name: Available platforms
+        run: echo ${{ steps.buildx.outputs.platforms }}
+
+      - name: Run Buildx
+        run: |
+          docker buildx build \
+            --platform linux/arm/v7 \
+            --load \
+            -t "screenly-ose-webview-builder" \
+            --file Dockerfile .
+
+      - name: Make artifacts folder
+        run: mkdir -p artifacts
+
+      - name: Run webviewer build
+        run: |
+          docker run \
+            -v $(pwd)/artifacts:/build \
+            screenly-ose-webview-builder build.sh
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: build-artifacts
+          path: artifacts
