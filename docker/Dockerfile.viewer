@@ -16,12 +16,12 @@ RUN apt-get update && \
         make && \
     apt-get clean
 
-WORKDIR /build
-
 RUN mkdir /src
-COPY webview/build.sh /usr/local/bin/
-COPY webview /src
-CMD /usr/local/bin/build.sh
+WORKDIR /src
+COPY webview/ /src/
+RUN /usr/lib/arm-linux-gnueabihf/qt5/bin/qmake
+RUN make -j 4
+RUN make install
 
 
 FROM balenalib/rpi-raspbian:buster
@@ -53,7 +53,7 @@ RUN apt-get update && \
 ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.viewer.txt
 
-# Environment varaibles
+# Environment variables
 ENV QT_QPA_PLATFORM eglfs
 ENV QT_QPA_EGLFS_FORCE888=1
 ENV NOREFRESH 1 # Fix white flickering in omxplayer
