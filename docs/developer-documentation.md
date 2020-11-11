@@ -93,4 +93,8 @@ screenly.script ->
 ```
 export QT_LOGGING_DEBUG=1
 export QT_LOGGING_RULES="*.debug=true"
+export QT_QPA_EGLFS_DEBUG=1
 ```
+
+
+export QT_QPA_EGLFS_INTEGRATION=eglfs_kms
