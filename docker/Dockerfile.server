@@ -15,6 +15,7 @@ RUN apt-get update && \
         python-pip \
         python-setuptools \
         python-dev \
+        omxplayer \
         python-gobject \
         python-pil \
         python-simplejson \
