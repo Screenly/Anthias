@@ -26,7 +26,7 @@
                 {% if context.my_ip %}
                     <p>To manage the content on this screen, just point your browser to:</p>
                     <div class="form-actions">
-                        <a href="http://{{ context.msg }}">http://{{ context.msg }}</a>
+                        <a href="http://{{ context.my_ip }}">http://{{ context.my_ip }}</a>
                     </div>
                 {% else %}
                     <p>Unable to retrieve IP</p>
