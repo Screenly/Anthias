@@ -63,4 +63,4 @@ WORKDIR /usr/src/app
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/
 
-CMD ["bash", "./bin/start_balena.sh"]
+CMD ["bash", "./bin/start_viewer.sh"]
