@@ -24,7 +24,6 @@ services:
     environment:
       - HOME=/data
       - NOREFRESH=1
-      - LISTEN=srly-ose-server
       - PORT=80
     network_mode: "host"
     privileged: true
@@ -39,7 +38,7 @@ services:
       - srly-ose-server
     environment:
       - HOME=/data
-      - LISTEN=srly-ose-server
+      - LISTEN=0.0.0.0
     ports:
       - 9999:9999
     privileged: true

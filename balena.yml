@@ -1,1 +1,4 @@
 repoUrl: "https://github.com/screenly/screenly-ose"
+applicationConfigVariables:
+  - RESIN_HOST_CONFIG_gpu_mem: 128
+  - RESIN_HOST_CONFIG_dtparam: "i2c_arm=on","spi=on","audio=on","vc4-kms-v3d"
