@@ -23,13 +23,13 @@
         </div>
         <div class="row">
             <div class="col-12 text-center">
-                {% if context.ip_lookup %}
+                {% if context.my_ip %}
                     <p>To manage the content on this screen, just point your browser to:</p>
                     <div class="form-actions">
-                        <a href="{{ context.msg }}">{{ context.msg }}</a>
+                        <a href="http://{{ context.msg }}">http://{{ context.msg }}</a>
                     </div>
                 {% else %}
-                    <p>{{ context.msg }}</p>
+                    <p>Unable to retrieve IP</p>
                 {% endif %}
             </div>
         </div>
