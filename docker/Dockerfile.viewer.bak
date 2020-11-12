@@ -59,6 +59,7 @@ RUN tar -xzf /tmp/screenly-webview-0.2.tar.gz -C /tmp
 RUN cp -r /tmp/res /usr/local/share/ScreenlyWebview/res
 RUN cp /tmp/ScreenlyWebview /usr/local/bin/ScreenlyWebview
 
-COPY . /tmp/screenly
+RUN mkdir -p /usr/src/app
+COPY . /usr/src/app/
 
-CMD ["bash", "/tmp/screenly/bin/start_balena.sh"]
+CMD ["bash", "./bin/start_balena.sh"]
