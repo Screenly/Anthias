@@ -60,7 +60,7 @@ ARG PI_VERSION=pi3
 #    -O /tmp/qtbase.tar.gz
 RUN wget \
     "http://drop.vikpire.com/qt/qtbase-$PI_VERSION.tar.gz" \
-    -s -O /tmp/qtbase.tar.gz
+    -q -O /tmp/qtbase.tar.gz
 
 RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
 RUN echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf
