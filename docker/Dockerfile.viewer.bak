@@ -1,3 +1,28 @@
+FROM balenalib/rpi-raspbian:buster as viewer-builder
+
+RUN sed -i -e 's/#deb-src/deb-src/' /etc/apt/sources.list
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+        build-essential \
+        g++ \
+        libinput-dev \
+        libqt5gui5 \
+        libqt5webkit5-dev \
+        libqt5x11extras5-dev \
+        libts-dev \
+        libudev-dev \
+        libxcb-xinerama0 \
+        libxcb-xinerama0-dev \
+        make && \
+    apt-get clean
+
+RUN mkdir /src
+WORKDIR /src
+COPY webview/ /src/
+RUN /usr/lib/arm-linux-gnueabihf/qt5/bin/qmake
+RUN make -j 4
+RUN make install
+
 FROM balenalib/rpi-raspbian:stretch
 
 RUN apt-get update && \
@@ -50,14 +75,9 @@ RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so
 RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
 RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
 
-RUN mkdir /usr/local/share/ScreenlyWebview
-RUN curl -L  \
-    "https://github.com/Screenly/screenly-ose-webview/releases/download/0.2/screenly-webview-0.2.tar.gz" \
-    > /tmp/screenly-webview-0.2.tar.gz
-RUN tar -xzf /tmp/screenly-webview-0.2.tar.gz -C /tmp
-
-RUN cp -r /tmp/res /usr/local/share/ScreenlyWebview/res
-RUN cp /tmp/ScreenlyWebview /usr/local/bin/ScreenlyWebview
+RUN mkdir -p /usr/local/share/ScreenlyWebview
+COPY --from=viewer-builder /src/ScreenlyWebview /usr/local/bin/
+COPY --from=viewer-builder /src/res /usr/local/share/ScreenlyWebview/
 
 WORKDIR /usr/src/app
 RUN mkdir -p /usr/src/app
