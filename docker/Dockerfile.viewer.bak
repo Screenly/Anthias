@@ -54,13 +54,13 @@ RUN curl -s https://bootstrap.pypa.io/get-pip.py | python && \
     pip install --upgrade -r /tmp/requirements.txt
 
 # QtBase from packages does not support eglfs
-#ARG PI_VERSION=pi3
-#RUN curl -L \
-#    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase-$PI_VERSION.tar.gz" \
-#    > /tmp/qtbase.tar.gz
-#RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
-#RUN echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf
-#RUN ldconfig
+ARG PI_VERSION=pi3
+RUN curl -L \
+    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase-$PI_VERSION.tar.gz" \
+    > /tmp/qtbase.tar.gz
+RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
+RUN echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf
+RUN ldconfig
 
 # Fix symlinks
 RUN rm -f /usr/lib/arm-linux-gnueabihf/libEGL.so.1
