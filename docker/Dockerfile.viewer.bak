@@ -59,7 +59,7 @@ ARG PI_VERSION=pi3
 #    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase-$PI_VERSION.tar.gz" \
 #    -O /tmp/qtbase.tar.gz
 RUN wget \
-    "http://drop.vikpire.com/qt/qtbase-$PI_VERSION.tar.gz" \
+    "https://storage.googleapis.com/ose-lab/qtbase-pi3.tar.gz" \
     -q -O /tmp/qtbase.tar.gz
 
 RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
