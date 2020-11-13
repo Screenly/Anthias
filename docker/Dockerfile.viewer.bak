@@ -50,7 +50,7 @@ RUN apt-get update && \
 
 # Install Python requirements
 ADD requirements/requirements.viewer.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.viewer.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 # QtBase from packages does not support eglfs
 ARG PI_VERSION=pi3
