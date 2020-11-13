@@ -54,7 +54,7 @@ ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.viewer.txt
 
 # Environment variables
-ENV UDEV=1 
+ENV UDEV=1
 ENV QT_QPA_PLATFORM eglfs
 ENV QT_QPA_EGLFS_FORCE888=1
 ENV NOREFRESH 1 # Fix white flickering in omxplayer
