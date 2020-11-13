@@ -23,7 +23,7 @@ RUN /usr/lib/arm-linux-gnueabihf/qt5/bin/qmake
 RUN make -j 4
 RUN make install
 
-FROM balenalib/rpi-raspbian:stretch
+FROM balenalib/rpi-raspbian:buster
 
 RUN apt-get update && \
     apt-get -y install \
