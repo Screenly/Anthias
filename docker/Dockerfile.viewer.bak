@@ -55,8 +55,11 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 # QtBase from packages does not support eglfs
 ARG PI_VERSION=pi3
+#RUN wget \
+#    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase-$PI_VERSION.tar.gz" \
+#    -O /tmp/qtbase.tar.gz
 RUN wget \
-    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase-$PI_VERSION.tar.gz" \
+    "https://drop.vikpire.com/qt/qtbase-$PI_VERSION.tar.gz" \
     -O /tmp/qtbase.tar.gz
 RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
 RUN echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf
