@@ -13,6 +13,7 @@ RUN apt-get update && \
         libudev-dev \
         libxcb-xinerama0 \
         libxcb-xinerama0-dev \
+        wget \
         make && \
     apt-get clean
 
