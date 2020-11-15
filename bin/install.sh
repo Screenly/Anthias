@@ -160,11 +160,6 @@ sudo apt-get purge -y python-setuptools python-pip python-pyasn1
 sudo apt-get install -y python-dev git-core libffi-dev libssl-dev whois
 curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 
-# users who chose experimental then reverted back to master or production need docker and containerd pkgs removed
-if [ "$BRANCH" != "experimental" ]; then
-  sudo apt-get purge -y docker-ce docker-ce-cli containerd.io > /dev/null
-fi
-
 if [ "$NETWORK" == 'y' ]; then
   export MANAGE_NETWORK=true
   sudo apt-get install -y network-manager
@@ -199,18 +194,18 @@ else
   sudo chmod 0440 /etc/sudoers.d/010_pi-nopasswd
 fi
 
-checkdefaultpw() {
 # Ask user to set a new pi password if default password "raspberry" detected
+check_defaultpw () {
 
 if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ] && [ "$WEB_UPGRADE" = false ]; then
 set +x
 
 # currently only looking for $6$/sha512 hash
-local var_currentpisalt=$(sudo cat /etc/shadow | grep pi | awk -F '$' '{print $3}')
-local var_currentpiuserpw=$(sudo cat /etc/shadow | grep pi | awk -F ':' '{print $2}')
-local var_defaultpipw=$(mkpasswd -m sha-512 raspberry "$var_currentpisalt")
+local VAR_CURRENTPISALT=$(sudo cat /etc/shadow | grep pi | awk -F '$' '{print $3}')
+local VAR_CURRENTPIUSERPW=$(sudo cat /etc/shadow | grep pi | awk -F ':' '{print $2}')
+local VAR_DEFAULTPIPW=$(mkpasswd -m sha-512 raspberry "$VAR_CURRENTPISALT")
 
-  if [[ "$var_currentpiuserpw" == "$var_defaultpipw" ]]; then
+  if [[ "$VAR_CURRENTPIUSERPW" == "$VAR_DEFAULTPIPW" ]]; then
     echo "(Warning): The default raspberry pi password was detected! - please change it now..."
     set +e
     passwd
@@ -222,7 +217,7 @@ local var_defaultpipw=$(mkpasswd -m sha-512 raspberry "$var_currentpisalt")
   fi
 fi
 }
-checkdefaultpw;
+check_defaultpw;
 
 echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
 
