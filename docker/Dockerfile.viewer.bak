@@ -1,6 +1,5 @@
 FROM balenalib/rpi-raspbian:buster as viewer-builder
 
-RUN sed -i -e 's/#deb-src/deb-src/' /etc/apt/sources.list
 RUN apt-get update && \
     apt-get -y install --no-install-recommends \
         build-essential \
@@ -18,7 +17,7 @@ RUN apt-get update && \
     apt-get clean
 
 RUN wget \
-    "https://storage.googleapis.com/ose-lab/5.12/qtbase-pi3.tar.gz" \
+    "https://storage.googleapis.com/ose-lab/4.9/qtbase-pi3.tar.gz" \
     -q -O /tmp/qtbase.tar.gz
 
 RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
@@ -68,7 +67,7 @@ ARG PI_VERSION=pi3
 #    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase-$PI_VERSION.tar.gz" \
 #    -q-O /tmp/qtbase.tar.gz
 RUN wget \
-    "https://storage.googleapis.com/ose-lab/5.12/qtbase-pi3.tar.gz" \
+    "https://storage.googleapis.com/ose-lab/4.9/qtbase-pi3.tar.gz" \
     -q -O /tmp/qtbase.tar.gz
 
 RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
