@@ -31,7 +31,7 @@ RUN /usr/lib/arm-linux-gnueabihf/qt5/bin/qmake
 RUN make -j 4
 RUN make install
 
-# We're stuck on Stretch as QT fails on later versions
+# @TODO: Upgrade to Buster. We're stuck on QT 5.9 and Stretch for now.
 FROM balenalib/rpi-raspbian:stretch
 
 RUN apt-get update && \
