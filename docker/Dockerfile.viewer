@@ -66,31 +66,28 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 ARG PI_VERSION=pi3
 ARG DEBIAN_VERSION=stretch
 ARG QT_VERSION=5.9
-RUN wget \
-    "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
-    -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz
-RUN wget \
-    "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
-    -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256
-RUN cd /tmp && \
-    sha256sum -c qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256
-
-RUN tar -xzf /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local
-RUN echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf
-RUN ldconfig
+RUN wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
+        -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
+    wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
+        -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
+    cd /tmp && \
+    sha256sum -c qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
+    tar -xzf /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local && \
+    echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf && \
+    ldconfig && \
+    rm qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*
 
 # Fix symlinks
-RUN rm -f /usr/lib/arm-linux-gnueabihf/libEGL.so.1
-RUN rm -f /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
-RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so
-RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1
-RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
-
-RUN rm -f /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
-RUN rm -f /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
-RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so
-RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
-RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
+RUN rm -f /usr/lib/arm-linux-gnueabihf/libEGL.so.1 && \
+    rm -f /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0 && \
+    ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so && \
+    ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1 && \
+    ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0 && \
+    rm -f /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2 && \
+    rm -f /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0 && \
+    ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so && \
+    ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2 && \
+    ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
 
 RUN mkdir -p /usr/local/share/ScreenlyWebview
 COPY --from=viewer-builder /src/ScreenlyWebview /usr/local/bin/
