@@ -32,14 +32,40 @@ RUN /usr/lib/arm-linux-gnueabihf/qt5/bin/qmake
 RUN make -j 4
 RUN make install
 
-FROM balenalib/rpi-raspbian:buster
+#FROM balenalib/rpi-raspbian:buster
+#
+#RUN apt-get update && \
+#    apt-get -y install \
+#        build-essential \
+#        curl \
+#        git-core \
+#        gstreamer1.0-plugins-good \
+#        libdbus-glib-1-dev \
+#        libffi-dev \
+#        libqt5webkit5 \
+#        libraspberrypi0 \
+#        libssl-dev \
+#        libts-dev \
+#        net-tools \
+#        omxplayer \
+#        psmisc \
+#        python-dev \
+#        python-gobject \
+#        python-netifaces \
+#        python-pip \
+#        python-setuptools \
+#        wget \
+#        sqlite3 && \
+#    apt-get clean
+
+FROM resin/rpi-raspbian:stretch
 
 RUN apt-get update && \
     apt-get -y install \
         build-essential \
         curl \
         git-core \
-        gstreamer1.0-plugins-good \
+        gstreamer0.10-plugins-good \
         libdbus-glib-1-dev \
         libffi-dev \
         libqt5webkit5 \
@@ -54,7 +80,6 @@ RUN apt-get update && \
         python-netifaces \
         python-pip \
         python-setuptools \
-        wget \
         sqlite3 && \
     apt-get clean
 
