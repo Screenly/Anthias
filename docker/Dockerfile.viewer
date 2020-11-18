@@ -73,7 +73,7 @@ RUN wget \
     "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
     -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256
 RUN cd /tmp && \
-    sha246sum -c qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256
+    sha256sum -c qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256
 
 RUN tar -xzf /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local
 RUN echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf
