@@ -67,6 +67,7 @@ RUN apt-get update && \
         git-core \
         gstreamer0.10-plugins-good \
         libdbus-glib-1-dev \
+        wget \
         libffi-dev \
         libqt5webkit5 \
         libraspberrypi0 \
