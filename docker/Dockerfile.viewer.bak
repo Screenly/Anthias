@@ -58,7 +58,7 @@ RUN make install
 #        sqlite3 && \
 #    apt-get clean
 
-FROM resin/rpi-raspbian:stretch
+FROM balenalib/rpi-raspbian:stretch
 
 RUN apt-get update && \
     apt-get -y install \
