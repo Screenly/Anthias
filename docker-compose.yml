@@ -18,7 +18,7 @@ services:
   srly-ose-viewer:
     build:
       context: .
-      dockerfile: docker/Dockerfile.viewer.bak
+      dockerfile: docker/Dockerfile.viewer
     depends_on:
       - srly-ose-server
     environment:

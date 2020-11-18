@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+jobs:
+  buildx:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: crazy-max/ghaction-docker-buildx@v3
+        with:
+          buildx-version: latest
+          qemu-version: latest
+
+      - name: Available platforms
+        run: echo ${{ steps.buildx.outputs.platforms }}
+
+      - name: Building websocket container
+        run: |
+          docker buildx build \
+            --platform linux/arm/v6,linux/arm/v7 \
+            -t "screenly/srly-ose-websocket" \
+            -f docker/Dockerfile.websocket .
+
+#      - name: Building viewer containers
+#        run: |
+#          for pi_version in pi1 pi2 pi3; do
+#            docker buildx build \
+#              --platform linux/arm/v6,linux/arm/v7 \
+#              --build-arg "PI_VERSION=$pi_version" \
+#              -f docker/Dockerfile.viewer \
+#              -t "screenly/srly-ose-viewer:$pi_version" .
+#          done
