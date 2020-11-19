@@ -14,7 +14,7 @@ services:
     volumes:
       - resin-data:/data
   srly-ose-viewer:
-    image: screenly/srly-ose-viewer-pi3:latest
+    image: screenly/srly-ose-viewer:latest-pi3
     depends_on:
       - srly-ose-server
     environment:
