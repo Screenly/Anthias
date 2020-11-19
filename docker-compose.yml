@@ -1,9 +1,7 @@
 version: "2"
 services:
   srly-ose-server:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.server
+    image: screenly/srly-ose-server:latest
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -16,9 +14,7 @@ services:
     volumes:
       - resin-data:/data
   srly-ose-viewer:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.viewer
+    image: screenly/srly-ose-viewer-pi3:latest
     depends_on:
       - srly-ose-server
     environment:
@@ -31,9 +27,7 @@ services:
     volumes:
       - resin-data:/data
   srly-ose-websocket:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.websocket
+    image: screenly/srly-ose-websocket:latest
     depends_on:
       - srly-ose-server
     environment:
@@ -46,9 +40,7 @@ services:
     volumes:
       - resin-data:/data
   srly-ose-celery:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.celery
+    image: screenly/srly-ose-celery:latest
     depends_on:
       - srly-ose-server
       - redis
@@ -61,9 +53,7 @@ services:
     volumes:
       - resin-data:/data
   redis:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.redis
+    image: screenly/srly-ose-redis:latest
     restart: always
 
 volumes:
