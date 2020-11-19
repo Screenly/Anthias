@@ -1,26 +1,25 @@
 ---
-# Enable Nginx
-- name: Check screenly.conf
-  command: cat /home/pi/.screenly/screenly.conf
-  register: config
-
-- set_fact: no_ssl="{{config.stdout.find('use_ssl = True') == -1}}"
-
-- name: Installs Nginx
-  apt:
-    name: nginx-light
-    state: present
-    update_cache: yes
-
-- name: Cleans up default config
-  file:
-    path: /etc/nginx/sites-enabled/default
-    state: absent
-
-- name: Installs nginx config
-  copy:
-    src: nginx.conf
-    dest:  /etc/nginx/sites-enabled/screenly.conf
-    mode: 644
-    owner: root
-    group: root
+#- name: Check screenly.conf
+#  command: cat /home/pi/.screenly/screenly.conf
+#  register: config
+#
+#- set_fact: no_ssl="{{config.stdout.find('use_ssl = True') == -1}}"
+#
+#- name: Installs Nginx
+#  apt:
+#    name: nginx-light
+#    state: present
+#    update_cache: yes
+#
+#- name: Cleans up default config
+#  file:
+#    path: /etc/nginx/sites-enabled/default
+#    state: absent
+#
+#- name: Installs nginx config
+#  copy:
+#    src: nginx.conf
+#    dest:  /etc/nginx/sites-enabled/screenly.conf
+#    mode: 644
+#    owner: root
+#    group: root

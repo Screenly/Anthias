@@ -1,25 +1,4 @@
-FROM balenalib/rpi-raspbian:buster
-
-RUN apt-get update && \
-    apt-get -y install --no-install-recommends \
-        build-essential \
-        curl \
-        git-core \
-        libffi-dev \
-        libssl-dev \
-        net-tools \
-        omxplayer \
-        psmisc \
-        python-dev \
-        python-gobject \
-        python-pip \
-        python-setuptools \
-        python-pil \
-        python-simplejson \
-        libraspberrypi0 \
-        ifupdown \
-        sqlite3 && \
-    apt-get clean
+FROM srly-ose-base
 
 ADD requirements/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt

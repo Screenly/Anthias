@@ -1,14 +1,4 @@
-FROM balenalib/rpi-raspbian:buster
-
-RUN apt-get update && \
-    apt-get -y install --no-install-recommends \
-        build-essential \
-        curl \
-        libffi-dev \
-        python-setuptools \
-        python-pip \
-        python-dev && \
-    apt-get clean
+FROM srly-ose-base
 
 ADD requirements/requirements-websocket.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
