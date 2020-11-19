@@ -100,6 +100,8 @@ RUN mkdir -p /usr/local/share/ScreenlyWebview
 COPY --from=viewer-builder /src/ScreenlyWebview /usr/local/bin/
 COPY --from=viewer-builder /src/res /usr/local/share/ScreenlyWebview/
 
+ENV QT_QPA_EGLFS_FORCE888=1
+
 WORKDIR /usr/src/app
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/

@@ -69,4 +69,3 @@ services:
     image: screenly/srly-ose-redis:${DOCKER_TAG}
 
 volumes:
-    resin-data:
