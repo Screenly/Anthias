@@ -7,7 +7,6 @@ RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
 COPY . /usr/src/app/
 
-
 CMD celery worker \
   -A server.celery \
   -B -n worker@screenly \

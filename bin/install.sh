@@ -36,7 +36,7 @@ if [ "$WEB_UPGRADE" = false ]; then
 
   # clear screen
   clear;
-  
+
   # Set color of logo
   tput setaf 6
   tput bold
@@ -112,9 +112,9 @@ elif [ "$WEB_UPGRADE" = true ]; then
   fi
 
   if [ "$UPGRADE_SYSTEM" = false ]; then
-    EXTRA_ARGS="--skip-tags enable-ssl,system-upgrade"
+      EXTRA_ARGS=("--skip-tags" "enable-ssl,system-upgrade")
   elif [ "$UPGRADE_SYSTEM" = true ]; then
-    EXTRA_ARGS="--skip-tags enable-ssl"
+      EXTRA_ARGS=("--skip-tags" "enable-ssl")
   else
     echo -e "Invalid -s parameter."
     exit 1
@@ -149,9 +149,9 @@ sudo mkdir -p /etc/ansible
 echo -e "[local]\nlocalhost ansible_connection=local" | sudo tee /etc/ansible/hosts > /dev/null
 
 if [ ! -f /etc/locale.gen ]; then
-  # No locales found. Creating locales with default UK/US setup.
-  echo -e "en_GB.UTF-8 UTF-8\nen_US.UTF-8 UTF-8" | sudo tee /etc/locale.gen > /dev/null
-  sudo locale-gen
+    # No locales found. Creating locales with default UK/US setup.
+    echo -e "en_GB.UTF-8 UTF-8\nen_US.UTF-8 UTF-8" | sudo tee /etc/locale.gen > /dev/null
+    sudo locale-gen
 fi
 
 sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' /etc/apt/sources.list
@@ -162,7 +162,7 @@ curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 
 # users who chose experimental and then reverted back to master or production need docker removed
 if [ "$BRANCH" != "experimental" ]; then
-	sudo apt-get purge -y docker-ce docker-ce-cli containerd.io > /dev/null
+    sudo apt-get purge -y docker-ce docker-ce-cli containerd.io > /dev/null
 fi
 
 if [ "$NETWORK" == 'y' ]; then
@@ -174,19 +174,59 @@ fi
 
 sudo pip install ansible==2.8.8
 
-sudo -u pi ansible localhost -m git -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH force=yes"
+sudo -u pi ansible localhost \
+    -m git \
+    -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH force=yes"
 cd /home/pi/screenly/ansible
 
-sudo -E ansible-playbook site.yml $EXTRA_ARGS
+sudo -E ansible-playbook site.yml "${EXTRA_ARGS[@]}"
+
+sudo docker-compose \
+    -f /home/pi/screenly/docker-compose.yml \
+    pull
+
+sudo docker-compose \
+    -f /home/pi/screenly/docker-compose.yml \
+    -f /home/pi/screenly/docker-compose.override.yml \
+    up -d
 
 sudo apt-get autoclean
 sudo apt-get clean
 sudo apt autoremove -y
-sudo find /usr/share/doc -depth -type f ! -name copyright -delete
-sudo find /usr/share/doc -empty -delete
-sudo rm -rf /usr/share/man /usr/share/groff /usr/share/info/* /usr/share/lintian /usr/share/linda /var/cache/man
-sudo find /usr/share/locale -type f ! -name 'en' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' -delete
-sudo find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name 'de*' ! -name 'es*' ! -name 'ja*' ! -name 'fr*' ! -name 'zh*' ! -name 'locale.alias' -exec rm -r {} \;
+sudo find /usr/share/doc \
+    -depth \
+    -type f \
+    ! -name copyright \
+    -delete
+sudo find /usr/share/doc \
+    -empty \
+    -delete
+sudo rm -rf \
+    /usr/share/man \
+    /usr/share/groff \
+    /usr/share/info/* \
+    /usr/share/lintian \
+    /usr/share/linda /var/cache/man
+sudo find /usr/share/locale \
+    -type f \
+    ! -name 'en' \
+    ! -name 'de*' \
+    ! -name 'es*' \
+    ! -name 'ja*' \
+    ! -name 'fr*' \
+    ! -name 'zh*' \
+    -delete
+sudo find /usr/share/locale \
+    -mindepth 1 \
+    -maxdepth 1 \
+    ! -name 'en*' \
+    ! -name 'de*' \
+    ! -name 'es*' \
+    ! -name 'ja*' \
+    ! -name 'fr*' \
+    ! -name 'zh*' \
+    ! -name 'locale.alias' \
+    -exec rm -r {} \;
 
 cd /home/pi/screenly && git rev-parse HEAD > /home/pi/.screenly/latest_screenly_sha
 sudo chown -R pi:pi /home/pi
@@ -216,7 +256,7 @@ _CURRENTPIUSERPWD=$(sudo cat /etc/shadow | grep pi | awk -F ':' '{print $2}')
 _DEFAULTPIPWD=$(mkpasswd -m sha-512 raspberry $_CURRENTPISALT)
 
   if [[ "$_CURRENTPIUSERPWD" == "$_DEFAULTPIPWD" ]]; then
-    echo "(Warning): The default raspberry pi password was detected! - please change it now..."
+    echo "(Warning): The default Raspberry Pi password was detected! - please change it now..."
     set +e
     passwd
     set -e
