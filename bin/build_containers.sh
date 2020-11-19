@@ -21,7 +21,7 @@ for container in server celery redis websocket; do
     echo "Building $container"
     docker "${DOCKER_BUILD_ARGS[@]}" \
         -f "docker/Dockerfile.$container" \
-        -t "srly-ose-$container:$GITBRANCH" .
+        -t "screenly/srly-ose-$container:$GITBRANCH" .
 done
 
 echo "Building viewer for different architectures..."
@@ -29,6 +29,6 @@ for pi_version in pi1 pi2 pi3; do
     docker "${DOCKER_BUILD_ARGS[@]}" \
         --build-arg "PI_VERSION=$pi_version" \
         -f docker/Dockerfile.viewer \
-        -t "srly-ose-viewer:$GITBRANCH-$pi_version" .
+        -t "screenly/srly-ose-viewer:$GITBRANCH-$pi_version" .
 done
 
