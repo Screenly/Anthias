@@ -16,7 +16,6 @@ else
     DOCKER_BUILD_ARGS=("build")
 fi
 
-
 for container in server celery redis websocket; do
     echo "Building $container"
     docker "${DOCKER_BUILD_ARGS[@]}" \
