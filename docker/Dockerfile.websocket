@@ -1,4 +1,4 @@
-FROM srly-ose-base
+FROM screenly/srly-ose-base
 
 ADD requirements/requirements-websocket.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
