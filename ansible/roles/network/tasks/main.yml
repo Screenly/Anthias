@@ -73,7 +73,7 @@
 
 - name: Check if resin-wifi-connect required version exist
   stat:
-    path: "/usr/local/share/wifi-connect/ui/{{ resin_wifi_connect_version }}"
+    path: "/usr/local/share/wifi-connect/ui/{{ balena_wifi_connect_version }}"
   register: resin_wifi_version_file
   when:
     - ansible_distribution_major_version|int >= 9
@@ -84,8 +84,8 @@
 
 - name: Download balena wifi-connect release
   get_url:
-    url: "https://github.com/balena-io/wifi-connect/releases/download/v{{ resin_wifi_connect_version }}/wifi-connect-v{{ resin_wifi_connect_version }}-linux-rpi.tar.gz"
-    dest: /home/pi/resin-wifi-connect.tar.gz
+    url: "https://github.com/balena-io/wifi-connect/releases/download/v{{ balena_wifi_connect_version }}/wifi-connect-v{{ resin_wifi_connect_version }}-linux-rpi.tar.gz"
+    dest: /home/pi/balena-wifi-connect.tar.gz
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
@@ -93,7 +93,7 @@
 
 - name: Unarchive balena wifi-connect release
   unarchive:
-    src: /home/pi/resin-wifi-connect.tar.gz
+    src: /home/pi/balena-wifi-connect.tar.gz
     dest: /home/pi
     owner: pi
     group: pi
@@ -125,7 +125,7 @@
 - name: Touch balena wifi-connect version file
   file:
     state: touch
-    path: "/usr/local/share/wifi-connect/ui/{{ resin_wifi_connect_version }}"
+    path: "/usr/local/share/wifi-connect/ui/{{ balena_wifi_connect_version }}"
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
@@ -138,7 +138,7 @@
   with_items:
     - wifi-connect
     - ui
-    - resin-wifi-connect.tar.gz
+    - balena-wifi-connect.tar.gz
   when:
     - ansible_distribution_major_version|int >= 9
     - not resin_wifi_version_file_exist
