@@ -182,12 +182,12 @@ cd /home/pi/screenly/ansible
 
 sudo -E ansible-playbook site.yml "${EXTRA_ARGS[@]}"
 
-sudo docker-compose \
+sudo -E docker-compose \
     -f /home/pi/screenly/docker-compose.yml \
     -f /home/pi/screenly/docker-compose.override.yml \
     pull
 
-sudo docker-compose \
+sudo -E docker-compose \
     -f /home/pi/screenly/docker-compose.yml \
     -f /home/pi/screenly/docker-compose.override.yml \
     up -d
