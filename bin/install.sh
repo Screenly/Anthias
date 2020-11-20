@@ -83,7 +83,7 @@ esac
 
   echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
   if [ "$UPGRADE" != 'y' ]; then
-    EXTRA_ARGS="--skip-tags system-upgrade"
+      EXTRA_ARGS=("--skip-tags" "system-upgrade")
   fi
 
 elif [ "$WEB_UPGRADE" = true ]; then
