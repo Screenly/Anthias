@@ -5,8 +5,7 @@
 
 set -euo pipefail
 
-#GITBRANCH=$(git rev-parse --abbrev-ref HEAD)
-GITBRANCH='latest'
+GITBRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 if [ -n "${CROSS_COMPILE+x}" ]; then
     echo "Running with cross-compile using docker buildx..."
