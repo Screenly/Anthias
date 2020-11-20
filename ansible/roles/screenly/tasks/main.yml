@@ -9,14 +9,6 @@
     - .config
     - screenly_assets
 
-- name: Copy Screenly default config
-  copy:
-    owner: pi
-    group: pi
-    src: screenly.conf
-    dest: /home/pi/.screenly/screenly.conf
-    force: no
-
 - name: Copy Screenly default assets file
   copy:
     owner: pi
@@ -35,22 +27,6 @@
   pip:
     requirements: /home/pi/screenly/requirements/requirements.host.txt
     extra_args: "--no-cache-dir --upgrade"
-
-- name: Create default assets database if does not exists
-  copy:
-    owner: pi
-    group: pi
-    src: screenly.db
-    dest: /home/pi/.screenly/screenly.db
-    force: no
-
-# This needs to be moved into Docker
-- name: Run database migration
-  become_user: pi
-  command: python /home/pi/screenly/bin/migrate.py
-  register: migrate
-
-- debug: msg="{{ migrate.stdout }}"
 
 - name: Remove screenly_utils.sh
   file:
@@ -146,14 +122,3 @@
     path: "/etc/systemd/system/{{ item }}"
     state: absent
   with_items: "{{ deprecated_screenly_systemd_units }}"
-
-- name: Check /proc/device-tree/model file
-  command: cat /proc/device-tree/model
-  register: model_file
-
-- debug:
-    msg: "Device type: {{ device_type }}"
-
-- debug:
-    msg: "Use {{ docker_tag }} version of images."
-
