@@ -78,5 +78,6 @@ services:
       - resin-data:/data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+
 volumes:
     resin-data:
