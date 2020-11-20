@@ -43,7 +43,6 @@ services:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
-
   srly-ose-celery:
     image: screenly/srly-ose-celery:latest
     depends_on:

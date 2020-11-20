@@ -14,10 +14,10 @@ from requests.auth import HTTPBasicAuth
 HOME = os.getenv('HOME', '/home/pi')
 
 BASE_API_SCREENLY_URL = 'https://api.screenlyapp.com'
-ASSETS_SCREENLY_OSE_API = 'http://127.0.0.1:8080/api/v1.1/assets'
+ASSETS_SCREENLY_OSE_API = 'http://127.0.0.1/api/v1.1/assets'
 
 PORT_NGROK = 4040
-PORT = 8000
+PORT = 80
 
 token = None
 ngrok_public_url = None
