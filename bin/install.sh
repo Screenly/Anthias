@@ -83,9 +83,7 @@ esac
 
   echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
   if [ "$UPGRADE" != 'y' ]; then
-    EXTRA_ARGS="--skip-tags enable-ssl,system-upgrade"
-  else
-    EXTRA_ARGS="--skip-tags enable-ssl"
+    EXTRA_ARGS="--skip-tags system-upgrade"
   fi
 
 elif [ "$WEB_UPGRADE" = true ]; then
@@ -112,9 +110,7 @@ elif [ "$WEB_UPGRADE" = true ]; then
   fi
 
   if [ "$UPGRADE_SYSTEM" = false ]; then
-      EXTRA_ARGS=("--skip-tags" "enable-ssl,system-upgrade")
-  elif [ "$UPGRADE_SYSTEM" = true ]; then
-      EXTRA_ARGS=("--skip-tags" "enable-ssl")
+      EXTRA_ARGS=("--skip-tags" "system-upgrade")
   else
     echo -e "Invalid -s parameter."
     exit 1
