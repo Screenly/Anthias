@@ -80,8 +80,8 @@ services:
       - srly-ose-websocket
     restart: always
     volumes:
-      - /home/pi/.screenly:/data/.screenly
-      - /home/pi/screenly_assets:/data/screenly_assets
+      - /home/pi/.screenly:/data/.screenly:ro
+      - /home/pi/screenly_assets:/data/screenly_assets:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 

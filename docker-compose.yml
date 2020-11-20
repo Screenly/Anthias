@@ -74,7 +74,7 @@ services:
       - srly-ose-websocket
     restart: always
     volumes:
-      - resin-data:/data
+      - resin-data:/data:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
