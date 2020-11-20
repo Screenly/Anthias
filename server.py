@@ -1842,24 +1842,8 @@ def integrations():
 
 @app.route('/splash-page')
 def splash_page():
-    url = None
-    try:
-        my_ip = get_node_ip()
-    except Exception as e:
-        ip_lookup = False
-        error_msg = e
-    else:
-        ip_lookup = True
-
-        if settings['use_ssl']:
-            url = 'https://{}'.format(my_ip)
-        elif LISTEN == '127.0.0.1':
-            url = "http://{}".format(my_ip)
-        else:
-            url = "http://{}:{}".format(my_ip, PORT)
-
-    msg = url if url else error_msg
-    return template('splash-page.html', ip_lookup=ip_lookup, msg=msg)
+    my_ip = get_node_ip()
+    return template('splash-page.html', my_ip=get_node_ip())
 
 
 @app.errorhandler(403)

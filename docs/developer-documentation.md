@@ -22,6 +22,10 @@ There are currently three versions of Screenly-OSE..
 |  Experimental | [experimental](https://github.com/Screenly/screenly-ose/tree/experimental)   | This is the branch with the experimental browser version mentioned above    |
 
 
+### Docker and Directories
+
+/
+
 ### Directories, files and their purpose with regards to Screenly
 
 ```
@@ -84,10 +88,13 @@ screenly.script ->
 `/other/directories/here/.. from ansible roles`
 
 
-### Screenly-OSE-WebView
+### Debugging Screenly OSE webview
 
-The Experimental branch uses a different web browser which is maintained on a different Github repo here:
-`https://github.com/Screenly/screenly-ose-webview`
+```
+export QT_LOGGING_DEBUG=1
+export QT_LOGGING_RULES="*.debug=true"
+export QT_QPA_EGLFS_DEBUG=1
+```
 
-_(need more details about this process and how exactly the experimental browser is installed._
 
+export QT_QPA_EGLFS_INTEGRATION=eglfs_kms

@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # SUGUSR1 from the viewer is also sent to the container
-# Prevent it so that the container does not fall
+# Prevent it so that the container does not fail
 trap '' 16
 
-su - pi -c "cd /home/pi/screenly && QT_QPA_EGLFS_FORCE888=1 dbus-run-session python viewer.py &"
+dbus-run-session python viewer.py &
 
 # Waiting for the viewer
 while true; do

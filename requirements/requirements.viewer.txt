@@ -1,7 +1,7 @@
 certifi==2020.6.20
 configparser==4.0.2
 cryptography==3.2.1
-flask==0.12.2
+Flask==1.1.2
 idna==2.6
 mixpanel==4.7.0
 netifaces==0.10.9

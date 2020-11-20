@@ -87,8 +87,7 @@ def get_node_ip(retry=3, timeout=1):
     for attempt in range(1, retry + 1):
         try:
             default_interface = gateways()['default'][AF_INET][1]
-            my_ip = ifaddresses(default_interface)[AF_INET][0]['addr']
-            return my_ip
+            return ifaddresses(default_interface)[AF_INET][0]['addr']
         except (KeyError, ValueError):
             if attempt == retry:
                 break

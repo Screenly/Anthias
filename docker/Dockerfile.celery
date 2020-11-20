@@ -4,7 +4,12 @@ ADD requirements/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 RUN mkdir -p /usr/src/app
-COPY . /usr/src/app/
 WORKDIR /usr/src/app
+COPY . /usr/src/app/
 
-CMD ["bash", "bin/start_server.sh"]
+CMD celery worker \
+  -A server.celery \
+  -B -n worker@screenly \
+  --loglevel=info \
+  --schedule \
+  /tmp/celerybeat-schedule

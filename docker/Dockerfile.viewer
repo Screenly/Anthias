@@ -1,4 +1,45 @@
-FROM resin/rpi-raspbian:stretch
+FROM balenalib/rpi-raspbian:buster as viewer-builder
+
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+        build-essential \
+        g++ \
+        libinput-dev \
+        libqt5gui5 \
+        libqt5webkit5-dev \
+        libqt5x11extras5-dev \
+        libts-dev \
+        libudev-dev \
+        libxcb-xinerama0 \
+        libxcb-xinerama0-dev \
+        wget \
+        make && \
+    apt-get clean
+
+# QT Base from packages does not support eglfs
+ARG PI_VERSION=pi3
+ARG DEBIAN_VERSION=stretch
+ARG QT_VERSION=5.9
+RUN wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
+        -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
+    wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
+        -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
+    cd /tmp && \
+    sha256sum -c qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
+    tar -xzf /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local && \
+    echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf && \
+    ldconfig && \
+    rm qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*
+
+RUN mkdir /src
+WORKDIR /src
+COPY webview/ /src/
+RUN /usr/lib/arm-linux-gnueabihf/qt5/bin/qmake
+RUN make -j 4
+RUN make install
+
+# @TODO: Upgrade to Buster. We're stuck on QT 5.9 and Stretch for now.
+FROM balenalib/rpi-raspbian:stretch
 
 RUN apt-get update && \
     apt-get -y install \
@@ -7,6 +48,7 @@ RUN apt-get update && \
         git-core \
         gstreamer0.10-plugins-good \
         libdbus-glib-1-dev \
+        wget \
         libffi-dev \
         libqt5webkit5 \
         libraspberrypi0 \
@@ -23,52 +65,45 @@ RUN apt-get update && \
         sqlite3 && \
     apt-get clean
 
-RUN pip install --upgrade pip
-
 # Install Python requirements
-ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt
-RUN pip install -r /tmp/requirements.viewer.txt
+ADD requirements/requirements.viewer.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-# QtBase from packages does not support eglfs
-ARG PI_VERSION=pi1
-RUN curl -L \
-    "https://github.com/Screenly/screenly-ose-webview/releases/download/v0.1/qtbase-$PI_VERSION.tar.gz" \
-    > /tmp/qtbase.tar.gz
-RUN tar -xzf /tmp/qtbase.tar.gz -C /usr/local
-RUN echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf
-RUN ldconfig
+# QT Base from packages does not support eglfs
+ARG PI_VERSION=pi3
+ARG DEBIAN_VERSION=stretch
+ARG QT_VERSION=5.9
+RUN wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
+        -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
+    wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
+        -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
+    cd /tmp && \
+    sha256sum -c qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
+    tar -xzf /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local && \
+    echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf && \
+    ldconfig && \
+    rm qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*
 
 # Fix symlinks
-RUN rm /usr/lib/arm-linux-gnueabihf/libEGL.so.1
-RUN rm /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
-RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so
-RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1
-RUN ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0
+RUN rm -f /usr/lib/arm-linux-gnueabihf/libEGL.so.1 && \
+    rm -f /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0 && \
+    ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so && \
+    ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1 && \
+    ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0 && \
+    rm -f /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2 && \
+    rm -f /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0 && \
+    ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so && \
+    ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2 && \
+    ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
 
-RUN rm /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
-RUN rm /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
-RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so
-RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2
-RUN ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
+RUN mkdir -p /usr/local/share/ScreenlyWebview
+COPY --from=viewer-builder /src/ScreenlyWebview /usr/local/bin/
+COPY --from=viewer-builder /src/res /usr/local/share/ScreenlyWebview/
 
-ENV QT_QPA_PLATFORM eglfs
+ENV QT_QPA_EGLFS_FORCE888=1
 
-RUN mkdir /usr/local/share/ScreenlyWebview
-RUN curl -L  \
-    "https://github.com/Screenly/screenly-ose-webview/releases/download/0.2/screenly-webview-0.2.tar.gz" \
-    > /tmp/screenly-webview-0.2.tar.gz
-RUN tar -xzf /tmp/screenly-webview-0.2.tar.gz -C /tmp
+WORKDIR /usr/src/app
+RUN mkdir -p /usr/src/app
+COPY . /usr/src/app/
 
-RUN cp -r /tmp/res /usr/local/share/ScreenlyWebview/res
-RUN cp /tmp/ScreenlyWebview /usr/local/bin/ScreenlyWebview
-
-# Fix white flickering in omxplayer
-ENV NOREFRESH 1
-
-# Create runtime user
-RUN    useradd pi -d /home/pi \
-    && /usr/sbin/usermod -a -G video pi
-
-WORKDIR /home/pi/screenly
-
-CMD ["bash", "bin/start_viewer.sh"]
+CMD ["bash", "./bin/start_viewer.sh"]

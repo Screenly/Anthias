@@ -40,10 +40,6 @@ RUN chown -R pi:pi /home/pi/.screenly /home/pi/screenly_assets
 USER pi
 WORKDIR /home/pi/screenly
 
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US:en
-ENV LC_ALL en_US.UTF-8
-
 EXPOSE 8080
 
 CMD python server.py

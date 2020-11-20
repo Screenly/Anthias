@@ -37,3 +37,6 @@ pip-log.txt
 .sass-cache/*
 node_modules
 venv
+
+docker/*
+docker-compose.*

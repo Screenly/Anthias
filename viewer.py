@@ -269,7 +269,7 @@ def view_webpage(uri):
     if current_browser_url is not uri:
         browser_bus.loadPage(uri)
         current_browser_url = uri
-    logging.info('current url is {0}'.format(current_browser_url))
+    logging.info('Current url is {0}'.format(current_browser_url))
 
 
 def view_image(uri):
@@ -280,7 +280,7 @@ def view_image(uri):
     if current_browser_url is not uri:
         browser_bus.loadImage(uri)
         current_browser_url = uri
-    logging.info('current url is {0}'.format(current_browser_url))
+    logging.info('Current url is {0}'.format(current_browser_url))
 
 
 def view_video(uri, duration):
@@ -374,7 +374,9 @@ def check_update():
 
 
 def load_settings():
-    """Load settings and set the log level."""
+    """
+    Load settings and set the log level.
+    """
     settings.load()
     logging.getLogger().setLevel(logging.DEBUG if settings['debug_logging'] else logging.INFO)
 
@@ -451,7 +453,6 @@ def setup_hotspot():
     )
 
     # Displays the hotspot page
-
     if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
         if len(wireless_connections) == 0:
             url = 'http://{0}/hotspot'.format(LISTEN)

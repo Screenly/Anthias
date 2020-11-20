@@ -9,14 +9,6 @@
     - .config
     - screenly_assets
 
-- name: Copy Screenly default config
-  copy:
-    owner: pi
-    group: pi
-    src: screenly.conf
-    dest: /home/pi/.screenly/screenly.conf
-    force: no
-
 - name: Copy Screenly default assets file
   copy:
     owner: pi
@@ -35,21 +27,6 @@
   pip:
     requirements: /home/pi/screenly/requirements/requirements.host.txt
     extra_args: "--no-cache-dir --upgrade"
-
-- name: Create default assets database if does not exists
-  copy:
-    owner: pi
-    group: pi
-    src: screenly.db
-    dest: /home/pi/.screenly/screenly.db
-    force: no
-
-- name: Run database migration
-  become_user: pi
-  command: python /home/pi/screenly/bin/migrate.py
-  register: migrate
-
-- debug: msg="{{ migrate.stdout }}"
 
 - name: Remove screenly_utils.sh
   file:
@@ -145,102 +122,3 @@
     path: "/etc/systemd/system/{{ item }}"
     state: absent
   with_items: "{{ deprecated_screenly_systemd_units }}"
-
-- name: Check /proc/device-tree/model file
-  command: cat /proc/device-tree/model
-  register: model_file
-
-- debug:
-    msg: "Device type: {{ device_type }}"
-
-- debug:
-    msg: "Use {{ docker_tag }} version of images."
-
-- name: Run docker-compose
-  docker_compose:
-    project_name: screenly
-    definition:
-      version: "2"
-      services:
-        screenly-server:
-          image: "screenly/screenly-ose-server:{{ docker_tag }}"
-          build:
-            context: /home/pi/screenly
-            dockerfile: /home/pi/screenly/docker/Dockerfile.server
-          container_name: screenly-server
-          entrypoint: python server.py
-          restart: unless-stopped
-          network_mode: "host"
-          volumes:
-            - /home/pi/screenly_assets:/home/pi/screenly_assets
-            - /home/pi/screenly:/home/pi/screenly
-            - /home/pi/.screenly:/home/pi/.screenly
-            - /etc/timezone:/etc/timezone:ro
-            - /etc/localtime:/etc/localtime:ro
-
-        screenly-viewer:
-          image: "screenly/screenly-ose-viewer:{{ docker_tag }}-{{ device_type }}"
-          build:
-            context: /home/pi/screenly
-            dockerfile: /home/pi/screenly/docker/Dockerfile.viewer
-            args:
-              - PI_VERSION={{ device_type }}
-          container_name: screenly-viewer
-          privileged: true
-          restart: unless-stopped
-          network_mode: "host"
-          volumes:
-            - /home/pi/screenly_assets:/home/pi/screenly_assets
-            - /home/pi/screenly:/home/pi/screenly
-            - /home/pi/.screenly:/home/pi/.screenly
-            - /etc/timezone:/etc/timezone:ro
-            - /etc/localtime:/etc/localtime:ro
-          depends_on:
-            - screenly-server
-
-        screenly-websocket:
-          image: "screenly/screenly-ose-websocket:{{ docker_tag }}"
-          build:
-            context: /home/pi/screenly
-            dockerfile: /home/pi/screenly/docker/Dockerfile.websocket
-          container_name: screenly-websocket
-          restart: unless-stopped
-          network_mode: "host"
-          volumes:
-            - /home/pi/screenly_assets:/home/pi/screenly_assets
-            - /home/pi/screenly:/home/pi/screenly
-            - /home/pi/.screenly:/home/pi/.screenly
-            - /etc/timezone:/etc/timezone:ro
-            - /etc/localtime:/etc/localtime:ro
-          depends_on:
-            - screenly-server
-
-        screenly-celery:
-          image: "screenly/screenly-ose-celery:{{ docker_tag }}"
-          build:
-            context: /home/pi/screenly
-            dockerfile: /home/pi/screenly/docker/Dockerfile.server
-          container_name: screenly-celery
-          entrypoint: celery worker -A server.celery -B -n worker@screenly --loglevel=info --schedule /tmp/celerybeat-schedule
-          network_mode: "host"
-          restart: unless-stopped
-          volumes:
-            - /home/pi/screenly_assets:/home/pi/screenly_assets
-            - /home/pi/screenly:/home/pi/screenly
-            - /home/pi/.screenly:/home/pi/.screenly
-            - /etc/timezone:/etc/timezone:ro
-            - /etc/localtime:/etc/localtime:ro
-          depends_on:
-            - screenly-server
-            - redis
-
-        redis:
-          image: redis:alpine
-          restart: unless-stopped
-          ports:
-            - "6379:6379"
-
-    recreate: smart
-
-- name: Pause screenly-viewer container
-  command: docker pause screenly-viewer

@@ -1,7 +1,7 @@
 version: "2"
 services:
   srly-ose-server:
-    image: screenly/srly-ose-server:latest
+    image: screenly/srly-ose-server:${DOCKER_TAG}
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -12,12 +12,13 @@ services:
     privileged: true
     restart: always
     volumes:
-      - resin-data:/data
+      - /home/pi/.screenly:/data/.screenly
+      - /home/pi/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
   srly-ose-viewer:
-    image: screenly/srly-ose-viewer:latest-pi3
+    image: screenly/srly-ose-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
     depends_on:
       - srly-ose-server
     environment:
@@ -28,11 +29,12 @@ services:
     privileged: true
     restart: always
     volumes:
-      - resin-data:/data
+      - /home/pi/.screenly:/data/.screenly
+      - /home/pi/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
   srly-ose-websocket:
-    image: screenly/srly-ose-websocket:latest
+    image: screenly/srly-ose-websocket:${DOCKER_TAG}
     depends_on:
       - srly-ose-server
     environment:
@@ -43,11 +45,12 @@ services:
     privileged: true
     restart: always
     volumes:
-      - resin-data:/data
+      - /home/pi/.screenly:/data/.screenly
+      - /home/pi/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
   srly-ose-celery:
-    image: screenly/srly-ose-celery:latest
+    image: screenly/srly-ose-celery:${DOCKER_TAG}
     depends_on:
       - srly-ose-server
       - redis
@@ -58,12 +61,12 @@ services:
     privileged: true
     restart: always
     volumes:
-      - resin-data:/data
+      - /home/pi/.screenly:/data/.screenly
+      - /home/pi/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
   redis:
-    image: screenly/srly-ose-redis:latest
-    restart: always
+    image: screenly/srly-ose-redis:${DOCKER_TAG}
 
 volumes:
-    resin-data:
+    screenly-data:

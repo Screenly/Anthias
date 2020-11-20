@@ -169,17 +169,7 @@
 - name: Install Screenly dependencies
   apt:
     name:
-      - console-data
-      - libffi-dev
-      - libssl-dev
-      - omxplayer
-      - python-dev
-      - python-gobject
-      - python-netifaces
-      - python-simplejson
       - rpi-update
-      - sqlite3
-      - systemd
     state: latest
 
 - name: Remove deprecated apt dependencies
@@ -196,17 +186,6 @@
       - uzbl
       - x11-xserver-utils
       - xserver-xorg
-    state: absent
-
-- name: Remove cups/printing related packages
-  apt:
-    name:
-      - cups
-      - cups-browsed
-      - cups-client
-      - cups-common
-      - cups-daemon
-      - cups-server-common
     state: absent
 
 - name: Add docker apt key
