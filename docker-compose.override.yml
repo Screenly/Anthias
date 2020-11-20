@@ -69,5 +69,21 @@ services:
   redis:
     image: screenly/srly-ose-redis:${DOCKER_TAG}
 
+  srly-ose-nginx:
+    image: screenly/srly-ose-nginx:${DOCKER_TAG}
+    depends_on:
+      - srly-ose-server
+    environment:
+      - HOME=/data
+    depends_on:
+      - srly-ose-server
+      - srly-ose-websocket
+    restart: always
+    volumes:
+      - /home/pi/.screenly:/data/.screenly
+      - /home/pi/screenly_assets:/data/screenly_assets
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+
 volumes:
     screenly-data:
