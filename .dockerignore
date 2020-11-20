@@ -38,5 +38,4 @@ pip-log.txt
 node_modules
 venv
 
-docker/*
 docker-compose.*
