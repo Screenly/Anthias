@@ -177,7 +177,7 @@ sudo pip install ansible==2.8.8
 
 sudo -u pi ansible localhost \
     -m git \
-    -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH force=yes"
+    -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH force=no"
 cd /home/pi/screenly/ansible
 
 sudo -E ansible-playbook site.yml "${EXTRA_ARGS[@]}"
@@ -242,22 +242,18 @@ else
   sudo chmod 0440 /etc/sudoers.d/010_pi-nopasswd
 fi
 
-#######################################################################
-# Setup a new pi password if default password "raspberry" detected
+# Ask user to set a new pi password if default password "raspberry" detected
+check_defaultpw () {
 
 if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ] && [ "$WEB_UPGRADE" = false ]; then
 set +x
-# clear any previous set variables used for password detection
-_CURRENTPISALT=''
-_CURRENTPIUSERPWD=''
-_DEFAULTPIPWD=''
 
-# currently only looking for $6$/sha512, will expand later on to all algorithms potentially used
-_CURRENTPISALT=$(sudo cat /etc/shadow | grep pi | awk -F '$' '{print $3}')
-_CURRENTPIUSERPWD=$(sudo cat /etc/shadow | grep pi | awk -F ':' '{print $2}')
-_DEFAULTPIPWD=$(mkpasswd -m sha-512 raspberry $_CURRENTPISALT)
+# currently only looking for $6$/sha512 hash
+local VAR_CURRENTPISALT=$(sudo cat /etc/shadow | grep pi | awk -F '$' '{print $3}')
+local VAR_CURRENTPIUSERPW=$(sudo cat /etc/shadow | grep pi | awk -F ':' '{print $2}')
+local VAR_DEFAULTPIPW=$(mkpasswd -m sha-512 raspberry "$VAR_CURRENTPISALT")
 
-  if [[ "$_CURRENTPIUSERPWD" == "$_DEFAULTPIPWD" ]]; then
+  if [[ "$VAR_CURRENTPIUSERPW" == "$VAR_DEFAULTPIPW" ]]; then
     echo "(Warning): The default Raspberry Pi password was detected! - please change it now..."
     set +e
     passwd
@@ -268,7 +264,8 @@ _DEFAULTPIPWD=$(mkpasswd -m sha-512 raspberry $_CURRENTPISALT)
     set -x
   fi
 fi
-#######################################################################
+}
+check_defaultpw;
 
 echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
 
