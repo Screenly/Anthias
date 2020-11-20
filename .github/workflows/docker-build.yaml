@@ -25,19 +25,5 @@ jobs:
       - name: Available platforms
         run: echo ${{ steps.buildx.outputs.platforms }}
 
-      - name: Building websocket container
-        run: |
-          docker buildx build \
-            --platform linux/arm/v6,linux/arm/v7 \
-            -t "screenly/srly-ose-websocket" \
-            -f docker/Dockerfile.websocket .
-
-#      - name: Building viewer containers
-#        run: |
-#          for pi_version in pi1 pi2 pi3; do
-#            docker buildx build \
-#              --platform linux/arm/v6,linux/arm/v7 \
-#              --build-arg "PI_VERSION=$pi_version" \
-#              -f docker/Dockerfile.viewer \
-#              -t "screenly/srly-ose-viewer:$pi_version" .
-#          done
+      - name: Building container
+        run: ./bin/build_containers.sh
