@@ -15,7 +15,7 @@ else
     DOCKER_BUILD_ARGS=("build")
 fi
 
-for container in base server celery redis websocket; do
+for container in base server celery redis websocket nginx; do
     echo "Building $container"
     docker "${DOCKER_BUILD_ARGS[@]}" \
         -f "docker/Dockerfile.$container" \

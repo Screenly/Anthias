@@ -1653,7 +1653,7 @@ def viewIndex():
     if settings['use_ssl']:
         ws_addresses.append('wss://' + my_ip + '/ws/')
     else:
-        ws_addresses.append('ws://' + my_ip + ':' + settings['websocket_port'])
+        ws_addresses.append('ws://' + my_ip + '/ws/')
 
     if resin_uuid:
         ws_addresses.append('wss://{}.resindevice.io/ws/'.format(resin_uuid))

@@ -33,6 +33,7 @@ services:
       - /home/pi/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+
   srly-ose-websocket:
     image: screenly/srly-ose-websocket:${DOCKER_TAG}
     depends_on:
@@ -40,8 +41,6 @@ services:
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
-    ports:
-      - 9999:9999
     privileged: true
     restart: always
     volumes:
@@ -49,6 +48,7 @@ services:
       - /home/pi/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+
   srly-ose-celery:
     image: screenly/srly-ose-celery:${DOCKER_TAG}
     depends_on:
@@ -65,6 +65,7 @@ services:
       - /home/pi/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+
   redis:
     image: screenly/srly-ose-redis:${DOCKER_TAG}
 
