@@ -9,6 +9,14 @@
     - .config
     - screenly_assets
 
+- name: Copy Screenly default config
+  copy:
+    owner: pi
+    group: pi
+    src: screenly.conf
+    dest: /home/pi/.screenly/screenly.conf
+    force: no
+
 - name: Copy Screenly default assets file
   copy:
     owner: pi
@@ -22,6 +30,18 @@
     regexp: '^.*listen.*'
     state: absent
     dest: /home/pi/.screenly/screenly.conf
+
+- name: Replace home directory to screenly_assets in screenly.conf
+  replace:
+    regexp: '^(?P<s>assetdir = ).*(?P<e>/screenly_assets)'
+    replace: '\g<s>{{ home }}\g<e>'
+    path: /home/pi/.screenly/screenly.conf
+
+- name: Replace home directory to database in screenly.conf
+  replace:
+    regexp: '^(?P<s>database = ).*(?P<e>/.screenly/screenly.db)'
+    replace: '\g<s>{{ home }}\g<e>'
+    path: /home/pi/.screenly/screenly.conf
 
 - name: Install pip dependencies
   pip:
