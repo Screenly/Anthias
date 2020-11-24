@@ -179,6 +179,8 @@
       - lightdm
       - lightdm-gtk-greeter
       - matchbox
+      - nginx-common
+      - nginx-light
       - pix-plym-splash
       - rabbitmq-server
       - redis-server
