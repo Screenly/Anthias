@@ -9,17 +9,19 @@ RUN apt-get update && \
         freetds-dev \
         g++ \
         git \
+        libgbm-dev \
+        libgles2-mesa-dev \
         libinput-dev \
-        lsb-release \
         libqt5gui5 \
         libqt5webkit5-dev \
         libqt5x11extras5-dev \
-        libraspberrypi0 \
         libraspberrypi-dev \
+        libraspberrypi0 \
         libts-dev \
         libudev-dev \
         libxcb-xinerama0 \
         libxcb-xinerama0-dev \
+        lsb-release \
         make && \
     apt-get build-dep libqt5gui5 && \
     apt-get clean

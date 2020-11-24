@@ -5,95 +5,76 @@
 
 set -euo pipefail
 
-QT_PI_1=/src/qt5/pi_1 # For Pi 1 and Pi Zero
-QT_PI_2=/src/qt5/pi_2 # For Pi 2
-QT_PI_3=/src/qt5/pi_3 # For Pi 3
 BUILD_TARGET=/build
-QT_BRANCH="5.9"
+QT_BRANCH="5.15"
 DEBIAN_VERSION=$(lsb_release -cs)
 
 mkdir -p "$BUILD_TARGET"
 
 echo "Building QT Base version $QT_BRANCH."
 
-if [ ! -f "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi1.tar.gz" ]; then
-    echo "Building QT Base for Pi 1"
-    mkdir -p "$QT_PI_1"
-    cd "$QT_PI_1"
+function build_qtbase () {
+    if [ ! -f "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" ]; then
+        SRC_DIR="/src/$1"
+        echo "Building QT Base for $1"
+        mkdir -p "$SRC_DIR"
+        cd "$SRC_DIR"
+        git clone git://code.qt.io/qt/qtbase.git -b "$QT_BRANCH"
+        cd qtbase
+        ./configure \
+            -release \
+            -no-compile-examples \
+            -opengl es2 \
+            -device "linux-rasp-$1-g++" \
+            -device-option CROSS_COMPILE=/usr/bin/ \
+            -opensource \
+            -confirm-license \
+            -make libs \
+            -prefix /usr/local/qt5pi \
+            -extprefix "$SRC_DIR/qt5pi" \
+            -no-use-gold-linker
+
+        make -j "$(nproc --all)"
+        make install
+        cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt5pi/lib/fonts"
+        cd "$SRC_DIR"
+        tar -zcvf "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" qt5pi
+        cd "$BUILD_TARGET"
+        sha256sum "qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
+    else
+        echo "Build already exist."
+    fi
+}
+
+build_qtbase pi
+build_qtbase pi2
+build_qtbase pi3
+
+if [ ! -f "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi4.tar.gz" ]; then
+    echo "Building QT Base for Pi 4"
+    SRC_DIR="/src/pi4"
+    mkdir -p "$SRC_DIR"
+    cd "$SRC_DIR"
     git clone git://code.qt.io/qt/qtbase.git -b "$QT_BRANCH"
     cd qtbase
     ./configure \
         -release \
-        -opengl es2 \
-        -device linux-rasp-pi-g++ \
-        -device-option CROSS_COMPILE=/usr/bin/ \
-        -opensource \
-        -confirm-license \
-        -make libs \
-        -prefix /usr/local/qt5pi \
-        -extprefix $QT_PI_1/qt5pi \
-        -no-use-gold-linker
-
-    make -j "$(nproc --all)"
-    make install
-    cp -r /usr/share/fonts/truetype/dejavu/ "$QT_PI_1/qt5pi/lib/fonts"
-    cd "$QT_PI_1"
-    tar -zcvf "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi1.tar.gz" qt5pi
-    cd "$BUILD_TARGET"
-    sha256sum "qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi1.tar.gz" > "qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi1.tar.gz.sha256"
-fi
-
-if [ ! -f "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi2.tar.gz" ]; then
-    echo "Building QT Base for Pi 2"
-    mkdir -p "$QT_PI_2"
-    cd "$QT_PI_2"
-    git clone git://code.qt.io/qt/qtbase.git -b "$QT_BRANCH"
-    cd qtbase
-    ./configure \
-        -release \
-        -opengl es2 \
-        -device linux-rasp-pi2-g++ \
-        -device-option CROSS_COMPILE=/usr/bin/ \
-        -opensource \
-        -confirm-license \
-        -make libs \
-        -prefix /usr/local/qt5pi \
-        -extprefix "$QT_PI_2/qt5pi" \
-        -no-use-gold-linker
-
-    make -j "$(nproc --all)"
-    make install
-    cp -r /usr/share/fonts/truetype/dejavu/ "$QT_PI_2/qt5pi/lib/fonts"
-    cd "$QT_PI_2"
-    tar -zcvf "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi2.tar.gz" qt5pi
-    cd "$BUILD_TARGET"
-    sha256sum "qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi2.tar.gz" > "qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi2.tar.gz.sha256"
-fi
-
-if [ ! -f "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi3.tar.gz" ]; then
-    echo "Building QT Base for Pi 3"
-    mkdir -p $QT_PI_3
-    cd "$QT_PI_3"
-    git clone git://code.qt.io/qt/qtbase.git -b "$QT_BRANCH"
-    cd qtbase
-    ./configure \
-        -release \
-        -opengl es2 \
-        -device linux-rasp-pi3-g++ \
+        -no-compile-examples \
+        -device linux-rasp-pi4-v3d-g++ \
         -device-option CROSS_COMPILE=/usr/bin/ \
         -opensource \
         -confirm-license \
         -release \
         -make libs \
         -prefix /usr/local/qt5pi \
-        -extprefix "$QT_PI_3/qt5pi" \
+        -extprefix "$SRC_DIR/qt5pi" \
         -no-use-gold-linker
 
     make -j "$(nproc --all)"
     make install
-    cp -r /usr/share/fonts/truetype/dejavu/ "$QT_PI_3/qt5pi/lib/fonts"
-    cd "$QT_PI_3"
-    tar -zcvf "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi3.tar.gz" qt5pi
+    cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt5pi/lib/fonts"
+    cd "$SRC_DIR"
+    tar -zcvf "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi4.tar.gz" qt5pi
     cd "$BUILD_TARGET"
-    sha256sum "qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi3.tar.gz" > "qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi3.tar.gz.sha256"
+    sha256sum "qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi4.tar.gz" > "qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi4.tar.gz.sha256"
 fi
