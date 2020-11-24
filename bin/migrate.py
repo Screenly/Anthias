@@ -3,8 +3,6 @@
 
 import sqlite3
 import os
-import shutil
-import subprocess
 from contextlib import contextmanager
 import datetime
 
