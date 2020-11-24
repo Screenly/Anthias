@@ -9,14 +9,6 @@
     - .config
     - screenly_assets
 
-- name: Copy Screenly default config
-  copy:
-    owner: pi
-    group: pi
-    src: screenly.conf
-    dest: /home/pi/.screenly/screenly.conf
-    force: no
-
 - name: Copy Screenly default assets file
   copy:
     owner: pi
