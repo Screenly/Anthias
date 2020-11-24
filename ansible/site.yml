@@ -7,12 +7,6 @@
     docker_tag: "{{ lookup('env', 'DOCKER_TAG') }}"
     device_type: "{{ lookup('env', 'DEVICE_TYPE') }}"
 
-  handlers:
-    - name: restart-nginx
-      service:
-        name: nginx
-        state: restarted
-
   roles:
     - system
     - screenly
