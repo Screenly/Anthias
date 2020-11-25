@@ -86,8 +86,9 @@ screenly.script -> plymouth script file that loads and scales splashscreen image
 
 ### Screenly-OSE-WebView
 
-The Experimental branch uses a different web browser which is maintained on a different Github repo here:
-`https://github.com/Screenly/screenly-ose-webview`
+The Experimental branch uses a different web browser which is maintained on the experimental repo:
+`https://github.com/Screenly/screenly-ose/tree/experimental/webview`
 
-_(need more details about this process and how exactly the experimental browser is installed.)_
+Browser is assembled with Dockerfile and built by `built_qtbase.sh` script.
+For more info visit the `experimental` branch.
 
