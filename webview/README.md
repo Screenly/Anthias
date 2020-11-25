@@ -1,6 +1,6 @@
-## Building BQ Base
+## Building QT Base
 
-Because the QT shiipped with Raspbian doens't come with all dependencies, we need to ship a separate version with the WebView.
+Because the QT package shipped with Raspbian doens't come with all dependencies, we need to ship a separate version with the WebView.
 
 At the moment, this build will not work with cross-compiling, and needs to be done on a Raspberry Pi.
 
