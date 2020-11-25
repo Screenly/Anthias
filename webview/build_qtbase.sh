@@ -13,6 +13,19 @@ mkdir -p "$BUILD_TARGET"
 
 echo "Building QT Base version $QT_BRANCH."
 
+function build_qtwebengine () {
+    if [ ! -f "$BUILD_TARGET/qtwebengine-$QT_BRANCH-$DEBIAN_VERSION.tar.gz" ]; then
+        SRC_DIR="/src/qtwebengine"
+        git clone git://code.qt.io/qt/qtwebengine.git -b "$QT_BRANCH" "$SRC_DIR"
+        cd "$SRC_DIR"
+        git submodule init
+        git submodule update
+        /usr/lib/arm-linux-gnueabihf/qt5/bin/qmake
+        make -j "$(nproc --all)"
+        make install
+    fi
+}
+
 function build_qtbase () {
     if [ ! -f "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" ]; then
         SRC_DIR="/src/$1"
@@ -46,10 +59,13 @@ function build_qtbase () {
     fi
 }
 
+build_qtwebengine
 build_qtbase pi
 build_qtbase pi2
 build_qtbase pi3
 
+# We can probably refactor the other `build_qtbase` function to include these
+# unique build options, but this will do for now even if it isn't DRY.
 if [ ! -f "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi4.tar.gz" ]; then
     echo "Building QT Base for Pi 4"
     SRC_DIR="/src/pi4"
