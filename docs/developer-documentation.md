@@ -46,19 +46,19 @@ screenly.db -> database file containing current Assets information.
 ```
 /etc/systemd/system/
 
-matchbox.service ->
-screenly-celery.service ->
-screenly-viewer.service ->
-screenly-web.service ->
-screenly-websocket_server_layer.service ->
-wifi-connect.service ->
+matchbox.service -> lightweight window manager for the X window system (env variable DISPLAY as 0.0)
+screenly-celery.service -> starts the celery worker (App set to server.celery, bpython interface, hostname worker@screenly, schedule database /home/pi/.screenly/celerybeat-schedule)
+screenly-viewer.service -> starts the main viewer (viewer.py) and sets a few user prefs for the X display
+screenly-web.service -> starts the web server (server.py)
+screenly-websocket_server_layer.service -> starts the websocket server, uses zmq for messaging
+wifi-connect.service -> starts the resin/balena wifi-connect program to dynamically set the wifi config on the device via captive portal
 ```
 
 ```
 /etc/nginx/sites-enabled/
 
-screenly_assets.conf ->
-screenly.conf ->
+screenly_assets.conf -> configuration file for ngrok.io server, deals with public url tunnel / pro migration?
+screenly.conf -> configuration file for nginx web server (default asset settings, web GUI auth, database/asset dir, etc), called by settings.py
 ```
 
 ```
@@ -68,9 +68,9 @@ screenly.conf ->
 ```
 /usr/share/plymouth/themes/screenly
 
-screenly.plymouth ->
-splashscreen.png ->
-screenly.script ->
+screenly.plymouth -> plymouth config file (sets module name, imagedir and scriptfile dir)
+splashscreen.png -> screenly ose splashscreen image file
+screenly.script -> plymouth script file that loads and scales splashscreen image during boot process
 ```
 
 ```
