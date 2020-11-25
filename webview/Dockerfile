@@ -13,6 +13,7 @@ RUN apt-get update && \
         git \
         gperf \
         gyp \
+        lib32stdc++-8-dev \
         libasound2-dev \
         libbz2-dev \
         libcap-dev \
@@ -39,6 +40,7 @@ RUN apt-get update && \
         libxtst-dev \
         lsb-release \
         ninja-build \
+        nodejs \
         python \
         qtdeclarative5-private-dev \
         ruby \

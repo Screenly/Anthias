@@ -34,7 +34,9 @@ RUN wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERS
 RUN mkdir /src
 WORKDIR /src
 COPY webview/ /src/
-RUN /usr/lib/arm-linux-gnueabihf/qt5/bin/qmake
+
+RUN /usr/local/qt5pi/bin/qmake
+
 RUN make -j 4
 RUN make install
 
@@ -48,9 +50,8 @@ RUN apt-get update && \
         git-core \
         gstreamer0.10-plugins-good \
         libdbus-glib-1-dev \
-        wget \
         libffi-dev \
-        libqt5webkit5 \
+        libqt5webengine-data \
         libraspberrypi0 \
         libssl-dev \
         libts-dev \
@@ -61,6 +62,7 @@ RUN apt-get update && \
         python-gobject \
         python-netifaces \
         python-pip \
+        wget \
         python-setuptools \
         sqlite3 && \
     apt-get clean
