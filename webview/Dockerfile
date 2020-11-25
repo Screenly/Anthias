@@ -7,6 +7,7 @@ RUN apt-get update && \
     apt-get -y install --no-install-recommends \
         bison \
         build-essential \
+        cowsay \
         flex \
         freetds-dev \
         g++ \

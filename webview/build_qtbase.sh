@@ -52,7 +52,7 @@ function build_qtbase () {
     local SRC_DIR="/src/$1"
 
     if [ ! -f "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" ]; then
-        echo "Building QT Base for $1"
+        cowthink "Building QT Base for $1"
         mkdir -p "$SRC_DIR"
         cd "$SRC_DIR"
         PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig NINJAJOBS=-j1 \
@@ -85,13 +85,12 @@ function build_qtbase () {
         make install
         cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt5pi/lib/fonts"
 
-        echo "Building QTWebEngine"
+        cowthink "Building QTWebEngine for $1"
         fetch_qtwebengine
         cd /src/qtwebengine
         "$SRC_DIR/qt5pi/bin/qmake"
         NINJAJOBS=-j1 make -j "$(nproc --all)"
         make install
-
 
         cd "$SRC_DIR"
         tar -zcvf "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" qt5pi
@@ -108,7 +107,7 @@ function build_qtbase_pi4 () {
     # unique build options, but this will do for now even if it isn't DRY.
     local SRC_DIR="/src/pi4"
     if [ ! -f "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi4.tar.gz" ]; then
-        echo "Building QT Base for Pi 4"
+        cowthink "Building QT Base for Pi 4"
         mkdir -p "$SRC_DIR"
         cd "$SRC_DIR"
         PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig NINJAJOBS=-j1 \
@@ -141,7 +140,7 @@ function build_qtbase_pi4 () {
         make install
         cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt5pi/lib/fonts"
 
-        echo "Building QTWebEngine"
+        cowthink "Building QTWebEngine for Pi 4"
         fetch_qtwebengine
         cd /src/qtwebengine
         "$SRC_DIR/qt5pi/bin/qmake"
@@ -157,7 +156,7 @@ function build_qtbase_pi4 () {
 
 fetch_qt
 fetch_qtwebengine
-#build_qtbase pi
-#build_qtbase pi2
-#build_qtbase pi3
+build_qtbase pi
+build_qtbase pi2
+build_qtbase pi3
 build_qtbase_pi4
