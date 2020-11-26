@@ -6,10 +6,12 @@
 set -euo pipefail
 
 BUILD_TARGET=/build
+SRC=/src
 QT_BRANCH="5.15.2"
 DEBIAN_VERSION=$(lsb_release -cs)
 
 mkdir -p "$BUILD_TARGET"
+mkdir -p "$SRC"
 
 echo "Building QT Base version $QT_BRANCH."
 
@@ -20,7 +22,7 @@ function fetch_qt () {
 
         # Patch QT
         git clone https://github.com/oniongarlic/qt-raspberrypi-configuration.git
-        qt-raspberrypi-configuration
+        cd qt-raspberrypi-configuration
         make install DESTDIR=../
     fi
 }

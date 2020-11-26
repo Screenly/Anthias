@@ -2,7 +2,7 @@
 
 Because the QT package shipped with Raspbian doens't come with all dependencies, we need to ship a separate version with the WebView.
 
-At the moment, this build will not work with cross-compiling, and needs to be done on a Raspberry Pi.
+At the moment, this build will not work with cross-compiling, and needs to be done on a Raspberry Pi 4 Model B (with 4GB RAM). You also need a few gigs of swap space and ~100GB of free space. We need to ensure that this can be cross compiled as this process takes a good day to run.
 
 Start by building the base image:
 
@@ -39,3 +39,14 @@ browser_bus.loadPage("www.example.com")
 ```
 
 Supported protocols: `http://`, `https://`
+
+
+## Cross compilation notes
+
+Note: This is work in progress.
+
+
+```
+$ docker buildx build --load --platform linux/arm/v7 -t qt-builder  .
+$ docker run --rm -v $(pwd):/build  qt-builder
+```
