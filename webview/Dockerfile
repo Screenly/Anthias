@@ -20,6 +20,7 @@ RUN apt-get update && \
         libcap-dev \
         libdrm-dev \
         libegl1-mesa-dev \
+        libfontconfig1-dev \
         libgbm-dev \
         libgles2-mesa-dev \
         libinput-dev \
@@ -29,18 +30,26 @@ RUN apt-get update && \
         libraspberrypi-dev \
         libraspberrypi0 \
         libsnappy-dev \
+        libsrtp0-dev
         libsrtp0-dev \
+        libssl-dev \
         libts-dev \
         libudev-dev \
         libvpx-dev \
         libwebp-dev \
         libxcb-xinerama0 \
         libxcb-xinerama0-dev \
+        libxcomposite-dev \
+        libxcursor-dev \
+        libxdamage-dev \
+        libxrandr-dev \
+        libxss-dev \
         libxtst-dev \
         lsb-release \
         ninja-build \
         nodejs \
         python \
+        qtbase5-private-dev \
         qtdeclarative5-private-dev \
         ruby \
         wget \

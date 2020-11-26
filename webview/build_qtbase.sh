@@ -13,7 +13,7 @@ DEBIAN_VERSION=$(lsb_release -cs)
 mkdir -p "$BUILD_TARGET"
 mkdir -p "$SRC"
 
-echo "Building QT Base version $QT_BRANCH."
+/usr/games/cowsay -f tux "Building QT Base version $QT_BRANCH."
 
 function fetch_qt () {
     if [ ! -d "/src/qtbase" ]; then
@@ -54,7 +54,7 @@ function build_qtbase () {
     local SRC_DIR="/src/$1"
 
     if [ ! -f "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" ]; then
-        cowthink "Building QT Base for $1"
+        /usr/games/cowsay -f tux "Building QT Base for $1"
         mkdir -p "$SRC_DIR"
         cd "$SRC_DIR"
         PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig NINJAJOBS=-j1 \
@@ -87,7 +87,7 @@ function build_qtbase () {
         make install
         cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt5pi/lib/fonts"
 
-        cowthink "Building QTWebEngine for $1"
+        /usr/games/cowsay -f tux "Building QTWebEngine for $1"
         fetch_qtwebengine
         cd /src/qtwebengine
         "$SRC_DIR/qt5pi/bin/qmake"
@@ -109,7 +109,7 @@ function build_qtbase_pi4 () {
     # unique build options, but this will do for now even if it isn't DRY.
     local SRC_DIR="/src/pi4"
     if [ ! -f "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi4.tar.gz" ]; then
-        cowthink "Building QT Base for Pi 4"
+        /usr/games/cowsay -f tux "Building QT Base for Pi 4"
         mkdir -p "$SRC_DIR"
         cd "$SRC_DIR"
         PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig NINJAJOBS=-j1 \
@@ -142,7 +142,7 @@ function build_qtbase_pi4 () {
         make install
         cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt5pi/lib/fonts"
 
-        cowthink "Building QTWebEngine for Pi 4"
+        /usr/games/cowsay -f tux "Building QTWebEngine for Pi 4"
         fetch_qtwebengine
         cd /src/qtwebengine
         "$SRC_DIR/qt5pi/bin/qmake"
@@ -157,7 +157,6 @@ function build_qtbase_pi4 () {
 }
 
 fetch_qt
-fetch_qtwebengine
 build_qtbase pi
 build_qtbase pi2
 build_qtbase pi3
