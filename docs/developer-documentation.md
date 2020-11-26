@@ -88,4 +88,4 @@ screenly.script -> plymouth script file that loads and scales splashscreen image
 
 Screenly OSE WebView is a custom-built web browser based on the [QT](https://www.qt.io/) toolkit framework.
 The browser is assembled with a Dockerfile and built by the `built_qtbase.sh` script.
-For more info on these files and more visit the following link: `https://github.com/Screenly/screenly-ose/master/webview`
+For further info on these files and more, visit the following link: `https://github.com/Screenly/screenly-ose/master/webview`
