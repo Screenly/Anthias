@@ -226,9 +226,11 @@ def get_raspberry_model(raspberry_code):
         'a03111': 'Model 4B',
         'b03111': 'Model 4B',
         'b03112': 'Model 4B',
+        'b03114': 'Model 4B',
         'c03111': 'Model 4B',
         'c03112': 'Model 4B',
-        'd03114': 'Model 4B'
+        'd03114': 'Model 4B',
+        'c03130': 'Model Pi 400'
     }
 
     return models.get(raspberry_code, 'Unable to determine raspberry model.')
@@ -266,9 +268,11 @@ def get_raspberry_revision(raspberry_code):
             'a03111': '1.1',
             'b03111': '1.1',
             'b03112': '1.2',
+            'b03114': '1.4',
             'c03111': '1.1',
             'c03112': '1.2',
-            'd03114': '1.4'
+            'd03114': '1.4',
+            'c03130': '1'
     }
 
     return revisions.get(raspberry_code, 'Unable to determine raspberry revision.')
@@ -306,9 +310,11 @@ def get_raspberry_ram(raspberry_code):
         'a03111': '1GB',
         'b03111': '2GB',
         'b03112': '2GB',
+        'b03114': '2GB',
         'c03111': '4GB',
         'c03112': '4GB',
-        'd03114': '8GB'
+        'd03114': '8GB',
+        'c03130': '4GB'
     }
 
     return rams.get(raspberry_code, 'Unable to determine raspberry RAM.')
@@ -346,9 +352,11 @@ def get_raspberry_manufacturer(raspberry_code):
         'a03111': 'Sony UK',
         'b03111': 'Sony UK',
         'b03112': 'Sony UK',
+        'b03114': 'Sony UK',
         'c03111': 'Sony UK',
         'c03112': 'Sony UK',
-        'd03114': 'Sony UK'
+        'd03114': 'Sony UK',
+        'c03130': 'Sony UK'
     }
 
     return manufacturers.get(raspberry_code, 'Unable to determine raspberry manufacturer.')
