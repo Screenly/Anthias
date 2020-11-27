@@ -1,8 +1,5 @@
 FROM balenalib/rpi-raspbian:buster
 
-RUN echo "deb-src http://archive.raspberrypi.org/debian stretch main ui" >> /etc/apt/sources.list.d/raspi.list
-RUN echo "deb-src http://archive.raspbian.org/raspbian stretch main contrib non-free rpi firmware" >> /etc/apt/sources.list
-
 # This list can most likely be slimmed down *a lot* but that's for another day.
 RUN apt-get update && \
     apt-get -y install --no-install-recommends \
@@ -68,7 +65,6 @@ RUN apt-get update && \
         ruby \
         wget \
         make && \
-    apt-get build-dep libqt5gui5 && \
     apt-get clean
 
 WORKDIR /build
