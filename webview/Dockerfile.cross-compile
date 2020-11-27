@@ -1,4 +1,26 @@
-FROM balenalib/rpi-raspbian:buster
+FROM --platform=linux/arm/v7 balenalib/rpi-raspbian:buster as builder
+
+RUN apt-get update && \
+    apt-get install -y \
+        ca-certificates \
+        libfontconfig1-dev \
+        libfreetype6-dev \
+        libinput-dev \
+        libjpeg-dev \
+        libjpeg62-turbo-dev \
+        libpng16-16 \
+        libraspberrypi-bin \
+        libraspberrypi-dev \
+        libraspberrypi0 \
+        libssl-dev \
+        libssl1.1 \
+        libts-dev \
+        libudev-dev \
+        libxcb-xinerama0-dev \
+        libxcb-xinerama0
+
+
+FROM debian:buster
 
 # This list can most likely be slimmed down *a lot* but that's for another day.
 RUN apt-get update && \
@@ -12,6 +34,7 @@ RUN apt-get update && \
         git \
         gperf \
         gyp \
+        libasound2 \
         libasound2-dev \
         libavcodec-dev \
         libavformat-dev \
@@ -24,24 +47,30 @@ RUN apt-get update && \
         libdrm-dev \
         libegl1-mesa-dev \
         libevent-dev \
+        libfontconfig1 \
         libfontconfig1-dev \
+        libfreetype6 \
         libgbm-dev \
         libgcrypt20-dev \
         libgles2-mesa-dev \
         libinput-dev \
+        libjpeg-dev \
+        libjpeg62-turbo-dev \
         libjsoncpp-dev \
         libminizip-dev \
+        libnss3 \
         libnss3-dev \
         libopus-dev \
         libpci-dev \
+        libpng16-16 \
         libpulse-dev \
         libqt5webchannel5-dev/stable \
-        libraspberrypi-dev \
-        libraspberrypi0 \
+        libsecret-1-0 \
         libsnappy-dev \
-        libsrtp0-dev \
         libsrtp2-dev \
         libssl-dev \
+        libssl1.1 \
+        libtiff5 \
         libts-dev \
         libudev-dev \
         libvpx-dev \
@@ -53,6 +82,7 @@ RUN apt-get update && \
         libxdamage-dev \
         libxrandr-dev \
         libxss-dev \
+        libxss1 \
         libxtst-dev \
         lsb-release \
         ninja-build \
@@ -62,12 +92,24 @@ RUN apt-get update && \
         qtbase5-private-dev/stable \
         qtcreator \
         qtdeclarative5-private-dev/stable  \
+        rsync \
         ruby \
+        subversion \
         wget \
         make && \
     apt-get clean
 
 WORKDIR /build
 
-COPY build_qtbase.sh /usr/local/bin/
-CMD /usr/local/bin/build_qtbase.sh
+RUN wget -q https://raw.githubusercontent.com/riscv/riscv-poky/master/scripts/sysroot-relativelinks.py \
+        -O /usr/local/bin/sysroot-relativelinks.py && \
+    chmod +x /usr/local/bin/sysroot-relativelinks.py
+
+RUN mkdir -p /sysroot/usr /sysroot/opt /sysroot/lib
+COPY --from=builder /lib/ /sysroot/lib/
+COPY --from=builder /usr/include/ /sysroot/usr/include/
+COPY --from=builder /usr/lib/ /sysroot/usr/lib/
+COPY --from=builder /opt/vc/ sysroot/opt/vc/
+
+COPY build_qtbase_cross_compile.sh /usr/local/bin/
+CMD /usr/local/bin/build_qtbase_cross_compile.sh
