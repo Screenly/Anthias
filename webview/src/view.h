@@ -1,11 +1,11 @@
 #pragma once
 
-#include <QWebView>
-#include <QWebPage>
+#include <QWebEngineView>
+#include <QWebEnginePage>
 #include <QWidget>
 #include <QEventLoop>
 
-class View : public QWebView
+class View : public QWebEngineView
 {
     Q_OBJECT
 
@@ -17,7 +17,8 @@ public:
 
 private slots:
     void handleAuthRequest(QNetworkReply*, QAuthenticator*);
+
 private:
-    QWebPage* pre_loader;
+    QWebEnginePage* pre_loader;
     QEventLoop pre_loader_loop;
 };
