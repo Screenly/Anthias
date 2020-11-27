@@ -1,6 +1,6 @@
 TEMPLATE = app
 
-QT += webkit webkitwidgets dbus
+QT += webengine webenginewidgets dbus
 CONFIG += c++11
 
 SOURCES += src/main.cpp \
