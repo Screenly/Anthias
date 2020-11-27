@@ -2,19 +2,21 @@
 #include <QFileInfo>
 #include <QUrl>
 #include <QStandardPaths>
-#include <QWebFrame>
 #include <QEventLoop>
 #include <QTimer>
 
 #include "view.h"
 
 
-View::View(QWidget* parent) : QWebView(parent)
+View::View(QWidget* parent) : QWebEngineView(parent)
 {
-    // Need to convert this to a new syntax
-    connect(QWebView::page()->networkAccessManager(), SIGNAL(authenticationRequired(QNetworkReply*,QAuthenticator*)),
-            this, SLOT(handleAuthRequest(QNetworkReply*,QAuthenticator*)));
-    pre_loader = new QWebPage;
+    connect(
+        QWebEngineView::page(),
+        SIGNAL(authenticationRequired(QNetworkReply*,QAuthenticator*)),
+        this,
+        SLOT(handleAuthRequest(QNetworkReply*,QAuthenticator*))
+    );
+    pre_loader = new QWebEnginePage;
 }
 
 void View::loadPage(const QString &uri)
@@ -50,11 +52,11 @@ void View::loadImage(const QString &preUri)
     QString styles = "background: #000 center no-repeat";
 
     stop();
-    pre_loader->currentFrame()->setHtml("<html><head><script>" + script + "</script></head><body style='" + styles + "'><script>window.setimg(\"" + uri + "\");</script></body></html>");
+    pre_loader -> setHtml("<html><head><script>" + script + "</script></head><body style='" + styles + "'><script>window.setimg(\"" + uri + "\");</script></body></html>");
     connect(pre_loader,SIGNAL(loadFinished(bool)),&pre_loader_loop,SLOT(quit()));
     QTimer::singleShot(5000, &pre_loader_loop, SLOT(quit()));
     pre_loader_loop.exec();
-    setHtml(pre_loader->currentFrame()->toHtml());
+    pre_loader -> toHtml([&](const QString &result){ setHtml(result); });
 }
 
 void View::handleAuthRequest(QNetworkReply* reply, QAuthenticator* auth)

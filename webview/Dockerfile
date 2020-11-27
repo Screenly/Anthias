@@ -1,25 +1,57 @@
-FROM balenalib/rpi-raspbian:stretch
+FROM balenalib/rpi-raspbian:buster
 
 RUN echo "deb-src http://archive.raspberrypi.org/debian stretch main ui" >> /etc/apt/sources.list.d/raspi.list
 RUN echo "deb-src http://archive.raspbian.org/raspbian stretch main contrib non-free rpi firmware" >> /etc/apt/sources.list
 
+# This list can most likely be slimmed down *a lot* but that's for another day.
 RUN apt-get update && \
     apt-get -y install --no-install-recommends \
+        bison \
         build-essential \
+        cowsay \
+        flex \
         freetds-dev \
         g++ \
         git \
+        gperf \
+        gyp \
+        libasound2-dev \
+        libbz2-dev \
+        libcap-dev \
+        libdrm-dev \
+        libegl1-mesa-dev \
+        libfontconfig1-dev \
+        libgbm-dev \
+        libgles2-mesa-dev \
         libinput-dev \
-        lsb-release \
-        libqt5gui5 \
-        libqt5webkit5-dev \
-        libqt5x11extras5-dev \
-        libraspberrypi0 \
+        libnss3-dev \
+        libpci-dev \
+        libpulse-dev \
         libraspberrypi-dev \
+        libraspberrypi0 \
+        libsnappy-dev \
+        libsrtp0-dev \
+        libssl-dev \
         libts-dev \
         libudev-dev \
+        libvpx-dev \
+        libwebp-dev \
         libxcb-xinerama0 \
         libxcb-xinerama0-dev \
+        libxcomposite-dev \
+        libxcursor-dev \
+        libxdamage-dev \
+        libxrandr-dev \
+        libxss-dev \
+        libxtst-dev \
+        lsb-release \
+        ninja-build \
+        nodejs \
+        python \
+        qtbase5-private-dev \
+        qtdeclarative5-private-dev \
+        ruby \
+        wget \
         make && \
     apt-get build-dep libqt5gui5 && \
     apt-get clean
