@@ -4,22 +4,26 @@ RUN apt-get update && \
     apt-get -y install --no-install-recommends \
         build-essential \
         g++ \
+        git \
+        libdouble-conversion-dev \
+        libegl1-mesa-dev \
+        libharfbuzz-dev \
+        libgbm-dev \
+        libgles2-mesa-dev \
         libinput-dev \
-        libqt5gui5 \
-        libqt5webkit5-dev \
-        libqt5x11extras5-dev \
+        libpng16-16 \
         libts-dev \
         libudev-dev \
         libxcb-xinerama0 \
         libxcb-xinerama0-dev \
+        mesa-common-dev \
         wget \
         make && \
     apt-get clean
 
-# QT Base from packages does not support eglfs
 ARG PI_VERSION=pi3
-ARG DEBIAN_VERSION=stretch
-ARG QT_VERSION=5.9
+ARG DEBIAN_VERSION=buster
+ARG QT_VERSION=5.15
 RUN wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
         -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
     wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
@@ -34,8 +38,10 @@ RUN wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERS
 RUN mkdir /src
 WORKDIR /src
 COPY webview/ /src/
-RUN /usr/lib/arm-linux-gnueabihf/qt5/bin/qmake
-RUN make -j 4
+
+RUN /usr/local/qt5pi/bin/qmake
+
+RUN make
 RUN make install
 
 # @TODO: Upgrade to Buster. We're stuck on QT 5.9 and Stretch for now.
@@ -48,9 +54,8 @@ RUN apt-get update && \
         git-core \
         gstreamer0.10-plugins-good \
         libdbus-glib-1-dev \
-        wget \
         libffi-dev \
-        libqt5webkit5 \
+        libqt5webengine-data \
         libraspberrypi0 \
         libssl-dev \
         libts-dev \
@@ -61,6 +66,7 @@ RUN apt-get update && \
         python-gobject \
         python-netifaces \
         python-pip \
+        wget \
         python-setuptools \
         sqlite3 && \
     apt-get clean
