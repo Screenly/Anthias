@@ -4,7 +4,6 @@ RUN apt-get update && \
     apt-get -y install --no-install-recommends \
         build-essential \
         g++ \
-        git \
         libdouble-conversion-dev \
         libegl1-mesa-dev \
         libharfbuzz-dev \
