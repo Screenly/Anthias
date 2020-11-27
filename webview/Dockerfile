@@ -30,7 +30,6 @@ RUN apt-get update && \
         libraspberrypi-dev \
         libraspberrypi0 \
         libsnappy-dev \
-        libsrtp0-dev
         libsrtp0-dev \
         libssl-dev \
         libts-dev \
