@@ -4,7 +4,7 @@ FROM --platform=linux/arm/v7 balenalib/rpi-raspbian:buster as builder
 # depending on your needs (and probably in general). My primary objective was just
 # to make things work.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+    apt-get install -y \
         firebird-dev \
         freetds-dev \
         gstreamer-tools \
@@ -101,7 +101,7 @@ FROM debian:buster
 
 # This list can most likely be slimmed down *a lot* but that's for another day.
 RUN apt-get update && \
-    apt-get -y install --no-install-recommends \
+    apt-get -y install \
         bison \
         build-essential \
         cowsay \
@@ -113,6 +113,7 @@ RUN apt-get update && \
         git \
         gperf \
         gyp \
+        lib32z1-dev \
         libasound2 \
         libasound2-dev \
         libavcodec-dev \
@@ -176,8 +177,10 @@ COPY --from=builder /lib/ /sysroot/lib/
 COPY --from=builder /usr/include/ /sysroot/usr/include/
 COPY --from=builder /usr/lib/ /sysroot/usr/lib/
 COPY --from=builder /opt/vc/ sysroot/opt/vc/
+COPY . /webview
 
 ENV BUILD_WEBENGINE 1
+ENV BUILD_WEBVIEW 1
 
 COPY build_qtbase_cross_compile.sh /usr/local/bin/
 CMD /usr/local/bin/build_qtbase_cross_compile.sh

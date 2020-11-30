@@ -19,9 +19,10 @@ if [ "${BUILD_WEBENGINE-x}" == "1" ]; then
 fi
 
 function fetch_cross_compile_tool () {
-    # The Raspberry Pi Foundations cross compiling tools are too old so we need newer ones
-    # https://github.com/UvinduW/Cross-Compiling-Qt-for-Raspberry-Pi-4
-    # https://releases.linaro.org/components/toolchain/binaries/latest-7/armv8l-linux-gnueabihf/
+    # The Raspberry Pi Foundation's cross compiling tools are too old so we need newer ones.
+    # References:
+    # * https://github.com/UvinduW/Cross-Compiling-Qt-for-Raspberry-Pi-4
+    # * https://releases.linaro.org/components/toolchain/binaries/latest-7/armv8l-linux-gnueabihf/
     if [ ! -d "/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf" ]; then
         cd /src/
         wget -q https://releases.linaro.org/components/toolchain/binaries/7.4-2019.02/arm-linux-gnueabihf/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz
@@ -45,6 +46,9 @@ function fetch_qt () {
     local SRC_DIR="/src/qtbase"
     if [ ! -d "$SRC_DIR" ]; then
         git clone git://code.qt.io/qt/qtbase.git -b "$QT_BRANCH" "$SRC_DIR"
+        cd "$SRC_DIR"
+        git submodule init
+        git submodule update
     else
         cd "$SRC_DIR"
         git reset --hard
@@ -59,7 +63,20 @@ function fetch_qtdeclarative () {
         cd "$SRC_DIR"
         git submodule init
         git submodule update
+    else
+        cd "$SRC_DIR"
+        git reset --hard
+        git clean -dfx
+    fi
+}
 
+function fetch_qtwebchannel () {
+    local SRC_DIR="/src/qtwebchannel"
+    if [ ! -d "$SRC_DIR" ]; then
+        git clone git://code.qt.io/qt/qtwebchannel.git -b "$QT_BRANCH" "$SRC_DIR"
+        cd "$SRC_DIR"
+        git submodule init
+        git submodule update
     else
         cd "$SRC_DIR"
         git reset --hard
@@ -74,7 +91,6 @@ function fetch_qtwebengine () {
         cd "$SRC_DIR"
         git submodule init
         git submodule update
-
     else
         cd "$SRC_DIR"
         git reset --hard
@@ -174,17 +190,47 @@ function build_qtbase () {
             make -j"$(nproc --all)"
             make install
 
+
+            /usr/games/cowsay -f tux "Building QTWebchannel for $1"
+            fetch_qtwebchannel
+            cd /src/qtwebchannel
+            "$SRC_DIR/qt5pi/bin/qmake"
+
+            make -j"$(nproc --all)"
+            make install
+
             /usr/games/cowsay -f tux "Building QTWebEngine for $1"
             fetch_qtwebengine
             cd /src/qtwebengine
             "$SRC_DIR/qt5pi/bin/qmake"
 
+            # Due to a bug, we can't specify a number of corse here.
+            # If we do, the build bcomes single threaded.
             make -j
             make install
         fi
 
+        if [ "${BUILD_WEBVIEW-x}" == "1" ]; then
+            cp -rf /webview "$SRC_DIR/"
+
+            cd "$SRC_DIR/webview"
+
+            "$SRC_DIR/qt5pi/bin/qmake"
+            make -j"$(nproc --all)"
+            make install
+
+            mkdir -p fakeroot/bin fakeroot/share/ScreenlyWebview
+            mv ScreenlyWebview fakeroot/bin/
+            cp -rf /webview/res fakeroot/share/ScreenlyWebview/
+
+            cd fakeroot
+            tar cfz "$BUILD_TARGET/webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" .
+            cd "$BUILD_TARGET"
+            sha256sum "webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
+        fi
+
         cd "$SRC_DIR"
-        tar zcf "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" qt5pi
+        tar cfz "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" qt5pi
         cd "$BUILD_TARGET"
         sha256sum "qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
     else
@@ -192,12 +238,14 @@ function build_qtbase () {
     fi
 }
 
+# Modify paths for build process
 /usr/local/bin/sysroot-relativelinks.py /sysroot
 
 fetch_qt
 fetch_cross_compile_tool
 fetch_rpi_firmware
 
+# Let's work our way through all Pis in order of relevance
 for device in pi4 pi3 pi2 pi1; do
     build_qtbase "$device"
 done
