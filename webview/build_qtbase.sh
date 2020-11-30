@@ -3,7 +3,7 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 # -*- sh-basic-offset: 4 -*-
 
-set -euo pipefail
+set -exuo pipefail
 
 BUILD_TARGET=/build
 SRC=/src
@@ -14,27 +14,83 @@ mkdir -p "$BUILD_TARGET"
 mkdir -p "$SRC"
 
 /usr/games/cowsay -f tux "Building QT Base version $QT_BRANCH."
+if [ "${BUILD_WEBENGINE-x}" == "1" ]; then
+    /usr/games/cowsay -f tux "...with QTWebEngine."
+fi
+
+function fetch_cross_compile_tool () {
+    # The Raspberry Pi Foundation's cross compiling tools are too old so we need newer ones.
+    # References:
+    # * https://github.com/UvinduW/Cross-Compiling-Qt-for-Raspberry-Pi-4
+    # * https://releases.linaro.org/components/toolchain/binaries/latest-7/armv8l-linux-gnueabihf/
+    if [ ! -d "/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf" ]; then
+        cd /src/
+        wget -q https://releases.linaro.org/components/toolchain/binaries/7.4-2019.02/arm-linux-gnueabihf/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz
+        tar xf gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz
+        rm gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz
+    fi
+}
+
+function fetch_rpi_firmware () {
+    if [ ! -d "/src/opt" ]; then
+        cd /src
+
+        # We do an `svn checkout` here as the entire git repo here is *huge*
+        # and `git` doesn't  support partial checkouts well (yet)
+        svn checkout -q https://github.com/raspberrypi/firmware/trunk/opt
+    fi
+    rsync -aqP /src/opt/ /sysroot/opt/
+}
 
 function fetch_qt () {
-    if [ ! -d "/src/qtbase" ]; then
-        cd /src
-        git clone git://code.qt.io/qt/qtbase.git -b "$QT_BRANCH"
+    local SRC_DIR="/src/qtbase"
+    if [ ! -d "$SRC_DIR" ]; then
+        git clone git://code.qt.io/qt/qtbase.git -b "$QT_BRANCH" "$SRC_DIR"
+        cd "$SRC_DIR"
+        git submodule init
+        git submodule update
+    else
+        cd "$SRC_DIR"
+        git reset --hard
+        git clean -dfx
+    fi
+}
 
-        # Patch QT
-        git clone https://github.com/oniongarlic/qt-raspberrypi-configuration.git
-        cd qt-raspberrypi-configuration
-        make install DESTDIR=../
+function fetch_qtdeclarative () {
+    local SRC_DIR="/src/qtdeclarative"
+    if [ ! -d "$SRC_DIR" ]; then
+        git clone git://code.qt.io/qt/qtdeclarative.git -b "$QT_BRANCH" "$SRC_DIR"
+        cd "$SRC_DIR"
+        git submodule init
+        git submodule update
+    else
+        cd "$SRC_DIR"
+        git reset --hard
+        git clean -dfx
+    fi
+}
+
+function fetch_qtwebchannel () {
+    local SRC_DIR="/src/qtwebchannel"
+    if [ ! -d "$SRC_DIR" ]; then
+        git clone git://code.qt.io/qt/qtwebchannel.git -b "$QT_BRANCH" "$SRC_DIR"
+        cd "$SRC_DIR"
+        git submodule init
+        git submodule update
+    else
+        cd "$SRC_DIR"
+        git reset --hard
+        git clean -dfx
     fi
 }
 
 function fetch_qtwebengine () {
     local SRC_DIR="/src/qtwebengine"
-    if [ ! -d "/src/qtwebengine" ]; then
+    if [ ! -d "$SRC_DIR" ]; then
         git clone git://code.qt.io/qt/qtwebengine.git -b "$QT_BRANCH" "$SRC_DIR"
         cd "$SRC_DIR"
         git submodule init
         git submodule update
-
     else
         cd "$SRC_DIR"
         git reset --hard
@@ -57,45 +113,124 @@ function build_qtbase () {
         /usr/games/cowsay -f tux "Building QT Base for $1"
         mkdir -p "$SRC_DIR"
         cd "$SRC_DIR"
-        PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig NINJAJOBS=-j1 \
-            /src/qtbase/configure \
-            -device "linux-rasp-$1-g++" \
-            -opengl es2 \
-            -eglfs \
-            -no-gtk \
-            -opensource \
+
+        if [ "$1" = "pi1" ]; then
+            local BUILD_ARGS=(
+                "-device" "linux-rasp-pi-g++"
+            )
+        elif [ "$1" = "pi2" ]; then
+            local BUILD_ARGS=(
+                "-device" "linux-rasp-pi2-g++"
+            )
+        elif [ "$1" = "pi3" ]; then
+            local BUILD_ARGS=(
+                "-device" "linux-rasp-pi3-g++"
+            )
+        elif [ "$1" = "pi4" ]; then
+            local BUILD_ARGS=(
+                "-device" "linux-rasp-pi4-v3d-g++"
+            )
+        else
+            echo "Unknown device. Exiting."
+            exit 1
+        fi
+
+        /src/qtbase/configure \
+            "${BUILD_ARGS[@]}" \
             -confirm-license \
-            -release \
-            -reduce-exports \
-            -force-pkg-config \
-            -nomake examples \
-            -no-compile-examples \
-            -skip qtwayland \
-            -qt-pcre \
-            -no-pch \
-            -ssl \
+            -dbus-linked \
+            -device-option CROSS_COMPILE=/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf- \
+            -eglfs \
             -evdev \
-            -qt-freetype \
-            -fontconfig \
-            -glib \
-            -prefix /usr/local/qt5pi \
-            -no-cups \
             -extprefix "$SRC_DIR/qt5pi" \
-            -qpa eglfs
+            -force-pkg-config \
+            -glib \
+            -no-compile-examples \
+            -no-cups \
+            -no-gbm \
+            -no-gtk \
+            -no-pch \
+            -no-use-gold-linker \
+            -nomake examples \
+            -nomake tests \
+            -opengl es2 \
+            -opensource \
+            -prefix /usr/local/qt5pi \
+            -qpa eglfs \
+            -qt-pcre \
+            -reduce-exports \
+            -release \
+            -skip qtandroidextras \
+            -skip qtcanvas3d \
+            -skip qtgamepad \
+            -skip qtlocation \
+            -skip qtmacextras \
+            -skip qtpurchasing \
+            -skip qtscript \
+            -skip qtwayland \
+            -skip qtwinextras \
+            -skip qtx11extras \
+            -ssl \
+            -system-freetype \
+            -system-libjpeg \
+            -system-libpng \
+            -system-zlib \
+            -sysroot /sysroot
 
         make -j "$(nproc --all)"
         make install
         cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt5pi/lib/fonts"
 
-        /usr/games/cowsay -f tux "Building QTWebEngine for $1"
-        fetch_qtwebengine
-        cd /src/qtwebengine
-        "$SRC_DIR/qt5pi/bin/qmake"
-        NINJAJOBS=-j1 make -j "$(nproc --all)"
-        make install
+        if [ "${BUILD_WEBENGINE-x}" == "1" ]; then
+
+            # This is a requirement for QTWebEngine
+            /usr/games/cowsay -f tux "Building QTDeclarative for $1"
+            fetch_qtdeclarative
+            cd /src/qtdeclarative
+            "$SRC_DIR/qt5pi/bin/qmake"
+            make -j"$(nproc --all)"
+            make install
+
+            # And so is this
+            /usr/games/cowsay -f tux "Building QTWebchannel for $1"
+            fetch_qtwebchannel
+            cd /src/qtwebchannel
+            "$SRC_DIR/qt5pi/bin/qmake"
+            make -j"$(nproc --all)"
+            make install
+
+            /usr/games/cowsay -f tux "Building QTWebEngine for $1"
+            fetch_qtwebengine
+            cd /src/qtwebengine
+            "$SRC_DIR/qt5pi/bin/qmake"
+
+            # Due to a bug, we can't specify a number of corse here.
+            # If we do, the build bcomes single threaded.
+            make -j
+            make install
+        fi
+
+        if [ "${BUILD_WEBVIEW-x}" == "1" ]; then
+            cp -rf /webview "$SRC_DIR/"
+
+            cd "$SRC_DIR/webview"
+
+            "$SRC_DIR/qt5pi/bin/qmake"
+            make -j"$(nproc --all)"
+            make install
+
+            mkdir -p fakeroot/bin fakeroot/share/ScreenlyWebview
+            mv ScreenlyWebview fakeroot/bin/
+            cp -rf /webview/res fakeroot/share/ScreenlyWebview/
+
+            cd fakeroot
+            tar cfz "$BUILD_TARGET/webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" .
+            cd "$BUILD_TARGET"
+            sha256sum "webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
+        fi
 
         cd "$SRC_DIR"
-        tar -zcvf "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" qt5pi
+        tar cfz "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" qt5pi
         cd "$BUILD_TARGET"
         sha256sum "qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
     else
@@ -103,61 +238,14 @@ function build_qtbase () {
     fi
 }
 
-
-function build_qtbase_pi4 () {
-    # We can probably refactor the other `build_qtbase` function to include these
-    # unique build options, but this will do for now even if it isn't DRY.
-    local SRC_DIR="/src/pi4"
-    if [ ! -f "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi4.tar.gz" ]; then
-        /usr/games/cowsay -f tux "Building QT Base for Pi 4"
-        mkdir -p "$SRC_DIR"
-        cd "$SRC_DIR"
-        PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig NINJAJOBS=-j1 \
-            /src/qtbase/configure \
-            -platform linux-rpi4-v3d-g++ \
-            -opengl es2 \
-            -eglfs \
-            -no-gtk \
-            -opensource \
-            -confirm-license \
-            -release \
-            -reduce-exports \
-            -force-pkg-config \
-            -nomake examples \
-            -no-compile-examples \
-            -skip qtwayland \
-            -qt-pcre \
-            -no-pch \
-            -ssl \
-            -evdev \
-            -system-freetype \
-            -fontconfig \
-            -glib \
-            -prefix /usr/local/qt5pi \
-            -no-cups \
-            -extprefix "$SRC_DIR/qt5pi" \
-            -qpa eglfs
-
-        make -j "$(nproc --all)"
-        make install
-        cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt5pi/lib/fonts"
-
-        /usr/games/cowsay -f tux "Building QTWebEngine for Pi 4"
-        fetch_qtwebengine
-        cd /src/qtwebengine
-        "$SRC_DIR/qt5pi/bin/qmake"
-        NINJAJOBS=-j1 make -j "$(nproc --all)"
-        make install
-
-        cd "$SRC_DIR"
-        tar -zcvf "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi4.tar.gz" qt5pi
-        cd "$BUILD_TARGET"
-        sha256sum "qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi4.tar.gz" > "qtbase-$QT_BRANCH-$DEBIAN_VERSION-pi4.tar.gz.sha256"
-    fi
-}
+# Modify paths for build process
+/usr/local/bin/sysroot-relativelinks.py /sysroot
 
 fetch_qt
-build_qtbase pi
-build_qtbase pi2
-build_qtbase pi3
-build_qtbase_pi4
+fetch_cross_compile_tool
+fetch_rpi_firmware
+
+# Let's work our way through all Pis in order of relevance
+for device in pi4 pi3 pi2 pi1; do
+    build_qtbase "$device"
+done
