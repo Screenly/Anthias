@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.org/Screenly/screenly-ose.svg?branch=master)](https://travis-ci.org/Screenly/screenly-ose)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/5905ebcf4aab4220ad9fdf3fb679c49d)](https://www.codacy.com/app/vpetersson/screenly-ose?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Screenly/screenly-ose&amp;utm_campaign=Badge_Grade)
-[![balena deploy button](https://www.balena.io/deploy.png)](https://dashboard.balena-cloud.com/deploy?repoUrl=https://github.com/screenly/screenly-ose&defaultDeviceType=raspberrypi3)
+[![balena deploy button](https://www.balena.io/deploy.svg)](https://dashboard.balena-cloud.com/deploy?repoUrl=https://github.com/screenly/screenly-ose&defaultDeviceType=raspberrypi3)
 
 # Screenly OSE - Digital Signage for the Raspberry Pi
 
@@ -29,6 +29,23 @@ $ bash <(curl -sL https://www.screenly.io/install-ose.sh)
  * The internet connection
 
 During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast internet connection), the installation normally takes 15-30 minutes. On a Raspberry Pi Zero or Raspberry Pi Model B with a class 4 SD card, the installation will take hours. As such, it is usually a lot faster to use the provided disk images.
+
+## Installing with balenaCloud
+
+Running Screenly OSE on [balenaCloud](https://balena.io) is a breeze. Just click the Deploy with balena button below:
+
+[![balena deploy button](https://www.balena.io/deploy.svg)](https://dashboard.balena-cloud.com/deploy?repoUrl=https://github.com/Screenly/screenly-ose&defaultDeviceType=raspberrypi3)
+
+Alternatively, you can install manually on balenaCloud using the following commands:
+
+```
+$ git clone git@github.com:Screenly/screenly-ose.git
+$ cd screenly-ose
+$ git remote add balena username@git.balena-cloud.com:username/myscreenlyapp.git
+$ git push balena master
+```
+
+Once the build is done, the device will automatically pull down the image and start running.
 
 ## Upgrading on Screenly OSE
 
