@@ -1,57 +1,12 @@
-FROM balenalib/rpi-raspbian:buster as viewer-builder
-
-RUN apt-get update && \
-    apt-get -y install --no-install-recommends \
-        build-essential \
-        g++ \
-        libinput-dev \
-        libqt5gui5 \
-        libqt5webkit5-dev \
-        libqt5x11extras5-dev \
-        libts-dev \
-        libudev-dev \
-        libxcb-xinerama0 \
-        libxcb-xinerama0-dev \
-        wget \
-        make && \
-    apt-get clean
-
-# QT Base from packages does not support eglfs
-ARG PI_VERSION=pi3
-ARG DEBIAN_VERSION=stretch
-ARG QT_VERSION=5.9
-RUN wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
-        -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
-    wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
-        -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
-    cd /tmp && \
-    sha256sum -c qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
-    tar -xzf /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local && \
-    echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf && \
-    ldconfig && \
-    rm qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*
-
-RUN mkdir /src
-WORKDIR /src
-COPY webview/ /src/
-
-RUN /usr/local/qt5pi/bin/qmake
-
-RUN make -j 4
-RUN make install
-
-# @TODO: Upgrade to Buster. We're stuck on QT 5.9 and Stretch for now.
-FROM balenalib/rpi-raspbian:stretch
+FROM balenalib/rpi-raspbian:buster
 
 RUN apt-get update && \
     apt-get -y install \
         build-essential \
         curl \
         git-core \
-        gstreamer0.10-plugins-good \
         libdbus-glib-1-dev \
         libffi-dev \
-        libqt5webengine-data \
         libraspberrypi0 \
         libssl-dev \
         libts-dev \
@@ -73,8 +28,8 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 # QT Base from packages does not support eglfs
 ARG PI_VERSION=pi3
-ARG DEBIAN_VERSION=stretch
-ARG QT_VERSION=5.9
+ARG DEBIAN_VERSION=buster
+ARG QT_VERSION=5.15.2
 RUN wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
         -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
     wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
@@ -82,27 +37,19 @@ RUN wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERS
     cd /tmp && \
     sha256sum -c qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
     tar -xzf /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local && \
-    echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf && \
-    ldconfig && \
     rm qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*
 
-# Fix symlinks
-RUN rm -f /usr/lib/arm-linux-gnueabihf/libEGL.so.1 && \
-    rm -f /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0 && \
-    ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so && \
-    ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1 && \
-    ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0 && \
-    rm -f /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2 && \
-    rm -f /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0 && \
-    ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so && \
-    ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2 && \
-    ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
+RUN wget "https://storage.googleapis.com/ose-lab/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
+        -q -O /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
+    wget "https://storage.googleapis.com/ose-lab/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
+        -q -O /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
+    cd /tmp && \
+    sha256sum -c webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
+    tar -xzf /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local && \
+    rm webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*
 
-RUN mkdir -p /usr/local/share/ScreenlyWebview
-COPY --from=viewer-builder /src/ScreenlyWebview /usr/local/bin/
-COPY --from=viewer-builder /src/res /usr/local/share/ScreenlyWebview/
 
-ENV QT_QPA_EGLFS_FORCE888=1
+#ENV QT_QPA_EGLFS_FORCE888=1
 
 WORKDIR /usr/src/app
 RUN mkdir -p /usr/src/app
