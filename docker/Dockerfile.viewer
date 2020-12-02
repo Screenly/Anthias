@@ -5,7 +5,6 @@ RUN apt-get update && \
     apt-get -y install \
         build-essential \
         ca-certificates \
-        curl \
         git-core \
         gstreamer1.0-plugins-base \
         gstreamer1.0-plugins-good \
@@ -116,19 +115,19 @@ RUN c_rehash
 ARG PI_VERSION=pi3
 ARG DEBIAN_VERSION=buster
 ARG QT_VERSION=5.15.2
-RUN wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
+RUN curl "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
         -s -o /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
-    wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
+    curl "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
         -s -o /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
     cd /tmp && \
     sha256sum -c qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
     tar -xzf /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local && \
     rm qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*
 
-RUN wget "https://storage.googleapis.com/ose-lab/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
-        -q -O /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
-    wget "https://storage.googleapis.com/ose-lab/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
-        -q -O /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
+RUN curl "https://storage.googleapis.com/ose-lab/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
+        -s -o /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
+    curl "https://storage.googleapis.com/ose-lab/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
+        -s -o /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
     cd /tmp && \
     sha256sum -c webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
     tar -xzf /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local && \
