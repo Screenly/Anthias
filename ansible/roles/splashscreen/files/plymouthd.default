@@ -2,4 +2,4 @@
 # upgrades.
 [Daemon]
 Theme=screenly
-ShowDelay=0
+ShowDelay=2

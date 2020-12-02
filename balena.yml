@@ -14,7 +14,7 @@ data:
     - RESIN_HOST_CONFIG_dtparam: "i2c_arm=on","spi=on","audio=on","vc4-kms-v3d"
   defaultDeviceType: "raspberrypi3"
   supportedDeviceTypes:
-    - "raspberry-pi"  
+    - "raspberry-pi"
     - "raspberry-pi2"
     - "raspberrypi3"
     - "raspberrypi3-64"
