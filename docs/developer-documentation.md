@@ -4,11 +4,11 @@ _(this document is in its initial phase)_
 Here is a high-level overview of the different components that make up the Screenly-OSE system.
 ![Screenly-OSE Diagram Overview](https://raw.githubusercontent.com/screenly/screenly-ose/master/docs/images/screenly-ose-diagram-overview.png)
 
-* Screenly-Viewer is what drives the screen (Ex: shows web page or image or video)
-* Screenly-Server is what the user interacts with (Ex: Web GUI)
-* Screenly-Celery is for task/queue/asynchronously executing work outside the HTTP request-response cycle (Ex: periodic cleanup task, upgrade via web)
-* Screenly-WebSocket is used for forwarding requests from NGINX to backend Screenly-Server (Ex: )
-* Redis is used as a database, cache and message broker. (Ex: )
+* Screenly-Viewer is what drives the screen (Ex: shows web page or image or video).
+* Screenly-Server is what the user interacts with (Ex: Web GUI).
+* Screenly-Celery is for task/queue/asynchronously executing work outside the HTTP request-response cycle (Ex: periodic cleanup task, upgrade via web).
+* Screenly-WebSocket is used for forwarding requests from NGINX to backend Screenly-Server.
+* Redis is used as a database, cache and message broker.
 * SQLite is used as the database for storing the assets information.
 
 These components and their dependencies are mostly installed and handled with Ansible and respective playbooks.
@@ -19,7 +19,7 @@ There are currently three versions of Screenly-OSE..
 | :------------- | :---------- | :----------- |
 |  Developer | [master](https://github.com/Screenly/screenly-ose)   | This is where we test things and apply latest fixes   |
 |  Production | [production](https://github.com/Screenly/screenly-ose/tree/production)   | This is the branch disk images are built from and should be properly tested    |
-|  Experimental | [experimental](https://github.com/Screenly/screenly-ose/tree/experimental)   | This is the branch with the experimental browser version mentioned above    |
+|  Experimental | [experimental](https://github.com/Screenly/screenly-ose/tree/experimental)   | This is the branch for experimenting, such as using a new web browser    |
 
 
 ### Directories, files and their purpose with regards to Screenly
@@ -46,19 +46,19 @@ screenly.db -> database file containing current Assets information.
 ```
 /etc/systemd/system/
 
-matchbox.service ->
-screenly-celery.service ->
-screenly-viewer.service ->
-screenly-web.service ->
-screenly-websocket_server_layer.service ->
-wifi-connect.service ->
+matchbox.service -> lightweight window manager for the X window system (env variable DISPLAY as 0.0)
+screenly-celery.service -> starts the celery worker (App set to server.celery, bpython interface, hostname worker@screenly, schedule database /home/pi/.screenly/celerybeat-schedule)
+screenly-viewer.service -> starts the main viewer (viewer.py) and sets a few user prefs for the X display
+screenly-web.service -> starts the web server (server.py)
+screenly-websocket_server_layer.service -> starts the websocket server, uses zmq for messaging
+wifi-connect.service -> starts the resin/balena wifi-connect program to dynamically set the wifi config on the device via captive portal
 ```
 
 ```
 /etc/nginx/sites-enabled/
 
-screenly_assets.conf ->
-screenly.conf ->
+screenly_assets.conf -> configuration file for ngrok.io server, deals with public url tunnel / pro migration?
+screenly.conf -> configuration file for nginx web server (default asset settings, web GUI auth, database/asset dir, etc), called by settings.py
 ```
 
 ```
@@ -68,9 +68,9 @@ screenly.conf ->
 ```
 /usr/share/plymouth/themes/screenly
 
-screenly.plymouth ->
-splashscreen.png ->
-screenly.script ->
+screenly.plymouth -> plymouth config file (sets module name, imagedir and scriptfile dir)
+splashscreen.png -> screenly ose splashscreen image file
+screenly.script -> plymouth script file that loads and scales splashscreen image during boot process
 ```
 
 ```
@@ -86,8 +86,6 @@ screenly.script ->
 
 ### Screenly-OSE-WebView
 
-The Experimental branch uses a different web browser which is maintained on a different Github repo here:
-`https://github.com/Screenly/screenly-ose-webview`
-
-_(need more details about this process and how exactly the experimental browser is installed._
-
+Screenly OSE WebView is a custom-built web browser based on the [QT](https://www.qt.io/) toolkit framework.
+The browser is assembled with a Dockerfile and built by the `built_qtbase.sh` script.
+For further info on these files and more, visit the following link: `https://github.com/Screenly/screenly-ose/master/webview`
