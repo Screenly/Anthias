@@ -101,7 +101,7 @@ RUN apt-get update && \
         python-netifaces \
         python-pip \
         python-setuptools \
-        sqlite3 &&
+        sqlite3 && \
     apt-get clean
 
 # Install Python requirements
