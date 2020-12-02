@@ -38,7 +38,6 @@ browser_bus.loadPage("www.example.com")
 
 Supported protocols: `http://`, `https://`
 
-
 ## Debugging
 
 You can enable QT debugging by using the following:
