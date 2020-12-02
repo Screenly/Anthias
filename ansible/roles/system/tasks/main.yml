@@ -81,6 +81,15 @@
   tags:
     - touches_boot_partition
 
+- name: Plymouth ignore serial consoles
+  replace:
+    dest: /boot/cmdline.txt
+    regexp: (^(?!$)((?!plymouth.ignore-serial-consoles).)*$)
+    replace: \1 plymouth.ignore-serial-consoles
+  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+  tags:
+    - touches_boot_partition
+
 - name: Use Systemd as init and quiet boot process
   replace:
     dest: /boot/cmdline.txt
