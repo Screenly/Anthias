@@ -9,6 +9,12 @@
 
 Want to help OSE thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
 
+## A note on Raspberry Pi 4 support
+
+Screenly OSE does not currently support the Raspberry Pi 4 Model B (well). We are looking for volunteers to help us with this. The remaining work is tracked [here](https://github.com/Screenly/screenly-ose/milestone/12). In short, we are doing a big overhaul (moving to Docker and QT/QTWebEngine). This will allow us to get things like a modern browser with hardware acceleration, as well as a simpler installation process.
+
+If you got experience with QT, we'd love your help.
+
 ## Disk images
 
 The recommended installation method is to grab the latest disk image from [here](https://github.com/Screenly/screenly-ose/releases).
