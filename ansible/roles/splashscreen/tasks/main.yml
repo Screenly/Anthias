@@ -63,3 +63,10 @@
     src: plymouthd.default
     dest: /usr/share/plymouth/plymouthd.default
   when: ansible_distribution_major_version|int > 7
+  
+  - name: Copy to plymouthd.conf
+  copy:
+    src: plymouthd.default
+    dest: /etc/plymouth/plymouthd.conf
+  when: ansible_distribution_major_version|int > 7
+  
