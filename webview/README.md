@@ -1,24 +1,22 @@
-## Building QT Base
+# Building QT
 
-Because the QT package shipped with Raspbian doens't come with all dependencies, we need to ship a separate version with the WebView.
-
-At the moment, this build will not work with cross-compiling, and needs to be done on a Raspberry Pi 4 Model B (with 4GB RAM). You also need a few gigs of swap space and ~100GB of free space. We need to ensure that this can be cross compiled as this process takes a good day to run.
-
-Start by building the base image:
+Since our entire build environment resides inside a Docker container, you don't need to install any packages on the host system. Everything is confined to the Docker image. Do however note that as of this writing, the multi-platform support is still in beta so, you need to enable this. Instructions for how to get started with multi-platform builds can be found [here](https://medium.com/@artur.klauser/building-multi-architecture-docker-images-with-buildx-27d80f7e2408).
 
 ```
+$ cd webview
 $ docker build -t qt-builder .
-[...]
 ```
 
-With the base image done, you can build QT Base with the following command:
+You should now be able to invoke a run executing the following command:
 
 ```
-$ docker run --rm -ti \
-    -v $(pwd)/build:/build -ti qt-builder
+$ docker run --rm -t \
+    -v ~/tmp/qt-src:/src \
+    -v ~/tmp/qt-build:/build \
+    qt-builder
 ```
 
-This will output the files in a folder called `build/` in the current directory.
+This will launch `build-qt.sh` and start the process of building QT for *all* Raspberry Pi boards. The resulting files will be placed in `~/tmp/qt-build/`.
 
 ## Usage
 
@@ -41,12 +39,9 @@ browser_bus.loadPage("www.example.com")
 Supported protocols: `http://`, `https://`
 
 
-## Cross compilation notes
+## Debugging
 
-Note: This is work in progress.
-
-
+You can enable QT debugging by using the following:
 ```
-$ docker buildx build --load --platform linux/arm/v7 -t qt-builder  .
-$ docker run --rm -v $(pwd):/build  qt-builder
+export QT_LOGGING_RULES=qt.qpa.*=true
 ```
