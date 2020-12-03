@@ -29,7 +29,7 @@ ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.dev.txt
 
 # Setup nginx
-RUN rm /etc/nginx/sites-enabled/default
+RUN rm -f /etc/nginx/sites-enabled/default
 COPY ansible/roles/ssl/files/nginx_resin.conf /etc/nginx/sites-enabled/screenly.conf
 
 COPY . /tmp/screenly
