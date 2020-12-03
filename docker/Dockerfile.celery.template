@@ -6,6 +6,7 @@ RUN apt-get update && \
         curl \
         git-core \
         libffi-dev \
+        libzmq3-dev \
         libssl-dev \
         net-tools \
         omxplayer \
@@ -23,7 +24,7 @@ RUN apt-get update && \
 
 # Install Python requirements
 ADD requirements/requirements.txt /tmp/requirements.txt
-RUN pip install -U -r /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY . /tmp/screenly
 
