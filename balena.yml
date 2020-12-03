@@ -11,7 +11,7 @@ data:
   description: "Screenly OSE - Digital Signage for the Raspberry Pi"
   applicationConfigVariables:
     - RESIN_HOST_CONFIG_gpu_mem: 128
-    - RESIN_HOST_CONFIG_dtparam: "i2c_arm=on","spi=on","audio=on","vc4-kms-v3d"
+    - RESIN_HOST_CONFIG_dtparam: "\"i2c_arm=on\",\"spi=on\",\"audio=on\",\"vc4-kms-v3d\""
   defaultDeviceType: "raspberrypi3"
   supportedDeviceTypes:
     - "raspberry-pi"
