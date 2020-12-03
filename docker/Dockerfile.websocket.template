@@ -4,6 +4,7 @@ RUN apt-get update && \
     apt-get -y install --no-install-recommends \
         build-essential \
         curl \
+        libffi-dev \
         python-pip \
         python-setuptools \
         python-dev && \
