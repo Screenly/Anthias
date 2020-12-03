@@ -5,7 +5,9 @@ RUN apt-get update && \
         build-essential \
         curl \
         git-core \
+        ifupdown \
         libffi-dev \
+        libraspberrypi0 \
         libssl-dev \
         matchbox \
         net-tools \
@@ -14,9 +16,8 @@ RUN apt-get update && \
         python-dev \
         python-pil \
         python-pip \
+        python-setuptools \
         python-simplejson \
-        libraspberrypi0 \
-        ifupdown \
         sqlite3 \
         uzbl \
         x11-xserver-utils \
