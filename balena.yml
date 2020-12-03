@@ -5,7 +5,7 @@ type: "sw.application"
 assets:
   - url: "https://github.com/Screenly/screenly-ose/"
     name: "repository"
-  - url: "https://avatars0.githubusercontent.com/u/20972724"
+  - url: "https://raw.githubusercontent.com/Screenly/screenly-ose/master/static/img/ose-logo.png"
     name: "logo"
 data:
   description: "Screenly OSE - Digital Signage for the Raspberry Pi"
