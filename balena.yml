@@ -5,7 +5,7 @@ type: "sw.application"
 assets:
   - url: "https://github.com/Screenly/screenly-ose/"
     name: "repository"
-  - url: "https://avatars0.githubusercontent.com/u/20972724"
+  - url: "https://raw.githubusercontent.com/Screenly/screenly-ose/master/static/img/ose-logo.png"
     name: "logo"
 data:
   description: "Screenly OSE - Digital Signage for the Raspberry Pi"
@@ -14,7 +14,7 @@ data:
     - RESIN_HOST_CONFIG_dtparam: "\"i2c_arm=on\",\"spi=on\",\"audio=on\",\"vc4-kms-v3d\""
   defaultDeviceType: "raspberrypi3"
   supportedDeviceTypes:
-    - "raspberry-pi"  
+    - "raspberry-pi"
     - "raspberry-pi2"
     - "raspberrypi3"
     - "raspberrypi3-64"
