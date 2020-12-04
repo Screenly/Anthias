@@ -5,4 +5,4 @@ RUN apt-get update && \
     redis-server && \
     apt-get clean
 
-CMD ["redis-server"]
+CMD ["redis-server", "--protected-mode", "no"]
