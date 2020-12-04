@@ -31,7 +31,7 @@ services:
       - PYTHONPATH=/data/screenly
       - SCREENLYSERVICE=viewer
       - LISTEN=screenly-server
-      - PORT=80
+      - PORT=8080
     privileged: true
     restart: always
     volumes:
