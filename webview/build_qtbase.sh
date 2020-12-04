@@ -54,6 +54,9 @@ function patch_qt (){
     # https://bugreports.qt.io/browse/QTBUG-62216
     sed -i 's/lEGL/lbrcmEGL/' "/src/qtbase/mkspecs/devices/$1/qmake.conf"
     sed -i 's/lGLESv2/lbrcmGLESv2/' "/src/qtbase/mkspecs/devices/$1/qmake.conf"
+
+    # We also need to patch up qmake for a spare =
+    sed -i 's#=/opt/vc/include#/opt/vc/include#' "/src/qtbase/mkspecs/devices/$1/qmake.conf"
 }
 
 function fetch_qt () {
