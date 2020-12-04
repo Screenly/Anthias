@@ -8,3 +8,4 @@ deprecated_screenly_systemd_units:
   - screenly-viewer.service
   - X.service
   - matchbox.service
+  - wifi-connect.service
