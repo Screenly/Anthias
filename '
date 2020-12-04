@@ -40,13 +40,6 @@ function fetch_rpi_firmware () {
         svn checkout -q https://github.com/raspberrypi/firmware/trunk/opt
     fi
     rsync -aqP /src/opt/ /sysroot/opt/
-
-    # There is a bug in QT's configure script that does not account
-    # for the /sysroot prefix, so we need to symlink the path on the host.
-    if [ ! -e "/opt/vc" ]; then
-        mkdir -p /opt
-        ln -s /sysroot/opt/vc /opt/
-    fi
 }
 
 function patch_qt (){
@@ -195,6 +188,7 @@ function build_qtbase () {
             -system-zlib \
             -sysroot /sysroot
 
+        exit
         make -j "$(nproc --all)"
         make install
         cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt5pi/lib/fonts"
@@ -243,7 +237,7 @@ function build_qtbase () {
 
             cd "$SRC_DIR/webview"
 
-            "$SRC_DIR/qt5pi/bin/qmake"
+            "$SRC_DIR/qt5pi/bin/qmake" 2>&1 > $SRC_DIR/webview-configure.log
             make -j"$(nproc --all)"
             make install
 
