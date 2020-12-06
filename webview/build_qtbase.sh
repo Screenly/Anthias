@@ -9,11 +9,12 @@ BUILD_TARGET=/build
 SRC=/src
 QT_BRANCH="5.15.2"
 DEBIAN_VERSION=$(lsb_release -cs)
+MAKE_CORES="$(expr $(nproc) + 2)"
 
 mkdir -p "$BUILD_TARGET"
 mkdir -p "$SRC"
 
-/usr/games/cowsay -f tux "Building QT Base version $QT_BRANCH."
+/usr/games/cowsay -f tux "Building QT version $QT_BRANCH."
 if [ "${BUILD_WEBENGINE-x}" == "1" ]; then
     /usr/games/cowsay -f tux "...with QTWebEngine."
 fi
@@ -52,82 +53,54 @@ function fetch_rpi_firmware () {
 function patch_qt (){
     # QT is linking against the old libraries for Pi 1 - Pi 3
     # https://bugreports.qt.io/browse/QTBUG-62216
-    sed -i 's/lEGL/lbrcmEGL/' "/src/qtbase/mkspecs/devices/$1/qmake.conf"
-    sed -i 's/lGLESv2/lbrcmGLESv2/' "/src/qtbase/mkspecs/devices/$1/qmake.conf"
+    sed -i 's/lEGL/lbrcmEGL/' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
+    sed -i 's/lGLESv2/lbrcmGLESv2/' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
 
     # We also need to patch up qmake for a spare =
-    sed -i 's#=/opt/vc/include#/opt/vc/include#' "/src/qtbase/mkspecs/devices/$1/qmake.conf"
+    sed -i 's#=/opt/vc/include#/opt/vc/include#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
 }
 
-function fetch_qt () {
-    local SRC_DIR="/src/qtbase"
+function fetch_qt5 () {
+    local SRC_DIR="/src/qt5"
+    cd /src
+
     if [ ! -d "$SRC_DIR" ]; then
-        git clone git://code.qt.io/qt/qtbase.git -b "$QT_BRANCH" "$SRC_DIR"
-        cd "$SRC_DIR"
-        git submodule init
-        git submodule update
+
+        if [ ! -f "qt-everywhere-src-5.15.2.tar.xz" ]; then
+            wget https://download.qt.io/archive/qt/5.15/5.15.2/single/qt-everywhere-src-5.15.2.tar.xz
+        fi
+
+        if [ ! -f "md5sums.txt" ]; then
+            wget https://download.qt.io/archive/qt/5.15/5.15.2/single/md5sums.txt
+        fi
+        md5sum --ignore-missing -c md5sums.txt
+
+        # Extract and make a clone
+        tar xf qt-everywhere-src-5.15.2.tar.xz
+        rsync -aqP qt-everywhere-src-5.15.2/ qt5
     else
-        cd "$SRC_DIR"
-        git reset --hard
-        git clean -dfx
+        rsync -aqP --delete qt-everywhere-src-5.15.2/ qt5
     fi
 }
 
-function fetch_qtdeclarative () {
-    local SRC_DIR="/src/qtdeclarative"
-    if [ ! -d "$SRC_DIR" ]; then
-        git clone git://code.qt.io/qt/qtdeclarative.git -b "$QT_BRANCH" "$SRC_DIR"
-        cd "$SRC_DIR"
-        git submodule init
-        git submodule update
-    else
-        cd "$SRC_DIR"
-        git reset --hard
-        git clean -dfx
-    fi
-}
-
-function fetch_qtwebchannel () {
-    local SRC_DIR="/src/qtwebchannel"
-    if [ ! -d "$SRC_DIR" ]; then
-        git clone git://code.qt.io/qt/qtwebchannel.git -b "$QT_BRANCH" "$SRC_DIR"
-        cd "$SRC_DIR"
-        git submodule init
-        git submodule update
-    else
-        cd "$SRC_DIR"
-        git reset --hard
-        git clean -dfx
-    fi
-}
-
-function fetch_qtwebengine () {
-    local SRC_DIR="/src/qtwebengine"
-    if [ ! -d "$SRC_DIR" ]; then
-        git clone git://code.qt.io/qt/qtwebengine.git -b "$QT_BRANCH" "$SRC_DIR"
-        cd "$SRC_DIR"
-        git submodule init
-        git submodule update
-    else
-        cd "$SRC_DIR"
-        git reset --hard
-        git clean -dfx
-    fi
-
+function patch_qtwebengine () {
     # Patch up WebEngine due to GCC bug
     # https://www.enricozini.org/blog/2020/qt5/build-qt5-cross-builder-with-raspbian-sysroot-compiling-with-the-sysroot/
-    cd "$SRC_DIR"
+    cd "/src/qt5/qtwebengine"
     sed -i '1s/^/#pragma GCC push_options\n#pragma GCC optimize ("O0")\n/' src/3rdparty/chromium/third_party/skia/third_party/skcms/skcms.cc
     echo "#pragma GCC pop_options" >> src/3rdparty/chromium/third_party/skia/third_party/skcms/skcms.cc
 }
 
-function build_qtbase () {
+function build_qt () {
     # This build process is inspired by
     # https://www.tal.org/tutorials/building-qt-512-raspberry-pi
     local SRC_DIR="/src/$1"
 
-    if [ ! -f "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" ]; then
-        /usr/games/cowsay -f tux "Building QT Base for $1"
+    # Make sure we have a clean QT 5 tree
+    fetch_qt5
+
+    if [ ! -f "$BUILD_TARGET/qt5-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" ]; then
+        /usr/games/cowsay -f tux "Building QT for $1"
         mkdir -p "$SRC_DIR"
         cd "$SRC_DIR"
 
@@ -144,7 +117,6 @@ function build_qtbase () {
         elif [ "$1" = "pi3" ]; then
             local BUILD_ARGS=(
                 "-device" "linux-rasp-pi3-g++"
-                "-v"
             )
             patch_qt "linux-rasp-pi3-g++"
         elif [ "$1" = "pi4" ]; then
@@ -156,7 +128,7 @@ function build_qtbase () {
             exit 1
         fi
 
-        /src/qtbase/configure \
+        /src/qt5/configure \
             "${BUILD_ARGS[@]}" \
             -confirm-license \
             -dbus-linked \
@@ -181,14 +153,33 @@ function build_qtbase () {
             -qt-pcre \
             -reduce-exports \
             -release \
+            -skip qt3d \
+            -skip qtactiveqt \
             -skip qtandroidextras \
             -skip qtcanvas3d \
+            -skip qtcharts \
+            -skip qtdatavis3d \
             -skip qtgamepad \
+            -skip qtgraphicaleffects \
             -skip qtlocation \
+            -skip qtlottie \
             -skip qtmacextras \
             -skip qtpurchasing \
+            -skip qtquick3d \
+            -skip qtquickcontrols \
+            -skip qtquickcontrols2 \
+            -skip qtquicktimeline \
             -skip qtscript \
+            -skip qtscxml \
+            -skip qtsensors \
+            -skip qtserialbus \
+            -skip qtserialport \
+            -skip qtspeech \
+            -skip qttools \
+            -skip qttranslations \
+            -skip qtvirtualkeyboard \
             -skip qtwayland \
+            -skip qtwebview \
             -skip qtwinextras \
             -skip qtx11extras \
             -ssl \
@@ -198,48 +189,12 @@ function build_qtbase () {
             -system-zlib \
             -sysroot /sysroot
 
-        make -j "$(nproc --all)"
+        make -j"$MAKE_CORES"
         make install
+
+        # I'm not sure we actually need this anymore. It's from an
+        # old build process for QT 4.9 that we used.
         cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt5pi/lib/fonts"
-
-        if [ "${BUILD_WEBENGINE-x}" == "1" ]; then
-
-            # This is a requirement for QTWebEngine
-            /usr/games/cowsay -f tux "Building QTDeclarative for $1"
-            fetch_qtdeclarative
-            cd /src/qtdeclarative
-            "$SRC_DIR/qt5pi/bin/qmake"
-            make -j"$(nproc --all)"
-            make install
-
-            # And so is this
-            /usr/games/cowsay -f tux "Building QTWebchannel for $1"
-            fetch_qtwebchannel
-            cd /src/qtwebchannel
-            "$SRC_DIR/qt5pi/bin/qmake"
-            make -j"$(nproc --all)"
-            make install
-
-            /usr/games/cowsay -f tux "Building QTWebEngine for $1"
-            fetch_qtwebengine
-            cd /src/qtwebengine
-            "$SRC_DIR/qt5pi/bin/qmake"
-
-            # This make process can crap out, so let's add some handling here
-            set +e
-
-            # Due to a bug, we can't specify a number of cores here.
-            # If we do, the build bcomes single threaded.
-            make -j
-
-            if [$? != 0 ]; then
-                echo "QTWebEngine process crapped out. Retrying with one thread."
-                make -j1
-            fi
-            set -e
-
-            make install
-        fi
 
         if [ "${BUILD_WEBVIEW-x}" == "1" ]; then
             cp -rf /webview "$SRC_DIR/"
@@ -247,7 +202,7 @@ function build_qtbase () {
             cd "$SRC_DIR/webview"
 
             "$SRC_DIR/qt5pi/bin/qmake"
-            make -j"$(nproc --all)"
+            make -j"$MAKE_CORES"
             make install
 
             mkdir -p fakeroot/bin fakeroot/share/ScreenlyWebview
@@ -261,9 +216,9 @@ function build_qtbase () {
         fi
 
         cd "$SRC_DIR"
-        tar cfz "$BUILD_TARGET/qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" qt5pi
+        tar cfz "$BUILD_TARGET/qt-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" qt5pi
         cd "$BUILD_TARGET"
-        sha256sum "qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "qtbase-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
+        sha256sum "qt-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "qt-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
     else
         echo "Build already exist."
     fi
@@ -272,11 +227,10 @@ function build_qtbase () {
 # Modify paths for build process
 /usr/local/bin/sysroot-relativelinks.py /sysroot
 
-fetch_qt
 fetch_cross_compile_tool
 fetch_rpi_firmware
 
 # Let's work our way through all Pis in order of relevance
-for device in pi4 pi3 pi2 pi1; do
-    build_qtbase "$device"
+for device in pi3 pi2 pi1; do
+    build_qt "$device"
 done

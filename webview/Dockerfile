@@ -30,8 +30,8 @@ RUN apt-get update && \
         libgles2-mesa-dev \
         libglib2.0-dev \
         libgst-dev \
-        libgstreamer-plugins-base0.10-dev \
-        libgstreamer0.10-dev \
+        libgstreamer-plugins-base1.0-dev \
+        libgstreamer1.0-dev \
         libicu-dev \
         libinput-dev \
         libiodbc2-dev \
@@ -46,7 +46,6 @@ RUN apt-get update && \
         libpq-dev \
         libpulse-dev \
         libraspberrypi-bin \
-        libraspberrypi-dev \
         libraspberrypi0 \
         librsvg2-common \
         libsnappy-dev \
@@ -96,6 +95,11 @@ RUN apt-get update && \
         ruby \
         va-driver-all \
         wget
+
+# Really make sure we don't have this package installed
+# as it will break the build of QTWebEngine
+# https://www.enricozini.org/blog/2020/qt5/build-qt5-cross-builder-with-raspbian-sysroot-compiling-with-the-sysroot-continued/
+RUN dpkg --purge libraspberrypi-dev
 
 FROM debian:buster
 
