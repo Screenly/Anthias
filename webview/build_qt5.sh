@@ -40,7 +40,17 @@ function fetch_rpi_firmware () {
         # and `git` doesn't  support partial checkouts well (yet)
         svn checkout -q https://github.com/raspberrypi/firmware/trunk/opt
     fi
-    rsync -aqP /src/opt/ /sysroot/opt/
+
+    # We need to exclude all of these .h and android files to make QT build.
+    # In the blog post referenced, this is done using `dpkg --purge libraspberrypi-dev`,
+    # but since we're copying in the source, we're just going to exclude these from the rsync.
+    # https://www.enricozini.org/blog/2020/qt5/build-qt5-cross-builder-with-raspbian-sysroot-compiling-with-the-sysroot-continued/
+    rsync \
+        -aP \
+        --exclude '*android*' \
+        --exclude 'hello_pi' \
+        --exclude '.svn' \
+        /src/opt/ /sysroot/opt/
 
     # There is a bug in QT's configure script that does not account
     # for the /sysroot prefix, so we need to symlink the path on the host.
@@ -50,7 +60,10 @@ function fetch_rpi_firmware () {
     fi
 }
 
-function patch_qt (){
+function patch_qt () {
+    # Yes, yes, this all should be converted to proper patches
+    # but I really just wanted to get it to work.
+
     # QT is linking against the old libraries for Pi 1 - Pi 3
     # https://bugreports.qt.io/browse/QTBUG-62216
     sed -i 's/lEGL/lbrcmEGL/' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
@@ -58,6 +71,7 @@ function patch_qt (){
 
     # We also need to patch up qmake for a spare =
     sed -i 's#=/opt/vc/include#/opt/vc/include#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
+    sed -i 's#=$$VC_LIBRARY_PATH#$$VC_LIBRARY_PATH#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
 }
 
 function fetch_qt5 () {
@@ -101,6 +115,11 @@ function build_qt () {
 
     if [ ! -f "$BUILD_TARGET/qt5-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" ]; then
         /usr/games/cowsay -f tux "Building QT for $1"
+
+        if [ "${CLEAN_BUILD-x}" == "1" ]; then
+            rm -rf "$SRC_DIR"
+        fi
+
         mkdir -p "$SRC_DIR"
         cd "$SRC_DIR"
 
@@ -130,6 +149,7 @@ function build_qt () {
 
         /src/qt5/configure \
             "${BUILD_ARGS[@]}" \
+            -ccache \
             -confirm-license \
             -dbus-linked \
             -device-option CROSS_COMPILE=/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf- \
@@ -144,6 +164,8 @@ function build_qt () {
             -no-gtk \
             -no-pch \
             -no-use-gold-linker \
+            -no-xcb \
+            -no-xcb-xlib \
             -nomake examples \
             -nomake tests \
             -opengl es2 \
@@ -182,6 +204,7 @@ function build_qt () {
             -skip qtwebview \
             -skip qtwinextras \
             -skip qtx11extras \
+            -skip wayland \
             -ssl \
             -system-freetype \
             -system-libjpeg \
@@ -189,6 +212,8 @@ function build_qt () {
             -system-zlib \
             -sysroot /sysroot
 
+        # The RAM consumption is proportional to the amount of cores.
+        # On an 8 core box, the build process will require ~16GB of RAM.
         make -j"$MAKE_CORES"
         make install
 

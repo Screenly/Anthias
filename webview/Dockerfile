@@ -60,6 +60,7 @@ RUN apt-get update && \
         libts-dev \
         libudev-dev \
         libvpx-dev \
+        libwayland-dev \
         libwebp-dev \
         libx11-dev \
         libx11-xcb-dev \
@@ -108,6 +109,7 @@ RUN apt-get update && \
     apt-get -y install \
         bison \
         build-essential \
+        ccache \
         cowsay \
         flex \
         freetds-dev \
@@ -183,8 +185,9 @@ COPY --from=builder /usr/lib/ /sysroot/usr/lib/
 COPY --from=builder /opt/vc/ sysroot/opt/vc/
 COPY . /webview
 
-ENV BUILD_WEBENGINE 1
 ENV BUILD_WEBVIEW 1
+ENV CCACHE_MAXSIZE 10G
+ENV CCACHE_DIR /src/ccache
 
-COPY build_qtbase.sh /usr/local/bin/
-CMD /usr/local/bin/build_qtbase.sh
+COPY build_qt5.sh /usr/local/bin/
+CMD /usr/local/bin/build_qt5.sh
