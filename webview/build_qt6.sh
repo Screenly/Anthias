@@ -3,6 +3,11 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 # -*- sh-basic-offset: 4 -*-
 
+
+#
+# This is work in progress and will not work at all currently
+#
+
 set -exuo pipefail
 
 BUILD_TARGET=/build
