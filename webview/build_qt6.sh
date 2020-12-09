@@ -7,7 +7,7 @@ set -exuo pipefail
 
 BUILD_TARGET=/build
 SRC=/src
-QT_BRANCH="5.15.2"
+QT_BRANCH="6.0.0"
 DEBIAN_VERSION=$(lsb_release -cs)
 MAKE_CORES="$(expr $(nproc) + 2)"
 
@@ -25,22 +25,20 @@ function fetch_cross_compile_tool () {
     # * https://github.com/UvinduW/Cross-Compiling-Qt-for-Raspberry-Pi-4
     # * https://releases.linaro.org/components/toolchain/binaries/latest-7/armv8l-linux-gnueabihf/
     if [ ! -d "/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf" ]; then
-        pushd /src/
+        cd /src/
         wget -q https://releases.linaro.org/components/toolchain/binaries/7.4-2019.02/arm-linux-gnueabihf/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz
         tar xf gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz
         rm gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz
-        popd
     fi
 }
 
 function fetch_rpi_firmware () {
     if [ ! -d "/src/opt" ]; then
-        pushd /src
+        cd /src
 
         # We do an `svn checkout` here as the entire git repo here is *huge*
         # and `git` doesn't  support partial checkouts well (yet)
         svn checkout -q https://github.com/raspberrypi/firmware/trunk/opt
-        popd
     fi
 
     # We need to exclude all of these .h and android files to make QT build.
@@ -53,47 +51,62 @@ function fetch_rpi_firmware () {
         --exclude 'hello_pi' \
         --exclude '.svn' \
         /src/opt/ /sysroot/opt/
+
+    # Adds more symlinks
+    #cd /sysroot/opt/vc/lib
+    #ln -sfr libEGL.so libEGL.so.1
+    #ln -sfr libGLESv2.so libGLESv2.so.2
 }
 
 function patch_qt () {
+    echo
     # Yes, yes, this all should be converted to proper patches
     # but I really just wanted to get it to work.
 
     # QT is linking against the old libraries for Pi 1 - Pi 3
     # https://bugreports.qt.io/browse/QTBUG-62216
-    sed -i 's/lEGL/lbrcmEGL/' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
-    sed -i 's/lGLESv2/lbrcmGLESv2/' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
+    #sed -i 's/lEGL/lbrcmEGL/' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
+    #sed -i 's/lGLESv2/lbrcmGLESv2/' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
 
     # Qmake won't account for sysroot
     # https://wiki.qt.io/RaspberryPi2EGLFS
-    sed -i 's#^VC_LIBRARY_PATH.*#VC_LIBRARY_PATH = $$[QT_SYSROOT]/opt/vc/lib#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
-    sed -i 's#^VC_INCLUDE_PATH.*#VC_INCLUDE_PATH = $$[QT_SYSROOT]/opt/vc/include#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
-    sed -i 's#^VC_LINK_LINE.*#VC_LINK_LINE = -L$${VC_LIBRARY_PATH}#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
-    sed -i 's#^QMAKE_LIBDIR_OPENGL_ES2.*#QMAKE_LIBDIR_OPENGL_ES2 = $${VC_LIBRARY_PATH}#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
+    #sed -i 's#^VC_LIBRARY_PATH.*#VC_LIBRARY_PATH = $$[QT_SYSROOT]/opt/vc/lib#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
+    #sed -i 's#^VC_INCLUDE_PATH.*#VC_INCLUDE_PATH = $$[QT_SYSROOT]/opt/vc/include#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
+    #sed -i 's#^VC_LINK_LINE.*#VC_LINK_LINE = -L$${VC_LIBRARY_PATH}#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
+    #sed -i 's#^QMAKE_LIBDIR_OPENGL_ES2.*#QMAKE_LIBDIR_OPENGL_ES2 = $${VC_LIBRARY_PATH}#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
+
+    #sed -i '23 a $${VC_INCLUDE_PATH}/interface/vcos \\' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
 }
 
-function fetch_qt5 () {
-    local SRC_DIR="/src/qt5"
-    pushd /src
+function fetch_qt6 () {
+    local SRC_DIR="/src/qt6"
+    cd /src
 
     if [ ! -d "$SRC_DIR" ]; then
 
-        if [ ! -f "qt-everywhere-src-5.15.2.tar.xz" ]; then
-            wget https://download.qt.io/archive/qt/5.15/5.15.2/single/qt-everywhere-src-5.15.2.tar.xz
+        if [ ! -f "qt-everywhere-src-6.0.0.tar.xz" ]; then
+            wget https://download.qt.io/archive/qt/6.0/6.0.0/single/qt-everywhere-src-6.0.0.tar.xz
         fi
 
-        if [ ! -f "md5sums.txt" ]; then
-            wget https://download.qt.io/archive/qt/5.15/5.15.2/single/md5sums.txt
+        if [ ! -f "md5sums-6.txt" ]; then
+            wget -O md5sums-6.txt https://download.qt.io/archive/qt/6.0/6.0.0/single/md5sums.txt
         fi
-        md5sum --ignore-missing -c md5sums.txt
+        md5sum --ignore-missing -c md5sums-6.txt
 
         # Extract and make a clone
-        tar xf qt-everywhere-src-5.15.2.tar.xz
-        rsync -aqP qt-everywhere-src-5.15.2/ qt5
+        tar xf qt-everywhere-src-6.0.0.tar.xz
+        rsync -aqP qt-everywhere-src-6.0.0/ qt6
     else
-        rsync -aqP --delete qt-everywhere-src-5.15.2/ qt5
+        rsync -aqP --delete qt-everywhere-src-6.0.0/ qt6
     fi
-    popd
+}
+
+function patch_qtwebengine () {
+    # Patch up WebEngine due to GCC bug
+    # https://www.enricozini.org/blog/2020/qt5/build-qt5-cross-builder-with-raspbian-sysroot-compiling-with-the-sysroot/
+    cd "/src/qt5/qtwebengine"
+    sed -i '1s/^/#pragma GCC push_options\n#pragma GCC optimize ("O0")\n/' src/3rdparty/chromium/third_party/skia/third_party/skcms/skcms.cc
+    echo "#pragma GCC pop_options" >> src/3rdparty/chromium/third_party/skia/third_party/skcms/skcms.cc
 }
 
 function build_qt () {
@@ -102,9 +115,9 @@ function build_qt () {
     local SRC_DIR="/src/$1"
 
     # Make sure we have a clean QT 5 tree
-    fetch_qt5
+    fetch_qt6
 
-    if [ ! -f "$BUILD_TARGET/qt5-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" ]; then
+    if [ ! -f "$BUILD_TARGET/qt6-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" ]; then
         /usr/games/cowsay -f tux "Building QT for $1"
 
         if [ "${CLEAN_BUILD-x}" == "1" ]; then
@@ -112,7 +125,7 @@ function build_qt () {
         fi
 
         mkdir -p "$SRC_DIR"
-        pushd "$SRC_DIR"
+        cd "$SRC_DIR"
 
         if [ "$1" = "pi1" ]; then
             local BUILD_ARGS=(
@@ -129,22 +142,16 @@ function build_qt () {
                 "-device" "linux-rasp-pi3-g++"
             )
             patch_qt "linux-rasp-pi3-g++"
-
-        # The opengl flag only works on Pi 4. It breaks the QTWebEngine build
-        # process on any other model.
         elif [ "$1" = "pi4" ]; then
             local BUILD_ARGS=(
                 "-device" "linux-rasp-pi4-v3d-g++"
-                "-opengl" "es2"
             )
         else
             echo "Unknown device. Exiting."
             exit 1
         fi
 
-        # @TODO: Add in the `-opengl es2` flag for Pi 1 - Pi 3.
-        # Currently this breaks the QTWebEngine process.
-        /src/qt5/configure \
+        /src/qt6/configure \
             "${BUILD_ARGS[@]}" \
             -ccache \
             -confirm-license \
@@ -152,7 +159,7 @@ function build_qt () {
             -device-option CROSS_COMPILE=/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf- \
             -eglfs \
             -evdev \
-            -extprefix "$SRC_DIR/qt5pi" \
+            -extprefix "$SRC_DIR/qt6pi" \
             -force-pkg-config \
             -glib \
             -make libs \
@@ -166,8 +173,9 @@ function build_qt () {
             -no-xcb-xlib \
             -nomake examples \
             -nomake tests \
+            -opengl es2 \
             -opensource \
-            -prefix /usr/local/qt5pi \
+            -prefix /usr/local/qt6pi \
             -qpa eglfs \
             -qt-pcre \
             -reduce-exports \
@@ -216,14 +224,14 @@ function build_qt () {
 
         # I'm not sure we actually need this anymore. It's from an
         # old build process for QT 4.9 that we used.
-        cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt5pi/lib/fonts"
+        cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt6pi/lib/fonts"
 
         if [ "${BUILD_WEBVIEW-x}" == "1" ]; then
             cp -rf /webview "$SRC_DIR/"
 
             cd "$SRC_DIR/webview"
 
-            "$SRC_DIR/qt5pi/bin/qmake"
+            "$SRC_DIR/qt6pi/bin/qmake"
             make -j"$MAKE_CORES"
             make install
 
@@ -236,15 +244,11 @@ function build_qt () {
             cd "$BUILD_TARGET"
             sha256sum "webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
         fi
-        popd
 
-        pushd "$SRC_DIR"
-        tar cfz "$BUILD_TARGET/qt-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" qt5pi
-        popd
-
-        pushd "$BUILD_TARGET"
+        cd "$SRC_DIR"
+        tar cfz "$BUILD_TARGET/qt-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" qt6pi
+        cd "$BUILD_TARGET"
         sha256sum "qt-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "qt-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
-        popd
     else
         echo "Build already exist."
     fi
