@@ -72,6 +72,15 @@ function patch_qt () {
     sed -i 's#^QMAKE_LIBDIR_OPENGL_ES2.*#QMAKE_LIBDIR_OPENGL_ES2 = $${VC_LIBRARY_PATH}#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
 }
 
+function patch_qtwebengine () {
+    # Patch up WebEngine due to GCC bug
+    # https://www.enricozini.org/blog/2020/qt5/build-qt5-cross-builder-with-raspbian-sysroot-compiling-with-the-sysroot/
+    pushd "/src/qt5/qtwebengine"
+    sed -i '1s/^/#pragma GCC push_options\n#pragma GCC optimize ("O0")\n/' src/3rdparty/chromium/third_party/skia/third_party/skcms/skcms.cc
+    echo "#pragma GCC pop_options" >> src/3rdparty/chromium/third_party/skia/third_party/skcms/skcms.cc
+    popd
+}
+
 function fetch_qt5 () {
     local SRC_DIR="/src/qt5"
     pushd /src
@@ -119,6 +128,7 @@ function build_qt () {
                 "-device" "linux-rasp-pi-g++"
             )
             patch_qt "linux-rasp-pi-g++"
+            patch_qtwebengine
         elif [ "$1" = "pi2" ]; then
             local BUILD_ARGS=(
                 "-device" "linux-rasp-pi2-g++"
@@ -264,3 +274,4 @@ if [ ! "${TARGET-}" ]; then
 else
     build_qt "$TARGET"
 fi
+
