@@ -29,7 +29,7 @@ for container in base server celery redis websocket nginx; do
 done
 
 echo "Building viewer for different architectures..."
-for pi_version in pi1 pi2 pi3 pi4; do
+for pi_version in pi4 pi3 pi2 pi1; do
     echo "Building viewer container for $pi_version"
     docker "${DOCKER_BUILD_ARGS[@]}" \
         --build-arg "PI_VERSION=$pi_version" \
