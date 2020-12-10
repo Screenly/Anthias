@@ -10,8 +10,6 @@ services:
     restart: always
     volumes:
       - resin-data:/data
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
 
   srly-ose-viewer:
     image: screenly/srly-ose-viewer:latest-pi3
@@ -26,8 +24,6 @@ services:
     restart: always
     volumes:
       - resin-data:/data
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
 
   srly-ose-websocket:
     image: screenly/srly-ose-websocket:latest
@@ -40,8 +36,6 @@ services:
     restart: always
     volumes:
       - resin-data:/data
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
 
   srly-ose-celery:
     image: screenly/srly-ose-celery:latest
@@ -56,8 +50,6 @@ services:
     restart: always
     volumes:
       - resin-data:/data
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
 
   redis:
     image: screenly/srly-ose-redis:latest
@@ -73,8 +65,6 @@ services:
     restart: always
     volumes:
       - resin-data:/data:ro
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
 
 volumes:
     resin-data:
