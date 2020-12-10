@@ -134,9 +134,17 @@ RUN curl "https://storage.googleapis.com/ose-lab/webview-$QT_VERSION-$DEBIAN_VER
     rm webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*
 
 ENV QT_QPA_EGLFS_FORCE888=1
+ENV QT_QPA_PLATFORM=linuxfb
+
+# Turn on debug logging for now
+QT_LOGGING_RULES=qt.qpa.*=true
+QT_QPA_DEBUG=1
+
+RUN useradd -g video viewer
 
 WORKDIR /usr/src/app
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/
 
+USER viewer
 CMD ["bash", "./bin/start_viewer.sh"]
