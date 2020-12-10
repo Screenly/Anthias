@@ -75,7 +75,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.nginx
-    port:
+    ports:
       - 80:80
     environment:
       - HOME=/data
