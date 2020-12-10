@@ -9,7 +9,6 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     ports:
       - 80:8080
-    privileged: true
     restart: always
     volumes:
       - /home/pi/.screenly:/data/.screenly

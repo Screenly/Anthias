@@ -7,9 +7,9 @@ services:
       dockerfile: docker/Dockerfile.server
     environment:
       - HOME=/data
+      - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    privileged: true
     restart: always
     volumes:
       - resin-data:/data
@@ -41,7 +41,6 @@ services:
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
-    privileged: true
     restart: always
     volumes:
       - resin-data:/data
@@ -58,7 +57,6 @@ services:
       - HOME=/data
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    privileged: true
     restart: always
     volumes:
       - resin-data:/data
