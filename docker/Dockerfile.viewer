@@ -137,8 +137,8 @@ ENV QT_QPA_EGLFS_FORCE888=1
 ENV QT_QPA_PLATFORM=linuxfb
 
 # Turn on debug logging for now
-QT_LOGGING_RULES=qt.qpa.*=true
-QT_QPA_DEBUG=1
+ENV QT_LOGGING_RULES=qt.qpa.*=true
+ENV QT_QPA_DEBUG=1
 
 RUN useradd -g video viewer
 
