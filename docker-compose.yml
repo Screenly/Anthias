@@ -65,8 +65,6 @@ services:
 
   srly-ose-nginx:
     image: screenly/srly-ose-nginx:latest
-    depends_on:
-      - srly-ose-server
     environment:
       - HOME=/data
     depends_on:
