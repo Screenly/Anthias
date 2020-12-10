@@ -186,7 +186,7 @@ def get_video_duration(file):
 
     try:
         if arch in ('armv6l', 'armv7l'):
-            run_player = ffprobe(file, info=True, _err_to_out=True, _ok_code=[0, 1], _decode_errors='ignore')
+            run_player = ffprobe(file, _err_to_out=True, _ok_code=[0, 1], _decode_errors='ignore')
         else:
             run_player = ffprobe('-i', file, _err_to_out=True)
     except sh.ErrorReturnCode_1:
