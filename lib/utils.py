@@ -38,6 +38,14 @@ try:
 except ImportError:
     pass
 
+# This will only work on the Raspberry Pi,
+# so let's wrap it in a try/except so that
+# Travis can run.
+try:
+    from sh import ffprobe
+except ImportError:
+    pass
+
 # This will work on x86-based machines
 if machine() in ['x86', 'x86_64']:
     try:
@@ -178,7 +186,7 @@ def get_video_duration(file):
 
     try:
         if arch in ('armv6l', 'armv7l'):
-            run_player = omxplayer(file, info=True, _err_to_out=True, _ok_code=[0, 1], _decode_errors='ignore')
+            run_player = ffprobe(file, info=True, _err_to_out=True, _ok_code=[0, 1], _decode_errors='ignore')
         else:
             run_player = ffprobe('-i', file, _err_to_out=True)
     except sh.ErrorReturnCode_1:
