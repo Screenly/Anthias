@@ -4,6 +4,9 @@
 chgrp video /dev/vchiq
 chmod g+rwX /dev/vchiq
 
+# Set permission for sha file
+chown viewer /data/.screenly/latest_screenly_sha
+
 # SUGUSR1 from the viewer is also sent to the container
 # Prevent it so that the container does not fail
 trap '' 16
