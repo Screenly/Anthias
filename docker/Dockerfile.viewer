@@ -146,5 +146,4 @@ WORKDIR /usr/src/app
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/
 
-USER viewer
 CMD ["bash", "./bin/start_viewer.sh"]

@@ -1,10 +1,14 @@
 #!/bin/bash
 
+# Fixes permission on /dev/vchiq
+chgrp video /dev/vchiq
+chmod g+rwX /dev/vchiq
+
 # SUGUSR1 from the viewer is also sent to the container
 # Prevent it so that the container does not fail
 trap '' 16
 
-dbus-run-session python viewer.py &
+sudo -E -u viewer dbus-run-session python viewer.py &
 
 # Waiting for the viewer
 while true; do

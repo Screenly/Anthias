@@ -28,6 +28,7 @@ WOTT_PATH = '/opt/wott'
 arch = machine()
 
 # 300 level HTTP responses are also ok, such as redirects, which many sites have and load
+# @TODO: This should be replaced with `r.ok` instead.
 HTTP_OK = xrange(200, 399)
 
 # This will only work on the Raspberry Pi,
