@@ -13,6 +13,8 @@ services:
     restart: always
     volumes:
       - resin-data:/data
+    labels:
+      io.balena.features.supervisor-api: '1'
 
   srly-ose-viewer:
     #image: screenly/srly-ose-viewer:latest-pi3
