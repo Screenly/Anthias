@@ -52,3 +52,9 @@ You can enable QT debugging by using the following:
 ```
 export QT_LOGGING_RULES=qt.qpa.*=true
 ```
+
+## Viewer arguments
+
+####--disable-web-security
+It's a temporary solution for `View::loadImage` when displaying local images. Without the flag, we will have the `js: Not allowed to load local resource:` error.<br/>
+Resource: https://forum.qt.io/topic/80431/not-allowed-load-local-resources-qtwebengine-disable-web-security
