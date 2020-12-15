@@ -1,20 +1,24 @@
 version: "2"
 services:
   srly-ose-server:
-    image: screenly/srly-ose-server:latest
+    #image: screenly/srly-ose-server:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.server
     environment:
       - HOME=/data
+      - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    privileged: true
     restart: always
     volumes:
       - resin-data:/data
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
 
   srly-ose-viewer:
-    image: screenly/srly-ose-viewer:latest-pi3
+    #image: screenly/srly-ose-viewer:latest-pi3
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.viewer
     depends_on:
       - srly-ose-server
     environment:
@@ -26,25 +30,26 @@ services:
     restart: always
     volumes:
       - resin-data:/data
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
 
   srly-ose-websocket:
-    image: screenly/srly-ose-websocket:latest
+    #image: screenly/srly-ose-websocket:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.websocket
     depends_on:
       - srly-ose-server
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
-    privileged: true
     restart: always
     volumes:
       - resin-data:/data
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
 
   srly-ose-celery:
-    image: screenly/srly-ose-celery:latest
+    #image: screenly/srly-ose-celery:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.celery
     depends_on:
       - srly-ose-server
       - redis
@@ -52,19 +57,24 @@ services:
       - HOME=/data
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    privileged: true
     restart: always
     volumes:
       - resin-data:/data
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
 
   redis:
-    image: screenly/srly-ose-redis:latest
+    #image: screenly/srly-ose-redis:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.redis
     restart: always
 
   srly-ose-nginx:
-    image: screenly/srly-ose-nginx:latest
+    #image: screenly/srly-ose-nginx:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nginx
+    ports:
+      - 80:80
     environment:
       - HOME=/data
     depends_on:
@@ -73,8 +83,6 @@ services:
     restart: always
     volumes:
       - resin-data:/data:ro
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
 
 volumes:
     resin-data:

@@ -1,59 +1,97 @@
-FROM balenalib/rpi-raspbian:buster as viewer-builder
+FROM balenalib/rpi-raspbian:buster
 
-RUN apt-get update && \
-    apt-get -y install --no-install-recommends \
-        build-essential \
-        g++ \
-        libinput-dev \
-        libqt5gui5 \
-        libqt5webkit5-dev \
-        libqt5x11extras5-dev \
-        libts-dev \
-        libudev-dev \
-        libxcb-xinerama0 \
-        libxcb-xinerama0-dev \
-        wget \
-        make && \
-    apt-get clean
-
-# QT Base from packages does not support eglfs
-ARG PI_VERSION=pi3
-ARG DEBIAN_VERSION=stretch
-ARG QT_VERSION=5.9
-RUN wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
-        -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
-    wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
-        -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
-    cd /tmp && \
-    sha256sum -c qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
-    tar -xzf /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local && \
-    echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf && \
-    ldconfig && \
-    rm qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*
-
-RUN mkdir /src
-WORKDIR /src
-COPY webview/ /src/
-RUN /usr/lib/arm-linux-gnueabihf/qt5/bin/qmake
-RUN make -j 4
-RUN make install
-
-# @TODO: Upgrade to Buster. We're stuck on QT 5.9 and Stretch for now.
-FROM balenalib/rpi-raspbian:stretch
-
+# This list needs to be trimmed back later
 RUN apt-get update && \
     apt-get -y install \
         build-essential \
-        curl \
+        ca-certificates \
         git-core \
-        gstreamer0.10-plugins-good \
+        gstreamer1.0-plugins-base \
+        gstreamer1.0-plugins-good \
+        gstreamer1.0-plugins-ugly \
+        gstreamer1.0-x \
+        libasound2-dev \
+        libavcodec-dev \
+        libavformat-dev \
+        libavutil-dev \
+        libbz2-dev \
+        libcap-dev \
+        libdbus-1-dev \
         libdbus-glib-1-dev \
-        wget \
+        libdrm-dev \
+        libegl1-mesa-dev \
+        libevent-dev \
         libffi-dev \
-        libqt5webkit5 \
+        libfontconfig1-dev \
+        libfreetype6-dev \
+        libgbm-dev \
+        libgcrypt20-dev \
+        libgles2-mesa \
+        libgles2-mesa-dev \
+        libglib2.0-dev \
+        libgst-dev \
+        libgstreamer-plugins-base0.10-dev \
+        libgstreamer0.10-dev \
+        libicu-dev \
+        libinput-dev \
+        libiodbc2-dev \
+        libjpeg62-turbo-dev \
+        libjsoncpp-dev \
+        libminizip-dev \
+        libnss3 \
+        libnss3-dev \
+        libopus-dev \
+        libpci-dev \
+        libpng-dev \
+        libpng16-16 \
+        libpq-dev \
+        libpulse-dev \
         libraspberrypi0 \
+        librsvg2-common \
+        libsdl2-dev \
+        libsnappy-dev \
+        libsqlite0-dev \
+        libsqlite3-dev \
+        libsrtp0-dev \
+        libsrtp2-dev \
         libssl-dev \
+        libssl1.1 \
+        libswscale-dev \
+        libsystemd-dev \
         libts-dev \
+        libudev-dev \
+        libvpx-dev \
+        libwebp-dev \
+        libx11-dev \
+        libx11-xcb-dev \
+        libx11-xcb1 \
+        libxcb-glx0-dev \
+        libxcb-icccm4 \
+        libxcb-icccm4-dev \
+        libxcb-image0 \
+        libxcb-image0-dev \
+        libxcb-keysyms1 \
+        libxcb-keysyms1-dev \
+        libxcb-randr0-dev \
+        libxcb-render-util0 \
+        libxcb-render-util0-dev \
+        libxcb-shape0-dev \
+        libxcb-shm0 \
+        libxcb-shm0-dev \
+        libxcb-sync-dev \
+        libxcb-sync1 \
+        libxcb-xfixes0-dev \
+        libxcb-xinerama0 \
+        libxcb-xinerama0-dev \
+        libxcb1 \
+        libxcb1-dev \
+        libxext-dev \
+        libxi-dev \
+        libxkbcommon-dev \
+        libxrender-dev \
+        libxslt1-dev \
+        libxss-dev \
+        libxtst-dev \
         net-tools \
         omxplayer \
         psmisc \
@@ -69,41 +107,44 @@ RUN apt-get update && \
 ADD requirements/requirements.viewer.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
+# Works around issue with `curl`
+# https://github.com/balena-io-library/base-images/issues/562
+RUN c_rehash
+
 # QT Base from packages does not support eglfs
 ARG PI_VERSION=pi3
-ARG DEBIAN_VERSION=stretch
-ARG QT_VERSION=5.9
-RUN wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
-        -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
-    wget "https://storage.googleapis.com/ose-lab/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
-        -q -O /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
+ARG DEBIAN_VERSION=buster
+ARG QT_VERSION=5.15.2
+RUN curl "https://storage.googleapis.com/ose-lab/qt-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
+        -s -o /tmp/qt-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
+    curl "https://storage.googleapis.com/ose-lab/qt-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
+        -s -o /tmp/qt-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
     cd /tmp && \
-    sha256sum -c qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
-    tar -xzf /tmp/qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local && \
-    echo "/usr/local/qt5pi/lib" > /etc/ld.so.conf.d/00-qt5pi.conf && \
-    ldconfig && \
-    rm qtbase-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*
+    sha256sum -c qt-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
+    tar -xzf /tmp/qt-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local && \
+    rm qt-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*
 
-# Fix symlinks
-RUN rm -f /usr/lib/arm-linux-gnueabihf/libEGL.so.1 && \
-    rm -f /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0 && \
-    ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so && \
-    ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1 && \
-    ln -s /opt/vc/lib/libbrcmEGL.so /usr/lib/arm-linux-gnueabihf/libEGL.so.1.0.0 && \
-    rm -f /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2 && \
-    rm -f /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0 && \
-    ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so && \
-    ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2 && \
-    ln -s /opt/vc/lib/libbrcmGLESv2.so /usr/lib/arm-linux-gnueabihf/libGLESv2.so.2.0.0
-
-RUN mkdir -p /usr/local/share/ScreenlyWebview
-COPY --from=viewer-builder /src/ScreenlyWebview /usr/local/bin/
-COPY --from=viewer-builder /src/res /usr/local/share/ScreenlyWebview/
+RUN curl "https://storage.googleapis.com/ose-lab/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
+        -s -o /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
+    curl "https://storage.googleapis.com/ose-lab/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
+        -s -o /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
+    cd /tmp && \
+    sha256sum -c webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
+    tar -xzf /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local && \
+    rm webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*
 
 ENV QT_QPA_EGLFS_FORCE888=1
+ENV QT_QPA_PLATFORM=linuxfb
+
+# Turn on debug logging for now
+ENV QT_LOGGING_RULES=qt.qpa.*=true
+ENV QT_QPA_DEBUG=1
+
+RUN useradd -g video viewer
 
 WORKDIR /usr/src/app
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/
 
+USER viewer
 CMD ["bash", "./bin/start_viewer.sh"]

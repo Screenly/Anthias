@@ -1,7 +1,8 @@
 #include <QApplication>
 #include <QDebug>
 #include <QtDBus>
-#include <QWebView>
+#include <QtWebEngine>
+#include <QWebEngineView>
 
 #include "mainwindow.h"
 
@@ -14,7 +15,7 @@ int main(int argc, char *argv[])
     QApplication::changeOverrideCursor(cursor);
 
     MainWindow *window = new MainWindow();
-    window->show();
+    window -> show();
 
     QDBusConnection connection = QDBusConnection::sessionBus();
 

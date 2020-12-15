@@ -8,12 +8,6 @@
     device_type: "{{ lookup('env', 'DEVICE_TYPE') }}"
     home: "/data"
 
-  handlers:
-    - name: restart-nginx
-      service:
-        name: nginx
-        state: restarted
-
   roles:
     - system
     - screenly
