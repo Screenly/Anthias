@@ -15,7 +15,6 @@ RUN apt-get update && \
         libavformat-dev \
         libavutil-dev \
         libbz2-dev \
-        libcap-dev \
         libdbus-1-dev \
         libdbus-glib-1-dev \
         libdrm-dev \
