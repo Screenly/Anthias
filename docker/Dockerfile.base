@@ -11,6 +11,7 @@ RUN apt-get update && \
         libffi-dev \
         libraspberrypi0 \
         libssl-dev \
+        libzmq3-dev \
         lsb-release \
         mplayer \
         net-tools \

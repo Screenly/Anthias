@@ -26,8 +26,10 @@ services:
     environment:
       - HOME=/data
       - NOREFRESH=1
-      - PORT=80
-    network_mode: "host"
+      - PYTHONPATH=/data/screenly
+      - SCREENLYSERVICE=viewer
+      - LISTEN=screenly-server
+      - PORT=8080
     privileged: true
     restart: always
     volumes:
