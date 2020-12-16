@@ -149,10 +149,10 @@
     src: "wifi-connect.service"
     dest: "/etc/systemd/system/wifi-connect.service"
 
-- name: Enable wifi-connect systemd service
-  systemd:
-    name: wifi-connect.service
-    enabled: yes
+#- name: Enable wifi-connect systemd service
+#  systemd:
+#    name: wifi-connect.service
+#    enabled: yes
 
 - name: Touch initialized file
   file:
