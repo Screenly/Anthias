@@ -436,7 +436,7 @@ def prepare_asset(request, unique_name=False):
         'asset_id': get('asset_id'),
         'is_enabled': get('is_enabled'),
         'is_processing': get('is_processing'),
-        'nocache': get('nocache'),
+        'nocache': get('nocache')
     }
 
     uri = escape(get('uri').encode('utf-8'))
@@ -523,6 +523,7 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
     asset = {
         'name': name,
         'mimetype': get('mimetype'),
+        'asset_id': get('asset_id'),
         'is_enabled': get('is_enabled'),
         'nocache': get('nocache')
     }
@@ -536,7 +537,7 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
         if not validate_url(uri):
             raise Exception("Invalid URL. Failed to add asset.")
 
-    if not asset_id:
+    if not asset['asset_id']:
         asset['asset_id'] = uuid.uuid4().hex
         if uri.startswith('/'):
             rename(uri, path.join(settings['assetdir'], asset['asset_id']))
