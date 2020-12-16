@@ -92,7 +92,7 @@ elif [ "$WEB_UPGRADE" = true ]; then
       export DOCKER_TAG="latest"
       BRANCH="master"
     elif [ "$BRANCH_VERSION" = "production" ]; then
-      export DOCKER_TAG="production"
+      export DOCKER_TAG="latest"
       BRANCH="production"
     else
       echo -e "Invalid -b parameter."
