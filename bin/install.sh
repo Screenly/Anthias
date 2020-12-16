@@ -73,7 +73,7 @@ case $BRANCHSELECTION in
     ;;
   2) echo "You selected: Development/Master";export DOCKER_TAG="latest";BRANCH="master"
     ;;
-  3) echo "You selected: Experimental";export DOCKER_TAG="experimental";BRANCH="experimental"
+  3) echo "You selected: Experimental";export DOCKER_TAG="latest";BRANCH="experimental"
     ;;
   *) echo "(Error) That was not an option, installer will now exit.";exit
     ;;
