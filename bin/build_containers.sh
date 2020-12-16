@@ -16,6 +16,10 @@ else
     DOCKER_BUILD_ARGS=("build")
 fi
 
+if [ -n "${CLEAN_BUILD+x}" ]; then
+    DOCKER_BUILD_ARGS+=("--no-cache")
+fi
+
 for container in base server celery redis websocket nginx; do
     echo "Building $container"
     docker "${DOCKER_BUILD_ARGS[@]}" \
