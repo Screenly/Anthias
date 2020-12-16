@@ -35,25 +35,9 @@ HTTP_OK = xrange(200, 399)
 # so let's wrap it in a try/except so that
 # Travis can run.
 try:
-    from sh import omxplayer
-except ImportError:
-    pass
-
-# This will only work on the Raspberry Pi,
-# so let's wrap it in a try/except so that
-# Travis can run.
-try:
     from sh import ffprobe
 except ImportError:
     pass
-
-# This will work on x86-based machines
-if machine() in ['x86', 'x86_64']:
-    try:
-        from sh import ffprobe, mplayer
-    except ImportError:
-        pass
-
 
 def string_to_bool(string):
     return bool(strtobool(str(string)))
@@ -186,10 +170,7 @@ def get_video_duration(file):
     time = None
 
     try:
-        if arch in ('armv6l', 'armv7l'):
-            run_player = ffprobe(file, _err_to_out=True, _ok_code=[0, 1], _decode_errors='ignore')
-        else:
-            run_player = ffprobe('-i', file, _err_to_out=True)
+        run_player = ffprobe('-i', file, _err_to_out=True)
     except sh.ErrorReturnCode_1:
         raise Exception('Bad video format')
 
@@ -226,18 +207,11 @@ def url_fails(url):
     If it is streaming
     """
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
-        if arch in ('armv6l', 'armv7l'):
-            run_omxplayer = omxplayer(url, info=True, _err_to_out=True, _ok_code=[0, 1])
-            for line in run_omxplayer.split('\n'):
-                if 'Input #0' in line:
-                    return False
-            return True
-        else:
-            run_mplayer = mplayer('-identify', '-frames', '0', '-nosound', url)
-            for line in run_mplayer.split('\n'):
-                if 'Clip info:' in line:
-                    return False
-            return True
+        run_mplayer = mplayer('-identify', '-frames', '0', '-nosound', url)
+        for line in run_mplayer.split('\n'):
+            if 'Clip info:' in line:
+                return False
+        return True
 
     """
     Try HEAD and GET for URL availability check.
