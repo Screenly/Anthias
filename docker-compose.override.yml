@@ -20,9 +20,7 @@ services:
       - srly-ose-server
     environment:
       - HOME=/data
-      - NOREFRESH=1
       - PORT=80
-    network_mode: "host"
     privileged: true
     restart: always
     volumes:

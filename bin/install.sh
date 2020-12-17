@@ -123,8 +123,6 @@ fi
 
 if grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
   export DEVICE_TYPE="pi4"
-  echo "Raspberry Pi 4 is currently unsupported. Exiting."
-  exit 1
 elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
   export DEVICE_TYPE="pi3"
 elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then

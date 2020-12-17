@@ -49,7 +49,7 @@ from lib.utils import get_video_duration
 from lib.utils import download_video_from_youtube, json_dump
 from lib.utils import url_fails
 from lib.utils import validate_url
-from lib.utils import is_balena_app, is_demo_node, is_wott_integrated, get_wott_device_id
+from lib.utils import is_balena_app, is_demo_node
 
 from settings import CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
 
@@ -1823,7 +1823,6 @@ def integrations():
     context = {
         'player_name': settings['player_name'],
         'is_balena': is_balena_app(),
-        'is_wott_installed': is_wott_integrated(),
     }
 
     if context['is_balena']:
@@ -1833,9 +1832,6 @@ def integrations():
         context['balena_supervisor_version'] = getenv('BALENA_SUPERVISOR_VERSION')
         context['balena_host_os_version'] = getenv('BALENA_HOST_OS_VERSION')
         context['balena_device_name_at_init'] = getenv('BALENA_DEVICE_NAME_AT_INIT')
-
-    if context['is_wott_installed']:
-        context['wott_device_id'] = get_wott_device_id()
 
     return template('integrations.html', **context)
 

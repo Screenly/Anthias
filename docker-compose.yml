@@ -26,10 +26,7 @@ services:
     environment:
       - HOME=/data
       - NOREFRESH=1
-      - PYTHONPATH=/data/screenly
-      - SCREENLYSERVICE=viewer
-      - LISTEN=screenly-server
-      - PORT=8080
+      - LISTEN=srly-ose-nginx
     privileged: true
     restart: always
     volumes:
