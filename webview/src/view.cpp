@@ -4,6 +4,9 @@
 #include <QStandardPaths>
 #include <QEventLoop>
 #include <QTimer>
+#include <QBuffer>
+#include <QMimeType>
+#include <QMimeDatabase>
 
 #include "view.h"
 
@@ -30,12 +33,21 @@ void View::loadImage(const QString &preUri)
 {
     qDebug() << "Type: Image";
     QFileInfo fileInfo = QFileInfo(preUri);
-    QString uri;
+    QString src;
 
     if (fileInfo.isFile())
     {
         qDebug() << "Location: Local File";
-        uri = QUrl::fromLocalFile(fileInfo.absoluteFilePath()).toEncoded();
+
+        QString uri = fileInfo.absoluteFilePath();
+        QMimeType type = QMimeDatabase().mimeTypeForFile(uri, QMimeDatabase::MatchContent);
+
+        QImage image(uri);
+        QByteArray ba;
+        QBuffer bu(&ba);
+        image.save(&bu, const_cast<char *>(type.preferredSuffix().toStdString().c_str()));
+
+        src = "data:" + type.name() + ";base64, " + ba.toBase64(QByteArray::Base64Encoding);
     }
     else if (preUri == "null")
     {
@@ -44,15 +56,15 @@ void View::loadImage(const QString &preUri)
     else
     {
         qDebug() << "Location: Remote URL";
-        uri = preUri;
+        src = preUri;
     }
 
     QString script = "window.setimg=function(n){var o=new Image;o.onload=function()"
-                     "{document.body.style.backgroundSize=o.width>window.innerWidth||o.height>window.innerHeight?\"contain\":\"auto\",document.body.style.backgroundImage=\"url(\"+n+\")\"},o.src=n};";
+                     "{document.body.style.backgroundSize=o.width>window.innerWidth||o.height>window.innerHeight?\"contain\":\"auto\",document.body.style.backgroundImage=\"url('\"+n+\"')\"},o.src=n};";
     QString styles = "background: #000 center no-repeat";
 
     stop();
-    pre_loader -> setHtml("<html><head><script>" + script + "</script></head><body style='" + styles + "'><script>window.setimg(\"" + uri + "\");</script></body></html>");
+    pre_loader -> setHtml("<html><head><script>" + script + "</script></head><body style='" + styles + "'><script>window.setimg(\"" + src + "\");</script></body></html>");
     connect(pre_loader,SIGNAL(loadFinished(bool)),&pre_loader_loop,SLOT(quit()));
     QTimer::singleShot(5000, &pre_loader_loop, SLOT(quit()));
     pre_loader_loop.exec();
