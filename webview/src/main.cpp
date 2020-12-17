@@ -8,17 +8,7 @@
 
 int main(int argc, char *argv[])
 {
-    // @TODO: This is a temporary solution until we find something better
-    char ARG_DISABLE_WEB_SECURITY[] = "--disable-web-security";
-    int newArgc = argc+1+1;
-    char** newArgv = new char*[newArgc];
-    for(int i=0; i<argc; i++) {
-        newArgv[i] = argv[i];
-    }
-    newArgv[argc] = ARG_DISABLE_WEB_SECURITY;
-    newArgv[argc+1] = nullptr;
-
-    QApplication app(newArgc, newArgv);
+    QApplication app(argc, argv);
 
     QCursor cursor(Qt::BlankCursor);
     QApplication::setOverrideCursor(cursor);
