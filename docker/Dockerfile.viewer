@@ -112,7 +112,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 RUN c_rehash
 
 # QT Base from packages does not support eglfs
-ARG PI_VERSION
+ARG PI_VERSION=pi3
 ARG DEBIAN_VERSION=buster
 ARG QT_VERSION=5.15.2
 RUN curl "https://storage.googleapis.com/ose-lab/qt-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \

@@ -19,8 +19,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
-      args:
-        PI_VERSION: ${DEVICE_TYPE}
     depends_on:
       - srly-ose-server
     environment:
