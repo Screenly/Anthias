@@ -71,9 +71,9 @@ read -n 1 -r -s BRANCHSELECTION
 case $BRANCHSELECTION in
   1) echo "You selected: Production";export DOCKER_TAG="production";BRANCH="production"
     ;;
-  2) echo "You selected: Development/Master";export experimental="latest";BRANCH="master"
+  2) echo "You selected: Development/Master";export DOCKER_TAG="latest";BRANCH="master"
     ;;
-  3) echo "You selected: Experimental";export experimental="experimental";BRANCH="experimental"
+  3) echo "You selected: Experimental";export DOCKER_TAG="experimental";BRANCH="experimental"
     ;;
   *) echo "(Error) That was not an option, installer will now exit.";exit
     ;;
