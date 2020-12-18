@@ -126,7 +126,7 @@ class ZmqSubscriber(Thread):
 
     def run(self):
         socket = self.context.socket(zmq.SUB)
-        socket.connect('tcp://{}:10001'.format(LISTEN))
+        socket.connect('tcp://srly-ose-server:10001')
         socket.setsockopt(zmq.SUBSCRIBE, 'viewer')
         while True:
             msg = socket.recv()

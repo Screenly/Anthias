@@ -151,12 +151,12 @@ class ZmqPublisher:
 
     def __init__(self):
         if self.INSTANCE is not None:
-            raise ValueError("An instantiation already exists!")
+            raise ValueError("An instance already exists!")
 
         self.context = zmq.Context()
 
         self.socket = self.context.socket(zmq.PUB)
-        self.socket.bind('tcp://127.0.0.1:10001')
+        self.socket.bind('tcp://0.0.0.0:10001')
         sleep(1)
 
     @classmethod
@@ -178,7 +178,7 @@ class ZmqConsumer:
 
         self.socket = self.context.socket(zmq.PUSH)
         self.socket.setsockopt(zmq.LINGER, 0)
-        self.socket.connect('tcp://{}:5558'.format(LISTEN))
+        self.socket.connect('tcp://srly-ose-server:5558')
 
         sleep(1)
 
@@ -191,12 +191,12 @@ class ZmqCollector:
 
     def __init__(self):
         if self.INSTANCE is not None:
-            raise ValueError("An instantiation already exists!")
+            raise ValueError("An instance already exists!")
 
         self.context = zmq.Context()
 
         self.socket = self.context.socket(zmq.PULL)
-        self.socket.bind('tcp://127.0.0.1:5558')
+        self.socket.bind('tcp://0.0.0.0:5558')
 
         self.poller = zmq.Poller()
         self.poller.register(self.socket, zmq.POLLIN)
