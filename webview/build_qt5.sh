@@ -244,7 +244,7 @@ function build_qt () {
         if [ "${BUILD_WEBVIEW-x}" == "1" ]; then
             cp -rf /webview "$SRC_DIR/"
 
-            cd "$SRC_DIR/webview"
+            pushd "$SRC_DIR/webview"
 
             "$SRC_DIR/qt5pi/bin/qmake"
             make -j"$MAKE_CORES"
@@ -254,12 +254,14 @@ function build_qt () {
             mv ScreenlyWebview fakeroot/bin/
             cp -rf /webview/res fakeroot/share/ScreenlyWebview/
 
-            cd fakeroot
+            pushd fakeroot
             tar cfz "$BUILD_TARGET/webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" .
-            cd "$BUILD_TARGET"
+            popd
+
+            pushd "$BUILD_TARGET"
             sha256sum "webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
+            popd
         fi
-        popd
     else
         echo "Webview Build already exist."
     fi
