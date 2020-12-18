@@ -280,6 +280,7 @@ def view_image(uri):
         browser_bus.loadImage(uri)
         current_browser_url = uri
     logging.info('Current url is {0}'.format(current_browser_url))
+    logging.info(browser.process.stdout)
 
 
 def view_video(uri, duration):
