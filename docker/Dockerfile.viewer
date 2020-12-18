@@ -92,6 +92,7 @@ RUN apt-get update && \
         libxss-dev \
         libxtst-dev \
         net-tools \
+        omxplayer \
         vlc \
         psmisc \
         python-dev \

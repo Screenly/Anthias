@@ -8,7 +8,6 @@ import re
 import string
 from datetime import datetime, timedelta
 from os import path, getenv, utime, system
-from platform import machine
 from random import shuffle
 from signal import signal, SIGALRM, SIGUSR1
 from time import sleep
@@ -23,10 +22,10 @@ from requests import get as req_get
 
 from lib import assets_helper
 from lib import db
-from lib.diagnostics import get_git_branch, get_git_short_hash
+from lib.diagnostics import get_raspberry_code, get_raspberry_model, get_git_branch, get_git_short_hash
 from lib.github import fetch_remote_hash, remote_branch_available
 from lib.errors import SigalrmException
-from lib.media_player import MediaPlayer
+from lib.media_player import VLCMediaPlayer, OMXMediaPlayer
 from lib.utils import get_active_connections, url_fails, touch, is_balena_app, is_ci, get_node_ip
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
@@ -47,12 +46,14 @@ current_browser_url = None
 browser = None
 loop_is_stopped = False
 browser_bus = None
-media_player = MediaPlayer()
 
-VIDEO_TIMEOUT = 20  # secs
+try:
+    media_player = VLCMediaPlayer() if get_raspberry_model(get_raspberry_code()) == 'Model 4B' else OMXMediaPlayer()
+except sh.ErrorReturnCode_1:
+    media_player = OMXMediaPlayer()
+
 
 HOME = None
-arch = None
 db_conn = None
 
 scheduler = None
@@ -284,14 +285,17 @@ def view_image(uri):
 def view_video(uri, duration):
     logging.debug('Displaying video %s for %s ', uri, duration)
 
-    # @TODO: HDMI or 3.5mm jack audio output
-    media_player.set_asset(uri)
+    media_player.set_asset(uri, duration)
     media_player.play()
 
     view_image('null')
-    while media_player.is_playing():
-        watchdog()
-        sleep(1)
+
+    try:
+        while media_player.is_playing():
+            watchdog()
+            sleep(1)
+    except sh.ErrorReturnCode_1:
+        logging.info('Resource URI is not correct, remote host is not responding or request was rejected.')
 
     media_player.stop()
 
@@ -405,9 +409,8 @@ def asset_loop(scheduler):
 
 
 def setup():
-    global HOME, arch, db_conn, browser_bus
+    global HOME, db_conn, browser_bus
     HOME = getenv('HOME', '/home/pi')
-    arch = machine()
 
     signal(SIGUSR1, sigusr1)
     signal(SIGALRM, sigalrm)
