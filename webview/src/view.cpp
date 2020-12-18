@@ -41,7 +41,8 @@ void View::loadImage(const QString &preUri)
 
         QUrl url;
         url.setScheme("http");
-        url.setHost(qgetenv("LISTEN"));
+        // url.setHost(qgetenv("LISTEN"));
+        url.setHost("srly-ose-nginx");
         url.setPath("/screenly_assets/" + fileInfo.fileName());
 
         src = url.toString();
