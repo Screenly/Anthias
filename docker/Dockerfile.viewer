@@ -93,6 +93,7 @@ RUN apt-get update && \
         libxtst-dev \
         net-tools \
         omxplayer \
+        vlc \
         psmisc \
         python-dev \
         python-gobject \

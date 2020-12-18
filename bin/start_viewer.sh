@@ -5,6 +5,7 @@ chgrp video /dev/vchiq
 chmod g+rwX /dev/vchiq
 
 # Set permission for sha file
+chown viewer /dev/snd/*
 chown viewer /data/.screenly/latest_screenly_sha
 
 # SUGUSR1 from the viewer is also sent to the container
