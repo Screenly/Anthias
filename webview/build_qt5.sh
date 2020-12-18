@@ -110,11 +110,12 @@ function build_qt () {
     # https://www.tal.org/tutorials/building-qt-512-raspberry-pi
     local SRC_DIR="/src/$1"
 
-    # Make sure we have a clean QT 5 tree
-    fetch_qt5
 
     if [ ! -f "$BUILD_TARGET/qt5-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" ]; then
         /usr/games/cowsay -f tux "Building QT for $1"
+
+        # Make sure we have a clean QT 5 tree
+        fetch_qt5
 
         if [ "${CLEAN_BUILD-x}" == "1" ]; then
             rm -rf "$SRC_DIR"
@@ -228,6 +229,18 @@ function build_qt () {
         # old build process for QT 4.9 that we used.
         cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt5pi/lib/fonts"
 
+        pushd "$SRC_DIR"
+        tar cfz "$BUILD_TARGET/qt5-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" qt5pi
+        popd
+
+        pushd "$BUILD_TARGET"
+        sha256sum "qt5-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "qt5-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
+        popd
+    else
+        echo "QT Build already exist."
+    fi
+
+    if [ ! -f "$BUILD_TARGET/webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" ]; then
         if [ "${BUILD_WEBVIEW-x}" == "1" ]; then
             cp -rf /webview "$SRC_DIR/"
 
@@ -247,16 +260,8 @@ function build_qt () {
             sha256sum "webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
         fi
         popd
-
-        pushd "$SRC_DIR"
-        tar cfz "$BUILD_TARGET/qt-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" qt5pi
-        popd
-
-        pushd "$BUILD_TARGET"
-        sha256sum "qt-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "qt-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
-        popd
     else
-        echo "Build already exist."
+        echo "Webview Build already exist."
     fi
 }
 
