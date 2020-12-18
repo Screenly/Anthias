@@ -4,9 +4,6 @@
 #include <QStandardPaths>
 #include <QEventLoop>
 #include <QTimer>
-#include <QBuffer>
-#include <QMimeType>
-#include <QMimeDatabase>
 
 #include "view.h"
 
