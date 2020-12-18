@@ -64,7 +64,7 @@
     return _.delay(fn, wait);
   };
 
-  mimetypes = [['jpg jpeg png pnm gif bmp'.split(' '), 'image'], ['avi mkv mov mpg mpeg mp4 ts flv'.split(' '), 'video']];
+  mimetypes = [['jpe jpg jpeg png pnm gif bmp'.split(' '), 'image'], ['avi mkv mov mpg mpeg mp4 ts flv'.split(' '), 'video']];
 
   viduris = 'rtsp rtmp'.split(' ');
 
@@ -378,10 +378,11 @@
             that.$fv('name', filename);
             that.updateFileUploadMimetype(filename);
             that.viewmodel(model);
-            return data.submit().success(function(uri) {
+            return data.submit().success(function(data) {
               var save;
               model.set({
-                uri: uri
+                uri: data.uri,
+                ext: data.ext
               }, {
                 silent: true
               });

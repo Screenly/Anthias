@@ -35,7 +35,7 @@ now = -> new Date()
 get_template = (name) -> _.template ($ "##{name}-template").html()
 delay = (wait, fn) -> _.delay fn, wait
 
-mimetypes = [ [('jpg jpeg png pnm gif bmp'.split ' '), 'image']
+mimetypes = [ [('jpe jpg jpeg png pnm gif bmp'.split ' '), 'image']
               [('avi mkv mov mpg mpeg mp4 ts flv'.split ' '), 'video']]
 viduris   = ('rtsp rtmp'.split ' ')
 domains = [ [('www.youtube.com youtu.be'.split ' '), 'youtube_asset']]
@@ -218,8 +218,8 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
           that.viewmodel model
 
           data.submit()
-          .success (uri) ->
-            model.set {uri: uri}, silent:yes
+          .success (data) ->
+            model.set {uri: data.uri, ext: data.ext}, silent:yes
 
             save = model.save()
             save.done (data) ->

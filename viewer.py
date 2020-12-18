@@ -40,7 +40,7 @@ EMPTY_PL_DELAY = 5  # secs
 
 INITIALIZED_FILE = '/.screenly/initialized'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
-LOAD_SCREEN = '/screenly/static/img/loading.png'  # relative to $HOME
+LOAD_SCREEN = 'http://{}:{}/{}'.format(LISTEN, PORT, 'static/img/loading.png')
 
 current_browser_url = None
 browser = None
@@ -389,7 +389,7 @@ def asset_loop(scheduler):
 
     if asset is None:
         logging.info('Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY)
-        view_image(HOME + LOAD_SCREEN)
+        view_image(LOAD_SCREEN)
         sleep(EMPTY_PL_DELAY)
 
     elif path.isfile(asset['uri']) or (not url_fails(asset['uri']) or asset['skip_asset_check']):
@@ -512,12 +512,12 @@ def main():
         setup_hotspot()
 
     if settings['show_splash']:
-        url = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT) if settings['show_splash'] else 'file://' + BLACK_PAGE
+        url = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
         view_webpage(url)
         sleep(SPLASH_DELAY)
 
     # We don't want to show splash-page if there are active assets but all of them are not available
-    view_image(HOME + LOAD_SCREEN)
+    view_image(LOAD_SCREEN)
 
     logging.debug('Entering infinite loop.')
     while True:
