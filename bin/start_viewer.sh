@@ -8,6 +8,10 @@ chmod g+rwX /dev/vchiq
 chown viewer /dev/snd/*
 chown viewer /data/.screenly/latest_screenly_sha
 
+# Fixes caching in QTWebEngine
+mkdir -p /data/.local/share/ScreenlyWebview/QtWebEngine
+chown -R viewer /data/.local/share/ScreenlyWebview
+
 # SUGUSR1 from the viewer is also sent to the container
 # Prevent it so that the container does not fail
 trap '' 16
