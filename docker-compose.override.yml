@@ -20,6 +20,7 @@ services:
       - srly-ose-server
     environment:
       - HOME=/data
+      - LISTEN=srly-ose-nginx
       - PORT=80
     privileged: true
     restart: always

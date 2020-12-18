@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 from dateutil import parser as date_parser
 from functools import wraps
 from hurry.filesize import size
-from mimetypes import guess_type
+from mimetypes import guess_type, guess_extension
 from os import getenv, listdir, makedirs, mkdir, path, remove, rename, statvfs, stat, walk
 from subprocess import check_output
 from urlparse import urlparse
@@ -539,9 +539,11 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
 
     if not asset_id:
         asset['asset_id'] = uuid.uuid4().hex
-        if uri.startswith('/'):
-            rename(uri, path.join(settings['assetdir'], asset['asset_id']))
-            uri = path.join(settings['assetdir'], asset['asset_id'])
+
+    if not asset_id and uri.startswith('/'):
+        new_uri = "{}{}".format(path.join(settings['assetdir'], asset['asset_id']), get('ext'))
+        rename(uri, new_uri)
+        uri = new_uri
 
     if 'youtube_asset' in asset['mimetype']:
         uri, asset['name'], asset['duration'] = download_video_from_youtube(uri, asset['asset_id'])
@@ -1219,7 +1221,7 @@ class FileAsset(Resource):
         else:
             file_upload.save(file_path)
 
-        return file_path
+        return {'uri': file_path, 'ext': guess_extension(file_type)}
 
 
 class PlaylistOrder(Resource):

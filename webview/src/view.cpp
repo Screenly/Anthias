@@ -39,15 +39,12 @@ void View::loadImage(const QString &preUri)
     {
         qDebug() << "Location: Local File";
 
-        QString uri = fileInfo.absoluteFilePath();
-        QMimeType type = QMimeDatabase().mimeTypeForFile(uri, QMimeDatabase::MatchContent);
+        QUrl url;
+        url.setScheme("http");
+        url.setHost(qgetenv("LISTEN"));
+        url.setPath("/screenly_assets/" + fileInfo.fileName());
 
-        QImage image(uri);
-        QByteArray ba;
-        QBuffer bu(&ba);
-        image.save(&bu, const_cast<char *>(type.preferredSuffix().toStdString().c_str()));
-
-        src = "data:" + type.name() + ";base64, " + ba.toBase64(QByteArray::Base64Encoding);
+        src = url.toString();
     }
     else if (preUri == "null")
     {
