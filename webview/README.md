@@ -4,7 +4,9 @@ Since our entire build environment resides inside a Docker container, you don't 
 
 ```
 $ cd webview
-$ docker build -t qt-builder .
+$ docker build \
+    --build-arg GIT_HASH=$(git rev-parse --short HEAD) \
+    -t qt-builder .
 ```
 
 You should now be able to invoke a run executing the following command:
@@ -13,6 +15,7 @@ You should now be able to invoke a run executing the following command:
 $ docker run --rm -t \
     -v ~/tmp/qt-src:/src \
     -v ~/tmp/qt-build:/build \
+    -v $(pwd):/webview:ro \
     qt-builder
 ```
 
