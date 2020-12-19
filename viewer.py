@@ -26,7 +26,7 @@ from lib.diagnostics import get_raspberry_code, get_raspberry_model, get_git_bra
 from lib.github import fetch_remote_hash, remote_branch_available
 from lib.errors import SigalrmException
 from lib.media_player import VLCMediaPlayer, OMXMediaPlayer
-from lib.utils import get_active_connections, url_fails, touch, is_balena_app, is_ci, get_node_ip
+from lib.utils import get_active_connections, url_fails, touch, is_balena_app, is_ci, get_node_ip, string_to_bool
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
 
@@ -280,7 +280,9 @@ def view_image(uri):
         browser_bus.loadImage(uri)
         current_browser_url = uri
     logging.info('Current url is {0}'.format(current_browser_url))
-    logging.info(browser.process.stdout)
+
+    if string_to_bool(getenv('WEBVIEW_DEBUG', '0')):
+        logging.info(browser.process.stdout)
 
 
 def view_video(uri, duration):
