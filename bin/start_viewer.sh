@@ -16,6 +16,10 @@ chown -R viewer /data/.local/share/ScreenlyWebview
 chown -R viewer /data/.cache/ScreenlyWebview/
 chown -R viewer /data/.pki
 
+# Temporary workaround for watchdog
+touch /tmp/screenly.watchdog
+chown viewer /tmp/screenly.watchdog
+
 # SUGUSR1 from the viewer is also sent to the container
 # Prevent it so that the container does not fail
 trap '' 16
