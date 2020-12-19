@@ -64,7 +64,6 @@ echo -e "\n________________________________________\n"
 echo -e "Which version/branch of Screenly OSE would you like to install:\n"
 echo " Press (1) for the Production branch, which is the latest stable."
 echo " Press (2) for the Development/Master branch, which has the latest features and fixes, but things may break."
-echo " Press (3) for the Experimental branch, which contains the last major changes, such as the new browser and migrating to Docker."
 echo ""
 
 read -n 1 -r -s BRANCHSELECTION
@@ -72,8 +71,6 @@ case $BRANCHSELECTION in
   1) echo "You selected: Production";export DOCKER_TAG="production";BRANCH="production"
     ;;
   2) echo "You selected: Development/Master";export DOCKER_TAG="latest";BRANCH="master"
-    ;;
-  3) echo "You selected: Experimental";export DOCKER_TAG="experimental";BRANCH="experimental"
     ;;
   *) echo "(Error) That was not an option, installer will now exit.";exit
     ;;
@@ -92,7 +89,7 @@ elif [ "$WEB_UPGRADE" = true ]; then
       export DOCKER_TAG="latest"
       BRANCH="master"
     elif [ "$BRANCH_VERSION" = "production" ]; then
-      export DOCKER_TAG="latest"
+      export DOCKER_TAG="production"
       BRANCH="production"
     else
       echo -e "Invalid -b parameter."
