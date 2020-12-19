@@ -1,0 +1,16 @@
+certifi==2020.6.20
+configparser==4.0.2
+cryptography==3.2.1
+Flask==1.1.2
+idna==2.6
+mixpanel==4.7.0
+netifaces==0.10.9
+pydbus==0.6.0
+python-dateutil==2.8.1
+python-vlc==3.0.11115
+pytz==2020.1
+pyzmq==19.0.2
+requests[security]==2.24.0
+sh==1.8
+uptime==3.0.1
+urllib3==1.25.11

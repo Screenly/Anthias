@@ -7,15 +7,7 @@
   with_items:
     - .screenly
     - .config
-    - .config/uzbl
-
-- name: Copy Screenly default config
-  copy:
-    owner: pi
-    group: pi
-    src: screenly.conf
-    dest: /home/pi/.screenly/screenly.conf
-    force: no
+    - screenly_assets
 
 - name: Copy Screenly default assets file
   copy:
@@ -31,39 +23,10 @@
     state: absent
     dest: /home/pi/.screenly/screenly.conf
 
-- name: Copy in GTK config
-  copy:
-    owner: pi
-    group: pi
-    src: gtkrc-2.0
-    dest: /home/pi/.gtkrc-2.0
-
-- name: Copy in UZBL config
-  copy:
-    owner: pi
-    group: pi
-    src: uzbl-config
-    dest: /home/pi/.config/uzbl/config-screenly
-
 - name: Install pip dependencies
   pip:
-    requirements: /home/pi/screenly/requirements/requirements.txt
+    requirements: /home/pi/screenly/requirements/requirements.host.txt
     extra_args: "--no-cache-dir --upgrade"
-
-- name: Create default assets database if does not exists
-  copy:
-    owner: pi
-    group: pi
-    src: screenly.db
-    dest: /home/pi/.screenly/screenly.db
-    force: no
-
-- name: Run database migration
-  become_user: pi
-  command: python /home/pi/screenly/bin/migrate.py
-  register: migrate
-
-- debug: msg="{{ migrate.stdout }}"
 
 - name: Remove screenly_utils.sh
   file:
@@ -125,22 +88,37 @@
     dest: "/etc/systemd/system/{{ item }}"
   with_items: "{{ screenly_systemd_units }}"
 
-- name: Copy plymouth-quit-wait.service
-  copy:
-    src: plymouth-quit-wait.service
+- name: Remove plymouth-quit-wait.service
+  file:
+    state: absent
     dest: /lib/systemd/system/plymouth-quit-wait.service
-    mode: 0644
-    owner: root
-    group: root
 
-- name: Copy plymouth-quit.service
-  copy:
-    src: plymouth-quit.service
+- name: Remove plymouth-quit.service
+  file:
+    state: absent
     dest: /lib/systemd/system/plymouth-quit.service
-    mode: 0644
-    owner: root
-    group: root
 
 - name: Enable screenly systemd services
   command: systemctl enable {{ item }} chdir=/etc/systemd/system
   with_items: "{{ screenly_systemd_units }}"
+
+- name: Check if deprecated systemd services exists
+  stat:
+    path: /etc/systemd/system/X.service
+  register: x_service
+
+- set_fact: x_service_exist="{{x_service.stat.exists}}"
+
+- name: Disable deprecated systemd services
+  systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: no
+  with_items: "{{ deprecated_screenly_systemd_units }}"
+  when: x_service_exist
+
+- name: Remove deprecated systemd units
+  file:
+    path: "/etc/systemd/system/{{ item }}"
+    state: absent
+  with_items: "{{ deprecated_screenly_systemd_units }}"

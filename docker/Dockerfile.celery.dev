@@ -8,13 +8,14 @@ RUN apt-get update && \
         git \
         libffi-dev \
         libssl-dev \
+        lsb-release \
         mplayer \
         net-tools \
         procps \
+        python-pip \
+        python-setuptools \
         python-dev \
         python-gobject \
-        python-setuptools \
-        python-pip \
         python-pil \
         python-simplejson \
         sqlite3 \
@@ -23,7 +24,7 @@ RUN apt-get update && \
 
 # Install Python requirements
 ADD requirements/requirements.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 RUN useradd pi
 

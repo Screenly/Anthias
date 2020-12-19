@@ -1,83 +1,89 @@
 version: "2"
 services:
-  screenly-server:
+  srly-ose-server:
+    #image: screenly/srly-ose-server:latest
     build:
       context: .
-      dockerfile: docker/Dockerfile.server.template
+      dockerfile: docker/Dockerfile.server
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
-      - PYTHONPATH=/data/screenly
-      - SCREENLYSERVICE=server
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    ports:
-      - 80:8080
-    privileged: true
     restart: always
     volumes:
       - resin-data:/data
+    labels:
+      io.balena.features.supervisor-api: '1'
 
-  screenly-viewer:
+  srly-ose-viewer:
+    #image: screenly/srly-ose-viewer:latest-pi3
     build:
       context: .
-      dockerfile: docker/Dockerfile.viewer.template
+      dockerfile: docker/Dockerfile.viewer
     depends_on:
-      - screenly-server
+      - srly-ose-server
     environment:
-      - DISPLAY=:0.0
       - HOME=/data
       - NOREFRESH=1
-      - PYTHONPATH=/data/screenly
-      - SCREENLYSERVICE=viewer
-      - LISTEN=screenly-server
-      - PORT=8080
+      - LISTEN=srly-ose-nginx
     privileged: true
     restart: always
     volumes:
       - resin-data:/data
 
-  screenly-websocket:
+  srly-ose-websocket:
+    #image: screenly/srly-ose-websocket:latest
     build:
       context: .
-      dockerfile: docker/Dockerfile.websocket.template
+      dockerfile: docker/Dockerfile.websocket
     depends_on:
-      - screenly-server
+      - srly-ose-server
     environment:
       - HOME=/data
-      - PYTHONPATH=/data/screenly
-      - SCREENLYSERVICE=websocket
-      - LISTEN=screenly-server
-    ports:
-      - 9999:9999
-    privileged: true
+      - LISTEN=0.0.0.0
     restart: always
     volumes:
       - resin-data:/data
 
-  screenly-celery:
+  srly-ose-celery:
+    #image: screenly/srly-ose-celery:latest
     build:
       context: .
-      dockerfile: docker/Dockerfile.celery.template
+      dockerfile: docker/Dockerfile.celery
     depends_on:
-      - screenly-server
+      - srly-ose-server
       - redis
     environment:
       - HOME=/data
-      - PYTHONPATH=/data/screenly
-      - SCREENLYSERVICE=celery
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    privileged: true
     restart: always
     volumes:
       - resin-data:/data
 
   redis:
+    #image: screenly/srly-ose-redis:latest
     build:
       context: .
-      dockerfile: docker/Dockerfile.redis.template
+      dockerfile: docker/Dockerfile.redis
     restart: always
+
+  srly-ose-nginx:
+    #image: screenly/srly-ose-nginx:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nginx
+    ports:
+      - 80:80
+    environment:
+      - HOME=/data
+    depends_on:
+      - srly-ose-server
+      - srly-ose-websocket
+    restart: always
+    volumes:
+      - resin-data:/data:ro
 
 volumes:
     resin-data:

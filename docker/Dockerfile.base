@@ -1,0 +1,28 @@
+FROM balenalib/rpi-raspbian:buster
+
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+        build-essential \
+        curl \
+        ffmpeg \
+        git \
+        git-core \
+        ifupdown \
+        libffi-dev \
+        libraspberrypi0 \
+        libssl-dev \
+        libzmq3-dev \
+        lsb-release \
+        mplayer \
+        net-tools \
+        omxplayer \
+        procps \
+        psmisc \
+        python-dev \
+        python-gobject \
+        python-pil \
+        python-pip \
+        python-setuptools \
+        python-simplejson \
+        sqlite3 && \
+    apt-get clean

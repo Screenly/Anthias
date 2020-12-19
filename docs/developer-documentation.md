@@ -22,6 +22,10 @@ There are currently three versions of Screenly-OSE..
 |  Experimental | [experimental](https://github.com/Screenly/screenly-ose/tree/experimental)   | This is the branch for experimenting, such as using a new web browser    |
 
 
+### Docker and Directories
+
+/
+
 ### Directories, files and their purpose with regards to Screenly
 
 ```
@@ -84,8 +88,15 @@ screenly.script -> plymouth script file that loads and scales splashscreen image
 `/other/directories/here/.. from ansible roles`
 
 
-### Screenly-OSE-WebView
+### Debugging Screenly OSE webview
+
+```
+export QT_LOGGING_DEBUG=1
+export QT_LOGGING_RULES="*.debug=true"
+export QT_QPA_EGLFS_DEBUG=1
+```
 
 Screenly OSE WebView is a custom-built web browser based on the [QT](https://www.qt.io/) toolkit framework.
 The browser is assembled with a Dockerfile and built by the `built_qtbase.sh` script.
+
 For further info on these files and more, visit the following link: `https://github.com/Screenly/screenly-ose/master/webview`

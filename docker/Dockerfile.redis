@@ -1,0 +1,8 @@
+FROM balenalib/rpi-raspbian:buster
+
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+    redis-server && \
+    apt-get clean
+
+CMD ["redis-server", "--protected-mode", "no"]

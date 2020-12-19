@@ -1,0 +1,3 @@
+FROM nginx:1-alpine
+
+COPY docker/nginx/nginx.conf /etc/nginx/conf.d/srly-ose.conf

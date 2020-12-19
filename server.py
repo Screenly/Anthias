@@ -12,6 +12,7 @@ import re
 import sh
 import shutil
 import time
+
 import traceback
 import yaml
 import uuid
@@ -21,7 +22,7 @@ from datetime import datetime, timedelta
 from dateutil import parser as date_parser
 from functools import wraps
 from hurry.filesize import size
-from mimetypes import guess_type
+from mimetypes import guess_type, guess_extension
 from os import getenv, listdir, makedirs, mkdir, path, remove, rename, statvfs, stat, walk
 from subprocess import check_output
 from urlparse import urlparse
@@ -41,14 +42,14 @@ from lib import diagnostics
 from lib import queries
 
 from lib.auth import authorized
-from lib.utils import generate_perfect_paper_password
+from lib.utils import generate_perfect_paper_password, is_docker
 from lib.utils import get_active_connections, remove_connection
 from lib.utils import get_node_ip, get_node_mac_address
 from lib.utils import get_video_duration
 from lib.utils import download_video_from_youtube, json_dump
 from lib.utils import url_fails
 from lib.utils import validate_url
-from lib.utils import is_balena_app, is_demo_node, is_wott_integrated, get_wott_device_id
+from lib.utils import is_balena_app, is_demo_node
 
 from settings import CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
 
@@ -538,9 +539,11 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
 
     if not asset_id:
         asset['asset_id'] = uuid.uuid4().hex
-        if uri.startswith('/'):
-            rename(uri, path.join(settings['assetdir'], asset['asset_id']))
-            uri = path.join(settings['assetdir'], asset['asset_id'])
+
+    if not asset_id and uri.startswith('/'):
+        new_uri = "{}{}".format(path.join(settings['assetdir'], asset['asset_id']), get('ext'))
+        rename(uri, new_uri)
+        uri = new_uri
 
     if 'youtube_asset' in asset['mimetype']:
         uri, asset['name'], asset['duration'] = download_video_from_youtube(uri, asset['asset_id'])
@@ -1218,7 +1221,7 @@ class FileAsset(Resource):
         else:
             file_upload.save(file_path)
 
-        return file_path
+        return {'uri': file_path, 'ext': guess_extension(file_type)}
 
 
 class PlaylistOrder(Resource):
@@ -1455,8 +1458,8 @@ class Info(Resource):
         viewlog = None
         try:
             viewlog = [line.decode('utf-8') for line in
-                       check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
-        except:
+                       check_output(['journalctl', '-b', 'CONTAINER_NAME=screenly-ose-viewer', '-n', '20']).split('\n')]
+        except Exception:
             pass
 
         # Calculate disk space
@@ -1464,7 +1467,7 @@ class Info(Resource):
         free_space = size(slash.f_bavail * slash.f_frsize)
 
         return {
-            'viewlog': viewlog,
+            # 'viewlog': viewlog,
             'loadavg': diagnostics.get_load_avg()['15 min'],
             'free_space': free_space,
             'display_info': diagnostics.get_monitor_status(),
@@ -1611,7 +1614,7 @@ api.add_resource(ViewerCurrentAsset, '/api/v1/viewer_current_asset')
 
 try:
     my_ip = get_node_ip()
-except:
+except Exception:
     pass
 else:
     SWAGGER_URL = '/api/docs'
@@ -1652,7 +1655,7 @@ def viewIndex():
     if settings['use_ssl']:
         ws_addresses.append('wss://' + my_ip + '/ws/')
     else:
-        ws_addresses.append('ws://' + my_ip + ':' + settings['websocket_port'])
+        ws_addresses.append('ws://' + my_ip + '/ws/')
 
     if resin_uuid:
         ws_addresses.append('wss://{}.resindevice.io/ws/'.format(resin_uuid))
@@ -1739,6 +1742,7 @@ def settings_page():
         'user': settings['user'],
         'need_current_password': bool(settings['auth_backend']),
         'is_balena': is_balena_app(),
+        'is_docker': is_docker(),
         'auth_backend': settings['auth_backend'],
         'auth_backends': auth_backends
     })
@@ -1751,7 +1755,7 @@ def settings_page():
 def system_info():
     try:
         viewlog = [line.decode('utf-8') for line in
-                   check_output(['sudo', 'systemctl', 'status', 'screenly-viewer.service', '-n', '20']).split('\n')]
+                   check_output(['journalctl', '-b', 'CONTAINER_NAME=screenly-ose-viewer', '-n', '20']).split('\n')]
     except Exception:
         viewlog = None
 
@@ -1801,7 +1805,7 @@ def system_info():
     return template(
         'system-info.html',
         player_name=player_name,
-        viewlog=viewlog,
+        # viewlog=viewlog,
         loadavg=loadavg,
         free_space=free_space,
         uptime=system_uptime,
@@ -1821,7 +1825,6 @@ def integrations():
     context = {
         'player_name': settings['player_name'],
         'is_balena': is_balena_app(),
-        'is_wott_installed': is_wott_integrated(),
     }
 
     if context['is_balena']:
@@ -1832,32 +1835,13 @@ def integrations():
         context['balena_host_os_version'] = getenv('BALENA_HOST_OS_VERSION')
         context['balena_device_name_at_init'] = getenv('BALENA_DEVICE_NAME_AT_INIT')
 
-    if context['is_wott_installed']:
-        context['wott_device_id'] = get_wott_device_id()
-
     return template('integrations.html', **context)
 
 
 @app.route('/splash-page')
 def splash_page():
-    url = None
-    try:
-        my_ip = get_node_ip()
-    except Exception as e:
-        ip_lookup = False
-        error_msg = e
-    else:
-        ip_lookup = True
-
-        if settings['use_ssl']:
-            url = 'https://{}'.format(my_ip)
-        elif LISTEN == '127.0.0.1':
-            url = "http://{}".format(my_ip)
-        else:
-            url = "http://{}:{}".format(my_ip, PORT)
-
-    msg = url if url else error_msg
-    return template('splash-page.html', ip_lookup=ip_lookup, msg=msg)
+    my_ip = get_node_ip()
+    return template('splash-page.html', my_ip=get_node_ip())
 
 
 @app.errorhandler(403)

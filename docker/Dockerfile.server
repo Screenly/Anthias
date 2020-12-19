@@ -1,0 +1,10 @@
+FROM screenly/srly-ose-base
+
+ADD requirements/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+RUN mkdir -p /usr/src/app
+COPY . /usr/src/app/
+WORKDIR /usr/src/app
+
+CMD ["bash", "bin/start_server.sh"]
