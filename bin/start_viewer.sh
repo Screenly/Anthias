@@ -20,6 +20,14 @@ chown -R viewer /data/.pki
 touch /tmp/screenly.watchdog
 chown viewer /tmp/screenly.watchdog
 
+# For whatever reason Raspbian messes up the sudo permissions
+chown root:root /usr/bin/sudo
+chown -R root:root /etc/sudoers.d
+chown -R root:root /etc/sudo.conf
+chown -R root:root /usr/lib/sudo
+chown root:root /etc/sudoers
+chmod 4755 /usr/bin/sudo
+
 # SUGUSR1 from the viewer is also sent to the container
 # Prevent it so that the container does not fail
 trap '' 16
