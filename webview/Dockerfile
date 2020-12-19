@@ -183,11 +183,12 @@ COPY --from=builder /lib/ /sysroot/lib/
 COPY --from=builder /usr/include/ /sysroot/usr/include/
 COPY --from=builder /usr/lib/ /sysroot/usr/lib/
 COPY --from=builder /opt/vc/ sysroot/opt/vc/
-COPY . /webview
 
 ENV BUILD_WEBVIEW 1
 ENV CCACHE_MAXSIZE 10G
 ENV CCACHE_DIR /src/ccache
+ARG GIT_HASH=0
+ENV GIT_HASH=$GIT_HASH
 
 COPY build_qt5.sh /usr/local/bin/
 CMD /usr/local/bin/build_qt5.sh

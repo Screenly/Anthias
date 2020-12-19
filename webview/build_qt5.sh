@@ -240,7 +240,7 @@ function build_qt () {
         echo "QT Build already exist."
     fi
 
-    if [ ! -f "$BUILD_TARGET/webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" ]; then
+    if [ ! -f "$BUILD_TARGET/webview-$QT_BRANCH-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" ]; then
         if [ "${BUILD_WEBVIEW-x}" == "1" ]; then
             cp -rf /webview "$SRC_DIR/"
 
@@ -255,11 +255,11 @@ function build_qt () {
             cp -rf /webview/res fakeroot/share/ScreenlyWebview/
 
             pushd fakeroot
-            tar cfz "$BUILD_TARGET/webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" .
+            tar cfz "$BUILD_TARGET/webview-$QT_BRANCH-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" .
             popd
 
             pushd "$BUILD_TARGET"
-            sha256sum "webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
+            sha256sum "webview-$QT_BRANCH-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" > "webview-$QT_BRANCH-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz.sha256"
             popd
         fi
     else
