@@ -115,6 +115,7 @@ RUN c_rehash
 ARG PI_VERSION=pi3
 ARG DEBIAN_VERSION=buster
 ARG QT_VERSION=5.15.2
+ARG WEBVIEW_GIT_HASH=349cbe4
 RUN curl "https://storage.googleapis.com/ose-lab/qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
         -s -o /tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
     curl "https://storage.googleapis.com/ose-lab/qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
@@ -124,14 +125,14 @@ RUN curl "https://storage.googleapis.com/ose-lab/qt5-$QT_VERSION-$DEBIAN_VERSION
     tar -xzf /tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local && \
     rm qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*
 
-RUN curl "https://storage.googleapis.com/ose-lab/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
-        -s -o /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz && \
-    curl "https://storage.googleapis.com/ose-lab/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
-        -s -o /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
+RUN curl "https://storage.googleapis.com/ose-lab/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz" \
+        -s -o /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz && \
+    curl "https://storage.googleapis.com/ose-lab/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz.sha256" \
+        -s -o /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz.sha256 && \
     cd /tmp && \
-    sha256sum -c webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256 && \
-    tar -xzf /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz -C /usr/local && \
-    rm webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*
+    sha256sum -c webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz.sha256 && \
+    tar -xzf /tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz -C /usr/local && \
+    rm webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz*
 
 ENV QT_QPA_EGLFS_FORCE888=1
 ENV QT_QPA_PLATFORM=linuxfb

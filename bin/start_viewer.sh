@@ -9,9 +9,12 @@ chown viewer /dev/snd/*
 chown viewer /data/.screenly/latest_screenly_sha
 
 # Fixes caching in QTWebEngine
-mkdir -p /data/.local/share/ScreenlyWebview/QtWebEngine /data/.cache/ScreenlyWebview/
+mkdir -p /data/.local/share/ScreenlyWebview/QtWebEngine \
+    /data/.cache/ScreenlyWebview \
+    /data/.pki
 chown -R viewer /data/.local/share/ScreenlyWebview
 chown -R viewer /data/.cache/ScreenlyWebview/
+chown -R viewer /data/.pki
 
 # SUGUSR1 from the viewer is also sent to the container
 # Prevent it so that the container does not fail
