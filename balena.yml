@@ -8,7 +8,7 @@ assets:
   - url: "https://raw.githubusercontent.com/Screenly/screenly-ose/master/static/img/ose-logo.png"
     name: "logo"
 data:
-  description: "Screenly OSE - Digital Signage for the Raspberry Pi"
+  description: "The most popular digital signage project for the Raspberry Pi"
   applicationConfigVariables:
     - BALENA_HOST_CONFIG_gpu_mem: 128
     - BALENA_HOST_CONFIG_framebuffer_depth: 32

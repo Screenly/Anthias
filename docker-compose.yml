@@ -25,6 +25,7 @@ services:
       - srly-ose-server
     environment:
       - HOME=/data
+      - PORT=80
       - NOREFRESH=1
       - LISTEN=srly-ose-nginx
     privileged: true
