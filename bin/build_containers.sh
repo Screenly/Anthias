@@ -5,7 +5,13 @@
 
 set -euo pipefail
 
-GITBRANCH=$(git rev-parse --abbrev-ref HEAD)
+GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$GIT_BRANCH" = "master" ]; then
+    DOCKER_TAG="latest"
+else
+    DOCKER_TAG="$GIT_BRANCH"
+fi
 
 if [ -n "${CROSS_COMPILE+x}" ]; then
     echo "Running with cross-compile using docker buildx..."
@@ -23,11 +29,11 @@ for container in base server celery redis websocket nginx; do
     echo "Building $container"
     docker "${DOCKER_BUILD_ARGS[@]}" \
         -f "docker/Dockerfile.$container" \
-        -t "screenly/srly-ose-$container:$GITBRANCH" .
+        -t "screenly/srly-ose-$container:$DOCKER_TAG" .
 
     # Push if the push flag is set and not cross compiling
     if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
-        docker push "screenly/srly-ose-$container:$GITBRANCH"
+        docker push "screenly/srly-ose-$container:$DOCKER_TAG"
     fi
 done
 
@@ -37,11 +43,11 @@ for pi_version in pi4 pi3 pi2 pi1; do
     docker "${DOCKER_BUILD_ARGS[@]}" \
         --build-arg "PI_VERSION=$pi_version" \
         -f docker/Dockerfile.viewer \
-        -t "screenly/srly-ose-viewer:$GITBRANCH-$pi_version" .
+        -t "screenly/srly-ose-viewer:$DOCKER_TAG-$pi_version" .
 
     # Push if the push flag is set and not cross compiling
     if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
-        docker push "screenly/srly-ose-viewer:$GITBRANCH-$pi_version"
+        docker push "screenly/srly-ose-viewer:$DOCKER_TAG-$pi_version"
     fi
 done
 
