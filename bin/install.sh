@@ -1,29 +1,32 @@
 #!/bin/bash -e
 
+# vim: tabstop=4 shiftwidth=4 softtabstop=4
+# -*- sh-basic-offset: 4 -*-
+
 WEB_UPGRADE=false
 BRANCH_VERSION=
 MANAGE_NETWORK=
 UPGRADE_SYSTEM=
 
 if [ -f .env ]; then
-  source .env
+    source .env
 fi
 
 while getopts ":w:b:n:s:" arg; do
-  case "${arg}" in
-    w)
-      WEB_UPGRADE=true
-      ;;
-    b)
-      BRANCH_VERSION=${OPTARG}
-      ;;
-    n)
-      MANAGE_NETWORK=${OPTARG}
-      ;;
-    s)
-      UPGRADE_SYSTEM=${OPTARG}
-      ;;
-  esac
+    case "${arg}" in
+        w)
+            WEB_UPGRADE=true
+        ;;
+        b)
+            BRANCH_VERSION=${OPTARG}
+        ;;
+        n)
+            MANAGE_NETWORK=${OPTARG}
+        ;;
+        s)
+            UPGRADE_SYSTEM=${OPTARG}
+        ;;
+    esac
 done
 
 if [ "$WEB_UPGRADE" = false ]; then
@@ -239,27 +242,32 @@ fi
 
 # Ask user to set a new pi password if default password "raspberry" detected
 check_defaultpw () {
+    if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ] && [ "$WEB_UPGRADE" = false ]; then
+        set +x
 
-if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ] && [ "$WEB_UPGRADE" = false ]; then
-set +x
+        # currently only looking for $6$/sha512 hash
+        local VAR_CURRENTPISALT
+        local VAR_CURRENTPIUSERPW
+        local VAR_DEFAULTPIPW
+        VAR_CURRENTPISALT=$(sudo cat /etc/shadow | grep pi | awk -F '$' '{print $3}')
+        VAR_CURRENTPIUSERPW=$(sudo cat /etc/shadow | grep pi | awk -F ':' '{print $2}')
+        VAR_DEFAULTPIPW=$(mkpasswd -m sha-512 raspberry "$VAR_CURRENTPISALT")
 
-# currently only looking for $6$/sha512 hash
-local VAR_CURRENTPISALT=$(sudo cat /etc/shadow | grep pi | awk -F '$' '{print $3}')
-local VAR_CURRENTPIUSERPW=$(sudo cat /etc/shadow | grep pi | awk -F ':' '{print $2}')
-local VAR_DEFAULTPIPW=$(mkpasswd -m sha-512 raspberry "$VAR_CURRENTPISALT")
-
-  if [[ "$VAR_CURRENTPIUSERPW" == "$VAR_DEFAULTPIPW" ]]; then
-    echo "(Warning): The default Raspberry Pi password was detected! - please change it now..."
-    set +e
-    passwd
-    set -e
-    set -x
-  else
-    echo "The default raspberry pi password was not detected, continuing with installation..."
-    set -x
-  fi
-fi
+        if [[ "$VAR_CURRENTPIUSERPW" == "$VAR_DEFAULTPIPW" ]]; then
+            echo "Warning: The default Raspberry Pi password was detected!"
+            read -p "Do you still want to change it? (y/N)" -n 1 -r -s PWD_CHANGE
+            if [ "$PWD_CHANGE" = 'y' ]; then
+                set +e
+                passwd
+                set -ex
+            fi
+        else
+            echo "The default raspberry pi password was not detected, continuing with installation..."
+            set -x
+        fi
+    fi
 }
+
 check_defaultpw;
 
 echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
