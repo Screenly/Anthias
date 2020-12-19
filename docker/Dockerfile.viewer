@@ -144,6 +144,11 @@ ENV QT_QPA_DEBUG=1
 
 RUN useradd -g video viewer
 
+# We need to fix up sudoers as it appears to be broken.
+RUN chown 0:0 /usr/bin/sudo && \
+    chown -R 0:0 /etc/sudoers.d && \
+    chmod 4755 /usr/bin/sudo
+
 WORKDIR /usr/src/app
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/
