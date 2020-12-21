@@ -228,7 +228,6 @@ sudo find /usr/share/locale \
     ! -name 'locale.alias' \
     -exec rm -r {} \;
 
-cd /home/pi/screenly && git rev-parse HEAD > /home/pi/.screenly/latest_screenly_sha
 sudo chown -R pi:pi /home/pi
 
 # Need a password for commands with sudo

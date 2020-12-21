@@ -5,4 +5,8 @@ RUN apt-get update && \
     redis-server && \
     apt-get clean
 
+ARG GIT_HASH
+ARG GIT_BRANCH
+ARG GIT_SHORT_BRANCH
+
 CMD ["redis-server", "--protected-mode", "no"]

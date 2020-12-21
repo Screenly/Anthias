@@ -7,6 +7,7 @@ import socket
 import sqlite3
 import re
 import utils
+from utils import connect_to_redis
 from pprint import pprint
 from uptime import uptime
 from datetime import datetime
@@ -113,45 +114,15 @@ def get_load_avg():
 
 
 def get_git_branch():
-    screenly_path = os.path.join(os.getenv('HOME'), 'screenly', '.git')
-    try:
-        get_hash = sh.git(
-            '--git-dir={}'.format(screenly_path),
-            'rev-parse',
-            '--abbrev-ref',
-            'HEAD'
-        )
-        return get_hash.stdout.strip()
-    except Exception:
-        return 'Unable to get git branch.'
+    return os.getenv('GIT_BRANCH')
 
 
 def get_git_short_hash():
-    screenly_path = os.path.join(os.getenv('HOME'), 'screenly', '.git')
-    try:
-        get_hash = sh.git(
-            '--git-dir={}'.format(screenly_path),
-            'rev-parse',
-            '--short',
-            'HEAD'
-        )
-        return get_hash.stdout.strip()
-    except Exception:
-        return 'Unable to get git hash.'
+    return os.getenv('GIT_SHORT_HASH')
 
 
 def get_git_hash():
-    screenly_path = os.path.join(os.getenv('HOME'), 'screenly', '.git')
-    try:
-        get_hash = sh.git(
-            '--git-dir={}'.format(screenly_path),
-            'rev-parse',
-            'HEAD'
-        )
-        return get_hash.stdout.strip()
-    except Exception:
-        return 'Unable to get git hash.'
-
+    return os.getenv('GIT_HASH')
 
 def try_connectivity():
     urls = [

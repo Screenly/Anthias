@@ -142,6 +142,10 @@ ENV QT_QPA_PLATFORM=linuxfb
 ENV QT_LOGGING_RULES=*.debug=true
 ENV QT_QPA_DEBUG=1
 
+ARG GIT_HASH
+ARG GIT_BRANCH
+ARG GIT_SHORT_BRANCH
+
 RUN useradd -g video viewer
 
 WORKDIR /usr/src/app

@@ -7,4 +7,8 @@ RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/
 WORKDIR /usr/src/app
 
+ARG GIT_HASH
+ARG GIT_BRANCH
+ARG GIT_SHORT_BRANCH
+
 CMD ["bash", "bin/start_server.sh"]
