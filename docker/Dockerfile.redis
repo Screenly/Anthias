@@ -5,4 +5,10 @@ RUN apt-get update && \
     redis-server && \
     apt-get clean
 
-CMD ["redis-server", "--protected-mode", "no"]
+ARG GIT_HASH
+ARG GIT_SHORT_HASH
+ARG GIT_BRANCH
+
+RUN sed -i 's/^bind.*/bind 0.0.0.0/g' /etc/redis/redis.conf
+
+CMD ["redis-server"]

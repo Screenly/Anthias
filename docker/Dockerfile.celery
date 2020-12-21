@@ -7,6 +7,10 @@ RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
 COPY . /usr/src/app/
 
+ARG GIT_HASH
+ARG GIT_SHORT_HASH
+ARG GIT_BRANCH
+
 CMD celery worker \
   -A server.celery \
   -B -n worker@screenly \

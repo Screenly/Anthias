@@ -5,6 +5,7 @@ import os
 import pytz
 import random
 import re
+import redis
 import requests
 import string
 import sh
@@ -312,6 +313,9 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
         ppp_letters = ''.join(set(ppp_letters) - set(string.punctuation))
     return "".join(random.SystemRandom().choice(ppp_letters) for _ in range(pw_length))
 
+
+def connect_to_redis():
+    return redis.Redis(host='redis', port=6379, db=0)
 
 def is_docker():
     return os.path.isfile('/.dockerenv')

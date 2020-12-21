@@ -6,6 +6,8 @@
 set -euo pipefail
 
 GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+GIT_SHORT_HASH=$(git rev-parse --short HEAD)
+GIT_HASH=$(git rev-parse HEAD)
 
 if [ "$GIT_BRANCH" = "master" ]; then
     DOCKER_TAG="latest"
@@ -30,6 +32,9 @@ docker pull balenalib/rpi-raspbian:buster
 for container in base server celery redis websocket nginx; do
     echo "Building $container"
     docker "${DOCKER_BUILD_ARGS[@]}" \
+        --build-arg "GIT_HASH=$GIT_HASH" \
+        --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
+        --build-arg "GIT_BRANCH=$GIT_BRANCH" \
         -f "docker/Dockerfile.$container" \
         -t "screenly/srly-ose-$container:$DOCKER_TAG" .
 
@@ -44,6 +49,9 @@ for pi_version in pi4 pi3 pi2 pi1; do
     echo "Building viewer container for $pi_version"
     docker "${DOCKER_BUILD_ARGS[@]}" \
         --build-arg "PI_VERSION=$pi_version" \
+        --build-arg "GIT_HASH=$GIT_HASH" \
+        --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
+        --build-arg "GIT_BRANCH=$GIT_BRANCH" \
         -f docker/Dockerfile.viewer \
         -t "screenly/srly-ose-viewer:$DOCKER_TAG-$pi_version" .
 

@@ -17,16 +17,14 @@ import requests
 import sh
 import zmq
 from mixpanel import Mixpanel, MixpanelException
-from netifaces import gateways
-from requests import get as req_get
 
 from lib import assets_helper
 from lib import db
-from lib.diagnostics import get_raspberry_code, get_raspberry_model, get_git_branch, get_git_short_hash
-from lib.github import fetch_remote_hash, remote_branch_available
+from lib.diagnostics import get_raspberry_code, get_raspberry_model
+from lib.github import is_up_to_date
 from lib.errors import SigalrmException
 from lib.media_player import VLCMediaPlayer, OMXMediaPlayer
-from lib.utils import get_active_connections, url_fails, touch, is_balena_app, is_ci, get_node_ip, string_to_bool
+from lib.utils import get_active_connections, url_fails, is_balena_app, get_node_ip, string_to_bool, connect_to_redis
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
 
@@ -40,12 +38,15 @@ EMPTY_PL_DELAY = 5  # secs
 
 INITIALIZED_FILE = '/.screenly/initialized'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
+
 LOAD_SCREEN = 'http://{}:{}/{}'.format(LISTEN, PORT, 'static/img/loading.png')
 
 current_browser_url = None
 browser = None
 loop_is_stopped = False
 browser_bus = None
+r = connect_to_redis()
+
 
 try:
     media_player = VLCMediaPlayer() if get_raspberry_model(get_raspberry_code()) == 'Model 4B' else OMXMediaPlayer()
@@ -303,70 +304,6 @@ def view_video(uri, duration):
     media_player.stop()
 
 
-def check_update():
-    """
-    Check if there is a later version of Screenly OSE
-    available. Only do this update once per day.
-    Return True if up to date was written to disk,
-    False if no update needed and None if unable to check.
-    """
-
-    sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
-    device_id_file = path.join(settings.get_configdir(), 'device_id')
-
-    if path.isfile(sha_file):
-        sha_file_mtime = path.getmtime(sha_file)
-        last_update = datetime.fromtimestamp(sha_file_mtime)
-    else:
-        last_update = None
-
-    if not path.isfile(device_id_file):
-        device_id = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(15))
-        with open(device_id_file, 'w') as f:
-            f.write(device_id)
-    else:
-        with open(device_id_file, 'r') as f:
-            device_id = f.read()
-
-    logging.debug('Last update: %s' % str(last_update))
-
-    git_branch = get_git_branch()
-    git_hash = get_git_short_hash()
-
-    if last_update is None or last_update < (datetime.now() - timedelta(days=1)):
-
-        if not settings['analytics_opt_out'] and not is_ci():
-            mp = Mixpanel('d18d9143e39ffdb2a4ee9dcc5ed16c56')
-            try:
-                mp.track(device_id, 'Version', {
-                    'Branch': str(git_branch),
-                    'Hash': str(git_hash),
-                    'NOOBS': path.isfile('/boot/os_config.json'),
-                    'Balena': is_balena_app()
-                })
-            except MixpanelException:
-                pass
-            except AttributeError:
-                pass
-
-        if remote_branch_available(git_branch):
-            latest_sha = fetch_remote_hash(git_branch)
-
-            if latest_sha:
-                with open(sha_file, 'w') as f:
-                    f.write(latest_sha)
-                return True
-            else:
-                logging.debug('Unable to fetch latest hash.')
-                return
-        else:
-            touch(sha_file)
-            logging.debug('Unable to check if branch exist. Checking again tomorrow.')
-            return
-    else:
-        return False
-
-
 def load_settings():
     """
     Load settings and set the log level.
@@ -378,7 +315,7 @@ def load_settings():
 def asset_loop(scheduler):
     disable_update_check = getenv("DISABLE_UPDATE_CHECK", False)
     if not disable_update_check:
-        check_update()
+        is_up_to_date()
     asset = scheduler.get_next_asset()
 
     if asset is None:

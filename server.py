@@ -41,6 +41,7 @@ from lib import db
 from lib import diagnostics
 from lib import queries
 
+from lib.github import is_up_to_date
 from lib.auth import authorized
 from lib.utils import generate_perfect_paper_password, is_docker
 from lib.utils import get_active_connections, remove_connection
@@ -206,35 +207,6 @@ def output_json(data, code, headers=None):
 
 def api_error(error):
     return make_response(json_dump({'error': error}), 500)
-
-
-def is_up_to_date():
-    """
-    Determine if there is any update available.
-    Used in conjunction with check_update() in viewer.py.
-    """
-
-    sha_file = path.join(settings.get_configdir(), 'latest_screenly_sha')
-
-    # Until this has been created by viewer.py,
-    # let's just assume we're up to date.
-    if not path.exists(sha_file):
-        return True
-
-    try:
-        with open(sha_file, 'r') as f:
-            latest_sha = f.read().strip()
-    except:
-        latest_sha = None
-
-    if latest_sha:
-        return diagnostics.get_git_hash() == latest_sha
-
-    # If we weren't able to verify with remote side,
-    # we'll set up_to_date to true in order to hide
-    # the 'update available' message
-    else:
-        return True
 
 
 def template(template_name, **context):
