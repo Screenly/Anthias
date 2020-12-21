@@ -8,7 +8,7 @@ WORKDIR /usr/src/app
 COPY . /usr/src/app/
 
 ARG GIT_HASH
+ARG GIT_SHORT_HASH
 ARG GIT_BRANCH
-ARG GIT_SHORT_BRANCH
 
 CMD ["python", "websocket_server_layer.py"]

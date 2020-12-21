@@ -1,7 +1,7 @@
 FROM nginx:1-alpine
 
 ARG GIT_HASH
+ARG GIT_SHORT_HASH
 ARG GIT_BRANCH
-ARG GIT_SHORT_BRANCH
 
 COPY docker/nginx/nginx.conf /etc/nginx/conf.d/srly-ose.conf
