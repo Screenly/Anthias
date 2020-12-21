@@ -192,6 +192,7 @@ sudo -E docker-compose \
 
 sudo apt-get autoclean
 sudo apt-get clean
+sudo docker system prune -y
 sudo apt autoremove -y
 sudo find /usr/share/doc \
     -depth \

@@ -1,5 +1,6 @@
 import os
 import logging
+import string
 import random
 from requests import get as requests_get, exceptions
 from lib.utils import is_balena_app, is_docker, is_ci, connect_to_redis
