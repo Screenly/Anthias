@@ -12,4 +12,4 @@ ARG GIT_BRANCH
 RUN sed -i 's/^bind.*/bind 0.0.0.0/g' /etc/redis/redis.conf
 RUN sed -i 's/^protected-mode.*/protected-mode no/g' /etc/redis/redis.conf
 
-CMD ["redis-server"]
+CMD ["redis-server", "--protected-mode", "no"]
