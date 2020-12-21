@@ -69,6 +69,8 @@ services:
       context: .
       dockerfile: docker/Dockerfile.redis
     restart: always
+    volumes:
+      - redis-data:/var/lib/redis
 
   srly-ose-nginx:
     #image: screenly/srly-ose-nginx:latest
@@ -88,3 +90,4 @@ services:
 
 volumes:
     resin-data:
+    redis-data:

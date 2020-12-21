@@ -9,4 +9,6 @@ ARG GIT_HASH
 ARG GIT_BRANCH
 ARG GIT_SHORT_BRANCH
 
-CMD ["redis-server", "--protected-mode", "no"]
+RUN sed -i 's/^bind.*/bind 0.0.0.0/g' /etc/redis/redis.conf
+
+CMD ["redis-server"]
