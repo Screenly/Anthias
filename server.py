@@ -110,18 +110,27 @@ def upgrade_screenly(self, branch, manage_network, upgrade_system):
 
 @celery.task
 def reboot_screenly():
-    """Background task to reboot Screenly-OSE."""
+    """
+    Background task to reboot Screenly-OSE.
+    @TODO. Fix me. This will not work in Docker.
+    """
     sh.sudo('shutdown', '-r', 'now', _bg=True)
 
 
 @celery.task
 def shutdown_screenly():
-    """Background task to shutdown Screenly-OSE."""
+    """
+    Background task to shutdown Screenly-OSE.
+    @TODO. Fix me. This will not work in Docker.
+    """
     sh.sudo('shutdown', 'now', _bg=True)
 
 
 @celery.task
 def append_usb_assets(mountpoint):
+    """
+    @TODO. Fix me. This will not work in Docker.
+    """
     settings.load()
 
     datetime_now = datetime.now()
@@ -173,6 +182,9 @@ def append_usb_assets(mountpoint):
 
 @celery.task
 def remove_usb_assets(mountpoint):
+    """
+    @TODO. Fix me. This will not work in Docker.
+    """
     settings.load()
     with db.conn(settings['database']) as conn:
         for asset in assets_helper.read(conn):
@@ -182,6 +194,9 @@ def remove_usb_assets(mountpoint):
 
 @celery.task
 def cleanup_usb_assets(media_dir='/media'):
+    """
+    @TODO. Fix me. This will not work in Docker.
+    """
     settings.load()
     mountpoints = ['%s/%s' % (media_dir, x) for x in listdir(media_dir) if path.isdir('%s/%s' % (media_dir, x))]
     with db.conn(settings['database']) as conn:
