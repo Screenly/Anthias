@@ -70,15 +70,15 @@ def validate_url(string):
     return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
 
 
-def get_node_ip(retry=3, timeout=1):
-    """Returns the node's IP, for the interface
-    that is being used as the default gateway.
-    This should work on both MacOS X and Linux."""
+def get_node_ip():
+    """
+    Returns the node's IP address.
+    We're using an API call to the supervisor for this on Balena
+    and an environment variable set by `install.sh` for other environments.
+    The reason for this is because we can't retrieve the host IP from within Docker.
+    """
 
     if is_balena_app():
-        """
-        Get the IP from the Balena Supervisor.
-        """
         balena_supervisor_address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
         balena_supervisor_api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
         headers = {'Content-Type': 'application/json'}
@@ -89,25 +89,33 @@ def get_node_ip(retry=3, timeout=1):
         ), headers=headers)
 
         if r.ok:
-             return r.json()['ip_address']
-        else:
-            return 'Unknown'
+            return r.json()['ip_address']
+        return 'Unknown'
+    elif os.getenv('MY_IP'):
+        return os.getenv('MY_IP')
 
-    else:
-        # @TODO: Needs implementation
-        return 'Unable to retrieve IP.'
+    return 'Unable to retrieve IP.'
 
 
 def get_node_mac_address():
-    """Returns the node's MAC address, for the interface
-    that is being used as the default gateway.
-    This should work on both MacOS X and Linux."""
-    try:
-        default_interface = gateways()['default'][AF_INET][1]
-        mac_address = ifaddresses(default_interface)[AF_LINK][0]['addr']
-        return mac_address
-    except (KeyError, ValueError):
-        pass
+    """
+    Returns the MAC address.
+    """
+    if is_balena_app():
+        balena_supervisor_address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
+        balena_supervisor_api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
+        headers = {'Content-Type': 'application/json'}
+
+        r = requests.get('{}/v1/device?apikey={}'.format(
+            balena_supervisor_address,
+            balena_supervisor_api_key
+        ), headers=headers)
+
+        if r.ok:
+            return r.json()['mac_address']
+        return 'Unknown'
+
+    return 'Unable to retrieve MAC address.'
 
 
 def get_active_connections(bus, fields=None):
