@@ -47,6 +47,8 @@ $ git push balena master
 
 Once the build is done, the device will automatically pull down the image and start running.
 
+For further information please take a look at our docs section where we have a [balenaCloud specific guide](https://github.com/Screenly/screenly-ose/blob/master/docs/balena.md).
+
 ## Upgrading on Screenly OSE
 
 The releases are based on the [Sprints](https://github.com/Screenly/screenly-ose/projects). At the end of each sprint, we merge the master branch (also known as the developer version), into the production branch and generate a new disk image.

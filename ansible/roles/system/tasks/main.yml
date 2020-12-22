@@ -132,6 +132,24 @@
   tags:
     - touches_boot_partition
 
+- name: cgroup_enable required by containerd for OOM
+  replace:
+    dest: /boot/cmdline.txt
+    regexp: (^(?!$)((?!cgroup_enable=memory).)*$)
+    replace: \1 cgroup_enable=memory
+  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+  tags:
+    - touches_boot_partition
+
+- name: cgroup_memory required by containerd for OOM
+  replace:
+    dest: /boot/cmdline.txt
+    regexp: (^(?!$)((?!cgroup_memory=1).)*$)
+    replace: \1 cgroup_memory=1
+  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+  tags:
+    - touches_boot_partition
+
 # Sometimes in some packages there are no necessary files.
 # They are required to install pip dependencies.
 # In this case we need to reinstall the packages.
