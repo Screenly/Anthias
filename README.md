@@ -14,7 +14,7 @@ Want to help OSE thrive? Support us using [GitHub Sponsor](https://github.com/sp
 
 The recommended installation method is to grab the latest disk image from [here](https://github.com/Screenly/screenly-ose/releases).
 
-## Installing on Raspbian
+## Installing on Raspbian/Raspberry Pi OS
 
 The tl;dr for installing Screenly OSE on [Raspbian Lite](https://www.raspberrypi.org/downloads/raspbian/) is:
 
@@ -42,6 +42,11 @@ Alternatively, you can install manually on balenaCloud using the following comma
 $ git clone git@github.com:Screenly/screenly-ose.git
 $ cd screenly-ose
 $ git remote add balena username@git.balena-cloud.com:username/myscreenlyapp.git
+```
+
+To do a deploy (initial or future), run the following commands:
+```
+$ ./bin/balena_pre_hook.sh
 $ git push balena master
 ```
 
