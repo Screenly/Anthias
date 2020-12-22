@@ -28,10 +28,6 @@ WOTT_PATH = '/opt/wott'
 
 arch = machine()
 
-# 300 level HTTP responses are also ok, such as redirects, which many sites have and load
-# @TODO: This should be replaced with `r.ok` instead.
-HTTP_OK = xrange(200, 399)
-
 # This will only work on the Raspberry Pi,
 # so let's wrap it in a try/except so that
 # Travis can run.
@@ -237,7 +233,7 @@ def url_fails(url):
             headers=headers,
             timeout=10,
             verify=verify
-        ).status_code in HTTP_OK:
+        ).ok:
             return False
 
         if requests.get(
@@ -246,7 +242,7 @@ def url_fails(url):
             headers=headers,
             timeout=10,
             verify=verify
-        ).status_code in HTTP_OK:
+        ).ok:
             return False
 
     except (requests.ConnectionError, requests.exceptions.Timeout):
