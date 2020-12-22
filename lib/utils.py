@@ -74,15 +74,28 @@ def get_node_ip(retry=3, timeout=1):
     """Returns the node's IP, for the interface
     that is being used as the default gateway.
     This should work on both MacOS X and Linux."""
-    for attempt in range(1, retry + 1):
-        try:
-            default_interface = gateways()['default'][AF_INET][1]
-            return ifaddresses(default_interface)[AF_INET][0]['addr']
-        except (KeyError, ValueError):
-            if attempt == retry:
-                break
-            time.sleep(timeout)
-    raise Exception("Unable to resolve local IP address.")
+
+    if is_balena_app():
+        """
+        Get the IP from the Balena Supervisor.
+        """
+        balena_supervisor_address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
+        balena_supervisor_api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
+        headers = {'Content-Type': 'application/json'}
+
+        r = requests.get('{}/v1/device?apikey={}'.format(
+            balena_supervisor_address,
+            balena_supervisor_api_key
+        ), headers=headers)
+
+        if r.ok:
+             return r.json()['ip_address']
+        else:
+            return 'Unknown'
+
+    else:
+        # @TODO: Needs implementation
+        return 'Unable to retrieve IP.'
 
 
 def get_node_mac_address():
