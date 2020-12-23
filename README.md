@@ -36,18 +36,10 @@ Running Screenly OSE on [balenaCloud](https://balena.io) is a breeze. Just click
 
 [![balena deploy button](https://www.balena.io/deploy.svg)](https://dashboard.balena-cloud.com/deploy?repoUrl=https://github.com/Screenly/screenly-ose&defaultDeviceType=raspberrypi3)
 
-Alternatively, you can install manually on balenaCloud using the following commands:
-
-```
-$ git clone git@github.com:Screenly/screenly-ose.git
-$ cd screenly-ose
-$ git remote add balena username@git.balena-cloud.com:username/myscreenlyapp.git
-$ git push balena master
-```
-
-Once the build is done, the device will automatically pull down the image and start running.
+Note that the above button will **only** work for Pi 3. See the page below for how to run on other boards.
 
 For further information please take a look at our docs section where we have a [balenaCloud specific guide](https://github.com/Screenly/screenly-ose/blob/master/docs/balena.md).
+
 
 ## Upgrading on Screenly OSE
 
