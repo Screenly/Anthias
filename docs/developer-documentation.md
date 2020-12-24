@@ -36,6 +36,19 @@ All of the files/folders from the Github repo should be cloned into this directo
 ```
 
 ```
+/home/pi/screenly/bin/
+
+build_containers.sh -> script to build docker cross-compiled images and different architecture containers
+enable_ssl.sh -> enables HTTPS on web server
+install.sh -> the main bash based install script
+migrate.py -> migrates assets
+run_upgrade.sh -> runs main install-ose.sh script with the no-cache option
+set_balena_variables.sh -> sets variables for use in balena such as device type, branch, etc.
+start_server.sh -> entrypoint file for the server container
+start_viewer.sh -> entrypoint file for the viewer container
+```
+
+```
 /home/pi/.screenly/
 
 celerybeat-schedule -> stores the last run times of the celery tasks.
@@ -89,7 +102,7 @@ screenly.script -> plymouth script file that loads and scales splashscreen image
 `/other/directories/here/.. from ansible roles`
 
 
-### Debugging Screenly OSE webview
+### Debugging Screenly OSE Webview
 
 ```
 export QT_LOGGING_DEBUG=1
@@ -97,7 +110,7 @@ export QT_LOGGING_RULES="*.debug=true"
 export QT_QPA_EGLFS_DEBUG=1
 ```
 
-Screenly OSE WebView is a custom-built web browser based on the [QT](https://www.qt.io/) toolkit framework.
+Screenly OSE Webview is a custom-built web browser based on the [QT](https://www.qt.io/) toolkit framework.
 The browser is assembled with a Dockerfile and built by a `webview/build_qt#.sh` script.
 
 For further info on these files and more, visit the following link: [https://github.com/Screenly/screenly-ose/tree/master/webview](https://github.com/Screenly/screenly-ose/tree/master/webview)
