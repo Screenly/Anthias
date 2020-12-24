@@ -29,77 +29,65 @@ There are currently three versions of Screenly-OSE..
 ### Directories, files and their purpose with regards to Screenly-OSE
 _(Most of the following information pertains to the Production version (Uzbl-based) and not the Developer QtWebview/Docker-based version)_
 
-```
-/home/pi/screenly/
 
-All of the files/folders from the Github repo should be cloned into this directory.
-```
+#### `/home/pi/screenly/`
+- All of the files/folders from the Github repo should be cloned into this directory.
+<br>
 
-```
-/home/pi/screenly/bin/
+#### `/home/pi/screenly/bin/`
+- build_containers.sh -> script to build docker cross-compiled images and different architecture containers
+- enable_ssl.sh -> enables HTTPS on web server
+- install.sh -> the main bash based install script
+- migrate.py -> migrates assets
+- run_upgrade.sh -> runs main install-ose.sh script with the no-cache option
+- set_balena_variables.sh -> sets variables for use in balena such as device type, branch, etc.
+- start_server.sh -> entrypoint file for the server container
+- start_viewer.sh -> entrypoint file for the viewer container
+<br>
 
-build_containers.sh -> script to build docker cross-compiled images and different architecture containers
-enable_ssl.sh -> enables HTTPS on web server
-install.sh -> the main bash based install script
-migrate.py -> migrates assets
-run_upgrade.sh -> runs main install-ose.sh script with the no-cache option
-set_balena_variables.sh -> sets variables for use in balena such as device type, branch, etc.
-start_server.sh -> entrypoint file for the server container
-start_viewer.sh -> entrypoint file for the viewer container
-```
+#### `/home/pi/.screenly/`
+- celerybeat-schedule -> stores the last run times of the celery tasks.
+- default_assets.yml -> configuration file which contains the default assets that get added to the Assets if enabled.
+- device_id -> randomly generated string to identify device.
+- initialized -> tells whether hotspot service runs or not.
+- latest_screenly_sha -> shows the version of branch in hashed value.
+- screenly.conf -> configuration file for web interface settings.
+- screenly.db -> database file containing current Assets information.
+<br>
 
-```
-/home/pi/.screenly/
+#### `/etc/systemd/system/`
+- matchbox.service -> lightweight window manager for the X window system (env variable DISPLAY as 0.0)
+- screenly-celery.service -> starts the celery worker (App set to server.celery, bpython interface, hostname worker@screenly, schedule database /home/pi/.screenly/celerybeat-schedule)
+- screenly-viewer.service -> starts the main viewer (viewer.py) and sets a few user prefs for the X display
+- screenly-web.service -> starts the web server (server.py)
+- screenly-websocket_server_layer.service -> starts the websocket server, uses zmq for messaging
+- wifi-connect.service -> starts the resin/balena wifi-connect program to dynamically set the wifi config on the device via captive portal
+<br>
 
-celerybeat-schedule -> stores the last run times of the celery tasks.
-default_assets.yml -> configuration file which contains the default assets that get added to the Assets if enabled.
-device_id -> randomly generated string to identify device.
-initialized -> tells whether hotspot service runs or not.
-latest_screenly_sha -> shows the version of branch in hashed value.
-screenly.conf -> configuration file for web interface settings.
-screenly.db -> database file containing current Assets information.
-```
+#### `/etc/nginx/sites-enabled/`
+- screenly_assets.conf -> configuration file for ngrok.io server, deals with public url tunnel / pro migration?
+- screenly.conf -> configuration file for nginx web server (default asset settings, web GUI auth, database/asset dir, etc), called by settings.py
+<br>
 
+#### `/etc/sudoers.d/`
+- screenly_overrides -> sudoers configuration file that allows pi user to execute certain sudo commands without being superuser.
+<br>
 
-```
-/etc/systemd/system/
+#### `/usr/share/plymouth/themes/screenly`
+- screenly.plymouth -> plymouth config file (sets module name, imagedir and scriptfile dir)
+- splashscreen.png -> screenly ose splashscreen image file
+- screenly.script -> plymouth script file that loads and scales splashscreen image during boot process
+<br>
 
-matchbox.service -> lightweight window manager for the X window system (env variable DISPLAY as 0.0)
-screenly-celery.service -> starts the celery worker (App set to server.celery, bpython interface, hostname worker@screenly, schedule database /home/pi/.screenly/celerybeat-schedule)
-screenly-viewer.service -> starts the main viewer (viewer.py) and sets a few user prefs for the X display
-screenly-web.service -> starts the web server (server.py)
-screenly-websocket_server_layer.service -> starts the websocket server, uses zmq for messaging
-wifi-connect.service -> starts the resin/balena wifi-connect program to dynamically set the wifi config on the device via captive portal
-```
+#### `/usr/local/sbin/`
+- upgrade_screenly.sh -> bash installation script that gets called through celery task from web interface when users need to upgrade version of screenly to Latest or Production without requiring superuser.
+<br>
 
-```
-/etc/nginx/sites-enabled/
+#### `/usr/local/bin/`
+- screenly_usb_assets.sh -> script file that handles assets in USB file.
+<br>
 
-screenly_assets.conf -> configuration file for ngrok.io server, deals with public url tunnel / pro migration?
-screenly.conf -> configuration file for nginx web server (default asset settings, web GUI auth, database/asset dir, etc), called by settings.py
-```
-
-```
-/etc/sudoers.d/screenly_overrides -> sudoers configuration file that allows pi user to execute certain sudo commands without being superuser.
-```
-
-```
-/usr/share/plymouth/themes/screenly
-
-screenly.plymouth -> plymouth config file (sets module name, imagedir and scriptfile dir)
-splashscreen.png -> screenly ose splashscreen image file
-screenly.script -> plymouth script file that loads and scales splashscreen image during boot process
-```
-
-```
-/usr/local/sbin/upgrade_screenly.sh -> bash installation script that gets called through celery task from web interface when users need to upgrade version of screenly to Latest or Production without requiring superuser.
-```
-
-```
-/usr/local/bin/screenly_usb_assets.sh -> script file that handles assets in USB file.
-```
-
-`/other/directories/here/.. from ansible roles`
+---
 
 
 ### Debugging Screenly OSE Webview
