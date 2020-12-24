@@ -32,14 +32,11 @@ During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast inte
 
 ## Installing with balenaCloud
 
-Running Screenly OSE on [balenaCloud](https://balena.io) is a breeze. Just click the Deploy with balena button below:
+Running Screenly OSE on [balenaCloud](https://balena.io) is a breeze.
 
-[![balena deploy button](https://www.balena.io/deploy.svg)](https://dashboard.balena-cloud.com/deploy?repoUrl=https://github.com/Screenly/screenly-ose&defaultDeviceType=raspberrypi3)
-
-Note that the above button will **only** work for Pi 3. See the page below for how to run on other boards.
+Note that the Deploy to Balena button will **only** work for Pi 3. See the page below for how to run on other boards.
 
 For further information please take a look at our docs section where we have a [balenaCloud specific guide](https://github.com/Screenly/screenly-ose/blob/master/docs/balena.md).
-
 
 ## Upgrading on Screenly OSE
 
