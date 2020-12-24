@@ -22,12 +22,14 @@ There are currently three versions of Screenly-OSE..
 |  Experimental | [experimental](https://github.com/Screenly/screenly-ose/tree/experimental)   | This is the branch for experimenting, such as using a new web browser    |
 
 
-### Docker and Directories
+### Directories, Docker, files, and their purpose with regards to Screenly-OSE
 
-/
+#### `/docker/nginx/`
+- **wifi-connect.service ->** starts the resin/balena wifi-connect program to dynamically set the wifi config on the device via captive portal
+<br>
 
-### Directories, files and their purpose with regards to Screenly-OSE
-_(Most of the following information pertains to the Production version (Uzbl-based) and not the Developer QtWebview/Docker-based version)_
+#### `docker related...`
+- **example placeholder ->** sample..
 <br>
 
 #### `/home/pi/screenly/`
@@ -61,7 +63,6 @@ _(Most of the following information pertains to the Production version (Uzbl-bas
 - **screenly-viewer.service ->** starts the main viewer (viewer.py) and sets a few user prefs for the X display
 - **screenly-web.service ->** starts the web server (server.py)
 - **screenly-websocket_server_layer.service ->** starts the websocket server, uses zmq for messaging
-- **wifi-connect.service ->** starts the resin/balena wifi-connect program to dynamically set the wifi config on the device via captive portal
 <br>
 
 #### `/etc/nginx/sites-enabled/`
