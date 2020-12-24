@@ -24,7 +24,6 @@ RUN apt-get update && \
         libfreetype6-dev \
         libgbm-dev \
         libgcrypt20-dev \
-        libgles2-mesa \
         libgles2-mesa-dev \
         libglib2.0-dev \
         libgst-dev \
