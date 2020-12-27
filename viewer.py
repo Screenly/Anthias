@@ -15,7 +15,6 @@ from threading import Thread
 import requests
 import sh
 import zmq
-from mixpanel import Mixpanel, MixpanelException
 
 from lib import assets_helper
 from lib import db

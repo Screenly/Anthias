@@ -4,7 +4,7 @@ import string
 import random
 from requests import get as requests_get, exceptions
 from lib.utils import is_balena_app, is_docker, is_ci, connect_to_redis
-from lib.diagnostics import get_git_branch, get_git_hash, get_git_short_hash
+from lib.diagnostics import get_git_branch, get_git_hash, get_git_short_hash, parse_cpu_info, get_raspberry_model
 from mixpanel import Mixpanel, MixpanelException
 from settings import settings
 
@@ -99,7 +99,8 @@ def is_up_to_date():
                     'Hash': str(git_short_hash),
                     'NOOBS': os.path.isfile('/boot/os_config.json'),
                     'Balena': is_balena_app(),
-                    'Docker': is_docker()
+                    'Docker': is_docker(),
+                    'Pi_Version': get_raspberry_model(parse_cpu_info()['revision'])
                 })
             except MixpanelException:
                 pass
