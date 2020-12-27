@@ -26,7 +26,8 @@ There are currently three versions of Screenly-OSE..
 
 /
 
-### Directories, files and their purpose with regards to Screenly
+### Directories, files and their purpose with regards to Screenly-OSE
+_(Most of the following information pertains to the Production version (Uzbl-based) and not the Developer QtWebview/Docker-based version)_
 
 ```
 /home/pi/screenly/
@@ -97,6 +98,6 @@ export QT_QPA_EGLFS_DEBUG=1
 ```
 
 Screenly OSE WebView is a custom-built web browser based on the [QT](https://www.qt.io/) toolkit framework.
-The browser is assembled with a Dockerfile and built by the `built_qtbase.sh` script.
+The browser is assembled with a Dockerfile and built by a `webview/build_qt#.sh` script.
 
-For further info on these files and more, visit the following link: `https://github.com/Screenly/screenly-ose/master/webview`
+For further info on these files and more, visit the following link: [https://github.com/Screenly/screenly-ose/tree/master/webview](https://github.com/Screenly/screenly-ose/tree/master/webview)

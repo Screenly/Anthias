@@ -19,7 +19,9 @@ $ docker run --rm -t \
     qt-builder
 ```
 
-This will launch `build-qt.sh` and start the process of building QT for *all* Raspberry Pi boards. The resulting files will be placed in `~/tmp/qt-build/`.
+This will launch `build-qt5.sh` and start the process of building QT for *all* Raspberry Pi boards. The resulting files will be placed in `~/tmp/qt-build/`.
+
+You can learn more about this process in our [Compiling Qt with Docker multi-stage and multi-platform](https://www.docker.com/blog/compiling-qt-with-docker-multi-stage-and-multi-platform/).
 
 ### Build Arguments
 
