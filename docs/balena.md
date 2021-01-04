@@ -20,16 +20,9 @@ $ balena login
 [...]
 ```
 
-To deploy, you need to use the following commands:
+To deploy, you need to use the following command:
 ```
-$ ./bin/set_balena_variables.sh
-$ balena deploy $NAME_OF_YOUR_APP
+$ ./bin/deploy_to_balena.sh
 ```
 
-Note that you need to re-run these commands every time you deploy.
-
-If you're having playback issues, you may need to manually apply [these](https://github.com/Screenly/screenly-ose/blob/master/balena.yml#L13-L16) settings to your device.
-
-## Longer instructions
-
-For more detailed instructions, including a screencast, check out the blog post [Deploy a digital signage application with Screenly OSE and balena.io](https://resin.io/blog/deploy-a-digital-signage-application-with-screenly-and-resin/).
+Note that you need to re-run this command every time you deploy.
