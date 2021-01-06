@@ -1,7 +1,7 @@
 FROM balenalib/rpi-raspbian:buster
 # This list needs to be trimmed back later
 RUN apt-get update && \
-    apt-get -y install \
+    apt-get -y install --no-install-recommends \
         build-essential \
         ca-certificates \
         git-core \
