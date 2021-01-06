@@ -197,6 +197,7 @@
   apt:
     name:
       - rpi-update
+      - bc
     state: latest
 
 - name: Remove deprecated apt dependencies
