@@ -186,7 +186,7 @@ sudo -E ansible-playbook site.yml "${EXTRA_ARGS[@]}"
 # Export various environment variables
 export MY_IP=$(ip -4 route get 8.8.8.8 | awk {'print $7'} | tr -d '\n')
 TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk {'print $2'})
-export VIEWER_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB" * 0.7 | bc)
+export VIEWER_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB" \* 0.7 | bc)
 
 sudo -E docker-compose \
     -f /home/pi/screenly/docker-compose.yml \
