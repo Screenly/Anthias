@@ -40,5 +40,5 @@ echo "Is the TV on now? $TV_STATUS_AFTER_POWER_ON" >> $TMPFILE
 echo -e "\n\nPerforming 'cec-compliance -A'  command:\n\n" >> $TMPFILE
 cec-compliance -A >> $TMPFILE 2>&1
 
-echo "\n\nPlease share this URL with us:"
+echo -e "\n\nPlease share this URL with us:"
 pastebinit -P -i $TMPFILE 2> /dev/null
