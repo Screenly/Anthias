@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 
-import netifaces
 import os
 import sh
 import cec
-import socket
 import sqlite3
 import re
 import utils
@@ -152,7 +150,6 @@ def compile_report():
     report['uptime'] = get_uptime()
     report['monitor'] = get_monitor_status()
     report['display_power'] = get_display_power()
-    report['hostname'] = socket.gethostname()
     report['playlist'] = get_playlist()
     report['git_hash'] = get_git_hash()
     report['connectivity'] = try_connectivity()
