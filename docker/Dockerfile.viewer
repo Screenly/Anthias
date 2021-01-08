@@ -5,10 +5,6 @@ RUN apt-get update && \
         build-essential \
         ca-certificates \
         git-core \
-        gstreamer1.0-plugins-base \
-        gstreamer1.0-plugins-good \
-        gstreamer1.0-plugins-ugly \
-        gstreamer1.0-x \
         libasound2-dev \
         libavcodec-dev \
         libavformat-dev \
@@ -28,8 +24,6 @@ RUN apt-get update && \
         libgles2-mesa-dev \
         libglib2.0-dev \
         libgst-dev \
-        libgstreamer-plugins-base0.10-dev \
-        libgstreamer0.10-dev \
         libicu-dev \
         libinput-dev \
         libiodbc2-dev \
@@ -123,7 +117,7 @@ RUN curl "$BASE_URL/qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
     cd /tmp && \
     sha256sum -c "qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" && \
     tar -xzf "/tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" -C /usr/local && \
-    rm "qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz*"
+    rm "qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz\*"
 
 RUN curl "$BASE_URL/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz" \
         -sL -o "/tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz" && \
@@ -132,7 +126,7 @@ RUN curl "$BASE_URL/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT
     cd /tmp && \
     sha256sum -c "webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz.sha256" && \
     tar -xzf "/tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz" -C /usr/local && \
-    rm "webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz*"
+    rm "webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz\*"
 
 ENV QT_QPA_EGLFS_FORCE888=1
 ENV QT_QPA_PLATFORM=linuxfb
