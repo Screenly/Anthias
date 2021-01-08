@@ -9,6 +9,7 @@ RUN apt-get update && \
         git \
         git-core \
         ifupdown \
+        libcec-dev  \
         libffi-dev \
         libraspberrypi0 \
         libssl-dev \

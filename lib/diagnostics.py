@@ -3,6 +3,7 @@
 import netifaces
 import os
 import sh
+import cec
 import socket
 import sqlite3
 import re
@@ -12,6 +13,8 @@ from pprint import pprint
 from uptime import uptime
 from datetime import datetime
 
+
+cec.init()
 
 def parse_cpu_info():
     cpu_info = {
@@ -63,16 +66,15 @@ def get_monitor_status():
 
 
 def get_display_power():
+    """
+    Queries the TV using CEC
+    """
+    tv = cec.Device(cec.CECDEVICE_TV)
     try:
-        display_status = sh.vcgencmd('display_power').stdout.strip().split('=')
-        if display_status[1] == '1':
-            return 'On'
-        elif display_status[1] == '0':
-            return 'Off'
-        else:
-            return 'Unknown'
-    except Exception:
-        return 'Unable to determine display power.'
+        tv_status = tv.is_on()
+    except IOError:
+        return 'Unknown'
+    return tv_status
 
 
 def get_network_interfaces():
