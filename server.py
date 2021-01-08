@@ -86,28 +86,6 @@ def setup_periodic_tasks(sender, **kwargs):
 def cleanup():
     sh.find(path.join(HOME, 'screenly_assets'), '-name', '*.tmp', '-delete')
 
-
-@celery.task(bind=True)
-def upgrade_screenly(self, branch, manage_network, upgrade_system):
-    """Background task to upgrade Screenly-OSE."""
-    if not path.isfile('/usr/local/sbin/upgrade_screenly.sh'):
-        raise Exception('File /usr/local/sbin/upgrade_screenly.sh does not exist.')
-    upgrade_process = sh.sudo('/usr/local/sbin/upgrade_screenly.sh',
-                              '-w', 'true',
-                              '-b', branch,
-                              '-n', manage_network,
-                              '-s', upgrade_system,
-                              _bg=True,
-                              _err_to_out=True)
-    while True:
-        if not upgrade_process.process.alive:
-            break
-        self.update_state(state="PROGRESS", meta={'status': upgrade_process.process.stdout})
-        time.sleep(1)
-
-    return {'status': upgrade_process.process.stdout}
-
-
 @celery.task
 def reboot_screenly():
     """
