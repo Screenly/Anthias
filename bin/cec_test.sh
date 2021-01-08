@@ -20,19 +20,19 @@ echo -e "\n\nPerforming CEC 'scan' command:\n\n" >> $TMPFILE
 echo 'scan' | cec-client -s -d 1 >> $TMPFILE
 
 echo -e "\n\nPerforming CEC 'pow 0.0.0.0' command:\n\n" >> $TMPFILE
-echo 'pow 0.0.0.0' | cec-client -s d 1 >> $TMPFILE
+echo 'pow 0.0.0.0' | cec-client -s -d 1 >> $TMPFILE
 
 read -p "Is the TV on right now? " -r TV_STATUS_START
 echo "Is the TV on now? $TV_STATUS_START" >> $TMPFILE
 
 echo -e "\n\nPerforming CEC 'standby 0.0.0.0' command:\n\n" >> $TMPFILE
-echo 'standby 0.0.0.0' | cec-client -s d 1 >> $TMPFILE
+echo 'standby 0.0.0.0' | cec-client -s -d 1 >> $TMPFILE
 
 read -p "Is the TV off right now? " -r TV_STATUS_AFTER_POWER_OFF
 echo "Is the TV off now? $TV_STATUS_AFTER_POWER_OFF" >> $TMPFILE
 
 echo -e "\n\nPerforming CEC 'on 0.0.0.0' command:\n\n" >> $TMPFILE
-echo 'on 0.0.0.0' | cec-client -s d 1 >> $TMPFILE
+echo 'on 0.0.0.0' | cec-client -s -d 1 >> $TMPFILE
 
 read -p "Is the TV on right now? " -r TV_STATUS_AFTER_POWER_ON
 echo "Is the TV on now? $TV_STATUS_AFTER_POWER_ON" >> $TMPFILE
