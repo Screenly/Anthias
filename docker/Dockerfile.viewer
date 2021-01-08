@@ -10,6 +10,7 @@ RUN apt-get update && \
         libavformat-dev \
         libavutil-dev \
         libbz2-dev \
+        libcec-dev  \
         libdbus-1-dev \
         libdbus-glib-1-dev \
         libdrm-dev \
@@ -86,13 +87,13 @@ RUN apt-get update && \
         libxtst-dev \
         net-tools \
         omxplayer \
-        vlc \
         psmisc \
         python-dev \
         python-gobject \
         python-netifaces \
         python-pip \
         python-setuptools \
+        vlc \
         sqlite3 && \
     apt-get clean
 
