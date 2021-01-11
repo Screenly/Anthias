@@ -2,18 +2,16 @@
 
 import os
 import sh
-import cec
 import sqlite3
 import re
 import utils
+import cec
 from lib import raspberry_pi_helper
 from utils import connect_to_redis
 from pprint import pprint
 from uptime import uptime
 from datetime import datetime
 
-
-cec.init()
 
 def get_monitor_status():
     try:
@@ -26,11 +24,17 @@ def get_display_power():
     """
     Queries the TV using CEC
     """
+    try:
+        cec.init()
+    except:
+        return 'CEC error'
+
     tv = cec.Device(cec.CECDEVICE_TV)
     try:
         tv_status = tv.is_on()
     except IOError:
         return 'Unknown'
+
     return tv_status
 
 
