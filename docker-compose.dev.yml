@@ -5,12 +5,14 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.base.dev
+      cache_from: screenly/srly-ose-base
 
   srly-ose-server:
     image: screenly/srly-ose-server
     build:
       context: .
       dockerfile: docker/Dockerfile.server.dev
+      cache_from: screenly/srly-ose-server
     depends_on:
       - srly-ose-base
     environment:
@@ -44,6 +46,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket.dev
+      cache_from: screenly/srly-ose-websocket
     depends_on:
       - srly-ose-base
       - srly-ose-server
@@ -59,6 +62,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.celery.dev
+      cache_from: screenly/srly-ose-celery
     depends_on:
       - srly-ose-base
       - srly-ose-server
@@ -79,6 +83,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.nginx
+      cache_from: screenly/srly-ose-nginx
     ports:
       - 8000:80
     environment:
