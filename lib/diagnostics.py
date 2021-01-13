@@ -9,7 +9,6 @@ import cec
 from lib import raspberry_pi_helper
 from utils import connect_to_redis
 from pprint import pprint
-from uptime import uptime
 from datetime import datetime
 
 
@@ -39,7 +38,10 @@ def get_display_power():
 
 
 def get_uptime():
-    return uptime()
+    with open('/proc/uptime', 'r') as f:
+        uptime_seconds = float(f.readline().split()[0])
+
+    return uptime_seconds
 
 
 def get_playlist():
@@ -114,7 +116,8 @@ def get_raspberry_code():
     """
     Temporary workaround and just all on another function
     """
-    return raspberry_pi_helper.parse_cpu_info().get('revision', False)
+    return raspberry_pi_helper.parse_cpu_info().get('revision']
+
 
 def get_raspberry_model(raspberry_pi_revision):
     """
