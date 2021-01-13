@@ -1,7 +1,7 @@
 version: "2"
 services:
   srly-ose-server:
-    #image: screenly/srly-ose-server:latest
+    image: screenly/srly-ose-server
     build:
       context: .
       dockerfile: docker/Dockerfile.server
@@ -19,7 +19,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   srly-ose-viewer:
-    #image: screenly/srly-ose-viewer:latest-pi3
+    image: screenly/srly-ose-viewer
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
@@ -36,7 +36,7 @@ services:
       - resin-data:/data
 
   srly-ose-websocket:
-    #image: screenly/srly-ose-websocket:latest
+    image: screenly/srly-ose-websocket
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket
@@ -50,7 +50,7 @@ services:
       - resin-data:/data
 
   srly-ose-celery:
-    #image: screenly/srly-ose-celery:latest
+    image: screenly/srly-ose-celery
     build:
       context: .
       dockerfile: docker/Dockerfile.celery
@@ -66,7 +66,7 @@ services:
       - resin-data:/data
 
   redis:
-    #image: screenly/srly-ose-redis:latest
+    image: screenly/srly-ose-redis
     build:
       context: .
       dockerfile: docker/Dockerfile.redis
@@ -75,7 +75,7 @@ services:
       - redis-data:/var/lib/redis
 
   srly-ose-nginx:
-    #image: screenly/srly-ose-nginx:latest
+    image: screenly/srly-ose-nginx
     build:
       context: .
       dockerfile: docker/Dockerfile.nginx
