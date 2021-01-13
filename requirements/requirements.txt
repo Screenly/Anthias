@@ -16,7 +16,7 @@ flask-restful-swagger-2==0.35
 flask-swagger-ui==3.36.0
 futures==3.3.0
 gevent-websocket==0.10.1
-gevent==20.9.0
+gevent==20.12.1
 gunicorn==19.10.0
 hurry.filesize==0.9
 kombu==4.6.11
