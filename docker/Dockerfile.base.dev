@@ -1,0 +1,28 @@
+FROM debian:buster
+
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+        build-essential \
+        cec-utils \
+        curl \
+        ffmpeg \
+        git \
+        git-core \
+        ifupdown \
+        libcec-dev  \
+        libffi-dev \
+        libssl-dev \
+        libzmq3-dev \
+        lsb-release \
+        mplayer \
+        net-tools \
+        procps \
+        psmisc \
+        python-dev \
+        python-gobject \
+        python-pil \
+        python-pip \
+        python-setuptools \
+        python-simplejson \
+        sqlite3 && \
+    apt-get clean

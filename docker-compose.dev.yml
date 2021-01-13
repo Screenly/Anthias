@@ -1,56 +1,92 @@
-version: "3"
+version: "2"
 services:
-  screenly-server:
+  srly-ose-base:
+    image: screenly/srly-ose-base
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.base.dev
+
+  srly-ose-server:
     build:
       context: .
       dockerfile: docker/Dockerfile.server.dev
+    depends_on:
+      - srly-ose-base
     environment:
-      - PYTHONUNBUFFERED=1
+      - HOME=/data
       - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    image: screenly-ose-server
-    ports:
-      - 8080:8080
+    restart: always
     volumes:
-      - ./:/home/pi/screenly:ro
-      - screenly-volume:/home/pi/.screenly
-      - screenly-assets-volume:/home/pi/screenly_assets
+      - resin-data:/data
 
-  screenly-websocket:
+# We might bring this in in the future
+#  srly-ose-viewer:
+#    build:
+#      context: .
+#      dockerfile: docker/Dockerfile.viewer
+#    depends_on:
+#      - srly-ose-server
+#    environment:
+#      - HOME=/data
+#      - PORT=80
+#      - NOREFRESH=1
+#      - LISTEN=srly-ose-nginx
+#    privileged: true
+#    restart: always
+#    volumes:
+#      - resin-data:/data
+
+  srly-ose-websocket:
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket.dev
     depends_on:
-      - screenly-server
-    image: screenly-ose-websocket
-    ports:
-      - 9999:9999
+      - srly-ose-base
+      - srly-ose-server
+    environment:
+      - HOME=/data
+      - LISTEN=0.0.0.0
+    restart: always
     volumes:
-      - ./:/home/pi/screenly:ro
-      - screenly-assets-volume:/home/pi/screenly_assets
-      - screenly-volume:/home/pi/.screenly
+      - resin-data:/data
 
-  screenly-celery:
+  srly-ose-celery:
     build:
       context: .
       dockerfile: docker/Dockerfile.celery.dev
     depends_on:
+      - srly-ose-base
+      - srly-ose-server
       - redis
-      - screenly-server
     environment:
+      - HOME=/data
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    image: screenly-ose-celery
+    restart: always
     volumes:
-      - ./:/home/pi/screenly:ro
-      - screenly-assets-volume:/home/pi/screenly_assets
-      - screenly-volume:/home/pi/.screenly
+      - resin-data:/data
 
   redis:
     image: redis:alpine
+
+  srly-ose-nginx:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nginx
+    ports:
+      - 80:80
+    environment:
+      - HOME=/data
+    depends_on:
+      - srly-ose-base
+      - srly-ose-server
+      - srly-ose-websocket
     restart: always
+    volumes:
+      - resin-data:/data:ro
 
 volumes:
-  screenly-assets-volume:
-  screenly-volume:
+    resin-data:
+    redis-data:

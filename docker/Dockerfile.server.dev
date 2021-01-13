@@ -1,45 +1,17 @@
-FROM debian:buster
+FROM screenly/srly-ose-base
 
-RUN apt-get update && \
-    apt-get -y install --no-install-recommends \
-        build-essential \
-        curl \
-        ffmpeg \
-        git \
-        libffi-dev \
-        libssl-dev \
-        lsb-release \
-        mplayer \
-        net-tools \
-        procps \
-        python-pip \
-        python-setuptools \
-        python-dev \
-        python-gobject \
-        python-pil \
-        python-simplejson \
-        sqlite3 \
-    && \
-    apt-get clean
-
-# Install Python requirements
 ADD requirements/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
-ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.dev.txt
 
-# Create runtime user
-RUN useradd pi
+RUN mkdir -p /usr/src/app
+COPY . /usr/src/app/
+WORKDIR /usr/src/app
 
-# Install config file and file structure
-RUN mkdir -p /home/pi/.screenly /home/pi/screenly /home/pi/screenly_assets
-COPY ansible/roles/screenly/files/default_assets.yml /home/pi/.screenly/default_assets.yml
-COPY ansible/roles/screenly/files/screenly.conf /home/pi/.screenly/screenly.conf
-RUN chown -R pi:pi /home/pi/.screenly /home/pi/screenly_assets
+ARG GIT_HASH
+ENV GIT_HASH=$GIT_HASH
+ARG GIT_SHORT_HASH
+ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
+ARG GIT_BRANCH
+ENV GIT_BRANCH=$GIT_BRANCH
 
-USER pi
-WORKDIR /home/pi/screenly
-
-EXPOSE 8080
-
-CMD python server.py
+CMD ["bash", "bin/start_server.sh"]
