@@ -40,6 +40,7 @@ from lib import backup_helper
 from lib import db
 from lib import diagnostics
 from lib import queries
+from lib import raspberry_pi_helper
 
 from lib.github import is_up_to_date
 from lib.auth import authorized
@@ -1751,16 +1752,17 @@ def system_info():
     # Player name for title
     player_name = settings['player_name']
 
-    try:
-        raspberry_code = diagnostics.get_raspberry_code()
-        raspberry_model = '{} Revision: {} Ram: {} {}'.format(
-            diagnostics.get_raspberry_model(raspberry_code),
-            diagnostics.get_raspberry_revision(raspberry_code),
-            diagnostics.get_raspberry_ram(raspberry_code),
-            diagnostics.get_raspberry_manufacturer(raspberry_code)
+    raspberry_pi_revision = raspberry_pi_helper.parse_cpu_info().get('revision', False)
+    if raspberry_pi_revision:
+        raspberry_pi_details = raspberry_pi_helper.lookup_raspberry_pi_revision(
+                raspberry_pi_revision
         )
-    except sh.ErrorReturnCode_1:
-        raspberry_model = 'Unable to determine raspberry model.'
+        raspberry_pi_model = '{} ({})'.format(
+            raspberry_pi_details['model'],
+            raspberry_pi_details['manufacturer']
+        )
+    else:
+        raspberry_pi_model = 'Unknown.'
 
     screenly_version = '{}@{}'.format(
         diagnostics.get_git_branch(),
@@ -1777,7 +1779,7 @@ def system_info():
         memory=memory,
         display_info=display_info,
         display_power=display_power,
-        raspberry_model=raspberry_model,
+        raspberry_pi_model=raspberry_pi_model,
         screenly_version=screenly_version,
         mac_address=get_node_mac_address()
     )
