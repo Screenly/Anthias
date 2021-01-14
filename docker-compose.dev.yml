@@ -1,7 +1,7 @@
 version: "2.2"
 services:
   srly-ose-base:
-    image: screenly/srly-ose-base
+    image: screenly/srly-ose-base:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.base.dev
@@ -9,7 +9,7 @@ services:
         - screenly/srly-ose-base
 
   srly-ose-server:
-    image: screenly/srly-ose-server
+    image: screenly/srly-ose-server:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.server.dev
@@ -45,7 +45,7 @@ services:
 #      - resin-data:/data
 
   srly-ose-websocket:
-    image: screenly/srly-ose-websocket
+    image: screenly/srly-ose-websocket:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket.dev
@@ -63,7 +63,7 @@ services:
       - resin-data:/data
 
   srly-ose-celery:
-    image: screenly/srly-ose-celery
+    image: screenly/srly-ose-celery:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.celery.dev
@@ -86,7 +86,7 @@ services:
     image: redis:alpine
 
   srly-ose-nginx:
-    image: screenly/srly-ose-nginx
+    image: screenly/srly-ose-nginx:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.nginx
