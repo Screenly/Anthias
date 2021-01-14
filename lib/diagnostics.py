@@ -116,7 +116,7 @@ def get_raspberry_code():
     """
     Temporary workaround and just all on another function
     """
-    return raspberry_pi_helper.parse_cpu_info().get('revision']
+    return raspberry_pi_helper.parse_cpu_info().get('revision', False)
 
 
 def get_raspberry_model(raspberry_pi_revision):
