@@ -45,14 +45,16 @@ from lib import raspberry_pi_helper
 
 from lib.github import is_up_to_date
 from lib.auth import authorized
+from lib.utils import download_video_from_youtube, json_dump
 from lib.utils import generate_perfect_paper_password, is_docker
 from lib.utils import get_active_connections, remove_connection
 from lib.utils import get_node_ip, get_node_mac_address
 from lib.utils import get_video_duration
-from lib.utils import download_video_from_youtube, json_dump
+from lib.utils import is_balena_app, is_demo_node
+from lib.utils import string_to_bool
+from lib.utils import connect_to_redis
 from lib.utils import url_fails
 from lib.utils import validate_url
-from lib.utils import is_balena_app, is_demo_node
 
 from settings import CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
 
@@ -62,9 +64,12 @@ CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_TASK_RESULT_EXPIRES = timedelta(hours=6)
 
 app = Flask(__name__)
+app.debug = string_to_bool(os.getenv('DEBUG', 'False'))
+
 CORS(app)
 api = Api(app, api_version="v1", title="Screenly OSE API")
 
+r = connect_to_redis()
 celery = Celery(
     app.name,
     backend=CELERY_RESULT_BACKEND,
@@ -82,11 +87,19 @@ def setup_periodic_tasks(sender, **kwargs):
     # Calls cleanup() every hour.
     sender.add_periodic_task(3600, cleanup.s(), name='cleanup')
     sender.add_periodic_task(3600, cleanup_usb_assets.s(), name='cleanup_usb_assets')
+    sender.add_periodic_task(60*5, get_display_power.s(), name='display_power')
+
+
+@celery.task
+def get_display_power():
+    r.set('display_power', diagnostics.get_display_power())
+    r.expire('display_power', 3600)
 
 
 @celery.task
 def cleanup():
     sh.find(path.join(HOME, 'screenly_assets'), '-name', '*.tmp', '-delete')
+
 
 @celery.task
 def reboot_screenly():
@@ -1427,13 +1440,14 @@ class Info(Resource):
         # Calculate disk space
         slash = statvfs("/")
         free_space = size(slash.f_bavail * slash.f_frsize)
+        display_power = r.get('display_power')
 
         return {
             'viewlog': viewlog,
             'loadavg': diagnostics.get_load_avg()['15 min'],
             'free_space': free_space,
             'display_info': diagnostics.get_monitor_status(),
-            'display_power': diagnostics.get_display_power(),
+            'display_power': display_power,
             'up_to_date': is_up_to_date()
         }
 
@@ -1715,11 +1729,11 @@ def settings_page():
 @app.route('/system-info')
 @authorized
 def system_info():
-    viewlog = "Yet to be implemented"
+    viewlog = ["Yet to be implemented"]
 
     loadavg = diagnostics.get_load_avg()['15 min']
     display_info = diagnostics.get_monitor_status()
-    display_power = diagnostics.get_display_power()
+    display_power = r.get('display_power')
 
     # Calculate disk space
     slash = statvfs("/")
