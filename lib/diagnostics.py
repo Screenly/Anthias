@@ -23,12 +23,14 @@ def get_display_power():
     """
     Queries the TV using CEC
     """
+    tv_status = None
+
     try:
         cec.init()
+        tv = cec.Device(cec.CECDEVICE_TV)
     except:
         return 'CEC error'
 
-    tv = cec.Device(cec.CECDEVICE_TV)
     try:
         tv_status = tv.is_on()
     except IOError:
