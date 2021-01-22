@@ -46,7 +46,6 @@ from lib import raspberry_pi_helper
 from lib.github import is_up_to_date
 from lib.auth import authorized
 from lib.utils import generate_perfect_paper_password, is_docker
-from lib.utils import string_to_bool
 from lib.utils import get_active_connections, remove_connection
 from lib.utils import get_node_ip, get_node_mac_address
 from lib.utils import get_video_duration
@@ -1860,8 +1859,7 @@ if __name__ == "__main__":
     config = {
         'bind': '{}:{}'.format(LISTEN, PORT),
         'threads': 2,
-        'timeout': 20,
-        'debug': string_to_bool(os.getenv('DEBUG', False))
+        'timeout': 20
     }
 
     class GunicornApplication(Application):
