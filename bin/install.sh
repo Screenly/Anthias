@@ -155,16 +155,16 @@ fi
 sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' /etc/apt/sources.list
 sudo apt update -y
 sudo apt-get purge -y \
-    python-setuptools \
-    python-pip \
     python-pyasn1
-sudo apt-get install -y \
-    python-dev \
+sudo apt-get install -y  --no-install-recommends \
     git-core \
     libffi-dev \
     libssl-dev \
+    python-dev \
+    python-pip \
+    python-setuptools \
+    python-wheel \
     whois
-curl -s https://bootstrap.pypa.io/get-pip.py | sudo python
 
 if [ "$NETWORK" == 'y' ]; then
   export MANAGE_NETWORK=true
@@ -173,7 +173,8 @@ else
   export MANAGE_NETWORK=false
 fi
 
-sudo pip install ansible==2.8.8
+# Install Ansible from requirements file.
+sudo pip install $(grep ansible requirements/requirements.host.txt)
 
 
 sudo -u pi ansible localhost \
