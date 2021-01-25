@@ -142,7 +142,6 @@ if [ -z "${REPOSITORY}" ]; then
 fi
 
 
-
 sudo mkdir -p /etc/ansible
 echo -e "[local]\nlocalhost ansible_connection=local" | sudo tee /etc/ansible/hosts > /dev/null
 
@@ -203,6 +202,7 @@ sudo apt-get autoclean
 sudo apt-get clean
 sudo docker system prune -f
 sudo apt autoremove -y
+sudo apt-get install plymouth --reinstall -y
 sudo find /usr/share/doc \
     -depth \
     -type f \
@@ -239,7 +239,6 @@ sudo find /usr/share/locale \
     -exec rm -r {} \;
 
 sudo chown -R pi:pi /home/pi
-
 
 # Run sudo w/out password
 if [ ! -f /etc/sudoers.d/010_pi-nopasswd ]; then
