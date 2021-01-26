@@ -173,7 +173,8 @@ else
 fi
 
 # Install Ansible from requirements file.
-sudo pip install $(grep ansible requirements/requirements.host.txt)
+ANSIBLE_VERSION=$(curl -s https://raw.githubusercontent.com/Screenly/screenly-ose/$BRANCH/requirements/requirements.host.txt | grep ansible)
+sudo pip install "$ANSIBLE_VERSION"
 
 
 sudo -u pi ansible localhost \
