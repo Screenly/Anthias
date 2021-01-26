@@ -79,7 +79,7 @@ case $BRANCHSELECTION in
     ;;
 esac
 
-  echo && read -p "Do you want Screenly to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
+  echo && read -p "Do you want Screenly OSE to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
 
   echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
   if [ "$UPGRADE" != 'y' ]; then
@@ -99,7 +99,6 @@ elif [ "$WEB_UPGRADE" = true ]; then
       exit 1
     fi
   fi
-
   if [ "$MANAGE_NETWORK" = false ]; then
     NETWORK="n"
   elif [ "$MANAGE_NETWORK" = true ]; then
@@ -108,27 +107,15 @@ elif [ "$WEB_UPGRADE" = true ]; then
     echo -e "Invalid -n parameter."
     exit 1
   fi
-
   if [ "$UPGRADE_SYSTEM" = false ]; then
       EXTRA_ARGS=("--skip-tags" "system-upgrade")
   else
     echo -e "Invalid -s parameter."
     exit 1
   fi
-
 else
   echo -e "Invalid -w parameter."
   exit 1
-fi
-
-if grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
-  export DEVICE_TYPE="pi4"
-elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
-  export DEVICE_TYPE="pi3"
-elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
-  export DEVICE_TYPE="pi2"
-else
-  export DEVICE_TYPE="pi1"
 fi
 
 if [ -z "${REPOSITORY}" ]; then
@@ -176,7 +163,6 @@ fi
 ANSIBLE_VERSION=$(curl -s https://raw.githubusercontent.com/Screenly/screenly-ose/$BRANCH/requirements/requirements.host.txt | grep ansible)
 sudo pip install "$ANSIBLE_VERSION"
 
-
 sudo -u pi ansible localhost \
     -m git \
     -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH force=no"
@@ -184,20 +170,8 @@ cd /home/pi/screenly/ansible
 
 sudo -E ansible-playbook site.yml "${EXTRA_ARGS[@]}"
 
-# Export various environment variables
-export MY_IP=$(ip -4 route get 8.8.8.8 | awk {'print $7'} | tr -d '\n')
-TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk {'print $2'})
-export VIEWER_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB" \* 0.7 | bc)
-
-sudo -E docker-compose \
-    -f /home/pi/screenly/docker-compose.yml \
-    -f /home/pi/screenly/docker-compose.override.yml \
-    pull
-
-sudo -E docker-compose \
-    -f /home/pi/screenly/docker-compose.yml \
-    -f /home/pi/screenly/docker-compose.override.yml \
-    up -d
+# Pull down and install containers
+/home/pi/screenly/bin/upgrade_containers.sh
 
 sudo apt-get autoclean
 sudo apt-get clean
