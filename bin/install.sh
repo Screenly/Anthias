@@ -160,7 +160,12 @@ else
 fi
 
 # Install Ansible from requirements file.
-ANSIBLE_VERSION=$(curl -s https://raw.githubusercontent.com/Screenly/screenly-ose/$BRANCH/requirements/requirements.host.txt | grep ansible)
+if [ "$BRANCH" = "master" ]; then
+    ANSIBLE_VERSION=$(curl -s https://raw.githubusercontent.com/Screenly/screenly-ose/$BRANCH/requirements/requirements.host.txt | grep ansible)
+else
+    ANSIBLE_VERSION=ansible==2.8.8
+fi
+
 sudo pip install "$ANSIBLE_VERSION"
 
 sudo -u pi ansible localhost \
