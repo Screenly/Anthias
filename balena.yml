@@ -1,14 +1,16 @@
-version: "2"
-slug: "screenly-ose"
 name: "Screenly OSE"
 type: "sw.application"
+description: "The most popular digital signage project for the Raspberry Pi"
 assets:
-  - url: "https://github.com/Screenly/screenly-ose/"
-    name: "repository"
-  - url: "https://raw.githubusercontent.com/Screenly/screenly-ose/master/static/img/ose-logo.png"
-    name: "logo"
+  repository:
+    type: "blob.asset"
+    data:
+      url: "https://github.com/Screenly/screenly-ose/"
+  logo:
+    type: "blob.asset"
+    data:
+      url: "https://raw.githubusercontent.com/Screenly/screenly-ose/master/static/img/ose-logo.png"
 data:
-  description: "The most popular digital signage project for the Raspberry Pi"
   applicationConfigVariables:
     - BALENA_HOST_CONFIG_gpu_mem: 128
     - BALENA_HOST_CONFIG_framebuffer_depth: 32
