@@ -24,7 +24,7 @@ else
     export DEVICE_TYPE="pi1"
 fi
 
-# Restart docker.service so clear potential errors
+# Restart docker.service to clear potential errors
 sudo systemctl restart docker.service
 
 sudo -E docker-compose \
