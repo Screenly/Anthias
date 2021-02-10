@@ -24,6 +24,9 @@ else
     export DEVICE_TYPE="pi1"
 fi
 
+# Restart docker.service so clear potential errors
+sudo systemctl restart docker.service
+
 sudo -E docker-compose \
     -f /home/pi/screenly/docker-compose.yml \
     -f /home/pi/screenly/docker-compose.override.yml \
