@@ -7,6 +7,7 @@ services:
     volumes:
       - /home/pi/.screenly:/data/.screenly
       - /home/pi/screenly_assets:/data/screenly_assets
+      - /home/pi/screenly/static:/data/screenly/static
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
@@ -43,6 +44,7 @@ services:
     volumes:
       - /home/pi/.screenly:/data/.screenly:ro
       - /home/pi/screenly_assets:/data/screenly_assets:ro
+      - /home/pi/screenly/static:/data/screenly/static:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
