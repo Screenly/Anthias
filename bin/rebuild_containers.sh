@@ -3,6 +3,9 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 # -*- sh-basic-offset: 4 -*-
 
+# Show the name of the file being ran
+echo "Currently running: $0"
+
 # Export various environment variables
 export MY_IP=$(ip -4 route get 8.8.8.8 | awk {'print $7'} | tr -d '\n')
 TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk {'print $2'})
@@ -24,11 +27,15 @@ else
     export DEVICE_TYPE="pi1"
 fi
 
+echo "Restarting docker service to clear potential errors.."
+sudo systemctl restart docker.service
+
 sudo -E docker-compose \
     -f /home/pi/screenly/docker-compose.yml \
     -f /home/pi/screenly/docker-compose.override.yml \
     pull
 
+echo "Rebuilding of container images process will take a while, please wait.."
 sudo -E docker-compose \
     -f /home/pi/screenly/docker-compose.yml \
     -f /home/pi/screenly/docker-compose.override.yml \
