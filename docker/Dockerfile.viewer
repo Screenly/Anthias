@@ -94,6 +94,8 @@ RUN apt-get update && \
         python-pip \
         python-setuptools \
         vlc \
+        ttf-wqy-zenhei \
+        fonts-arphic-uming \
         sqlite3 && \
     apt-get clean
 
