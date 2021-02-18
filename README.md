@@ -57,7 +57,7 @@ Quick links:
  * [API Docs](https://ose.demo.screenlyapp.com/api/docs/)
  * [Developer Documentation](https://github.com/Screenly/screenly-ose/blob/master/docs/developer-documentation.md)
 
-Screenly OSE works on all Raspberry Pi versions, including Raspberry Pi Zero and Raspberry Pi 3 Model B.
+Screenly OSE works on all Raspberry Pi versions, including Raspberry Pi Zero, Raspberry Pi 3 Model B, and Raspberry Pi 4 Model B.
 
 ## Dockerized Development Environment
 
