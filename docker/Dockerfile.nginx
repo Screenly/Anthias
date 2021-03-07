@@ -1,4 +1,9 @@
-FROM nginx:1-alpine
+FROM balenalib/rpi-raspbian:buster
+
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+    nginx && \
+    apt-get clean
 
 ARG GIT_HASH
 ENV GIT_HASH=$GIT_HASH
@@ -8,3 +13,5 @@ ARG GIT_BRANCH
 ENV GIT_BRANCH=$GIT_BRANCH
 
 COPY docker/nginx/nginx.conf /etc/nginx/conf.d/srly-ose.conf
+
+CMD nginx

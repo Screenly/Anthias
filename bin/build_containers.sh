@@ -41,6 +41,7 @@ for container in base server celery redis websocket nginx; do
     # Push if the push flag is set and not cross compiling
     if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
         docker push "screenly/srly-ose-$container:$DOCKER_TAG"
+        docker push "screenly/srly-ose-$container:latest"
     fi
 done
 
@@ -58,6 +59,7 @@ for pi_version in pi4 pi3 pi2 pi1; do
     # Push if the push flag is set and not cross compiling
     if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
         docker push "screenly/srly-ose-viewer:$DOCKER_TAG-$pi_version"
+        docker push "screenly/srly-ose-viewer:$DOCKER_TAG-latest"
     fi
 done
 
