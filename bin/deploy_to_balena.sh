@@ -19,13 +19,14 @@ if ! which balena > /dev/null; then
 fi
 
 
-read -p "What is the target device? (pi1-pi4)? " -r DEVICE_TYPE
-
 echo 'Here are your Balena apps:'
 balena apps
 echo
 
 read -p "Enter the app name of the app you want to deploy to (needs to be SLUG): " -r APP_NAME
+
+# Get the device type from the device type in Balena
+DEVICE_TYPE=$(balena app "$APP_NAME" | grep "DEVICE TYPE:" | sed 's/DEVICE TYPE: raspberry\(pi[0-9]\).*/\1/')
 
 mkdir -p .balena
 cat <<EOF > .balena/balena.yml
@@ -48,4 +49,4 @@ if [ "$DEVICE_TYPE" = "pi4" ]; then
     balena env add BALENA_HOST_CONFIG_dtparam "\"i2c_arm=on\",\"spi=on\",\"audio=on\",\"vc4-kms-v3d\"" --application "$APP_NAME"
 fi
 
-balena deploy "$APP_NAME"
+balena deploy --build "$APP_NAME"
