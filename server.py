@@ -105,18 +105,16 @@ def cleanup():
 def reboot_screenly():
     """
     Background task to reboot Screenly-OSE.
-    @TODO. Fix me. This will not work in Docker.
     """
-    sh.sudo('shutdown', '-r', 'now', _bg=True)
+    r.publish('hostcmd', 'reboot')
 
 
 @celery.task
 def shutdown_screenly():
     """
     Background task to shutdown Screenly-OSE.
-    @TODO. Fix me. This will not work in Docker.
     """
-    sh.sudo('shutdown', 'now', _bg=True)
+    r.publish('hostcmd', 'shutdown')
 
 
 @celery.task

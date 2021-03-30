@@ -173,31 +173,13 @@
     update_cache: yes
   when: not cdefs_exist
 
-- name: Check if cc1plus exists
-  stat:
-    path: /usr/lib/gcc/arm-linux-gnueabihf/4.9/cc1plus
-  register: cc1plus
-
-- set_fact: cc1plus_exist="{{cc1plus.stat.exists}}"
-
-- name: Remove build-essential
-  apt:
-    name: build-essential
-    state: absent
-  when: not cc1plus_exist
-
-- name: Install build-essential
-  apt:
-    name: build-essential
-    state: present
-    update_cache: yes
-  when: not cc1plus_exist
-
 - name: Install Screenly dependencies
   apt:
     name:
       - rpi-update
       - bc
+      - python3
+      - python3-redis
     state: latest
 
 - name: Remove deprecated apt dependencies

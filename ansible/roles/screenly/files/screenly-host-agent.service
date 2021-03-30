@@ -1,0 +1,16 @@
+[Unit]
+Description=Screenly Host Agent
+After=docker.service
+StartLimitIntervalSec=10
+StartLimitBurst=3
+
+[Service]
+WorkingDirectory=/home/pi/screenly
+User=pi
+
+ExecStart=/usr/bin/python3 /home/pi/screenly/host_agent.py
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

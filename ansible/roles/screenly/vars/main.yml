@@ -1,5 +1,6 @@
 screenly_systemd_units:
   - udev-restart.service
+  - screenly-host-agent.service
 
 deprecated_screenly_systemd_units:
   - screenly-celery.service
