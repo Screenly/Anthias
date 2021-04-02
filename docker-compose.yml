@@ -72,6 +72,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.redis
+    ports:
+      - 127.0.0.1:6379:6379
     restart: always
     volumes:
       - redis-data:/var/lib/redis

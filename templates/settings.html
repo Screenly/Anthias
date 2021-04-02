@@ -415,7 +415,9 @@
                         <button id="btn-reset" class="btn btn-danger btn-long" type="button">Reset wifi</button>
                     </div>
                 </div>
+            {% endif %}
 
+            {% if not (context.is_balena) %}
                 {# System controls #}
                 <div id="system-controls-section" class="col-12 mb-5">
                     <h4 class="page-header">
