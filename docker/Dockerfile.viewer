@@ -148,6 +148,8 @@ ENV GIT_BRANCH=$GIT_BRANCH
 
 RUN useradd -g video viewer
 
+RUN rm -f /etc/localtime
+
 WORKDIR /usr/src/app
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/
