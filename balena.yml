@@ -1,6 +1,18 @@
 name: "Screenly OSE"
 type: "sw.application"
 description: "The most popular digital signage project for the Raspberry Pi"
+fleetcta: Get started
+post-provisioning: >-
+  ## Usage instructions
+  Once your device joins the fleet you'll need to allow some time for it to
+  download the application. Screenly’s management URL will appear on your screen 
+  (e.g. http://aaa.bbb.ccc.ddd:8080). To manage your content, open up the URL on 
+  a different computer. Don’t try to manage the content directly on the Raspberry 
+  Pi using a keyboard and mouse. That won’t work.
+  
+  More guides are available [here](https://support.screenly.io/hc/en-us/sections/360006304773-OSE). 
+  If you want to dive deeper into Screenly OSE, you can review the open source code 
+  on [Screenly OSE's GitHub](https://github.com/Screenly/screenly-ose).
 assets:
   repository:
     type: "blob.asset"
@@ -25,3 +37,4 @@ data:
     - "raspberrypi4-64"
     - "fincm3"
     - "raspberrypi400-64"
+version: 10.1
