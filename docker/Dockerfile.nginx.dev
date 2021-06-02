@@ -1,0 +1,18 @@
+FROM debian:buster
+
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+    nginx && \
+    apt-get clean
+
+ARG GIT_HASH
+ENV GIT_HASH=$GIT_HASH
+ARG GIT_SHORT_HASH
+ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
+ARG GIT_BRANCH
+ENV GIT_BRANCH=$GIT_BRANCH
+
+COPY docker/nginx/nginx.conf /etc/nginx/sites-enabled/srly-ose.conf
+RUN rm -f /etc/nginx/sites-enabled/default
+
+CMD ["nginx", "-g", "daemon off;"]

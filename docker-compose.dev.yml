@@ -89,9 +89,7 @@ services:
     image: screenly/srly-ose-nginx:latest-x86
     build:
       context: .
-      dockerfile: docker/Dockerfile.nginx
-      cache_from:
-        - screenly/srly-ose-nginx:latest-x86
+      dockerfile: docker/Dockerfile.nginx.dev
     ports:
       - 8000:80
     environment:
