@@ -15,4 +15,4 @@ redis==3.5.3
 requests[security]==2.24.0
 sh==1.8
 uptime==3.0.1
-urllib3==1.25.11
+urllib3==1.26.5
