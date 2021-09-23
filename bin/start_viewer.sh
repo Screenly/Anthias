@@ -28,13 +28,17 @@ chown -Rf root:root /usr/lib/sudo
 chown -f root:root /etc/sudoers
 chmod -f 4755 /usr/bin/sudo
 
-# SUGUSR1 from the viewer is also sent to the container
+# SIGUSR1 from the viewer is also sent to the container
 # Prevent it so that the container does not fail
 trap '' 16
 
+# Disable swapping
+echo 0 >  /sys/fs/cgroup/memory/memory.swappiness
+
+# Start viewer
 sudo -E -u viewer dbus-run-session python viewer.py &
 
-# Waiting for the viewer
+# Wait for the viewer
 while true; do
   PID=$(pidof python)
   if [ "$?" == '0' ]; then
@@ -43,7 +47,10 @@ while true; do
   sleep 0.5
 done
 
-# Exit when the viewer falls
+# If the viewer runs OOM, force the OOM killer to kill this script so the container restarts
+echo 1000 > /proc/$$/oom_score_adj
+
+# Exit when the viewer stops
 while kill -0 "$PID"; do
   sleep 1
 done
