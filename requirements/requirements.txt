@@ -6,7 +6,7 @@ MarkupSafe==1.1.1
 PyYAML==5.4
 Werkzeug==1.0.1
 cec==0.2.7
-celery==4.4.7
+celery==5.2.2
 certifi==2020.6.20
 cffi==1.14.4
 click==7.1.2
