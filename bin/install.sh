@@ -121,10 +121,10 @@ fi
 if [ -z "${REPOSITORY}" ]; then
   if [ "$WEB_UPGRADE" = false ]; then
     set -x
-    REPOSITORY=${1:-https://github.com/semaf/screenly-ose.git}
+    REPOSITORY=${1:-https://github.com/screenly/screenly-ose.git}
   else
     set -e
-    REPOSITORY=https://github.com/semaf/screenly-ose.git
+    REPOSITORY=https://github.com/screenly/screenly-ose.git
   fi
 fi
 
