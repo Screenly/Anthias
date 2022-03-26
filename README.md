@@ -16,7 +16,7 @@ The recommended installation method is to grab the latest disk image from [here]
 
 ## Installing on Raspbian/Raspberry Pi OS
 
-The tl;dr for installing Screenly OSE on [Raspbian Lite](https://www.raspberrypi.org/downloads/raspbian/) is:
+The tl;dr for installing Screenly OSE on [Raspberry Pi OS Lite (Legacy, buster)](https://www.raspberrypi.com/software/operating-systems/#raspberry-pi-os-legacy) is:
 
 ```
 $ bash <(curl -sL https://www.screenly.io/install-ose.sh)
