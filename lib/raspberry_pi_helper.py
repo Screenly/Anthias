@@ -164,7 +164,11 @@ def lookup_raspberry_pi_revision(revision):
         'c03114': {'manufacturer': 'Sony UK',
                    'model': 'Model 4B',
                    'ram': '4GB',
-                   'revision': '1.4'}
+                   'revision': '1.4'},
+        'd03115': {'manufacturer': 'Sony UK',
+                   'model': 'Model 4B',
+                   'ram': '8GB',
+                   'revision': '1.5'}
     }
 
     return database.get(revision, 'Unknown Raspberry Pi version.')
