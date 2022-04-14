@@ -168,6 +168,10 @@ def lookup_raspberry_pi_revision(revision):
         'd03115': {'manufacturer': 'Sony UK',
                    'model': 'Model 4B',
                    'ram': '8GB',
+                   'revision': '1.5'},
+        'c03115': {'manufacturer': 'Sony UK',
+                   'model': 'Model 4B',
+                   'ram': '4GB',
                    'revision': '1.5'}
     }
 
