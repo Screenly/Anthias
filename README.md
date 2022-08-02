@@ -10,6 +10,10 @@
 
 Want to help OSE thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
 
+## We're hiring
+
+Want to get paid to work on Screenly OSE? Apply [here](https://screenly.workable.com/jobs/2622289).
+
 ## Disk images
 
 The recommended installation method is to grab the latest disk image from [here](https://github.com/Screenly/screenly-ose/releases).
