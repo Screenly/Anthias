@@ -200,7 +200,7 @@
       - xserver-xorg
     state: absent
 
-- name: Make sure distro package of Docker is abseent
+- name: Make sure distro package of Docker is absent
   apt:
     name:
       - docker
