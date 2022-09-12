@@ -11,11 +11,39 @@ from settings import settings
 
 r = connect_to_redis()
 
+# Availability and HEAD commit of the remote branch to be checked every 24 hours.
+REMOTE_BRANCH_STATUS_TTL = (60 * 60 * 24)
+
+# Suspend all external requests if we enconter an error other than a ConnectionError for 5 minutes
+ERROR_BACKOFF_TTL = (60 * 5)
+
+def handle_github_error(exc, action):
+    # After failing, dont retry until backoff timer expires
+    r.set('github-api-error', action)
+    r.expire('github-api-error', ERROR_BACKOFF_TTL)
+
+    # Print a useful error message
+    if exc.response:
+        errdesc = exc.response.content
+    else:
+        errdesc = 'no data'
+    logging.error('{} fetching {} from GitHub: {}'.format(type(exc).__name__, action, errdesc))
+
 
 def remote_branch_available(branch):
     if not branch:
         logging.error('No branch specified. Exiting.')
         return None
+
+    # Make sure we havent recently failed before allowing fetch
+    if r.get('github-api-error') is not None:
+        logging.warning("GitHub requests suspended due to prior error")
+        return None
+
+    # Check for cached remote branch status
+    remote_branch_cache = r.get('remote-branch-available')
+    if remote_branch_cache is not None:
+        return remote_branch_cache == "1"
 
     try:
         resp = requests_get(
@@ -24,18 +52,24 @@ def remote_branch_available(branch):
                 'Accept': 'application/vnd.github.loki-preview+json',
             },
         )
-    except exceptions.ConnectionError:
-        logging.error('No internet connection.')
+        resp.raise_for_status()
+    except exceptions.RequestException as exc:
+        handle_github_error(exc, 'remote branch availability')
         return None
 
-    if not resp.ok:
-        logging.error('Invalid response from GitHub: {}'.format(resp.content))
-        return None
-
+    found = False
     for github_branch in resp.json():
         if github_branch['name'] == branch:
-            return True
-    return False
+            found = True
+            break
+
+    # Cache and return the result
+    if found:
+        r.set('remote-branch-available', '1')
+    else:
+        r.set('remote-branch-available', '0')
+    r.expire('remote-branch-available', REMOTE_BRANCH_STATUS_TTL)
+    return found
 
 
 def fetch_remote_hash():
@@ -44,27 +78,32 @@ def fetch_remote_hash():
     or not.
     """
     branch = os.getenv('GIT_BRANCH')
-    get_cache = r.get('latest-remote-hash')
 
     if not branch:
-        logging.error('Unable to get Git branch')
+        logging.error('Unable to get local Git branch')
         return None, False
 
+    get_cache = r.get('latest-remote-hash')
     if not get_cache:
-        resp = requests_get(
-            'https://api.github.com/repos/screenly/screenly-ose/git/refs/heads/{}'.format(branch)
-        )
-
-        if not resp.ok:
-            logging.error('Invalid response from GitHub: {}'.format(resp.content))
+        # Ensure the remote branch is available before trying to fetch the HEAD ref
+        if not remote_branch_available(branch):
+            logging.error('Remote Git branch not available')
+            return None, False
+        try:
+            resp = requests_get(
+                'https://api.github.com/repos/screenly/screenly-ose/git/refs/heads/{}'.format(branch)
+            )
+            resp.raise_for_status()
+        except exceptions.RequestException as exc:
+            handle_github_error(exc, 'remote branch HEAD')
             return None, False
 
         logging.debug('Got response from GitHub: {}'.format(resp.status_code))
         latest_sha = resp.json()['object']['sha']
         r.set('latest-remote-hash', latest_sha)
 
-        # Cache the result for 24 hours
-        r.expire('latest-remote-hash', 24 * 60 * 60)
+        # Cache the result for the REMOTE_BRANCH_STATUS_TTL
+        r.expire('latest-remote-hash', REMOTE_BRANCH_STATUS_TTL)
         return latest_sha, True
     return get_cache, False
 
