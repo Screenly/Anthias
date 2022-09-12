@@ -200,12 +200,23 @@
       - xserver-xorg
     state: absent
 
+- name: Make sure distro package of Docker is absent
+  apt:
+    name:
+      - docker
+      - docker-engine
+      - docker.io
+      - containerd
+      - runc
+      - docker-compose
+    state: absent
+
 - name: Add docker apt key
   apt_key:
     url: https://download.docker.com/linux/raspbian/gpg
     state: present
 
-- name : Get raspbian name
+- name: Get raspbian name
   command: lsb_release -cs
   register: raspbian_name
 
@@ -221,6 +232,7 @@
     name:
       - docker-ce:armhf
       - docker-ce-cli:armhf
+      - docker-compose-plugin:armhf
     update_cache: yes
     install_recommends: no
 

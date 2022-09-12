@@ -1,4 +1,2 @@
 ansible-core==2.12
-docker==4.3.1
-docker-compose==1.26.2
-pyrsistent==0.15.7
+docker==6.0.0
