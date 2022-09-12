@@ -218,7 +218,9 @@
 
 - name: Install Docker
   apt:
-    name: docker-ce
+    name:
+      - docker-ce:armhf
+      - docker-ce-cli:armhf
     update_cache: yes
     install_recommends: no
 
