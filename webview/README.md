@@ -13,8 +13,8 @@ You should now be able to invoke a run executing the following command:
 
 ```
 $ docker run --rm -t \
-    -v ~/tmp/qt-src:/src \
-    -v ~/tmp/qt-build:/build \
+    -v ~/tmp/qt-src:/src:Z \
+    -v ~/tmp/qt-build:/build:Z \
     -v $(pwd):/webview:ro \
     qt-builder
 ```
