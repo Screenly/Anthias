@@ -24,12 +24,12 @@ else
     export DEVICE_TYPE="pi1"
 fi
 
-sudo -E docker-compose \
+sudo -E docker compose \
     -f /home/pi/screenly/docker-compose.yml \
     -f /home/pi/screenly/docker-compose.override.yml \
     pull
 
-sudo -E docker-compose \
+sudo -E docker compose \
     -f /home/pi/screenly/docker-compose.yml \
     -f /home/pi/screenly/docker-compose.override.yml \
     up -d

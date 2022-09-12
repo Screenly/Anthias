@@ -208,6 +208,7 @@
       - docker.io
       - containerd
       - runc
+      - docker-compose
     state: absent
 
 - name: Add docker apt key
