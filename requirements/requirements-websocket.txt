@@ -1,4 +1,4 @@
 Flask==1.1.2
 gevent-websocket==0.10.1
 gevent==20.9.0
-pyzmq==19.0.2
+pytz==2022.2.1
