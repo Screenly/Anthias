@@ -213,12 +213,14 @@
   lineinfile:
     path: /etc/apt/sources.list.d/docker.list
     create: yes
-    line: "deb [arch=armhf] https://download.docker.com/linux/raspbian {{ raspbian_name.stdout }} edge"
+    line: "deb [arch=armhf] https://download.docker.com/linux/debian {{ raspbian_name.stdout }} stable"
     state: present
 
 - name: Install Docker
   apt:
-    name: docker-ce
+    name:
+      - docker-ce:armhf
+      - docker-ce-cli:armhf
     update_cache: yes
     install_recommends: no
 
