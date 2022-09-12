@@ -12,7 +12,7 @@ python-vlc==3.0.11115
 pytz==2022.2.1
 pyzmq==19.0.2
 redis==3.5.3
-requests[security]==2.28.1
+requests[security]==2.27.1
 sh==1.8
 uptime==3.0.1
 urllib3==1.25.0
