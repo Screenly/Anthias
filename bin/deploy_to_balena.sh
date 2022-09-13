@@ -20,13 +20,13 @@ fi
 
 
 echo 'Here are your Balena apps:'
-balena apps
+balena fleets
 echo
 
 read -p "Enter the app name of the app you want to deploy to (needs to be SLUG): " -r APP_NAME
 
 # Get the device type from the device type in Balena
-DEVICE_TYPE=$(balena app "$APP_NAME" | grep "DEVICE TYPE:" | sed 's/DEVICE TYPE: raspberry\(pi[0-9]\).*/\1/')
+DEVICE_TYPE=$(balena fleet "$APP_NAME" | grep "DEVICE TYPE:" | grep -i 'device type' | sed -e 's/.*raspberry\(pi[0-9]\).*/\1/')
 
 mkdir -p .balena
 cat <<EOF > .balena/balena.yml

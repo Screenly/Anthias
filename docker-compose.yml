@@ -95,5 +95,5 @@ services:
       - resin-data:/data:ro
 
 volumes:
-    resin-data:
-    redis-data:
+  resin-data:
+  redis-data:
