@@ -4,7 +4,7 @@ Since our entire build environment resides inside a Docker container, you don't 
 
 ```
 $ cd webview
-$ docker build \
+$ docker buildx build \
     --build-arg GIT_HASH=$(git rev-parse --short HEAD) \
     -t qt-builder .
 ```
