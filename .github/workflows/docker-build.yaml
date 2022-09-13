@@ -47,7 +47,6 @@ jobs:
       - name: Building base container
         run: |
           docker buildx build \
-            --load \
             --platform linux/arm/v6,linux/arm/v7 \
             --cache-from "type=local,src=/tmp/.buildx-cache" \
             --build-arg "GIT_HASH=$GITHUB_SHA" \
