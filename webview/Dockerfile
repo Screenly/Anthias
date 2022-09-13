@@ -5,6 +5,7 @@ FROM --platform=linux/arm/v7 balenalib/rpi-raspbian:buster as builder
 # to make things work.
 RUN apt-get update && \
     apt-get install -y \
+        apt-utils \
         firebird-dev \
         freetds-dev \
         gstreamer-tools \

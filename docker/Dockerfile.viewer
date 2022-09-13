@@ -100,7 +100,7 @@ RUN apt-get update && \
     apt-get clean
 
 # Install Python requirements
-ADD requirements/requirements.viewer.txt /tmp/requirements.txt
+COPY requirements/requirements.viewer.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 # Works around issue with `curl`
