@@ -9,7 +9,8 @@ assets:
   logo:
     type: "blob.asset"
     data:
-      url: "https://raw.githubusercontent.com/Screenly/screenly-ose/master/static/img/ose-logo.png"
+      url: >-
+        "https://raw.githubusercontent.com/Screenly/screenly-ose/master/static/img/ose-logo.png"
 data:
   applicationConfigVariables:
     - BALENA_HOST_CONFIG_gpu_mem: 128
