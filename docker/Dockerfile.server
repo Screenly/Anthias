@@ -1,6 +1,6 @@
 FROM screenly/srly-ose-base
 
-ADD requirements/requirements.txt /tmp/requirements.txt
+COPY requirements/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 RUN mkdir -p /usr/src/app

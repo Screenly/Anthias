@@ -45,6 +45,7 @@ for container in base server celery redis websocket nginx; do
     fi
 done
 
+# @TODO Simplify this setup with https://docs.docker.com/desktop/multi-arch/
 echo "Building viewer for different architectures..."
 for pi_version in pi4 pi3 pi2 pi1; do
     echo "Building viewer container for $pi_version"
