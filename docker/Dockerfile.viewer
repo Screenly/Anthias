@@ -1,4 +1,5 @@
-FROM balenalib/rpi-raspbian:buster
+FROM balenalib/raspberrypi3:buster
+
 # This list needs to be trimmed back later
 RUN apt-get update && \
     apt-get -y install --no-install-recommends \
