@@ -35,9 +35,19 @@ jobs:
      #    username: ${{ secrets.DOCKER_USERNAME }}
      #    password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Set Docker tag
+        RUN: |
+          if [ "$GITHUB_REF_NAME" == 'master' ]; then
+             export 'DOCKER_TAG=latest';
+          elif [ "$GITHUB_REF_NAME" == 'production' ]; then
+             export 'DOCKER_TAG=production';
+          fi
+          echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_ENV
+
       - name: Building base container
         run: |
           docker buildx build \
+            --load \
             --platform linux/arm/v6,linux/arm/v7 \
             --cache-from "type=local,src=/tmp/.buildx-cache" \
             --build-arg "GIT_HASH=$GITHUB_SHA" \
