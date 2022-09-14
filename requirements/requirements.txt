@@ -14,6 +14,7 @@ configparser==4.0.2
 cryptography==3.3.2
 flask-restful-swagger-2==0.35
 flask-swagger-ui==3.36.0
+futures==3.3.0
 gevent-websocket==0.10.1
 gevent==21.12.0
 greenlet==1.1.0
