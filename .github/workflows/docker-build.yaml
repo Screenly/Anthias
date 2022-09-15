@@ -53,11 +53,12 @@ jobs:
              export "DOCKER_TAG=production-${{ matrix.board }}";
           fi
           echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_ENV
+          echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> GITHUB_ENV
 
           # Generage a docker-compose file for Balena with the correct board
           mkdir -p balena-deploy
           cat docker-compose.balena.yml | \
-            sed "s/BOARD_TAG/latest-${{ matrix.board }}/" \
+            sed "s/BOARD_TAG/$GIT_SHORT_HASH-${{ matrix.board }}/" \
             > balena-deploy/docker-compose.yml
 
           # Define the build arguments
@@ -68,7 +69,7 @@ jobs:
             --cache-to "type=local,dest=/tmp/.buildx-cache" \
             --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
             --build-arg "GIT_HASH=$GITHUB_SHA" \
-            --build-arg "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" \
+            --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
             --build-arg "GIT_BRANCH=$GITHUB_REF_NAME"
 
       - name: Building base container
@@ -76,6 +77,7 @@ jobs:
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.base" \
+            -t "screenly/srly-ose-base:$GIT_SHORT_HASH-${{ matrix.board }}" \
             -t "screenly/srly-ose-base:$DOCKER_TAG" .
 
       # We need to Clean up and refactor the blow to use concurrencty.
@@ -84,6 +86,7 @@ jobs:
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.server" \
+            -t "screenly/srly-ose-server:$GIT_SHORT_HASH-${{ matrix.board }}"
             -t "screenly/srly-ose-server:$DOCKER_TAG" .
 
       - name: Building celery container
@@ -91,6 +94,7 @@ jobs:
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.celery" \
+            -t "screenly/srly-ose-celery:$GIT_SHORT_HASH-${{ matrix.board }}"
             -t "screenly/srly-ose-celery:$DOCKER_TAG" .
 
       - name: Building redis container
@@ -98,6 +102,7 @@ jobs:
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.redis" \
+            -t "screenly/srly-ose-redis:$GIT_SHORT_HASH-${{ matrix.board }}"
             -t "screenly/srly-ose-redis:$DOCKER_TAG" .
 
       - name: Building websocket container
@@ -105,6 +110,7 @@ jobs:
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.websocket" \
+            -t "screenly/srly-ose-websocket:$GIT_SHORT_HASH-${{ matrix.board }}"
             -t "screenly/srly-ose-websocket:$DOCKER_TAG" .
 
       - name: Building nginx container
@@ -112,6 +118,7 @@ jobs:
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.nginx" \
+            -t "screenly/srly-ose-nginx:$GIT_SHORT_HASH-${{ matrix.board }}"
             -t "screenly/srly-ose-nginx:$DOCKER_TAG" .
 
       - name: Building viewer container
@@ -120,6 +127,7 @@ jobs:
             ${{ steps.prepare.outputs.buildx_args }} \
             --build-arg "PI_VERSION=${{ matrix.board }}" \
             -f docker/Dockerfile.viewer \
+            -t "screenly/srly-ose-viewer:$GIT_SHORT_HASH-${{ matrix.board }}"
             -t "screenly/srly-ose-viewer:$DOCKER_TAG-${{ matrix.board }}" .
 
       - uses: balena-io/deploy-to-balena-action@master
