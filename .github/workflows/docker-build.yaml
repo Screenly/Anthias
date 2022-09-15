@@ -53,12 +53,12 @@ jobs:
             --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
             --build-arg "GIT_HASH=$GITHUB_SHA" \
             --build-arg "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" \
-            --build-arg "GIT_BRANCH=$GITHUB_REF_NAME" \
+            --build-arg "GIT_BRANCH=$GITHUB_REF_NAME"
 
       - name: Building base container
         run: |
           docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }}
+            ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.base" \
             -t "screenly/srly-ose-base:$DOCKER_TAG" .
 
@@ -66,42 +66,42 @@ jobs:
       - name: Building server container
         run: |
           docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }}
+            ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.server" \
             -t "screenly/srly-ose-server:$DOCKER_TAG" .
 
       - name: Building celery container
         run: |
           docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }}
+            ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.celery" \
             -t "screenly/srly-ose-celery:$DOCKER_TAG" .
 
       - name: Building redis container
         run: |
           docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }}
+            ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.redis" \
             -t "screenly/srly-ose-redis:$DOCKER_TAG" .
 
       - name: Building websocket container
         run: |
           docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }}
+            ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.websocket" \
             -t "screenly/srly-ose-websocket:$DOCKER_TAG" .
 
       - name: Building nginx container
         run: |
           docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }}
+            ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.nginx" \
             -t "screenly/srly-ose-nginx:$DOCKER_TAG" .
 
       #- name: Building viewer container
       #  run: |
       #    docker buildx build \
-      #      ${{ steps.prepare.outputs.buildx_args }}
+      #      ${{ steps.prepare.outputs.buildx_args }} \
       #      --build-arg "PI_VERSION=$pi_version" \
       #      -f docker/Dockerfile.viewer \
       #      -t "screenly/srly-ose-viewer:$DOCKER_TAG-$pi_version" .
