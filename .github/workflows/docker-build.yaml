@@ -42,6 +42,8 @@ jobs:
       - name: Set Docker tag and buildx args
         id: prepare
         run: |
+
+          # Apply the correct docker tag based on branch
           if [ "$GITHUB_REF_NAME" == 'master' ]; then
              export "DOCKER_TAG=latest-${{ matrix.board }}";
           elif [ "$GITHUB_REF_NAME" == 'production' ]; then
@@ -49,6 +51,11 @@ jobs:
           fi
           echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_ENV
 
+          # Patch the balena file for the correct board
+          sed -i "s/BOARD_TAG/latest-${{ matrix.board }}/" \
+                docker-compose.balena.yml
+
+          # Define the build arguments
           echo ::set-output name=buildx_args::\
             --push \
             --platform linux/arm/v7 \
@@ -109,3 +116,10 @@ jobs:
             --build-arg "PI_VERSION=${{ matrix.board }}" \
             -f docker/Dockerfile.viewer \
             -t "screenly/srly-ose-viewer:$DOCKER_TAG-${{ matrix.board }}" .
+
+      - uses: balena-io/deploy-to-balena-action@master
+        id: build
+        with:
+          balena_token: ${{ secrets.BALENA_TOKEN }}
+          fleet: screenly2/ose-${{ matrix.board }}
+          source: docker-compose.balena.yml

@@ -1,7 +1,7 @@
 version: "2"
 services:
   srly-ose-server:
-    image: screenly/srly-ose-server:${DOCKER_TAG}
+    image: screenly/srly-ose-server:${DOCKER_TAG}-${DEVICE_TYPE}
     environment:
       - MY_IP=${MY_IP}
     volumes:
@@ -21,7 +21,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
   srly-ose-websocket:
-    image: screenly/srly-ose-websocket:${DOCKER_TAG}
+    image: screenly/srly-ose-websocket:${DOCKER_TAG}-${DEVICE_TYPE}
     volumes:
       - /home/pi/.screenly:/data/.screenly
       - /home/pi/screenly_assets:/data/screenly_assets
@@ -29,7 +29,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
   srly-ose-celery:
-    image: screenly/srly-ose-celery:${DOCKER_TAG}
+    image: screenly/srly-ose-celery:${DOCKER_TAG}-${DEVICE_TYPE}
     volumes:
       - /home/pi/.screenly:/data/.screenly
       - /home/pi/screenly_assets:/data/screenly_assets
@@ -37,10 +37,10 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
   redis:
-    image: screenly/srly-ose-redis:${DOCKER_TAG}
+    image: screenly/srly-ose-redis:${DOCKER_TAG}-${DEVICE_TYPE}
 
   srly-ose-nginx:
-    image: screenly/srly-ose-nginx:${DOCKER_TAG}
+    image: screenly/srly-ose-nginx:${DOCKER_TAG}-${DEVICE_TYPE}
     volumes:
       - /home/pi/.screenly:/data/.screenly:ro
       - /home/pi/screenly_assets:/data/screenly_assets:ro
@@ -49,4 +49,4 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
 volumes:
-    screenly-data:
+  screenly-data:

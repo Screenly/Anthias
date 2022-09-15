@@ -40,7 +40,6 @@ jobs:
         id: prepare
         run: |
           echo ::set-output name=buildx_args::\
-            --push \
             --platform linux/arm/v7 \
             --cache-from "type=local,src=/tmp/.buildx-cache" \
             --cache-to "type=local,dest=/tmp/.buildx-cache" \

@@ -1,0 +1,81 @@
+version: "2"
+services:
+  srly-ose-server:
+    image: screenly/srly-ose-server:BOARD_TAG
+    environment:
+      - HOME=/data
+      - LISTEN=0.0.0.0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    devices:
+      - "/dev/vchiq:/dev/vchiq"
+    restart: always
+    volumes:
+      - resin-data:/data
+    labels:
+      io.balena.features.supervisor-api: '1'
+
+  srly-ose-viewer:
+    image: screenly/srly-ose-viewer:BOARD_TAG
+    depends_on:
+      - srly-ose-server
+    environment:
+      - HOME=/data
+      - PORT=80
+      - NOREFRESH=1
+      - LISTEN=srly-ose-nginx
+    privileged: true
+    restart: always
+    volumes:
+      - resin-data:/data
+
+  srly-ose-websocket:
+    image: screenly/srly-ose-websocket:BOARD_TAG
+    depends_on:
+      - srly-ose-server
+    environment:
+      - HOME=/data
+      - LISTEN=0.0.0.0
+    restart: always
+    volumes:
+      - resin-data:/data
+
+  srly-ose-celery:
+    image: screenly/srly-ose-celery:BOARD_TAG
+    depends_on:
+      - srly-ose-server
+      - redis
+    environment:
+      - HOME=/data
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    devices:
+      - "/dev/vchiq:/dev/vchiq"
+    restart: always
+    volumes:
+      - resin-data:/data
+
+  redis:
+    image: screenly/srly-ose-redis:BOARD_TAG
+    ports:
+      - 127.0.0.1:6379:6379
+    restart: always
+    volumes:
+      - redis-data:/var/lib/redis
+
+  srly-ose-nginx:
+    image: screenly/srly-ose-nginx:BOARD_TAG
+    ports:
+      - 80:80
+    environment:
+      - HOME=/data
+    depends_on:
+      - srly-ose-server
+      - srly-ose-websocket
+    restart: always
+    volumes:
+      - resin-data:/data:ro
+
+volumes:
+  resin-data:
+  redis-data:
