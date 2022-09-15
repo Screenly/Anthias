@@ -57,8 +57,8 @@ jobs:
 
           # Define the build arguments
           echo ::set-output name=buildx_args::\
-            --push \
             --platform linux/arm/v7 \
+            --output "type=image,push=true" \
             --cache-from "type=local,src=/tmp/.buildx-cache" \
             --cache-to "type=local,dest=/tmp/.buildx-cache" \
             --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
