@@ -86,7 +86,7 @@ jobs:
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.server" \
-            -t "screenly/srly-ose-server:$GIT_SHORT_HASH-${{ matrix.board }}"
+            -t "screenly/srly-ose-server:$GIT_SHORT_HASH-${{ matrix.board }}" \
             -t "screenly/srly-ose-server:$DOCKER_TAG" .
 
       - name: Building celery container
@@ -94,7 +94,7 @@ jobs:
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.celery" \
-            -t "screenly/srly-ose-celery:$GIT_SHORT_HASH-${{ matrix.board }}"
+            -t "screenly/srly-ose-celery:$GIT_SHORT_HASH-${{ matrix.board }}" \
             -t "screenly/srly-ose-celery:$DOCKER_TAG" .
 
       - name: Building redis container
@@ -102,7 +102,7 @@ jobs:
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.redis" \
-            -t "screenly/srly-ose-redis:$GIT_SHORT_HASH-${{ matrix.board }}"
+            -t "screenly/srly-ose-redis:$GIT_SHORT_HASH-${{ matrix.board }}" \
             -t "screenly/srly-ose-redis:$DOCKER_TAG" .
 
       - name: Building websocket container
@@ -110,7 +110,7 @@ jobs:
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.websocket" \
-            -t "screenly/srly-ose-websocket:$GIT_SHORT_HASH-${{ matrix.board }}"
+            -t "screenly/srly-ose-websocket:$GIT_SHORT_HASH-${{ matrix.board }}" \
             -t "screenly/srly-ose-websocket:$DOCKER_TAG" .
 
       - name: Building nginx container
@@ -118,7 +118,7 @@ jobs:
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.nginx" \
-            -t "screenly/srly-ose-nginx:$GIT_SHORT_HASH-${{ matrix.board }}"
+            -t "screenly/srly-ose-nginx:$GIT_SHORT_HASH-${{ matrix.board }}" \
             -t "screenly/srly-ose-nginx:$DOCKER_TAG" .
 
       - name: Building viewer container
@@ -127,7 +127,7 @@ jobs:
             ${{ steps.prepare.outputs.buildx_args }} \
             --build-arg "PI_VERSION=${{ matrix.board }}" \
             -f docker/Dockerfile.viewer \
-            -t "screenly/srly-ose-viewer:$GIT_SHORT_HASH-${{ matrix.board }}"
+            -t "screenly/srly-ose-viewer:$GIT_SHORT_HASH-${{ matrix.board }}" \
             -t "screenly/srly-ose-viewer:$DOCKER_TAG-${{ matrix.board }}" .
 
       - uses: balena-io/deploy-to-balena-action@master
