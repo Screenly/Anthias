@@ -1,0 +1,57 @@
+name: Build Webview
+
+on:
+  push:
+    branches:
+      - master
+jobs:
+  webview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            src:
+              - 'webview/**'
+
+      - name: Set up Docker Buildx
+        id: buildx
+        if: steps.changes.outputs.src == 'true'
+        uses: crazy-max/ghaction-docker-buildx@v3
+        with:
+          buildx-version: latest
+          qemu-version: latest
+
+      - name: Cache build layers
+        if: steps.changes.outputs.src == 'true'
+        uses: actions/cache@v2
+        id: cache
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-webview-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-webview-buildx-
+
+      - name: Set Docker tag and buildx args
+        id: prepare
+        run: |
+          echo ::set-output name=buildx_args::\
+            --push \
+            --platform linux/arm/v7 \
+            --cache-from "type=local,src=/tmp/.buildx-cache" \
+            --cache-to "type=local,dest=/tmp/.buildx-cache" \
+            --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --build-arg "GIT_HASH=$GITHUB_SHA" \
+            --build-arg "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" \
+            --build-arg "GIT_BRANCH=$GITHUB_REF_NAME"
+
+      - name: Building container
+        run: |
+          cd webview
+          docker buildx build \
+            ${{ steps.prepare.outputs.buildx_args }} \
+            -t qt-builder .
