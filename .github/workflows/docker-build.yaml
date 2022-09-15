@@ -66,18 +66,6 @@ jobs:
             --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
             --build-arg "GIT_BRANCH=$GITHUB_REF_NAME"
 
-      - name: Prepare Balena file
-        run: |
-          # Generage a docker-compose file for Balena with the correct board
-          mkdir -p balena-deploy
-          cat docker-compose.balena.yml | \
-            sed "s/BOARD_TAG/$GIT_SHORT_HASH-${{ matrix.board }}/" \
-            > balena-deploy/docker-compose.yml
-
-          # debug code
-          cat balena-deploy/docker-compose.yml
-          exit 1
-
       - name: Building base container
         run: |
           docker buildx build \
@@ -135,6 +123,14 @@ jobs:
             -f docker/Dockerfile.viewer \
             -t "screenly/srly-ose-viewer:$GIT_SHORT_HASH-${{ matrix.board }}" \
             -t "screenly/srly-ose-viewer:$DOCKER_TAG-${{ matrix.board }}" .
+
+      - name: Prepare Balena file
+        run: |
+          # Generage a docker-compose file for Balena with the correct board
+          mkdir -p balena-deploy
+          cat docker-compose.balena.yml | \
+            sed "s/BOARD_TAG/$GIT_SHORT_HASH-${{ matrix.board }}/" \
+            > balena-deploy/docker-compose.yml
 
       - uses: balena-io/deploy-to-balena-action@master
         id: build
