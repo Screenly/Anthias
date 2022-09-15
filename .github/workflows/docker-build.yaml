@@ -108,4 +108,4 @@ jobs:
             ${{ steps.prepare.outputs.buildx_args }} \
             --build-arg "PI_VERSION=${{ matrix.board }}" \
             -f docker/Dockerfile.viewer \
-            -t "screenly/srly-ose-viewer:$DOCKER_TAG-${{ matrix.board }} .
+            -t "screenly/srly-ose-viewer:$DOCKER_TAG-${{ matrix.board }}" .
