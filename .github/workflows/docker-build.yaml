@@ -53,7 +53,7 @@ jobs:
              export "DOCKER_TAG=production-${{ matrix.board }}";
           fi
           echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_ENV
-          echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> GITHUB_ENV
+          echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
           # Generage a docker-compose file for Balena with the correct board
           mkdir -p balena-deploy
