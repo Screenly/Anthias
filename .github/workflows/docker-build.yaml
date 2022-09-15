@@ -7,7 +7,11 @@ on:
 
 jobs:
   buildx:
+    strategy:
+      matrix:
+        board: ['pi3', 'pi4']
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -39,14 +43,14 @@ jobs:
         id: prepare
         run: |
           if [ "$GITHUB_REF_NAME" == 'master' ]; then
-             export 'DOCKER_TAG=latest';
+             export "DOCKER_TAG=latest-${{ matrix.board }}";
           elif [ "$GITHUB_REF_NAME" == 'production' ]; then
-             export 'DOCKER_TAG=production';
+             export "DOCKER_TAG=production-${{ matrix.board }}";
           fi
           echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_ENV
 
           echo ::set-output name=buildx_args::\
-            --platform linux/arm/v6,linux/arm/v7 \
+            --platform linux/arm/v7 \
             --cache-from "type=local,src=/tmp/.buildx-cache" \
             --cache-to "type=local,dest=/tmp/.buildx-cache" \
             --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
@@ -56,6 +60,14 @@ jobs:
 
       - name: Building base container
         run: |
+          # Adjust the base image for pi4
+          if [ ${{ matrix.board }} == 'pi4' ]; then
+            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberrypi4-64/' \
+              docker/Dockerfile.base
+            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberrypi4-64/' \
+              docker/Dockerfile.viewer
+          fi
+
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
             -f "docker/Dockerfile.base" \
@@ -97,10 +109,10 @@ jobs:
             -f "docker/Dockerfile.nginx" \
             -t "screenly/srly-ose-nginx:$DOCKER_TAG" .
 
-      #- name: Building viewer container
-      #  run: |
-      #    docker buildx build \
-      #      ${{ steps.prepare.outputs.buildx_args }} \
-      #      --build-arg "PI_VERSION=$pi_version" \
-      #      -f docker/Dockerfile.viewer \
-      #      -t "screenly/srly-ose-viewer:$DOCKER_TAG-$pi_version" .
+      - name: Building viewer container
+        run: |
+          docker buildx build \
+            ${{ steps.prepare.outputs.buildx_args }} \
+            --build-arg "PI_VERSION=${{ matrix.board }}" \
+            -f docker/Dockerfile.viewer \
+            -t "screenly/srly-ose-viewer:$DOCKER_TAG-${{ matrix.board }} .
