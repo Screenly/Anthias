@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - master
+    paths:
+      - 'webview/**'
+
 jobs:
   webview:
     runs-on: ubuntu-latest
@@ -11,23 +14,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - uses: dorny/paths-filter@v2
-        id: changes
-        with:
-          filters: |
-            src:
-              - 'webview/**'
-
       - name: Set up Docker Buildx
         id: buildx
-        if: steps.changes.outputs.src == 'true'
         uses: crazy-max/ghaction-docker-buildx@v3
         with:
           buildx-version: latest
           qemu-version: latest
 
       - name: Cache build layers
-        if: steps.changes.outputs.src == 'true'
         uses: actions/cache@v2
         id: cache
         with:

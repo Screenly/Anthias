@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - master
+    paths-ignore:
+      - 'webview/**'
+      - README.md
 
 jobs:
   buildx:
@@ -51,9 +54,11 @@ jobs:
           fi
           echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_ENV
 
-          # Patch the balena file for the correct board
-          sed -i "s/BOARD_TAG/latest-${{ matrix.board }}/" \
-                docker-compose.balena.yml
+          # Generage a docker-compose file for Balena with the correct board
+          mkdir -p balena-deploy
+          cat docker-compose.balena.yml | \
+            sed "s/BOARD_TAG/latest-${{ matrix.board }}/" \
+            > balena-deploy/docker-compose.yml
 
           # Define the build arguments
           echo ::set-output name=buildx_args::\
@@ -122,4 +127,4 @@ jobs:
         with:
           balena_token: ${{ secrets.BALENA_TOKEN }}
           fleet: screenly2/ose-${{ matrix.board }}
-          source: docker-compose.balena.yml
+          source: balena-deploy
