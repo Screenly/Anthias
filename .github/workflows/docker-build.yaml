@@ -61,6 +61,10 @@ jobs:
             sed "s/BOARD_TAG/$GIT_SHORT_HASH-${{ matrix.board }}/" \
             > balena-deploy/docker-compose.yml
 
+          # debug code
+          cat balena-deploy/docker-compose.yml
+          exit 1
+
           # Define the build arguments
           echo ::set-output name=buildx_args::\
             --platform linux/arm/v7 \
