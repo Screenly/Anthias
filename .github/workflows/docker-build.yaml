@@ -28,9 +28,9 @@ jobs:
         id: cache
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          key: ${{ runner.os }}-${{ matrix.board }}-buildx-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-buildx-
+            ${{ runner.os }}-${{ matrix.board }}-buildx-
 
      #- name: Login to DockerHub
      #  if: success() && github.event_name != 'pull_request'
@@ -61,12 +61,12 @@ jobs:
       - name: Building base container
         run: |
           # Adjust the base image for pi4
-          if [ ${{ matrix.board }} == 'pi4' ]; then
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberrypi4-64/' \
-              docker/Dockerfile.base
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberrypi4-64/' \
-              docker/Dockerfile.viewer
-          fi
+          #if [ ${{ matrix.board }} == 'pi4' ]; then
+          #  sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberrypi4-64/' \
+          #    docker/Dockerfile.base
+          #  sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberrypi4-64/' \
+          #    docker/Dockerfile.viewer
+          #fi
 
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
