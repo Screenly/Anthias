@@ -30,6 +30,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-webview-buildx-
 
+      - name: check cache
+        run: |
+          ls -lah /tmp/.buildx-cache
+
       - name: Set Docker tag and buildx args
         id: prepare
         run: |
@@ -49,11 +53,6 @@ jobs:
       #      ${{ steps.prepare.outputs.buildx_args }} \
       #      -t qt-builder .
 
-      - name: Populate cache
-        run: |
-      #    wget https://storage.googleapis.com/ose-lab/cache.tgz
-      #    tar cfz cache.tgz /tmp/.buildx-cache/
-          ls -lah /tmp/.buildx-cache
 
       #- name: Start complation
       #  run: |

@@ -275,7 +275,7 @@ fetch_rpi_firmware
 
 if [ ! "${TARGET-}" ]; then
     # Let's work our way through all Pis in order of relevance
-    for device in pi4 pi3 pi2 pi1; do
+    for device in pi4 pi3; do
         build_qt "$device"
     done
 else
