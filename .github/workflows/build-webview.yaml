@@ -38,12 +38,11 @@ jobs:
           tar xfz cache.tgz -C /tmp/.buildx-cache
           ls -lah /tmp/.buildx-cache
 
-      - name: Set Docker tag and buildx args
+      - name: Set buildx arguments
         id: prepare
         run: |
           echo ::set-output name=buildx_args::\
             --load \
-            --output "type=image,push=false" \
             --cache-from "type=local,src=/tmp/.buildx-cache" \
             --cache-to "type=local,dest=/tmp/.buildx-cache" \
             --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
@@ -57,7 +56,6 @@ jobs:
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
             -t qt-builder .
-
 
       - name: Start complation
         run: |
