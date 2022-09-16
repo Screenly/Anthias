@@ -61,68 +61,21 @@ jobs:
             --output "type=image,push=true" \
             --cache-from "type=local,src=/tmp/.buildx-cache" \
             --cache-to "type=local,dest=/tmp/.buildx-cache" \
+            --build-arg "PI_VERSION=${{ matrix.board }}" \
             --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
             --build-arg "GIT_HASH=$GITHUB_SHA" \
             --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
             --build-arg "GIT_BRANCH=$GITHUB_REF_NAME"
 
-      - name: Building base container
+      - name: Building containers
         run: |
-          docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }} \
-            -f "docker/Dockerfile.base" \
-            -t "screenly/srly-ose-base:$GIT_SHORT_HASH-${{ matrix.board }}" \
-            -t "screenly/srly-ose-base:$DOCKER_TAG" .
-
-      # We need to Clean up and refactor the blow to use concurrencty.
-      - name: Building server container
-        run: |
-          docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }} \
-            -f "docker/Dockerfile.server" \
-            -t "screenly/srly-ose-server:$GIT_SHORT_HASH-${{ matrix.board }}" \
-            -t "screenly/srly-ose-server:$DOCKER_TAG" .
-
-      - name: Building celery container
-        run: |
-          docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }} \
-            -f "docker/Dockerfile.celery" \
-            -t "screenly/srly-ose-celery:$GIT_SHORT_HASH-${{ matrix.board }}" \
-            -t "screenly/srly-ose-celery:$DOCKER_TAG" .
-
-      - name: Building redis container
-        run: |
-          docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }} \
-            -f "docker/Dockerfile.redis" \
-            -t "screenly/srly-ose-redis:$GIT_SHORT_HASH-${{ matrix.board }}" \
-            -t "screenly/srly-ose-redis:$DOCKER_TAG" .
-
-      - name: Building websocket container
-        run: |
-          docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }} \
-            -f "docker/Dockerfile.websocket" \
-            -t "screenly/srly-ose-websocket:$GIT_SHORT_HASH-${{ matrix.board }}" \
-            -t "screenly/srly-ose-websocket:$DOCKER_TAG" .
-
-      - name: Building nginx container
-        run: |
-          docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }} \
-            -f "docker/Dockerfile.nginx" \
-            -t "screenly/srly-ose-nginx:$GIT_SHORT_HASH-${{ matrix.board }}" \
-            -t "screenly/srly-ose-nginx:$DOCKER_TAG" .
-
-      - name: Building viewer container
-        run: |
-          docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }} \
-            --build-arg "PI_VERSION=${{ matrix.board }}" \
-            -f docker/Dockerfile.viewer \
-            -t "screenly/srly-ose-viewer:$GIT_SHORT_HASH-${{ matrix.board }}" \
-            -t "screenly/srly-ose-viewer:$DOCKER_TAG-${{ matrix.board }}" .
+          for container in base server celery redis websocket nginx viewer; do
+            docker buildx build \
+              ${{ steps.prepare.outputs.buildx_args }} \
+              -f "docker/Dockerfile.base" \
+              -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-${{ matrix.board }}" \
+              -t "screenly/srly-ose-$container:$DOCKER_TAG" .
+          done
 
       - name: Prepare Balena file
         run: |
