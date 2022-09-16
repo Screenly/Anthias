@@ -28,13 +28,13 @@ jobs:
         uses: docker/setup-buildx-action@v2
 
       - name: Cache Docker layers
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-${{ matrix.board }}-buildx-${{ github.sha }}
+          key: ${{ runner.os }}-${{ matrix.board }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.board }}-buildx-
+            ${{ runner.os }}-${{ matrix.board }}
 
       - name: Login to DockerHub
         if: success() && github.event_name != 'pull_request'

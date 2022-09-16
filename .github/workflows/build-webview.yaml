@@ -22,16 +22,18 @@ jobs:
         uses: docker/setup-buildx-action@v2
 
       - name: Cache build layers
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         id: cache
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-webview-buildx-${{ github.sha }}
+          key: ${{ runner.os }}-webview
           restore-keys: |
-            ${{ runner.os }}-webview-buildx-
+            ${{ runner.os }}-webview
 
-      - name: check cache
+      - name: Build cache
         run: |
+          wget -q https://storage.googleapis.com/ose-lab/cache.tgz
+          tar xfz cache.tgz -C /tmp/.buildx-cache
           ls -lah /tmp/.buildx-cache
 
       - name: Set Docker tag and buildx args
