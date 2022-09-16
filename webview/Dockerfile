@@ -1,4 +1,4 @@
-FROM --platform=linux/arm/v7 balenalib/rpi-raspbian:buster as builder
+FROM balenalib/raspberrypi3:buster as builder
 
 # There are likely a large number of dependencies that can be stripped out here
 # depending on your needs (and probably in general). My primary objective was just
