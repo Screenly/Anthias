@@ -42,9 +42,24 @@ jobs:
             --build-arg "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" \
             --build-arg "GIT_BRANCH=$GITHUB_REF_NAME"
 
-      - name: Building container
+      #- name: Building container
+      #  run: |
+      #    cd webview
+      #    docker buildx build \
+      #      ${{ steps.prepare.outputs.buildx_args }} \
+      #      -t qt-builder .
+
+      - name: Populate cache
         run: |
-          cd webview
-          docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }} \
-            -t qt-builder .
+          wget https://storage.googleapis.com/ose-lab/cache.tgz
+          tar cvz cache.tgz /tmp/.buildx-cache/
+
+      #- name: Start complation
+      #  run: |
+      #    cd webview
+      #    docker run --rm -t \
+      #      -v ~/tmp/qt-src:/src:Z \
+      #      -v /tmp/.buildx-cache/ccache:/src/ccache:Z \
+      #      -v ~/tmp/qt-build:/build:Z \
+      #      -v $(pwd):/webview:ro \
+      #      qt-builder
