@@ -4,7 +4,7 @@
 
 Since our entire build environment resides inside a Docker container, you don't need to install any packages on the host system. Everything is confined to the Docker image. Do however note that as of this writing, the multi-platform support is still in beta so, you need to enable this. Instructions for how to get started with multi-platform builds can be found [here](https://medium.com/@artur.klauser/building-multi-architecture-docker-images-with-buildx-27d80f7e2408).
 
-```
+```bash
 $ cd webview
 $ docker buildx build \
     --load \
@@ -14,7 +14,7 @@ $ docker buildx build \
 
 You should now be able to invoke a run executing the following command:
 
-```
+```bash
 $ docker run --rm -t \
     -v ~/tmp/qt-src:/src:Z \
     -v ~/tmp/qt-build:/build:Z \
@@ -43,7 +43,7 @@ Webview provides 2 methods:`loadPage` and `loadImage`.
 
 Example of interaction (python):
 
-```
+```python
 from pydbus import SessionBus
 
 bus = SessionBus()
