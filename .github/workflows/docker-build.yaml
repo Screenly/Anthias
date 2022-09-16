@@ -72,9 +72,10 @@ jobs:
       - name: Building containers
         run: |
           for container in base server celery redis websocket nginx viewer; do
+            echo "Building container $container"
             docker buildx build \
               ${{ steps.prepare.outputs.buildx_args }} \
-              -f "docker/Dockerfile.base" \
+              -f "docker/Dockerfile.$container" \
               -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-${{ matrix.board }}" \
               -t "screenly/srly-ose-$container:$DOCKER_TAG" .
           done
