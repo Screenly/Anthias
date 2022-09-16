@@ -7,7 +7,7 @@ set -exuo pipefail
 
 BUILD_TARGET=/build
 SRC=/src
-QT_BRANCH="5.15.2"
+QT_BRANCH="5.15.6"
 DEBIAN_VERSION=$(lsb_release -cs)
 MAKE_CORES="$(expr $(nproc) + 2)"
 
@@ -87,20 +87,20 @@ function fetch_qt5 () {
 
     if [ ! -d "$SRC_DIR" ]; then
 
-        if [ ! -f "qt-everywhere-src-5.15.2.tar.xz" ]; then
-            wget https://download.qt.io/archive/qt/5.15/5.15.2/single/qt-everywhere-src-5.15.2.tar.xz
+        if [ ! -f "qt-everywhere-src-5.15.6.tar.xz" ]; then
+            wget https://download.qt.io/archive/qt/5.15/5.15.6/single/qt-everywhere-opensource-src-5.15.6.tar.xz
         fi
 
         if [ ! -f "md5sums.txt" ]; then
-            wget https://download.qt.io/archive/qt/5.15/5.15.2/single/md5sums.txt
+            wget https://download.qt.io/archive/qt/5.15/5.15.6/single/md5sums.txt
         fi
         md5sum --ignore-missing -c md5sums.txt
 
         # Extract and make a clone
-        tar xf qt-everywhere-src-5.15.2.tar.xz
-        rsync -aqP qt-everywhere-src-5.15.2/ qt5
+        tar xf qt-everywhere-opensource-src-5.15.6.tar.xz
+        rsync -aqP qt-everywhere-src-5.15.6/ qt5
     else
-        rsync -aqP --delete qt-everywhere-src-5.15.2/ qt5
+        rsync -aqP --delete qt-everywhere-src-5.15.6/ qt5
     fi
     popd
 }
