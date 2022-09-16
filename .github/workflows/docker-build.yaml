@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - production
     paths-ignore:
       - 'webview/**'
       - README.md
