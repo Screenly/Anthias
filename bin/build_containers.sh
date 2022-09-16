@@ -29,39 +29,34 @@ if [ -n "${CLEAN_BUILD+x}" ]; then
     DOCKER_BUILD_ARGS+=("--no-cache")
 fi
 
-docker pull balenalib/rpi-raspbian:buster
-
-for container in base server celery redis websocket nginx; do
-    echo "Building $container"
-    docker "${DOCKER_BUILD_ARGS[@]}" \
-        --build-arg "GIT_HASH=$GIT_HASH" \
-        --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
-        --build-arg "GIT_BRANCH=$GIT_BRANCH" \
-        -f "docker/Dockerfile.$container" \
-        -t "screenly/srly-ose-$container:$DOCKER_TAG" .
-
-    # Push if the push flag is set and not cross compiling
-    if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
-        docker push "screenly/srly-ose-$container:$DOCKER_TAG"
-        docker push "screenly/srly-ose-$container:latest"
-    fi
-done
-
-# @TODO Simplify this setup with https://docs.docker.com/desktop/multi-arch/
-echo "Building viewer for different architectures..."
 for pi_version in pi4 pi3 pi2 pi1; do
-    echo "Building viewer container for $pi_version"
-    docker "${DOCKER_BUILD_ARGS[@]}" \
-        --build-arg "PI_VERSION=$pi_version" \
-        --build-arg "GIT_HASH=$GIT_HASH" \
-        --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
-        --build-arg "GIT_BRANCH=$GIT_BRANCH" \
-        -f docker/Dockerfile.viewer \
-        -t "screenly/srly-ose-viewer:$DOCKER_TAG-$pi_version" .
 
-    # Push if the push flag is set and not cross compiling
-    if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
-        docker push "screenly/srly-ose-viewer:$DOCKER_TAG-$pi_version"
-        docker push "screenly/srly-ose-viewer:$DOCKER_TAG-latest"
+    # Patch base image
+    if [ "$pi_version" == 'pi1' ]; then
+        sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
+            docker/Dockerfile.base
+        sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
+            docker/Dockerfile.viewer
+       elif [ "$pi_version" == 'pi2' ]; then
+          sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
+            docker/Dockerfile.base
+          sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
+            docker/Dockerfile.viewer
     fi
+
+    for container in base server celery redis websocket nginx viewer; do
+        echo "Building $container"
+        docker "${DOCKER_BUILD_ARGS[@]}" \
+            --build-arg "GIT_HASH=$GIT_HASH" \
+            --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
+            --build-arg "GIT_BRANCH=$GIT_BRANCH" \
+            --build-arg "PI_VERSION=$pi_version" \
+            -f "docker/Dockerfile.$container" \
+            -t "screenly/srly-ose-$container:$DOCKER_TAG" .
+
+        # Push if the push flag is set and not cross compiling
+        if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
+            docker push "screenly/srly-ose-$container:$DOCKER_TAG-$pi_version"
+        fi
+    done
 done
