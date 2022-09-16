@@ -4,7 +4,9 @@ on:
   push:
     branches:
       - master
+      - production
     paths:
+      - '.github/workflows/build-webview.yaml'
       - 'webview/**'
 
 jobs:
@@ -32,8 +34,6 @@ jobs:
 
       - name: Build cache
         run: |
-          wget -q https://storage.googleapis.com/ose-lab/cache.tgz
-          tar xfz cache.tgz -C /tmp/.buildx-cache
           ls -lah /tmp/.buildx-cache
 
       - name: Set Docker tag and buildx args
