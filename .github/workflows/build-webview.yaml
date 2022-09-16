@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - production
     paths:
       - '.github/workflows/build-webview.yaml'
       - 'webview/**'
@@ -32,8 +31,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-webview
 
-      - name: Build cache
+      - name: Build ccache
+        if: steps.cache.outputs.cache-hit != 'true'
         run: |
+          wget -q https://storage.googleapis.com/ose-lab/cache.tgz
+          tar xfz cache.tgz -C /tmp/.buildx-cache
           ls -lah /tmp/.buildx-cache
 
       - name: Set Docker tag and buildx args
@@ -48,20 +50,19 @@ jobs:
             --build-arg "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" \
             --build-arg "GIT_BRANCH=$GITHUB_REF_NAME"
 
-      #- name: Building container
-      #  run: |
-      #    cd webview
-      #    docker buildx build \
-      #      ${{ steps.prepare.outputs.buildx_args }} \
-      #      -t qt-builder .
+      - name: Building container
+        run: |
+          cd webview
+          docker buildx build \
+            ${{ steps.prepare.outputs.buildx_args }} \
+            -t qt-builder .
 
 
-      #- name: Start complation
-      #  run: |
-      #    cd webview
-      #    docker run --rm -t \
-      #      -v ~/tmp/qt-src:/src:Z \
-      #      -v /tmp/.buildx-cache/ccache:/src/ccache:Z \
-      #      -v ~/tmp/qt-build:/build:Z \
-      #      -v $(pwd):/webview:ro \
-      #      qt-builder
+      - name: Start complation
+        run: |
+          docker run --rm -t \
+            -v ~/tmp/qt-src:/src:Z \
+            -v /tmp/.buildx-cache/ccache:/src/ccache:Z \
+            -v ~/tmp/qt-build:/build:Z \
+            -v $(pwd):/webview:ro \
+            qt-builder
