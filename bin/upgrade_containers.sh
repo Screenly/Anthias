@@ -19,8 +19,7 @@ elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
 elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
     export DEVICE_TYPE="pi2"
 else
-    # This should not be used as an else statement but
-    # let's leave in there for now.
+    # If all else fail, assume pi1
     export DEVICE_TYPE="pi1"
 fi
 

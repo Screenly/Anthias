@@ -14,7 +14,7 @@ jobs:
   buildx:
     strategy:
       matrix:
-        board: ['pi3', 'pi4']
+        board: ['pi1', 'pi2', 'pi3', 'pi4']
     runs-on: ubuntu-latest
 
     steps:
@@ -68,6 +68,20 @@ jobs:
             --build-arg "GIT_HASH=$GITHUB_SHA" \
             --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
             --build-arg "GIT_BRANCH=$GITHUB_REF_NAME"
+
+      - name: Tweak base image based on board
+        run: |
+          if [ "{{ matrix.board }}" == 'pi1' ]; then
+            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
+              docker/Dockerfile.base
+            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
+              docker/Dockerfile.viewer
+          elif [ "{{ matrix.board }}" == 'pi2' ]; then
+            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
+              docker/Dockerfile.base
+            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
+              docker/Dockerfile.viewer
+          fi
 
       - name: Building containers
         run: |
