@@ -42,6 +42,7 @@ jobs:
         id: prepare
         run: |
           echo ::set-output name=buildx_args::\
+            --load \
             --output "type=image,push=false" \
             --cache-from "type=local,src=/tmp/.buildx-cache" \
             --cache-to "type=local,dest=/tmp/.buildx-cache" \
@@ -66,3 +67,8 @@ jobs:
             -v ~/tmp/qt-build:/build:Z \
             -v $(pwd):/webview:ro \
             qt-builder
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: Release files
+          path: ~/tmp/qt-build/
