@@ -59,6 +59,7 @@ jobs:
 
       - name: Start complation
         run: |
+          cd webview
           docker run --rm -t \
             -v ~/tmp/qt-src:/src:Z \
             -v /tmp/.buildx-cache/ccache:/src/ccache:Z \
