@@ -52,7 +52,7 @@ jobs:
       - name: Populate cache
         run: |
           wget https://storage.googleapis.com/ose-lab/cache.tgz
-          tar cvz cache.tgz /tmp/.buildx-cache/
+          tar cfz cache.tgz /tmp/.buildx-cache/
 
       #- name: Start complation
       #  run: |
