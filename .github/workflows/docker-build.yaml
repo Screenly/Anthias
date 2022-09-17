@@ -46,20 +46,24 @@ jobs:
 
       - name: Tweak base image and target based on board
         run: |
-          if [ "{{ matrix.board }}" == 'pi1' ]; then
+          # Logic for Raspberry Pi 1
+          if [ "${{ matrix.board }}" == 'pi1' ]; then
             sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
               docker/Dockerfile.base
             sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
               docker/Dockerfile.viewer
             echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
-          elif [ "{{ matrix.board }}" == 'pi2' ]; then
+
+          # Logic for Raspberry Pi 2
+          elif [ "${{ matrix.board }}" == 'pi2' ]; then
             sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
               docker/Dockerfile.base
             sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
               docker/Dockerfile.viewer
             echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
+
+          # We use the same target for Pi 3 and Pi 4 for now.
           else
-            # We use the same target for Pi 3 and Pi 4 for now.
             echo 'TARGET_PLATFORM=linux/arm/v7' >> $GITHUB_ENV
           fi
 
