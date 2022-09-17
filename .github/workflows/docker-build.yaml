@@ -51,7 +51,7 @@ jobs:
               docker/Dockerfile.base
             sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
               docker/Dockerfile.viewer
-            echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITENV
+            echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
           elif [ "{{ matrix.board }}" == 'pi2' ]; then
             sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
               docker/Dockerfile.base
