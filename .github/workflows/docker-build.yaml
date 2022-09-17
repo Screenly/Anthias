@@ -44,10 +44,28 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Tweak base image and target based on board
+        run: |
+          if [ "{{ matrix.board }}" == 'pi1' ]; then
+            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
+              docker/Dockerfile.base
+            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
+              docker/Dockerfile.viewer
+            echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITENV
+          elif [ "{{ matrix.board }}" == 'pi2' ]; then
+            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
+              docker/Dockerfile.base
+            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
+              docker/Dockerfile.viewer
+            echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
+          else
+            # We use the same target for Pi 3 and Pi 4 for now.
+            echo 'TARGET_PLATFORM=linux/arm/v7' >> $GITHUB_ENV
+          fi
+
       - name: Set Docker tag and buildx args
         id: prepare
         run: |
-
           # Apply the correct docker tag based on branch
           if [ "$GITHUB_REF_NAME" == 'master' ]; then
              export "DOCKER_TAG=latest-${{ matrix.board }}";
@@ -59,7 +77,7 @@ jobs:
 
           # Define the build arguments
           echo ::set-output name=buildx_args::\
-            --platform linux/arm/v7 \
+            --platform "$TARGET_PLATFORM" \
             --output "type=image,push=true" \
             --cache-from "type=local,src=/tmp/.buildx-cache" \
             --cache-to "type=local,dest=/tmp/.buildx-cache" \
@@ -69,19 +87,6 @@ jobs:
             --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
             --build-arg "GIT_BRANCH=$GITHUB_REF_NAME"
 
-      - name: Tweak base image based on board
-        run: |
-          if [ "{{ matrix.board }}" == 'pi1' ]; then
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
-              docker/Dockerfile.base
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
-              docker/Dockerfile.viewer
-          elif [ "{{ matrix.board }}" == 'pi2' ]; then
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
-              docker/Dockerfile.base
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
-              docker/Dockerfile.viewer
-          fi
 
       - name: Building containers
         run: |
