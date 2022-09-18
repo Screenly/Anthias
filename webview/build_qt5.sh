@@ -7,7 +7,10 @@ set -exuo pipefail
 
 BUILD_TARGET=/build
 SRC=/src
-QT_VERSION="5.15.2"
+QT_MAJOR="5"
+QT_MINOR="15"
+QT_BUG_FIX="2"
+QT_VERSION="$QT_MAJOR.$QT_MINOR.$QT_BUG_FIX"
 DEBIAN_VERSION=$(lsb_release -cs)
 MAKE_CORES="$(expr $(nproc) + 2)"
 
@@ -61,46 +64,46 @@ function patch_qt () {
 
     # QT is linking against the old libraries for Pi 1 - Pi 3
     # https://bugreports.qt.io/browse/QTBUG-62216
-    sed -i 's/lEGL/lbrcmEGL/' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
-    sed -i 's/lGLESv2/lbrcmGLESv2/' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
+    sed -i 's/lEGL/lbrcmEGL/' "/src/qt$QT_MAJOR/qtbase/mkspecs/devices/$1/qmake.conf"
+    sed -i 's/lGLESv2/lbrcmGLESv2/' "/src/qt$QT_MAJOR/qtbase/mkspecs/devices/$1/qmake.conf"
 
     # Qmake won't account for sysroot
     # https://wiki.qt.io/RaspberryPi2EGLFS
-    sed -i 's#^VC_LIBRARY_PATH.*#VC_LIBRARY_PATH = $$[QT_SYSROOT]/opt/vc/lib#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
-    sed -i 's#^VC_INCLUDE_PATH.*#VC_INCLUDE_PATH = $$[QT_SYSROOT]/opt/vc/include#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
-    sed -i 's#^VC_LINK_LINE.*#VC_LINK_LINE = -L$${VC_LIBRARY_PATH}#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
-    sed -i 's#^QMAKE_LIBDIR_OPENGL_ES2.*#QMAKE_LIBDIR_OPENGL_ES2 = $${VC_LIBRARY_PATH}#' "/src/qt5/qtbase/mkspecs/devices/$1/qmake.conf"
+    sed -i 's#^VC_LIBRARY_PATH.*#VC_LIBRARY_PATH = $$[QT_SYSROOT]/opt/vc/lib#' "/src/qt$QT_MAJOR/qtbase/mkspecs/devices/$1/qmake.conf"
+    sed -i 's#^VC_INCLUDE_PATH.*#VC_INCLUDE_PATH = $$[QT_SYSROOT]/opt/vc/include#' "/src/qt$QT_MAJOR/qtbase/mkspecs/devices/$1/qmake.conf"
+    sed -i 's#^VC_LINK_LINE.*#VC_LINK_LINE = -L$${VC_LIBRARY_PATH}#' "/src/qt$QT_MAJOR/qtbase/mkspecs/devices/$1/qmake.conf"
+    sed -i 's#^QMAKE_LIBDIR_OPENGL_ES2.*#QMAKE_LIBDIR_OPENGL_ES2 = $${VC_LIBRARY_PATH}#' "/src/qt$QT_MAJOR/qtbase/mkspecs/devices/$1/qmake.conf"
 }
 
 function patch_qtwebengine () {
     # Patch up WebEngine due to GCC bug
     # https://www.enricozini.org/blog/2020/qt5/build-qt5-cross-builder-with-raspbian-sysroot-compiling-with-the-sysroot/
-    pushd "/src/qt5/qtwebengine"
+    pushd "/src/qt$QT_MAJOR/qtwebengine"
     sed -i '1s/^/#pragma GCC push_options\n#pragma GCC optimize ("O0")\n/' src/3rdparty/chromium/third_party/skia/third_party/skcms/skcms.cc
     echo "#pragma GCC pop_options" >> src/3rdparty/chromium/third_party/skia/third_party/skcms/skcms.cc
     popd
 }
 
-function fetch_qt5 () {
-    local SRC_DIR="/src/qt5"
+function fetch_qt () {
+    local SRC_DIR="/src/qt$QT_MAJOR"
     pushd /src
 
     if [ ! -d "$SRC_DIR" ]; then
 
-        if [ ! -f "qt-everywhere-src-5.15.2.tar.xz" ]; then
-            wget https://download.qt.io/archive/qt/5.15/5.15.2/single/qt-everywhere-src-5.15.2.tar.xz
+        if [ ! -f "qt-everywhere-src-$QT_VERSION.tar.xz" ]; then
+            wget https://download.qt.io/archive/qt/$QT_MAJOR.$QT_MINOR/$QT_VERSION/single/qt-everywhere-src-$QT_VERSION.tar.xz
         fi
 
         if [ ! -f "md5sums.txt" ]; then
-            wget https://download.qt.io/archive/qt/5.15/5.15.2/single/md5sums.txt
+            wget https://download.qt.io/archive/qt/$QT_MAJOR.$QT_MINOR/$QT_VERSION/single/md5sums.txt
         fi
         md5sum --ignore-missing -c md5sums.txt
 
         # Extract and make a clone
-        tar xf qt-everywhere-src-5.15.2.tar.xz
-        rsync -aqP qt-everywhere-src-5.15.2/ qt5
+        tar xf qt-everywhere-src-$QT_VERSION.tar.xz
+        rsync -aqP qt-everywhere-src-$QT_VERSION/ qt$QT_MAJOR
     else
-        rsync -aqP --delete qt-everywhere-src-5.15.2/ qt5
+        rsync -aqP --delete qt-everywhere-src-$QT_VERSION/ qt$QT_MAJOR
     fi
     popd
 }
@@ -111,11 +114,11 @@ function build_qt () {
     local SRC_DIR="/src/$1"
 
 
-    if [ ! -f "$BUILD_TARGET/qt5-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz" ]; then
+    if [ ! -f "$BUILD_TARGET/qt$QT_MAJOR-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz" ]; then
         /usr/games/cowsay -f tux "Building QT for $1"
 
         # Make sure we have a clean QT 5 tree
-        fetch_qt5
+        fetch_qt
 
         if [ "${CLEAN_BUILD-x}" == "1" ]; then
             rm -rf "$SRC_DIR"
@@ -155,7 +158,7 @@ function build_qt () {
 
         # @TODO: Add in the `-opengl es2` flag for Pi 1 - Pi 3.
         # Currently this breaks the QTWebEngine process.
-        /src/qt5/configure \
+        /src/qt$QT_MAJOR/configure \
             "${BUILD_ARGS[@]}" \
             -ccache \
             -confirm-license \
@@ -163,7 +166,7 @@ function build_qt () {
             -device-option CROSS_COMPILE=/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf- \
             -eglfs \
             -evdev \
-            -extprefix "$SRC_DIR/qt5pi" \
+            -extprefix "$SRC_DIR/qt${QT_MAJOR}pi" \
             -force-pkg-config \
             -glib \
             -make libs \
@@ -178,7 +181,7 @@ function build_qt () {
             -nomake examples \
             -nomake tests \
             -opensource \
-            -prefix /usr/local/qt5pi \
+            -prefix "/usr/local/qt${QT_MAJOR}pi" \
             -qpa eglfs \
             -qt-pcre \
             -reduce-exports \
@@ -227,14 +230,14 @@ function build_qt () {
 
         # I'm not sure we actually need this anymore. It's from an
         # old build process for QT 4.9 that we used.
-        cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt5pi/lib/fonts"
+        cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt${QT_MAJOR}pi/lib/fonts"
 
         pushd "$SRC_DIR"
-        tar cfz "$BUILD_TARGET/qt5-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz" qt5pi
+        tar cfz "$BUILD_TARGET/qt$QT_MAJOR-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz" qt${QT_MAJOR}pi
         popd
 
         pushd "$BUILD_TARGET"
-        sha256sum "qt5-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz" > "qt5-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz.sha256"
+        sha256sum "qt$QT_MAJOR-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz" > "qt$QT_MAJOR-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz.sha256"
         popd
     else
         echo "QT Build already exist."
@@ -246,7 +249,7 @@ function build_qt () {
 
             pushd "$SRC_DIR/webview"
 
-            "$SRC_DIR/qt5pi/bin/qmake"
+            "$SRC_DIR/qt${QT_MAJOR}pi/bin/qmake"
             make -j"$MAKE_CORES"
             make install
 
