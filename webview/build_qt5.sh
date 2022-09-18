@@ -7,14 +7,14 @@ set -exuo pipefail
 
 BUILD_TARGET=/build
 SRC=/src
-QT_BRANCH="5.15.2"
+QT_VERSION="5.15.2"
 DEBIAN_VERSION=$(lsb_release -cs)
 MAKE_CORES="$(expr $(nproc) + 2)"
 
 mkdir -p "$BUILD_TARGET"
 mkdir -p "$SRC"
 
-/usr/games/cowsay -f tux "Building QT version $QT_BRANCH."
+/usr/games/cowsay -f tux "Building QT version $QT_VERSION."
 if [ "${BUILD_WEBENGINE-x}" == "1" ]; then
     /usr/games/cowsay -f tux "...with QTWebEngine."
 fi
@@ -111,7 +111,7 @@ function build_qt () {
     local SRC_DIR="/src/$1"
 
 
-    if [ ! -f "$BUILD_TARGET/qt5-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" ]; then
+    if [ ! -f "$BUILD_TARGET/qt5-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz" ]; then
         /usr/games/cowsay -f tux "Building QT for $1"
 
         # Make sure we have a clean QT 5 tree
@@ -230,17 +230,17 @@ function build_qt () {
         cp -r /usr/share/fonts/truetype/dejavu/ "$SRC_DIR/qt5pi/lib/fonts"
 
         pushd "$SRC_DIR"
-        tar cfz "$BUILD_TARGET/qt5-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" qt5pi
+        tar cfz "$BUILD_TARGET/qt5-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz" qt5pi
         popd
 
         pushd "$BUILD_TARGET"
-        sha256sum "qt5-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" > "qt5-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz.sha256"
+        sha256sum "qt5-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz" > "qt5-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz.sha256"
         popd
     else
         echo "QT Build already exist."
     fi
 
-    if [ ! -f "$BUILD_TARGET/webview-$QT_BRANCH-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" ]; then
+    if [ ! -f "$BUILD_TARGET/webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" ]; then
         if [ "${BUILD_WEBVIEW-x}" == "1" ]; then
             cp -rf /webview "$SRC_DIR/"
 
@@ -255,11 +255,11 @@ function build_qt () {
             cp -rf /webview/res fakeroot/share/ScreenlyWebview/
 
             pushd fakeroot
-            tar cfz "$BUILD_TARGET/webview-$QT_BRANCH-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" .
+            tar cfz "$BUILD_TARGET/webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" .
             popd
 
             pushd "$BUILD_TARGET"
-            sha256sum "webview-$QT_BRANCH-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" > "webview-$QT_BRANCH-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz.sha256"
+            sha256sum "webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" > "webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz.sha256"
             popd
         fi
     else
