@@ -100,9 +100,9 @@ function fetch_qt () {
 
         # Extract and make a clone
         tar xf "qt-everywhere-opensource-src-$QT_VERSION.tar.xz"
-        rsync -aqP "qt-everywhere-opensource-src-$QT_VERSION/" qt5
+        rsync -aqP "qt-everywhere-src-$QT_VERSION/" "qt$QT_MAJOR"
     else
-        rsync -aqP --delete "qt-everywhere-opensource-src-$QT_VERSION/" qt5
+        rsync -aqP --delete "qt-everywhere-src-$QT_VERSION/" "qt$QT_MAJOR"
     fi
     popd
 }
