@@ -156,11 +156,14 @@ def is_up_to_date():
                 }]
             }
             headers = {'content-type': 'application/json'}
-            response = requests_post(
+
+            try:
+                requests_post(
                     ga_url,
                     data=json.dumps(payload),
                     headers=headers
-            )
-
+                )
+            except exceptions.ConnectionError:
+                pass
 
     return latest_sha == git_hash
