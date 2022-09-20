@@ -14,7 +14,7 @@ jobs:
   buildx:
     strategy:
       matrix:
-        board: ['pi3', 'pi4']
+        board: ['pi1', 'pi2', 'pi3', 'pi4']
     runs-on: ubuntu-latest
 
     steps:
@@ -44,10 +44,32 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Tweak base image and target based on board
+        run: |
+          # Logic for Raspberry Pi 1
+          if [ "${{ matrix.board }}" == 'pi1' ]; then
+            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
+              docker/Dockerfile.base
+            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
+              docker/Dockerfile.viewer
+            echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
+
+          # Logic for Raspberry Pi 2
+          elif [ "${{ matrix.board }}" == 'pi2' ]; then
+            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
+              docker/Dockerfile.base
+            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
+              docker/Dockerfile.viewer
+            echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
+
+          # We use the same target for Pi 3 and Pi 4 for now.
+          else
+            echo 'TARGET_PLATFORM=linux/arm/v7' >> $GITHUB_ENV
+          fi
+
       - name: Set Docker tag and buildx args
         id: prepare
         run: |
-
           # Apply the correct docker tag based on branch
           if [ "$GITHUB_REF_NAME" == 'master' ]; then
              export "DOCKER_TAG=latest-${{ matrix.board }}";
@@ -59,7 +81,7 @@ jobs:
 
           # Define the build arguments
           echo ::set-output name=buildx_args::\
-            --platform linux/arm/v7 \
+            --platform "$TARGET_PLATFORM" \
             --output "type=image,push=true" \
             --cache-from "type=local,src=/tmp/.buildx-cache" \
             --cache-to "type=local,dest=/tmp/.buildx-cache" \
@@ -69,12 +91,14 @@ jobs:
             --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
             --build-arg "GIT_BRANCH=$GITHUB_REF_NAME"
 
+
       - name: Building containers
         run: |
           for container in base server celery redis websocket nginx viewer; do
+            echo "Building container $container"
             docker buildx build \
               ${{ steps.prepare.outputs.buildx_args }} \
-              -f "docker/Dockerfile.base" \
+              -f "docker/Dockerfile.$container" \
               -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-${{ matrix.board }}" \
               -t "screenly/srly-ose-$container:$DOCKER_TAG" .
           done
