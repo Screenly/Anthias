@@ -47,7 +47,7 @@ def touch(path):
 
 def is_ci():
     """
-    Returns True when run on Travis.
+    Returns True when run on CI.
     """
     return string_to_bool(os.getenv('CI', False))
 

@@ -2,11 +2,11 @@ import os
 import logging
 import string
 import random
-from requests import get as requests_get, exceptions
+import json
+from requests import get as requests_get, post as requests_post, exceptions
 from lib.utils import is_balena_app, is_docker, is_ci, connect_to_redis
 from lib.diagnostics import get_git_branch, get_git_hash, get_git_short_hash
 from lib.raspberry_pi_helper import parse_cpu_info, lookup_raspberry_pi_revision
-from mixpanel import Mixpanel, MixpanelException
 from settings import settings
 
 r = connect_to_redis()
@@ -16,6 +16,10 @@ REMOTE_BRANCH_STATUS_TTL = (60 * 60 * 24)
 
 # Suspend all external requests if we enconter an error other than a ConnectionError for 5 minutes
 ERROR_BACKOFF_TTL = (60 * 5)
+
+# Google Analytics data
+ANALYTICS_MEASURE_ID = 'G-S3VX8HTPK7'
+ANALYTICS_API_SECRET = 'G8NcBpRIS9qBsOj3ODK8gw'
 
 def handle_github_error(exc, action):
     # After failing, dont retry until backoff timer expires
@@ -132,19 +136,34 @@ def is_up_to_date():
 
     if retrieved_update:
         if not settings['analytics_opt_out'] and not is_ci():
-            mp = Mixpanel('d18d9143e39ffdb2a4ee9dcc5ed16c56')
+            ga_url = 'https://www.google-analytics.com/mp/collect?measurement_id={}&api_secret={}'.format(
+                    ANALYTICS_MEASURE_ID,
+                    ANALYTICS_API_SECRET
+            )
+            payload = {
+                'client_id': device_id,
+                'events': [{
+                    'name': 'version',
+                    'params': {
+                        'Branch': str(git_branch),
+                        'Hash': str(git_short_hash),
+                        'NOOBS': os.path.isfile('/boot/os_config.json'),
+                        'Balena': is_balena_app(),
+                        'Docker': is_docker(),
+                        'Pi_Version': lookup_raspberry_pi_revision(
+                            parse_cpu_info()['revision'])['model']
+                        }
+                }]
+            }
+            headers = {'content-type': 'application/json'}
+
             try:
-                mp.track(device_id, 'Version', {
-                    'Branch': str(git_branch),
-                    'Hash': str(git_short_hash),
-                    'NOOBS': os.path.isfile('/boot/os_config.json'),
-                    'Balena': is_balena_app(),
-                    'Docker': is_docker(),
-                    'Pi_Version': lookup_raspberry_pi_revision(parse_cpu_info()['revision'])['model']
-                })
-            except MixpanelException:
-                pass
-            except AttributeError:
+                requests_post(
+                    ga_url,
+                    data=json.dumps(payload),
+                    headers=headers
+                )
+            except exceptions.ConnectionError:
                 pass
 
     return latest_sha == git_hash
