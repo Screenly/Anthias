@@ -4,7 +4,6 @@ certifi==2021.10.8
 configparser==4.0.2
 cryptography==3.3.2
 idna==2.6
-mixpanel==4.7.0
 netifaces==0.10.9
 pydbus==0.6.0
 python-dateutil==2.8.1
