@@ -183,7 +183,7 @@ RUN mkdir -p /sysroot/usr /sysroot/opt /sysroot/lib
 COPY --from=builder /lib/ /sysroot/lib/
 COPY --from=builder /usr/include/ /sysroot/usr/include/
 COPY --from=builder /usr/lib/ /sysroot/usr/lib/
-COPY --from=builder /opt/vc/ sysroot/opt/vc/
+COPY --from=builder /opt/vc/ /sysroot/opt/vc/
 
 ENV BUILD_WEBVIEW 1
 ENV CCACHE_MAXSIZE 10G
