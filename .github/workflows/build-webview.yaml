@@ -34,6 +34,7 @@ jobs:
       - name: Build ccache
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
+          ls -lah /tmp/
           wget -q https://storage.googleapis.com/ose-lab/cache.tgz
           tar xfz cache.tgz -C /tmp/.buildx-cache
           ls -lah /tmp/.buildx-cache
