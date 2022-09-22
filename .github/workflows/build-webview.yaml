@@ -29,15 +29,6 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build ccache
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: |
-          # Unclear why this is needed
-          mkdir -p /tmp/.buildx-cache
-          wget -q https://storage.googleapis.com/ose-lab/cache.tgz
-          tar xfz cache.tgz -C /tmp/.buildx-cache
-          ls -lah /tmp/.buildx-cache
-
       - name: Set buildx arguments
         id: prepare
         run: |
@@ -99,7 +90,8 @@ jobs:
             -v /tmp/.cache/ccache:/src/ccache:Z \
             -v ~/tmp/qt-build:/build:Z \
             -v $(pwd):/webview:ro \
-            screenly/ose-qt-builder:latest ${{ matrix.board }}
+            screenly/ose-qt-builder:latest \
+            /usr/local/bin/build_qt5.sh ${{ matrix.board }}
 
       - uses: actions/upload-artifact@v3
         with:
