@@ -90,8 +90,8 @@ jobs:
             -v /tmp/.cache/ccache:/src/ccache:Z \
             -v ~/tmp/qt-build:/build:Z \
             -v $(pwd):/webview:ro \
-            screenly/ose-qt-builder:latest \
-            /usr/local/bin/build_qt5.sh ${{ matrix.board }}
+            -e TARGET=${{ matrix.board }} \
+            screenly/ose-qt-builder:latest
 
       - uses: actions/upload-artifact@v3
         with:
