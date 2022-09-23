@@ -106,12 +106,12 @@ jobs:
           done
 
   balena:
+    needs: buildx
     strategy:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
     runs-on: ubuntu-latest
-    needs: buildx
-    jobs:
+    steps:
       - name: Checkout
         uses: actions/checkout@v3
 
