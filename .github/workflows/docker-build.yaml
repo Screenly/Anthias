@@ -67,8 +67,7 @@ jobs:
             echo 'TARGET_PLATFORM=linux/arm/v7' >> $GITHUB_ENV
           fi
 
-      - name: Set Docker tag and buildx args
-        id: prepare
+      - name: Set Docker tag
         run: |
           # Apply the correct docker tag based on branch
           if [ "$GITHUB_REF_NAME" == 'master' ]; then
@@ -79,6 +78,9 @@ jobs:
           echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_ENV
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
+      - name: Set buildx args
+        id: buildx-args
+        run: |
           # Define the build arguments
           echo ::set-output name=buildx_args::\
             --platform "$TARGET_PLATFORM" \
@@ -97,11 +99,25 @@ jobs:
           for container in base server celery redis websocket nginx viewer; do
             echo "Building container $container"
             docker buildx build \
-              ${{ steps.prepare.outputs.buildx_args }} \
+              ${{ steps.buildx-args.outputs.buildx_args }} \
               -f "docker/Dockerfile.$container" \
               -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-${{ matrix.board }}" \
               -t "screenly/srly-ose-$container:$DOCKER_TAG" .
           done
+
+  balena:
+    strategy:
+      matrix:
+        board: ['pi1', 'pi2', 'pi3', 'pi4']
+    runs-on: ubuntu-latest
+    needs: buildx
+    jobs:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set Docker tag
+        run: |
+          echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Prepare Balena file
         run: |
