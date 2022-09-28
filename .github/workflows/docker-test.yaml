@@ -58,7 +58,7 @@ jobs:
             procps \
             psmisc \
             python-dev \
-            python-gobject \
+            python-gobject-2 \
             python-pil \
             python-setuptools \
             python-simplejson \
