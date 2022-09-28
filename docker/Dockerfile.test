@@ -1,0 +1,18 @@
+FROM screenly/srly-ose-base:latest-x86
+
+ADD requirements/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.dev.txt
+
+RUN mkdir -p /usr/src/app
+COPY . /usr/src/app
+WORKDIR /usr/src/app
+
+ARG GIT_HASH
+ENV GIT_HASH=$GIT_HASH
+ARG GIT_SHORT_HASH
+ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
+ARG GIT_BRANCH
+ENV GIT_BRANCH=$GIT_BRANCH
