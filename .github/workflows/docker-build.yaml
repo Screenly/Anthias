@@ -9,9 +9,32 @@ on:
       - 'webview/**'
       - '.github/workflows/build-webview.yaml'
       - README.md
+  pull_request:
+    branches:
+      - master
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare the test environment.
+        run: |
+          mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets /tmp/USB/cleanup_folder
+          curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
+          cp /tmp/image.png /tmp/USB/image.png
+          cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
+          cp tests/config/ffserver.conf /etc/ffserver.conf
+          python server.py &
+          server_pid=$!
+          sleep 3
+
+      - name: Run the unit tests.
+        run: |
+          find . ! -path "*/rtmplite/*" -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
+          nosetests -v -a '!fixme'
+
   buildx:
+    needs: test
     strategy:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
@@ -131,5 +154,5 @@ jobs:
         id: build
         with:
           balena_token: ${{ secrets.BALENA_TOKEN }}
-          fleet: screenly_ose/screenly-ose-${{ matrix.board }}
+          fleet: screenly2/ose-${{ matrix.board }}
           source: balena-deploy
