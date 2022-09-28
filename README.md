@@ -34,10 +34,7 @@ During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast inte
 
 ## Installing with Balena
 
-Deploying Screenly OSE to Balena is a breeze. Note that the Deploy to Balena button will **only** work for Pi 3. See the page below for how to run on other boards.
-
-
-For further information please take a look at our docs section where we have a [Balena specific guide](https://github.com/Screenly/screenly-ose/blob/master/docs/balena.md).
+While you can deploy to your own Balena fleet, the easiest way to deploy using [Balena OpenFleets](https://hub.balena.io/organizations/screenly_ose/fleets).gT
 
 ## Upgrading on Screenly OSE
 
