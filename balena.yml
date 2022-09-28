@@ -1,12 +1,22 @@
 name: "Screenly OSE"
 type: "sw.application"
 description: >-
-  "The most popular digital signage project for the Raspberry Pi"
+  The most popular digital signage project on GitHub
 post-provisioning: >-
 
-Screenly Open Source Edition (OSE) is free digital signage software that is backed by our community and maintained by Screenly, Inc. We launched Screenly OSE back in 2012 on GitHub, and it now powers thousands of screens around the world.
+  [![An introduction to digital signage with Screenly OSE](http://img.youtube.com/vi/FQte5yP0azE/0.jpg)](http://www.youtube.com/watch?v=FQte5yP0azE)
 
-[![An introduction to digital signage with Screenly OSE](http://img.youtube.com/vi/FQte5yP0azE/0.jpg)](http://www.youtube.com/watch?v=FQte5yP0azE)
+  ## Introduction
+
+  Screenly Open Source Edition (OSE) is free digital signage software that is backed by our community and maintained by Screenly, Inc.
+
+  With Screenly OSE, a monitor/TV and a Raspberry Pi, you can create a remotely managed screen that can display:
+
+  - images
+  - video
+  - web pages
+
+  Thanks to Balena [OpenFleets](https://hub.balena.io/organizations/screenly_ose/fleets), you benefit from having automatic updates. As soon as updates are shipped, they will be deployed to your device.
 
 assets:
   repository:
