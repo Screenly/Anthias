@@ -21,18 +21,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Prepare the test environment.
+      - name: Check Python version
         run: |
-          mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets /tmp/USB/cleanup_folder
-          curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
-          cp /tmp/image.png /tmp/USB/image.png
-          cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
-          sudo cp tests/config/ffserver.conf /etc/ffserver.conf
-          python server.py &
-          server_pid=$!
-          sleep 3
+          which python
+          python --version
 
-      - name: Run the unit tests.
-        run: |
-          find . ! -path "*/rtmplite/*" -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
-          nosetests -v -a '!fixme'
+      # TODO: Uncomment when ready.
+      # - name: Prepare the test environment.
+      #   run: |
+      #     mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets /tmp/USB/cleanup_folder
+      #     curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
+      #     cp /tmp/image.png /tmp/USB/image.png
+      #     cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
+      #     sudo cp tests/config/ffserver.conf /etc/ffserver.conf
+      #     python server.py &
+      #     server_pid=$!
+      #     sleep 3
+
+      # TODO: Uncomment when ready.
+      # - name: Run the unit tests.
+      #   run: |
+      #     find . ! -path "*/rtmplite/*" -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
+      #     nosetests -v -a '!fixme'
