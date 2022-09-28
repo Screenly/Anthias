@@ -36,6 +36,7 @@ jobs:
           which python
           python --version
 
+      # TODO: Use the base Screenly OSE image, if possible.
       - name: Install dependencies using apt-get
         run: |
           sudo apt-get update && \
@@ -65,16 +66,16 @@ jobs:
           sudo apt-get clean
 
       # TODO: Uncomment when ready.
-      # - name: Prepare the test environment.
-      #   run: |
-      #     mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets /tmp/USB/cleanup_folder
-      #     curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
-      #     cp /tmp/image.png /tmp/USB/image.png
-      #     cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
-      #     sudo cp tests/config/ffserver.conf /etc/ffserver.conf
-      #     python server.py &
-      #     server_pid=$!
-      #     sleep 3
+      - name: Prepare the test environment.
+        run: |
+          mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets /tmp/USB/cleanup_folder
+          curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
+          cp /tmp/image.png /tmp/USB/image.png
+          cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
+          sudo cp tests/config/ffserver.conf /etc/ffserver.conf
+          python server.py &
+          server_pid=$!
+          sleep 3
 
       # TODO: Uncomment when ready.
       # - name: Run the unit tests.
