@@ -159,5 +159,5 @@ jobs:
         id: build
         with:
           balena_token: ${{ secrets.BALENA_TOKEN }}
-          fleet: screenly2/ose-${{ matrix.board }}
+          fleet: screenly_ose/screenly-ose-${{ matrix.board }}
           source: balena-deploy
