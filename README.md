@@ -34,7 +34,7 @@ During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast inte
 
 ## Installing with Balena
 
-While you can deploy to your own Balena fleet, the easiest way to deploy using [Balena OpenFleets](https://hub.balena.io/organizations/screenly_ose/fleets).gT
+While you can deploy to your own Balena fleet, the easiest way to deploy using [Balena OpenFleets](https://hub.balena.io/organizations/screenly_ose/fleets).
 
 ## Upgrading on Screenly OSE
 
