@@ -1,6 +1,13 @@
 name: "Screenly OSE"
 type: "sw.application"
-description: "The most popular digital signage project for the Raspberry Pi"
+description: >-
+  "The most popular digital signage project for the Raspberry Pi"
+post-provisioning: >-
+
+Screenly Open Source Edition (OSE) is free digital signage software that is backed by our community and maintained by Screenly, Inc. We launched Screenly OSE back in 2012 on GitHub, and it now powers thousands of screens around the world.
+
+[![An introduction to digital signage with Screenly OSE](http://img.youtube.com/vi/FQte5yP0azE/0.jpg)](http://www.youtube.com/watch?v=FQte5yP0azE)
+
 assets:
   repository:
     type: "blob.asset"
@@ -11,18 +18,3 @@ assets:
     data:
       url: >-
         "https://raw.githubusercontent.com/Screenly/screenly-ose/master/static/img/ose-logo.png"
-data:
-  applicationConfigVariables:
-    - BALENA_HOST_CONFIG_gpu_mem: 128
-    - BALENA_HOST_CONFIG_framebuffer_depth: 32
-    - BALENA_HOST_CONFIG_framebuffer_ignore_alpha: 1
-    - BALENA_HOST_CONFIG_dtparam: "\"i2c_arm=on\",\"spi=on\",\"audio=on\",\"vc4-kms-v3d\""
-  defaultDeviceType: "raspberrypi3"
-  supportedDeviceTypes:
-    - "raspberry-pi"
-    - "raspberry-pi2"
-    - "raspberrypi3"
-    - "raspberrypi3-64"
-    - "raspberrypi4-64"
-    - "fincm3"
-    - "raspberrypi400-64"
