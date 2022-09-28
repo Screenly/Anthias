@@ -38,8 +38,8 @@ jobs:
 
       - name: Install dependencies using apt-get
         run: |
-          apt-get update && \
-          apt-get -y install --no-install-recommends \
+          sudo apt-get update && \
+          sudo apt-get -y install --no-install-recommends \
             build-essential \
             cec-utils \
             curl \
@@ -63,7 +63,7 @@ jobs:
             python-setuptools \
             python-simplejson \
             sqlite3 && \
-          apt-get clean
+          sudo apt-get clean
 
       # TODO: Uncomment when ready.
       # - name: Prepare the test environment.
