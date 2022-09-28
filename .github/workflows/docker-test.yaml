@@ -65,7 +65,11 @@ jobs:
             sqlite3 && \
           sudo apt-get clean
 
-      # TODO: Uncomment when ready.
+      - name: Install Python dependencies.
+        run: |
+          pip install --no-cache-dir -r ./requirements/requirements.txt
+          pip install --no-cache-dir -r ./requirements/requirements.dev.txt
+
       - name: Prepare the test environment.
         run: |
           mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets /tmp/USB/cleanup_folder
