@@ -3,11 +3,9 @@
 import os
 import sh
 import sqlite3
-import re
 import utils
 import cec
 from lib import raspberry_pi_helper
-from utils import connect_to_redis
 from pprint import pprint
 from datetime import datetime
 
@@ -84,6 +82,7 @@ def get_git_short_hash():
 def get_git_hash():
     return os.getenv('GIT_HASH')
 
+
 def try_connectivity():
     urls = [
         'http://www.google.com',
@@ -125,28 +124,28 @@ def get_raspberry_model(raspberry_pi_revision):
     """
     Quick DRY workaround. Needs to be refactored later.
     """
-    return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision)['model']
+    return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision).get('model', False)
 
 
 def get_raspberry_revision(raspberry_pi_revision):
     """
     Quick DRY workaround. Needs to be refactored later.
     """
-    return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision)['revision']
+    return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision).get('revision', False)
 
 
 def get_raspberry_ram(raspberry_pi_revision):
     """
     Quick DRY workaround. Needs to be refactored later.
     """
-    return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision)['ram']
+    return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision).get('ram', False)
 
 
 def get_raspberry_manufacturer(raspberry_pi_revision):
     """
     Quick DRY workaround. Needs to be refactored later.
     """
-    return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision)['manufacturer']
+    return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision).get('manufacturer', False)
 
 
 def compile_report():
