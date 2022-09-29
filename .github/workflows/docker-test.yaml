@@ -40,5 +40,19 @@ jobs:
         run: |
           which docker-compose
           docker-compose --version
-          alias docker-compose
-          docker compose --version
+
+      - name: Build using Docker Compose
+        run: |
+          docker-compose -f docker-compose.test.yml build
+
+      - name: Start the test container
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+
+      - name: Run the tests inside the container
+        run: |
+          docker-compose -f docker-compose.test.yml exec srly-ose-test bash ./bin/run_tests.sh
+
+      - name: Stop the test container
+        run: |
+          docker-compose -f docker-compose.test.yml down
