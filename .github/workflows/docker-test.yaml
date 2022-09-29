@@ -21,11 +21,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Set Python version
-        uses: actions/setup-python@v4
-        with:
-          python-version: '2.7'
-
       - name: Check pip version
         run: |
           which pip
@@ -36,53 +31,7 @@ jobs:
           which python
           python --version
 
-      # TODO: Use the base Screenly OSE image, if possible.
-      - name: Install dependencies using apt-get
+      - name: Check if Docker is pre-installed
         run: |
-          sudo apt-get update && \
-          sudo apt-get -y install --no-install-recommends \
-            build-essential \
-            cec-utils \
-            curl \
-            ffmpeg \
-            git \
-            git-core \
-            ifupdown \
-            libcec-dev  \
-            libffi-dev \
-            libssl-dev \
-            libzmq3-dev \
-            lsb-release \
-            mplayer \
-            net-tools \
-            procps \
-            psmisc \
-            python-dev \
-            python-gi \
-            python-pil \
-            python-setuptools \
-            python-simplejson \
-            sqlite3 && \
-          sudo apt-get clean
-
-      - name: Install Python dependencies.
-        run: |
-          pip install --no-cache-dir -r ./requirements/requirements.txt
-          pip install --no-cache-dir -r ./requirements/requirements.dev.txt
-
-      - name: Prepare the test environment.
-        run: |
-          mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets /tmp/USB/cleanup_folder
-          curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
-          cp /tmp/image.png /tmp/USB/image.png
-          cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
-          sudo cp tests/config/ffserver.conf /etc/ffserver.conf
-          python server.py &
-          server_pid=$!
-          sleep 3
-
-      # TODO: Uncomment when ready.
-      # - name: Run the unit tests.
-      #   run: |
-      #     find . ! -path "*/rtmplite/*" -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
-      #     nosetests -v -a '!fixme'
+          which docker
+          docker --version
