@@ -22,3 +22,6 @@ execute_tests
 if [ -n "$server_pid" ]; then
     kill $server_pid
 fi
+
+# TODO: Remove after debugging. Just checking if this will fail in CI runs.
+exit 1
