@@ -1,7 +1,7 @@
 #!/bin/bash
 
 prepare () {
-    mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets /tmp/USB/cleanup_folder
+    mkdir -p ~/.screenly /tmp/USB/cleanup_folder
     curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
     cp /tmp/image.png /tmp/USB/image.png
     cp /tmp/image.png /tmp/USB/cleanup_folder/image.png

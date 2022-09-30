@@ -6,6 +6,8 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.dev.txt
 
+RUN pip install --no-cache-dir 'python-vlc==3.0.11115'
+
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app
 WORKDIR /usr/src/app
