@@ -14,6 +14,10 @@ prepare () {
 execute_tests () {
     find . ! -path "*/rtmplite/*" -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
     nosetests -v -a '!fixme'
+
+    if [[ $? -ne 0 ]]; then
+        exit 1
+    fi
 }
 
 prepare
@@ -22,6 +26,3 @@ execute_tests
 if [ -n "$server_pid" ]; then
     kill $server_pid
 fi
-
-# TODO: Remove after debugging. Just checking if this will fail in CI runs.
-exit 1
