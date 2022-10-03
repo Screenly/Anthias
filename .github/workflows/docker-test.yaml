@@ -1,20 +1,9 @@
 name: Run Unit Tests
 
 on:
-  push:
-    branches:
-      - master
-      - production
-    paths-ignore:
-      - 'webview/**'
-      - '.github/workflows/build-webview.yaml'
-      - README.md
-  pull_request:
-    branches:
-      - master
+  workflow_call:
 
 jobs:
-  # TODO: Move to docker-build.yaml when ready.
   run-tests:
     runs-on: ubuntu-latest
     steps:

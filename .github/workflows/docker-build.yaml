@@ -9,37 +9,16 @@ on:
       - 'webview/**'
       - '.github/workflows/build-webview.yaml'
       - README.md
-  # TODO: Uncomment when ready.
-  # pull_request:
-  #   branches:
-  #     - master
+  pull_request:
+    branches:
+      - master
 
 jobs:
-  # TODO: Uncomment when ready.
-  # test:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v3
-
-  #     - name: Prepare the test environment.
-  #       run: |
-  #         mkdir -p ~/.screenly ~/.config/uzbl/ ~/screenly_assets /tmp/USB/cleanup_folder
-  #         curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
-  #         cp /tmp/image.png /tmp/USB/image.png
-  #         cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
-  #         sudo cp tests/config/ffserver.conf /etc/ffserver.conf
-  #         python server.py &
-  #         server_pid=$!
-  #         sleep 3
-
-  #     - name: Run the unit tests.
-  #       run: |
-  #         find . ! -path "*/rtmplite/*" -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
-  #         nosetests -v -a '!fixme'
+  run-tests:
+    uses: ./.github/workflows/docker-test.yaml
 
   buildx:
-    needs: test
+    needs: run-tests
     strategy:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
