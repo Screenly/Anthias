@@ -8,13 +8,14 @@
 
 Want to help OSE thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
 
-## We're hiring
+## Star History
 
-Want to get paid to work on Screenly OSE? Apply [here](https://screenly.workable.com/jobs/2622289).
+[![Star History Chart](https://api.star-history.com/svg?repos=Screenly/screenly-ose&type=Date)](https://star-history.com/#Screenly/screenly-ose&Date)
+
 
 ## Disk images
 
-The recommended installation method is to grab the latest disk image from [here](https://github.com/Screenly/screenly-ose/releases).
+~~The recommended installation method is to grab the latest disk image from [here](https://github.com/Screenly/screenly-ose/releases).~~
 
 ## Installing on Raspbian/Raspberry Pi OS
 
