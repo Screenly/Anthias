@@ -15,31 +15,11 @@ on:
 
 jobs:
   # TODO: Move to docker-build.yaml when ready.
-  test:
+  run-tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Check pip version
-        run: |
-          which pip
-          pip --version
-
-      - name: Check Python version
-        run: |
-          which python
-          python --version
-
-      - name: Check if Docker is pre-installed
-        run: |
-          which docker
-          docker --version
-
-      - name: Check if Docker Compose is pre-installed
-        run: |
-          which docker-compose
-          docker-compose --version
 
       - name: Build using Docker Compose
         run: |
