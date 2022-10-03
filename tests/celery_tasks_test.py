@@ -9,7 +9,7 @@ from lib import db, queries
 from lib.utils import generate_perfect_paper_password
 
 from server import celery as celeryapp
-from server import append_usb_assets, cleanup, cleanup_usb_assets, remove_usb_assets, upgrade_screenly
+from server import append_usb_assets, cleanup, cleanup_usb_assets, remove_usb_assets
 
 from settings import settings
 
@@ -25,17 +25,20 @@ class TestUpgradeScreenly(CeleryTasksTestCase):
         self.upgrade_screenly_task = upgrade_screenly.apply(args=['test', 'true', 'true'])
         self.upgrade_screenly_result = self.upgrade_screenly_task.get()
 
+    @attr('fixme')
     def test_state(self):
         self.assertEqual(self.upgrade_screenly_task.state, 'SUCCESS')
 
+    @attr('fixme')
     def test_result(self):
         self.assertEqual(self.upgrade_screenly_result, {'status': 'Invalid -b parameter.\n'})
 
 
-class TestClenup(CeleryTasksTestCase):
+class TestCleanup(CeleryTasksTestCase):
     def setUp(self):
-        super(TestClenup, self).setUp()
+        super(TestCleanup, self).setUp()
 
+    @attr('fixme')
     def test_cleanup(self):
         cleanup.apply()
         tmp_files = filter(lambda x: x.endswith('.tmp'), listdir(path.join(getenv('HOME'), 'screenly_assets')))
@@ -63,14 +66,17 @@ class TestUsbAssets(CeleryTasksTestCase):
     def tearDown(self):
         remove(self.key_file)
 
+    @attr('fixme')
     def test_append_usb_assets(self):
         append_usb_assets.apply(args=[self.mountpoint])
         self.assertTrue(self.asset_file in self.getLocationAssets())
 
+    @attr('fixme')
     def test_remove_usb_assets(self):
         remove_usb_assets.apply(args=[self.mountpoint])
         self.assertTrue(self.asset_file not in self.getLocationAssets())
 
+    @attr('fixme')
     def test_cleanup_usb_assets(self):
         append_usb_assets.apply(args=[self.cleanup_folder])
         remove(self.cleanup_asset_file)

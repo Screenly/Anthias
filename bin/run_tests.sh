@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# vim: tabstop=4 shiftwidth=4 softtabstop=4
+# -*- sh-basic-offset: 4 -*-
+
+set -euo pipefail
+
 prepare () {
     mkdir -p ~/.screenly /tmp/USB/cleanup_folder
     curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
@@ -12,12 +17,7 @@ prepare () {
 }
 
 execute_tests () {
-    find . ! -path "*/rtmplite/*" -name \*.py -exec pep8 --ignore=E402,E501,E731 {} +
     nosetests -v -a '!fixme'
-
-    if [[ $? -ne 0 ]]; then
-        exit 1
-    fi
 }
 
 prepare
