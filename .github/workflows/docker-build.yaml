@@ -14,11 +14,11 @@ on:
       - master
 
 jobs:
-  run-tests:
-    uses: ./.github/workflows/docker-test.yaml
+  # run-tests:
+  #   uses: ./.github/workflows/docker-test.yaml
 
   buildx:
-    needs: run-tests
+    # needs: run-tests
     strategy:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
