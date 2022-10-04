@@ -35,7 +35,7 @@
 
 - cron:
     name: Cleanup screenly_assets
-    state : absent
+    state: absent
     user: pi
 
 - name: Download upgrade_screenly.sh from github repository
