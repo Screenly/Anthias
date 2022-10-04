@@ -1,0 +1,22 @@
+---
+name: Ansible Lint
+
+on:
+  push:
+    branches:
+      - master
+      - production
+    paths:
+      - 'ansible/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Run ansible-lint
+        uses: ansible-community/ansible-lint-action@main
+        with:
+          path: "ansible/"
