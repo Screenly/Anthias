@@ -4,6 +4,10 @@ on:
   pull_request:
     branches:
       - master
+    paths-ignore:
+      - 'webview/**'
+      - '.github/workflows/build-webview.yaml'
+      - README.md
   workflow_call:
 
 jobs:
