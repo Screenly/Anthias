@@ -1,12 +1,13 @@
 FROM screenly/srly-ose-base:latest-x86
 
 ADD requirements/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
-
 ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.dev.txt
+ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt
 
-RUN pip install --no-cache-dir 'python-vlc==3.0.11115'
+RUN pip install --no-cache-dir \
+    -r /tmp/requirements.txt \
+    -r /tmp/requirements.dev.txt \
+    -r /tmp/requirements.viewer.txt
 
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app
