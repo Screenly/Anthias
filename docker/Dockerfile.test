@@ -4,6 +4,7 @@ ADD requirements/requirements.txt /tmp/requirements.txt
 ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
 ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt
 
+# requirements.viewer.txt required for python-vlc
 RUN pip install --no-cache-dir \
     -r /tmp/requirements.txt \
     -r /tmp/requirements.dev.txt \
