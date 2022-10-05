@@ -1,13 +1,21 @@
 name: Run Unit Tests
 
 on:
-  pull_request:
+  push:
     branches:
       - master
+      - production
     paths-ignore:
       - 'webview/**'
       - '.github/workflows/build-webview.yaml'
       - README.md
+  pull_request:
+    branches:
+      - master
+      - production
+    paths-ignore:
+      - 'webview/**'
+      - '.github/workflows/build-webview.yaml'
   workflow_call:
 
 jobs:
