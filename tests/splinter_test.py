@@ -7,6 +7,7 @@ from lib import db
 from lib import assets_helper
 import unittest
 from datetime import datetime, timedelta
+from nose.plugins.attrib import attr
 
 asset_x = {
     'mimetype': u'web',
@@ -65,6 +66,7 @@ class WebTest(unittest.TestCase):
     def tearDown(self):
         pass
 
+    @attr('fixme')
     def test_add_asset_url(self):
         with Browser() as browser:
             browser.visit(main_page_url)
@@ -92,6 +94,7 @@ class WebTest(unittest.TestCase):
             self.assertEqual(asset['mimetype'], u'webpage')
             self.assertEqual(asset['duration'], settings['default_duration'])
 
+    @attr('fixme')
     def test_edit_asset(self):
         with db.conn(settings['database']) as conn:
             assets_helper.create(conn, asset_x)
@@ -118,6 +121,7 @@ class WebTest(unittest.TestCase):
 
             self.assertEqual(asset['duration'], u'333')
 
+    @attr('fixme')
     def test_add_asset_image_upload(self):
         image_file = '/tmp/image.png'
 
@@ -143,6 +147,7 @@ class WebTest(unittest.TestCase):
             self.assertEqual(asset['mimetype'], u'image')
             self.assertEqual(asset['duration'], settings['default_duration'])
 
+    @attr('fixme')
     def test_add_asset_video_upload(self):
         video_file = '/tmp/video.flv'
 
@@ -168,6 +173,7 @@ class WebTest(unittest.TestCase):
             self.assertEqual(asset['mimetype'], u'video')
             self.assertEqual(asset['duration'], u'54')
 
+    @attr('fixme')
     def test_add_two_assets_upload(self):
         video_file = '/tmp/video.flv'
         image_file = '/tmp/image.png'
@@ -197,6 +203,7 @@ class WebTest(unittest.TestCase):
             self.assertEqual(assets[1]['mimetype'], u'video')
             self.assertEqual(assets[1]['duration'], u'54')
 
+    @attr('fixme')
     def test_add_asset_streaming(self):
         with Browser() as browser:
             browser.visit(main_page_url)
@@ -224,6 +231,7 @@ class WebTest(unittest.TestCase):
             self.assertEqual(asset['mimetype'], u'streaming')
             self.assertEqual(asset['duration'], settings['default_streaming_duration'])
 
+    @attr('fixme')
     def test_rm_asset(self):
         with db.conn(settings['database']) as conn:
             assets_helper.create(conn, asset_x)
@@ -239,6 +247,7 @@ class WebTest(unittest.TestCase):
             assets = assets_helper.read(conn)
             self.assertEqual(len(assets), 0)
 
+    @attr('fixme')
     def test_enable_asset(self):
         with db.conn(settings['database']) as conn:
             assets_helper.create(conn, asset_x)
@@ -255,6 +264,7 @@ class WebTest(unittest.TestCase):
             asset = assets[0]
             self.assertEqual(asset['is_enabled'], 1)
 
+    @attr('fixme')
     def test_disable_asset(self):
         with db.conn(settings['database']) as conn:
             _asset_x = asset_x.copy()
@@ -299,12 +309,14 @@ class WebTest(unittest.TestCase):
             self.assertEqual(x['play_order'], 0)
             self.assertEqual(y['play_order'], 1)
 
+    @attr('fixme')
     def test_settings_page_should_work(self):
         with Browser() as browser:
             browser.visit(settings_url)
             self.assertEqual(browser.is_text_present('Error: 500 Internal Server Error'), False,
                              '500: internal server error not expected')
 
+    @attr('fixme')
     def test_system_info_page_should_work(self):
         with Browser() as browser:
             browser.visit(system_info_url)

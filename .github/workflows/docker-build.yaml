@@ -11,7 +11,11 @@ on:
       - README.md
 
 jobs:
+  run-tests:
+    uses: ./.github/workflows/docker-test.yaml
+
   buildx:
+    needs: run-tests
     strategy:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
