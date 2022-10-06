@@ -42,11 +42,17 @@ class ViewerTestCase(unittest.TestCase):
 
 @attr('fixme')
 class TestEmptyPl(ViewerTestCase):
+    @mock.patch('pydbus.SessionBus', mock.MagicMock())
     def test_empty(self):
         m_asset_list = mock.Mock()
         m_asset_list.return_value = ([], None)
+
         with mock.patch.object(self.u, 'generate_asset_list', m_asset_list):
+            self.m_cmd.return_value.return_value.process.stdout = 'Screenly service start'
+            self.p_cmd.start()
             self.u.main()
+            self.p_cmd.stop()
+            self.m_cmd.assert_called_once_with('ScreenlyWebview')
 
 
 class TestLoadBrowser(ViewerTestCase):

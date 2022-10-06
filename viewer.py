@@ -25,6 +25,8 @@ from lib.media_player import VLCMediaPlayer, OMXMediaPlayer
 from lib.utils import get_active_connections, url_fails, is_balena_app, get_node_ip, string_to_bool, connect_to_redis
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
+from netifaces import gateways
+
 
 __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2020, Screenly, Inc"
