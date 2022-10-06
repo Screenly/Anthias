@@ -41,7 +41,6 @@ class TestCleanup(CeleryTasksTestCase):
         self.assets_path = path.join(getenv('HOME'), 'screenly_assets')
         mkdir(self.assets_path)
 
-    @attr('fixme')
     def test_cleanup(self):
         chdir(self.assets_path)
 
