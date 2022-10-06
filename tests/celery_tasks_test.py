@@ -1,4 +1,5 @@
-from os import getenv, path, remove, listdir
+from os import chdir, getenv, path, remove, listdir, mkdir
+from shutil import rmtree
 import yaml
 import unittest
 
@@ -37,12 +38,23 @@ class TestUpgradeScreenly(CeleryTasksTestCase):
 class TestCleanup(CeleryTasksTestCase):
     def setUp(self):
         super(TestCleanup, self).setUp()
+        self.assets_path = path.join(getenv('HOME'), 'screenly_assets')
+        mkdir(self.assets_path)
 
     @attr('fixme')
     def test_cleanup(self):
+        chdir(self.assets_path)
+
+        for i in range(4):
+            with open('file_{}.tmp'.format(i), 'w'):
+                pass
+
         cleanup.apply()
-        tmp_files = filter(lambda x: x.endswith('.tmp'), listdir(path.join(getenv('HOME'), 'screenly_assets')))
+        tmp_files = filter(lambda x: x.endswith('.tmp'), listdir(self.assets_path))
         self.assertEqual(len(tmp_files), 0)
+
+    def tearDown(self):
+        rmtree(self.assets_path)
 
 
 @attr('usb_assets')
