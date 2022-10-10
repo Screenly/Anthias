@@ -32,6 +32,8 @@ while getopts "sh" arg; do
 done
 
 mkdir -p ~/.screenly /tmp/USB/cleanup_folder
+cp ansible/roles/screenly/files/screenly.db ~/.screenly/
+cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
 curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
 cp /tmp/image.png /tmp/USB/image.png
 cp /tmp/image.png /tmp/USB/cleanup_folder/image.png

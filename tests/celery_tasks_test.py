@@ -41,6 +41,8 @@ class TestCleanup(CeleryTasksTestCase):
         self.assets_path = path.join(getenv('HOME'), 'screenly_assets')
         mkdir(self.assets_path)
 
+    # TODO: Make this test case idempotent.
+    @attr('fixme')
     def test_cleanup(self):
         chdir(self.assets_path)
 
@@ -77,16 +79,15 @@ class TestUsbAssets(CeleryTasksTestCase):
     def tearDown(self):
         remove(self.key_file)
 
-    @attr('fixme')
     def test_append_usb_assets(self):
         append_usb_assets.apply(args=[self.mountpoint])
         self.assertTrue(self.asset_file in self.getLocationAssets())
 
-    @attr('fixme')
     def test_remove_usb_assets(self):
         remove_usb_assets.apply(args=[self.mountpoint])
         self.assertTrue(self.asset_file not in self.getLocationAssets())
 
+    # TODO: Make this test case idempotent.
     @attr('fixme')
     def test_cleanup_usb_assets(self):
         append_usb_assets.apply(args=[self.cleanup_folder])
