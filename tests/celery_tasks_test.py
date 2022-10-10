@@ -42,7 +42,6 @@ class TestCleanup(CeleryTasksTestCase):
         mkdir(self.assets_path)
 
     # TODO: Make this test case idempotent.
-    @attr('fixme')
     def test_cleanup(self):
         chdir(self.assets_path)
 
@@ -88,7 +87,6 @@ class TestUsbAssets(CeleryTasksTestCase):
         self.assertTrue(self.asset_file not in self.getLocationAssets())
 
     # TODO: Make this test case idempotent.
-    @attr('fixme')
     def test_cleanup_usb_assets(self):
         append_usb_assets.apply(args=[self.cleanup_folder])
         remove(self.cleanup_asset_file)
