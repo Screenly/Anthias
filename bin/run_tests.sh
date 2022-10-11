@@ -10,6 +10,7 @@ python server.py &
 server_pid=$!
 sleep 3
 
+# The command below will allow you to run all tests that don't have a `fixme` attribute.
 nosetests -v -a '!fixme'
 
 if [ -n "$server_pid" ]; then

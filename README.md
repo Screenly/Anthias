@@ -74,17 +74,11 @@ $ docker-compose -f docker-compose.dev.yml up
 Start the containers.
 
 ```bash
-docker-compose -f docker-compose.dev.yml up -d
+docker-compose -f docker-compose.test.yml up -d
 ```
 
-Setup the testing environment. Make sure to include the `-s` flag so that the server will start.
+Run the unit tests.
 
 ```bash
-docker-compose -f docker-compose.dev.yml exec srly-ose-test bash bin/prepare_test_environment.sh -s
-```
-
-Run the unit tests. The command below will allow you to run all tests that don't have a `fixme` attribute. You can also run specific tests as well. You can modify then run the command below without rebuilding.
-
-```bash
-docker-compose -f docker-compose.dev.yml exec srly-ose-test nosetests -v -a `!fixme`
+docker-compose -f docker-compose.test.yml exec -T srly-ose-test bash ./bin/run_tests.sh
 ```
