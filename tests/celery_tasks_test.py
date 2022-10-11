@@ -1,4 +1,4 @@
-from os import getenv, path, remove, listdir
+from os import getenv, path, remove, listdir, system
 import yaml
 import unittest
 
@@ -16,33 +16,26 @@ from settings import settings
 
 class CeleryTasksTestCase(unittest.TestCase):
     def setUp(self):
+        self.image_url = 'https://github.com/Screenly/screenly-ose/raw/master/static/img/ose-logo.png'
         celeryapp.conf.update(CELERY_ALWAYS_EAGER=True, CELERY_RESULT_BACKEND='', CELERY_BROKER_URL='')
 
-
-class TestUpgradeScreenly(CeleryTasksTestCase):
-    def setUp(self):
-        super(TestUpgradeScreenly, self).setUp()
-        self.upgrade_screenly_task = upgrade_screenly.apply(args=['test', 'true', 'true'])
-        self.upgrade_screenly_result = self.upgrade_screenly_task.get()
-
-    @attr('fixme')
-    def test_state(self):
-        self.assertEqual(self.upgrade_screenly_task.state, 'SUCCESS')
-
-    @attr('fixme')
-    def test_result(self):
-        self.assertEqual(self.upgrade_screenly_result, {'status': 'Invalid -b parameter.\n'})
+    def download_image(self, image_url, image_path):
+        system('curl {} > {}'.format(image_url, image_path))
 
 
 class TestCleanup(CeleryTasksTestCase):
     def setUp(self):
         super(TestCleanup, self).setUp()
+        self.assets_path = path.join(getenv('HOME'), 'screenly_assets')
+        self.image_path = path.join(self.assets_path, 'image.tmp')
 
-    @attr('fixme')
     def test_cleanup(self):
         cleanup.apply()
-        tmp_files = filter(lambda x: x.endswith('.tmp'), listdir(path.join(getenv('HOME'), 'screenly_assets')))
+        tmp_files = filter(lambda x: x.endswith('.tmp'), listdir(self.assets_path))
         self.assertEqual(len(tmp_files), 0)
+
+    def tearDown(self):
+        self.download_image(self.image_url, self.image_path)
 
 
 @attr('usb_assets')
@@ -66,22 +59,21 @@ class TestUsbAssets(CeleryTasksTestCase):
     def tearDown(self):
         remove(self.key_file)
 
-    @attr('fixme')
     def test_append_usb_assets(self):
         append_usb_assets.apply(args=[self.mountpoint])
         self.assertTrue(self.asset_file in self.getLocationAssets())
 
-    @attr('fixme')
     def test_remove_usb_assets(self):
         remove_usb_assets.apply(args=[self.mountpoint])
         self.assertTrue(self.asset_file not in self.getLocationAssets())
 
-    @attr('fixme')
     def test_cleanup_usb_assets(self):
         append_usb_assets.apply(args=[self.cleanup_folder])
         remove(self.cleanup_asset_file)
         cleanup_usb_assets.apply(args=[self.mountpoint])
         self.assertTrue(self.asset_file not in self.getLocationAssets())
+
+        self.download_image(self.image_url, self.cleanup_asset_file)
 
     @staticmethod
     def getLocationAssets():
