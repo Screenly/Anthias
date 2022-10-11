@@ -6,6 +6,7 @@
 set -euo pipefail
 
 START_SERVER=false
+OSE_LOGO_URL='https://github.com/Screenly/screenly-ose/raw/master/static/img/ose-logo.png'
 
 print_usage () {
     echo "Usage: $0 [-s]"
@@ -34,7 +35,7 @@ done
 mkdir -p ~/.screenly ~/screenly_assets /tmp/USB/cleanup_folder
 cp ansible/roles/screenly/files/screenly.db ~/.screenly/
 cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
-curl https://www.screenly.io/upload/ose-logo.png > /tmp/image.png
+curl $OSE_LOGO_URL > /tmp/image.png
 cp /tmp/image.png /tmp/USB/image.png
 cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
 cp tests/config/ffserver.conf /etc/ffserver.conf

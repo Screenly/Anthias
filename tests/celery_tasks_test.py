@@ -16,26 +16,11 @@ from settings import settings
 
 class CeleryTasksTestCase(unittest.TestCase):
     def setUp(self):
-        self.image_url = 'https://www.screenly.io/upload/ose-logo.png'
+        self.image_url = 'https://github.com/Screenly/screenly-ose/raw/master/static/img/ose-logo.png'
         celeryapp.conf.update(CELERY_ALWAYS_EAGER=True, CELERY_RESULT_BACKEND='', CELERY_BROKER_URL='')
 
     def download_image(self, image_url, image_path):
         system('curl {} > {}'.format(image_url, image_path))
-
-
-class TestUpgradeScreenly(CeleryTasksTestCase):
-    def setUp(self):
-        super(TestUpgradeScreenly, self).setUp()
-        self.upgrade_screenly_task = upgrade_screenly.apply(args=['test', 'true', 'true'])
-        self.upgrade_screenly_result = self.upgrade_screenly_task.get()
-
-    @attr('fixme')
-    def test_state(self):
-        self.assertEqual(self.upgrade_screenly_task.state, 'SUCCESS')
-
-    @attr('fixme')
-    def test_result(self):
-        self.assertEqual(self.upgrade_screenly_result, {'status': 'Invalid -b parameter.\n'})
 
 
 class TestCleanup(CeleryTasksTestCase):
