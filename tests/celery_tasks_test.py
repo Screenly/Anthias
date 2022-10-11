@@ -19,6 +19,9 @@ class CeleryTasksTestCase(unittest.TestCase):
         self.image_url = 'https://www.screenly.io/upload/ose-logo.png'
         celeryapp.conf.update(CELERY_ALWAYS_EAGER=True, CELERY_RESULT_BACKEND='', CELERY_BROKER_URL='')
 
+    def download_image(self, image_url, image_path):
+        system('curl {} > {}'.format(image_url, image_path))
+
 
 class TestUpgradeScreenly(CeleryTasksTestCase):
     def setUp(self):
@@ -42,14 +45,12 @@ class TestCleanup(CeleryTasksTestCase):
         self.image_path = path.join(self.assets_path, 'image.tmp')
 
     def test_cleanup(self):
-        system('curl {} > {}'.format(self.image_url, self.image_path))
-
         cleanup.apply()
         tmp_files = filter(lambda x: x.endswith('.tmp'), listdir(self.assets_path))
         self.assertEqual(len(tmp_files), 0)
 
     def tearDown(self):
-        system('curl {} > {}'.format(self.image_url, self.image_path))
+        self.download_image(self.image_url, self.image_path)
 
 
 @attr('usb_assets')
@@ -87,7 +88,7 @@ class TestUsbAssets(CeleryTasksTestCase):
         cleanup_usb_assets.apply(args=[self.mountpoint])
         self.assertTrue(self.asset_file not in self.getLocationAssets())
 
-        system('curl {} > {}'.format(self.image_url, self.cleanup_asset_file))
+        self.download_image(self.image_url, self.cleanup_asset_file)
 
     @staticmethod
     def getLocationAssets():

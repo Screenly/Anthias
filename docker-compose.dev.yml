@@ -21,8 +21,6 @@ services:
     tty: true
     volumes:
       - .:/usr/src/app
-    environment:
-      - LISTEN=0.0.0.0
 
   srly-ose-server:
     image: screenly/srly-ose-server:latest-x86
