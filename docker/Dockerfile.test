@@ -1,5 +1,7 @@
 FROM screenly/srly-ose-base:latest-x86
 
+RUN apt-get -y install wget
+
 ADD requirements/requirements.txt /tmp/requirements.txt
 ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
 ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt

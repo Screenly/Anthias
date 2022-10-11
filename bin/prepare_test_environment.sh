@@ -7,6 +7,7 @@ set -euo pipefail
 
 START_SERVER=false
 OSE_LOGO_URL='https://github.com/Screenly/screenly-ose/raw/master/static/img/ose-logo.png'
+GECKODRIVER_DL_URL='https://github.com/mozilla/geckodriver/releases/download/v0.31.0/geckodriver-v0.31.0-linux64.tar.gz'
 
 print_usage () {
     echo "Usage: $0 [-s]"
@@ -14,6 +15,11 @@ print_usage () {
     echo
     echo "Options:"
     echo "  -s    run the web server (server.py)"
+}
+
+install_geckodriver () {
+    wget $GECKODRIVER_DL_URL -O /tmp/geckodriver.tar.gz
+    tar -xf /tmp/geckodriver.tar.gz -C /usr/bin
 }
 
 while getopts "sh" arg; do
@@ -39,6 +45,8 @@ curl $OSE_LOGO_URL > /tmp/image.png
 cp /tmp/image.png /tmp/USB/image.png
 cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
 cp tests/config/ffserver.conf /etc/ffserver.conf
+
+install_geckodriver
 
 if [ "$START_SERVER" = true ]; then
     python server.py &
