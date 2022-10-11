@@ -1,5 +1,4 @@
-from os import chdir, getenv, path, remove, listdir, mkdir
-from shutil import rmtree
+from os import getenv, path, remove, listdir, system
 import yaml
 import unittest
 
@@ -17,6 +16,7 @@ from settings import settings
 
 class CeleryTasksTestCase(unittest.TestCase):
     def setUp(self):
+        self.image_url = 'https://www.screenly.io/upload/ose-logo.png'
         celeryapp.conf.update(CELERY_ALWAYS_EAGER=True, CELERY_RESULT_BACKEND='', CELERY_BROKER_URL='')
 
 
@@ -39,22 +39,17 @@ class TestCleanup(CeleryTasksTestCase):
     def setUp(self):
         super(TestCleanup, self).setUp()
         self.assets_path = path.join(getenv('HOME'), 'screenly_assets')
-        mkdir(self.assets_path)
+        self.image_path = path.join(self.assets_path, 'image.tmp')
 
-    # TODO: Make this test case idempotent.
     def test_cleanup(self):
-        chdir(self.assets_path)
-
-        for i in range(4):
-            with open('file_{}.tmp'.format(i), 'w'):
-                pass
+        system('curl {} > {}'.format(self.image_url, self.image_path))
 
         cleanup.apply()
         tmp_files = filter(lambda x: x.endswith('.tmp'), listdir(self.assets_path))
         self.assertEqual(len(tmp_files), 0)
 
     def tearDown(self):
-        rmtree(self.assets_path)
+        system('curl {} > {}'.format(self.image_url, self.image_path))
 
 
 @attr('usb_assets')
@@ -86,12 +81,13 @@ class TestUsbAssets(CeleryTasksTestCase):
         remove_usb_assets.apply(args=[self.mountpoint])
         self.assertTrue(self.asset_file not in self.getLocationAssets())
 
-    # TODO: Make this test case idempotent.
     def test_cleanup_usb_assets(self):
         append_usb_assets.apply(args=[self.cleanup_folder])
         remove(self.cleanup_asset_file)
         cleanup_usb_assets.apply(args=[self.mountpoint])
         self.assertTrue(self.asset_file not in self.getLocationAssets())
+
+        system('curl {} > {}'.format(self.image_url, self.cleanup_asset_file))
 
     @staticmethod
     def getLocationAssets():
