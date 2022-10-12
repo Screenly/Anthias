@@ -18,7 +18,6 @@ print_usage () {
 }
 
 install_geckodriver () {
-    wget $GECKODRIVER_DL_URL -O /tmp/geckodriver.tar.gz
     tar -xf /tmp/geckodriver.tar.gz -C /usr/bin
 }
 

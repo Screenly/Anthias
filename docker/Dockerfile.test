@@ -6,6 +6,10 @@ ADD requirements/requirements.txt /tmp/requirements.txt
 ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
 ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt
 
+ARG GECKODRIVER_DL_URL="https://github.com/mozilla/geckodriver/releases/download/v0.31.0/geckodriver-v0.31.0-linux64.tar.gz"
+
+RUN wget $GECKODRIVER_DL_URL -O /tmp/geckodriver.tar.gz
+
 RUN pip install --no-cache-dir \
     -r /tmp/requirements.txt \
     -r /tmp/requirements.dev.txt \
