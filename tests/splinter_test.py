@@ -2,6 +2,7 @@ from nose.plugins.attrib import attr
 from splinter import Browser
 from time import sleep
 from selenium.common.exceptions import ElementNotVisibleException
+from selenium import webdriver
 from settings import settings
 from lib import db
 from lib import assets_helper
@@ -37,9 +38,18 @@ asset_y = {
     'skip_asset_check': 0
 }
 
-main_page_url = 'http://foo:bar@localhost:8080'
+main_page_url = 'http://localhost:8080'
 settings_url = 'http://foo:bar@localhost:8080/settings'
 system_info_url = 'http://foo:bar@localhost:8080/system_info'
+
+
+def get_browser():
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+
+    return Browser('chrome', headless=True, options=chrome_options)
 
 
 def wait_for_and_do(browser, query, callback):
@@ -66,9 +76,8 @@ class WebTest(unittest.TestCase):
     def tearDown(self):
         pass
 
-    @attr('fixme')
     def test_add_asset_url(self):
-        with Browser() as browser:
+        with get_browser() as browser:
             browser.visit(main_page_url)
 
             wait_for_and_do(browser, '#add-asset-button', lambda btn: btn.click())
@@ -121,11 +130,10 @@ class WebTest(unittest.TestCase):
 
             self.assertEqual(asset['duration'], u'333')
 
-    @attr('fixme')
     def test_add_asset_image_upload(self):
         image_file = '/tmp/image.png'
 
-        with Browser() as browser:
+        with get_browser() as browser:
             browser.visit(main_page_url)
 
             browser.find_by_id('add-asset-button').click()

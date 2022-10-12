@@ -11,6 +11,7 @@ RUN apt-get update && \
         ifupdown \
         libcec-dev  \
         libffi-dev \
+        libnss3 \
         libssl-dev \
         libzmq3-dev \
         lsb-release \

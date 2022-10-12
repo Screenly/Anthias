@@ -1,14 +1,19 @@
 FROM screenly/srly-ose-base:latest-x86
 
-RUN apt-get -y install wget
+RUN apt-get -y install wget unzip
 
 ADD requirements/requirements.txt /tmp/requirements.txt
 ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
 ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt
 
-ARG GECKODRIVER_DL_URL="https://github.com/mozilla/geckodriver/releases/download/v0.31.0/geckodriver-v0.31.0-linux64.tar.gz"
+ARG CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/106.0.5249.61/chromedriver_linux64.zip"
+RUN wget $CHROMEDRIVER_DL_URL -O /tmp/chromedriver.zip && \
+    unzip /tmp/chromedriver.zip -d /usr/bin
 
-RUN wget $GECKODRIVER_DL_URL -O /tmp/geckodriver.tar.gz
+# TODO: Use a specific version instead.
+ARG CHROME_DL_URL="https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
+RUN wget $CHROME_DL_URL -O /tmp/chrome.deb && \
+    apt install -y /tmp/chrome.deb
 
 RUN pip install --no-cache-dir \
     -r /tmp/requirements.txt \
