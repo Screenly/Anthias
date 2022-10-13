@@ -103,12 +103,11 @@ class WebTest(unittest.TestCase):
             self.assertEqual(asset['mimetype'], u'webpage')
             self.assertEqual(asset['duration'], settings['default_duration'])
 
-    @attr('fixme')
     def test_edit_asset(self):
         with db.conn(settings['database']) as conn:
             assets_helper.create(conn, asset_x)
 
-        with Browser() as browser:
+        with get_browser() as browser:
             browser.visit(main_page_url)
             wait_for_and_do(browser, '.edit-asset-button', lambda btn: btn.click())
             sleep(1)
@@ -239,12 +238,11 @@ class WebTest(unittest.TestCase):
             self.assertEqual(asset['mimetype'], u'streaming')
             self.assertEqual(asset['duration'], settings['default_streaming_duration'])
 
-    @attr('fixme')
     def test_rm_asset(self):
         with db.conn(settings['database']) as conn:
             assets_helper.create(conn, asset_x)
 
-        with Browser() as browser:
+        with get_browser() as browser:
             browser.visit(main_page_url)
 
             wait_for_and_do(browser, '.delete-asset-button', lambda btn: btn.click())
@@ -255,12 +253,11 @@ class WebTest(unittest.TestCase):
             assets = assets_helper.read(conn)
             self.assertEqual(len(assets), 0)
 
-    @attr('fixme')
     def test_enable_asset(self):
         with db.conn(settings['database']) as conn:
             assets_helper.create(conn, asset_x)
 
-        with Browser() as browser:
+        with get_browser() as browser:
             browser.visit(main_page_url)
             wait_for_and_do(browser, '.toggle', lambda btn: btn.click())
             sleep(3)  # backend need time to process request
@@ -272,14 +269,13 @@ class WebTest(unittest.TestCase):
             asset = assets[0]
             self.assertEqual(asset['is_enabled'], 1)
 
-    @attr('fixme')
     def test_disable_asset(self):
         with db.conn(settings['database']) as conn:
             _asset_x = asset_x.copy()
             _asset_x['is_enabled'] = 1
             assets_helper.create(conn, _asset_x)
 
-        with Browser() as browser:
+        with get_browser() as browser:
             browser.visit(main_page_url)
 
             wait_for_and_do(browser, '.toggle', lambda btn: btn.click())
@@ -292,7 +288,6 @@ class WebTest(unittest.TestCase):
             asset = assets[0]
             self.assertEqual(asset['is_enabled'], 0)
 
-    @attr('fixme')
     def test_reorder_asset(self):
         with db.conn(settings['database']) as conn:
             _asset_x = asset_x.copy()
@@ -300,7 +295,7 @@ class WebTest(unittest.TestCase):
             assets_helper.create(conn, _asset_x)
             assets_helper.create(conn, asset_y)
 
-        with Browser() as browser:
+        with get_browser() as browser:
             browser.visit(main_page_url)
 
             asset_x_for_drag = browser.find_by_id(asset_x['asset_id'])
@@ -317,16 +312,14 @@ class WebTest(unittest.TestCase):
             self.assertEqual(x['play_order'], 0)
             self.assertEqual(y['play_order'], 1)
 
-    @attr('fixme')
     def test_settings_page_should_work(self):
-        with Browser() as browser:
+        with get_browser() as browser:
             browser.visit(settings_url)
             self.assertEqual(browser.is_text_present('Error: 500 Internal Server Error'), False,
                              '500: internal server error not expected')
 
-    @attr('fixme')
     def test_system_info_page_should_work(self):
-        with Browser() as browser:
+        with get_browser() as browser:
             browser.visit(system_info_url)
             self.assertEqual(browser.is_text_present('Error: 500 Internal Server Error'), False,
                              '500: internal server error not expected')
