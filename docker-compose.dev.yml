@@ -8,20 +8,6 @@ services:
       cache_from:
         - screenly/srly-ose-base:latest-x86
 
-  srly-ose-test:
-    image: screenly/srly-ose-base:latest-x86
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.test
-      cache_from:
-        - screenly/srly-ose-base:latest-x86
-    depends_on:
-      - srly-ose-base
-    stdin_open: true
-    tty: true
-    volumes:
-      - .:/usr/src/app
-
   srly-ose-server:
     image: screenly/srly-ose-server:latest-x86
     build:

@@ -24,6 +24,7 @@ services:
     stdin_open: true
     tty: true
     volumes:
+      - .:/usr/src/app
       - resin-data:/data
 
   srly-ose-celery:
