@@ -33,9 +33,9 @@ while getopts "sh" arg; do
     esac
 done
 
-mkdir -p ~/.screenly ~/screenly_assets /tmp/USB/cleanup_folder
-cp ansible/roles/screenly/files/screenly.db ~/.screenly/
-cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
+mkdir -p /data/.screenly /data/screenly_assets /tmp/USB/cleanup_folder
+cp ansible/roles/screenly/files/screenly.db /data/.screenly/
+cp ansible/roles/screenly/files/screenly.conf /data/.screenly/
 curl $OSE_LOGO_URL > /tmp/image.png
 cp /tmp/image.png /tmp/USB/image.png
 cp /tmp/image.png /tmp/USB/cleanup_folder/image.png

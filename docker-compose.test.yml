@@ -9,14 +9,46 @@ services:
         - screenly/srly-ose-base:latest-x86
 
   srly-ose-test:
-    image: screenly/srly-ose-server:latest-x86
+    image: screenly/srly-ose-base:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.test
       cache_from:
         - screenly/srly-ose-base:latest-x86
-        - screenly/srly-ose-server:latest-x86
     depends_on:
       - srly-ose-base
+    environment:
+      - HOME=/data
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     stdin_open: true
     tty: true
+    volumes:
+      - resin-data:/data
+
+  srly-ose-celery:
+    image: screenly/srly-ose-celery:latest-x86
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.celery.dev
+      cache_from:
+        - screenly/srly-ose-base:latest-x86
+        - screenly/srly-ose-celery:latest-x86
+    depends_on:
+      - srly-ose-base
+      - srly-ose-test
+      - redis
+    environment:
+      - HOME=/data
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    restart: always
+    volumes:
+      - resin-data:/data
+
+  redis:
+    image: redis:alpine
+
+volumes:
+  resin-data:
+  redis-data:

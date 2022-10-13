@@ -8,7 +8,7 @@ ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt
 
 ARG CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/106.0.5249.61/chromedriver_linux64.zip"
 RUN wget $CHROMEDRIVER_DL_URL -O /tmp/chromedriver.zip && \
-    unzip /tmp/chromedriver.zip -d /usr/bin
+    unzip -o /tmp/chromedriver.zip -d /usr/bin
 
 # TODO: Use a specific version instead.
 ARG CHROME_DL_URL="https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
@@ -23,6 +23,8 @@ RUN pip install --no-cache-dir \
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app
 WORKDIR /usr/src/app
+
+RUN bash bin/prepare_test_environment.sh
 
 ARG GIT_HASH
 ENV GIT_HASH=$GIT_HASH
