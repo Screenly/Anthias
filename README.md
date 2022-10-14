@@ -19,7 +19,7 @@ Want to help OSE thrive? Support us using [GitHub Sponsor](https://github.com/sp
 
 ## Installing on Raspbian/Raspberry Pi OS
 
-The tl;dr for installing Screenly OSE on [Raspbian Lite](https://www.raspberrypi.org/downloads/raspbian/) is:
+The tl;dr for installing Screenly OSE on [Raspberry Pi OS](https://www.raspberrypi.com/software/) Bullseye Lite is:
 
 ```
 $ bash <(curl -sL https://install-ose.srly.io)
