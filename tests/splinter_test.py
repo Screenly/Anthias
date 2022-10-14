@@ -154,11 +154,10 @@ class WebTest(unittest.TestCase):
             self.assertEqual(asset['mimetype'], u'image')
             self.assertEqual(asset['duration'], settings['default_duration'])
 
-    @attr('fixme')
     def test_add_asset_video_upload(self):
-        video_file = '/tmp/video.flv'
+        video_file = '/tmp/video.mov'
 
-        with Browser() as browser:
+        with get_browser() as browser:
             browser.visit(main_page_url)
 
             browser.find_by_id('add-asset-button').click()
@@ -176,16 +175,15 @@ class WebTest(unittest.TestCase):
             self.assertEqual(len(assets), 1)
             asset = assets[0]
 
-            self.assertEqual(asset['name'], u'video.flv')
+            self.assertEqual(asset['name'], u'video.mov')
             self.assertEqual(asset['mimetype'], u'video')
-            self.assertEqual(asset['duration'], u'54')
+            self.assertEqual(asset['duration'], u'5')
 
-    @attr('fixme')
     def test_add_two_assets_upload(self):
-        video_file = '/tmp/video.flv'
+        video_file = '/tmp/video.mov'
         image_file = '/tmp/image.png'
 
-        with Browser() as browser:
+        with get_browser() as browser:
             browser.visit(main_page_url)
 
             browser.find_by_id('add-asset-button').click()
@@ -206,9 +204,9 @@ class WebTest(unittest.TestCase):
             self.assertEqual(assets[0]['mimetype'], u'image')
             self.assertEqual(assets[0]['duration'], settings['default_duration'])
 
-            self.assertEqual(assets[1]['name'], u'video.flv')
+            self.assertEqual(assets[1]['name'], u'video.mov')
             self.assertEqual(assets[1]['mimetype'], u'video')
-            self.assertEqual(assets[1]['duration'], u'54')
+            self.assertEqual(assets[1]['duration'], u'5')
 
     @attr('fixme')
     def test_add_asset_streaming(self):

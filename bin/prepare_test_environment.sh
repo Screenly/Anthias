@@ -36,6 +36,7 @@ done
 mkdir -p /data/.screenly /data/screenly_assets /tmp/USB/cleanup_folder
 cp ansible/roles/screenly/files/screenly.db /data/.screenly/
 cp ansible/roles/screenly/files/screenly.conf /data/.screenly/
+cp tests/assets/asset.mov /tmp/video.mov
 curl $OSE_LOGO_URL > /tmp/image.png
 cp /tmp/image.png /tmp/USB/image.png
 cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
