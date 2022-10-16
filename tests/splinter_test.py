@@ -1,4 +1,3 @@
-from nose.plugins.attrib import attr
 from splinter import Browser
 from time import sleep
 from selenium.common.exceptions import ElementNotVisibleException
@@ -8,7 +7,6 @@ from lib import db
 from lib import assets_helper
 import unittest
 from datetime import datetime, timedelta
-from nose.plugins.attrib import attr
 
 asset_x = {
     'mimetype': u'web',
@@ -155,7 +153,7 @@ class WebTest(unittest.TestCase):
             self.assertEqual(asset['duration'], settings['default_duration'])
 
     def test_add_asset_video_upload(self):
-        video_file = '/tmp/video.mov'
+        video_file = '/tmp/asset.mov'
 
         with get_browser() as browser:
             browser.visit(main_page_url)
@@ -175,12 +173,12 @@ class WebTest(unittest.TestCase):
             self.assertEqual(len(assets), 1)
             asset = assets[0]
 
-            self.assertEqual(asset['name'], u'video.mov')
+            self.assertEqual(asset['name'], u'asset.mov')
             self.assertEqual(asset['mimetype'], u'video')
             self.assertEqual(asset['duration'], u'5')
 
     def test_add_two_assets_upload(self):
-        video_file = '/tmp/video.mov'
+        video_file = '/tmp/asset.mov'
         image_file = '/tmp/image.png'
 
         with get_browser() as browser:
@@ -204,13 +202,12 @@ class WebTest(unittest.TestCase):
             self.assertEqual(assets[0]['mimetype'], u'image')
             self.assertEqual(assets[0]['duration'], settings['default_duration'])
 
-            self.assertEqual(assets[1]['name'], u'video.mov')
+            self.assertEqual(assets[1]['name'], u'asset.mov')
             self.assertEqual(assets[1]['mimetype'], u'video')
             self.assertEqual(assets[1]['duration'], u'5')
 
-    @attr('fixme')
     def test_add_asset_streaming(self):
-        with Browser() as browser:
+        with get_browser() as browser:
             browser.visit(main_page_url)
 
             wait_for_and_do(browser, '#add-asset-button', lambda btn: btn.click())

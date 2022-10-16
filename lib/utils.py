@@ -17,6 +17,7 @@ from netifaces import ifaddresses, gateways, AF_INET, AF_LINK
 from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
+from sh import mplayer
 from subprocess import check_output, call
 from threading import Thread
 from urlparse import urlparse

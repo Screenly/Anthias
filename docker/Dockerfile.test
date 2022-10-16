@@ -24,7 +24,9 @@ RUN mkdir -p /usr/src/app
 COPY . /usr/src/app
 WORKDIR /usr/src/app
 
-RUN bash bin/prepare_test_environment.sh
+RUN mkdir -p /data/.screenly /data/screenly_assets /tmp/USB/cleanup_folder
+RUN cp ansible/roles/screenly/files/screenly.db \
+    ansible/roles/screenly/files/screenly.conf /data/.screenly
 
 ARG GIT_HASH
 ENV GIT_HASH=$GIT_HASH

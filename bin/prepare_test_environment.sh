@@ -33,16 +33,26 @@ while getopts "sh" arg; do
     esac
 done
 
-mkdir -p /data/.screenly /data/screenly_assets /tmp/USB/cleanup_folder
-cp ansible/roles/screenly/files/screenly.db /data/.screenly/
-cp ansible/roles/screenly/files/screenly.conf /data/.screenly/
-cp tests/assets/asset.mov /tmp/video.mov
+cp tests/assets/asset.mov /tmp/asset.mov
 curl $OSE_LOGO_URL > /tmp/image.png
 cp /tmp/image.png /tmp/USB/image.png
 cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
 cp tests/config/ffserver.conf /etc/ffserver.conf
 
+if [ ! -d /data/ffmpeg ] || [ ! -f /data/ffmpeg/ffserver ]; then
+    cd /data
+    git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg
+    cd ffmpeg
+    git checkout 2ca65fc7b74444edd51d5803a2c1e05a801a6023
+    ./configure --disable-x86asm
+    make -j4
+fi
+
+nohup /data/ffmpeg/ffserver -f /etc/ffserver.conf > /dev/null 2>&1 &
+sleep 1
+
 if [ "$START_SERVER" = true ]; then
+    cd /usr/src/app
     python server.py &
     sleep 3
 fi
