@@ -5,6 +5,7 @@
 
 set -euo pipefail
 
+bash ./bin/prepare_test_environment.sh
 python server.py &
 server_pid=$!
 sleep 3
