@@ -34,7 +34,7 @@ while getopts "sh" arg; do
 done
 
 cp tests/assets/asset.mov /tmp/asset.mov
-curl $OSE_LOGO_URL > /tmp/image.png
+cp static/img/ose-logo.png /tmp/image.png
 cp /tmp/image.png /tmp/USB/image.png
 cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
 cp tests/config/ffserver.conf /etc/ffserver.conf
