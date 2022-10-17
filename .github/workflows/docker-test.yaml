@@ -34,8 +34,9 @@ jobs:
           docker-compose -f docker-compose.test.yml up -d
 
       - name: Run the tests inside the container
+        shell: 'script -q -e -c "bash {0}"'
         run: |
-          docker-compose -f docker-compose.test.yml exec -T srly-ose-test bash ./bin/run_tests.sh
+          docker-compose -f docker-compose.test.yml exec srly-ose-test bash ./bin/run_tests.sh
 
       - name: Stop the test container
         run: |
