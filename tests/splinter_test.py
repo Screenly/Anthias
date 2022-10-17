@@ -5,6 +5,9 @@ from selenium import webdriver
 from settings import settings
 from lib import db
 from lib import assets_helper
+import os
+import shutil
+import tempfile
 import unittest
 from datetime import datetime, timedelta
 
@@ -39,6 +42,21 @@ asset_y = {
 main_page_url = 'http://localhost:8080'
 settings_url = 'http://foo:bar@localhost:8080/settings'
 system_info_url = 'http://foo:bar@localhost:8080/system_info'
+
+
+class TemporaryCopy:
+    def __init__(self, original_path, base_path):
+        self.original_path = original_path
+        self.base_path = base_path
+
+    def __enter__(self):
+        temp_dir = tempfile.gettempdir()
+        self.path = os.path.join(temp_dir, self.base_path)
+        shutil.copy2(self.original_path, self.path)
+        return self.path
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        os.remove(self.path)
 
 
 def get_browser():
@@ -153,58 +171,56 @@ class WebTest(unittest.TestCase):
             self.assertEqual(asset['duration'], settings['default_duration'])
 
     def test_add_asset_video_upload(self):
-        video_file = '/tmp/asset.mov'
+        with TemporaryCopy('tests/assets/asset.mov', 'video.mov') as video_file:
+            with get_browser() as browser:
+                browser.visit(main_page_url)
 
-        with get_browser() as browser:
-            browser.visit(main_page_url)
+                browser.find_by_id('add-asset-button').click()
+                sleep(1)
 
-            browser.find_by_id('add-asset-button').click()
-            sleep(1)
+                wait_for_and_do(browser, 'a[href="#tab-file_upload"]', lambda tab: tab.click())
+                wait_for_and_do(browser, 'input[name="file_upload"]', lambda input: input.fill(video_file))
+                sleep(1)  # wait for new-asset panel animation
 
-            wait_for_and_do(browser, 'a[href="#tab-file_upload"]', lambda tab: tab.click())
-            wait_for_and_do(browser, 'input[name="file_upload"]', lambda input: input.fill(video_file))
-            sleep(1)  # wait for new-asset panel animation
+                sleep(3)  # backend need time to process request
 
-            sleep(3)  # backend need time to process request
+            with db.conn(settings['database']) as conn:
+                assets = assets_helper.read(conn)
 
-        with db.conn(settings['database']) as conn:
-            assets = assets_helper.read(conn)
+                self.assertEqual(len(assets), 1)
+                asset = assets[0]
 
-            self.assertEqual(len(assets), 1)
-            asset = assets[0]
-
-            self.assertEqual(asset['name'], u'asset.mov')
-            self.assertEqual(asset['mimetype'], u'video')
-            self.assertEqual(asset['duration'], u'5')
+                self.assertEqual(asset['name'], u'video.mov')
+                self.assertEqual(asset['mimetype'], u'video')
+                self.assertEqual(asset['duration'], u'5')
 
     def test_add_two_assets_upload(self):
-        video_file = '/tmp/asset.mov'
-        image_file = '/tmp/image.png'
+        with TemporaryCopy('tests/assets/asset.mov', 'video.mov') as video_file, \
+            TemporaryCopy('static/img/ose-logo.png', 'ose-logo.png') as image_file:
+            with get_browser() as browser:
+                browser.visit(main_page_url)
 
-        with get_browser() as browser:
-            browser.visit(main_page_url)
+                browser.find_by_id('add-asset-button').click()
+                sleep(1)
 
-            browser.find_by_id('add-asset-button').click()
-            sleep(1)
+                wait_for_and_do(browser, 'a[href="#tab-file_upload"]', lambda tab: tab.click())
+                wait_for_and_do(browser, 'input[name="file_upload"]', lambda input: input.fill(image_file))
+                wait_for_and_do(browser, 'input[name="file_upload"]', lambda input: input.fill(video_file))
 
-            wait_for_and_do(browser, 'a[href="#tab-file_upload"]', lambda tab: tab.click())
-            wait_for_and_do(browser, 'input[name="file_upload"]', lambda input: input.fill(image_file))
-            wait_for_and_do(browser, 'input[name="file_upload"]', lambda input: input.fill(video_file))
+                sleep(3)  # backend need time to process request
 
-            sleep(3)  # backend need time to process request
+            with db.conn(settings['database']) as conn:
+                assets = assets_helper.read(conn)
 
-        with db.conn(settings['database']) as conn:
-            assets = assets_helper.read(conn)
+                self.assertEqual(len(assets), 2)
 
-            self.assertEqual(len(assets), 2)
+                self.assertEqual(assets[0]['name'], u'ose-logo.png')
+                self.assertEqual(assets[0]['mimetype'], u'image')
+                self.assertEqual(assets[0]['duration'], settings['default_duration'])
 
-            self.assertEqual(assets[0]['name'], u'image.png')
-            self.assertEqual(assets[0]['mimetype'], u'image')
-            self.assertEqual(assets[0]['duration'], settings['default_duration'])
-
-            self.assertEqual(assets[1]['name'], u'asset.mov')
-            self.assertEqual(assets[1]['mimetype'], u'video')
-            self.assertEqual(assets[1]['duration'], u'5')
+                self.assertEqual(assets[1]['name'], u'video.mov')
+                self.assertEqual(assets[1]['mimetype'], u'video')
+                self.assertEqual(assets[1]['duration'], u'5')
 
     def test_add_asset_streaming(self):
         with get_browser() as browser:
