@@ -6,6 +6,7 @@ on:
       - master
       - production
     paths-ignore:
+      - 'README.md'
       - 'webview/**'
       - '.github/workflows/build-webview.yaml'
       - README.md
@@ -14,6 +15,7 @@ on:
       - master
       - production
     paths-ignore:
+      - 'README.md'
       - 'webview/**'
       - '.github/workflows/build-webview.yaml'
   workflow_call:
