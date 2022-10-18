@@ -9,11 +9,13 @@ RUN apt-get -y update && \
         git-core && \
     apt-get clean
 
+RUN echo "nproc: $(nproc)"
+
 RUN cd /opt && \
     git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg && \
     cd ffmpeg && \
     git checkout 2ca65fc7b74444edd51d5803a2c1e05a801a6023 && \
-    ./configure --disable-x86asm && make
+    ./configure --disable-x86asm && make -j$(nproc)
 
 FROM screenly/srly-ose-base:latest-x86
 
