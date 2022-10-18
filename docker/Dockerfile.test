@@ -1,4 +1,13 @@
-FROM screenly/srly-ose-base:latest-x86 as builder
+FROM debian:buster as builder
+
+ENV GIT_SSL_NO_VERIFY=1
+
+RUN apt-get -y update && \
+    apt-get -y install --no-install-recommends \
+        build-essential \
+        git \
+        git-core && \
+    apt-get clean
 
 RUN cd /opt && \
     git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg && \
