@@ -1,15 +1,11 @@
 FROM debian:buster as builder
 
-ENV GIT_SSL_NO_VERIFY=1
-
-RUN apt-get -y update && \
+RUN apt-get update && \
     apt-get -y install --no-install-recommends \
         build-essential \
         git \
-        git-core && \
+        ca-certificates && \
     apt-get clean
-
-RUN echo "nproc: $(nproc)"
 
 RUN cd /opt && \
     git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg && \
