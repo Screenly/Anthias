@@ -1,6 +1,18 @@
-FROM screenly/srly-ose-base:latest-x86
+FROM screenly/srly-ose-base:latest-x86 as builder
+
+WORKDIR /opt
+RUN cd /opt
+RUN git clone https://git.ffmpeg.org/ffmpeg.git
+WORKDIR ffmpeg
+RUN git checkout 2ca65fc7b74444edd51d5803a2c1e05a801a6023 && \
+    ./configure --disable-x86asm && make
+
+FROM builder
 
 RUN apt-get -y install wget unzip
+
+WORKDIR /opt/ffmpeg
+COPY --from=builder /opt/ffmpeg/ffserver ./
 
 ADD requirements/requirements.txt /tmp/requirements.txt
 ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
