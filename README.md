@@ -80,5 +80,6 @@ docker-compose -f docker-compose.test.yml up -d
 Run the unit tests.
 
 ```bash
-docker-compose -f docker-compose.test.yml exec -T srly-ose-test bash ./bin/run_tests.sh
+docker-compose -f docker-compose.test.yml exec -T srly-ose-test bash ./bin/prepare_test_environment.sh
+docker-compose -f docker-compose.test.yml exec -T srly-ose-test nosetests -v -a '!fixme'
 ```
