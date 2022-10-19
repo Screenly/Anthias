@@ -9,7 +9,7 @@ services:
         - screenly/srly-ose-base:latest-x86
 
   srly-ose-test:
-    image: screenly/srly-ose-base:latest-x86
+    image: screenly/srly-ose-test:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.test
