@@ -6,7 +6,6 @@
 set -euo pipefail
 
 START_SERVER=false
-OSE_LOGO_URL='https://github.com/Screenly/screenly-ose/raw/master/static/img/ose-logo.png'
 
 print_usage () {
     echo "Usage: $0 [-s]"
@@ -32,15 +31,17 @@ while getopts "sh" arg; do
     esac
 done
 
-mkdir -p ~/.screenly ~/screenly_assets /tmp/USB/cleanup_folder
-cp ansible/roles/screenly/files/screenly.db ~/.screenly/
-cp ansible/roles/screenly/files/screenly.conf ~/.screenly/
-curl $OSE_LOGO_URL > /tmp/image.png
+cp tests/assets/asset.mov /tmp/asset.mov
+cp static/img/ose-logo.png /tmp/image.png
 cp /tmp/image.png /tmp/USB/image.png
 cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
 cp tests/config/ffserver.conf /etc/ffserver.conf
 
+nohup /opt/ffmpeg/ffserver -f /etc/ffserver.conf > /dev/null 2>&1 &
+sleep 3
+
 if [ "$START_SERVER" = true ]; then
+    cd /usr/src/app
     python server.py &
     sleep 3
 fi
