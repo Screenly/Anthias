@@ -10,6 +10,7 @@ import shutil
 import tempfile
 import unittest
 from datetime import datetime, timedelta
+from nose.plugins.attrib import attr
 
 asset_x = {
     'mimetype': u'web',
@@ -222,6 +223,7 @@ class WebTest(unittest.TestCase):
                 self.assertEqual(assets[1]['mimetype'], u'video')
                 self.assertEqual(assets[1]['duration'], u'5')
 
+    @attr('fixme')
     def test_add_asset_streaming(self):
         with get_browser() as browser:
             browser.visit(main_page_url)
