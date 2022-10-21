@@ -28,7 +28,13 @@ class MediaPlayer:
 class VLCMediaPlayer(MediaPlayer):
     def __init__(self):
         MediaPlayer.__init__(self)
-        self.instance = vlc.Instance()
+
+        options = (
+          '--video-x=1920 '
+          '--mmal-display hdmi-2'
+        )
+
+        self.instance = vlc.Instance(options)
         self.player = self.instance.media_player_new()
 
         self.player.audio_output_set('alsa')
