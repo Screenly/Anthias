@@ -29,10 +29,10 @@ class VLCMediaPlayer(MediaPlayer):
     def __init__(self):
         MediaPlayer.__init__(self)
 
-        options = (
-          '--video-x=1920 '
-          '--mmal-display hdmi-2'
-        )
+        options = [
+            '--mmal-display=HDMI-2',
+            '--vout=mmal_vout',
+        ]
 
         self.instance = vlc.Instance(options)
         self.player = self.instance.media_player_new()
