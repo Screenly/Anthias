@@ -68,6 +68,12 @@
   tags:
     - touches_boot_partition
 
+- name: Change dtoverlay value for DRM VC4 V3D driver
+  replace:
+    dest: /boot/config.txt
+    regexp: (^dtoverlay)=vc4-kms-v3d$
+    replace: \1=vc4-fkms-v3d
+
 - name: Backup kernel boot args
   copy:
     src: /boot/cmdline.txt
