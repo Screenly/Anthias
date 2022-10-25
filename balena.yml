@@ -27,9 +27,3 @@ assets:
     type: "blob.asset"
     data:
       url: "https://raw.githubusercontent.com/Screenly/screenly-ose/master/static/img/ose-logo.png"
-data:
-  defaultDeviceType: raspberrypi3
-  supportedDeviceTypes:
-    - raspberrypi3
-    - fincm3
-version: 0.0.2
