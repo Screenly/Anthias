@@ -29,3 +29,7 @@ assets:
       url: >-
         "https://raw.githubusercontent.com/Screenly/screenly-ose/master/static/img/ose-logo.png"
 data:
+  supportedDeviceTypes:
+    - raspberrypi3
+    - fincm3
+version: 0.0.1
