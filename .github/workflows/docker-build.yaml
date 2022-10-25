@@ -5,10 +5,13 @@ on:
     branches:
       - master
       - production
-    paths-ignore:
-      - 'webview/**'
-      - '.github/workflows/build-webview.yaml'
-      - README.md
+    paths:
+      - '/**'
+      - '!webview/**'
+      - '!.github/workflows/build-webview.yaml'
+      - '!README.md'
+      - '!/bin'
+      - '!/docks'
 
 jobs:
   run-tests:

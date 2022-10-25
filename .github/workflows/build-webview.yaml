@@ -7,8 +7,7 @@ on:
     paths:
       - '.github/workflows/build-webview.yaml'
       - 'webview/**'
-    paths-ignore:
-      - 'webview/README.md'
+      - '!webview/README.md'
 
 jobs:
   build-docker-image:
