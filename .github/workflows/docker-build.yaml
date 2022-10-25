@@ -11,7 +11,7 @@ on:
       - '!.github/workflows/build-webview.yaml'
       - '!README.md'
       - '!/bin'
-      - '!/docks'
+      - '!/docs'
 
 jobs:
   run-tests:
