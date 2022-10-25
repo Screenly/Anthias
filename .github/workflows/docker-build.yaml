@@ -6,12 +6,11 @@ on:
       - master
       - production
     paths:
-      - '/**'
+      - '**'
       - '!webview/**'
       - '!.github/workflows/build-webview.yaml'
       - '!README.md'
-      - '!/bin'
-      - '!/docs'
+      - '!docs/**'
 
 jobs:
   run-tests:
