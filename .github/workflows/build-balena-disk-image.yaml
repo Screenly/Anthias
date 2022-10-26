@@ -38,21 +38,24 @@ jobs:
           fi
 
       - name: Download image
-        run: balena os \
-          download "$BALENA_IMAGE" \
-          --output "$BALENA_IMAGE.img" \
-          --version default
+        run: |
+          balena os \
+            download "$BALENA_IMAGE" \
+            --output "$BALENA_IMAGE.img" \
+            --version default
 
       - name: Preload image
-        run: balena preload \
-          "$BALENA_IMAGE.img" \
-          --fleet screenly_ose/screenly-ose-${{ matrix.board }} \
-          --commit latest
+        run: |
+          balena preload \
+            "$BALENA_IMAGE.img" \
+            --fleet screenly_ose/screenly-ose-${{ matrix.board }} \
+            --commit latest
 
       - name: Zip image
-        run: zip -9 \
-          "$BALENA_IMAGE.zip" \
-          "$BALENA_IMAGE.img"
+        run: |
+          zip -9 \
+            "$BALENA_IMAGE.zip" \
+            "$BALENA_IMAGE.img"
 
       - uses: actions/upload-artifact@v3
         with:
