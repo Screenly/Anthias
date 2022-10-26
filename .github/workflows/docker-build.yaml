@@ -9,6 +9,7 @@ on:
       - '**'
       - '!webview/**'
       - '!.github/workflows/build-webview.yaml'
+      - '!.github/workflows/build-balena-disk-image.yaml'
       - '!README.md'
       - '!docs/**'
 
