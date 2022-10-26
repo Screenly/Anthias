@@ -46,7 +46,7 @@ jobs:
       - name: Preload image
         run: balena preload \
           "$BALENA_IMAGE.img" \
-          --app screenly_ose/screenly-ose-${{ matrix.board }} \
+          --fleet screenly_ose/screenly-ose-${{ matrix.board }} \
           --commit latest
 
       - name: Zip image
