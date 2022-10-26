@@ -4,7 +4,8 @@ jobs:
   balena-build-images:
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4']
+        # board: ['pi1', 'pi2', 'pi3', 'pi4']
+        board: ['pi3', 'pi4']
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -47,7 +48,7 @@ jobs:
         uses: docker/setup-buildx-action@v2
         with:
           install: true
-
+          platforms: "$TARGET_PLATFORM"
       - name: Download image
         run: |
           balena os \
