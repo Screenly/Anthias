@@ -48,7 +48,7 @@ jobs:
         with:
           install: true
           driver-opts: |
-            platforms="$TARGET_PLATFORM"
+            platforms=$TARGET_PLATFORM
 
       - name: Download image
         run: |
