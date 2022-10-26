@@ -16,7 +16,10 @@ jobs:
           node-version: 16
 
       - name: Install latest balena-cli
-        run: npm install -g balena-cli@14.5.2
+        run: npm install \
+          -g \
+          --ignore-scripts \
+          balena-cli@14.5.2
 
       - name: Login
         run: balena login --token ${{ secrets.BALENA_TOKEN }}
