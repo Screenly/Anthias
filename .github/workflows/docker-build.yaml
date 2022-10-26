@@ -121,6 +121,11 @@ jobs:
         run: |
           # Generage a docker-compose file for Balena with the correct board
           mkdir -p balena-deploy
+
+          # Copy in the Balena yaml file.
+          cp balena.yml balena-deploy/
+
+          # Generate the docker-compose file
           cat docker-compose.balena.yml | \
             sed "s/BOARD_TAG/$GIT_SHORT_HASH-${{ matrix.board }}/" \
             > balena-deploy/docker-compose.yml
