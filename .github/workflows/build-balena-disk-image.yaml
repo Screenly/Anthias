@@ -1,0 +1,56 @@
+name: Build Balena Disk Images
+on: workflow_dispatch
+jobs:
+  balena-build-images:
+    strategy:
+      matrix:
+        board: ['pi1', 'pi2', 'pi3', 'pi4']
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+
+      - name: Setup NodeJS
+        uses: actions/setup-node@v2
+        with:
+          node-version: 16
+
+      - name: Install latest balena-cli
+        run: npm install -g balena-cli@14.5.2
+
+      - name: Login
+        run: balena login --token ${{ secrets.BALENA_TOKEN }}
+
+      - name: Get base board
+        run: |
+          # Logic for Raspberry Pi 1
+          if [ "${{ matrix.board }}" == 'pi1' ]; then
+            echo BALENA_IMAGE=raspberry-pi" >> $GITHUB_ENV
+          # Logic for Raspberry Pi 2
+          elif [ "${{ matrix.board }}" == 'pi2' ]; then
+            echo BALENA_IMAGE=raspberry-pi2" >> $GITHUB_ENV
+          else
+            echo BALENA_IMAGE=raspberrypi3" >> $GITHUB_ENV
+          fi
+
+      - name: Download image
+        run: balena os \
+          download "$BALENA_IMAGE" \
+          --output "$BALENA_IMAGE.img" \
+          --version default
+
+      - name: Preload image
+        run: balena preload \
+          "$BALENA_IMAGE.img" \
+          --app screenly_ose/screenly-ose-${{ matrix.board }} \
+          --commit latest
+
+      - name: Zip image
+        run: zip -9 \
+          "$BALENA_IMAGE.zip" \
+          "$BALENA_IMAGE.img"
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: Release file
+          path: "$BALENA_IMAGE.zip"

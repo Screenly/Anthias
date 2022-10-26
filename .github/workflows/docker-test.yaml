@@ -5,19 +5,22 @@ on:
     branches:
       - master
       - production
-    paths-ignore:
-      - 'README.md'
-      - 'webview/**'
-      - '.github/workflows/build-webview.yaml'
-      - README.md
+    paths:
+      - '!README.md'
+      - '!webview/**'
+      - '!.github/workflows/build-webview.yaml'
+      - '!.github/workflows/build-balena-disk-image.yaml'
+      - '!docs/**'
   pull_request:
     branches:
       - master
       - production
-    paths-ignore:
-      - 'README.md'
-      - 'webview/**'
-      - '.github/workflows/build-webview.yaml'
+    paths:
+      - '!README.md'
+      - '!webview/**'
+      - '!.github/workflows/build-webview.yaml'
+      - '!.github/workflows/build-balena-disk-image.yaml'
+      - '!docs/**'
   workflow_call:
 
 jobs:
