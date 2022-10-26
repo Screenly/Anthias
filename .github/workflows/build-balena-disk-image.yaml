@@ -47,8 +47,6 @@ jobs:
         uses: docker/setup-buildx-action@v2
         with:
           install: true
-          driver-opts: |
-            platforms=$TARGET_PLATFORM
 
       - name: Download image
         run: |
