@@ -29,12 +29,12 @@ jobs:
         run: |
           # Logic for Raspberry Pi 1
           if [ "${{ matrix.board }}" == 'pi1' ]; then
-            echo BALENA_IMAGE=raspberry-pi" >> $GITHUB_ENV
+            echo "BALENA_IMAGE=raspberry-pi" >> $GITHUB_ENV
           # Logic for Raspberry Pi 2
           elif [ "${{ matrix.board }}" == 'pi2' ]; then
-            echo BALENA_IMAGE=raspberry-pi2" >> $GITHUB_ENV
+            echo "BALENA_IMAGE=raspberry-pi2" >> $GITHUB_ENV
           else
-            echo BALENA_IMAGE=raspberrypi3" >> $GITHUB_ENV
+            echo "BALENA_IMAGE=raspberrypi3" >> $GITHUB_ENV
           fi
 
       - name: Download image
