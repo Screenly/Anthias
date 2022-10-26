@@ -34,21 +34,18 @@ jobs:
           # Logic for Raspberry Pi 1
           if [ "${{ matrix.board }}" == 'pi1' ]; then
             echo "BALENA_IMAGE=raspberry-pi" >> $GITHUB_ENV
-            echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
           # Logic for Raspberry Pi 2
           elif [ "${{ matrix.board }}" == 'pi2' ]; then
             echo "BALENA_IMAGE=raspberry-pi2" >> $GITHUB_ENV
-            echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
           else
             echo "BALENA_IMAGE=raspberrypi3" >> $GITHUB_ENV
-            echo 'TARGET_PLATFORM=linux/arm/v7' >> $GITHUB_ENV
           fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
         with:
           install: true
-          platforms: "$TARGET_PLATFORM"
+          platforms: linux/arm/v6,linux/arm/v7
       - name: Download image
         run: |
           balena os \
