@@ -30,7 +30,7 @@ jobs:
           balena_cli_commands: |
             os download "$BALENA_IMAGE" \
               --output "$BALENA_IMAGE.img" \
-              --version default &&
+              --version default
           balena_cli_version: 13.7.1
 
       - name: balena CLI Action - preload
