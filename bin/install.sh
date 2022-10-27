@@ -180,7 +180,6 @@ else
       DOMAIN_NAME='raw.githubusercontent.com'
       _REPOSITORY=$(echo $REPOSITORY | cut -d '/' -f 4,5)
       REQUIREMENTS_PATH='requirements/requirements.host.txt'
-      curl -s https://$DOMAIN_NAME/${_REPOSITORY%.git}/$BRANCH/$REQUIREMENTS_PATH
       ANSIBLE_VERSION=$(curl -s https://$DOMAIN_NAME/${_REPOSITORY%.git}/$BRANCH/$REQUIREMENTS_PATH | grep ansible)
     fi
 fi
