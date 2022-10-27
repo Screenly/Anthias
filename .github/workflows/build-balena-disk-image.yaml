@@ -23,14 +23,21 @@ jobs:
             echo "BALENA_IMAGE=raspberrypi3" >> $GITHUB_ENV
           fi
 
-      - name: balena CLI Action
+      - name: balena CLI Action - download
         uses: balena-labs-research/community-cli-action@1.0.0
         with:
           balena_token: ${{secrets.BALENA_TOKEN}}
-          balena_cli_commands: >
+          balena_cli_commands: |
             os download "$BALENA_IMAGE" \
               --output "$BALENA_IMAGE.img" \
-              --version default;
+              --version default &&
+          balena_cli_version: 13.7.1
+
+      - name: balena CLI Action - preload
+        uses: balena-labs-research/community-cli-action@1.0.0
+        with:
+          balena_token: ${{secrets.BALENA_TOKEN}}
+          balena_cli_commands: |
             preload \
               "$BALENA_IMAGE.img" \
               --fleet screenly_ose/screenly-ose-${{ matrix.board }} \
@@ -46,4 +53,4 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: Release file
-          path: "$BALENA_IMAGE.zip"
+          path: "*.zip"
