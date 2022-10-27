@@ -28,7 +28,7 @@ jobs:
         with:
           balena_token: ${{secrets.BALENA_TOKEN}}
           balena_cli_commands: >
-            download "$BALENA_IMAGE" \
+            os download "$BALENA_IMAGE" \
               --output "$BALENA_IMAGE.img" \
               --version default;
             preload \
