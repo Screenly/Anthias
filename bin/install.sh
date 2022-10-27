@@ -180,14 +180,8 @@ else
       DOMAIN_NAME='raw.githubusercontent.com'
       _REPOSITORY=$(echo $REPOSITORY | cut -d '/' -f 4,5)
       REQUIREMENTS_PATH='requirements/requirements.host.txt'
-      # TODO: Remove after debug.
-      echo "[DEBUG]: REPOSITORY: $REPOSITORY"
-      echo "[DEBUG]: BRANCH: $BRANCH"
-      URL="https://$DOMAIN_NAME/${_REPOSITORY%.git}/$BRANCH/$REQUIREMENTS_PATH"
-      echo "[DEBUG]: URL: $URL"
       curl -s https://$DOMAIN_NAME/${_REPOSITORY%.git}/$BRANCH/$REQUIREMENTS_PATH
       ANSIBLE_VERSION=$(curl -s https://$DOMAIN_NAME/${_REPOSITORY%.git}/$BRANCH/$REQUIREMENTS_PATH | grep ansible)
-      echo "[DEBUG] ANSIBLE_VERSION: $ANSIBLE_VERSION"
     fi
 fi
 
