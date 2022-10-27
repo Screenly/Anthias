@@ -88,7 +88,7 @@ EOF
 
 # Remove these once the above code has been restored.
 export DOCKER_TAG="latest"
-export BRANCH="master"
+export BRANCH=${BRANCH:-'master'}
 
   echo && read -p "Do you want Screenly OSE to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
 
@@ -167,11 +167,21 @@ else
   export MANAGE_NETWORK=false
 fi
 
+DOMAIN_NAME='raw.githubusercontent.com'
+REQUIREMENTS_PATH='requirements/requirements.host.txt'
+
 # Install Ansible from requirements file.
 if [ "$BRANCH" = "master" ]; then
-    ANSIBLE_VERSION=$(curl -s https://raw.githubusercontent.com/Screenly/screenly-ose/$BRANCH/requirements/requirements.host.txt | grep ansible)
+    ANSIBLE_VERSION=$(curl -s https://$DOMAIN_NAME/Screenly/screenly-ose/$BRANCH/$REQUIREMENTS_PATH | grep ansible)
 else
-    ANSIBLE_VERSION=ansible==2.8.8
+    if [ -z "$REPOSITORY" ]; then
+        ANSIBLE_VERSION=ansible==2.8.8
+    else
+      DOMAIN_NAME='raw.githubusercontent.com'
+      _REPOSITORY=$(echo $REPOSITORY | cut -d '/' -f 4,5)
+      REQUIREMENTS_PATH='requirements/requirements.host.txt'
+      ANSIBLE_VERSION=$(curl -s https://$DOMAIN_NAME/${_REPOSITORY%.git}/$BRANCH/$REQUIREMENTS_PATH | grep ansible)
+    fi
 fi
 
 sudo pip install "$ANSIBLE_VERSION"
