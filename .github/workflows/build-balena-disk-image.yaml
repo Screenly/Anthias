@@ -11,24 +11,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2.3.4
 
-      - name: Setup NodeJS
-        uses: actions/setup-node@v2
-        with:
-          node-version: 16
-
-      - name: Install latest balena-cli
-        run: |
-          npm install \
-            --ignore-scripts \
-            -g \
-            balena-cli@14.5.2
-
-      - name: Login
-        run: balena login --token ${{ secrets.BALENA_TOKEN }}
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-
       - name: Get base board
         run: |
           # Logic for Raspberry Pi 1
@@ -41,24 +23,19 @@ jobs:
             echo "BALENA_IMAGE=raspberrypi3" >> $GITHUB_ENV
           fi
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+      - name: balena CLI Action
+        uses: balena-labs-research/community-cli-action@1.0.0
         with:
-          install: true
-          platforms: linux/arm/v6,linux/arm/v7
-      - name: Download image
-        run: |
-          balena os \
+          balena_token: ${{secrets.BALENA_TOKEN}}
+          balena_cli_commands: >
             download "$BALENA_IMAGE" \
-            --output "$BALENA_IMAGE.img" \
-            --version default
-
-      - name: Preload image
-        run: |
-          balena preload \
-            "$BALENA_IMAGE.img" \
-            --fleet screenly_ose/screenly-ose-${{ matrix.board }} \
-            --commit latest
+              --output "$BALENA_IMAGE.img" \
+              --version default;
+            preload \
+              "$BALENA_IMAGE.img" \
+              --fleet screenly_ose/screenly-ose-${{ matrix.board }} \
+              --commit latest
+          balena_cli_version: 13.7.1
 
       - name: Zip image
         run: |
