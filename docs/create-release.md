@@ -1,9 +1,15 @@
 # Creating a new release
 
 * Run through the [QA Checklist](*https://www.forgett.com/checklist/1789089623)
-* Assuming it worked, merge the master branch into the production branch
-* Create a new release (targeting the production branch) and link to the corresponding sprint
-* Create a new [disk image](https://github.com/Screenly/screenly-ose/blob/master/docs/create-disk-image.md) based on the new changes
+* Create a new release and link to the corresponding sprint
+* Create a release tag in `git`:
+
+```
+$ git tag -a vX.Y.Z -m "Release name"
+$ git push origin vX.Y.Z
+```
+
+* Create a new disk image by triggering the [Balena Disk Image](https://github.com/Screenly/screenly-ose/actions/workflows/build-balena-disk-image.yaml) job
+* Download the resulting images from the job
+* Unzip the content from the zip file
 * Upload the new disk image to the release above
-* Upload the disk image to the NOOBS repository
-* Write a blog post on screenly.io and announce the new release on social media
