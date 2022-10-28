@@ -10,54 +10,57 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2.3.4
 
-      - name: Setup NodeJS
-        uses: actions/setup-node@v2
-        with:
-          node-version: 16
-
-      - name: Install latest balena-cli
-        run: |
-          npm install \
-            --ignore-scripts \
-            -g \
-            balena-cli@14.5.2
-
-      - name: Login
-        run: balena login --token ${{ secrets.BALENA_TOKEN }}
-
       - name: Get base board
         run: |
-          # Logic for Raspberry Pi 1
           if [ "${{ matrix.board }}" == 'pi1' ]; then
             echo "BALENA_IMAGE=raspberry-pi" >> $GITHUB_ENV
-          # Logic for Raspberry Pi 2
           elif [ "${{ matrix.board }}" == 'pi2' ]; then
             echo "BALENA_IMAGE=raspberry-pi2" >> $GITHUB_ENV
-          else
+          elif [ "${{ matrix.board }}" == 'pi3' ]; then
             echo "BALENA_IMAGE=raspberrypi3" >> $GITHUB_ENV
+          elif [ "${{ matrix.board }}" == 'pi4' ]; then
+            echo "BALENA_IMAGE=raspberrypi4-64" >> $GITHUB_ENV
           fi
 
-      - name: Download image
-        run: |
-          balena os \
-            download "$BALENA_IMAGE" \
-            --output "$BALENA_IMAGE.img" \
-            --version default
+      - name: balena CLI Action - download
+        uses: balena-labs-research/community-cli-action@1.0.0
+        with:
+          balena_token: ${{secrets.BALENA_TOKEN}}
+          balena_cli_commands: |
+            os download "$BALENA_IMAGE" \
+              --output "$BALENA_IMAGE.img" \
+              --version default
+          balena_cli_version: 13.7.1
 
-      - name: Preload image
-        run: |
-          balena preload \
-            "$BALENA_IMAGE.img" \
-            --fleet screenly_ose/screenly-ose-${{ matrix.board }} \
-            --commit latest
+      - name: balena CLI Action - preload
+        uses: balena-labs-research/community-cli-action@1.0.0
+        with:
+          balena_token: ${{secrets.BALENA_TOKEN}}
+          balena_cli_commands: |
+            preload \
+              "$BALENA_IMAGE.img" \
+              --fleet screenly_ose/screenly-ose-${{ matrix.board }} \
+              --commit latest
+          balena_cli_version: 13.7.1
+
+      - name: balena CLI Action - configure
+        uses: balena-labs-research/community-cli-action@1.0.0
+        with:
+          balena_token: ${{secrets.BALENA_TOKEN}}
+          balena_cli_commands: |
+            os configure \
+              "$BALENA_IMAGE.img" \
+              --config-network=ethernet  \
+              --fleet screenly_ose/screenly-ose-${{ matrix.board }}
+          balena_cli_version: 13.7.1
 
       - name: Zip image
         run: |
           zip -9 \
-            "$BALENA_IMAGE.zip" \
+            "$(date -I)-$BALENA_IMAGE.zip" \
             "$BALENA_IMAGE.img"
 
       - uses: actions/upload-artifact@v3
         with:
           name: Release file
-          path: "$BALENA_IMAGE.zip"
+          path: "*.zip"
