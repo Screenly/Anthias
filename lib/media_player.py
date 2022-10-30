@@ -3,6 +3,7 @@ from platform import machine
 import sh
 import vlc
 
+from lib.raspberry_pi_helper import lookup_raspberry_pi_version
 from settings import settings
 
 VIDEO_TIMEOUT = 20  # secs
@@ -29,15 +30,22 @@ class VLCMediaPlayer(MediaPlayer):
     def __init__(self):
         MediaPlayer.__init__(self)
 
-        options = [
-            '--mmal-display=HDMI-2',
-            '--vout=mmal_vout',
-        ]
-
+        options = self.__get_options()
         self.instance = vlc.Instance(options)
         self.player = self.instance.media_player_new()
 
         self.player.audio_output_set('alsa')
+
+    def __get_options(self):
+        options = []
+
+        if lookup_raspberry_pi_version() == 'pi4':
+            options += [
+                '--mmal-display=HDMI-2',
+                '--vout=mmal_vout',
+            ]
+
+        return options
 
     def set_asset(self, uri, duration):
         # @TODO: HDMI or 3.5mm jack audio output
