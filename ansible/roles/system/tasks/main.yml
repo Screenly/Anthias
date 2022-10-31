@@ -68,11 +68,35 @@
   tags:
     - touches_boot_partition
 
-- name: Change dtoverlay value for DRM VC4 V3D driver
+- name: Comment out the original dtoverlay config.
   replace:
-    dest: /boot/config.txt
+    dest: ./config.txt
+    regexp: ^(dtoverlay=vc4-kms-v3d)$
+    replace: '#\1'
+
+- name: Change dtoverlay value for DRM VC4 V3D driver.
+  replace:
+    dest: ./config.txt
     regexp: ^(\[pi4\])$
     replace: \1\ndtoverlay=vc4-fkms-v3d
+
+- name: Specify configs for pi1, pi2, and pi3.
+  vars:
+    kms_config: dtoverlay=vc4-kms-v3d
+  replace:
+    dest: ./config.txt
+    regexp: ^(\[pi4\])$
+    replace: |-
+      [pi1]
+      {{ kms_config }}
+
+      [pi2]
+      {{ kms_config }}
+
+      [pi3]
+      {{ kms_config }}
+
+      \1
 
 - name: Backup kernel boot args
   copy:
