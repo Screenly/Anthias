@@ -75,7 +75,7 @@
     replace: '#\1'
 
 - name: Add FKMS config for Pi 4.
-  ansible.builtin.lineinfile:
+  lineinfile:
     path: /boot/config.txt
     insertafter: '^\[pi4\]$'
     line: dtoverlay=vc4-fkms-v3d
