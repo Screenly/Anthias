@@ -79,7 +79,11 @@ def get_node_ip():
     The reason for this is because we can't retrieve the host IP from within Docker.
     """
 
-    @retry(requests.ConnectionError, tries=3)
+    @retry((
+        requests.ConnectionError,
+        requests.ConnectTimeout,
+        requests.Timeout,
+    ), tries=3)
     def get_response():
         balena_supervisor_address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
         balena_supervisor_api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
