@@ -20,6 +20,7 @@ from retry import retry
 from settings import settings, ZmqPublisher
 from subprocess import check_output, call
 from threading import Thread
+from urllib3.exceptions import NewConnectionError
 from urlparse import urlparse
 import logging
 
@@ -83,7 +84,8 @@ def get_node_ip():
         requests.ConnectionError,
         requests.ConnectTimeout,
         requests.Timeout,
-    ), tries=3)
+        NewConnectionError,
+    ))
     def get_response():
         balena_supervisor_address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
         balena_supervisor_api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
