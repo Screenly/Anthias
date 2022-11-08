@@ -174,6 +174,11 @@ else
     ANSIBLE_VERSION=ansible==2.8.8
 fi
 
+# @TODO
+# Remove me later. Cryptography 38.0.3 won't build at the moment.
+# See https://github.com/Screenly/screenly-ose/issues/1654
+sudo pip install cryptography==38.0.2
+
 sudo pip install "$ANSIBLE_VERSION"
 
 sudo -u pi ansible localhost \
