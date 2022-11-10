@@ -188,9 +188,6 @@ cd /home/pi/screenly/ansible
 
 sudo -E ansible-playbook site.yml "${EXTRA_ARGS[@]}"
 
-# Pull down and install containers
-/home/pi/screenly/bin/upgrade_containers.sh
-
 sudo apt-get autoclean
 sudo apt-get clean
 sudo docker system prune -f
@@ -268,6 +265,9 @@ check_defaultpw () {
 }
 
 check_defaultpw;
+
+# Pull down and install containers
+/home/pi/screenly/bin/upgrade_containers.sh
 
 echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
 
