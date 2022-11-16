@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.server
-      network: host
+      network: bridge
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -24,7 +24,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
-      network: host
+      network: bridge
     depends_on:
       - srly-ose-server
     environment:
@@ -42,7 +42,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket
-      network: host
+      network: bridge
     depends_on:
       - srly-ose-server
     environment:
@@ -57,7 +57,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.celery
-      network: host
+      network: bridge
     depends_on:
       - srly-ose-server
       - redis
@@ -76,7 +76,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.redis
-      network: host
+      network: bridge
     ports:
       - 127.0.0.1:6379:6379
     restart: always
@@ -88,7 +88,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.nginx
-      network: host
+      network: bridge
     ports:
       - 80:80
     environment:
