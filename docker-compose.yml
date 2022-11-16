@@ -1,10 +1,11 @@
-version: "2"
+version: "2.2"
 services:
   srly-ose-server:
     image: screenly/srly-ose-server
     build:
       context: .
       dockerfile: docker/Dockerfile.server
+      network: host
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -23,6 +24,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
+      network: host
     depends_on:
       - srly-ose-server
     environment:
@@ -40,6 +42,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket
+      network: host
     depends_on:
       - srly-ose-server
     environment:
@@ -54,6 +57,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.celery
+      network: host
     depends_on:
       - srly-ose-server
       - redis
@@ -72,6 +76,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.redis
+      network: host
     ports:
       - 127.0.0.1:6379:6379
     restart: always
@@ -83,6 +88,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.nginx
+      network: host
     ports:
       - 80:80
     environment:
