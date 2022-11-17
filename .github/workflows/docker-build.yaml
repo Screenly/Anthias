@@ -5,10 +5,13 @@ on:
     branches:
       - master
       - production
-    paths-ignore:
-      - 'webview/**'
-      - '.github/workflows/build-webview.yaml'
-      - README.md
+    paths:
+      - '**'
+      - '!webview/**'
+      - '!.github/workflows/build-webview.yaml'
+      - '!.github/workflows/build-balena-disk-image.yaml'
+      - '!README.md'
+      - '!docs/**'
 
 jobs:
   run-tests:
@@ -82,28 +85,20 @@ jobs:
           echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_ENV
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
-      - name: Set buildx args
-        id: buildx-args
-        run: |
-          # Define the build arguments
-          echo ::set-output name=buildx_args::\
-            --platform "$TARGET_PLATFORM" \
-            --output "type=image,push=true" \
-            --cache-from "type=local,src=/tmp/.buildx-cache" \
-            --cache-to "type=local,dest=/tmp/.buildx-cache" \
-            --build-arg "PI_VERSION=${{ matrix.board }}" \
-            --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-            --build-arg "GIT_HASH=$GITHUB_SHA" \
-            --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
-            --build-arg "GIT_BRANCH=$GITHUB_REF_NAME"
-
-
       - name: Building containers
         run: |
           for container in base server celery redis websocket nginx viewer; do
             echo "Building container $container"
             docker buildx build \
-              ${{ steps.buildx-args.outputs.buildx_args }} \
+              --platform "$TARGET_PLATFORM" \
+              --output "type=image,push=true" \
+              --cache-from "type=local,src=/tmp/.buildx-cache" \
+              --cache-to "type=local,dest=/tmp/.buildx-cache" \
+              --build-arg "PI_VERSION=${{ matrix.board }}" \
+              --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+              --build-arg "GIT_HASH=$GITHUB_SHA" \
+              --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
+              --build-arg "GIT_BRANCH=$GITHUB_REF_NAME" \
               -f "docker/Dockerfile.$container" \
               -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-${{ matrix.board }}" \
               -t "screenly/srly-ose-$container:$DOCKER_TAG" .
@@ -127,6 +122,11 @@ jobs:
         run: |
           # Generage a docker-compose file for Balena with the correct board
           mkdir -p balena-deploy
+
+          # Copy in the Balena yaml file.
+          cp balena.yml balena-deploy/
+
+          # Generate the docker-compose file
           cat docker-compose.balena.yml | \
             sed "s/BOARD_TAG/$GIT_SHORT_HASH-${{ matrix.board }}/" \
             > balena-deploy/docker-compose.yml

@@ -15,11 +15,19 @@ Want to help OSE thrive? Support us using [GitHub Sponsor](https://github.com/sp
 
 ## Disk images
 
-~~The recommended installation method is to grab the latest disk image from [here](https://github.com/Screenly/screenly-ose/releases).~~
+The quickest way to get started is to use one of our pre-built disk images (powered by [Balena Hub](https://hub.balena.io/)).
+
+* [Raspberry Pi 1](https://github.com/Screenly/screenly-ose/releases/download/v0.18.4/2022-11-04-raspberry-pi.zip)
+* [Raspberry Pi 2](https://github.com/Screenly/screenly-ose/releases/download/v0.18.4/2022-11-04-raspberry-pi2.zip)
+* [Raspberry Pi 3](https://github.com/Screenly/screenly-ose/releases/download/v0.18.4/2022-11-04-raspberrypi3.zip)
+* [Raspberry Pi 4](https://github.com/Screenly/screenly-ose/releases/download/v0.18.4/2022-11-04-raspberrypi4-64.zip)
+
+Do however note that that we are still in the process of knocking out some bugs. You can track the known issues [here](https://github.com/Screenly/screenly-ose/projects/8).
+
 
 ## Installing on Raspbian/Raspberry Pi OS
 
-The tl;dr for installing Screenly OSE on [Raspbian Lite](https://www.raspberrypi.org/downloads/raspbian/) is:
+The tl;dr for installing Screenly OSE on [Raspberry Pi OS](https://www.raspberrypi.com/software/) Bullseye Lite is:
 
 ```
 $ bash <(curl -sL https://install-ose.srly.io)
@@ -65,8 +73,9 @@ To simplify development of the server module of Screenly OSE, we've created a Do
 
 Assuming you're in the source code repository, simply run:
 
-```
-$ docker-compose -f docker-compose.dev.yml up
+```bash
+$ docker-compose \
+    -f docker-compose.dev.yml up
 ```
 
 ## Running the Unit Tests
@@ -74,17 +83,17 @@ $ docker-compose -f docker-compose.dev.yml up
 Start the containers.
 
 ```bash
-docker-compose -f docker-compose.dev.yml up -d
+$ docker-compose \
+    -f docker-compose.test.yml up -d
 ```
 
-Setup the testing environment. Make sure to include the `-s` flag so that the server will start.
+Run the unit tests.
 
 ```bash
-docker-compose -f docker-compose.dev.yml exec srly-ose-test bash bin/prepare_test_environment.sh -s
-```
-
-Run the unit tests. The command below will allow you to run all tests that don't have a `fixme` attribute. You can also run specific tests as well. You can modify then run the command below without rebuilding.
-
-```bash
-docker-compose -f docker-compose.dev.yml exec srly-ose-test nosetests -v -a `!fixme`
+$ docker-compose \
+    -f docker-compose.test.yml \
+    exec -T srly-ose-test bash ./bin/prepare_test_environment.sh -s
+$ docker-compose \
+    -f docker-compose.test.yml \
+    exec -T srly-ose-test nosetests -v -a '!fixme'
 ```

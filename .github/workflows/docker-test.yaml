@@ -5,17 +5,23 @@ on:
     branches:
       - master
       - production
-    paths-ignore:
-      - 'webview/**'
-      - '.github/workflows/build-webview.yaml'
-      - README.md
+    paths:
+      - '!README.md'
+      - '!webview/**'
+      - '!.github/workflows/build-webview.yaml'
+      - '!.github/workflows/build-balena-disk-image.yaml'
+      - '!docs/**'
   pull_request:
     branches:
       - master
       - production
-    paths-ignore:
-      - 'webview/**'
-      - '.github/workflows/build-webview.yaml'
+    paths:
+      - '**/**'
+      - '!README.md'
+      - '!webview/**'
+      - '!.github/workflows/build-webview.yaml'
+      - '!.github/workflows/build-balena-disk-image.yaml'
+      - '!docs/**'
   workflow_call:
 
 jobs:
@@ -34,8 +40,10 @@ jobs:
           docker-compose -f docker-compose.test.yml up -d
 
       - name: Run the tests inside the container
+        shell: 'script -q -e -c "bash {0}"'
         run: |
-          docker-compose -f docker-compose.test.yml exec -T srly-ose-test bash ./bin/run_tests.sh
+          docker-compose -f docker-compose.test.yml exec srly-ose-test bash ./bin/prepare_test_environment.sh -s
+          docker-compose -f docker-compose.test.yml exec srly-ose-test nosetests -v -a '!fixme'
 
       - name: Stop the test container
         run: |

@@ -1,0 +1,66 @@
+name: Build Balena Disk Images
+on: workflow_dispatch
+jobs:
+  balena-build-images:
+    strategy:
+      matrix:
+        board: ['pi1', 'pi2', 'pi3', 'pi4']
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+
+      - name: Get base board
+        run: |
+          if [ "${{ matrix.board }}" == 'pi1' ]; then
+            echo "BALENA_IMAGE=raspberry-pi" >> $GITHUB_ENV
+          elif [ "${{ matrix.board }}" == 'pi2' ]; then
+            echo "BALENA_IMAGE=raspberry-pi2" >> $GITHUB_ENV
+          elif [ "${{ matrix.board }}" == 'pi3' ]; then
+            echo "BALENA_IMAGE=raspberrypi3" >> $GITHUB_ENV
+          elif [ "${{ matrix.board }}" == 'pi4' ]; then
+            echo "BALENA_IMAGE=raspberrypi4-64" >> $GITHUB_ENV
+          fi
+
+      - name: balena CLI Action - download
+        uses: balena-labs-research/community-cli-action@1.0.0
+        with:
+          balena_token: ${{secrets.BALENA_TOKEN}}
+          balena_cli_commands: |
+            os download "$BALENA_IMAGE" \
+              --output "$BALENA_IMAGE.img" \
+              --version default
+          balena_cli_version: 13.7.1
+
+      - name: balena CLI Action - preload
+        uses: balena-labs-research/community-cli-action@1.0.0
+        with:
+          balena_token: ${{secrets.BALENA_TOKEN}}
+          balena_cli_commands: |
+            preload \
+              "$BALENA_IMAGE.img" \
+              --fleet screenly_ose/screenly-ose-${{ matrix.board }} \
+              --commit latest
+          balena_cli_version: 13.7.1
+
+      - name: balena CLI Action - configure
+        uses: balena-labs-research/community-cli-action@1.0.0
+        with:
+          balena_token: ${{secrets.BALENA_TOKEN}}
+          balena_cli_commands: |
+            os configure \
+              "$BALENA_IMAGE.img" \
+              --config-network=ethernet  \
+              --fleet screenly_ose/screenly-ose-${{ matrix.board }}
+          balena_cli_version: 13.7.1
+
+      - name: Zip image
+        run: |
+          zip -9 \
+            "$(date -I)-$BALENA_IMAGE.zip" \
+            "$BALENA_IMAGE.img"
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: Release file
+          path: "*.zip"
