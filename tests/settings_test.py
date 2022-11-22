@@ -5,6 +5,8 @@ import shutil
 import sys
 from contextlib import contextmanager
 
+pi_user = os.getenv('USER')
+
 settings1 = """
 [viewer]
 player_name = new player
@@ -17,8 +19,8 @@ resolution = 1920x1080
 default_duration = 45
 
 [main]
-assetdir = /home/pi/screenly_assets
-database = /home/pi/.screenly/screenly.db
+assetdir = /home/"""+pi_user+"""/screenly_assets
+database = /home/"""+pi_user+"""/.screenly/screenly.db
 use_ssl = False
 
 """
