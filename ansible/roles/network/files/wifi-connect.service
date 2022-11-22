@@ -4,13 +4,13 @@ Wants=network-online.target
 After=network-online.target
 
 [Service]
-WorkingDirectory=/home/pi/screenly
-User=pi
+WorkingDirectory=/home/${USER}/screenly
+User=${USER}
 Type=oneshot
 
-ExecStartPre=/bin/rm -f /home/pi/.screenly/initialized
-ExecStart=/usr/bin/python /home/pi/screenly/start_resin_wifi.py
-ExecStartPost=/usr/bin/touch /home/pi/.screenly/initialized
+ExecStartPre=/bin/rm -f /home/${USER}/.screenly/initialized
+ExecStart=/usr/bin/python /home/${USER}/screenly/start_resin_wifi.py
+ExecStartPost=/usr/bin/touch /home/${USER}/.screenly/initialized
 
 [Install]
 WantedBy=multi-user.target
