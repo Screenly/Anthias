@@ -44,6 +44,7 @@ browser = None
 loop_is_stopped = False
 browser_bus = None
 r = connect_to_redis()
+pi_user = os.getenv('USER')
 
 
 try:
@@ -348,7 +349,7 @@ def asset_loop(scheduler):
 
 def setup():
     global HOME, db_conn, browser_bus
-    HOME = getenv('HOME', '/home/pi')
+    HOME = getenv('HOME', '/home/'+pi_user)
 
     signal(SIGUSR1, sigusr1)
     signal(SIGALRM, sigalrm)
