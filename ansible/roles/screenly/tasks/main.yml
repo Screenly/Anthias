@@ -1,6 +1,6 @@
 - name: Get username running ansible
   become: false
-  local_action: command whoami
+  command: whoami
   register: pi_user
 
 - name: Ensure folders exist
