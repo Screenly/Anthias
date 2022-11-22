@@ -1,6 +1,6 @@
 - name: Install Screenly
   hosts: all
-  user: pi
+  user: "{{ lookup('env', 'USER') }}"
   become: yes
   vars:
     manage_network: "{{ lookup('env', 'MANAGE_NETWORK') }}"
