@@ -58,7 +58,8 @@ from lib.utils import validate_url
 
 from settings import CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
 
-HOME = getenv('HOME', '/home/pi')
+pi_user = getenv('USER')
+HOME = getenv('HOME', '/home/'+pi_user)
 CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_TASK_RESULT_EXPIRES = timedelta(hours=6)
