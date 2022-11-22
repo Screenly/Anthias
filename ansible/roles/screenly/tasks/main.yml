@@ -1,9 +1,14 @@
+- name: Get username running ansible
+  become: false
+  local_action: command whoami
+  register: pi_user
+
 - name: Ensure folders exist
   file:
-    path: "/home/pi/{{ item }}"
+    path: "/home/{{ pi_user }}/{{ item }}"
     state: directory
-    owner: pi
-    group: pi
+    owner: "{{ pi_user }}"
+    group: "{{ pi_user }}"
   with_items:
     - .screenly
     - .config
@@ -11,21 +16,21 @@
 
 - name: Copy Screenly default assets file
   copy:
-    owner: pi
-    group: pi
+    owner: "{{ pi_user }}"
+    group: "{{ pi_user }}"
     src: default_assets.yml
-    dest: /home/pi/.screenly/default_assets.yml
+    dest: "/home/{{ pi_user }}/.screenly/default_assets.yml"
     force: yes
 
 - name: Remove deprecated parameter "listen"
   lineinfile:
     regexp: '^.*listen.*'
     state: absent
-    dest: /home/pi/.screenly/screenly.conf
+    dest: "/home/{{ pi_user }}/.screenly/screenly.conf"
 
 - name: Install pip dependencies
   pip:
-    requirements: /home/pi/screenly/requirements/requirements.host.txt
+    requirements: "/home/{{ pi_user }}/screenly/requirements/requirements.host.txt"
     extra_args: "--no-cache-dir --upgrade"
 
 - name: Remove screenly_utils.sh
@@ -36,7 +41,7 @@
 - cron:
     name: Cleanup screenly_assets
     state: absent
-    user: pi
+    user: "{{ pi_user }}"
 
 - name: Download upgrade_screenly.sh from github repository
   get_url:
