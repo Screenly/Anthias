@@ -41,7 +41,7 @@
 - name: Add pi user to Identity
   replace:
     regexp: '^Identity=.*'
-    replace: 'Identity=unix-group:netdev;unix-group:sudo:{{ lookup('env', 'USER') }}'
+    replace: "Identity=unix-group:netdev;unix-group:sudo:{{ lookup('env', 'USER') }}"
     dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
   when:
     - manage_network|bool == true
