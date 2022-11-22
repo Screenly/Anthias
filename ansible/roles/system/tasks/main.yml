@@ -248,10 +248,10 @@
     update_cache: yes
     install_recommends: no
 
-- name: Add pi to docker group
+- name: Add user to docker group
   user:
-    name: pi
-    group: pi
+    name: "{{ lookup('env', 'USER') }}"
+    group: "{{ lookup('env', 'USER') }}"
     groups:
       - docker
       - adm
