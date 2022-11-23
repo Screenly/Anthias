@@ -5,14 +5,21 @@
   register: screenly_network_manager
 
 - name: Check if screenly-network-manager is set
-  ansible.builtin.set_fact: screenly_network_manager_exist="{{ screenly_network_manager.stat.exists }}"
+  ansible.builtin.set_fact:
+    screenly_network_manager_exist: "{{ screenly_network_manager.stat.exists }}"
 
 - name: Disable network manager
-  ansible.builtin.command: systemctl disable screenly-net-manager.service
+  ansible.builtin.systemd:
+    state: stopped
+    name: screenly-net-manager.service
+    enabled: false
   when: screenly_network_manager_exist
 
 - name: Disable network watchdog
-  ansible.builtin.command: systemctl disable screenly-net-watchdog.timer
+  ansible.builtin.systemd:
+    state: stopped
+    name: screenly-net-watchdog.timer
+    enabled: false
   when: screenly_network_manager_exist
 
 - name: Remove network manager and watchdog
@@ -60,13 +67,19 @@
   when: manage_network|bool
 
 - name: Disable dhcpcd
-  ansible.builtin.command: systemctl disable dhcpcd
+  ansible.builtin.systemd:
+    state: stopped
+    name: dhcpcd
+    enabled: false
   when:
     - ansible_distribution_major_version|int >= 9
     - manage_network|bool
 
 - name: Activate NetworkManager
-  ansible.builtin.command: systemctl enable NetworkManager
+  ansible.builtin.systemd:
+    state: started
+    name: NetworkManager
+    enabled: true
   when:
     - ansible_distribution_major_version|int >= 9
     - manage_network|bool
