@@ -1,3 +1,4 @@
+---
 - name: Copy ngrok binary
   ansible.builtin.copy:
     src: ngrok
