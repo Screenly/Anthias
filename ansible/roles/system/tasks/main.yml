@@ -251,6 +251,9 @@
     create: true
     line: "deb [arch=armhf] https://download.docker.com/linux/debian {{ raspbian_name.stdout }} stable"
     state: present
+    owner: root
+    group: root
+    mode: 0644
 
 - name: Install Docker
   ansible.builtin.apt:
