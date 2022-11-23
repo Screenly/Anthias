@@ -1,20 +1,21 @@
 - name: Check if screenly-network-manager files exist
-  stat:
+  ansible.builtin.stat:
     path: /usr/sbin/screenly_net_mgr.py
   register: screenly_network_manager
 
-- set_fact: screenly_network_manager_exist="{{screenly_network_manager.stat.exists}}"
+- name: Check if screenly-network-manager is set
+  ansible.builtin.set_fact: screenly_network_manager_exist="{{ screenly_network_manager.stat.exists }}"
 
 - name: Disable network manager
-  command: systemctl disable screenly-net-manager.service
+  ansible.builtin.command: systemctl disable screenly-net-manager.service
   when: screenly_network_manager_exist
 
 - name: Disable network watchdog
-  command: systemctl disable screenly-net-watchdog.timer
+  ansible.builtin.command: systemctl disable screenly-net-watchdog.timer
   when: screenly_network_manager_exist
 
 - name: Remove network manager and watchdog
-  file:
+  ansible.builtin.file:
     state: absent
     path: "/usr/sbin/{{ item }}"
   with_items:
@@ -22,7 +23,7 @@
     - screenly_net_watchdog.py
 
 - name: Remove network manager and watchdog unit files
-  file:
+  ansible.builtin.file:
     state: absent
     path: "/etc/systemd/system/{{ item }}"
   with_items:
@@ -30,7 +31,7 @@
     - screenly-net-watchdog.service
 
 - name: Remove network watchdog timer file
-  file:
+  ansible.builtin.file:
     state: absent
     path: /etc/systemd/system/screenly-net-watchdog.timer
 
@@ -55,18 +56,18 @@
     - manage_network|bool == true
 
 - name: Copy org.freedesktop.NetworkManager.pkla to 50-local.d
-  command: cp -f /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla /etc/polkit-1/localauthority/50-local.d
+  ansible.builtin.command: cp -f /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla /etc/polkit-1/localauthority/50-local.d
   when:
     - manage_network|bool == true
 
 - name: Disable dhcpcd
-  command: systemctl disable dhcpcd
+  ansible.builtin.command: systemctl disable dhcpcd
   when:
     - ansible_distribution_major_version|int >= 9
     - manage_network|bool == true
 
 - name: Activate NetworkManager
-  command: systemctl enable NetworkManager
+  ansible.builtin.command: systemctl enable NetworkManager
   when:
     - ansible_distribution_major_version|int >= 9
     - manage_network|bool == true
