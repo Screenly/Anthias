@@ -29,7 +29,7 @@
     - touches_boot_partition
 
 - name: Make sure we have proper framebuffer depth
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: /boot/config.txt
     regexp: ^framebuffer_depth=
     line: framebuffer_depth=32
@@ -38,7 +38,7 @@
     - touches_boot_partition
 
 - name: Fix framebuffer bug
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: /boot/config.txt
     regexp: ^framebuffer_ignore_alpha=
     line: framebuffer_ignore_alpha=1
@@ -47,7 +47,7 @@
     - touches_boot_partition
 
 - name: Add gpu_mem_256 in config.txt if it doesn't exist
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /boot/config.txt
     line: gpu_mem_256=96
   when: config_txt.stdout.find('gpu_mem_256') == -1
@@ -55,7 +55,7 @@
     - touches_boot_partition
 
 - name: Add gpu_mem_512 in config.txt if it doesn't exist
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /boot/config.txt
     line: gpu_mem_512=128
   when: config_txt.stdout.find('gpu_mem_512') == -1
@@ -63,7 +63,7 @@
     - touches_boot_partition
 
 - name: Add gpu_mem_1024 in config.txt if it doesn't exist
-  lineinfile:
+ ansible.builtin. lineinfile:
     path: /boot/config.txt
     line: gpu_mem_1024=196
   when: config_txt.stdout.find('gpu_mem_1024') == -1
@@ -77,7 +77,7 @@
     replace: '#\1'
 
 - name: Add FKMS config for Pi 4.
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /boot/config.txt
     insertafter: '^\[pi4\]$'
     line: dtoverlay=vc4-fkms-v3d
@@ -238,7 +238,7 @@
   register: raspbian_name
 
 - name: Add Docker repo
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/apt/sources.list.d/docker.list
     create: yes
     line: "deb [arch=armhf] https://download.docker.com/linux/debian {{ raspbian_name.stdout }} stable"
