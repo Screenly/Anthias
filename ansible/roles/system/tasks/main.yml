@@ -254,7 +254,7 @@
     install_recommends: no
 
 - name: Add user to docker group
-  user:
+  ansible.builtin.user:
     name: "{{ lookup('env', 'USER') }}"
     group: "{{ lookup('env', 'USER') }}"
     groups:
