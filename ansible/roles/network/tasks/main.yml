@@ -36,11 +36,12 @@
     path: /etc/systemd/system/screenly-net-watchdog.timer
 
 # Use resin-wifi-connect if Stretch
-- debug:
+- name: Debug msg for manage network
+  ansible.builtin.debug:
     msg: "Manage network: {{ manage_network }}"
 
 - name: Add pi user to Identity
-  replace:
+  ansible.builtin.replace:
     regexp: '^Identity=.*'
     replace: "Identity=unix-group:netdev;unix-group:sudo:{{ lookup('env', 'USER') }}"
     dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
@@ -48,7 +49,7 @@
     - manage_network|bool == true
 
 - name: Set ResultAny to yes
-  replace:
+  ansible.builtin.replace:
     regexp: '^ResultAny=.*'
     replace: 'ResultAny=yes'
     dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
