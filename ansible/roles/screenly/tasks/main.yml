@@ -19,13 +19,13 @@
     force: true
 
 - name: Remove deprecated parameter "listen"
-  lineinfile:
+  ansible.builtin.lineinfile:
     regexp: '^.*listen.*'
     state: absent
     dest: "/home/{{ lookup('env', 'USER') }}/.screenly/screenly.conf"
 
 - name: Install pip dependencies
-  pip:
+  ansible.builtin.pip:
     requirements: "/home/{{ lookup('env', 'USER') }}/screenly/requirements/requirements.host.txt"
     extra_args: "--no-cache-dir --upgrade"
 
@@ -41,7 +41,7 @@
     user: "{{ lookup('env', 'USER') }}"
 
 - name: Download upgrade_screenly.sh from github repository
-  get_url:
+  ansible.builtin.get_url:
     url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/install.sh
     dest: /usr/local/sbin/upgrade_screenly.sh
     mode: 0700
@@ -69,7 +69,7 @@
   ansible.builtin.copy:
     src: 50-autoplay.rules
     dest: /etc/udev/rules.d/50-autoplay.rules
-    mode: 644
+    mode: 0644
     owner: root
     group: root
 
@@ -77,9 +77,12 @@
   ansible.builtin.copy:
     src: /lib/systemd/system/systemd-udevd.service
     dest: /etc/systemd/system/systemd-udevd.service
+    mode: 0644
+    owner: root
+    group: root
 
 - name: Configure systemd-udevd service
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: /etc/systemd/system/systemd-udevd.service
     regexp: '^MountFlags='
     line: 'MountFlags=shared'
@@ -88,6 +91,9 @@
   ansible.builtin.copy:
     src: "{{ item }}"
     dest: "/etc/systemd/system/{{ item }}"
+    mode: 0644
+    owner: root
+    group: root
   with_items: "{{ screenly_systemd_units }}"
 
 - name: Remove plymouth-quit-wait.service
