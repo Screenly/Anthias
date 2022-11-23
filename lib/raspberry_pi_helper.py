@@ -18,7 +18,7 @@ def parse_cpu_info():
             if key == 'processor':
                 cpu_info['cpu_count'] += 1
 
-            if key in ['Serial', 'Hardware', 'Revision', 'model name']:
+            if key in ['Serial', 'Hardware', 'Revision', 'Model']:
                 cpu_info[key.lower()] = value
     return cpu_info
 
