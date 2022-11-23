@@ -22,7 +22,7 @@ from lib.diagnostics import get_raspberry_code, get_raspberry_model
 from lib.github import is_up_to_date
 from lib.errors import SigalrmException
 from lib.media_player import VLCMediaPlayer, OMXMediaPlayer
-from lib.utils import get_active_connections, url_fails, is_balena_app, get_node_ip, string_to_bool, connect_to_redis
+from lib.utils import get_active_connections, url_fails, is_balena_app, get_node_ip, string_to_bool, connect_to_redis, wait_for_supervisor
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
 
@@ -441,6 +441,7 @@ def main():
 
     if settings['show_splash']:
         url = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
+        wait_for_supervisor(5)
         view_webpage(url)
         sleep(SPLASH_DELAY)
 
