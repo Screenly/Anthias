@@ -1,3 +1,4 @@
+---
 - name: Check if screenly-network-manager files exist
   ansible.builtin.stat:
     path: /usr/sbin/screenly_net_mgr.py
