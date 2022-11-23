@@ -46,30 +46,27 @@
     regexp: '^Identity=.*'
     replace: "Identity=unix-group:netdev;unix-group:sudo:{{ lookup('env', 'USER') }}"
     dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
-  when:
-    - manage_network|bool == true
+  when: manage_network|bool
 
 - name: Set ResultAny to yes
   ansible.builtin.replace:
     regexp: '^ResultAny=.*'
     replace: 'ResultAny=yes'
     dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
-  when:
-    - manage_network|bool == true
+  when: manage_network|bool
 
 - name: Copy org.freedesktop.NetworkManager.pkla to 50-local.d
   ansible.builtin.command: cp -f /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla /etc/polkit-1/localauthority/50-local.d
-  when:
-    - manage_network|bool == true
+  when: manage_network|bool
 
 - name: Disable dhcpcd
   ansible.builtin.command: systemctl disable dhcpcd
   when:
     - ansible_distribution_major_version|int >= 9
-    - manage_network|bool == true
+    - manage_network|bool
 
 - name: Activate NetworkManager
   ansible.builtin.command: systemctl enable NetworkManager
   when:
     - ansible_distribution_major_version|int >= 9
-    - manage_network|bool == true
+    - manage_network|bool
