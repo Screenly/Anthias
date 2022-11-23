@@ -86,7 +86,7 @@
   ansible.builtin.copy:
     src: /boot/cmdline.txt
     dest: /boot/cmdline.txt.orig
-    force: no
+    force: false
   when: not is_berryboot
   tags:
     - touches_boot_partition
@@ -100,7 +100,7 @@
   ansible.builtin.copy:
     src: /boot/cmdline.txt.orig
     dest: /boot/cmdline.txt
-    force: yes
+    force: true
   when: not is_berryboot and config_txt.stdout.find('NOOBS') == -1
   tags:
     - touches_boot_partition
@@ -187,7 +187,7 @@
   ansible.builtin.apt:
     name: libc6-dev
     state: present
-    update_cache: yes
+    update_cache: true
   when: not cdefs_exist
 
 - name: Install Screenly dependencies
@@ -240,7 +240,7 @@
 - name: Add Docker repo
   ansible.builtin.lineinfile:
     path: /etc/apt/sources.list.d/docker.list
-    create: yes
+    create: true
     line: "deb [arch=armhf] https://download.docker.com/linux/debian {{ raspbian_name.stdout }} stable"
     state: present
 
@@ -250,8 +250,8 @@
       - docker-ce:armhf
       - docker-ce-cli:armhf
       - docker-compose-plugin:armhf
-    update_cache: yes
-    install_recommends: no
+    update_cache: true
+    install_recommends: false
 
 - name: Add user to docker group
   ansible.builtin.user:
@@ -277,7 +277,7 @@
 
 - name: Clean up unused packages
   ansible.builtin.apt:
-    autoremove: yes
+    autoremove: true
   tags:
     - system-upgrade
 
