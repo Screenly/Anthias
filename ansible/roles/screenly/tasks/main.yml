@@ -1,3 +1,4 @@
+---
 - name: Ensure folders exist
   ansible.builtin.file:
     path: "/home/{{ lookup('env', 'USER') }}/{{ item }}"
