@@ -34,7 +34,8 @@
     state: absent
     path: /usr/local/bin/screenly_utils.sh
 
-- cron:
+- name: Cron job to cleanup screenly_assets
+  ansible.builtin.cron:
     name: Cleanup screenly_assets
     state: absent
     user: "{{ lookup('env', 'USER') }}"
