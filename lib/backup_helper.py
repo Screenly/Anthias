@@ -3,12 +3,9 @@ from datetime import datetime
 from os import path, getenv, remove
 import sh
 
-pi_user = getenv('USER')
-
 directories = ['.screenly', 'screenly_assets']
 default_archive_name = "screenly-backup"
 static_dir = "screenly/static"
-
 
 def create_backup(name=default_archive_name):
     home = getenv('HOME')
@@ -39,6 +36,6 @@ def recover(file_path):
             if directory not in tar.getnames():
                 raise Exception("Archive is wrong.")
 
-        tar.extractall(path=getenv('HOME', '/home/'+pi_user))
+        tar.extractall(path=getenv('HOME', 'HOME'))
 
     remove(file_path)
