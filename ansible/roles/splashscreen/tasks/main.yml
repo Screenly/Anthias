@@ -10,6 +10,9 @@
   ansible.builtin.copy:
     src: splashscreen.png
     dest: /etc/splashscreen.png
+    mode: 0644
+    owner: root
+    group: root
   when: ansible_distribution_major_version|int <= 7
 
 - name: Copies in rc script
@@ -48,6 +51,9 @@
   ansible.builtin.copy:
     src: "{{ item }}"
     dest: /usr/share/plymouth/themes/screenly/
+    mode: 0644
+    owner: root
+    group: root
   with_items:
     - screenly.plymouth
     - screenly.script
@@ -62,10 +68,16 @@
   ansible.builtin.copy:
     src: plymouthd.default
     dest: /usr/share/plymouth/plymouthd.defaults
+    mode: 0644
+    owner: root
+    group: root
   when: ansible_distribution_major_version|int > 7
 
 - name: Copy to plymouthd.conf
   ansible.builtin.copy:
     src: plymouthd.default
     dest: /etc/plymouth/plymouthd.conf
+    mode: 0644
+    owner: root
+    group: root
   when: ansible_distribution_major_version|int > 7
