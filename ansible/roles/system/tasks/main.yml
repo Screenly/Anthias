@@ -1,10 +1,10 @@
 ---
-#- name: test for available disk space
-#  assert:
-#    that:
-#     - "{{ item.size_available > 500 * 1000 * 1000 }}" # 500Mb
-#  when: "{{ item.mount == '/' }}"
-#  with_items: "{{ ansible_mounts }}"
+# - name: test for available disk space
+#   assert:
+#     that:
+#      - "{{ item.size_available > 500 * 1000 * 1000 }}" # 500Mb
+#   when: "{{ item.mount == '/' }}"
+#   with_items: "{{ ansible_mounts }}"
 
 
 # We need custom handling for BerryBoot as it lacks `/boot`.
@@ -15,7 +15,8 @@
   register: berryboot
 
 - name: Set BerryBoot fact
-  ansible.builtin.set_fact: is_berryboot="{{ berryboot.stat.exists }}"
+  ansible.builtin.set_fact:
+    is_berryboot: "{{ berryboot.stat.exists }}"
 
 - name: Log BerryBoot detection
   ansible.builtin.debug:
@@ -86,6 +87,9 @@
   ansible.builtin.copy:
     src: /boot/cmdline.txt
     dest: /boot/cmdline.txt.orig
+    owner: root
+    group: root
+    mode: 0755
     force: false
   when: not is_berryboot
   tags:
@@ -100,6 +104,9 @@
   ansible.builtin.copy:
     src: /boot/cmdline.txt.orig
     dest: /boot/cmdline.txt
+    owner: root
+    group: root
+    mode: 0755
     force: true
   when: not is_berryboot and config_txt.stdout.find('NOOBS') == -1
   tags:
@@ -139,7 +146,7 @@
   tags:
     - touches_boot_partition
 
-- name: ethN/wlanN names for interfaces
+- name: Set ethN/wlanN names for interfaces
   ansible.builtin.replace:
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!net\.ifnames=0).)*$)
@@ -148,7 +155,7 @@
   tags:
     - touches_boot_partition
 
-- name: cgroup_enable required by containerd for OOM
+- name: Set cgroup_enable required by containerd for OOM
   ansible.builtin.replace:
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!cgroup_enable=memory).)*$)
@@ -157,7 +164,7 @@
   tags:
     - touches_boot_partition
 
-- name: cgroup_memory required by containerd for OOM
+- name: Set cgroup_memory required by containerd for OOM
   ansible.builtin.replace:
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!cgroup_memory=1).)*$)
@@ -175,7 +182,8 @@
   register: cdefs
 
 - name: Set fact for cdefs
-  ansible.builtin.set_fact: cdefs_exist="{{ cdefs.stat.exists }}"
+  ansible.builtin.set_fact: 
+    cdefs_exist: "{{ cdefs.stat.exists }}"
 
 - name: Remove libc6-dev
   ansible.builtin.apt:
