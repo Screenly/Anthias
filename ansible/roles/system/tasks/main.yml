@@ -63,7 +63,7 @@
     - touches_boot_partition
 
 - name: Add gpu_mem_1024 in config.txt if it doesn't exist
-  ansible.builtin. lineinfile:
+  ansible.builtin.lineinfile:
     path: /boot/config.txt
     line: gpu_mem_1024=196
   when: config_txt.stdout.find('gpu_mem_1024') == -1
