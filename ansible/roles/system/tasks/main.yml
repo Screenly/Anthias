@@ -282,7 +282,7 @@
     - system-upgrade
 
 - name: Remove deprecated pip dependencies
-  pip:
+  ansible.builtin.pip:
     name: supervisor
     state: absent
 
