@@ -107,7 +107,12 @@
     dest: /lib/systemd/system/plymouth-quit.service
 
 - name: Enable screenly systemd services
-  ansible.builtin.command: systemctl enable {{ item }} chdir=/etc/systemd/system
+  ansible.builtin.systemd:
+    name: {{ item }}
+    state: started
+    enabled: yes
+  args:
+    chdir: "/etc/systemd/system"
   with_items: "{{ screenly_systemd_units }}"
 
 - name: Check if deprecated systemd services exists
@@ -116,7 +121,8 @@
   register: x_service
 
 - name: Set the x_service fact
-  ansible.builtin.set_fact: x_service_exist="{{ x_service.stat.exists }}"
+  ansible.builtin.set_fact:
+    x_service_exist: "{{ x_service.stat.exists }}"
 
 - name: Disable deprecated systemd services
   systemd:
