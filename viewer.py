@@ -348,7 +348,7 @@ def asset_loop(scheduler):
 
 def setup():
     global HOME, db_conn, browser_bus
-    HOME = getenv('HOME', 'HOME')
+    HOME = getenv('HOME')
 
     signal(SIGUSR1, sigusr1)
     signal(SIGALRM, sigalrm)
