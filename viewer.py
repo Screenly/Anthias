@@ -44,7 +44,7 @@ browser = None
 loop_is_stopped = False
 browser_bus = None
 r = connect_to_redis()
-pi_user = os.getenv('USER')
+pi_user = getenv('USER')
 
 
 try:
