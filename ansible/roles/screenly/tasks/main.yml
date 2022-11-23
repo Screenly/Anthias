@@ -15,7 +15,7 @@
     group: "{{ lookup('env', 'USER') }}"
     src: default_assets.yml
     dest: "/home/{{ lookup('env', 'USER') }}/.screenly/default_assets.yml"
-    force: yes
+    force: true
 
 - name: Remove deprecated parameter "listen"
   lineinfile:
@@ -45,7 +45,7 @@
     mode: 0700
     owner: root
     group: root
-    force: yes
+    force: true
 
 - name: Copy screenly_overrides
   ansible.builtin.copy:
@@ -114,7 +114,7 @@
   systemd:
     name: "{{ item }}"
     state: stopped
-    enabled: no
+    enabled: false
   with_items: "{{ deprecated_screenly_systemd_units }}"
   when: x_service_exist
 
