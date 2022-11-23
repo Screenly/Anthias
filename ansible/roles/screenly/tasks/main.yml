@@ -1,5 +1,5 @@
 - name: Ensure folders exist
-  file:
+  ansible.builtin.file:
     path: "/home/{{ lookup('env', 'USER') }}/{{ item }}"
     state: directory
     owner: "{{ lookup('env', 'USER') }}"
@@ -10,7 +10,7 @@
     - screenly_assets
 
 - name: Copy Screenly default assets file
-  copy:
+  ansible.builtin.copy:
     owner: "{{ lookup('env', 'USER') }}"
     group: "{{ lookup('env', 'USER') }}"
     src: default_assets.yml
@@ -29,7 +29,7 @@
     extra_args: "--no-cache-dir --upgrade"
 
 - name: Remove screenly_utils.sh
-  file:
+  ansible.builtin.file:
     state: absent
     path: /usr/local/bin/screenly_utils.sh
 
@@ -48,7 +48,7 @@
     force: yes
 
 - name: Copy screenly_overrides
-  copy:
+  ansible.builtin.copy:
     src: screenly_overrides
     dest: /etc/sudoers.d/screenly_overrides
     mode: 0440
@@ -56,7 +56,7 @@
     group: root
 
 - name: Copy screenly_usb_assets.sh
-  copy:
+  ansible.builtin.copy:
     src: screenly_usb_assets.sh
     dest: /usr/local/bin/screenly_usb_assets.sh
     mode: 0755
@@ -64,7 +64,7 @@
     group: root
 
 - name: Installs autoplay udev rule
-  copy:
+  ansible.builtin.copy:
     src: 50-autoplay.rules
     dest: /etc/udev/rules.d/50-autoplay.rules
     mode: 644
@@ -72,7 +72,7 @@
     group: root
 
 - name: Copy systemd-udevd service
-  copy:
+  ansible.builtin.copy:
     src: /lib/systemd/system/systemd-udevd.service
     dest: /etc/systemd/system/systemd-udevd.service
 
@@ -83,31 +83,32 @@
     line: 'MountFlags=shared'
 
 - name: Copy screenly systemd units
-  copy:
+  ansible.builtin.copy:
     src: "{{ item }}"
     dest: "/etc/systemd/system/{{ item }}"
   with_items: "{{ screenly_systemd_units }}"
 
 - name: Remove plymouth-quit-wait.service
-  file:
+  ansible.builtin.file:
     state: absent
     dest: /lib/systemd/system/plymouth-quit-wait.service
 
 - name: Remove plymouth-quit.service
-  file:
+  ansible.builtin.file:
     state: absent
     dest: /lib/systemd/system/plymouth-quit.service
 
 - name: Enable screenly systemd services
-  command: systemctl enable {{ item }} chdir=/etc/systemd/system
+  ansible.builtin.command: systemctl enable {{ item }} chdir=/etc/systemd/system
   with_items: "{{ screenly_systemd_units }}"
 
 - name: Check if deprecated systemd services exists
-  stat:
+  ansible.builtin.stat:
     path: /etc/systemd/system/X.service
   register: x_service
 
-- set_fact: x_service_exist="{{x_service.stat.exists}}"
+- name: Set the x_service fact
+  ansible.builtin.set_fact: x_service_exist="{{ x_service.stat.exists }}"
 
 - name: Disable deprecated systemd services
   systemd:
@@ -118,7 +119,7 @@
   when: x_service_exist
 
 - name: Remove deprecated systemd units
-  file:
+  ansible.builtin.file:
     path: "/etc/systemd/system/{{ item }}"
     state: absent
   with_items: "{{ deprecated_screenly_systemd_units }}"
