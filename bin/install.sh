@@ -236,36 +236,6 @@ if [ ! -f /etc/sudoers.d/010_${USER}-nopasswd ]; then
   sudo chmod 0440 /etc/sudoers.d/010_${USER}-nopasswd
 fi
 
-# Ask user to set a new password if default password "raspberry" detected
-check_defaultpw () {
-    if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ] && [ "$WEB_UPGRADE" = false ]; then
-        set +x
-
-        # currently only looking for $6$/sha512 hash
-        local VAR_CURRENTPISALT
-        local VAR_CURRENTPIUSERPW
-        local VAR_DEFAULTPIPW
-        VAR_CURRENTPISALT=$(sudo cat /etc/shadow | grep ${USER} | awk -F '$' '{print $3}')
-        VAR_CURRENTPIUSERPW=$(sudo cat /etc/shadow | grep ${USER} | awk -F ':' '{print $2}')
-        VAR_DEFAULTPIPW=$(mkpasswd -m sha-512 raspberry "$VAR_CURRENTPISALT")
-
-        if [[ "$VAR_CURRENTPIUSERPW" == "$VAR_DEFAULTPIPW" ]]; then
-            echo "Warning: The default Raspberry Pi password was detected!"
-            read -p "Do you still want to change it? (y/N)" -n 1 -r -s PWD_CHANGE
-            if [ "$PWD_CHANGE" = 'y' ]; then
-                set +e
-                passwd
-                set -ex
-            fi
-        else
-            echo "The default raspberry pi password was not detected, continuing with installation..."
-            set -x
-        fi
-    fi
-}
-
-check_defaultpw;
-
 echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
 
 if [ "$WEB_UPGRADE" = false ]; then
