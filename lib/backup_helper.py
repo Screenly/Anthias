@@ -36,6 +36,6 @@ def recover(file_path):
             if directory not in tar.getnames():
                 raise Exception("Archive is wrong.")
 
-        tar.extractall(path=getenv('HOME', 'HOME'))
+        tar.extractall(path=getenv('HOME'))
 
     remove(file_path)
