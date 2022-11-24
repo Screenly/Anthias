@@ -1,28 +1,4 @@
 ---
-# - name: test for available disk space
-#   assert:
-#     that:
-#      - "{{ item.size_available > 500 * 1000 * 1000 }}" # 500Mb
-#   when: "{{ item.mount == '/' }}"
-#   with_items: "{{ ansible_mounts }}"
-
-
-# We need custom handling for BerryBoot as it lacks `/boot`.
-# To detect this, the image creates `/etc/berryboot`.
-- name: Detect BerryBoot
-  ansible.builtin.stat:
-    path: /etc/berryboot
-  register: berryboot
-
-- name: Set BerryBoot fact
-  ansible.builtin.set_fact:
-    is_berryboot: "{{ berryboot.stat.exists }}"
-
-- name: Log BerryBoot detection
-  ansible.builtin.debug:
-    msg: "Detected BerryBoot installation. Skipping some steps."
-  when: is_berryboot
-
 - name: Check NOOBS
   ansible.builtin.command: cat /boot/config.txt
   register: config_txt
@@ -35,7 +11,6 @@
     dest: /boot/config.txt
     regexp: ^framebuffer_depth=
     line: framebuffer_depth=32
-  when: not is_berryboot
   tags:
     - touches_boot_partition
 
@@ -44,7 +19,6 @@
     dest: /boot/config.txt
     regexp: ^framebuffer_ignore_alpha=
     line: framebuffer_ignore_alpha=1
-  when: not is_berryboot
   tags:
     - touches_boot_partition
 
@@ -92,14 +66,12 @@
     group: root
     mode: 0755
     force: false
-  when: not is_berryboot
   tags:
     - touches_boot_partition
 
 - name: Notice for cmdline.txt.orig file
   ansible.builtin.debug:
     msg: "Use cmdline.txt.orig for boot parameters (don't remove this file)"
-  when: not is_berryboot
 
 - name: Copy cmdline.txt.orig to cmdline.txt
   ansible.builtin.copy:
@@ -109,7 +81,7 @@
     group: root
     mode: 0755
     force: true
-  when: not is_berryboot and config_txt.stdout.find('NOOBS') == -1
+  when: config_txt.stdout.find('NOOBS') == -1
   tags:
     - touches_boot_partition
 
@@ -118,14 +90,14 @@
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!splash).)*$)
     replace: \1 splash
-  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int >= 7
 
 - name: Remove blinking cursor
   ansible.builtin.replace:
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!vt.global_cursor_default=0).)*$)
     replace: \1 vt.global_cursor_default=0
-  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int >= 7
   tags:
     - touches_boot_partition
 
@@ -134,7 +106,7 @@
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!plymouth.ignore-serial-consoles).)*$)
     replace: \1 plymouth.ignore-serial-consoles
-  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int >= 7
   tags:
     - touches_boot_partition
 
@@ -143,7 +115,6 @@
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!quiet init=/lib/systemd/systemd).)*$)
     replace: \1 quiet init=/lib/systemd/systemd
-  when: not is_berryboot
   tags:
     - touches_boot_partition
 
@@ -152,7 +123,6 @@
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!net\.ifnames=0).)*$)
     replace: \1 net.ifnames=0
-  when: not is_berryboot
   tags:
     - touches_boot_partition
 
@@ -161,7 +131,7 @@
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!cgroup_enable=memory).)*$)
     replace: \1 cgroup_enable=memory
-  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int >= 7
   tags:
     - touches_boot_partition
 
@@ -170,7 +140,7 @@
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!cgroup_memory=1).)*$)
     replace: \1 cgroup_memory=1
-  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int >= 7
   tags:
     - touches_boot_partition
 
@@ -206,7 +176,7 @@
       - bc
       - python3
       - python3-redis
-    state: latest
+    state: present
 
 - name: Remove deprecated apt dependencies
   ansible.builtin.apt:
