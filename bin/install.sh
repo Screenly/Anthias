@@ -56,18 +56,12 @@ EOF
   # Reset color
   tput sgr 0
 
-#  if [ "$USER" != 'pi' ]; then
-#      echo "Screenly OSE must be installed as the user 'pi' (with sudo permission)."
-#      exit 1
-#  fi
-
   echo -e "Screenly OSE requires a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\n"
   read -p "Do you still want to continue? (y/N)" -n 1 -r -s INSTALL
   if [ "$INSTALL" != 'y' ]; then
     echo
     exit 1
   fi
-
 
 # @TODO Re-enable the 'production' branch once we've merged master into production
 #echo -e "\n________________________________________\n"
