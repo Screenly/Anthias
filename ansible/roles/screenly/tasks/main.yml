@@ -5,6 +5,7 @@
     state: directory
     owner: "{{ lookup('env', 'USER') }}"
     group: "{{ lookup('env', 'USER') }}"
+    mode: 0755
   with_items:
     - .screenly
     - .config
@@ -14,6 +15,7 @@
   ansible.builtin.copy:
     owner: "{{ lookup('env', 'USER') }}"
     group: "{{ lookup('env', 'USER') }}"
+    mode: 0644
     src: default_assets.yml
     dest: "/home/{{ lookup('env', 'USER') }}/.screenly/default_assets.yml"
     force: true
@@ -110,7 +112,7 @@
   ansible.builtin.systemd:
     name: "{{ item }}"
     state: started
-    enabled: yes
+    enabled: true
   with_items: "{{ screenly_systemd_units }}"
 
 - name: Check if deprecated systemd services exists
@@ -123,7 +125,7 @@
     x_service_exist: "{{ x_service.stat.exists }}"
 
 - name: Disable deprecated systemd services
-  systemd:
+  ansible.builtin.systemd:
     name: "{{ item }}"
     state: stopped
     enabled: false
