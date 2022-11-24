@@ -4,7 +4,7 @@
   <head>
     <meta charset='utf-8' />
     <meta http-equiv="X-UA-Compatible" content="chrome=1" />
-    <meta name="description" content="Screenly-ose : Screenly OSE -- Digital Signage for the Raspberry Pi" />
+    <meta name="description" content="Screenly OSE" />
 
     <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
 
@@ -16,147 +16,15 @@
     <!-- HEADER -->
     <div id="header_wrap" class="outer">
         <header class="inner">
-          <a id="forkme_banner" href="https://github.com/wireload/screenly-ose">View on GitHub</a>
-
-          <h1 id="project_title">Screenly-ose</h1>
-          <h2 id="project_tagline">Screenly OSE -- Digital Signage for the Raspberry Pi</h2>
-
-            <section id="downloads">
-              <a class="zip_download_link" href="https://github.com/wireload/screenly-ose/zipball/master">Download this project as a .zip file</a>
-              <a class="tar_download_link" href="https://github.com/wireload/screenly-ose/tarball/master">Download this project as a tar.gz file</a>
-            </section>
+          <a id="forkme_banner" href="https://github.com/screenly/screenly-ose">View on GitHub</a>
         </header>
     </div>
 
     <!-- MAIN CONTENT -->
     <div id="main_content_wrap" class="outer">
       <section id="main_content" class="inner">
-        <h1>Screenly OSE -- Digital Signage for the Raspberry Pi</h1>
+        <h1>Screenly OSE</h1>
 
-<p>When we started <a href="http://skarmverket.se">Skarmverket</a>, a small network of public billboards in Sweden, we evaluated many of the existing solutions on the market. Most of them were clunky and/or expensive. A fair number of them ran on Windows and used Adobe Flash. We ended up writing our own solution and used Asus Eee PCs with Linux. </p>
-
-<p>Then the <a href="http://www.raspberrypi.org/">Raspberry Pi</a> came along. Priced at $35, and equipped with everything needed to power a screen. We were immediatelly sold and knew that this was what we wanted to use moving forward. Since we love Open Source, we've decided to release Screenly for free for anyone to use. </p>
-
-<p>The current version should be consider a beta. While we have been running it in the lab without any issues, there might still be issues that we are unaware of at this point. Yet, we wanted to make Screenly available to the vibrant Rasberry Pi community.</p>
-
-<p>Since Screenly was written for the Raspberry Pi from the ground up, we had to make it as lean as possible. </p>
-
-<p>There are many use cases where Screenly can be used, such as:</p>
-
-<ul>
-<li>Display BI or server dashboards</li>
-<li>Advertisements (in-store or in store-front)</li>
-<li>Internal information boards</li>
-<li>Fancy photo-frame</li>
-</ul><p>A rought video of Screenly in action is available <a href="http://www.youtube.com/watch?v=yjDjEfhspxk">here</a>.</p>
-
-<p>Screenshots and pictures of Screenly are available <a href="https://picasaweb.google.com/102112347693505491575/Screenly01?authkey=Gv1sRgCNa2qp-j5vWUGQ">here</a>.</p>
-
-<h2>How Screenly works</h2>
-
-<p>Once installed, Screenly can view images, videos and websites on the screen. You can configure your own playlist, and set the duration for how long each element should be viewed.</p>
-
-<p>Here's how you add content to your Screenly box:</p>
-
-<ul>
-<li>Point your browser to the URL displayed on the screen at boot.</li>
-<li>Click 'Add asset.'
-
-<ul>
-<li>Provide a name of the asset, the URL to the asset, and the asset type and click 'Submit.'</li>
-</ul>
-</li>
-<li>Click 'Schedule asset.'
-
-<ul>
-<li>Select the asset you just added in the drop-down, select the time frame you wish to display the asset and the duration (if image or website) and press 'Submit.'</li>
-</ul>
-</li>
-<li>Repeate for all the assets you want to display.</li>
-</ul><p>Note: If you don't have any server where you can make your asset available, you can use <a href="https://www.dropbox.com/help/16/en">public folders</a> in Dropbox. </p>
-
-<h2>Requirements</h2>
-
-<ul>
-<li>A Raspberry Pi (Model B).</li>
-<li>An SD Card (&gt;2GB).</li>
-<li>A HDMI-cable.</li>
-<li>A network connection (with DHCP).</li>
-<li>A Keyboard and mouse (only required for the installation).</li>
-<li>A monitor/TV that can view full HD (and has HDMI input).</li>
-</ul><h2>Configure the Raspberry Pi</h2>
-
-<ul>
-<li>Flash the SD card and install <a href="http://www.raspberrypi.org/downloads">Raspbian Wheezy</a>. Instructions are available <a href="http://elinux.org/RPi_Easy_SD_Card_Setup">here</a>.</li>
-<li>Configure Raspbian to automatically log into X.</li>
-<li>Make sure that the system's clock is configured for the proper timezone.</li>
-<li>Expand the filesystem if needed. </li>
-</ul><p>Please note that Screenly currently relies on the user 'pi', so don't change the username.</p>
-
-<h2>Install Screenly OSE</h2>
-
-<p>Open a terminal-window (or SSH-session) and as the user 'pi' run:</p>
-
-<pre><code>cd ~
-sudo apt-get update
-sudo apt-get -y install git-core
-git clone git@github.com:wireload/screenly-ose.git ~/screenly
-~/screenly/misc/install.sh
-</code></pre>
-
-<p>Assuming everything went well, reboot your system. Screenly should now load. </p>
-
-<p>Upon boot, Screenly's URL should show up on the screen (e.g. <a href="http://aaa.bbb.ccc.ddd:8080">http://aaa.bbb.ccc.ddd:8080</a>).</p>
-
-<h2>Supported media</h2>
-
-<p>Screenly currently three types of media:</p>
-
-<ul>
-<li>Videos
-
-<ul>
-<li>Screenly uses <a href="https://github.com/huceke/omxplayer/">omxplayer</a> as the video back-end. It is currently limited to MP4/h264-encoded videos.</li>
-</ul>
-</li>
-<li>Images</li>
-<li>Web-pages</li>
-</ul><p>Adobe Flash-media <em>is not</em> supported. </p>
-
-<p>Images and web-pages will be rendered in 1920x1080, so adjust your content for this size. </p>
-
-<p>It is also worth noting that no media is permanently stored on the Raspberry Pi. All content is simply retrieved from the remote server (with limited caching in the browser).</p>
-
-<h2>Upgrade Screenly</h2>
-
-<p>Since Screenly still is in beta, it's not unlikely that you'll run across bugs.</p>
-
-<p>To upgrade Screenly, simply run (as the user 'pi'):</p>
-
-<pre><code>cd ~/screenly
-git pull
-</code></pre>
-
-<p>Once done, simply restart the computer. If you prefer not to reboot, you might get away with (depending on the update):</p>
-
-<pre><code>pkill -f "viewer.py"
-</code></pre>
-
-<h2>Licensing</h2>
-
-<p>Dual License: <a href="http://www.gnu.org/licenses/gpl-2.0.html">GPLv2</a> and Commercial License. For more information, contact <a href="http://wireload.net/company/">WireLoad</a>. </p>
-      </section>
-    </div>
-
-    <!-- FOOTER  -->
-    <div id="footer_wrap" class="outer">
-      <footer class="inner">
-        <p class="copyright">Screenly-ose maintained by <a href="https://github.com/wireload">wireload</a></p>
-        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
-      </footer>
-    </div>
-
-    
-
+        <p>Placeholder</p>
   </body>
 </html>
