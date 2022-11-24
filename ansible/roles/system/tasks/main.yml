@@ -26,6 +26,7 @@
 - name: Check NOOBS
   ansible.builtin.command: cat /boot/config.txt
   register: config_txt
+  changed_when: false
   tags:
     - touches_boot_partition
 
@@ -244,6 +245,7 @@
 - name: Get raspbian name
   ansible.builtin.command: lsb_release -cs
   register: raspbian_name
+  changed_when: false
 
 - name: Add Docker repo
   ansible.builtin.lineinfile:
