@@ -1,4 +1,4 @@
-version: "2.2"
+version: "2"
 services:
   srly-ose-server:
     image: screenly/srly-ose-server
