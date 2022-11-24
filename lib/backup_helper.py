@@ -31,6 +31,11 @@ def create_backup(name=default_archive_name):
 
 
 def recover(file_path):
+    HOME = getenv('HOME')
+    if not HOME:
+        logging.error('No HOME variable')
+        exit(1) # Alternatively, we can raise an Exception using a custom message, or we can create a new class that extends Exception.
+    
     with tarfile.open(file_path, "r:gz") as tar:
         for directory in directories:
             if directory not in tar.getnames():
