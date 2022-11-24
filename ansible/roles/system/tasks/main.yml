@@ -182,7 +182,7 @@
   register: cdefs
 
 - name: Set fact for cdefs
-  ansible.builtin.set_fact: 
+  ansible.builtin.set_fact:
     cdefs_exist: "{{ cdefs.stat.exists }}"
 
 - name: Remove libc6-dev
