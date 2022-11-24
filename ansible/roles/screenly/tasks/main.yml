@@ -111,8 +111,6 @@
     name: {{ item }}
     state: started
     enabled: yes
-  args:
-    chdir: "/etc/systemd/system"
   with_items: "{{ screenly_systemd_units }}"
 
 - name: Check if deprecated systemd services exists
