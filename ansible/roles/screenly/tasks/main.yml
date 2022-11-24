@@ -108,7 +108,7 @@
 
 - name: Enable screenly systemd services
   ansible.builtin.systemd:
-    name: {{ item }}
+    name: "{{ item }}"
     state: started
     enabled: yes
   with_items: "{{ screenly_systemd_units }}"
