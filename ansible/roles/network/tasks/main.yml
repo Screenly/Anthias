@@ -48,7 +48,7 @@
   ansible.builtin.debug:
     msg: "Manage network: {{ manage_network }}"
 
-- name: Add the user {{ lookup('env', 'USER') }} to Identity
+- name: Add current user to Identity
   ansible.builtin.replace:
     regexp: '^Identity=.*'
     replace: "Identity=unix-group:netdev;unix-group:sudo:{{ lookup('env', 'USER') }}"
