@@ -150,6 +150,12 @@ if [ ! -f /etc/locale.gen ]; then
 fi
 
 sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' /etc/apt/sources.list
+DOCKER_SOURCE_LIST="/etc/apt/sources.list.d/docker.list"
+if [ -f "$DOCKER_SOURCE_LIST" ]; then
+    sudo sed -i 's/debian/raspbian/g' $DOCKER_SOURCE_LIST
+else 
+    sudo echo -e "deb [arch=armhf] https://download.docker.com/linux/raspbian bullseye stable" | sudo tee $DOCKER_SOURCE_LIST > /dev/null
+fi
 sudo apt update -y
 sudo apt-get install -y  --no-install-recommends \
     git \
