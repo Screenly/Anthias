@@ -197,7 +197,6 @@
 - name: Remove deprecated apt dependencies
   apt:
     name:
-      - dphys-swapfile
       - lightdm
       - lightdm-gtk-greeter
       - matchbox
@@ -211,6 +210,23 @@
       - x11-xserver-utils
       - xserver-xorg
     state: absent
+
+- name: Disable dphys-swapfile systemd service
+  systemd:
+    name: dphys-swapfile.service
+    masked: true
+    enabled: false
+  when: screenly_system_disable_swap_on_disk
+
+- name: Disable swap
+  command: /sbin/swapoff --all removes=/var/swap
+  when: screenly_system_disable_swap_on_disk
+
+- name: Remove swapfile from disk
+  file:
+    path: /var/swap
+    state: absent
+  when: screenly_system_disable_swap_on_disk
 
 - name: Make sure distro package of Docker is absent
   apt:
@@ -296,11 +312,3 @@
     mode: 0644
     owner: root
     group: root
-
-- name: Disable swap
-  command: /sbin/swapoff --all removes=/var/swap
-
-- name: Remove swapfile from disk
-  file:
-    path: /var/swap
-    state: absent

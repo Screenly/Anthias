@@ -97,3 +97,21 @@ $ docker-compose \
     -f docker-compose.test.yml \
     exec -T srly-ose-test nosetests -v -a '!fixme'
 ```
+
+## Installation options for advanced users
+There are additional switches to configure the installation of Screenly OSE. To set the ansible extra vars supplied to the `ansible-playbook` run, set the `OVERRIDE_ANSIBLE_VARS` variable to your desired value(s). This can either be done by setting it in a `.env` file in the folder the installation gets run in or by supplying the corresponding variables to the bash command.
+
+### Example
+To set the variable `screenly_system_disable_swap_on_disk` to `true` and `something_else` to `false`, run the installer the following way:
+```bash
+$ OVERRIDE_ANSIBLE_VARS="screenly_system_disable_swap_on_disk=false something_else=true" bash <(curl -sL https://install-ose.srly.io)
+```
+The same result with a `.env` file:
+```bash
+echo 'OVERRIDE_ANSIBLE_VARS="screenly_system_disable_swap_on_disk=false something_else=true"' >> .env
+bash <(curl -sL https://install-ose.srly.io)
+```
+### Available Variables
+| Variable name                        | What it does | Default value |
+|--------------------------------------|--------------|---------------|
+| screenly_system_disable_swap_on_disk | Should the setup disable the `dphys-swapfile` service to prolong the livetime of the sd-card? | true |

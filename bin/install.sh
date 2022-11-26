@@ -97,6 +97,13 @@ export BRANCH="master"
       EXTRA_ARGS=("--skip-tags" "system-upgrade")
   fi
 
+  if [ ! -z "$OVERRIDE_ANSIBLE_VARS" ]; then
+    echo -e "Setting ansible extra vars to: $OVERRIDE_ANSIBLE_VARS"
+    ANSIBLE_EXTRA_VARS=("--extra-vars" "$OVERRIDE_ANSIBLE_VARS")
+  else
+    ANSIBLE_EXTRA_VARS=""
+  fi
+
 elif [ "$WEB_UPGRADE" = true ]; then
   if [ -z "${BRANCH}" ]; then
     if [ "$BRANCH_VERSION" = "latest" ]; then
@@ -186,7 +193,7 @@ sudo -u pi ansible localhost \
     -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH force=no"
 cd /home/pi/screenly/ansible
 
-sudo -E ansible-playbook site.yml "${EXTRA_ARGS[@]}"
+sudo -E ansible-playbook site.yml "${EXTRA_ARGS[@]}" "${ANSIBLE_EXTRA_VARS[@]}"
 
 # Pull down and install containers
 /home/pi/screenly/bin/upgrade_containers.sh
