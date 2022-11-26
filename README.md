@@ -104,12 +104,13 @@ There are additional switches to configure the installation of Screenly OSE. To 
 ### Example
 To set the variable `screenly_system_disable_swap_on_disk` to `true` and `something_else` to `false`, run the installer the following way:
 ```bash
-$ OVERRIDE_ANSIBLE_VARS="screenly_system_disable_swap_on_disk=false something_else=true" bash <(curl -sL https://install-ose.srly.io)
+$ OVERRIDE_ANSIBLE_VARS="screenly_system_disable_swap_on_disk=false something_else=true" \
+    bash <(curl -sL https://install-ose.srly.io)
 ```
 The same result with a `.env` file:
 ```bash
-echo 'OVERRIDE_ANSIBLE_VARS="screenly_system_disable_swap_on_disk=false something_else=true"' >> .env
-bash <(curl -sL https://install-ose.srly.io)
+$ echo 'OVERRIDE_ANSIBLE_VARS="screenly_system_disable_swap_on_disk=false something_else=true"' >> .env
+$ bash <(curl -sL https://install-ose.srly.io)
 ```
 ### Available Variables
 | Variable name                        | What it does | Default value |
