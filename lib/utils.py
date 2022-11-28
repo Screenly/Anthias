@@ -73,27 +73,15 @@ def validate_url(string):
     return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
 
 
-def get_supervisor_api_response(delay):
-    def function():
-        balena_supervisor_address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
-        balena_supervisor_api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
-        headers = {'Content-Type': 'application/json'}
+def get_supervisor_api_response():
+    balena_supervisor_address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
+    balena_supervisor_api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
+    headers = {'Content-Type': 'application/json'}
 
-        return requests.get('{}/v1/device?apikey={}'.format(
-            balena_supervisor_address,
-            balena_supervisor_api_key
-        ), headers=headers)
-
-    return retry_call(
-        function,
-        delay=delay,
-        exceptions=(
-            requests.ConnectionError,
-            requests.ConnectTimeout,
-            requests.Timeout,
-            NewConnectionError,
-        ),
-    )
+    return requests.get('{}/v1/device?apikey={}'.format(
+        balena_supervisor_address,
+        balena_supervisor_api_key
+    ), headers=headers)
 
 
 def get_node_ip():
@@ -105,10 +93,10 @@ def get_node_ip():
     """
 
     if is_balena_app():
-        r = get_supervisor_api_response(delay=1)
+        response = get_supervisor_api_response()
 
-        if r.ok:
-            return r.json()['ip_address']
+        if response.ok:
+            return response.json()['ip_address']
         return 'Unknown'
     elif os.getenv('MY_IP'):
         return os.getenv('MY_IP')

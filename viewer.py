@@ -442,7 +442,14 @@ def main():
     if settings['show_splash']:
         url = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
 
-        get_supervisor_api_response(delay=1)
+        if is_balena_app():
+            retries = 5
+            for _ in range(retries):
+                try:
+                    get_supervisor_api_response()
+                    break
+                except requests.exceptions.ConnectionError:
+                    sleep(1)
 
         view_webpage(url)
         sleep(SPLASH_DELAY)
