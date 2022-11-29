@@ -1,12 +1,12 @@
-[![balena deploy button](https://www.balena.io/deploy.svg)](https://dashboard.balena-cloud.com/deploy?repoUrl=https://github.com/screenly/screenly-ose&defaultDeviceType=raspberrypi3)
+# Anthias - Digital Signage for the Raspberry Pi
 
-# Screenly OSE - Digital Signage for the Raspberry Pi
+![Anthias Logo](https://assets.digitalocean.com/articles/alligator/boo.svg "a title")
 
-[Which Screenly version is right for me?](https://www.screenly.io/screenly-ose-vs-pro/)
+## Screenly OSE is now known as Anthias
 
-**PLEASE NOTE:** Screenly OSE and the commercial version of Screenly (formerly known as Screenly Pro) are **two completely separate products**. They **do not share any code base and behave very differently** both with regards to management and performance. Hence do not use one to evaluate the other.
+To clear up confusion between Screenly and Anthias, we have decided to rename Screenly OSE to Anthias. More details can be found in [this blog post]().
 
-Want to help OSE thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
+Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
 
 ## Star History
 
@@ -27,7 +27,7 @@ Do however note that that we are still in the process of knocking out some bugs.
 
 ## Installing on Raspbian/Raspberry Pi OS
 
-The tl;dr for installing Screenly OSE on [Raspberry Pi OS](https://www.raspberrypi.com/software/) Bullseye Lite is:
+The tl;dr for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) Bullseye Lite is:
 
 ```
 $ bash <(curl -sL https://install-ose.srly.io)
@@ -45,31 +45,20 @@ During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast inte
 
 While you can deploy to your own Balena fleet, the easiest way to deploy using [Balena OpenFleets](https://hub.balena.io/organizations/screenly_ose/fleets).
 
-## Upgrading on Screenly OSE
+## Quick links
 
-The releases are based on the [Sprints](https://github.com/Screenly/screenly-ose/projects). At the end of each sprint, we merge the master branch (also known as the developer version), into the production branch and generate a new disk image.
-
-Should you want to upgrade to the latest development version (for instance if you want to try a bug-fix), you can do this by simply re-running the installation script and select that you want to install the development version. Re-running the installation script should normally not take more than a few minutes (depending on how much changed).
-
-To learn more about Screenly, please visit the official website at [Screenly.io](http://www.screenly.io).
-
-[![An introduction to digital signage with Screenly OSE](http://img.youtube.com/vi/FQte5yP0azE/0.jpg)](http://www.youtube.com/watch?v=FQte5yP0azE)
-
-Quick links:
-
- * [FAQ](https://support.screenly.io/hc/en-us/categories/360002606694-OSE)
- * [Screenly OSE Forum](https://forums.screenly.io/c/screenly-ose)
- * [Screenly OSE Home](https://www.screenly.io/ose/)
+ * [Forum](https://forums.screenly.io/c/screenly-ose)
+ * [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](https://github.com/Screenly/screenly-ose/tree/gh-pages))
  * [Live Demo](https://ose.demo.screenlyapp.com/)
  * [QA Checklist](https://github.com/Screenly/screenly-ose/blob/master/docs/qa-checklist.md)
  * [API Docs](https://ose.demo.screenlyapp.com/api/docs/)
  * [Developer Documentation](https://github.com/Screenly/screenly-ose/blob/master/docs/developer-documentation.md)
 
-Screenly OSE works on all Raspberry Pi versions, including Raspberry Pi Zero, Raspberry Pi 3 Model B, and Raspberry Pi 4 Model B.
+Anthias works on all Raspberry Pi versions, including Raspberry Pi Zero, Raspberry Pi 3 Model B, and Raspberry Pi 4 Model B.
 
 ## Dockerized Development Environment
 
-To simplify development of the server module of Screenly OSE, we've created a Docker container. This is intended to run on your local machine with the Screenly OSE repository mounted as a volume.
+To simplify development of the server module of Anthias, we've created a Docker container. This is intended to run on your local machine with the Anthias repository mounted as a volume.
 
 Assuming you're in the source code repository, simply run:
 
