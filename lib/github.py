@@ -150,7 +150,7 @@ def is_up_to_date():
                         'NOOBS': os.path.isfile('/boot/os_config.json'),
                         'Balena': is_balena_app(),
                         'Docker': is_docker(),
-                        'Pi_Version': parse_cpu_info().get('model', False)
+                        'Pi_Version': parse_cpu_info().get('model', "Unknown")
                         }
                 }]
             }
