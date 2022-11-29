@@ -2,32 +2,35 @@
 
 # If Jessie
 - name: Installs dependencies (Jessie)
-  apt:
+  ansible.builtin.apt:
     name: fbi
   when: ansible_distribution_major_version|int <= 7
 
 - name: Copies in splash screen
-  copy:
+  ansible.builtin.copy:
     src: splashscreen.png
     dest: /etc/splashscreen.png
+    mode: 0644
+    owner: root
+    group: root
   when: ansible_distribution_major_version|int <= 7
 
 - name: Copies in rc script
-  copy:
+  ansible.builtin.copy:
     src: asplashscreen
     dest: /etc/init.d/asplashscreen
     mode: 0755
   when: ansible_distribution_major_version|int <= 7
 
 - name: Enables asplashscreen
-  command: update-rc.d asplashscreen defaults
+  ansible.builtin.command: update-rc.d asplashscreen defaults
   args:
     creates: /etc/rcS.d/S01asplashscreen
   when: ansible_distribution_major_version|int <= 7
 
 # If not Jessie
 - name: Remove older versions
-  file:
+  ansible.builtin.file:
     state: absent
     path: "{{ item }}"
   with_items:
@@ -36,18 +39,21 @@
   when: ansible_distribution_major_version|int > 7
 
 - name: Disable asplashscreen
-  command: update-rc.d asplashscreen remove
+  ansible.builtin.command: update-rc.d asplashscreen remove
   when: ansible_distribution_major_version|int > 7
 
 - name: Installs dependencies (not Jessie)
-  apt:
+  ansible.builtin.apt:
     name: plymouth
   when: ansible_distribution_major_version|int > 7
 
 - name: Copies plymouth theme
-  copy:
+  ansible.builtin.copy:
     src: "{{ item }}"
     dest: /usr/share/plymouth/themes/screenly/
+    mode: 0644
+    owner: root
+    group: root
   with_items:
     - screenly.plymouth
     - screenly.script
@@ -55,18 +61,23 @@
   when: ansible_distribution_major_version|int > 7
 
 - name: Set splashscreen
-  command: plymouth-set-default-theme -R screenly
+  ansible.builtin.command: plymouth-set-default-theme -R screenly
   when: ansible_distribution_major_version|int > 7
 
 - name: Set plymouthd.default
-  copy:
+  ansible.builtin.copy:
     src: plymouthd.default
     dest: /usr/share/plymouth/plymouthd.defaults
+    mode: 0644
+    owner: root
+    group: root
   when: ansible_distribution_major_version|int > 7
-  
+
 - name: Copy to plymouthd.conf
-  copy:
+  ansible.builtin.copy:
     src: plymouthd.default
     dest: /etc/plymouth/plymouthd.conf
+    mode: 0644
+    owner: root
+    group: root
   when: ansible_distribution_major_version|int > 7
-  

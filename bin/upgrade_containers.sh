@@ -24,11 +24,11 @@ else
 fi
 
 sudo -E docker compose \
-    -f /home/pi/screenly/docker-compose.yml \
-    -f /home/pi/screenly/docker-compose.override.yml \
+    -f /home/${USER}/screenly/docker-compose.yml \
+    -f /home/${USER}/screenly/docker-compose.override.yml \
     pull
 
 sudo -E docker compose \
-    -f /home/pi/screenly/docker-compose.yml \
-    -f /home/pi/screenly/docker-compose.override.yml \
+    -f /home/${USER}/screenly/docker-compose.yml \
+    -f /home/${USER}/screenly/docker-compose.override.yml \
     up -d

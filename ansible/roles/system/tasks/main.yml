@@ -1,51 +1,29 @@
-
-#- name: test for available disk space
-#  assert:
-#    that:
-#     - "{{ item.size_available > 500 * 1000 * 1000 }}" # 500Mb
-#  when: "{{ item.mount == '/' }}"
-#  with_items: "{{ ansible_mounts }}"
-
-
-# We need custom handling for BerryBoot as it lacks `/boot`.
-# To detect this, the image creates `/etc/berryboot`.
-- stat:
-    path: /etc/berryboot
-  register: berryboot
-
-- set_fact: is_berryboot="{{berryboot.stat.exists}}"
-
-- debug:
-    msg: "Detected BerryBoot installation. Skipping some steps."
-  when: is_berryboot
-
+---
 - name: Check NOOBS
-  command: cat /boot/config.txt
+  ansible.builtin.command: cat /boot/config.txt
   register: config_txt
+  changed_when: false
   tags:
     - touches_boot_partition
 
-
 - name: Make sure we have proper framebuffer depth
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: /boot/config.txt
     regexp: ^framebuffer_depth=
     line: framebuffer_depth=32
-  when: not is_berryboot
   tags:
     - touches_boot_partition
 
 - name: Fix framebuffer bug
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: /boot/config.txt
     regexp: ^framebuffer_ignore_alpha=
     line: framebuffer_ignore_alpha=1
-  when: not is_berryboot
   tags:
     - touches_boot_partition
 
 - name: Add gpu_mem_256 in config.txt if it doesn't exist
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /boot/config.txt
     line: gpu_mem_256=96
   when: config_txt.stdout.find('gpu_mem_256') == -1
@@ -53,7 +31,7 @@
     - touches_boot_partition
 
 - name: Add gpu_mem_512 in config.txt if it doesn't exist
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /boot/config.txt
     line: gpu_mem_512=128
   when: config_txt.stdout.find('gpu_mem_512') == -1
@@ -61,7 +39,7 @@
     - touches_boot_partition
 
 - name: Add gpu_mem_1024 in config.txt if it doesn't exist
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /boot/config.txt
     line: gpu_mem_1024=196
   when: config_txt.stdout.find('gpu_mem_1024') == -1
@@ -69,96 +47,100 @@
     - touches_boot_partition
 
 - name: Comment out the original dtoverlay config.
-  replace:
+  ansible.builtin.replace:
     dest: /boot/config.txt
     regexp: ^(dtoverlay=vc4-kms-v3d)$
     replace: '#\1'
 
 - name: Add FKMS config for Pi 4.
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /boot/config.txt
     insertafter: '^\[pi4\]$'
     line: dtoverlay=vc4-fkms-v3d
 
 - name: Backup kernel boot args
-  copy:
+  ansible.builtin.copy:
     src: /boot/cmdline.txt
     dest: /boot/cmdline.txt.orig
-    force: no
-  when: not is_berryboot
+    owner: root
+    group: root
+    mode: 0755
+    force: false
   tags:
     - touches_boot_partition
 
-- debug:
+- name: Notice for cmdline.txt.orig file
+  ansible.builtin.debug:
     msg: "Use cmdline.txt.orig for boot parameters (don't remove this file)"
-  when: not is_berryboot
 
-- copy:
+- name: Copy cmdline.txt.orig to cmdline.txt
+  ansible.builtin.copy:
     src: /boot/cmdline.txt.orig
     dest: /boot/cmdline.txt
-    force: yes
-  when: not is_berryboot and config_txt.stdout.find('NOOBS') == -1
+    owner: root
+    group: root
+    mode: 0755
+    force: true
+  when: config_txt.stdout.find('NOOBS') == -1
   tags:
     - touches_boot_partition
 
 - name: For splash screen using Plymouth
-  replace:
+  ansible.builtin.replace:
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!splash).)*$)
     replace: \1 splash
-  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int >= 7
 
 - name: Remove blinking cursor
-  replace:
+  ansible.builtin.replace:
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!vt.global_cursor_default=0).)*$)
     replace: \1 vt.global_cursor_default=0
-  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int >= 7
   tags:
     - touches_boot_partition
 
 - name: Plymouth ignore serial consoles
-  replace:
+  ansible.builtin.replace:
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!plymouth.ignore-serial-consoles).)*$)
     replace: \1 plymouth.ignore-serial-consoles
-  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int >= 7
   tags:
     - touches_boot_partition
 
 - name: Use Systemd as init and quiet boot process
-  replace:
+  ansible.builtin.replace:
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!quiet init=/lib/systemd/systemd).)*$)
     replace: \1 quiet init=/lib/systemd/systemd
-  when: not is_berryboot
   tags:
     - touches_boot_partition
 
-- name: ethN/wlanN names for interfaces
-  replace:
+- name: Set ethN/wlanN names for interfaces
+  ansible.builtin.replace:
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!net\.ifnames=0).)*$)
     replace: \1 net.ifnames=0
-  when: not is_berryboot
   tags:
     - touches_boot_partition
 
-- name: cgroup_enable required by containerd for OOM
-  replace:
+- name: Set cgroup_enable required by containerd for OOM
+  ansible.builtin.replace:
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!cgroup_enable=memory).)*$)
     replace: \1 cgroup_enable=memory
-  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int >= 7
   tags:
     - touches_boot_partition
 
-- name: cgroup_memory required by containerd for OOM
-  replace:
+- name: Set cgroup_memory required by containerd for OOM
+  ansible.builtin.replace:
     dest: /boot/cmdline.txt
     regexp: (^(?!$)((?!cgroup_memory=1).)*$)
     replace: \1 cgroup_memory=1
-  when: not is_berryboot and ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version|int >= 7
   tags:
     - touches_boot_partition
 
@@ -166,36 +148,38 @@
 # They are required to install pip dependencies.
 # In this case we need to reinstall the packages.
 - name: Check if cdefs.h exists
-  stat:
+  ansible.builtin.stat:
     path: /usr/include/arm-linux-gnueabihf/sys/cdefs.h
   register: cdefs
 
-- set_fact: cdefs_exist="{{cdefs.stat.exists}}"
+- name: Set fact for cdefs
+  ansible.builtin.set_fact:
+    cdefs_exist: "{{ cdefs.stat.exists }}"
 
 - name: Remove libc6-dev
-  apt:
+  ansible.builtin.apt:
     name: libc6-dev
     state: absent
   when: not cdefs_exist
 
 - name: Install libc6-dev
-  apt:
+  ansible.builtin.apt:
     name: libc6-dev
     state: present
-    update_cache: yes
+    update_cache: true
   when: not cdefs_exist
 
 - name: Install Screenly dependencies
-  apt:
+  ansible.builtin.apt:
     name:
       - rpi-update
       - bc
       - python3
       - python3-redis
-    state: latest
+    state: present
 
 - name: Remove deprecated apt dependencies
-  apt:
+  ansible.builtin.apt:
     name:
       - dphys-swapfile
       - lightdm
@@ -213,7 +197,7 @@
     state: absent
 
 - name: Make sure distro package of Docker is absent
-  apt:
+  ansible.builtin.apt:
     name:
       - docker
       - docker-engine
@@ -224,34 +208,38 @@
     state: absent
 
 - name: Add docker apt key
-  apt_key:
+  ansible.builtin.apt_key:
     url: https://download.docker.com/linux/raspbian/gpg
     state: present
 
 - name: Get raspbian name
-  command: lsb_release -cs
+  ansible.builtin.command: lsb_release -cs
   register: raspbian_name
+  changed_when: false
 
 - name: Add Docker repo
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/apt/sources.list.d/docker.list
-    create: yes
+    create: true
     line: "deb [arch=armhf] https://download.docker.com/linux/debian {{ raspbian_name.stdout }} stable"
     state: present
+    owner: root
+    group: root
+    mode: 0644
 
 - name: Install Docker
-  apt:
+  ansible.builtin.apt:
     name:
       - docker-ce:armhf
       - docker-ce-cli:armhf
       - docker-compose-plugin:armhf
-    update_cache: yes
-    install_recommends: no
+    update_cache: true
+    install_recommends: false
 
-- name: Add pi to docker group
-  user:
-    name: pi
-    group: pi
+- name: Add user to docker group
+  ansible.builtin.user:
+    name: "{{ lookup('env', 'USER') }}"
+    group: "{{ lookup('env', 'USER') }}"
     groups:
       - docker
       - adm
@@ -265,24 +253,24 @@
       - dialout
 
 - name: Perform system upgrade
-  apt:
+  ansible.builtin.apt:
     upgrade: dist
   tags:
     - system-upgrade
 
 - name: Clean up unused packages
-  apt:
-    autoremove: yes
+  ansible.builtin.apt:
+    autoremove: true
   tags:
     - system-upgrade
 
 - name: Remove deprecated pip dependencies
-  pip:
+  ansible.builtin.pip:
     name: supervisor
     state: absent
 
 - name: Copy in rc.local
-  copy:
+  ansible.builtin.copy:
     src: rc.local
     dest: /etc/rc.local
     mode: 0755
@@ -290,7 +278,7 @@
     group: root
 
 - name: Copy in 01_nodoc
-  copy:
+  ansible.builtin.copy:
     src: 01_nodoc
     dest: /etc/dpkg/dpkg.cfg.d/01_nodoc
     mode: 0644
@@ -298,9 +286,9 @@
     group: root
 
 - name: Disable swap
-  command: /sbin/swapoff --all removes=/var/swap
+  ansible.builtin.command: /sbin/swapoff --all removes=/var/swap
 
 - name: Remove swapfile from disk
-  file:
+  ansible.builtin.file:
     path: /var/swap
     state: absent

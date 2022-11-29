@@ -1,12 +1,12 @@
 import tarfile
+import sh
+import sys
 from datetime import datetime
 from os import path, getenv, remove
-import sh
 
 directories = ['.screenly', 'screenly_assets']
 default_archive_name = "screenly-backup"
 static_dir = "screenly/static"
-
 
 def create_backup(name=default_archive_name):
     home = getenv('HOME')
@@ -32,11 +32,16 @@ def create_backup(name=default_archive_name):
 
 
 def recover(file_path):
+    HOME = getenv('HOME')
+    if not HOME:
+        logging.error('No HOME variable')
+        sys.exit(1) # Alternatively, we can raise an Exception using a custom message, or we can create a new class that extends Exception.
+    
     with tarfile.open(file_path, "r:gz") as tar:
         for directory in directories:
             if directory not in tar.getnames():
                 raise Exception("Archive is wrong.")
 
-        tar.extractall(path=getenv('HOME', '/home/pi'))
+        tar.extractall(path=getenv('HOME'))
 
     remove(file_path)
