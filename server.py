@@ -1799,7 +1799,6 @@ def integrations():
 
 @app.route('/splash-page')
 def splash_page():
-    my_ip = get_node_ip()
     return template('splash-page.html', my_ip=get_node_ip())
 
 
