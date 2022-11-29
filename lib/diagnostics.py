@@ -132,23 +132,14 @@ Need to find different methods (built-in) that does not rely on manually entered
 Example: cat /proc/meminfo for memory, not sure how we 
 
 def get_raspberry_revision(raspberry_pi_revision):
-    """
-    Quick DRY workaround. Needs to be refactored later.
-    """
     return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision).get('revision', False)
 
 
 def get_raspberry_ram(raspberry_pi_revision):
-    """
-    Quick DRY workaround. Needs to be refactored later.
-    """
     return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision).get('ram', False)
 
 
 def get_raspberry_manufacturer(raspberry_pi_revision):
-    """
-    Quick DRY workaround. Needs to be refactored later.
-    """
     return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision).get('manufacturer', False)
 """
 
