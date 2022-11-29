@@ -23,6 +23,7 @@ from lib.github import is_up_to_date
 from lib.errors import SigalrmException
 from lib.media_player import VLCMediaPlayer, OMXMediaPlayer
 from lib.utils import get_active_connections, url_fails, is_balena_app, get_node_ip, string_to_bool, connect_to_redis, get_supervisor_api_response
+from retry.api import retry_call
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
 
@@ -443,13 +444,7 @@ def main():
         url = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
 
         if is_balena_app():
-            retries = 5
-            for _ in range(retries):
-                try:
-                    get_supervisor_api_response()
-                    break
-                except requests.exceptions.ConnectionError:
-                    sleep(1)
+            retry_call(get_supervisor_api_response, tries=5, delay=1)
 
         view_webpage(url)
         sleep(SPLASH_DELAY)
