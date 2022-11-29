@@ -1754,7 +1754,7 @@ def system_info():
     # Player name for title
     player_name = settings['player_name']
 
-    raspberry_pi_revision = raspberry_pi_helper.parse_cpu_info().get('model', False)
+    raspberry_pi_revision = raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
 
     screenly_version = '{}@{}'.format(
         diagnostics.get_git_branch(),
