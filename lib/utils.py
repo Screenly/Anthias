@@ -16,7 +16,6 @@ from distutils.util import strtobool
 from netifaces import ifaddresses, gateways, AF_INET, AF_LINK
 from os import getenv, path, utime
 from platform import machine
-from retry.api import retry_call
 from settings import settings, ZmqPublisher
 from subprocess import check_output, call
 from threading import Thread

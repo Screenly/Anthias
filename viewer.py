@@ -22,7 +22,15 @@ from lib.diagnostics import get_raspberry_code, get_raspberry_model
 from lib.github import is_up_to_date
 from lib.errors import SigalrmException
 from lib.media_player import VLCMediaPlayer, OMXMediaPlayer
-from lib.utils import get_active_connections, url_fails, is_balena_app, get_node_ip, string_to_bool, connect_to_redis, get_supervisor_api_response
+from lib.utils import (
+    get_active_connections,
+    url_fails,
+    is_balena_app,
+    get_node_ip,
+    string_to_bool,
+    connect_to_redis,
+    get_supervisor_api_response,
+)
 from retry.api import retry_call
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
