@@ -112,20 +112,6 @@ def get_debian_version():
     else:
         return 'Unable to get Debian version.'
 
-
-def get_raspberry_hardware():
-    """
-    Temporary workaround and just all on another function
-    """
-    return raspberry_pi_helper.parse_cpu_info().get('hardware', "Unknown")
-
-
-def get_raspberry_model():
-    """
-    Quick DRY workaround. Needs to be refactored later.
-    """
-    return raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
-
 """
 @TODO
 Need to find different methods (built-in) that does not rely on manually entered static database info to get these results.
@@ -148,8 +134,8 @@ def compile_report():
     Compile report with various data points.
     """
     report = {}
-    report['cpu_info'] = get_raspberry_hardware()
-    report['pi_model'] = get_raspberry_model()
+    report['cpu_info'] = raspberry_pi_helper.parse_cpu_info().get('hardware', "Unknown")
+    report['pi_model'] = raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
     report['uptime'] = get_uptime()
     report['monitor'] = get_monitor_status()
     report['display_power'] = get_display_power()
