@@ -5,6 +5,7 @@ import logging
 import pydbus
 import re
 import string
+import sys
 from datetime import datetime, timedelta
 from os import path, getenv, utime, system
 from random import shuffle
@@ -348,7 +349,10 @@ def asset_loop(scheduler):
 
 def setup():
     global HOME, db_conn, browser_bus
-    HOME = getenv('HOME', '/home/pi')
+    HOME = getenv('HOME')
+    if not HOME:
+        logging.error('No HOME variable')
+        sys.exit(1) # Alternatively, we can raise an Exception using a custom message, or we can create a new class that extends Exception.
 
     signal(SIGUSR1, sigusr1)
     signal(SIGALRM, sigalrm)

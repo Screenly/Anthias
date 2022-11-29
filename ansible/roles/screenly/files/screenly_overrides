@@ -1,7 +1,7 @@
-pi ALL=NOPASSWD: /usr/local/sbin/upgrade_screenly.sh
+${USER} ALL=NOPASSWD: /usr/local/sbin/upgrade_screenly.sh
 
 #SystemCommands
-pi ALL=NOPASSWD: /sbin/shutdown, /bin/systemctl
+${USER} ALL=NOPASSWD: /sbin/shutdown, /bin/systemctl
 
 #External
-pi ALL=NOPASSWD: /usr/local/sbin/wifi-connect
+${USER} ALL=NOPASSWD: /usr/local/sbin/wifi-connect

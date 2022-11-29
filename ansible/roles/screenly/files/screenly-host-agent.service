@@ -5,10 +5,10 @@ StartLimitIntervalSec=10
 StartLimitBurst=3
 
 [Service]
-WorkingDirectory=/home/pi/screenly
-User=pi
+WorkingDirectory=/home/${USER}/screenly
+User=${USER}
 
-ExecStart=/usr/bin/python3 /home/pi/screenly/host_agent.py
+ExecStart=/usr/bin/python3 /home/${USER}/screenly/host_agent.py
 Restart=on-failure
 RestartSec=10s
 
