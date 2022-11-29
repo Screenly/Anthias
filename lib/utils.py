@@ -16,7 +16,6 @@ from distutils.util import strtobool
 from netifaces import ifaddresses, gateways, AF_INET, AF_LINK
 from os import getenv, path, utime
 from platform import machine
-from retry import retry
 from settings import settings, ZmqPublisher
 from subprocess import check_output, call
 from threading import Thread
@@ -71,6 +70,17 @@ def validate_url(string):
     return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
 
 
+def get_supervisor_api_response():
+    balena_supervisor_address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
+    balena_supervisor_api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
+    headers = {'Content-Type': 'application/json'}
+
+    return requests.get('{}/v1/device?apikey={}'.format(
+        balena_supervisor_address,
+        balena_supervisor_api_key
+    ), headers=headers)
+
+
 def get_node_ip():
     """
     Returns the node's IP address.
@@ -79,26 +89,11 @@ def get_node_ip():
     The reason for this is because we can't retrieve the host IP from within Docker.
     """
 
-    @retry((
-        requests.ConnectionError,
-        requests.ConnectTimeout,
-        requests.Timeout,
-    ), tries=3)
-    def get_response():
-        balena_supervisor_address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
-        balena_supervisor_api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
-        headers = {'Content-Type': 'application/json'}
-
-        return requests.get('{}/v1/device?apikey={}'.format(
-            balena_supervisor_address,
-            balena_supervisor_api_key
-        ), headers=headers)
-
     if is_balena_app():
-        r = get_response()
+        response = get_supervisor_api_response()
 
-        if r.ok:
-            return r.json()['ip_address']
+        if response.ok:
+            return response.json()['ip_address']
         return 'Unknown'
     elif os.getenv('MY_IP'):
         return os.getenv('MY_IP')
