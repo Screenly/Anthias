@@ -19,8 +19,6 @@ from platform import machine
 from settings import settings, ZmqPublisher
 from subprocess import check_output, call
 from threading import Thread
-from time import sleep
-from urllib3.exceptions import NewConnectionError
 from urlparse import urlparse
 import logging
 
