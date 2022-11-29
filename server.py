@@ -1754,17 +1754,7 @@ def system_info():
     # Player name for title
     player_name = settings['player_name']
 
-    raspberry_pi_revision = raspberry_pi_helper.parse_cpu_info().get('revision', False)
-    if raspberry_pi_revision:
-        raspberry_pi_details = raspberry_pi_helper.lookup_raspberry_pi_revision(
-                raspberry_pi_revision
-        )
-        raspberry_pi_model = '{} ({})'.format(
-            raspberry_pi_details['model'],
-            raspberry_pi_details['manufacturer']
-        )
-    else:
-        raspberry_pi_model = 'Unknown.'
+    raspberry_pi_revision = raspberry_pi_helper.parse_cpu_info().get('model', False)
 
     screenly_version = '{}@{}'.format(
         diagnostics.get_git_branch(),
@@ -1781,7 +1771,7 @@ def system_info():
         memory=memory,
         display_info=display_info,
         display_power=display_power,
-        raspberry_pi_model=raspberry_pi_model,
+        raspberry_pi_model=raspberry_pi_revision,
         screenly_version=screenly_version,
         mac_address=get_node_mac_address()
     )
