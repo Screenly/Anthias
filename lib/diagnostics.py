@@ -129,13 +129,19 @@ def get_raspberry_manufacturer(raspberry_pi_revision):
     return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision).get('manufacturer', False)
 """
 
+def get_raspberry_code():
+    return raspberry_pi_helper.parse_cpu_info().get('hardware', "Unknown")
+
+def get_raspberry_model():
+    return raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
+
 def compile_report():
     """
     Compile report with various data points.
     """
     report = {}
-    report['cpu_info'] = raspberry_pi_helper.parse_cpu_info().get('hardware', "Unknown")
-    report['pi_model'] = raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
+    report['cpu_info'] = get_raspberry_code()
+    report['pi_model'] = get_raspberry_model()
     report['uptime'] = get_uptime()
     report['monitor'] = get_monitor_status()
     report['display_power'] = get_display_power()
