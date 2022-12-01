@@ -26,7 +26,7 @@ ADD requirements/requirements.txt /tmp/requirements.txt
 ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
 ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt
 
-ARG CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/106.0.5249.61/chromedriver_linux64.zip"
+ARG CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/108.0.5359.71/chromedriver_linux64.zip"
 RUN wget $CHROMEDRIVER_DL_URL -O /tmp/chromedriver.zip && \
     unzip -o /tmp/chromedriver.zip -d /usr/bin
 
