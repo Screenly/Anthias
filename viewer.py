@@ -37,7 +37,7 @@ from settings import settings, LISTEN, PORT, ZmqConsumer
 
 
 __author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2020, Screenly, Inc"
+__copyright__ = "Copyright 2012-2023, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 
