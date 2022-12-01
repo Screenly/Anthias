@@ -133,7 +133,7 @@ if [ -z "${REPOSITORY}" ]; then
   fi
 fi
 
-if [ ! -f /home/${USER}/screenly ]; then
+if [ ! -d /home/${USER}/screenly ]; then
     mkdir /home/${USER}/screenly
 fi
 
