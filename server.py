@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 __author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2021, Screenly, Inc"
+__copyright__ = "Copyright 2012-2023, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 import json
