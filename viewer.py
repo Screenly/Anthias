@@ -19,7 +19,7 @@ import zmq
 
 from lib import assets_helper
 from lib import db
-from lib.diagnostics import get_raspberry_code, get_raspberry_model
+from lib.diagnostics import get_raspberry_model
 from lib.github import is_up_to_date
 from lib.errors import SigalrmException
 from lib.media_player import VLCMediaPlayer, OMXMediaPlayer
@@ -57,7 +57,7 @@ r = connect_to_redis()
 
 
 try:
-    media_player = VLCMediaPlayer() if get_raspberry_model(get_raspberry_code()) == 'Model 4B' else OMXMediaPlayer()
+    media_player = VLCMediaPlayer() if 'Raspberry Pi 4' in get_raspberry_model() else OMXMediaPlayer()
 except sh.ErrorReturnCode_1:
     media_player = OMXMediaPlayer()
 
