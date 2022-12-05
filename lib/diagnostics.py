@@ -112,18 +112,6 @@ def get_debian_version():
     else:
         return 'Unable to get Debian version.'
 
-"""
-@TODO
-Need to find different methods (built-in) that does not rely on manually entered static database info to get these results.
-Example, for mem: cat /proc/meminfo for memory
-Not sure how we should approach this for now, but not really important at the moment.
-
-def get_raspberry_ram(raspberry_pi_revision):
-    return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision).get('ram', False)
-
-def get_raspberry_manufacturer(raspberry_pi_revision):
-    return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision).get('manufacturer', False)
-"""
 
 def get_raspberry_code():
     return raspberry_pi_helper.parse_cpu_info().get('hardware', "Unknown")
