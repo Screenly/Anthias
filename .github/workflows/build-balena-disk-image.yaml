@@ -62,7 +62,7 @@ jobs:
             "$(date -I)-$BALENA_IMAGE.zip" \
             "$BALENA_IMAGE.img"
 
-      - uses: ncipollo/release-action@@v1.11.2
+      - uses: ncipollo/release-action@v1.11.2
         with:
           prerelease: true
           artifacts: "*.zip"
