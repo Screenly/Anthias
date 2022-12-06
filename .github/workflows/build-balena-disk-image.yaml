@@ -6,6 +6,8 @@ jobs:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
     runs-on: ubuntu-20.04
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v2.3.4
@@ -60,7 +62,7 @@ jobs:
             "$(date -I)-$BALENA_IMAGE.zip" \
             "$BALENA_IMAGE.img"
 
-      - uses: actions/upload-artifact@v3
+      - uses: ncipollo/release-action@@v1.11.2
         with:
-          name: Release file
-          path: "*.zip"
+          prerelease: true
+          artifacts: "*.zip"
