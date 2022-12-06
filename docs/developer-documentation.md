@@ -1,5 +1,27 @@
-## Screenly-OSE Developer Documentation
-_(this document is in its initial phase)_
+## Anthias Developer Documentation
+
+### Creating a new release
+
+Check what the latest release is:
+
+```bash
+$ git pull
+$ git tag
+[...]
+```
+
+Create a new release:
+
+```bash
+$ git tag -a v0.18.5 -m "Test new automated disk images"
+```
+
+Push release:
+```bash
+$ git push origin v0.18.5
+```
+
+### Outdated documentation that needs to be updated
 
 Here is a high-level overview of the different components that make up the Screenly-OSE system.
 ![Screenly-OSE Diagram Overview](https://raw.githubusercontent.com/screenly/screenly-ose/master/docs/images/screenly-ose-diagram-overview.png)
