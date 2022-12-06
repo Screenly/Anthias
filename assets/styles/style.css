@@ -1,5 +1,5 @@
 body {
-  font-family: 'Plus Jakarta Sans';
+  font-family: "Plus Jakarta Sans", Arial, Helvetica, sans-serif;
   font-size: 16px;
 }
 
@@ -11,6 +11,9 @@ body {
   --bs-navbar-nav-link-padding-x: 1rem;
   --bs-navbar-toggler-padding-x: 0;
   --bs-navbar-toggler-padding-y: 0;
+
+  background-color: #270035;
+  padding: 36px 0;
 }
 
 h1 {
@@ -36,8 +39,8 @@ h3 {
 }
 
 .background-light {
-  background: rgba(212, 204, 215, 0.3);
-  color: #3F3F46;
+  background: rgba(212 204 215 / 30%);
+  color: #3f3f46;
 }
 
 .btn {
@@ -60,11 +63,6 @@ h3 {
   background: transparent;
   border: 1px solid #ffdf12;
   color: #fff;
-}
-
-.navbar {
-  background-color: #270035;
-  padding: 36px 0;
 }
 
 .navbar-dark {
@@ -102,7 +100,7 @@ header {
 }
 
 header .hero-text {
-  color: rgba(255 255 255 / 0.7);
+  color: rgba(255 255 255 / 70%);
 }
 
 header .hero-text h1 {
@@ -110,7 +108,7 @@ header .hero-text h1 {
 }
 
 .features {
-  background-color: rgba(212, 204, 215, 0.3);
+  background-color: rgba(212 204 215 / 30%);
   padding: 3rem 0 5rem;
 }
 
@@ -163,12 +161,12 @@ header .hero-text h1 {
 }
 
 .faq .accordion-button::after {
-  background-image: url('/assets/images/plus.svg');
+  background-image: url("/assets/images/plus.svg");
   cursor: pointer;
 }
 
 .faq .accordion-button:not(.collapsed)::after {
-  background-image: url('/assets/images/minus.svg');
+  background-image: url("/assets/images/minus.svg");
   cursor: pointer;
 }
 
@@ -188,7 +186,7 @@ footer .bg-container {
 }
 
 footer .footer-links {
- max-width: 351px;
+  max-width: 351px;
 }
 
 footer .social-icons {
@@ -196,8 +194,8 @@ footer .social-icons {
 }
 
 footer .legal {
-  border-top: 1px solid rgba(255 255 255 / 0.4);
-  color: rgba(255 255 255 / 0.4);
+  border-top: 1px solid rgba(255 255 255 / 40%);
+  color: rgba(255 255 255 / 40%);
 }
 
 @media (min-width: 768px) {
@@ -233,7 +231,6 @@ footer .legal {
 }
 
 @media (min-width: 992px) {
-  /* Bootstrap Overrides */
   .container-fluid {
     --bs-gutter-x: 7rem;
   }
@@ -241,12 +238,12 @@ footer .legal {
   h1 {
     font-size: 4.5rem;
   }
-  
+
   h2 {
     font-size: 3.75rem;
     line-height: 4.5rem;
   }
-  
+
   h3 {
     font-size: 2.5rem;
     line-height: 2.8rem;
@@ -266,6 +263,6 @@ footer .legal {
   }
 
   .faq {
-    padding: 6rem 0 8.75rem 0;
+    padding: 6rem 0 8.75rem;
   }
 }
