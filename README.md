@@ -4,7 +4,8 @@
 
 ## Screenly OSE is now known as Anthias
 
-To clear up confusion between Screenly and Anthias, we have decided to rename Screenly OSE to Anthias. More details can be found in [this blog post](https://www.screenly.io/blog/2022/12/06/screenly-ose-now-called-anthias/).
+To clear up confusion between Screenly and Anthias, we have decided to rename Screenly OSE to Anthias. More details can be found in [this blog post](https://www.screenly.io/blog/2022/12/06/screenly-ose-now-called-anthias/). The renaming process is now under way, and over the coming months, Anthias will receive a face lift and the love it deserves.
+
 
 Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
 
