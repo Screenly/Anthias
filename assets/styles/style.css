@@ -153,7 +153,7 @@ header .hero-text h1 {
   color: #08000b;
   font-size: 1.125rem;
   font-weight: 700;
-  line-height: 1.125rem;
+  line-height: 2rem;
   padding: 1.875rem 1.25rem 1.68rem;
 }
 
@@ -173,10 +173,16 @@ header .hero-text h1 {
 }
 
 .faq .accordion-body {
+  font-size: 1.06rem;
+  line-height: 1.75;
   padding-bottom: 2.875rem;
 }
 
-footer .bg-container{
+.faq .accordion-body a {
+  text-decoration: none;
+}
+
+footer .bg-container {
   padding-top: 4rem;
   padding-bottom: 4.5rem;
 }
@@ -191,14 +197,6 @@ footer .social-icons {
 
 footer .legal {
   border-top: 1px solid rgba(255 255 255 / 0.4);
-  color: rgba(255 255 255 / 0.4);
-}
-
-footer .legal-links {
-  max-width: 293px;
-}
-
-footer .legal-links a {
   color: rgba(255 255 255 / 0.4);
 }
 
@@ -268,6 +266,6 @@ footer .legal-links a {
   }
 
   .faq {
-    padding: 2rem 0 8.75rem 0;
+    padding: 6rem 0 8.75rem 0;
   }
 }
