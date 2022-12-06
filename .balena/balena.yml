@@ -1,0 +1,8 @@
+build-variables:
+  global:
+    - GIT_HASH=f997332e8d8ddedd8a2b97996b1ff03f5556746d
+    - GIT_SHORT_HASH=f997332
+    - GIT_BRANCH=master
+  services:
+      srly-ose-viewer:
+        - DEVICE_TYPE=pi3
