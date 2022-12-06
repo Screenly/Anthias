@@ -10,19 +10,19 @@ Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.co
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Screenly/screenly-ose&type=Date)](https://star-history.com/#Screenly/screenly-ose&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=Screenly/anthias&type=Date)](https://star-history.com/#Screenly/anthias&Date)
 
 
 ## Disk images
 
 The quickest way to get started is to use one of our pre-built disk images (powered by [Balena Hub](https://hub.balena.io/)).
 
-* [Raspberry Pi 1](https://github.com/Screenly/screenly-ose/releases/download/v0.18.4/2022-11-04-raspberry-pi.zip)
-* [Raspberry Pi 2](https://github.com/Screenly/screenly-ose/releases/download/v0.18.4/2022-11-04-raspberry-pi2.zip)
-* [Raspberry Pi 3](https://github.com/Screenly/screenly-ose/releases/download/v0.18.4/2022-11-04-raspberrypi3.zip)
-* [Raspberry Pi 4](https://github.com/Screenly/screenly-ose/releases/download/v0.18.4/2022-11-04-raspberrypi4-64.zip)
+* [Raspberry Pi 1](https://github.com/Screenly/anthias/releases/download/v0.18.4/2022-11-04-raspberry-pi.zip)
+* [Raspberry Pi 2](https://github.com/Screenly/anthias/releases/download/v0.18.4/2022-11-04-raspberry-pi2.zip)
+* [Raspberry Pi 3](https://github.com/Screenly/anthias/releases/download/v0.18.4/2022-11-04-raspberrypi3.zip)
+* [Raspberry Pi 4](https://github.com/Screenly/anthias/releases/download/v0.18.4/2022-11-04-raspberrypi4-64.zip)
 
-Do however note that that we are still in the process of knocking out some bugs. You can track the known issues [here](https://github.com/Screenly/screenly-ose/projects/8).
+Do however note that that we are still in the process of knocking out some bugs. You can track the known issues [here](https://github.com/Screenly/anthias/projects/8).
 
 
 ## Installing on Raspbian/Raspberry Pi OS
@@ -48,11 +48,11 @@ While you can deploy to your own Balena fleet, the easiest way to deploy using [
 ## Quick links
 
  * [Forum](https://forums.screenly.io/c/screenly-ose)
- * [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](https://github.com/Screenly/screenly-ose/tree/gh-pages))
+ * [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](https://github.com/Screenly/anthias/tree/gh-pages))
  * [Live Demo](https://ose.demo.screenlyapp.com/)
- * [QA Checklist](https://github.com/Screenly/screenly-ose/blob/master/docs/qa-checklist.md)
+ * [QA Checklist](https://github.com/Screenly/anthias/blob/master/docs/qa-checklist.md)
  * [API Docs](https://ose.demo.screenlyapp.com/api/docs/)
- * [Developer Documentation](https://github.com/Screenly/screenly-ose/blob/master/docs/developer-documentation.md)
+ * [Developer Documentation](https://github.com/Screenly/anthias/blob/master/docs/developer-documentation.md)
 
 Anthias works on all Raspberry Pi versions, including Raspberry Pi Zero, Raspberry Pi 3 Model B, and Raspberry Pi 4 Model B.
 
