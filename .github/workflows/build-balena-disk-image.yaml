@@ -62,12 +62,12 @@ jobs:
 
       - name: Package up image
         run: |
-          sha256sum "$BALENA_IMAGE.img" >> "$(date -I)-$BALENA_IMAGE.checksum"
+          sha256sum "$BALENA_IMAGE.img" >> "$(date -I)-$BALENA_IMAGE.sha256"
           zip -9 \
             "$(date -I)-$BALENA_IMAGE.zip" \
             "$BALENA_IMAGE.img"
           sha256sum "$(date -I)-$BALENA_IMAGE.zip" >> \
-            "$(date -I)-$BALENA_IMAGE.checksum"
+            "$(date -I)-$BALENA_IMAGE.sha256"
 
       - uses: ncipollo/release-action@v1.11.2
         with:
