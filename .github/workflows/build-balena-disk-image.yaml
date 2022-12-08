@@ -69,8 +69,27 @@ jobs:
           sha256sum "$(date -I)-$BALENA_IMAGE.zip" >> \
             "$(date -I)-$BALENA_IMAGE.sha256"
 
+          # Build Raspberry Pi Imager metadata
+          jq --null-input \
+            --arg BOARD "${{ matrix.board }}" \
+            --arg IMAGE_SHA256 "$(sha256sum "$BALENA_IMAGE.img" | cut -d ' ' -f 1)" \
+            --arg IMAGE_SIZE "$(wc -c < "$BALENA_IMAGE.img" | xargs)" \
+            --arg DOWNLOAD_SHA256 "$(sha256sum "$(date -I)-$BALENA_IMAGE.zip" | cut -d ' ' -f 1)" \
+            --arg DOWNLOAD_SIZE "$(wc -c < "$(date -I)-$BALENA_IMAGE.zip" | xargs)" \
+            --arg RELEASE_DATE "$(date -I)" \
+            '{
+              "name": ("Anthias (" + $BOARD + ")"),
+              "description": "The most popular open source digital signage project.",
+              "icon": "https://raw.githubusercontent.com/Screenly/Anthias/master/static/img/square-dark.svg",
+              "extract_size": $IMAGE_SIZE,
+              "extract_sha256": $IMAGE_SHA256,
+              "image_download_size": $DOWNLOAD_SIZE,
+              "image_download_sha256": $DOWNLOAD_SHA256,
+              "release_date": $RELEASE_DATE
+            }' > "$(date -I)-$BALENA_IMAGE.json"
+
       - uses: ncipollo/release-action@v1.11.2
         with:
           allowUpdates: true
           prerelease: true
-          artifacts: "*.zip,*.sha256"
+          artifacts: "*.zip,*.sha256 *.json"
