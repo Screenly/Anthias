@@ -67,5 +67,6 @@ jobs:
 
       - uses: ncipollo/release-action@v1.11.2
         with:
+          allowUpdates: true
           prerelease: true
           artifacts: "*.zip"
