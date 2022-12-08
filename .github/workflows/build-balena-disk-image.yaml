@@ -92,4 +92,4 @@ jobs:
         with:
           allowUpdates: true
           prerelease: true
-          artifacts: "*.zip,*.sha256 *.json"
+          artifacts: "*.zip,*.sha256,*.json"
