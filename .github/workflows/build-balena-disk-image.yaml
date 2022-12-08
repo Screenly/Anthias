@@ -73,4 +73,4 @@ jobs:
         with:
           allowUpdates: true
           prerelease: true
-          artifacts: "*.zip,*.checksum"
+          artifacts: "*.zip,*.sha256"
