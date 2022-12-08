@@ -39,14 +39,13 @@ def retrieve_and_patch_json(url):
 
     image_json['url'] = url
     image_json['extract_size'] = int(image_json['extract_size'])
-    image_json['image_download_size'] =int(image_json['image_download_size'])
+    image_json['image_download_size'] = int(image_json['image_download_size'])
     return image_json
 
 
 def main():
     latest_release = get_latest_tag()
-    release_assets = get_asset_list('v0.18.5')
-
+    release_assets = get_asset_list(latest_release)
     pi_imager_json = {"os_list": []}
 
     for url in release_assets:
