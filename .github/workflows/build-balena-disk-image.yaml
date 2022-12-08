@@ -79,7 +79,7 @@ jobs:
             --arg RELEASE_DATE "$(date -I)" \
             '{
               "name": ("Anthias (" + $BOARD + ")"),
-              "description": "The most popular open source digital signage project.",
+              "description": "Anthias, formerly known as Screenly OSE, is the world most popular open source digital signage project in the world.",
               "icon": "https://raw.githubusercontent.com/Screenly/Anthias/master/static/img/square-dark.svg",
               "extract_size": $IMAGE_SIZE,
               "extract_sha256": $IMAGE_SHA256,
