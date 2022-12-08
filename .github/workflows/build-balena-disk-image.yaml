@@ -45,18 +45,8 @@ jobs:
             preload \
               "$BALENA_IMAGE.img" \
               --fleet screenly_ose/screenly-ose-${{ matrix.board }} \
+              --splash-image ansible/roles/splashscreen/files/splashscreen.png \
               --commit latest
-          balena_cli_version: 13.7.1
-
-      - name: balena CLI Action - set splashscreen
-        uses: balena-labs-research/community-cli-action@1.0.0
-        with:
-          balena_token: ${{secrets.BALENA_TOKEN}}
-          balena_cli_commands: |
-            preload \
-              "$BALENA_IMAGE.img" \
-              --fleet screenly_ose/screenly-ose-${{ matrix.board }} \
-              --splash-image ansible/roles/splashscreen/files/splashscreen.png
           balena_cli_version: 13.7.1
 
       - name: balena CLI Action - configure
