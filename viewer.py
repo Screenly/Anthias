@@ -54,7 +54,13 @@ browser = None
 loop_is_stopped = False
 browser_bus = None
 r = connect_to_redis()
-media_player = OMXMediaPlayer()
+
+try:
+    media_player = OMXMediaPlayer()
+    # @TODO: Remove the line below once VLC playback issue is fixed.
+    # media_player = VLCMediaPlayer() if 'Raspberry Pi 4' in get_raspberry_model() else OMXMediaPlayer()
+except sh.ErrorReturnCode_1:
+    media_player = OMXMediaPlayer()
 
 HOME = None
 db_conn = None
