@@ -8,6 +8,7 @@ on:
     paths:
       - '**'
       - '!webview/**'
+      - '!website/**'
       - '!.github/workflows/build-webview.yaml'
       - '!.github/workflows/build-balena-disk-image.yaml'
       - '!README.md'

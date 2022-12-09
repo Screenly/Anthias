@@ -1,0 +1,76 @@
+name: Deploy Anthias.screenly.io
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/deploy-website.yaml'
+      - 'website/**'
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  # Build job
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v2
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - run: pip install requests==2.28.1
+
+      - name: Build website
+        run: |
+          cd website
+          mkdir -p _site
+
+          # Build Raspberry Pi Imager JSON
+          python build-pi-imager-json.py > _site/rpi-imager.json
+
+          # Make sure it's valid
+          cat _site/rpi-imager.json | jq
+
+          # Copy in static files. This is to be migrated to Hugo later.
+          cp -rf assets _site/
+          cp index.html _site/
+
+          # Show all files for debug purposes
+          find _site
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: website/_site
+
+  # Deployment job
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
