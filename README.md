@@ -49,7 +49,7 @@ While you can deploy to your own Balena fleet, the easiest way to deploy using [
 ## Quick links
 
  * [Forum](https://forums.screenly.io/c/screenly-ose)
- * [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](https://github.com/Screenly/Anthias/tree/gh-pages))
+ * [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](https://github.com/Screenly/Anthias/tree/master/website))
  * [Live Demo](https://ose.demo.screenlyapp.com/)
  * [QA Checklist](https://github.com/Screenly/Anthias/blob/master/docs/qa-checklist.md)
  * [API Docs](https://ose.demo.screenlyapp.com/api/docs/)
