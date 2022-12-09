@@ -46,7 +46,7 @@ jobs:
           mkdir -p _site
 
           # Build Raspberry Pi Imager JSON
-          python build-pi-imager-json.py > _site/rpi-imager.json
+          python bin/build-pi-imager-json.py > _site/rpi-imager.json
 
           # Make sure it's valid
           cat _site/rpi-imager.json | jq
