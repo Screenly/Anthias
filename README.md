@@ -16,15 +16,9 @@ Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.co
 
 ## Disk images
 
-The quickest way to get started is to use one of our pre-built disk images (powered by [Balena Hub](https://hub.balena.io/)).
-
-* [Raspberry Pi 1](https://github.com/Screenly/Anthias/releases/download/v0.18.4/2022-11-04-raspberry-pi.zip)
-* [Raspberry Pi 2](https://github.com/Screenly/Anthias/releases/download/v0.18.4/2022-11-04-raspberry-pi2.zip)
-* [Raspberry Pi 3](https://github.com/Screenly/Anthias/releases/download/v0.18.4/2022-11-04-raspberrypi3.zip)
-* [Raspberry Pi 4](https://github.com/Screenly/Anthias/releases/download/v0.18.4/2022-11-04-raspberrypi4-64.zip)
+The quickest way to get started is to use one of our pre-built disk images (powered by [Balena Hub](https://hub.balena.io/)) from [here](https://github.com/Screenly/Anthias/releases/latest/).
 
 Do however note that that we are still in the process of knocking out some bugs. You can track the known issues [here](https://github.com/Screenly/Anthias/projects/8).
-
 
 ## Installing on Raspbian/Raspberry Pi OS
 
