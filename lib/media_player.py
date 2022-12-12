@@ -73,7 +73,7 @@ class OMXMediaPlayer(MediaPlayer):
     def set_asset(self, uri, duration):
         settings.load()
 
-        if self._arch in ('armv6l', 'armv7l'):
+        if self._arch in ('armv6l', 'armv7l', 'aarch64'):
             self._player_args = ['omxplayer', uri]
             self._player_kwargs = {'o': settings['audio_output'], 'layer': 1, '_bg': True, '_ok_code': [0, 124, 143]}
         else:
