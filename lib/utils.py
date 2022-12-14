@@ -69,20 +69,24 @@ def validate_url(string):
     checker = urlparse(string)
     return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
 
+
 def get_balena_supervisor_address():
     return os.getenv('BALENA_SUPERVISOR_ADDRESS')
 
+
 def get_balena_supervisor_api_key():
     return os.getenv('BALENA_SUPERVISOR_API_KEY')
+
 
 def get_balena_supervisor_request_headers():
     return {'Content-Type': 'application/json'}
 
 
+# @TODO: Rename method to something more specific.
 def get_supervisor_api_response():
     return requests.get('{}/v1/device?apikey={}'.format(
-        get_balena_supervisor_request_headers(),
         get_balena_supervisor_address(),
+        get_balena_supervisor_api_key(),
     ), headers=get_balena_supervisor_request_headers())
 
 
