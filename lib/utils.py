@@ -72,7 +72,7 @@ def validate_url(string):
 
 def get_balena_supervisor_api_response(method, action):
     return getattr(requests, method)('{}/v1/{}?apikey={}'.format(
-        os.getenv('BALENA_SUPERVISOR_ADDRESS')
+        os.getenv('BALENA_SUPERVISOR_ADDRESS'),
         action,
         os.getenv('BALENA_SUPERVISOR_API_KEY'),
     ), headers={'Content-Type': 'application/json'})
