@@ -69,16 +69,35 @@ def validate_url(string):
     checker = urlparse(string)
     return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
 
+def get_balena_supervisor_address():
+    return os.getenv('BALENA_SUPERVISOR_ADDRESS')
+
+def get_balena_supervisor_api_key():
+    return os.getenv('BALENA_SUPERVISOR_API_KEY')
+
+def get_balena_supervisor_request_headers():
+    return {'Content-Type': 'application/json'}
+
 
 def get_supervisor_api_response():
-    balena_supervisor_address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
-    balena_supervisor_api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
-    headers = {'Content-Type': 'application/json'}
-
     return requests.get('{}/v1/device?apikey={}'.format(
-        balena_supervisor_address,
-        balena_supervisor_api_key
-    ), headers=headers)
+        get_balena_supervisor_request_headers(),
+        get_balena_supervisor_address(),
+    ), headers=get_balena_supervisor_request_headers())
+
+
+def shutdown_via_balena_supervisor():
+    return requests.post('{}/v1/shutdown?apikey={}'.format(
+        get_balena_supervisor_address(),
+        get_balena_supervisor_api_key(),
+    ), headers=get_balena_supervisor_request_headers())
+
+
+def reboot_via_balena_supervisor():
+    return requests.post('{}/v1/reboot?apikey={}'.format(
+        get_balena_supervisor_address(),
+        get_balena_supervisor_api_key(),
+    ), headers=get_balena_supervisor_request_headers())
 
 
 def get_node_ip():

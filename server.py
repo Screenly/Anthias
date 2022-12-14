@@ -50,7 +50,7 @@ from lib.utils import generate_perfect_paper_password, is_docker
 from lib.utils import get_active_connections, remove_connection
 from lib.utils import get_node_ip, get_node_mac_address
 from lib.utils import get_video_duration
-from lib.utils import is_balena_app, is_demo_node
+from lib.utils import is_balena_app, is_demo_node, shutdown_via_balena_supervisor, reboot_via_balena_supervisor
 from lib.utils import string_to_bool
 from lib.utils import connect_to_redis
 from lib.utils import url_fails
@@ -106,7 +106,10 @@ def reboot_screenly():
     """
     Background task to reboot Screenly-OSE.
     """
-    r.publish('hostcmd', 'reboot')
+    if is_balena_app():
+        reboot_via_balena_supervisor()
+    else:
+        r.publish('hostcmd', 'reboot')
 
 
 @celery.task
@@ -114,7 +117,11 @@ def shutdown_screenly():
     """
     Background task to shutdown Screenly-OSE.
     """
-    r.publish('hostcmd', 'shutdown')
+    if is_balena_app():
+        # @TODO: Make use of `retry`.
+        shutdown_via_balena_supervisor()
+    else:
+        r.publish('hostcmd', 'shutdown')
 
 
 @celery.task

@@ -68,6 +68,8 @@ services:
     restart: always
     volumes:
       - resin-data:/data
+    labels:
+      io.balena.features.supervisor-api: '1'
 
   redis:
     image: screenly/srly-ose-redis
