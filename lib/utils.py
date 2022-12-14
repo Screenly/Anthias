@@ -83,7 +83,7 @@ def get_balena_supervisor_request_headers():
 
 
 # @TODO: Rename method to something more specific.
-def get_supervisor_api_response():
+def get_balena_device_info():
     return requests.get('{}/v1/device?apikey={}'.format(
         get_balena_supervisor_address(),
         get_balena_supervisor_api_key(),
@@ -113,7 +113,7 @@ def get_node_ip():
     """
 
     if is_balena_app():
-        response = get_supervisor_api_response()
+        response = get_balena_device_info()
 
         if response.ok:
             return response.json()['ip_address']
