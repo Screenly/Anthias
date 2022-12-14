@@ -126,10 +126,10 @@ fi
 if [ -z "${REPOSITORY}" ]; then
   if [ "$WEB_UPGRADE" = false ]; then
     set -x
-    REPOSITORY=${1:-https://github.com/screenly/screenly-ose.git}
+    REPOSITORY=${1:-https://github.com/screenly/anthias.git}
   else
     set -e
-    REPOSITORY=https://github.com/screenly/screenly-ose.git
+    REPOSITORY=https://github.com/screenly/anthias.git
   fi
 fi
 
@@ -166,14 +166,14 @@ fi
 
 # Install Ansible from requirements file.
 if [ "$BRANCH" = "master" ]; then
-    ANSIBLE_VERSION=$(curl -s https://raw.githubusercontent.com/Screenly/screenly-ose/$BRANCH/requirements/requirements.host.txt | grep ansible)
+    ANSIBLE_VERSION=$(curl -s https://raw.githubusercontent.com/screenly/anthias/$BRANCH/requirements/requirements.host.txt | grep ansible)
 else
     ANSIBLE_VERSION=ansible==2.8.8
 fi
 
 # @TODO
 # Remove me later. Cryptography 38.0.3 won't build at the moment.
-# See https://github.com/Screenly/screenly-ose/issues/1654
+# See https://github.com/screenly/anthias/issues/1654
 sudo pip install cryptography==38.0.2
 
 sudo pip install "$ANSIBLE_VERSION"

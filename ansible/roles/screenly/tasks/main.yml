@@ -90,7 +90,7 @@
     line: 'MountFlags=shared'
 
 - name: Copy screenly systemd units
-  ansible.builtin.copy:
+  ansible.builtin.template:
     src: "{{ item }}"
     dest: "/etc/systemd/system/{{ item }}"
     mode: 0644
