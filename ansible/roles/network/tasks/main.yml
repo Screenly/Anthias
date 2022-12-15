@@ -8,6 +8,15 @@
   ansible.builtin.set_fact:
     screenly_network_manager_exist: "{{ screenly_network_manager.stat.exists }}"
 
+- name: Copy network systemd units
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: 0644
+    owner: root
+    group: root
+  with_items: "{{ screenly_systemd_units }}"
+
 - name: Disable network manager
   ansible.builtin.systemd:
     state: stopped
