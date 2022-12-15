@@ -70,15 +70,24 @@ def validate_url(string):
     return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
 
 
-def get_supervisor_api_response():
-    balena_supervisor_address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
-    balena_supervisor_api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
-    headers = {'Content-Type': 'application/json'}
+def get_balena_supervisor_api_response(method, action):
+    return getattr(requests, method)('{}/v1/{}?apikey={}'.format(
+        os.getenv('BALENA_SUPERVISOR_ADDRESS'),
+        action,
+        os.getenv('BALENA_SUPERVISOR_API_KEY'),
+    ), headers={'Content-Type': 'application/json'})
 
-    return requests.get('{}/v1/device?apikey={}'.format(
-        balena_supervisor_address,
-        balena_supervisor_api_key
-    ), headers=headers)
+
+def get_balena_device_info():
+    return get_balena_supervisor_api_response(method='get', action='device')
+
+
+def shutdown_via_balena_supervisor():
+    return get_balena_supervisor_api_response(method='post', action='shutdown')
+
+
+def reboot_via_balena_supervisor():
+    return get_balena_supervisor_api_response(method='post', action='reboot')
 
 
 def get_node_ip():
@@ -90,7 +99,7 @@ def get_node_ip():
     """
 
     if is_balena_app():
-        response = get_supervisor_api_response()
+        response = get_balena_device_info()
 
         if response.ok:
             return response.json()['ip_address']

@@ -30,7 +30,7 @@ from lib.utils import (
     get_node_ip,
     string_to_bool,
     connect_to_redis,
-    get_supervisor_api_response,
+    get_balena_device_info,
 )
 from retry.api import retry_call
 from settings import settings, LISTEN, PORT, ZmqConsumer
@@ -456,7 +456,7 @@ def main():
         url = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
 
         if is_balena_app():
-            retry_call(get_supervisor_api_response, tries=5, delay=1)
+            retry_call(get_balena_device_info, tries=5, delay=1)
 
         view_webpage(url)
         sleep(SPLASH_DELAY)
