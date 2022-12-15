@@ -16,7 +16,7 @@ Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.co
 
 ## Disk images
 
-The quickest way to get started is to use one of our pre-built disk images (powered by [Balena Hub](https://hub.balena.io/)) from [here](https://github.com/Screenly/Anthias/releases/latest/).
+The quickest way to get started is to use [Raspberry Pi Imager](https://www.screenly.io/blog/2022/12/13/anthias-and-screenly-now-in-rpi-imager/), where you can find Anthias under `Other specific-purpose OS`. Alternatively, you can find our pre-built disk images (powered by [Balena Hub](https://hub.balena.io/)) [here](https://github.com/Screenly/Anthias/releases/latest/).
 
 Do however note that that we are still in the process of knocking out some bugs. You can track the known issues [here](https://github.com/Screenly/Anthias/projects/8).
 
