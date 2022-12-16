@@ -1,5 +1,15 @@
 version: "2"
 services:
+  wifi-connect:
+    build: ./wifi-connect
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+    environment:
+      DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/host/run/dbus/system_bus_socket"
+    labels:
+      io.balena.features.dbus: '1'
+
   srly-ose-server:
     image: screenly/srly-ose-server
     build:
