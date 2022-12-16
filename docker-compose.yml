@@ -1,5 +1,6 @@
 version: "2"
 services:
+  # @TODO: Move this to docker-compose.balena.yml after debug.
   wifi-connect:
     build: ./wifi-connect
     network_mode: "host"
