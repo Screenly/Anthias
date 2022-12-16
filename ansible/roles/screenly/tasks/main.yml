@@ -96,7 +96,7 @@
     mode: 0644
     owner: root
     group: root
-  with_items: "{{ network_systemd_units }}"
+  with_items: "{{ screenly_systemd_units }}"
 
 - name: Remove plymouth-quit-wait.service
   ansible.builtin.file:
