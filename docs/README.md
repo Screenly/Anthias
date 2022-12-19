@@ -40,4 +40,20 @@ Its a SQLite Database and can be modified with the sqlite3 CLI. The schema is re
 
 # Wi-Fi Setup
 
-On first boot your OSE player will check if there is any active network connection (such as Ethernet with DHCP). If there isn’t one, then the Pi will create a local wifi network and display the SSID and PW on the screen. Using your phone or computer connect to this network and navigate to the URL displayed on the screen. (Ex: Screenly.io/wifi)  This will take you to the network setup page for your OSE player. If you are not connected to the network that the player is generating then you will be redirected here.
+~~On first boot your OSE player will check if there is any active network connection (such as Ethernet with DHCP). If there isn’t one, then the Pi will create a local wifi network and display the SSID and PW on the screen. Using your phone or computer connect to this network and navigate to the URL displayed on the screen. (Ex: Screenly.io/wifi)  This will take you to the network setup page for your OSE player. If you are not connected to the network that the player is generating then you will be redirected here.~~
+
+At the moment, Wi-Fi setup is not working on instances running Raspberry Pi OS Lite, but is supported on those running **_balenaOS_**.
+See the steps below on how to setup the Wi-Fi on your device running **_balenaOS_**:
+
+1. Turn on your Raspberry Pi device. Make sure that the device is connected via the Ethernet.
+2. Disconnect the Ethernet cable from your Raspberry Pi.
+3. Refresh the web UI page. You shouldn't be able to access the page anymore.
+4. Go to your phone or computer and connect to the network whose SSID is "Anthias Wi-Fi Connect".
+5. Determine your Raspberry Pi's gateway IP address by checking out the network settings.
+6. Once you determined the gateway IP address, go to your browser and go to the captive portal using the
+gateway IP address, plus the port `8000` (e.g., http://192.168.42.1:8000).
+7. On the captive portal, select a network to connect to by selecting an item fromt the **_SSID_** drop-down.
+8. Input the Wi-Fi password.
+9. Once you're all set, click **_Connect_**. Your phone/computer will be disconnected from the access point
+(i.e., the Raspberry Pi).
+10. Your device will soon be online. Otherwise, the access point will be back up.
