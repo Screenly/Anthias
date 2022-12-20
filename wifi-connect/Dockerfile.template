@@ -1,1 +1,22 @@
-FROM bh.cr/balenalabs/wifi-connect-%%BALENA_ARCH%%
+FROM balenalib/%%BALENA_ARCH%%-python as builder
+
+RUN install_packages dnsmasq wireless-tools git rsync binutils busybox-static wget
+
+WORKDIR /usr/src/app
+
+RUN curl https://api.github.com/repos/balena-io/wifi-connect/releases/latest -sL \
+    | grep -hoP 'browser_download_url": "\K.*%%BALENA_ARCH%%\.tar\.gz' \
+    | xargs -n1 curl -Ls \
+    | tar -xvz -C /usr/src/app/
+
+RUN pip install git+https://github.com/larsks/dockerize
+
+RUN mkdir output
+
+RUN dockerize -n --verbose -o /usr/src/app/output/ -u dnsmasq -a /var/run /var/run  --filetools `which busybox` `which balena-idle` `which dnsmasq` /usr/src/app/wifi-connect
+
+RUN touch /var/lib/misc/dnsmasq.leases
+
+COPY start.sh ./
+
+CMD ["bash", "start.sh"]
