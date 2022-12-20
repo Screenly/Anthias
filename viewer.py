@@ -116,6 +116,19 @@ def send_current_asset_id_to_server():
     consumer.send({'current_asset_id': scheduler.current_asset_id})
 
 
+def setup_wifi():
+    if not is_balena_app():
+        return
+
+    uri = 'http://{0}/hotspot'.format(LISTEN)
+    sleep_duration = 60
+
+    stop_loop()
+    view_webpage(uri)
+    sleep(sleep_duration)
+    play_loop()
+
+
 commands = {
     'next': lambda _: skip_asset(),
     'previous': lambda _: skip_asset(back=True),
@@ -123,6 +136,7 @@ commands = {
     'reload': lambda _: load_settings(),
     'stop': lambda _: stop_loop(),
     'play': lambda _: play_loop(),
+    'wifi': lambda _: setup_wifi(),
     'unknown': lambda _: command_not_found(),
     'current_asset_id': lambda _: send_current_asset_id_to_server()
 }
