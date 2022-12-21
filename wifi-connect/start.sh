@@ -25,6 +25,9 @@ while [[ true ]]; do
             echo "Starting up Wifi-Connect."
             echo "Connect to the Access Point and configure the SSID and Passphrase for the network to connect to."
         fi
+
+        python trigger_wifi_setup.py
+
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket /usr/src/app/wifi-connect -u /usr/src/app/ui
     fi
 

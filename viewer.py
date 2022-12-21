@@ -143,14 +143,17 @@ commands = {
 
 
 class ZmqSubscriber(Thread):
-    def __init__(self):
+    def __init__(self, publisher_url, topic='viewer'):
         Thread.__init__(self)
         self.context = zmq.Context()
+        self.publisher_url = publisher_url
+        self.topic = topic
 
     def run(self):
         socket = self.context.socket(zmq.SUB)
-        socket.connect('tcp://srly-ose-server:10001')
-        socket.setsockopt(zmq.SUBSCRIBE, 'viewer')
+        socket.connect(self.publisher_url)
+        socket.setsockopt(zmq.SUBSCRIBE, self.topic)
+
         while True:
             msg = socket.recv()
             topic, message = msg.split()
@@ -455,9 +458,13 @@ def main():
     global db_conn, scheduler
     setup()
 
-    subscriber = ZmqSubscriber()
-    subscriber.daemon = True
-    subscriber.start()
+    subscriber_1 = ZmqSubscriber('tcp://srly-ose-server:10001')
+    subscriber_1.daemon = True
+    subscriber_1.start()
+
+    subscriber_2 = ZmqSubscriber('tcp://host.docker.internal:10001')
+    subscriber_2.daemon = True
+    subscriber_2.start()
 
     scheduler = Scheduler()
 

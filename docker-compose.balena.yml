@@ -37,6 +37,8 @@ services:
       - PORT=80
       - NOREFRESH=1
       - LISTEN=srly-ose-nginx
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     privileged: true
     restart: always
     volumes:
