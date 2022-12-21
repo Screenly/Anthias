@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import json
 import logging
 import pydbus
 import re
@@ -116,12 +117,14 @@ def send_current_asset_id_to_server():
     consumer.send({'current_asset_id': scheduler.current_asset_id})
 
 
-def setup_wifi():
+def setup_wifi(data):
     if not is_balena_app():
         return
 
     uri = 'http://{0}/hotspot'.format(LISTEN)
     sleep_duration = 60
+
+    decoded = json.loads(data)
 
     stop_loop()
     view_webpage(uri)
@@ -136,7 +139,7 @@ commands = {
     'reload': lambda _: load_settings(),
     'stop': lambda _: stop_loop(),
     'play': lambda _: play_loop(),
-    'wifi': lambda _: setup_wifi(),
+    'setup-wifi': lambda data: setup_wifi(data),
     'unknown': lambda _: command_not_found(),
     'current_asset_id': lambda _: send_current_asset_id_to_server()
 }
@@ -156,10 +159,10 @@ class ZmqSubscriber(Thread):
 
         while True:
             msg = socket.recv()
-            topic, message = msg.split()
+            topic, message = msg.split(' ', 1)
 
             # If the command consists of 2 parts, then the first is the function, the second is the argument
-            parts = message.split('&')
+            parts = message.split('&', 1)
             command = parts[0]
             parameter = parts[1] if len(parts) > 1 else None
 
@@ -462,9 +465,10 @@ def main():
     subscriber_1.daemon = True
     subscriber_1.start()
 
-    subscriber_2 = ZmqSubscriber('tcp://host.docker.internal:10001')
-    subscriber_2.daemon = True
-    subscriber_2.start()
+    if is_balena_app():
+        subscriber_2 = ZmqSubscriber('tcp://host.docker.internal:10001')
+        subscriber_2.daemon = True
+        subscriber_2.start()
 
     scheduler = Scheduler()
 

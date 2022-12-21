@@ -48,7 +48,7 @@ See the steps below on how to setup the Wi-Fi on your device running **_balenaOS
 1. Turn on your Raspberry Pi device. Make sure that the device is connected via the Ethernet.
 2. Disconnect the Ethernet cable from your Raspberry Pi.
 3. Refresh the web UI page. You shouldn't be able to access the page anymore.
-4. Go to your phone or computer and connect to the network whose SSID is "Anthias Wi-Fi Connect".
+4. Go to your phone or computer and connect to the network whose SSID is "Anthias WiFi Connect".
 5. Determine your Raspberry Pi's gateway IP address by checking out the network settings.
 6. Once you determined the gateway IP address, go to your browser and go to the captive portal using the
 gateway IP address, plus the port `8000` (e.g., http://192.168.42.1:8000).
