@@ -8,6 +8,7 @@ import re
 import string
 import sys
 from datetime import datetime, timedelta
+from jinja2 import Template
 from os import path, getenv, utime, system
 from random import shuffle
 from signal import signal, SIGALRM, SIGUSR1
@@ -125,6 +126,22 @@ def setup_wifi(data):
     sleep_duration = 60
 
     decoded = json.loads(data)
+
+    # @TODO: Refactor HTML file generation into a separate function.
+    base_dir = path.abspath(path.dirname(__file__))
+    template_path = path.join('templates/hotspot.html')
+
+    with open(template_path) as f:
+        template = Template(f.read())
+
+    context = {
+        'network': decoded.get('network', None),
+        'ssid_pswd': decoded.get('ssid_pswd', None),
+        'address': decoded.get('address', None),
+    }
+
+    with open('/tmp/hotspot.html', 'w') as out_file:
+        out_file.write(template.render(context=context))
 
     stop_loop()
     view_webpage(uri)
