@@ -140,7 +140,7 @@ def setup_wifi(data):
         'address': decoded.get('address', None),
     }
 
-    with open('/tmp/hotspot.html', 'w') as out_file:
+    with open('/data/hotspot/hotspot.html', 'w') as out_file:
         out_file.write(template.render(context=context))
 
     stop_loop()

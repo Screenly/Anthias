@@ -10,11 +10,14 @@ chown -f viewer /data/.screenly/latest_screenly_sha
 
 # Fixes caching in QTWebEngine
 mkdir -p /data/.local/share/ScreenlyWebview/QtWebEngine \
+    /data/hotspot \
     /data/.cache/ScreenlyWebview \
     /data/.pki
+
 chown -Rf viewer /data/.local/share/ScreenlyWebview
 chown -Rf viewer /data/.cache/ScreenlyWebview/
 chown -Rf viewer /data/.pki
+chown -Rf viewer /data/hotspot
 
 # Temporary workaround for watchdog
 touch /tmp/screenly.watchdog
