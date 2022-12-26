@@ -1,6 +1,6 @@
 version: "2"
 services:
-  wifi-connect:
+  srly-ose-wifi-connect:
     build: ./wifi-connect
     environment:
       PORTAL_LISTENING_PORT: 8000
