@@ -1,7 +1,8 @@
 version: "2"
 services:
   srly-ose-wifi-connect:
-    build: ./wifi-connect
+    image: screenly/srly-ose-wifi-connect:BOARD_TAG
+    build: ./wifi-connect # @TODO: Remove this.
     environment:
       PORTAL_LISTENING_PORT: 8000
       CHECK_CONN_FREQ: 10

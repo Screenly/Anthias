@@ -1,4 +1,6 @@
-FROM balenalib/%%BALENA_ARCH%%-python as builder
+# @TODO: Make use of build args or `sed` to customize the
+#     base image to be used.
+FROM balenalib/aarch64-python as builder
 
 RUN install_packages \
     dnsmasq \
@@ -12,15 +14,17 @@ RUN install_packages \
 
 WORKDIR /usr/src/app
 
+# @TODO: Make use of build args or `sed` to customize the
+#     name of the archive file to be extracted.
 RUN curl https://api.github.com/repos/balena-io/wifi-connect/releases/latest -sL \
-    | grep -hoP 'browser_download_url": "\K.*%%BALENA_ARCH%%\.tar\.gz' \
+    | grep -hoP 'browser_download_url": "\K.*aarch64\.tar\.gz' \
     | xargs -n1 curl -Ls \
     | tar -xvz -C /usr/src/app/
 
-COPY requirements.txt /tmp/requirements.txt
+COPY docker/wifi-connect/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-COPY trigger_wifi_setup.py .
+COPY docker/wifi-connect/trigger_wifi_setup.py ./
 
 # @TODO: Remove the commented statement below if not needed.
 # RUN pip install git+https://github.com/larsks/dockerize
@@ -34,6 +38,6 @@ RUN mkdir output
 
 RUN touch /var/lib/misc/dnsmasq.leases
 
-COPY start.sh ./
+COPY docker/wifi-connect/start.sh ./
 
 CMD ["bash", "start.sh"]
