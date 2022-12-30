@@ -61,6 +61,8 @@ jobs:
               docker/Dockerfile.base
             sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
               docker/Dockerfile.viewer
+            sed -i 's/\bBALENA_ARCH\b/rpi/' \
+              docker/Dockerfile.wifi-connect
             echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
 
           # Logic for Raspberry Pi 2
@@ -69,10 +71,14 @@ jobs:
               docker/Dockerfile.base
             sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
               docker/Dockerfile.viewer
+            sed -i 's/\bBALENA_ARCH\b/rpi/' \
+              docker/Dockerfile.wifi-connect
             echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
 
           # We use the same target for Pi 3 and Pi 4 for now.
           else
+            sed -i 's/\bBALENA_ARCH\b/armv7hf/' \
+              docker/Dockerfile.wifi-connect
             echo 'TARGET_PLATFORM=linux/arm/v7' >> $GITHUB_ENV
           fi
 
@@ -89,7 +95,7 @@ jobs:
 
       - name: Building containers
         run: |
-          for container in base server celery redis websocket nginx viewer; do
+          for container in base server celery redis websocket nginx viewer wifi-connect; do
             echo "Building container $container"
             docker buildx build \
               --platform "$TARGET_PLATFORM" \
