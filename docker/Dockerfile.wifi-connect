@@ -1,4 +1,4 @@
-FROM balenalib/BALENA_ARCH-python
+FROM balenalib/BALENA_ARCH-python:3.7-buster
 
 RUN install_packages \
     build-essential \
