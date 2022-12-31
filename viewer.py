@@ -50,6 +50,7 @@ INITIALIZED_FILE = '/.screenly/initialized'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 
 LOAD_SCREEN = 'http://{}:{}/{}'.format(LISTEN, PORT, 'static/img/loading.png')
+SPLASH_PAGE_URL = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
 
 current_browser_url = None
 browser = None
@@ -149,6 +150,17 @@ def setup_wifi(data):
     play_loop()
 
 
+def show_splash():
+    if not is_balena_app():
+        return
+
+    stop_loop()
+    retry_call(get_balena_device_info, tries=60, delay=1)
+    view_webpage(SPLASH_PAGE_URL)
+    sleep(SPLASH_DELAY)
+    play_loop()
+
+
 commands = {
     'next': lambda _: skip_asset(),
     'previous': lambda _: skip_asset(back=True),
@@ -156,7 +168,8 @@ commands = {
     'reload': lambda _: load_settings(),
     'stop': lambda _: stop_loop(),
     'play': lambda _: play_loop(),
-    'setup-wifi': lambda data: setup_wifi(data),
+    'setup_wifi': lambda data: setup_wifi(data),
+    'show_splash': lambda _: show_splash(),
     'unknown': lambda _: command_not_found(),
     'current_asset_id': lambda _: send_current_asset_id_to_server()
 }
@@ -495,12 +508,10 @@ def main():
         setup_hotspot()
 
     if settings['show_splash']:
-        url = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
-
         if is_balena_app():
             retry_call(get_balena_device_info, tries=5, delay=1)
 
-        view_webpage(url)
+        view_webpage(SPLASH_PAGE_URL)
         sleep(SPLASH_DELAY)
 
     # We don't want to show splash-page if there are active assets but all of them are not available

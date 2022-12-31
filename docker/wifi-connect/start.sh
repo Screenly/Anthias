@@ -1,5 +1,7 @@
 #!/bin/bash
 
+IS_CONNECTED=''
+
 if [[ ! -z $CHECK_CONN_FREQ ]]
     then
         freq=$CHECK_CONN_FREQ
@@ -19,6 +21,12 @@ while [[ true ]]; do
             echo "Your device is already connected to the internet."
             echo "Skipping setting up Wifi-Connect Access Point. Will check again in $freq seconds."
         fi
+
+        if [[ "$IS_CONNECTED" = 'false' ]]; then
+            python send_zmq_message.py --action='show_splash'
+        fi
+
+        IS_CONNECTED='true'
     else
         if [[ "$VERBOSE" != 'false' ]]; then
             echo "Your device is not connected to the internet."
@@ -26,7 +34,8 @@ while [[ true ]]; do
             echo "Connect to the Access Point and configure the SSID and Passphrase for the network to connect to."
         fi
 
-        python trigger_wifi_setup.py
+        IS_CONNECTED='false'
+        python send_zmq_message.py --action='setup_wifi'
 
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket /usr/src/app/wifi-connect -u /usr/src/app/ui
     fi

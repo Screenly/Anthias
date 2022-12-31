@@ -21,7 +21,7 @@ RUN curl https://api.github.com/repos/balena-io/wifi-connect/releases/latest -sL
 COPY docker/wifi-connect/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-COPY docker/wifi-connect/trigger_wifi_setup.py ./
+COPY docker/wifi-connect/send_zmq_message.py ./
 
 RUN mkdir output
 
