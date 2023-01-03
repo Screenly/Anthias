@@ -128,7 +128,6 @@ def setup_wifi(data):
 
     decoded = json.loads(data)
 
-    # @TODO: Refactor HTML file generation into a separate function.
     base_dir = path.abspath(path.dirname(__file__))
     template_path = path.join('templates/hotspot.html')
 
@@ -146,16 +145,20 @@ def setup_wifi(data):
 
     stop_loop()
     view_webpage(uri)
-    sleep(sleep_duration)
-    play_loop()
 
 
 def show_splash():
     if not is_balena_app():
         return
 
-    stop_loop()
-    retry_call(get_balena_device_info, tries=60, delay=1)
+    while True:
+        try:
+            ip_address = get_balena_device_info().json()['ip_address']
+            if ip_address != '':
+                break
+        except Exception:
+            break
+
     view_webpage(SPLASH_PAGE_URL)
     sleep(SPLASH_DELAY)
     play_loop()

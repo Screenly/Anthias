@@ -34,8 +34,11 @@ while [[ true ]]; do
             echo "Connect to the Access Point and configure the SSID and Passphrase for the network to connect to."
         fi
 
+        if [[ "$IS_CONNECTED" = 'true' ]] || [[ "$IS_CONNECTED" = '' ]]; then
+            python send_zmq_message.py --action='setup_wifi'
+        fi
+
         IS_CONNECTED='false'
-        python send_zmq_message.py --action='setup_wifi'
 
         DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket /usr/src/app/wifi-connect -u /usr/src/app/ui
     fi
