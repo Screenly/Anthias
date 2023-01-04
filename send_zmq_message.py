@@ -13,7 +13,7 @@ def get_portal_url():
     if port is None:
         return gateway
     else:
-        return f'{gateway}:{port}'
+        return '{}:{}'.format(gateway, port)
 
 def get_message(action):
     if action == 'setup_wifi':
@@ -22,9 +22,9 @@ def get_message(action):
             'ssid_pswd': getenv('PORTAL_PASSPHRASE', None),
             'address': get_portal_url(),
         }
-        return f'{action}&{json.dumps(data)}'
+        return '{}&{}'.format(action, json.dumps(data))
     elif action == 'show_splash':
-        return f'{action}'
+        return '{}'.format(action)
 
 
 def main():
@@ -42,7 +42,8 @@ def main():
     socket.bind('tcp://0.0.0.0:10001')
     sleep(1)
 
-    socket.send_string(f'viewer {get_message(args.action)}')
+    message = get_message(args.action)
+    socket.send_string('viewer {}'.format(message))
 
 
 if __name__ == '__main__':

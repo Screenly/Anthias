@@ -61,7 +61,7 @@ jobs:
               docker/Dockerfile.base
             sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
               docker/Dockerfile.viewer
-            sed -i 's/\bBALENA_ARCH\b/rpi/' \
+            sed -i 's/\barmv7hf\b/rpi/' \
               docker/Dockerfile.wifi-connect
             echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
 
@@ -71,7 +71,7 @@ jobs:
               docker/Dockerfile.base
             sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
               docker/Dockerfile.viewer
-            sed -i 's/\bBALENA_ARCH\b/rpi/' \
+            sed -i 's/\barmv7hf\b/rpi/' \
               docker/Dockerfile.wifi-connect
             echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
 

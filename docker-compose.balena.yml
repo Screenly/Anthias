@@ -6,7 +6,7 @@ services:
       PORTAL_LISTENING_PORT: 8000
       CHECK_CONN_FREQ: 10
       PORTAL_SSID: 'Anthias WiFi Connect'
-    restart: always
+    restart: "on-failure"
     network_mode: host
     privileged: true
     labels:

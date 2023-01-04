@@ -1,32 +1,44 @@
-FROM balenalib/BALENA_ARCH-python:3.7-buster
-
-RUN install_packages \
-    build-essential \
-    dnsmasq \
-    wireless-tools \
-    git \
-    rsync \
-    binutils \
-    busybox-static\
-    wget \
-    libzmq3-dev
+FROM screenly/srly-ose-base as builder
 
 WORKDIR /usr/src/app
 
 RUN curl https://api.github.com/repos/balena-io/wifi-connect/releases/latest -sL \
-    | grep -hoP 'browser_download_url": "\K.*BALENA_ARCH\.tar\.gz' \
+    | grep -hoP 'browser_download_url": "\K.*armv7hf\.tar\.gz' \
     | xargs -n1 curl -Ls \
     | tar -xvz -C /usr/src/app/
 
-COPY docker/wifi-connect/requirements.txt /tmp/requirements.txt
+FROM balenalib/raspberrypi3:buster
+
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+        build-essential \
+        dnsmasq \
+        wireless-tools \
+        git \
+        rsync \
+        binutils \
+        busybox-static \
+        wget \
+        libzmq3-dev \
+        python-dev \
+        python-pip \
+        python-setuptools && \
+    apt-get clean
+
+WORKDIR /usr/src/app
+
+COPY --from=builder /usr/src/app/ui /usr/src/app/ui
+COPY --from=builder /usr/src/app/wifi-connect /usr/src/app/wifi-connect
+
+COPY requirements/requirements.wifi-connect.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-COPY docker/wifi-connect/send_zmq_message.py ./
+COPY send_zmq_message.py ./
 
 RUN mkdir output
 
 RUN touch /var/lib/misc/dnsmasq.leases
 
-COPY docker/wifi-connect/start.sh ./
+COPY bin/start_wifi_connect.sh ./
 
-CMD ["bash", "start.sh"]
+CMD ["bash", "start_wifi_connect.sh"]
