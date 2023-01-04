@@ -14,10 +14,6 @@ RUN apt-get update && \
         build-essential \
         dnsmasq \
         wireless-tools \
-        git \
-        rsync \
-        binutils \
-        busybox-static \
         wget \
         libzmq3-dev \
         python-dev \
@@ -34,8 +30,6 @@ COPY requirements/requirements.wifi-connect.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY send_zmq_message.py ./
-
-RUN mkdir output
 
 RUN touch /var/lib/misc/dnsmasq.leases
 
