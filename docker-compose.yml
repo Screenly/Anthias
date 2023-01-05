@@ -1,5 +1,23 @@
 version: "2"
 services:
+  srly-ose-wifi-connect:
+    image: screenly/srly-ose-wifi-connect
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.wifi-connect
+    environment:
+      PORTAL_LISTENING_PORT: 8000
+      CHECK_CONN_FREQ: 10
+      PORTAL_SSID: 'Anthias WiFi Connect'
+      DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=/run/dbus/system_bus_socket'
+    restart: "on-failure"
+    network_mode: host
+    privileged: true
+    volumes:
+      - type: bind
+        source: /run/dbus/system_bus_socket
+        target: /run/dbus/system_bus_socket
+
   srly-ose-server:
     image: screenly/srly-ose-server
     build:
@@ -30,6 +48,8 @@ services:
       - PORT=80
       - NOREFRESH=1
       - LISTEN=srly-ose-nginx
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     privileged: true
     restart: always
     volumes:

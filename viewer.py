@@ -120,9 +120,6 @@ def send_current_asset_id_to_server():
 
 
 def setup_wifi(data):
-    if not is_balena_app():
-        return
-
     uri = 'http://{0}/hotspot'.format(LISTEN)
     sleep_duration = 60
 
@@ -148,9 +145,6 @@ def setup_wifi(data):
 
 
 def show_splash():
-    if not is_balena_app():
-        return
-
     while True:
         try:
             ip_address = get_balena_device_info().json()['ip_address']
@@ -498,10 +492,9 @@ def main():
     subscriber_1.daemon = True
     subscriber_1.start()
 
-    if is_balena_app():
-        subscriber_2 = ZmqSubscriber('tcp://host.docker.internal:10001')
-        subscriber_2.daemon = True
-        subscriber_2.start()
+    subscriber_2 = ZmqSubscriber('tcp://host.docker.internal:10001')
+    subscriber_2.daemon = True
+    subscriber_2.start()
 
     scheduler = Scheduler()
 

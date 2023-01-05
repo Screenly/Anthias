@@ -40,7 +40,7 @@ while [[ true ]]; do
 
         IS_CONNECTED='false'
 
-        DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket /usr/src/app/wifi-connect -u /usr/src/app/ui
+        /usr/src/app/wifi-connect -u /usr/src/app/ui
     fi
 
     sleep $freq
