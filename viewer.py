@@ -121,12 +121,10 @@ def send_current_asset_id_to_server():
 
 def setup_wifi(data):
     uri = 'http://{0}/hotspot'.format(LISTEN)
-    sleep_duration = 60
-
     decoded = json.loads(data)
 
     base_dir = path.abspath(path.dirname(__file__))
-    template_path = path.join('templates/hotspot.html')
+    template_path = path.join(base_dir, 'templates/hotspot.html')
 
     with open(template_path) as f:
         template = Template(f.read())
