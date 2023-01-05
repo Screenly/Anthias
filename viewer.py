@@ -145,13 +145,14 @@ def setup_wifi(data):
 
 
 def show_splash():
-    while True:
-        try:
-            ip_address = get_balena_device_info().json()['ip_address']
-            if ip_address != '':
+    if is_balena_app():
+        while True:
+            try:
+                ip_address = get_balena_device_info().json()['ip_address']
+                if ip_address != '':
+                    break
+            except Exception:
                 break
-        except Exception:
-            break
 
     view_webpage(SPLASH_PAGE_URL)
     sleep(SPLASH_DELAY)
