@@ -104,8 +104,14 @@ def get_node_ip():
         if response.ok:
             return response.json()['ip_address']
         return 'Unknown'
-    elif os.getenv('MY_IP'):
-        return os.getenv('MY_IP')
+    else:
+        r = connect_to_redis()
+        ip_addresses = r.get('ip_addresses')
+
+        if ip_addresses:
+            return ' '.join(json.loads(ip_addresses))
+        elif os.getenv('MY_IP'):
+            return os.getenv('MY_IP')
 
     return 'Unable to retrieve IP.'
 

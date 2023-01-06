@@ -2,6 +2,7 @@ import json
 import zmq
 
 from argparse import ArgumentParser
+from netifaces import interfaces, ifaddresses, AF_INET
 from os import getenv
 from time import sleep
 
@@ -24,7 +25,18 @@ def get_message(action):
         }
         return '{}&{}'.format(action, json.dumps(data))
     elif action == 'show_splash':
-        return '{}'.format(action)
+        ip_addresses = get_ip_addresses()
+        return '{}&{}'.format(action, json.dumps(ip_addresses))
+
+
+def get_ip_addresses():
+    return [
+        i['addr']
+        for interface_name in interfaces()
+        for i in ifaddresses(interface_name).setdefault(AF_INET, [{'addr': None}])
+        if interface_name in ['eth0', 'wlan0']
+        if i['addr'] is not None
+    ]
 
 
 def main():

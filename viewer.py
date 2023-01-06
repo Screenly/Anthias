@@ -142,7 +142,7 @@ def setup_wifi(data):
     view_webpage(uri)
 
 
-def show_splash():
+def show_splash(data):
     if is_balena_app():
         while True:
             try:
@@ -151,6 +151,8 @@ def show_splash():
                     break
             except Exception:
                 break
+    else:
+        r.set('ip_addresses', data)
 
     view_webpage(SPLASH_PAGE_URL)
     sleep(SPLASH_DELAY)
@@ -165,7 +167,7 @@ commands = {
     'stop': lambda _: stop_loop(),
     'play': lambda _: play_loop(),
     'setup_wifi': lambda data: setup_wifi(data),
-    'show_splash': lambda _: show_splash(),
+    'show_splash': lambda data: show_splash(data),
     'unknown': lambda _: command_not_found(),
     'current_asset_id': lambda _: send_current_asset_id_to_server()
 }
