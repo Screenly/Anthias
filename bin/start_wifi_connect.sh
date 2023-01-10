@@ -12,14 +12,14 @@ fi
 
 sleep 5
 
-while [[ true ]]; do
+while [[ "$IS_CONNECTED" != 'true' ]]; do
     if [[ "$VERBOSE" != 'false' ]]; then echo "Checking internet connectivity ..."; fi
     wget --spider --no-check-certificate 1.1.1.1 > /dev/null 2>&1
 
     if [ $? -eq 0 ]; then
         if [[ "$VERBOSE" != 'false' ]]; then
             echo "Your device is already connected to the internet."
-            echo "Skipping setting up Wifi-Connect Access Point. Will check again in $freq seconds."
+            echo "Skipping setting up Wifi-Connect Access Point."
         fi
 
         if [[ "$IS_CONNECTED" = 'false' ]]; then
@@ -27,6 +27,7 @@ while [[ true ]]; do
         fi
 
         IS_CONNECTED='true'
+        break
     else
         if [[ "$VERBOSE" != 'false' ]]; then
             echo "Your device is not connected to the internet."
@@ -44,5 +45,6 @@ while [[ true ]]; do
     fi
 
     sleep $freq
-
 done
+
+/usr/bin/balena-idle

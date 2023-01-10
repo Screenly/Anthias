@@ -77,8 +77,6 @@ jobs:
 
           # We use the same target for Pi 3 and Pi 4 for now.
           else
-            sed -i 's/\bBALENA_ARCH\b/armv7hf/' \
-              docker/Dockerfile.wifi-connect
             echo 'TARGET_PLATFORM=linux/arm/v7' >> $GITHUB_ENV
           fi
 

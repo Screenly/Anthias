@@ -7,18 +7,13 @@ RUN curl https://api.github.com/repos/balena-io/wifi-connect/releases/latest -sL
     | xargs -n1 curl -Ls \
     | tar -xvz -C /usr/src/app/
 
-FROM balenalib/raspberrypi3:buster
+FROM screenly/srly-ose-base
 
 RUN apt-get update && \
     apt-get -y install --no-install-recommends \
-        build-essential \
         dnsmasq \
         wireless-tools \
-        wget \
-        libzmq3-dev \
-        python-dev \
-        python-pip \
-        python-setuptools && \
+        wget && \
     apt-get clean
 
 WORKDIR /usr/src/app
