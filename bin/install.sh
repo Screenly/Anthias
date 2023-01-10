@@ -33,7 +33,7 @@ if [ "$WEB_UPGRADE" = false ]; then
 
   # Make sure the command is launched interactive.
   if ! [ -t 0  ]; then
-    echo -e "Detected old installation command. Please use:\n$ bash <(curl -sL https://www.screenlyapp.com/install-ose.sh)"
+    echo -e "Detected old installation command. Please use:\n$ bash <(curl -sL https://install-anthias.srly.io)"
     exit 1
   fi
 
@@ -45,18 +45,20 @@ if [ "$WEB_UPGRADE" = false ]; then
   tput bold
 
   cat << EOF
-       _____                           __         ____  _____ ______
-      / ___/_____________  ___  ____  / /_  __   / __ \/ ___// ____/
-      \__ \/ ___/ ___/ _ \/ _ \/ __ \/ / / / /  / / / /\__ \/ __/
-     ___/ / /__/ /  /  __/  __/ / / / / /_/ /  / /_/ /___/ / /___
-    /____/\___/_/   \___/\___/_/ /_/_/\__, /   \____//____/_____/
-                                     /____/
+       d8888            888     888       d8b                   
+      d88888            888     888       Y8P                   
+     d88P888            888     888                            
+    d88P 888  88888b.   888888  88888b.   888   8888b.   .d8888b  
+   d88P  888  888 "88b  888     888 "88b  888      "88b  88K      
+  d88P   888  888  888  888     888  888  888  .d888888  "Y8888b. 
+ d8888888888  888  888  Y88b.   888  888  888  888  888       X88 
+d88P     888  888  888   Y888   888  888  888  "Y888888   88888P'
 EOF
 
   # Reset color
   tput sgr 0
 
-  echo -e "Screenly OSE requires a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\n"
+  echo -e "Anthias requires a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\n"
   read -p "Do you still want to continue? (y/N)" -n 1 -r -s INSTALL
   if [ "$INSTALL" != 'y' ]; then
     echo
@@ -84,7 +86,7 @@ EOF
 export DOCKER_TAG="latest"
 export BRANCH="master"
 
-  echo && read -p "Do you want Screenly OSE to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
+  echo && read -p "Do you want Anthias to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
 
   echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
   if [ "$UPGRADE" != 'y' ]; then
@@ -236,7 +238,7 @@ if [ ! -f /etc/sudoers.d/010_${USER}-nopasswd ]; then
   sudo chmod 0440 /etc/sudoers.d/010_${USER}-nopasswd
 fi
 
-echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
+echo -e "Anthias version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
 
 if [ "$WEB_UPGRADE" = false ]; then
   set +x
