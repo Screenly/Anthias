@@ -1,25 +1,21 @@
-FROM screenly/srly-ose-base as builder
-
-WORKDIR /usr/src/app
-
-RUN curl https://api.github.com/repos/balena-io/wifi-connect/releases/latest -sL \
-    | grep -hoP 'browser_download_url": "\K.*armv7hf\.tar\.gz' \
-    | xargs -n1 curl -Ls \
-    | tar -xvz -C /usr/src/app/
-
 FROM screenly/srly-ose-base
 
 RUN apt-get update && \
     apt-get -y install --no-install-recommends \
         dnsmasq \
-        wireless-tools \
-        wget && \
+        jq \
+        wget \
+        wireless-tools && \
     apt-get clean
 
 WORKDIR /usr/src/app
 
-COPY --from=builder /usr/src/app/ui /usr/src/app/ui
-COPY --from=builder /usr/src/app/wifi-connect /usr/src/app/wifi-connect
+RUN wc_download_url='https://api.github.com/repos/balena-os/wifi-connect/releases/45509064' && \
+    jq_filter='.assets[] | select (.name|test("linux-armv7hf")) | .browser_download_url' \
+    archive_url=$(curl -sL $wc_download_url | jq -r "$jq_filter") && \
+    wget $archive_url && \
+    archive_file=$(basename $archive_url) && \
+    tar -xvz -C /usr/src/app -f $archive_file
 
 COPY requirements/requirements.wifi-connect.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt

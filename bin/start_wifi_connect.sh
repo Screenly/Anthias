@@ -27,7 +27,7 @@ while [[ "$IS_CONNECTED" != 'true' ]]; do
         fi
 
         IS_CONNECTED='true'
-        break
+        exit 0
     else
         if [[ "$VERBOSE" != 'false' ]]; then
             echo "Your device is not connected to the internet."
@@ -46,5 +46,3 @@ while [[ "$IS_CONNECTED" != 'true' ]]; do
 
     sleep $freq
 done
-
-/usr/bin/balena-idle
