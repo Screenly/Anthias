@@ -33,7 +33,7 @@ if [ "$WEB_UPGRADE" = false ]; then
 
   # Make sure the command is launched interactive.
   if ! [ -t 0  ]; then
-    echo -e "Detected old installation command. Please use:\n$ bash <(curl -sL https://install-ose.srly.io)"
+    echo -e "Detected old installation command. Please use:\n$ bash <(curl -sL https://install-anthias.srly.io)"
     exit 1
   fi
 
