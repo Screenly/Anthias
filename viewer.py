@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import json
 import logging
 import pydbus
 import re
 import string
 import sys
 from datetime import datetime, timedelta
+from jinja2 import Template
 from os import path, getenv, utime, system
 from random import shuffle
 from signal import signal, SIGALRM, SIGUSR1
@@ -48,6 +50,7 @@ INITIALIZED_FILE = '/.screenly/initialized'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 
 LOAD_SCREEN = 'http://{}:{}/{}'.format(LISTEN, PORT, 'static/img/loading.png')
+SPLASH_PAGE_URL = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
 
 current_browser_url = None
 browser = None
@@ -116,6 +119,46 @@ def send_current_asset_id_to_server():
     consumer.send({'current_asset_id': scheduler.current_asset_id})
 
 
+def setup_wifi(data):
+    uri = 'http://{0}/hotspot'.format(LISTEN)
+    decoded = json.loads(data)
+
+    base_dir = path.abspath(path.dirname(__file__))
+    template_path = path.join(base_dir, 'templates/hotspot.html')
+
+    with open(template_path) as f:
+        template = Template(f.read())
+
+    context = {
+        'network': decoded.get('network', None),
+        'ssid_pswd': decoded.get('ssid_pswd', None),
+        'address': decoded.get('address', None),
+    }
+
+    with open('/data/hotspot/hotspot.html', 'w') as out_file:
+        out_file.write(template.render(context=context))
+
+    stop_loop()
+    view_webpage(uri)
+
+
+def show_splash(data):
+    if is_balena_app():
+        while True:
+            try:
+                ip_address = get_balena_device_info().json()['ip_address']
+                if ip_address != '':
+                    break
+            except Exception:
+                break
+    else:
+        r.set('ip_addresses', data)
+
+    view_webpage(SPLASH_PAGE_URL)
+    sleep(SPLASH_DELAY)
+    play_loop()
+
+
 commands = {
     'next': lambda _: skip_asset(),
     'previous': lambda _: skip_asset(back=True),
@@ -123,26 +166,31 @@ commands = {
     'reload': lambda _: load_settings(),
     'stop': lambda _: stop_loop(),
     'play': lambda _: play_loop(),
+    'setup_wifi': lambda data: setup_wifi(data),
+    'show_splash': lambda data: show_splash(data),
     'unknown': lambda _: command_not_found(),
     'current_asset_id': lambda _: send_current_asset_id_to_server()
 }
 
 
 class ZmqSubscriber(Thread):
-    def __init__(self):
+    def __init__(self, publisher_url, topic='viewer'):
         Thread.__init__(self)
         self.context = zmq.Context()
+        self.publisher_url = publisher_url
+        self.topic = topic
 
     def run(self):
         socket = self.context.socket(zmq.SUB)
-        socket.connect('tcp://srly-ose-server:10001')
-        socket.setsockopt(zmq.SUBSCRIBE, 'viewer')
+        socket.connect(self.publisher_url)
+        socket.setsockopt(zmq.SUBSCRIBE, self.topic)
+
         while True:
             msg = socket.recv()
-            topic, message = msg.split()
+            topic, message = msg.split(' ', 1)
 
             # If the command consists of 2 parts, then the first is the function, the second is the argument
-            parts = message.split('&')
+            parts = message.split('&', 1)
             command = parts[0]
             parameter = parts[1] if len(parts) > 1 else None
 
@@ -441,9 +489,13 @@ def main():
     global db_conn, scheduler
     setup()
 
-    subscriber = ZmqSubscriber()
-    subscriber.daemon = True
-    subscriber.start()
+    subscriber_1 = ZmqSubscriber('tcp://srly-ose-server:10001')
+    subscriber_1.daemon = True
+    subscriber_1.start()
+
+    subscriber_2 = ZmqSubscriber('tcp://host.docker.internal:10001')
+    subscriber_2.daemon = True
+    subscriber_2.start()
 
     scheduler = Scheduler()
 
@@ -453,12 +505,10 @@ def main():
         setup_hotspot()
 
     if settings['show_splash']:
-        url = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
-
         if is_balena_app():
             retry_call(get_balena_device_info, tries=5, delay=1)
 
-        view_webpage(url)
+        view_webpage(SPLASH_PAGE_URL)
         sleep(SPLASH_DELAY)
 
     # We don't want to show splash-page if there are active assets but all of them are not available
