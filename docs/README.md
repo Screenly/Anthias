@@ -42,11 +42,8 @@ Its a SQLite Database and can be modified with the sqlite3 CLI. The schema is re
 
 ~~On first boot your OSE player will check if there is any active network connection (such as Ethernet with DHCP). If there isn’t one, then the Pi will create a local wifi network and display the SSID and PW on the screen. Using your phone or computer connect to this network and navigate to the URL displayed on the screen. (Ex: Screenly.io/wifi)  This will take you to the network setup page for your OSE player. If you are not connected to the network that the player is generating then you will be redirected here.~~
 
-At the moment, Wi-Fi setup is not working on instances running Raspberry Pi OS Lite, but is supported on those running **_balenaOS_**.
-See the steps below on how to setup the Wi-Fi on your device running **_balenaOS_**:
-
-1. Turn on your Raspberry Pi device. Make sure that the device is connected via the Ethernet.
-2. Disconnect the Ethernet cable from your Raspberry Pi.
+1. Disconnect the Ethernet cable from your Raspberry Pi.
+2. Turn on your Raspberry Pi device.
 3. Refresh the web UI page. You shouldn't be able to access the page anymore.
 4. Go to your phone or computer and connect to the network whose SSID is "Anthias WiFi Connect".
 5. The screen will then display the hotspot page which contains the following information &ndash;

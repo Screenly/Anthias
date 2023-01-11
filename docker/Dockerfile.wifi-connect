@@ -10,12 +10,10 @@ RUN apt-get update && \
 
 WORKDIR /usr/src/app
 
-RUN wc_download_url='https://api.github.com/repos/balena-os/wifi-connect/releases/45509064' && \
-    jq_filter='.assets[] | select (.name|test("linux-armv7hf")) | .browser_download_url' \
-    archive_url=$(curl -sL $wc_download_url | jq -r "$jq_filter") && \
-    wget $archive_url && \
-    archive_file=$(basename $archive_url) && \
-    tar -xvz -C /usr/src/app -f $archive_file
+ARG TARGET_PLATFORM
+
+COPY ./bin/install_wifi_connect.sh .
+RUN bash ./install_wifi_connect.sh
 
 COPY requirements/requirements.wifi-connect.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
