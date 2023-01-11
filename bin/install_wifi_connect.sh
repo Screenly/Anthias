@@ -11,5 +11,5 @@ jq_filter=".assets[] | select (.name|test(\"linux-$architecture\")) | .browser_d
 archive_url=$(curl -sL $wc_download_url | jq -r "$jq_filter")
 archive_file=$(basename $archive_url)
 
-wget $archive_url && \
-    tar -xvz -C /usr/src/app -f $archive_file
+wget $archive_url
+tar -xvz -C /usr/src/app -f $archive_file
