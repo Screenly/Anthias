@@ -33,7 +33,7 @@ if [ "$WEB_UPGRADE" = false ]; then
 
   # Make sure the command is launched interactive.
   if ! [ -t 0  ]; then
-    echo -e "Detected old installation command. Please use:\n$ bash <(curl -sL https://www.screenlyapp.com/install-ose.sh)"
+    echo -e "Detected old installation command. Please use:\n$ bash <(curl -sL https://install-anthias.srly.io)"
     exit 1
   fi
 
@@ -45,29 +45,25 @@ if [ "$WEB_UPGRADE" = false ]; then
   tput bold
 
   cat << EOF
-       _____                           __         ____  _____ ______
-      / ___/_____________  ___  ____  / /_  __   / __ \/ ___// ____/
-      \__ \/ ___/ ___/ _ \/ _ \/ __ \/ / / / /  / / / /\__ \/ __/
-     ___/ / /__/ /  /  __/  __/ / / / / /_/ /  / /_/ /___/ / /___
-    /____/\___/_/   \___/\___/_/ /_/_/\__, /   \____//____/_____/
-                                     /____/
+       d8888            888     888       d8b                   
+      d88888            888     888       Y8P                   
+     d88P888            888     888                            
+    d88P 888  88888b.   888888  88888b.   888   8888b.   .d8888b  
+   d88P  888  888 "88b  888     888 "88b  888      "88b  88K      
+  d88P   888  888  888  888     888  888  888  .d888888  "Y8888b. 
+ d8888888888  888  888  Y88b.   888  888  888  888  888       X88 
+d88P     888  888  888   Y888   888  888  888  "Y888888   88888P'
 EOF
 
   # Reset color
   tput sgr 0
 
-  if [ "$USER" != 'pi' ]; then
-      echo "Screenly OSE must be installed as the user 'pi' (with sudo permission)."
-      exit 1
-  fi
-
-  echo -e "Screenly OSE requires a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\n"
+  echo -e "Anthias requires a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\n"
   read -p "Do you still want to continue? (y/N)" -n 1 -r -s INSTALL
   if [ "$INSTALL" != 'y' ]; then
     echo
     exit 1
   fi
-
 
 # @TODO Re-enable the 'production' branch once we've merged master into production
 #echo -e "\n________________________________________\n"
@@ -90,7 +86,7 @@ EOF
 export DOCKER_TAG="latest"
 export BRANCH="master"
 
-  echo && read -p "Do you want Screenly OSE to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
+  echo && read -p "Do you want Anthias to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
 
   echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
   if [ "$UPGRADE" != 'y' ]; then
@@ -132,13 +128,16 @@ fi
 if [ -z "${REPOSITORY}" ]; then
   if [ "$WEB_UPGRADE" = false ]; then
     set -x
-    REPOSITORY=${1:-https://github.com/screenly/screenly-ose.git}
+    REPOSITORY=${1:-https://github.com/screenly/anthias.git}
   else
     set -e
-    REPOSITORY=https://github.com/screenly/screenly-ose.git
+    REPOSITORY=https://github.com/screenly/anthias.git
   fi
 fi
 
+if [ ! -d /home/${USER}/screenly ]; then
+    mkdir /home/${USER}/screenly
+fi
 
 sudo mkdir -p /etc/ansible
 echo -e "[local]\nlocalhost ansible_connection=local" | sudo tee /etc/ansible/hosts > /dev/null
@@ -151,7 +150,7 @@ fi
 
 sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' /etc/apt/sources.list
 sudo apt update -y
-sudo apt-get install -y  --no-install-recommends \
+sudo apt-get install -y --no-install-recommends \
     git \
     libffi-dev \
     libssl-dev \
@@ -169,27 +168,27 @@ fi
 
 # Install Ansible from requirements file.
 if [ "$BRANCH" = "master" ]; then
-    ANSIBLE_VERSION=$(curl -s https://raw.githubusercontent.com/Screenly/screenly-ose/$BRANCH/requirements/requirements.host.txt | grep ansible)
+    ANSIBLE_VERSION=$(curl -s https://raw.githubusercontent.com/screenly/anthias/$BRANCH/requirements/requirements.host.txt | grep ansible)
 else
     ANSIBLE_VERSION=ansible==2.8.8
 fi
 
 # @TODO
 # Remove me later. Cryptography 38.0.3 won't build at the moment.
-# See https://github.com/Screenly/screenly-ose/issues/1654
+# See https://github.com/screenly/anthias/issues/1654
 sudo pip install cryptography==38.0.2
 
 sudo pip install "$ANSIBLE_VERSION"
 
-sudo -u pi ansible localhost \
+sudo -u ${USER} ansible localhost \
     -m git \
-    -a "repo=$REPOSITORY dest=/home/pi/screenly version=$BRANCH force=no"
-cd /home/pi/screenly/ansible
+    -a "repo=$REPOSITORY dest=/home/${USER}/screenly version=$BRANCH force=no"
+cd /home/${USER}/screenly/ansible
 
-sudo -E ansible-playbook site.yml "${EXTRA_ARGS[@]}"
+sudo -E -u ${USER} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
 
 # Pull down and install containers
-/home/pi/screenly/bin/upgrade_containers.sh
+/home/${USER}/screenly/bin/upgrade_containers.sh
 
 sudo apt-get autoclean
 sudo apt-get clean
@@ -231,45 +230,15 @@ sudo find /usr/share/locale \
     ! -name 'locale.alias' \
     -exec rm -r {} \;
 
-sudo chown -R pi:pi /home/pi
+sudo chown -R ${USER}:${USER} /home/${USER}
 
 # Run sudo w/out password
-if [ ! -f /etc/sudoers.d/010_pi-nopasswd ]; then
-  echo "pi ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/010_pi-nopasswd > /dev/null
-  sudo chmod 0440 /etc/sudoers.d/010_pi-nopasswd
+if [ ! -f /etc/sudoers.d/010_${USER}-nopasswd ]; then
+  echo "${USER} ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/010_${USER}-nopasswd > /dev/null
+  sudo chmod 0440 /etc/sudoers.d/010_${USER}-nopasswd
 fi
 
-# Ask user to set a new pi password if default password "raspberry" detected
-check_defaultpw () {
-    if [ "$BRANCH" = "master" ] || [ "$BRANCH" = "production" ] && [ "$WEB_UPGRADE" = false ]; then
-        set +x
-
-        # currently only looking for $6$/sha512 hash
-        local VAR_CURRENTPISALT
-        local VAR_CURRENTPIUSERPW
-        local VAR_DEFAULTPIPW
-        VAR_CURRENTPISALT=$(sudo cat /etc/shadow | grep pi | awk -F '$' '{print $3}')
-        VAR_CURRENTPIUSERPW=$(sudo cat /etc/shadow | grep pi | awk -F ':' '{print $2}')
-        VAR_DEFAULTPIPW=$(mkpasswd -m sha-512 raspberry "$VAR_CURRENTPISALT")
-
-        if [[ "$VAR_CURRENTPIUSERPW" == "$VAR_DEFAULTPIPW" ]]; then
-            echo "Warning: The default Raspberry Pi password was detected!"
-            read -p "Do you still want to change it? (y/N)" -n 1 -r -s PWD_CHANGE
-            if [ "$PWD_CHANGE" = 'y' ]; then
-                set +e
-                passwd
-                set -ex
-            fi
-        else
-            echo "The default raspberry pi password was not detected, continuing with installation..."
-            set -x
-        fi
-    fi
-}
-
-check_defaultpw;
-
-echo -e "Screenly version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
+echo -e "Anthias version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
 
 if [ "$WEB_UPGRADE" = false ]; then
   set +x

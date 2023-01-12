@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 __author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2021, Screenly, Inc"
+__copyright__ = "Copyright 2012-2023, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 import json
@@ -25,6 +25,7 @@ from functools import wraps
 from hurry.filesize import size
 from mimetypes import guess_type, guess_extension
 from os import getenv, listdir, makedirs, mkdir, path, remove, rename, statvfs, stat, walk
+from retry.api import retry_call
 from subprocess import check_output
 from urlparse import urlparse
 
@@ -45,20 +46,24 @@ from lib import raspberry_pi_helper
 
 from lib.github import is_up_to_date
 from lib.auth import authorized
-from lib.utils import download_video_from_youtube, json_dump
-from lib.utils import generate_perfect_paper_password, is_docker
-from lib.utils import get_active_connections, remove_connection
-from lib.utils import get_node_ip, get_node_mac_address
-from lib.utils import get_video_duration
-from lib.utils import is_balena_app, is_demo_node
-from lib.utils import string_to_bool
-from lib.utils import connect_to_redis
-from lib.utils import url_fails
-from lib.utils import validate_url
+
+from lib.utils import (
+    download_video_from_youtube, json_dump,
+    generate_perfect_paper_password, is_docker,
+    get_active_connections, remove_connection,
+    get_node_ip, get_node_mac_address,
+    get_video_duration,
+    is_balena_app, is_demo_node,
+    shutdown_via_balena_supervisor, reboot_via_balena_supervisor,
+    string_to_bool,
+    connect_to_redis,
+    url_fails,
+    validate_url,
+)
 
 from settings import CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
 
-HOME = getenv('HOME', '/home/pi')
+HOME = getenv('HOME')
 CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_TASK_RESULT_EXPIRES = timedelta(hours=6)
@@ -106,7 +111,10 @@ def reboot_screenly():
     """
     Background task to reboot Screenly-OSE.
     """
-    r.publish('hostcmd', 'reboot')
+    if is_balena_app():
+        retry_call(reboot_via_balena_supervisor, tries=5, delay=1)
+    else:
+        r.publish('hostcmd', 'reboot')
 
 
 @celery.task
@@ -114,7 +122,10 @@ def shutdown_screenly():
     """
     Background task to shutdown Screenly-OSE.
     """
-    r.publish('hostcmd', 'shutdown')
+    if is_balena_app():
+        retry_call(shutdown_via_balena_supervisor, tries=5, delay=1)
+    else:
+        r.publish('hostcmd', 'shutdown')
 
 
 @celery.task
@@ -1754,17 +1765,7 @@ def system_info():
     # Player name for title
     player_name = settings['player_name']
 
-    raspberry_pi_revision = raspberry_pi_helper.parse_cpu_info().get('revision', False)
-    if raspberry_pi_revision:
-        raspberry_pi_details = raspberry_pi_helper.lookup_raspberry_pi_revision(
-                raspberry_pi_revision
-        )
-        raspberry_pi_model = '{} ({})'.format(
-            raspberry_pi_details['model'],
-            raspberry_pi_details['manufacturer']
-        )
-    else:
-        raspberry_pi_model = 'Unknown.'
+    raspberry_pi_model = raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
 
     screenly_version = '{}@{}'.format(
         diagnostics.get_git_branch(),
@@ -1809,7 +1810,6 @@ def integrations():
 
 @app.route('/splash-page')
 def splash_page():
-    my_ip = get_node_ip()
     return template('splash-page.html', my_ip=get_node_ip())
 
 

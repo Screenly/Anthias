@@ -6,7 +6,7 @@ import json
 from requests import get as requests_get, post as requests_post, exceptions
 from lib.utils import is_balena_app, is_docker, is_ci, connect_to_redis
 from lib.diagnostics import get_git_branch, get_git_hash, get_git_short_hash
-from lib.raspberry_pi_helper import parse_cpu_info, lookup_raspberry_pi_revision
+from lib.raspberry_pi_helper import parse_cpu_info
 from settings import settings
 
 r = connect_to_redis()
@@ -51,7 +51,7 @@ def remote_branch_available(branch):
 
     try:
         resp = requests_get(
-            'https://api.github.com/repos/screenly/screenly-ose/branches',
+            'https://api.github.com/repos/screenly/anthias/branches',
             headers={
                 'Accept': 'application/vnd.github.loki-preview+json',
             },
@@ -95,7 +95,7 @@ def fetch_remote_hash():
             return None, False
         try:
             resp = requests_get(
-                'https://api.github.com/repos/screenly/screenly-ose/git/refs/heads/{}'.format(branch)
+                'https://api.github.com/repos/screenly/anthias/git/refs/heads/{}'.format(branch)
             )
             resp.raise_for_status()
         except exceptions.RequestException as exc:
@@ -150,8 +150,7 @@ def is_up_to_date():
                         'NOOBS': os.path.isfile('/boot/os_config.json'),
                         'Balena': is_balena_app(),
                         'Docker': is_docker(),
-                        'Pi_Version': lookup_raspberry_pi_revision(
-                            parse_cpu_info()['revision'])['model']
+                        'Pi_Version': parse_cpu_info().get('model', "Unknown")
                         }
                 }]
             }

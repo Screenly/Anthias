@@ -11,7 +11,7 @@ import time
 
 from requests.auth import HTTPBasicAuth
 
-HOME = os.getenv('HOME', '/home/pi')
+user_home_dir = os.getenv('HOME')
 
 BASE_API_SCREENLY_URL = 'https://api.screenlyapp.com'
 ASSETS_SCREENLY_OSE_API = 'http://127.0.0.1/api/v1.1/assets'
@@ -114,7 +114,7 @@ def send_asset(asset):
         'Authorization': token
     }
     asset_uri = asset['uri']
-    if asset_uri.startswith(HOME):
+    if asset_uri.startswith(user_home_dir):
         asset_uri = os.path.join(ngrok_public_url, asset['asset_id'])
     data = {
         'title': asset['name'],

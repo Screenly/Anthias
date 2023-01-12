@@ -8,6 +8,12 @@ on:
       - production
     paths:
       - 'ansible/**'
+  pull_request:
+    branches:
+      - master
+      - production
+    paths:
+      - 'ansible/**'
 
 jobs:
   build:

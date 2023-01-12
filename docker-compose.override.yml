@@ -1,13 +1,16 @@
 version: "2"
 services:
+  srly-ose-wifi-connect:
+    image: screenly/srly-ose-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
+
   srly-ose-server:
     image: screenly/srly-ose-server:${DOCKER_TAG}-${DEVICE_TYPE}
     environment:
       - MY_IP=${MY_IP}
     volumes:
-      - /home/pi/.screenly:/data/.screenly
-      - /home/pi/screenly_assets:/data/screenly_assets
-      - /home/pi/screenly/static:/data/screenly/static
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
+      - /home/${USER}/screenly/static:/data/screenly/static
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
@@ -15,24 +18,24 @@ services:
     image: screenly/srly-ose-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
     mem_limit: ${VIEWER_MEMORY_LIMIT_KB}k
     volumes:
-      - /home/pi/.screenly:/data/.screenly
-      - /home/pi/screenly_assets:/data/screenly_assets
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
   srly-ose-websocket:
     image: screenly/srly-ose-websocket:${DOCKER_TAG}-${DEVICE_TYPE}
     volumes:
-      - /home/pi/.screenly:/data/.screenly
-      - /home/pi/screenly_assets:/data/screenly_assets
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
   srly-ose-celery:
     image: screenly/srly-ose-celery:${DOCKER_TAG}-${DEVICE_TYPE}
     volumes:
-      - /home/pi/.screenly:/data/.screenly
-      - /home/pi/screenly_assets:/data/screenly_assets
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
@@ -42,9 +45,9 @@ services:
   srly-ose-nginx:
     image: screenly/srly-ose-nginx:${DOCKER_TAG}-${DEVICE_TYPE}
     volumes:
-      - /home/pi/.screenly:/data/.screenly:ro
-      - /home/pi/screenly_assets:/data/screenly_assets:ro
-      - /home/pi/screenly/static:/data/screenly/static:ro
+      - /home/${USER}/.screenly:/data/.screenly:ro
+      - /home/${USER}/screenly_assets:/data/screenly_assets:ro
+      - /home/${USER}/screenly/static:/data/screenly/static:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 

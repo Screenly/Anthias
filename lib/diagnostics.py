@@ -114,46 +114,18 @@ def get_debian_version():
 
 
 def get_raspberry_code():
-    """
-    Temporary workaround and just all on another function
-    """
-    return raspberry_pi_helper.parse_cpu_info().get('revision', False)
+    return raspberry_pi_helper.parse_cpu_info().get('hardware', "Unknown")
 
-
-def get_raspberry_model(raspberry_pi_revision):
-    """
-    Quick DRY workaround. Needs to be refactored later.
-    """
-    return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision).get('model', False)
-
-
-def get_raspberry_revision(raspberry_pi_revision):
-    """
-    Quick DRY workaround. Needs to be refactored later.
-    """
-    return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision).get('revision', False)
-
-
-def get_raspberry_ram(raspberry_pi_revision):
-    """
-    Quick DRY workaround. Needs to be refactored later.
-    """
-    return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision).get('ram', False)
-
-
-def get_raspberry_manufacturer(raspberry_pi_revision):
-    """
-    Quick DRY workaround. Needs to be refactored later.
-    """
-    return raspberry_pi_helper.lookup_raspberry_pi_revision(raspberry_pi_revision).get('manufacturer', False)
-
+def get_raspberry_model():
+    return raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
 
 def compile_report():
     """
     Compile report with various data points.
     """
     report = {}
-    report['cpu_info'] = raspberry_pi_helper.parse_cpu_info()
+    report['cpu_info'] = get_raspberry_code()
+    report['pi_model'] = get_raspberry_model()
     report['uptime'] = get_uptime()
     report['monitor'] = get_monitor_status()
     report['display_power'] = get_display_power()

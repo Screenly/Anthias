@@ -8,6 +8,8 @@ on:
     paths:
       - '**'
       - '!webview/**'
+      - '!website/**'
+      - '!.github/workflows/deploy-website.yaml'
       - '!.github/workflows/build-webview.yaml'
       - '!.github/workflows/build-balena-disk-image.yaml'
       - '!README.md'
@@ -87,7 +89,7 @@ jobs:
 
       - name: Building containers
         run: |
-          for container in base server celery redis websocket nginx viewer; do
+          for container in base server celery redis websocket nginx viewer wifi-connect; do
             echo "Building container $container"
             docker buildx build \
               --platform "$TARGET_PLATFORM" \

@@ -1,0 +1,27 @@
+FROM screenly/srly-ose-base
+
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+        dnsmasq \
+        jq \
+        wget \
+        wireless-tools && \
+    apt-get clean
+
+WORKDIR /usr/src/app
+
+ARG TARGET_PLATFORM
+
+COPY ./bin/install_wifi_connect.sh .
+RUN bash ./install_wifi_connect.sh
+
+COPY requirements/requirements.wifi-connect.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+COPY send_zmq_message.py ./
+
+RUN touch /var/lib/misc/dnsmasq.leases
+
+COPY bin/start_wifi_connect.sh ./
+
+CMD ["bash", "start_wifi_connect.sh"]
