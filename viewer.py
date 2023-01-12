@@ -33,6 +33,7 @@ from lib.utils import (
     string_to_bool,
     connect_to_redis,
     get_balena_device_info,
+    start_wifi_connect_service,
 )
 from retry.api import retry_call
 from settings import settings, LISTEN, PORT, ZmqConsumer
@@ -500,6 +501,9 @@ def main():
     scheduler = Scheduler()
 
     wait_for_server(5)
+
+    # @TODO: Move this line somewhere else.
+    retry_call(start_wifi_connect_service, tries=5, delay=1)
 
     if not is_balena_app():
         setup_hotspot()

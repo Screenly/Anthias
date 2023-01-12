@@ -78,6 +78,21 @@ def get_balena_supervisor_api_response(method, action):
     ), headers={'Content-Type': 'application/json'})
 
 
+# @TODO: Refactor the function so that it'll call the function above.
+def start_wifi_connect_service():
+    # @TODO: Write code for instances running Raspberry Pi OS Lite.
+    if not is_balena_app():
+        return
+
+    data = {'serviceName': 'srly-ose-wifi-connect'}
+
+    return requests.post('{}/v2/applications/{}/start-service/?apikey={}'.format(
+        os.getenv('BALENA_SUPERVISOR_ADDRESS'),
+        os.getenv('BALENA_APP_ID'),
+        os.getenv('BALENA_SUPERVISOR_API_KEY'),
+    ), headers={'Content-Type': 'application/json'}, json=data)
+
+
 def get_balena_device_info():
     return get_balena_supervisor_api_response(method='get', action='device')
 
