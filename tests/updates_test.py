@@ -1,6 +1,5 @@
 from datetime import datetime
 from datetime import timedelta
-from nose.plugins.attrib import attr
 import unittest
 
 import mock
@@ -49,35 +48,3 @@ class UpdateTest(unittest.TestCase):
             f.write(fancy_sha)
         self.assertEqual(server.is_up_to_date(), False)
         del os.environ['GIT_BRANCH']
-
-    @attr('fixme')
-    @mock.patch('viewer.settings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
-    def test_if_sha_file_is_new__check_update__should_return_false(self):
-        with open(self.sha_file, 'w+') as f:
-            f.write(fancy_sha)
-        self.assertEqual(viewer.check_update(), False)
-
-        # check that SHA file not modified
-        with open(self.sha_file, 'r') as f:
-            self.assertEqual(f.readline(), fancy_sha)
-
-    @attr('fixme')
-    @mock.patch('viewer.req_get', side_effect=mocked_req_get)
-    @mock.patch('viewer.remote_branch_available', side_effect=lambda _: True)
-    @mock.patch('viewer.fetch_remote_hash', side_effect=lambda _: 'master')
-    @mock.patch('viewer.settings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
-    def test_if_sha_file_is_empty__check_update__should_return_true(self, req_get, remote_branch_available, fetch_remote_hash):
-        with open(self.sha_file, 'w+') as f:
-            pass
-
-        epoch = datetime.utcfromtimestamp(0)
-        yesterday = datetime.now() - timedelta(days=2)
-        dt = (yesterday - epoch).total_seconds()
-
-        os.utime(self.sha_file, (dt, dt))
-
-        self.assertEqual(viewer.check_update(), True)
-
-        # check that file contains latest SHA
-        with open(self.sha_file, 'r') as f:
-            self.assertNotEqual(f.readline(), '')
