@@ -12,15 +12,6 @@ from settings import settings
 fancy_sha = 'deadbeaf'
 
 
-def mocked_req_get(*args, **kwargs):
-    class MockResponse:
-        def __init__(self, content, status_code):
-            self.content = content
-            self.status_code = status_code
-
-    return MockResponse('response_content\n', 200)
-
-
 class UpdateTest(unittest.TestCase):
     def setUp(self):
         self.get_configdir_m = mock.patch('settings.ScreenlySettings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
