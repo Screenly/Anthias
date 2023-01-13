@@ -42,12 +42,13 @@ class UpdateTest(unittest.TestCase):
     def test_if_sha_file_not_exists__is_up_to_date__should_return_false(self):
         self.assertEqual(server.is_up_to_date(), True)
 
-    @attr('fixme')
     @mock.patch('viewer.settings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
     def test_if_sha_file_not_equals_to_branch_hash__is_up_to_date__should_return_false(self):
+        os.environ['GIT_BRANCH'] = 'master'
         with open(self.sha_file, 'w+') as f:
             f.write(fancy_sha)
         self.assertEqual(server.is_up_to_date(), False)
+        del os.environ['GIT_BRANCH']
 
     @attr('fixme')
     @mock.patch('viewer.settings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
