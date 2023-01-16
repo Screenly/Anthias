@@ -25,7 +25,7 @@ Do however note that that we are still in the process of knocking out some bugs.
 The tl;dr for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) Bullseye Lite is:
 
 ```
-$ bash <(curl -sL https://install-ose.srly.io)
+$ bash <(curl -sL https://install-anthias.srly.io)
 ```
 
 **This installation will take 15 minutes to several hours**, depending on variables such as:
