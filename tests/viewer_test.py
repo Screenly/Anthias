@@ -40,11 +40,13 @@ class ViewerTestCase(unittest.TestCase):
 
 
 class TestEmptyPl(ViewerTestCase):
-    @mock.patch('viewer.start_loop', return_value=None)
-    @mock.patch('viewer.view_image', return_value=None)
-    @mock.patch('viewer.view_webpage', return_value=None)
-    @mock.patch('viewer.setup_hotspot', return_value=None)
-    @mock.patch('viewer.setup', return_value=None)
+    noop = lambda *a, **k: None
+
+    @mock.patch('viewer.start_loop', side_effect=noop)
+    @mock.patch('viewer.view_image', side_effect=noop)
+    @mock.patch('viewer.view_webpage', side_effect=noop)
+    @mock.patch('viewer.setup_hotspot', side_effect=noop)
+    @mock.patch('viewer.setup', side_effect=noop)
     def test_empty(
         self,
         mock_setup,
