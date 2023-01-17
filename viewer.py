@@ -38,6 +38,8 @@ from lib.utils import (
 from retry.api import retry_call
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
+from netifaces import gateways
+
 
 __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2023, Screenly, Inc"
@@ -486,6 +488,21 @@ def wait_for_server(retries, wt=1):
             sleep(wt)
 
 
+def start_loop():
+    global db_conn, loop_is_stopped
+
+    logging.debug('Entering infinite loop.')
+    while True:
+        if loop_is_stopped:
+            sleep(0.1)
+            continue
+        if not db_conn:
+            load_settings()
+            db_conn = db.conn(settings['database'])
+
+        asset_loop(scheduler)
+
+
 def main():
     global db_conn, scheduler
     setup()
@@ -517,17 +534,7 @@ def main():
 
     # We don't want to show splash-page if there are active assets but all of them are not available
     view_image(LOAD_SCREEN)
-
-    logging.debug('Entering infinite loop.')
-    while True:
-        if loop_is_stopped:
-            sleep(0.1)
-            continue
-        if not db_conn:
-            load_settings()
-            db_conn = db.conn(settings['database'])
-
-        asset_loop(scheduler)
+    start_loop()
 
 
 if __name__ == "__main__":
