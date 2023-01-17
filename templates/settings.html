@@ -417,21 +417,18 @@
                 </div>
             {% endif %}
 
-            {% if not (context.is_balena) %}
-                {# System controls #}
-                <div id="system-controls-section" class="col-12 mb-5">
-                    <h4 class="page-header">
-                        <b>System Controls</b>
-                    </h4>
-                    <hr>
-                    <div class="text-right">
-                        <button id="btn-reboot-system" class="btn btn-danger btn-long" type="button">Reboot Screenly</button>
-                        <button id="btn-shutdown-system" class="btn btn-danger btn-long" type="button">Shutdown Screenly
-                        </button>
-                    </div>
+            {# System controls #}
+            <div id="system-controls-section" class="col-12 mb-5">
+                <h4 class="page-header">
+                    <b>System Controls</b>
+                </h4>
+                <hr>
+                <div class="text-right">
+                    <button id="btn-reboot-system" class="btn btn-danger btn-long" type="button">Reboot Screenly</button>
+                    <button id="btn-shutdown-system" class="btn btn-danger btn-long" type="button">Shutdown Screenly
+                    </button>
                 </div>
-
-            {% endif %}
+            </div>
         </div>
     </div>
 {% endblock %}

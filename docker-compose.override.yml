@@ -1,5 +1,8 @@
 version: "2"
 services:
+  srly-ose-wifi-connect:
+    image: screenly/srly-ose-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
+
   srly-ose-server:
     image: screenly/srly-ose-server:${DOCKER_TAG}-${DEVICE_TYPE}
     environment:

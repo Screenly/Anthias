@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 from nose.tools import eq_
-from nose.plugins.attrib import attr
 import mock
 import unittest
 import os
@@ -40,13 +39,34 @@ class ViewerTestCase(unittest.TestCase):
         self.u.SPLASH_DELAY = self.original_splash_delay
 
 
-@attr('fixme')
 class TestEmptyPl(ViewerTestCase):
-    def test_empty(self):
+    noop = lambda *a, **k: None
+
+    @mock.patch('viewer.start_loop', side_effect=noop)
+    @mock.patch('viewer.view_image', side_effect=noop)
+    @mock.patch('viewer.view_webpage', side_effect=noop)
+    @mock.patch('viewer.setup_hotspot', side_effect=noop)
+    @mock.patch('viewer.setup', side_effect=noop)
+    def test_empty(
+        self,
+        mock_setup,
+        mock_setup_hotspot,
+        mock_view_webpage,
+        mock_view_image,
+        mock_start_loop,
+    ):
         m_asset_list = mock.Mock()
         m_asset_list.return_value = ([], None)
+
         with mock.patch.object(self.u, 'generate_asset_list', m_asset_list):
             self.u.main()
+
+            m_asset_list.assert_called_once()
+            mock_setup.assert_called_once()
+            mock_setup_hotspot.assert_called_once()
+            mock_view_webpage.assert_called_once()
+            mock_view_image.assert_called_once()
+            mock_start_loop.assert_called_once()
 
 
 class TestLoadBrowser(ViewerTestCase):
