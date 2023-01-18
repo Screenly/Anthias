@@ -14,7 +14,7 @@
 #     git checkout 2ca65fc7b74444edd51d5803a2c1e05a801a6023 && \
 #     ./configure --disable-x86asm && make -j$(nproc) --quiet
 
-FROM screenly/srly-ose-base:latest-x86
+FROM screenly/anthias-base:latest-x86
 
 RUN apt-get -y install wget unzip
 

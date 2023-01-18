@@ -113,7 +113,7 @@ ARG PI_VERSION=pi3
 ARG DEBIAN_VERSION=buster
 ARG QT_VERSION=5.15.2
 ARG WEBVIEW_GIT_HASH=0b6d49359133246659b9ba1d8dd883e3fc5c9a91
-ARG BASE_URL="https://github.com/Screenly/screenly-ose/releases/download/WebView-v0.2.1"
+ARG BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.1"
 RUN curl "$BASE_URL/qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
         -sL -o "/tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" && \
     curl "$BASE_URL/qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \

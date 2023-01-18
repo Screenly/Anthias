@@ -1,23 +1,23 @@
 version: "2.2"
 services:
-  srly-ose-base:
-    image: screenly/srly-ose-base:latest-x86
+  anthias-base:
+    image: screenly/anthias-base:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.base.dev
       cache_from:
-        - screenly/srly-ose-base:latest-x86
+        - screenly/anthias-base:latest-x86
 
-  srly-ose-server:
-    image: screenly/srly-ose-server:latest-x86
+  anthias-server:
+    image: screenly/anthias-server:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.server.dev
       cache_from:
-        - screenly/srly-ose-base:latest-x86
-        - screenly/srly-ose-server:latest-x86
+        - screenly/anthias-base:latest-x86
+        - screenly/anthias-server:latest-x86
     depends_on:
-      - srly-ose-base
+      - anthias-base
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -28,33 +28,33 @@ services:
       - resin-data:/data
 
 # We might bring this in in the future
-#  srly-ose-viewer:
+#  anthias-viewer:
 #    build:
 #      context: .
 #      dockerfile: docker/Dockerfile.viewer
 #    depends_on:
-#      - srly-ose-server
+#      - anthias-server
 #    environment:
 #      - HOME=/data
 #      - PORT=80
 #      - NOREFRESH=1
-#      - LISTEN=srly-ose-nginx
+#      - LISTEN=anthias-nginx
 #    privileged: true
 #    restart: always
 #    volumes:
 #      - resin-data:/data
 
-  srly-ose-websocket:
-    image: screenly/srly-ose-websocket:latest-x86
+  anthias-websocket:
+    image: screenly/anthias-websocket:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket.dev
       cache_from:
-        - screenly/srly-ose-base:latest-x86
-        - screenly/srly-ose-websocket:latest-x86
+        - screenly/anthias-base:latest-x86
+        - screenly/anthias-websocket:latest-x86
     depends_on:
-      - srly-ose-base
-      - srly-ose-server
+      - anthias-base
+      - anthias-server
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -62,17 +62,17 @@ services:
     volumes:
       - resin-data:/data
 
-  srly-ose-celery:
-    image: screenly/srly-ose-celery:latest-x86
+  anthias-celery:
+    image: screenly/anthias-celery:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.celery.dev
       cache_from:
-        - screenly/srly-ose-base:latest-x86
-        - screenly/srly-ose-celery:latest-x86
+        - screenly/anthias-base:latest-x86
+        - screenly/anthias-celery:latest-x86
     depends_on:
-      - srly-ose-base
-      - srly-ose-server
+      - anthias-base
+      - anthias-server
       - redis
     environment:
       - HOME=/data
@@ -85,8 +85,8 @@ services:
   redis:
     image: redis:alpine
 
-  srly-ose-nginx:
-    image: screenly/srly-ose-nginx:latest-x86
+  anthias-nginx:
+    image: screenly/anthias-nginx:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.nginx.dev
@@ -95,9 +95,9 @@ services:
     environment:
       - HOME=/data
     depends_on:
-      - srly-ose-base
-      - srly-ose-server
-      - srly-ose-websocket
+      - anthias-base
+      - anthias-server
+      - anthias-websocket
     restart: always
     volumes:
       - resin-data:/data:ro

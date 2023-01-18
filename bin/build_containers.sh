@@ -52,11 +52,11 @@ for pi_version in pi4 pi3 pi2 pi1; do
             --build-arg "GIT_BRANCH=$GIT_BRANCH" \
             --build-arg "PI_VERSION=$pi_version" \
             -f "docker/Dockerfile.$container" \
-            -t "screenly/srly-ose-$container:$DOCKER_TAG" .
+            -t "screenly/anthias-$container:$DOCKER_TAG" .
 
         # Push if the push flag is set and not cross compiling
         if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
-            docker push "screenly/srly-ose-$container:$DOCKER_TAG-$pi_version"
+            docker push "screenly/anthias-$container:$DOCKER_TAG-$pi_version"
         fi
     done
 done

@@ -33,8 +33,8 @@ $ git push --delete origin v0.18.5                                              
 
 ### Outdated documentation that needs to be updated
 
-Here is a high-level overview of the different components that make up the Screenly-OSE system.
-![Screenly-OSE Diagram Overview](https://raw.githubusercontent.com/screenly/screenly-ose/master/docs/images/screenly-ose-diagram-overview.png)
+Here is a high-level overview of the different components that make up the Anthias system.
+![Anthias Diagram Overview](https://raw.githubusercontent.com/Screenly/Anthias/master/docs/images/screenly-ose-diagram-overview.png)
 
 * Screenly-Viewer is what drives the screen (Ex: shows web page or image or video).
 * Screenly-Server is what the user interacts with (Ex: Web GUI).
@@ -45,20 +45,20 @@ Here is a high-level overview of the different components that make up the Scree
 
 These components and their dependencies are mostly installed and handled with Ansible and respective playbooks.
 
-There are currently three versions of Screenly-OSE..
+There are currently three versions of Anthias.
 
 | Version       | Branch     | Comment    |
 | :------------- | :---------- | :----------- |
-|  Developer | [master](https://github.com/Screenly/screenly-ose)   | This is where we test things and apply latest fixes   |
-|  Production | [production](https://github.com/Screenly/screenly-ose/tree/production)   | This is the branch disk images are built from and should be properly tested    |
-|  Experimental | [experimental](https://github.com/Screenly/screenly-ose/tree/experimental)   | This is the branch for experimenting, such as using a new web browser    |
+|  Developer | [master](https://github.com/Screenly/Anthias)   | This is where we test things and apply latest fixes   |
+|  Production | [production](https://github.com/Screenly/Anthias/tree/production)   | This is the branch disk images are built from and should be properly tested    |
+|  Experimental | [experimental](https://github.com/Screenly/Anthias/tree/experimental)   | This is the branch for experimenting, such as using a new web browser    |
 
 
 ### Docker and Directories
 
 /
 
-### Directories, files and their purpose with regards to Screenly-OSE
+### Directories, files and their purpose with regards to Anthias
 _(Most of the following information pertains to the Production version (Uzbl-based) and not the Developer QtWebview/Docker-based version)_
 
 ```
@@ -106,7 +106,7 @@ screenly.conf -> configuration file for nginx web server (default asset settings
 /usr/share/plymouth/themes/screenly
 
 screenly.plymouth -> plymouth config file (sets module name, imagedir and scriptfile dir)
-splashscreen.png -> screenly ose splashscreen image file
+splashscreen.png -> Anthias splashscreen image file
 screenly.script -> plymouth script file that loads and scales splashscreen image during boot process
 ```
 
@@ -121,7 +121,7 @@ screenly.script -> plymouth script file that loads and scales splashscreen image
 `/other/directories/here/.. from ansible roles`
 
 
-### Debugging Screenly OSE webview
+### Debugging Anthias webview
 
 ```
 export QT_LOGGING_DEBUG=1
@@ -129,7 +129,7 @@ export QT_LOGGING_RULES="*.debug=true"
 export QT_QPA_EGLFS_DEBUG=1
 ```
 
-Screenly OSE WebView is a custom-built web browser based on the [QT](https://www.qt.io/) toolkit framework.
+Anthias WebView is a custom-built web browser based on the [QT](https://www.qt.io/) toolkit framework.
 The browser is assembled with a Dockerfile and built by a `webview/build_qt#.sh` script.
 
-For further info on these files and more, visit the following link: [https://github.com/Screenly/screenly-ose/tree/master/webview](https://github.com/Screenly/screenly-ose/tree/master/webview)
+For further info on these files and more, visit the following link: [https://github.com/Screenly/Anthias/tree/master/webview](https://github.com/Screenly/Anthias/tree/master/webview)

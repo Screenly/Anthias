@@ -72,7 +72,7 @@ app = Flask(__name__)
 app.debug = string_to_bool(os.getenv('DEBUG', 'False'))
 
 CORS(app)
-api = Api(app, api_version="v1", title="Screenly OSE API")
+api = Api(app, api_version="v1", title="Anthias API")
 
 r = connect_to_redis()
 celery = Celery(
@@ -109,7 +109,7 @@ def cleanup():
 @celery.task
 def reboot_screenly():
     """
-    Background task to reboot Screenly-OSE.
+    Background task to reboot Anthias.
     """
     if is_balena_app():
         retry_call(reboot_via_balena_supervisor, tries=5, delay=1)
@@ -120,7 +120,7 @@ def reboot_screenly():
 @celery.task
 def shutdown_screenly():
     """
-    Background task to shutdown Screenly-OSE.
+    Background task to shutdown Anthias.
     """
     if is_balena_app():
         retry_call(shutdown_via_balena_supervisor, tries=5, delay=1)
@@ -1314,7 +1314,7 @@ class ResetWifiConfig(Resource):
         bus = pydbus.SystemBus()
 
         pattern_include = re.compile("wlan*")
-        pattern_exclude = re.compile("ScreenlyOSE-*")
+        pattern_exclude = re.compile("Anthias-*")
 
         wireless_connections = get_active_connections(bus)
 
@@ -1616,7 +1616,7 @@ else:
         SWAGGER_URL,
         API_URL,
         config={
-            'app_name': "Screenly OSE API"
+            'app_name': "Anthias API"
         }
     )
     app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)

@@ -45,13 +45,13 @@ if [ "$WEB_UPGRADE" = false ]; then
   tput bold
 
   cat << EOF
-       d8888            888     888       d8b                   
-      d88888            888     888       Y8P                   
-     d88P888            888     888                            
-    d88P 888  88888b.   888888  88888b.   888   8888b.   .d8888b  
-   d88P  888  888 "88b  888     888 "88b  888      "88b  88K      
-  d88P   888  888  888  888     888  888  888  .d888888  "Y8888b. 
- d8888888888  888  888  Y88b.   888  888  888  888  888       X88 
+       d8888            888     888       d8b
+      d88888            888     888       Y8P
+     d88P888            888     888
+    d88P 888  88888b.   888888  88888b.   888   8888b.   .d8888b
+   d88P  888  888 "88b  888     888 "88b  888      "88b  88K
+  d88P   888  888  888  888     888  888  888  .d888888  "Y8888b.
+ d8888888888  888  888  Y88b.   888  888  888  888  888       X88
 d88P     888  888  888   Y888   888  888  888  "Y888888   88888P'
 EOF
 
@@ -67,7 +67,7 @@ EOF
 
 # @TODO Re-enable the 'production' branch once we've merged master into production
 #echo -e "\n________________________________________\n"
-#echo -e "Which version/branch of Screenly OSE would you like to install:\n"
+#echo -e "Which version/branch of Anthias would you like to install:\n"
 #echo " Press (1) for the Production branch, which is the latest stable."
 #echo " Press (2) for the Development/Master branch, which has the latest features and fixes, but things may break."
 #echo ""

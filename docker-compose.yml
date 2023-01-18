@@ -1,7 +1,7 @@
 version: "2"
 services:
-  srly-ose-wifi-connect:
-    image: screenly/srly-ose-wifi-connect
+  anthias-wifi-connect:
+    image: screenly/anthias-wifi-connect
     build:
       args:
         TARGET_PLATFORM: ${TARGET_PLATFORM:-linux/arm/v7}
@@ -20,8 +20,8 @@ services:
         source: /run/dbus/system_bus_socket
         target: /run/dbus/system_bus_socket
 
-  srly-ose-server:
-    image: screenly/srly-ose-server
+  anthias-server:
+    image: screenly/anthias-server
     build:
       context: .
       dockerfile: docker/Dockerfile.server
@@ -38,18 +38,18 @@ services:
     labels:
       io.balena.features.supervisor-api: '1'
 
-  srly-ose-viewer:
-    image: screenly/srly-ose-viewer
+  anthias-viewer:
+    image: screenly/anthias-viewer
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
     depends_on:
-      - srly-ose-server
+      - anthias-server
     environment:
       - HOME=/data
       - PORT=80
       - NOREFRESH=1
-      - LISTEN=srly-ose-nginx
+      - LISTEN=anthias-nginx
     extra_hosts:
       - "host.docker.internal:host-gateway"
     privileged: true
@@ -59,13 +59,13 @@ services:
     labels:
       io.balena.features.supervisor-api: '1'
 
-  srly-ose-websocket:
-    image: screenly/srly-ose-websocket
+  anthias-websocket:
+    image: screenly/anthias-websocket
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket
     depends_on:
-      - srly-ose-server
+      - anthias-server
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -73,13 +73,13 @@ services:
     volumes:
       - resin-data:/data
 
-  srly-ose-celery:
-    image: screenly/srly-ose-celery
+  anthias-celery:
+    image: screenly/anthias-celery
     build:
       context: .
       dockerfile: docker/Dockerfile.celery
     depends_on:
-      - srly-ose-server
+      - anthias-server
       - redis
     environment:
       - HOME=/data
@@ -94,7 +94,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   redis:
-    image: screenly/srly-ose-redis
+    image: screenly/anthias-redis
     build:
       context: .
       dockerfile: docker/Dockerfile.redis
@@ -104,8 +104,8 @@ services:
     volumes:
       - redis-data:/var/lib/redis
 
-  srly-ose-nginx:
-    image: screenly/srly-ose-nginx
+  anthias-nginx:
+    image: screenly/anthias-nginx
     build:
       context: .
       dockerfile: docker/Dockerfile.nginx
@@ -114,8 +114,8 @@ services:
     environment:
       - HOME=/data
     depends_on:
-      - srly-ose-server
-      - srly-ose-websocket
+      - anthias-server
+      - anthias-websocket
     restart: always
     volumes:
       - resin-data:/data:ro

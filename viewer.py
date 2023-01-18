@@ -428,7 +428,7 @@ def setup_hotspot():
     bus = pydbus.SessionBus()
 
     pattern_include = re.compile("wlan*")
-    pattern_exclude = re.compile("ScreenlyOSE-*")
+    pattern_exclude = re.compile("Anthias-*")
 
     wireless_connections = get_active_connections(bus)
 
@@ -506,7 +506,7 @@ def main():
     global db_conn, scheduler
     setup()
 
-    subscriber_1 = ZmqSubscriber('tcp://srly-ose-server:10001')
+    subscriber_1 = ZmqSubscriber('tcp://anthias-server:10001')
     subscriber_1.daemon = True
     subscriber_1.start()
 

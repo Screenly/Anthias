@@ -1,7 +1,7 @@
 version: "2"
 services:
-  srly-ose-wifi-connect:
-    image: screenly/srly-ose-wifi-connect:BOARD_TAG
+  anthias-wifi-connect:
+    image: screenly/anthias-wifi-connect:BOARD_TAG
     environment:
       PORTAL_LISTENING_PORT: 8000
       CHECK_CONN_FREQ: 10
@@ -14,8 +14,8 @@ services:
       io.balena.features.dbus: "1"
       io.balena.features.firmware: "1"
 
-  srly-ose-server:
-    image: screenly/srly-ose-server:BOARD_TAG
+  anthias-server:
+    image: screenly/anthias-server:BOARD_TAG
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -29,15 +29,15 @@ services:
     labels:
       io.balena.features.supervisor-api: '1'
 
-  srly-ose-viewer:
-    image: screenly/srly-ose-viewer:BOARD_TAG
+  anthias-viewer:
+    image: screenly/anthias-viewer:BOARD_TAG
     depends_on:
-      - srly-ose-server
+      - anthias-server
     environment:
       - HOME=/data
       - PORT=80
       - NOREFRESH=1
-      - LISTEN=srly-ose-nginx
+      - LISTEN=anthias-nginx
     extra_hosts:
       - "host.docker.internal:host-gateway"
     privileged: true
@@ -47,10 +47,10 @@ services:
     labels:
       io.balena.features.supervisor-api: '1'
 
-  srly-ose-websocket:
-    image: screenly/srly-ose-websocket:BOARD_TAG
+  anthias-websocket:
+    image: screenly/anthias-websocket:BOARD_TAG
     depends_on:
-      - srly-ose-server
+      - anthias-server
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -58,10 +58,10 @@ services:
     volumes:
       - resin-data:/data
 
-  srly-ose-celery:
-    image: screenly/srly-ose-celery:BOARD_TAG
+  anthias-celery:
+    image: screenly/anthias-celery:BOARD_TAG
     depends_on:
-      - srly-ose-server
+      - anthias-server
       - redis
     environment:
       - HOME=/data
@@ -76,22 +76,22 @@ services:
       io.balena.features.supervisor-api: '1'
 
   redis:
-    image: screenly/srly-ose-redis:BOARD_TAG
+    image: screenly/anthias-redis:BOARD_TAG
     ports:
       - 127.0.0.1:6379:6379
     restart: always
     volumes:
       - redis-data:/var/lib/redis
 
-  srly-ose-nginx:
-    image: screenly/srly-ose-nginx:BOARD_TAG
+  anthias-nginx:
+    image: screenly/anthias-nginx:BOARD_TAG
     ports:
       - 80:80
     environment:
       - HOME=/data
     depends_on:
-      - srly-ose-server
-      - srly-ose-websocket
+      - anthias-server
+      - anthias-websocket
     restart: always
     volumes:
       - resin-data:/data:ro

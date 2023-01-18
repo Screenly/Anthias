@@ -2,7 +2,7 @@ version: "2.2"
 services:
   # Use the `docker-compose.dev.yml` as the base and this
   # as the override file.
-  srly-ose-server:
+  anthias-server:
     environment:
       - IS_DEMO_NODE=1
       - SWAGGER_HOST=ose.demo.screenlyapp.com

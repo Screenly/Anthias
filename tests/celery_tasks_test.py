@@ -16,7 +16,7 @@ from settings import settings
 
 class CeleryTasksTestCase(unittest.TestCase):
     def setUp(self):
-        self.image_url = 'https://github.com/Screenly/screenly-ose/raw/master/static/img/ose-logo.png'
+        self.image_url = 'https://github.com/Screenly/Anthias/raw/master/static/img/ose-logo.png'
         celeryapp.conf.update(CELERY_ALWAYS_EAGER=True, CELERY_RESULT_BACKEND='', CELERY_BROKER_URL='')
 
     def download_image(self, image_url, image_path):
