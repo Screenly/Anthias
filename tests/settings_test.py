@@ -19,7 +19,7 @@ resolution = 1920x1080
 default_duration = 45
 
 [main]
-assetdir = "{}/screenly_assets".format(user_home_dir)
+assetdir = "{}/anthias_assets".format(user_home_dir)
 database = "{}/.anthias/screenly.db".format(user_home_dir)
 use_ssl = False
 

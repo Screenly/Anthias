@@ -44,7 +44,7 @@ RUN mkdir -p /usr/src/app
 COPY . /usr/src/app
 WORKDIR /usr/src/app
 
-RUN mkdir -p /data/.anthias /data/screenly_assets /tmp/USB/cleanup_folder
+RUN mkdir -p /data/.anthias /data/anthias_assets /tmp/USB/cleanup_folder
 RUN cp ansible/roles/screenly/files/screenly.db \
     ansible/roles/screenly/files/screenly.conf /data/.anthias
 

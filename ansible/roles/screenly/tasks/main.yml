@@ -9,7 +9,7 @@
   with_items:
     - .anthias
     - .config
-    - screenly_assets
+    - anthias_assets
 
 - name: Copy Screenly default assets file
   ansible.builtin.copy:
@@ -36,9 +36,9 @@
     state: absent
     path: /usr/local/bin/screenly_utils.sh
 
-- name: Cron job to cleanup screenly_assets
+- name: Cron job to cleanup anthias_assets
   ansible.builtin.cron:
-    name: Cleanup screenly_assets
+    name: Cleanup anthias_assets
     state: absent
     user: "{{ lookup('env', 'USER') }}"
 

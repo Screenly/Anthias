@@ -4,7 +4,7 @@ import sys
 from datetime import datetime
 from os import path, getenv, remove
 
-directories = ['.anthias', 'screenly_assets']
+directories = ['.anthias', 'anthias_assets']
 default_archive_name = "screenly-backup"
 static_dir = "screenly/static"
 

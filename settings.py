@@ -18,7 +18,7 @@ CONFIG_FILE = 'screenly.conf'
 DEFAULTS = {
     'main': {
         'analytics_opt_out': False,
-        'assetdir': 'screenly_assets',
+        'assetdir': 'anthias_assets',
         'database': CONFIG_DIR + 'screenly.db',
         'date_format': 'mm/dd/yyyy',
         'use_24_hour_clock': False,

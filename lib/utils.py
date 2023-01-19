@@ -297,7 +297,7 @@ def download_video_from_youtube(uri, asset_id):
     info = json.loads(check_output(['youtube-dl', '-j', uri]))
     duration = info['duration']
 
-    location = path.join(home, 'screenly_assets', asset_id)
+    location = path.join(home, 'anthias_assets', asset_id)
     thread = YoutubeDownloadThread(location, uri, asset_id)
     thread.daemon = True
     thread.start()

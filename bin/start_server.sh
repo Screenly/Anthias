@@ -3,7 +3,7 @@
 mkdir -p \
     /data/.config \
     /data/.anthias \
-    /data/screenly_assets
+    /data/anthias_assets
 
 cp -n /usr/src/app/ansible/roles/screenly/files/screenly.conf /data/.anthias/screenly.conf
 cp -n /usr/src/app/ansible/roles/screenly/files/default_assets.yml /data/.anthias/default_assets.yml
