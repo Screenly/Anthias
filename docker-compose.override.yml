@@ -52,4 +52,4 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
 volumes:
-  screenly-data:
+  anthias-data:
