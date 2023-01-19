@@ -34,7 +34,7 @@ From a Console Run:
 
 For most users, it's recommended that you use the API instead.
 
-The SQLite Database can be found here: `~/.screenly/screenly.db`
+The SQLite Database can be found here: `~/.anthias/screenly.db`
 
 Its a SQLite Database and can be modified with the sqlite3 CLI. The schema is relatively straight forward if you are a developer; the columns of most interest to you will be `name` and `is_enabled`. In addition `start_date` is useful if you want to use this in a disconnected manner.
 

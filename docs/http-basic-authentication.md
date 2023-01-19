@@ -4,7 +4,7 @@ Access to Screenly web configuration interface can be restricted via an [*HTTP b
 
 ## Configuration
 
-Login and password are defined in the `~/.screenly/screenly.conf` configuration file, in the `[auth]` part as shown below:
+Login and password are defined in the `~/.anthias/screenly.conf` configuration file, in the `[auth]` part as shown below:
 
 ```
 [auth]
@@ -29,7 +29,7 @@ feature), you can add it with this command (adapt for desired login and
 password):
 
 ```Shell
-$ cat >> ~/.screenly/screenly.conf <<'EOT'
+$ cat >> ~/.anthias/screenly.conf <<'EOT'
 
 [auth]
 user = foo
@@ -45,7 +45,7 @@ To change both login and password with a single command, you can use:
 $ sed --in-place \
     -e 's/^user\s*=\s*.*/user = foo/' \
     -e 's/^password\s*=\s*.*/password = bar/' \
-    ~/.screenly/screenly.conf
+    ~/.anthias/screenly.conf
 ```
 
 ## Usage

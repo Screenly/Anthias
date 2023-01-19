@@ -13,7 +13,7 @@ from UserDict import IterableUserDict
 from lib.auth import WoTTAuth, BasicAuth, NoAuth
 from lib.errors import ZmqCollectorTimeout
 
-CONFIG_DIR = '.screenly/'
+CONFIG_DIR = '.anthias/'
 CONFIG_FILE = 'screenly.conf'
 DEFAULTS = {
     'main': {

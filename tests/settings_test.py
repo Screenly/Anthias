@@ -20,7 +20,7 @@ default_duration = 45
 
 [main]
 assetdir = "{}/screenly_assets".format(user_home_dir)
-database = "{}/.screenly/screenly.db".format(user_home_dir)
+database = "{}/.anthias/screenly.db".format(user_home_dir)
 use_ssl = False
 
 """
@@ -40,7 +40,7 @@ show_splash = offf
 
 """
 
-CONFIG_DIR = '/tmp/.screenly/'
+CONFIG_DIR = '/tmp/.anthias/'
 CONFIG_FILE = CONFIG_DIR + 'screenly.conf'
 
 

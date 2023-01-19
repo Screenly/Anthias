@@ -8,7 +8,7 @@ services:
     environment:
       - MY_IP=${MY_IP}
     volumes:
-      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/.anthias:/data/.anthias
       - /home/${USER}/screenly_assets:/data/screenly_assets
       - /home/${USER}/screenly/static:/data/screenly/static
       - /etc/timezone:/etc/timezone:ro
@@ -18,7 +18,7 @@ services:
     image: screenly/anthias-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
     mem_limit: ${VIEWER_MEMORY_LIMIT_KB}k
     volumes:
-      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/.anthias:/data/.anthias
       - /home/${USER}/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
@@ -26,7 +26,7 @@ services:
   anthias-websocket:
     image: screenly/anthias-websocket:${DOCKER_TAG}-${DEVICE_TYPE}
     volumes:
-      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/.anthias:/data/.anthias
       - /home/${USER}/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
@@ -34,7 +34,7 @@ services:
   anthias-celery:
     image: screenly/anthias-celery:${DOCKER_TAG}-${DEVICE_TYPE}
     volumes:
-      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/.anthias:/data/.anthias
       - /home/${USER}/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
@@ -45,7 +45,7 @@ services:
   anthias-nginx:
     image: screenly/anthias-nginx:${DOCKER_TAG}-${DEVICE_TYPE}
     volumes:
-      - /home/${USER}/.screenly:/data/.screenly:ro
+      - /home/${USER}/.anthias:/data/.anthias:ro
       - /home/${USER}/screenly_assets:/data/screenly_assets:ro
       - /home/${USER}/screenly/static:/data/screenly/static:ro
       - /etc/timezone:/etc/timezone:ro

@@ -48,7 +48,7 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 SPLASH_DELAY = 60  # secs
 EMPTY_PL_DELAY = 5  # secs
 
-INITIALIZED_FILE = '/.screenly/initialized'
+INITIALIZED_FILE = '/.anthias/initialized'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 
 LOAD_SCREEN = 'http://{}:{}/{}'.format(LISTEN, PORT, 'static/img/loading.png')

@@ -68,7 +68,7 @@ All of the files/folders from the Github repo should be cloned into this directo
 ```
 
 ```
-/home/pi/.screenly/
+/home/pi/.anthias/
 
 celerybeat-schedule -> stores the last run times of the celery tasks.
 default_assets.yml -> configuration file which contains the default assets that get added to the Assets if enabled.
@@ -84,7 +84,7 @@ screenly.db -> database file containing current Assets information.
 /etc/systemd/system/
 
 matchbox.service -> lightweight window manager for the X window system (env variable DISPLAY as 0.0)
-screenly-celery.service -> starts the celery worker (App set to server.celery, bpython interface, hostname worker@screenly, schedule database /home/pi/.screenly/celerybeat-schedule)
+screenly-celery.service -> starts the celery worker (App set to server.celery, bpython interface, hostname worker@screenly, schedule database /home/pi/.anthias/celerybeat-schedule)
 screenly-viewer.service -> starts the main viewer (viewer.py) and sets a few user prefs for the X display
 screenly-web.service -> starts the web server (server.py)
 screenly-websocket_server_layer.service -> starts the websocket server, uses zmq for messaging

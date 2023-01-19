@@ -7,7 +7,7 @@
     group: "{{ lookup('env', 'USER') }}"
     mode: 0755
   with_items:
-    - .screenly
+    - .anthias
     - .config
     - screenly_assets
 
@@ -17,14 +17,14 @@
     group: "{{ lookup('env', 'USER') }}"
     mode: 0644
     src: default_assets.yml
-    dest: "/home/{{ lookup('env', 'USER') }}/.screenly/default_assets.yml"
+    dest: "/home/{{ lookup('env', 'USER') }}/.anthias/default_assets.yml"
     force: true
 
 - name: Remove deprecated parameter "listen"
   ansible.builtin.lineinfile:
     regexp: '^.*listen.*'
     state: absent
-    dest: "/home/{{ lookup('env', 'USER') }}/.screenly/screenly.conf"
+    dest: "/home/{{ lookup('env', 'USER') }}/.anthias/screenly.conf"
 
 - name: Install pip dependencies
   ansible.builtin.pip:

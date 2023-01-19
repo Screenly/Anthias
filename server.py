@@ -631,7 +631,7 @@ def add_default_assets():
         'duration': settings['default_duration']
     }
 
-    default_assets_yaml = path.join(HOME, '.screenly/default_assets.yml')
+    default_assets_yaml = path.join(HOME, '.anthias/default_assets.yml')
 
     with open(default_assets_yaml, 'r') as yaml_file:
         default_assets = yaml.safe_load(yaml_file).get('assets')
@@ -1306,7 +1306,7 @@ class ResetWifiConfig(Resource):
     })
     def get(self):
         home = getenv('HOME')
-        file_path = path.join(home, '.screenly/initialized')
+        file_path = path.join(home, '.anthias/initialized')
 
         if path.isfile(file_path):
             remove(file_path)

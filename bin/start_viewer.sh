@@ -6,7 +6,7 @@ chmod -f g+rwX /dev/vchiq
 
 # Set permission for sha file
 chown -f viewer /dev/snd/*
-chown -f viewer /data/.screenly/latest_screenly_sha
+chown -f viewer /data/.anthias/latest_screenly_sha
 
 # Fixes caching in QTWebEngine
 mkdir -p /data/.local/share/ScreenlyWebview/QtWebEngine \

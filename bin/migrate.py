@@ -8,7 +8,7 @@ import subprocess
 from contextlib import contextmanager
 import datetime
 
-configdir = os.path.join(os.getenv('HOME'), '.screenly/')
+configdir = os.path.join(os.getenv('HOME'), '.anthias/')
 database = os.path.join(configdir, 'screenly.db')
 
 comma = ','.join

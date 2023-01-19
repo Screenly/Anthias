@@ -4,7 +4,7 @@ import sys
 from datetime import datetime
 from os import path, getenv, remove
 
-directories = ['.screenly', 'screenly_assets']
+directories = ['.anthias', 'screenly_assets']
 default_archive_name = "screenly-backup"
 static_dir = "screenly/static"
 
@@ -36,7 +36,7 @@ def recover(file_path):
     if not HOME:
         logging.error('No HOME variable')
         sys.exit(1) # Alternatively, we can raise an Exception using a custom message, or we can create a new class that extends Exception.
-    
+
     with tarfile.open(file_path, "r:gz") as tar:
         for directory in directories:
             if directory not in tar.getnames():
