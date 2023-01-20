@@ -1,7 +1,7 @@
 version: "2.2"
 services:
   anthias-base:
-    image: screenly/srly-ose-base:latest-x86
+    image: screenly/anthias-base:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.base.dev
@@ -9,7 +9,7 @@ services:
         - screenly/srly-ose-base:latest-x86
 
   anthias-test:
-    image: screenly/srly-ose-test:latest-x86
+    image: screenly/anthias-test:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.test
@@ -26,7 +26,7 @@ services:
       - resin-data:/data
 
   anthias-celery:
-    image: screenly/srly-ose-celery:latest-x86
+    image: screenly/anthias-celery:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.celery.dev

@@ -102,6 +102,8 @@ jobs:
               --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
               --build-arg "GIT_BRANCH=$GITHUB_REF_NAME" \
               -f "docker/Dockerfile.$container" \
+              -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-${{ matrix.board }}" \
+              -t "screenly/srly-ose-$container:$DOCKER_TAG" . \
               -t "screenly/anthias-$container:$GIT_SHORT_HASH-${{ matrix.board }}" \
               -t "screenly/anthias-$container:$DOCKER_TAG" .
           done
