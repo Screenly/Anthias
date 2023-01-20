@@ -1,6 +1,6 @@
 version: "2"
 services:
-  srly-ose-wifi-connect:
+  anthias-wifi-connect:
     image: screenly/srly-ose-wifi-connect
     build:
       args:
@@ -20,7 +20,7 @@ services:
         source: /run/dbus/system_bus_socket
         target: /run/dbus/system_bus_socket
 
-  srly-ose-server:
+  anthias-server:
     image: screenly/srly-ose-server
     build:
       context: .
@@ -38,18 +38,18 @@ services:
     labels:
       io.balena.features.supervisor-api: '1'
 
-  srly-ose-viewer:
+  anthias-viewer:
     image: screenly/srly-ose-viewer
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
     depends_on:
-      - srly-ose-server
+      - anthias-server
     environment:
       - HOME=/data
       - PORT=80
       - NOREFRESH=1
-      - LISTEN=srly-ose-nginx
+      - LISTEN=anthias-nginx
     extra_hosts:
       - "host.docker.internal:host-gateway"
     privileged: true
@@ -59,13 +59,13 @@ services:
     labels:
       io.balena.features.supervisor-api: '1'
 
-  srly-ose-websocket:
+  anthias-websocket:
     image: screenly/srly-ose-websocket
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket
     depends_on:
-      - srly-ose-server
+      - anthias-server
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -73,13 +73,13 @@ services:
     volumes:
       - resin-data:/data
 
-  srly-ose-celery:
+  anthias-celery:
     image: screenly/srly-ose-celery
     build:
       context: .
       dockerfile: docker/Dockerfile.celery
     depends_on:
-      - srly-ose-server
+      - anthias-server
       - redis
     environment:
       - HOME=/data
@@ -104,7 +104,7 @@ services:
     volumes:
       - redis-data:/var/lib/redis
 
-  srly-ose-nginx:
+  anthias-nginx:
     image: screenly/srly-ose-nginx
     build:
       context: .
@@ -114,8 +114,8 @@ services:
     environment:
       - HOME=/data
     depends_on:
-      - srly-ose-server
-      - srly-ose-websocket
+      - anthias-server
+      - anthias-websocket
     restart: always
     volumes:
       - resin-data:/data:ro

@@ -44,8 +44,8 @@ jobs:
       - name: Run the tests inside the container
         shell: 'script -q -e -c "bash {0}"'
         run: |
-          docker-compose -f docker-compose.test.yml exec srly-ose-test bash ./bin/prepare_test_environment.sh -s
-          docker-compose -f docker-compose.test.yml exec srly-ose-test nosetests -v -a '!fixme'
+          docker-compose -f docker-compose.test.yml exec anthias-test bash ./bin/prepare_test_environment.sh -s
+          docker-compose -f docker-compose.test.yml exec anthias-test nosetests -v -a '!fixme'
 
       - name: Stop the test container
         run: |

@@ -1,9 +1,9 @@
 version: "2"
 services:
-  srly-ose-wifi-connect:
+  anthias-wifi-connect:
     image: screenly/srly-ose-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
 
-  srly-ose-server:
+  anthias-server:
     image: screenly/srly-ose-server:${DOCKER_TAG}-${DEVICE_TYPE}
     environment:
       - MY_IP=${MY_IP}
@@ -14,7 +14,7 @@ services:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
-  srly-ose-viewer:
+  anthias-viewer:
     image: screenly/srly-ose-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
     mem_limit: ${VIEWER_MEMORY_LIMIT_KB}k
     volumes:
@@ -23,7 +23,7 @@ services:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
-  srly-ose-websocket:
+  anthias-websocket:
     image: screenly/srly-ose-websocket:${DOCKER_TAG}-${DEVICE_TYPE}
     volumes:
       - /home/${USER}/.screenly:/data/.screenly
@@ -31,7 +31,7 @@ services:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
-  srly-ose-celery:
+  anthias-celery:
     image: screenly/srly-ose-celery:${DOCKER_TAG}-${DEVICE_TYPE}
     volumes:
       - /home/${USER}/.screenly:/data/.screenly
@@ -42,7 +42,7 @@ services:
   redis:
     image: screenly/srly-ose-redis:${DOCKER_TAG}-${DEVICE_TYPE}
 
-  srly-ose-nginx:
+  anthias-nginx:
     image: screenly/srly-ose-nginx:${DOCKER_TAG}-${DEVICE_TYPE}
     volumes:
       - /home/${USER}/.screenly:/data/.screenly:ro

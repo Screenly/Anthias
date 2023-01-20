@@ -1,6 +1,6 @@
 version: "2.2"
 services:
-  srly-ose-base:
+  anthias-base:
     image: screenly/srly-ose-base:latest-x86
     build:
       context: .
@@ -8,7 +8,7 @@ services:
       cache_from:
         - screenly/srly-ose-base:latest-x86
 
-  srly-ose-server:
+  anthias-server:
     image: screenly/srly-ose-server:latest-x86
     build:
       context: .
@@ -17,7 +17,7 @@ services:
         - screenly/srly-ose-base:latest-x86
         - screenly/srly-ose-server:latest-x86
     depends_on:
-      - srly-ose-base
+      - anthias-base
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -28,23 +28,23 @@ services:
       - resin-data:/data
 
 # We might bring this in in the future
-#  srly-ose-viewer:
+#  anthias-viewer:
 #    build:
 #      context: .
 #      dockerfile: docker/Dockerfile.viewer
 #    depends_on:
-#      - srly-ose-server
+#      - anthias-server
 #    environment:
 #      - HOME=/data
 #      - PORT=80
 #      - NOREFRESH=1
-#      - LISTEN=srly-ose-nginx
+#      - LISTEN=anthias-nginx
 #    privileged: true
 #    restart: always
 #    volumes:
 #      - resin-data:/data
 
-  srly-ose-websocket:
+  anthias-websocket:
     image: screenly/srly-ose-websocket:latest-x86
     build:
       context: .
@@ -53,8 +53,8 @@ services:
         - screenly/srly-ose-base:latest-x86
         - screenly/srly-ose-websocket:latest-x86
     depends_on:
-      - srly-ose-base
-      - srly-ose-server
+      - anthias-base
+      - anthias-server
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -62,7 +62,7 @@ services:
     volumes:
       - resin-data:/data
 
-  srly-ose-celery:
+  anthias-celery:
     image: screenly/srly-ose-celery:latest-x86
     build:
       context: .
@@ -71,8 +71,8 @@ services:
         - screenly/srly-ose-base:latest-x86
         - screenly/srly-ose-celery:latest-x86
     depends_on:
-      - srly-ose-base
-      - srly-ose-server
+      - anthias-base
+      - anthias-server
       - redis
     environment:
       - HOME=/data
@@ -85,7 +85,7 @@ services:
   redis:
     image: redis:alpine
 
-  srly-ose-nginx:
+  anthias-nginx:
     image: screenly/srly-ose-nginx:latest-x86
     build:
       context: .
@@ -95,9 +95,9 @@ services:
     environment:
       - HOME=/data
     depends_on:
-      - srly-ose-base
-      - srly-ose-server
-      - srly-ose-websocket
+      - anthias-base
+      - anthias-server
+      - anthias-websocket
     restart: always
     volumes:
       - resin-data:/data:ro

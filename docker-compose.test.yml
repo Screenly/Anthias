@@ -1,6 +1,6 @@
 version: "2.2"
 services:
-  srly-ose-base:
+  anthias-base:
     image: screenly/srly-ose-base:latest-x86
     build:
       context: .
@@ -8,13 +8,13 @@ services:
       cache_from:
         - screenly/srly-ose-base:latest-x86
 
-  srly-ose-test:
+  anthias-test:
     image: screenly/srly-ose-test:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.test
     depends_on:
-      - srly-ose-base
+      - anthias-base
     environment:
       - HOME=/data
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -25,7 +25,7 @@ services:
       - .:/usr/src/app
       - resin-data:/data
 
-  srly-ose-celery:
+  anthias-celery:
     image: screenly/srly-ose-celery:latest-x86
     build:
       context: .
@@ -34,8 +34,8 @@ services:
         - screenly/srly-ose-base:latest-x86
         - screenly/srly-ose-celery:latest-x86
     depends_on:
-      - srly-ose-base
-      - srly-ose-test
+      - anthias-base
+      - anthias-test
       - redis
     environment:
       - HOME=/data
