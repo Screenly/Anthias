@@ -76,8 +76,8 @@ Run the unit tests.
 ```bash
 $ docker-compose \
     -f docker-compose.test.yml \
-    exec -T srly-ose-test bash ./bin/prepare_test_environment.sh -s
+    exec -T anthias-test bash ./bin/prepare_test_environment.sh -s
 $ docker-compose \
     -f docker-compose.test.yml \
-    exec -T srly-ose-test nosetests -v -a '!fixme'
+    exec -T anthias-test nosetests -v -a '!fixme'
 ```

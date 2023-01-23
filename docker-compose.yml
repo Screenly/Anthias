@@ -1,7 +1,7 @@
 version: "2"
 services:
   anthias-wifi-connect:
-    image: screenly/srly-ose-wifi-connect
+    image: screenly/anthias-ose-wifi-connect
     build:
       args:
         TARGET_PLATFORM: ${TARGET_PLATFORM:-linux/arm/v7}
@@ -21,7 +21,7 @@ services:
         target: /run/dbus/system_bus_socket
 
   anthias-server:
-    image: screenly/srly-ose-server
+    image: screenly/anthias-ose-server
     build:
       context: .
       dockerfile: docker/Dockerfile.server
@@ -39,7 +39,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   anthias-viewer:
-    image: screenly/srly-ose-viewer
+    image: screenly/anthias-ose-viewer
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
@@ -63,7 +63,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   anthias-websocket:
-    image: screenly/srly-ose-websocket
+    image: screenly/anthias-ose-websocket
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket
@@ -77,7 +77,7 @@ services:
       - resin-data:/data
 
   anthias-celery:
-    image: screenly/srly-ose-celery
+    image: screenly/anthias-ose-celery
     build:
       context: .
       dockerfile: docker/Dockerfile.celery
@@ -97,7 +97,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   redis:
-    image: screenly/srly-ose-redis
+    image: screenly/anthias-ose-redis
     build:
       context: .
       dockerfile: docker/Dockerfile.redis
@@ -108,7 +108,7 @@ services:
       - redis-data:/var/lib/redis
 
   anthias-nginx:
-    image: screenly/srly-ose-nginx
+    image: screenly/anthias-ose-nginx
     build:
       context: .
       dockerfile: docker/Dockerfile.nginx

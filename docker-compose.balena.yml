@@ -1,7 +1,7 @@
 version: "2"
 services:
   anthias-wifi-connect:
-    image: screenly/srly-ose-wifi-connect:BOARD_TAG
+    image: screenly/anthias-ose-wifi-connect:BOARD_TAG
     environment:
       PORTAL_LISTENING_PORT: 8000
       CHECK_CONN_FREQ: 10
@@ -15,7 +15,7 @@ services:
       io.balena.features.firmware: "1"
 
   anthias-server:
-    image: screenly/srly-ose-server:BOARD_TAG
+    image: screenly/anthias-ose-server:BOARD_TAG
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -30,7 +30,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   anthias-viewer:
-    image: screenly/srly-ose-viewer:BOARD_TAG
+    image: screenly/anthias-ose-viewer:BOARD_TAG
     depends_on:
       - anthias-server
     environment:
@@ -51,7 +51,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   anthias-websocket:
-    image: screenly/srly-ose-websocket:BOARD_TAG
+    image: screenly/anthias-ose-websocket:BOARD_TAG
     depends_on:
       - anthias-server
     environment:
@@ -62,7 +62,7 @@ services:
       - resin-data:/data
 
   anthias-celery:
-    image: screenly/srly-ose-celery:BOARD_TAG
+    image: screenly/anthias-ose-celery:BOARD_TAG
     depends_on:
       - anthias-server
       - redis
@@ -79,7 +79,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   redis:
-    image: screenly/srly-ose-redis:BOARD_TAG
+    image: screenly/anthias-ose-redis:BOARD_TAG
     ports:
       - 127.0.0.1:6379:6379
     restart: always
@@ -87,7 +87,7 @@ services:
       - redis-data:/var/lib/redis
 
   anthias-nginx:
-    image: screenly/srly-ose-nginx:BOARD_TAG
+    image: screenly/anthias-ose-nginx:BOARD_TAG
     ports:
       - 80:80
     environment:
