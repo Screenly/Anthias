@@ -6,13 +6,11 @@
 
 To clear up confusion between Screenly and Anthias, we have decided to rename Screenly OSE to Anthias. More details can be found in [this blog post](https://www.screenly.io/blog/2022/12/06/screenly-ose-now-called-anthias/). The renaming process is now under way, and over the coming months, Anthias will receive a face lift and the love it deserves.
 
-
 Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
 
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Screenly/Anthias&type=Date)](https://star-history.com/#Screenly/Anthias&Date)
-
 
 ## Disk images
 
@@ -40,13 +38,21 @@ During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast inte
 
 While you can deploy to your own Balena fleet, the easiest way to deploy using [Balena OpenFleets](https://hub.balena.io/organizations/screenly_ose/fleets).
 
+## Local demo
+
+With Docker installed, run the following:
+
+```bash
+$ git clone git@github.com:Screenly/Anthias.git
+$ cd Anthias
+$ docker compose up -f docker-compose.demo.yml
+```
+
 ## Quick links
 
  * [Forum](https://forums.screenly.io/c/screenly-ose)
  * [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](https://github.com/Screenly/Anthias/tree/master/website))
- * [Live Demo](https://ose.demo.screenlyapp.com/)
  * [QA Checklist](https://github.com/Screenly/Anthias/blob/master/docs/qa-checklist.md)
- * [API Docs](https://ose.demo.screenlyapp.com/api/docs/)
  * [Developer Documentation](https://github.com/Screenly/Anthias/blob/master/docs/developer-documentation.md)
 
 Anthias works on all Raspberry Pi versions, including Raspberry Pi Zero, Raspberry Pi 3 Model B, and Raspberry Pi 4 Model B.

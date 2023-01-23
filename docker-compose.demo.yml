@@ -5,4 +5,3 @@ services:
   srly-ose-server:
     environment:
       - IS_DEMO_NODE=1
-      - SWAGGER_HOST=ose.demo.screenlyapp.com

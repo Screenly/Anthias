@@ -23,7 +23,7 @@ jobs:
     needs: run-tests
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
     runs-on: ubuntu-latest
 
     steps:
@@ -58,18 +58,20 @@ jobs:
           # Logic for Raspberry Pi 1
           if [ "${{ matrix.board }}" == 'pi1' ]; then
             sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
-              docker/Dockerfile.base
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
-              docker/Dockerfile.viewer
+              docker/Dockerfile.*
             echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
 
           # Logic for Raspberry Pi 2
           elif [ "${{ matrix.board }}" == 'pi2' ]; then
             sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
-              docker/Dockerfile.base
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
-              docker/Dockerfile.viewer
+              docker/Dockerfile.*
             echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
+
+          # Logic for x86
+          elif [ "${{ matrix.board }}" == 'x86' ]; then
+            sed -i 's/balenalib\/raspberrypi3/debian/' \
+              docker/Dockerfile.*
+            echo 'TARGET_PLATFORM=linux/amd64' >> $GITHUB_ENV
 
           # We use the same target for Pi 3 and Pi 4 for now.
           else
@@ -110,7 +112,7 @@ jobs:
     needs: buildx
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
