@@ -40,6 +40,9 @@ services:
       - LISTEN=anthias-nginx
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      default:
+      anthias-extra-1:
     privileged: true
     restart: always
     volumes:
@@ -92,9 +95,18 @@ services:
     depends_on:
       - anthias-server
       - anthias-websocket
+    networks:
+      default:
+      anthias-extra-1:
+        aliases:
+          - 'anthias-nginx'
+          - 'srly-ose-nginx'
     restart: always
     volumes:
       - resin-data:/data:ro
+
+networks:
+  anthias-extra-1:
 
 volumes:
   resin-data:
