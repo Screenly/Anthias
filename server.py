@@ -1867,7 +1867,11 @@ def main():
                 cursor.execute(assets_helper.create_assets_table)
 
 
-if __name__ == "__main__":
+def is_development():
+    return getenv('FLASK_ENV', '') == 'development'
+
+
+if __name__ == "__main__" and not is_development():
     config = {
         'bind': '{}:{}'.format(LISTEN, PORT),
         'threads': 2,

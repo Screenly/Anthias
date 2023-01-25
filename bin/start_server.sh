@@ -23,4 +23,8 @@ fi
 echo "Running migration..."
 python ./bin/migrate.py
 
-python server.py
+if [[ ! -z $DEVELOPMENT_MODE ]]; then
+    flask run --host 0.0.0.0 --port 8080
+else
+    python server.py
+fi
