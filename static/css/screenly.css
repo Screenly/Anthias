@@ -8928,13 +8928,23 @@ a.text-dark:hover, a.text-dark:focus {
     border-color: #dee2e6;
   }
 }
+::-moz-selection {
+  color: #000000;
+  background: #FFE11A;
+}
+
+::selection {
+  color: #000000;
+  background: #FFE11A;
+}
+
 html {
   position: relative;
   min-height: 100%;
 }
 
 body {
-  background-color: #f0f0f0;
+  background-color: #270035;
   margin-top: 95px;
   margin-bottom: 104px;
   font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
@@ -8943,7 +8953,7 @@ body {
 .content {
   background-color: white;
   border-radius: 4px;
-  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.12);
+  border-left: 6px solid #FFE11A;
   padding: 15px 0;
   min-height: 60vh;
   margin: 0;
@@ -8964,7 +8974,7 @@ label {
 }
 
 .btn-long {
-  width: 170px;
+  min-width: 170px;
 }
 
 .btn-primary {
@@ -8975,6 +8985,12 @@ label {
 
 .btn-outline-primary {
   color: #000000;
+  background-color: #FFFFFF;
+  transition: none;
+}
+.btn-outline-primary:hover {
+  background-image: linear-gradient(133.73deg, #FFF963, #FFD800);
+  font-weight: 600;
 }
 
 .switch-ios.switch-light input:checked ~ span {
@@ -9064,16 +9080,17 @@ label {
   max-height: 50px;
 }
 #footer .links a {
-  color: rgba(54, 54, 54, 0.45);
+  color: rgba(255, 255, 255, 0.7);
   font-weight: bold;
   text-transform: uppercase;
 }
 #footer .links a:hover {
   text-decoration: none;
+  color: rgba(255, 255, 255, 0.9);
 }
 #footer .copy {
   border-top: 1px solid rgba(0, 0, 0, 0.1);
-  color: rgba(54, 54, 54, 0.45);
+  color: rgba(255, 255, 255, 0.7);
   font-size: 0.7em;
 }
 
