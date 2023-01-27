@@ -8952,13 +8952,13 @@ body {
 
 .content {
   background-color: white;
+  border-left: 6px solid #FFE11A;
   border-radius: 4px;
   padding: 15px 0;
   margin: 0;
 }
 
 .active-content {
-  border-left: 6px solid #FFE11A;
   background: linear-gradient(0deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.16)), #270035;
   color: #FFFFFF;
 }
@@ -8967,6 +8967,7 @@ body {
 }
 .active-content table tbody > tr {
   background: linear-gradient(0deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.16)), #270035;
+  opacity: 0.8;
 }
 .active-content .btn {
   color: #FFFFFF;
@@ -9019,11 +9020,13 @@ label {
   font-weight: 600;
 }
 
-.switch-ios.switch-light input:checked ~ span {
-  box-shadow: inset 0 0 0 30px #FFE11A !important;
+.switch-material.switch-light input ~ span a {
+  background-color: #FFE11A !important;
+  box-shadow: none !important;
+  top: -0.125em;
 }
-.switch-ios.switch-light input:checked ~ span a {
-  border-color: #FFE11A !important;
+.switch-material.switch-light input:checked ~ span {
+  box-shadow: inset 0 0 0 30px #FFF3A3 !important;
 }
 
 .splash {

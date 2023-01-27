@@ -48,7 +48,7 @@
             <%= duration %>
         </td>
         <td class="asset-toggle" style="width:7%">
-            <label class="is_enabled-toggle toggle switch-light switch-ios small m-0">
+            <label class="is_enabled-toggle toggle switch-light switch-material small m-0">
                 <input type="checkbox"/>
                 <span>
                     <span class="off"></span>
@@ -301,7 +301,7 @@
     <div class="container pt-3 pb-3">
         <div class="row">
             <div class="col-12">
-                <h5 class="d-flex">
+                <h4 class="d-flex">
                     <b class="justify-content-center align-self-center text-white">Schedule Overview</b>
                     <div class="ml-auto">
                         <a id="previous-asset-button" class="btn btn-long btn-outline-primary" href="#">
@@ -316,9 +316,9 @@
                             Add Asset
                         </a>
                     </div>
-                </h5>
+                </h4>
                 {% if context.player_name %}
-                    <h2>{{ context.player_name }}</h2>
+                    <h4 class="text-white">{{ context.player_name }}</h4>
                 {% endif %}
             </div>
         </div>
@@ -326,12 +326,12 @@
 
     <span id="assets">
         <div class="container">
-            <div class="row content active-content">
+            <div class="row content active-content px-2 pt-4">
                 <div class="col-12 mb-5">
                     <section id="active-assets-section">
-                        <h4>
+                        <h5>
                             <b>Active assets</b>
-                        </h4>
+                        </h5>
                         <table class="table">
                             <thead class="table-borderless">
                             <tr>
@@ -351,13 +351,13 @@
             </div>
         </div>
 
-        <div class="container mt-4">
-            <div class="row content inactive-content">
+        <div class="container mt-4 mb-4">
+            <div class="row content inactive-content px-2 pt-4">
                 <div class="col-12 mb-5">
                     <section id="inactive-assets-section">
-                        <h4>
+                        <h5>
                             <b>Inactive assets</b>
-                        </h4>
+                        </h5>
                         <table class="table">
                             <thead class="table-borderless">
                             <tr>
