@@ -323,50 +323,58 @@
             </div>
         </div>
     </div>
-    <div class="container">
-        <div id="assets" class="row content">
-            <div class="col-12 mb-5">
-                <section id="active-assets-section">
-                    <h4>
-                        <b>Active assets</b>
-                    </h4>
-                    <table class="table">
-                        <thead class="table-borderless">
-                        <tr>
-                            <th class="text-secondary font-weight-normal asset_row_name">Name</th>
-                            <th class="text-secondary font-weight-normal" style="width:21%">Start</th>
-                            <th class="text-secondary font-weight-normal" style="width:21%">End</th>
-                            <th class="text-secondary font-weight-normal" style="width:13%">Duration</th>
-                            <th class="text-secondary font-weight-normal" style="width:7%">Activity</th>
-                            <th class="text-secondary font-weight-normal" style="width:13%"></th>
-                        </tr>
-                        </thead>
-                        <tbody id="active-assets"></tbody>
-                    </table>
-                    <div class="table-assets-help-text text-secondary">Currently there are no assets. <a class="add-asset-button" href="#">Add asset</a> now.</div>
-                </section>
-            </div>
-            <div class="col-12">
-                <section id="inactive-assets-section">
-                    <h4>
-                        <b>Inactive assets</b>
-                    </h4>
-                    <table class="table">
-                        <thead class="table-borderless">
-                        <tr>
-                            <th class="text-secondary font-weight-normal asset_row_name">Name</th>
-                            <th class="text-secondary font-weight-normal" style="width:21%">Start</th>
-                            <th class="text-secondary font-weight-normal" style="width:21%">End</th>
-                            <th class="text-secondary font-weight-normal" style="width:13%">Duration</th>
-                            <th class="text-secondary font-weight-normal" style="width:7%">Activity</th>
-                            <th class="text-secondary font-weight-normal" style="width:13%"></th>
-                        </tr>
-                        </thead>
-                        <tbody id="inactive-assets"></tbody>
-                    </table>
-                    <div class="table-assets-help-text text-secondary">Currently there are no assets. <a class="add-asset-button" href="#">Add asset</a> now.</div>
-                </section>
+
+    <span id="assets">
+        <div class="container">
+            <div class="row content active-content">
+                <div class="col-12 mb-5">
+                    <section id="active-assets-section">
+                        <h4>
+                            <b>Active assets</b>
+                        </h4>
+                        <table class="table">
+                            <thead class="table-borderless">
+                            <tr>
+                                <th class="font-weight-normal asset_row_name">Name</th>
+                                <th class="font-weight-normal" style="width:21%">Start</th>
+                                <th class="font-weight-normal" style="width:21%">End</th>
+                                <th class="font-weight-normal" style="width:13%">Duration</th>
+                                <th class="font-weight-normal" style="width:7%">Activity</th>
+                                <th class="font-weight-normal" style="width:13%"></th>
+                            </tr>
+                            </thead>
+                            <tbody id="active-assets"></tbody>
+                        </table>
+                        <div class="table-assets-help-text">Currently there are no assets. <a class="add-asset-button" href="#">Add asset</a> now.</div>
+                    </section>
+                </div>
             </div>
         </div>
-    </div>
+
+        <div class="container mt-4">
+            <div class="row content inactive-content">
+                <div class="col-12 mb-5">
+                    <section id="inactive-assets-section">
+                        <h4>
+                            <b>Inactive assets</b>
+                        </h4>
+                        <table class="table">
+                            <thead class="table-borderless">
+                            <tr>
+                                <th class="text-secondary font-weight-normal asset_row_name">Name</th>
+                                <th class="text-secondary font-weight-normal" style="width:21%">Start</th>
+                                <th class="text-secondary font-weight-normal" style="width:21%">End</th>
+                                <th class="text-secondary font-weight-normal" style="width:13%">Duration</th>
+                                <th class="text-secondary font-weight-normal" style="width:7%">Activity</th>
+                                <th class="text-secondary font-weight-normal" style="width:13%"></th>
+                            </tr>
+                            </thead>
+                            <tbody id="inactive-assets"></tbody>
+                        </table>
+                        <div class="table-assets-help-text text-secondary">Currently there are no assets. <a class="add-asset-button" href="#">Add asset</a> now.</div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </span>
 {% endblock %}

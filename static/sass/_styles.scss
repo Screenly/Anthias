@@ -44,10 +44,32 @@ body {
 .content {
   background-color: white;
   border-radius: 4px;
-  border-left: 6px solid $anthias-yellow-3;
   padding: 15px 0;
-  min-height: 60vh;
   margin: 0;
+}
+
+.active-content {
+  border-left: 6px solid $anthias-yellow-3;
+  background: linear-gradient(0deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.16)), #270035;
+  color: #FFFFFF;
+
+  table {
+    color: #FFFFFF;
+  }
+
+  .btn {
+    color: #FFFFFF;
+    border-color: #FFFFFF;
+
+    &:hover {
+      background-color: #FFFFFF;
+      color: $anthias-purple;
+    }
+  }
+}
+
+.inactive-content {
+  border-left: 6px solid $anthias-yellow-3;
 }
 
 

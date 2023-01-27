@@ -8953,10 +8953,29 @@ body {
 .content {
   background-color: white;
   border-radius: 4px;
-  border-left: 6px solid #FFE11A;
   padding: 15px 0;
-  min-height: 60vh;
   margin: 0;
+}
+
+.active-content {
+  border-left: 6px solid #FFE11A;
+  background: linear-gradient(0deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.16)), #270035;
+  color: #FFFFFF;
+}
+.active-content table {
+  color: #FFFFFF;
+}
+.active-content .btn {
+  color: #FFFFFF;
+  border-color: #FFFFFF;
+}
+.active-content .btn:hover {
+  background-color: #FFFFFF;
+  color: #270035;
+}
+
+.inactive-content {
+  border-left: 6px solid #FFE11A;
 }
 
 @media (max-width: 1199px) {
