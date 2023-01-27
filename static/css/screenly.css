@@ -8965,6 +8965,9 @@ body {
 .active-content table {
   color: #FFFFFF;
 }
+.active-content table tbody > tr {
+  background: linear-gradient(0deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.16)), #270035;
+}
 .active-content .btn {
   color: #FFFFFF;
   border-color: #FFFFFF;
@@ -8990,6 +8993,10 @@ body {
 
 label {
   text-align: right;
+}
+
+.btn:focus {
+  box-shadow: none !important;
 }
 
 .btn-long {

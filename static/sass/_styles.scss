@@ -55,6 +55,15 @@ body {
 
   table {
     color: #FFFFFF;
+
+    // DEV START
+    tbody > tr {
+      // color: inherit;
+      // color: red;
+      // background-color: green;
+      background: linear-gradient(0deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.16)), #270035;
+    }
+    // DEV END
   }
 
   .btn {
@@ -87,6 +96,14 @@ body {
 label {
   text-align: right;
 }
+
+// DEV START
+.btn {
+  &:focus {
+    box-shadow: none !important;
+  }
+}
+// DEV END
 
 .btn-long {
   min-width: 170px;
