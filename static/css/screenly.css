@@ -9021,12 +9021,17 @@ label {
 }
 
 .switch-material.switch-light input ~ span a {
-  background-color: #FFE11A !important;
+  background-color: #FFFFFF !important;
+  border: 1px solid rgba(0, 0, 0, 0.26);
   box-shadow: none !important;
   top: -0.125em;
 }
 .switch-material.switch-light input:checked ~ span {
   box-shadow: inset 0 0 0 30px #FFF3A3 !important;
+}
+.switch-material.switch-light input:checked ~ span a {
+  background-color: #FFE11A !important;
+  border: none;
 }
 
 .splash {
