@@ -8959,15 +8959,15 @@ body {
 }
 
 .active-content {
-  background: linear-gradient(0deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.16)), #270035;
+  background-color: #492955;
   color: #FFFFFF;
 }
 .active-content table {
   color: #FFFFFF;
 }
 .active-content table tbody > tr {
-  background: linear-gradient(0deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.16)), #270035;
-  opacity: 0.8;
+  background-color: #492955;
+  color: rgba(255, 255, 255, 0.8);
 }
 .active-content .btn {
   color: #FFFFFF;
@@ -9311,7 +9311,7 @@ input[name=file_upload] {
   margin-left: 5px;
 }
 
-#inactive-assets img {
+#inactive-assets i.fa-bars {
   display: none;
 }
 

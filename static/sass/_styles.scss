@@ -35,7 +35,7 @@ html {
 }
 
 body {
-  background-color: $anthias-purple;
+  background-color: $anthias-purple-1;
   margin-top: 95px;
   margin-bottom: $footer-height + $base-line-height;
   font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
@@ -50,15 +50,15 @@ body {
 }
 
 .active-content {
-  background: linear-gradient(0deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.16)), #270035;
+  background-color: $anthias-purple-2;
   color: #FFFFFF;
 
   table {
     color: #FFFFFF;
 
     tbody > tr {
-      background: linear-gradient(0deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.16)), #270035;
-      opacity: 0.8;
+      background-color: $anthias-purple-2;
+      color: rgba(255, 255, 255, 0.8);
     }
   }
 
@@ -68,7 +68,7 @@ body {
 
     &:hover {
       background-color: #FFFFFF;
-      color: $anthias-purple;
+      color: $anthias-purple-1;
     }
   }
 }
@@ -105,7 +105,7 @@ label {
 
 .btn-primary {
   background-image: $anthias-yellow-gradient;
-  color: $anthias-purple;
+  color: $anthias-purple-1;
   font-weight: 600;
 }
 
@@ -471,7 +471,7 @@ input[name="file_upload"] {
   margin-left: 5px;
 }
 
-#inactive-assets img {
+#inactive-assets i.fa-bars {
   display: none;
 }
 
