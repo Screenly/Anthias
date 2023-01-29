@@ -1750,14 +1750,14 @@ def system_info():
 
     # Memory
     virtual_memory = psutil.virtual_memory()
-    memory = "Total: {} | Used: {} | Free: {} | Shared: {} | Buff: {} | Available: {}".format(
-        virtual_memory.total >> 20,
-        virtual_memory.used >> 20,
-        virtual_memory.free >> 20,
-        virtual_memory.shared >> 20,
-        virtual_memory.buffers >> 20,
-        virtual_memory.available >> 20
-    )
+    memory = {
+        'total': virtual_memory.total >> 20,
+        'used': virtual_memory.used >> 20,
+        'free': virtual_memory.free >> 20,
+        'shared': virtual_memory.shared >> 20,
+        'buff': virtual_memory.buffers >> 20,
+        'available': virtual_memory.available >> 20
+    }
 
     # Get uptime
     system_uptime = timedelta(seconds=diagnostics.get_uptime())
