@@ -26,12 +26,14 @@
                     Schedule Overview
                 </a>
             </li>
-            <li>
-                <a href="/integrations">
-                    <i class="far fa-plus-square pr-1"></i>
-                    Integrations
-                </a>
-            </li>
+            {% if context.is_balena %}
+                <li>
+                    <a href="/integrations">
+                        <i class="far fa-plus-square pr-1"></i>
+                        Integrations
+                    </a>
+                </li>
+            {% endif %}
             <li>
                 <a href="/settings">
                     <i class="fas fa-cog pr-1"></i>
