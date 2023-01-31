@@ -9153,6 +9153,21 @@ section .header {
   margin-bottom: 20px;
 }
 
+a.nav-link:not(.active) {
+  color: #A0A0A0;
+}
+
+#add-asset-nav-tabs {
+  border: 0px;
+}
+#add-asset-nav-tabs .nav-link {
+  border: 0px;
+}
+#add-asset-nav-tabs .active {
+  border-bottom: 3px solid #FFE11A;
+  font-weight: 600;
+}
+
 .popover .popover-header {
   font-weight: bold;
 }
@@ -9213,7 +9228,7 @@ input[name=file_upload] {
 .bootstrap-timepicker table td input {
   border: 1px solid #ced4da;
   border-radius: 0.25rem;
-  width: 39px;
+  width: 39px !important;
 }
 
 .duration .controls {
@@ -9244,11 +9259,11 @@ input[name=file_upload] {
 
 .filedrop {
   position: relative;
-  border: 4px dashed #ccc;
+  border: 3px dashed #ccc;
   padding: 50px;
   text-align: center;
   color: #888;
-  border-radius: 12px;
+  border-radius: 7px;
 }
 
 #file_upload_label {
