@@ -9037,13 +9037,13 @@ label {
 }
 
 .splash {
-  background: url(../img/bg.jpg) center center no-repeat #370c6c;
+  background-color: #270035;
   background-size: 100% 100%;
   margin-top: 0;
   font-size: calc((1.5vw + 1.5vh) / 2);
 }
 .splash .splash-body {
-  background-color: rgba(0, 0, 0, 0.4);
+  background-color: #492955;
   border-radius: 10px;
   color: white;
 }
