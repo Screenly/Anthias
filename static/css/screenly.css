@@ -8996,6 +8996,9 @@ label {
   text-align: right;
 }
 
+.btn {
+  padding: 12px 24px 12px 24px;
+}
 .btn:focus {
   box-shadow: none !important;
 }
