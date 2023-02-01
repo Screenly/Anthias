@@ -147,8 +147,6 @@ label {
   font-size: calc((1.5vw + 1.5vh) / 2);
 
   .splash-body {
-    background-color: $anthias-purple-2;
-    border-radius: 10px;
     color: white;
   }
 
@@ -167,12 +165,12 @@ label {
     }
   }
 
-  @media (max-width: 767px) {
+  @media (min-width: 768px) {
     .logo-container {
-      padding: 10px 0px 10px 0px;
+      padding: 20px 0px 20px 0px;
 
       img {
-        max-height: 100px;
+        max-height: 67%;
         width: auto;
       }
     }
@@ -417,12 +415,11 @@ input[name="file_upload"] {
   padding: 20px 20px;
   margin-top: 20px;
   margin-bottom: 20px;
-  background-color: #f5f5f5;
-  border-top: 1px solid #e5e5e5;
-  border-radius: .25rem;
+  background-color: $anthias-purple-2;
+  border-radius: 7px;
 
   a, span {
-    color: #300952;
+    color: #FFFFFF;
   }
 }
 
