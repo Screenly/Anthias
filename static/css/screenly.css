@@ -9043,25 +9043,25 @@ label {
   font-size: calc((1.5vw + 1.5vh) / 2);
 }
 .splash .splash-body {
+  background-color: #52335D;
   color: white;
 }
 .splash .row {
   display: block;
 }
 .splash .logo-container {
-  height: 30vh;
   padding: 3vh 0;
   margin-bottom: 3vh;
 }
 .splash .logo-container img {
-  height: 100%;
+  width: 75%;
 }
-@media (min-width: 768px) {
+@media (max-width: 767px) {
   .splash .logo-container {
     padding: 20px 0px 20px 0px;
   }
   .splash .logo-container img {
-    max-height: 67%;
+    max-height: 100px;
     width: auto;
   }
 }
@@ -9250,11 +9250,10 @@ input[name=file_upload] {
   padding: 20px 20px;
   margin-top: 20px;
   margin-bottom: 20px;
-  background-color: #492955;
-  border-radius: 7px;
+  background-color: #D4CCD7;
 }
 .form-actions a, .form-actions span {
-  color: #FFFFFF;
+  color: #1F002A;
 }
 
 .filedrop {
