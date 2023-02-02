@@ -31,10 +31,25 @@
                 {% if context.my_ip %}
                     <p>
                         To manage the content on this screen, just point your
-                        browser to the IP address provided below.
+                        browser to
+                        {% if context.my_ip | length > 1 %}
+                            any of
+                        {% endif %}
+                        the IP
+                        {% if context.my_ip | length > 1 %}
+                            addresses
+                        {% else %}
+                            address
+                        {% endif %}
+                        provided below.
                     </p>
                     <div class="form-actions">
-                        <a href="http://{{ context.my_ip }}">http://{{ context.my_ip }}</a>
+                        {% for ip in context.my_ip %}
+                            <a href="http://{{ ip }}">http://{{ ip }}</a>
+                            {% if not loop.last %}
+                                <br/>
+                            {% endif %}
+                        {% endfor %}
                     </div>
                 {% else %}
                     <p>Unable to retrieve IP.</p>
