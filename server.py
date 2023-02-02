@@ -1645,7 +1645,13 @@ def viewIndex():
     if resin_uuid:
         ws_addresses.append('wss://{}.resindevice.io/ws/'.format(resin_uuid))
 
-    return template('index.html', ws_addresses=ws_addresses, player_name=player_name, is_demo=is_demo)
+    return template(
+        'index.html',
+        ws_addresses=ws_addresses,
+        player_name=player_name,
+        is_demo=is_demo,
+        is_balena=is_balena_app(),
+    )
 
 
 @app.route('/settings', methods=["GET", "POST"])
@@ -1784,7 +1790,8 @@ def system_info():
         display_power=display_power,
         raspberry_pi_model=raspberry_pi_model,
         screenly_version=screenly_version,
-        mac_address=get_node_mac_address()
+        mac_address=get_node_mac_address(),
+        is_balena=is_balena_app(),
     )
 
 
