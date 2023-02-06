@@ -4,9 +4,9 @@
     <div class="container pt-3 pb-3">
         <div class="row">
             <div class="col-12">
-                <h5 class="page-header">
+                <h4 class="page-header text-white">
                     <b>System Info</b>
-                </h5>
+                </h4>
             </div>
         </div>
     </div>
@@ -33,7 +33,14 @@
                     </tr>
                     <tr>
                         <th scope="row">Memory</th>
-                        <td>{{ context.memory }}</td>
+                        <td>
+                            Total: <strong>{{ context.memory.total }}</strong> /
+                            Used: <strong>{{ context.memory.used }}</strong> /
+                            Free: <strong>{{ context.memory.free }}</strong> /
+                            Shared: <strong>{{ context.memory.shared }}</strong> /
+                            Buff: <strong>{{ context.memory.buff }}</strong> /
+                            Available: <strong>{{ context.memory.available }}</strong>
+                        </td>
                     </tr>
                     <tr>
                         <th scope="row">Uptime</th>
@@ -52,7 +59,7 @@
                         <td>{{ context.raspberry_pi_model }}</td>
                     </tr>
                     <tr>
-                        <th scope="row">Screenly OSE Version</th>
+                        <th scope="row">Anthias Version</th>
                         <td>{{ context.screenly_version }}</td>
                     </tr>
                     <tr>

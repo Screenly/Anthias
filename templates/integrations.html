@@ -4,14 +4,14 @@
     <div class="container pt-3 pb-3">
         <div class="row">
             <div class="col-12">
-                <h5 class="page-header">
+                <h4 class="text-white">
                     <b>Integrations</b>
-                </h5>
+                </h4>
             </div>
         </div>
     </div>
     <div class="container">
-        <div class="row content">
+        <div class="row content" style="min-height: 60vh;">
             {% if context.is_balena %}
                 <div id="balena-section" class="col-12">
                     <h4 class="page-header">
@@ -57,30 +57,6 @@
                             <th scope="row">Host OS Version</th>
                             <td>{{ context.balena_host_os_version }}</td>
                             <td>The version of the host OS.</td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-            {% endif %}
-
-            {% if context.is_wott_installed %}
-                <div id="wott-section" class="col-12">
-                    <h4 class="page-header">
-                        <b>WoTT</b>
-                    </h4>
-                    <table class="table">
-                        <thead class="table-borderless">
-                        <tr>
-                            <th class="text-secondary font-weight-normal" scope="col">Option</th>
-                            <th class="text-secondary font-weight-normal" scope="col">Value</th>
-                            <th class="text-secondary font-weight-normal" scope="col">Description</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr>
-                            <th scope="row">Device ID</th>
-                            <td>{{ context.wott_device_id }}</td>
-                            <td>WoTT Device ID.</td>
                         </tr>
                         </tbody>
                     </table>

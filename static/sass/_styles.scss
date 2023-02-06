@@ -14,9 +14,20 @@
   box-shadow: $shadow;
 }
 
-$footerHeight: 84px;
-$secondaryColor: #6c757d;
-$baseLineHeight: 20px !default;
+// Selected text
+@mixin selection {
+    ::-moz-selection { @content; }
+    ::selection { @content; }
+}
+
+@include selection {
+  color: #000000;
+  background: $anthias-yellow-3;
+}
+
+$footer-height: 84px;
+$secondary-color: #6c757d;
+$base-line-height: 20px !default;
 
 html {
   position: relative;
@@ -24,19 +35,46 @@ html {
 }
 
 body {
-  background-color: #f0f0f0;
+  background-color: $anthias-purple-1;
   margin-top: 95px;
-  margin-bottom: $footerHeight + $baseLineHeight;
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  margin-bottom: $footer-height + $base-line-height;
+  font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
 }
 
 .content {
   background-color: white;
+  border-left: 6px solid $anthias-yellow-3;
   border-radius: 4px;
-  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.12);
   padding: 15px 0;
-  min-height: 60vh;
   margin: 0;
+}
+
+.active-content {
+  background-color: $anthias-purple-2;
+  color: #FFFFFF;
+
+  table {
+    color: #FFFFFF;
+
+    tbody > tr {
+      background-color: $anthias-purple-2;
+      color: rgba(255, 255, 255, 0.8);
+    }
+  }
+
+  .btn {
+    color: #FFFFFF;
+    border-color: #FFFFFF;
+
+    &:hover {
+      background-color: #FFFFFF;
+      color: $anthias-purple-1;
+    }
+  }
+}
+
+.inactive-content {
+  border-left: 6px solid $anthias-yellow-3;
 }
 
 
@@ -55,19 +93,61 @@ label {
   text-align: right;
 }
 
+.btn {
+  padding: 12px 24px 12px 24px;
+
+  &:focus {
+    box-shadow: none !important;
+  }
+}
+
 .btn-long {
-  width: 170px;
+  min-width: 180px;
+}
+
+.btn-primary {
+  background-image: $anthias-yellow-gradient;
+  color: $anthias-purple-1;
+  font-weight: 600;
+}
+
+.btn-outline-primary {
+  color: #000000;
+  background-color: #FFFFFF;
+  transition: none;
+
+  &:hover {
+    background-image: $anthias-yellow-gradient;
+  }
+}
+
+.switch-material.switch-light {
+  input ~ span {
+    a {
+      background-color: #FFFFFF !important;
+      border: 1px solid rgba(0, 0, 0, 0.26);
+      box-shadow: none !important;
+      top: -0.125em;
+    }
+  }
+
+  input:checked ~ span {
+    box-shadow: inset 0 0 0 30px $anthias-yellow-4 !important;
+    a {
+      background-color: $anthias-yellow-3 !important;
+      border: none;
+    }
+  }
 }
 
 .splash {
-  background: url(../img/bg.jpg) center center no-repeat #370c6c;
+  background-color: $anthias-purple-1;
   background-size: 100% 100%;
   margin-top: 0;
   font-size: calc((1.5vw + 1.5vh) / 2);
 
   .splash-body {
-    background-color: rgba(0, 0, 0, 0.4);
-    border-radius: 10px;
+    background-color: $anthias-purple-3;
     color: white;
   }
 
@@ -77,18 +157,17 @@ label {
   }
 
   .logo-container {
-    height: 30vh;
     padding: 3vh 0;
     margin-bottom: 3vh;
 
     img {
-      height: 100%;
+      width: 75%;
     }
   }
 
   @media (max-width: 767px) {
     .logo-container {
-      padding: 10px 0px 10px 0px;
+      padding: 20px 0px 20px 0px;
 
       img {
         max-height: 100px;
@@ -160,7 +239,7 @@ label {
 
 #footer {
   bottom: 0;
-  height: $footerHeight;
+  height: $footer-height;
   position: absolute;
   width: 100%;
 
@@ -172,19 +251,20 @@ label {
 
   .links {
     a {
-      color: rgba(54, 54, 54, 0.45);
+      color: rgba(255, 255, 255, 0.70);
       font-weight: bold;
       text-transform: uppercase;
 
       &:hover {
         text-decoration: none;
+        color: rgba(255, 255, 255, 0.90);
       }
     }
   }
 
   .copy {
     border-top: 1px solid rgba(0, 0, 0, .1);
-    color: rgba(54, 54, 54, 0.45);
+    color: rgba(255, 255, 255, 0.70);
     font-size: 0.7em;
   }
 }
@@ -215,6 +295,23 @@ section {
 
 .asset-location .nav {
   margin-bottom: 20px;
+}
+
+a.nav-link:not(.active) {
+  color: #A0A0A0;
+}
+
+#add-asset-nav-tabs {
+  border: 0px;
+
+  .nav-link {
+    border: 0px;
+  }
+
+  .active {
+    border-bottom: 3px solid $anthias-yellow-3;
+    font-weight: 600;
+  }
 }
 
 .popover {
@@ -294,7 +391,7 @@ input[name="file_upload"] {
 .bootstrap-timepicker table td input {
   border: 1px solid #ced4da;
   border-radius: .25rem;
-  width: 39px;
+  width: 39px !important;
 }
 
 .duration {
@@ -318,12 +415,10 @@ input[name="file_upload"] {
   padding: 20px 20px;
   margin-top: 20px;
   margin-bottom: 20px;
-  background-color: #f5f5f5;
-  border-top: 1px solid #e5e5e5;
-  border-radius: .25rem;
+  background-color: $anthias-purple-4;
 
   a, span {
-    color: #300952;
+    color: #1F002A;
   }
 }
 
@@ -335,11 +430,11 @@ input[name="file_upload"] {
 
 .filedrop {
   position: relative;
-  border: 4px dashed #ccc;
+  border: 3px dashed #ccc;
   padding: 50px;
   text-align: center;
   color: #888;
-  border-radius: 12px;
+  border-radius: 7px;
 }
 
 #file_upload_label {
@@ -395,7 +490,7 @@ input[name="file_upload"] {
   margin-left: 5px;
 }
 
-#inactive-assets img {
+#inactive-assets i.fa-grip-vertical {
   display: none;
 }
 
