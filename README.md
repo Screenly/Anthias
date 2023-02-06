@@ -44,9 +44,7 @@ While you can deploy to your own Balena fleet, the easiest way to deploy using [
 
  * [Forum](https://forums.screenly.io/c/screenly-ose)
  * [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](https://github.com/Screenly/Anthias/tree/master/website))
- * [Live Demo](https://ose.demo.screenlyapp.com/)
  * [QA Checklist](https://github.com/Screenly/Anthias/blob/master/docs/qa-checklist.md)
- * [API Docs](https://ose.demo.screenlyapp.com/api/docs/)
  * [Developer Documentation](https://github.com/Screenly/Anthias/blob/master/docs/developer-documentation.md)
 
 Anthias works on all Raspberry Pi versions, including Raspberry Pi Zero, Raspberry Pi 3 Model B, and Raspberry Pi 4 Model B.
