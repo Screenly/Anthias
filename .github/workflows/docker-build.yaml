@@ -119,7 +119,7 @@ jobs:
       - name: Set Docker tag
         run: |
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-
+          echo "BOARD=${{ matrix.board }}" >> $GITHUB_ENV
       - name: Prepare Balena file
         run: |
           # Generage a docker-compose file for Balena with the correct board
@@ -129,8 +129,7 @@ jobs:
           cp balena.yml balena-deploy/
 
           # Generate the docker-compose file
-          cat docker-compose.balena.yml | \
-            sed "s/BOARD_TAG/$GIT_SHORT_HASH-${{ matrix.board }}/" \
+          cat docker-compose.balena.yml.tmpl | envsubst  
             > balena-deploy/docker-compose.yml
 
       - uses: balena-io/deploy-to-balena-action@master
