@@ -55,26 +55,33 @@ jobs:
 
       - name: Tweak base image and target based on board
         run: |
+          # Use Buster for all images
+          export BASE_IMAGE_TAG=buster
+
           # Logic for Raspberry Pi 1
           if [ "${{ matrix.board }}" == 'pi1' ]; then
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
-              docker/Dockerfile.base
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
-              docker/Dockerfile.viewer
+            export BASE_IMAGE=balenalib/raspberry-pi
             echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
 
           # Logic for Raspberry Pi 2
           elif [ "${{ matrix.board }}" == 'pi2' ]; then
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
-              docker/Dockerfile.base
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
-              docker/Dockerfile.viewer
+            export BASE_IMAGE=balenalib/raspberry-pi2
             echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
 
-          # We use the same target for Pi 3 and Pi 4 for now.
-          else
+          # Logic for Raspberry Pi 3
+          elif [ "${{ matrix.board }}" == 'pi3' ]; then
+            export BASE_IMAGE=raspberrypi3-debian
             echo 'TARGET_PLATFORM=linux/arm/v7' >> $GITHUB_ENV
+
+          # Logic for Raspberry Pi 4
+          elif [ "${{ matrix.board }}" == 'pi4' ]; then
+            echo 'TARGET_PLATFORM=linux/arm/v8' >> $GITHUB_ENV
+            export BASE_IMAGE=raspberrypi4-64-debian
           fi
+          
+          # Perform substitutions
+          cat docker/Dockerfile.base | envsubstr > docker/Dockerfile.base 
+          cat docker/Dockerfile.viewer | envsubstr > docker/Dockerfile.viewer
 
       - name: Set Docker tag
         run: |
@@ -120,6 +127,7 @@ jobs:
         run: |
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BOARD=${{ matrix.board }}" >> $GITHUB_ENV
+
       - name: Prepare Balena file
         run: |
           # Generage a docker-compose file for Balena with the correct board
