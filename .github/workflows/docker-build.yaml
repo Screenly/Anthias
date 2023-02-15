@@ -103,8 +103,8 @@ jobs:
           for container in base server celery redis websocket nginx viewer wifi-connect; do
             echo "Building container $container"
 
-            cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container" 
-        
+            cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container"
+
             docker buildx build \
               --platform "$TARGET_PLATFORM" \
               --output "type=image,push=true" \
@@ -141,7 +141,7 @@ jobs:
           cp balena.yml balena-deploy/
 
           # Generate the docker-compose file
-          cat docker-compose.balena.yml.tmpl | envsubst  
+          cat docker-compose.balena.yml.tmpl | envsubst
             > balena-deploy/docker-compose.yml
 
       - uses: balena-io/deploy-to-balena-action@master
