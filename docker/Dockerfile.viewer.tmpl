@@ -99,8 +99,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
         vlc \
         ttf-wqy-zenhei \
         fonts-arphic-uming \
-        sqlite3 && \
-    apt-get clean
+        sqlite3
 
 # Install Python requirements
 COPY requirements/requirements.viewer.txt /tmp/requirements.txt

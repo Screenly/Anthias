@@ -28,8 +28,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
         python-pip \
         python-setuptools \
         python-simplejson \
-        sqlite3 && \
-    apt-get clean
+        sqlite3 
 
 # Works around issue with `curl`
 # https://github.com/balena-io-library/base-images/issues/562

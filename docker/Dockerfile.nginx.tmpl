@@ -3,8 +3,7 @@ FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \
     apt-get -y install --no-install-recommends \
-    nginx && \
-    apt-get clean
+    nginx
 
 ARG GIT_HASH
 ENV GIT_HASH=$GIT_HASH

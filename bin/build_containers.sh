@@ -17,12 +17,13 @@ fi
 
 if [ -n "${CROSS_COMPILE+x}" ]; then
     echo "Running with cross-compile using docker buildx..."
-    DOCKER_BUILD_ARGS=("buildx" "build" "--load" "--platform" "linux/arm/v6,linux/arm/v7")
+    DOCKER_BUILD_ARGS=("buildx" "build" "--load" "--platform" "linux/arm/v6,linux/arm/v7,linux/arm/v8")
 
     echo 'Make sure you ran `docker run --privileged --rm tonistiigi/binfmt --install all` before the command'
 else
     echo "Running without cross-compile..."
-    DOCKER_BUILD_ARGS=("build")
+    docker buildx create --use
+    DOCKER_BUILD_ARGS=("buildx" "build" "--load")
 fi
 
 if [ -n "${CLEAN_BUILD+x}" ]; then
