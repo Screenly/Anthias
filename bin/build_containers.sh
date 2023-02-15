@@ -23,7 +23,7 @@ if [ -n "${CROSS_COMPILE+x}" ]; then
 else
     echo "Running without cross-compile..."
     DOCKER_BUILD_ARGS=("buildx" "build" "--load")
-    echo 'Make sure you ran `docker buildx create --user` before the command'
+    echo 'Make sure you ran `docker buildx create --use` before the command'
 fi
 
 if [ -n "${CLEAN_BUILD+x}" ]; then
