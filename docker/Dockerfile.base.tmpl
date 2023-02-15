@@ -1,4 +1,4 @@
-FROM balenalib/raspberrypi3:buster
+FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
 
 RUN apt-get update && \
     apt-get -y install --no-install-recommends \

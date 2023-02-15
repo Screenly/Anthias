@@ -1,4 +1,4 @@
-FROM balenalib/raspberrypi3:buster
+FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
 
 # This list needs to be trimmed back later
 RUN apt-get update && \

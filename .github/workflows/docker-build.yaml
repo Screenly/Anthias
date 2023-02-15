@@ -55,26 +55,35 @@ jobs:
 
       - name: Tweak base image and target based on board
         run: |
+          # Use Buster for all images
+          export BASE_IMAGE_TAG=buster
+
           # Logic for Raspberry Pi 1
           if [ "${{ matrix.board }}" == 'pi1' ]; then
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
-              docker/Dockerfile.base
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
-              docker/Dockerfile.viewer
+            export BASE_IMAGE=balenalib/raspberry-pi
             echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
 
           # Logic for Raspberry Pi 2
           elif [ "${{ matrix.board }}" == 'pi2' ]; then
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
-              docker/Dockerfile.base
-            sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
-              docker/Dockerfile.viewer
+            export BASE_IMAGE=balenalib/raspberry-pi2
             echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
 
-          # We use the same target for Pi 3 and Pi 4 for now.
-          else
+          # Logic for Raspberry Pi 3
+          elif [ "${{ matrix.board }}" == 'pi3' ]; then
+            export BASE_IMAGE=balenalib/raspberrypi3-debian
             echo 'TARGET_PLATFORM=linux/arm/v7' >> $GITHUB_ENV
+
+          # Logic for Raspberry Pi 4
+          elif [ "${{ matrix.board }}" == 'pi4' ]; then
+            # We want to restore once we've removed omxplayer as a dependency
+            #export BASE_IMAGE=balenalib/raspberrypi4-64-debian
+            export BASE_IMAGE=balenalib/raspberrypi3-debian
+            echo 'TARGET_PLATFORM=linux/arm/v8' >> $GITHUB_ENV
           fi
+          
+          # Perform substitutions
+          cat docker/Dockerfile.base.tmpl | envsubst > docker/Dockerfile.base 
+          cat docker/Dockerfile.viewer.tmpl | envsubst > docker/Dockerfile.viewer
 
       - name: Set Docker tag
         run: |
@@ -82,12 +91,12 @@ jobs:
           if [ "$GITHUB_REF_NAME" == 'master' ]; then
              export "DOCKER_TAG=latest-${{ matrix.board }}";
           elif [ "$GITHUB_REF_NAME" == 'production' ]; then
-             export "DOCKER_TAG=production-${{ matrix.board }}";
+             export "DOCKER_TAG=production-${{ matrix.board }}"
           fi
           echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_ENV
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
-      - name: Building containers
+      - name: Build containers
         run: |
           for container in base server celery redis websocket nginx viewer wifi-connect; do
             echo "Building container $container"
@@ -119,6 +128,7 @@ jobs:
       - name: Set Docker tag
         run: |
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "BOARD=${{ matrix.board }}" >> $GITHUB_ENV
 
       - name: Prepare Balena file
         run: |
@@ -129,8 +139,7 @@ jobs:
           cp balena.yml balena-deploy/
 
           # Generate the docker-compose file
-          cat docker-compose.balena.yml | \
-            sed "s/BOARD_TAG/$GIT_SHORT_HASH-${{ matrix.board }}/" \
+          cat docker-compose.balena.yml.tmpl | envsubst  
             > balena-deploy/docker-compose.yml
 
       - uses: balena-io/deploy-to-balena-action@master

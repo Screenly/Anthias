@@ -1,7 +1,7 @@
 version: "2"
 services:
   srly-ose-wifi-connect:
-    image: screenly/srly-ose-wifi-connect:BOARD_TAG
+    image: screenly/srly-ose-wifi-connect:${GIT_SHORT_HASH}-${BOARD}
     environment:
       PORTAL_LISTENING_PORT: 8000
       CHECK_CONN_FREQ: 10
@@ -15,7 +15,7 @@ services:
       io.balena.features.firmware: "1"
 
   srly-ose-server:
-    image: screenly/srly-ose-server:BOARD_TAG
+    image: screenly/srly-ose-server:${GIT_SHORT_HASH}-${BOARD}
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -30,7 +30,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   srly-ose-viewer:
-    image: screenly/srly-ose-viewer:BOARD_TAG
+    image: screenly/srly-ose-viewer:${GIT_SHORT_HASH}-${BOARD}
     depends_on:
       - srly-ose-server
     environment:
@@ -48,7 +48,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   srly-ose-websocket:
-    image: screenly/srly-ose-websocket:BOARD_TAG
+    image: screenly/srly-ose-websocket:${GIT_SHORT_HASH}-${BOARD}
     depends_on:
       - srly-ose-server
     environment:
@@ -59,7 +59,7 @@ services:
       - resin-data:/data
 
   srly-ose-celery:
-    image: screenly/srly-ose-celery:BOARD_TAG
+    image: screenly/srly-ose-celery:${GIT_SHORT_HASH}-${BOARD}
     depends_on:
       - srly-ose-server
       - redis
@@ -76,7 +76,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   redis:
-    image: screenly/srly-ose-redis:BOARD_TAG
+    image: screenly/srly-ose-redis:${GIT_SHORT_HASH}-${BOARD}
     ports:
       - 127.0.0.1:6379:6379
     restart: always
@@ -84,7 +84,7 @@ services:
       - redis-data:/var/lib/redis
 
   srly-ose-nginx:
-    image: screenly/srly-ose-nginx:BOARD_TAG
+    image: screenly/srly-ose-nginx:${GIT_SHORT_HASH}-${BOARD}
     ports:
       - 80:80
     environment:

@@ -29,22 +29,27 @@ if [ -n "${CLEAN_BUILD+x}" ]; then
     DOCKER_BUILD_ARGS+=("--no-cache")
 fi
 
-for pi_version in pi4 pi3 pi2 pi1; do
 
-    # Patch base image
+export BASE_IMAGE_TAG=buster
+
+for pi_version in pi4 pi3 pi2 pi1; do
     if [ "$pi_version" == 'pi1' ]; then
-        sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
-            docker/Dockerfile.base
-        sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi/' \
-            docker/Dockerfile.viewer
-       elif [ "$pi_version" == 'pi2' ]; then
-          sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
-            docker/Dockerfile.base
-          sed -i 's/balenalib\/raspberrypi3/balenalib\/raspberry-pi2/' \
-            docker/Dockerfile.viewer
+        export BASE_IMAGE=balenalib/raspberry-pi
+    elif [ "$pi_version" == 'pi2' ]; then
+        export BASE_IMAGE=balenalib/raspberry-pi2
+    elif [ "$pi_version" == 'pi3' ]; then
+        export BASE_IMAGE=balenalib/raspberrypi3-debian
+    elif [ "$pi_version" == 'pi4' ]; then
+        # We want to restore once we've removed omxplayer as a dependency
+        #export BASE_IMAGE=balenalib/raspberrypi4-64-debian
+        export BASE_IMAGE=balenalib/raspberrypi3-debian
     fi
 
-    for container in base server celery redis websocket nginx viewer; do
+    # Perform substitutions
+    cat docker/Dockerfile.base.tmpl | envsubst > docker/Dockerfile.base 
+    cat docker/Dockerfile.viewer.tmpl | envsubst > docker/Dockerfile.viewer
+
+    for container in base server celery redis websocket nginx viewer wifi-connect; do
         echo "Building $container"
         docker "${DOCKER_BUILD_ARGS[@]}" \
             --build-arg "GIT_HASH=$GIT_HASH" \
