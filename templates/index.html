@@ -34,8 +34,8 @@
 
     <script id="asset-row-template" type="text/template">
         <td class="asset_row_name">
-            <img src="static/img/drag-handle.png"/>
-            <i class="asset-icon"></i>
+            <i class="fas fa-grip-vertical mr-2"></i>
+            <i class="asset-icon mr-2"></i>
             <%= name %>
         </td>
         <td style="width:21%">
@@ -48,7 +48,7 @@
             <%= duration %>
         </td>
         <td class="asset-toggle" style="width:7%">
-            <label class="is_enabled-toggle toggle switch-light switch-ios small m-0">
+            <label class="is_enabled-toggle toggle switch-light switch-material small m-0">
                 <input type="checkbox"/>
                 <span>
                     <span class="off"></span>
@@ -118,21 +118,21 @@
                             <div class="asset-location add">
                                 <fieldset>
                                     <div class="tabbable">
-                                        <ul class="nav nav-tabs">
-                                            <li class="tabnav-uri nav-item active show" style="margin-left:180px">
+                                        <ul class="nav nav-tabs" id="add-asset-nav-tabs">
+                                            <li class="tabnav-uri nav-item active show text-center">
                                                 <a class="nav-link" href="#tab-uri">URL</a>
                                             </li>
-                                            <li class="tabnav-file_upload nav-item">
+                                            <li class="tabnav-file_upload nav-item text-center">
                                                 <a class="nav-link" href="#tab-file_upload">Upload</a>
                                             </li>
                                         </ul>
-                                        <div class="tab-content">
+                                        <div class="tab-content px-4 pt-2 pb-4">
                                             <div id="tab-uri" class="tab-pane active"></div>
                                             <div id="tab-file_upload" class="tab-pane">
                                                 <div class="control-group">
                                                     <div class="filedrop">
                                                         <div class="upload-header">
-                                                            <button class="btn btn-primary">Add Files..</button>
+                                                            <button class="btn btn-primary">Add Files</button>
                                                             <input name="file_upload" type="file"/>
                                                             <br/>
                                                             or
@@ -258,7 +258,7 @@
                             <div class="float-left progress active" style="display:none">
                                 <div class="bar progress-bar-striped progress-bar progress-bar-animated"></div>
                             </div>
-                            <input class="btn btn-outline-dark btn-long cancel" type="button" value="Cancel"/>
+                            <input class="btn btn-outline-primary btn-long cancel" type="button" value="Cancel"/>
                             <input id="save-asset" class="btn btn-primary btn-long" type="submit" value="Save"/>
                         </div>
                     </div>
@@ -301,72 +301,80 @@
     <div class="container pt-3 pb-3">
         <div class="row">
             <div class="col-12">
-                <h5 class="d-flex">
-                    <b class="justify-content-center align-self-center">Schedule Overview</b>
+                <h4 class="d-flex">
+                    <b class="justify-content-center align-self-center text-white">Schedule Overview</b>
                     <div class="ml-auto">
-                        <a id="previous-asset-button" class="btn btn-long btn-outline-dark" href="#">
-                            <i class="fas fa-long-arrow-alt-left pr-2"></i>
+                        <a id="previous-asset-button" class="btn btn-long btn-outline-primary" href="#">
+                            <i class="fas fa-chevron-left pr-2"></i>
                             Previous Asset
                         </a>
-                        <a id="next-asset-button" class="btn btn-long btn-outline-dark" href="#">
+                        <a id="next-asset-button" class="btn btn-long btn-outline-primary" href="#">
                             Next Asset
-                            <i class="fas fa-long-arrow-alt-right pl-2"></i>
+                            <i class="fas fa-chevron-right pl-2"></i>
                         </a>
                         <a id="add-asset-button" class="add-asset-button btn btn-long btn-primary" href="#">
                             Add Asset
                         </a>
                     </div>
-                </h5>
+                </h4>
                 {% if context.player_name %}
-                    <h2>{{ context.player_name }}</h2>
+                    <h4 class="text-white">{{ context.player_name }}</h4>
                 {% endif %}
             </div>
         </div>
     </div>
-    <div class="container">
-        <div id="assets" class="row content">
-            <div class="col-12 mb-5">
-                <section id="active-assets-section">
-                    <h4>
-                        <b>Active assets</b>
-                    </h4>
-                    <table class="table">
-                        <thead class="table-borderless">
-                        <tr>
-                            <th class="text-secondary font-weight-normal asset_row_name">Name</th>
-                            <th class="text-secondary font-weight-normal" style="width:21%">Start</th>
-                            <th class="text-secondary font-weight-normal" style="width:21%">End</th>
-                            <th class="text-secondary font-weight-normal" style="width:13%">Duration</th>
-                            <th class="text-secondary font-weight-normal" style="width:7%">Activity</th>
-                            <th class="text-secondary font-weight-normal" style="width:13%"></th>
-                        </tr>
-                        </thead>
-                        <tbody id="active-assets"></tbody>
-                    </table>
-                    <div class="table-assets-help-text text-secondary">Currently there are no assets. <a class="add-asset-button" href="#">Add asset</a> now.</div>
-                </section>
-            </div>
-            <div class="col-12">
-                <section id="inactive-assets-section">
-                    <h4>
-                        <b>Inactive assets</b>
-                    </h4>
-                    <table class="table">
-                        <thead class="table-borderless">
-                        <tr>
-                            <th class="text-secondary font-weight-normal asset_row_name">Name</th>
-                            <th class="text-secondary font-weight-normal" style="width:21%">Start</th>
-                            <th class="text-secondary font-weight-normal" style="width:21%">End</th>
-                            <th class="text-secondary font-weight-normal" style="width:13%">Duration</th>
-                            <th class="text-secondary font-weight-normal" style="width:7%">Activity</th>
-                            <th class="text-secondary font-weight-normal" style="width:13%"></th>
-                        </tr>
-                        </thead>
-                        <tbody id="inactive-assets"></tbody>
-                    </table>
-                    <div class="table-assets-help-text text-secondary">Currently there are no assets. <a class="add-asset-button" href="#">Add asset</a> now.</div>
-                </section>
+
+    <span id="assets">
+        <div class="container">
+            <div class="row content active-content px-2 pt-4">
+                <div class="col-12 mb-5">
+                    <section id="active-assets-section">
+                        <h5>
+                            <b>Active assets</b>
+                        </h5>
+                        <table class="table">
+                            <thead class="table-borderless">
+                            <tr>
+                                <th class="font-weight-normal asset_row_name">Name</th>
+                                <th class="font-weight-normal" style="width:21%">Start</th>
+                                <th class="font-weight-normal" style="width:21%">End</th>
+                                <th class="font-weight-normal" style="width:13%">Duration</th>
+                                <th class="font-weight-normal" style="width:7%">Activity</th>
+                                <th class="font-weight-normal" style="width:13%"></th>
+                            </tr>
+                            </thead>
+                            <tbody id="active-assets"></tbody>
+                        </table>
+                        <div class="table-assets-help-text">Currently there are no assets. <a class="add-asset-button" href="#">Add asset</a> now.</div>
+                    </section>
+                </div>
             </div>
         </div>
-    </div>
+
+        <div class="container mt-4">
+            <div class="row content inactive-content px-2 pt-4">
+                <div class="col-12 mb-5">
+                    <section id="inactive-assets-section">
+                        <h5>
+                            <b>Inactive assets</b>
+                        </h5>
+                        <table class="table">
+                            <thead class="table-borderless">
+                            <tr>
+                                <th class="text-secondary font-weight-normal asset_row_name">Name</th>
+                                <th class="text-secondary font-weight-normal" style="width:21%">Start</th>
+                                <th class="text-secondary font-weight-normal" style="width:21%">End</th>
+                                <th class="text-secondary font-weight-normal" style="width:13%">Duration</th>
+                                <th class="text-secondary font-weight-normal" style="width:7%">Activity</th>
+                                <th class="text-secondary font-weight-normal" style="width:13%"></th>
+                            </tr>
+                            </thead>
+                            <tbody id="inactive-assets"></tbody>
+                        </table>
+                        <div class="table-assets-help-text text-secondary">Currently there are no assets. <a class="add-asset-button" href="#">Add asset</a> now.</div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </span>
 {% endblock %}

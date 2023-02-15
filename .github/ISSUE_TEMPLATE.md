@@ -17,4 +17,4 @@ Steps to reproduce this issue, eg:
 
 * Raspberry Pi Hardware Version:
 * Raspberry Pi Network Setup: (ex. built-in WiFi, Ethernet, USB WiFi Adapter)
-* Screenly OSE Version:
+* Anthias Version:

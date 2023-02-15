@@ -4,6 +4,8 @@
     <meta charset="utf-8"/>
     <title>Hotspot Page</title>
     <link href="/static/css/screenly.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css?family=Plus Jakarta Sans" rel="stylesheet">
+    <link rel="icon" href="/static/favicons/favicon.ico">
     <style type="text/css">
         html, body {
             height: 100%;
@@ -13,25 +15,35 @@
 </head>
 <body class="splash container d-table">
 <div class="col-12 d-table-cell align-middle">
-    <div class="splash-body p-5">
-        <div class="row">
-            <div class="col-12">
-                <div class="logo-container page-header text-center">
-                    <img src="/static/img/screenly_ose_logo_white_large.png" class="img-fluid"/>
-                </div>
+    <div class="row">
+        <div class="col-12">
+            <div
+                class="logo-container page-header d-flex flex-nowrap
+                    justify-content-center align-items-center"
+            >
+                <img src="/static/img/logo-full-splash.svg" alt="splash-logo" class="img-fluid"/>
             </div>
         </div>
+    </div>
+    <div class="splash-body p-5">
         <div class="row">
             <div class="col-12 text-center">
-                <p>No network connection were found. An access point has been created. <br>To configure WiFi networking,
-                    simply connect to the access point <br>using your computer or mobile device</p>
+                <img src="/static/img/wifi-off.svg" alt="wifi-off" class="img-fluid mb-4">
+                <h3 class="mb-3">
+                    <b>No network connections were found</b>
+                </h3>
+                <p>
+                    An access point has been created. To configure WiFi networking,
+                    simply connect to the access point using your computer or
+                    mobile device.
+                </p>
                 <div class="form-actions">
                 <span>
-                    SSID: {{ context.network }}
+                    <strong>SSID:</strong> {{ context.network }}
                     <br>
-                    Password: {{ context.ssid_pswd }}
+                    <strong>Password:</strong> {{ context.ssid_pswd }}
                     <br>
-                    Address: {{ context.address }}
+                    <strong>Address:</strong> {{ context.address }}
                 </span>
                 </div>
             </div>

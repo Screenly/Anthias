@@ -9,7 +9,7 @@
 <div class="navbar navbar-header navbar-expand-lg fixed-top bg-dark">
     <div class="container">
         <a class="brand" href="/">
-            <img src="static/img/screenly_ose_logo.png"/>
+            <img src="static/img/logo-full.svg"/>
         </a>
         <ul class="nav float-right">
             {% if not context.up_to_date %}
@@ -26,15 +26,17 @@
                     Schedule Overview
                 </a>
             </li>
-            <li>
-                <a href="/integrations">
-                    <i class="far fa-plus-square pr-1"></i>
-                    Integrations
-                </a>
-            </li>
+            {% if context.is_balena %}
+                <li>
+                    <a href="/integrations">
+                        <i class="far fa-plus-square pr-1"></i>
+                        Integrations
+                    </a>
+                </li>
+            {% endif %}
             <li>
                 <a href="/settings">
-                    <i class="fas fa-cogs pr-1"></i>
+                    <i class="fas fa-cog pr-1"></i>
                     Settings
                 </a>
             </li>

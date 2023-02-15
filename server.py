@@ -1645,7 +1645,13 @@ def viewIndex():
     if resin_uuid:
         ws_addresses.append('wss://{}.resindevice.io/ws/'.format(resin_uuid))
 
-    return template('index.html', ws_addresses=ws_addresses, player_name=player_name, is_demo=is_demo)
+    return template(
+        'index.html',
+        ws_addresses=ws_addresses,
+        player_name=player_name,
+        is_demo=is_demo,
+        is_balena=is_balena_app(),
+    )
 
 
 @app.route('/settings', methods=["GET", "POST"])
@@ -1750,14 +1756,14 @@ def system_info():
 
     # Memory
     virtual_memory = psutil.virtual_memory()
-    memory = "Total: {} | Used: {} | Free: {} | Shared: {} | Buff: {} | Available: {}".format(
-        virtual_memory.total >> 20,
-        virtual_memory.used >> 20,
-        virtual_memory.free >> 20,
-        virtual_memory.shared >> 20,
-        virtual_memory.buffers >> 20,
-        virtual_memory.available >> 20
-    )
+    memory = {
+        'total': virtual_memory.total >> 20,
+        'used': virtual_memory.used >> 20,
+        'free': virtual_memory.free >> 20,
+        'shared': virtual_memory.shared >> 20,
+        'buff': virtual_memory.buffers >> 20,
+        'available': virtual_memory.available >> 20
+    }
 
     # Get uptime
     system_uptime = timedelta(seconds=diagnostics.get_uptime())
@@ -1784,7 +1790,8 @@ def system_info():
         display_power=display_power,
         raspberry_pi_model=raspberry_pi_model,
         screenly_version=screenly_version,
-        mac_address=get_node_mac_address()
+        mac_address=get_node_mac_address(),
+        is_balena=is_balena_app(),
     )
 
 
@@ -1810,7 +1817,8 @@ def integrations():
 
 @app.route('/splash-page')
 def splash_page():
-    return template('splash-page.html', my_ip=get_node_ip())
+    my_ip = get_node_ip().split()
+    return template('splash-page.html', my_ip=my_ip)
 
 
 @app.errorhandler(403)
@@ -1867,7 +1875,11 @@ def main():
                 cursor.execute(assets_helper.create_assets_table)
 
 
-if __name__ == "__main__":
+def is_development():
+    return getenv('FLASK_ENV', '') == 'development'
+
+
+if __name__ == "__main__" and not is_development():
     config = {
         'bind': '{}:{}'.format(LISTEN, PORT),
         'threads': 2,
