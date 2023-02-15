@@ -70,12 +70,12 @@ jobs:
 
           # Logic for Raspberry Pi 3
           elif [ "${{ matrix.board }}" == 'pi3' ]; then
-            export BASE_IMAGE=raspberrypi3-debian
+            export BASE_IMAGE=balenalib/raspberrypi3-debian
             echo 'TARGET_PLATFORM=linux/arm/v7' >> $GITHUB_ENV
 
           # Logic for Raspberry Pi 4
           elif [ "${{ matrix.board }}" == 'pi4' ]; then
-            export BASE_IMAGE=raspberrypi4-64-debian
+            export BASE_IMAGE=balenalib/raspberrypi4-64-debian
             echo 'TARGET_PLATFORM=linux/arm/v8' >> $GITHUB_ENV
           fi
           
