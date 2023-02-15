@@ -34,6 +34,9 @@ fi
 export BASE_IMAGE_TAG=buster
 export DEBIAN_VERSION=buster
 export QT_VERSION=5.15.2
+export GIT_SHORT_HASH="$(git rev-parse --short HEAD)"
+export GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+export GIT_HASH="$(git rev-parse HEAD)"
 export WEBVIEW_GIT_HASH=0b6d49359133246659b9ba1d8dd883e3fc5c9a91
 export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.1"
 
@@ -60,8 +63,8 @@ for pi_version in pi4 pi3 pi2 pi1; do
 
         docker "${DOCKER_BUILD_ARGS[@]}" \
             --build-arg "GIT_HASH=$GIT_HASH" \
-            --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
             --build-arg "GIT_BRANCH=$GIT_BRANCH" \
+            --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
             --build-arg "PI_VERSION=$pi_version" \
             --cache-from "type=local,src=/tmp/.buildx-cache" \
             --cache-from "type=registry,ref=screenly/srly-ose-$container:$DOCKER_TAG" \

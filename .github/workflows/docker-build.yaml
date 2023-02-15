@@ -95,6 +95,8 @@ jobs:
           fi
           echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_ENV
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "GIT_BRANCH=$GITHUB_REF_NAME" >> $GITHUB_ENV
+          echo "GIT_HASH=$GITHUB_SHA" >> $GITHUB_ENV
 
       - name: Build containers
         run: |
@@ -108,9 +110,9 @@ jobs:
               --output "type=image,push=true" \
               --build-arg "PI_VERSION=${{ matrix.board }}" \
               --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-              --build-arg "GIT_HASH=$GITHUB_SHA" \
+              --build-arg "GIT_HASH=$GITHUB_HASH" \
               --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
-              --build-arg "GIT_BRANCH=$GITHUB_REF_NAME" \
+              --build-arg "GIT_BRANCH=$GITHUB_BRANCH" \
               --cache-from "type=local,src=/tmp/.buildx-cache" \
               --cache-from "type=registry,ref=screenly/srly-ose-$container:$DOCKER_TAG" \
               --cache-to "type=local,dest=/tmp/.buildx-cache" \
