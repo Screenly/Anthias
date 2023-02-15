@@ -75,8 +75,8 @@ jobs:
 
           # Logic for Raspberry Pi 4
           elif [ "${{ matrix.board }}" == 'pi4' ]; then
-            echo 'TARGET_PLATFORM=linux/arm/v8' >> $GITHUB_ENV
             export BASE_IMAGE=raspberrypi4-64-debian
+            echo 'TARGET_PLATFORM=linux/arm/v8' >> $GITHUB_ENV
           fi
           
           # Perform substitutions
@@ -94,7 +94,7 @@ jobs:
           echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_ENV
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
-      - name: Building containers
+      - name: Build containers
         run: |
           for container in base server celery redis websocket nginx viewer wifi-connect; do
             echo "Building container $container"
