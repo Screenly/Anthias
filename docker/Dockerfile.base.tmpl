@@ -1,6 +1,8 @@
+# syntax=docker/dockerfile:1.3
 FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
 
-RUN apt-get update && \
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update && \
     apt-get -y install --no-install-recommends \
         build-essential \
         cec-utils \
@@ -26,8 +28,7 @@ RUN apt-get update && \
         python-pip \
         python-setuptools \
         python-simplejson \
-        sqlite3 && \
-    apt-get clean
+        sqlite3 
 
 # Works around issue with `curl`
 # https://github.com/balena-io-library/base-images/issues/562

@@ -1,3 +1,4 @@
+Cython==0.29.33
 Flask-Cors==3.0.9
 Flask==1.1.2
 Jinja2==2.11.3

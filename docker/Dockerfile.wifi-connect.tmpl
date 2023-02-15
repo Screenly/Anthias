@@ -1,12 +1,12 @@
 FROM screenly/srly-ose-base
 
-RUN apt-get update && \
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update && \
     apt-get -y install --no-install-recommends \
         dnsmasq \
         jq \
         wget \
-        wireless-tools && \
-    apt-get clean
+        wireless-tools
 
 WORKDIR /usr/src/app
 
@@ -16,7 +16,8 @@ COPY ./bin/install_wifi_connect.sh .
 RUN bash ./install_wifi_connect.sh
 
 COPY requirements/requirements.wifi-connect.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r /tmp/requirements.txt
 
 COPY send_zmq_message.py ./
 
