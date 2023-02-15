@@ -1,7 +1,9 @@
-FROM balenalib/raspberrypi3:buster
+# syntax=docker/dockerfile:1.3
+FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
 
 # This list needs to be trimmed back later
-RUN apt-get update && \
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update && \
     apt-get -y install --no-install-recommends \
         build-essential \
         ca-certificates \
@@ -97,40 +99,36 @@ RUN apt-get update && \
         vlc \
         ttf-wqy-zenhei \
         fonts-arphic-uming \
-        sqlite3 && \
-    apt-get clean
+        sqlite3
 
 # Install Python requirements
 COPY requirements/requirements.viewer.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r /tmp/requirements.txt
 
 # Works around issue with `curl`
 # https://github.com/balena-io-library/base-images/issues/562
 RUN c_rehash
 
 # QT Base from packages does not support eglfs
-ARG PI_VERSION=pi3
-ARG DEBIAN_VERSION=buster
-ARG QT_VERSION=5.15.2
-ARG WEBVIEW_GIT_HASH=0b6d49359133246659b9ba1d8dd883e3fc5c9a91
-ARG BASE_URL="https://github.com/Screenly/screenly-ose/releases/download/WebView-v0.2.1"
-RUN curl "$BASE_URL/qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" \
-        -sL -o "/tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" && \
-    curl "$BASE_URL/qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" \
-        -sL -o "/tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" && \
+RUN curl "$WEBVIEW_BASE_URL/qt5-$QT_VERSION-$DEBIAN_VERSION-$BOARD.tar.gz" \
+        -sL -o "/tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$BOARD.tar.gz" && \
+    curl "$WEBVIEW_BASE_URL/qt5-$QT_VERSION-$DEBIAN_VERSION-$BOARD.tar.gz.sha256" \
+        -sL -o "/tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$BOARD.tar.gz.sha256" && \
     cd /tmp && \
-    sha256sum -c "qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz.sha256" && \
-    tar -xzf "/tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz" -C /usr/local && \
-    rm "qt5-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION.tar.gz"
+    sha256sum -c "qt5-$QT_VERSION-$DEBIAN_VERSION-$BOARD.tar.gz.sha256" && \
+    tar -xzf "/tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$BOARD.tar.gz" -C /usr/local && \
+    rm "qt5-$QT_VERSION-$DEBIAN_VERSION-$BOARD.tar.gz"
 
-RUN curl "$BASE_URL/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz" \
-        -sL -o "/tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz" && \
-    curl "$BASE_URL/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz.sha256" \
-        -sL -o "/tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz.sha256" && \
+RUN curl "$WEBVIEW_BASE_URL/webview-$QT_VERSION-$DEBIAN_VERSION-$BOARD-$WEBVIEW_GIT_HASH.tar.gz" \
+        -sL -o "/tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$BOARD-$WEBVIEW_GIT_HASH.tar.gz" && \
+    curl "$WEBVIEW_BASE_URL/webview-$QT_VERSION-$DEBIAN_VERSION-$BOARD-$WEBVIEW_GIT_HASH.tar.gz.sha256" \
+        -sL -o "/tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$BOARD-$WEBVIEW_GIT_HASH.tar.gz.sha256" && \
     cd /tmp && \
-    sha256sum -c "webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz.sha256" && \
-    tar -xzf "/tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz" -C /usr/local && \
-    rm "webview-$QT_VERSION-$DEBIAN_VERSION-$PI_VERSION-$WEBVIEW_GIT_HASH.tar.gz"
+    sha256sum -c "webview-$QT_VERSION-$DEBIAN_VERSION-$BOARD-$WEBVIEW_GIT_HASH.tar.gz.sha256" && \
+    tar -xzf "/tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$BOARD-$WEBVIEW_GIT_HASH.tar.gz" -C /usr/local && \
+    rm "webview-$QT_VERSION-$DEBIAN_VERSION-$BOARD-$WEBVIEW_GIT_HASH.tar.gz"
 
 ENV QT_QPA_EGLFS_FORCE888=1
 ENV QT_QPA_PLATFORM=linuxfb

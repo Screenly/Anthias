@@ -2,8 +2,10 @@
 <html>
 <head>
     <meta charset="utf-8"/>
-    <title>Welcome to Screenly OSE</title>
+    <title>Welcome to Anthias</title>
     <link href="{{ url_for('static', filename='css/screenly.css') }}" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css?family=Plus Jakarta Sans" rel="stylesheet">
+    <link rel="icon" href="/static/favicons/favicon.ico">
     <style type="text/css">
         html, body {
             height: 100%;
@@ -13,20 +15,41 @@
 </head>
 <body class="splash container d-table">
 <div class="col-12 d-table-cell align-middle">
-    <div class="splash-body p-5">
-        <div class="row">
-            <div class="col-12">
-                <div class="logo-container page-header text-center">
-                    <img src="/static/img/screenly_ose_logo_white_large.png" class="img-fluid"/>
-                </div>
+    <div class="row">
+        <div class="col-12">
+            <div
+                class="logo-container page-header d-flex flex-nowrap
+                    justify-content-center align-items-center"
+            >
+                <img src="/static/img/logo-full-splash.svg" alt="splash-logo" class="img-fluid"/>
             </div>
         </div>
+    </div>
+    <div class="splash-body p-5">
         <div class="row">
             <div class="col-12 text-center">
                 {% if context.my_ip %}
-                    <p>To manage the content on this screen, just point your browser to:</p>
+                    <p>
+                        To manage the content on this screen, just point your
+                        browser to
+                        {% if context.my_ip | length > 1 %}
+                            any of
+                        {% endif %}
+                        the IP
+                        {% if context.my_ip | length > 1 %}
+                            addresses
+                        {% else %}
+                            address
+                        {% endif %}
+                        provided below.
+                    </p>
                     <div class="form-actions">
-                        <a href="http://{{ context.my_ip }}">http://{{ context.my_ip }}</a>
+                        {% for ip in context.my_ip %}
+                            <a href="http://{{ ip }}">http://{{ ip }}</a>
+                            {% if not loop.last %}
+                                <br/>
+                            {% endif %}
+                        {% endfor %}
                     </div>
                 {% else %}
                     <p>Unable to retrieve IP.</p>

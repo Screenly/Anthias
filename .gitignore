@@ -38,3 +38,14 @@ node_modules
 *.retry
 .env
 .balena/balena.yml
+
+# Ignore all non-template based files
+docker/Dockerfile.base
+docker/Dockerfile.nginx
+docker/Dockerfile.server
+docker/Dockerfile.websocket
+docker/Dockerfile.celery
+docker/Dockerfile.redis
+docker/Dockerfile.viewer
+docker/Dockerfile.wifi-connect
+
