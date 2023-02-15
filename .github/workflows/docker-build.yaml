@@ -75,7 +75,9 @@ jobs:
 
           # Logic for Raspberry Pi 4
           elif [ "${{ matrix.board }}" == 'pi4' ]; then
-            export BASE_IMAGE=balenalib/raspberrypi4-64-debian
+            # We want to restore once we've removed omxplayer as a dependencys
+            #export BASE_IMAGE=balenalib/raspberrypi4-64-debian
+            export BASE_IMAGE=balenalib/raspberrypi3-debian
             echo 'TARGET_PLATFORM=linux/arm/v8' >> $GITHUB_ENV
           fi
           
