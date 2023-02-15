@@ -80,8 +80,8 @@ jobs:
           fi
           
           # Perform substitutions
-          cat docker/Dockerfile.base | envsubst > docker/Dockerfile.base 
-          cat docker/Dockerfile.viewer | envsubst > docker/Dockerfile.viewer
+          cat docker/Dockerfile.base.tmpl | envsubst > docker/Dockerfile.base 
+          cat docker/Dockerfile.viewer.tmpl | envsubst > docker/Dockerfile.viewer
 
       - name: Set Docker tag
         run: |

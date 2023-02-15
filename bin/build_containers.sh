@@ -44,8 +44,8 @@ for pi_version in pi4 pi3 pi2 pi1; do
     fi
 
     # Perform substitutions
-    cat docker/Dockerfile.base | envsubst > docker/Dockerfile.base 
-    cat docker/Dockerfile.viewer | envsubst > docker/Dockerfile.viewer
+    cat docker/Dockerfile.base.tmpl | envsubst > docker/Dockerfile.base 
+    cat docker/Dockerfile.viewer.tmpl | envsubst > docker/Dockerfile.viewer
 
     for container in base server celery redis websocket nginx viewer wifi-connect; do
         echo "Building $container"
