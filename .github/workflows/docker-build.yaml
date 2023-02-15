@@ -108,6 +108,7 @@ jobs:
               --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
               --build-arg "GIT_BRANCH=$GITHUB_REF_NAME" \
               --cache-from "type=local,src=/tmp/.buildx-cache" \
+              --cache-from "type=registry,ref=screenly/srly-ose-$container:$DOCKER_TAG" \
               --cache-to "type=local,dest=/tmp/.buildx-cache" \
               -f "docker/Dockerfile.$container" \
               -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-${{ matrix.board }}" \

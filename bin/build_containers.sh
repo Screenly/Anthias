@@ -30,7 +30,6 @@ if [ -n "${CLEAN_BUILD+x}" ]; then
     DOCKER_BUILD_ARGS+=("--no-cache")
 fi
 
-
 export BASE_IMAGE_TAG=buster
 
 for pi_version in pi4 pi3 pi2 pi1; do
@@ -56,6 +55,7 @@ for pi_version in pi4 pi3 pi2 pi1; do
             --build-arg "GIT_BRANCH=$GIT_BRANCH" \
             --build-arg "PI_VERSION=$pi_version" \
             --cache-from "type=local,src=/tmp/.buildx-cache" \
+            --cache-from "type=registry,ref=screenly/srly-ose-$container:$DOCKER_TAG" \
             --cache-to "type=local,dest=/tmp/.buildx-cache" \
             -f "docker/Dockerfile.$container" \
             -t "screenly/srly-ose-$container:$DOCKER_TAG" .
