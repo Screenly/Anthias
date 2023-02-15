@@ -14,9 +14,10 @@
 #     git checkout 2ca65fc7b74444edd51d5803a2c1e05a801a6023 && \
 #     ./configure --disable-x86asm && make -j$(nproc) --quiet
 
-FROM screenly/srly-ose-base:latest-x86
+FROM screenly/srly-ose-base
 
-RUN apt-get -y install wget unzip
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get -y install wget unzip
 
 # @TODO: Uncomment the lines below when test_add_asset_streaming is fixed.
 # WORKDIR /opt/ffmpeg
@@ -31,14 +32,16 @@ RUN wget $CHROMEDRIVER_DL_URL -O /tmp/chromedriver.zip && \
     unzip -o /tmp/chromedriver.zip -d /usr/bin
 
 ARG CHROME_DL_URL="https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_107.0.5304.121-1_amd64.deb"
-RUN wget $CHROME_DL_URL -O /tmp/chrome.deb && \
+RUN --mount=type=cache,target=/var/cache/apt \
+    wget $CHROME_DL_URL -O /tmp/chrome.deb && \
     apt-get -y update && \
     apt-get install -y /tmp/chrome.deb
 
-RUN pip install --no-cache-dir \
-    -r /tmp/requirements.txt \
-    -r /tmp/requirements.dev.txt \
-    -r /tmp/requirements.viewer.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install \
+        -r /tmp/requirements.txt \
+        -r /tmp/requirements.dev.txt \
+        -r /tmp/requirements.viewer.txt
 
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app

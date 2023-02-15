@@ -98,7 +98,7 @@ jobs:
           echo "GIT_BRANCH=$GITHUB_REF_NAME" >> $GITHUB_ENV
           echo "GIT_HASH=$GITHUB_SHA" >> $GITHUB_ENV
 
-      - name: Build containers
+      - name: Build Containers
         run: |
           for container in base server celery redis websocket nginx viewer wifi-connect; do
             echo "Building container $container"
