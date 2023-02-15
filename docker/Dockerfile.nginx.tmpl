@@ -1,6 +1,7 @@
 FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
 
-RUN apt-get update && \
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update && \
     apt-get -y install --no-install-recommends \
     nginx && \
     apt-get clean

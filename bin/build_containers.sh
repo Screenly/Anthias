@@ -49,14 +49,13 @@ for pi_version in pi4 pi3 pi2 pi1; do
         echo "Building $container"
         cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container" 
 
-        # Create cache directories
-        mkdir -p /tmp/.buildx-cache/{apt,pip}
-
         docker "${DOCKER_BUILD_ARGS[@]}" \
             --build-arg "GIT_HASH=$GIT_HASH" \
             --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
             --build-arg "GIT_BRANCH=$GIT_BRANCH" \
             --build-arg "PI_VERSION=$pi_version" \
+            --cache-from "type=local,src=/tmp/.buildx-cache" \
+            --cache-to "type=local,dest=/tmp/.buildx-cache" \
             -f "docker/Dockerfile.$container" \
             -t "screenly/srly-ose-$container:$DOCKER_TAG" .
 

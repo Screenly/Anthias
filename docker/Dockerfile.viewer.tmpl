@@ -2,7 +2,7 @@
 FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
 
 # This list needs to be trimmed back later
-RUN --mount=type=bind,source="/tmp/.buildx-cache/apt",target=/var/cache/apt \
+RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \
     apt-get -y install --no-install-recommends \
         build-essential \
@@ -104,7 +104,9 @@ RUN --mount=type=bind,source="/tmp/.buildx-cache/apt",target=/var/cache/apt \
 
 # Install Python requirements
 COPY requirements/requirements.viewer.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt
+
+RUN --mount=type=cache,target=/root/.cache \
+    pip install -r /tmp/requirements.txt
 
 # Works around issue with `curl`
 # https://github.com/balena-io-library/base-images/issues/562

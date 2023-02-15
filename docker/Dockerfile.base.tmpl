@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.3
 FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
 
-RUN --mount=type=bind,source="/tmp/.buildx-cache/apt",target=/var/cache/apt \
+RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \
     apt-get -y install --no-install-recommends \
         build-essential \
