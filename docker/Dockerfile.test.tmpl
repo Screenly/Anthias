@@ -51,9 +51,6 @@ RUN mkdir -p /data/.screenly /data/screenly_assets /tmp/USB/cleanup_folder
 RUN cp ansible/roles/screenly/files/screenly.db \
     ansible/roles/screenly/files/screenly.conf /data/.screenly
 
-ARG GIT_HASH
 ENV GIT_HASH=$GIT_HASH
-ARG GIT_SHORT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
-ARG GIT_BRANCH
 ENV GIT_BRANCH=$GIT_BRANCH

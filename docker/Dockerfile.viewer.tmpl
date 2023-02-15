@@ -5,8 +5,10 @@ FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \
     apt-get -y install --no-install-recommends \
+         omxplayer \
         build-essential \
         ca-certificates \
+        fonts-arphic-uming \
         git-core \
         libasound2-dev \
         libavcodec-dev \
@@ -42,6 +44,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
         libpng16-16 \
         libpq-dev \
         libpulse-dev \
+        libraspberrypi0 \
         librsvg2-common \
         libsdl2-dev \
         libsnappy-dev \
@@ -94,9 +97,8 @@ RUN --mount=type=cache,target=/var/cache/apt \
         python-netifaces \
         python-pip \
         python-setuptools \
-        vlc \
         ttf-wqy-zenhei \
-        fonts-arphic-uming \
+        vlc \
         sqlite3
 
 # Install Python requirements
@@ -110,23 +112,23 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 RUN c_rehash
 
 # QT Base from packages does not support eglfs
-RUN curl "$WEBVIEW_BASE_URL/qt5-$QT_VERSION-$DEBIAN_VERSION-$BOARD.tar.gz" \
-        -sL -o "/tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$BOARD.tar.gz" && \
-    curl "$WEBVIEW_BASE_URL/qt5-$QT_VERSION-$DEBIAN_VERSION-$BOARD.tar.gz.sha256" \
-        -sL -o "/tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$BOARD.tar.gz.sha256" && \
+RUN curl "$WEBVIEW_BASE_URL/qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" \
+        -sL -o "/tmp/qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" && \
+    curl "$WEBVIEW_BASE_URL/qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" \
+        -sL -o "/tmp/qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" && \
     cd /tmp && \
-    sha256sum -c "qt5-$QT_VERSION-$DEBIAN_VERSION-$BOARD.tar.gz.sha256" && \
-    tar -xzf "/tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$BOARD.tar.gz" -C /usr/local && \
-    rm "qt5-$QT_VERSION-$DEBIAN_VERSION-$BOARD.tar.gz"
+    sha256sum -c "qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" && \
+    tar -xzf "/tmp/qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" -C /usr/local && \
+    rm "qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz"
 
-RUN curl "$WEBVIEW_BASE_URL/webview-$QT_VERSION-$DEBIAN_VERSION-$BOARD-$WEBVIEW_GIT_HASH.tar.gz" \
-        -sL -o "/tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$BOARD-$WEBVIEW_GIT_HASH.tar.gz" && \
-    curl "$WEBVIEW_BASE_URL/webview-$QT_VERSION-$DEBIAN_VERSION-$BOARD-$WEBVIEW_GIT_HASH.tar.gz.sha256" \
-        -sL -o "/tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$BOARD-$WEBVIEW_GIT_HASH.tar.gz.sha256" && \
+RUN curl "$WEBVIEW_BASE_URL/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz" \
+        -sL -o "/tmp/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz" && \
+    curl "$WEBVIEW_BASE_URL/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz.sha256" \
+        -sL -o "/tmp/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz.sha256" && \
     cd /tmp && \
-    sha256sum -c "webview-$QT_VERSION-$DEBIAN_VERSION-$BOARD-$WEBVIEW_GIT_HASH.tar.gz.sha256" && \
-    tar -xzf "/tmp/webview-$QT_VERSION-$DEBIAN_VERSION-$BOARD-$WEBVIEW_GIT_HASH.tar.gz" -C /usr/local && \
-    rm "webview-$QT_VERSION-$DEBIAN_VERSION-$BOARD-$WEBVIEW_GIT_HASH.tar.gz"
+    sha256sum -c "webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz.sha256" && \
+    tar -xzf "/tmp/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz" -C /usr/local && \
+    rm "webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz"
 
 ENV QT_QPA_EGLFS_FORCE888=1
 ENV QT_QPA_PLATFORM=linuxfb
@@ -136,11 +138,8 @@ ENV QT_QPA_PLATFORM=linuxfb
 ENV QT_LOGGING_RULES=*.debug=true
 ENV QT_QPA_DEBUG=1
 
-ARG GIT_HASH
 ENV GIT_HASH=$GIT_HASH
-ARG GIT_SHORT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
-ARG GIT_BRANCH
 ENV GIT_BRANCH=$GIT_BRANCH
 
 RUN useradd -g video viewer

@@ -8,11 +8,8 @@ RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
 COPY . /usr/src/app/
 
-ARG GIT_HASH
 ENV GIT_HASH=$GIT_HASH
-ARG GIT_SHORT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
-ARG GIT_BRANCH
 ENV GIT_BRANCH=$GIT_BRANCH
 
 CMD ["python", "websocket_server_layer.py"]

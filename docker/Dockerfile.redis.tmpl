@@ -6,11 +6,8 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt-get -y install --no-install-recommends \
     redis-server
 
-ARG GIT_HASH
 ENV GIT_HASH=$GIT_HASH
-ARG GIT_SHORT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
-ARG GIT_BRANCH
 ENV GIT_BRANCH=$GIT_BRANCH
 
 RUN sed -i 's/^bind.*/bind 0.0.0.0/g' /etc/redis/redis.conf

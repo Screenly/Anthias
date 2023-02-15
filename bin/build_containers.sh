@@ -36,18 +36,23 @@ export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/W
 if [ ! -f /proc/device-tree/model ]; then
     export BOARD="x86"
     export BASE_IMAGE=debian
+    export TARGET_PLATFORM=linux/amd64
 elif grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
     export BASE_IMAGE=balenalib/raspberrypi3-debian
     export BOARD="pi4"
+    export TARGET_PLATFORM=linux/arm/v8
 elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
     export BOARD="pi3"
     export BASE_IMAGE=balenalib/raspberrypi3-debian
+    export TARGET_PLATFORM=linux/arm/v7
 elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
     export BOARD="pi2"
     export BASE_IMAGE=balenalib/raspberry-pi2
+    export TARGET_PLATFORM=linux/arm/v6
 elif grep -qF "Raspberry Pi 1" /proc/device-tree/model; then
     export BOARD="pi1"
     export BASE_IMAGE=balenalib/raspberry-pi
+    export TARGET_PLATFORM=linux/arm/v6
 fi
 
 for container in base server celery redis websocket nginx viewer wifi-connect 'test'; do
@@ -56,18 +61,15 @@ for container in base server celery redis websocket nginx viewer wifi-connect 't
 
     # If we're running on x86, remove all Pi specific packages
     if [ "$BOARD" == 'x86' ]; then
-        sed -i '/libraspberrypi0/d' docker/Dockerfile.*
-        sed -i '/omxplayer/d' docker/Dockerfile.*
+        sed -i '/libraspberrypi0/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
+        sed -i '/omxplayer/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
     fi
 
     docker "${DOCKER_BUILD_ARGS[@]}" \
-        --build-arg "GIT_HASH=$GIT_HASH" \
-        --build-arg "GIT_BRANCH=$GIT_BRANCH" \
-        --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \
-        --build-arg "PI_VERSION=$BOARD" \
         --cache-from "type=local,src=/tmp/.buildx-cache" \
         --cache-from "type=registry,ref=screenly/srly-ose-$container:$DOCKER_TAG" \
         --cache-to "type=local,dest=/tmp/.buildx-cache" \
+        --platform "$TARGET_PLATFORM" \
         -f "docker/Dockerfile.$container" \
         -t "screenly/srly-ose-$container:$DOCKER_TAG" .
 
