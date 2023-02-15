@@ -75,7 +75,7 @@ jobs:
 
           # Logic for Raspberry Pi 4
           elif [ "${{ matrix.board }}" == 'pi4' ]; then
-            # We want to restore once we've removed omxplayer as a dependencys
+            # We want to restore once we've removed omxplayer as a dependency
             #export BASE_IMAGE=balenalib/raspberrypi4-64-debian
             export BASE_IMAGE=balenalib/raspberrypi3-debian
             echo 'TARGET_PLATFORM=linux/arm/v8' >> $GITHUB_ENV
@@ -91,7 +91,7 @@ jobs:
           if [ "$GITHUB_REF_NAME" == 'master' ]; then
              export "DOCKER_TAG=latest-${{ matrix.board }}";
           elif [ "$GITHUB_REF_NAME" == 'production' ]; then
-             export "DOCKER_TAG=production-${{ matrix.board }}";
+             export "DOCKER_TAG=production-${{ matrix.board }}"
           fi
           echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_ENV
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV

@@ -40,7 +40,7 @@ for pi_version in pi4 pi3 pi2 pi1; do
     elif [ "$pi_version" == 'pi3' ]; then
         export BASE_IMAGE=balenalib/raspberrypi3-debian
     elif [ "$pi_version" == 'pi4' ]; then
-        # We want to restore once we've removed omxplayer as a dependencys
+        # We want to restore once we've removed omxplayer as a dependency
         #export BASE_IMAGE=balenalib/raspberrypi4-64-debian
         export BASE_IMAGE=balenalib/raspberrypi3-debian
     fi
