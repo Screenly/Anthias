@@ -45,12 +45,13 @@ for pi_version in pi4 pi3 pi2 pi1; do
         export BASE_IMAGE=balenalib/raspberrypi3-debian
     fi
 
-    # Perform substitutions
-    cat docker/Dockerfile.base.tmpl | envsubst > docker/Dockerfile.base 
-    cat docker/Dockerfile.viewer.tmpl | envsubst > docker/Dockerfile.viewer
-
     for container in base server celery redis websocket nginx viewer wifi-connect; do
         echo "Building $container"
+        cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container" 
+
+        # Create cache directories
+        mkdir -p /tmp/.buildx-cache/{apt,pip}
+
         docker "${DOCKER_BUILD_ARGS[@]}" \
             --build-arg "GIT_HASH=$GIT_HASH" \
             --build-arg "GIT_SHORT_HASH=$GIT_SHORT_HASH" \

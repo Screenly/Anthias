@@ -60,30 +60,26 @@ jobs:
 
           # Logic for Raspberry Pi 1
           if [ "${{ matrix.board }}" == 'pi1' ]; then
-            export BASE_IMAGE=balenalib/raspberry-pi
+            echo 'BASE_IMAGE=balenalib/raspberry-pi' >> $GITHUB_ENV
             echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
 
           # Logic for Raspberry Pi 2
           elif [ "${{ matrix.board }}" == 'pi2' ]; then
-            export BASE_IMAGE=balenalib/raspberry-pi2
+            echo 'BASE_IMAGE=balenalib/raspberry-pi2' >> $GITHUB_ENV
             echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
 
           # Logic for Raspberry Pi 3
           elif [ "${{ matrix.board }}" == 'pi3' ]; then
-            export BASE_IMAGE=balenalib/raspberrypi3-debian
+            echo 'BASE_IMAGE=balenalib/raspberrypi3-debian' >> $GITHUB_ENV
             echo 'TARGET_PLATFORM=linux/arm/v7' >> $GITHUB_ENV
 
           # Logic for Raspberry Pi 4
           elif [ "${{ matrix.board }}" == 'pi4' ]; then
             # We want to restore once we've removed omxplayer as a dependency
             #export BASE_IMAGE=balenalib/raspberrypi4-64-debian
-            export BASE_IMAGE=balenalib/raspberrypi3-debian
+            echo 'BASE_IMAGE=balenalib/raspberrypi3-debian' >> $GITHUB_ENV
             echo 'TARGET_PLATFORM=linux/arm/v8' >> $GITHUB_ENV
           fi
-          
-          # Perform substitutions
-          cat docker/Dockerfile.base.tmpl | envsubst > docker/Dockerfile.base 
-          cat docker/Dockerfile.viewer.tmpl | envsubst > docker/Dockerfile.viewer
 
       - name: Set Docker tag
         run: |
@@ -100,11 +96,15 @@ jobs:
         run: |
           for container in base server celery redis websocket nginx viewer wifi-connect; do
             echo "Building container $container"
+
+            cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container" 
+        
+            # Create cache directories
+            mkdir -p /tmp/.buildx-cache/{apt,pip}
+
             docker buildx build \
               --platform "$TARGET_PLATFORM" \
               --output "type=image,push=true" \
-              --cache-from "type=local,src=/tmp/.buildx-cache" \
-              --cache-to "type=local,dest=/tmp/.buildx-cache" \
               --build-arg "PI_VERSION=${{ matrix.board }}" \
               --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
               --build-arg "GIT_HASH=$GITHUB_SHA" \
