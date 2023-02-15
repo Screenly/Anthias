@@ -22,8 +22,8 @@ if [ -n "${CROSS_COMPILE+x}" ]; then
     echo 'Make sure you ran `docker run --privileged --rm tonistiigi/binfmt --install all` before the command'
 else
     echo "Running without cross-compile..."
-    docker buildx create --use
     DOCKER_BUILD_ARGS=("buildx" "build" "--load")
+    echo 'Make sure you ran `docker buildx create --user` before the command'
 fi
 
 if [ -n "${CLEAN_BUILD+x}" ]; then
