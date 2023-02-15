@@ -30,18 +30,27 @@ if [ -n "${CLEAN_BUILD+x}" ]; then
     DOCKER_BUILD_ARGS+=("--no-cache")
 fi
 
+# Set various variables for the Dockerfiles to use
 export BASE_IMAGE_TAG=buster
+export DEBIAN_VERSION=buster
+export QT_VERSION=5.15.2
+export WEBVIEW_GIT_HASH=0b6d49359133246659b9ba1d8dd883e3fc5c9a91
+export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.1"
 
 for pi_version in pi4 pi3 pi2 pi1; do
     if [ "$pi_version" == 'pi1' ]; then
+        export BOARD="$pi_version"
         export BASE_IMAGE=balenalib/raspberry-pi
     elif [ "$pi_version" == 'pi2' ]; then
+        export BOARD="$pi_version"
         export BASE_IMAGE=balenalib/raspberry-pi2
     elif [ "$pi_version" == 'pi3' ]; then
+        export BOARD="$pi_version"
         export BASE_IMAGE=balenalib/raspberrypi3-debian
     elif [ "$pi_version" == 'pi4' ]; then
         # We want to restore once we've removed omxplayer as a dependency
         #export BASE_IMAGE=balenalib/raspberrypi4-64-debian
+        export BOARD="$pi_version"
         export BASE_IMAGE=balenalib/raspberrypi3-debian
     fi
 

@@ -55,8 +55,12 @@ jobs:
 
       - name: Tweak base image and target based on board
         run: |
-          # Use Buster for all images
-          export BASE_IMAGE_TAG=buster
+          # Set variables for template
+          echo 'BASE_IMAGE_TAG=buster' >> $GITHUB_ENV
+          echo 'DEBIAN_VERSION=buster' >> $GITHUB_ENV
+          echo 'QT_VERSION=5.15.2' >> $GITHUB_ENV
+          echo 'WEBVIEW_GIT_HASH=0b6d49359133246659b9ba1d8dd883e3fc5c9a91' >> $GITHUB_ENV
+          echo 'WEBVIEW_BASE_URL=https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.1' >> $GITHUB_ENV
 
           # Logic for Raspberry Pi 1
           if [ "${{ matrix.board }}" == 'pi1' ]; then
