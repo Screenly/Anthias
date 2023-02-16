@@ -53,7 +53,6 @@ else
     export DOCKER_TAG="$GIT_BRANCH-$BOARD"
 fi
 
-
 for container in server celery redis websocket nginx viewer wifi-connect 'test'; do
     echo "Building $container"
     
