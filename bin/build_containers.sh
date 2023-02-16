@@ -54,9 +54,16 @@ else
 fi
 
 
-for container in base server celery redis websocket nginx viewer wifi-connect 'test'; do
+for container in server celery redis websocket nginx viewer wifi-connect 'test'; do
     echo "Building $container"
-    cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container" 
+    
+    # For all but redis and nginx, and viewer append the base layer
+    if [ ! "$container" == 'redis' ] || [ ! "$container" == 'nginx' ] || [ ! "$container" == 'viewer' ]; then
+        cat "docker/Dockerfile.base.tmpl" | envsubst > "docker/Dockerfile.$container"
+        cat "docker/Dockerfile.$container.tmpl" | envsubst >> "docker/Dockerfile.$container" 
+    else
+        cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container" 
+    fi
 
     # If we're running on x86, remove all Pi specific packages
     if [ "$BOARD" == 'x86' ]; then

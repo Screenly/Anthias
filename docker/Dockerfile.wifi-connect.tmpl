@@ -1,5 +1,3 @@
-FROM screenly/anthias-base
-
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \
     apt-get -y install --no-install-recommends \

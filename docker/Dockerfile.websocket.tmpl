@@ -1,5 +1,3 @@
-FROM screenly/anthias-base
-
 COPY requirements/requirements-websocket.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r /tmp/requirements.txt
