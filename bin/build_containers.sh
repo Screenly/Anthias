@@ -55,23 +55,28 @@ fi
 
 for container in server celery redis websocket nginx viewer wifi-connect 'test'; do
     echo "Building $container"
-    
+
     # For all but redis and nginx, and viewer append the base layer
     if [ ! "$container" == 'redis' ] || [ ! "$container" == 'nginx' ] || [ ! "$container" == 'viewer' ]; then
         cat "docker/Dockerfile.base.tmpl" | envsubst > "docker/Dockerfile.$container"
-        cat "docker/Dockerfile.$container.tmpl" | envsubst >> "docker/Dockerfile.$container" 
+        cat "docker/Dockerfile.$container.tmpl" | envsubst >> "docker/Dockerfile.$container"
     else
-        cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container" 
+        cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container"
     fi
 
     # If we're running on x86, remove all Pi specific packages
     if [ "$BOARD" == 'x86' ]; then
         sed -i '/libraspberrypi0/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
         sed -i '/omxplayer/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
-        
+
         # Don't build the viewer container if we're on x86
         if [ "$container" == 'viewer' ]; then
             echo "Skipping viewer container for x86 builds..."
+            continue
+        fi
+    else
+        if [ "$container" == 'test' ]; then
+            echo "Skipping test container for Pi builds..."
             continue
         fi
     fi
