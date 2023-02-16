@@ -29,19 +29,19 @@ if [ ! -f /proc/device-tree/model ] && [ -z "${BUILD_TARGET+x}" ]; then
     export BOARD="x86"
     export BASE_IMAGE=debian
     export TARGET_PLATFORM=linux/amd64
-elif grep -qF "Raspberry Pi 4" /proc/device-tree/model || [ "${BUILD_TARGET+x}" == 'pi4' ]; then
+elif grep -qF "Raspberry Pi 4" /proc/device-tree/model || [ "${BUILD_TARGET}" == 'pi4' ]; then
     export BASE_IMAGE=balenalib/raspberrypi3-debian
     export BOARD="pi4"
     export TARGET_PLATFORM=linux/arm/v8
-elif grep -qF "Raspberry Pi 3" /proc/device-tree/model || [ "${BUILD_TARGET+x}" == 'pi3' ]; then
+elif grep -qF "Raspberry Pi 3" /proc/device-tree/model || [ "${BUILD_TARGET}" == 'pi3' ]; then
     export BOARD="pi3"
     export BASE_IMAGE=balenalib/raspberrypi3-debian
     export TARGET_PLATFORM=linux/arm/v7
-elif grep -qF "Raspberry Pi 2" /proc/device-tree/model || [ "${BUILD_TARGET+x}" == 'pi2' ]; then
+elif grep -qF "Raspberry Pi 2" /proc/device-tree/model || [ "${BUILD_TARGET}" == 'pi2' ]; then
     export BOARD="pi2"
     export BASE_IMAGE=balenalib/raspberry-pi2
     export TARGET_PLATFORM=linux/arm/v6
-elif grep -qF "Raspberry Pi 1" /proc/device-tree/model || [ "${BUILD_TARGET+x}" == 'pi4' ]; then
+elif grep -qF "Raspberry Pi 1" /proc/device-tree/model || [ "${BUILD_TARGET}" == 'pi4' ]; then
     export BOARD="pi1"
     export BASE_IMAGE=balenalib/raspberry-pi
     export TARGET_PLATFORM=linux/arm/v6
