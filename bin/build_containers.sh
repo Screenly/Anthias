@@ -27,7 +27,7 @@ export WEBVIEW_GIT_HASH=0b6d49359133246659b9ba1d8dd883e3fc5c9a91
 export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.1"
 
 # Detect what platform
-elif [ ! -f /proc/device-tree/model ] && [ -n "${BUILD_TARGET+x}" ] ; then
+if [ ! -f /proc/device-tree/model ] && [ -n "${BUILD_TARGET+x}" ]; then
     export BOARD="x86"
     export BASE_IMAGE=debian
     export TARGET_PLATFORM=linux/amd64
