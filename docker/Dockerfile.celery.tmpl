@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.3
-FROM screenly/srly-ose-base
+FROM screenly/anthias-base
 
 COPY requirements/requirements.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \

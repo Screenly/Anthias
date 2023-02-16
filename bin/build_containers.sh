@@ -5,6 +5,7 @@
 
 set -euo pipefail
 
+# Set various confirguration variables for the Dockerfiles to use
 export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 export GIT_SHORT_HASH=$(git rev-parse --short HEAD)
 export GIT_HASH=$(git rev-parse HEAD)
@@ -22,8 +23,6 @@ echo 'Make sure you ran `docker buildx create --use` before the command'
 if [ -n "${CLEAN_BUILD+x}" ]; then
     DOCKER_BUILD_ARGS+=("--no-cache")
 fi
-
-# Set various variables for the Dockerfiles to use
 
 # Detect what platform
 if [ ! -f /proc/device-tree/model ] && [ -z "${BUILD_TARGET+x}" ]; then
@@ -77,10 +76,13 @@ for container in base server celery redis websocket nginx viewer wifi-connect 't
         --platform "$TARGET_PLATFORM" \
         -f "docker/Dockerfile.$container" \
         -t "screenly/srly-ose-$container:latest" \
+        -t "screenly/anthias-$container:latest" \
+        -t "screenly/anthias-$container:$DOCKER_TAG" \
         -t "screenly/srly-ose-$container:$DOCKER_TAG" .
 
     # Push if the push flag is set and not cross compiling
     if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
         docker push "screenly/srly-ose-$container:$DOCKER_TAG"
+        docker push "screenly/anthias-$container:$DOCKER_TAG"
     fi
 done
