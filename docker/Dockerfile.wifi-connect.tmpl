@@ -1,5 +1,3 @@
-FROM screenly/srly-ose-base
-
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \
     apt-get -y install --no-install-recommends \
@@ -24,5 +22,9 @@ COPY send_zmq_message.py ./
 RUN touch /var/lib/misc/dnsmasq.leases
 
 COPY bin/start_wifi_connect.sh ./
+
+ENV GIT_HASH=$GIT_HASH
+ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
+ENV GIT_BRANCH=$GIT_BRANCH
 
 CMD ["bash", "start_wifi_connect.sh"]

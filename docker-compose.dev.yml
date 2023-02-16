@@ -1,23 +1,9 @@
 version: "2.2"
 services:
-  srly-ose-base:
-    image: screenly/srly-ose-base:latest-x86
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.base.dev
-      cache_from:
-        - screenly/srly-ose-base:latest-x86
-
   srly-ose-server:
-    image: screenly/srly-ose-server:latest-x86
     build:
       context: .
-      dockerfile: docker/Dockerfile.server.dev
-      cache_from:
-        - screenly/srly-ose-base:latest-x86
-        - screenly/srly-ose-server:latest-x86
-    depends_on:
-      - srly-ose-base
+      dockerfile: docker/Dockerfile.server
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -49,15 +35,10 @@ services:
 #      - resin-data:/data
 
   srly-ose-websocket:
-    image: screenly/srly-ose-websocket:latest-x86
     build:
       context: .
-      dockerfile: docker/Dockerfile.websocket.dev
-      cache_from:
-        - screenly/srly-ose-base:latest-x86
-        - screenly/srly-ose-websocket:latest-x86
+      dockerfile: docker/Dockerfile.websocket
     depends_on:
-      - srly-ose-base
       - srly-ose-server
     environment:
       - HOME=/data
@@ -67,15 +48,10 @@ services:
       - resin-data:/data
 
   srly-ose-celery:
-    image: screenly/srly-ose-celery:latest-x86
     build:
       context: .
-      dockerfile: docker/Dockerfile.celery.dev
-      cache_from:
-        - screenly/srly-ose-base:latest-x86
-        - screenly/srly-ose-celery:latest-x86
+      dockerfile: docker/Dockerfile.celery
     depends_on:
-      - srly-ose-base
       - srly-ose-server
       - redis
     environment:
@@ -87,19 +63,18 @@ services:
       - resin-data:/data
 
   redis:
+    platform: "linux/amd64"
     image: redis:alpine
 
   srly-ose-nginx:
-    image: screenly/srly-ose-nginx:latest-x86
     build:
       context: .
-      dockerfile: docker/Dockerfile.nginx.dev
+      dockerfile: docker/Dockerfile.nginx
     ports:
       - 8000:80
     environment:
       - HOME=/data
     depends_on:
-      - srly-ose-base
       - srly-ose-server
       - srly-ose-websocket
     restart: always

@@ -1,20 +1,9 @@
 version: "2.2"
 services:
-  srly-ose-base:
-    image: screenly/srly-ose-base:latest-x86
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.base.dev
-      cache_from:
-        - screenly/srly-ose-base:latest-x86
-
   srly-ose-test:
-    image: screenly/srly-ose-test:latest-x86
     build:
       context: .
       dockerfile: docker/Dockerfile.test
-    depends_on:
-      - srly-ose-base
     environment:
       - HOME=/data
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -26,15 +15,10 @@ services:
       - resin-data:/data
 
   srly-ose-celery:
-    image: screenly/srly-ose-celery:latest-x86
     build:
       context: .
-      dockerfile: docker/Dockerfile.celery.dev
-      cache_from:
-        - screenly/srly-ose-base:latest-x86
-        - screenly/srly-ose-celery:latest-x86
+      dockerfile: docker/Dockerfile.celery
     depends_on:
-      - srly-ose-base
       - srly-ose-test
       - redis
     environment:
