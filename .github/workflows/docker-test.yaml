@@ -42,7 +42,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-x86
 
-      - name: Build containers
+      - name: Build Containers
         run: |
           ./bin/build_containers.sh
 
