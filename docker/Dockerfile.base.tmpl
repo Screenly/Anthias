@@ -34,3 +34,10 @@ RUN --mount=type=cache,target=/var/cache/apt \
 # Works around issue with `curl`
 # https://github.com/balena-io-library/base-images/issues/562
 RUN c_rehash
+
+# We need this to ensure that the wheels can be built.
+# Otherwise we get "invalid command 'bdist_wheel'"
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install wheel
+
+# Keep a newline below here to not break the concatination of files.
