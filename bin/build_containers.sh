@@ -5,14 +5,16 @@
 
 set -euo pipefail
 
-GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-GIT_SHORT_HASH=$(git rev-parse --short HEAD)
-GIT_HASH=$(git rev-parse HEAD)
-BASE_IMAGE_TAG=buster
-DEBIAN_VERSION=buster
-QT_VERSION=5.15.2
-WEBVIEW_GIT_HASH=0b6d49359133246659b9ba1d8dd883e3fc5c9a91
-WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.1"
+export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+export GIT_SHORT_HASH=$(git rev-parse --short HEAD)
+export GIT_HASH=$(git rev-parse HEAD)
+export BASE_IMAGE_TAG=buster
+export DEBIAN_VERSION=buster
+export QT_VERSION=5.15.2
+export WEBVIEW_GIT_HASH=0b6d49359133246659b9ba1d8dd883e3fc5c9a91
+export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.1"
+export CHROME_DL_URL="https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_107.0.5304.121-1_amd64.deb"
+export CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/107.0.5304.62/chromedriver_linux64.zip"
 
 DOCKER_BUILD_ARGS=("buildx" "build" "--load")
 echo 'Make sure you ran `docker buildx create --use` before the command'
@@ -25,31 +27,31 @@ fi
 
 # Detect what platform
 if [ ! -f /proc/device-tree/model ] && [ -z "${BUILD_TARGET+x}" ]; then
-    BOARD="x86"
-    BASE_IMAGE=debian
-    TARGET_PLATFORM=linux/amd64
+    export BOARD="x86"
+    export BASE_IMAGE=debian
+    export TARGET_PLATFORM=linux/amd64
 elif grep -qF "Raspberry Pi 4" /proc/device-tree/model || [ "${BUILD_TARGET+x}" == 'pi4' ]; then
-    BASE_IMAGE=balenalib/raspberrypi3-debian
-    BOARD="pi4"
-    TARGET_PLATFORM=linux/arm/v8
+    export BASE_IMAGE=balenalib/raspberrypi3-debian
+    export BOARD="pi4"
+    export TARGET_PLATFORM=linux/arm/v8
 elif grep -qF "Raspberry Pi 3" /proc/device-tree/model || [ "${BUILD_TARGET+x}" == 'pi3' ]; then
-    BOARD="pi3"
-    BASE_IMAGE=balenalib/raspberrypi3-debian
-    TARGET_PLATFORM=linux/arm/v7
+    export BOARD="pi3"
+    export BASE_IMAGE=balenalib/raspberrypi3-debian
+    export TARGET_PLATFORM=linux/arm/v7
 elif grep -qF "Raspberry Pi 2" /proc/device-tree/model || [ "${BUILD_TARGET+x}" == 'pi2' ]; then
-    BOARD="pi2"
-    BASE_IMAGE=balenalib/raspberry-pi2
-    TARGET_PLATFORM=linux/arm/v6
+    export BOARD="pi2"
+    export BASE_IMAGE=balenalib/raspberry-pi2
+    export TARGET_PLATFORM=linux/arm/v6
 elif grep -qF "Raspberry Pi 1" /proc/device-tree/model || [ "${BUILD_TARGET+x}" == 'pi4' ]; then
-    BOARD="pi1"
-    BASE_IMAGE=balenalib/raspberry-pi
-    TARGET_PLATFORM=linux/arm/v6
+    export BOARD="pi1"
+    export BASE_IMAGE=balenalib/raspberry-pi
+    export TARGET_PLATFORM=linux/arm/v6
 fi
 
 if [ "$GIT_BRANCH" = "master" ]; then
-    DOCKER_TAG="latest-$BOARD"
+    export DOCKER_TAG="latest-$BOARD"
 else
-    DOCKER_TAG="$GIT_BRANCH-$BOARD"
+    export DOCKER_TAG="$GIT_BRANCH-$BOARD"
 fi
 
 
@@ -70,7 +72,6 @@ for container in base server celery redis websocket nginx viewer wifi-connect 't
     fi
 
     docker "${DOCKER_BUILD_ARGS[@]}" \
-        --cache-from "type=registry,ref=screenly/srly-ose-$container:$DOCKER_TAG" \
         --cache-from "type=local,src=/tmp/.buildx-cache" \
         --cache-to "type=local,dest=/tmp/.buildx-cache" \
         --platform "$TARGET_PLATFORM" \
