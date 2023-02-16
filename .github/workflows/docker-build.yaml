@@ -53,69 +53,10 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Tweak base image and target based on board
-        run: |
-          # Set variables for template
-          echo 'BASE_IMAGE_TAG=buster' >> $GITHUB_ENV
-          echo 'DEBIAN_VERSION=buster' >> $GITHUB_ENV
-          echo 'QT_VERSION=5.15.2' >> $GITHUB_ENV
-          echo 'WEBVIEW_GIT_HASH=0b6d49359133246659b9ba1d8dd883e3fc5c9a91' >> $GITHUB_ENV
-          echo 'WEBVIEW_BASE_URL=https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.1' >> $GITHUB_ENV
-
-          # Logic for Raspberry Pi 1
-          if [ "${{ matrix.board }}" == 'pi1' ]; then
-            echo 'BASE_IMAGE=balenalib/raspberry-pi' >> $GITHUB_ENV
-            echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
-
-          # Logic for Raspberry Pi 2
-          elif [ "${{ matrix.board }}" == 'pi2' ]; then
-            echo 'BASE_IMAGE=balenalib/raspberry-pi2' >> $GITHUB_ENV
-            echo 'TARGET_PLATFORM=linux/arm/v6' >> $GITHUB_ENV
-
-          # Logic for Raspberry Pi 3
-          elif [ "${{ matrix.board }}" == 'pi3' ]; then
-            echo 'BASE_IMAGE=balenalib/raspberrypi3-debian' >> $GITHUB_ENV
-            echo 'TARGET_PLATFORM=linux/arm/v7' >> $GITHUB_ENV
-
-          # Logic for Raspberry Pi 4
-          elif [ "${{ matrix.board }}" == 'pi4' ]; then
-            # We want to restore once we've removed omxplayer as a dependency
-            #export BASE_IMAGE=balenalib/raspberrypi4-64-debian
-            echo 'BASE_IMAGE=balenalib/raspberrypi3-debian' >> $GITHUB_ENV
-            echo 'TARGET_PLATFORM=linux/arm/v8' >> $GITHUB_ENV
-          fi
-
-      - name: Set Docker tag
-        run: |
-          # Apply the correct docker tag based on branch
-          if [ "$GITHUB_REF_NAME" == 'master' ]; then
-             export "DOCKER_TAG=latest-${{ matrix.board }}";
-          elif [ "$GITHUB_REF_NAME" == 'production' ]; then
-             export "DOCKER_TAG=production-${{ matrix.board }}"
-          fi
-          echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_ENV
-          echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-          echo "GIT_BRANCH=$GITHUB_REF_NAME" >> $GITHUB_ENV
-          echo "GIT_HASH=$GITHUB_SHA" >> $GITHUB_ENV
-
       - name: Build Containers
         run: |
-          for container in base server celery redis websocket nginx viewer wifi-connect; do
-            echo "Building container $container"
-
-            cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container"
-
-            docker buildx build \
-              --platform "$TARGET_PLATFORM" \
-              --output "type=image,push=true" \
-              --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-              --cache-from "type=local,src=/tmp/.buildx-cache" \
-              --cache-from "type=registry,ref=screenly/srly-ose-$container:$DOCKER_TAG" \
-              --cache-to "type=local,dest=/tmp/.buildx-cache" \
-              -f "docker/Dockerfile.$container" \
-              -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-${{ matrix.board }}" \
-              -t "screenly/srly-ose-$container:$DOCKER_TAG" .
-          done
+          export BUILD_TARGET=${{ matrix.board }} 
+          ./bin/build_containers.sh
 
   balena:
     needs: buildx
