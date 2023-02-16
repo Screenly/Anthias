@@ -3,7 +3,7 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 # -*- sh-basic-offset: 4 -*-
 
-set -euo pipefail
+set -euox pipefail
 
 # Set various confirguration variables for the Dockerfiles to use
 export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
@@ -84,6 +84,7 @@ for container in server celery redis websocket nginx viewer wifi-connect 'test';
         -f "docker/Dockerfile.$container" \
         -t "screenly/srly-ose-$container:latest" \
         -t "screenly/anthias-$container:latest" \
+        -t "anthias-$container:latest" \
         -t "screenly/anthias-$container:$DOCKER_TAG" \
         -t "screenly/srly-ose-$container:$DOCKER_TAG" .
 
