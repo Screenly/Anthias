@@ -41,7 +41,7 @@ elif grep -qF "Raspberry Pi 2" /proc/device-tree/model || [ "${BUILD_TARGET}" ==
     export BOARD="pi2"
     export BASE_IMAGE=balenalib/raspberry-pi2
     export TARGET_PLATFORM=linux/arm/v6
-elif grep -qF "Raspberry Pi 1" /proc/device-tree/model || [ "${BUILD_TARGET}" == 'pi4' ]; then
+elif grep -qF "Raspberry Pi 1" /proc/device-tree/model || [ "${BUILD_TARGET}" == 'pi1' ]; then
     export BOARD="pi1"
     export BASE_IMAGE=balenalib/raspberry-pi
     export TARGET_PLATFORM=linux/arm/v6
