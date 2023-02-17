@@ -92,11 +92,11 @@ RUN --mount=type=cache,target=/var/cache/apt \
         libxtst-dev \
         net-tools \
         psmisc \
-        python-dev \
-        python-gobject \
-        python-netifaces \
-        python-pip \
-        python-setuptools \
+        python3-dev \
+        python3-gobject \
+        python3-netifaces \
+        python3-pip \
+        python3-setuptools \
         ttf-wqy-zenhei \
         vlc \
         sqlite3
@@ -104,13 +104,13 @@ RUN --mount=type=cache,target=/var/cache/apt \
 # We need this to ensure that the wheels can be built.
 # Otherwise we get "invalid command 'bdist_wheel'"
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install wheel
+    pip3 install wheel
 
 # Install Python requirements
 COPY requirements/requirements.viewer.txt /tmp/requirements.txt
 
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r /tmp/requirements.txt
+    pip3 install -r /tmp/requirements.txt
 
 # Works around issue with `curl`
 # https://github.com/balena-io-library/base-images/issues/562

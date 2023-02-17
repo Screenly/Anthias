@@ -1,3 +1,4 @@
 Cython==0.29.33
 netifaces==0.10.9
 pyzmq==19.0.2
+future==0.18.3

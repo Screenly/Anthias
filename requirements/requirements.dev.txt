@@ -3,3 +3,4 @@ mock==3.0.5
 pep8==1.7.1
 selenium==3.141.0
 splinter==0.14.0
+future==0.18.3
