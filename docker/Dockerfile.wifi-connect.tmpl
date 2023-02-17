@@ -1,17 +1,13 @@
 RUN --mount=type=cache,target=/var/cache/apt \
-    apt-get update && \
     apt-get -y install --no-install-recommends \
         dnsmasq \
-        jq \
-        wget \
         wireless-tools
 
 WORKDIR /usr/src/app
 
-ARG TARGET_PLATFORM
-
-COPY ./bin/install_wifi_connect.sh .
-RUN bash ./install_wifi_connect.sh
+RUN curl -sL -o /tmp/wifi_connect.tgz "$ARCHIVE_URL" && \
+    tar xfz /tmp/wifi_connect.tgz -C /usr/src/app && \
+    rm /tmp/wifi_connect.tgz
 
 COPY requirements/requirements.wifi-connect.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \

@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.3
+# syntax=docker/dockerfile:1.4
 FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
 
 RUN --mount=type=cache,target=/var/cache/apt \
@@ -14,13 +14,13 @@ RUN --mount=type=cache,target=/var/cache/apt \
         libcec-dev  \
         libffi-dev \
         libraspberrypi0 \
+        libraspberrypi0 \
         libssl-dev \
         libzmq3-dev \
         lsb-release \
-        libraspberrypi0 \
-        omxplayer \
         mplayer \
         net-tools \
+        omxplayer \
         procps \
         psmisc \
         python-dev \

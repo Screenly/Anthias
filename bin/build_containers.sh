@@ -11,11 +11,6 @@ export GIT_SHORT_HASH=$(git rev-parse --short HEAD)
 export GIT_HASH=$(git rev-parse HEAD)
 export BASE_IMAGE_TAG=buster
 export DEBIAN_VERSION=buster
-export QT_VERSION=5.15.2
-export WEBVIEW_GIT_HASH=0b6d49359133246659b9ba1d8dd883e3fc5c9a91
-export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.1"
-export CHROME_DL_URL="https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_107.0.5304.121-1_amd64.deb"
-export CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/107.0.5304.62/chromedriver_linux64.zip"
 
 DOCKER_BUILD_ARGS=("buildx" "build" "--load")
 echo 'Make sure you ran `docker buildx create --use` before the command'
@@ -56,6 +51,27 @@ fi
 for container in server celery redis websocket nginx viewer wifi-connect 'test'; do
     echo "Building $container"
 
+    if [ "$container" == 'viewer' ]; then
+        export QT_VERSION=5.15.2
+        export WEBVIEW_GIT_HASH=0b6d49359133246659b9ba1d8dd883e3fc5c9a91
+        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.1"
+        export CHROME_DL_URL="https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_107.0.5304.121-1_amd64.deb"
+        export CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/107.0.5304.62/chromedriver_linux64.zip"
+
+    elif [ "$container" == 'wifi-connect' ]; then
+        # Logic for determining the correct architecture for the wifi-connect container
+        if [ "$TARGET_PLATFORM" = 'linux/arm/v6' ]; then 
+            architecture=rpi
+        else
+            architecture=armv7hf
+        fi
+
+        wc_download_url='https://api.github.com/repos/balena-os/wifi-connect/releases/45509064'
+        jq_filter=".assets[] | select (.name|test(\"linux-$architecture\")) | .browser_download_url" 
+        archive_url=$(curl -sL "$wc_download_url" | jq -r "$jq_filter")  
+        export ARCHIVE_URL="$archive_url"
+    fi
+
     # For all but redis and nginx, and viewer append the base layer
     if [ ! "$container" == 'redis' ] || [ ! "$container" == 'nginx' ] || [ ! "$container" == 'viewer' ]; then
         cat "docker/Dockerfile.base.tmpl" | envsubst > "docker/Dockerfile.$container"
@@ -90,11 +106,15 @@ for container in server celery redis websocket nginx viewer wifi-connect 'test';
         -t "screenly/anthias-$container:latest" \
         -t "anthias-$container:latest" \
         -t "screenly/anthias-$container:$DOCKER_TAG" \
-        -t "screenly/srly-ose-$container:$DOCKER_TAG" .
+        -t "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD" \
+        -t "screenly/srly-ose-$container:$DOCKER_TAG" \
+        -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD" .
 
     # Push if the push flag is set and not cross compiling
     if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
         docker push "screenly/srly-ose-$container:$DOCKER_TAG"
         docker push "screenly/anthias-$container:$DOCKER_TAG"
+        docker push "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
+        docker push "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD"
     fi
 done
