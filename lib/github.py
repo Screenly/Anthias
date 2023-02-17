@@ -1,3 +1,5 @@
+from builtins import str
+from builtins import range
 import os
 import logging
 import string

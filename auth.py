@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from builtins import str
+from builtins import object
 from abc import ABCMeta, abstractmethod, abstractproperty
 from functools import wraps
 import hashlib
@@ -7,6 +9,7 @@ import os.path
 import json
 
 from flask import request, Response
+from future.utils import with_metaclass
 
 LINUX_USER = os.getenv('USER', 'pi')
 WOTT_CREDENTIALS_PATH = '/opt/wott/credentials'
@@ -14,9 +17,7 @@ WOTT_USER_CREDENTIALS_PATH = os.path.join(WOTT_CREDENTIALS_PATH, LINUX_USER)
 WOTT_SCREENLY_CREDENTIAL_NAME = 'screenly'
 
 
-class Auth(object):
-    __metaclass__ = ABCMeta
-
+class Auth(with_metaclass(ABCMeta, object)):
     @abstractmethod
     def authenticate(self):
         """

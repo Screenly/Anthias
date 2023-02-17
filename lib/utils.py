@@ -1,4 +1,8 @@
 from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
 import certifi
 from . import db
 import json
@@ -20,7 +24,7 @@ from platform import machine
 from settings import settings, ZmqPublisher
 from subprocess import check_output, call
 from threading import Thread
-from urlparse import urlparse
+from urllib.parse import urlparse
 import logging
 
 from .assets_helper import update
@@ -303,7 +307,7 @@ def download_video_from_youtube(uri, asset_id):
     thread.daemon = True
     thread.start()
 
-    return location, unicode(name.decode('utf-8')), duration
+    return location, str(name.decode('utf-8')), duration
 
 
 class YoutubeDownloadThread(Thread):
@@ -325,7 +329,7 @@ class YoutubeDownloadThread(Thread):
 def template_handle_unicode(value):
     if isinstance(value, str):
         return value.decode('utf-8')
-    return unicode(value)
+    return str(value)
 
 
 def is_demo_node():

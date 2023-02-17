@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from past.builtins import basestring
 __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2023, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
@@ -27,7 +31,7 @@ from mimetypes import guess_type, guess_extension
 from os import getenv, listdir, makedirs, mkdir, path, remove, rename, statvfs, stat, walk
 from retry.api import retry_call
 from subprocess import check_output
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 from flask import Flask, escape, make_response, render_template, request, send_from_directory, url_for, jsonify
 from flask_cors import CORS
@@ -396,7 +400,7 @@ def prepare_asset(request, unique_name=False):
 
     def get(key):
         val = data.get(key, '')
-        if isinstance(val, unicode):
+        if isinstance(val, str):
             return val.strip()
         elif isinstance(val, basestring):
             return val.strip().decode('utf-8')
@@ -479,7 +483,7 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
 
     def get(key):
         val = data.get(key, '')
-        if isinstance(val, unicode):
+        if isinstance(val, str):
             return val.strip()
         elif isinstance(val, basestring):
             return val.strip().decode('utf-8')
@@ -656,7 +660,7 @@ def remove_default_assets():
 
 
 def update_asset(asset, data):
-    for key, value in data.items():
+    for key, value in list(data.items()):
 
         if key in ['asset_id', 'is_processing', 'mimetype', 'uri'] or key not in asset:
             continue
@@ -683,7 +687,7 @@ def api_response(view):
             return view(*args, **kwargs)
         except Exception as e:
             traceback.print_exc()
-            return api_error(unicode(e))
+            return api_error(str(e))
 
     return api_view
 
@@ -1321,13 +1325,7 @@ class ResetWifiConfig(Resource):
         if wireless_connections is not None:
             device_uuid = None
 
-            wireless_connections = filter(
-                lambda c: not pattern_exclude.search(str(c['Id'])),
-                filter(
-                    lambda c: pattern_include.search(str(c['Devices'])),
-                    wireless_connections
-                )
-            )
+            wireless_connections = [c for c in [c for c in wireless_connections if pattern_include.search(str(c['Devices']))] if not pattern_exclude.search(str(c['Id']))]
 
             if len(wireless_connections) > 0:
                 device_uuid = wireless_connections[0].get('Uuid')
@@ -1680,7 +1678,7 @@ def settings_page():
             next_auth_backend.update_settings(current_pass_correct)
             settings['auth_backend'] = auth_backend
 
-            for field, default in CONFIGURABLE_SETTINGS.items():
+            for field, default in list(CONFIGURABLE_SETTINGS.items()):
                 value = request.form.get(field, default)
 
                 if not value and field in ['default_duration', 'default_streaming_duration']:
@@ -1708,7 +1706,7 @@ def settings_page():
             context['flash'] = {'class': "danger", 'message': e}
     else:
         settings.load()
-    for field, default in DEFAULTS['viewer'].items():
+    for field, default in list(DEFAULTS['viewer'].items()):
         if field == 'usb_assets_key':
             if not settings[field]:
                 settings[field] = generate_perfect_paper_password(20, False)

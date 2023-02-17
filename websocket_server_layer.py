@@ -1,3 +1,4 @@
+from builtins import object
 from gevent import pywsgi
 from geventwebsocket import WebSocketError
 from geventwebsocket.handler import WebSocketHandler

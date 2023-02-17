@@ -1,3 +1,4 @@
+from builtins import object
 from splinter import Browser
 from time import sleep
 from selenium.common.exceptions import ElementNotVisibleException
@@ -45,7 +46,7 @@ settings_url = 'http://foo:bar@localhost:8080/settings'
 system_info_url = 'http://foo:bar@localhost:8080/system_info'
 
 
-class TemporaryCopy:
+class TemporaryCopy(object):
     def __init__(self, original_path, base_path):
         self.original_path = original_path
         self.base_path = base_path
