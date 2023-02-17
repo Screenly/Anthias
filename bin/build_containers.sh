@@ -90,7 +90,9 @@ for container in server celery redis websocket nginx viewer wifi-connect 'test';
         -t "screenly/anthias-$container:latest" \
         -t "anthias-$container:latest" \
         -t "screenly/anthias-$container:$DOCKER_TAG" \
-        -t "screenly/srly-ose-$container:$DOCKER_TAG" .
+        -t "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD" \
+        -t "screenly/srly-ose-$container:$DOCKER_TAG" \
+        -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD" .
 
     # Push if the push flag is set and not cross compiling
     if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
