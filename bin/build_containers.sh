@@ -12,9 +12,7 @@ export GIT_HASH=$(git rev-parse HEAD)
 export BASE_IMAGE_TAG=buster
 export DEBIAN_VERSION=buster
 
-# Handle command-line arguments.
-declare -a SKIP_SERVICES
-declare -a VALID_SERVICES=(
+declare -a SERVICES=(
     server
     celery
     redis
@@ -24,63 +22,6 @@ declare -a VALID_SERVICES=(
     wifi-connect
     'test'
 )
-declare -a SERVICES=("${VALID_SERVICES[@]}")
-
-function usage() {
-    echo "Usage: $0 [options]"
-    echo "Options:"
-
-    echo "  --skip-<service>  Skip building the specified service"
-    echo -n "                    Valid services: "
-    for service in "${VALID_SERVICES[@]}"; do
-        echo -n "$service "
-    done
-    echo
-
-    echo "  -h, --help        Show this help message"
-}
-
-function is_valid_service() {
-    local service="$1"
-    for valid_service in "${VALID_SERVICES[@]}"; do
-        if [ "$service" == "$valid_service" ]; then
-            return 0
-        fi
-    done
-    return 1
-}
-
-while [[ $# -gt 0 ]]; do
-    key="$1"
-    case $key in
-        --skip-*)
-            SERVICE="${key#--skip-}"
-
-            if ! is_valid_service "$SERVICE"; then
-                echo "Invalid service: $SERVICE"
-                usage
-                exit 1
-            fi
-
-            for i in "${!SERVICES[@]}"; do
-                if [ "${SERVICES[$i]}" == "$SERVICE" ]; then
-                    unset "SERVICES[$i]"
-                fi
-            done
-
-            shift
-            ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        *)
-            echo "Unknown argument: $key"
-            usage
-            exit 1
-            ;;
-    esac
-done
 
 DOCKER_BUILD_ARGS=("buildx" "build" "--load")
 echo 'Make sure you ran `docker buildx create --use` before the command'
@@ -119,7 +60,17 @@ else
 fi
 
 for container in ${SERVICES[@]}; do
-    echo "Building $container"
+    echo "Building $container..."
+
+    uppercase_container=$(
+        echo $container | tr '[:lower:]' '[:upper:]' | tr '-' '_'
+    )
+    skip_variable="SKIP_${uppercase_container}"
+
+    if [ -n "${!skip_variable:-}" ]; then
+        echo "$skip_variable is set. Skipping $container..."
+        continue
+    fi
 
     if [ "$container" == 'viewer' ]; then
         export QT_VERSION=5.15.2
@@ -130,15 +81,15 @@ for container in ${SERVICES[@]}; do
 
     elif [ "$container" == 'wifi-connect' ]; then
         # Logic for determining the correct architecture for the wifi-connect container
-        if [ "$TARGET_PLATFORM" = 'linux/arm/v6' ]; then 
+        if [ "$TARGET_PLATFORM" = 'linux/arm/v6' ]; then
             architecture=rpi
         else
             architecture=armv7hf
         fi
 
         wc_download_url='https://api.github.com/repos/balena-os/wifi-connect/releases/45509064'
-        jq_filter=".assets[] | select (.name|test(\"linux-$architecture\")) | .browser_download_url" 
-        archive_url=$(curl -sL "$wc_download_url" | jq -r "$jq_filter")  
+        jq_filter=".assets[] | select (.name|test(\"linux-$architecture\")) | .browser_download_url"
+        archive_url=$(curl -sL "$wc_download_url" | jq -r "$jq_filter")
         export ARCHIVE_URL="$archive_url"
     fi
 
