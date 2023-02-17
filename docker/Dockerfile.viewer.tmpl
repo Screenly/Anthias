@@ -101,6 +101,11 @@ RUN --mount=type=cache,target=/var/cache/apt \
         vlc \
         sqlite3
 
+# We need this to ensure that the wheels can be built.
+# Otherwise we get "invalid command 'bdist_wheel'"
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install wheel
+
 # Install Python requirements
 COPY requirements/requirements.viewer.txt /tmp/requirements.txt
 
