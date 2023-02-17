@@ -98,5 +98,7 @@ for container in server celery redis websocket nginx viewer wifi-connect 'test';
     if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
         docker push "screenly/srly-ose-$container:$DOCKER_TAG"
         docker push "screenly/anthias-$container:$DOCKER_TAG"
+        docker push "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
+        docker push "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD"
     fi
 done
