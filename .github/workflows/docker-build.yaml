@@ -79,16 +79,20 @@ jobs:
           # Generage a docker-compose file for Balena with the correct board
           mkdir -p balena-deploy
 
-          # Copy in the Balena yaml file.
+          # Copy in the Balena yaml file
           cp balena.yml balena-deploy/
 
+          # This should in theory not be necessary
+          export BOARD=$BOARD
+          export GIT_SHORT_HASH=$GIT_SHORT_HASH
+
           # Generate the docker-compose file
-          cat docker-compose.balena.yml.tmpl | envsubst
-            > balena-deploy/docker-compose.yml
+          cat docker-compose.balena.yml.tmpl | \
+            envsubst > balena-deploy/docker-compose.yml
 
       - uses: balena-io/deploy-to-balena-action@master
         id: build
         with:
           balena_token: ${{ secrets.BALENA_TOKEN }}
-          fleet: screenly_ose/screenly-ose-${{ matrix.board }}
+          fleet: screenly_ose/anthias-${{ matrix.board }}
           source: balena-deploy
