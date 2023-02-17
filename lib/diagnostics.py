@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
+from __future__ import absolute_import
 import os
 import sh
 import sqlite3
-import utils
+from . import utils
 import cec
 from lib import raspberry_pi_helper
 from pprint import pprint

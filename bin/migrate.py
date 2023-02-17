@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 
+from __future__ import print_function
 import sqlite3
 import os
 import shutil
@@ -78,9 +79,9 @@ commit;
 def migrate_add_column(col, script):
     with open_db_get_cursor() as (cursor, conn):
         if test_column(col, cursor):
-            print 'Column (' + col + ') already present'
+            print('Column (' + col + ') already present')
         else:
-            print 'Adding new column (' + col + ')'
+            print('Adding new column (' + col + ')')
             cursor.executescript(script)
             assets = read(cursor)
             for asset in assets:
@@ -116,11 +117,11 @@ def migrate_make_asset_id_primary_key():
         table_info = cursor.execute('pragma table_info(assets)')
         has_primary_key = table_info.fetchone()[-1] == 1
     if has_primary_key:
-        print 'already has primary key'
+        print('already has primary key')
     else:
         with open_db_get_cursor() as (cursor, _):
             cursor.executescript(query_make_asset_id_primary_key)
-            print 'asset_id is primary key'
+            print('asset_id is primary key')
 # ✂--------
 query_add_is_enabled_and_nocache = """
 begin transaction;
@@ -134,7 +135,7 @@ def migrate_add_is_enabled_and_nocache():
     with open_db_get_cursor() as (cursor, conn):
         col = 'is_enabled,nocache'
         if test_column(col, cursor):
-            print 'Columns (' + col + ') already present'
+            print('Columns (' + col + ') already present')
         else:
             cursor.executescript(query_add_is_enabled_and_nocache)
             assets = read(cursor)
@@ -142,7 +143,7 @@ def migrate_add_is_enabled_and_nocache():
                 asset.update({'is_enabled': is_active(asset)})
                 update(cursor, asset['asset_id'], asset)
                 conn.commit()
-            print 'Added new columns (' + col + ')'
+            print('Added new columns (' + col + ')')
 # ✂--------
 query_drop_filename = """BEGIN TRANSACTION;
 CREATE TEMPORARY TABLE assets_backup(asset_id, name, uri, md5, start_date, end_date, duration, mimetype);
@@ -160,9 +161,9 @@ def migrate_drop_filename():
         col = 'filename'
         if test_column(col, cursor):
             cursor.executescript(query_drop_filename)
-            print 'Dropped obsolete column (' + col + ')'
+            print('Dropped obsolete column (' + col + ')')
         else:
-            print 'Obsolete column (' + col + ') is not present'
+            print('Obsolete column (' + col + ') is not present')
 # ✂--------
 
 
@@ -173,4 +174,4 @@ if __name__ == '__main__':
     migrate_add_column('play_order', query_add_play_order)
     migrate_add_column('is_processing', query_add_is_processing)
     migrate_add_column('skip_asset_check', query_add_skip_asset_check)
-    print "Migration done."
+    print("Migration done.")

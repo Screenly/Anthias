@@ -1,5 +1,6 @@
+from __future__ import absolute_import
 import certifi
-import db
+from . import db
 import json
 import os
 import pytz
@@ -22,7 +23,7 @@ from threading import Thread
 from urlparse import urlparse
 import logging
 
-from assets_helper import update
+from .assets_helper import update
 
 WOTT_PATH = '/opt/wott'
 

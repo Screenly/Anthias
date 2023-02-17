@@ -1,5 +1,6 @@
-import db
-import queries
+from __future__ import absolute_import
+from . import db
+from . import queries
 import datetime
 
 FIELDS = ["asset_id", "name", "uri", "start_date",
