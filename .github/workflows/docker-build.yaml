@@ -94,5 +94,5 @@ jobs:
         id: build
         with:
           balena_token: ${{ secrets.BALENA_TOKEN }}
-          fleet: screenly_ose/screenly-ose-${{ matrix.board }}
+          fleet: screenly_ose/anthias-${{ matrix.board }}
           source: balena-deploy
