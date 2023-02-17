@@ -17,6 +17,76 @@ export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/W
 export CHROME_DL_URL="https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_107.0.5304.121-1_amd64.deb"
 export CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/107.0.5304.62/chromedriver_linux64.zip"
 
+# Handle command-line arguments.
+declare -a SKIP_SERVICES
+declare -a VALID_SERVICES=(
+    server
+    celery
+    redis
+    websocket
+    nginx
+    viewer
+    wifi-connect
+    'test'
+)
+declare -a SERVICES=("${VALID_SERVICES[@]}")
+
+function usage() {
+    echo "Usage: $0 [options]"
+    echo "Options:"
+
+    echo "  --skip-<service>  Skip building the specified service"
+    echo -n "                    Valid services: "
+    for service in "${VALID_SERVICES[@]}"; do
+        echo -n "$service "
+    done
+    echo
+
+    echo "  -h, --help        Show this help message"
+}
+
+function is_valid_service() {
+    local service="$1"
+    for valid_service in "${VALID_SERVICES[@]}"; do
+        if [ "$service" == "$valid_service" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+while [[ $# -gt 0 ]]; do
+    key="$1"
+    case $key in
+        --skip-*)
+            SERVICE="${key#--skip-}"
+
+            if ! is_valid_service "$SERVICE"; then
+                echo "Invalid service: $SERVICE"
+                usage
+                exit 1
+            fi
+
+            for i in "${!SERVICES[@]}"; do
+                if [ "${SERVICES[$i]}" == "$SERVICE" ]; then
+                    unset "SERVICES[$i]"
+                fi
+            done
+
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $key"
+            usage
+            exit 1
+            ;;
+    esac
+done
+
 DOCKER_BUILD_ARGS=("buildx" "build" "--load")
 echo 'Make sure you ran `docker buildx create --use` before the command'
 
@@ -53,7 +123,7 @@ else
     export DOCKER_TAG="$GIT_BRANCH-$BOARD"
 fi
 
-for container in server celery redis websocket nginx viewer wifi-connect 'test'; do
+for container in ${SERVICES[@]}; do
     echo "Building $container"
 
     # For all but redis and nginx, and viewer append the base layer
