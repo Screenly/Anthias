@@ -12,6 +12,17 @@ export GIT_HASH=$(git rev-parse HEAD)
 export BASE_IMAGE_TAG=buster
 export DEBIAN_VERSION=buster
 
+declare -a SERVICES=(
+    server
+    celery
+    redis
+    websocket
+    nginx
+    viewer
+    wifi-connect
+    'test'
+)
+
 DOCKER_BUILD_ARGS=("buildx" "build" "--load")
 echo 'Make sure you ran `docker buildx create --use` before the command'
 
@@ -48,8 +59,18 @@ else
     export DOCKER_TAG="$GIT_BRANCH-$BOARD"
 fi
 
-for container in server celery redis websocket nginx viewer wifi-connect 'test'; do
-    echo "Building $container"
+for container in ${SERVICES[@]}; do
+    echo "Building $container..."
+
+    uppercase_container=$(
+        echo $container | tr '[:lower:]' '[:upper:]' | tr '-' '_'
+    )
+    skip_variable="SKIP_${uppercase_container}"
+
+    if [ -n "${!skip_variable:-}" ]; then
+        echo "$skip_variable is set. Skipping $container..."
+        continue
+    fi
 
     if [ "$container" == 'viewer' ]; then
         export QT_VERSION=5.15.2

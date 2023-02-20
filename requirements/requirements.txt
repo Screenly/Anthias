@@ -15,12 +15,13 @@ configparser==4.0.2
 cryptography==3.3.2
 flask-restful-swagger-2==0.35
 flask-swagger-ui==3.36.0
-futures==3.3.0
 gevent-websocket==0.10.1
 gevent==21.12.0
 greenlet==1.1.0
 gunicorn==19.10.0
 hurry.filesize==0.9
+importlib-metadata==4.13.0
+itsdangerous==2.0.1
 kombu==4.6.11
 netifaces==0.10.9
 psutil==5.7.3
