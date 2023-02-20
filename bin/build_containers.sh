@@ -60,15 +60,15 @@ for container in server celery redis websocket nginx viewer wifi-connect 'test';
 
     elif [ "$container" == 'wifi-connect' ]; then
         # Logic for determining the correct architecture for the wifi-connect container
-        if [ "$TARGET_PLATFORM" = 'linux/arm/v6' ]; then 
+        if [ "$TARGET_PLATFORM" = 'linux/arm/v6' ]; then
             architecture=rpi
         else
             architecture=armv7hf
         fi
 
         wc_download_url='https://api.github.com/repos/balena-os/wifi-connect/releases/45509064'
-        jq_filter=".assets[] | select (.name|test(\"linux-$architecture\")) | .browser_download_url" 
-        archive_url=$(curl -sL "$wc_download_url" | jq -r "$jq_filter")  
+        jq_filter=".assets[] | select (.name|test(\"linux-$architecture\")) | .browser_download_url"
+        archive_url=$(curl -sL "$wc_download_url" | jq -r "$jq_filter")
         export ARCHIVE_URL="$archive_url"
     fi
 
@@ -82,8 +82,8 @@ for container in server celery redis websocket nginx viewer wifi-connect 'test';
 
     # If we're running on x86, remove all Pi specific packages
     if [ "$BOARD" == 'x86' ]; then
-        sed -i '/libraspberrypi0/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
-        sed -i '/omxplayer/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
+        sed -i -e '/libraspberrypi0/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
+        sed -i -e '/omxplayer/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
 
         # Don't build the viewer container if we're on x86
         if [ "$container" == 'viewer' ]; then

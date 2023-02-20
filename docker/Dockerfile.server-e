@@ -1,0 +1,53 @@
+# syntax=docker/dockerfile:1.4
+FROM debian:buster
+
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update && \
+    apt-get -y install --no-install-recommends \
+        build-essential \
+        cec-utils \
+        curl \
+        ffmpeg \
+        git \
+        git-core \
+        ifupdown \
+        libcec-dev  \
+        libffi-dev \
+        libssl-dev \
+        libzmq3-dev \
+        lsb-release \
+        mplayer \
+        net-tools \
+        procps \
+        psmisc \
+        python-dev \
+        python-gobject \
+        python-pil \
+        python-pip \
+        python-setuptools \
+        python-simplejson \
+        sqlite3 
+
+# Works around issue with `curl`
+# https://github.com/balena-io-library/base-images/issues/562
+RUN c_rehash
+
+# We need this to ensure that the wheels can be built.
+# Otherwise we get "invalid command 'bdist_wheel'"
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install wheel
+
+# Keep a newline below here to not break the concatination of files.
+COPY requirements/requirements.txt /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r /tmp/requirements.txt
+
+RUN mkdir -p /usr/src/app
+COPY . /usr/src/app/
+WORKDIR /usr/src/app
+
+ENV GIT_HASH=dc36bd866f1d84a70e84fdc076a9dfbfe59bd171
+ENV GIT_SHORT_HASH=dc36bd8
+ENV GIT_BRANCH=master
+
+CMD ["bash", "bin/start_server.sh"]
