@@ -55,7 +55,7 @@ jobs:
 
       - name: Build Containers
         run: |
-          export BUILD_TARGET=${{ matrix.board }} 
+          export BUILD_TARGET=${{ matrix.board }}
           export PUSH=1
           ./bin/build_containers.sh
 
@@ -81,10 +81,6 @@ jobs:
 
           # Copy in the Balena yaml file
           cp balena.yml balena-deploy/
-
-          # This should in theory not be necessary
-          export BOARD=$BOARD
-          export GIT_SHORT_HASH=$GIT_SHORT_HASH
 
           # Generate the docker-compose file
           cat docker-compose.balena.yml.tmpl | \
