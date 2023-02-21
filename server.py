@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import unicode_literals
 from future import standard_library
 standard_library.install_aliases()
 from builtins import str
@@ -433,7 +434,7 @@ def prepare_asset(request, unique_name=False):
         'nocache': get('nocache'),
     }
 
-    uri = escape(get('uri').encode('utf-8'))
+    uri = escape(get('uri'))
 
     if uri.startswith('/'):
         if not path.isfile(uri):

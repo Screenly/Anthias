@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from __future__ import unicode_literals
 import sqlite3
 from contextlib import contextmanager
 from . import queries

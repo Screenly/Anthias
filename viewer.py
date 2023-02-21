@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import unicode_literals
+from builtins import bytes
 from future import standard_library
 standard_library.install_aliases()
 from builtins import filter
@@ -191,7 +193,7 @@ class ZmqSubscriber(Thread):
     def run(self):
         socket = self.context.socket(zmq.SUB)
         socket.connect(self.publisher_url)
-        socket.setsockopt(zmq.SUBSCRIBE, self.topic)
+        socket.setsockopt(zmq.SUBSCRIBE, bytes(self.topic, encoding='utf-8'))
 
         while True:
             msg = socket.recv()

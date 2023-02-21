@@ -43,6 +43,6 @@ cp tests/config/ffserver.conf /etc/ffserver.conf
 
 if [ "$START_SERVER" = true ]; then
     cd /usr/src/app
-    python server.py &
+    python3 server.py &
     sleep 3
 fi

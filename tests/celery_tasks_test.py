@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 from os import getenv, path, remove, listdir, system
 import yaml
 import unittest

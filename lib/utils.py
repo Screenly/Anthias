@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from __future__ import unicode_literals
 from future import standard_library
 standard_library.install_aliases()
 from builtins import str
@@ -327,8 +328,6 @@ class YoutubeDownloadThread(Thread):
 
 
 def template_handle_unicode(value):
-    if isinstance(value, str):
-        return value.decode('utf-8')
     return str(value)
 
 

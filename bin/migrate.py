@@ -2,6 +2,7 @@
 # -*- coding: utf8 -*-
 
 from __future__ import print_function
+from __future__ import unicode_literals
 import sqlite3
 import os
 import shutil
