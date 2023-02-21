@@ -23,12 +23,14 @@ else
     export DEVICE_TYPE="pi1"
 fi
 
+cat /home/${USER}/screenly/docker-compose.yml.tmpl \
+    | envsubst \
+    > /home/${USER}/screenly/docker-compose.yml
+
 sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \
-    -f /home/${USER}/screenly/docker-compose.override.yml \
     pull
 
 sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \
-    -f /home/${USER}/screenly/docker-compose.override.yml \
     up -d

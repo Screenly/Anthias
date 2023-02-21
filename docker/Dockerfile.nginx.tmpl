@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1.4
+# vim: ft=dockerfile
+
 FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
 
 RUN --mount=type=cache,target=/var/cache/apt \

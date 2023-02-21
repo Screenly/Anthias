@@ -65,6 +65,7 @@ jobs:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -88,6 +89,16 @@ jobs:
 
       - uses: balena-io/deploy-to-balena-action@master
         id: build
+        with:
+          balena_token: ${{ secrets.BALENA_TOKEN }}
+          fleet: screenly_ose/anthias-${{ matrix.board }}
+          source: balena-deploy
+
+      # Balena deploy often fails with 'ESOCKETTIMEDOUT'.
+      # This adds some retry logic.
+      - uses: balena-io/deploy-to-balena-action@master
+        id: build-retry
+        if: failure() && steps.build.outcome == 'failure'
         with:
           balena_token: ${{ secrets.BALENA_TOKEN }}
           fleet: screenly_ose/anthias-${{ matrix.board }}

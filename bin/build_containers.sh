@@ -76,9 +76,9 @@ for container in ${SERVICES[@]}; do
         export QT_VERSION=5.15.2
         export WEBVIEW_GIT_HASH=0b6d49359133246659b9ba1d8dd883e3fc5c9a91
         export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.1"
+    elif [ "$container" == 'test' ]; then
         export CHROME_DL_URL="https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_107.0.5304.121-1_amd64.deb"
         export CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/107.0.5304.62/chromedriver_linux64.zip"
-
     elif [ "$container" == 'wifi-connect' ]; then
         if [ "$BOARD" == 'x86' ]; then
             continue
@@ -98,7 +98,7 @@ for container in ${SERVICES[@]}; do
     fi
 
     # For all but redis and nginx, and viewer append the base layer
-    if [ ! "$container" == 'redis' ] || [ ! "$container" == 'nginx' ] || [ ! "$container" == 'viewer' ]; then
+    if [ ! "$container" == 'redis' ] && [ ! "$container" == 'nginx' ] && [ ! "$container" == 'viewer' ]; then
         cat "docker/Dockerfile.base.tmpl" | envsubst > "docker/Dockerfile.$container"
         cat "docker/Dockerfile.$container.tmpl" | envsubst >> "docker/Dockerfile.$container"
     else
