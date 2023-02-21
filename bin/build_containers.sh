@@ -12,6 +12,17 @@ export GIT_HASH=$(git rev-parse HEAD)
 export BASE_IMAGE_TAG=buster
 export DEBIAN_VERSION=buster
 
+declare -a SERVICES=(
+    server
+    celery
+    redis
+    websocket
+    nginx
+    viewer
+    wifi-connect
+    'test'
+)
+
 DOCKER_BUILD_ARGS=("buildx" "build" "--load")
 echo 'Make sure you ran `docker buildx create --use` before the command'
 
@@ -48,16 +59,26 @@ else
     export DOCKER_TAG="$GIT_BRANCH-$BOARD"
 fi
 
-for container in server celery redis websocket nginx viewer wifi-connect 'test'; do
-    echo "Building $container"
+for container in ${SERVICES[@]}; do
+    echo "Building $container..."
+
+    uppercase_container=$(
+        echo $container | tr '[:lower:]' '[:upper:]' | tr '-' '_'
+    )
+    skip_variable="SKIP_${uppercase_container}"
+
+    if [ -n "${!skip_variable:-}" ]; then
+        echo "$skip_variable is set. Skipping $container..."
+        continue
+    fi
 
     if [ "$container" == 'viewer' ]; then
         export QT_VERSION=5.15.2
         export WEBVIEW_GIT_HASH=0b6d49359133246659b9ba1d8dd883e3fc5c9a91
         export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.1"
+    elif [ "$container" == 'test' ]; then
         export CHROME_DL_URL="https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_107.0.5304.121-1_amd64.deb"
         export CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/107.0.5304.62/chromedriver_linux64.zip"
-
     elif [ "$container" == 'wifi-connect' ]; then
         # Logic for determining the correct architecture for the wifi-connect container
         if [ "$TARGET_PLATFORM" = 'linux/arm/v6' ]; then
@@ -73,7 +94,7 @@ for container in server celery redis websocket nginx viewer wifi-connect 'test';
     fi
 
     # For all but redis and nginx, and viewer append the base layer
-    if [ ! "$container" == 'redis' ] || [ ! "$container" == 'nginx' ] || [ ! "$container" == 'viewer' ]; then
+    if [ ! "$container" == 'redis' ] && [ ! "$container" == 'nginx' ] && [ ! "$container" == 'viewer' ]; then
         cat "docker/Dockerfile.base.tmpl" | envsubst > "docker/Dockerfile.$container"
         cat "docker/Dockerfile.$container.tmpl" | envsubst >> "docker/Dockerfile.$container"
     else
