@@ -94,6 +94,11 @@ jobs:
           fleet: screenly_ose/anthias-${{ matrix.board }}
           source: balena-deploy
 
+      - name: Sleep random sleep before retry
+        if: failure() && steps.build.outcome == 'failure'
+        run: |
+          sleep $((120 + RANDOM % 600));
+
       # Balena deploy often fails with 'ESOCKETTIMEDOUT'.
       # This adds some retry logic.
       - uses: balena-io/deploy-to-balena-action@master
@@ -103,3 +108,8 @@ jobs:
           balena_token: ${{ secrets.BALENA_TOKEN }}
           fleet: screenly_ose/anthias-${{ matrix.board }}
           source: balena-deploy
+
+      - name: Fail if retry fails
+        if: failure() && steps.build-retry.outcome == 'failure'
+        run: |
+          exit 1
