@@ -82,8 +82,14 @@ for container in server celery redis websocket nginx viewer wifi-connect 'test';
 
     # If we're running on x86, remove all Pi specific packages
     if [ "$BOARD" == 'x86' ]; then
-        sed -i -e '/libraspberrypi0/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
-        sed -i -e '/omxplayer/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
+        if [[ $OSTYPE == 'darwin'* ]]; then
+            SED_ARGS=(-i "")
+        else
+            SED_ARGS=(-i)
+        fi
+
+        sed "${SED_ARGS[@]}" -e '/libraspberrypi0/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
+        sed "${SED_ARGS[@]}" -e '/omxplayer/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
 
         # Don't build the viewer container if we're on x86
         if [ "$container" == 'viewer' ]; then
