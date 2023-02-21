@@ -48,6 +48,11 @@ jobs:
 
       - name: Build Containers
         run: |
+          export SKIP_SERVER=1
+          export SKIP_WEBSOCKET=1
+          export SKIP_NGINX=1
+          export SKIP_VIEWER=1
+          export SKIP_WIFI_CONNECT=1
           ./bin/build_containers.sh
 
       - name: Start the test container
