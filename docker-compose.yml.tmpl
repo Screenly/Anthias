@@ -1,7 +1,9 @@
+# vim: ft=yaml
+
 version: "2"
 services:
   srly-ose-wifi-connect:
-    image: screenly/srly-ose-wifi-connect
+    image: screenly/anthias-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       args:
         TARGET_PLATFORM: ${TARGET_PLATFORM:-linux/arm/v7}
@@ -21,11 +23,13 @@ services:
         target: /run/dbus/system_bus_socket
 
   srly-ose-server:
-    image: screenly/srly-ose-server
+    image: screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.server
+    volumes:
     environment:
+      - MY_IP=${MY_IP}
       - HOME=/data
       - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -35,14 +39,20 @@ services:
     restart: always
     volumes:
       - resin-data:/data
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
+      - /home/${USER}/screenly/static:/data/screenly/static
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
     labels:
       io.balena.features.supervisor-api: '1'
 
   srly-ose-viewer:
-    image: screenly/srly-ose-viewer
+    image: screenly/anthias-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
+    mem_limit: ${VIEWER_MEMORY_LIMIT_KB}k
     depends_on:
       - srly-ose-server
     environment:
@@ -56,11 +66,15 @@ services:
     restart: always
     volumes:
       - resin-data:/data
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
     labels:
       io.balena.features.supervisor-api: '1'
 
   srly-ose-websocket:
-    image: screenly/srly-ose-websocket
+    image: screenly/anthias-websocket:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket
@@ -72,9 +86,13 @@ services:
     restart: always
     volumes:
       - resin-data:/data
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
 
   srly-ose-celery:
-    image: screenly/srly-ose-celery
+    image: screenly/anthias-celery:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.celery
@@ -90,11 +108,15 @@ services:
     restart: always
     volumes:
       - resin-data:/data
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
     labels:
       io.balena.features.supervisor-api: '1'
 
   redis:
-    image: screenly/srly-ose-redis
+    image: screenly/anthias-redis:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.redis
@@ -105,7 +127,7 @@ services:
       - redis-data:/var/lib/redis
 
   srly-ose-nginx:
-    image: screenly/srly-ose-nginx
+    image: screenly/anthias-nginx:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.nginx
@@ -119,7 +141,37 @@ services:
     restart: always
     volumes:
       - resin-data:/data:ro
+      - /home/${USER}/.screenly:/data/.screenly:ro
+      - /home/${USER}/screenly_assets:/data/screenly_assets:ro
+      - /home/${USER}/screenly/static:/data/screenly/static:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
 
 volumes:
   resin-data:
   redis-data:
+  screenly-data:
+
+---
+
+
+  version: "2"
+services:
+
+  srly-ose-server:
+
+  srly-ose-viewer:
+    volumes:
+
+  srly-ose-websocket:
+    volumes:
+
+  srly-ose-celery:
+    volumes:
+
+  redis:
+
+  srly-ose-nginx:
+    volumes:
+
+volumes:
