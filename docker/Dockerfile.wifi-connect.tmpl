@@ -1,3 +1,5 @@
+# vim: ft=dockerfile
+
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get -y install --no-install-recommends \
         dnsmasq \

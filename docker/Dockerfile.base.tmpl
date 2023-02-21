@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1.4
+# vim: ft=dockerfile
+
 FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
 
 RUN --mount=type=cache,target=/var/cache/apt \
@@ -29,7 +31,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
         python-pip \
         python-setuptools \
         python-simplejson \
-        sqlite3 
+        sqlite3
 
 # Works around issue with `curl`
 # https://github.com/balena-io-library/base-images/issues/562
