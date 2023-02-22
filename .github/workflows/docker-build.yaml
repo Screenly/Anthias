@@ -65,7 +65,6 @@ jobs:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -89,6 +88,7 @@ jobs:
 
       - uses: balena-io/deploy-to-balena-action@master
         id: build
+        continue-on-error: true
         with:
           balena_token: ${{ secrets.BALENA_TOKEN }}
           fleet: screenly_ose/anthias-${{ matrix.board }}
@@ -97,7 +97,7 @@ jobs:
       - name: Sleep random sleep before retry
         if: failure() && steps.build.outcome == 'failure'
         run: |
-          sleep $((120 + RANDOM % 600));
+          sleep $((120 + RANDOM % 900));
 
       # Balena deploy often fails with 'ESOCKETTIMEDOUT'.
       # This adds some retry logic.
@@ -108,8 +108,3 @@ jobs:
           balena_token: ${{ secrets.BALENA_TOKEN }}
           fleet: screenly_ose/anthias-${{ matrix.board }}
           source: balena-deploy
-
-      - name: Fail if retry fails
-        if: failure() && steps.build-retry.outcome == 'failure'
-        run: |
-          exit 1
