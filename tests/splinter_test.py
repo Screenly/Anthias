@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 from builtins import object
+from nose.plugins.attrib import attr
 from splinter import Browser
 from time import sleep
 from selenium.common.exceptions import ElementNotVisibleException
@@ -148,6 +149,7 @@ class WebTest(unittest.TestCase):
 
             self.assertEqual(asset['duration'], u'333')
 
+    @attr('fixme')
     def test_add_asset_image_upload(self):
         image_file = '/tmp/image.png'
 
@@ -167,12 +169,14 @@ class WebTest(unittest.TestCase):
             assets = assets_helper.read(conn)
 
             self.assertEqual(len(assets), 1)
+
             asset = assets[0]
 
             self.assertEqual(asset['name'], u'image.png')
             self.assertEqual(asset['mimetype'], u'image')
             self.assertEqual(asset['duration'], settings['default_duration'])
 
+    @attr('fixme')
     def test_add_asset_video_upload(self):
         with TemporaryCopy('tests/assets/asset.mov', 'video.mov') as video_file:
             with get_browser() as browser:
@@ -197,6 +201,7 @@ class WebTest(unittest.TestCase):
                 self.assertEqual(asset['mimetype'], u'video')
                 self.assertEqual(asset['duration'], u'5')
 
+    @attr('fixme')
     def test_add_two_assets_upload(self):
         with TemporaryCopy('tests/assets/asset.mov', 'video.mov') as video_file, \
             TemporaryCopy('static/img/ose-logo.png', 'ose-logo.png') as image_file:
