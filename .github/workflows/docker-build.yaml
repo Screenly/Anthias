@@ -97,7 +97,7 @@ jobs:
           source: balena-deploy
 
       - name: Sleep random sleep before retry
-        if: failure() && steps.build.outcome == 'failure'
+        if: ${{ failure() && steps.build.conclusion == 'failure' }}
         run: |
           sleep $((120 + RANDOM % 900));
 
@@ -105,7 +105,7 @@ jobs:
       # This adds some retry logic.
       - uses: balena-io/deploy-to-balena-action@master
         id: build-retry
-        if: failure() && steps.build.outcome == 'failure'
+        if: ${{ failure() && steps.build.conclusion == 'failure' }}
         with:
           balena_token: ${{ secrets.BALENA_TOKEN }}
           fleet: screenly_ose/anthias-${{ matrix.board }}
