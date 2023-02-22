@@ -2,7 +2,7 @@
 
 version: "2"
 services:
-  srly-ose-wifi-connect:
+  anthias-wifi-connect:
     image: screenly/anthias-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
@@ -20,7 +20,7 @@ services:
         source: /run/dbus/system_bus_socket
         target: /run/dbus/system_bus_socket
 
-  srly-ose-server:
+  anthias-server:
     image: screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
@@ -45,14 +45,14 @@ services:
     labels:
       io.balena.features.supervisor-api: '1'
 
-  srly-ose-viewer:
+  anthias-viewer:
     image: screenly/anthias-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
     mem_limit: ${VIEWER_MEMORY_LIMIT_KB}k
     depends_on:
-      - srly-ose-server
+      - anthias-server
     environment:
       - HOME=/data
       - PORT=80
@@ -71,13 +71,13 @@ services:
     labels:
       io.balena.features.supervisor-api: '1'
 
-  srly-ose-websocket:
+  anthias-websocket:
     image: screenly/anthias-websocket:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket
     depends_on:
-      - srly-ose-server
+      - anthias-server
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -89,13 +89,13 @@ services:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
-  srly-ose-celery:
+  anthias-celery:
     image: screenly/anthias-celery:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.celery
     depends_on:
-      - srly-ose-server
+      - anthias-server
       - redis
     environment:
       - HOME=/data
@@ -124,7 +124,7 @@ services:
     volumes:
       - redis-data:/var/lib/redis
 
-  srly-ose-nginx:
+  anthias-nginx:
     image: screenly/anthias-nginx:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
@@ -134,8 +134,8 @@ services:
     environment:
       - HOME=/data
     depends_on:
-      - srly-ose-server
-      - srly-ose-websocket
+      - anthias-server
+      - anthias-websocket
     restart: always
     volumes:
       - resin-data:/data:ro
@@ -149,27 +149,3 @@ volumes:
   resin-data:
   redis-data:
   screenly-data:
-
----
-
-
-  version: "2"
-services:
-
-  srly-ose-server:
-
-  srly-ose-viewer:
-    volumes:
-
-  srly-ose-websocket:
-    volumes:
-
-  srly-ose-celery:
-    volumes:
-
-  redis:
-
-  srly-ose-nginx:
-    volumes:
-
-volumes:

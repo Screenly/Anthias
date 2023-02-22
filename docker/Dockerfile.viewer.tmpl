@@ -7,7 +7,6 @@ FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \
     apt-get -y install --no-install-recommends \
-         omxplayer \
         build-essential \
         ca-certificates \
         fonts-arphic-uming \
@@ -93,7 +92,10 @@ RUN --mount=type=cache,target=/var/cache/apt \
         libxslt1-dev \
         libxss-dev \
         libxtst-dev \
+        libzmq5-dev \
+        libzmq5 \
         net-tools \
+        omxplayer \
         psmisc \
         python3-dev \
         python3-gi \

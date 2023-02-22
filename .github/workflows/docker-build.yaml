@@ -14,6 +14,8 @@ on:
       - '!.github/workflows/build-balena-disk-image.yaml'
       - '!README.md'
       - '!docs/**'
+      - '!bin/build_containers.sh'
+      - '!bin/upgrade_containers.sh'
 
 jobs:
   run-tests:
@@ -65,7 +67,6 @@ jobs:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -89,16 +90,22 @@ jobs:
 
       - uses: balena-io/deploy-to-balena-action@master
         id: build
+        continue-on-error: true
         with:
           balena_token: ${{ secrets.BALENA_TOKEN }}
           fleet: screenly_ose/anthias-${{ matrix.board }}
           source: balena-deploy
 
+      - name: Sleep random sleep before retry
+        if: ${{ failure() && steps.build.conclusion == 'failure' }}
+        run: |
+          sleep $((120 + RANDOM % 900));
+
       # Balena deploy often fails with 'ESOCKETTIMEDOUT'.
       # This adds some retry logic.
       - uses: balena-io/deploy-to-balena-action@master
         id: build-retry
-        if: failure() && steps.build.outcome == 'failure'
+        if: ${{ failure() && steps.build.conclusion == 'failure' }}
         with:
           balena_token: ${{ secrets.BALENA_TOKEN }}
           fleet: screenly_ose/anthias-${{ matrix.board }}

@@ -98,7 +98,7 @@ for container in ${SERVICES[@]}; do
     fi
 
     # For all but redis and nginx, and viewer append the base layer
-    if [ ! "$container" == 'redis' ] && [ ! "$container" == 'nginx' ] && [ ! "$container" == 'viewer' ]; then
+    if [[ ! "$container" =~ ^(redis|nginx|viewer)$ ]]; then
         cat "docker/Dockerfile.base.tmpl" | envsubst > "docker/Dockerfile.$container"
         cat "docker/Dockerfile.$container.tmpl" | envsubst >> "docker/Dockerfile.$container"
     else
