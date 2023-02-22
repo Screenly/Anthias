@@ -35,10 +35,6 @@ if [[ -n $(docker ps | grep srly-ose) ]]; then
     set -e
 fi
 
-
-exit
-
-
 cat /home/${USER}/screenly/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/screenly/docker-compose.yml
