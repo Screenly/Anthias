@@ -59,7 +59,7 @@ Assuming you're in the source code repository, simply run:
 
 ```bash
  ./bin/build_containers.sh
-$ docker-compose \
+$ docker compose \
     -f docker-compose.dev.yml up
 ```
 
@@ -69,7 +69,7 @@ Start the containers.
 
 ```bash
 $ ./bin/build_containers.sh
-$ docker-compose \
+$ docker compose \
     -f docker-compose.test.yml up -d
 ```
 
@@ -77,10 +77,10 @@ Run the unit tests.
 
 ```bash
 $ ./bin/build_containers.sh
-$ docker-compose \
+$ docker compose \
     -f docker-compose.test.yml \
     exec -T srly-ose-test bash ./bin/prepare_test_environment.sh -s
-$ docker-compose \
+$ docker compose \
     -f docker-compose.test.yml \
     exec -T srly-ose-test nosetests -v -a '!fixme'
 ```

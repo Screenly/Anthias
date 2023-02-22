@@ -13,7 +13,6 @@ import shutil
 import tempfile
 import unittest
 from datetime import datetime, timedelta
-from nose.plugins.attrib import attr
 
 asset_x = {
     'mimetype': u'web',
@@ -149,7 +148,6 @@ class WebTest(unittest.TestCase):
 
             self.assertEqual(asset['duration'], u'333')
 
-    @attr('fixme')
     def test_add_asset_image_upload(self):
         image_file = '/tmp/image.png'
 
@@ -176,7 +174,6 @@ class WebTest(unittest.TestCase):
             self.assertEqual(asset['mimetype'], u'image')
             self.assertEqual(asset['duration'], settings['default_duration'])
 
-    @attr('fixme')
     def test_add_asset_video_upload(self):
         with TemporaryCopy('tests/assets/asset.mov', 'video.mov') as video_file:
             with get_browser() as browser:
@@ -201,7 +198,6 @@ class WebTest(unittest.TestCase):
                 self.assertEqual(asset['mimetype'], u'video')
                 self.assertEqual(asset['duration'], u'5')
 
-    @attr('fixme')
     def test_add_two_assets_upload(self):
         with TemporaryCopy('tests/assets/asset.mov', 'video.mov') as video_file, \
             TemporaryCopy('static/img/ose-logo.png', 'ose-logo.png') as image_file:
