@@ -1,6 +1,6 @@
 version: "2.2"
 services:
-  srly-ose-test:
+  anthias-test:
     build:
       context: .
       dockerfile: docker/Dockerfile.test
@@ -14,12 +14,12 @@ services:
       - .:/usr/src/app
       - resin-data:/data
 
-  srly-ose-celery:
+  anthias-celery:
     build:
       context: .
       dockerfile: docker/Dockerfile.celery
     depends_on:
-      - srly-ose-test
+      - anthias-test
       - redis
     environment:
       - HOME=/data

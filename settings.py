@@ -178,7 +178,7 @@ class ZmqConsumer:
 
         self.socket = self.context.socket(zmq.PUSH)
         self.socket.setsockopt(zmq.LINGER, 0)
-        self.socket.connect('tcp://srly-ose-server:5558')
+        self.socket.connect('tcp://anthias-server:5558')
 
         sleep(1)
 
