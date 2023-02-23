@@ -21,3 +21,4 @@ sh==1.8
 uptime==3.0.1
 urllib3==1.25.0
 future==0.18.3
+Werkzeug==1.0.1

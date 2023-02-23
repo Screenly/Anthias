@@ -323,7 +323,7 @@ def load_browser():
     logging.info('Loading browser...')
 
     browser = sh.Command('ScreenlyWebview')(_bg=True, _err_to_out=True)
-    while 'Screenly service start' not in browser.process.stdout:
+    while b'Screenly service start' not in browser.process.stdout:
         sleep(1)
 
 
