@@ -1209,7 +1209,7 @@ class FileAsset(Resource):
         if 'Content-Range' in request.headers:
             range_str = request.headers['Content-Range']
             start_bytes = int(range_str.split(' ')[1].split('-')[0])
-            with open(file_path, 'a') as f:
+            with open(file_path, 'ab') as f:
                 f.seek(start_bytes)
                 f.write(file_upload.read())
         else:
