@@ -36,7 +36,7 @@ class ScreenlyServerListener(Thread):
         socket_incoming = self.context.socket(zmq.SUB)
         socket_outgoing = self.context.socket(zmq.PUB)
 
-        socket_incoming.connect('tcp://srly-ose-server:10001')
+        socket_incoming.connect('tcp://anthias-server:10001')
         socket_outgoing.bind('inproc://queue')
 
         socket_incoming.setsockopt(zmq.SUBSCRIBE, "")
