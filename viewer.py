@@ -197,7 +197,7 @@ class ZmqSubscriber(Thread):
 
         while True:
             msg = socket.recv()
-            topic, message = msg.split(' ', 1)
+            topic, message = msg.decode('utf-8').split(' ', 1)
 
             # If the command consists of 2 parts, then the first is the function, the second is the argument
             parts = message.split('&', 1)
@@ -323,7 +323,7 @@ def load_browser():
     logging.info('Loading browser...')
 
     browser = sh.Command('ScreenlyWebview')(_bg=True, _err_to_out=True)
-    while b'Screenly service start' not in browser.process.stdout:
+    while 'Screenly service start' not in browser.process.stdout.decode('utf-8'):
         sleep(1)
 
 
