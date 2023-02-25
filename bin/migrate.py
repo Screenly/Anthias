@@ -80,9 +80,9 @@ commit;
 def migrate_add_column(col, script):
     with open_db_get_cursor() as (cursor, conn):
         if test_column(col, cursor):
-            print('Column (' + col + ') already present')
+            print(f'Column ({col}) already present')
         else:
-            print('Adding new column (' + col + ')')
+            print(f'Adding new column ({col})')
             cursor.executescript(script)
             assets = read(cursor)
             for asset in assets:
@@ -136,7 +136,7 @@ def migrate_add_is_enabled_and_nocache():
     with open_db_get_cursor() as (cursor, conn):
         col = 'is_enabled,nocache'
         if test_column(col, cursor):
-            print('Columns (' + col + ') already present')
+            print(f'Column ({col}) already present')
         else:
             cursor.executescript(query_add_is_enabled_and_nocache)
             assets = read(cursor)
@@ -144,7 +144,7 @@ def migrate_add_is_enabled_and_nocache():
                 asset.update({'is_enabled': is_active(asset)})
                 update(cursor, asset['asset_id'], asset)
                 conn.commit()
-            print('Added new columns (' + col + ')')
+            print(f'Added new columns ({col})')
 # ✂--------
 query_drop_filename = """BEGIN TRANSACTION;
 CREATE TEMPORARY TABLE assets_backup(asset_id, name, uri, md5, start_date, end_date, duration, mimetype);
@@ -162,9 +162,9 @@ def migrate_drop_filename():
         col = 'filename'
         if test_column(col, cursor):
             cursor.executescript(query_drop_filename)
-            print('Dropped obsolete column (' + col + ')')
+            print(f'Dropped obsolete column ({col})')
         else:
-            print('Obsolete column (' + col + ') is not present')
+            print(f'Obsolete column ({col}) is not present'')
 # ✂--------
 
 
