@@ -80,6 +80,7 @@ for container in ${SERVICES[@]}; do
         export CHROME_DL_URL="https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_107.0.5304.121-1_amd64.deb"
         export CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/107.0.5304.62/chromedriver_linux64.zip"
     elif [ "$container" == 'wifi-connect' ]; then
+        # We don't support wifi-connect on x86 yet.
         if [ "$BOARD" == 'x86' ]; then
             continue
         fi

@@ -60,6 +60,7 @@ services:
       - LISTEN=anthias-nginx
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # @TODO: Remove the networks option once we have a new release of the WebView.
     networks:
       default:
       anthias-extra-network-1:
