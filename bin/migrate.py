@@ -164,7 +164,7 @@ def migrate_drop_filename():
             cursor.executescript(query_drop_filename)
             print(f'Dropped obsolete column ({col})')
         else:
-            print(f'Obsolete column ({col}) is not present'')
+            print(f'Obsolete column ({col}) is not present')
 # ✂--------
 
 
