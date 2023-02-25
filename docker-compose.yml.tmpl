@@ -4,6 +4,9 @@ version: "2"
 services:
   anthias-wifi-connect:
     image: screenly/anthias-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.wifi-connect
     environment:
       PORTAL_LISTENING_PORT: 8000
       CHECK_CONN_FREQ: 10
@@ -19,6 +22,9 @@ services:
 
   anthias-server:
     image: screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.server
     volumes:
     environment:
       - MY_IP=${MY_IP}
@@ -41,6 +47,9 @@ services:
 
   anthias-viewer:
     image: screenly/anthias-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.viewer
     mem_limit: ${VIEWER_MEMORY_LIMIT_KB}k
     depends_on:
       - anthias-server
@@ -67,6 +76,9 @@ services:
 
   anthias-websocket:
     image: screenly/anthias-websocket:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.websocket
     depends_on:
       - anthias-server
     environment:
@@ -82,6 +94,9 @@ services:
 
   anthias-celery:
     image: screenly/anthias-celery:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.celery
     depends_on:
       - anthias-server
       - redis
@@ -103,6 +118,9 @@ services:
 
   redis:
     image: screenly/anthias-redis:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.redis
     ports:
       - 127.0.0.1:6379:6379
     restart: always
@@ -111,6 +129,9 @@ services:
 
   anthias-nginx:
     image: screenly/anthias-nginx:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nginx
     ports:
       - 80:80
     environment:
