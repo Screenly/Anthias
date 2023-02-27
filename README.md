@@ -63,6 +63,33 @@ $ docker-compose \
     -f docker-compose.dev.yml up
 ```
 
+## Building Containers Locally
+
+Make sure that you have `buildx` installed and that you have run
+`docker buildx create --use` befure you run the following:
+
+```bash
+./bin/build_containers.sh
+```
+
+### Skipping Specific Services
+
+Say that you would like to skip building the `anthias-viewer` and `anthias-nginx`
+services. Just run the following:
+
+```bash
+SKIP_VIEWER=1 SKIP_NGINX=1 ./bin/build_containers.sh
+```
+
+### Generating Only Dockerfiles
+
+If you'd like to just generate the Dockerfiles from the templates provided
+inside the `docker/` directory, run the following:
+
+```bash
+DOCKERFILES_ONLY=1 ./bin_build_containers.sh
+```
+
 ## Running the Unit Tests
 
 Start the containers.
