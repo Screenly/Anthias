@@ -66,7 +66,7 @@ $ docker-compose \
 ## Building Containers Locally
 
 Make sure that you have `buildx` installed and that you have run
-`docker buildx create --use` befure you run the following:
+`docker buildx create --use` before you do the following:
 
 ```bash
 ./bin/build_containers.sh
