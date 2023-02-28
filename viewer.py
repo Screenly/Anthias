@@ -457,7 +457,7 @@ def setup_hotspot():
             sleep(1)
             wireless_connections = [c for c in [c for c in get_active_connections(bus) if pattern_include.search(str(c['Devices']))] if not pattern_exclude.search(str(c['Id']))]
             continue
-        if wireless_connections is None:
+        if len(wireless_connections) == 0:
             sleep(1)
             continue
         break
