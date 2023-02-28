@@ -60,10 +60,6 @@ services:
       - LISTEN=anthias-nginx
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # @TODO: Remove the networks option once we have a new release of the WebView.
-    networks:
-      default:
-      anthias-extra-network-1:
     privileged: true
     restart: always
     volumes:
@@ -140,12 +136,6 @@ services:
     depends_on:
       - anthias-server
       - anthias-websocket
-    networks:
-      default:
-      anthias-extra-network-1:
-        aliases:
-          - 'anthias-nginx'
-          - 'srly-ose-nginx'
     restart: always
     volumes:
       - resin-data:/data:ro
@@ -154,9 +144,6 @@ services:
       - /home/${USER}/screenly/static:/data/screenly/static:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
-
-networks:
-  anthias-extra-network-1:
 
 volumes:
   resin-data:
