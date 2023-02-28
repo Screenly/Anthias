@@ -74,8 +74,8 @@ for container in ${SERVICES[@]}; do
 
     if [ "$container" == 'viewer' ]; then
         export QT_VERSION=5.15.2
-        export WEBVIEW_GIT_HASH=0b6d49359133246659b9ba1d8dd883e3fc5c9a91
-        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.1"
+        export WEBVIEW_GIT_HASH=f5ef562982dcb6274c9716b9e375cc5ac0faba84
+        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.2"
     elif [ "$container" == 'test' ]; then
         export CHROME_DL_URL="https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_107.0.5304.121-1_amd64.deb"
         export CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/107.0.5304.62/chromedriver_linux64.zip"
