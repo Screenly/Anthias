@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+from builtins import object
 from datetime import datetime
 from datetime import timedelta
 import functools
@@ -75,7 +77,7 @@ asset_tomorrow = {
 FAKE_DB_PATH = '/tmp/fakedb'
 
 
-class FakeDatetime:
+class FakeDatetime(object):
     def __init__(self, need_time):
         self.need_time = need_time
 

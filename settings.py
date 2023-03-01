@@ -1,14 +1,20 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import object
 import hashlib
 import json
 import logging
 import os
 import zmq
-import ConfigParser
+import configparser
 from os import path, getenv
 from time import sleep
-from UserDict import IterableUserDict
+
+from collections import UserDict
 
 from lib.auth import WoTTAuth, BasicAuth, NoAuth
 from lib.errors import ZmqCollectorTimeout
@@ -60,11 +66,11 @@ requests_log.setLevel(logging.WARNING)
 logging.debug('Starting viewer.py')
 
 
-class ScreenlySettings(IterableUserDict):
+class ScreenlySettings(UserDict):
     """Screenly OSE's Settings."""
 
     def __init__(self, *args, **kwargs):
-        IterableUserDict.__init__(self, *args, **kwargs)
+        UserDict.__init__(self, *args, **kwargs)
         self.home = getenv('HOME')
         self.conf_file = self.get_configfile()
         self.auth_backends_list = [NoAuth(), BasicAuth(self)]
@@ -92,8 +98,8 @@ class ScreenlySettings(IterableUserDict):
                 self[field] = config.get(section, field)
                 if field == 'password' and self[field] != '' and len(self[field]) != 64:   # likely not a hashed password.
                     self[field] = hashlib.sha256(self[field]).hexdigest()   # hash the original password.
-        except ConfigParser.Error as e:
-            logging.debug("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (section, field, unicode(e), default))
+        except configparser.Error as e:
+            logging.debug("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (section, field, str(e), default))
             self[field] = default
         if field in ['database', 'assetdir']:
             self[field] = str(path.join(self.home, self[field]))
@@ -102,29 +108,29 @@ class ScreenlySettings(IterableUserDict):
         if isinstance(default, bool):
             config.set(section, field, self.get(field, default) and 'on' or 'off')
         else:
-            config.set(section, field, unicode(self.get(field, default)))
+            config.set(section, field, str(self.get(field, default)))
 
     def load(self):
         """Loads the latest settings from screenly.conf into memory."""
         logging.debug('Reading config-file...')
-        config = ConfigParser.ConfigParser()
+        config = configparser.ConfigParser()
         config.read(self.conf_file)
 
-        for section, defaults in DEFAULTS.items():
-            for field, default in defaults.items():
+        for section, defaults in list(DEFAULTS.items()):
+            for field, default in list(defaults.items()):
                 self._get(config, section, field, default)
 
     def use_defaults(self):
-        for defaults in DEFAULTS.items():
-            for field, default in defaults[1].items():
+        for defaults in list(DEFAULTS.items()):
+            for field, default in list(defaults[1].items()):
                 self[field] = default
 
     def save(self):
         # Write new settings to disk.
-        config = ConfigParser.ConfigParser()
-        for section, defaults in DEFAULTS.items():
+        config = configparser.ConfigParser()
+        for section, defaults in list(DEFAULTS.items()):
             config.add_section(section)
-            for field, default in defaults.items():
+            for field, default in list(defaults.items()):
                 self._set(config, section, field, default)
         with open(self.conf_file, "w") as f:
             config.write(f)
@@ -146,7 +152,7 @@ class ScreenlySettings(IterableUserDict):
 settings = ScreenlySettings()
 
 
-class ZmqPublisher:
+class ZmqPublisher(object):
     INSTANCE = None
 
     def __init__(self):
@@ -172,7 +178,7 @@ class ZmqPublisher:
         self.socket.send_string("viewer {}".format(msg))
 
 
-class ZmqConsumer:
+class ZmqConsumer(object):
     def __init__(self):
         self.context = zmq.Context()
 
@@ -186,7 +192,7 @@ class ZmqConsumer:
         self.socket.send_json(msg, flags=zmq.NOBLOCK)
 
 
-class ZmqCollector:
+class ZmqCollector(object):
     INSTANCE = None
 
     def __init__(self):

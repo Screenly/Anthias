@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 import unittest
 import os
 import sh
@@ -82,10 +83,10 @@ class SettingsTest(unittest.TestCase):
         project_dir = os.path.dirname(__file__)
 
         with self.assertRaises(sh.ErrorReturnCode_1):
-            sh.python(project_dir + '/../viewer.py', _env=new_env)
+            sh.python3(project_dir + '/../viewer.py', _env=new_env)
 
         with self.assertRaises(sh.ErrorReturnCode_1):
-            sh.python(project_dir + '/../server.py', _env=new_env)
+            sh.python3(project_dir + '/../server.py', _env=new_env)
 
     def test_parse_settings(self):
         with fake_settings(settings1) as (mod_settings, settings):

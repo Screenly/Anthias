@@ -1,6 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import unicode_literals
+from builtins import bytes
+from future import standard_library
+standard_library.install_aliases()
+from builtins import filter
+from builtins import str
+from builtins import range
+from builtins import object
 import json
 import logging
 import pydbus
@@ -185,11 +193,11 @@ class ZmqSubscriber(Thread):
     def run(self):
         socket = self.context.socket(zmq.SUB)
         socket.connect(self.publisher_url)
-        socket.setsockopt(zmq.SUBSCRIBE, self.topic)
+        socket.setsockopt(zmq.SUBSCRIBE, bytes(self.topic, encoding='utf-8'))
 
         while True:
             msg = socket.recv()
-            topic, message = msg.split(' ', 1)
+            topic, message = msg.decode('utf-8').split(' ', 1)
 
             # If the command consists of 2 parts, then the first is the function, the second is the argument
             parts = message.split('&', 1)
@@ -292,7 +300,7 @@ def generate_asset_list():
     assets = assets_helper.read(db_conn)
     deadlines = [asset['end_date'] if assets_helper.is_active(asset) else asset['start_date'] for asset in assets]
 
-    playlist = filter(assets_helper.is_active, assets)
+    playlist = list(filter(assets_helper.is_active, assets))
     deadline = sorted(deadlines)[0] if len(deadlines) > 0 else None
     logging.debug('generate_asset_list deadline: %s', deadline)
 
@@ -315,7 +323,7 @@ def load_browser():
     logging.info('Loading browser...')
 
     browser = sh.Command('ScreenlyWebview')(_bg=True, _err_to_out=True)
-    while 'Screenly service start' not in browser.process.stdout:
+    while 'Screenly service start' not in browser.process.stdout.decode('utf-8'):
         sleep(1)
 
 
@@ -435,13 +443,7 @@ def setup_hotspot():
     if wireless_connections is None:
         return
 
-    wireless_connections = filter(
-        lambda c: not pattern_exclude.search(str(c['Id'])),
-        filter(
-            lambda c: pattern_include.search(str(c['Devices'])),
-            wireless_connections
-        )
-    )
+    wireless_connections = [c for c in [c for c in wireless_connections if pattern_include.search(str(c['Devices']))] if not pattern_exclude.search(str(c['Id']))]
 
     # Displays the hotspot page
     if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
@@ -453,15 +455,9 @@ def setup_hotspot():
     while not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
         if len(wireless_connections) == 0:
             sleep(1)
-            wireless_connections = filter(
-                lambda c: not pattern_exclude.search(str(c['Id'])),
-                filter(
-                    lambda c: pattern_include.search(str(c['Devices'])),
-                    get_active_connections(bus)
-                )
-            )
+            wireless_connections = [c for c in [c for c in get_active_connections(bus) if pattern_include.search(str(c['Devices']))] if not pattern_exclude.search(str(c['Id']))]
             continue
-        if wireless_connections is None:
+        if len(wireless_connections) == 0:
             sleep(1)
             continue
         break

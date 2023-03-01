@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+from __future__ import unicode_literals
 __author__ = "Nash Kaminski"
 __license__ = "Dual License: GPLv2 and Commercial License"
 

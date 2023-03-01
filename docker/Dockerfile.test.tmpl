@@ -37,7 +37,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt-get install -y /tmp/chrome.deb
 
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install \
+    pip3 install \
         -r /tmp/requirements.txt \
         -r /tmp/requirements.dev.txt \
         -r /tmp/requirements.viewer.txt

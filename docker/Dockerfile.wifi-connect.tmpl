@@ -13,7 +13,7 @@ RUN curl -sL -o /tmp/wifi_connect.tgz "$ARCHIVE_URL" && \
 
 COPY requirements/requirements.wifi-connect.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r /tmp/requirements.txt
+    pip3 install -r /tmp/requirements.txt
 
 COPY send_zmq_message.py ./
 

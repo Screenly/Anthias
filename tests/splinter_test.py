@@ -1,3 +1,6 @@
+from __future__ import unicode_literals
+from builtins import object
+from nose.plugins.attrib import attr
 from splinter import Browser
 from time import sleep
 from selenium.common.exceptions import ElementNotVisibleException
@@ -10,7 +13,6 @@ import shutil
 import tempfile
 import unittest
 from datetime import datetime, timedelta
-from nose.plugins.attrib import attr
 
 asset_x = {
     'mimetype': u'web',
@@ -45,7 +47,7 @@ settings_url = 'http://foo:bar@localhost:8080/settings'
 system_info_url = 'http://foo:bar@localhost:8080/system_info'
 
 
-class TemporaryCopy:
+class TemporaryCopy(object):
     def __init__(self, original_path, base_path):
         self.original_path = original_path
         self.base_path = base_path
@@ -77,7 +79,7 @@ def wait_for_and_do(browser, query, callback):
         try:
             callback(browser.find_by_css(query).first)
             not_filled = False
-        except ElementNotVisibleException, e:
+        except ElementNotVisibleException as e:
             if n > 20:
                 raise e
             n += 1
@@ -165,6 +167,7 @@ class WebTest(unittest.TestCase):
             assets = assets_helper.read(conn)
 
             self.assertEqual(len(assets), 1)
+
             asset = assets[0]
 
             self.assertEqual(asset['name'], u'image.png')

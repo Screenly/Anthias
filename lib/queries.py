@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 
 comma = ','.join
 quest = lambda l: '=?,'.join(l) + '=?'

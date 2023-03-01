@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import unicode_literals
+from builtins import object
 import datetime
 import functools
 import unittest
@@ -103,7 +105,7 @@ uri_ = '/home/user/file'
 # url_timeout = 'http://...'
 
 
-class Req():
+class Req(object):
     def __init__(self, asset):
         self.POST = asset
 

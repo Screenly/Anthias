@@ -5,8 +5,6 @@ services:
   anthias-wifi-connect:
     image: screenly/anthias-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
-      args:
-        TARGET_PLATFORM: ${TARGET_PLATFORM:-linux/arm/v7}
       context: .
       dockerfile: docker/Dockerfile.wifi-connect
     environment:

@@ -23,7 +23,7 @@ while [[ "$IS_CONNECTED" != 'true' ]]; do
         fi
 
         if [[ "$IS_CONNECTED" = 'false' ]]; then
-            python send_zmq_message.py --action='show_splash'
+            python3 send_zmq_message.py --action='show_splash'
         fi
 
         IS_CONNECTED='true'
@@ -36,7 +36,7 @@ while [[ "$IS_CONNECTED" != 'true' ]]; do
         fi
 
         if [[ "$IS_CONNECTED" = 'true' ]] || [[ "$IS_CONNECTED" = '' ]]; then
-            python send_zmq_message.py --action='setup_wifi'
+            python3 send_zmq_message.py --action='setup_wifi'
         fi
 
         IS_CONNECTED='false'
