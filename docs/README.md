@@ -44,22 +44,18 @@ We've attempted to restore the Wi-Fi connectivity feature by introducing Balena'
 service. At present, a lot of Wi-Fi connectivity issues have been reported. As a result, we will temporarily disable the
 `anthias-wifi-connect` service until fixed.
 
-~~On first boot your OSE player will check if there is any active network connection (such as Ethernet with DHCP). If there isn’t one, then the Pi will create a local wifi network and display the SSID and PW on the screen. Using your phone or computer connect to this network and navigate to the URL displayed on the screen. (Ex: Screenly.io/wifi)  This will take you to the network setup page for your OSE player. If you are not connected to the network that the player is generating then you will be redirected here.~~
+For Raspberry Pi devices running balenaOS with Anthias installed, you can run the following in order to stop the
+`wifi-connect` service:
 
+```bash
+docker stop screenly-anthias-wifi-connect-1
+```
 
-1. Disconnect the Ethernet cable from your Raspberry Pi.
-2. Turn on your Raspberry Pi device.
-3. Refresh the web UI page. You shouldn't be able to access the page anymore.
-4. Go to your phone or computer and connect to the network whose SSID is "Anthias WiFi Connect".
-5. The screen will then display the hotspot page which contains the following information &ndash;
-_SSID ("Anthias WiFi Connect")_, _Password (None)_, and _Address ("192.168.42.1:8000")_.
-6. Go to your browser and go to the captive portal using the gateway IP address, plus the
-port `8000` (e.g., http://192.168.42.1:8000).
-7. On the captive portal, select a network to connect to by selecting an item fromt the **_SSID_** drop-down.
-8. Input the Wi-Fi password.
-9. Once you're all set, click **_Connect_**. Your phone/computer will be disconnected from the access point
-(i.e., the Raspberry Pi).
-10. Your device will soon be online. Otherwise, the access point will be back up.
+Alternatively, you could do it via `docker compose`:
+
+```bash
+docker compose stop anthias-wifi-connect
+```
 
 
 [1]: https://github.com/balena-os/wifi-connect
