@@ -40,7 +40,12 @@ Its a SQLite Database and can be modified with the sqlite3 CLI. The schema is re
 
 # Wi-Fi Setup
 
+We've attempted to restore the Wi-Fi connectivity feature by introducing Balena's [wifi-connect][1] as a Docker
+service. At present, a lot of Wi-Fi connectivity issues have been reported. As a result, we will temporarily disable the
+`anthias-wifi-connect` service until fixed.
+
 ~~On first boot your OSE player will check if there is any active network connection (such as Ethernet with DHCP). If there isn’t one, then the Pi will create a local wifi network and display the SSID and PW on the screen. Using your phone or computer connect to this network and navigate to the URL displayed on the screen. (Ex: Screenly.io/wifi)  This will take you to the network setup page for your OSE player. If you are not connected to the network that the player is generating then you will be redirected here.~~
+
 
 1. Disconnect the Ethernet cable from your Raspberry Pi.
 2. Turn on your Raspberry Pi device.
@@ -55,3 +60,6 @@ port `8000` (e.g., http://192.168.42.1:8000).
 9. Once you're all set, click **_Connect_**. Your phone/computer will be disconnected from the access point
 (i.e., the Raspberry Pi).
 10. Your device will soon be online. Otherwise, the access point will be back up.
+
+
+[1]: https://github.com/balena-os/wifi-connect

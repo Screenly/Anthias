@@ -1,18 +1,21 @@
+# vim: ft=yaml
+
 version: "2"
 services:
-  anthias-wifi-connect:
-    image: screenly/anthias-wifi-connect:${GIT_SHORT_HASH}-${BOARD}
-    environment:
-      PORTAL_LISTENING_PORT: 8000
-      CHECK_CONN_FREQ: 10
-      PORTAL_SSID: 'Anthias WiFi Connect'
-      DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=/host/run/dbus/system_bus_socket'
-    restart: "on-failure"
-    network_mode: host
-    privileged: true
-    labels:
-      io.balena.features.dbus: "1"
-      io.balena.features.firmware: "1"
+  # @TODO: Uncomment service once fixed.
+  # anthias-wifi-connect:
+  #   image: screenly/anthias-wifi-connect:${GIT_SHORT_HASH}-${BOARD}
+  #   environment:
+  #     PORTAL_LISTENING_PORT: 8000
+  #     CHECK_CONN_FREQ: 10
+  #     PORTAL_SSID: 'Anthias WiFi Connect'
+  #     DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=/host/run/dbus/system_bus_socket'
+  #   restart: "on-failure"
+  #   network_mode: host
+  #   privileged: true
+  #   labels:
+  #     io.balena.features.dbus: "1"
+  #     io.balena.features.firmware: "1"
 
   anthias-server:
     image: screenly/anthias-server:${GIT_SHORT_HASH}-${BOARD}

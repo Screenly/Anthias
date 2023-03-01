@@ -19,7 +19,7 @@ declare -a SERVICES=(
     websocket
     nginx
     viewer
-    wifi-connect
+    # wifi-connect # TODO: Restore this once Wi-Fi is working.
     'test'
 )
 
