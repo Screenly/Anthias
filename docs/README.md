@@ -41,10 +41,10 @@ Its a SQLite Database and can be modified with the sqlite3 CLI. The schema is re
 # Wi-Fi Setup
 
 We've attempted to restore the Wi-Fi connectivity feature by introducing Balena's [wifi-connect][1] as a Docker
-service. At present, a lot of Wi-Fi connectivity issues have been reported. As a result, we will temporarily disable the
-`anthias-wifi-connect` service until fixed.
+service. At present, a lot of Wi-Fi connectivity issues have been reported. As a result, we temporarily disabled
+Wi-Fi connectivity in instances running Raspberry Pi OS Lite.
 
-For Raspberry Pi devices running balenaOS with Anthias installed, you can run the following in order to stop the
+For Raspberry Pi devices running Raspberry Pi OS Lite, you can run the following in order to stop the
 `wifi-connect` service:
 
 ```bash
