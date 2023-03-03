@@ -16,7 +16,7 @@ class WebSocketTranslator(object):
     def __call__(self, environ, start_response):
         ws = environ['wsgi.websocket']
         socket = self.context.socket(zmq.SUB)
-        socket.setsockopt(zmq.SUBSCRIBE, "ws_server")
+        socket.setsockopt(zmq.SUBSCRIBE, b'ws_server')
         socket.connect('inproc://queue')
         try:
             while True:
@@ -39,7 +39,7 @@ class ScreenlyServerListener(Thread):
         socket_incoming.connect('tcp://anthias-server:10001')
         socket_outgoing.bind('inproc://queue')
 
-        socket_incoming.setsockopt(zmq.SUBSCRIBE, "")
+        socket_incoming.setsockopt(zmq.SUBSCRIBE, b'')
         while True:
             msg = socket_incoming.recv()
             socket_outgoing.send(msg)
