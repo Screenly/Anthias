@@ -355,7 +355,7 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
 
 
 def connect_to_redis():
-    return redis.Redis(host='redis', port=6379, db=0)
+    return redis.Redis(host='redis', decode_responses=True, port=6379, db=0)
 
 def is_docker():
     return os.path.isfile('/.dockerenv')
