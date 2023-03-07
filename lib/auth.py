@@ -109,7 +109,7 @@ class BasicAuth(Auth):
         return self.settings['user'] == username and self.check_password(password)
 
     def check_password(self, password):
-        hashed_password = hashlib.sha256(password).hexdigest()
+        hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
         return self.settings['password'] == hashed_password
 
     @property
