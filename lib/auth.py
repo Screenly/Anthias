@@ -127,8 +127,8 @@ class BasicAuth(Auth):
 
     def update_settings(self, current_pass_correct):
         new_user = request.form.get('user', '')
-        new_pass = request.form.get('password', '')
-        new_pass2 = request.form.get('password2', '')
+        new_pass = request.form.get('password', '').encode('utf-8')
+        new_pass2 = request.form.get('password2', '').encode('utf-8')
         new_pass = hashlib.sha256(new_pass).hexdigest() if new_pass else None
         new_pass2 = hashlib.sha256(new_pass2).hexdigest() if new_pass else None
         # Handle auth components
