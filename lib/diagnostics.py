@@ -15,7 +15,7 @@ from datetime import datetime
 
 def get_monitor_status():
     try:
-        return sh.tvservice('-s').stdout.strip()
+        return sh.tvservice('-s').stdout.strip().decode('utf-8')
     except Exception:
         return 'Unable to run tvservice.'
 

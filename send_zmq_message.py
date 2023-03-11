@@ -15,7 +15,7 @@ def get_portal_url():
     if port is None:
         return gateway
     else:
-        return '{}:{}'.format(gateway, port)
+        return f'{gateway}:{port}'
 
 def get_message(action):
     if action == 'setup_wifi':
@@ -24,10 +24,10 @@ def get_message(action):
             'ssid_pswd': getenv('PORTAL_PASSPHRASE', None),
             'address': get_portal_url(),
         }
-        return '{}&{}'.format(action, json.dumps(data))
+        return f'{action}&{json.dumps(data)}'
     elif action == 'show_splash':
         ip_addresses = get_ip_addresses()
-        return '{}&{}'.format(action, json.dumps(ip_addresses))
+        return f'{action}&{json.dumps(ip_addresses)}'
 
 
 def get_ip_addresses():
@@ -56,7 +56,7 @@ def main():
     sleep(1)
 
     message = get_message(args.action)
-    socket.send_string('viewer {}'.format(message))
+    socket.send_string(f'viewer {message}')
 
 
 if __name__ == '__main__':

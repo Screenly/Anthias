@@ -519,7 +519,7 @@ def main():
 
     if settings['show_splash']:
         if is_balena_app():
-            retry_call(get_balena_device_info, tries=5, delay=1)
+            retry_call(get_balena_device_info, tries=30, delay=1)
 
         view_webpage(SPLASH_PAGE_URL)
         sleep(SPLASH_DELAY)
