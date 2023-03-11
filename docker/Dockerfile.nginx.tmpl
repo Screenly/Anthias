@@ -12,7 +12,7 @@ ENV GIT_HASH=$GIT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
 ENV GIT_BRANCH=$GIT_BRANCH
 
-COPY docker/nginx/nginx.conf /etc/nginx/sites-enabled/srly-ose.conf
+COPY docker/nginx/nginx.conf /etc/nginx/sites-enabled/anthiaas.conf
 RUN rm -f /etc/nginx/sites-enabled/default
 
 CMD ["nginx", "-g", "daemon off;"]
