@@ -92,7 +92,7 @@ for container in ${SERVICES[@]}; do
             architecture=armv7hf
         fi
 
-        wc_download_url='https://api.github.com/repos/balena-os/wifi-connect/releases/45509064'
+        wc_download_url='https://api.github.com/repos/balena-os/wifi-connect/releases/93025295'
         jq_filter=".assets[] | select (.name|test(\"linux-$architecture\")) | .browser_download_url"
         archive_url=$(curl -sL "$wc_download_url" | jq -r "$jq_filter")
         export ARCHIVE_URL="$archive_url"
