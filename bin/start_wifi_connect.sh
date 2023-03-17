@@ -3,10 +3,10 @@
 IS_CONNECTED=''
 
 if [[ $BOARD =~ ^(pi1|pi2)$ ]]; then
-    # @TODO: Add a condition to check if a Wi-Fi adapter is connected to the device.
-    #   Pi 1 and Pi 2 do not have Wi-Fi built-in, but they can be connected to a Wi-Fi adapter.
-    echo "This device does not have Wi-Fi built-in. Exiting..."
-    exit 0
+    if [[ -z $(iw dev | grep Interface) ]]; then
+        echo "No Wi-Fi adapters were detected. Exiting..."
+        exit 0
+    fi
 fi
 
 if [[ ! -z $CHECK_CONN_FREQ ]]
