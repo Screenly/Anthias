@@ -23,6 +23,7 @@ RUN touch /var/lib/misc/dnsmasq.leases
 
 COPY bin/start_wifi_connect.sh ./
 
+ENV DEVICE_TYPE=$BOARD
 ENV GIT_HASH=$GIT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
 ENV GIT_BRANCH=$GIT_BRANCH
