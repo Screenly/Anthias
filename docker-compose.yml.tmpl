@@ -3,23 +3,23 @@
 version: "2"
 services:
   # @TODO: Uncomment service once fixed.
-  anthias-wifi-connect:
-    image: screenly/anthias-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.wifi-connect
-    environment:
-      PORTAL_LISTENING_PORT: 8000
-      CHECK_CONN_FREQ: 10
-      PORTAL_SSID: 'Anthias WiFi Connect'
-      DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=/run/dbus/system_bus_socket'
-    restart: "on-failure"
-    network_mode: host
-    privileged: true
-    volumes:
-      - type: bind
-        source: /run/dbus/system_bus_socket
-        target: /run/dbus/system_bus_socket
+  # anthias-wifi-connect:
+  #   image: screenly/anthias-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Dockerfile.wifi-connect
+  #   environment:
+  #     PORTAL_LISTENING_PORT: 8000
+  #     CHECK_CONN_FREQ: 10
+  #     PORTAL_SSID: 'Anthias WiFi Connect'
+  #     DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=/run/dbus/system_bus_socket'
+  #   restart: "on-failure"
+  #   network_mode: host
+  #   privileged: true
+  #   volumes:
+  #     - type: bind
+  #       source: /run/dbus/system_bus_socket
+  #       target: /run/dbus/system_bus_socket
 
   anthias-server:
     image: screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
