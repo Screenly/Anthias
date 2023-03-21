@@ -61,6 +61,7 @@ WATCHDOG_PATH = '/tmp/screenly.watchdog'
 
 LOAD_SCREEN = 'http://{}:{}/{}'.format(LISTEN, PORT, 'static/img/loading.png')
 SPLASH_PAGE_URL = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
+ZMQ_HOST_PUB_URL = 'tcp://host.docker.internal:10001'
 
 current_browser_url = None
 browser = None
@@ -202,6 +203,9 @@ class ZmqSubscriber(Thread):
         socket = self.context.socket(zmq.SUB)
         socket.connect(self.publisher_url)
         socket.setsockopt(zmq.SUBSCRIBE, bytes(self.topic, encoding='utf-8'))
+
+        if self.publisher_url == ZMQ_HOST_PUB_URL:
+            r.set('viewer-subscriber-ready', int(True))
 
         while True:
             msg = socket.recv()
@@ -519,7 +523,7 @@ def main():
     subscriber_1.daemon = True
     subscriber_1.start()
 
-    subscriber_2 = ZmqSubscriber('tcp://host.docker.internal:10001')
+    subscriber_2 = ZmqSubscriber(ZMQ_HOST_PUB_URL)
     subscriber_2.daemon = True
     subscriber_2.start()
 

@@ -2,7 +2,7 @@
 
 IS_CONNECTED=''
 
-if [[ $BOARD =~ ^(pi1|pi2)$ ]]; then
+if [[ $DEVICE_TYPE =~ ^(pi1|pi2)$ ]]; then
     if [[ -z $(iw dev | grep Interface) ]]; then
         echo "No Wi-Fi adapters were detected. Exiting..."
         exit 0
