@@ -9,7 +9,6 @@ services:
       CHECK_CONN_FREQ: 10
       PORTAL_SSID: 'Anthias WiFi Connect'
       DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=/host/run/dbus/system_bus_socket'
-    restart: "on-failure"
     network_mode: host
     privileged: true
     labels:

@@ -41,6 +41,14 @@ def get_ip_addresses():
     ]
 
 
+def is_viewer_subscriber_ready(r):
+    is_ready = r.get('viewer-subscriber-ready')
+    if is_ready is None:
+        return False
+    else:
+        return bool(int(is_ready))
+
+
 def main():
     argument_parser = ArgumentParser()
     argument_parser.add_argument(
@@ -59,7 +67,7 @@ def main():
 
     message = get_message(args.action)
 
-    while not bool(int(r.get('viewer-subscriber-ready'))):
+    while not is_viewer_subscriber_ready(r):
         continue
 
     socket.send_string(f'viewer {message}')
