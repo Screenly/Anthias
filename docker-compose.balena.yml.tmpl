@@ -4,6 +4,8 @@ version: "2"
 services:
   anthias-wifi-connect:
     image: screenly/anthias-wifi-connect:${GIT_SHORT_HASH}-${BOARD}
+    depends_on:
+      - anthias-viewer
     environment:
       PORTAL_LISTENING_PORT: 8000
       CHECK_CONN_FREQ: 10
