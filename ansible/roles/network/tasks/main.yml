@@ -17,6 +17,13 @@
     group: root
   with_items: "{{ network_systemd_units }}"
 
+- name: Enable network systemd services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  with_items: "{{ network_systemd_units }}"
+
 - name: Disable network manager
   ansible.builtin.systemd:
     state: stopped
