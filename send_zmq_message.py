@@ -68,6 +68,7 @@ def main():
     message = get_message(args.action)
 
     while not is_viewer_subscriber_ready(r):
+        sleep(1)
         continue
 
     socket.send_string(f'viewer {message}')
