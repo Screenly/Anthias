@@ -40,22 +40,4 @@ Its a SQLite Database and can be modified with the sqlite3 CLI. The schema is re
 
 # Wi-Fi Setup
 
-We've attempted to restore the Wi-Fi connectivity feature by introducing Balena's [wifi-connect][1] as a Docker
-service. At present, a lot of Wi-Fi connectivity issues have been reported. As a result, we temporarily disabled
-Wi-Fi connectivity in instances running Raspberry Pi OS Lite.
-
-For Raspberry Pi devices running Raspberry Pi OS Lite, you can run the following in order to stop the
-`wifi-connect` service:
-
-```bash
-docker stop screenly-anthias-wifi-connect-1
-```
-
-Alternatively, you could do it via `docker compose`:
-
-```bash
-docker compose stop anthias-wifi-connect
-```
-
-
-[1]: https://github.com/balena-os/wifi-connect
+- Read the [Wi-Fi Setup](wifi-setup.md) page for more details on how to set up Wi-Fi on the Raspberry Pi.

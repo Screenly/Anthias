@@ -5,6 +5,7 @@ import zmq
 from argparse import ArgumentParser
 from netifaces import interfaces, ifaddresses, AF_INET
 from os import getenv
+import redis
 from time import sleep
 
 
@@ -40,6 +41,14 @@ def get_ip_addresses():
     ]
 
 
+def is_viewer_subscriber_ready(r):
+    is_ready = r.get('viewer-subscriber-ready')
+    if is_ready is None:
+        return False
+    else:
+        return bool(int(is_ready))
+
+
 def main():
     argument_parser = ArgumentParser()
     argument_parser.add_argument(
@@ -49,6 +58,7 @@ def main():
         help='Specify the ZeroMQ message to be sent.',
     )
     args = argument_parser.parse_args()
+    r = redis.Redis(host='127.0.0.1', decode_responses=True, port=6379, db=0)
 
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
@@ -56,6 +66,11 @@ def main():
     sleep(1)
 
     message = get_message(args.action)
+
+    while not is_viewer_subscriber_ready(r):
+        sleep(1)
+        continue
+
     socket.send_string(f'viewer {message}')
 
 

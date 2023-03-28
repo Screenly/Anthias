@@ -61,6 +61,7 @@ WATCHDOG_PATH = '/tmp/screenly.watchdog'
 
 LOAD_SCREEN = 'http://{}:{}/{}'.format(LISTEN, PORT, 'static/img/loading.png')
 SPLASH_PAGE_URL = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
+ZMQ_HOST_PUB_URL = 'tcp://host.docker.internal:10001'
 
 current_browser_url = None
 browser = None
@@ -129,7 +130,7 @@ def send_current_asset_id_to_server():
     consumer.send({'current_asset_id': scheduler.current_asset_id})
 
 
-def setup_wifi(data):
+def show_hotspot_page(data):
     uri = 'http://{0}/hotspot'.format(LISTEN)
     decoded = json.loads(data)
 
@@ -151,6 +152,14 @@ def setup_wifi(data):
     stop_loop()
     view_webpage(uri)
 
+
+def setup_wifi(data):
+    global load_screen_displayed, mq_data
+    if not load_screen_displayed:
+        mq_data = data
+        return
+
+    show_hotspot_page(data)
 
 def show_splash(data):
     if is_balena_app():
@@ -194,6 +203,9 @@ class ZmqSubscriber(Thread):
         socket = self.context.socket(zmq.SUB)
         socket.connect(self.publisher_url)
         socket.setsockopt(zmq.SUBSCRIBE, bytes(self.topic, encoding='utf-8'))
+
+        if self.publisher_url == ZMQ_HOST_PUB_URL:
+            r.set('viewer-subscriber-ready', int(True))
 
         while True:
             msg = socket.recv()
@@ -500,13 +512,18 @@ def start_loop():
 
 def main():
     global db_conn, scheduler
+    global load_screen_displayed, mq_data
+
+    load_screen_displayed = False
+    mq_data = None
+
     setup()
 
     subscriber_1 = ZmqSubscriber('tcp://anthias-server:10001')
     subscriber_1.daemon = True
     subscriber_1.start()
 
-    subscriber_2 = ZmqSubscriber('tcp://host.docker.internal:10001')
+    subscriber_2 = ZmqSubscriber(ZMQ_HOST_PUB_URL)
     subscriber_2.daemon = True
     subscriber_2.start()
 
@@ -526,6 +543,13 @@ def main():
 
     # We don't want to show splash-page if there are active assets but all of them are not available
     view_image(LOAD_SCREEN)
+
+    load_screen_displayed = True
+
+    if mq_data is not None:
+        show_hotspot_page(mq_data)
+        mq_data = None
+
     start_loop()
 
 

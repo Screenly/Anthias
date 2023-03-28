@@ -3,13 +3,16 @@
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get -y install --no-install-recommends \
         dnsmasq \
+        iw \
+        unzip \
+        wget \
         wireless-tools
 
 WORKDIR /usr/src/app
 
-RUN curl -sL -o /tmp/wifi_connect.tgz "$ARCHIVE_URL" && \
-    tar xfz /tmp/wifi_connect.tgz -C /usr/src/app && \
-    rm /tmp/wifi_connect.tgz
+RUN curl -sL -o /tmp/wifi_connect.zip "$ARCHIVE_URL" && \
+    unzip -o /tmp/wifi_connect.zip -d /usr/src/app && \
+    rm /tmp/wifi_connect.zip
 
 COPY requirements/requirements.wifi-connect.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -21,6 +24,7 @@ RUN touch /var/lib/misc/dnsmasq.leases
 
 COPY bin/start_wifi_connect.sh ./
 
+ENV DEVICE_TYPE=$BOARD
 ENV GIT_HASH=$GIT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
 ENV GIT_BRANCH=$GIT_BRANCH
