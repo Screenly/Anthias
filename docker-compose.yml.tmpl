@@ -26,7 +26,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.server
-    volumes:
     environment:
       - MY_IP=${MY_IP}
       - HOME=/data
