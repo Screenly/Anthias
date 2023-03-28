@@ -2,4 +2,4 @@ Cython==0.29.33
 future==0.18.3
 netifaces==0.10.9
 pyzmq==19.0.2
-redis==3.5.3
+redis==4.5.3
