@@ -2,7 +2,12 @@
 
 IS_CONNECTED=''
 
-if [[ $DEVICE_TYPE =~ ^(pi1|pi2)$ ]]; then
+if [[ $DEVICE_TYPE = "pi1" ]]; then
+    echo "The latest version of WiFi Connect does not support Raspberry Pi 1. Exiting..."
+    exit 0
+fi
+
+if [[ $DEVICE_TYPE == "pi2" ]]; then
     if [[ -z $(iw dev | grep Interface) ]]; then
         echo "No Wi-Fi adapters were detected. Exiting..."
         exit 0

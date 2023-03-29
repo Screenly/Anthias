@@ -10,9 +10,10 @@ RUN --mount=type=cache,target=/var/cache/apt \
 
 WORKDIR /usr/src/app
 
-RUN curl -sL -o /tmp/wifi_connect.zip "$ARCHIVE_URL" && \
+RUN if [[ ! -z "$ARCHIVE_URL" ]]; then \
+    curl -sL -o /tmp/wifi_connect.zip "$ARCHIVE_URL" && \
     unzip -o /tmp/wifi_connect.zip -d /usr/src/app && \
-    rm /tmp/wifi_connect.zip
+    rm /tmp/wifi_connect.zip; fi
 
 COPY requirements/requirements.wifi-connect.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
