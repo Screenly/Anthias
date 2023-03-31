@@ -11,6 +11,9 @@ RUN --mount=type=cache,target=/var/cache/apt \
 
 WORKDIR /usr/src/app
 
+# @TODO: WiFi Connect 4.11.1 doesn't have a release for Raspberry Pi
+#        devices that has ARMv6 support. We should remove this once a
+#        new compatible release is available.
 RUN if [[ ! -z "$ARCHIVE_URL" ]]; then \
     curl -sL -o /tmp/wifi_connect.zip "$ARCHIVE_URL" && \
     unzip -o /tmp/wifi_connect.zip -d /usr/src/app && \
