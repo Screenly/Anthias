@@ -1,12 +1,15 @@
 #!/bin/bash
 
+# vim: tabstop=4 shiftwidth=4 softtabstop=4
+# -*- sh-basic-offset: 4 -*-
+
+set -euox pipefail
+
 IS_CONNECTED=''
 
-if [[ $DEVICE_TYPE =~ ^(pi1|pi2)$ ]]; then
-    if [[ -z $(iw dev | grep Interface) ]]; then
-        echo "No Wi-Fi adapters were detected. Exiting..."
-        exit 0
-    fi
+if [[ -z $(nmcli device wifi list) ]]; then
+    echo "No Wi-Fi adapters were detected. Exiting..."
+    exit 0
 fi
 
 if [[ ! -z $CHECK_CONN_FREQ ]]
