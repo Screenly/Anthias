@@ -6,7 +6,7 @@
 set -euo pipefail
 
 IS_CONNECTED=''
-VERBOSE='true'
+VERBOSE=${VERBOSE:-true}
 
 if [[ -z $(nmcli device wifi list) ]]; then
     echo "No Wi-Fi adapters were detected. Exiting..."
