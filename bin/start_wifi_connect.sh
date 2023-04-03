@@ -3,9 +3,10 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 # -*- sh-basic-offset: 4 -*-
 
-set -euox pipefail
+set -euo pipefail
 
 IS_CONNECTED=''
+VERBOSE='true'
 
 if [[ -z $(nmcli device wifi list) ]]; then
     echo "No Wi-Fi adapters were detected. Exiting..."
