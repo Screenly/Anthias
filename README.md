@@ -58,7 +58,7 @@ Do note that Anthias is using Docker's [buildx](https://docs.docker.com/engine/r
 Assuming you're in the source code repository, simply run:
 
 ```bash
- ./bin/build_containers.sh
+$ ./bin/build_containers.sh
 $ docker compose \
     -f docker-compose.dev.yml up
 ```
@@ -69,7 +69,7 @@ Make sure that you have `buildx` installed and that you have run
 `docker buildx create --use` before you do the following:
 
 ```bash
-./bin/build_containers.sh
+$ ./bin/build_containers.sh
 ```
 
 ### Skipping Specific Services
@@ -78,7 +78,7 @@ Say that you would like to skip building the `anthias-viewer` and `anthias-nginx
 services. Just run the following:
 
 ```bash
-SKIP_VIEWER=1 SKIP_NGINX=1 ./bin/build_containers.sh
+$ SKIP_VIEWER=1 SKIP_NGINX=1 ./bin/build_containers.sh
 ```
 
 ### Generating Only Dockerfiles
@@ -87,7 +87,7 @@ If you'd like to just generate the Dockerfiles from the templates provided
 inside the `docker/` directory, run the following:
 
 ```bash
-DOCKERFILES_ONLY=1 ./bin_build_containers.sh
+$ DOCKERFILES_ONLY=1 ./bin_build_containers.sh
 ```
 
 ## Running the Unit Tests

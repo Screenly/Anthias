@@ -26,7 +26,7 @@ See [the official documentation](https://www.raspberrypi.org/documentation/remot
 # Updating Screenly
 From a Console Run:
 
-`bash <(curl -sL https://www.screenly.io/install-ose.sh)`
+`$ bash <(curl -sL https://www.screenly.io/install-ose.sh)`
 
 # Accessing the SQLite Database
 
