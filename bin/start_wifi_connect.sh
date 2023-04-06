@@ -3,7 +3,7 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 # -*- sh-basic-offset: 4 -*-
 
-set -euox pipefail
+set -euo pipefail
 
 IS_CONNECTED=''
 
@@ -23,14 +23,12 @@ fi
 sleep 5
 
 while [[ true ]]; do
-    if [[ "$VERBOSE" != 'false' ]]; then echo "Checking internet connectivity ..."; fi
+    echo "Checking internet connectivity ..."
     wget --spider --no-check-certificate 1.1.1.1 > /dev/null 2>&1
 
     if [ $? -eq 0 ]; then
-        if [[ "$VERBOSE" != 'false' ]]; then
-            echo "Your device is already connected to the internet."
-            echo "Skipping setting up Wifi-Connect Access Point."
-        fi
+        echo "Your device is already connected to the internet."
+        echo "Skipping setting up Wifi-Connect Access Point."
 
         if [[ "$IS_CONNECTED" = 'false' ]]; then
             python3 send_zmq_message.py --action='show_splash'
@@ -38,11 +36,9 @@ while [[ true ]]; do
 
         exit 0
     else
-        if [[ "$VERBOSE" != 'false' ]]; then
-            echo "Your device is not connected to the internet."
-            echo "Starting up Wifi-Connect."
-            echo "Connect to the Access Point and configure the SSID and Passphrase for the network to connect to."
-        fi
+        echo "Your device is not connected to the internet."
+        echo "Starting up Wifi-Connect."
+        echo "Connect to the Access Point and configure the SSID and Passphrase for the network to connect to."
 
         if [[ "$IS_CONNECTED" = '' ]]; then
             python3 send_zmq_message.py --action='setup_wifi'
