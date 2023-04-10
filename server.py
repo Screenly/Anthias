@@ -1537,7 +1537,7 @@ class AssetContent(Resource):
             result = {
                 'type': 'file',
                 'filename': filename,
-                'content': b64encode(content),
+                'content': b64encode(content).decode(),
                 'mimetype': mimetype
             }
         else:
