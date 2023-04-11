@@ -92,9 +92,14 @@ $ DOCKERFILES_ONLY=1 ./bin_build_containers.sh
 
 ## Running the Unit Tests
 
-Start the containers.
+Build and start the containers.
 
 ```bash
+$ export SKIP_SERVER=1 && \
+  export SKIP_WEBSOCKET=1 && \
+  export SKIP_NGINX=1 && \
+  export SKIP_VIEWER=1 && \
+  export SKIP_WIFI_CONNECT=1
 $ ./bin/build_containers.sh
 $ docker compose \
     -f docker-compose.test.yml up -d
