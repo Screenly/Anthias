@@ -3,7 +3,7 @@ import tarfile
 import sh
 import sys
 from datetime import datetime
-from os import path, getenv, remove
+from os import path, getenv, makedirs, remove
 
 directories = ['.screenly', 'screenly_assets']
 default_archive_name = "screenly-backup"
@@ -16,6 +16,10 @@ def create_backup(name=default_archive_name):
         datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     )
     file_path = path.join(home, static_dir, archive_name)
+
+    if not path.exists(path.join(home, static_dir)):
+        makedirs(path.join(home, static_dir), exist_ok=True)
+
     if path.isfile(file_path):
         remove(file_path)
 
@@ -37,7 +41,7 @@ def recover(file_path):
     if not HOME:
         logging.error('No HOME variable')
         sys.exit(1) # Alternatively, we can raise an Exception using a custom message, or we can create a new class that extends Exception.
-    
+
     with tarfile.open(file_path, "r:gz") as tar:
         for directory in directories:
             if directory not in tar.getnames():
