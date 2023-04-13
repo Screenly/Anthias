@@ -92,10 +92,15 @@ $ DOCKERFILES_ONLY=1 ./bin_build_containers.sh
 
 ## Running the Unit Tests
 
-Start the containers.
+Build and start the containers.
 
 ```bash
-$ ./bin/build_containers.sh
+$ SKIP_SERVER=1 \
+  SKIP_WEBSOCKET=1 \
+  SKIP_NGINX=1 \
+  SKIP_VIEWER=1 \
+  SKIP_WIFI_CONNECT=1 \
+  ./bin/build_containers.sh
 $ docker compose \
     -f docker-compose.test.yml up -d
 ```
@@ -103,7 +108,6 @@ $ docker compose \
 Run the unit tests.
 
 ```bash
-$ ./bin/build_containers.sh
 $ docker compose \
     -f docker-compose.test.yml \
     exec -T anthias-test bash ./bin/prepare_test_environment.sh -s
