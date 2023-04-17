@@ -45,7 +45,7 @@ if [ "$WEB_UPGRADE" = false ]; then
   tput bold
 
   cat << EOF
-  
+
        d8888            888     888
       d88888            888     888       888
      d88P888            888     888
@@ -189,10 +189,23 @@ sudo -u ${USER} ansible localhost \
     -a "repo=$REPOSITORY dest=/home/${USER}/screenly version=$BRANCH force=no"
 cd /home/${USER}/screenly/ansible
 
+# nico start - debug
+filename=$(basename "$0")
+echo "[$filename] #01 - groups $USER: $(groups $USER)"
+# nico end
+
 sudo -E -u ${USER} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
+
+# nico start - debug
+echo "[$filename] #02 - groups $USER: $(groups $USER)"
+# nico end
 
 # Pull down and install containers
 /home/${USER}/screenly/bin/upgrade_containers.sh
+
+# nico start - debug
+echo "[$filename] #03 - groups $USER: $(groups $USER)"
+# nico end
 
 sudo apt-get autoclean
 sudo apt-get clean
