@@ -56,7 +56,7 @@ cat /home/${USER}/screenly/docker-compose.yml.tmpl \
 echo "[$filename] #04 - groups $USER: $(groups $USER)"
 # nico end
 
-sudo -E -u $USER docker compose \
+sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \
     pull
 
@@ -64,7 +64,7 @@ sudo -E -u $USER docker compose \
 echo "[$filename] #05 - groups $USER: $(groups $USER)"
 # nico end
 
-sudo -E -u $USER docker compose \
+sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \
     up -d
 
