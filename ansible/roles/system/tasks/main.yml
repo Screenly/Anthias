@@ -252,6 +252,10 @@
       - gpio
       - dialout
 
+- name: Add the `veth` kernel module.
+  ansible.builtin.shell: |
+    sudo modprobe veth
+
 - name: Perform system upgrade
   ansible.builtin.apt:
     upgrade: dist
