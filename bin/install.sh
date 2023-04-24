@@ -184,12 +184,21 @@ sudo pip install cryptography==38.0.2
 
 sudo pip install "$ANSIBLE_VERSION"
 
+# @TODO: Remove after debugging and testing.
+export REPOSITORY='https://github.com/nicomiguelino/Anthias.git'
+export BRANCH=${CUSTOM_BRANCH}
+
 sudo -u ${USER} ansible localhost \
     -m git \
     -a "repo=$REPOSITORY dest=/home/${USER}/screenly version=$BRANCH force=no"
 cd /home/${USER}/screenly/ansible
 
 sudo -E -u ${USER} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
+
+# @TODO: Remove after debugging and testing.
+if [[ ! -z "$EARLY_EXIT" ]]; then
+  exit 0
+fi
 
 # Pull down and install containers
 sudo -u ${USER} /home/${USER}/screenly/bin/upgrade_containers.sh
