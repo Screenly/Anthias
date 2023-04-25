@@ -28,6 +28,16 @@ The tl;dr for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) Bullse
 $ bash <(curl -sL https://install-anthias.srly.io)
 ```
 
+If you've selected **_N_** when prompted for an upgrade &ndash; i.e., "Would you like to perform a full system upgrade as well? (y/N)"
+&ndash; you'll get the following message when the installer is almost done executing:
+
+```
+"Please reboot and run `/home/$USER/screenly/bin/upgrade_containers.sh` to complete the installation. Would you like to reboot now? (y/N)"
+```
+
+You have the option to reboot now or later. On the next boot, make sure to run
+`upgrade_containers.sh`, as mentioned above.
+
 **This installation will take 15 minutes to several hours**, depending on variables such as:
 
  * The Raspberry Pi hardware version
