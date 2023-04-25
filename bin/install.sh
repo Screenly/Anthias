@@ -262,6 +262,11 @@ fi
 echo "Installation completed."
 
 if [ "$WEB_UPGRADE" = false ]; then
+  if [ -f /var/run/reboot-required ]; then
+      echo "Please reboot and run ./bin/upgrade_containers.sh to complete the installation."
+      exit 0
+  fi
+
   read -p "You need to reboot the system for the installation to complete. Would you like to reboot now? (y/N)" -n 1 -r -s REBOOT && echo
   if [ "$REBOOT" == 'y' ]; then
     sudo reboot
