@@ -32,7 +32,7 @@ If you've selected **_N_** when prompted for an upgrade &ndash; i.e., "Would you
 &ndash; you'll get the following message when the installer is almost done executing:
 
 ```
-"Please reboot and run `/home/$USER/screenly/bin/upgrade_containers.sh` to complete the installation. Would you like to reboot now? (y/N)"
+"Please reboot and run /home/$USER/screenly/bin/upgrade_containers.sh to complete the installation. Would you like to reboot now? (y/N)"
 ```
 
 You have the option to reboot now or later. On the next boot, make sure to run

@@ -265,7 +265,7 @@ if [ "$WEB_UPGRADE" = false ]; then
   POST_INSTALL_MESSAGE=""
 
   if [ -f /var/run/reboot-required ]; then
-    POST_INSTALL_MESSAGE="Please reboot and run `/home/$USER/screenly/bin/upgrade_containers.sh` to complete the installation"
+    POST_INSTALL_MESSAGE="Please reboot and run /home/$USER/screenly/bin/upgrade_containers.sh to complete the installation"
   else
     POST_INSTALL_MESSAGE="You need to reboot the system for the installation to complete"
   fi
