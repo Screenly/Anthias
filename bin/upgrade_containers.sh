@@ -44,7 +44,6 @@ sudo -E docker compose \
     pull
 
 if [ -f /var/run/reboot-required ]; then
-    echo "Reboot required. Please reboot and run this script again."
     exit 0
 fi
 
