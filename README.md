@@ -38,6 +38,9 @@ If you've selected **_N_** when prompted for an upgrade &ndash; i.e., "Would you
 You have the option to reboot now or later. On the next boot, make sure to run
 `upgrade_containers.sh`, as mentioned above.
 
+Otherwise, if you've selected **_y_** for the system upgrade, then you don't need to do a reboot for the containers to be started. However,
+it's still recommended to do a reboot.
+
 **This installation will take 15 minutes to several hours**, depending on variables such as:
 
  * The Raspberry Pi hardware version
