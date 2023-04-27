@@ -39,7 +39,7 @@ cat /home/${USER}/screenly/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/screenly/docker-compose.yml
 
-sudo -E -u ${USER} docker compose \
+sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \
     pull
 
@@ -47,6 +47,6 @@ if [ -f /var/run/reboot-required ]; then
     exit 0
 fi
 
-sudo -E -u ${USER} docker compose \
+sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \
     up -d
