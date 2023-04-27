@@ -253,7 +253,15 @@ fi
 echo "Installation completed."
 
 if [ "$WEB_UPGRADE" = false ]; then
-  read -p "You need to reboot the system for the installation to complete. Would you like to reboot now? (y/N)" -n 1 -r -s REBOOT && echo
+  POST_INSTALL_MESSAGE=""
+
+  if [ -f /var/run/reboot-required ]; then
+    POST_INSTALL_MESSAGE="Please reboot and run /home/$USER/screenly/bin/upgrade_containers.sh to complete the installation"
+  else
+    POST_INSTALL_MESSAGE="You need to reboot the system for the installation to complete"
+  fi
+
+  read -p "${POST_INSTALL_MESSAGE}. Would you like to reboot now? (y/N)" -n 1 -r -s REBOOT && echo
   if [ "$REBOOT" == 'y' ]; then
     sudo reboot
   fi

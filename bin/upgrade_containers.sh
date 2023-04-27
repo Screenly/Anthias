@@ -43,6 +43,10 @@ sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \
     pull
 
+if [ -f /var/run/reboot-required ]; then
+    exit 0
+fi
+
 sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \
     up -d
