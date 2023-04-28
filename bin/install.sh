@@ -192,7 +192,7 @@ cd /home/${USER}/screenly/ansible
 sudo -E -u ${USER} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
 
 # Pull down and install containers
-/home/${USER}/screenly/bin/upgrade_containers.sh
+sudo -u ${USER} /home/${USER}/screenly/bin/upgrade_containers.sh
 
 sudo apt-get autoclean
 sudo apt-get clean
