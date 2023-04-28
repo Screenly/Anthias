@@ -9173,8 +9173,8 @@ a.nav-link:not(.active) {
   font-weight: bold;
 }
 .popover .popover-delete-content {
-  width: 236px;
-  padding-bottom: 38px;
+  width: 200px;
+  padding-bottom: 4em;
 }
 
 #request-error {
