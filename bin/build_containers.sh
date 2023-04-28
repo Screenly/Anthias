@@ -81,10 +81,9 @@ for container in ${SERVICES[@]}; do
         export CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/107.0.5304.62/chromedriver_linux64.zip"
     elif [ "$container" == 'wifi-connect' ]; then
         # We don't support wifi-connect on x86 yet.
-        # @TODO: Uncomment when ready.
-        # if [ "$BOARD" == 'x86' ]; then
-        #     continue
-        # fi
+        if [ "$BOARD" == 'x86' ]; then
+            continue
+        fi
 
         # Logic for determining the correct architecture for the wifi-connect container
         if [ "$TARGET_PLATFORM" = 'linux/arm/v6' ]; then
@@ -105,6 +104,11 @@ for container in ${SERVICES[@]}; do
         cat "docker/Dockerfile.$container.tmpl" | envsubst >> "docker/Dockerfile.$container"
     else
         cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container"
+    fi
+
+    if [[ -n "${DOCKERFILES_ONLY:-}" ]] && [[ "${DOCKERFILES_ONLY}" -ne 0 ]]; then
+        echo "Variable DOCKERFILES_ONLY is set. Skipping build for $container..."
+        continue
     fi
 
     # If we're running on x86, remove all Pi specific packages
@@ -128,15 +132,6 @@ for container in ${SERVICES[@]}; do
             echo "Skipping test container for Pi builds..."
             continue
         fi
-    fi
-
-    if [[ -n "${DEV_MODE:-}" ]] && [[ "${DEV_MODE}" -ne 0 ]]; then
-        sed -i 's/RUN --mount.\+ /RUN /g' "docker/Dockerfile.$container"
-    fi
-
-    if [[ -n "${DOCKERFILES_ONLY:-}" ]] && [[ "${DOCKERFILES_ONLY}" -ne 0 ]]; then
-        echo "Variable DOCKERFILES_ONLY is set. Skipping build for $container..."
-        continue
     fi
 
     docker "${DOCKER_BUILD_ARGS[@]}" \
