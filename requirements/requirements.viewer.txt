@@ -3,7 +3,7 @@ certifi==2022.12.7
 configparser==4.0.2
 cryptography==3.3.2
 Cython==0.29.33
-Flask==1.1.2
+Flask==2.3.2
 future==0.18.3
 idna==2.6
 itsdangerous==2.0.1
