@@ -19,7 +19,7 @@ Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.co
 
 The quickest way to get started is to use [Raspberry Pi Imager](https://www.screenly.io/blog/2022/12/13/anthias-and-screenly-now-in-rpi-imager/), where you can find Anthias under `Other specific-purpose OS`. Alternatively, you can find our pre-built disk images (powered by [Balena Hub](https://hub.balena.io/)) [here](https://github.com/Screenly/Anthias/releases/latest/).
 
-Do however note that we are still in the process of knocking out some bugs. You can track the known issues [here](https://github.com/Screenly/Anthias/issues). You can also check the discussions in the [Anthias forums][1].
+Do however note that we are still in the process of knocking out some bugs. You can track the known issues [here](https://github.com/Screenly/Anthias/issues). You can also check the discussions in the [Anthias forums](https://forums.screenly.io).
 
 If you'd like more control over your digital signage instance, try installing it on
 [Raspberry Pi OS Lite](#installing-on-raspberry-pi-os-lite).
@@ -58,20 +58,12 @@ During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast inte
 While you can deploy to your own Balena fleet, the easiest way to deploy using [Balena OpenFleets](https://hub.balena.io/organizations/screenly_ose/fleets).
 
 We'll include documentation on how to deploy to your fleet soon. For now,
-[this Balena blog post][3] can come in handy and give you a head start, but you'll
+[this Balena blog post](https://blog.balena.io/deploy-free-digital-signage-software-screenly-ose/) can come in handy and give you a head start, but you'll
 still need to do some manual code changes. Stay tuned for more updates.
 
 ## Quick links
 
- * [Forum][1]
- * [Website][2] (hosted on GitHub and the source is available [here](https://github.com/Screenly/Anthias/tree/master/website))
+ * [Forum](https://forums.screenly.io/)
+ * [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](https://github.com/Screenly/Anthias/tree/master/website))
  * [General documentation](https://github.com/Screenly/Anthias/blob/master/docs/README.md)
  * [Developer documentation](https://github.com/Screenly/Anthias/blob/master/docs/developer-documentation.md)
-
-
-
-<!-- Put all the links here. -->
-
-[1]: https://forums.screenly.io/
-[2]: https://anthias.screenly.io
-[3]: https://blog.balena.io/deploy-free-digital-signage-software-screenly-ose/
