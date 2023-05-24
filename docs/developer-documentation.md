@@ -1,5 +1,78 @@
-## Anthias Developer Documentation
+# Anthias Developer Documentation
 
+## Dockerized Development Environment
+
+To simplify development of the server module of Anthias, we've created a Docker container. This is intended to run on your local machine with the Anthias repository mounted as a volume.
+
+Do note that Anthias is using Docker's [buildx](https://docs.docker.com/engine/reference/commandline/buildx/) for the image builds. This is used both for cross compilation as well as for local caching. You might need to run `docker buildx create --use` first.
+
+Assuming you're in the source code repository, simply run:
+
+```bash
+$ ./bin/build_containers.sh
+$ docker compose \
+    -f docker-compose.dev.yml up
+```
+
+## Building Containers Locally
+
+Make sure that you have `buildx` installed and that you have run
+`docker buildx create --use` before you do the following:
+
+```bash
+$ ./bin/build_containers.sh
+```
+
+### Skipping Specific Services
+
+Say that you would like to skip building the `anthias-viewer` and `anthias-nginx`
+services. Just run the following:
+
+```bash
+$ SKIP_VIEWER=1 SKIP_NGINX=1 ./bin/build_containers.sh
+```
+
+### Generating Only Dockerfiles
+
+If you'd like to just generate the Dockerfiles from the templates provided
+inside the `docker/` directory, run the following:
+
+```bash
+$ DOCKERFILES_ONLY=1 ./bin_build_containers.sh
+```
+
+## Running the Unit Tests
+
+Build and start the containers.
+
+```bash
+$ SKIP_SERVER=1 \
+  SKIP_WEBSOCKET=1 \
+  SKIP_NGINX=1 \
+  SKIP_VIEWER=1 \
+  SKIP_WIFI_CONNECT=1 \
+  ./bin/build_containers.sh
+$ docker compose \
+    -f docker-compose.test.yml up -d
+```
+
+Run the unit tests.
+
+```bash
+$ docker compose \
+    -f docker-compose.test.yml \
+    exec -T anthias-test bash ./bin/prepare_test_environment.sh -s
+$ docker-compose \
+    -f docker-compose.test.yml \
+    exec -T anthias-test nosetests -v -a '!fixme'
+```
+
+
+<!-- Put all the links here. -->
+
+[1]: https://forums.screenly.io/
+
+## Managing releases
 ### Creating a new release
 
 Check what the latest release is:
@@ -21,17 +94,17 @@ Push release:
 $ git push origin v0.18.5
 ```
 
-#### Delete a broken release
+### Delete a broken release
 
 ```bash
-$ git tag -d v0.18.5                                                                                                                                                                          [±master ✓]
+$ git tag -d v0.18.5                         [±master ✓]
 Deleted tag 'v0.18.5' (was 9b86c39)
 
-$ git push --delete origin v0.18.5                                                                                                                                                            [±master ✓]
+$ git push --delete origin v0.18.5           [±master ✓]
 ```
 
 
-### Outdated documentation that needs to be updated
+## Outdated documentation that needs to be updated
 
 Here is a high-level overview of the different components that make up the Screenly-OSE system.
 ![Screenly-OSE Diagram Overview](https://raw.githubusercontent.com/screenly/screenly-ose/master/docs/images/screenly-ose-diagram-overview.png)
@@ -54,11 +127,7 @@ There are currently three versions of Screenly-OSE..
 |  Experimental | [experimental](https://github.com/Screenly/screenly-ose/tree/experimental)   | This is the branch for experimenting, such as using a new web browser    |
 
 
-### Docker and Directories
-
-/
-
-### Directories, files and their purpose with regards to Screenly-OSE
+## Directories and files explained
 _(Most of the following information pertains to the Production version (Uzbl-based) and not the Developer QtWebview/Docker-based version)_
 
 ```
