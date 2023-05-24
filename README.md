@@ -55,8 +55,6 @@ During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast inte
 
 ## Installing with Balena
 
-While you can deploy to your own Balena fleet, the easiest way to deploy using [Balena OpenFleets](https://hub.balena.io/organizations/screenly_ose/fleets).
-
 We'll include documentation on how to deploy to your fleet soon. For now,
 [this Balena blog post](https://blog.balena.io/deploy-free-digital-signage-software-screenly-ose/) can come in handy and give you a head start, but you'll
 still need to do some manual code changes. Stay tuned for more updates.
