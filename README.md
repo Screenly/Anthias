@@ -4,7 +4,7 @@
 
 ## About Anthias
 
-Anthias is a digital signage platform for the Raspberry Pi. Formerly known as Screenly OSE, it was rebranded to clear up the confusion between Screenly (the paid version) and Anthias. More details can be found in [this blog post](https://www.screenly.io/blog/2022/12/06/screenly-ose-now-called-anthias/).
+Anthias is a digital signage platform for Raspberry Pi. Formerly known as Screenly OSE, it was rebranded to clear up the confusion between Screenly (the paid version) and Anthias. More details can be found in [this blog post](https://www.screenly.io/blog/2022/12/06/screenly-ose-now-called-anthias/).
 
 Anthias works on all Raspberry Pi versions, including Raspberry Pi Zero, Raspberry Pi 3 Model B, and Raspberry Pi 4 Model B.
 
@@ -19,9 +19,9 @@ Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.co
 
 The quickest way to get started is to use [Raspberry Pi Imager](https://www.screenly.io/blog/2022/12/13/anthias-and-screenly-now-in-rpi-imager/), where you can find Anthias under `Other specific-purpose OS`. Alternatively, you can find our pre-built disk images (powered by [Balena Hub](https://hub.balena.io/)) [here](https://github.com/Screenly/Anthias/releases/latest/).
 
-Do however note that that we are still in the process of knocking out some bugs. You can track the known issues [here](https://github.com/Screenly/Anthias/issues). You can also check the discussions in the [Anthias forums][1].
+Do however note that we are still in the process of knocking out some bugs. You can track the known issues [here](https://github.com/Screenly/Anthias/issues). You can also check the discussions in the [Anthias forums][1].
 
-If you'd like more control over your digital signage isntance, try installing it on
+If you'd like more control over your digital signage instance, try installing it on
 [Raspberry Pi OS Lite](#installing-on-raspberry-pi-os-lite).
 
 ## Installing on Raspberry Pi OS Lite
@@ -57,7 +57,7 @@ During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast inte
 
 While you can deploy to your own Balena fleet, the easiest way to deploy using [Balena OpenFleets](https://hub.balena.io/organizations/screenly_ose/fleets).
 
-We'll include a documentation on how to deploy to your own fleet soon. For now,
+We'll include documentation on how to deploy to your fleet soon. For now,
 [this Balena blog post][3] can come in handy and give you a head start, but you'll
 still need to do some manual code changes. Stay tuned for more updates.
 
