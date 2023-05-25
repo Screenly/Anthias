@@ -46,9 +46,9 @@ a.anthias-websocket <-> a.anthias-server
 a.anthias-celery -> a.redis: "in-memory data"
 a.redis <-> a.anthias-server
 
-b.anthias-viewer <-> database
+b.anthias-viewer <-> database: "assets data"
 
-a.anthias-server <-> b.anthias-viewer
+a.anthias-server <-> b.anthias-viewer: "assets data"
 a.anthias-server <-> database
 a.anthias-celery <-> database
 
