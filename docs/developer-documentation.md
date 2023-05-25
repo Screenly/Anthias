@@ -8,6 +8,7 @@ Here is a high-level overview of the different components that make Anthias:
 
 These components and their dependencies are mostly installed and handled with Ansible and Docker.
 
+* The **NGINX** component (`anthias-nginx`) forwards requests to the backend and serves static files.
 * The **viewer** (`anthias-viewer`) is what drives the screen (e.g., shows web page, image or video).
 * The **web app** component (`anthias-server`) &mdash; which consists of the front-end and back-end code &ndash; is what the user interacts with via browser.
 * The **Celery** (`anthias-celery`) component is for aynschronouslt queueing and executing tasks outside the HTTP request-response cycle (e.g., doing assets cleanup).
