@@ -1,37 +1,37 @@
-direction: right
+direction: down
 
 classes: {
   containers: {
     shape: rectangle
-    style.stroke: purple
-    style.fill: white
-    style.font-color: purple
   }
 }
 
-user: 'User' {
+user: "User" {
   shape: person
-  style.stroke: purple
-  style.fill: purple
-  style.font-color: purple
 }
 
-database: 'SQLite3' {
+database: "SQLite3" {
   shape: cylinder
-  style.stroke: purple
-  style.font-color: purple
-  style.fill: white
 }
 
-display: 'Display (Monitor or TV)' {
+a {
+  label: null
+  style.fill: transparent
+  style.stroke: transparent
+}
+
+b {
+  label: null
+  style.fill: transparent
+  style.stroke: transparent
+}
+
+b.display: "Display (Monitor or TV)" {
   style.3d: true
-  style.stroke: green
-  style.font-color: green
-  style.fill: white
 }
 
 anthias-nginx.class: containers
-anthias-viewer.class: containers
+b.anthias-viewer.class: containers
 a.anthias-server.class: containers
 a.anthias-websocket.class: containers
 a.anthias-celery.class: containers
@@ -41,21 +41,15 @@ user -> anthias-nginx
 anthias-nginx <-> a.anthias-server
 anthias-nginx -> a.anthias-websocket
 
-a {
-  label: null
-  style.fill: transparent
-  style.stroke: transparent
+a.anthias-server <-> a.anthias-celery
+a.anthias-websocket <-> a.anthias-server
+a.anthias-celery -> a.redis: "in-memory data"
+a.redis <-> a.anthias-server
 
-  anthias-server <-> anthias-celery
-  # anthias-server <-> anthias-websocket
-  anthias-websocket <-> anthias-server
-  anthias-celery -> redis
-  anthias-server <-> redis
-}
+b.anthias-viewer <-> database
 
-anthias-viewer <-> database
-a.anthias-server <-> anthias-viewer
+a.anthias-server <-> b.anthias-viewer
 a.anthias-server <-> database
 a.anthias-celery <-> database
 
-display -- anthias-viewer
+b.anthias-viewer -> b.display: "current asset"
