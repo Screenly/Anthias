@@ -16,17 +16,6 @@ These components and their dependencies are mostly installed and handled with An
 * **Redis** (`redis`) is used as a database, cache and message broker.
 * The **database** component uses **SQLite** for storing the assets information.
 
-There are currently three major branches in the repository:
-
-| Version       | Branch      | Comment    |
-| :------------ | :---------- | :--------- |
-|  Developer    | [`master`](https://github.com/Screenly/Anthias) | This is where we test things and apply latest fixes. |
-|  Production   | [`production`](https://github.com/Screenly/Anthias/tree/production) | This is the branch disk images are built from and should be properly tested |
-|  Experimental | [`experimental`](https://github.com/Screenly/Anthias/tree/experimental) | This is the branch for experimenting, such as using a new web browser |
-
-It's important to note that the `production` and `experimental` branches are
-not frequently updated at the moment.
-
 ## Dockerized development environment
 
 To simplify development of the server module of Anthias, we've created a Docker container. This is intended to run on your local machine with the Anthias repository mounted as a volume.
