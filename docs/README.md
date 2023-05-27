@@ -70,7 +70,7 @@ $ bash <(curl -sL https://install-anthias.srly.io)
 Alternatively, you can also run the following command:
 
 ```bash
-$ /home/${USER}/screenly/bin/run_upgrade.sh
+$ $HOME/screenly/bin/run_upgrade.sh
 ```
 
 ## Accessing the REST API
