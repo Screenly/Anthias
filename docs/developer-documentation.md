@@ -8,7 +8,7 @@ Here is a high-level overview of the different components that make Anthias:
 
 These components and their dependencies are mostly installed and handled with Ansible and Docker.
 
-* The **NGINX** component (`anthias-nginx`) forwards requests to the backend and serves static files.
+* The **NGINX** component (`anthias-nginx`) forwards requests to the backend and serves static files. It also acts as a reverse proxy.
 * The **viewer** (`anthias-viewer`) is what drives the screen (e.g., shows web page, image or video).
 * The **web app** component (`anthias-server`) &mdash; which consists of the front-end and back-end code &ndash; is what the user interacts with via browser.
 * The **Celery** (`anthias-celery`) component is for aynschronouslt queueing and executing tasks outside the HTTP request-response cycle (e.g., doing assets cleanup).
@@ -57,7 +57,8 @@ inside the `docker/` directory, run the following:
 $ DOCKERFILES_ONLY=1 ./bin_build_containers.sh
 ```
 
-## Running the unit tests
+## Testing
+### Running the unit tests
 
 Build and start the containers.
 
@@ -82,6 +83,10 @@ $ docker-compose \
     -f docker-compose.test.yml \
     exec -T anthias-test nosetests -v -a '!fixme'
 ```
+
+### The QA checklist
+
+We've also provided a [checklist](/docs/qa-checklist.md) that can serve as a guide for testing Anthias manually.
 
 ## Managing releases
 ### Creating a new release
@@ -166,3 +171,7 @@ The Anthias WebView is a custom-built web browser based on the [Qt](https://www.
 The browser is assembled with a Dockerfile and built by a `webview/build_qt#.sh` script.
 
 For further info on these files and more, visit the following link: [https://github.com/Screenly/Anthias/tree/master/webview](https://github.com/Screenly/Anthias/tree/master/webview)
+
+## Tweaking HTTP basic auth settings
+
+* Check out [this page](/docs/http-basic-authentication.md) for more information on how to customize your basic authentication credentials.

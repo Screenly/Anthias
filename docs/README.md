@@ -18,7 +18,7 @@ use the `docker-compose logs` command.
 For instance, the command below will show you the logs from the server container:
 
 ```bash
-docker logs -f screenly-anthias-server-1
+$ docker logs -f screenly-anthias-server-1
 ```
 
 If you'd want to see the logs from other containers, simply replace the name
@@ -87,6 +87,6 @@ The SQLite Database can be found here: `~/.screenly/screenly.db`
 
 Its a SQLite Database and can be modified with the `sqlite3` CLI. The schema is relatively straightforward if you're already familiar. The columns of most interest to you will be `name` and `is_enabled`. In addition, `start_date` is useful if you want to use this in a disconnected manner.
 
-# Wi-Fi Setup
+## Wi-Fi Setup
 
 - Read the [Wi-Fi Setup](wifi-setup.md) page for more details on how to set up Wi-Fi on the Raspberry Pi.
