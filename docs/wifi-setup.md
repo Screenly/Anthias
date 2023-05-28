@@ -110,6 +110,10 @@ Here's a sample output:
 # ...
 ```
 
+#### Disconnecting from the Wi-Fi
+
+Just run `sudo nmcli connection delete $WIFI_SSID`.
+
 Some part of the output are hidden for security reasons.
 
 ### Using `raspi-config`
