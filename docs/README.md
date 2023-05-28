@@ -24,7 +24,7 @@ $ docker logs -f screenly-anthias-server-1
 If you'd want to see the logs from other containers, simply replace the name
 of the container in the command above. Here's a table of the available containers:
 
-<!-- create a two column table -->
+<!-- create a two-column table -->
 | Container Name | Description |
 | -------------- | ----------- |
 | `screenly-anthias-nginx-1` | NGINX service |
@@ -34,7 +34,6 @@ of the container in the command above. Here's a table of the available container
 | `screenly-anthias-server-1` | web UI (front-end and back-end) |
 | `screenly-anthias-redis-1` | Redis (database, cache, message broker) |
 | `screenly-anthias-wifi-connect-1` | Wi-Fi connectivity |
-
 
 ### Using `docker-compose logs`
 
@@ -79,13 +78,11 @@ To get started, open your browser and go to `http://<ip-address>:8080/api/docs/`
 
 ## Accessing the SQLite Database
 
-**This section is for power users only. **Do not** mess around with the database unless you know what you are doing**.
+This section is for power users only. **Do not** mess around with the database unless you know what you are doing.
 
 For most users, it's recommended that you [use the API instead](#accessing-the-rest-api).
 
-The SQLite Database can be found here: `~/.screenly/screenly.db`
-
-Its a SQLite Database and can be modified with the `sqlite3` CLI. The schema is relatively straightforward if you're already familiar. The columns of most interest to you will be `name` and `is_enabled`. In addition, `start_date` is useful if you want to use this in a disconnected manner.
+The SQLite Database can be found here &mdash; `~/.screenly/screenly.db`. It can be modified with the `sqlite3` CLI. The schema is relatively straightforward if you're already familiar. The columns of most interest to you will be `name` and `is_enabled`. In addition, `start_date` is useful if you want to use this in a disconnected manner.
 
 ## Wi-Fi Setup
 
