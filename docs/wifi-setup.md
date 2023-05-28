@@ -20,6 +20,12 @@ on your terminal.
 
 ### Using `raspi-config`
 
+If you've opt to let Anthias manage your network during the installation (which
+means that [`NetworkManager`](https://wiki.debian.org/NetworkManager) will be
+installed), we wouldn't recommend you to use this method. We suggest that you
+tweak the Wi-Fi settings using the `nmcli` command. If you haven't, you can
+follow the steps in this section.
+
 Run the following command in your console:
 
 ```bash
@@ -56,7 +62,7 @@ To get started, do the following steps:
     the display will now show the splash page with an addition IP address.
 11. After a minute, the display will show the assets (if there's any).
 
-#### Limitations and Known Issues
+#### Limitations and known issues
 
 - In balenaOS, during boot, if the device is not connected to the Internet, the `wifi-connect` will
   start. However, the screen will not show the Wi-Fi setup page. Instead, the screen will show just
