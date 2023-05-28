@@ -18,6 +18,100 @@ There are several ways to connect your Anthias instance to Wi-Fi. You can either
 configure the Wi-Fi settings via the captive portal or you can run the `raspi-config`
 on your terminal.
 
+The `raspi-config` and `nmcli` commands will only work on devices running a
+Raspberry Pi OS Lite as those running balenaOS gives users less control over
+some configs.
+
+### Using `nmcli`
+
+If you said yes when prompted for network management during the installation
+process, its recommended to use the `NetworkManager` (via the `nmcli` command).
+For more details, you can read [this article](https://www.makeuseof.com/connect-to-wifi-with-nmcli/)
+that shows how to connect to Wi-Fi.
+
+#### Enable the Wi-Fi device
+
+Run the following command to check if the Wi-Fi device is enabled.
+
+```shell
+$ nmcli dev status
+```
+
+The console output (truncated to save space) should look something like this:
+
+```
+DEVICE           TYPE      STATE                   CONNECTION
+eth0             ethernet  connected               Wired connection 1
+br-7569eb45ac38  bridge    connected (externally)  br-7569eb45ac38
+docker0          bridge    connected (externally)  docker0
+wlan0            wifi      disconnected            --
+p2p-dev-wlan0    wifi-p2p  disconnected            --
+```
+
+Look for the row with `wlan0` for the `DEVICE` name. Its `STATE` should be
+`disconnected`. If it's set to `unavailable`, then it's not enabled.
+
+You can also run `nmcli radio wifi` to check the status of the Wi-fi interface.
+The output could either be `enabled` or `disabled`. If it shows that the
+interface is `disabled`, run `nmcli radio wifi on`.
+
+### Identify the Wi-Fi access point
+
+If you didn't know the name of your network, run `nmcli dev wifi list`. You'll
+get an output the looks like this:
+
+```
+IN-USE  BSSID              SSID              MODE   CHAN  RATE        SIGNAL  BARS  SECURITY
+        80:75:C3:DF:74:E4  Network27861      Infra  1     260 Mbit/s  100     ▂▄▆█  WPA2 WPA3
+# ...
+# The output is truncated to save space.
+```
+
+Take good note of the `SSID` (in this example, it's `Network27861`), as you'll
+use it in the next step.
+
+#### Connect to Wi-Fi with `nmcli`
+
+You can either do any of the following:
+
+```shell
+$ sudo nmcli dev wifi connect $WIFI_SSID password $WIFI_PASSWORD
+```
+
+```shell
+$ sudo nmcli --ask dev wifi connect $WIFI_SSID
+```
+
+We recommend that you use the second one. You don't want someone to know your
+password just by looking at the command `history`. The output should look like
+the following &mdash; `Device 'wlan0' successfully activated with
+<hex>`.
+
+To see if the Wi-Fi connection is successful, try running a `ping` commad:
+
+```shell
+$ ping google.com # You can also use `1.1.1.1`.
+```
+
+You can also check to see if the `wlan0` interface is assigned an IPv4 address.
+If so, then you're all set.
+
+```shell
+ip addr show wlan0
+```
+
+Here's a sample output:
+
+```
+3: wlan0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether [MAC-ADDRESS] brd ff:ff:ff:ff:ff:ff
+    inet 10.0.0.25/24 brd 10.0.0.255 scope global dynamic noprefixroute wlan0
+       valid_lft [VALID_LFT_HEX] preferred_lft [PREFERRED_LFT_HEX]
+# ...
+```
+
+Some part of the output are hidden for security reasons.
+
 ### Using `raspi-config`
 
 If you've opt to let Anthias manage your network during the installation (which
