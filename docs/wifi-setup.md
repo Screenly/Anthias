@@ -1,35 +1,21 @@
-# Wi-Fi Setup
-
-Anthias uses balena's [WiFi connect][1] to setup Wi-Fi connectivity in Raspberry Pi devices running
-either [Raspberry Pi OS Lite][2] or [balenaOS][3].
-
-`wifi-connect` will start if there's no Internet connectivity. For instance, if you unplug the Ethernet
-cable from your Pi, a page showing the following information:
-
-- SSID (the Wi-Fi device name), which is "Anthias WiFi Connect" by default
-- Password, which is currently not set
-- Address, which is `192.168.42.1:8000` by default
-
-Customizing the SSID, password, and IP address is not yet supported.
-
-## Connecting to Wi-Fi
+# Connecting to Wi-Fi
 
 There are several ways to connect your Anthias instance to Wi-Fi. You can either
-configure the Wi-Fi settings via the captive portal or you can run the `raspi-config`
-on your terminal.
+configure the Wi-Fi settings via the captive portal or you can use
+`NetworkManager`'s `nmcli` or `nmtui` commands.
 
-The `raspi-config` and `nmcli` commands will only work on devices running a
+The `nmcli` and `nmtui` commands will only work on devices running a
 Raspberry Pi OS Lite as those running balenaOS gives users less control over
 some configs.
 
-### Using `nmcli`
+## Using `nmcli`
 
 If you said yes when prompted for network management during the installation
 process, its recommended to use the `NetworkManager` (via the `nmcli` command).
 For more details, you can read [this article](https://www.makeuseof.com/connect-to-wifi-with-nmcli/)
 that shows how to connect to Wi-Fi.
 
-#### Enable the Wi-Fi device
+### Enable the Wi-Fi device
 
 Run the following command to check if the Wi-Fi device is enabled.
 
@@ -70,7 +56,7 @@ IN-USE  BSSID              SSID              MODE   CHAN  RATE        SIGNAL  BA
 Take good note of the `SSID` (in this example, it's `Network27861`), as you'll
 use it in the next step.
 
-#### Connect to Wi-Fi with `nmcli`
+### Connect to Wi-Fi with `nmcli`
 
 You can either do any of the following:
 
@@ -110,34 +96,69 @@ Here's a sample output:
 # ...
 ```
 
-#### Disconnecting from the Wi-Fi
+### Disconnecting from the Wi-Fi
 
 Just run `sudo nmcli connection delete $WIFI_SSID`.
 
 Some part of the output are hidden for security reasons.
 
-### Using `raspi-config`
+## Using `nmtui`
 
-If you've opt to let Anthias manage your network during the installation (which
-means that [`NetworkManager`](https://wiki.debian.org/NetworkManager) will be
-installed), we wouldn't recommend you to use this method. We suggest that you
-tweak the Wi-Fi settings using the `nmcli` command. If you haven't, you can
-follow the steps in this section.
+If [using `nmcli`](#using-nmcli) might be a bit overwhelming for you, you can
+use `nmtui` instead. Also a part of the `NetworkManager` package, it's like
+`nmcli` but it uses a TUI instead of a CLI.
 
-Run the following command in your console:
+### Start NetworkManager TUI
 
-```bash
-$ sudo raspi-config
+Run `sudo nmtui`. You'll be presented with a TUI that looks like this:
+
+![nmtui-01](/docs/images/nmtui-01.png)
+
+Select `Activate a connection` by making use of the arrow keys and press `Enter`.
+
+### Select a Wi-Fi network to connect to
+
+Select a Wi-Fi network that you want to connect to. Use the arrow keys to select
+a network and press `Enter`. A part of the image was hidden for security reasons.
+
+![nmtui-02](/docs/images/nmtui-02.png)
+
+You will then be prompted to type in the password for the Wi-Fi network. Press
+`Enter` to continue.
+
+![nmtui-03](/docs/images/nmtui-03.png)
+
+The TUI will then bring you back to the list of networks. You'll notice that the
+selected network (highlighted in red) now has a `*` beside it. Press `Enter` to
+continue.
+
+![nmtui-04](/docs/images/nmtui-04.png)
+
+Use the arrow keys to select `Back` and press `Enter`. You'll be brought back to
+the main menu. Select `Quit` and press `Enter`.
+
+### Check if the Wi-Fi connection is successful
+
+```shell
+$ ip addr show wlan0
 ```
 
-A TUI will appear. Follow the steps below:
-* Select "System Options" and then select "Wireless LAN".
-* You'll be prompted to select the country where you're currently located.
-* After that, you'll be asked to enter the SSID and password of the Wi-Fi network that you'd like to connect. If you've enter the correct credentials, you'll be redirected to the TUI main menu.
-* Use your arrow keys to navigate to "Finish" and then press Enter.
-* To confirm if the device is connected to the Internet via Wi-Fi, run `ip addr show wlan0`. You should be able to see the IPv4 address of the device.
+You should see an output similar to the one in the
+[previous section](#connect-to-wi-fi-with-nmcli).
 
-### Using the captive portal
+## Using the captive portal
+
+Anthias uses balena's [WiFi connect][1] to setup Wi-Fi connectivity in Raspberry Pi devices running
+either [Raspberry Pi OS Lite][2] or [balenaOS][3].
+
+`wifi-connect` will start if there's no Internet connectivity. For instance, if you unplug the Ethernet
+cable from your Pi, a page showing the following information:
+
+- SSID (the Wi-Fi device name), which is "Anthias WiFi Connect" by default
+- Password, which is currently not set
+- Address, which is `192.168.42.1:8000` by default
+
+Customizing the SSID, password, and IP address is not yet supported.
 
 At startup, the device will show the Wi-Fi setup page on a connected display if
 the device is not connected to the Internet. *NOTE:* The are times when this feature
@@ -160,7 +181,7 @@ To get started, do the following steps:
     the display will now show the splash page with an addition IP address.
 11. After a minute, the display will show the assets (if there's any).
 
-#### Limitations and known issues
+### Limitations and known issues
 
 - In balenaOS, during boot, if the device is not connected to the Internet, the `wifi-connect` will
   start. However, the screen will not show the Wi-Fi setup page. Instead, the screen will show just
@@ -173,7 +194,7 @@ To get started, do the following steps:
   replaced by the Wi-Fi setup page. It would be better if the Wi-Fi setup page is shown immediately
   after boot.
 
-#### balenaOS vs Raspberry Pi OS Lite
+### balenaOS vs Raspberry Pi OS Lite
 
 Wi-Fi setup behaves differently in devices running balenaOS and Raspberry Pi OS Lite.
 
