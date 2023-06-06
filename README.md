@@ -26,7 +26,12 @@ If you'd like more control over your digital signage instance, try installing it
 
 ## Installing on Raspberry Pi OS Lite
 
-The tl;dr for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) Bullseye Lite is:
+For Raspberry Pi 3 and 4, we recommend installing the 64-bit version of Raspberry
+Pi OS Lite. For Raspberry Pi Zero, 1, and 2, we recommend installing the 32-bit
+version of Raspberry Pi OS Lite. The easiest way to install Raspberry Pi OS Lite
+is to use [Raspberry Pi Imager](https://www.raspberrypi.com/software/).
+
+The TL;DR for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) Bullseye Lite is:
 
 ```
 $ bash <(curl -sL https://install-anthias.srly.io)
