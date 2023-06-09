@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 from os import getenv, path, remove, listdir, system
 import yaml
 import unittest
@@ -31,7 +32,7 @@ class TestCleanup(CeleryTasksTestCase):
 
     def test_cleanup(self):
         cleanup.apply()
-        tmp_files = filter(lambda x: x.endswith('.tmp'), listdir(self.assets_path))
+        tmp_files = [x for x in listdir(self.assets_path) if x.endswith('.tmp')]
         self.assertEqual(len(tmp_files), 0)
 
     def tearDown(self):

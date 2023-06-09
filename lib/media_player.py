@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+from builtins import object
 from platform import machine
 
 import sh
@@ -9,7 +11,7 @@ from settings import settings
 VIDEO_TIMEOUT = 20  # secs
 
 
-class MediaPlayer:
+class MediaPlayer(object):
     def __init__(self):
         pass
 

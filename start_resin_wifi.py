@@ -1,4 +1,7 @@
 #!/usr/bin/python
+from __future__ import unicode_literals
+from builtins import filter
+from builtins import str
 import time
 
 import pydbus
@@ -38,15 +41,9 @@ if __name__ == "__main__":
     if wireless_connections is None:
         exit()
 
-    wireless_connections = filter(
-        lambda c: not pattern_exclude.search(str(c['Id'])),
-        filter(
-            lambda c: pattern_include.search(str(c['Devices'])),
-            wireless_connections
-        )
-    )
+    wireless_connections = [c for c in [c for c in wireless_connections if pattern_include.search(str(c['Devices']))] if not pattern_exclude.search(str(c['Id']))]
 
-    if not gateways().get('default') and filter(pattern_include.match, interfaces()):
+    if not gateways().get('default') and list(filter(pattern_include.match, interfaces())):
         if len(wireless_connections) == 0:
             ssid = 'ScreenlyOSE-{}'.format(generate_perfect_paper_password(pw_length=4, has_symbols=False))
             ssid_password = generate_perfect_paper_password(pw_length=8, has_symbols=False)
@@ -56,5 +53,5 @@ if __name__ == "__main__":
     else:
         exit()
 
-    while not gateways().get('default') and filter(pattern_include.match, interfaces()):
+    while not gateways().get('default') and list(filter(pattern_include.match, interfaces())):
         time.sleep(.5)

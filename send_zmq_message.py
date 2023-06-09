@@ -1,9 +1,11 @@
+from __future__ import unicode_literals
 import json
 import zmq
 
 from argparse import ArgumentParser
 from netifaces import interfaces, ifaddresses, AF_INET
 from os import getenv
+import redis
 from time import sleep
 
 
@@ -14,7 +16,7 @@ def get_portal_url():
     if port is None:
         return gateway
     else:
-        return '{}:{}'.format(gateway, port)
+        return f'{gateway}:{port}'
 
 def get_message(action):
     if action == 'setup_wifi':
@@ -23,10 +25,10 @@ def get_message(action):
             'ssid_pswd': getenv('PORTAL_PASSPHRASE', None),
             'address': get_portal_url(),
         }
-        return '{}&{}'.format(action, json.dumps(data))
+        return f'{action}&{json.dumps(data)}'
     elif action == 'show_splash':
         ip_addresses = get_ip_addresses()
-        return '{}&{}'.format(action, json.dumps(ip_addresses))
+        return f'{action}&{json.dumps(ip_addresses)}'
 
 
 def get_ip_addresses():
@@ -39,6 +41,14 @@ def get_ip_addresses():
     ]
 
 
+def is_viewer_subscriber_ready(r):
+    is_ready = r.get('viewer-subscriber-ready')
+    if is_ready is None:
+        return False
+    else:
+        return bool(int(is_ready))
+
+
 def main():
     argument_parser = ArgumentParser()
     argument_parser.add_argument(
@@ -48,6 +58,7 @@ def main():
         help='Specify the ZeroMQ message to be sent.',
     )
     args = argument_parser.parse_args()
+    r = redis.Redis(host='127.0.0.1', decode_responses=True, port=6379, db=0)
 
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
@@ -55,7 +66,12 @@ def main():
     sleep(1)
 
     message = get_message(args.action)
-    socket.send_string('viewer {}'.format(message))
+
+    while not is_viewer_subscriber_ready(r):
+        sleep(1)
+        continue
+
+    socket.send_string(f'viewer {message}')
 
 
 if __name__ == '__main__':

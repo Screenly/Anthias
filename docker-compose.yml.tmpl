@@ -1,18 +1,19 @@
+# vim: ft=yaml
+
 version: "2"
 services:
-  srly-ose-wifi-connect:
-    image: screenly/srly-ose-wifi-connect
+  anthias-wifi-connect:
+    image: screenly/anthias-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
-      args:
-        TARGET_PLATFORM: ${TARGET_PLATFORM:-linux/arm/v7}
       context: .
       dockerfile: docker/Dockerfile.wifi-connect
+    depends_on:
+      - anthias-viewer
     environment:
       PORTAL_LISTENING_PORT: 8000
       CHECK_CONN_FREQ: 10
       PORTAL_SSID: 'Anthias WiFi Connect'
       DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=/run/dbus/system_bus_socket'
-    restart: "on-failure"
     network_mode: host
     privileged: true
     volumes:
@@ -20,12 +21,13 @@ services:
         source: /run/dbus/system_bus_socket
         target: /run/dbus/system_bus_socket
 
-  srly-ose-server:
-    image: screenly/srly-ose-server
+  anthias-server:
+    image: screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.server
     environment:
+      - MY_IP=${MY_IP}
       - HOME=/data
       - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -35,51 +37,65 @@ services:
     restart: always
     volumes:
       - resin-data:/data
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
+      - /home/${USER}/screenly/static:/data/screenly/static
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
     labels:
       io.balena.features.supervisor-api: '1'
 
-  srly-ose-viewer:
-    image: screenly/srly-ose-viewer
+  anthias-viewer:
+    image: screenly/anthias-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
+    mem_limit: ${VIEWER_MEMORY_LIMIT_KB}k
     depends_on:
-      - srly-ose-server
+      - anthias-server
     environment:
       - HOME=/data
       - PORT=80
       - NOREFRESH=1
-      - LISTEN=srly-ose-nginx
+      - LISTEN=anthias-nginx
     extra_hosts:
       - "host.docker.internal:host-gateway"
     privileged: true
     restart: always
     volumes:
       - resin-data:/data
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
     labels:
       io.balena.features.supervisor-api: '1'
 
-  srly-ose-websocket:
-    image: screenly/srly-ose-websocket
+  anthias-websocket:
+    image: screenly/anthias-websocket:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket
     depends_on:
-      - srly-ose-server
+      - anthias-server
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
     restart: always
     volumes:
       - resin-data:/data
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
 
-  srly-ose-celery:
-    image: screenly/srly-ose-celery
+  anthias-celery:
+    image: screenly/anthias-celery:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.celery
     depends_on:
-      - srly-ose-server
+      - anthias-server
       - redis
     environment:
       - HOME=/data
@@ -90,11 +106,15 @@ services:
     restart: always
     volumes:
       - resin-data:/data
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
     labels:
       io.balena.features.supervisor-api: '1'
 
   redis:
-    image: screenly/srly-ose-redis
+    image: screenly/anthias-redis:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.redis
@@ -104,8 +124,8 @@ services:
     volumes:
       - redis-data:/var/lib/redis
 
-  srly-ose-nginx:
-    image: screenly/srly-ose-nginx
+  anthias-nginx:
+    image: screenly/anthias-nginx:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.nginx
@@ -114,12 +134,18 @@ services:
     environment:
       - HOME=/data
     depends_on:
-      - srly-ose-server
-      - srly-ose-websocket
+      - anthias-server
+      - anthias-websocket
     restart: always
     volumes:
       - resin-data:/data:ro
+      - /home/${USER}/.screenly:/data/.screenly:ro
+      - /home/${USER}/screenly_assets:/data/screenly_assets:ro
+      - /home/${USER}/screenly/static:/data/screenly/static:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
 
 volumes:
   resin-data:
   redis-data:
+  screenly-data:

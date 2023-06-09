@@ -45,7 +45,7 @@ if [ "$WEB_UPGRADE" = false ]; then
   tput bold
 
   cat << EOF
-  
+
        d8888            888     888
       d88888            888     888       888
      d88P888            888     888
@@ -192,7 +192,7 @@ cd /home/${USER}/screenly/ansible
 sudo -E -u ${USER} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
 
 # Pull down and install containers
-/home/${USER}/screenly/bin/upgrade_containers.sh
+sudo -u ${USER} /home/${USER}/screenly/bin/upgrade_containers.sh
 
 sudo apt-get autoclean
 sudo apt-get clean
@@ -253,7 +253,15 @@ fi
 echo "Installation completed."
 
 if [ "$WEB_UPGRADE" = false ]; then
-  read -p "You need to reboot the system for the installation to complete. Would you like to reboot now? (y/N)" -n 1 -r -s REBOOT && echo
+  POST_INSTALL_MESSAGE=""
+
+  if [ -f /var/run/reboot-required ]; then
+    POST_INSTALL_MESSAGE="Please reboot and run /home/$USER/screenly/bin/upgrade_containers.sh to complete the installation"
+  else
+    POST_INSTALL_MESSAGE="You need to reboot the system for the installation to complete"
+  fi
+
+  read -p "${POST_INSTALL_MESSAGE}. Would you like to reboot now? (y/N)" -n 1 -r -s REBOOT && echo
   if [ "$REBOOT" == 'y' ]; then
     sudo reboot
   fi

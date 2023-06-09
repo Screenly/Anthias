@@ -1,63 +1,48 @@
 # QA Checklist
 
-(This is a partial list, as we lost the official list after Forgett closed down.)
+Running unit tests is a good way to make sure that the code is working as expected. However, it's also important to do manual testing as some bugs may not be caught by unit tests. This document contains a list of things that you can do to test the application manually.
 
-1. Run device with an enabled ethernet and wait for the splash page.
-2. Make sure that the splash page looks correct.
-3. Use the provided link and make sure the link forwards to web UI.
-4. Run device w/out ethernet and wait for the hotspot page.
-5. Make sure that the hotspot page looks correct.
-6. Connect to exists Screenly access point and wait for the splash page.
-7. See step 2 and step 3
+The list is not exhaustive, but you can use it as your guide when testing Anthias.
 
+## General
 
-1. Run device with an enabled ethernet and wait for the splash page.
-2. Make sure that the splash page looks correct.
-3. Use the provided link and make sure the link forwards to web UI.
-4. Run device w/out ethernet and wait for the hotspot page.
-5. Make sure that the hotspot page looks correct.
-6. Connect to exists Screenly access point and wait for the splash page.
-7. See step 2 and step 3
-
+1. Make sure that device is connected to the internet (e.g., via Ethernet).
+2. Turn on the device and wait for the splash page to appear.
+3. Make sure that the splash page is being displayed properly.
+4. Use the provided IP address and make sure that entering it in a browser will redirect you to the web UI home page (the assets page).
 
 ## Content page
 
-8. Add assets(image, video, webpage, stream) and make them as active.
-9. Make sure that these assets are shown on a screen.
-10. Disable the assets and make sure that the screen in standby mode.
-11. Change a duration for any asset and make sure that the screen displays it during the correct time.
-12. Change a start date and an end date and make sure that the asset displays in correct time.
-13. Turn on some assets and change their order(with drag and drop). Make sure that the assets display with the correct order.
-14. Try to change a name of any asset.
-15. Turn on some assets. Click on Previous asset and on Next asset. Make sure that the screen changes assets on.
-16. Click on a download button near any asset. The asset should be downloaded.
-
+1. Add assets (image, video, or webpage) and make them active by toggling the switch.
+2. Make sure that these assets are shown on the screen.
+3. Disable the assets and make sure that the screen in standby mode, which means that it displays the Anthias standby page.
+4. Change a duration for any asset and make sure that it is being displayed for the specified duration.
+5. Change a the start and end dates and make sure that the asset is being displayed only during the specified period.
+6. Turn on some assets and change their order (by dragging and dropping them). Make sure that the assets are being displayed in the correct order.
+7. Try to change a name of any asset.
+8. Turn on some assets. Click on Previous asset and on Next asset. Make sure that the screen displays the asset that comes before or after the current asset.
+9. Click on the download button near any asset. The asset should be downloaded into your computer.
 
 ## Settings page
 
-17. Setup a player name
-18. Change a default value for the Default duration input and upload any asset. Make sure that the duration value is correct.
-19. Change a default value for the Default streaming duration input and upload any stream. Make sure that the duration value is correct.
-20. Turn on the Show splash screen and reboot device. Make sure that the splash screen is skipped.
-21. Turn on the Default assets and make sure that the assets are added to content. Turn off the Default assets and make sure that the assets are deleted from content.
-22. Turn on the Shuffle playlist. Activate some assets and make sure that the shuffle is working.
-23. Turn on the Use 24-hour clock. Go to the content page and make sure that a time field uses correct format.
-24. Activate any video file with sounds and choose HDMI for the Audion output. Make sure that the sound works.
-25. Activate any video file with sounds and choose 3.5mm jack for the Audion output. Make sure that the sound works.
-26. Choose any format for the Date format. Go to the content page and make sure that a date field uses correct format.
-27. Turn on Basic auth. Reload page and make sure that works.
-28. Click on the Get backup. Delete all assets. Click on Upload and Recover and make sure that the assets are restored.
-29. Generate file for the USB assets. Put it and some assets on any usb stick. Turn on the stick to device. Make sure that the assets are displays on the content page. Turn on some assets and make sure that the assets display correct. Turn off the USB stick. Make sure that the assets are deleted from the content page and make sure that the screen doesn't display them.
-30. Open the Upgrade Screenly and choose the next params:
-*  Production
-* Turn on a manage your network
-* Turn off a full system upgrade
-
-and then start the upgrade. Make sure that passed w/out errors.
-
-31. Try to reboot device and Shutdown device from the settings page.
-32. Go to the System Info page and make sure that all information are correct.
-33. Make sure that all links in the footer is correct.
-34. Go to the settings page. Click on the Reset wifi and reboot your device. Make sure that the hotspot page displays.
-
-35. Connect to the device by ssh. Run `./bin/enable_ssl.sh` script. Make sure the site url uses the ssl.
+1. Go to the Settings page.
+2. If desired, change the device's **Player name**.
+3. Change a default value for the **Default duration** and upload any asset. Make sure that the duration value is correct.
+4. Change a default value for the **Default streaming duration** and upload any stream. Make sure that the asset is being displayed for the specified duration.
+5. Enable **Show splash screen** and reboot the device. Make sure that the splash screen is not being displayed upon boot.
+6. Enable **Default assets** and make sure that the default assets are added to the list of active assets. Also make sure that the assets are being displayed on the screen.
+7. Disable **Default assets** and make sure that the assets are deleted from the list of active assets. Also make sure that the assets are not being displayed on the screen.
+8. Enable **Shuffle playlist**. Activate some assets and make sure that the assets are being displayed in random order.
+9. Enable **Use 24-hour clock**. Go to the assets page and make sure that the time field uses correct format.
+10. Enable any video asset with sounds and choose **HDMI** for the **Audio output**. Make sure that the sound works.
+11. Enable any video file with sounds and choose **3.5mm** jack for the **Audio output**. Make sure that the sound works.
+12. Choose any format for the **Date format**. Go to the assets page and make sure that the date field uses the correct format.
+13. Enable authentication by selecting **Basic** from the **Authentication** dropdown. Reload page and make sure that you'll now be prompted to enter a username and a password.
+14. Click the **Get Backup** button. Delete all assets. Click on **Upload and Recover** and make sure that the assets are restored.
+15. Generate file for the USB assets. Put it and some assets on any USB stick. Insert the stick into the device. Enable some assets and make sure that the assets are being displayed correctly.
+16. Remove the USB stick from the device. Make sure that the assets are deleted from the content page and make sure that the screen doesn't display them.
+17. Try to reboot or shutdown the device by clickin on the **Reboot** or **Shutdown** buttons, respectively. Make sure that the device does the corresponding action.
+18. Go to the **System Info** page and make sure that all information are correct.
+19. Make sure that all the footer links are being displayed correctly.
+20. Go to the **Settings** page. Click on the **Reset Wi-Fi** and reboot your device. Make sure that the hotspot page displays.
+35. Connect to the device by ssh. Run `./bin/enable_ssl.sh` script. Make sure the site URL uses SSL.

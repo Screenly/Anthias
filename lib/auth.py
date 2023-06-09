@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+from builtins import str
+from builtins import object
 from abc import ABCMeta, abstractmethod, abstractproperty
 from functools import wraps
 import hashlib
@@ -7,6 +10,7 @@ import os.path
 import json
 
 from flask import request, Response
+from future.utils import with_metaclass
 
 LINUX_USER = os.getenv('USER', 'pi')
 WOTT_CREDENTIALS_PATH = '/opt/wott/credentials'
@@ -14,9 +18,7 @@ WOTT_USER_CREDENTIALS_PATH = os.path.join(WOTT_CREDENTIALS_PATH, LINUX_USER)
 WOTT_SCREENLY_CREDENTIAL_NAME = 'screenly'
 
 
-class Auth(object):
-    __metaclass__ = ABCMeta
-
+class Auth(with_metaclass(ABCMeta, object)):
     @abstractmethod
     def authenticate(self):
         """
@@ -107,7 +109,7 @@ class BasicAuth(Auth):
         return self.settings['user'] == username and self.check_password(password)
 
     def check_password(self, password):
-        hashed_password = hashlib.sha256(password).hexdigest()
+        hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
         return self.settings['password'] == hashed_password
 
     @property
@@ -125,8 +127,8 @@ class BasicAuth(Auth):
 
     def update_settings(self, current_pass_correct):
         new_user = request.form.get('user', '')
-        new_pass = request.form.get('password', '')
-        new_pass2 = request.form.get('password2', '')
+        new_pass = request.form.get('password', '').encode('utf-8')
+        new_pass2 = request.form.get('password2', '').encode('utf-8')
         new_pass = hashlib.sha256(new_pass).hexdigest() if new_pass else None
         new_pass2 = hashlib.sha256(new_pass2).hexdigest() if new_pass else None
         # Handle auth components

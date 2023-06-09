@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 
+from __future__ import absolute_import
+from __future__ import unicode_literals
+from builtins import str
 import os
 import sh
 import sqlite3
-import utils
+from . import utils
 import cec
 from lib import raspberry_pi_helper
 from pprint import pprint
@@ -12,7 +15,7 @@ from datetime import datetime
 
 def get_monitor_status():
     try:
-        return sh.tvservice('-s').stdout.strip()
+        return sh.tvservice('-s').stdout.strip().decode('utf-8')
     except Exception:
         return 'Unable to run tvservice.'
 

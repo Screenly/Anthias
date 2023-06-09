@@ -1,57 +1,89 @@
-Welcome to the Screenly OSE
+# Documentation
 
-How to get the Log out of Screenly for reporting issues:
+## How to get logs from Anthias
 
-SSH into the Pi, if you are not sure what this means, and you are Windows:
+SSH into your Raspberry Pi. For instance, if you've set `pi` for the username
+and `raspberrypi` for the hostname, then run:
 
-1. Download [Putty](http://www.chiark.greenend.org.uk/~sgtatham/putty/)
-2. Leave everything else as default, change the Host Name to the name or IP address of your pi then click open
-3. A black screen will pop up with "login as:" written
-4. login as `pi` with the password raspberry (or whatever you changed it to)
+```bash
+$ ssh pi@raspberrypi
+```
 
-On macOS and Linux, there is no need to download any software. You can use `ssh` directly from your Terminal.
+Anthias makes use of Docker for containerization. To get the logs from the
+containers, you can either make use of the `docker logs` command or you can
+use the `docker-compose logs` command.
 
-Navigate to the /tmp folder (try `cd /tmp`)
-Open the log file with your favorite editor (`nano` is easy to use) screenly_viewer.log
+### Using `docker logs`
 
-In Putty, to copy something simply select it, that its it, it's now magically in your clipboard ready for pasting.
+For instance, the command below will show you the logs from the server container:
 
-# Console Access
-To access the console while Screenly OSE is Running Simply hit `CTRL + ALT + F1`
+```bash
+$ docker logs -f screenly-anthias-server-1
+```
 
-# Enabling SSH
+If you'd want to see the logs from other containers, simply replace the name
+of the container in the command above. Here's a table of the available containers:
+
+<!-- create a two-column table -->
+| Container Name | Description |
+| -------------- | ----------- |
+| `screenly-anthias-nginx-1` | NGINX service |
+| `screenly-anthias-viewer-1` | Viewer service |
+| `screenly-anthias-celery-1` | Celery service |
+| `screenly-anthias-websocket-1` | WebSocket service |
+| `screenly-anthias-server-1` | web UI (front-end and back-end) |
+| `screenly-anthias-redis-1` | Redis (database, cache, message broker) |
+| `screenly-anthias-wifi-connect-1` | Wi-Fi connectivity |
+
+### Using `docker-compose logs`
+
+Before running the succeeding commands, make sure that you're in the
+`/home/${USER}/screenly` directory:
+
+```bash
+$ cd /home/${USER}/screenly # e.g., /home/pi/screenly if the user is `pi`
+```
+
+If you'd like to see the logs of a specific container or service via Docker Compose,
+you can run the following:
+
+```bash
+$ docker compose logs -f ${SERVICE_NAME}
+# e.g., docker compose logs -f anthias-server
+```
+
+Check out [this section](/docs/developer-documentation.md#understanding-the-components-that-make-up-anthias) of the Developer documentation page for the list of available services.
+
+## Enabling SSH
 
 See [the official documentation](https://www.raspberrypi.org/documentation/remote-access/ssh/)
 
-# Updating Screenly
-From a Console Run:
+## Updating Anthias
 
-`bash <(curl -sL https://www.screenly.io/install-ose.sh)`
+Run the following command in your console:
 
-# Accessing the SQLite Database
+```bash
+$ bash <(curl -sL https://install-anthias.srly.io)
+```
 
-**This section is for power users only; DO NOT mess around with the database unless you know what you are doing**.
+Alternatively, you can also run the following command:
 
-For most users, it's recommended that you use the API instead.
+```bash
+$ $HOME/screenly/bin/run_upgrade.sh
+```
 
-The SQLite Database can be found here: `~/.screenly/screenly.db`
+## Accessing the REST API
 
-Its a SQLite Database and can be modified with the sqlite3 CLI. The schema is relatively straight forward if you are a developer; the columns of most interest to you will be `name` and `is_enabled`. In addition `start_date` is useful if you want to use this in a disconnected manner.
+To get started, open your browser and go to `http://<ip-address>:8080/api/docs/`. You should see the Swagger API docs for the endpoints.
 
-# Wi-Fi Setup
+## Accessing the SQLite Database
 
-~~On first boot your OSE player will check if there is any active network connection (such as Ethernet with DHCP). If there isn’t one, then the Pi will create a local wifi network and display the SSID and PW on the screen. Using your phone or computer connect to this network and navigate to the URL displayed on the screen. (Ex: Screenly.io/wifi)  This will take you to the network setup page for your OSE player. If you are not connected to the network that the player is generating then you will be redirected here.~~
+This section is for power users only. **Do not** mess around with the database unless you know what you are doing.
 
-1. Disconnect the Ethernet cable from your Raspberry Pi.
-2. Turn on your Raspberry Pi device.
-3. Refresh the web UI page. You shouldn't be able to access the page anymore.
-4. Go to your phone or computer and connect to the network whose SSID is "Anthias WiFi Connect".
-5. The screen will then display the hotspot page which contains the following information &ndash;
-_SSID ("Anthias WiFi Connect")_, _Password (None)_, and _Address ("192.168.42.1:8000")_.
-6. Go to your browser and go to the captive portal using the gateway IP address, plus the
-port `8000` (e.g., http://192.168.42.1:8000).
-7. On the captive portal, select a network to connect to by selecting an item fromt the **_SSID_** drop-down.
-8. Input the Wi-Fi password.
-9. Once you're all set, click **_Connect_**. Your phone/computer will be disconnected from the access point
-(i.e., the Raspberry Pi).
-10. Your device will soon be online. Otherwise, the access point will be back up.
+For most users, it's recommended that you [use the API instead](#accessing-the-rest-api).
+
+The SQLite Database can be found here &mdash; `~/.screenly/screenly.db`. It can be modified with the `sqlite3` CLI. The schema is relatively straightforward if you're already familiar. The columns of most interest to you will be `name` and `is_enabled`. In addition, `start_date` is useful if you want to use this in a disconnected manner.
+
+## Wi-Fi Setup
+
+- Read the [Wi-Fi Setup](wifi-setup.md) page for more details on how to set up Wi-Fi on the Raspberry Pi.

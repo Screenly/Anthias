@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+from builtins import object
 from gevent import pywsgi
 from geventwebsocket import WebSocketError
 from geventwebsocket.handler import WebSocketHandler
@@ -14,7 +16,7 @@ class WebSocketTranslator(object):
     def __call__(self, environ, start_response):
         ws = environ['wsgi.websocket']
         socket = self.context.socket(zmq.SUB)
-        socket.setsockopt(zmq.SUBSCRIBE, "ws_server")
+        socket.setsockopt(zmq.SUBSCRIBE, b'ws_server')
         socket.connect('inproc://queue')
         try:
             while True:
@@ -34,10 +36,10 @@ class ScreenlyServerListener(Thread):
         socket_incoming = self.context.socket(zmq.SUB)
         socket_outgoing = self.context.socket(zmq.PUB)
 
-        socket_incoming.connect('tcp://srly-ose-server:10001')
+        socket_incoming.connect('tcp://anthias-server:10001')
         socket_outgoing.bind('inproc://queue')
 
-        socket_incoming.setsockopt(zmq.SUBSCRIBE, "")
+        socket_incoming.setsockopt(zmq.SUBSCRIBE, b'')
         while True:
             msg = socket_incoming.recv()
             socket_outgoing.send(msg)

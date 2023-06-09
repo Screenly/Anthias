@@ -23,12 +23,30 @@ else
     export DEVICE_TYPE="pi1"
 fi
 
-sudo -E docker compose \
-    -f /home/${USER}/screenly/docker-compose.yml \
-    -f /home/${USER}/screenly/docker-compose.override.yml \
-    pull
+if [[ -n $(docker ps | grep srly-ose) ]]; then
+    # @TODO: Rename later
+    set +e
+    docker container rename srly-ose-wifi-connect anthias-wifi-connect
+    docker container rename srly-ose-server anthias-server
+    docker container rename srly-ose-viewer anthias-viewer
+    docker container rename srly-ose-celery anthias-celery
+    docker container rename srly-ose-websocket anthias-websocket
+    docker container rename srly-ose-nginx anthias-nginx
+    set -e
+fi
+
+cat /home/${USER}/screenly/docker-compose.yml.tmpl \
+    | envsubst \
+    > /home/${USER}/screenly/docker-compose.yml
 
 sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \
-    -f /home/${USER}/screenly/docker-compose.override.yml \
+    pull
+
+if [ -f /var/run/reboot-required ]; then
+    exit 0
+fi
+
+sudo -E docker compose \
+    -f /home/${USER}/screenly/docker-compose.yml \
     up -d

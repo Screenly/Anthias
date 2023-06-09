@@ -48,4 +48,5 @@ docker/Dockerfile.celery
 docker/Dockerfile.redis
 docker/Dockerfile.viewer
 docker/Dockerfile.wifi-connect
-
+docker/Dockerfile.test
+docker-compose.yml

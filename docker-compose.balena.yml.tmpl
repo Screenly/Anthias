@@ -1,21 +1,24 @@
+# vim: ft=yaml
+
 version: "2"
 services:
-  srly-ose-wifi-connect:
-    image: screenly/srly-ose-wifi-connect:${GIT_SHORT_HASH}-${BOARD}
+  anthias-wifi-connect:
+    image: screenly/anthias-wifi-connect:${GIT_SHORT_HASH}-${BOARD}
+    depends_on:
+      - anthias-viewer
     environment:
       PORTAL_LISTENING_PORT: 8000
       CHECK_CONN_FREQ: 10
       PORTAL_SSID: 'Anthias WiFi Connect'
       DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=/host/run/dbus/system_bus_socket'
-    restart: "on-failure"
     network_mode: host
     privileged: true
     labels:
       io.balena.features.dbus: "1"
       io.balena.features.firmware: "1"
 
-  srly-ose-server:
-    image: screenly/srly-ose-server:${GIT_SHORT_HASH}-${BOARD}
+  anthias-server:
+    image: screenly/anthias-server:${GIT_SHORT_HASH}-${BOARD}
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -29,15 +32,15 @@ services:
     labels:
       io.balena.features.supervisor-api: '1'
 
-  srly-ose-viewer:
-    image: screenly/srly-ose-viewer:${GIT_SHORT_HASH}-${BOARD}
+  anthias-viewer:
+    image: screenly/anthias-viewer:${GIT_SHORT_HASH}-${BOARD}
     depends_on:
-      - srly-ose-server
+      - anthias-server
     environment:
       - HOME=/data
       - PORT=80
       - NOREFRESH=1
-      - LISTEN=srly-ose-nginx
+      - LISTEN=anthias-nginx
     extra_hosts:
       - "host.docker.internal:host-gateway"
     privileged: true
@@ -47,10 +50,10 @@ services:
     labels:
       io.balena.features.supervisor-api: '1'
 
-  srly-ose-websocket:
-    image: screenly/srly-ose-websocket:${GIT_SHORT_HASH}-${BOARD}
+  anthias-websocket:
+    image: screenly/anthias-websocket:${GIT_SHORT_HASH}-${BOARD}
     depends_on:
-      - srly-ose-server
+      - anthias-server
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
@@ -58,10 +61,10 @@ services:
     volumes:
       - resin-data:/data
 
-  srly-ose-celery:
-    image: screenly/srly-ose-celery:${GIT_SHORT_HASH}-${BOARD}
+  anthias-celery:
+    image: screenly/anthias-celery:${GIT_SHORT_HASH}-${BOARD}
     depends_on:
-      - srly-ose-server
+      - anthias-server
       - redis
     environment:
       - HOME=/data
@@ -76,22 +79,22 @@ services:
       io.balena.features.supervisor-api: '1'
 
   redis:
-    image: screenly/srly-ose-redis:${GIT_SHORT_HASH}-${BOARD}
+    image: screenly/anthias-redis:${GIT_SHORT_HASH}-${BOARD}
     ports:
       - 127.0.0.1:6379:6379
     restart: always
     volumes:
       - redis-data:/var/lib/redis
 
-  srly-ose-nginx:
-    image: screenly/srly-ose-nginx:${GIT_SHORT_HASH}-${BOARD}
+  anthias-nginx:
+    image: screenly/anthias-nginx:${GIT_SHORT_HASH}-${BOARD}
     ports:
       - 80:80
     environment:
       - HOME=/data
     depends_on:
-      - srly-ose-server
-      - srly-ose-websocket
+      - anthias-server
+      - anthias-websocket
     restart: always
     volumes:
       - resin-data:/data:ro

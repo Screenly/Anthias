@@ -44,7 +44,7 @@ jobs:
           balena_cli_commands: |
             preload \
               "$BALENA_IMAGE.img" \
-              --fleet screenly_ose/screenly-ose-${{ matrix.board }} \
+              --fleet screenly_ose/anthias-${{ matrix.board }} \
               --splash-image ansible/roles/splashscreen/files/splashscreen.png \
               --commit latest
           balena_cli_version: 13.7.1
@@ -57,7 +57,7 @@ jobs:
             os configure \
               "$BALENA_IMAGE.img" \
               --config-network=ethernet  \
-              --fleet screenly_ose/screenly-ose-${{ matrix.board }}
+              --fleet screenly_ose/anthias-${{ matrix.board }}
           balena_cli_version: 13.7.1
 
       - name: Package up image
