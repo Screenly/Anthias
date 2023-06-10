@@ -42,6 +42,11 @@ class VLCMediaPlayer(MediaPlayer):
         options = []
 
         if lookup_raspberry_pi_version() == 'pi4':
+            if settings['audio_output'] == 'local':
+                options += [
+                    '--alsa-audio-device=plughw:CARD=Headphones',
+                ]
+
             options += [
                 '--mmal-display=HDMI-2',
                 '--vout=mmal_vout',
@@ -50,8 +55,14 @@ class VLCMediaPlayer(MediaPlayer):
         return options
 
     def set_asset(self, uri, duration):
-        # @TODO: HDMI or 3.5mm jack audio output
         self.player.set_mrl(uri)
+        settings.load()
+
+        # @TODO: Refactor this conditional statement.
+        if settings['audio_output'] == 'local':
+            self.player.audio_output_device_set('alsa', 'plughw:CARD=Headphones')
+        elif settings['audio_output'] == 'hdmi':
+            self.player.audio_output_device_set('alsa', 'default')
 
     def play(self):
         self.player.play()
@@ -75,7 +86,7 @@ class OMXMediaPlayer(MediaPlayer):
     def set_asset(self, uri, duration):
         settings.load()
 
-        if self._arch in ('armv6l', 'armv7l'):
+        if self._arch in ('armv6l', 'armv7l', 'aarch64'):
             self._player_args = ['omxplayer', uri]
             self._player_kwargs = {'o': settings['audio_output'], 'layer': 1, '_bg': True, '_ok_code': [0, 124, 143]}
         else:
