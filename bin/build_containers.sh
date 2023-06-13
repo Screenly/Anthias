@@ -106,6 +106,10 @@ for container in ${SERVICES[@]}; do
         cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container"
     fi
 
+    if [[ -n "${DEV_MODE:-}" ]] && [[ "${DEV_MODE}" -ne 0 ]]; then
+        sed -i 's/RUN --mount.\+ /RUN /g' "docker/Dockerfile.$container"
+    fi
+
     if [[ -n "${DOCKERFILES_ONLY:-}" ]] && [[ "${DOCKERFILES_ONLY}" -ne 0 ]]; then
         echo "Variable DOCKERFILES_ONLY is set. Skipping build for $container..."
         continue
