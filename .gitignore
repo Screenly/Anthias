@@ -50,3 +50,5 @@ docker/Dockerfile.viewer
 docker/Dockerfile.wifi-connect
 docker/Dockerfile.test
 docker-compose.yml
+
+balena-deploy/

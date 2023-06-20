@@ -18,6 +18,12 @@ while [[ $# -gt 0 ]]; do
             shift
             shift
             ;;
+        # add an option for specifying the fleet name
+        -f|--fleet)
+            export FLEET="$2"
+            shift
+            shift
+            ;;
         -t|--token)
             export TOKEN="$2"
             shift
@@ -41,26 +47,29 @@ if [[ -z "${BOARD+x}" ]]; then
     exit 1
 fi
 
+if [[ -z "${FLEET+x}" ]]; then
+    echo "Please specify the fleet name with --fleet"
+    exit 1
+fi
+
 if [[ -z "${TOKEN+x}" ]]; then
     echo "Please specify a Balena token with --token"
     exit 1
 fi
 
-export GIT_SHORT_HASH=${GIT_SHORT_HASH:-$(git rev-parse --short HEAD)}
-export BUILD_TARGET=$BOARD
-export DOCKERFILES_ONLY=1
-export DEV_MODE=1
+export GIT_SHORT_HASH=${GIT_SHORT_HASH:-latest}
 
 function prepare_balena_file() {
+    mkdir -p balena-deploy
+    cp balena.yml balena-deploy/
     cat docker-compose.balena.yml.tmpl | \
-    envsubst > docker-compose.yml
+    envsubst > balena-deploy/docker-compose.yml
 }
 
-./bin/build_containers.sh
 prepare_balena_file
 
 if ! balena whoami; then
     balena login -t $TOKEN
 fi
 
-balena push anthias-$BUILD_TARGET
+balena push --source ./balena-deploy $FLEET
