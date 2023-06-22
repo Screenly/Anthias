@@ -18,7 +18,6 @@ while [[ $# -gt 0 ]]; do
             shift
             shift
             ;;
-        # add an option for specifying the fleet name
         -f|--fleet)
             export FLEET="$2"
             shift
@@ -29,10 +28,14 @@ while [[ $# -gt 0 ]]; do
             shift
             shift
             ;;
-        # add argument for the short hash. default to 'latest' if not specified
         -s|--short-hash)
             export GIT_SHORT_HASH="$2"
             shift
+            shift
+            ;;
+        # add an option whether to run in dev mode or not
+        -d|--dev)
+            export DEV_MODE=1
             shift
             ;;
         *)
@@ -66,10 +69,23 @@ function prepare_balena_file() {
     envsubst > balena-deploy/docker-compose.yml
 }
 
-prepare_balena_file
-
 if ! balena whoami; then
     balena login -t $TOKEN
 fi
 
-balena push --source ./balena-deploy $FLEET
+if [[ -z "${DEV_MODE+x}" ]]; then
+    echo "Running in production mode..."
+
+    prepare_balena_file
+
+    balena push --source ./balena-deploy $FLEET
+else
+    echo "Running in dev mode..."
+
+    DOCKERFILES_ONLY=1 DEV_MODE=1 BUILD_TARGET=${BOARD} \
+        ./bin/build_containers.sh
+    cat docker-compose.balena.dev.yml.tmpl | \
+        envsubst > docker-compose.yml
+
+    balena push $FLEET
+fi

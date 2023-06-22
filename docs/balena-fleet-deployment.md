@@ -72,7 +72,16 @@ Running the command above will pull the latest Docker images from Docker Hub and
 push them to your balenaCloud account. It will also create a new release and
 deploy it to your fleet.
 
-Deploying local changes to the fleet isn't supported by the script at the moment.
+If you want to deploy your local changes, run the following command instead:
+
+```bash
+# Take note of the --dev flag.
+$ ./bin/deploy_to_balena.sh \
+    --board $BOARD_TYPE \
+    --fleet $FLEET_NAME \
+    --api-key $API_KEY \
+    --dev
+```
 
 It would take a while for the deployment to finish. Once it's done, you should
 see the new release in the fleet's summary page. You can now add your devices to
