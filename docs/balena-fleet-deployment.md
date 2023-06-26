@@ -16,18 +16,17 @@ Balena fleet.
   [here](https://github.com/balena-io/balena-cli/blob/master/INSTALL.md) for the
   installation instructions.
 - On your terminal, login to your balenaCloud account using the CLI by running
-  `balena login`.
-- Generate an API key for your balenaCloud account by going to your account
-  settings page and clicking on the `Create API Key` button. Copy the API key
-  and save it somewhere safe. You'll need it later. Alternatively, you can run
-  `balena api-key generate <name>` to generate an API key using the CLI.
+  `balena login`.  You'll be prompted to select a login method. Select
+  **Web authorization**, which is the recommended way to login. The browser will
+  open a new tab. Click **Authorize** to proceed.
 - Install balenaEtcher on your computer. You can download it from
   [here](https://etcher.balena.io/).
 
 ## Create and configure a new fleet
 
-Open your browser and go to https://dashboard.balena-cloud.com. You should be
-redirected to your balenaCloud dashboard.
+Open your browser and go to https://dashboard.balena-cloud.com. Login to your
+balenaCloud account if you haven't already. You should be redirected to the
+dashboard.
 
 ![balena-ss-01](/docs/images/balena-deployment-01-dashboard.png)
 
@@ -67,8 +66,6 @@ Here's a sample output:
 ID      NAME                           VALUE        FLEET
 1979572 RESIN_HOST_CONFIG_dtoverlay    vc4-fkms-v3d gh_nicomiguelino/anthias-pi4
 1979571 RESIN_HOST_CONFIG_gpu_mem      1024         gh_nicomiguelino/anthias-pi4
-1979570 RESIN_SUPERVISOR_DELTA_VERSION 3            gh_nicomiguelino/anthias-pi4
-1979569 RESIN_SUPERVISOR_NATIVE_LOGGER true         gh_nicomiguelino/anthias-pi4
 ```
 
 Alternatively, you can check the releases page of that fleet and look for the
@@ -77,6 +74,9 @@ Alternatively, you can check the releases page of that fleet and look for the
 ![balena-ss-04](/docs/images/balena-deployment-04-fleet-config-page.png)
 
 ## Deploy changes to the fleet
+
+Before proceeding, make sure that you have logged in by running `balena login`.
+You can verify if you're logged in by running `balena whoami`.
 
 Open your terminal and clone the Anthias repository if you haven't already:
 
@@ -92,7 +92,6 @@ Run the following command:
 $ ./bin/deploy_to_balena.sh \
     --board $BOARD_TYPE \
     --fleet $FLEET_NAME \
-    --token $API_KEY
 ```
 
 Running the command above will pull the latest Docker images from Docker Hub and
@@ -106,7 +105,6 @@ If you want to deploy your local changes, run the following command instead:
 $ ./bin/deploy_to_balena.sh \
     --board $BOARD_TYPE \
     --fleet $FLEET_NAME \
-    --token $API_KEY \
     --dev
 ```
 

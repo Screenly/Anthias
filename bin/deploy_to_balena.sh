@@ -23,11 +23,6 @@ while [[ $# -gt 0 ]]; do
             shift
             shift
             ;;
-        -t|--token)
-            export TOKEN="$2"
-            shift
-            shift
-            ;;
         -s|--short-hash)
             export GIT_SHORT_HASH="$2"
             shift
@@ -55,11 +50,6 @@ if [[ -z "${FLEET+x}" ]]; then
     exit 1
 fi
 
-if [[ -z "${TOKEN+x}" ]]; then
-    echo "Please specify a Balena token with --token"
-    exit 1
-fi
-
 export GIT_SHORT_HASH=${GIT_SHORT_HASH:-latest}
 
 function prepare_balena_file() {
@@ -70,7 +60,8 @@ function prepare_balena_file() {
 }
 
 if ! balena whoami; then
-    balena login -t $TOKEN
+    echo "Please login to Balena with `balena login` command, then run this script again."
+    exit 0
 fi
 
 if [[ -z "${DEV_MODE+x}" ]]; then
