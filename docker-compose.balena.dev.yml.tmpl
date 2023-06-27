@@ -1,0 +1,125 @@
+# vim: ft=yaml
+
+version: "2"
+services:
+  anthias-wifi-connect:
+    image: screenly/anthias-wifi-connect:${GIT_SHORT_HASH}-${BOARD}
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.wifi-connect
+    depends_on:
+      - anthias-viewer
+    environment:
+      PORTAL_LISTENING_PORT: 8000
+      CHECK_CONN_FREQ: 10
+      PORTAL_SSID: 'Anthias WiFi Connect'
+      DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=/host/run/dbus/system_bus_socket'
+    network_mode: host
+    privileged: true
+    labels:
+      io.balena.features.dbus: "1"
+      io.balena.features.firmware: "1"
+
+  anthias-server:
+    image: screenly/anthias-server:${GIT_SHORT_HASH}-${BOARD}
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.server
+    environment:
+      - HOME=/data
+      - LISTEN=0.0.0.0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    devices:
+      - "/dev/vchiq:/dev/vchiq"
+    restart: always
+    volumes:
+      - resin-data:/data
+    labels:
+      io.balena.features.supervisor-api: '1'
+
+  anthias-viewer:
+    image: screenly/anthias-viewer:${GIT_SHORT_HASH}-${BOARD}
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.viewer
+    depends_on:
+      - anthias-server
+    environment:
+      - HOME=/data
+      - PORT=80
+      - NOREFRESH=1
+      - LISTEN=anthias-nginx
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    privileged: true
+    restart: always
+    volumes:
+      - resin-data:/data
+    labels:
+      io.balena.features.supervisor-api: '1'
+
+  anthias-websocket:
+    image: screenly/anthias-websocket:${GIT_SHORT_HASH}-${BOARD}
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.websocket
+    depends_on:
+      - anthias-server
+    environment:
+      - HOME=/data
+      - LISTEN=0.0.0.0
+    restart: always
+    volumes:
+      - resin-data:/data
+
+  anthias-celery:
+    image: screenly/anthias-celery:${GIT_SHORT_HASH}-${BOARD}
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.celery
+    depends_on:
+      - anthias-server
+      - redis
+    environment:
+      - HOME=/data
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    devices:
+      - "/dev/vchiq:/dev/vchiq"
+    restart: always
+    volumes:
+      - resin-data:/data
+    labels:
+      io.balena.features.supervisor-api: '1'
+
+  redis:
+    image: screenly/anthias-redis:${GIT_SHORT_HASH}-${BOARD}
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.redis
+    ports:
+      - 127.0.0.1:6379:6379
+    restart: always
+    volumes:
+      - redis-data:/var/lib/redis
+
+  anthias-nginx:
+    image: screenly/anthias-nginx:${GIT_SHORT_HASH}-${BOARD}
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.nginx
+    ports:
+      - 80:80
+    environment:
+      - HOME=/data
+    depends_on:
+      - anthias-server
+      - anthias-websocket
+    restart: always
+    volumes:
+      - resin-data:/data:ro
+
+volumes:
+  resin-data:
+  redis-data:
