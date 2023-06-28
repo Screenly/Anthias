@@ -6,6 +6,7 @@ click==7.1.2
 configparser==4.0.2
 cryptography==3.3.2
 Cython==0.29.33
+Django==3.2.18
 Flask-Cors==3.0.9
 flask-restful-swagger-2==0.35
 flask-swagger-ui==3.36.0

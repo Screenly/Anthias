@@ -24,6 +24,12 @@ echo "Running migration..."
 python3 ./bin/migrate.py
 
 if [[ ! -z $DEVELOPMENT_MODE ]]; then
+    pushd /usr/src/app/anthias_django
+    ./manage.py makemigrations
+    ./manage.py migrate
+    ./manage.py runserver 0.0.0.0:4040 &
+    popd
+
     flask run --host 0.0.0.0 --port 8080
 else
     python3 server.py

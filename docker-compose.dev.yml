@@ -12,6 +12,9 @@ services:
       - DEVELOPMENT_MODE=1
       - FLASK_APP=server.py
       - FLASK_ENV=development
+    # @TODO: Finalize the port mappings.
+    ports:
+      - 4040:4040
     restart: always
     volumes:
       - resin-data:/data
