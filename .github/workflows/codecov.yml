@@ -11,11 +11,10 @@ on:
       - production
 
 jobs:
-  build:
+  codecov:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3
           env: CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
