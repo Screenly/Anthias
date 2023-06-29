@@ -65,6 +65,11 @@ jobs:
           docker compose -f docker-compose.test.yml exec anthias-test bash ./bin/prepare_test_environment.sh -s
           docker compose -f docker-compose.test.yml exec anthias-test nosetests -v -a '!fixme'
 
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
       - name: Stop the test container
         run: |
           docker compose -f docker-compose.test.yml down
