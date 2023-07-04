@@ -1,5 +1,10 @@
+from datetime import timedelta
 from django.shortcuts import render, HttpResponse
-from os import getenv
+from hurry.filesize import size
+from os import (
+    getenv,
+    statvfs,
+)
 from settings import (
     CONFIGURABLE_SETTINGS,
     DEFAULTS,
@@ -7,14 +12,23 @@ from settings import (
     ZmqPublisher,
 )
 from urllib.parse import urlparse
-import logging # todo nico: remove this import if not needed
+from lib import (
+    diagnostics,
+    raspberry_pi_helper,
+)
 from lib.utils import (
+    connect_to_redis,
     generate_perfect_paper_password,
+    get_node_mac_address,
     is_balena_app,
     is_demo_node,
     is_docker,
 )
 from .helpers import template
+import psutil
+
+
+r = connect_to_redis()
 
 
 # @TODO: Turn this into a class-based view.
@@ -127,3 +141,59 @@ def settings_page(request):
     })
 
     return template(request, 'settings.html', context)
+
+
+# @TODO: Turn this into a class-based view.
+def system_info(request):
+    viewlog = ["Yet to be implemented"]
+    loadavg = diagnostics.get_load_avg()['15 min']
+    display_info = diagnostics.get_monitor_status()
+    display_power = r.get('display_power')
+
+    # Calculate disk space
+    slash = statvfs("/")
+    free_space = size(slash.f_bavail * slash.f_frsize)
+
+    # Memory
+    virtual_memory = psutil.virtual_memory()
+    memory = {
+        'total': virtual_memory.total >> 20,
+        'used': virtual_memory.used >> 20,
+        'free': virtual_memory.free >> 20,
+        'shared': virtual_memory.shared >> 20,
+        'buff': virtual_memory.buffers >> 20,
+        'available': virtual_memory.available >> 20
+    }
+
+    # Get uptime
+    system_uptime = timedelta(seconds=diagnostics.get_uptime())
+
+    # Player name for title
+    player_name = settings['player_name']
+
+    raspberry_pi_model = raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
+
+    screenly_version = '{}@{}'.format(
+        diagnostics.get_git_branch(),
+        diagnostics.get_git_short_hash()
+    )
+
+    context = {
+        'player_name': player_name,
+        'viewlog': viewlog,
+        'loadavg': loadavg,
+        'free_space': free_space,
+        'uptime': {
+            'days': system_uptime.days,
+            'hours': round(system_uptime.seconds / 3600, 2),
+        },
+        'memory': memory,
+        'display_info': display_info,
+        'display_power': display_power,
+        'raspberry_pi_model': raspberry_pi_model,
+        'screenly_version': screenly_version,
+        'mac_address': get_node_mac_address(),
+        'is_balena': is_balena_app(),
+    }
+
+    return template(request, 'system-info.html', context)
