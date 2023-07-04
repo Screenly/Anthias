@@ -1,14 +1,17 @@
+{# vim: ft=htmldjango #}
+
 {% extends "base.html" %}
+{% load static %}
 
 {% block head %}
-    <script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
+    <script src="{% static 'js/popper.min.js' %}"></script>
 
-    <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script> <!-- needs jquery -->
-    <script src="{{ url_for('static', filename='js/jquery-ui-1.10.1.custom.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/jquery.fileupload.js') }}"></script> <!-- needs jqueryui.widget -->
-    <script src="{{ url_for('static', filename='js/bootstrap-datepicker.js') }}"></script>
+    <script src="{% static 'js/bootstrap.min.js' %}"></script> <!-- needs jquery -->
+    <script src="{% static 'js/jquery-ui-1.10.1.custom.min.js' %}"></script>
+    <script src="{% static 'js/jquery.fileupload.js' %}"></script> <!-- needs jqueryui.widget -->
+    <script src="{% static 'js/bootstrap-datepicker.js' %}"></script>
 
-    <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+    <script src="{% static 'js/settings.js' %}"></script>
 {% endblock %}
 
 {% block content %}
@@ -22,34 +25,36 @@
         </div>
         <div class="row content px-3">
             <div class="col-12 my-3">
-                {% if context.flash %}
-                    <div class="alert alert-{{ context.flash['class'] }}">
-                        {{ context.flash['message'] }}
+                {% if flash %}
+                    <div class="alert alert-{{ flash.class }}">
+                        {{ flash.message }}
                     </div>
                 {% endif %}
+
                 <form method="post" class="row">
+                    {% csrf_token %}
                     <div class="form-group col-6 d-flex flex-column justify-content-between">
                         <div class="form-group">
                             <label class="small text-secondary">Player name</label>
                             <input class="form-control" name="player_name" type="text"
-                                   value="{{ context.player_name }}">
+                                   value="{{ player_name }}">
                         </div>
                         <div class="row">
                             <div class="form-group col-6">
                                 <label class="small text-secondary">Default duration</label>
                                 <input class="form-control" name="default_duration" type="number"
-                                       value="{{ context.default_duration }}"/>
+                                       value="{{ default_duration }}"/>
                             </div>
                             <div class="form-group col-6">
                                 <label class="small text-secondary">Default streaming duration</label>
                                 <input class="form-control" name="default_streaming_duration" type="number"
-                                       value="{{ context.default_streaming_duration }}"/>
+                                       value="{{ default_streaming_duration }}"/>
                             </div>
                         </div>
                         <div class="form-group">
                             <label class="small text-secondary">Audio output</label>
                             <select class="form-control" name="audio_output">
-                                {% if context.audio_output == 'hdmi' %}
+                                {% if audio_output == 'hdmi' %}
                                     <option value="hdmi" selected="selected">HDMI</option>
                                     <option value="local">3.5mm jack</option>
                                 {% else %}
@@ -62,39 +67,39 @@
                             <label class="small text-secondary">Date format</label>
                             <select class="form-control" name="date_format">
                                 <option value="mm/dd/yyyy"
-                                        {% if context.date_format == 'mm/dd/yyyy' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'mm/dd/yyyy' %} selected="selected" {% endif %}>
                                     month/day/year
                                 </option>
                                 <option value="dd/mm/yyyy"
-                                        {% if context.date_format == 'dd/mm/yyyy' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'dd/mm/yyyy' %} selected="selected" {% endif %}>
                                     day/month/year
                                 </option>
                                 <option value="yyyy/mm/dd"
-                                        {% if context.date_format == 'yyyy/mm/dd' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'yyyy/mm/dd' %} selected="selected" {% endif %}>
                                     year/month/day
                                 </option>
                                 <option value="mm-dd-yyyy"
-                                        {% if context.date_format == 'mm-dd-yyyy' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'mm-dd-yyyy' %} selected="selected" {% endif %}>
                                     month-day-year
                                 </option>
                                 <option value="dd-mm-yyyy"
-                                        {% if context.date_format == 'dd-mm-yyyy' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'dd-mm-yyyy' %} selected="selected" {% endif %}>
                                     day-month-year
                                 </option>
                                 <option value="yyyy-mm-dd"
-                                        {% if context.date_format == 'yyyy-mm-dd' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'yyyy-mm-dd' %} selected="selected" {% endif %}>
                                     year-month-day
                                 </option>
                                 <option value="mm.dd.yyyy"
-                                        {% if context.date_format == 'mm.dd.yyyy' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'mm.dd.yyyy' %} selected="selected" {% endif %}>
                                     month.day.year
                                 </option>
                                 <option value="dd.mm.yyyy"
-                                        {% if context.date_format == 'dd.mm.yyyy' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'dd.mm.yyyy' %} selected="selected" {% endif %}>
                                     day.month.year
                                 </option>
                                 <option value="yyyy.mm.dd"
-                                        {% if context.date_format == 'yyyy.mm.dd' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'yyyy.mm.dd' %} selected="selected" {% endif %}>
                                     year.month.day
                                 </option>
                             </select>
@@ -102,20 +107,20 @@
                         <div class="form-group mb-0">
                             <label class="small text-secondary">Authentication</label>
                             <select class="form-control" id="auth_backend" name="auth_backend">
-                                {% for opt in context.auth_backends %}
+                                {% for opt in auth_backends %}
                                     <option value="{{ opt.name }}" {{ opt.selected }}>{{ opt.text }}</option>
                                 {% endfor %}
                             </select>
                         </div>
 
-                        {% if context.need_current_password %}
+                        {% if need_current_password %}
                             <div class="form-group" id="curpassword_group">
                                 <label class="small text-secondary">Current Password</label>
                                 <input class="form-control" name="current-password" type="password" value="">
                             </div>
                         {% endif %}
 
-                        {% for backend in context.auth_backends %}
+                        {% for backend in auth_backends %}
                             {% if backend.template %}
                                 <div id="auth_backend-{{ backend.name }}">
                                     {% include backend.template %}
@@ -130,7 +135,7 @@
                             <div class="ml-auto">
                                 <label id="splash_checkbox"
                                        class="is_enabled-toggle toggle switch-light switch-material small m-0">
-                                    {% if context.show_splash %}
+                                    {% if show_splash %}
                                         <input name="show_splash" checked="checked" type="checkbox"/>
                                     {% else %}
                                         <input name="show_splash" type="checkbox"/>
@@ -144,7 +149,7 @@
                             <div class="ml-auto">
                                 <label id="default_assets_checkbox"
                                        class="is_enabled-toggle toggle switch-light switch-material small m-0">
-                                    {% if context.default_assets %}
+                                    {% if default_assets %}
                                         <input name="default_assets" checked="checked" type="checkbox"/>
                                     {% else %}
                                         <input name="default_assets" type="checkbox"/>
@@ -158,7 +163,7 @@
                             <div class="ml-auto">
                                 <label id="shuffle_checkbox"
                                        class="is_enabled-toggle toggle switch-light switch-material small m-0">
-                                    {% if context.shuffle_playlist %}
+                                    {% if shuffle_playlist %}
                                         <input name="shuffle_playlist" checked="checked" type="checkbox"/>
                                     {% else %}
                                         <input name="shuffle_playlist" type="checkbox"/>
@@ -172,7 +177,7 @@
                             <div class="ml-auto">
                                 <label id="use_24_hour_clock_checkbox"
                                        class="is_enabled-toggle toggle switch-light switch-material small m-0">
-                                    {% if context.use_24_hour_clock %}
+                                    {% if use_24_hour_clock %}
                                         <input name="use_24_hour_clock" checked="checked" type="checkbox"/>
                                     {% else %}
                                         <input name="use_24_hour_clock" type="checkbox"/>
@@ -186,7 +191,7 @@
                             <div class="ml-auto">
                                 <label id="debug_checkbox"
                                        class="is_enabled-toggle toggle switch-light switch-material small m-0">
-                                    {% if context.debug_logging %}
+                                    {% if debug_logging %}
                                         <input name="debug_logging" checked="checked" type="checkbox">
                                     {% else %}
                                         <input name="debug_logging" type="checkbox">
@@ -235,7 +240,7 @@
         </div>
     </div>
 
-            {% if not (context.is_balena or context.is_docker) %}
+            {% if not is_balena and not is_docker %}
 
                 {# USB assets #}
                 <div class="container mt-4">
@@ -302,7 +307,7 @@
 
                                             <div class="form-group col-6">
                                                 <label class="small text-secondary">Usb assets key</label>
-                                                <input id="usb-assets-key-badge" class="form-control mb-3" type="text" value="{{ context.usb_assets_key }}" readonly>
+                                                <input id="usb-assets-key-badge" class="form-control mb-3" type="text" value="{{ usb_assets_key }}" readonly>
                                             </div>
 
                                             <div class="form-group col-12">

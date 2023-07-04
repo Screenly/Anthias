@@ -1,3 +1,5 @@
+{# vim: ft=htmldjango #}
+
 {% extends "base.html" %}
 {% load static %}
 
@@ -24,11 +26,11 @@
     <script src="{% static 'js/moment.js' %}"></script>
 
     <script type="text/javascript">
-        var dateFormat = "{{ context.date_format }}";
-        var defaultDuration = {{ context.default_duration }};
-        var defaultStreamingDuration = {{ context.default_streaming_duration }};
-        var use24HourClock = {% if context.use_24_hour_clock %} true; {% else %} false; {% endif %}
-        var wsAddresses = {{ context.ws_addresses|json_script:"ws_addresses" }};
+        var dateFormat = "{{ date_format }}";
+        var defaultDuration = {{ default_duration }};
+        var defaultStreamingDuration = {{ default_streaming_duration }};
+        var use24HourClock = {% if use_24_hour_clock %} true; {% else %} false; {% endif %}
+        var wsAddresses = {{ ws_addresses|json_script:"ws_addresses" }};
     </script>
     <script src="{% static 'js/screenly-ose.js' %}"></script>
     <script src="{% static 'js/main.js' %}"></script>
@@ -318,8 +320,8 @@
                         </a>
                     </div>
                 </h4>
-                {% if context.player_name %}
-                    <h4 class="text-white">{{ context.player_name }}</h4>
+                {% if player_name %}
+                    <h4 class="text-white">{{ player_name }}</h4>
                 {% endif %}
             </div>
         </div>
