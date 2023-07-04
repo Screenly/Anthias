@@ -126,9 +126,4 @@ def settings_page(request):
         'auth_backends': auth_backends
     })
 
-    # nico start - debug shit
-    logging.info(f'[nico] is_balena_app(): {is_balena_app()}')
-    logging.info(f'[nico] is_docker(): {is_docker()}')
-    # nico end
-
     return template(request, 'settings.html', context)
