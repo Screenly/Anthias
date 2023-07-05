@@ -1607,12 +1607,6 @@ else:
 ################################
 
 
-@app.route('/splash-page')
-def splash_page():
-    my_ip = get_node_ip().split()
-    return template('splash-page.html', my_ip=my_ip)
-
-
 @app.errorhandler(403)
 def mistake403(code):
     return 'The parameter you passed has the wrong format!'

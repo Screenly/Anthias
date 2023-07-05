@@ -19,6 +19,7 @@ from lib import (
 from lib.utils import (
     connect_to_redis,
     generate_perfect_paper_password,
+    get_node_ip,
     get_node_mac_address,
     is_balena_app,
     is_demo_node,
@@ -216,3 +217,8 @@ def integrations(request):
         })
 
     return template(request, 'integrations.html', context)
+
+
+def splash_page(request):
+    my_ip = get_node_ip().split()
+    return template(request, 'splash-page.html', {'my_ip': my_ip})
