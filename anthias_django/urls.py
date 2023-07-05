@@ -20,3 +20,5 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('anthias_app.urls')),
 ]
+
+# @TODO: Write custom 403 and 404 pages.

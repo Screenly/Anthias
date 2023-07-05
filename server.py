@@ -1603,21 +1603,6 @@ else:
 
 
 ################################
-# Views
-################################
-
-
-@app.errorhandler(403)
-def mistake403(code):
-    return 'The parameter you passed has the wrong format!'
-
-
-@app.errorhandler(404)
-def mistake404(code):
-    return 'Sorry, this page does not exist!'
-
-
-################################
 # Static
 ################################
 
