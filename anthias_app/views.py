@@ -197,3 +197,22 @@ def system_info(request):
     }
 
     return template(request, 'system-info.html', context)
+
+
+def integrations(request):
+    context = {
+        'player_name': settings['player_name'],
+        'is_balena': is_balena_app(),
+    }
+
+    if context['is_balena']:
+        context.update({
+            'balena_device_id': getenv('BALENA_DEVICE_UUID'),
+            'balena_app_id': getenv('BALENA_APP_ID'),
+            'balena_app_name': getenv('BALENA_APP_NAME'),
+            'balena_supervisor_version': getenv('BALENA_SUPERVISOR_VERSION'),
+            'balena_host_os_version': getenv('BALENA_HOST_OS_VERSION'),
+            'balena_device_name_at_init': getenv('BALENA_DEVICE_NAME_AT_INIT'),
+        })
+
+    return template(request, 'integrations.html', context)

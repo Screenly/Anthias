@@ -7,4 +7,5 @@ urlpatterns = [
     path('', views.index, name='index'),
     path('settings/', views.settings_page, name='settings'),
     path('system-info/', views.system_info, name='system_info'),
+    path('integrations', views.integrations, name='integrations'),
 ]

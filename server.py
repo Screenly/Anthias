@@ -1607,26 +1607,6 @@ else:
 ################################
 
 
-@app.route('/integrations')
-@authorized
-def integrations():
-
-    context = {
-        'player_name': settings['player_name'],
-        'is_balena': is_balena_app(),
-    }
-
-    if context['is_balena']:
-        context['balena_device_id'] = getenv('BALENA_DEVICE_UUID')
-        context['balena_app_id'] = getenv('BALENA_APP_ID')
-        context['balena_app_name'] = getenv('BALENA_APP_NAME')
-        context['balena_supervisor_version'] = getenv('BALENA_SUPERVISOR_VERSION')
-        context['balena_host_os_version'] = getenv('BALENA_HOST_OS_VERSION')
-        context['balena_device_name_at_init'] = getenv('BALENA_DEVICE_NAME_AT_INIT')
-
-    return template('integrations.html', **context)
-
-
 @app.route('/splash-page')
 def splash_page():
     my_ip = get_node_ip().split()
