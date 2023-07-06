@@ -7,10 +7,11 @@ configparser==4.0.2
 cryptography==3.3.2
 Cython==0.29.33
 Django==3.2.18
-Flask-Cors==3.0.9
-flask-restful-swagger-2==0.35
-flask-swagger-ui==3.36.0
-Flask==1.1.2
+djangorestframework==3.14.0
+Flask-Cors==3.0.9 # @TODO: Remove.
+flask-restful-swagger-2==0.35 # @TODO: Remove.
+flask-swagger-ui==3.36.0 # @TODO: Remove.
+Flask==1.1.2 # @TODO: Remove.
 future==0.18.3
 gevent-websocket==0.10.1
 gevent==21.12.0
