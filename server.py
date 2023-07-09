@@ -677,23 +677,6 @@ def api_response(view):
 class Assets(Resource):
     method_decorators = [authorized]
 
-    @swagger.doc({
-        'responses': {
-            '200': {
-                'description': 'List of assets',
-                'schema': {
-                    'type': 'array',
-                    'items': AssetModel
-
-                }
-            }
-        }
-    })
-    def get(self):
-        with db.conn(settings['database']) as conn:
-            assets = assets_helper.read(conn)
-            return assets
-
     @api_response
     @swagger.doc({
         'parameters': [
