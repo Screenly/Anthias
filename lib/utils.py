@@ -299,7 +299,7 @@ def url_fails(url):
 
 def download_video_from_youtube(uri, asset_id):
     home = getenv('HOME')
-    name = check_output(['yt-dlp', '-O title', uri])
+    name = check_output(['yt-dlp', '-O', 'title', uri])
     info = json.loads(check_output(['yt-dlp', '-j', uri]))
     duration = info['duration']
 
