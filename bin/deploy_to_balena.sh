@@ -2,9 +2,23 @@
 
 set -euo pipefail
 
+print_help() {
+    echo "Usage: deploy_to_balena.sh [options]"
+    echo "Options:"
+    echo "  -h, --help            show this help message and exit"
+    echo "  -b, --board BOARD     specify the board to build for (pi1, pi2, pi3, pi4)"
+    echo "  -f, --fleet FLEET     specify the fleet name to deploy to"
+    echo "  -s, --short-hash HASH specify the short hash to use for the image tag"
+    echo "  -d, --dev             run in dev mode"
+}
+
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
+        -h|--help)
+            print_help
+            exit 0
+            ;;
         -b|--board)
             export BOARD="$2"
 
@@ -12,6 +26,7 @@ while [[ $# -gt 0 ]]; do
                 echo "Building for $BOARD"
             else
                 echo "Invalid board $BOARD"
+                print_help
                 exit 1
             fi
 
@@ -28,13 +43,13 @@ while [[ $# -gt 0 ]]; do
             shift
             shift
             ;;
-        # add an option whether to run in dev mode or not
         -d|--dev)
             export DEV_MODE=1
             shift
             ;;
         *)
             echo "Unknown option $key"
+            print_help
             exit 1
             ;;
     esac
@@ -42,11 +57,13 @@ done
 
 if [[ -z "${BOARD+x}" ]]; then
     echo "Please specify a board with --board"
+    print_help
     exit 1
 fi
 
 if [[ -z "${FLEET+x}" ]]; then
     echo "Please specify the fleet name with --fleet"
+    print_help
     exit 1
 fi
 
