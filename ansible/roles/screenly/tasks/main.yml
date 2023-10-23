@@ -29,7 +29,7 @@
 - name: Install pip dependencies
   ansible.builtin.pip:
     requirements: "/home/{{ lookup('env', 'USER') }}/screenly/requirements/requirements.host.txt"
-    extra_args: "--no-cache-dir --upgrade"
+    extra_args: "--no-cache-dir --upgrade --break-system-packages"
 
 - name: Remove screenly_utils.sh
   ansible.builtin.file:
