@@ -82,6 +82,13 @@
   ansible.builtin.command: cp -f /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla /etc/polkit-1/localauthority/50-local.d
   when: manage_network|bool
 
+# nico start - new task for checking if the service exists
+- name: Check if the dhcpcd service exists
+  ansible.builtin.shell: systemctl list-units --type=service | grep 'dhcpcd'
+  register: dhcpcd_service_exists
+  ignore_errors: true
+# nico end
+
 - name: Disable dhcpcd
   ansible.builtin.systemd:
     state: stopped
@@ -90,6 +97,9 @@
   when:
     - ansible_distribution_major_version|int >= 9
     - manage_network|bool
+    # nico start - todo: remove this condition if it's not working
+    - dhcpcd_service_exists.rc == 0
+    # nico end
 
 - name: Activate NetworkManager
   ansible.builtin.systemd:
