@@ -44,7 +44,12 @@
 
 - name: Installs dependencies (not Jessie)
   ansible.builtin.apt:
-    name: plymouth
+    name:
+      - plymouth
+      # nico start
+      - plymouth-themes
+      - plymouth-label
+      # nico end
   when: ansible_distribution_major_version|int > 7
 
 - name: Copies plymouth theme
