@@ -11,5 +11,7 @@
     - system
     - screenly
     - network
-    - splashscreen
+    # nico start - todo: uncomment when ready
+    # - splashscreen
+    # nico end
     - tools

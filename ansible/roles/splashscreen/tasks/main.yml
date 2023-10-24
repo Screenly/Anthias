@@ -38,7 +38,7 @@
     - /etc/init.d/asplashscreen
   when: ansible_distribution_major_version|int > 7
 
-- name: Disable asplashscreen
+- name: Disable splashscreen
   ansible.builtin.command: update-rc.d asplashscreen remove
   when: ansible_distribution_major_version|int > 7
 
