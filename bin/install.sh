@@ -180,16 +180,13 @@ fi
 # @TODO
 # Remove me later. Cryptography 38.0.3 won't build at the moment.
 # See https://github.com/screenly/anthias/issues/1654
-# nico start - todo: run this on Bullseye, but not on Bookworm
 sudo pip install cryptography==38.0.2 --break-system-packages
-# nico end
 
 sudo pip install "$ANSIBLE_VERSION" --break-system-packages
 
-# nico start - todo: remove after testing
+# @TODO: Remove two lines below after testing.
 export REPOSITORY='https://github.com/nicomiguelino/Anthias.git'
 export BRANCH=${CUSTOM_BRANCH}
-# nico end
 
 sudo -u ${USER} ansible localhost \
     -m git \
@@ -197,12 +194,6 @@ sudo -u ${USER} ansible localhost \
 cd /home/${USER}/screenly/ansible
 
 sudo -E -u ${USER} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
-
-# nico start - todo: remove after testing
-if [[ ! -z "$EARLY_EXIT" ]]; then
-  exit 0
-fi
-# nico end
 
 # Pull down and install containers
 sudo -u ${USER} /home/${USER}/screenly/bin/upgrade_containers.sh
