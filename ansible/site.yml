@@ -11,5 +11,5 @@
     - system
     - screenly
     - network
-    # - splashscreen # TODO NICO: Uncomment later.
+    - splashscreen
     - tools
