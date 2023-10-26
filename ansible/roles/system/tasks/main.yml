@@ -46,11 +46,11 @@
   tags:
     - touches_boot_partition
 
-# - name: Comment out the original dtoverlay config.
-#   ansible.builtin.replace:
-#     dest: /boot/config.txt
-#     regexp: ^(dtoverlay=vc4-kms-v3d)$
-#     replace: '#\1'
+- name: Comment out the original dtoverlay config.
+  ansible.builtin.replace:
+    dest: /boot/config.txt
+    regexp: ^(dtoverlay=vc4-kms-v3d)$
+    replace: '#\1'
 
 # - name: Add FKMS config for Pi 4.
 #   ansible.builtin.lineinfile:
