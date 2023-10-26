@@ -9,7 +9,7 @@
 
   roles:
     - system
-    # - screenly
-    # - network
-    # - splashscreen
-    # - tools
+    - screenly
+    - network
+    - splashscreen
+    - tools
