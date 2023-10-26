@@ -52,12 +52,6 @@
     regexp: ^(dtoverlay=vc4-kms-v3d)$
     replace: '#\1'
 
-# - name: Add FKMS config for Pi 4.
-#   ansible.builtin.lineinfile:
-#     path: /boot/config.txt
-#     insertafter: '^\[pi4\]$'
-#     line: dtoverlay=vc4-fkms-v3d
-
 - name: Backup kernel boot args
   ansible.builtin.copy:
     src: /boot/cmdline.txt
