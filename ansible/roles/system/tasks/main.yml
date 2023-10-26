@@ -22,15 +22,15 @@
   tags:
     - touches_boot_partition
 
-# TODO NICO: Uncomment the rest of this file gradually.
-# - name: Add gpu_mem_256 in config.txt if it doesn't exist
-#   ansible.builtin.lineinfile:
-#     path: /boot/config.txt
-#     line: gpu_mem_256=96
-#   when: config_txt.stdout.find('gpu_mem_256') == -1
-#   tags:
-#     - touches_boot_partition
+- name: Add gpu_mem_256 in config.txt if it doesn't exist
+  ansible.builtin.lineinfile:
+    path: /boot/config.txt
+    line: gpu_mem_256=96
+  when: config_txt.stdout.find('gpu_mem_256') == -1
+  tags:
+    - touches_boot_partition
 
+# TODO NICO: Uncomment the rest of this file gradually.
 # - name: Add gpu_mem_512 in config.txt if it doesn't exist
 #   ansible.builtin.lineinfile:
 #     path: /boot/config.txt
