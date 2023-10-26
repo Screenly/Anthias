@@ -30,35 +30,35 @@
   tags:
     - touches_boot_partition
 
+- name: Add gpu_mem_512 in config.txt if it doesn't exist
+  ansible.builtin.lineinfile:
+    path: /boot/config.txt
+    line: gpu_mem_512=128
+  when: config_txt.stdout.find('gpu_mem_512') == -1
+  tags:
+    - touches_boot_partition
+
+- name: Add gpu_mem_1024 in config.txt if it doesn't exist
+  ansible.builtin.lineinfile:
+    path: /boot/config.txt
+    line: gpu_mem_1024=196
+  when: config_txt.stdout.find('gpu_mem_1024') == -1
+  tags:
+    - touches_boot_partition
+
+- name: Comment out the original dtoverlay config.
+  ansible.builtin.replace:
+    dest: /boot/config.txt
+    regexp: ^(dtoverlay=vc4-kms-v3d)$
+    replace: '#\1'
+
+- name: Add FKMS config for Pi 4.
+  ansible.builtin.lineinfile:
+    path: /boot/config.txt
+    insertafter: '^\[pi4\]$'
+    line: dtoverlay=vc4-fkms-v3d
+
 # TODO NICO: Uncomment the rest of this file gradually.
-# - name: Add gpu_mem_512 in config.txt if it doesn't exist
-#   ansible.builtin.lineinfile:
-#     path: /boot/config.txt
-#     line: gpu_mem_512=128
-#   when: config_txt.stdout.find('gpu_mem_512') == -1
-#   tags:
-#     - touches_boot_partition
-
-# - name: Add gpu_mem_1024 in config.txt if it doesn't exist
-#   ansible.builtin.lineinfile:
-#     path: /boot/config.txt
-#     line: gpu_mem_1024=196
-#   when: config_txt.stdout.find('gpu_mem_1024') == -1
-#   tags:
-#     - touches_boot_partition
-
-# - name: Comment out the original dtoverlay config.
-#   ansible.builtin.replace:
-#     dest: /boot/config.txt
-#     regexp: ^(dtoverlay=vc4-kms-v3d)$
-#     replace: '#\1'
-
-# - name: Add FKMS config for Pi 4.
-#   ansible.builtin.lineinfile:
-#     path: /boot/config.txt
-#     insertafter: '^\[pi4\]$'
-#     line: dtoverlay=vc4-fkms-v3d
-
 # - name: Backup kernel boot args
 #   ansible.builtin.copy:
 #     src: /boot/cmdline.txt
