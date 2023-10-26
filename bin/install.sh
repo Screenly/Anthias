@@ -182,7 +182,6 @@ PIP_ARGS=()
 
 if [ "$RASPBIAN_VERSION" = "12" ]; then
   PIP_ARGS+=("--break-system-packages")
-else
 fi
 
 # @TODO
