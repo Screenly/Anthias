@@ -177,12 +177,20 @@ else
     ANSIBLE_VERSION=ansible==2.8.8
 fi
 
+RASPBIAN_VERSION=$(cat /etc/os-release | grep VERSION= | cut -d'=' -f2 | cut -d'"' -f2 | cut -d' ' -f1)
+PIP_ARGS=()
+
+if [ "$RASPBIAN_VERSION" = "12" ]; then
+  PIP_ARGS+=("--break-system-packages")
+else
+fi
+
 # @TODO
 # Remove me later. Cryptography 38.0.3 won't build at the moment.
 # See https://github.com/screenly/anthias/issues/1654
-sudo pip install cryptography==38.0.2 --break-system-packages
+sudo pip install cryptography==38.0.2 "${PIP_ARGS[@]}"
 
-sudo pip install "$ANSIBLE_VERSION" --break-system-packages
+sudo pip install "$ANSIBLE_VERSION" "${PIP_ARGS[@]}"
 
 # @TODO: Remove two lines below after testing.
 export REPOSITORY='https://github.com/nicomiguelino/Anthias.git'

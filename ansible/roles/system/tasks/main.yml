@@ -258,11 +258,20 @@
   tags:
     - system-upgrade
 
-- name: Remove deprecated pip dependencies
+- name: Remove deprecated pip dependencies (<= Debian 11)
+  ansible.builtin.pip:
+    name: supervisor
+    state: absent
+  when:
+    - ansible_distribution_major_version|int <= 11
+
+- name: Remove deprecated pip dependencies (>= Debian 12)
   ansible.builtin.pip:
     name: supervisor
     state: absent
     extra_args: --break-system-packages
+  when:
+    - ansible_distribution_major_version|int >= 12
 
 - name: Copy in rc.local
   ansible.builtin.copy:
