@@ -8,7 +8,7 @@
     device_type: "{{ lookup('env', 'DEVICE_TYPE') }}"
 
   roles:
-    - system
+    # - system
     # - screenly
     # - network
     # - splashscreen
