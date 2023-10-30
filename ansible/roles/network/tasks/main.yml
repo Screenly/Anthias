@@ -78,9 +78,15 @@
     dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
   when: manage_network|bool
 
+- name: Get stat of org.freedesktop.NetworkManager.pkla
+  ansible.builtin.stat:
+    path: /etc/polkit-1/localauthority/50-local.d/org.freedesktop.NetworkManager.pkla
+  register: nm_pkla_path
+
 - name: Copy org.freedesktop.NetworkManager.pkla to 50-local.d
   ansible.builtin.command: cp -f /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla /etc/polkit-1/localauthority/50-local.d
   when: manage_network|bool
+  changed_when: not nm_pkla_path.stat.exists
 
 - name: Check if the dhcpcd service exists
   ansible.builtin.shell: systemctl list-units --type=service | grep 'dhcpcd'
