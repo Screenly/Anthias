@@ -58,7 +58,7 @@
     dest: /boot/cmdline.txt.orig
     owner: root
     group: root
-    mode: 0755
+    mode: "0755"
     force: false
   tags:
     - touches_boot_partition
@@ -73,7 +73,7 @@
     dest: /boot/cmdline.txt
     owner: root
     group: root
-    mode: 0755
+    mode: "0755"
     force: true
   when: config_txt.stdout.find('NOOBS') == -1
   tags:
@@ -219,7 +219,7 @@
     state: present
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
 
 - name: Install Docker
   ansible.builtin.apt:
@@ -277,7 +277,7 @@
   ansible.builtin.copy:
     src: rc.local
     dest: /etc/rc.local
-    mode: 0755
+    mode: "0755"
     owner: root
     group: root
 
@@ -285,7 +285,7 @@
   ansible.builtin.copy:
     src: 01_nodoc
     dest: /etc/dpkg/dpkg.cfg.d/01_nodoc
-    mode: 0644
+    mode: "0644"
     owner: root
     group: root
 
