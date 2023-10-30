@@ -12,7 +12,7 @@
   ansible.builtin.template:
     src: "{{ item }}"
     dest: "/etc/systemd/system/{{ item }}"
-    mode: 0644
+    mode: "0644"
     owner: root
     group: root
   with_items: "{{ network_systemd_units }}"
