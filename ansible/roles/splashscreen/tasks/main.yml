@@ -38,9 +38,16 @@
     - /etc/init.d/asplashscreen
   when: ansible_distribution_major_version|int > 7
 
+- name: Get stat of asplashscreen
+  ansible.builtin.stat:
+    path: /etc/rcS.d/S01asplashscreen
+  register: asplashscreen_path
+  when: ansible_distribution_major_version|int > 7
+
 - name: Disable asplashscreen
   ansible.builtin.command: update-rc.d asplashscreen remove
   when: ansible_distribution_major_version|int > 7
+  changed_when: asplashscreen_path.stat.exists
 
 - name: Installs dependencies (not Jessie)
   ansible.builtin.apt:
