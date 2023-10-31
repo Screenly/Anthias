@@ -88,11 +88,6 @@
   when: manage_network|bool
   changed_when: not nm_pkla_path.stat.exists
 
-- name: Check if the dhcpcd service exists
-  ansible.builtin.shell: systemctl list-units --type=service | grep 'dhcpcd'
-  register: dhcpcd_service_exists
-  ignore_errors: true
-
 - name: Disable dhcpcd
   ansible.builtin.systemd:
     state: stopped
@@ -100,8 +95,8 @@
     enabled: false
   when:
     - ansible_distribution_major_version|int >= 9
+    - ansible_distribution_major_version|int <= 11
     - manage_network|bool
-    - dhcpcd_service_exists.rc == 0
 
 - name: Activate NetworkManager
   ansible.builtin.systemd:
