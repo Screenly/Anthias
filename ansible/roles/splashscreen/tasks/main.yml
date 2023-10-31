@@ -70,9 +70,16 @@
     - splashscreen.png
   when: ansible_distribution_major_version|int > 7
 
+- name: Get current plymouth theme
+  ansible.builtin.shell: plymouth-set-default-theme
+  register: plymouth_theme
+  changed_when: false
+  when: ansible_distribution_major_version|int > 7
+
 - name: Set splashscreen
   ansible.builtin.command: plymouth-set-default-theme -R screenly
   when: ansible_distribution_major_version|int > 7
+  changed_when: plymouth_theme.stdout != "screenly"
 
 - name: Set plymouthd.default
   ansible.builtin.copy:
