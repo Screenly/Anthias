@@ -177,7 +177,7 @@ else
     ANSIBLE_VERSION=ansible==2.8.8
 fi
 
-RASPBIAN_VERSION=$(cat /etc/os-release | grep VERSION= | cut -d'=' -f2 | cut -d'"' -f2 | cut -d' ' -f1)
+RASPBIAN_VERSION=$(lsb_release -rs)
 PIP_ARGS=()
 
 if [ "$RASPBIAN_VERSION" = "12" ]; then
