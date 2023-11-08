@@ -207,17 +207,13 @@ PIP_ARGS=()
 # nico end
 
 # nico start - new code
+SUDO_ARGS=()
+
 if [ "$RASPBIAN_VERSION" = "12" ]; then
-    # @TODO: Create a new virtual environment for Python 3.
     python3 -m venv /home/${USER}/screenly/venv
     source /home/${USER}/screenly/venv/bin/activate
 
-    pip install cryptography==38.0.2
-    pip install "$ANSIBLE_VERSION"
-else
-    # todo nico: refactor this mess.
-    sudo pip install cryptography==38.0.2
-    sudo pip install "$ANSIBLE_VERSION"
+    SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
 fi
 # nico end
 
@@ -226,24 +222,24 @@ fi
 # See https://github.com/screenly/anthias/issues/1654
 # nico start - todo: choose only one
 # sudo pip install cryptography==38.0.2 "${PIP_ARGS[@]}"
-# sudo pip install cryptography==38.0.2
+sudo ${SUDO_ARGS[@]} pip install cryptography==38.0.2
 # nico end
 
 # nico start - todo: choose only one
 # sudo pip install "$ANSIBLE_VERSION" "${PIP_ARGS[@]}"
-# sudo pip install "$ANSIBLE_VERSION"
+sudo ${SUDO_ARGS[@]} pip install "$ANSIBLE_VERSION"
 # nico end
 
 # @TODO: Remove two lines below after testing.
 export REPOSITORY='https://github.com/nicomiguelino/Anthias.git'
 export BRANCH=${CUSTOM_BRANCH}
 
-sudo -u ${USER} ansible localhost \
+sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
     -m git \
     -a "repo=$REPOSITORY dest=/home/${USER}/screenly version=$BRANCH force=no"
 cd /home/${USER}/screenly/ansible
 
-sudo -E -u ${USER} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
+sudo -E -u ${USER} ${SUDO_ARGS[@]} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
 
 # Pull down and install containers
 sudo -u ${USER} /home/${USER}/screenly/bin/upgrade_containers.sh
