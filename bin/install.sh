@@ -211,6 +211,13 @@ if [ "$RASPBIAN_VERSION" = "12" ]; then
     # @TODO: Create a new virtual environment for Python 3.
     python3 -m venv /home/${USER}/screenly/venv
     source /home/${USER}/screenly/venv/bin/activate
+
+    pip install cryptography==38.0.2
+    pip install "$ANSIBLE_VERSION"
+else
+    # todo nico: refactor this mess.
+    sudo pip install cryptography==38.0.2
+    sudo pip install "$ANSIBLE_VERSION"
 fi
 # nico end
 
@@ -219,12 +226,12 @@ fi
 # See https://github.com/screenly/anthias/issues/1654
 # nico start - todo: choose only one
 # sudo pip install cryptography==38.0.2 "${PIP_ARGS[@]}"
-sudo pip install cryptography==38.0.2
+# sudo pip install cryptography==38.0.2
 # nico end
 
 # nico start - todo: choose only one
 # sudo pip install "$ANSIBLE_VERSION" "${PIP_ARGS[@]}"
-sudo pip install "$ANSIBLE_VERSION"
+# sudo pip install "$ANSIBLE_VERSION"
 # nico end
 
 # @TODO: Remove two lines below after testing.
