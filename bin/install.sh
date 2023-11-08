@@ -210,8 +210,8 @@ PIP_ARGS=()
 SUDO_ARGS=()
 
 if [ "$RASPBIAN_VERSION" = "12" ]; then
-    python3 -m venv /home/${USER}/screenly/venv
-    source /home/${USER}/screenly/venv/bin/activate
+    python3 -m venv /home/${USER}/installer_venv
+    source /home/${USER}/installer_env/bin/activate
 
     SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
 fi
