@@ -152,7 +152,6 @@ if [ ! -f /etc/locale.gen ]; then
     sudo locale-gen
 fi
 
-# nico start - new code here
 RASPBIAN_VERSION=$(lsb_release -rs)
 APT_INSTALL_ARGS=(
   "git"
@@ -166,23 +165,10 @@ if [ "$RASPBIAN_VERSION" = "12" ]; then
 else
   APT_INSTALL_ARGS+=("python3" "python3-dev" "python3-pip")
 fi
-# nico end
 
 sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' /etc/apt/sources.list
 sudo apt update -y
-# nico start - old apt install code
-# sudo apt-get install -y --no-install-recommends \
-#     git \
-#     libffi-dev \
-#     libssl-dev \
-#     python3 \
-#     python3-dev \
-#     python3-pip \
-#     whois
-# nico end
-# nico start - new apt install code
 sudo apt-get install -y --no-install-recommends "${APT_INSTALL_ARGS[@]}"
-# nico end
 
 if [ "$NETWORK" == 'y' ]; then
   export MANAGE_NETWORK=true
@@ -198,15 +184,6 @@ else
     ANSIBLE_VERSION=ansible==2.8.8
 fi
 
-PIP_ARGS=()
-
-# nico start - old code
-# if [ "$RASPBIAN_VERSION" = "12" ]; then
-#   PIP_ARGS+=("--break-system-packages")
-# fi
-# nico end
-
-# nico start - new code
 SUDO_ARGS=()
 
 if [ "$RASPBIAN_VERSION" = "12" ]; then
@@ -215,20 +192,12 @@ if [ "$RASPBIAN_VERSION" = "12" ]; then
 
     SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
 fi
-# nico end
 
 # @TODO
 # Remove me later. Cryptography 38.0.3 won't build at the moment.
 # See https://github.com/screenly/anthias/issues/1654
-# nico start - todo: choose only one
-# sudo pip install cryptography==38.0.2 "${PIP_ARGS[@]}"
 sudo ${SUDO_ARGS[@]} pip install cryptography==38.0.2
-# nico end
-
-# nico start - todo: choose only one
-# sudo pip install "$ANSIBLE_VERSION" "${PIP_ARGS[@]}"
 sudo ${SUDO_ARGS[@]} pip install "$ANSIBLE_VERSION"
-# nico end
 
 # @TODO: Remove two lines below after testing.
 export REPOSITORY='https://github.com/nicomiguelino/Anthias.git'
