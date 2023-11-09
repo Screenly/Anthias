@@ -34,8 +34,11 @@
 
 - name: Install pip dependencies
   ansible.builtin.pip:
+    executable: /home/nico/installer_venv/bin/pip
     requirements: "/home/{{ lookup('env', 'USER') }}/screenly/requirements/requirements.host.txt"
-    extra_args: "--no-cache-dir --upgrade --break-system-packages"
+    extra_args: "--no-cache-dir --upgrade"
+    # TODO NICO: Remove below if not needed.
+    # extra_args: "--no-cache-dir --upgrade --break-system-packages"
   when: ansible_distribution_major_version|int >= 12
 
 - name: Remove screenly_utils.sh
