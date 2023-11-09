@@ -268,10 +268,8 @@
 - name: Remove deprecated pip dependencies (>= Debian 12)
   ansible.builtin.pip:
     name: supervisor
-    executable: /home/nico/installer_venv/bin/pip
+    executable: /home/{{ lookup('env', 'USER') }}/installer_venv/bin/pip
     state: absent
-    # TODO NICO: Remove if not needed.
-    # extra_args: --break-system-packages
   when:
     - ansible_distribution_major_version|int >= 12
 
