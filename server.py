@@ -152,7 +152,7 @@ def append_usb_assets(mountpoint):
     for root, _, filenames in walk(mountpoint):
         if 'usb_assets_key.yaml' in filenames:
             with open("%s/%s" % (root, 'usb_assets_key.yaml'), 'r') as yaml_file:
-                usb_file_settings = yaml.load(yaml_file).get('screenly')
+                usb_file_settings = yaml.load(yaml_file, Loader=yaml.Loader).get('screenly')
                 if usb_file_settings.get('key') == settings['usb_assets_key']:
                     if usb_file_settings.get('activate'):
                         usb_assets_settings.update({
