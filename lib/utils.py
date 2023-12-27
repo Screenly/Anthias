@@ -299,8 +299,8 @@ def url_fails(url):
 
 def download_video_from_youtube(uri, asset_id):
     home = getenv('HOME')
-    name = check_output(['youtube-dl', '-e', uri])
-    info = json.loads(check_output(['youtube-dl', '-j', uri]))
+    name = check_output(['yt-dlp', '-O', 'title', uri])
+    info = json.loads(check_output(['yt-dlp', '-j', uri]))
     duration = info['duration']
 
     location = path.join(home, 'screenly_assets', asset_id)
@@ -320,7 +320,7 @@ class YoutubeDownloadThread(Thread):
 
     def run(self):
         publisher = ZmqPublisher.get_instance()
-        call(['youtube-dl', '-f', 'mp4', '-o', self.location, self.uri])
+        call(['yt-dlp', '-f', 'mp4', '-o', self.location, self.uri])
         with db.conn(settings['database']) as conn:
             update(conn, self.asset_id, {'asset_id': self.asset_id, 'is_processing': 0})
 
