@@ -1,0 +1,32 @@
+Before starting to code
+
+Please follow these guidelines before starting to code you feature or bugfix.
+
+    If you want to implement a bugfix or feature request from an existing issue, please comment on that issue that you will work on it. 
+       This helps us to coordinate what needs to be done and what not.
+
+    If you want to implement a feature request without an existing issue, please create an issue, so we know what you are working on 
+       and discuss the feature.
+
+    For major feature implementations make sure you are able to maintain your code in the future in regard to bugs and possible 
+       code conflicts in future updates. 
+
+    Optionally you could join the Discord channel (link below), so you will hear instantly if something needs to be worked on.
+                https://discord.gg/4EGXP9MT 
+
+
+Please follow these guidelines before sending your pull request and making contributions.
+
+    When you submit a pull request, you agree that your code is published under the  GNU GENERAL PUBLIC LICENSE v2.0
+    Please link the issue you are referring to.
+    Do not include non-free software or modules with your code.
+    Make sure your pull request is set up to merge your branch to Anthias MSU-Denver Board development branch.
+    Make sure your branch is up to date with the development branch before submitting your pull request.
+    Stick to a similar style of code already in the project. Please look at current code to get an idea on how to do this.
+    Comment your code when necessary. Follow the CSS and PYTHON Documentation and Comments Standard for functions.
+    Please test your code. Make sure new features work as well as existing core features such as watching videos or loading subscriptions. 
+    Please make sure your code does not violate any standards set by our linter. It's up to you to make fixes whenever necessary. 
+    Please limit the amount of Node Modules that you introduce into the project. 
+    Please try to stay involved with the community and maintain your code. 
+    We are only a handful of developers working on the Board in our spare time.
+    We do not have time to work on everything, and it would be nice if you can maintain your code when necessary.
