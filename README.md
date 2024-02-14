@@ -22,7 +22,7 @@ To use our modified version of Anthias, you can follow the installation instruct
 
 The quickest way to get started is to use [Raspberry Pi Imager](https://www.screenly.io/blog/2022/12/13/anthias-and-screenly-now-in-rpi-imager/), where you can find Anthias under `Other specific-purpose OS`. Alternatively, you can find our pre-built disk images (powered by [Balena Hub](https://hub.balena.io/)) [here](https://github.com/YourOrganization/Anthias/releases/latest/).
 
-Please be aware that our fork is a work in progress, and some bugs may still exist. Track the known issues [here](https://github.com/YourOrganization/Anthias/issues). Engage in discussions and seek support in the [Anthias forums](https://forums.screenly.io).
+Please be aware that our fork is a work in progress, and some bugs may still exist. Track the known issues [here](https://github.com/MSU-Denver-Bulletin-Board/Anthias-MSU-Denver-Bulletin-Board). Engage in discussions and seek support in the [Anthias forums](https://forums.screenly.io).
 
 ### Installing on Raspberry Pi OS Lite
 
