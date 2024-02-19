@@ -28,5 +28,5 @@ Please follow these guidelines before sending your pull request and making contr
     Please make sure your code does not violate any standards set by our linter. It's up to you to make fixes whenever necessary. 
     Please limit the amount of Node Modules that you introduce into the project. 
     Please try to stay involved with the community and maintain your code. 
-    We are only a handful of developers working on the Board in our spare time.
+    We are only a handful of developers working on this project on our spare time.
     We do not have time to work on everything, and it would be nice if you can maintain your code when necessary.
