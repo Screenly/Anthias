@@ -45,7 +45,7 @@ jobs:
               --fleet screenly_ose/anthias-${{ matrix.board }} \
               --splash-image ansible/roles/splashscreen/files/splashscreen.png \
               --commit latest
-          balena_cli_version: 13.7.1
+          balena_cli_version: 18.1.2
 
       - name: balena CLI Action - configure
         uses: balena-labs-research/community-cli-action@1.0.0
