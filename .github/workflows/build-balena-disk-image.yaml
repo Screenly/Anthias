@@ -88,6 +88,12 @@ jobs:
             }' > "$(date -I)-$BALENA_IMAGE.json"
 
       # TODO: Remove this block when ready.
+      - name: List files
+        run: |
+          pwd
+          ls -l
+
+      # TODO: Remove this block when ready.
       - name: Upload Balena images as artifacts
         uses: actions/upload-artifact@v4
         with:
