@@ -12,7 +12,7 @@
   ansible.builtin.template:
     src: "{{ item }}"
     dest: "/etc/systemd/system/{{ item }}"
-    mode: 0644
+    mode: "0644"
     owner: root
     group: root
   with_items: "{{ network_systemd_units }}"
@@ -78,9 +78,15 @@
     dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
   when: manage_network|bool
 
+- name: Get stat of org.freedesktop.NetworkManager.pkla
+  ansible.builtin.stat:
+    path: /etc/polkit-1/localauthority/50-local.d/org.freedesktop.NetworkManager.pkla
+  register: nm_pkla_path
+
 - name: Copy org.freedesktop.NetworkManager.pkla to 50-local.d
   ansible.builtin.command: cp -f /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla /etc/polkit-1/localauthority/50-local.d
   when: manage_network|bool
+  changed_when: not nm_pkla_path.stat.exists
 
 - name: Disable dhcpcd
   ansible.builtin.systemd:
@@ -89,6 +95,7 @@
     enabled: false
   when:
     - ansible_distribution_major_version|int >= 9
+    - ansible_distribution_major_version|int <= 11
     - manage_network|bool
 
 - name: Activate NetworkManager

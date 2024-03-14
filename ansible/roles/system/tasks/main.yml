@@ -52,11 +52,13 @@
     regexp: ^(dtoverlay=vc4-kms-v3d)$
     replace: '#\1'
 
-- name: Add FKMS config for Pi 4.
+- name: Add FKMS config for Pi 4. (<= Debian 11)
   ansible.builtin.lineinfile:
     path: /boot/config.txt
     insertafter: '^\[pi4\]$'
     line: dtoverlay=vc4-fkms-v3d
+  when:
+    - ansible_distribution_major_version|int <= 11
 
 - name: Backup kernel boot args
   ansible.builtin.copy:
@@ -64,7 +66,7 @@
     dest: /boot/cmdline.txt.orig
     owner: root
     group: root
-    mode: 0755
+    mode: "0755"
     force: false
   tags:
     - touches_boot_partition
@@ -79,7 +81,7 @@
     dest: /boot/cmdline.txt
     owner: root
     group: root
-    mode: 0755
+    mode: "0755"
     force: true
   when: config_txt.stdout.find('NOOBS') == -1
   tags:
@@ -225,7 +227,7 @@
     state: present
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
 
 - name: Install Docker
   ansible.builtin.apt:
@@ -264,16 +266,26 @@
   tags:
     - system-upgrade
 
-- name: Remove deprecated pip dependencies
+- name: Remove deprecated pip dependencies (<= Debian 11)
   ansible.builtin.pip:
     name: supervisor
     state: absent
+  when:
+    - ansible_distribution_major_version|int <= 11
+
+- name: Remove deprecated pip dependencies (>= Debian 12)
+  ansible.builtin.pip:
+    name: supervisor
+    executable: /home/{{ lookup('env', 'USER') }}/installer_venv/bin/pip
+    state: absent
+  when:
+    - ansible_distribution_major_version|int >= 12
 
 - name: Copy in rc.local
   ansible.builtin.copy:
     src: rc.local
     dest: /etc/rc.local
-    mode: 0755
+    mode: "0755"
     owner: root
     group: root
 
@@ -281,7 +293,7 @@
   ansible.builtin.copy:
     src: 01_nodoc
     dest: /etc/dpkg/dpkg.cfg.d/01_nodoc
-    mode: 0644
+    mode: "0644"
     owner: root
     group: root
 
