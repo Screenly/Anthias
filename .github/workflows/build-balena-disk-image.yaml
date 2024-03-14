@@ -1,5 +1,11 @@
 name: Build Balena Disk Images
-on: workflow_dispatch
+on:
+workflow_dispatch:
+  inputs:
+    tag:
+      description: 'Tag to be used for the release'
+      required: true
+      type: string
 
 jobs:
   balena-build-images:
@@ -92,3 +98,4 @@ jobs:
           allowUpdates: true
           prerelease: true
           artifacts: "*raspberry*.zip,*raspberry*.sha256,*raspberry*.json"
+          tag: ${{ inputs.tag }}
