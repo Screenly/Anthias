@@ -33,7 +33,7 @@ jobs:
             os download "$BALENA_IMAGE" \
               --output "$BALENA_IMAGE.img" \
               --version default
-          balena_cli_version: 13.7.1
+          balena_cli_version: 18.1.2
 
       - name: balena CLI Action - preload
         uses: balena-labs-research/community-cli-action@1.0.0
@@ -56,7 +56,7 @@ jobs:
               "$BALENA_IMAGE.img" \
               --config-network=ethernet  \
               --fleet screenly_ose/anthias-${{ matrix.board }}
-          balena_cli_version: 13.7.1
+          balena_cli_version: 18.1.2
 
       - name: Package up image
         run: |
