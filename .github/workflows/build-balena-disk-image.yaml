@@ -6,6 +6,11 @@ on:
         description: 'Tag to be used for the release'
         required: true
         type: string
+      commit:
+        description: 'Commit or branch name'
+        required: false
+        type: string
+        default: 'master'
 
 jobs:
   balena-build-images:
@@ -99,3 +104,4 @@ jobs:
           prerelease: true
           artifacts: "*raspberry*.zip,*raspberry*.sha256,*raspberry*.json"
           tag: ${{ inputs.tag }}
+          commit: ${{ inputs.commit }}
