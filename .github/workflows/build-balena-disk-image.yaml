@@ -1,11 +1,11 @@
 name: Build Balena Disk Images
 on:
-workflow_dispatch:
-  inputs:
-    tag:
-      description: 'Tag to be used for the release'
-      required: true
-      type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to be used for the release'
+        required: true
+        type: string
 
 jobs:
   balena-build-images:
