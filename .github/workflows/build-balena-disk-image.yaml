@@ -1,17 +1,16 @@
 name: Build Balena Disk Images
 on:
   workflow_dispatch:
-    # TODO: Uncomment when ready.
-    # inputs:
-    #   tag:
-    #     description: 'Tag to be used for the release'
-    #     required: true
-    #     type: string
-    #   commit:
-    #     description: 'Commit or branch name'
-    #     required: false
-    #     type: string
-    #     default: 'master'
+    inputs:
+      tag:
+        description: 'Tag to be used for the release'
+        required: true
+        type: string
+      commit:
+        description: 'Commit or branch name'
+        required: false
+        type: string
+        default: 'master'
 
 jobs:
   balena-build-images:
