@@ -1,5 +1,5 @@
 cec==0.2.7
-celery==4.4.7
+celery==5.2.2
 certifi==2022.12.7
 cffi==1.14.4
 click==7.1.2
