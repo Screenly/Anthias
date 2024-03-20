@@ -24,7 +24,14 @@ echo "Running migration..."
 python3 ./bin/migrate.py
 
 if [[ ! -z $DEVELOPMENT_MODE ]]; then
-    flask run --host 0.0.0.0 --port 8080
+    # Initialize the Django development server.
+    ./manage.py makemigrations
+    ./manage.py migrate
+    ./manage.py runserver 0.0.0.0:4040
+
+    # Initialize the Flask development server.
+    # @TODO: Remove if not needed. You'll be migrating to Django anyway.
+    # flask run --host 0.0.0.0 --port 8080
 else
     python3 server.py
 fi
