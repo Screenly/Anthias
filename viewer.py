@@ -70,7 +70,9 @@ browser_bus = None
 r = connect_to_redis()
 
 try:
-    media_player = VLCMediaPlayer() if 'Raspberry Pi 4' in get_raspberry_model() else OMXMediaPlayer()
+    media_player = OMXMediaPlayer()
+    # @TODO: Remove the line above and uncomment the line below once VLC playback issue is fixed.
+    # media_player = VLCMediaPlayer() if 'Raspberry Pi 4' in get_raspberry_model() else OMXMediaPlayer()
 except sh.ErrorReturnCode_1:
     media_player = OMXMediaPlayer()
 

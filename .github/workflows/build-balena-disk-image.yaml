@@ -1,8 +1,6 @@
 name: Build Balena Disk Images
-on:
-  push:
-    tags:
-      - '*'
+on: workflow_dispatch
+
 jobs:
   balena-build-images:
     strategy:
