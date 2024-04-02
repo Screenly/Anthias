@@ -1,7 +1,7 @@
 ---
 - name: Create a config_path variable
   ansible.builtin.set_fact:
-    config_path: "{{ /boot/config.txt if ansible_distribution_major_version|int <= 11 else /boot/firmware/config.txt }}"
+    config_path: "{{ '/boot/config.txt' if ansible_distribution_major_version|int <= 11 else '/boot/firmware/config.txt' }}"
 
 - name: Check NOOBS
   ansible.builtin.command: cat {{ config_path }}
