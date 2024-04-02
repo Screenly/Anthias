@@ -12,6 +12,8 @@ export VIEWER_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB" \* 0.8 | bc)
 export DOCKER_TAG="latest"
 
 # Detect Raspberry Pi version
+if grep -qF "Raspberry Pi 5" /proc/device-tree/model; then
+    export DEVICE_TYPE="pi4" # @TODO: Change this to "pi5" later.
 if grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
     export DEVICE_TYPE="pi4"
 elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
