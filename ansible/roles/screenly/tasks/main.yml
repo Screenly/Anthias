@@ -5,7 +5,7 @@
     state: directory
     owner: "{{ lookup('env', 'USER') }}"
     group: "{{ lookup('env', 'USER') }}"
-    mode: 0755
+    mode: "0755"
   with_items:
     - .screenly
     - .config
@@ -15,7 +15,7 @@
   ansible.builtin.copy:
     owner: "{{ lookup('env', 'USER') }}"
     group: "{{ lookup('env', 'USER') }}"
-    mode: 0644
+    mode: "0644"
     src: default_assets.yml
     dest: "/home/{{ lookup('env', 'USER') }}/.screenly/default_assets.yml"
     force: true
@@ -30,6 +30,14 @@
   ansible.builtin.pip:
     requirements: "/home/{{ lookup('env', 'USER') }}/screenly/requirements/requirements.host.txt"
     extra_args: "--no-cache-dir --upgrade"
+  when: ansible_distribution_major_version|int <= 11
+
+- name: Install pip dependencies
+  ansible.builtin.pip:
+    executable: "/home/{{ lookup('env', 'USER') }}/installer_venv/bin/pip"
+    requirements: "/home/{{ lookup('env', 'USER') }}/screenly/requirements/requirements.host.txt"
+    extra_args: "--no-cache-dir --upgrade"
+  when: ansible_distribution_major_version|int >= 12
 
 - name: Remove screenly_utils.sh
   ansible.builtin.file:
@@ -46,7 +54,7 @@
   ansible.builtin.get_url:
     url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/install.sh
     dest: /usr/local/sbin/upgrade_screenly.sh
-    mode: 0700
+    mode: "0700"
     owner: root
     group: root
     force: true
@@ -55,7 +63,7 @@
   ansible.builtin.copy:
     src: screenly_overrides
     dest: /etc/sudoers.d/screenly_overrides
-    mode: 0440
+    mode: "0440"
     owner: root
     group: root
 
@@ -63,7 +71,7 @@
   ansible.builtin.copy:
     src: screenly_usb_assets.sh
     dest: /usr/local/bin/screenly_usb_assets.sh
-    mode: 0755
+    mode: "0755"
     owner: root
     group: root
 
@@ -71,7 +79,7 @@
   ansible.builtin.copy:
     src: 50-autoplay.rules
     dest: /etc/udev/rules.d/50-autoplay.rules
-    mode: 0644
+    mode: "0644"
     owner: root
     group: root
 
@@ -79,7 +87,7 @@
   ansible.builtin.copy:
     src: /lib/systemd/system/systemd-udevd.service
     dest: /etc/systemd/system/systemd-udevd.service
-    mode: 0644
+    mode: "0644"
     owner: root
     group: root
 
@@ -93,7 +101,7 @@
   ansible.builtin.template:
     src: "{{ item }}"
     dest: "/etc/systemd/system/{{ item }}"
-    mode: 0644
+    mode: "0644"
     owner: root
     group: root
   with_items: "{{ screenly_systemd_units }}"
