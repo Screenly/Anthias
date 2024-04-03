@@ -79,7 +79,7 @@ Run the unit tests.
 $ docker compose \
     -f docker-compose.test.yml \
     exec -T anthias-test bash ./bin/prepare_test_environment.sh -s
-$ docker-compose \
+$ docker compose \
     -f docker-compose.test.yml \
     exec -T anthias-test nosetests -v -a '!fixme'
 ```
