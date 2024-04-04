@@ -11,8 +11,11 @@ post-provisioning: >-
   With Anthias, a monitor/TV and a Raspberry Pi, you can create a remotely managed screen that can display:
 
   * Images
+
   * Video
+
   * Web pages
+
   * Video feeds (RTSP)
 
   Thanks to Balena [OpenFleets](https://hub.balena.io/organizations/screenly_ose/fleets), you benefit from having automatic updates. As soon as updates are shipped, they will be deployed to your device.
