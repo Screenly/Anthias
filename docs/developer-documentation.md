@@ -20,14 +20,28 @@ These components and their dependencies are mostly installed and handled with An
 
 To simplify development of the server module of Anthias, we've created a Docker container. This is intended to run on your local machine with the Anthias repository mounted as a volume.
 
-Do note that Anthias is using Docker's [buildx](https://docs.docker.com/engine/reference/commandline/buildx/) for the image builds. This is used both for cross compilation as well as for local caching. You might need to run `docker buildx create --use` first.
-
-Assuming you're in the source code repository, simply run:
+Run the following:
 
 ```bash
 $ ./bin/build_containers.sh
 $ docker compose \
     -f docker-compose.dev.yml up
+```
+
+```bash
+$ DOCKERFILES_ONLY=1 DEV_MODE=1 \
+    SKIP_VIEWER=1 SKIP_WIFI_CONNECT=1 ./bin/build_containers.sh
+
+# Dockerfiles (Dockerfile.$SERVICE) will be generated from the Dockerfile.$SERVICE.tmpl files.
+
+$ docker compose -f docker-compose.dev.yml down && \
+    docker-compose -f docker-compose.dev.yml build && \
+    docker-compose -f docker-compose.dev.yml up -d
+
+# This will start Anthias in development mode. If you change HTML, CSS, and JS files, changes will take
+# effect in the web UI on browser refresh.
+
+$ docker compose -f docker-compose.dev.yml exec anthias-server npm run coffee-dev
 ```
 
 ## Building containers locally
