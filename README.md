@@ -33,11 +33,11 @@ Should you encounter any issues, please file an issue either in this repository 
 
 The quickest way to get started is to use [Raspberry Pi Imager](https://www.screenly.io/blog/2022/12/13/anthias-and-screenly-now-in-rpi-imager/), where you can find Anthias under `Other specific-purpose OS`.
 
-![imager-01](./docs/img/imager-01.png)
+![imager-01](./docs/images/imager-01.png)
 
-![imager-02](./docs/img/imager-02.png)
+![imager-02](./docs/images/imager-02.png)
 
-![imager-03](./docs/img/imager-03.png)
+![imager-03](./docs/images/imager-03.png)
 
 ### Using the images from balenaHub
 
