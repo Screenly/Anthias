@@ -110,6 +110,11 @@ for container in ${SERVICES[@]}; do
         sed -i 's/RUN --mount.\+ /RUN /g' "docker/Dockerfile.$container"
     fi
 
+    if [[ -n "${DOCKERFILES_ONLY:-}" ]] && [[ "${DOCKERFILES_ONLY}" -ne 0 ]]; then
+        echo "Variable DOCKERFILES_ONLY is set. Skipping build for $container..."
+        continue
+    fi
+
     # If we're running on x86, remove all Pi specific packages
     if [ "$BOARD" == 'x86' ]; then
         if [[ $OSTYPE == 'darwin'* ]]; then
@@ -131,11 +136,6 @@ for container in ${SERVICES[@]}; do
             echo "Skipping test container for Pi builds..."
             continue
         fi
-    fi
-
-    if [[ -n "${DOCKERFILES_ONLY:-}" ]] && [[ "${DOCKERFILES_ONLY}" -ne 0 ]]; then
-        echo "Variable DOCKERFILES_ONLY is set. Skipping build for $container..."
-        continue
     fi
 
     docker "${DOCKER_BUILD_ARGS[@]}" \
