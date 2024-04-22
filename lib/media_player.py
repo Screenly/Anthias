@@ -48,8 +48,8 @@ class VLCMediaPlayer(MediaPlayer):
                 ]
 
             options += [
-                '--mmal-display=HDMI-2',
-                '--vout=mmal_vout',
+                '-q',
+                '--no-osd',
             ]
 
         return options

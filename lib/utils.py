@@ -250,10 +250,10 @@ def url_fails(url):
     If it is streaming
     """
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
-        run_mplayer = mplayer('-identify', '-frames', '0', '-nosound', url)
-        for line in run_mplayer.split('\n'):
-            if 'Clip info:' in line:
-                return False
+#        run_mplayer = mplayer('-identify', '-frames', '0', '-nosound', url)
+#        for line in run_mplayer.split('\n'):
+#            if 'Clip info:' in line:
+#                return False
         return True
 
     """

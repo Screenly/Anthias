@@ -9,8 +9,8 @@ set -euox pipefail
 export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 export GIT_SHORT_HASH=$(git rev-parse --short HEAD)
 export GIT_HASH=$(git rev-parse HEAD)
-export BASE_IMAGE_TAG=buster
-export DEBIAN_VERSION=buster
+export BASE_IMAGE_TAG=bookworm
+export DEBIAN_VERSION=bookworm
 
 declare -a SERVICES=(
     server
@@ -33,12 +33,12 @@ fi
 # Detect what platform
 if [ ! -f /proc/device-tree/model ] && [ -z "${BUILD_TARGET+x}" ]; then
     export BOARD="x86"
-    export BASE_IMAGE=debian
-    export TARGET_PLATFORM=linux/amd64
+    export BASE_IMAGE=balenalib/raspberrypi4-64-debian
+    export TARGET_PLATFORM=linux/arm64
 elif grep -qF "Raspberry Pi 4" /proc/device-tree/model || [ "${BUILD_TARGET}" == 'pi4' ]; then
-    export BASE_IMAGE=balenalib/raspberrypi3-debian
+    export BASE_IMAGE=balenalib/raspberrypi4-64-debian
     export BOARD="pi4"
-    export TARGET_PLATFORM=linux/arm/v8
+    export TARGET_PLATFORM=linux/arm64
 elif grep -qF "Raspberry Pi 3" /proc/device-tree/model || [ "${BUILD_TARGET}" == 'pi3' ]; then
     export BOARD="pi3"
     export BASE_IMAGE=balenalib/raspberrypi3-debian
@@ -77,8 +77,8 @@ for container in ${SERVICES[@]}; do
         export WEBVIEW_GIT_HASH=f5ef562982dcb6274c9716b9e375cc5ac0faba84
         export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.2"
     elif [ "$container" == 'test' ]; then
-        export CHROME_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chrome-linux64.zip"
-        export CHROMEDRIVER_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chromedriver-linux64.zip"
+        export CHROME_DL_URL="https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_107.0.5304.121-1_amd64.deb"
+        export CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/107.0.5304.62/chromedriver_linux64.zip"
     elif [ "$container" == 'wifi-connect' ]; then
         # We don't support wifi-connect on x86 yet.
         if [ "$BOARD" == 'x86' ]; then

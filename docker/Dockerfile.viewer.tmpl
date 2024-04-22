@@ -108,13 +108,13 @@ RUN --mount=type=cache,target=/var/cache/apt \
 
 # We need this to ensure that the wheels can be built.
 # Otherwise we get "invalid command 'bdist_wheel'"
-RUN --mount=type=cache,target=/root/.cache/pip \
+RUN \
     pip3 install wheel
 
 # Install Python requirements
 COPY requirements/requirements.viewer.txt /tmp/requirements.txt
 
-RUN --mount=type=cache,target=/root/.cache/pip \
+RUN \
     pip3 install -r /tmp/requirements.txt
 
 # Works around issue with `curl`

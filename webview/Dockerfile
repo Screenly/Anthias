@@ -1,4 +1,4 @@
-FROM --platform=linux/arm/v7 balenalib/raspberrypi3:buster as builder
+FROM --platform=linux/arm64 balenalib/raspberrypi4-64-debian:bookworm as builder
 
 # There are likely a large number of dependencies that can be stripped out here
 # depending on your needs (and probably in general). My primary objective was just
@@ -103,7 +103,7 @@ RUN apt-get update && \
 # https://www.enricozini.org/blog/2020/qt5/build-qt5-cross-builder-with-raspbian-sysroot-compiling-with-the-sysroot-continued/
 RUN dpkg --purge libraspberrypi-dev
 
-FROM debian:buster
+FROM debian:bookworm
 
 # This list can most likely be slimmed down *a lot* but that's for another day.
 RUN apt-get update && \
