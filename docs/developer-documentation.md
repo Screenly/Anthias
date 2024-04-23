@@ -42,7 +42,10 @@ $ docker compose -f docker-compose.dev.yml down && \
 # effect in the web UI on browser refresh.
 
 $ docker compose -f docker-compose.dev.yml exec anthias-server npm install
+
+# Run the two commands below in separate terminal windows to watch for changes in the source files.
 $ docker compose -f docker-compose.dev.yml exec anthias-server npm run coffee-dev
+$ docker compose -f docker-compose.dev.yml exec anthias-server npm run sass-dev
 ```
 
 ## Building containers locally
