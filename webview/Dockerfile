@@ -163,7 +163,6 @@ RUN apt-get update && \
         libxss1 \
         libxtst-dev \
         lsb-release \
-        ninja-build \
         nodejs \
         python \
         rsync \
@@ -179,6 +178,20 @@ RUN wget -q https://raw.githubusercontent.com/riscv/riscv-poky/master/scripts/sy
         -O /usr/local/bin/sysroot-relativelinks.py && \
     chmod +x /usr/local/bin/sysroot-relativelinks.py
 
+# Download and install CMake.
+RUN cd /opt && \
+    wget https://github.com/Kitware/CMake/releases/download/v3.29.2/cmake-3.29.2-linux-x86_64.tar.gz && \
+    tar -xf cmake-3.29.2-linux-x86_64.tar.gz && \
+    cp -r cmake-3.29.2-linux-x86_64/* /usr && \
+    rm -rf cmake-3.29.2-linux-x86_64.tar.gz cmake-3.29.2-Linux-x86_64
+
+# Download and install Ninja.
+RUN cd /opt && \
+    wget https://github.com/ninja-build/ninja/releases/download/v1.12.0/ninja-linux.zip && \
+    unzip ninja-linux.zip && \
+    cp ninja /usr/bin && \
+    rm -rf ninja-linux.zip ninja
+
 RUN mkdir -p /sysroot/usr /sysroot/opt /sysroot/lib
 COPY --from=builder /lib/ /sysroot/lib/
 COPY --from=builder /usr/include/ /sysroot/usr/include/
@@ -191,5 +204,5 @@ ENV CCACHE_DIR /src/ccache
 ARG GIT_HASH=0
 ENV GIT_HASH=$GIT_HASH
 
-COPY build_qt5.sh /usr/local/bin/
-CMD /usr/local/bin/build_qt5.sh
+COPY build_qt6.sh /usr/local/bin/
+CMD /usr/local/bin/build_qt6.sh

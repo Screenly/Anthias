@@ -168,7 +168,6 @@ function build_qt () {
             -force-pkg-config \
             -glib \
             -make libs \
-            -no-compile-examples \
             -no-cups \
             -no-gbm \
             -no-gtk \
@@ -198,6 +197,7 @@ function build_qt () {
             -skip qtmacextras \
             -skip qtpurchasing \
             -skip qtquick3d \
+            -skip qtdoc \
             -skip qtquickcontrols \
             -skip qtquickcontrols2 \
             -skip qtquicktimeline \
@@ -224,8 +224,9 @@ function build_qt () {
 
         # The RAM consumption is proportional to the amount of cores.
         # On an 8 core box, the build process will require ~16GB of RAM.
-        make -j"$MAKE_CORES"
-        make install
+
+        cmake --build . --parallel -- -j "$MAKE_CORES"
+        cmake --install .
 
         # I'm not sure we actually need this anymore. It's from an
         # old build process for QT 4.9 that we used.
@@ -263,7 +264,7 @@ function build_qt () {
 /usr/local/bin/sysroot-relativelinks.py /sysroot
 
 fetch_cross_compile_tool
-fetch_rpi_firmware
+# fetch_rpi_firmware
 
 if [ ! "${TARGET-}" ]; then
     # Let's work our way through all Pis in order of relevance

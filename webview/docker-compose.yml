@@ -1,0 +1,17 @@
+version: "3.8"
+services:
+  qt-builder:
+    image: qt-builder
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: bash
+    environment:
+      - TARGET=${TARGET:-pi4}
+    tty: true
+    stdin_open: true
+    volumes:
+      - ~/tmp/qt-src:/src:Z
+      - ~/tmp/qt-build:/build:Z
+      - ./build_qt6.sh:/usr/local/bin/build_qt6.sh
+      - ./:/webview:ro
