@@ -35,12 +35,13 @@ $ DOCKERFILES_ONLY=1 DEV_MODE=1 \
 # Dockerfiles (Dockerfile.$SERVICE) will be generated from the Dockerfile.$SERVICE.tmpl files.
 
 $ docker compose -f docker-compose.dev.yml down && \
-    docker-compose -f docker-compose.dev.yml build && \
-    docker-compose -f docker-compose.dev.yml up -d
+    docker compose -f docker-compose.dev.yml build && \
+    docker compose -f docker-compose.dev.yml up -d
 
 # This will start Anthias in development mode. If you change HTML, CSS, and JS files, changes will take
 # effect in the web UI on browser refresh.
 
+$ docker compose -f docker-compose.dev.yml exec anthias-server npm install
 $ docker compose -f docker-compose.dev.yml exec anthias-server npm run coffee-dev
 ```
 
