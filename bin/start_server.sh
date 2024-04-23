@@ -24,7 +24,6 @@ echo "Running migration..."
 python3 ./bin/migrate.py
 
 if [[ ! -z $DEVELOPMENT_MODE ]]; then
-    apt-get -y install --no-install-recommends nodejs npm # @TODO: Move this to a Dockerfile.
     flask run --host 0.0.0.0 --port 8080
 else
     python3 server.py

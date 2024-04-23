@@ -11,5 +11,9 @@ WORKDIR /usr/src/app
 ENV GIT_HASH=$GIT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
 ENV GIT_BRANCH=$GIT_BRANCH
+ENV DEV_MODE=$DEV_MODE
+
+COPY bin/install_nodejs.sh /tmp/install_nodejs.sh
+RUN bash /tmp/install_nodejs.sh
 
 CMD ["bash", "bin/start_server.sh"]
