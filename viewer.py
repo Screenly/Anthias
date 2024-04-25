@@ -372,10 +372,15 @@ def view_video(uri, duration):
 
     view_image('null')
 
+    timeout = 0
+
     try:
         while media_player.is_playing():
             watchdog()
             sleep(1)
+            timeout += 1
+            if timeout > int(duration):
+                break
     except sh.ErrorReturnCode_1:
         logging.info('Resource URI is not correct, remote host is not responding or request was rejected.')
 
