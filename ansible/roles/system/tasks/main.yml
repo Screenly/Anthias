@@ -2,6 +2,7 @@
 - name: Create a config_path variable
   ansible.builtin.set_fact:
     config_path: "{{ '/boot/config.txt' if ansible_distribution_major_version|int <= 11 else '/boot/firmware/config.txt' }}"
+    cmdline_path: "{{ '/boot/cmdline.txt' if ansible_distribution_major_version|int <= 11 else '/boot/firmware/cmdline.txt' }}"
 
 - name: Check NOOBS
   ansible.builtin.command: cat {{ config_path }}
@@ -80,8 +81,8 @@
 
 - name: Backup kernel boot args
   ansible.builtin.copy:
-    src: /boot/cmdline.txt
-    dest: /boot/cmdline.txt.orig
+    src: "{{ cmdline_path }}"
+    dest: "{{ cmdline_path }}.orig"
     owner: root
     group: root
     mode: "0755"
@@ -95,8 +96,8 @@
 
 - name: Copy cmdline.txt.orig to cmdline.txt
   ansible.builtin.copy:
-    src: /boot/cmdline.txt.orig
-    dest: /boot/cmdline.txt
+    src: "{{ cmdline_path }}.orig"
+    dest: "{{ cmdline_path }}"
     owner: root
     group: root
     mode: "0755"
@@ -107,14 +108,14 @@
 
 - name: For splash screen using Plymouth
   ansible.builtin.replace:
-    dest: /boot/cmdline.txt
+    dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!splash).)*$)
     replace: \1 splash
   when: ansible_distribution_major_version|int >= 7
 
 - name: Remove blinking cursor
   ansible.builtin.replace:
-    dest: /boot/cmdline.txt
+    dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!vt.global_cursor_default=0).)*$)
     replace: \1 vt.global_cursor_default=0
   when: ansible_distribution_major_version|int >= 7
@@ -123,7 +124,7 @@
 
 - name: Plymouth ignore serial consoles
   ansible.builtin.replace:
-    dest: /boot/cmdline.txt
+    dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!plymouth.ignore-serial-consoles).)*$)
     replace: \1 plymouth.ignore-serial-consoles
   when: ansible_distribution_major_version|int >= 7
@@ -132,7 +133,7 @@
 
 - name: Use Systemd as init and quiet boot process
   ansible.builtin.replace:
-    dest: /boot/cmdline.txt
+    dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!quiet init=/lib/systemd/systemd).)*$)
     replace: \1 quiet init=/lib/systemd/systemd
   tags:
@@ -140,7 +141,7 @@
 
 - name: Set ethN/wlanN names for interfaces
   ansible.builtin.replace:
-    dest: /boot/cmdline.txt
+    dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!net\.ifnames=0).)*$)
     replace: \1 net.ifnames=0
   tags:
@@ -148,7 +149,7 @@
 
 - name: Set cgroup_enable required by containerd for OOM
   ansible.builtin.replace:
-    dest: /boot/cmdline.txt
+    dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!cgroup_enable=memory).)*$)
     replace: \1 cgroup_enable=memory
   when: ansible_distribution_major_version|int >= 7
@@ -157,7 +158,7 @@
 
 - name: Set cgroup_memory required by containerd for OOM
   ansible.builtin.replace:
-    dest: /boot/cmdline.txt
+    dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!cgroup_memory=1).)*$)
     replace: \1 cgroup_memory=1
   when: ansible_distribution_major_version|int >= 7
