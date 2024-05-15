@@ -19,7 +19,13 @@
 ENV DEBIAN_FRONTEND noninteractive
 
 RUN --mount=type=cache,target=/var/cache/apt \
-    apt-get -y install wget unzip
+    apt-get -y install wget \
+    unzip \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0.0 \
+    libcups2 \
+    libxcomposite1
 
 # @TODO: Uncomment the lines below when test_add_asset_streaming is fixed.
 # WORKDIR /opt/ffmpeg
@@ -30,11 +36,9 @@ ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
 ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt
 
 RUN wget $CHROMEDRIVER_DL_URL -O /tmp/chromedriver.zip && \
-    unzip -o /tmp/chromedriver.zip -d /usr/bin
-
-RUN --mount=type=cache,target=/var/cache/apt \
-    wget $CHROME_DL_URL -O /tmp/chrome.deb && \
-    apt-get install -y /tmp/chrome.deb
+    unzip -o /tmp/chromedriver.zip -d /opt
+RUN wget $CHROME_DL_URL -O /tmp/chrome.zip && \
+    unzip -o /tmp/chrome.zip -d /opt
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install \
@@ -53,3 +57,4 @@ RUN cp ansible/roles/screenly/files/screenly.db \
 ENV GIT_HASH=$GIT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
 ENV GIT_BRANCH=$GIT_BRANCH
+ENV PATH="/opt/chrome-linux64:/opt/chromedriver-linux64:\$PATH"

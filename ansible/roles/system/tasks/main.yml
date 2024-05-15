@@ -1,6 +1,11 @@
 ---
+- name: Create a config_path variable
+  ansible.builtin.set_fact:
+    config_path: "{{ '/boot/config.txt' if ansible_distribution_major_version|int <= 11 else '/boot/firmware/config.txt' }}"
+    cmdline_path: "{{ '/boot/cmdline.txt' if ansible_distribution_major_version|int <= 11 else '/boot/firmware/cmdline.txt' }}"
+
 - name: Check NOOBS
-  ansible.builtin.command: cat /boot/config.txt
+  ansible.builtin.command: cat {{ config_path }}
   register: config_txt
   changed_when: false
   tags:
@@ -8,7 +13,7 @@
 
 - name: Make sure we have proper framebuffer depth
   ansible.builtin.lineinfile:
-    dest: /boot/config.txt
+    dest: "{{ config_path }}"
     regexp: ^framebuffer_depth=
     line: framebuffer_depth=32
   tags:
@@ -16,7 +21,7 @@
 
 - name: Fix framebuffer bug
   ansible.builtin.lineinfile:
-    dest: /boot/config.txt
+    dest: "{{ config_path }}"
     regexp: ^framebuffer_ignore_alpha=
     line: framebuffer_ignore_alpha=1
   tags:
@@ -24,7 +29,7 @@
 
 - name: Add gpu_mem_256 in config.txt if it doesn't exist
   ansible.builtin.lineinfile:
-    path: /boot/config.txt
+    path: "{{ config_path }}"
     line: gpu_mem_256=96
   when: config_txt.stdout.find('gpu_mem_256') == -1
   tags:
@@ -32,7 +37,7 @@
 
 - name: Add gpu_mem_512 in config.txt if it doesn't exist
   ansible.builtin.lineinfile:
-    path: /boot/config.txt
+    path: "{{ config_path }}"
     line: gpu_mem_512=128
   when: config_txt.stdout.find('gpu_mem_512') == -1
   tags:
@@ -40,31 +45,47 @@
 
 - name: Add gpu_mem_1024 in config.txt if it doesn't exist
   ansible.builtin.lineinfile:
-    path: /boot/config.txt
+    path: "{{ config_path }}"
     line: gpu_mem_1024=196
   when: config_txt.stdout.find('gpu_mem_1024') == -1
   tags:
     - touches_boot_partition
 
+- name: Add pi4 section in config.txt if it doesn't exist
+  ansible.builtin.lineinfile:
+    path: "{{ config_path }}"
+    line: "[pi4]"
+  when: config_txt.stdout.find('[pi4]') == -1
+
 - name: Comment out the original dtoverlay config.
   ansible.builtin.replace:
-    dest: /boot/config.txt
+    dest: "{{ config_path }}"
     regexp: ^(dtoverlay=vc4-kms-v3d)$
     replace: '#\1'
 
-- name: Add FKMS config for Pi 4.
+- name: Add FKMS config for Pi 4. (<= Debian 11)
   ansible.builtin.lineinfile:
-    path: /boot/config.txt
+    path: "{{ config_path }}"
     insertafter: '^\[pi4\]$'
     line: dtoverlay=vc4-fkms-v3d
+  when:
+    - ansible_distribution_major_version|int <= 11
+
+- name: Add FKMS config for Pi 4. (>= Debian 12)
+  ansible.builtin.lineinfile:
+    path: "{{ config_path }}"
+    insertafter: '^\[pi4\]$'
+    line: dtoverlay=vc4-fkms-v3d
+  when:
+    - ansible_distribution_major_version|int >= 12
 
 - name: Backup kernel boot args
   ansible.builtin.copy:
-    src: /boot/cmdline.txt
-    dest: /boot/cmdline.txt.orig
+    src: "{{ cmdline_path }}"
+    dest: "{{ cmdline_path }}.orig"
     owner: root
     group: root
-    mode: 0755
+    mode: "0755"
     force: false
   tags:
     - touches_boot_partition
@@ -75,11 +96,11 @@
 
 - name: Copy cmdline.txt.orig to cmdline.txt
   ansible.builtin.copy:
-    src: /boot/cmdline.txt.orig
-    dest: /boot/cmdline.txt
+    src: "{{ cmdline_path }}.orig"
+    dest: "{{ cmdline_path }}"
     owner: root
     group: root
-    mode: 0755
+    mode: "0755"
     force: true
   when: config_txt.stdout.find('NOOBS') == -1
   tags:
@@ -87,14 +108,14 @@
 
 - name: For splash screen using Plymouth
   ansible.builtin.replace:
-    dest: /boot/cmdline.txt
+    dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!splash).)*$)
     replace: \1 splash
   when: ansible_distribution_major_version|int >= 7
 
 - name: Remove blinking cursor
   ansible.builtin.replace:
-    dest: /boot/cmdline.txt
+    dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!vt.global_cursor_default=0).)*$)
     replace: \1 vt.global_cursor_default=0
   when: ansible_distribution_major_version|int >= 7
@@ -103,7 +124,7 @@
 
 - name: Plymouth ignore serial consoles
   ansible.builtin.replace:
-    dest: /boot/cmdline.txt
+    dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!plymouth.ignore-serial-consoles).)*$)
     replace: \1 plymouth.ignore-serial-consoles
   when: ansible_distribution_major_version|int >= 7
@@ -112,7 +133,7 @@
 
 - name: Use Systemd as init and quiet boot process
   ansible.builtin.replace:
-    dest: /boot/cmdline.txt
+    dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!quiet init=/lib/systemd/systemd).)*$)
     replace: \1 quiet init=/lib/systemd/systemd
   tags:
@@ -120,7 +141,7 @@
 
 - name: Set ethN/wlanN names for interfaces
   ansible.builtin.replace:
-    dest: /boot/cmdline.txt
+    dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!net\.ifnames=0).)*$)
     replace: \1 net.ifnames=0
   tags:
@@ -128,7 +149,7 @@
 
 - name: Set cgroup_enable required by containerd for OOM
   ansible.builtin.replace:
-    dest: /boot/cmdline.txt
+    dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!cgroup_enable=memory).)*$)
     replace: \1 cgroup_enable=memory
   when: ansible_distribution_major_version|int >= 7
@@ -137,7 +158,7 @@
 
 - name: Set cgroup_memory required by containerd for OOM
   ansible.builtin.replace:
-    dest: /boot/cmdline.txt
+    dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!cgroup_memory=1).)*$)
     replace: \1 cgroup_memory=1
   when: ansible_distribution_major_version|int >= 7
@@ -225,7 +246,7 @@
     state: present
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
 
 - name: Install Docker
   ansible.builtin.apt:
@@ -264,16 +285,26 @@
   tags:
     - system-upgrade
 
-- name: Remove deprecated pip dependencies
+- name: Remove deprecated pip dependencies (<= Debian 11)
   ansible.builtin.pip:
     name: supervisor
     state: absent
+  when:
+    - ansible_distribution_major_version|int <= 11
+
+- name: Remove deprecated pip dependencies (>= Debian 12)
+  ansible.builtin.pip:
+    name: supervisor
+    executable: /home/{{ lookup('env', 'USER') }}/installer_venv/bin/pip
+    state: absent
+  when:
+    - ansible_distribution_major_version|int >= 12
 
 - name: Copy in rc.local
   ansible.builtin.copy:
     src: rc.local
     dest: /etc/rc.local
-    mode: 0755
+    mode: "0755"
     owner: root
     group: root
 
@@ -281,7 +312,7 @@
   ansible.builtin.copy:
     src: 01_nodoc
     dest: /etc/dpkg/dpkg.cfg.d/01_nodoc
-    mode: 0644
+    mode: "0644"
     owner: root
     group: root
 

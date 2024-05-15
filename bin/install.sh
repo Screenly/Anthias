@@ -152,16 +152,23 @@ if [ ! -f /etc/locale.gen ]; then
     sudo locale-gen
 fi
 
+RASPBIAN_VERSION=$(lsb_release -rs)
+APT_INSTALL_ARGS=(
+  "git"
+  "libffi-dev"
+  "libssl-dev"
+  "whois"
+)
+
+if [ "$RASPBIAN_VERSION" = "12" ]; then
+  APT_INSTALL_ARGS+=("python3-full")
+else
+  APT_INSTALL_ARGS+=("python3" "python3-dev" "python3-pip")
+fi
+
 sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' /etc/apt/sources.list
 sudo apt update -y
-sudo apt-get install -y --no-install-recommends \
-    git \
-    libffi-dev \
-    libssl-dev \
-    python3 \
-    python3-dev \
-    python3-pip \
-    whois
+sudo apt-get install -y --no-install-recommends "${APT_INSTALL_ARGS[@]}"
 
 if [ "$NETWORK" == 'y' ]; then
   export MANAGE_NETWORK=true
@@ -177,19 +184,27 @@ else
     ANSIBLE_VERSION=ansible==2.8.8
 fi
 
+SUDO_ARGS=()
+
+if [ "$RASPBIAN_VERSION" = "12" ]; then
+    python3 -m venv /home/${USER}/installer_venv
+    source /home/${USER}/installer_venv/bin/activate
+
+    SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
+fi
+
 # @TODO
 # Remove me later. Cryptography 38.0.3 won't build at the moment.
 # See https://github.com/screenly/anthias/issues/1654
-sudo pip install cryptography==38.0.2
+sudo ${SUDO_ARGS[@]} pip install cryptography==38.0.2
+sudo ${SUDO_ARGS[@]} pip install "$ANSIBLE_VERSION"
 
-sudo pip install "$ANSIBLE_VERSION"
-
-sudo -u ${USER} ansible localhost \
+sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
     -m git \
     -a "repo=$REPOSITORY dest=/home/${USER}/screenly version=$BRANCH force=no"
 cd /home/${USER}/screenly/ansible
 
-sudo -E -u ${USER} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
+sudo -E -u ${USER} ${SUDO_ARGS[@]} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
 
 # Pull down and install containers
 sudo -u ${USER} /home/${USER}/screenly/bin/upgrade_containers.sh
