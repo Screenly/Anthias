@@ -54,6 +54,7 @@ services:
       - "host.docker.internal:host-gateway"
     privileged: true
     restart: always
+    shm_size: ${SHM_SIZE}
     volumes:
       - resin-data:/data
     labels:
