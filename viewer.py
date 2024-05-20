@@ -368,7 +368,7 @@ def view_image(uri, uri_type=ImageUriType.SCREENLY_ASSETS):
         if uri_type == ImageUriType.STATIC:
             http_url = f'http://anthias-nginx/image_view?path=static/img/{uri}'
         elif uri_type == ImageUriType.BLANK:
-            http_url = f'http://anthias-nginx/image_view'
+            http_url = 'http://anthias-nginx/image_view'
         else:
             file_name = path.basename(uri)
             http_url = f'http://anthias-nginx/image_view?path=screenly_assets/{file_name}'

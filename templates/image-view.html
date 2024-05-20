@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8"/>
     <title>Image Asset Display</title>
@@ -20,7 +20,7 @@
 </head>
 <body>
     {% if context.uri %}
-        <img src="{{ context.uri }}">
+        <img src="{{ context.uri }}" alt="Image Asset">
     {% endif %}
 </body>
 </html>
