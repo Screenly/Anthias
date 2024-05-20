@@ -19,7 +19,7 @@ hurry.filesize==0.9
 importlib-metadata==4.13.0
 itsdangerous==2.0.1
 Jinja2==2.11.3
-kombu==4.6.11
+kombu==5.2.2
 Mako==1.2.2
 MarkupSafe==1.1.1
 netifaces==0.10.9
