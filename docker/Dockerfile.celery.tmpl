@@ -12,8 +12,7 @@ ENV GIT_HASH=$GIT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
 ENV GIT_BRANCH=$GIT_BRANCH
 
-CMD celery worker \
-  -A server.celery \
+CMD celery -A server.celery worker \
   -B -n worker@screenly \
   --loglevel=info \
   --schedule \
