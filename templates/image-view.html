@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <title>Image Asset Display</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000 center no-repeat;
+            overflow: hidden;
+        }
+
+        img {
+            width: 100vw;
+            height: 100vh;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+    {% if context.uri %}
+        <img src="{{ context.uri }}">
+    {% endif %}
+</body>
+</html>
