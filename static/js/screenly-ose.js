@@ -1109,9 +1109,10 @@
         address = wsAddresses[k];
         try {
           ws = new WebSocket(address);
-          results.push(ws.onmessage = function(x) {
+          results.push(ws.onmessage = async function(x) {
+            var assetId = await x.data.text()
             var model, save;
-            model = API.assets.get(x.data);
+            model = API.assets.get(assetId);
             if (model) {
               return save = model.fetch();
             }
