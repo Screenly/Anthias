@@ -646,9 +646,10 @@ API.App = class App extends Backbone.View
       try
         ws = new WebSocket address
         ws.onmessage = (x) ->
-          model = API.assets.get(x.data)
-          if model
-            save = model.fetch()
+          x.data.text().then (assetId) ->
+            model = API.assets.get(assetId)
+            if model
+              save = model.fetch()
       catch error
         no
 
