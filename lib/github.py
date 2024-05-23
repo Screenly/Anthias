@@ -122,7 +122,14 @@ def get_latest_docker_hub_hash(device_type):
     """
 
     url = 'https://hub.docker.com/v2/namespaces/screenly/repositories/anthias-server/tags'
-    response = requests_get(url)
+
+    try:
+        response = requests_get(url)
+        response.raise_for_status()
+    except exceptions.RequestException as exc:
+        logging.debug('Failed to fetch latest Docker Hub tags: %s', exc)
+        return None
+
     data = response.json()
     results = data['results']
 
