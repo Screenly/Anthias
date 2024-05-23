@@ -172,7 +172,7 @@ class ZmqPublisher(object):
         return cls.INSTANCE
 
     def send_to_ws_server(self, msg):
-        self.socket.send("ws_server {}".format(msg))
+        self.socket.send("ws_server {}".format(msg).encode('utf-8'))
 
     def send_to_viewer(self, msg):
         self.socket.send_string("viewer {}".format(msg))
