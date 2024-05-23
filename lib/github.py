@@ -133,6 +133,10 @@ def get_latest_docker_hub_hash(device_type):
         and result['name'].endswith(f'-{device_type}')
     ]
 
+    if len(reduced) == 0:
+        logging.warning('No commit hash found for device type: %s', device_type)
+        return None
+
     # Results are sorted by date in descending order, so we can just return the first one.
     return reduced[0]
 
