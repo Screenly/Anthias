@@ -161,7 +161,7 @@ function build_qt () {
             -ccache \
             -confirm-license \
             -dbus-linked \
-            -device-option CROSS_COMPILE=/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf- \
+            -device-option CROSS_COMPILE=aarch64-linux-gnu- \
             -eglfs \
             -evdev \
             -extprefix "$SRC_DIR/qt6pi" \
@@ -182,6 +182,7 @@ function build_qt () {
             -prefix /usr/local/qt6pi \
             -qpa eglfs \
             -qt-pcre \
+            -qt-host-path /src/qt-host \
             -reduce-exports \
             -release \
             -skip qt3d \
@@ -220,7 +221,9 @@ function build_qt () {
             -system-libjpeg \
             -system-libpng \
             -system-zlib \
-            -sysroot /sysroot
+            -sysroot /sysroot -- \
+            -DCMAKE_TOOLCHAIN_FILE=/webview/toolchain.cmake \
+            -DQT_HOST_PATH=/src/qt-host
 
         # The RAM consumption is proportional to the amount of cores.
         # On an 8 core box, the build process will require ~16GB of RAM.

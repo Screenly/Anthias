@@ -1,4 +1,4 @@
-FROM --platform=linux/arm/v7 balenalib/raspberrypi3:buster as builder
+FROM --platform=linux/arm/v7 balenalib/raspberrypi3:bullseye as builder
 
 # There are likely a large number of dependencies that can be stripped out here
 # depending on your needs (and probably in general). My primary objective was just
@@ -8,7 +8,7 @@ RUN apt-get update && \
         apt-utils \
         firebird-dev \
         freetds-dev \
-        gstreamer-tools \
+        gstreamer1.0-tools \
         gstreamer1.0-plugins-base \
         gstreamer1.0-plugins-good \
         gstreamer1.0-plugins-ugly \
@@ -103,7 +103,13 @@ RUN apt-get update && \
 # https://www.enricozini.org/blog/2020/qt5/build-qt5-cross-builder-with-raspbian-sysroot-compiling-with-the-sysroot-continued/
 RUN dpkg --purge libraspberrypi-dev
 
-FROM debian:buster
+# nico start - old code
+# FROM debian:buster
+# nico end
+
+# nico start - new code
+FROM debian:bullseye
+# nico end
 
 # This list can most likely be slimmed down *a lot* but that's for another day.
 RUN apt-get update && \
@@ -114,9 +120,8 @@ RUN apt-get update && \
         cowsay \
         flex \
         freetds-dev \
-        g++ \
-        g++-multilib \
-        gcc-multilib \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu \
         git \
         gperf \
         gyp \
@@ -196,7 +201,8 @@ RUN mkdir -p /sysroot/usr /sysroot/opt /sysroot/lib
 COPY --from=builder /lib/ /sysroot/lib/
 COPY --from=builder /usr/include/ /sysroot/usr/include/
 COPY --from=builder /usr/lib/ /sysroot/usr/lib/
-COPY --from=builder /opt/vc/ /sysroot/opt/vc/
+# todo nico: remove line below if not needed
+# COPY --from=builder /opt/vc/ /sysroot/opt/vc/
 
 ENV BUILD_WEBVIEW 1
 ENV CCACHE_MAXSIZE 10G
@@ -205,4 +211,6 @@ ARG GIT_HASH=0
 ENV GIT_HASH=$GIT_HASH
 
 COPY build_qt6.sh /usr/local/bin/
-CMD /usr/local/bin/build_qt6.sh
+
+# todo nico: uncomment when ready
+# CMD /usr/local/bin/build_qt6.sh
