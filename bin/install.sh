@@ -105,7 +105,7 @@ export BRANCH="master"
       tput setaf 9
 
       echo ""
-      echo "Anthias requires a wired Ethernet connection if you want to manage your network on this version of Raspbian."
+      echo "Anthias requires a wired Ethernet connection if you want to manage your network on this version of Raspberry Pi OS."
       echo "Please connect your Raspberry Pi to the Internet and make sure that Wi-Fi is disabled."
       echo "If you want to continue without network management, run the installer again and answer 'n' when prompted."
       echo ""
