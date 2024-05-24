@@ -221,10 +221,6 @@ fi
 sudo ${SUDO_ARGS[@]} pip install cryptography==38.0.2
 sudo ${SUDO_ARGS[@]} pip install "$ANSIBLE_VERSION"
 
-# @TODO: Remove the two lines below once the PR's ready to be merged.
-export REPOSITORY='https://github.com/nicomiguelino/Anthias.git'
-export BRANCH=${CUSTOM_BRANCH}
-
 sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
     -m git \
     -a "repo=$REPOSITORY dest=/home/${USER}/screenly version=$BRANCH force=no"
