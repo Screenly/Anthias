@@ -106,7 +106,7 @@ export BRANCH="master"
 
       echo ""
       echo "Anthias requires a wired Ethernet connection if you want to manage your network on this version of Raspbian."
-      echo "Please connect your Raspberry Pi to the Internet using an Ethernet connection and try again."
+      echo "Please connect your Raspberry Pi to the Internet and make sure that Wi-Fi is disabled."
       echo "If you want to continue without network management, run the installer again and answer 'n' when prompted."
       echo ""
 
