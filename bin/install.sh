@@ -14,14 +14,10 @@ fi
 
 RASPBIAN_VERSION=$(lsb_release -rs)
 WLAN_ON=false
-ETH_ON=true
 
-if [ -d /sys/class/net/wlan0/operstate ] && [ "$(cat /sys/class/net/wlan0/operstate)" = "up" ]; then
+# @TODO: Consider devices that uses Wi-Fi dongle.
+if [ -f /sys/class/net/wlan0/operstate ] && [ "$(cat /sys/class/net/wlan0/operstate)" = "up" ]; then
   WLAN_ON=true
-fi
-
-if [ -d /sys/class/net/eth0/operstate ] && [ "$(cat /sys/class/net/eth0/operstate)" = "up" ]; then
-  ETH_ON=true
 fi
 
 while getopts ":w:b:n:s:" arg; do
@@ -105,10 +101,16 @@ export BRANCH="master"
   echo && read -p "Do you want Anthias to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
 
   if [ "$NETWORK" = 'y' ]; then
-    if [ "$RASPBIAN_VERSION" -lt 12 ] && [ "$WLAN_ON" = true ] && [ "$ETH_ON" = false ]; then
+    if [ "$RASPBIAN_VERSION" -lt 12 ] && [ "$WLAN_ON" = true ]; then
+      tput setaf 9
+
+      echo ""
       echo "Anthias requires a wired Ethernet connection if you want to manage your network on this version of Raspbian."
       echo "Please connect your Raspberry Pi to the Internet using an Ethernet connection and try again."
       echo "If you want to continue without network management, run the installer again and answer 'n' when prompted."
+      echo ""
+
+      tput sgr 0
       exit 1
     fi
   fi
