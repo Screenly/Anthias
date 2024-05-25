@@ -1653,14 +1653,6 @@ def viewIndex():
     )
 
 
-@app.route('/image_view')
-def image_view():
-    return template(
-        'image-view.html',
-        uri=request.args.get('path')
-    )
-
-
 @app.route('/settings', methods=["GET", "POST"])
 @authorized
 def settings_page():
