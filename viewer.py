@@ -16,7 +16,6 @@ import re
 import string
 import sys
 from datetime import datetime, timedelta
-from enum import Enum
 from jinja2 import Template
 from os import path, getenv, utime, system
 from random import shuffle
@@ -60,7 +59,7 @@ EMPTY_PL_DELAY = 5  # secs
 INITIALIZED_FILE = '/.screenly/initialized'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 
-LOAD_SCREEN = 'loading.png'
+LOAD_SCREEN = 'http://{}:{}/{}'.format(LISTEN, PORT, 'static/img/loading.png')
 SPLASH_PAGE_URL = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
 ZMQ_HOST_PUB_URL = 'tcp://host.docker.internal:10001'
 
@@ -81,12 +80,6 @@ HOME = None
 db_conn = None
 
 scheduler = None
-
-
-class ImageUriType(Enum):
-    STATIC = 'static'
-    SCREENLY_ASSETS = 'screenly_assets'
-    BLANK = 'blank'
 
 
 def sigalrm(signum, frame):
@@ -357,22 +350,13 @@ def view_webpage(uri):
     logging.info('Current url is {0}'.format(current_browser_url))
 
 
-def view_image(uri, uri_type=ImageUriType.SCREENLY_ASSETS):
+def view_image(uri):
     global current_browser_url
 
     if browser is None or not browser.process.alive:
         load_browser()
-
     if current_browser_url is not uri:
-
-        if uri_type == ImageUriType.STATIC:
-            http_url = f'http://anthias-nginx/image_view?path=static/img/{uri}'
-        elif uri_type == ImageUriType.BLANK:
-            http_url = 'http://anthias-nginx/image_view'
-        else:
-            file_name = path.basename(uri)
-            http_url = f'http://anthias-nginx/image_view?path=screenly_assets/{file_name}'
-        browser_bus.loadPage(http_url)
+        browser_bus.loadImage(uri)
         current_browser_url = uri
     logging.info('Current url is {0}'.format(current_browser_url))
 
@@ -386,7 +370,7 @@ def view_video(uri, duration):
     media_player.set_asset(uri, duration)
     media_player.play()
 
-    view_image('null', uri_type=ImageUriType.BLANK)
+    view_image('null')
 
     try:
         while media_player.is_playing():
@@ -414,7 +398,7 @@ def asset_loop(scheduler):
 
     if asset is None:
         logging.info('Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY)
-        view_image(LOAD_SCREEN, uri_type=ImageUriType.STATIC)
+        view_image(LOAD_SCREEN)
         sleep(EMPTY_PL_DELAY)
 
     elif path.isfile(asset['uri']) or (not url_fails(asset['uri']) or asset['skip_asset_check']):
@@ -558,7 +542,7 @@ def main():
         sleep(SPLASH_DELAY)
 
     # We don't want to show splash-page if there are active assets but all of them are not available
-    view_image(LOAD_SCREEN, uri_type=ImageUriType.STATIC)
+    view_image(LOAD_SCREEN)
 
     load_screen_displayed = True
 
