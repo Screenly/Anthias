@@ -1110,11 +1110,13 @@
         try {
           ws = new WebSocket(address);
           results.push(ws.onmessage = function(x) {
-            var model, save;
-            model = API.assets.get(x.data);
-            if (model) {
-              return save = model.fetch();
-            }
+            return x.data.text().then(function(assetId) {
+              var model, save;
+              model = API.assets.get(assetId);
+              if (model) {
+                return save = model.fetch();
+              }
+            });
           });
         } catch (error1) {
           error = error1;

@@ -111,6 +111,16 @@ $ ./bin/deploy_to_balena.sh \
     --dev
 ```
 
+You can also includa a `--shm-size` flag to specify the shared memory size, which defaults
+to `256mb`. For example:
+
+```bash
+$ ./bin/deploy_to_balena.sh \
+    --board $BOARD_TYPE \
+    --fleet $FLEET_NAME \
+    --shm-size 512mb
+```
+
 It would take a while for the deployment to finish. Once it's done, you should
 see the new release in the fleet's summary page. You can now add your devices to
 the fleet and they should be able to download the new release.

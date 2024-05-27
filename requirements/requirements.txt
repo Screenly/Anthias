@@ -1,5 +1,5 @@
 cec==0.2.7
-celery==4.4.7
+celery==5.2.2
 certifi==2022.12.7
 cffi==1.14.4
 click==7.1.2
@@ -19,7 +19,7 @@ hurry.filesize==0.9
 importlib-metadata==4.13.0
 itsdangerous==2.0.1
 Jinja2==2.11.3
-kombu==4.6.11
+kombu==5.2.4
 Mako==1.2.2
 MarkupSafe==1.1.1
 netifaces==0.10.9
