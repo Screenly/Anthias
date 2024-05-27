@@ -76,9 +76,11 @@ def validate_url(string):
     return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
 
 
-def get_balena_supervisor_api_response(method, action):
-    return getattr(requests, method)('{}/v1/{}?apikey={}'.format(
+def get_balena_supervisor_api_response(method, action, **kwargs):
+    version = kwargs.get('version', 'v1')
+    return getattr(requests, method)('{}/{}/{}?apikey={}'.format(
         os.getenv('BALENA_SUPERVISOR_ADDRESS'),
+        version,
         action,
         os.getenv('BALENA_SUPERVISOR_API_KEY'),
     ), headers={'Content-Type': 'application/json'})
@@ -94,6 +96,14 @@ def shutdown_via_balena_supervisor():
 
 def reboot_via_balena_supervisor():
     return get_balena_supervisor_api_response(method='post', action='reboot')
+
+
+def get_balena_supervisor_version():
+    response = get_balena_supervisor_api_response(method='get', action='version', version='v2')
+    if response.ok:
+        return response.json()['version']
+    else:
+        return 'Error getting the Supervisor version'
 
 
 def get_node_ip():
