@@ -56,6 +56,7 @@ from lib.utils import (
     download_video_from_youtube, json_dump,
     generate_perfect_paper_password, is_docker,
     get_active_connections, remove_connection,
+    get_balena_supervisor_version,
     get_node_ip, get_node_mac_address,
     get_video_duration,
     is_balena_app, is_demo_node,
@@ -1807,7 +1808,7 @@ def integrations():
         context['balena_device_id'] = getenv('BALENA_DEVICE_UUID')
         context['balena_app_id'] = getenv('BALENA_APP_ID')
         context['balena_app_name'] = getenv('BALENA_APP_NAME')
-        context['balena_supervisor_version'] = getenv('BALENA_SUPERVISOR_VERSION')
+        context['balena_supervisor_version'] = get_balena_supervisor_version()
         context['balena_host_os_version'] = getenv('BALENA_HOST_OS_VERSION')
         context['balena_device_name_at_init'] = getenv('BALENA_DEVICE_NAME_AT_INIT')
 
