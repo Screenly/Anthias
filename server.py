@@ -56,6 +56,7 @@ from lib.utils import (
     download_video_from_youtube, json_dump,
     generate_perfect_paper_password, is_docker,
     get_active_connections, remove_connection,
+    get_balena_supervisor_version,
     get_node_ip, get_node_mac_address,
     get_video_duration,
     is_balena_app, is_demo_node,

@@ -115,6 +115,39 @@ def fetch_remote_hash():
     return get_cache, False
 
 
+def get_latest_docker_hub_hash(device_type):
+    """
+    This function is useful for cases where latest changes pushed does not trigger
+    Docker image builds.
+    """
+
+    url = 'https://hub.docker.com/v2/namespaces/screenly/repositories/anthias-server/tags'
+
+    try:
+        response = requests_get(url)
+        response.raise_for_status()
+    except exceptions.RequestException as exc:
+        logging.debug('Failed to fetch latest Docker Hub tags: %s', exc)
+        return None
+
+    data = response.json()
+    results = data['results']
+
+    reduced = [
+        result['name'].split('-')[0]
+        for result in results
+        if not result['name'].startswith('latest-')
+        and result['name'].endswith(f'-{device_type}')
+    ]
+
+    if len(reduced) == 0:
+        logging.warning('No commit hash found for device type: %s', device_type)
+        return None
+
+    # Results are sorted by date in descending order, so we can just return the first one.
+    return reduced[0]
+
+
 def is_up_to_date():
     """
     Primitive update check. Checks local hash against GitHub hash for branch.
@@ -168,4 +201,7 @@ def is_up_to_date():
             except exceptions.ConnectionError:
                 pass
 
-    return latest_sha == git_hash
+    device_type = os.getenv('DEVICE_TYPE')
+    latest_docker_hub_hash = get_latest_docker_hub_hash(device_type)
+
+    return (latest_sha == git_hash) or (latest_docker_hub_hash == git_short_hash)
