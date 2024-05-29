@@ -1025,7 +1025,7 @@
         el = ref[l];
         this.collection.get(el.id).set('play_order', active.length);
       }
-      return $.post('/api/v1/assets/order', {
+      return $.post('/api/v1/assets/order/', {
         ids: ((this.$('#active-assets')).sortable('toArray')).join(',')
       });
     };
