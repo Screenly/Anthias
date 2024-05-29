@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.helpers import prepare_asset_v1_2, update_asset
+from api.serializers import AssetSerializer
 from lib import assets_helper, db
 from lib.utils import url_fails
 from os import remove
@@ -11,10 +12,13 @@ from settings import settings
 
 # @TODO: Use the following decorators: authorized, swagger
 class AssetListViewV1_2(APIView):
+    serializer_class = AssetSerializer
+
     def get(self, request):
         with db.conn(settings['database']) as conn:
             result = assets_helper.read(conn)
-            return Response(result)
+            serializer = self.serializer_class(result, many=True)
+            return Response(serializer.data)
 
     def post(self, request):
         asset = prepare_asset_v1_2(request, unique_name=True)
@@ -37,10 +41,13 @@ class AssetListViewV1_2(APIView):
 
 # @TODO: Use the following decorators: api_response, authorized, swagger
 class AssetViewV1_2(APIView):
+    serializer_class = AssetSerializer
+
     def get(self, request, asset_id):
         with db.conn(settings['database']) as conn:
             result = assets_helper.read(conn, asset_id)
-            return Response(result)
+            serializer = self.serializer_class(result)
+            return Response(serializer.data)
 
     def patch(self, request, asset_id):
 
@@ -85,7 +92,8 @@ class AssetViewV1_2(APIView):
 
             assets_helper.save_ordering(conn, ids_of_active_assets)
             result = assets_helper.read(conn, asset_id)
-            return Response(result)
+            serializer = self.serializer_class(result)
+            return Response(serializer.data)
 
     def delete(self, request, asset_id):
         with db.conn(settings['database']) as conn:
