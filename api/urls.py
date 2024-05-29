@@ -16,10 +16,15 @@ from .views.v1 import (
     ShutdownScreenlyView,
     ViewerCurrentAssetView
 )
+from .views.v1_1 import (
+    AssetListViewV1_1,
+    AssetViewV1_1
+)
 
 app_name = 'api'
 
 urlpatterns = [
+    # v1 endpoints
     path('v1/assets/', AssetListViewV1.as_view(), name='asset_list_v1'),
     path('v1/assets/<str:asset_id>/', AssetViewV1.as_view(), name='asset_detail_v1'),
     path('v1/assets/<str:asset_id>/content/', AssetContentView.as_view(), name='asset_content_v1'),
@@ -34,5 +39,9 @@ urlpatterns = [
     path('v1/upgrade_screenly/', UpgradeScreenlyView.as_view(), name='upgrade_screenly_v1'),
     path('v1/reboot_screenly/', RebootScreenlyView.as_view(), name='reboot_screenly_v1'),
     path('v1/shutdown_screenly', ShutdownScreenlyView.as_view(), name='shutdown_screenly_v1'),
-    path('v1/viewer_current_asset', ViewerCurrentAssetView.as_view(), name='viewer_current_asset_v1')
+    path('v1/viewer_current_asset', ViewerCurrentAssetView.as_view(), name='viewer_current_asset_v1'),
+
+    # v1.1 endpoints
+    path('v1.1/assets/', AssetListViewV1_1.as_view(), name='asset_list_v1_1'),
+    path('v1.1/assets/<str:asset_id>/', AssetViewV1_1.as_view(), name='asset_detail_v1_1'),
 ]
