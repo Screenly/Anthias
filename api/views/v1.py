@@ -144,8 +144,8 @@ class AssetListViewV1(APIView):
 # @TODO: Use the following decorators: api_response, authorized, swagger
 class FileAssetView(APIView):
     def post(self, request):
-        file_upload = request.files.get('file_upload')
-        filename = file_upload.filename
+        file_upload = request.data.get('file_upload')
+        filename = file_upload.name
         file_type = guess_type(filename)[0]
 
         if not file_type:
@@ -163,7 +163,8 @@ class FileAssetView(APIView):
                 f.seek(start_bytes)
                 f.write(file_upload.read())
         else:
-            file_upload.save(file_path)
+            with open(file_path, 'wb') as f:
+                f.write(file_upload.read())
 
         return Response({'uri': file_path, 'ext': guess_extension(file_type)})
 
