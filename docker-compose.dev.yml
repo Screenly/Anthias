@@ -14,7 +14,7 @@ services:
       - FLASK_ENV=development
     # @TODO: Finalize the port mappings.
     ports:
-      - 4040:4040
+      - 8080:8080
     restart: always
     volumes:
       - resin-data:/data

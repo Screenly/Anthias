@@ -27,7 +27,7 @@ if [[ ! -z $DEVELOPMENT_MODE ]]; then
     # Initialize the Django development server.
     ./manage.py makemigrations
     ./manage.py migrate
-    ./manage.py runserver 0.0.0.0:4040
+    ./manage.py runserver 0.0.0.0:8080
 
     # Initialize the Flask development server.
     # @TODO: Remove if not needed. You'll be migrating to Django anyway.

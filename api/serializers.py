@@ -5,7 +5,7 @@ from rest_framework.serializers import (
     Serializer,
 )
 
-class AssetListSerializer(Serializer):
+class AssetSerializer(Serializer):
     asset_id = CharField()
     name = CharField()
     uri = CharField()
