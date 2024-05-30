@@ -13,11 +13,11 @@
       $("#btn-backup").prop("disabled", true);
       return $.ajax({
         method: "POST",
-        url: "api/v1/backup",
+        url: "/api/v1/backup",
         timeout: 1800 * 1000
       }).done(function(data, e) {
         if (data) {
-          return window.location = "static_with_mime/" + data + "?mime=application/x-tgz";
+          return window.location = "/static_with_mime/" + data + "?mime=application/x-tgz";
         }
       }).fail(function(data, e) {
         var err, j;

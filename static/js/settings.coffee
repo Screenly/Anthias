@@ -12,13 +12,13 @@ $().ready ->
 
     $.ajax({
       method: "POST"
-      url: "api/v1/backup"
+      url: "/api/v1/backup"
       timeout: 1800 * 1000
     })
 
     .done  (data, e) ->
       if (data)
-        window.location = "static_with_mime/" + data + "?mime=application/x-tgz"
+        window.location = "/static_with_mime/" + data + "?mime=application/x-tgz"
 
     .fail  (data, e) ->
       $("#request-error .alert").addClass "alert-danger"
