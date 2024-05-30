@@ -23,11 +23,15 @@ fi
 echo "Running migration..."
 python3 ./bin/migrate.py
 
+./manage.py makemigrations
+./manage.py migrate
+
 if [[ ! -z $DEVELOPMENT_MODE ]]; then
-    # Initialize the Django development server.
-    ./manage.py makemigrations
-    ./manage.py migrate
+    echo "Starting Django development server..."
     ./manage.py runserver 0.0.0.0:8080
 else
-    python3 server.py
+    echo "Generating Django static files..."
+    ./manage.py collectstatic --clear --noinput
+    echo "Starting Gunicorn..."
+    python3 run_gunicorn.py
 fi
