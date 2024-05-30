@@ -189,16 +189,20 @@ class BackupView(APIView):
 class RecoverView(APIView):
     def post(self, request):
         publisher = ZmqPublisher.get_instance()
-        file_upload = (request.files['backup_upload'])
-        filename = file_upload.filename
+        file_upload = (request.data.get('backup_upload'))
+        filename = file_upload.name
 
         if guess_type(filename)[0] != 'application/x-tar':
             raise Exception("Incorrect file extension.")
         try:
             publisher.send_to_viewer('stop')
             location = path.join("static", filename)
-            file_upload.save(location)
+
+            with open(location, 'wb') as f:
+                f.write(file_upload.read())
+
             backup_helper.recover(location)
+
             return Response("Recovery successful.")
         finally:
             publisher.send_to_viewer('play')

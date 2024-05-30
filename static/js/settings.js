@@ -40,7 +40,7 @@
       return $("[name='backup_upload']").click();
     });
     $("[name='backup_upload']").fileupload({
-      url: "api/v1/recover",
+      url: "/api/v1/recover",
       progressall: function(e, data) {
         var valuenow;
         if (data.loaded && data.total) {

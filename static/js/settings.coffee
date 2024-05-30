@@ -40,7 +40,7 @@ $().ready ->
     $("[name='backup_upload']").click()
 
   $("[name='backup_upload']").fileupload
-    url: "api/v1/recover"
+    url: "/api/v1/recover"
     progressall: (e, data) -> if data.loaded and data.total
       valuenow = data.loaded/data.total*100
       $(".progress .bar").css "width", valuenow + "%"
