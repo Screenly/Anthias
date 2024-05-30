@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['anthias-nginx'] # @TODO: Include the IP address of the device.
 
 
 # Application definition
