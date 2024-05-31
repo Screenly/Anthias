@@ -26,7 +26,7 @@ python3 ./bin/migrate.py
 ./manage.py makemigrations
 ./manage.py migrate
 
-if [[ ! -z $DEVELOPMENT_MODE ]]; then
+if [[ $ENVIRONMENT == "development" ]]; then
     echo "Starting Django development server..."
     ./manage.py runserver 0.0.0.0:8080
 else
