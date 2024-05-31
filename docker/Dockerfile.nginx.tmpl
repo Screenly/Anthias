@@ -8,11 +8,15 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt-get -y install --no-install-recommends \
     nginx
 
+RUN mkdir -p /usr/src/app
+COPY ./bin/start_nginx.sh /usr/src/app/bin/start_nginx.sh
+WORKDIR /usr/src/app
+
 ENV GIT_HASH=$GIT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
 ENV GIT_BRANCH=$GIT_BRANCH
 
-COPY docker/nginx/nginx.conf /etc/nginx/sites-enabled/anthias.conf
+COPY docker/nginx/nginx.development.conf docker/nginx/nginx.production.conf /etc/nginx/sites-available
 RUN rm -f /etc/nginx/sites-enabled/default
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["bash", "bin/start_nginx.sh"]
