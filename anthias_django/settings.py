@@ -37,6 +37,7 @@ ALLOWED_HOSTS = [
 
 INSTALLED_APPS = [
     'anthias_app.apps.AnthiasAppConfig',
+    'drf_spectacular',
     'rest_framework',
     'api.apps.ApiConfig',
     'django.contrib.admin',
@@ -137,3 +138,12 @@ STATIC_ROOT = '/data/screenly/staticfiles'
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Anthias API',
+    'VERSION': '1.2.0',
+}

@@ -9,11 +9,8 @@ from .views.v1 import (
     RecoverView,
     AssetsControlView,
     InfoView,
-    ResetWifiConfigView,
-    GenerateUsbAssetsKeyView,
-    UpgradeScreenlyView,
-    RebootScreenlyView,
-    ShutdownScreenlyView,
+    RebootView,
+    ShutdownView,
     ViewerCurrentAssetView
 )
 from .views.v1_1 import (
@@ -38,12 +35,14 @@ urlpatterns = [
     path('v1/backup', BackupView.as_view(), name='backup_v1'),
     path('v1/recover', RecoverView.as_view(), name='recover_v1'),
     path('v1/info', InfoView.as_view(), name='info_v1'),
-    path('v1/reset_wifi', ResetWifiConfigView.as_view(), name='reset_wifi_v1'),
-    path('v1/generate_usb_assets_key', GenerateUsbAssetsKeyView.as_view(), name='generate_usb_assets_key_v1'),
-    path('v1/upgrade_screenly', UpgradeScreenlyView.as_view(), name='upgrade_screenly_v1'),
-    path('v1/reboot_screenly', RebootScreenlyView.as_view(), name='reboot_screenly_v1'),
-    path('v1/shutdown_screenly', ShutdownScreenlyView.as_view(), name='shutdown_screenly_v1'),
+    path('v1/reboot_screenly', RebootView.as_view(), name='reboot_screenly_v1'),
+    path('v1/shutdown_screenly', ShutdownView.as_view(), name='shutdown_screenly_v1'),
     path('v1/viewer_current_asset', ViewerCurrentAssetView.as_view(), name='viewer_current_asset_v1'),
+
+    # @TODO: Uncomment these endpoints when they are fixed.
+    # path('v1/reset_wifi', ResetWifiConfigView.as_view(), name='reset_wifi_v1'),
+    # path('v1/generate_usb_assets_key', GenerateUsbAssetsKeyView.as_view(), name='generate_usb_assets_key_v1'),
+    # path('v1/upgrade_screenly', UpgradeScreenlyView.as_view(), name='upgrade_screenly_v1'),
 
     # v1.1 endpoints
     path('v1.1/assets', AssetListViewV1_1.as_view(), name='asset_list_v1_1'),

@@ -1,9 +1,10 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.helpers import prepare_asset_v1_2, update_asset
-from api.serializers import AssetSerializer
+from api.serializers import AssetSerializer, AssetRequestSerializer
 from lib import assets_helper, db
 from lib.utils import url_fails
 from os import remove
@@ -14,12 +15,25 @@ from settings import settings
 class AssetListViewV1_2(APIView):
     serializer_class = AssetSerializer
 
+    @extend_schema(
+        summary='List assets',
+        responses={
+            200: AssetSerializer(many=True)
+        }
+    )
     def get(self, request):
         with db.conn(settings['database']) as conn:
             result = assets_helper.read(conn)
             serializer = self.serializer_class(result, many=True)
             return Response(serializer.data)
 
+    @extend_schema(
+        summary='Create asset',
+        request=AssetRequestSerializer,
+        responses={
+            201: AssetSerializer
+        }
+    )
     def post(self, request):
         asset = prepare_asset_v1_2(request, unique_name=True)
 
@@ -43,12 +57,20 @@ class AssetListViewV1_2(APIView):
 class AssetViewV1_2(APIView):
     serializer_class = AssetSerializer
 
+    @extend_schema(summary='Get asset')
     def get(self, request, asset_id):
         with db.conn(settings['database']) as conn:
             result = assets_helper.read(conn, asset_id)
             serializer = self.serializer_class(result)
             return Response(serializer.data)
 
+    @extend_schema(
+        summary='Update asset',
+        request=AssetRequestSerializer,
+        responses={
+            200: AssetSerializer
+        }
+    )
     def patch(self, request, asset_id):
 
         with db.conn(settings['database']) as conn:
@@ -75,6 +97,13 @@ class AssetViewV1_2(APIView):
             result = assets_helper.read(conn, asset_id)
             return Response(result)
 
+    @extend_schema(
+        summary='Update asset',
+        request=AssetRequestSerializer,
+        responses={
+            200: AssetSerializer
+        }
+    )
     def put(self, request, asset_id):
         asset = prepare_asset_v1_2(request, asset_id)
         with db.conn(settings['database']) as conn:
@@ -95,6 +124,7 @@ class AssetViewV1_2(APIView):
             serializer = self.serializer_class(result)
             return Response(serializer.data)
 
+    @extend_schema(summary='Delete asset')
     def delete(self, request, asset_id):
         with db.conn(settings['database']) as conn:
             asset = assets_helper.read(conn, asset_id)

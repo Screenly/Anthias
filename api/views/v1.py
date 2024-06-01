@@ -2,13 +2,21 @@ import pydbus
 import re
 import uuid
 
-from rest_framework import status
+from inspect import cleandoc
+from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
 from api.serializers import AssetSerializer
 from api.helpers import prepare_asset
 from base64 import b64encode
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import (
+    extend_schema,
+    inline_serializer,
+    OpenApiExample,
+    OpenApiParameter,
+    OpenApiRequest,
+)
 from hurry.filesize import size
 from lib import (
     assets_helper,
@@ -32,11 +40,52 @@ from settings import settings, ZmqCollector, ZmqPublisher
 
 r = connect_to_redis()
 
+MODEL_STRING_EXAMPLE = """
+Yes, that is just a string of JSON not JSON itself it will be parsed on the other end.
+It's recommended to set `Content-Type` to `application/x-www-form-urlencoded` and
+send the model as a string.
 
-# @TODO: Use the following decorators: api_response, authorized, swagger
+```
+model: "{
+    "name": "Website",
+    "mimetype": "webpage",
+    "uri": "http://example.com",
+    "is_active": 0,
+    "start_date": "2017-02-02T00:33:00.000Z",
+    "end_date": "2017-03-01T00:33:00.000Z",
+    "duration": "10",
+    "is_enabled": 0,
+    "is_processing": 0,
+    "nocache": 0,
+    "play_order": 0,
+    "skip_asset_check": 0
+}"
+```
+"""
+
+V1_ASSET_REQUEST = OpenApiRequest(
+    inline_serializer(
+        name='ModelString',
+        fields={
+            'model': serializers.CharField(
+                help_text=MODEL_STRING_EXAMPLE,
+            ),
+        },
+    ),
+    examples=[
+        OpenApiExample(
+            name='Example 1',
+            value={'model': MODEL_STRING_EXAMPLE}
+        ),
+    ],
+)
+
+
+# @TODO: Use the following decorators: api_response, authorized
 class AssetViewV1(APIView):
     serializer_class = AssetSerializer
 
+    @extend_schema(summary='Get asset')
     def get(self, request, asset_id, format=None):
         with db.conn(settings['database']) as conn:
             asset = assets_helper.read(conn, asset_id)
@@ -57,12 +106,19 @@ class AssetViewV1(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    @extend_schema(
+        summary='Update asset',
+        request=V1_ASSET_REQUEST,
+        responses={
+            201: AssetSerializer
+        }
+    )
     def put(self, request, asset_id, format=None):
         with db.conn(settings['database']) as conn:
             result = assets_helper.update(conn, asset_id, prepare_asset(request))
-
             return Response(result, status=status.HTTP_200_OK)
 
+    @extend_schema(summary='Delete asset')
     def delete(self, request, asset_id, format=None):
         with db.conn(settings['database']) as conn:
             asset = assets_helper.read(conn, asset_id)
@@ -77,6 +133,28 @@ class AssetViewV1(APIView):
 
 # @TODO: Use the following decorators: api_response, authorized, swagger
 class AssetContentView(APIView):
+    @extend_schema(
+        summary='Get asset content',
+        description=cleandoc("""
+        The content of the asset.
+        `type` can either be `file` or `url`.
+
+        In case of a file, the fields `mimetype`, `filename`, and `content`  will be present.
+        In case of a URL, the field `url` will be present.
+        """),
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'type': {'type': 'string'},
+                    'url': {'type': 'string'},
+                    'filename': {'type': 'string'},
+                    'mimetype': {'type': 'string'},
+                    'content': {'type': 'string'},
+                }
+            }
+        }
+    )
     def get(self, request, asset_id, format=None):
         with db.conn(settings['database']) as conn:
             asset = assets_helper.read(conn, asset_id)
@@ -109,10 +187,16 @@ class AssetContentView(APIView):
         return Response(result)
 
 
-# @TODO: Use the following decorators: authorized, swagger
+# @TODO: Use the following decorators: authorized
 class AssetListViewV1(APIView):
     serializer_class = AssetSerializer
 
+    @extend_schema(
+        summary='List assets',
+        responses={
+            200: AssetSerializer(many=True)
+        }
+    )
     def get(self, request, format=None):
         with db.conn(settings['database']) as conn:
             data = assets_helper.read(conn)
@@ -127,6 +211,13 @@ class AssetListViewV1(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    @extend_schema(
+        summary='Create asset',
+        request=V1_ASSET_REQUEST,
+        responses={
+            201: AssetSerializer
+        }
+    )
     def post(self, request, format=None):
         asset = prepare_asset(request)
 
@@ -141,8 +232,31 @@ class AssetListViewV1(APIView):
             return Response(result, status=status.HTTP_201_CREATED)
 
 
-# @TODO: Use the following decorators: api_response, authorized, swagger
+# @TODO: Use the following decorators: api_response, authorized
 class FileAssetView(APIView):
+    @extend_schema(
+        summary='Upload file asset',
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'file_upload': {
+                        'type': 'string',
+                        'format': 'binary'
+                    }
+                }
+            }
+        },
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'uri': {'type': 'string'},
+                    'ext': {'type': 'string'}
+                }
+            }
+        }
+    )
     def post(self, request):
         file_upload = request.data.get('file_upload')
         filename = file_upload.name
@@ -169,8 +283,29 @@ class FileAssetView(APIView):
         return Response({'uri': file_path, 'ext': guess_extension(file_type)})
 
 
-# @TODO: Use the following decorators: api_response, authorized, swagger
+# @TODO: Use the following decorators: api_response, authorized
 class PlaylistOrderView(APIView):
+    @extend_schema(
+        summary='Update playlist order',
+        request={
+            'application/x-www-form-urlencoded': {
+                'type': 'object',
+                'properties': {
+                    'ids': {
+                        'type': 'string',
+                        'description': cleandoc(
+                            """
+                            Comma-separated list of asset IDs in the order they should be played.
+                            For example:
+
+                            `793406aa1fd34b85aa82614004c0e63a,1c5cfa719d1f4a9abae16c983a18903b,9c41068f3b7e452baf4dc3f9b7906595`
+                            """
+                        )
+                    }
+                },
+            }
+        }
+    )
     def post(self, request):
         with db.conn(settings['database']) as conn:
             assets_helper.save_ordering(conn, request.data.get('ids', '').split(','))
@@ -178,15 +313,54 @@ class PlaylistOrderView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-# @TODO: Use the following decorators: api_response, authorized, swagger
+# @TODO: Use the following decorators: api_response, authorized
 class BackupView(APIView):
+    @extend_schema(
+        summary='Create backup',
+        description=cleandoc("""
+        Create a backup of the current Anthias instance, which includes the following:
+        * current settings
+        * image and video assets
+        * asset metadata (e.g. name, duration, play order, status), which is stored in a SQLite database
+        """),
+        responses={
+            201: {
+                'type': 'string',
+                'example': 'screenly-backup-2021-09-16T15-00-00.tar.gz',
+                'description': 'Backup file name'
+            }
+        }
+    )
     def post(self, request):
         filename = backup_helper.create_backup(name=settings['player_name'])
         return Response(filename, status=status.HTTP_201_CREATED)
 
 
-# @TODO: Use the following decorators: api_response, authorized, swagger
+# @TODO: Use the following decorators: api_response, authorized
 class RecoverView(APIView):
+    @extend_schema(
+        summary='Recover from backup',
+        description=cleandoc("""
+        Recover data from a backup file. The backup file must be a `.tar.gz` file.
+        """),
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'backup_upload': {
+                        'type': 'string',
+                        'format': 'binary'
+                    }
+                }
+            }
+        },
+        responses={
+            200: {
+                'type': 'string',
+                'example': 'Recovery successful.',
+            }
+        },
+    )
     def post(self, request):
         publisher = ZmqPublisher.get_instance()
         file_upload = (request.data.get('backup_upload'))
@@ -208,16 +382,63 @@ class RecoverView(APIView):
             publisher.send_to_viewer('play')
 
 
-# @TODO: Use the following decorators: api_response, authorized, swagger
+# @TODO: Use the following decorators: api_response, authorized
 class AssetsControlView(APIView):
+    @extend_schema(
+        summary='Control asset playback',
+        description = cleandoc("""
+        Use any of the following commands to control asset playback:
+        * `next` - Show the next asset
+        * `previous` - Show the previous asset
+        * `asset&{asset_id}` - Show the asset with the specified `asset_id`
+        """),
+        responses={
+            200: {
+                'type': 'string',
+                'example': 'Asset switched',
+            }
+        },
+        parameters=[
+            OpenApiParameter(
+                name='command',
+                location=OpenApiParameter.PATH,
+                type=OpenApiTypes.STR,
+                enum=['next', 'previous', 'asset&{asset_id}'],
+            )
+        ]
+    )
     def get(self, request, command):
         publisher = ZmqPublisher.get_instance()
         publisher.send_to_viewer(command)
         return Response("Asset switched")
 
 
-# @TODO: Use the following decorators: api_response, authorized, swagger
+# @TODO: Use the following decorators: api_response, authorized
 class InfoView(APIView):
+    @extend_schema(
+        summary='Get system information',
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'viewlog': {'type': 'string'},
+                    'loadavg': {'type': 'number'},
+                    'free_space': {'type': 'string'},
+                    'display_info': {'type': 'string'},
+                    'display_power': {'type': 'string'},
+                    'up_to_date': {'type': 'boolean'}
+                },
+                'example': {
+                    'viewlog': 'Not yet implemented',
+                    'loadavg': 0.1,
+                    'free_space': '10G',
+                    'display_info': 'state 0xa [HDMI CUSTOM RGB lim 16:9], 3840x2160 @ 30.00Hz, progressive',
+                    'display_power': 'on',
+                    'up_to_date': True
+                }
+            }
+        }
+    )
     def get(self, request):
         viewlog = "Not yet implemented"
 
@@ -236,7 +457,7 @@ class InfoView(APIView):
         })
 
 
-# @TODO: Use the following decorators: api_response, authorized, swagger
+# @TODO: Use the following decorators: api_response, authorized
 class ResetWifiConfigView(APIView):
     def get(self, request):
         home = getenv('HOME')
@@ -268,7 +489,7 @@ class ResetWifiConfigView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-# @TODO: Use the following decorators: api_response, authorized, swagger
+# @TODO: Use the following decorators: api_response, authorized
 class GenerateUsbAssetsKeyView(APIView):
     def get(self, request):
         settings['usb_assets_key'] = generate_perfect_paper_password(20, False)
@@ -277,7 +498,7 @@ class GenerateUsbAssetsKeyView(APIView):
         return Response(settings['usb_assets_key'])
 
 
-# @TODO: Use the following decorators: api_response, authorized, swagger
+# @TODO: Use the following decorators: api_response, authorized
 class UpgradeScreenlyView(APIView):
     def post(self, request):
         for task in celery.control.inspect(timeout=2.0).active().get('worker@screenly'):
@@ -290,22 +511,30 @@ class UpgradeScreenlyView(APIView):
         return Response({'id': task.id})
 
 
-# @TODO: Use the following decorators: api_response, authorized, swagger
-class RebootScreenlyView(APIView):
+# @TODO: Use the following decorators: api_response, authorized
+class RebootView(APIView):
+    @extend_schema(summary='Reboot system')
     def post(self, request):
         reboot_screenly.apply_async()
         return Response(status=status.HTTP_200_OK)
 
-# @TODO: Use the following decorators: api_response, authorized, swagger
-class ShutdownScreenlyView(APIView):
+# @TODO: Use the following decorators: api_response, authorized
+class ShutdownView(APIView):
+    @extend_schema(summary='Shut down system')
     def post(self, request):
         shutdown_screenly.apply_async()
         return Response(status=status.HTTP_200_OK)
 
 
-# @TODO: Use the following decorators: api_response, authorized, swagger
+# @TODO: Use the following decorators: api_response, authorized
 class ViewerCurrentAssetView(APIView):
-    def get(self):
+    @extend_schema(
+        summary='Get current asset',
+        description='Get the current asset being displayed on the screen',
+        responses={
+            200: AssetSerializer
+        })
+    def get(self, request):
         collector = ZmqCollector.get_instance()
 
         publisher = ZmqPublisher.get_instance()
