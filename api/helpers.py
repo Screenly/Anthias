@@ -13,6 +13,9 @@ from lib.utils import (
     get_video_duration,
     validate_url
 )
+from rest_framework import status
+from rest_framework.views import exception_handler
+from rest_framework.response import Response
 from settings import settings
 
 
@@ -213,3 +216,12 @@ def update_asset(asset, data):
             value = int(value)
 
         asset.update({key: value})
+
+
+def custom_exception_handler(exc, context):
+    exception_handler(exc, context)
+
+    return Response(
+        {'error': str(exc)},
+        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+    )
