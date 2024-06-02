@@ -12,7 +12,6 @@ from os import remove
 from settings import settings
 
 
-# @TODO: Use the following decorators: authorized, swagger
 class AssetListViewV1_2(APIView):
     serializer_class = AssetSerializer
 
@@ -36,6 +35,7 @@ class AssetListViewV1_2(APIView):
             201: AssetSerializer
         }
     )
+    @authorized
     def post(self, request):
         asset = prepare_asset_v1_2(request, unique_name=True)
 
@@ -55,11 +55,11 @@ class AssetListViewV1_2(APIView):
             return Response(result, status=status.HTTP_201_CREATED)
 
 
-# @TODO: Use the following decorators: api_response, authorized, swagger
 class AssetViewV1_2(APIView):
     serializer_class = AssetSerializer
 
     @extend_schema(summary='Get asset')
+    @authorized
     def get(self, request, asset_id):
         with db.conn(settings['database']) as conn:
             result = assets_helper.read(conn, asset_id)
@@ -73,6 +73,7 @@ class AssetViewV1_2(APIView):
             200: AssetSerializer
         }
     )
+    @authorized
     def patch(self, request, asset_id):
 
         with db.conn(settings['database']) as conn:
@@ -106,6 +107,7 @@ class AssetViewV1_2(APIView):
             200: AssetSerializer
         }
     )
+    @authorized
     def put(self, request, asset_id):
         asset = prepare_asset_v1_2(request, asset_id)
         with db.conn(settings['database']) as conn:
@@ -127,6 +129,7 @@ class AssetViewV1_2(APIView):
             return Response(serializer.data)
 
     @extend_schema(summary='Delete asset')
+    @authorized
     def delete(self, request, asset_id):
         with db.conn(settings['database']) as conn:
             asset = assets_helper.read(conn, asset_id)
