@@ -5,7 +5,6 @@ from base64 import b64decode
 from builtins import str
 from builtins import object
 from abc import ABCMeta, abstractmethod
-from django.http import HttpResponse
 from functools import wraps
 import hashlib
 import os.path
@@ -13,6 +12,7 @@ import json
 
 from flask import request, Response
 from future.utils import with_metaclass
+
 
 LINUX_USER = os.getenv('USER', 'pi')
 WOTT_CREDENTIALS_PATH = '/opt/wott/credentials'
@@ -139,6 +139,7 @@ class BasicAuth(Auth):
         return 'auth_basic.html', {'user': self.settings['user']}
 
     def authenticate(self):
+        from django.http import HttpResponse
         realm = "Anthias {}".format(self.settings['player_name'])
         return HttpResponse("Access denied", status=401, headers={"WWW-Authenticate": 'Basic realm="{}"'.format(realm)})
 
@@ -253,18 +254,23 @@ class WoTTAuth(BasicAuth):
 
 
 def authorized(orig):
-    """
-    Annotation which initiates authentication if the request is unauthorized.
-    :param orig: Flask function
-    :return: Response
-    """
     from settings import settings
+    from django.http import HttpRequest
+    from rest_framework.request import Request
 
     @wraps(orig)
     def decorated(*args, **kwargs):
         if not settings.auth:
             return orig(*args, **kwargs)
-        request = args[0]
+
+        if len(args) == 0:
+            raise ValueError('No request object passed to decorated function')
+
+        request = args[-1]
+
+        if not isinstance(request, (HttpRequest, Request)):
+            raise ValueError('Request object is not of type HttpRequest or Request')
+
         return settings.auth.authenticate_if_needed(request) or orig(*args, **kwargs)
 
     return decorated

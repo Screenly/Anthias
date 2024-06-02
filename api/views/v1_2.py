@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from api.helpers import prepare_asset_v1_2, update_asset
 from api.serializers import AssetSerializer, AssetRequestSerializer
 from lib import assets_helper, db
+from lib.auth import authorized
 from lib.utils import url_fails
 from os import remove
 from settings import settings
@@ -21,6 +22,7 @@ class AssetListViewV1_2(APIView):
             200: AssetSerializer(many=True)
         }
     )
+    @authorized
     def get(self, request):
         with db.conn(settings['database']) as conn:
             result = assets_helper.read(conn)
