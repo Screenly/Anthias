@@ -16,6 +16,7 @@ from lib import (
     diagnostics,
     raspberry_pi_helper,
 )
+from lib.auth import authorized
 from lib.utils import (
     connect_to_redis,
     generate_perfect_paper_password,
@@ -32,7 +33,7 @@ import psutil
 r = connect_to_redis()
 
 
-# @TODO: Turn this into a class-based view.
+@authorized
 def index(request):
     player_name = settings['player_name']
     my_ip = urlparse(request.build_absolute_uri()).hostname
@@ -57,7 +58,7 @@ def index(request):
     })
 
 
-# @TODO: Turn this into a class-based view.
+@authorized
 def settings_page(request):
     context = {'flash': None}
 
@@ -78,7 +79,7 @@ def settings_page(request):
             else:
                 current_pass_correct = settings.auth_backends[prev_auth_backend].check_password(current_pass)
             next_auth_backend = settings.auth_backends[auth_backend]
-            next_auth_backend.update_settings(current_pass_correct)
+            next_auth_backend.update_settings(request, current_pass_correct)
             settings['auth_backend'] = auth_backend
 
             for field, default in list(CONFIGURABLE_SETTINGS.items()):
@@ -144,7 +145,7 @@ def settings_page(request):
     return template(request, 'settings.html', context)
 
 
-# @TODO: Turn this into a class-based view.
+@authorized
 def system_info(request):
     viewlog = ["Yet to be implemented"]
     loadavg = diagnostics.get_load_avg()['15 min']
@@ -200,6 +201,7 @@ def system_info(request):
     return template(request, 'system-info.html', context)
 
 
+@authorized
 def integrations(request):
     context = {
         'player_name': settings['player_name'],

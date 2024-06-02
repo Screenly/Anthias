@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
+from base64 import b64decode
 from builtins import str
 from builtins import object
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
+from django.http import HttpResponse
 from functools import wraps
 import hashlib
 import os.path
@@ -27,7 +29,6 @@ class Auth(with_metaclass(ABCMeta, object)):
         """
         pass
 
-    @abstractproperty
     def is_authenticated(self):
         """
         See if the user is authenticated for the request.
@@ -35,13 +36,13 @@ class Auth(with_metaclass(ABCMeta, object)):
         """
         pass
 
-    def authenticate_if_needed(self):
+    def authenticate_if_needed(self, request):
         """
         If the user performing the request is not authenticated, initiate authentication.
         :return: a Response which initiates authentication or None if already authenticated.
         """
         try:
-            if not self.is_authenticated:
+            if not self.is_authenticated(request):
                 return self.authenticate()
         except ValueError as e:
             return Response("Authorization backend is unavailable: " + str(e), 503)
@@ -112,23 +113,39 @@ class BasicAuth(Auth):
         hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
         return self.settings['password'] == hashed_password
 
-    @property
-    def is_authenticated(self):
-        auth = request.authorization
-        return auth and self._check(auth.username, auth.password)
+    def is_authenticated(self, request):
+        authorization = request.headers.get('Authorization')
+        if not authorization:
+            return False
+
+        content = authorization.split(' ')
+
+        if len(content) != 2:
+            return False
+
+        auth_type = content[0]
+        auth_data = content[1]
+        if auth_type == 'Basic':
+            auth_data = b64decode(auth_data).decode('utf-8')
+            auth_data = auth_data.split(':')
+            if len(auth_data) == 2:
+                username = auth_data[0]
+                password = auth_data[1]
+                return self._check(username, password)
+        return False
 
     @property
     def template(self):
         return 'auth_basic.html', {'user': self.settings['user']}
 
     def authenticate(self):
-        realm = "Screenly OSE {}".format(self.settings['player_name'])
-        return Response("Access denied", 401, {"WWW-Authenticate": 'Basic realm="{}"'.format(realm)})
+        realm = "Anthias {}".format(self.settings['player_name'])
+        return HttpResponse("Access denied", status=401, headers={"WWW-Authenticate": 'Basic realm="{}"'.format(realm)})
 
-    def update_settings(self, current_pass_correct):
-        new_user = request.form.get('user', '')
-        new_pass = request.form.get('password', '').encode('utf-8')
-        new_pass2 = request.form.get('password2', '').encode('utf-8')
+    def update_settings(self, request, current_pass_correct):
+        new_user = request.POST.get('user', '')
+        new_pass = request.POST.get('password', '').encode('utf-8')
+        new_pass2 = request.POST.get('password2', '').encode('utf-8')
         new_pass = hashlib.sha256(new_pass).hexdigest() if new_pass else None
         new_pass2 = hashlib.sha256(new_pass2).hexdigest() if new_pass else None
         # Handle auth components
@@ -247,6 +264,7 @@ def authorized(orig):
     def decorated(*args, **kwargs):
         if not settings.auth:
             return orig(*args, **kwargs)
-        return settings.auth.authenticate_if_needed() or orig(*args, **kwargs)
+        request = args[0]
+        return settings.auth.authenticate_if_needed(request) or orig(*args, **kwargs)
 
     return decorated
