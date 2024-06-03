@@ -5,8 +5,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 import sqlite3
 import os
-import shutil
-import subprocess
 from contextlib import contextmanager
 import datetime
 
@@ -166,6 +164,28 @@ def migrate_drop_filename():
         else:
             print(f'Obsolete column ({col}) is not present')
 # ✂--------
+
+
+# @TODO: Convert this function into a Django management command.
+# # This function is used to be called when the first request is made to the server,
+# # back when the server's written in Flask.
+# def initialize_assets_directories():
+#     from lib import assets_helper, db, queries
+#     from settings import settings
+
+#     # Make sure the asset folder exist. If not, create it
+#     if not os.path.isdir(settings['assetdir']):
+#         os.mkdir(settings['assetdir'])
+
+#     # Create config dir if it doesn't exist
+#     if not os.path.isdir(settings.get_configdir()):
+#         os.makedirs(settings.get_configdir())
+
+#     with db.conn(settings['database']) as conn:
+#         with db.cursor(conn) as cursor:
+#             cursor.execute(queries.exists_table)
+#             if cursor.fetchone() is None:
+#                 cursor.execute(assets_helper.create_assets_table)
 
 
 if __name__ == '__main__':

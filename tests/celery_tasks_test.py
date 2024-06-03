@@ -9,8 +9,8 @@ from lib import db, queries
 
 from lib.utils import generate_perfect_paper_password
 
-from server import celery as celeryapp
-from server import append_usb_assets, cleanup, cleanup_usb_assets, remove_usb_assets
+from celery_tasks import celery as celeryapp
+from celery_tasks import append_usb_assets, cleanup, cleanup_usb_assets, remove_usb_assets
 
 from settings import settings
 

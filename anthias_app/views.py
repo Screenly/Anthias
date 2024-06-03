@@ -1,5 +1,4 @@
 from datetime import timedelta
-from django.shortcuts import render, HttpResponse
 from hurry.filesize import size
 from os import (
     getenv,
@@ -26,7 +25,11 @@ from lib.utils import (
     is_demo_node,
     is_docker,
 )
-from .helpers import template
+from .helpers import (
+    add_default_assets,
+    remove_default_assets,
+    template,
+)
 import psutil
 
 

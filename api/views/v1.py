@@ -35,7 +35,7 @@ from lib.utils import (
 )
 from mimetypes import guess_type, guess_extension
 from os import getenv, path, remove, statvfs
-from server import celery, reboot_screenly, shutdown_screenly
+from celery_tasks import celery, reboot_screenly, shutdown_screenly
 from settings import settings, ZmqCollector, ZmqPublisher
 
 
@@ -506,7 +506,7 @@ class UpgradeScreenlyView(APIView):
     @authorized
     def post(self, request):
         for task in celery.control.inspect(timeout=2.0).active().get('worker@screenly'):
-            if task.get('type') == 'server.upgrade_screenly':
+            if task.get('type') == 'celery_tasks.upgrade_screenly':
                 return Response({'id': task.get('id')})
         branch = request.form.get('branch')
         manage_network = request.form.get('manage_network')

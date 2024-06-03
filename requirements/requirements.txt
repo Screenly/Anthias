@@ -2,17 +2,12 @@ cec==0.2.7
 celery==5.2.2
 certifi==2022.12.7
 cffi==1.14.4
-click==7.1.2
 configparser==4.0.2
 cryptography==3.3.2
 Cython==0.29.33
 Django==3.2.18
 djangorestframework==3.14.0
 drf-spectacular==0.27.2
-Flask-Cors==3.0.9 # @TODO: Remove.
-flask-restful-swagger-2==0.35 # @TODO: Remove.
-flask-swagger-ui==3.36.0 # @TODO: Remove.
-Flask==1.1.2 # @TODO: Remove.
 future==0.18.3
 gevent-websocket==0.10.1
 gevent==21.12.0
@@ -20,7 +15,6 @@ greenlet==1.1.0
 gunicorn==22.0.0
 hurry.filesize==0.9
 importlib-metadata==4.13.0
-itsdangerous==2.0.1
 Jinja2==2.11.3
 kombu==5.2.4
 Mako==1.2.2
@@ -40,6 +34,5 @@ retry==0.9.2
 sh==1.8
 six==1.15.0
 urllib3==1.26.5
-Werkzeug==1.0.1
 wheel==0.38.1
 yt-dlp==2023.11.16

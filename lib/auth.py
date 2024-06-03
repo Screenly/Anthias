@@ -10,7 +10,6 @@ import hashlib
 import os.path
 import json
 
-from flask import Response
 from future.utils import with_metaclass
 
 
@@ -41,11 +40,13 @@ class Auth(with_metaclass(ABCMeta, object)):
         If the user performing the request is not authenticated, initiate authentication.
         :return: a Response which initiates authentication or None if already authenticated.
         """
+        from django.http import HttpResponse
+
         try:
             if not self.is_authenticated(request):
                 return self.authenticate()
         except ValueError as e:
-            return Response("Authorization backend is unavailable: " + str(e), 503)
+            return HttpResponse("Authorization backend is unavailable: " + str(e), status=503)
 
     def update_settings(self, request, current_pass_correct):
         """
