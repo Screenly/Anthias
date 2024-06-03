@@ -16,7 +16,7 @@ ENV GIT_HASH=$GIT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
 ENV GIT_BRANCH=$GIT_BRANCH
 
-COPY docker/nginx/nginx.development.conf docker/nginx/nginx.production.conf /etc/nginx/sites-available
+COPY docker/nginx/nginx.development.conf docker/nginx/nginx.production.conf /etc/nginx/sites-available/
 RUN rm -f /etc/nginx/sites-enabled/default
 
 CMD ["bash", "bin/start_nginx.sh"]
