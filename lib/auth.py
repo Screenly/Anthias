@@ -10,7 +10,7 @@ import hashlib
 import os.path
 import json
 
-from flask import request, Response
+from flask import Response
 from future.utils import with_metaclass
 
 
@@ -29,7 +29,7 @@ class Auth(with_metaclass(ABCMeta, object)):
         """
         pass
 
-    def is_authenticated(self):
+    def is_authenticated(self, request):
         """
         See if the user is authenticated for the request.
         :return: bool
@@ -47,7 +47,7 @@ class Auth(with_metaclass(ABCMeta, object)):
         except ValueError as e:
             return Response("Authorization backend is unavailable: " + str(e), 503)
 
-    def update_settings(self, current_pass_correct):
+    def update_settings(self, request, current_pass_correct):
         """
         Submit updated values from Settings page.
         :param current_pass_correct: the value of "Current Password" field or None if empty.
@@ -77,7 +77,7 @@ class NoAuth(Auth):
     name = ''
     config = {}
 
-    def is_authenticated(self):
+    def is_authenticated(self, request):
         return True
 
     def authenticate(self):
@@ -195,7 +195,7 @@ class WoTTAuth(BasicAuth):
     def __init__(self, settings):
         super(WoTTAuth, self).__init__(settings)
 
-    def update_settings(self, current_pass_correct):
+    def update_settings(self, request, current_pass_correct):
         if not self._fetch_credentials():
             raise ValueError("Can not read WoTT credentials file or login credentials record is incorrect")
 
