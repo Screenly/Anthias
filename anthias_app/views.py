@@ -1,4 +1,5 @@
 from datetime import timedelta
+from django.views.decorators.http import require_http_methods
 from hurry.filesize import size
 from os import (
     getenv,
@@ -37,6 +38,7 @@ r = connect_to_redis()
 
 
 @authorized
+@require_http_methods(["GET"])
 def index(request):
     player_name = settings['player_name']
     my_ip = urlparse(request.build_absolute_uri()).hostname
@@ -62,6 +64,7 @@ def index(request):
 
 
 @authorized
+@require_http_methods(["GET", "POST"])
 def settings_page(request):
     context = {'flash': None}
 
@@ -149,6 +152,7 @@ def settings_page(request):
 
 
 @authorized
+@require_http_methods(["GET"])
 def system_info(request):
     viewlog = ["Yet to be implemented"]
     loadavg = diagnostics.get_load_avg()['15 min']
@@ -205,6 +209,7 @@ def system_info(request):
 
 
 @authorized
+@require_http_methods(["GET"])
 def integrations(request):
     context = {
         'player_name': settings['player_name'],
@@ -224,6 +229,7 @@ def integrations(request):
     return template(request, 'integrations.html', context)
 
 
+@require_http_methods(["GET"])
 def splash_page(request):
     my_ip = get_node_ip().split()
     return template(request, 'splash-page.html', {'my_ip': my_ip})
