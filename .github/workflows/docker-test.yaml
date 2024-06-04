@@ -48,12 +48,15 @@ jobs:
 
       - name: Build Containers
         run: |
+          export DOCKERFILES_ONLY=1
+          export DEV_MODE=1
           export SKIP_SERVER=1
           export SKIP_WEBSOCKET=1
           export SKIP_NGINX=1
           export SKIP_VIEWER=1
           export SKIP_WIFI_CONNECT=1
           ./bin/build_containers.sh
+          docker compose -f docker-compose.test.yml build
 
       - name: Start the test container
         run: |
