@@ -13,7 +13,7 @@ services:
     tty: true
     volumes:
       - .:/usr/src/app
-      - data:/data
+      - anthias-data:/data
 
   anthias-celery:
     build:
@@ -28,11 +28,11 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     restart: always
     volumes:
-      - data:/data
+      - anthias-data:/data
 
   redis:
     image: redis:alpine
 
 volumes:
-  data:
+  anthias-data:
   redis-data:

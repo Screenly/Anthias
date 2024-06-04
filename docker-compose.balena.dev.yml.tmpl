@@ -34,7 +34,7 @@ services:
       - "/dev/vchiq:/dev/vchiq"
     restart: always
     volumes:
-      - resin-data:/data
+      - anthias-data:/data
     labels:
       io.balena.features.supervisor-api: '1'
 
@@ -56,7 +56,7 @@ services:
     restart: always
     shm_size: ${SHM_SIZE}
     volumes:
-      - resin-data:/data
+      - anthias-data:/data
     labels:
       io.balena.features.supervisor-api: '1'
 
@@ -72,7 +72,7 @@ services:
       - LISTEN=0.0.0.0
     restart: always
     volumes:
-      - resin-data:/data
+      - anthias-data:/data
 
   anthias-celery:
     image: screenly/anthias-celery:${GIT_SHORT_HASH}-${BOARD}
@@ -90,7 +90,7 @@ services:
       - "/dev/vchiq:/dev/vchiq"
     restart: always
     volumes:
-      - resin-data:/data
+      - anthias-data:/data
     labels:
       io.balena.features.supervisor-api: '1'
 
@@ -119,8 +119,8 @@ services:
       - anthias-websocket
     restart: always
     volumes:
-      - resin-data:/data:ro
+      - anthias-data:/data:ro
 
 volumes:
-  resin-data:
+  anthias-data:
   redis-data:

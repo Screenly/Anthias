@@ -43,7 +43,7 @@ def index(request):
     player_name = settings['player_name']
     my_ip = urlparse(request.build_absolute_uri()).hostname
     is_demo = is_demo_node()
-    resin_uuid = getenv("RESIN_UUID", None)
+    balena_device_uuid = getenv("BALENA_DEVICE_UUID", None)
 
     ws_addresses = []
 
@@ -52,8 +52,8 @@ def index(request):
     else:
         ws_addresses.append('ws://' + my_ip + '/ws/')
 
-    if resin_uuid:
-        ws_addresses.append('wss://{}.resindevice.io/ws/'.format(resin_uuid))
+    if balena_device_uuid:
+        ws_addresses.append('wss://{}.balena-devices.com/ws/'.format(balena_device_uuid))
 
     return template(request, 'index.html', {
         'ws_addresses': ws_addresses,
