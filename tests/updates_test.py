@@ -1,15 +1,12 @@
 from __future__ import unicode_literals
-from datetime import datetime
-from datetime import timedelta
 import unittest
 
 import mock
-import viewer
-import server
 import os
 
-from settings import settings
+from lib.github import is_up_to_date
 from nose.plugins.attrib import attr
+from settings import settings
 
 fancy_sha = 'deadbeaf'
 
@@ -33,7 +30,7 @@ class UpdateTest(unittest.TestCase):
     @attr('fixme')
     @mock.patch('viewer.settings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
     def test_if_sha_file_not_exists__is_up_to_date__should_return_false(self):
-        self.assertEqual(server.is_up_to_date(), True)
+        self.assertEqual(is_up_to_date(), True)
 
     @attr('fixme')
     @mock.patch('viewer.settings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
@@ -41,5 +38,5 @@ class UpdateTest(unittest.TestCase):
         os.environ['GIT_BRANCH'] = 'master'
         with open(self.sha_file, 'w+') as f:
             f.write(fancy_sha)
-        self.assertEqual(server.is_up_to_date(), False)
+        self.assertEqual(is_up_to_date(), False)
         del os.environ['GIT_BRANCH']

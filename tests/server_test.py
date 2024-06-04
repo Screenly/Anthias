@@ -5,11 +5,16 @@ from __future__ import unicode_literals
 from builtins import object
 import datetime
 import functools
+import os
 import unittest
 
-from lib import assets_helper
-from lib import db
-import server
+# This is needed to avoid exceptions when importing from api.helpers.
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "anthias_django.settings")
+
+from api.helpers import update_asset
+from lib import assets_helper, db
+from lib.utils import url_fails
+
 
 # fixtures chronology
 #
@@ -112,13 +117,13 @@ class Req(object):
 
 class URLHelperTest(unittest.TestCase):
     def test_url_1(self):
-        self.assertTrue(server.url_fails(url_fail))
+        self.assertTrue(url_fails(url_fail))
 
     def test_url_2(self):
-        self.assertFalse(server.url_fails(url_redir))
+        self.assertFalse(url_fails(url_redir))
 
     def test_url_3(self):
-        self.assertFalse(server.url_fails(uri_))
+        self.assertFalse(url_fails(uri_))
 
 
 class DBHelperTest(unittest.TestCase):
@@ -235,7 +240,7 @@ class DBHelperTest(unittest.TestCase):
 
         self.assertEquals(asset_x_, asset_x_copy)
 
-        server.update_asset(asset_x_copy, data)
+        update_asset(asset_x_copy, data)
         asset_x_copy = assets_helper.update(self.conn, asset_x_copy.get('id'), asset_x_copy)
 
         self.assertEquals(asset_x_copy,
