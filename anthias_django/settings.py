@@ -12,8 +12,10 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 
 from pathlib import Path
 from os import getenv
+from django.core.management.utils import get_random_secret_key
 
 from lib.utils import get_node_ip
+from settings import settings as device_settings
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,11 +24,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = getenv('ENVIRONMENT', 'production') == 'development'
+
+if not DEBUG:
+    if not device_settings.get('django_secret_key'):
+        # Modify the generated so that string interpolation errors can be avoided.
+        secret_key = get_random_secret_key().replace('%', '%%')
+        device_settings['django_secret_key'] = secret_key
+        device_settings.save()
+
+    SECRET_KEY = device_settings.get('django_secret_key')
+else:
+    # SECURITY WARNING: keep the secret key used in production secret!
+    SECRET_KEY = 'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j'
 
 # @TODO: Resolve hostnames and IP addresses dynamically.
 ALLOWED_HOSTS = [

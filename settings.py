@@ -19,6 +19,7 @@ from collections import UserDict
 from lib.auth import WoTTAuth, BasicAuth, NoAuth
 from lib.errors import ZmqCollectorTimeout
 
+
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
 DEFAULTS = {
@@ -30,7 +31,8 @@ DEFAULTS = {
         'use_24_hour_clock': False,
         'use_ssl': False,
         'auth_backend': '',
-        'websocket_port': '9999'
+        'websocket_port': '9999',
+        'django_secret_key': ''
     },
     'viewer': {
         'audio_output': 'hdmi',
