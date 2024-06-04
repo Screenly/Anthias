@@ -13,7 +13,7 @@ ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
 ENV GIT_BRANCH=$GIT_BRANCH
 
 CMD celery -A celery_tasks.celery worker \
-  -B -n worker@screenly \
+  -B -n worker@anthias \
   --loglevel=info \
   --schedule \
   /tmp/celerybeat-schedule

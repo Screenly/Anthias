@@ -17,7 +17,7 @@ from settings import settings
 
 class CeleryTasksTestCase(unittest.TestCase):
     def setUp(self):
-        self.image_url = 'https://github.com/Screenly/screenly-ose/raw/master/static/img/ose-logo.png'
+        self.image_url = 'https://github.com/Screenly/Anthias/raw/master/static/img/ose-logo.png'
         celeryapp.conf.update(CELERY_ALWAYS_EAGER=True, CELERY_RESULT_BACKEND='', CELERY_BROKER_URL='')
 
     def download_image(self, image_url, image_path):
@@ -53,7 +53,7 @@ class TestUsbAssets(CeleryTasksTestCase):
         settings['usb_assets_key'] = generate_perfect_paper_password(20, False)
         settings.save()
 
-        key_data = {"screenly": {"key": settings['usb_assets_key']}}
+        key_data = {"anthias": {"key": settings['usb_assets_key']}}
         with open(self.key_file, 'w') as f:
             yaml.dump(key_data, f)
 

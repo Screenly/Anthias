@@ -182,7 +182,7 @@ def system_info(request):
 
     raspberry_pi_model = raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
 
-    screenly_version = '{}@{}'.format(
+    anthias_version = '{}@{}'.format(
         diagnostics.get_git_branch(),
         diagnostics.get_git_short_hash()
     )
@@ -200,7 +200,7 @@ def system_info(request):
         'display_info': display_info,
         'display_power': display_power,
         'raspberry_pi_model': raspberry_pi_model,
-        'screenly_version': screenly_version,
+        'anthias_version': anthias_version,
         'mac_address': get_node_mac_address(),
         'is_balena': is_balena_app(),
     }

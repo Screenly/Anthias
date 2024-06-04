@@ -151,7 +151,7 @@ $().ready ->
               getStatus(id)
             ,1000
           else
-            ($ "#upgrade_logs").append "\nScreenly-OSE update was finished"
+            ($ "#upgrade_logs").append "\nAnthias update was finished"
             ($ "#upgrade_logs").scrollTop(($ "#upgrade_logs").prop "scrollHeight")
             window.onbeforeunload = null
             $("#start-upgrade-btn").prop "disabled", no
@@ -161,7 +161,7 @@ $().ready ->
           else
             ($ "#upgrade_logs").append "The operation failed. Please reload the page and try again."
 
-      ($ "#upgrade_logs").text "Screenly-OSE upgrade has started successfully."
+      ($ "#upgrade_logs").text "Anthias upgrade has started successfully."
       window.onbeforeunload = ->
         no
       getStatus(data.id)
@@ -173,13 +173,13 @@ $().ready ->
       $("#start-upgrade-btn").prop "disabled", no
 
   $("#btn-reboot-system").click (e) ->
-    if confirm "Are you sure you want to reboot your Screenly?"
-      $.post "/api/v1/reboot_screenly"
+    if confirm "Are you sure you want to reboot your device?"
+      $.post "/api/v1/reboot"
       .done  (e) ->
         ($ "#request-error .alert").show()
         ($ "#request-error .alert").addClass "alert-success"
         ($ "#request-error .alert").removeClass "alert-danger"
-        ($ "#request-error .msg").text "Screenly reboot has started successfully."
+        ($ "#request-error .msg").text "Anthias reboot has started successfully."
       .fail (data, e) ->
         ($ "#request-error .alert").show()
         ($ "#request-error .alert").addClass "alert-danger"
@@ -190,13 +190,13 @@ $().ready ->
           ($ "#request-error .msg").text "The operation failed. Please reload the page and try again."
 
   $("#btn-shutdown-system").click (e) ->
-    if confirm "Are you sure you want to shutdown your Screenly?"
-      $.post "/api/v1/shutdown_screenly"
+    if confirm "Are you sure you want to shutdown your device?"
+      $.post "/api/v1/shutdown"
       .done  (e) ->
         ($ "#request-error .alert").show()
         ($ "#request-error .alert").addClass "alert-success"
         ($ "#request-error .alert").removeClass "alert-danger"
-        ($ "#request-error .msg").text "Screenly shutdown has started successfully. Soon you will be able to unplug the power from your Raspberry Pi."
+        ($ "#request-error .msg").text "Anthias shutdown has started successfully. Soon you will be able to unplug the power from your Raspberry Pi."
       .fail (data, e) ->
         ($ "#request-error .alert").show()
         ($ "#request-error .alert").addClass "alert-danger"

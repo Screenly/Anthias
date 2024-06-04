@@ -35,7 +35,7 @@ from lib.utils import (
 )
 from mimetypes import guess_type, guess_extension
 from os import getenv, path, remove, statvfs
-from celery_tasks import celery, reboot_screenly, shutdown_screenly
+from celery_tasks import celery, reboot_anthias, shutdown_anthias
 from settings import settings, ZmqCollector, ZmqPublisher
 
 
@@ -329,7 +329,7 @@ class BackupView(APIView):
         responses={
             201: {
                 'type': 'string',
-                'example': 'screenly-backup-2021-09-16T15-00-00.tar.gz',
+                'example': 'anthias-backup-2021-09-16T15-00-00.tar.gz',
                 'description': 'Backup file name'
             }
         }
@@ -473,7 +473,7 @@ class ResetWifiConfigView(APIView):
         bus = pydbus.SystemBus()
 
         pattern_include = re.compile("wlan*")
-        pattern_exclude = re.compile("ScreenlyOSE-*")
+        pattern_exclude = re.compile("Anthias-*")
 
         wireless_connections = get_active_connections(bus)
 
@@ -502,31 +502,32 @@ class GenerateUsbAssetsKeyView(APIView):
         return Response(settings['usb_assets_key'])
 
 
-class UpgradeScreenlyView(APIView):
-    @authorized
-    def post(self, request):
-        for task in celery.control.inspect(timeout=2.0).active().get('worker@screenly'):
-            if task.get('type') == 'celery_tasks.upgrade_screenly':
-                return Response({'id': task.get('id')})
-        branch = request.form.get('branch')
-        manage_network = request.form.get('manage_network')
-        system_upgrade = request.form.get('system_upgrade')
-        task = upgrade_screenly.apply_async(args=(branch, manage_network, system_upgrade))
-        return Response({'id': task.id})
+# @TODO: Uncomment this endpoint when fixed.
+# class UpgradeAnthiasView(APIView):
+#     @authorized
+#     def post(self, request):
+#         for task in celery.control.inspect(timeout=2.0).active().get('worker@anthias'):
+#             if task.get('type') == 'celery_tasks.upgrade_anthias':
+#                 return Response({'id': task.get('id')})
+#         branch = request.form.get('branch')
+#         manage_network = request.form.get('manage_network')
+#         system_upgrade = request.form.get('system_upgrade')
+#         task = upgrade_anthias.apply_async(args=(branch, manage_network, system_upgrade))
+#         return Response({'id': task.id})
 
 
 class RebootView(APIView):
     @extend_schema(summary='Reboot system')
     @authorized
     def post(self, request):
-        reboot_screenly.apply_async()
+        reboot_anthias.apply_async()
         return Response(status=status.HTTP_200_OK)
 
 class ShutdownView(APIView):
     @extend_schema(summary='Shut down system')
     @authorized
     def post(self, request):
-        shutdown_screenly.apply_async()
+        shutdown_anthias.apply_async()
         return Response(status=status.HTTP_200_OK)
 
 

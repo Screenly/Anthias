@@ -48,10 +48,10 @@ def get_uptime():
 
 
 def get_playlist():
-    screenly_db = os.path.join(os.getenv('HOME'), '.screenly/screenly.db')
+    anthias_db = os.path.join(os.getenv('HOME'), '.screenly/screenly.db')
     playlist = []
-    if os.path.isfile(screenly_db):
-        conn = sqlite3.connect(screenly_db)
+    if os.path.isfile(anthias_db):
+        conn = sqlite3.connect(anthias_db)
         c = conn.cursor()
         for row in c.execute('SELECT * FROM assets;'):
             playlist.append(row)

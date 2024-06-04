@@ -5,7 +5,7 @@ from __future__ import unicode_literals
 from future import standard_library
 standard_library.install_aliases()
 __author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2023, Screenly, Inc"
+__copyright__ = "Copyright 2012-2024, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 import re
@@ -108,9 +108,9 @@ def cleanup():
 
 
 @celery.task
-def reboot_screenly():
+def reboot_anthias():
     """
-    Background task to reboot Screenly-OSE.
+    Background task to reboot Anthias.
     """
     if is_balena_app():
         retry_call(reboot_via_balena_supervisor, tries=5, delay=1)
@@ -119,9 +119,9 @@ def reboot_screenly():
 
 
 @celery.task
-def shutdown_screenly():
+def shutdown_anthias():
     """
-    Background task to shutdown Screenly-OSE.
+    Background task to shutdown Anthias.
     """
     if is_balena_app():
         retry_call(shutdown_via_balena_supervisor, tries=5, delay=1)

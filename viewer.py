@@ -49,7 +49,7 @@ from netifaces import gateways
 
 
 __author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2023, Screenly, Inc"
+__copyright__ = "Copyright 2012-2024, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 
@@ -448,7 +448,7 @@ def setup_hotspot():
     bus = pydbus.SessionBus()
 
     pattern_include = re.compile("wlan*")
-    pattern_exclude = re.compile("ScreenlyOSE-*")
+    pattern_exclude = re.compile("Anthias-*")
 
     wireless_connections = get_active_connections(bus)
 

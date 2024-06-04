@@ -16,7 +16,7 @@ from requests.auth import HTTPBasicAuth
 user_home_dir = os.getenv('HOME')
 
 BASE_API_SCREENLY_URL = 'https://api.screenlyapp.com'
-ASSETS_SCREENLY_OSE_API = 'http://127.0.0.1/api/v1.1/assets'
+ANTHIAS_ASSETS_API_ENDPOINT = 'http://127.0.0.1/api/v1.1/assets'
 
 PORT_NGROK = 4040
 PORT = 80
@@ -92,14 +92,14 @@ def set_ngrok_public_url(value):
 # Database
 ################################
 
-def get_assets_by_screenly_ose_api():
-    if click.confirm('Do you need authentication to access Screenly-OSE API?'):
+def get_assets_by_anthias_api():
+    if click.confirm('Do you need authentication to access Anthias API?'):
         login = click.prompt('Login')
         password = click.prompt('Password', hide_input=True)
         auth = HTTPBasicAuth(login, password)
     else:
         auth = None
-    response = requests.get(ASSETS_SCREENLY_OSE_API, timeout=10, auth=auth)
+    response = requests.get(ANTHIAS_ASSETS_API_ENDPOINT, timeout=10, auth=auth)
     if response.status_code == 200:
         return response.json()
     elif response.status_code == 401:
@@ -164,7 +164,7 @@ def start_migration():
 
 
 def assets_migration():
-    assets = get_assets_by_screenly_ose_api()
+    assets = get_assets_by_anthias_api()
     assets_length = len(assets)
     click.echo('\n')
     for index, asset in enumerate(assets):

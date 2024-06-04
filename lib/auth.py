@@ -16,7 +16,7 @@ from future.utils import with_metaclass
 LINUX_USER = os.getenv('USER', 'pi')
 WOTT_CREDENTIALS_PATH = '/opt/wott/credentials'
 WOTT_USER_CREDENTIALS_PATH = os.path.join(WOTT_CREDENTIALS_PATH, LINUX_USER)
-WOTT_SCREENLY_CREDENTIAL_NAME = 'screenly'
+WOTT_ANTHIAS_CREDENTIAL_NAME = 'anthias'
 
 
 class Auth(with_metaclass(ABCMeta, object)):
@@ -189,7 +189,7 @@ class WoTTAuth(BasicAuth):
     name = 'auth_wott'
     config = {
         'auth_wott': {
-            'wott_secret_name': 'screenly_credentials',
+            'wott_secret_name': 'anthias_credentials',
         }
     }
 
@@ -201,12 +201,12 @@ class WoTTAuth(BasicAuth):
             raise ValueError("Can not read WoTT credentials file or login credentials record is incorrect")
 
     def _fetch_credentials(self):
-        wott_credentials_path = os.path.join(WOTT_USER_CREDENTIALS_PATH, WOTT_SCREENLY_CREDENTIAL_NAME + ".json")
+        wott_credentials_path = os.path.join(WOTT_USER_CREDENTIALS_PATH, WOTT_ANTHIAS_CREDENTIAL_NAME + ".json")
 
         if 'wott_secret_name' in self.settings and self.settings['wott_secret_name']:
-            screenly_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, self.settings['wott_secret_name'] + ".json")
-            if os.path.isfile(screenly_credentials_path):
-                wott_credentials_path = screenly_credentials_path
+            credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, self.settings['wott_secret_name'] + ".json")
+            if os.path.isfile(credentials_path):
+                wott_credentials_path = credentials_path
 
         self.user = self.password = ''
 
@@ -241,8 +241,8 @@ class WoTTAuth(BasicAuth):
     def _check(self, username, password):
         """
         Check username/password combo against WoTT Credentials.
-        Used credentials with name 'screenly_credentials' or name
-        which defined in value of 'screenly_credentials' settings
+        Used credentials with name 'anthias_credentials' or name
+        which defined in value of 'anthias_credentials' settings
         :param username: str
         :param password: str
         :return: True if the check passes.
