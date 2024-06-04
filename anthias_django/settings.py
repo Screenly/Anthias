@@ -10,9 +10,9 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
 
+import secrets
 from pathlib import Path
 from os import getenv
-from django.core.management.utils import get_random_secret_key
 
 from lib.utils import get_node_ip
 from settings import settings as device_settings
@@ -31,7 +31,7 @@ DEBUG = getenv('ENVIRONMENT', 'production') == 'development'
 if not DEBUG:
     if not device_settings.get('django_secret_key'):
         # Modify the generated so that string interpolation errors can be avoided.
-        secret_key = get_random_secret_key().replace('%', '%%')
+        secret_key = secrets.token_urlsafe(50)
         device_settings['django_secret_key'] = secret_key
         device_settings.save()
 
