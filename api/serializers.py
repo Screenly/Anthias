@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework.serializers import (
     CharField,
     DateTimeField,
@@ -5,11 +6,12 @@ from rest_framework.serializers import (
     Serializer,
 )
 
+
 class AssetRequestSerializer(Serializer):
     name = CharField()
     uri = CharField()
-    start_date = DateTimeField()
-    end_date = DateTimeField()
+    start_date = DateTimeField(default_timezone=timezone.utc)
+    end_date = DateTimeField(default_timezone=timezone.utc)
     duration = CharField()
     mimetype = CharField()
     is_enabled = IntegerField(min_value=0, max_value=1)

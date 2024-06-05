@@ -78,10 +78,10 @@ Run the unit tests.
 ```bash
 $ docker compose \
     -f docker-compose.test.yml \
-    exec -T anthias-test bash ./bin/prepare_test_environment.sh -s
+    exec anthias-test bash ./bin/prepare_test_environment.sh -s
 $ docker compose \
     -f docker-compose.test.yml \
-    exec -T anthias-test nosetests -v -a '!fixme'
+    exec anthias-test nosetests -v -a '!fixme'
 ```
 
 ### The QA checklist

@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
 
+import pytz
 import secrets
 from pathlib import Path
 from os import getenv
@@ -135,13 +136,18 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
-
 USE_I18N = True
 
 USE_L10N = True
 
 USE_TZ = True
+
+try:
+    with open('/etc/timezone', 'r') as f:
+        TIME_ZONE = f.read().strip()
+        pytz.timezone(TIME_ZONE)  # Checks if the timezone is valid.
+except (pytz.exceptions.UnknownTimeZoneError, FileNotFoundError):
+    TIME_ZONE = 'UTC'
 
 
 # Static files (CSS, JavaScript, Images)
