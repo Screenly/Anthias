@@ -922,9 +922,7 @@
     };
 
     AssetRowView.prototype.download = function(e) {
-      var r;
-      r = $.get('/api/v1/assets/' + this.model.id + '/content').success(function(result) {
-        var a, blob, content, fn, mimetype, url;
+      $.get('/api/v1/assets/' + this.model.id + '/content', function(result) {
         switch (result['type']) {
           case 'url':
             return window.open(result['url']);
@@ -945,6 +943,7 @@
             return a.remove();
         }
       });
+
       return false;
     };
 
