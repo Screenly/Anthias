@@ -155,10 +155,6 @@ present in a Raspberry Pi with Anthias installed.
 * `splashscreen.png` &mdash; the spash screen image that is displayed during the boot process
 * `screenly.script` &ndash; plymouth script file that loads and scales the splash screen image during the boot process
 
-### `/usr/local/bin/`
-
-* `screenly_usb_assets.sh` &mdash; script file that handles assets in a USB drive
-
 ## Debugging the Anthias WebView
 
 ```

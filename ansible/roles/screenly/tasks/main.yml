@@ -67,11 +67,10 @@
     owner: root
     group: root
 
-- name: Copy screenly_usb_assets.sh
-  ansible.builtin.copy:
-    src: screenly_usb_assets.sh
-    dest: /usr/local/bin/screenly_usb_assets.sh
-    mode: "0755"
+- name: Remove /usr/local/bin/screenly_usb_assets.sh (deprecated)
+  ansible.builtin.file:
+    state: absent
+    path: /usr/local/bin/screenly_usb_assets.sh
     owner: root
     group: root
 
