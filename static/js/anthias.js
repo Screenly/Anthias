@@ -922,8 +922,7 @@
     };
 
     AssetRowView.prototype.download = function(e) {
-      var r;
-      r = $.get('/api/v1/assets/' + this.model.id + '/content').success(function(result) {
+      $.get('/api/v1/assets/' + this.model.id + '/content', function(result) {
         var a, blob, content, fn, mimetype, url;
         switch (result['type']) {
           case 'url':
@@ -1151,4 +1150,4 @@
 
 }).call(this);
 
-//# sourceMappingURL=screenly-ose.js.map
+//# sourceMappingURL=anthias.js.map
