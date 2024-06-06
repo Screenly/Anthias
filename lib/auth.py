@@ -1,22 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
 from __future__ import unicode_literals
+import hashlib
+import os.path
 from base64 import b64decode
 from builtins import str
 from builtins import object
 from abc import ABCMeta, abstractmethod
 from functools import wraps
-import hashlib
-import os.path
-import json
-
 from future.utils import with_metaclass
 
 
 LINUX_USER = os.getenv('USER', 'pi')
-WOTT_CREDENTIALS_PATH = '/opt/wott/credentials'
-WOTT_USER_CREDENTIALS_PATH = os.path.join(WOTT_CREDENTIALS_PATH, LINUX_USER)
-WOTT_ANTHIAS_CREDENTIAL_NAME = 'anthias'
 
 
 class Auth(with_metaclass(ABCMeta, object)):
@@ -182,76 +178,6 @@ class BasicAuth(Auth):
                 self.settings['password'] = new_pass
             else:
                 raise ValueError("Must provide username")
-
-
-class WoTTAuth(BasicAuth):
-    display_name = 'WoTT'
-    name = 'auth_wott'
-    config = {
-        'auth_wott': {
-            'wott_secret_name': 'anthias_credentials',
-        }
-    }
-
-    def __init__(self, settings):
-        super(WoTTAuth, self).__init__(settings)
-
-    def update_settings(self, request, current_pass_correct):
-        if not self._fetch_credentials():
-            raise ValueError("Can not read WoTT credentials file or login credentials record is incorrect")
-
-    def _fetch_credentials(self):
-        wott_credentials_path = os.path.join(WOTT_USER_CREDENTIALS_PATH, WOTT_ANTHIAS_CREDENTIAL_NAME + ".json")
-
-        if 'wott_secret_name' in self.settings and self.settings['wott_secret_name']:
-            credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, self.settings['wott_secret_name'] + ".json")
-            if os.path.isfile(credentials_path):
-                wott_credentials_path = credentials_path
-
-        self.user = self.password = ''
-
-        if not os.path.isfile(wott_credentials_path):
-            return False
-
-        with open(wott_credentials_path, "r") as credentials_file:
-            credentials = json.load(credentials_file)
-            login_record = credentials.get('login', '')
-            if not login_record:
-                return False
-            login_record = login_record.split(':', 1)
-            if len(login_record) == 2:
-                self.user, password = login_record
-                if password:
-                    self.password = hashlib.sha256(password).hexdigest()
-                else:
-                    self.password = password
-
-        return True
-
-    def check_password(self, password):
-        hashed_password = hashlib.sha256(password).hexdigest()
-        return self.password == hashed_password
-
-    @property
-    def is_authenticated(self):
-        if not self._fetch_credentials():
-            raise ValueError('Cannot load credentials')
-        return super(WoTTAuth, self).is_authenticated
-
-    def _check(self, username, password):
-        """
-        Check username/password combo against WoTT Credentials.
-        Used credentials with name 'anthias_credentials' or name
-        which defined in value of 'anthias_credentials' settings
-        :param username: str
-        :param password: str
-        :return: True if the check passes.
-        """
-        return self.user == username and self.check_password(password)
-
-    @property
-    def template(self):
-        return None
 
 
 def authorized(orig):
