@@ -923,6 +923,7 @@
 
     AssetRowView.prototype.download = function(e) {
       $.get('/api/v1/assets/' + this.model.id + '/content', function(result) {
+        var a, blob, content, fn, mimetype, url;
         switch (result['type']) {
           case 'url':
             return window.open(result['url']);
@@ -943,7 +944,6 @@
             return a.remove();
         }
       });
-
       return false;
     };
 
