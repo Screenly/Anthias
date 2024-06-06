@@ -1150,4 +1150,4 @@
 
 }).call(this);
 
-//# sourceMappingURL=screenly-ose.js.map
+//# sourceMappingURL=anthias.js.map
