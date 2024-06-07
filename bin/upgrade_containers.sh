@@ -54,9 +54,12 @@ sudo -E docker compose \
 
 # Check if all the containers are running
 # If yes, remove screenly_resin-data, only if it's dangling.
+
 RUNNING_ANTHIAS_CONTAINERS=$(docker ps -q --filter "name=anthias")
+DANGLING_VOLUMES=$(docker volume ls -q --filter "dangling=true")
+
 if [ -n "$RUNNING_ANTHIAS_CONTAINERS" ]; then
-    if [ -n $(docker volume ls -q --filter "dangling=true") ]; then
+    if [ -n "$DANGLING_VOLUMES" ]; then
         docker volume rm screenly_resin-data
     fi
 fi
