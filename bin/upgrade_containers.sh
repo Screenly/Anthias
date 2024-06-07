@@ -53,9 +53,11 @@ sudo -E docker compose \
     up -d
 
 # Check if all the containers are running
-# If yes, remove screenly_redis-data, only if it's dangling.
-if [ -z $(docker ps -q --filter "name=anthias") ]; then
+# If yes, remove screenly_resin-data, only if it's dangling.
+RUNNING_ANTHIAS_CONTAINERS=$(docker ps -q --filter "name=anthias")
+if [ -n "$RUNNING_ANTHIAS_CONTAINERS" ]; then
     if [ -n $(docker volume ls -q --filter "dangling=true") ]; then
-        docker volume rm screenly_redis-data
+        docker volume rm screenly_resin-data
     fi
 fi
+
