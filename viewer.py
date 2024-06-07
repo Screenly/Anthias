@@ -530,7 +530,7 @@ def main():
 
     scheduler = Scheduler()
 
-    wait_for_server(5)
+    wait_for_server(10)
 
     if not is_balena_app():
         setup_hotspot()
