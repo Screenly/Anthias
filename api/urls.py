@@ -41,7 +41,6 @@ urlpatterns = [
 
     # @TODO: Uncomment these endpoints when they are fixed.
     # path('v1/reset_wifi', ResetWifiConfigView.as_view(), name='reset_wifi_v1'),
-    # path('v1/generate_usb_assets_key', GenerateUsbAssetsKeyView.as_view(), name='generate_usb_assets_key_v1'),
     # path('v1/upgrade', UpgradeAnthiasview.as_view(), name='upgrade_anthias_v1'),
 
     # v1.1 endpoints

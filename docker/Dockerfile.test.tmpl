@@ -50,7 +50,7 @@ RUN mkdir -p /usr/src/app
 COPY . /usr/src/app
 WORKDIR /usr/src/app
 
-RUN mkdir -p /data/.screenly /data/screenly_assets /tmp/USB/cleanup_folder
+RUN mkdir -p /data/.screenly /data/screenly_assets
 RUN cp ansible/roles/screenly/files/screenly.db \
     ansible/roles/screenly/files/screenly.conf /data/.screenly
 

@@ -33,8 +33,6 @@ done
 
 cp tests/assets/asset.mov /tmp/asset.mov
 cp static/img/ose-logo.png /tmp/image.png
-cp /tmp/image.png /tmp/USB/image.png
-cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
 cp tests/config/ffserver.conf /etc/ffserver.conf
 
 cat << 'EOF' > $HOME/.bashrc

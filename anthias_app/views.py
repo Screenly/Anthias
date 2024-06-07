@@ -118,10 +118,6 @@ def settings_page(request):
         settings.load()
 
     for field, default in list(DEFAULTS['viewer'].items()):
-        if field == 'usb_assets_key':
-            if not settings[field]:
-                settings[field] = generate_perfect_paper_password(20, False)
-                settings.save()
         context[field] = settings[field]
 
     auth_backends = []

@@ -493,15 +493,6 @@ class ResetWifiConfigView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class GenerateUsbAssetsKeyView(APIView):
-    @authorized
-    def get(self, request):
-        settings['usb_assets_key'] = generate_perfect_paper_password(20, False)
-        settings.save()
-
-        return Response(settings['usb_assets_key'])
-
-
 # @TODO: Uncomment this endpoint when fixed.
 # class UpgradeAnthiasView(APIView):
 #     @authorized

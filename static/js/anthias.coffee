@@ -1,4 +1,4 @@
-### screenly-ose ui ###
+### anthias ui ###
 
 $().ready ->
   $('#subsribe-form-container').popover content: get_template 'subscribe-form'
