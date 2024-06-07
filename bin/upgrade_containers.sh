@@ -51,3 +51,11 @@ fi
 sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \
     up -d
+
+# Check if all the containers are running
+# If yes, remove screenly_redis-data, only if it's dangling.
+if [ -z $(docker ps -q --filter "name=anthias") ]; then
+    if [ -n $(docker volume ls -q --filter "dangling=true") ]; then
+        docker volume rm screenly_redis-data
+    fi
+fi
