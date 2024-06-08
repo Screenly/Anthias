@@ -52,7 +52,7 @@ def setup_periodic_tasks(sender, **kwargs):
     sender.add_periodic_task(60*5, get_display_power.s(), name='display_power')
 
 
-@celery.task
+@celery.task(time_limit=30)
 def get_display_power():
     r.set('display_power', diagnostics.get_display_power())
     r.expire('display_power', 3600)
