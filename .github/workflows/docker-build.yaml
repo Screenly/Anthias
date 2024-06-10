@@ -111,3 +111,9 @@ jobs:
           balena_token: ${{ secrets.BALENA_TOKEN }}
           fleet: screenly_ose/anthias-${{ matrix.board }}
           source: balena-deploy
+
+      - uses: balena-io-experimental/community-cli-action@0.0.3
+        with:
+          balena_token: ${{ secrets.BALENA_TOKEN }}
+          balena_cli_commands: >
+            env add BALENA_HOST_CONFIG_disable_overscan 1 --fleet screenly_ose/anthias-${{ matrix.board }};
