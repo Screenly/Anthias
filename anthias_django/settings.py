@@ -10,12 +10,14 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
 
+import logging
 import pytz
 import secrets
 from pathlib import Path
 from os import getenv
 
 from lib.utils import get_node_ip
+from retry.api import retry_call
 from settings import settings as device_settings
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -48,9 +50,9 @@ ALLOWED_HOSTS = [
 ]
 
 try:
-    ALLOWED_HOSTS += get_node_ip().split()
-except Exception:
-    pass
+    ALLOWED_HOSTS += retry_call(get_node_ip, tries=30, delay=1).split()
+except Exception as error:
+    logging.error('Failed to get the node IP address: %s', error)
 
 
 # Application definition

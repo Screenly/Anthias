@@ -60,6 +60,7 @@ INITIALIZED_FILE = '/.screenly/initialized'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 
 LOAD_SCREEN = 'http://{}:{}/{}'.format(LISTEN, PORT, 'static/img/loading.png')
+SPLASH_IMAGE = 'http://{}:{}/{}'.format(LISTEN, PORT, 'static/img/splashscreen.png')
 SPLASH_PAGE_URL = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
 ZMQ_HOST_PUB_URL = 'tcp://host.docker.internal:10001'
 
@@ -530,7 +531,8 @@ def main():
 
     scheduler = Scheduler()
 
-    wait_for_server(10)
+    view_image(SPLASH_IMAGE) # This will prevent white screen from happening before showing the splash screen with IP addresses.
+    wait_for_server(30)
 
     if not is_balena_app():
         setup_hotspot()
