@@ -1,0 +1,16 @@
+name: Run Balena CLI commands
+
+on:
+  workflow_dispatch:
+
+
+jobs:
+  run-balena-cli-commands:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: balena-io-experimental/community-cli-action@0.0.3
+        with:
+          balena_token: ${{ secrets.BALENA_TOKEN }}
+          balena_cli_commands: >
+            whoami;
+            envs --fleet screenly_ose/anthias-${{ matrix.board }} --config;
