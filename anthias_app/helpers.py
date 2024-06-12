@@ -1,12 +1,13 @@
 import uuid
 import yaml
 
-from datetime import datetime
 from django.shortcuts import render
+from django.utils import timezone
 from lib import assets_helper, db
 from lib.github import is_up_to_date
 from os import getenv, path
 from settings import settings
+
 
 def template(request, template_name, context):
     """
@@ -55,7 +56,7 @@ def prepare_default_asset(**kwargs):
 def add_default_assets():
     settings.load()
 
-    datetime_now = datetime.now()
+    datetime_now = timezone.now().replace(tzinfo=None)
     default_asset_settings = {
         'start_date': datetime_now,
         'end_date': datetime_now.replace(year=datetime_now.year + 6),
