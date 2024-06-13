@@ -9,6 +9,11 @@ TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk {'print $2'})
 export VIEWER_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB" \* 0.8 | bc)
 export SHM_SIZE_KB="$(echo "$TOTAL_MEMORY_KB" \* 0.3 | bc | cut -d'.' -f1)"
 
+# The `getmac` module might exit with non-zero exit code if no MAC address is found.
+set +e
+export MAC_ADDRESS=`${HOME}/installer_venv/bin/python -m getmac`
+set -e
+
 # Hard code this to latest for now.
 export DOCKER_TAG="latest"
 

@@ -1,2 +1,3 @@
 ansible-core==2.12
 docker==6.0.0
+getmac==0.9.4
