@@ -15,6 +15,7 @@ class MainWindow : public QMainWindow
     public slots:
         void loadPage(const QString &uri);
         void loadImage(const QString &uri);
+        void loadVideo(const QString &uri);
 
     private:
         View *view;

@@ -1,6 +1,6 @@
 TEMPLATE = app
 
-QT += webengine webenginewidgets dbus
+QT += webengine webenginewidgets dbus multimediawidgets
 CONFIG += c++11
 
 SOURCES += src/main.cpp \
