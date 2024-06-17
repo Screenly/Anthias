@@ -2,4 +2,4 @@
 
 click==8.1.7
 requests==2.32.3
-sh==2.0.7
+tenacity==8.4.1

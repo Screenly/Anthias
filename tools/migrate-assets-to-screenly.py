@@ -1,17 +1,14 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import unicode_literals
-from builtins import str
+import click
 import os
+import requests
 import sys
 import traceback
-import sh
-
-import click
-import requests
-import time
 
 from requests.auth import HTTPBasicAuth
+from requests.exceptions import RequestException
+from tenacity import retry
 
 HOME = os.getenv('HOME')
 
@@ -23,14 +20,9 @@ PORT = 80
 token = None
 
 
-################################
-# Suprocesses
-################################
-
-
-################################
-# Utilities
-################################
+#############
+# Utilities #
+#############
 
 def progress_bar(count, total, text=''):
     """
@@ -48,9 +40,9 @@ def set_token(value):
     token = 'Token %s' % value
 
 
-################################
-# Database
-################################
+############
+# Database #
+############
 
 def get_assets_by_anthias_api():
     if click.confirm('Do you need authentication to access Anthias API?'):
@@ -66,9 +58,13 @@ def get_assets_by_anthias_api():
         raise Exception('Access denied')
 
 
-################################
-# Requests
-################################
+############
+# Requests #
+############
+
+@retry
+def get_post_response(endpoint_url, **kwargs):
+    return requests.post(endpoint_url, **kwargs)
 
 def send_asset(asset):
     endpoint_url = '%s/api/v3/assets/' % BASE_API_SCREENLY_URL
@@ -97,12 +93,11 @@ def send_asset(asset):
             }
         })
 
-    response = requests.post(endpoint_url, **post_kwargs)
-
     try:
+        response = get_post_response(endpoint_url, **post_kwargs)
         response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        click.echo(click.style('Error: %s' % e, fg='red'))
+    except RequestException as error:
+        click.echo(click.style('Error: %s' % error, fg='red'))
         return False
 
     return True
@@ -133,8 +128,9 @@ def get_api_key_by_credentials(username, password):
         return None
 
 
-################################
-################################
+########
+# Main #
+########
 
 def start_migration():
     if click.confirm('Do you want to start assets migration?'):
@@ -152,7 +148,7 @@ def assets_migration():
 
         status = send_asset(asset)
         if not status:
-            click.echo(click.style('\n%s asset was failed migration' % asset_name, fg='red'))
+            click.echo(click.style('Failed to migrate asset: %s' % asset_name, fg='red'))
     click.echo('\n')
     click.echo(click.style('Migration completed successfully', fg='green'))
 
