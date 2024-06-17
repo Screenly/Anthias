@@ -45,4 +45,4 @@ The list is not exhaustive, but you can use it as your guide when testing Anthia
 18. Go to the **System Info** page and make sure that all information are correct.
 19. Make sure that all the footer links are being displayed correctly.
 20. Go to the **Settings** page. Click on the **Reset Wi-Fi** and reboot your device. Make sure that the hotspot page displays.
-35. Connect to the device by ssh. Run `./bin/enable_ssl.sh` script. Make sure the site URL uses SSL.
+21. Connect to the device by ssh. Run `./bin/enable_ssl.sh` script. Make sure the site URL uses SSL.

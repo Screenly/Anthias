@@ -59,7 +59,7 @@ EMPTY_PL_DELAY = 5  # secs
 INITIALIZED_FILE = '/.screenly/initialized'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 
-LOAD_SCREEN = 'http://{}:{}/{}'.format(LISTEN, PORT, 'static/img/loading.png')
+STANDBY_SCREEN = 'http://{}:{}/{}'.format(LISTEN, PORT, 'static/img/standby.png')
 SPLASH_PAGE_URL = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
 ZMQ_HOST_PUB_URL = 'tcp://host.docker.internal:10001'
 
@@ -398,7 +398,7 @@ def asset_loop(scheduler):
 
     if asset is None:
         logging.info('Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY)
-        view_image(LOAD_SCREEN)
+        view_image(STANDBY_SCREEN)
         sleep(EMPTY_PL_DELAY)
 
     elif path.isfile(asset['uri']) or (not url_fails(asset['uri']) or asset['skip_asset_check']):
@@ -543,7 +543,7 @@ def main():
         sleep(SPLASH_DELAY)
 
     # We don't want to show splash-page if there are active assets but all of them are not available
-    view_image(LOAD_SCREEN)
+    view_image(STANDBY_SCREEN)
 
     load_screen_displayed = True
 
