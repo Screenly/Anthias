@@ -200,7 +200,7 @@ class WebTest(unittest.TestCase):
 
     def test_add_two_assets_upload(self):
         with TemporaryCopy('tests/assets/asset.mov', 'video.mov') as video_file, \
-            TemporaryCopy('static/img/ose-logo.png', 'ose-logo.png') as image_file:
+            TemporaryCopy('static/img/standby.png', 'standby.png') as image_file:
             with get_browser() as browser:
                 browser.visit(main_page_url)
 
@@ -218,7 +218,7 @@ class WebTest(unittest.TestCase):
 
                 self.assertEqual(len(assets), 2)
 
-                self.assertEqual(assets[0]['name'], u'ose-logo.png')
+                self.assertEqual(assets[0]['name'], u'standby.png')
                 self.assertEqual(assets[0]['mimetype'], u'image')
                 self.assertEqual(assets[0]['duration'], settings['default_duration'])
 
