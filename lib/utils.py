@@ -15,7 +15,6 @@ import redis
 import requests
 import string
 import sh
-import time
 
 from datetime import datetime, timedelta
 from distutils.util import strtobool
