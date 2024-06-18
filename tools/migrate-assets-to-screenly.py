@@ -121,19 +121,6 @@ def check_validate_token(api_key):
         return None
 
 
-def get_api_key_by_credentials(username, password):
-    endpoint_url = '%s/api/v3/tokens/' % BASE_API_SCREENLY_URL
-    data = {
-        'username': username,
-        'password': password
-    }
-    response = requests.post(endpoint_url, data=data)
-    if response.status_code == 200:
-        return response.json()['token']
-    else:
-        return None
-
-
 ########
 # Main #
 ########
@@ -178,12 +165,11 @@ def assets_migration():
         """
         What do you want to use for migration?
         1. API token
-        2. Credentials (username and password)
-        3. Exit
+        2. Exit
         Your choice
         """
     ),
-    type=click.Choice(['1', '2', '3'])
+    type=click.Choice(['1', '2'])
 )
 def main(method):
     try:
@@ -193,10 +179,6 @@ def main(method):
             api_key = click.prompt('Your API key')
             valid_token = check_validate_token(api_key)
         elif method == '2':
-            username = click.prompt('Your username')
-            password = click.prompt('Your password', hide_input=True)
-            valid_token = get_api_key_by_credentials(username, password)
-        elif method == '3':
             sys.exit(0)
 
         if valid_token:
@@ -210,7 +192,7 @@ def main(method):
 
 
 if __name__ == '__main__':
-    click.echo(click.style("""
+    click.echo(click.style(cleandoc("""
            d8888            888     888
           d88888            888     888       888
          d88P888            888     888
@@ -219,7 +201,8 @@ if __name__ == '__main__':
       d88P   888  888  888  888     888  888  888  .d888888  'Y8888b.
      d8888888888  888  888  Y88b.   888  888  888  888  888       X88
     d88P     888  888  888   Y888   888  888  888  'Y888888   88888P'
-    ==================================================================
-    """, fg='cyan'))
+    """), fg='cyan'))
+
+    click.echo()
 
     main()
