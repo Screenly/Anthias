@@ -86,12 +86,16 @@ def send_asset(asset):
         'headers': headers,
     }
 
-    if asset['mimetype'] in ['image', 'video']:
-        post_kwargs.update({
-            'files': {
-                'file': open(asset_uri, 'rb') # @TODO: Add exception handling.
-            }
-        })
+    try:
+        if asset['mimetype'] in ['image', 'video']:
+            post_kwargs.update({
+                'files': {
+                    'file': open(asset_uri, 'rb')
+                }
+            })
+    except FileNotFoundError as error:
+        click.echo(click.style('No such file or directory: %s' % error.filename, fg='red'))
+        return False
 
     try:
         response = get_post_response(endpoint_url, **post_kwargs)
@@ -145,6 +149,7 @@ def assets_migration():
         sys.exit(1)
 
     assets_length = len(assets)
+    failed_assets_count = 0
 
     click.echo('\n')
     for index, asset in enumerate(assets):
@@ -153,9 +158,15 @@ def assets_migration():
 
         status = send_asset(asset)
         if not status:
+            failed_assets_count += 1
             click.echo(click.style('Failed to migrate asset: %s' % asset_name, fg='red'))
+
     click.echo('\n')
-    click.echo(click.style('Migration completed successfully', fg='green'))
+
+    if failed_assets_count > 0:
+        click.echo(click.style('Migration completed with %s failed assets' % failed_assets_count, fg='red'))
+    else:
+        click.echo(click.style('Migration completed successfully', fg='green'))
 
 
 @click.command()
