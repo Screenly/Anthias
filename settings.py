@@ -41,7 +41,6 @@ DEFAULTS = {
         'show_splash': True,
         'shuffle_playlist': False,
         'verify_ssl': True,
-        'usb_assets_key': '',
         'default_assets': False
     }
 }
