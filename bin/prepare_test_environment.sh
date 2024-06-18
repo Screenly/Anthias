@@ -32,7 +32,7 @@ while getopts "sh" arg; do
 done
 
 cp tests/assets/asset.mov /tmp/asset.mov
-cp static/img/ose-logo.png /tmp/image.png
+cp static/img/standby.png /tmp/image.png
 cp tests/config/ffserver.conf /etc/ffserver.conf
 
 cat << 'EOF' > $HOME/.bashrc
