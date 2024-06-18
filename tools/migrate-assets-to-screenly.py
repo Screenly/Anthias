@@ -6,6 +6,7 @@ import requests
 import sys
 import traceback
 
+from inspect import cleandoc
 from requests.auth import HTTPBasicAuth
 from requests.exceptions import RequestException
 from tenacity import retry
@@ -52,10 +53,9 @@ def get_assets_by_anthias_api():
     else:
         auth = None
     response = requests.get(ASSETS_ANTHIAS_API, timeout=10, auth=auth)
-    if response.status_code == 200:
-        return response.json()
-    elif response.status_code == 401:
-        raise Exception('Access denied')
+
+    response.raise_for_status()
+    return response.json()
 
 
 ############
@@ -138,7 +138,12 @@ def start_migration():
 
 
 def assets_migration():
-    assets = get_assets_by_anthias_api()
+    try:
+        assets = get_assets_by_anthias_api()
+    except RequestException as error:
+        click.echo(click.style('Error: %s' % error, fg='red'))
+        sys.exit(1)
+
     assets_length = len(assets)
 
     click.echo('\n')
@@ -154,9 +159,19 @@ def assets_migration():
 
 
 @click.command()
-@click.option('--method',
-              prompt='What do you want to use for migration?\n1.API token\n2.Credentials\n3.Exit\nYour choice',
-              type=click.Choice(['1', '2', '3']))
+@click.option(
+    '--method',
+    prompt=cleandoc(
+        """
+        What do you want to use for migration?
+        1. API token
+        2. Credentials (username and password)
+        3. Exit
+        Your choice
+        """
+    ),
+    type=click.Choice(['1', '2', '3'])
+)
 def main(method):
     try:
         valid_token = None
