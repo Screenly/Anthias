@@ -67,9 +67,10 @@ def get_post_response(endpoint_url, **kwargs):
     return requests.post(endpoint_url, **kwargs)
 
 def send_asset(asset):
-    endpoint_url = '%s/api/v3/assets/' % BASE_API_SCREENLY_URL
+    endpoint_url = '%s/api/v4/assets' % BASE_API_SCREENLY_URL
     headers = {
-        'Authorization': token
+        'Authorization': token,
+        'Prefer': 'return=representation'
     }
     asset_uri = asset['uri']
 
@@ -93,6 +94,7 @@ def send_asset(asset):
                     'file': open(asset_uri, 'rb')
                 }
             })
+            post_kwargs['data'].pop('source_url')
     except FileNotFoundError as error:
         click.echo(click.style('No such file or directory: %s' % error.filename, fg='red'))
         return False
@@ -108,7 +110,7 @@ def send_asset(asset):
 
 
 def check_validate_token(api_key):
-    endpoint_url = '%s/api/v3/assets/' % BASE_API_SCREENLY_URL
+    endpoint_url = '%s/api/v4/assets' % BASE_API_SCREENLY_URL
     headers = {
         'Authorization': 'Token %s' % api_key
     }
