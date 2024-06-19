@@ -67,35 +67,17 @@
     owner: root
     group: root
 
-- name: Copy screenly_usb_assets.sh
-  ansible.builtin.copy:
-    src: screenly_usb_assets.sh
-    dest: /usr/local/bin/screenly_usb_assets.sh
-    mode: "0755"
+- name: Remove /usr/local/bin/screenly_usb_assets.sh (deprecated)
+  ansible.builtin.file:
+    state: absent
+    path: /usr/local/bin/screenly_usb_assets.sh
     owner: root
     group: root
 
-- name: Installs autoplay udev rule
-  ansible.builtin.copy:
-    src: 50-autoplay.rules
-    dest: /etc/udev/rules.d/50-autoplay.rules
-    mode: "0644"
-    owner: root
-    group: root
-
-- name: Copy systemd-udevd service
-  ansible.builtin.copy:
-    src: /lib/systemd/system/systemd-udevd.service
-    dest: /etc/systemd/system/systemd-udevd.service
-    mode: "0644"
-    owner: root
-    group: root
-
-- name: Configure systemd-udevd service
-  ansible.builtin.lineinfile:
-    dest: /etc/systemd/system/systemd-udevd.service
-    regexp: '^MountFlags='
-    line: 'MountFlags=shared'
+- name: Cleans up autoplay udev rule
+  ansible.builtin.file:
+    state: absent
+    path: /etc/udev/rules.d/50-autoplay.rules
 
 - name: Copy screenly systemd units
   ansible.builtin.template:
