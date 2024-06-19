@@ -15,8 +15,6 @@ import pydbus
 import psutil
 import re
 import sh
-import shutil
-import time
 import os
 
 import traceback
@@ -29,9 +27,8 @@ from dateutil import parser as date_parser
 from functools import wraps
 from hurry.filesize import size
 from mimetypes import guess_type, guess_extension
-from os import getenv, listdir, makedirs, mkdir, path, remove, rename, statvfs, stat, walk
+from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
 from retry.api import retry_call
-from subprocess import check_output
 from urllib.parse import urlparse
 
 from flask import Flask, escape, make_response, render_template, request, send_from_directory, url_for, jsonify
@@ -53,8 +50,7 @@ from lib.github import is_up_to_date
 from lib.auth import authorized
 
 from lib.utils import (
-    download_video_from_youtube, json_dump,
-    generate_perfect_paper_password, is_docker,
+    download_video_from_youtube, json_dump, is_docker,
     get_active_connections, remove_connection,
     get_balena_supervisor_version,
     get_node_ip, get_node_mac_address,
@@ -97,7 +93,6 @@ celery = Celery(
 def setup_periodic_tasks(sender, **kwargs):
     # Calls cleanup() every hour.
     sender.add_periodic_task(3600, cleanup.s(), name='cleanup')
-    sender.add_periodic_task(3600, cleanup_usb_assets.s(), name='cleanup_usb_assets')
     sender.add_periodic_task(60*5, get_display_power.s(), name='display_power')
 
 
@@ -132,88 +127,6 @@ def shutdown_screenly():
         retry_call(shutdown_via_balena_supervisor, tries=5, delay=1)
     else:
         r.publish('hostcmd', 'shutdown')
-
-
-@celery.task
-def append_usb_assets(mountpoint):
-    """
-    @TODO. Fix me. This will not work in Docker.
-    """
-    settings.load()
-
-    datetime_now = datetime.now()
-    usb_assets_settings = {
-        'activate': False,
-        'copy': False,
-        'start_date': datetime_now,
-        'end_date': datetime_now + timedelta(days=7),
-        'duration': settings['default_duration']
-    }
-
-    for root, _, filenames in walk(mountpoint):
-        if 'usb_assets_key.yaml' in filenames:
-            with open("%s/%s" % (root, 'usb_assets_key.yaml'), 'r') as yaml_file:
-                usb_file_settings = yaml.load(yaml_file, Loader=yaml.Loader).get('screenly')
-                if usb_file_settings.get('key') == settings['usb_assets_key']:
-                    if usb_file_settings.get('activate'):
-                        usb_assets_settings.update({
-                            'activate': usb_file_settings.get('activate')
-                        })
-                    if usb_file_settings.get('copy'):
-                        usb_assets_settings.update({
-                            'copy': usb_file_settings.get('copy')
-                        })
-                    if usb_file_settings.get('start_date'):
-                        ts = time.mktime(datetime.strptime(usb_file_settings.get('start_date'), "%m/%d/%Y").timetuple())
-                        usb_assets_settings.update({
-                            'start_date': datetime.utcfromtimestamp(ts)
-                        })
-                    if usb_file_settings.get('end_date'):
-                        ts = time.mktime(datetime.strptime(usb_file_settings.get('end_date'), "%m/%d/%Y").timetuple())
-                        usb_assets_settings.update({
-                            'end_date': datetime.utcfromtimestamp(ts)
-                        })
-                    if usb_file_settings.get('duration'):
-                        usb_assets_settings.update({
-                            'duration': usb_file_settings.get('duration')
-                        })
-
-                    files = ['%s/%s' % (root, y) for root, _, filenames in walk(mountpoint) for y in filenames]
-                    with db.conn(settings['database']) as conn:
-                        for filepath in files:
-                            asset = prepare_usb_asset(filepath, **usb_assets_settings)
-                            if asset:
-                                assets_helper.create(conn, asset)
-
-                    break
-
-
-@celery.task
-def remove_usb_assets(mountpoint):
-    """
-    @TODO. Fix me. This will not work in Docker.
-    """
-    settings.load()
-    with db.conn(settings['database']) as conn:
-        for asset in assets_helper.read(conn):
-            if asset['uri'].startswith(mountpoint):
-                assets_helper.delete(conn, asset['asset_id'])
-
-
-@celery.task
-def cleanup_usb_assets(media_dir='/media'):
-    """
-    @TODO. Fix me. This will not work in Docker.
-    """
-    settings.load()
-    mountpoints = ['%s/%s' % (media_dir, x) for x in listdir(media_dir) if path.isdir('%s/%s' % (media_dir, x))]
-    with db.conn(settings['database']) as conn:
-        for asset in assets_helper.read(conn):
-            if asset['uri'].startswith(media_dir):
-                location = re.search(r'^(/\w+/\w+[^/])', asset['uri'])
-                if location:
-                    if location.group() not in mountpoints:
-                        assets_helper.delete(conn, asset['asset_id'])
 
 
 ################################
@@ -565,42 +478,6 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
     asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
 
     return asset
-
-
-def prepare_usb_asset(filepath, **kwargs):
-    filetype = guess_type(filepath)[0]
-
-    if not filetype:
-        return
-
-    filetype = filetype.split('/')[0]
-
-    if filetype not in ['image', 'video']:
-        return
-
-    asset_id = uuid.uuid4().hex
-    asset_name = path.basename(filepath)
-    duration = int(get_video_duration(filepath).total_seconds()) if "video" == filetype else int(kwargs['duration'])
-
-    if kwargs['copy']:
-        shutil.copy(filepath, path.join(settings['assetdir'], asset_id))
-        filepath = path.join(settings['assetdir'], asset_id)
-
-    return {
-        'asset_id': asset_id,
-        'duration': duration,
-        'end_date': kwargs['end_date'],
-        'is_active': 1,
-        'is_enabled': kwargs['activate'],
-        'is_processing': 0,
-        'mimetype': filetype,
-        'name': asset_name,
-        'nocache': 0,
-        'play_order': 0,
-        'skip_asset_check': 0,
-        'start_date': kwargs['start_date'],
-        'uri': filepath,
-    }
 
 
 def prepare_default_asset(**kwargs):
@@ -1340,26 +1217,6 @@ class ResetWifiConfig(Resource):
         return '', 204
 
 
-class GenerateUsbAssetsKey(Resource):
-    method_decorators = [api_response, authorized]
-
-    @swagger.doc({
-        'responses': {
-            '200': {
-                'description': 'Usb assets key generated',
-                'schema': {
-                    'type': 'string'
-                }
-            }
-        }
-    })
-    def get(self):
-        settings['usb_assets_key'] = generate_perfect_paper_password(20, False)
-        settings.save()
-
-        return settings['usb_assets_key']
-
-
 class UpgradeScreenly(Resource):
     method_decorators = [api_response, authorized]
 
@@ -1591,7 +1448,6 @@ api.add_resource(Recover, '/api/v1/recover')
 api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 api.add_resource(Info, '/api/v1/info')
 api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
-api.add_resource(GenerateUsbAssetsKey, '/api/v1/generate_usb_assets_key')
 api.add_resource(UpgradeScreenly, '/api/v1/upgrade_screenly')
 api.add_resource(RebootScreenly, '/api/v1/reboot_screenly')
 api.add_resource(ShutdownScreenly, '/api/v1/shutdown_screenly')
@@ -1709,10 +1565,6 @@ def settings_page():
     else:
         settings.load()
     for field, default in list(DEFAULTS['viewer'].items()):
-        if field == 'usb_assets_key':
-            if not settings[field]:
-                settings[field] = generate_perfect_paper_password(20, False)
-                settings.save()
         context[field] = settings[field]
 
     auth_backends = []
