@@ -81,9 +81,6 @@ $().ready ->
       .error (e) ->
         document.location.reload()
 
-  start_date = new Date()
-  end_date = new Date(new Date().setDate(start_date.getDate() + 7))
-
   $("#btn-upgrade").click (e) ->
     $("#upgrade-modal").modal "show"
 
