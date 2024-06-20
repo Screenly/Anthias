@@ -1,8 +1,8 @@
 from os import getenv, path, listdir, system
 import unittest
 
-from server import celery as celeryapp
-from server import cleanup
+from celery_tasks import celery as celeryapp
+from celery_tasks import cleanup
 
 
 class CeleryTasksTestCase(unittest.TestCase):
