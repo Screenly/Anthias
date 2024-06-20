@@ -127,3 +127,10 @@
     path: "/etc/systemd/system/{{ item }}"
     state: absent
   with_items: "{{ deprecated_screenly_systemd_units }}"
+
+- name: Remove the ngrok binary
+  ansible.builtin.file:
+    path: "/usr/local/bin/ngrok"
+    state: absent
+    owner: root
+    group: root
