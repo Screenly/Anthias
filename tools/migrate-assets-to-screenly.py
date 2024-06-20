@@ -32,13 +32,13 @@ def progress_bar(count, total, text=''):
     """
     progress_line = "\u2588" * int(round(50 * count / float(total))) + '-' * (50 - int(round(50 * count / float(total))))
     percent = round(100.0 * count / float(total), 1)
-    sys.stdout.write('[%s] %s%s %s\r' % (progress_line, percent, '%', text))
+    sys.stdout.write(f'[{progress_line}] {percent}% {text}\r')
     sys.stdout.flush()
 
 
 def set_token(value):
     global token
-    token = 'Token %s' % value
+    token = f'Token {value}'
 
 
 ############
@@ -67,52 +67,46 @@ def get_post_response(endpoint_url, **kwargs):
     return requests.post(endpoint_url, **kwargs)
 
 def send_asset(asset):
-    endpoint_url = '%s/api/v4/assets' % BASE_API_SCREENLY_URL
-    headers = {
-        'Authorization': token,
-        'Prefer': 'return=representation'
-    }
+    endpoint_url = f'{BASE_API_SCREENLY_URL}/api/v4/assets'
     asset_uri = asset['uri']
-
-    if asset_uri.startswith('/data'):
-        asset_uri = os.path.join(HOME, 'screenly_assets', os.path.basename(asset_uri))
-
-    data = {
-        'title': asset['name'],
-        'source_url': asset_uri
-    }
-
     post_kwargs = {
-        'data': data,
-        'headers': headers,
+        'data': {'title': asset['name']},
+        'headers': {
+            'Authorization': token,
+            'Prefer': 'return=representation'
+        }
     }
 
     try:
         if asset['mimetype'] in ['image', 'video']:
+            if asset_uri.startswith('/data'):
+                asset_uri = os.path.join(HOME, 'screenly_assets', os.path.basename(asset_uri))
+
             post_kwargs.update({
                 'files': {
                     'file': open(asset_uri, 'rb')
                 }
             })
-            post_kwargs['data'].pop('source_url')
+        else:
+            post_kwargs['data'].update({'source_url': asset_uri})
     except FileNotFoundError as error:
-        click.echo(click.style('No such file or directory: %s' % error.filename, fg='red'))
+        click.secho(f'No such file or directory: {error.filename}', fg='red')
         return False
 
     try:
         response = get_post_response(endpoint_url, **post_kwargs)
         response.raise_for_status()
     except RequestException as error:
-        click.echo(click.style('Error: %s' % error, fg='red'))
+        click.secho(f'Error: {error}', fg='red')
         return False
 
     return True
 
 
 def check_validate_token(api_key):
-    endpoint_url = '%s/api/v4/assets' % BASE_API_SCREENLY_URL
+    endpoint_url = f'{BASE_API_SCREENLY_URL}/api/v4/assets'
     headers = {
-        'Authorization': 'Token %s' % api_key
+        'Authorization': f'Token {api_key}'
     }
     response = requests.get(endpoint_url, headers=headers)
     if response.status_code == 200:
@@ -134,7 +128,7 @@ def assets_migration():
     try:
         assets = get_assets_by_anthias_api()
     except RequestException as error:
-        click.echo(click.style('Error: %s' % error, fg='red'))
+        click.secho(f'Error: {error}', fg='red')
         sys.exit(1)
 
     assets_length = len(assets)
@@ -143,19 +137,19 @@ def assets_migration():
     click.echo('\n')
     for index, asset in enumerate(assets):
         asset_name = str(asset['name'])
-        progress_bar(index + 1, assets_length, text='Asset in migration progress: %s' % asset_name)
+        progress_bar(index + 1, assets_length, text=f'Asset in migration progress: {asset_name}')
 
         status = send_asset(asset)
         if not status:
             failed_assets_count += 1
-            click.echo(click.style('Failed to migrate asset: %s' % asset_name, fg='red'))
+            click.secho(f'Failed to migrate asset: {asset_name}', fg='red')
 
     click.echo('\n')
 
     if failed_assets_count > 0:
-        click.echo(click.style('Migration completed with %s failed assets' % failed_assets_count, fg='red'))
+        click.secho(f'Migration completed with {failed_assets_count} failed assets', fg='red')
     else:
-        click.echo(click.style('Migration completed successfully', fg='green'))
+        click.secho('Migration completed successfully', fg='green')
 
 
 @click.command()
@@ -183,16 +177,16 @@ def main(method):
 
         if valid_token:
             set_token(valid_token)
-            click.echo(click.style('Successfull authentication', fg='green'))
+            click.secho('Successfull authentication', fg='green')
             start_migration()
         else:
-            click.echo(click.style('Failed authentication', fg='red'))
+            click.secho('Failed authentication', fg='red')
     except Exception:
         traceback.print_exc()
 
 
 if __name__ == '__main__':
-    click.echo(click.style(cleandoc("""
+    click.secho(cleandoc("""
            d8888            888     888
           d88888            888     888       888
          d88P888            888     888
@@ -201,7 +195,7 @@ if __name__ == '__main__':
       d88P   888  888  888  888     888  888  888  .d888888  'Y8888b.
      d8888888888  888  888  Y88b.   888  888  888  888  888       X88
     d88P     888  888  888   Y888   888  888  888  'Y888888   88888P'
-    """), fg='cyan'))
+    """), fg='cyan')
 
     click.echo()
 
