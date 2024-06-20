@@ -3,8 +3,7 @@ name: Run Python Linter
 on:
   push:
     branches:
-      - master
-      - add-py-linting # TODO: Remove before merging to master.
+      - '**' # TODO: Make it only `master`.
     paths:
       - '**.py'
   pull_request:
