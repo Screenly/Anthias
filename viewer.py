@@ -4,7 +4,6 @@
 from __future__ import unicode_literals
 from builtins import bytes
 from future import standard_library
-standard_library.install_aliases()
 from builtins import filter
 from builtins import str
 from builtins import range
@@ -13,9 +12,8 @@ import json
 import logging
 import pydbus
 import re
-import string
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from jinja2 import Template
 from os import path, getenv, utime, system
 from random import shuffle
@@ -29,10 +27,9 @@ import zmq
 
 from lib import assets_helper
 from lib import db
-from lib.diagnostics import get_raspberry_model
 from lib.github import is_up_to_date
 from lib.errors import SigalrmException
-from lib.media_player import VLCMediaPlayer, OMXMediaPlayer
+from lib.media_player import OMXMediaPlayer
 from lib.utils import (
     get_active_connections,
     url_fails,
@@ -46,6 +43,9 @@ from retry.api import retry_call
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
 from netifaces import gateways
+
+
+standard_library.install_aliases()
 
 
 __author__ = "Screenly, Inc"
@@ -160,6 +160,7 @@ def setup_wifi(data):
         return
 
     show_hotspot_page(data)
+
 
 def show_splash(data):
     if is_balena_app():
@@ -431,7 +432,7 @@ def setup():
     HOME = getenv('HOME')
     if not HOME:
         logging.error('No HOME variable')
-        sys.exit(1) # Alternatively, we can raise an Exception using a custom message, or we can create a new class that extends Exception.
+        sys.exit(1)  # Alternatively, we can raise an Exception using a custom message, or we can create a new class that extends Exception.
 
     signal(SIGUSR1, sigusr1)
     signal(SIGALRM, sigalrm)

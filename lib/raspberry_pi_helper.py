@@ -1,4 +1,6 @@
 from __future__ import unicode_literals
+
+
 def parse_cpu_info():
     """
     Extracts the various Raspberry Pi related data
