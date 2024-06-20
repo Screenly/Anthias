@@ -135,7 +135,7 @@ $().ready ->
         ($ "#request-error .alert").show()
         ($ "#request-error .alert").addClass "alert-success"
         ($ "#request-error .alert").removeClass "alert-danger"
-        ($ "#request-error .msg").text "Anthias reboot has started successfully."
+        ($ "#request-error .msg").text "Reboot has started successfully."
       .fail (data, e) ->
         ($ "#request-error .alert").show()
         ($ "#request-error .alert").addClass "alert-danger"
@@ -152,7 +152,7 @@ $().ready ->
         ($ "#request-error .alert").show()
         ($ "#request-error .alert").addClass "alert-success"
         ($ "#request-error .alert").removeClass "alert-danger"
-        ($ "#request-error .msg").text "Anthias shutdown has started successfully. Soon you will be able to unplug the power from your Raspberry Pi."
+        ($ "#request-error .msg").text "Device shutdown has started successfully. Soon you will be able to unplug the power from your Raspberry Pi."
       .fail (data, e) ->
         ($ "#request-error .alert").show()
         ($ "#request-error .alert").addClass "alert-danger"

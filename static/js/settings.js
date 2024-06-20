@@ -158,7 +158,7 @@
           ($("#request-error .alert")).show();
           ($("#request-error .alert")).addClass("alert-success");
           ($("#request-error .alert")).removeClass("alert-danger");
-          return ($("#request-error .msg")).text("Anthias reboot has started successfully.");
+          return ($("#request-error .msg")).text("Reboot has started successfully.");
         }).fail(function(data, e) {
           var err, j;
           ($("#request-error .alert")).show();
@@ -178,7 +178,7 @@
           ($("#request-error .alert")).show();
           ($("#request-error .alert")).addClass("alert-success");
           ($("#request-error .alert")).removeClass("alert-danger");
-          return ($("#request-error .msg")).text("Anthias shutdown has started successfully. Soon you will be able to unplug the power from your Raspberry Pi.");
+          return ($("#request-error .msg")).text("Device shutdown has started successfully. Soon you will be able to unplug the power from your Raspberry Pi.");
         }).fail(function(data, e) {
           var err, j;
           ($("#request-error .alert")).show();
