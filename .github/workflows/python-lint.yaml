@@ -4,15 +4,13 @@ on:
   push:
     branches:
       - '**' # TODO: Make it only `master`.
-    # TODO: Uncomment before merging.
-    # paths:
-    #   - '**.py'
+    paths:
+      - '**/*.py'
   pull_request:
     branches:
       - master
-    # TODO: Uncomment before merging.
-    # paths:
-    #   - '**.py'
+    paths:
+      - '**/*.py'
 
 jobs:
   build:
