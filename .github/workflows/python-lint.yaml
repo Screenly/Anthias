@@ -13,7 +13,7 @@ on:
       - '**/*.py'
 
 jobs:
-  build:
+  run-python-linter:
     runs-on: ubuntu-latest
     strategy:
       matrix:
