@@ -9,6 +9,7 @@ on:
   pull_request:
     branches:
       - master
+      - add-py-linting # TODO: Remove before merging to master.
     paths:
       - '**.py'
 
