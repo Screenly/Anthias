@@ -10,12 +10,12 @@ from inspect import cleandoc
 from requests.auth import HTTPBasicAuth
 from requests.exceptions import RequestException
 from tenacity import retry
+from textwrap import shorten
 
 HOME = os.getenv('HOME')
-
 BASE_API_SCREENLY_URL = 'https://api.screenlyapp.com'
 ASSETS_ANTHIAS_API = 'http://127.0.0.1/api/v1.1/assets'
-
+MAX_ASSET_NAME_LENGTH = 40
 PORT = 80
 
 token = None
@@ -25,12 +25,17 @@ token = None
 # Utilities #
 #############
 
-def progress_bar(count, total, text=''):
+def progress_bar(count, total, asset_name='', previous_asset_name=''):
     """
     This simple console progress bar
     For display progress asset uploads
     """
-    progress_line = "\u2588" * int(round(50 * count / float(total))) + '-' * (50 - int(round(50 * count / float(total))))
+
+    # This will prevent the characters from the previous asset name to be displayed,
+    # if the current asset name is shorter than the previous one.
+    text = f'{asset_name}'.ljust(len(previous_asset_name))
+
+    progress_line = '#' * int(round(50 * count / float(total))) + '-' * (50 - int(round(50 * count / float(total))))
     percent = round(100.0 * count / float(total), 1)
     sys.stdout.write(f'[{progress_line}] {percent}% {text}\r')
     sys.stdout.flush()
@@ -133,11 +138,20 @@ def assets_migration():
 
     assets_length = len(assets)
     failed_assets_count = 0
+    previous_asset_name = ''
 
     click.echo('\n')
+
     for index, asset in enumerate(assets):
         asset_name = str(asset['name'])
-        progress_bar(index + 1, assets_length, text=f'Asset in migration progress: {asset_name}')
+        shortened_asset_name = shorten(asset_name, MAX_ASSET_NAME_LENGTH)
+        progress_bar(
+            index + 1,
+            assets_length,
+            asset_name=shortened_asset_name,
+            previous_asset_name=previous_asset_name
+        )
+        previous_asset_name = shortened_asset_name
 
         status = send_asset(asset)
         if not status:
