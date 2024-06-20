@@ -153,12 +153,12 @@
       });
     });
     $("#btn-reboot-system").click(function(e) {
-      if (confirm("Are you sure you want to reboot your Screenly?")) {
-        return $.post("/api/v1/reboot_screenly").done(function(e) {
+      if (confirm("Are you sure you want to reboot your device?")) {
+        return $.post("/api/v1/reboot").done(function(e) {
           ($("#request-error .alert")).show();
           ($("#request-error .alert")).addClass("alert-success");
           ($("#request-error .alert")).removeClass("alert-danger");
-          return ($("#request-error .msg")).text("Screenly reboot has started successfully.");
+          return ($("#request-error .msg")).text("Reboot has started successfully.");
         }).fail(function(data, e) {
           var err, j;
           ($("#request-error .alert")).show();
@@ -173,12 +173,12 @@
       }
     });
     $("#btn-shutdown-system").click(function(e) {
-      if (confirm("Are you sure you want to shutdown your Screenly?")) {
-        return $.post("/api/v1/shutdown_screenly").done(function(e) {
+      if (confirm("Are you sure you want to shutdown your device?")) {
+        return $.post("/api/v1/shutdown").done(function(e) {
           ($("#request-error .alert")).show();
           ($("#request-error .alert")).addClass("alert-success");
           ($("#request-error .alert")).removeClass("alert-danger");
-          return ($("#request-error .msg")).text("Screenly shutdown has started successfully. Soon you will be able to unplug the power from your Raspberry Pi.");
+          return ($("#request-error .msg")).text("Device shutdown has started successfully. Soon you will be able to unplug the power from your Raspberry Pi.");
         }).fail(function(data, e) {
           var err, j;
           ($("#request-error .alert")).show();
