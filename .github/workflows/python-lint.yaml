@@ -3,7 +3,7 @@ name: Run Python Linter
 on:
   push:
     branches:
-      - '**' # TODO: Make it only `master`.
+      - 'master'
     paths:
       - '**/*.py'
   pull_request:
