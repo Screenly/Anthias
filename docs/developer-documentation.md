@@ -88,6 +88,48 @@ $ docker compose \
 
 We've also provided a [checklist](/docs/qa-checklist.md) that can serve as a guide for testing Anthias manually.
 
+## Linting Python code locally
+
+The project uses `flake8` for linting the Python codebase. While the linter is being run on the CI/CD pipeline,
+you can also run it locally. There are several ways to do this.
+
+### Run the linter using `act`
+
+[`act`](https://nektosact.com/) lets you run GitHub Actions locally. This is useful for testing the CI/CD pipeline locally.
+Installation instructions can be found [here](https://nektosact.com/installation/index.html).
+
+After installing and setting up `act`, run the following command:
+
+```bash
+$ act -W .github/workflows/python-lint.yaml
+```
+
+The commant above will run the linter on the all the Python files in the repository. If you want to run the linter
+on a specific file, you can try the commands in the next section.
+
+## Running the linter using `venv`
+
+First, create a virtual environment and install the dependencies:
+
+```bash
+$ python3 -m venv venv/
+$ source venv/bin/activate
+$ pip install -r requirements/requirements.linter.txt
+```
+
+To run the linter on all the Python files in the repository, run the following command:
+
+```bash
+$ flake8 $(git ls-files '**/*.py')
+```
+
+To run the linter on a specific file, run the following command:
+
+```bash
+$ flake8 path/to/file.py
+```
+
+
 ## Managing releases
 ### Creating a new release
 
