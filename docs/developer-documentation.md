@@ -104,7 +104,7 @@ After installing and setting up `act`, run the following command:
 $ act -W .github/workflows/python-lint.yaml
 ```
 
-The commant above will run the linter on the all the Python files in the repository. If you want to run the linter
+The command above will run the linter on the all the Python files in the repository. If you want to run the linter
 on a specific file, you can try the commands in the next section.
 
 ### Running the linter using `venv`
