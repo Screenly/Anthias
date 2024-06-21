@@ -6,7 +6,7 @@ from geventwebsocket.handler import WebSocketHandler
 from threading import Thread
 import zmq.green as zmq
 
-from settings import settings, LISTEN
+from settings import settings
 
 
 class WebSocketTranslator(object):

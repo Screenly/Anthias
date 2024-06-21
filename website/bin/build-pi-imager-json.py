@@ -24,7 +24,7 @@ def get_latest_tag():
 def get_asset_list(release_tag):
     asset_urls = []
     response = requests.get(
-        "{}/releases/tags/{}".format(BASE_URL,release_tag),
+        "{}/releases/tags/{}".format(BASE_URL, release_tag),
         headers=GITHUB_HEADERS
     )
 
@@ -56,6 +56,7 @@ def main():
         pi_imager_json['os_list'].append(retrieve_and_patch_json(url))
 
     print(json.dumps(pi_imager_json))
+
 
 if __name__ == "__main__":
     main()

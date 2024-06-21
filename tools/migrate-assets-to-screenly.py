@@ -71,6 +71,7 @@ def get_assets_by_anthias_api():
 def get_post_response(endpoint_url, **kwargs):
     return requests.post(endpoint_url, **kwargs)
 
+
 def send_asset(asset):
     endpoint_url = f'{BASE_API_SCREENLY_URL}/api/v4/assets'
     asset_uri = asset['uri']

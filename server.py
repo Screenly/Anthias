@@ -3,7 +3,6 @@
 
 from __future__ import unicode_literals
 from future import standard_library
-standard_library.install_aliases()
 from builtins import str
 from past.builtins import basestring
 __author__ = "Screenly, Inc"
@@ -36,7 +35,6 @@ from flask import (
     request,
     send_from_directory,
     url_for,
-    jsonify,
 )
 from flask_cors import CORS
 from flask_restful_swagger_2 import Api, Resource, Schema, swagger
@@ -45,7 +43,7 @@ from flask_swagger_ui import get_swaggerui_blueprint
 from gunicorn.app.base import Application
 from werkzeug.wrappers import Request
 
-from celery_tasks import celery, shutdown_anthias, reboot_anthias
+from celery_tasks import shutdown_anthias, reboot_anthias
 
 from lib import assets_helper
 from lib import backup_helper
@@ -73,6 +71,8 @@ from settings import (
     CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT,
     settings, ZmqPublisher, ZmqCollector,
 )
+
+standard_library.install_aliases()
 
 HOME = getenv('HOME')
 
@@ -1173,56 +1173,6 @@ class ResetWifiConfig(Resource):
         return '', 204
 
 
-class UpgradeScreenly(Resource):
-    method_decorators = [api_response, authorized]
-
-    @swagger.doc({
-        'responses': {
-            '200': {
-                'description': 'Upgrade system'
-            }
-        }
-    })
-    def post(self):
-        for task in celery.control.inspect(timeout=2.0).active().get('worker@screenly'):
-            if task.get('type') == 'server.upgrade_screenly':
-                return jsonify({'id': task.get('id')})
-        branch = request.form.get('branch')
-        manage_network = request.form.get('manage_network')
-        system_upgrade = request.form.get('system_upgrade')
-        task = upgrade_screenly.apply_async(args=(branch, manage_network, system_upgrade))
-        return jsonify({'id': task.id})
-
-
-@app.route('/upgrade_status/<task_id>')
-def upgrade_screenly_status(task_id):
-    status_code = 200
-    task = upgrade_screenly.AsyncResult(task_id)
-    if task.state == 'PENDING':
-        response = {
-            'state': task.state,
-            'status': ''
-        }
-        status_code = 202
-    elif task.state == 'PROGRESS':
-        response = {
-            'state': task.state,
-            'status': task.info.get('status', '')
-        }
-        status_code = 202
-    elif task.state != 'FAILURE':
-        response = {
-            'state': task.state,
-            'status': task.info.get('status', '')
-        }
-    else:
-        response = {
-            'state': task.state,
-            'status': str(task.info)
-        }
-    return jsonify(response), status_code
-
-
 class RebootScreenly(Resource):
     method_decorators = [api_response, authorized]
 
@@ -1404,7 +1354,6 @@ api.add_resource(Recover, '/api/v1/recover')
 api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 api.add_resource(Info, '/api/v1/info')
 api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
-api.add_resource(UpgradeScreenly, '/api/v1/upgrade_screenly')
 api.add_resource(RebootScreenly, '/api/v1/reboot')
 api.add_resource(ShutdownScreenly, '/api/v1/shutdown')
 api.add_resource(ViewerCurrentAsset, '/api/v1/viewer_current_asset')

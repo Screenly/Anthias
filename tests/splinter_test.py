@@ -200,7 +200,7 @@ class WebTest(unittest.TestCase):
 
     def test_add_two_assets_upload(self):
         with TemporaryCopy('tests/assets/asset.mov', 'video.mov') as video_file, \
-            TemporaryCopy('static/img/standby.png', 'standby.png') as image_file:
+                TemporaryCopy('static/img/standby.png', 'standby.png') as image_file:
             with get_browser() as browser:
                 browser.visit(main_page_url)
 

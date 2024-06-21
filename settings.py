@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 from future import standard_library
-standard_library.install_aliases()
 from builtins import str
 from builtins import object
 import hashlib
@@ -17,6 +16,8 @@ from collections import UserDict
 
 from lib.auth import BasicAuth, NoAuth
 from lib.errors import ZmqCollectorTimeout
+
+standard_library.install_aliases()
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
