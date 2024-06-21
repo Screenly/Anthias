@@ -17,6 +17,7 @@ CHANNEL_NAME = b'hostcmd'
 CMD_TO_ARGV = {b'reboot': ['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'reboot'],
                b'shutdown': ['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'poweroff']}
 
+
 def execute_host_command(cmd_name):
     cmd = CMD_TO_ARGV.get(cmd_name, None)
     if cmd is None:
@@ -28,11 +29,13 @@ def execute_host_command(cmd_name):
         phandle = subprocess.run(cmd)
         logging.info("Host command %s (%s) returned %s", cmd_name, cmd, phandle.returncode)
 
+
 def process_message(message):
     if (message.get('type', '') == 'message' and message.get('channel', b'') == CHANNEL_NAME):
         execute_host_command(message.get('data', b''))
     else:
         logging.info("Received unsolicited message: %s", message)
+
 
 def subscriber_loop():
     # Connect to redis on localhost and wait for messages
@@ -43,6 +46,7 @@ def subscriber_loop():
     logging.info("Subscribed to channel %s, ready to process messages", CHANNEL_NAME)
     for message in pubsub.listen():
         process_message(message)
+
 
 if __name__ == '__main__':
     # Init logging

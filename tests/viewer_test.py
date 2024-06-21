@@ -40,8 +40,11 @@ class ViewerTestCase(unittest.TestCase):
         self.u.SPLASH_DELAY = self.original_splash_delay
 
 
+def noop(*a, **k):
+    return None
+
+
 class TestEmptyPl(ViewerTestCase):
-    noop = lambda *a, **k: None
 
     @mock.patch('viewer.start_loop', side_effect=noop)
     @mock.patch('viewer.view_image', side_effect=noop)
@@ -97,7 +100,7 @@ class TestWatchdog(ViewerTestCase):
     def test_watchdog_should_create_file_if_not_exists(self):
         try:
             os.remove(self.u.WATCHDOG_PATH)
-        except:
+        except OSError:
             pass
         self.u.watchdog()
         self.assertEqual(os.path.exists(self.u.WATCHDOG_PATH), True)

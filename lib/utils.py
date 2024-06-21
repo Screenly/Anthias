@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 from future import standard_library
-standard_library.install_aliases()
 from builtins import str
 from builtins import range
 import certifi
@@ -27,6 +26,8 @@ from urllib.parse import urlparse
 
 from .assets_helper import update
 
+standard_library.install_aliases()
+
 
 arch = machine()
 
@@ -37,6 +38,7 @@ try:
     from sh import ffprobe
 except ImportError:
     pass
+
 
 def string_to_bool(string):
     return bool(strtobool(str(string)))
@@ -256,7 +258,7 @@ def url_fails(url):
     If it is streaming
     """
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
-        run_mplayer = mplayer('-identify', '-frames', '0', '-nosound', url)
+        run_mplayer = mplayer('-identify', '-frames', '0', '-nosound', url)  # noqa: F821
         for line in run_mplayer.split('\n'):
             if 'Clip info:' in line:
                 return False
@@ -362,6 +364,7 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
 
 def connect_to_redis():
     return redis.Redis(host='redis', decode_responses=True, port=6379, db=0)
+
 
 def is_docker():
     return os.path.isfile('/.dockerenv')

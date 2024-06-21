@@ -12,10 +12,22 @@ configdir = os.path.join(os.getenv('HOME'), '.screenly/')
 database = os.path.join(configdir, 'screenly.db')
 
 comma = ','.join
-quest = lambda l: '=?,'.join(l) + '=?'
-query_read_all = lambda keys: 'SELECT ' + comma(keys) + ' FROM assets ORDER BY name'
-query_update = lambda keys: 'UPDATE assets SET ' + quest(keys) + ' WHERE asset_id=?'
-mkdict = lambda keys: (lambda row: dict([(keys[ki], v) for ki, v in enumerate(row)]))
+
+
+def quest(values):
+    return '=?,'.join(values) + '=?'
+
+
+def query_read_all(keys):
+    return 'SELECT ' + comma(keys) + ' FROM assets ORDER BY name'
+
+
+def query_update(keys):
+    return 'UPDATE assets SET ' + quest(keys) + ' WHERE asset_id=?'
+
+
+def mkdict(keys):
+    return (lambda row: dict([(keys[ki], v) for ki, v in enumerate(row)]))
 
 
 def is_active(asset):
@@ -55,7 +67,7 @@ def open_db_get_cursor():
         yield (cursor, conn)
         cursor.close()
 
-# ✂--------
+
 query_add_play_order = """
 begin transaction;
 alter table assets add play_order integer default 0;
@@ -87,7 +99,8 @@ def migrate_add_column(col, script):
                 asset.update({'play_order': 0})
                 update(cursor, asset['asset_id'], asset)
                 conn.commit()
-# ✂--------
+
+
 query_create_assets_table = """
 create table assets(
 asset_id text primary key,
@@ -121,7 +134,8 @@ def migrate_make_asset_id_primary_key():
         with open_db_get_cursor() as (cursor, _):
             cursor.executescript(query_make_asset_id_primary_key)
             print('asset_id is primary key')
-# ✂--------
+
+
 query_add_is_enabled_and_nocache = """
 begin transaction;
 alter table assets add is_enabled integer default 0;
@@ -143,7 +157,8 @@ def migrate_add_is_enabled_and_nocache():
                 update(cursor, asset['asset_id'], asset)
                 conn.commit()
             print(f'Added new columns ({col})')
-# ✂--------
+
+
 query_drop_filename = """BEGIN TRANSACTION;
 CREATE TEMPORARY TABLE assets_backup(asset_id, name, uri, md5, start_date, end_date, duration, mimetype);
 INSERT INTO assets_backup SELECT asset_id, name, uri, md5, start_date, end_date, duration, mimetype FROM assets;

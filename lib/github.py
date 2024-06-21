@@ -24,6 +24,7 @@ ERROR_BACKOFF_TTL = (60 * 5)
 ANALYTICS_MEASURE_ID = 'G-S3VX8HTPK7'
 ANALYTICS_API_SECRET = 'G8NcBpRIS9qBsOj3ODK8gw'
 
+
 def handle_github_error(exc, action):
     # After failing, dont retry until backoff timer expires
     r.set('github-api-error', action)
