@@ -11,9 +11,9 @@ import unittest
 # This is needed to avoid exceptions when importing from api.helpers.
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "anthias_django.settings")
 
-from api.helpers import update_asset
-from lib import assets_helper, db
-from lib.utils import url_fails
+from api.helpers import update_asset # noqa E402
+from lib import assets_helper, db # noqa E402
+from lib.utils import url_fails # noqa E402
 
 
 # fixtures chronology

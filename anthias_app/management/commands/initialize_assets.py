@@ -21,6 +21,7 @@ def initialize_assets_directories():
             if cursor.fetchone() is None:
                 cursor.execute(assets_helper.create_assets_table)
 
+
 class Command(BaseCommand):
     help = (
         "Ensures that the config & assets folders exist and that the "

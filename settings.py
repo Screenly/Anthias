@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
-from future import standard_library
 from builtins import str
 from builtins import object
 import hashlib

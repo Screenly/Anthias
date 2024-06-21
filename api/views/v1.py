@@ -28,14 +28,13 @@ from lib.auth import authorized
 from lib.github import is_up_to_date
 from lib.utils import (
     connect_to_redis,
-    generate_perfect_paper_password,
     get_active_connections,
     remove_connection,
     url_fails
 )
 from mimetypes import guess_type, guess_extension
 from os import getenv, path, remove, statvfs
-from celery_tasks import celery, reboot_anthias, shutdown_anthias
+from celery_tasks import reboot_anthias, shutdown_anthias
 from settings import settings, ZmqCollector, ZmqPublisher
 
 
@@ -389,7 +388,7 @@ class RecoverView(APIView):
 class AssetsControlView(APIView):
     @extend_schema(
         summary='Control asset playback',
-        description = cleandoc("""
+        description=cleandoc("""
         Use any of the following commands to control asset playback:
         * `next` - Show the next asset
         * `previous` - Show the previous asset
@@ -514,6 +513,7 @@ class RebootView(APIView):
         reboot_anthias.apply_async()
         return Response(status=status.HTTP_200_OK)
 
+
 class ShutdownView(APIView):
     @extend_schema(summary='Shut down system')
     @authorized
@@ -526,9 +526,8 @@ class ViewerCurrentAssetView(APIView):
     @extend_schema(
         summary='Get current asset',
         description='Get the current asset being displayed on the screen',
-        responses={
-            200: AssetSerializer
-    })
+        responses={200: AssetSerializer}
+    )
     @authorized
     def get(self, request):
         collector = ZmqCollector.get_instance()

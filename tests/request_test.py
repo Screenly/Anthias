@@ -3,7 +3,6 @@ from __future__ import unicode_literals
 from datetime import datetime
 import os
 import unittest
-import mock
 
 from django.http import HttpRequest
 from rest_framework.request import Request
@@ -11,7 +10,7 @@ from rest_framework.request import Request
 # This is needed to avoid exceptions when importing from api.helpers.
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "anthias_django.settings")
 
-from api.helpers import prepare_asset
+from api.helpers import prepare_asset # noqa E402
 
 request_ok_json = """{"name": "https://mail.ru", "mimetype": "webpage", "uri": "https://mail.ru", "is_active": false,
                 "start_date": "2016-07-19T12:42:00.000Z", "end_date": "2016-07-26T12:42:00.000Z", "duration": "30",

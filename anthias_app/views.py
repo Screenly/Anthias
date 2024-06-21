@@ -19,7 +19,6 @@ from lib import (
 from lib.auth import authorized
 from lib.utils import (
     connect_to_redis,
-    generate_perfect_paper_password,
     get_node_ip,
     get_node_mac_address,
     is_balena_app,

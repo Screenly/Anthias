@@ -19,6 +19,7 @@ class AssetRequestSerializer(Serializer):
     play_order = IntegerField()
     skip_asset_check = IntegerField(min_value=0, max_value=1)
 
+
 class AssetSerializer(AssetRequestSerializer):
     asset_id = CharField()
     is_active = IntegerField(min_value=0, max_value=1)

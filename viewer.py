@@ -532,7 +532,7 @@ def main():
     scheduler = Scheduler()
 
     # This will prevent white screen from happening before showing the splash screen with IP addresses.
-    view_image(LOAD_SCREEN)
+    view_image(STANDBY_SCREEN)
 
     wait_for_server(60)
 
