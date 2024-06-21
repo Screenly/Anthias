@@ -8,7 +8,7 @@ def quest(values):
 
 
 def quest_2(values, c):
-    ', '.join([('%s=CASE ' % x) + ("WHEN asset_id=? THEN ? " * c) + 'ELSE asset_id END' for x in values])
+    return ', '.join([('%s=CASE ' % x) + ("WHEN asset_id=? THEN ? " * c) + 'ELSE asset_id END' for x in values])
 
 
 exists_table = "SELECT name FROM sqlite_master WHERE type='table' AND name='assets'"
