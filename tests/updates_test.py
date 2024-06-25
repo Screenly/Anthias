@@ -1,10 +1,7 @@
 from __future__ import unicode_literals
-from datetime import datetime
-from datetime import timedelta
 import unittest
 
 import mock
-import viewer
 import server
 import os
 

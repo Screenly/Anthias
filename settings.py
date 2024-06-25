@@ -2,13 +2,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 from future import standard_library
-standard_library.install_aliases()
 from builtins import str
 from builtins import object
 import hashlib
 import json
 import logging
-import os
 import zmq
 import configparser
 from os import path, getenv
@@ -16,8 +14,10 @@ from time import sleep
 
 from collections import UserDict
 
-from lib.auth import WoTTAuth, BasicAuth, NoAuth
+from lib.auth import BasicAuth, NoAuth
 from lib.errors import ZmqCollectorTimeout
+
+standard_library.install_aliases()
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -42,7 +42,6 @@ DEFAULTS = {
         'show_splash': True,
         'shuffle_playlist': False,
         'verify_ssl': True,
-        'usb_assets_key': '',
         'default_assets': False
     }
 }
@@ -74,8 +73,6 @@ class ScreenlySettings(UserDict):
         self.home = getenv('HOME')
         self.conf_file = self.get_configfile()
         self.auth_backends_list = [NoAuth(), BasicAuth(self)]
-        if os.path.isdir('/opt/wott'):
-            self.auth_backends_list.append(WoTTAuth(self))
         self.auth_backends = {}
         for backend in self.auth_backends_list:
             DEFAULTS.update(backend.config)

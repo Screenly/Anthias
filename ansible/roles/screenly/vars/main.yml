@@ -1,5 +1,4 @@
 screenly_systemd_units:
-  - udev-restart.service
   - screenly-host-agent.service
 
 deprecated_screenly_systemd_units:
@@ -9,4 +8,5 @@ deprecated_screenly_systemd_units:
   - screenly-viewer.service
   - X.service
   - matchbox.service
+  - udev-restart.service
   - wifi-connect.service
