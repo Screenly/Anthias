@@ -1,7 +1,5 @@
 #include <QStandardPaths>
 #include <QWebEngineSettings>
-#include <QVideoWidget>
-#include <QMediaPlayer>
 
 #include "mainwindow.h"
 #include "view.h"
@@ -15,6 +13,11 @@ MainWindow::MainWindow() : QMainWindow()
 
     view = new View(this);
     setCentralWidget(view);
+
+    player = new QMediaPlayer;
+    videoWidget = new QVideoWidget;
+
+    player->setVideoOutput(videoWidget);
 }
 
 void MainWindow::loadPage(const QString &uri)
@@ -29,11 +32,8 @@ void MainWindow:: loadImage(const QString &uri)
 
 void MainWindow::loadVideo(const QString &uri)
 {
-    qDebug() << "Type: Image, URI: " << uri;
+    qDebug() << "Type: Video, URI: " << uri;
 
-    QMediaPlayer *player = new QMediaPlayer;
-    QVideoWidget *videoWidget = new QVideoWidget;
-    player -> setVideoOutput(videoWidget);
-    player -> setMedia(QUrl(uri));
-    player -> play();
+    player->setMedia(QUrl(uri));
+    player->play();
 }

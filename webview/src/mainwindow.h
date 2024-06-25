@@ -2,6 +2,8 @@
 
 #include <QMainWindow>
 #include <QWebEngineView>
+#include <QVideoWidget>
+#include <QMediaPlayer>
 
 #include "view.h"
 
@@ -19,4 +21,6 @@ class MainWindow : public QMainWindow
 
     private:
         View *view;
+        QMediaPlayer *player;
+        QVideoWidget *videoWidget;
 };
