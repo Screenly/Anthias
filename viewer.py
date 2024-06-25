@@ -413,8 +413,10 @@ def asset_loop(scheduler):
         else:
             logging.error('Unknown MimeType %s', mime)
 
-        if 'image' in mime or 'web' in mime or 'video' in mime:
+        if any(mimetype for mimetype in ['image', 'web', 'video']):
             duration = int(asset['duration'])
+            if 'video' in mime:
+                duration += 0.5 # Add a 500-ms delay to avoid cross-playback.
             logging.info('Sleeping for %s', duration)
             sleep(duration)
 
