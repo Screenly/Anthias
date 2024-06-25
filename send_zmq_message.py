@@ -18,6 +18,7 @@ def get_portal_url():
     else:
         return f'{gateway}:{port}'
 
+
 def get_message(action):
     if action == 'setup_wifi':
         data = {

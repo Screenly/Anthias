@@ -29,7 +29,7 @@ def get_display_power():
     try:
         cec.init()
         tv = cec.Device(cec.CECDEVICE_TV)
-    except:
+    except Exception:
         return 'CEC error'
 
     try:
@@ -119,8 +119,10 @@ def get_debian_version():
 def get_raspberry_code():
     return raspberry_pi_helper.parse_cpu_info().get('hardware', "Unknown")
 
+
 def get_raspberry_model():
     return raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
+
 
 def compile_report():
     """

@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 from future import standard_library
-standard_library.install_aliases()
 from builtins import str
 from builtins import range
 import certifi
@@ -15,22 +14,20 @@ import redis
 import requests
 import string
 import sh
-import time
 
 from datetime import datetime, timedelta
 from distutils.util import strtobool
-from netifaces import ifaddresses, gateways, AF_INET, AF_LINK
 from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
 from subprocess import check_output, call
 from threading import Thread
 from urllib.parse import urlparse
-import logging
 
 from .assets_helper import update
 
-WOTT_PATH = '/opt/wott'
+standard_library.install_aliases()
+
 
 arch = machine()
 
@@ -41,6 +38,7 @@ try:
     from sh import ffprobe
 except ImportError:
     pass
+
 
 def string_to_bool(string):
     return bool(strtobool(str(string)))
@@ -260,7 +258,7 @@ def url_fails(url):
     If it is streaming
     """
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
-        run_mplayer = mplayer('-identify', '-frames', '0', '-nosound', url)
+        run_mplayer = mplayer('-identify', '-frames', '0', '-nosound', url)  # noqa: F821
         for line in run_mplayer.split('\n'):
             if 'Clip info:' in line:
                 return False
@@ -367,6 +365,7 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
 def connect_to_redis():
     return redis.Redis(host='redis', decode_responses=True, port=6379, db=0)
 
+
 def is_docker():
     return os.path.isfile('/.dockerenv')
 
@@ -377,25 +376,3 @@ def is_balena_app():
     :return: bool
     """
     return bool(getenv('RESIN', False)) or bool(getenv('BALENA', False))
-
-
-def is_wott_integrated():
-    """
-    Chacks if wott-agent installed or not
-    :return:
-    """
-    return os.path.isdir(WOTT_PATH)
-
-
-def get_wott_device_id():
-    """
-    :return: WoTT Device id of this device
-    """
-    metadata_path = os.path.join(WOTT_PATH, 'metadata.json')
-    if os.path.isfile(metadata_path):
-        with open(metadata_path) as metadata_file:
-            metadata = json.load(metadata_file)
-        if 'device_id' in metadata:
-            return metadata['device_id']
-    logging.warning("Could not read WoTT Device ID")
-    return 'Could not read WoTT Device ID'
