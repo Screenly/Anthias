@@ -15,9 +15,6 @@ MainWindow::MainWindow() : QMainWindow()
     setCentralWidget(view);
 
     player = new QMediaPlayer;
-    videoWidget = new QVideoWidget;
-
-    player->setVideoOutput(videoWidget);
 }
 
 void MainWindow::loadPage(const QString &uri)
@@ -34,6 +31,6 @@ void MainWindow::loadVideo(const QString &uri)
 {
     qDebug() << "Type: Video, URI: " << uri;
 
-    player->setMedia(QUrl(uri));
+    player->setMedia(QUrl::fromLocalFile(uri));
     player->play();
 }
