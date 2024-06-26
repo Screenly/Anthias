@@ -9,7 +9,7 @@ Cython==0.29.33
 Flask-Cors==3.0.9
 flask-restful-swagger-2==0.35
 flask-swagger-ui==3.36.0
-Flask==1.1.2
+Flask==2.2.5
 future==0.18.3
 gevent-websocket==0.10.1
 gevent==21.12.0
