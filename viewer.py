@@ -376,7 +376,14 @@ def view_video(uri, duration):
     if browser is None or not browser.process.alive:
         load_browser()
 
-    browser_bus.loadVideo(uri)
+    browser_bus.loadVideo(uri, int(duration))
+
+    while True:
+        is_ready = browser_bus.isReady()
+        if is_ready:
+            break
+        sleep(1)
+
     logging.info('Current url is {0}'.format(uri))
 
 
@@ -414,10 +421,8 @@ def asset_loop(scheduler):
         else:
             logging.error('Unknown MimeType %s', mime)
 
-        if any(mimetype for mimetype in ['image', 'web', 'video']):
+        if any(mimetype in mime for mimetype in ['image', 'web']):
             duration = int(asset['duration'])
-            if 'video' in mime:
-                duration += 0.5 # Add a 500-ms delay to avoid cross-playback.
             logging.info('Sleeping for %s', duration)
             sleep(duration)
 
