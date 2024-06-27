@@ -15,7 +15,7 @@ greenlet==1.1.0
 gunicorn==22.0.0
 hurry.filesize==0.9
 importlib-metadata==4.13.0
-Jinja2==2.11.3
+Jinja2==3.1.4
 kombu==5.2.4
 Mako==1.2.2
 MarkupSafe==1.1.1
