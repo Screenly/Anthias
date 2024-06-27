@@ -1394,7 +1394,7 @@ def viewIndex():
     player_name = settings['player_name']
     my_ip = urlparse(request.host_url).hostname
     is_demo = is_demo_node()
-    resin_uuid = getenv("RESIN_UUID", None)
+    balena_uuid = getenv("BALENA_APP_UUID", None)
 
     ws_addresses = []
 
@@ -1403,8 +1403,8 @@ def viewIndex():
     else:
         ws_addresses.append('ws://' + my_ip + '/ws/')
 
-    if resin_uuid:
-        ws_addresses.append('wss://{}.resindevice.io/ws/'.format(resin_uuid))
+    if balena_uuid:
+        ws_addresses.append('wss://{}.balena-devices.com/ws/'.format(balena_uuid))
 
     return template(
         'index.html',
