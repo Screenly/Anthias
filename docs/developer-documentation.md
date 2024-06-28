@@ -88,6 +88,38 @@ $ docker compose \
 
 We've also provided a [checklist](/docs/qa-checklist.md) that can serve as a guide for testing Anthias manually.
 
+## Generating CSS and JS files
+
+Anthias only supports compiling from the host container at the moment. You need to install the latest version
+of Node.js. We recommend to intall Node.js on Linux. You can use this [guide](https://nodejs.org/en/learn/getting-started/how-to-install-nodejs)
+to get started.
+
+### Installing Node.js dependencies
+
+Run the following command from the project root directory.
+
+```bash
+npm install
+```
+
+### Transpiling CSS from SASS
+
+```bash
+npm run sass-dev
+```
+
+### Transpiling JS from CoffeeScript
+
+```bash
+# You need to run this on a separate terminal session if you already ran the
+# script for transpiling SASS files.
+npm run coffee-dev
+```
+
+### Closing the transpiler
+
+Just press `Ctrl-C` to close the SASS and CoffeeScript transpilers.
+
 ## Linting Python code locally
 
 The project uses `flake8` for linting the Python codebase. While the linter is being run on the CI/CD pipeline,
