@@ -13,6 +13,11 @@ ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
 ENV GIT_BRANCH=$GIT_BRANCH
 
 COPY docker/nginx/nginx.conf /etc/nginx/sites-enabled/anthias.conf
+
+# @TODO: Find a way to generate the cert and key files ad-hoc.
+COPY docker/nginx/cert.pem /etc/nginx/cert.pem
+COPY docker/nginx/key.pem /etc/nginx/key.pem
+
 RUN rm -f /etc/nginx/sites-enabled/default
 
 CMD ["nginx", "-g", "daemon off;"]
