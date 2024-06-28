@@ -52,8 +52,8 @@
 
 - name: Download upgrade_screenly.sh from github repository
   ansible.builtin.get_url:
-    url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/install.sh
-    dest: /usr/local/sbin/upgrade_screenly.sh
+    url: https://raw.githubusercontent.com/Screenly/Anthias/master/bin/install.sh
+    dest: /usr/local/sbin/upgrade_anthias.sh
     mode: "0700"
     owner: root
     group: root

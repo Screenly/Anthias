@@ -107,7 +107,7 @@ $().ready ->
               getStatus(id)
             ,1000
           else
-            ($ "#upgrade_logs").append "\nScreenly-OSE update was finished"
+            ($ "#upgrade_logs").append "\nAnthias update was finished"
             ($ "#upgrade_logs").scrollTop(($ "#upgrade_logs").prop "scrollHeight")
             window.onbeforeunload = null
             $("#start-upgrade-btn").prop "disabled", no
@@ -117,7 +117,7 @@ $().ready ->
           else
             ($ "#upgrade_logs").append "The operation failed. Please reload the page and try again."
 
-      ($ "#upgrade_logs").text "Screenly-OSE upgrade has started successfully."
+      ($ "#upgrade_logs").text "Anthias upgrade has started successfully."
       window.onbeforeunload = ->
         no
       getStatus(data.id)

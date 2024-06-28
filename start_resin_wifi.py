@@ -34,7 +34,7 @@ if __name__ == "__main__":
     bus = pydbus.SystemBus()
 
     pattern_include = re.compile("wlan*")
-    pattern_exclude = re.compile("ScreenlyOSE-*")
+    pattern_exclude = re.compile("Anthias-*")
 
     wireless_connections = get_active_connections(bus)
 
@@ -45,7 +45,7 @@ if __name__ == "__main__":
 
     if not gateways().get('default') and list(filter(pattern_include.match, interfaces())):
         if len(wireless_connections) == 0:
-            ssid = 'ScreenlyOSE-{}'.format(generate_perfect_paper_password(pw_length=4, has_symbols=False))
+            ssid = 'Anthias-{}'.format(generate_perfect_paper_password(pw_length=4, has_symbols=False))
             ssid_password = generate_perfect_paper_password(pw_length=8, has_symbols=False)
             generate_page(ssid, ssid_password, 'screenly.io/wifi')
 
