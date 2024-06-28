@@ -81,18 +81,6 @@
         return $("#btn-backup").show();
       }
     });
-    $("#btn-reset").click(function(e) {
-      if (confirm("Are you sure you want to reset your wifi configuration?")) {
-        return $.get("/api/v1/reset_wifi").done(function(e) {
-          $("#request-error .alert").show();
-          $("#request-error .alert").addClass("alert-success");
-          $("#request-error .alert").removeClass("alert-danger");
-          return ($("#request-error .msg")).text("Reset was successful. Please reboot the device.");
-        }).error(function(e) {
-          return document.location.reload();
-        });
-      }
-    });
     $("#btn-reboot-system").click(function(e) {
       if (confirm("Are you sure you want to reboot your device?")) {
         return $.post("/api/v1/reboot").done(function(e) {
