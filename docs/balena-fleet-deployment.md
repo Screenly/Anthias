@@ -42,11 +42,11 @@ We'll be doing the initial fleet configuration via CLI. Open your terminal and
 run the following commands:
 
 ```bash
-$ balena env add RESIN_HOST_CONFIG_gpu_mem $GPU_MEM_VALUE --fleet $FLEET_NAME
+$ balena env add BALENA_HOST_CONFIG_gpu_mem $GPU_MEM_VALUE --fleet $FLEET_NAME
 
 # Run the command below only if you're using a Raspberry Pi 4, as it uses
 # VLC for video playback.
-$ balena env add RESIN_HOST_CONFIG_dtoverlay vc4-fkms-v3d --fleet $FLEET_NAME
+$ balena env add BALENA_HOST_CONFIG_dtoverlay vc4-fkms-v3d --fleet $FLEET_NAME
 ```
 
 Replace `$GPU_MEM_VALUE` with the GPU memory value you want to use, as long as
@@ -64,12 +64,12 @@ Here's a sample output:
 
 ```
 ID      NAME                           VALUE        FLEET
-1979572 RESIN_HOST_CONFIG_dtoverlay    vc4-fkms-v3d gh_nicomiguelino/anthias-pi4
-1979571 RESIN_HOST_CONFIG_gpu_mem      1024         gh_nicomiguelino/anthias-pi4
+1979572 BALENA_HOST_CONFIG_dtoverlay    vc4-fkms-v3d gh_nicomiguelino/anthias-pi4
+1979571 BALENA_HOST_CONFIG_gpu_mem      1024         gh_nicomiguelino/anthias-pi4
 ```
 
 Alternatively, you can check the releases page of that fleet and look for the
-`RESIN_HOST_CONFIG_gpu_mem` and `RESIN_HOST_CONFIG_dtoverlay` variables.
+`BALENA_HOST_CONFIG_gpu_mem` and `BALENA_HOST_CONFIG_dtoverlay` variables.
 
 ![balena-ss-04](/docs/images/balena-deployment-04-fleet-config-page.png)
 
