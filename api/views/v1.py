@@ -460,52 +460,6 @@ class InfoView(APIView):
         })
 
 
-class ResetWifiConfigView(APIView):
-    @authorized
-    def get(self, request):
-        home = getenv('HOME')
-        file_path = path.join(home, '.screenly/initialized')
-
-        if path.isfile(file_path):
-            remove(file_path)
-
-        bus = pydbus.SystemBus()
-
-        pattern_include = re.compile("wlan*")
-        pattern_exclude = re.compile("Anthias-*")
-
-        wireless_connections = get_active_connections(bus)
-
-        if wireless_connections is not None:
-            device_uuid = None
-
-            wireless_connections = [c for c in [c for c in wireless_connections if pattern_include.search(str(c['Devices']))] if not pattern_exclude.search(str(c['Id']))]
-
-            if len(wireless_connections) > 0:
-                device_uuid = wireless_connections[0].get('Uuid')
-
-            if not device_uuid:
-                raise Exception('The device has no active connection.')
-
-            remove_connection(bus, device_uuid)
-
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-# @TODO: Uncomment this endpoint when fixed.
-# class UpgradeAnthiasView(APIView):
-#     @authorized
-#     def post(self, request):
-#         for task in celery.control.inspect(timeout=2.0).active().get('worker@anthias'):
-#             if task.get('type') == 'celery_tasks.upgrade_anthias':
-#                 return Response({'id': task.get('id')})
-#         branch = request.form.get('branch')
-#         manage_network = request.form.get('manage_network')
-#         system_upgrade = request.form.get('system_upgrade')
-#         task = upgrade_anthias.apply_async(args=(branch, manage_network, system_upgrade))
-#         return Response({'id': task.id})
-
-
 class RebootView(APIView):
     @extend_schema(summary='Reboot system')
     @authorized

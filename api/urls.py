@@ -39,10 +39,6 @@ urlpatterns = [
     path('v1/shutdown', ShutdownView.as_view(), name='shutdown_v1'),
     path('v1/viewer_current_asset', ViewerCurrentAssetView.as_view(), name='viewer_current_asset_v1'),
 
-    # @TODO: Uncomment these endpoints when they are fixed.
-    # path('v1/reset_wifi', ResetWifiConfigView.as_view(), name='reset_wifi_v1'),
-    # path('v1/upgrade', UpgradeAnthiasview.as_view(), name='upgrade_anthias_v1'),
-
     # v1.1 endpoints
     path('v1.1/assets', AssetListViewV1_1.as_view(), name='asset_list_v1_1'),
     path('v1.1/assets/<str:asset_id>', AssetViewV1_1.as_view(), name='asset_detail_v1_1'),
