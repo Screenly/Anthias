@@ -61,22 +61,16 @@
   ansible.builtin.command: mv /usr/share/plymouth/themes/screenly /usr/share/plymouth/themes/anthias || true
   when: ansible_distribution_major_version|int > 10
   changed_when: false
-  owner: root
-  group: root
 
 - name: Rename 'screenly.plymouth' to 'anthias.plymouth'
   ansible.builtin.command: mv /usr/share/plymouth/themes/anthias/screenly.plymouth /usr/share/plymouth/themes/anthias/anthias.plymouth || true
   when: ansible_distribution_major_version|int > 10
   changed_when: false
-  owner: root
-  group: root
 
 - name: Rename 'screenly.script' to 'anthias.script'
   ansible.builtin.command: mv /usr/share/plymouth/themes/anthias/screenly.script /usr/share/plymouth/themes/anthias/anthias.script || true
   when: ansible_distribution_major_version|int > 10
   changed_when: false
-  owner: root
-  group: root
 
 - name: Copies plymouth theme
   ansible.builtin.copy:
