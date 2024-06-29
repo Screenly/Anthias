@@ -445,39 +445,6 @@ def setup():
     browser_bus = bus.get('screenly.webview', '/Screenly')
 
 
-def setup_hotspot():
-    bus = pydbus.SessionBus()
-
-    pattern_include = re.compile("wlan*")
-    pattern_exclude = re.compile("Anthias-*")
-
-    wireless_connections = get_active_connections(bus)
-
-    if wireless_connections is None:
-        return
-
-    wireless_connections = [c for c in [c for c in wireless_connections if pattern_include.search(str(c['Devices']))] if not pattern_exclude.search(str(c['Id']))]
-
-    # Displays the hotspot page
-    if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
-        if len(wireless_connections) == 0:
-            url = 'http://{0}/hotspot'.format(LISTEN)
-            view_webpage(url)
-
-    # Wait until the network is configured
-    while not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
-        if len(wireless_connections) == 0:
-            sleep(1)
-            wireless_connections = [c for c in [c for c in get_active_connections(bus) if pattern_include.search(str(c['Devices']))] if not pattern_exclude.search(str(c['Id']))]
-            continue
-        if len(wireless_connections) == 0:
-            sleep(1)
-            continue
-        break
-
-    wait_for_node_ip(5)
-
-
 def wait_for_node_ip(seconds):
     for _ in range(seconds):
         try:
@@ -535,9 +502,6 @@ def main():
     view_image(STANDBY_SCREEN)
 
     wait_for_server(60)
-
-    if not is_balena_app():
-        setup_hotspot()
 
     if settings['show_splash']:
         if is_balena_app():

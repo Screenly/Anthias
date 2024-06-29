@@ -49,12 +49,10 @@ class TestEmptyPl(ViewerTestCase):
     @mock.patch('viewer.start_loop', side_effect=noop)
     @mock.patch('viewer.view_image', side_effect=noop)
     @mock.patch('viewer.view_webpage', side_effect=noop)
-    @mock.patch('viewer.setup_hotspot', side_effect=noop)
     @mock.patch('viewer.setup', side_effect=noop)
     def test_empty(
         self,
         mock_setup,
-        mock_setup_hotspot,
         mock_view_webpage,
         mock_view_image,
         mock_start_loop,
@@ -67,7 +65,6 @@ class TestEmptyPl(ViewerTestCase):
 
             m_asset_list.assert_called_once()
             mock_setup.assert_called_once()
-            mock_setup_hotspot.assert_called_once()
             mock_view_webpage.assert_called_once()
             self.assertEqual(mock_view_image.call_count, 2)
             mock_start_loop.assert_called_once()

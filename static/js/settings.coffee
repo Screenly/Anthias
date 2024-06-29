@@ -70,17 +70,6 @@ $().ready ->
       $("#btn-upload").show()
       $("#btn-backup").show()
 
-  $("#btn-reset").click (e) ->
-    if confirm "Are you sure you want to reset your wifi configuration?"
-      $.get "/api/v1/reset_wifi"
-      .done  (e) ->
-        $("#request-error .alert").show()
-        $("#request-error .alert").addClass "alert-success"
-        $("#request-error .alert").removeClass "alert-danger"
-        ($ "#request-error .msg").text "Reset was successful. Please reboot the device."
-      .error (e) ->
-        document.location.reload()
-
   $("#btn-reboot-system").click (e) ->
     if confirm "Are you sure you want to reboot your device?"
       $.post "/api/v1/reboot"
