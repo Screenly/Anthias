@@ -1133,46 +1133,6 @@ class Recover(Resource):
             publisher.send_to_viewer('play')
 
 
-class ResetWifiConfig(Resource):
-    method_decorators = [api_response, authorized]
-
-    @swagger.doc({
-        'responses': {
-            '204': {
-                'description': 'Deleted'
-            }
-        }
-    })
-    def get(self):
-        home = getenv('HOME')
-        file_path = path.join(home, '.screenly/initialized')
-
-        if path.isfile(file_path):
-            remove(file_path)
-
-        bus = pydbus.SystemBus()
-
-        pattern_include = re.compile("wlan*")
-        pattern_exclude = re.compile("ScreenlyOSE-*")
-
-        wireless_connections = get_active_connections(bus)
-
-        if wireless_connections is not None:
-            device_uuid = None
-
-            wireless_connections = [c for c in [c for c in wireless_connections if pattern_include.search(str(c['Devices']))] if not pattern_exclude.search(str(c['Id']))]
-
-            if len(wireless_connections) > 0:
-                device_uuid = wireless_connections[0].get('Uuid')
-
-            if not device_uuid:
-                raise Exception('The device has no active connection.')
-
-            remove_connection(bus, device_uuid)
-
-        return '', 204
-
-
 class RebootScreenly(Resource):
     method_decorators = [api_response, authorized]
 
@@ -1353,7 +1313,6 @@ api.add_resource(Backup, '/api/v1/backup')
 api.add_resource(Recover, '/api/v1/recover')
 api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 api.add_resource(Info, '/api/v1/info')
-api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
 api.add_resource(RebootScreenly, '/api/v1/reboot')
 api.add_resource(ShutdownScreenly, '/api/v1/shutdown')
 api.add_resource(ViewerCurrentAsset, '/api/v1/viewer_current_asset')
