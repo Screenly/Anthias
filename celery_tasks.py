@@ -13,6 +13,11 @@ from os import getenv, path
 from retry.api import retry_call
 
 
+__author__ = "Screenly, Inc"
+__copyright__ = "Copyright 2012-2024, Screenly, Inc"
+__license__ = "Dual License: GPLv2 and Commercial License"
+
+
 CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_TASK_RESULT_EXPIRES = timedelta(hours=6)

@@ -6,8 +6,8 @@ from datetime import datetime
 from os import path, getenv, makedirs, remove
 
 directories = ['.screenly', 'screenly_assets']
-default_archive_name = "screenly-backup"
-static_dir = "screenly/static"
+default_archive_name = "anthias-backup"
+static_dir = "screenly/staticfiles"
 
 
 def create_backup(name=default_archive_name):

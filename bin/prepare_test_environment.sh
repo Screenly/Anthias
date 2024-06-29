@@ -47,6 +47,10 @@ EOF
 
 if [ "$START_SERVER" = true ]; then
     cd /usr/src/app
-    python3 server.py &
+
+    ./manage.py makemigrations
+    ./manage.py migrate
+    ./manage.py runserver 127.0.0.1:8080 &
+
     sleep 3
 fi

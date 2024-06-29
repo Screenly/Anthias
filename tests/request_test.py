@@ -1,9 +1,16 @@
 # coding=utf-8
 from __future__ import unicode_literals
 from datetime import datetime
+import os
 import unittest
-import server
-import mock
+
+from django.http import HttpRequest
+from rest_framework.request import Request
+
+# This is needed to avoid exceptions when importing from api.helpers.
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "anthias_django.settings")
+
+from api.helpers import prepare_asset # noqa E402
 
 request_ok_json = """{"name": "https://mail.ru", "mimetype": "webpage", "uri": "https://mail.ru", "is_active": false,
                 "start_date": "2016-07-19T12:42:00.000Z", "end_date": "2016-07-26T12:42:00.000Z", "duration": "30",
@@ -29,9 +36,13 @@ class RequestParseTest(unittest.TestCase):
     def tearDown(self):
         pass
 
+    def create_request(self, model):
+        request = Request(HttpRequest())
+        request.data['model'] = model
+        return request
+
     def test_asset_should_be_correct_V1_0(self):
-        server.Request = lambda a: mock.Mock(form={'model': request_ok_json}, files=mock.Mock(get=lambda a: None))
-        asset = server.prepare_asset(mock.Mock(environ={}))
+        asset = prepare_asset(self.create_request(request_ok_json))
         self.assertEqual(asset['duration'], 30)
         self.assertEqual(asset['is_enabled'], 0)
         self.assertEqual(asset['mimetype'], u'webpage')
@@ -40,18 +51,15 @@ class RequestParseTest(unittest.TestCase):
         self.assertEqual(asset['start_date'], datetime(2016, 7, 19, 12, 42))
 
     def test_exception_should_rise_if_no_name_presented_V1_0(self):
-        server.Request = lambda a: mock.Mock(form={'model': request_json_no_name}, files=mock.Mock(get=lambda a: None))
         with self.assertRaises(Exception):
-            server.prepare_asset(mock.Mock(environ={}))
+            prepare_asset(self.create_request(request_json_no_name))
 
     def test_exception_should_rise_if_no_mime_presented_V1_0(self):
-        server.Request = lambda a: mock.Mock(form={'model': request_json_no_mime}, files=mock.Mock(get=lambda a: None))
         with self.assertRaises(Exception):
-            server.prepare_asset(mock.Mock(environ={}))
+            prepare_asset(self.create_request(request_json_no_mime))
 
     def test_asset_should_be_correct_V1_1(self):
-        server.Request = lambda a: mock.Mock(data=request_ok_json, files=mock.Mock(get=lambda a: None))
-        asset = server.prepare_asset(mock.Mock(environ={}))
+        asset = prepare_asset(self.create_request(request_ok_json))
         self.assertEqual(asset['duration'], 30)
         self.assertEqual(asset['is_enabled'], 0)
         self.assertEqual(asset['mimetype'], u'webpage')
@@ -60,11 +68,9 @@ class RequestParseTest(unittest.TestCase):
         self.assertEqual(asset['start_date'], datetime(2016, 7, 19, 12, 42))
 
     def test_exception_should_rise_if_no_name_presented_V1_1(self):
-        server.Request = lambda a: mock.Mock(data=request_json_no_name, files=mock.Mock(get=lambda a: None))
         with self.assertRaises(Exception):
-            server.prepare_asset(mock.Mock(environ={}))
+            prepare_asset(self.create_request(request_json_no_name))
 
     def test_exception_should_rise_if_no_mime_presented_V1_1(self):
-        server.Request = lambda a: mock.Mock(data=request_json_no_mime, files=mock.Mock(get=lambda a: None))
         with self.assertRaises(Exception):
-            server.prepare_asset(mock.Mock(environ={}))
+            prepare_asset(self.create_request(request_json_no_mime))
