@@ -6,6 +6,7 @@ from builtins import range
 import certifi
 from . import db
 import json
+import logging
 import os
 import pytz
 import random
@@ -22,6 +23,7 @@ from platform import machine
 from settings import settings, ZmqPublisher
 from subprocess import check_output, call
 from threading import Thread
+from time import sleep
 from urllib.parse import urlparse
 
 from .assets_helper import update
@@ -114,12 +116,28 @@ def get_node_ip():
 
     if is_balena_app():
         response = get_balena_device_info()
-
         if response.ok:
             return response.json()['ip_address']
         return 'Unknown'
     else:
         r = connect_to_redis()
+        max_retries = 60
+        retries = 0
+
+        while True:
+            is_ready = r.get('host_agent_ready') or 'false'
+
+            if json.loads(is_ready):
+                break
+
+            if retries >= max_retries:
+                logging.info('host_agent_service is not ready after %d retries', max_retries)
+                break
+
+            retries += 1
+            sleep(1)
+
+        r.publish('hostcmd', 'set_ip_addresses')
         ip_addresses = r.get('ip_addresses')
 
         if ip_addresses:
