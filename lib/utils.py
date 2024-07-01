@@ -125,6 +125,10 @@ def get_node_ip():
         retries = 0
 
         while True:
+            environment = getenv('ENVIRONMENT', None)
+            if environment == 'test':
+                break
+
             is_ready = r.get('host_agent_ready') or 'false'
 
             if json.loads(is_ready):
