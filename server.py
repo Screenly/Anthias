@@ -77,7 +77,6 @@ standard_library.install_aliases()
 HOME = getenv('HOME')
 
 app = Flask(__name__)
-app.debug = string_to_bool(os.getenv('DEBUG', 'False'))
 
 CORS(app)
 api = Api(app, api_version="v1", title="Screenly OSE API")
@@ -1592,7 +1591,7 @@ def main():
 
 
 def is_development():
-    return getenv('FLASK_ENV', '') == 'development'
+    return getenv('ENVIRONMENT', '') == 'development'
 
 
 if __name__ == "__main__" and not is_development():
