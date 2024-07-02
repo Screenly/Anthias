@@ -161,14 +161,13 @@ function build_qt () {
             -ccache \
             -confirm-license \
             -dbus-linked \
-            -device-option CROSS_COMPILE=/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf- \
+            -device-option CROSS_COMPILE=aarch64-linux-gnu- \
             -eglfs \
             -evdev \
             -extprefix "$SRC_DIR/qt6pi" \
             -force-pkg-config \
             -glib \
             -make libs \
-            -no-compile-examples \
             -no-cups \
             -no-gbm \
             -no-gtk \
@@ -183,6 +182,7 @@ function build_qt () {
             -prefix /usr/local/qt6pi \
             -qpa eglfs \
             -qt-pcre \
+            -qt-host-path /src/qt-host \
             -reduce-exports \
             -release \
             -skip qt3d \
@@ -198,6 +198,7 @@ function build_qt () {
             -skip qtmacextras \
             -skip qtpurchasing \
             -skip qtquick3d \
+            -skip qtdoc \
             -skip qtquickcontrols \
             -skip qtquickcontrols2 \
             -skip qtquicktimeline \
@@ -220,12 +221,15 @@ function build_qt () {
             -system-libjpeg \
             -system-libpng \
             -system-zlib \
-            -sysroot /sysroot
+            -sysroot /sysroot -- \
+            -DCMAKE_TOOLCHAIN_FILE=/webview/toolchain.cmake \
+            -DQT_HOST_PATH=/src/qt-host
 
         # The RAM consumption is proportional to the amount of cores.
         # On an 8 core box, the build process will require ~16GB of RAM.
-        make -j"$MAKE_CORES"
-        make install
+
+        cmake --build . --parallel -- -j "$MAKE_CORES"
+        cmake --install .
 
         # I'm not sure we actually need this anymore. It's from an
         # old build process for QT 4.9 that we used.
@@ -263,7 +267,7 @@ function build_qt () {
 /usr/local/bin/sysroot-relativelinks.py /sysroot
 
 fetch_cross_compile_tool
-fetch_rpi_firmware
+# fetch_rpi_firmware
 
 if [ ! "${TARGET-}" ]; then
     # Let's work our way through all Pis in order of relevance
