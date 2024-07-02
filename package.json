@@ -1,5 +1,5 @@
 {
-  "name": "screenly-ose",
+  "name": "anthias",
   "version": "1.0.0",
   "scripts": {
     "coffee-dev": "coffee --compile --map --watch static/js/*.coffee",

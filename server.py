@@ -80,7 +80,7 @@ app = Flask(__name__)
 app.debug = string_to_bool(os.getenv('DEBUG', 'False'))
 
 CORS(app)
-api = Api(app, api_version="v1", title="Screenly OSE API")
+api = Api(app, api_version="v1", title="Anthias API")
 
 r = connect_to_redis()
 
@@ -102,7 +102,8 @@ def api_error(error):
 
 
 def template(template_name, **context):
-    """Screenly template response generator. Shares the
+    """
+    This is a template response wrapper that shares the
     same function signature as Flask's render_template() method
     but also injects some global context."""
 
@@ -1133,7 +1134,7 @@ class Recover(Resource):
             publisher.send_to_viewer('play')
 
 
-class RebootScreenly(Resource):
+class Reboot(Resource):
     method_decorators = [api_response, authorized]
 
     @swagger.doc({
@@ -1148,7 +1149,7 @@ class RebootScreenly(Resource):
         return '', 200
 
 
-class ShutdownScreenly(Resource):
+class Shutdown(Resource):
     method_decorators = [api_response, authorized]
 
     @swagger.doc({
@@ -1313,8 +1314,8 @@ api.add_resource(Backup, '/api/v1/backup')
 api.add_resource(Recover, '/api/v1/recover')
 api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 api.add_resource(Info, '/api/v1/info')
-api.add_resource(RebootScreenly, '/api/v1/reboot')
-api.add_resource(ShutdownScreenly, '/api/v1/shutdown')
+api.add_resource(Reboot, '/api/v1/reboot')
+api.add_resource(Shutdown, '/api/v1/shutdown')
 api.add_resource(ViewerCurrentAsset, '/api/v1/viewer_current_asset')
 
 try:
@@ -1336,7 +1337,7 @@ else:
         SWAGGER_URL,
         API_URL,
         config={
-            'app_name': "Screenly OSE API"
+            'app_name': "Anthias API"
         }
     )
     app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
@@ -1489,7 +1490,7 @@ def system_info():
 
     raspberry_pi_model = raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
 
-    screenly_version = '{}@{}'.format(
+    version = '{}@{}'.format(
         diagnostics.get_git_branch(),
         diagnostics.get_git_short_hash()
     )
@@ -1505,7 +1506,7 @@ def system_info():
         display_info=display_info,
         display_power=display_power,
         raspberry_pi_model=raspberry_pi_model,
-        screenly_version=screenly_version,
+        version=version,
         mac_address=get_node_mac_address(),
         is_balena=is_balena_app(),
     )

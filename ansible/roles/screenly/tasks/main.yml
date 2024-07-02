@@ -50,14 +50,21 @@
     state: absent
     user: "{{ lookup('env', 'USER') }}"
 
-- name: Download upgrade_screenly.sh from github repository
+- name: Download upgrade script from github repository
   ansible.builtin.get_url:
-    url: https://raw.githubusercontent.com/Screenly/screenly-ose/master/bin/install.sh
-    dest: /usr/local/sbin/upgrade_screenly.sh
+    url: https://raw.githubusercontent.com/Screenly/Anthias/master/bin/install.sh
+    dest: /usr/local/sbin/upgrade_anthias.sh
     mode: "0700"
     owner: root
     group: root
     force: true
+
+- name: Remove the old upgrade script
+  ansible.builtin.file:
+    state: absent
+    path: /usr/local/sbin/upgrade_screenly.sh
+    owner: root
+    group: root
 
 - name: Copy screenly_overrides
   ansible.builtin.copy:

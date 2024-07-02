@@ -65,8 +65,8 @@ requests_log.setLevel(logging.WARNING)
 logging.debug('Starting viewer.py')
 
 
-class ScreenlySettings(UserDict):
-    """Screenly OSE's Settings."""
+class AnthiasSettings(UserDict):
+    """Anthias' Settings."""
 
     def __init__(self, *args, **kwargs):
         UserDict.__init__(self, *args, **kwargs)
@@ -146,7 +146,7 @@ class ScreenlySettings(UserDict):
             return self.auth_backends[self['auth_backend']]
 
 
-settings = ScreenlySettings()
+settings = AnthiasSettings()
 
 
 class ZmqPublisher(object):

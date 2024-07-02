@@ -1,5 +1,5 @@
 jQuery(function() {
-  Screenly.app = new Screenly.App({
+  Anthias.app = new Anthias.App({
     el: $('body')
   });
 });

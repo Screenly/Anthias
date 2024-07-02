@@ -118,7 +118,7 @@ class BasicAuth(Auth):
         return 'auth_basic.html', {'user': self.settings['user']}
 
     def authenticate(self):
-        realm = "Screenly OSE {}".format(self.settings['player_name'])
+        realm = "Anthias OSE {}".format(self.settings['player_name'])
         return Response("Access denied", 401, {"WWW-Authenticate": 'Basic realm="{}"'.format(realm)})
 
     def update_settings(self, current_pass_correct):

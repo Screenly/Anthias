@@ -27,7 +27,7 @@ class WebSocketTranslator(object):
             ws.close()
 
 
-class ScreenlyServerListener(Thread):
+class AnthiasServerListener(Thread):
     def __init__(self, context):
         Thread.__init__(self)
         self.context = context
@@ -47,7 +47,7 @@ class ScreenlyServerListener(Thread):
 
 if __name__ == "__main__":
     context = zmq.Context()
-    listener = ScreenlyServerListener(context)
+    listener = AnthiasServerListener(context)
     listener.start()
 
     port = int(settings['websocket_port'])

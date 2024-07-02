@@ -190,7 +190,7 @@
     update_cache: true
   when: not cdefs_exist
 
-- name: Install Screenly dependencies
+- name: Install Anthias dependencies
   ansible.builtin.apt:
     name:
       - rpi-update
