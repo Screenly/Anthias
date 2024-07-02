@@ -10,9 +10,7 @@ __copyright__ = "Copyright 2012-2023, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 import json
-import pydbus
 import psutil
-import re
 import os
 
 import traceback
@@ -56,7 +54,6 @@ from lib.github import is_up_to_date
 from lib.auth import authorized
 from lib.utils import (
     download_video_from_youtube, json_dump, is_docker,
-    get_active_connections, remove_connection,
     get_balena_supervisor_version,
     get_node_ip, get_node_mac_address,
     get_video_duration,
