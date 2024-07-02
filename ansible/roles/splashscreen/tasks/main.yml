@@ -57,31 +57,16 @@
       - plymouth-label
   when: ansible_distribution_major_version|int > 7
 
-- name: Rename `screenly` Plymouth directory to `anthias`
-  ansible.builtin.shell: mv /usr/share/plymouth/themes/screenly /usr/share/plymouth/themes/anthias || true
-  when: ansible_distribution_major_version|int > 10
-  changed_when: false
-
-- name: Rename 'screenly.plymouth' to 'anthias.plymouth'
-  ansible.builtin.shell: mv /usr/share/plymouth/themes/anthias/screenly.plymouth /usr/share/plymouth/themes/anthias/anthias.plymouth || true
-  when: ansible_distribution_major_version|int > 10
-  changed_when: false
-
-- name: Rename 'screenly.script' to 'anthias.script'
-  ansible.builtin.shell: mv /usr/share/plymouth/themes/anthias/screenly.script /usr/share/plymouth/themes/anthias/anthias.script || true
-  when: ansible_distribution_major_version|int > 10
-  changed_when: false
-
 - name: Copies plymouth theme
   ansible.builtin.copy:
     src: "{{ item }}"
-    dest: /usr/share/plymouth/themes/anthias/
+    dest: /usr/share/plymouth/themes/screenly/
     mode: "0644"
     owner: root
     group: root
   with_items:
-    - anthias.plymouth
-    - anthias.script
+    - screenly.plymouth
+    - screenly.script
     - splashscreen.png
   when: ansible_distribution_major_version|int > 7
 

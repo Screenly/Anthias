@@ -223,11 +223,11 @@ present in a Raspberry Pi with Anthias installed.
 
 * `sudoers` configuration file that allows pi user to execute certain `sudo` commands without being a superuser (i.e., `root`)
 
-### `/usr/share/plymouth/themes/anthias`
+### `/usr/share/plymouth/themes/screenly`
 
-* `anthias.plymouth` &mdash; Plymouth config file (sets module name, `imagedir` and `scriptfile` dir)
+* `screenly.plymouth` &mdash; Plymouth config file (sets module name, `imagedir` and `scriptfile` dir)
 * `splashscreen.png` &mdash; the spash screen image that is displayed during the boot process
-* `anthias.script` &ndash; plymouth script file that loads and scales the splash screen image during the boot process
+* `screenly.script` &ndash; plymouth script file that loads and scales the splash screen image during the boot process
 
 ## Debugging the Anthias WebView
 
