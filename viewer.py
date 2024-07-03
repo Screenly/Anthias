@@ -5,13 +5,11 @@ from __future__ import unicode_literals
 from builtins import bytes
 from future import standard_library
 from builtins import filter
-from builtins import str
 from builtins import range
 from builtins import object
 import json
 import logging
 import pydbus
-import re
 import sys
 from datetime import datetime
 from jinja2 import Template
@@ -31,7 +29,6 @@ from lib.github import is_up_to_date
 from lib.errors import SigalrmException
 from lib.media_player import OMXMediaPlayer
 from lib.utils import (
-    get_active_connections,
     url_fails,
     is_balena_app,
     get_node_ip,
@@ -41,8 +38,6 @@ from lib.utils import (
 )
 from retry.api import retry_call
 from settings import settings, LISTEN, PORT, ZmqConsumer
-
-from netifaces import gateways
 
 
 standard_library.install_aliases()

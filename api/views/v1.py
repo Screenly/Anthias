@@ -1,5 +1,3 @@
-import pydbus
-import re
 import uuid
 
 from inspect import cleandoc
@@ -28,12 +26,10 @@ from lib.auth import authorized
 from lib.github import is_up_to_date
 from lib.utils import (
     connect_to_redis,
-    get_active_connections,
-    remove_connection,
     url_fails
 )
 from mimetypes import guess_type, guess_extension
-from os import getenv, path, remove, statvfs
+from os import path, remove, statvfs
 from celery_tasks import reboot_anthias, shutdown_anthias
 from settings import settings, ZmqCollector, ZmqPublisher
 
