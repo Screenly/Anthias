@@ -11,7 +11,6 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 
 import json
 import psutil
-import os
 
 import traceback
 import yaml
@@ -58,7 +57,6 @@ from lib.utils import (
     get_node_ip, get_node_mac_address,
     get_video_duration,
     is_balena_app, is_demo_node,
-    string_to_bool,
     connect_to_redis,
     url_fails,
     validate_url,
@@ -74,7 +72,6 @@ standard_library.install_aliases()
 HOME = getenv('HOME')
 
 app = Flask(__name__)
-app.debug = string_to_bool(os.getenv('DEBUG', 'False'))
 
 CORS(app)
 api = Api(app, api_version="v1", title="Screenly OSE API")
@@ -1589,7 +1586,7 @@ def main():
 
 
 def is_development():
-    return getenv('FLASK_ENV', '') == 'development'
+    return getenv('ENVIRONMENT', '') == 'development'
 
 
 if __name__ == "__main__" and not is_development():
