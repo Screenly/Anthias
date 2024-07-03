@@ -36,7 +36,7 @@ services:
       - "/dev/vchiq:/dev/vchiq"
     restart: always
     volumes:
-      - anthias-data:/data
+      - resin-data:/data
       - /home/${USER}/.screenly:/data/.screenly
       - /home/${USER}/screenly_assets:/data/screenly_assets
       - /home/${USER}/screenly/staticfiles:/data/screenly/staticfiles
@@ -64,7 +64,7 @@ services:
     restart: always
     shm_size: ${SHM_SIZE_KB}kb
     volumes:
-      - anthias-data:/data
+      - resin-data:/data
       - /home/${USER}/.screenly:/data/.screenly
       - /home/${USER}/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
@@ -84,7 +84,7 @@ services:
       - LISTEN=0.0.0.0
     restart: always
     volumes:
-      - anthias-data:/data
+      - resin-data:/data
       - /home/${USER}/.screenly:/data/.screenly
       - /home/${USER}/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
@@ -106,7 +106,7 @@ services:
       - "/dev/vchiq:/dev/vchiq"
     restart: always
     volumes:
-      - anthias-data:/data
+      - resin-data:/data
       - /home/${USER}/.screenly:/data/.screenly
       - /home/${USER}/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
@@ -139,7 +139,7 @@ services:
       - anthias-websocket
     restart: always
     volumes:
-      - anthias-data:/data:ro
+      - resin-data:/data:ro
       - /home/${USER}/.screenly:/data/.screenly:ro
       - /home/${USER}/screenly_assets:/data/screenly_assets:ro
       - /home/${USER}/screenly/staticfiles:/data/screenly/staticfiles:ro
@@ -147,6 +147,6 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
 volumes:
-  anthias-data:
+  resin-data:
   redis-data:
   screenly-data:
