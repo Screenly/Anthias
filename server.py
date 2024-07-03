@@ -11,7 +11,6 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 
 import json
 import psutil
-import os
 
 import traceback
 import yaml
@@ -58,7 +57,6 @@ from lib.utils import (
     get_node_ip, get_node_mac_address,
     get_video_duration,
     is_balena_app, is_demo_node,
-    string_to_bool,
     connect_to_redis,
     url_fails,
     validate_url,
