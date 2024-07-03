@@ -59,7 +59,6 @@
     state: absent
     path: /etc/systemd/system/screenly-net-watchdog.timer
 
-# Use resin-wifi-connect if Stretch
 - name: Debug msg for manage network
   ansible.builtin.debug:
     msg: "Manage network: {{ manage_network }}"

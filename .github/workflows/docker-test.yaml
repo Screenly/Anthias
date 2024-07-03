@@ -6,6 +6,7 @@ on:
       - master
       - production
     paths:
+      - '**/**'
       - '!README.md'
       - '!webview/**'
       - '!website/**'

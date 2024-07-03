@@ -13,10 +13,10 @@ fancy_sha = 'deadbeaf'
 
 class UpdateTest(unittest.TestCase):
     def setUp(self):
-        self.get_configdir_m = mock.patch('settings.ScreenlySettings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
+        self.get_configdir_m = mock.patch('settings.AnthiasSettings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
         self.get_configdir_m.start()
 
-        self.sha_file = settings.get_configdir() + 'latest_screenly_sha'
+        self.sha_file = settings.get_configdir() + 'latest_anthias_sha'
 
         if not os.path.exists(settings.get_configdir()):
             os.mkdir(settings.get_configdir())

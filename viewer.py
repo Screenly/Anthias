@@ -5,13 +5,11 @@ from __future__ import unicode_literals
 from builtins import bytes
 from future import standard_library
 from builtins import filter
-from builtins import str
 from builtins import range
 from builtins import object
 import json
 import logging
 import pydbus
-import re
 import sys
 from datetime import datetime
 from jinja2 import Template
@@ -31,7 +29,6 @@ from lib.github import is_up_to_date
 from lib.errors import SigalrmException
 from lib.media_player import OMXMediaPlayer
 from lib.utils import (
-    get_active_connections,
     url_fails,
     is_balena_app,
     get_node_ip,
@@ -41,8 +38,6 @@ from lib.utils import (
 )
 from retry.api import retry_call
 from settings import settings, LISTEN, PORT, ZmqConsumer
-
-from netifaces import gateways
 
 
 standard_library.install_aliases()
@@ -445,39 +440,6 @@ def setup():
     browser_bus = bus.get('screenly.webview', '/Screenly')
 
 
-def setup_hotspot():
-    bus = pydbus.SessionBus()
-
-    pattern_include = re.compile("wlan*")
-    pattern_exclude = re.compile("ScreenlyOSE-*")
-
-    wireless_connections = get_active_connections(bus)
-
-    if wireless_connections is None:
-        return
-
-    wireless_connections = [c for c in [c for c in wireless_connections if pattern_include.search(str(c['Devices']))] if not pattern_exclude.search(str(c['Id']))]
-
-    # Displays the hotspot page
-    if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
-        if len(wireless_connections) == 0:
-            url = 'http://{0}/hotspot'.format(LISTEN)
-            view_webpage(url)
-
-    # Wait until the network is configured
-    while not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
-        if len(wireless_connections) == 0:
-            sleep(1)
-            wireless_connections = [c for c in [c for c in get_active_connections(bus) if pattern_include.search(str(c['Devices']))] if not pattern_exclude.search(str(c['Id']))]
-            continue
-        if len(wireless_connections) == 0:
-            sleep(1)
-            continue
-        break
-
-    wait_for_node_ip(5)
-
-
 def wait_for_node_ip(seconds):
     for _ in range(seconds):
         try:
@@ -532,9 +494,6 @@ def main():
     scheduler = Scheduler()
 
     wait_for_server(5)
-
-    if not is_balena_app():
-        setup_hotspot()
 
     if settings['show_splash']:
         if is_balena_app():
