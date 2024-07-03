@@ -290,7 +290,8 @@
       'hidden.bs.modal': 'destroyFileUploadWidget',
       'click .tabnav-uri': 'clickTabNavUri',
       'click .tabnav-file_upload': 'clickTabNavUpload',
-      'change .is_enabled-skip_asset_check_checkbox': 'toggleSkipAssetCheck'
+      'change .is_enabled-skip_asset_check_checkbox': 'toggleSkipAssetCheck',
+      'keyup [name=uri]': 'change'
     };
 
     AddAssetView.prototype.save = function(e) {
