@@ -10,10 +10,7 @@ __copyright__ = "Copyright 2012-2023, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 import json
-import pydbus
 import psutil
-import re
-import os
 
 import traceback
 import yaml
@@ -56,12 +53,10 @@ from lib.github import is_up_to_date
 from lib.auth import authorized
 from lib.utils import (
     download_video_from_youtube, json_dump, is_docker,
-    get_active_connections, remove_connection,
     get_balena_supervisor_version,
     get_node_ip, get_node_mac_address,
     get_video_duration,
     is_balena_app, is_demo_node,
-    string_to_bool,
     connect_to_redis,
     url_fails,
     validate_url,
@@ -77,7 +72,6 @@ standard_library.install_aliases()
 HOME = getenv('HOME')
 
 app = Flask(__name__)
-app.debug = string_to_bool(os.getenv('DEBUG', 'False'))
 
 CORS(app)
 api = Api(app, api_version="v1", title="Anthias API")
@@ -1593,7 +1587,7 @@ def main():
 
 
 def is_development():
-    return getenv('FLASK_ENV', '') == 'development'
+    return getenv('ENVIRONMENT', '') == 'development'
 
 
 if __name__ == "__main__" and not is_development():
