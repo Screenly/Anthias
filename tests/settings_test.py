@@ -77,7 +77,7 @@ class SettingsTest(unittest.TestCase):
         shutil.rmtree(CONFIG_DIR)
         os.getenv = self.orig_getenv
 
-    def test_screenly_should_exit_if_no_settings_file_found(self):
+    def test_anthias_should_exit_if_no_settings_file_found(self):
         new_env = os.environ.copy()
         new_env["HOME"] = "/tmp"
         project_dir = os.path.dirname(__file__)

@@ -1,10 +1,10 @@
-### screenly-ose ui ###
+### anthias ui ###
 
 $().ready ->
   $('#subsribe-form-container').popover content: get_template 'subscribe-form'
 
 
-API = (window.Screenly ||= {}) # exports
+API = (window.Anthias ||= {}) # exports
 
 dateSettings = {}
 
