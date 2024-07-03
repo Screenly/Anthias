@@ -1,5 +1,7 @@
 #!/bin/bash
 
+ENVIRONMENT=${ENVIRONMENT:-production}
+
 mkdir -p \
     /data/.config \
     /data/.screenly \
@@ -10,7 +12,7 @@ cp -n /usr/src/app/ansible/roles/screenly/files/default_assets.yml /data/.screen
 cp -n /usr/src/app/ansible/roles/screenly/files/screenly.db /data/.screenly/screenly.db
 
 if [ -n "${OVERWRITE_CONFIG}" ]; then
-    echo "Requested to overwrite Screenly config file."
+    echo "Requested to overwrite Anthias config file."
     cp /usr/src/app/ansible/roles/screenly/files/screenly.conf "/data/.screenly/screenly.conf"
 fi
 
@@ -27,9 +29,7 @@ python3 ./bin/migrate.py
 ./manage.py makemigrations
 ./manage.py migrate
 
-ENVIRONMENT=${ENVIRONMENT:-production}
-
-if [[ $ENVIRONMENT == "development" ]]; then
+if [[ "$ENVIRONMENT" == "development" ]]; then
     echo "Starting Django development server..."
     ./manage.py runserver 0.0.0.0:8080
 else

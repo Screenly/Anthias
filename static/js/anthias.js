@@ -16,7 +16,7 @@
     });
   });
 
-  API = (window.Screenly || (window.Screenly = {}));
+  API = (window.Anthias || (window.Anthias = {}));
 
   dateSettings = {};
 
