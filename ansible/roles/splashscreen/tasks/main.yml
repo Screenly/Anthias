@@ -84,9 +84,9 @@
   when: ansible_distribution_major_version|int > 7
 
 - name: Set splashscreen
-  ansible.builtin.command: plymouth-set-default-theme -R screenly
+  ansible.builtin.command: plymouth-set-default-theme -R anthias
   when: ansible_distribution_major_version|int > 7
-  changed_when: plymouth_theme.stdout != "screenly"
+  changed_when: plymouth_theme.stdout != "anthias"
 
 - name: Set plymouthd.default
   ansible.builtin.copy:
