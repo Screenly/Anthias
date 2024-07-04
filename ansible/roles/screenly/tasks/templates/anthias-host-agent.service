@@ -1,5 +1,5 @@
 [Unit]
-Description=Screenly Host Agent
+Description=Anthias Host Agent
 After=docker.service
 StartLimitIntervalSec=10
 StartLimitBurst=3
