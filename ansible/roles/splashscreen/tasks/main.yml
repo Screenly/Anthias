@@ -57,16 +57,23 @@
       - plymouth-label
   when: ansible_distribution_major_version|int > 7
 
+- name: Remove the old Plymouth scripts
+  ansible.builtin.file:
+    state: absent
+    path: /usr/share/plymouth/themes/screenly/
+    owner: root
+    group: root
+
 - name: Copies plymouth theme
   ansible.builtin.copy:
     src: "{{ item }}"
-    dest: /usr/share/plymouth/themes/screenly/
+    dest: /usr/share/plymouth/themes/anthias/
     mode: "0644"
     owner: root
     group: root
   with_items:
-    - screenly.plymouth
-    - screenly.script
+    - anthias.plymouth
+    - anthias.script
     - splashscreen.png
   when: ansible_distribution_major_version|int > 7
 
@@ -77,9 +84,9 @@
   when: ansible_distribution_major_version|int > 7
 
 - name: Set splashscreen
-  ansible.builtin.command: plymouth-set-default-theme -R screenly
+  ansible.builtin.command: plymouth-set-default-theme -R anthias
   when: ansible_distribution_major_version|int > 7
-  changed_when: plymouth_theme.stdout != "screenly"
+  changed_when: plymouth_theme.stdout != "anthias"
 
 - name: Set plymouthd.default
   ansible.builtin.copy:
