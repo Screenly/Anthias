@@ -187,8 +187,9 @@ fi
 SUDO_ARGS=()
 
 if [ "$RASPBIAN_VERSION" = "12" ]; then
-    python3 -m venv /home/${USER}/installer_venv
-    source /home/${USER}/installer_venv/bin/activate
+    rm -rf /home/${USER}/installer_venv
+    python3 -m venv /home/${USER}/anthias_venv
+    source /home/${USER}/anthias_venv/bin/activate
 
     SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
 fi
