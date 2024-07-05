@@ -217,7 +217,7 @@ present in a Raspberry Pi with Anthias installed.
 ### `/etc/systemd/system/`
 
 * `wifi-connect.service` &mdash; starts the Balena `wifi-connect` program to dynamically set the Wi-Fi config on the device via the captive portal
-* `screenly-host-agent.service` &mdash; starts the Python script `host_agent.py`, which subscribes from the Redis component and performs a system call to shutdown or reboot the device when the message is received.
+* `anthias-host-agent.service` &mdash; starts the Python script `host_agent.py`, which subscribes from the Redis component and performs a system call to shutdown or reboot the device when the message is received.
 
 ### `/etc/sudoers.d/screenly_overrides`
 
