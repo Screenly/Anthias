@@ -5,7 +5,7 @@ cryptography==3.3.2
 Cython==0.29.33
 Flask==2.2.5
 future==0.18.3
-idna==2.6
+idna==3.7
 itsdangerous==2.0.1
 Jinja2==3.1.4
 MarkupSafe==1.1.1
