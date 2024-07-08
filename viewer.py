@@ -25,7 +25,6 @@ import zmq
 
 from lib import assets_helper
 from lib import db
-from lib.github import is_up_to_date
 from lib.errors import SigalrmException
 from lib.media_player import OMXMediaPlayer
 from lib.utils import (
