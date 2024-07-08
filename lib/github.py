@@ -3,6 +3,7 @@ from builtins import str
 from builtins import range
 import os
 import logging
+import socket
 import string
 import random
 import json
@@ -11,6 +12,7 @@ from lib.utils import is_balena_app, is_docker, is_ci, connect_to_redis
 from lib.diagnostics import get_git_branch, get_git_hash, get_git_short_hash
 from lib.raspberry_pi_helper import parse_cpu_info
 from settings import settings
+
 
 r = connect_to_redis()
 
@@ -36,6 +38,17 @@ def handle_github_error(exc, action):
     else:
         errdesc = 'no data'
     logging.error('{} fetching {} from GitHub: {}'.format(type(exc).__name__, action, errdesc))
+
+
+def is_reachable(domain_name):
+    try:
+        host = socket.gethostbyname(domain_name)
+        s = socket.create_connection((host, 443), 2)
+        s.close()
+        logging.info('Could reach domain: %s', domain_name)
+    except (socket.gaierror, OSError):
+        logging.error('Could not reach domain: %s', domain_name)
+        return False
 
 
 def remote_branch_available(branch):
@@ -154,6 +167,10 @@ def is_up_to_date():
     Primitive update check. Checks local hash against GitHub hash for branch.
     Returns True if the player is up to date.
     """
+
+    if not is_reachable('github.com') or not is_reachable('hub.docker.com'):
+        logging.warning('GitHub and Docker Hub are not reachable')
+        return True  # We don't want to show the Update Available menu if Internet is not available.
 
     latest_sha, retrieved_update = fetch_remote_hash()
     git_branch = get_git_branch()

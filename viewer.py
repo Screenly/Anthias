@@ -387,9 +387,6 @@ def load_settings():
 
 
 def asset_loop(scheduler):
-    disable_update_check = getenv("DISABLE_UPDATE_CHECK", False)
-    if not disable_update_check:
-        is_up_to_date()
     asset = scheduler.get_next_asset()
 
     if asset is None:
