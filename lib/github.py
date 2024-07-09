@@ -43,9 +43,10 @@ def handle_github_error(exc, action):
 def is_reachable(domain_name):
     try:
         host = socket.gethostbyname(domain_name)
-        s = socket.create_connection((host, 443), 2)
+        s = socket.create_connection((host, 443), timeout=0.5)
         s.close()
         logging.info('Could reach domain: %s', domain_name)
+        return True
     except (socket.gaierror, OSError):
         logging.error('Could not reach domain: %s', domain_name)
         return False
@@ -168,8 +169,8 @@ def is_up_to_date():
     Returns True if the player is up to date.
     """
 
-    if not is_reachable('github.com') or not is_reachable('hub.docker.com'):
-        logging.warning('GitHub and Docker Hub are not reachable')
+    if not is_reachable('1.1.1.1'):
+        logging.warning('Unable to retrieve updates')
         return True  # We don't want to show the Update Available menu if Internet is not available.
 
     latest_sha, retrieved_update = fetch_remote_hash()
