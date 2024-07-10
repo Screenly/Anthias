@@ -25,7 +25,6 @@ import zmq
 
 from lib import assets_helper
 from lib import db
-from lib.github import is_up_to_date
 from lib.errors import SigalrmException
 from lib.media_player import OMXMediaPlayer
 from lib.utils import (
@@ -387,9 +386,6 @@ def load_settings():
 
 
 def asset_loop(scheduler):
-    disable_update_check = getenv("DISABLE_UPDATE_CHECK", False)
-    if not disable_update_check:
-        is_up_to_date()
     asset = scheduler.get_next_asset()
 
     if asset is None:
