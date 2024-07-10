@@ -7,9 +7,9 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 
 import json
 import logging
+import netifaces
 import os
 import redis
-import socket
 import subprocess
 
 
@@ -18,12 +18,27 @@ REDIS_ARGS = dict(host="127.0.0.1", port=6379, db=0)
 CHANNEL_NAME = b'hostcmd'
 
 
+def get_ip_addresses():
+    addresses = []
+
+    for interface in netifaces.interfaces():
+        if not (interface.startswith('wlan') or interface.startswith('eth')):
+            continue
+
+        addrs = netifaces.ifaddresses(interface)
+        if netifaces.AF_INET in addrs or netifaces.AF_INET6 in addrs:
+            for ip in addrs.get(netifaces.AF_INET, []):
+                addresses.append(ip['addr'])
+            for ip in addrs.get(netifaces.AF_INET6, []):
+                addresses.append(ip['addr'])
+
+    return addresses
+
+
 def set_ip_addresses():
     rdb = redis.Redis(**REDIS_ARGS)
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
-    ip_address = s.getsockname()[0]
-    rdb.set('ip_addresses', json.dumps([ip_address]))
+    ip_addresses = get_ip_addresses()
+    rdb.set('ip_addresses', json.dumps(ip_addresses))
 
 
 # Explicit command whitelist for security reasons, keys as bytes objects
