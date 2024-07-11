@@ -489,7 +489,7 @@ def main():
 
     scheduler = Scheduler()
 
-    wait_for_server(5)
+    wait_for_server(60)
 
     if settings['show_splash']:
         if is_balena_app():
