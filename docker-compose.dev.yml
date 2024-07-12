@@ -72,7 +72,6 @@ services:
       - 8000:80
     environment:
       - HOME=/data
-      - ENVIRONMENT=development
     depends_on:
       - anthias-server
       - anthias-websocket

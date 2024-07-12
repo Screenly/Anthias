@@ -11,6 +11,7 @@ export GIT_SHORT_HASH=$(git rev-parse --short HEAD)
 export GIT_HASH=$(git rev-parse HEAD)
 export BASE_IMAGE_TAG=buster
 export DEBIAN_VERSION=buster
+export ENVIRONMENT=${ENVIRONMENT:-production}
 
 declare -a SERVICES=(
     server
