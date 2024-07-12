@@ -1440,13 +1440,17 @@ def settings_page():
             'selected': 'selected' if settings['auth_backend'] == backend.name else ''
         })
 
+    ip_addresses = get_node_ip().split()
+
     context.update({
         'user': settings['user'],
         'need_current_password': bool(settings['auth_backend']),
         'is_balena': is_balena_app(),
         'is_docker': is_docker(),
         'auth_backend': settings['auth_backend'],
-        'auth_backends': auth_backends
+        'auth_backends': auth_backends,
+        'ip_addresses': ip_addresses,
+        'host_user': getenv('HOST_USER')
     })
 
     return template('settings.html', **context)
