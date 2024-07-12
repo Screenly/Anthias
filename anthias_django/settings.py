@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = getenv('ENVIRONMENT', 'production') == 'development'
+DEBUG = getenv('ENVIRONMENT', 'production') in ['development', 'test']
 
 if not DEBUG:
     if not device_settings.get('django_secret_key'):
