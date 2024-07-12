@@ -186,12 +186,10 @@ fi
 
 SUDO_ARGS=()
 
-if [ "$RASPBIAN_VERSION" = "12" ]; then
-    python3 -m venv /home/${USER}/installer_venv
-    source /home/${USER}/installer_venv/bin/activate
+python3 -m venv /home/${USER}/installer_venv
+source /home/${USER}/installer_venv/bin/activate
 
-    SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
-fi
+SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
 
 # @TODO
 # Remove me later. Cryptography 38.0.3 won't build at the moment.

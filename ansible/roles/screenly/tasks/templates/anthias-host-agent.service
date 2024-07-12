@@ -8,11 +8,7 @@ StartLimitBurst=3
 WorkingDirectory=/home/{{ lookup('env', 'USER') }}/screenly
 User={{ lookup('env', 'USER') }}
 
-{% if debian_version|int >= 12 %}
 ExecStart=/home/{{ lookup('env', 'USER') }}/installer_venv/bin/python /home/{{ lookup('env', 'USER') }}/screenly/host_agent.py
-{% else %}
-ExecStart=/usr/bin/python3 /home/{{ lookup('env', 'USER') }}/screenly/host_agent.py
-{% endif %}
 Restart=on-failure
 RestartSec=10s
 
