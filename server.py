@@ -1318,14 +1318,7 @@ except Exception:
     pass
 else:
     SWAGGER_URL = '/api/docs'
-    swagger_address = getenv("SWAGGER_HOST", my_ip)
-
-    if settings['use_ssl'] or is_demo_node:
-        API_URL = 'http://{}/api/swagger.json'.format(swagger_address)
-    elif LISTEN == '127.0.0.1' or swagger_address != my_ip:
-        API_URL = "http://{}/api/swagger.json".format(swagger_address)
-    else:
-        API_URL = "http://{}:{}/api/swagger.json".format(swagger_address, PORT)
+    API_URL = "/api/swagger.json"
 
     swaggerui_blueprint = get_swaggerui_blueprint(
         SWAGGER_URL,
