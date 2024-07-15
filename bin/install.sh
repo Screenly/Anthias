@@ -186,11 +186,13 @@ fi
 
 SUDO_ARGS=()
 
-if [ "$RASPBIAN_VERSION" = "12" ]; then
-    python3 -m venv /home/${USER}/installer_venv
-    source /home/${USER}/installer_venv/bin/activate
+if python3 -c "import venv" &> /dev/null; then
+  echo "Module venv is detected. Activating virtual environment..."
 
-    SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
+  python3 -m venv /home/${USER}/installer_venv
+  source /home/${USER}/installer_venv/bin/activate
+
+  SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
 fi
 
 # @TODO
