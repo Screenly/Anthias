@@ -186,10 +186,14 @@ fi
 
 SUDO_ARGS=()
 
-python3 -m venv /home/${USER}/installer_venv
-source /home/${USER}/installer_venv/bin/activate
+if python3 -c "import venv" &> /dev/null; then
+  echo "Module venv is detected. Activating virtual environment..."
 
-SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
+  python3 -m venv /home/${USER}/installer_venv
+  source /home/${USER}/installer_venv/bin/activate
+
+  SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
+fi
 
 # @TODO
 # Remove me later. Cryptography 38.0.3 won't build at the moment.
