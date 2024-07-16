@@ -9,6 +9,7 @@ __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2023, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
+import ipaddress
 import json
 import psutil
 
@@ -1525,8 +1526,17 @@ def integrations():
 
 @app.route('/splash-page')
 def splash_page():
-    my_ip = get_node_ip().split()
-    return template('splash-page.html', my_ip=my_ip)
+    ip_addresses = []
+
+    for ip_address in get_node_ip().split():
+        ip_address_object = ipaddress.ip_address(ip_address)
+
+        if isinstance(ip_address_object, ipaddress.IPv6Address):
+            ip_addresses.append(f'http://[{ip_address}]')
+        else:
+            ip_addresses.append(f'http://{ip_address}')
+
+    return template('splash-page.html', ip_addresses=ip_addresses)
 
 
 @app.errorhandler(403)
