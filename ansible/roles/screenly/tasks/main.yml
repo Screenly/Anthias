@@ -28,16 +28,9 @@
 
 - name: Install pip dependencies
   ansible.builtin.pip:
-    requirements: "/home/{{ lookup('env', 'USER') }}/screenly/requirements/requirements.host.txt"
-    extra_args: "--no-cache-dir --upgrade"
-  when: ansible_distribution_major_version|int <= 11
-
-- name: Install pip dependencies
-  ansible.builtin.pip:
     executable: "/home/{{ lookup('env', 'USER') }}/installer_venv/bin/pip"
     requirements: "/home/{{ lookup('env', 'USER') }}/screenly/requirements/requirements.host.txt"
     extra_args: "--no-cache-dir --upgrade"
-  when: ansible_distribution_major_version|int >= 12
 
 - name: Remove screenly_utils.sh
   ansible.builtin.file:
