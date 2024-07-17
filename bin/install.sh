@@ -163,7 +163,7 @@ APT_INSTALL_ARGS=(
 if [ "$RASPBIAN_VERSION" = "12" ]; then
   APT_INSTALL_ARGS+=("python3-full")
 else
-  APT_INSTALL_ARGS+=("python3" "python3-dev" "python3-pip")
+  APT_INSTALL_ARGS+=("python3" "python3-dev" "python3-pip" "python3-venv")
 fi
 
 sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' /etc/apt/sources.list
