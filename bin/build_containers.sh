@@ -9,7 +9,7 @@ set -euox pipefail
 export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 export GIT_SHORT_HASH=$(git rev-parse --short HEAD)
 export GIT_HASH=$(git rev-parse HEAD)
-export BASE_IMAGE_TAG=buster
+export BASE_IMAGE_TAG=bookworm
 export DEBIAN_VERSION=buster
 
 declare -a SERVICES=(

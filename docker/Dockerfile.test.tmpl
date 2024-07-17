@@ -44,7 +44,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install \
         -r /tmp/requirements.txt \
         -r /tmp/requirements.dev.txt \
-        -r /tmp/requirements.viewer.txt
+        -r /tmp/requirements.viewer.txt \
+        --break-system-packages
 
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app
