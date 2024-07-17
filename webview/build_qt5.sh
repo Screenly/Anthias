@@ -243,30 +243,26 @@ function build_qt () {
         echo "QT Build already exist."
     fi
 
-    if [ ! -f "$BUILD_TARGET/webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" ]; then
-        if [ "${BUILD_WEBVIEW-x}" == "1" ]; then
-            cp -rf /webview "$SRC_DIR/"
+    if [ "${BUILD_WEBVIEW-x}" == "1" ]; then
+        cp -rf /webview "$SRC_DIR/"
 
-            pushd "$SRC_DIR/webview"
+        pushd "$SRC_DIR/webview"
 
-            "$SRC_DIR/qt${QT_MAJOR}pi/bin/qmake"
-            make -j"$MAKE_CORES"
-            make install
+        "$SRC_DIR/qt${QT_MAJOR}pi/bin/qmake"
+        make -j"$MAKE_CORES"
+        make install
 
-            mkdir -p fakeroot/bin fakeroot/share/ScreenlyWebview
-            mv ScreenlyWebview fakeroot/bin/
-            cp -rf /webview/res fakeroot/share/ScreenlyWebview/
+        mkdir -p fakeroot/bin fakeroot/share/ScreenlyWebview
+        mv ScreenlyWebview fakeroot/bin/
+        cp -rf /webview/res fakeroot/share/ScreenlyWebview/
 
-            pushd fakeroot
-            tar cfz "$BUILD_TARGET/webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" .
-            popd
+        pushd fakeroot
+        tar cfz "$BUILD_TARGET/webview-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz" .
+        popd
 
-            pushd "$BUILD_TARGET"
-            sha256sum "webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" > "webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz.sha256"
-            popd
-        fi
-    else
-        echo "Webview Build already exist."
+        pushd "$BUILD_TARGET"
+        sha256sum "webview-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz" > "webview-$QT_VERSION-$DEBIAN_VERSION-$1.tar.gz.sha256"
+        popd
     fi
 }
 
@@ -274,7 +270,6 @@ function build_qt () {
 /usr/local/bin/sysroot-relativelinks.py /sysroot
 
 fetch_cross_compile_tool
-fetch_rpi_firmware
 
 if [ ! "${TARGET-}" ]; then
     # Let's work our way through all Pis in order of relevance

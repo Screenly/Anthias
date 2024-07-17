@@ -192,4 +192,3 @@ ARG GIT_HASH=0
 ENV GIT_HASH=$GIT_HASH
 
 COPY build_qt5.sh /usr/local/bin/
-CMD /usr/local/bin/build_qt5.sh
