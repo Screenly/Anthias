@@ -4,27 +4,11 @@
 #include <QtWebEngine>
 #include <QWebEngineView>
 
-#include <iostream>
-#include <fstream>
-
 #include "mainwindow.h"
 
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-
-    qInstallMessageHandler([](QtMsgType type, const QMessageLogContext &context, const QString &msg) {
-        std::ofstream log;
-        log.open("/tmp/anthias-webview.log", std::ios::out | std::ios::app);
-
-        if (log.fail()) {
-            std::cerr << "Failed to open log file" << std::endl;
-            return;
-        }
-
-        log << msg.toStdString() << std::endl;
-        std::cout << msg.toStdString() << std::endl;
-    });
 
     QCursor cursor(Qt::BlankCursor);
     QApplication::setOverrideCursor(cursor);
