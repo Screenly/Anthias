@@ -176,11 +176,11 @@ RUN apt-get update && \
 RUN curl https://pyenv.run | bash && \
     echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc && \
     echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc && \
-    echo 'eval "$(pyenv init -)"' >> ~/.bashrc && \
+    echo 'eval "$(pyenv init -)"' >> ~/.bashrc
 
 # Install Python 2.7.18. This is needed to compile hthe QTWebEngine.
-RUN pyenv install 2.7.18 && \
-    pyenv global 2.7.18
+RUN /root/.pyenv/bin/pyenv install 2.7.18 && \
+    /root/.pyenv/bin/pyenv global 2.7.18
 
 WORKDIR /build
 
