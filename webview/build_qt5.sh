@@ -9,7 +9,7 @@ BUILD_TARGET=/build
 SRC=/src
 QT_MAJOR="5"
 QT_MINOR="15"
-QT_BUG_FIX="2"
+QT_BUG_FIX="14"
 QT_VERSION="$QT_MAJOR.$QT_MINOR.$QT_BUG_FIX"
 DEBIAN_VERSION=$(lsb_release -cs)
 MAKE_CORES="$(expr $(nproc) + 2)"
@@ -90,8 +90,8 @@ function fetch_qt () {
 
     if [ ! -d "$SRC_DIR" ]; then
 
-        if [ ! -f "qt-everywhere-src-$QT_VERSION.tar.xz" ]; then
-            wget https://download.qt.io/archive/qt/$QT_MAJOR.$QT_MINOR/$QT_VERSION/single/qt-everywhere-src-$QT_VERSION.tar.xz
+        if [ ! -f "qt-everywhere-opensource-src-$QT_VERSION.tar.xz" ]; then
+            wget https://download.qt.io/archive/qt/$QT_MAJOR.$QT_MINOR/$QT_VERSION/single/qt-everywhere-opensource-src-$QT_VERSION.tar.xz
         fi
 
         if [ ! -f "md5sums.txt" ]; then
@@ -100,7 +100,7 @@ function fetch_qt () {
         md5sum --ignore-missing -c md5sums.txt
 
         # Extract and make a clone
-        tar xf qt-everywhere-src-$QT_VERSION.tar.xz
+        tar xf qt-everywhere-opensource-src-$QT_VERSION.tar.xz
         rsync -aqP qt-everywhere-src-$QT_VERSION/ qt$QT_MAJOR
     else
         rsync -aqP --delete qt-everywhere-src-$QT_VERSION/ qt$QT_MAJOR
