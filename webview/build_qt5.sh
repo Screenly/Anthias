@@ -37,6 +37,13 @@ function fetch_cross_compile_tool () {
 }
 
 function fetch_rpi_firmware () {
+    # Check Debian version. Return early if newer than Debian 10, as they don't have /opt/vc anymore.
+    DEBIAN_VERSION=$(lsb_release -rs)
+    if [ "${DEBIAN_VERSION}" -gt "10" ]; then
+        echo "Debian version is newer than 10. Skipping firmware fetch."
+        return
+    fi
+
     if [ ! -d "/src/opt" ]; then
         pushd /src
 
@@ -270,6 +277,7 @@ function build_qt () {
 /usr/local/bin/sysroot-relativelinks.py /sysroot
 
 fetch_cross_compile_tool
+fetch_rpi_firmware
 
 if [ ! "${TARGET-}" ]; then
     # Let's work our way through all Pis in order of relevance
