@@ -9,7 +9,7 @@ BUILD_TARGET=/build
 SRC=/src
 QT_MAJOR="5"
 QT_MINOR="15"
-QT_BUG_FIX="2"
+QT_BUG_FIX="14"
 QT_VERSION="$QT_MAJOR.$QT_MINOR.$QT_BUG_FIX"
 DEBIAN_VERSION=$(lsb_release -cs)
 MAKE_CORES="$(expr $(nproc) + 2)"
@@ -37,6 +37,13 @@ function fetch_cross_compile_tool () {
 }
 
 function fetch_rpi_firmware () {
+    # Check Debian version. Return early if newer than Debian 10, as they don't have /opt/vc anymore.
+    _DEBIAN_VERSION=$(lsb_release -rs)
+    if [ "${_DEBIAN_VERSION}" -gt "10" ]; then
+        echo "Debian version is newer than 10. Skipping firmware fetch."
+        return
+    fi
+
     if [ ! -d "/src/opt" ]; then
         pushd /src
 
@@ -90,8 +97,8 @@ function fetch_qt () {
 
     if [ ! -d "$SRC_DIR" ]; then
 
-        if [ ! -f "qt-everywhere-src-$QT_VERSION.tar.xz" ]; then
-            wget https://download.qt.io/archive/qt/$QT_MAJOR.$QT_MINOR/$QT_VERSION/single/qt-everywhere-src-$QT_VERSION.tar.xz
+        if [ ! -f "qt-everywhere-opensource-src-$QT_VERSION.tar.xz" ]; then
+            wget https://download.qt.io/archive/qt/$QT_MAJOR.$QT_MINOR/$QT_VERSION/single/qt-everywhere-opensource-src-$QT_VERSION.tar.xz
         fi
 
         if [ ! -f "md5sums.txt" ]; then
@@ -100,7 +107,7 @@ function fetch_qt () {
         md5sum --ignore-missing -c md5sums.txt
 
         # Extract and make a clone
-        tar xf qt-everywhere-src-$QT_VERSION.tar.xz
+        tar xf qt-everywhere-opensource-src-$QT_VERSION.tar.xz
         rsync -aqP qt-everywhere-src-$QT_VERSION/ qt$QT_MAJOR
     else
         rsync -aqP --delete qt-everywhere-src-$QT_VERSION/ qt$QT_MAJOR
@@ -243,30 +250,26 @@ function build_qt () {
         echo "QT Build already exist."
     fi
 
-    if [ ! -f "$BUILD_TARGET/webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" ]; then
-        if [ "${BUILD_WEBVIEW-x}" == "1" ]; then
-            cp -rf /webview "$SRC_DIR/"
+    if [ "${BUILD_WEBVIEW-x}" == "1" ]; then
+        cp -rf /webview "$SRC_DIR/"
 
-            pushd "$SRC_DIR/webview"
+        pushd "$SRC_DIR/webview"
 
-            "$SRC_DIR/qt${QT_MAJOR}pi/bin/qmake"
-            make -j"$MAKE_CORES"
-            make install
+        "$SRC_DIR/qt${QT_MAJOR}pi/bin/qmake"
+        make -j"$MAKE_CORES"
+        make install
 
-            mkdir -p fakeroot/bin fakeroot/share/ScreenlyWebview
-            mv ScreenlyWebview fakeroot/bin/
-            cp -rf /webview/res fakeroot/share/ScreenlyWebview/
+        mkdir -p fakeroot/bin fakeroot/share/ScreenlyWebview
+        mv ScreenlyWebview fakeroot/bin/
+        cp -rf /webview/res fakeroot/share/ScreenlyWebview/
 
-            pushd fakeroot
-            tar cfz "$BUILD_TARGET/webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" .
-            popd
+        pushd fakeroot
+        tar cfz "$BUILD_TARGET/webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" .
+        popd
 
-            pushd "$BUILD_TARGET"
-            sha256sum "webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" > "webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz.sha256"
-            popd
-        fi
-    else
-        echo "Webview Build already exist."
+        pushd "$BUILD_TARGET"
+        sha256sum "webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" > "webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz.sha256"
+        popd
     fi
 }
 
