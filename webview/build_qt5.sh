@@ -38,8 +38,8 @@ function fetch_cross_compile_tool () {
 
 function fetch_rpi_firmware () {
     # Check Debian version. Return early if newer than Debian 10, as they don't have /opt/vc anymore.
-    DEBIAN_VERSION=$(lsb_release -rs)
-    if [ "${DEBIAN_VERSION}" -gt "10" ]; then
+    _DEBIAN_VERSION=$(lsb_release -rs)
+    if [ "${_DEBIAN_VERSION}" -gt "10" ]; then
         echo "Debian version is newer than 10. Skipping firmware fetch."
         return
     fi
