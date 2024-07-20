@@ -1,4 +1,6 @@
-from __future__ import unicode_literals
+from unittest import mock
+mock.patch('vlc.Instance', mock.MagicMock()).__enter__()
+
 from builtins import object
 from datetime import datetime
 from datetime import timedelta
