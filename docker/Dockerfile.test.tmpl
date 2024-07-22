@@ -25,7 +25,8 @@ RUN --mount=type=cache,target=/var/cache/apt \
     libatk1.0-0 \
     libatk-bridge2.0.0 \
     libcups2 \
-    libxcomposite1
+    libxcomposite1 \
+    libxdamage1
 
 # @TODO: Uncomment the lines below when test_add_asset_streaming is fixed.
 # WORKDIR /opt/ffmpeg
@@ -44,7 +45,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install \
         -r /tmp/requirements.txt \
         -r /tmp/requirements.dev.txt \
-        -r /tmp/requirements.viewer.txt
+        -r /tmp/requirements.viewer.txt \
+        --break-system-packages
 
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app

@@ -5,13 +5,11 @@ from __future__ import unicode_literals
 from builtins import bytes
 from future import standard_library
 from builtins import filter
-from builtins import str
 from builtins import range
 from builtins import object
 import json
 import logging
 import pydbus
-import re
 import sys
 from datetime import datetime
 from jinja2 import Template
@@ -27,11 +25,9 @@ import zmq
 
 from lib import assets_helper
 from lib import db
-from lib.github import is_up_to_date
 from lib.errors import SigalrmException
-from lib.media_player import OMXMediaPlayer
+from lib.media_player import VLCMediaPlayer
 from lib.utils import (
-    get_active_connections,
     url_fails,
     is_balena_app,
     get_node_ip,
@@ -41,8 +37,6 @@ from lib.utils import (
 )
 from retry.api import retry_call
 from settings import settings, LISTEN, PORT, ZmqConsumer
-
-from netifaces import gateways
 
 
 standard_library.install_aliases()
@@ -69,12 +63,7 @@ loop_is_stopped = False
 browser_bus = None
 r = connect_to_redis()
 
-try:
-    media_player = OMXMediaPlayer()
-    # @TODO: Remove the line above and uncomment the line below once VLC playback issue is fixed.
-    # media_player = VLCMediaPlayer() if 'Raspberry Pi 4' in get_raspberry_model() else OMXMediaPlayer()
-except sh.ErrorReturnCode_1:
-    media_player = OMXMediaPlayer()
+media_player = VLCMediaPlayer()
 
 HOME = None
 db_conn = None
@@ -392,9 +381,6 @@ def load_settings():
 
 
 def asset_loop(scheduler):
-    disable_update_check = getenv("DISABLE_UPDATE_CHECK", False)
-    if not disable_update_check:
-        is_up_to_date()
     asset = scheduler.get_next_asset()
 
     if asset is None:
@@ -498,7 +484,7 @@ def main():
 
     scheduler = Scheduler()
 
-    wait_for_server(5)
+    wait_for_server(60)
 
     if settings['show_splash']:
         if is_balena_app():

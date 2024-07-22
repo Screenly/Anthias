@@ -228,14 +228,18 @@
                             Go to the <a href="#backup-section" class="text-danger">backup section</a> and click <em>Get Backup</em>.
                         </li>
                         <li>
-                            Open up a terminal and SSH to this device &mdash;
-                            <code>ssh $USER@$HOSTNAME</code>
+                            Open up a terminal and SSH to this device using any of the following commands:
+                            <ul>
+                                {% for ip_address in context.ip_addresses %}
+                                    <li><code>ssh {{ context.host_user }}@{{ ip_address }}</code></li>
+                                {% endfor %}
+                            </ul>
                         </li>
                         <li>
                             Go to the project root directory &mdash; <code>cd ~/screenly</code>
                         </li>
                         <li>
-                            Run the following upgrade script &mdash; <code>./bin_run_upgrade.sh</code>. The script is essentially a wrapper around
+                            Run the following upgrade script &mdash; <code>./bin/run_upgrade.sh</code>. The script is essentially a wrapper around
                             the install script, so it will prompt you with the same questions as when you first installed Anthias.
                         </li>
                     </ul>

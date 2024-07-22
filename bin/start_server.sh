@@ -1,5 +1,7 @@
 #!/bin/bash
 
+ENVIRONMENT=${ENVIRONMENT:-production}
+
 mkdir -p \
     /data/.config \
     /data/.screenly \
@@ -10,7 +12,7 @@ cp -n /usr/src/app/ansible/roles/screenly/files/default_assets.yml /data/.screen
 cp -n /usr/src/app/ansible/roles/screenly/files/screenly.db /data/.screenly/screenly.db
 
 if [ -n "${OVERWRITE_CONFIG}" ]; then
-    echo "Requested to overwrite Screenly config file."
+    echo "Requested to overwrite Anthias config file."
     cp /usr/src/app/ansible/roles/screenly/files/screenly.conf "/data/.screenly/screenly.conf"
 fi
 
@@ -23,8 +25,8 @@ fi
 echo "Running migration..."
 python3 ./bin/migrate.py
 
-if [[ ! -z $DEVELOPMENT_MODE ]]; then
-    flask run --host 0.0.0.0 --port 8080
+if [[ "$ENVIRONMENT" == "development" ]]; then
+    flask --app server.py run --debug --reload --host 0.0.0.0 --port 8080
 else
     python3 server.py
 fi
