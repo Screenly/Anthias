@@ -69,6 +69,13 @@
     regexp: ^(dtoverlay=vc4-kms-v3d)$
     replace: '#\1'
 
+- name: Refresh contents of config.txt.
+  ansible.builtin.command: cat {{ config_path }}
+  register: config_txt
+  changed_when: false
+  tags:
+    - touches_boot_partition
+
 - name: Add FKMS config for all devices.
   ansible.builtin.lineinfile:
     path: "{{ config_path }}"
