@@ -1,7 +1,7 @@
 # Anthias - Digital Signage for the Raspberry Pi
-[![Run Unit Tests](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml/badge.svg)](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml)
-[![CodeQL](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml/badge.svg)](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml)
-[![Lint Code Base](https://github.com/Screenly/Anthias/actions/workflows/linter.yml/badge.svg)](https://github.com/Screenly/Anthias/actions/workflows/linter.yml)
+[![Run Unit Tests](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml)
+[![CodeQL](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml)
+[![Lint Python Code Base](https://github.com/Screenly/Anthias/actions/workflows/python-lint.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/python-lint.yaml)
 
 ![Anthias Logo](https://github.com/Screenly/Anthias/blob/master/static/img/dark.svg?raw=true  "Anthias Logo")
 

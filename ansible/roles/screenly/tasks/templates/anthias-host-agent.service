@@ -1,5 +1,5 @@
 [Unit]
-Description=Screenly Host Agent
+Description=Anthias Host Agent
 After=docker.service
 StartLimitIntervalSec=10
 StartLimitBurst=3
@@ -8,7 +8,7 @@ StartLimitBurst=3
 WorkingDirectory=/home/{{ lookup('env', 'USER') }}/screenly
 User={{ lookup('env', 'USER') }}
 
-ExecStart=/usr/bin/python3 /home/{{ lookup('env', 'USER') }}/screenly/host_agent.py
+ExecStart=/home/{{ lookup('env', 'USER') }}/installer_venv/bin/python /home/{{ lookup('env', 'USER') }}/screenly/host_agent.py
 Restart=on-failure
 RestartSec=10s
 
