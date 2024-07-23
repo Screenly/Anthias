@@ -122,12 +122,12 @@ for container in ${SERVICES[@]}; do
             echo "Skipping viewer container for x86 builds..."
             continue
         fi
-    elif [ "$BOARD" == "pi1" ]; then
-        # Remove the libssl1.1 from Dockerfile.viewer
-        if [ "$container" == 'viewer' ]; then
+    else
+        if [ "$BOARD" == "pi1" ] && [ "$container" == "viewer" ]; then
+            # Remove the libssl1.1 from Dockerfile.viewer
             sed -i '/libssl1.1/d' "docker/Dockerfile.$container"
         fi
-    else
+
         if [ "$container" == 'test' ]; then
             echo "Skipping test container for Pi builds..."
             continue
