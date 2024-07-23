@@ -2,7 +2,7 @@
 
 COPY requirements/requirements.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install -r /tmp/requirements.txt
+    pip3 install -r /tmp/requirements.txt --break-system-packages
 
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/

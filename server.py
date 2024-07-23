@@ -9,6 +9,7 @@ __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2023, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
+import ipaddress
 import json
 import psutil
 
@@ -1318,14 +1319,7 @@ except Exception:
     pass
 else:
     SWAGGER_URL = '/api/docs'
-    swagger_address = getenv("SWAGGER_HOST", my_ip)
-
-    if settings['use_ssl'] or is_demo_node:
-        API_URL = 'http://{}/api/swagger.json'.format(swagger_address)
-    elif LISTEN == '127.0.0.1' or swagger_address != my_ip:
-        API_URL = "http://{}/api/swagger.json".format(swagger_address)
-    else:
-        API_URL = "http://{}:{}/api/swagger.json".format(swagger_address, PORT)
+    API_URL = "/api/swagger.json"
 
     swaggerui_blueprint = get_swaggerui_blueprint(
         SWAGGER_URL,
@@ -1440,13 +1434,17 @@ def settings_page():
             'selected': 'selected' if settings['auth_backend'] == backend.name else ''
         })
 
+    ip_addresses = get_node_ip().split()
+
     context.update({
         'user': settings['user'],
         'need_current_password': bool(settings['auth_backend']),
         'is_balena': is_balena_app(),
         'is_docker': is_docker(),
         'auth_backend': settings['auth_backend'],
-        'auth_backends': auth_backends
+        'auth_backends': auth_backends,
+        'ip_addresses': ip_addresses,
+        'host_user': getenv('HOST_USER')
     })
 
     return template('settings.html', **context)
@@ -1528,8 +1526,17 @@ def integrations():
 
 @app.route('/splash-page')
 def splash_page():
-    my_ip = get_node_ip().split()
-    return template('splash-page.html', my_ip=my_ip)
+    ip_addresses = []
+
+    for ip_address in get_node_ip().split():
+        ip_address_object = ipaddress.ip_address(ip_address)
+
+        if isinstance(ip_address_object, ipaddress.IPv6Address):
+            ip_addresses.append(f'http://[{ip_address}]')
+        else:
+            ip_addresses.append(f'http://{ip_address}')
+
+    return template('splash-page.html', ip_addresses=ip_addresses)
 
 
 @app.errorhandler(403)
