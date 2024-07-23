@@ -4,6 +4,7 @@ import unittest
 import mock
 import os
 
+from lib.github import is_up_to_date
 from settings import settings
 
 fancy_sha = 'deadbeaf'
