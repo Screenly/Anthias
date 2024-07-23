@@ -123,6 +123,11 @@ for container in ${SERVICES[@]}; do
             continue
         fi
     else
+        if [ "$BOARD" == "pi1" ] && [ "$container" == "viewer" ]; then
+            # Remove the libssl1.1 from Dockerfile.viewer
+            sed -i '/libssl1.1/d' "docker/Dockerfile.$container"
+        fi
+
         if [ "$container" == 'test' ]; then
             echo "Skipping test container for Pi builds..."
             continue

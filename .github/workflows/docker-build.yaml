@@ -12,6 +12,7 @@ on:
       - '!.github/workflows/deploy-website.yaml'
       - '!.github/workflows/build-webview.yaml'
       - '!.github/workflows/build-balena-disk-image.yaml'
+      - '!.github/workflows/python-lint.yaml'
       - '!README.md'
       - '!docs/**'
       - '!bin/build_containers.sh'
