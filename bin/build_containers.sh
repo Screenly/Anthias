@@ -9,8 +9,8 @@ set -euox pipefail
 export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 export GIT_SHORT_HASH=$(git rev-parse --short HEAD)
 export GIT_HASH=$(git rev-parse HEAD)
-export BASE_IMAGE_TAG=buster
-export DEBIAN_VERSION=buster
+export BASE_IMAGE_TAG=bookworm
+export DEBIAN_VERSION=bookworm
 export ENVIRONMENT=${ENVIRONMENT:-production}
 
 declare -a SERVICES=(
@@ -74,9 +74,9 @@ for container in ${SERVICES[@]}; do
     fi
 
     if [ "$container" == 'viewer' ]; then
-        export QT_VERSION=5.15.2
-        export WEBVIEW_GIT_HASH=f5ef562982dcb6274c9716b9e375cc5ac0faba84
-        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.2"
+        export QT_VERSION=5.15.14
+        export WEBVIEW_GIT_HASH=ec710ed9b355fc10a758f03058e10d01176f3bd6
+        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.0"
     elif [ "$container" == 'test' ]; then
         export CHROME_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chrome-linux64.zip"
         export CHROMEDRIVER_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chromedriver-linux64.zip"
@@ -122,6 +122,11 @@ for container in ${SERVICES[@]}; do
         if [ "$container" == 'viewer' ]; then
             echo "Skipping viewer container for x86 builds..."
             continue
+        fi
+    elif [ "$BOARD" == "pi1" ]; then
+        # Remove the libssl1.1 from Dockerfile.viewer
+        if [ "$container" == 'viewer' ]; then
+            sed -i '/libssl1.1/d' "docker/Dockerfile.$container"
         fi
     else
         if [ "$container" == 'test' ]; then

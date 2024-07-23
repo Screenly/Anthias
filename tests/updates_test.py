@@ -4,8 +4,6 @@ import unittest
 import mock
 import os
 
-from lib.github import is_up_to_date
-from nose.plugins.attrib import attr
 from settings import settings
 
 fancy_sha = 'deadbeaf'
@@ -27,12 +25,10 @@ class UpdateTest(unittest.TestCase):
 
         self.get_configdir_m.stop()
 
-    @attr('fixme')
     @mock.patch('viewer.settings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
     def test_if_sha_file_not_exists__is_up_to_date__should_return_false(self):
         self.assertEqual(is_up_to_date(), True)
 
-    @attr('fixme')
     @mock.patch('viewer.settings.get_configdir', mock.MagicMock(return_value='/tmp/.screenly/'))
     def test_if_sha_file_not_equals_to_branch_hash__is_up_to_date__should_return_false(self):
         os.environ['GIT_BRANCH'] = 'master'
@@ -40,3 +36,6 @@ class UpdateTest(unittest.TestCase):
             f.write(fancy_sha)
         self.assertEqual(is_up_to_date(), False)
         del os.environ['GIT_BRANCH']
+
+    test_if_sha_file_not_exists__is_up_to_date__should_return_false.fixme = True
+    test_if_sha_file_not_equals_to_branch_hash__is_up_to_date__should_return_false.fixme = True

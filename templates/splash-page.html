@@ -31,15 +31,15 @@
     <div class="splash-body p-5">
         <div class="row">
             <div class="col-12 text-center">
-                {% if my_ip %}
+                {% if ip_addresses %}
                     <p>
                         To manage the content on this screen, just point your
                         browser to
-                        {% if my_ip|length > 1 %}
+                        {% if ip_addresses|length > 1 %}
                             any of
                         {% endif %}
                         the IP
-                        {% if my_ip|length > 1 %}
+                        {% if ip_addresses|length > 1 %}
                             addresses
                         {% else %}
                             address
@@ -47,8 +47,8 @@
                         provided below.
                     </p>
                     <div class="form-actions">
-                        {% for ip in my_ip %}
-                            <a href="http://{{ ip }}">http://{{ ip }}</a>
+                        {% for ip_address in ip_addresses %}
+                            <a href="{{ ip_address }}">{{ ip_address }}</a>
                             {% if not loop.last %}
                                 <br/>
                             {% endif %}

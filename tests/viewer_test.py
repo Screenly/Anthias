@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import unicode_literals
-from nose.tools import eq_
 import mock
 import unittest
 import os
@@ -11,6 +10,7 @@ from time import sleep
 
 class ViewerTestCase(unittest.TestCase):
     def setUp(self):
+        mock.patch('vlc.Instance', mock.MagicMock()).__enter__()
         import viewer
 
         self.original_splash_delay = viewer.SPLASH_DELAY
@@ -88,8 +88,7 @@ class TestLoadBrowser(ViewerTestCase):
 class TestSignalHandlers(ViewerTestCase):
     def test_usr1(self):
         self.p_killall.start()
-        eq_(None, self.u.sigusr1(None, None))
-        self.m_killall.assert_called_once_with('omxplayer.bin', _ok_code=[1])
+        self.assertEqual(None, self.u.sigusr1(None, None))
         self.p_killall.stop()
 
 

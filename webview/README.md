@@ -12,17 +12,33 @@ $ docker buildx build \
     -t qt-builder .
 ```
 
-You should now be able to invoke a run executing the following command:
+Start the builder container with the following command:
 
 ```bash
-$ docker run --rm -t \
+$ docker run -itd \
+    --name qt-builder-instance \
     -v ~/tmp/qt-src:/src:Z \
     -v ~/tmp/qt-build:/build:Z \
     -v $(pwd):/webview:ro \
+    -e TARGET=${TARGET_PLATFORM} \
     qt-builder
 ```
 
-This will launch `build-qt5.sh` and start the process of building QT for *all* Raspberry Pi boards. The resulting files will be placed in `~/tmp/qt-build/`.
+You should now be able to invoke a run executing the following command:
+
+```bash
+$ docker exec -it qt-builder-instance /webview/build_qt5.sh
+```
+
+This will start the process of building QT for *all* Raspberry Pi boards if you don't specify a `TARGET` environment variable.
+The resulting files will be placed in `~/tmp/qt-build/`.
+
+When you're done, you can stop and remove the container with the following commands:
+
+```bash
+$ docker stop qt-builder-instance
+$ docker rm qt-builder-instance
+```
 
 You can learn more about this process in the blog post [Compiling Qt with Docker multi-stage and multi-platform](https://www.docker.com/blog/compiling-qt-with-docker-multi-stage-and-multi-platform/).
 
