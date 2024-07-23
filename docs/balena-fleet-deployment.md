@@ -43,9 +43,6 @@ run the following commands:
 
 ```bash
 $ balena env add BALENA_HOST_CONFIG_gpu_mem $GPU_MEM_VALUE --fleet $FLEET_NAME
-
-# Run the command below only if you're using a Raspberry Pi 4, as it uses
-# VLC for video playback.
 $ balena env add BALENA_HOST_CONFIG_dtoverlay vc4-fkms-v3d --fleet $FLEET_NAME
 ```
 
