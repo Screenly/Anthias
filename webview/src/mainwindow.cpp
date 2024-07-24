@@ -15,7 +15,9 @@ MainWindow::MainWindow() : QMainWindow()
     view = new View(this);
     setCentralWidget(view);
 
-    player = new QMediaPlayer;
+    player = new QMediaPlayer(this, QMediaPlayer::Flags(QMediaPlayer::VideoSurface));
+    videoWidget = new QVideoWidget;
+    player->setVideoOutput(videoWidget);
 }
 
 void MainWindow::loadPage(const QString &uri)
@@ -36,6 +38,7 @@ void MainWindow::loadVideo(const QString &uri, unsigned int durationInSecs)
     {
         ready = false;
         player->setMedia(QUrl::fromLocalFile(uri));
+        this->setCentralWidget(videoWidget);
         player->play();
 
         // Convert duration from seconds to milliseconds.
