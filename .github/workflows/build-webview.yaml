@@ -1,6 +1,9 @@
 name: Build Webview
 
 on:
+  pull_request:
+    branches:
+      - master
   push:
     branches:
       - master
@@ -95,7 +98,7 @@ jobs:
             -v $(pwd):/webview:ro \
             -e TARGET=${{ matrix.board }} \
             screenly/ose-qt-builder:latest
-          docker exec -it qt-builder /webview/build_qt5.sh
+          docker exec -it qt-builder cat /etc/os-release
           docker rm -f qt-builder
 
       - uses: actions/upload-artifact@v3
