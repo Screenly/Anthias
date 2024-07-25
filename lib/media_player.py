@@ -1,8 +1,6 @@
 from __future__ import unicode_literals
 from builtins import object
-from platform import machine
 
-import sh
 import vlc
 
 from settings import settings
