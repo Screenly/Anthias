@@ -1,9 +1,6 @@
 name: Build Webview
 
 on:
-  pull_request:
-    branches:
-      - master
   push:
     branches:
       - master
@@ -38,7 +35,7 @@ jobs:
         run: |
           echo ::set-output name=buildx_args::\
             --cache-from "screenly/ose-qt-builder:latest" \
-            --output "type=image,push=false" \
+            --output "type=image,push=true" \
             --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
             --build-arg "GIT_HASH=$GITHUB_SHA" \
             --build-arg "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" \
@@ -98,7 +95,7 @@ jobs:
             -v $(pwd):/webview:ro \
             -e TARGET=${{ matrix.board }} \
             screenly/ose-qt-builder:latest
-          docker exec -it qt-builder cat /etc/os-release
+          docker exec -it qt-builder /webview/build_qt5.sh
           docker rm -f qt-builder
 
       - uses: actions/upload-artifact@v3
