@@ -37,4 +37,4 @@ six==1.15.0
 urllib3==1.26.19
 Werkzeug==2.2.3
 wheel==0.38.1
-yt-dlp==2023.11.16
+yt-dlp==2024.7.7
