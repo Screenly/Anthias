@@ -1,7 +1,7 @@
 cec==0.2.8
 certifi==2024.7.4
 configparser==4.0.2
-cryptography==3.3.2
+cryptography==42.0.4
 Cython==0.29.33
 Flask==2.2.5
 future==0.18.3
