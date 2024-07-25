@@ -86,13 +86,16 @@ jobs:
       - name: Start compilation
         run: |
           cd webview
-          docker run --rm -t \
+          docker run -itd \
+            --name qt-builder \
             -v ~/tmp/qt-src:/src:Z \
             -v /tmp/.cache/ccache:/src/ccache:Z \
             -v ~/tmp/qt-build:/build:Z \
             -v $(pwd):/webview:ro \
             -e TARGET=${{ matrix.board }} \
             screenly/ose-qt-builder:latest
+          docker exec -it qt-builder /webview/build_qt5.sh
+          docker rm -f qt-builder
 
       - uses: actions/upload-artifact@v3
         with:
