@@ -6,11 +6,16 @@ import logging
 import string
 import random
 import json
-from requests import get as requests_get, post as requests_post, exceptions
+from requests import (
+    get as requests_get,
+    post as requests_post,
+    exceptions
+)
 from lib.utils import is_balena_app, is_docker, is_ci, connect_to_redis
 from lib.diagnostics import get_git_branch, get_git_hash, get_git_short_hash
 from lib.raspberry_pi_helper import parse_cpu_info
 from settings import settings
+
 
 r = connect_to_redis()
 
@@ -20,9 +25,15 @@ REMOTE_BRANCH_STATUS_TTL = (60 * 60 * 24)
 # Suspend all external requests if we enconter an error other than a ConnectionError for 5 minutes
 ERROR_BACKOFF_TTL = (60 * 5)
 
+# Availability of the cached Docker Hub hash
+DOCKER_HUB_HASH_TTL = (10 * 60)
+
 # Google Analytics data
 ANALYTICS_MEASURE_ID = 'G-S3VX8HTPK7'
 ANALYTICS_API_SECRET = 'G8NcBpRIS9qBsOj3ODK8gw'
+
+DEFAULT_REQUESTS_TIMEOUT = 1  # in seconds
+
 
 def handle_github_error(exc, action):
     # After failing, dont retry until backoff timer expires
@@ -58,6 +69,7 @@ def remote_branch_available(branch):
             headers={
                 'Accept': 'application/vnd.github.loki-preview+json',
             },
+            timeout=DEFAULT_REQUESTS_TIMEOUT
         )
         resp.raise_for_status()
     except exceptions.RequestException as exc:
@@ -98,7 +110,8 @@ def fetch_remote_hash():
             return None, False
         try:
             resp = requests_get(
-                'https://api.github.com/repos/screenly/anthias/git/refs/heads/{}'.format(branch)
+                'https://api.github.com/repos/screenly/anthias/git/refs/heads/{}'.format(branch),
+                timeout=DEFAULT_REQUESTS_TIMEOUT
             )
             resp.raise_for_status()
         except exceptions.RequestException as exc:
@@ -123,29 +136,38 @@ def get_latest_docker_hub_hash(device_type):
 
     url = 'https://hub.docker.com/v2/namespaces/screenly/repositories/anthias-server/tags'
 
-    try:
-        response = requests_get(url)
-        response.raise_for_status()
-    except exceptions.RequestException as exc:
-        logging.debug('Failed to fetch latest Docker Hub tags: %s', exc)
-        return None
+    cached_docker_hub_hash = r.get('latest-docker-hub-hash')
 
-    data = response.json()
-    results = data['results']
+    if cached_docker_hub_hash:
+        try:
+            response = requests_get(url, timeout=DEFAULT_REQUESTS_TIMEOUT)
+            response.raise_for_status()
+        except exceptions.RequestException as exc:
+            logging.debug('Failed to fetch latest Docker Hub tags: %s', exc)
+            return None
 
-    reduced = [
-        result['name'].split('-')[0]
-        for result in results
-        if not result['name'].startswith('latest-')
-        and result['name'].endswith(f'-{device_type}')
-    ]
+        data = response.json()
+        results = data['results']
 
-    if len(reduced) == 0:
-        logging.warning('No commit hash found for device type: %s', device_type)
-        return None
+        reduced = [
+            result['name'].split('-')[0]
+            for result in results
+            if not result['name'].startswith('latest-')
+            and result['name'].endswith(f'-{device_type}')
+        ]
 
-    # Results are sorted by date in descending order, so we can just return the first one.
-    return reduced[0]
+        if len(reduced) == 0:
+            logging.warning('No commit hash found for device type: %s', device_type)
+            return None
+
+        docker_hub_hash = reduced[0]
+        r.set('latest-docker-hub-hash', docker_hub_hash)
+        r.expire('latest-docker-hub-hash', DOCKER_HUB_HASH_TTL)
+
+        # Results are sorted by date in descending order, so we can just return the first one.
+        return reduced[0]
+
+    return cached_docker_hub_hash
 
 
 def is_up_to_date():

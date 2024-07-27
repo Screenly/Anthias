@@ -29,7 +29,7 @@ def get_display_power():
     try:
         cec.init()
         tv = cec.Device(cec.CECDEVICE_TV)
-    except:
+    except Exception:
         return 'CEC error'
 
     try:
@@ -48,10 +48,10 @@ def get_uptime():
 
 
 def get_playlist():
-    screenly_db = os.path.join(os.getenv('HOME'), '.screenly/screenly.db')
+    anthias_db = os.path.join(os.getenv('HOME'), '.screenly/screenly.db')
     playlist = []
-    if os.path.isfile(screenly_db):
-        conn = sqlite3.connect(screenly_db)
+    if os.path.isfile(anthias_db):
+        conn = sqlite3.connect(anthias_db)
         c = conn.cursor()
         for row in c.execute('SELECT * FROM assets;'):
             playlist.append(row)
@@ -119,8 +119,10 @@ def get_debian_version():
 def get_raspberry_code():
     return raspberry_pi_helper.parse_cpu_info().get('hardware', "Unknown")
 
+
 def get_raspberry_model():
     return raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
+
 
 def compile_report():
     """

@@ -81,12 +81,86 @@ $ docker compose \
     exec -T anthias-test bash ./bin/prepare_test_environment.sh -s
 $ docker compose \
     -f docker-compose.test.yml \
-    exec -T anthias-test nosetests -v -a '!fixme'
+    exec -T anthias-test nose2 -v -A '!fixme'
 ```
 
 ### The QA checklist
 
 We've also provided a [checklist](/docs/qa-checklist.md) that can serve as a guide for testing Anthias manually.
+
+## Generating CSS and JS files
+
+Anthias only supports compiling from the host container at the moment. You need to install the latest version
+of Node.js. We recommend to intall Node.js on Linux. You can use this [guide](https://nodejs.org/en/learn/getting-started/how-to-install-nodejs)
+to get started.
+
+### Installing Node.js dependencies
+
+Run the following command from the project root directory.
+
+```bash
+npm install
+```
+
+### Transpiling CSS from SASS
+
+```bash
+npm run sass-dev
+```
+
+### Transpiling JS from CoffeeScript
+
+```bash
+# You need to run this on a separate terminal session if you already ran the
+# script for transpiling SASS files.
+npm run coffee-dev
+```
+
+### Closing the transpiler
+
+Just press `Ctrl-C` to close the SASS and CoffeeScript transpilers.
+
+## Linting Python code locally
+
+The project uses `flake8` for linting the Python codebase. While the linter is being run on the CI/CD pipeline,
+you can also run it locally. There are several ways to do this.
+
+### Run the linter using `act`
+
+[`act`](https://nektosact.com/) lets you run GitHub Actions locally. This is useful for testing the CI/CD pipeline locally.
+Installation instructions can be found [here](https://nektosact.com/installation/index.html).
+
+After installing and setting up `act`, run the following command:
+
+```bash
+$ act -W .github/workflows/python-lint.yaml
+```
+
+The command above will run the linter on the all the Python files in the repository. If you want to run the linter
+on a specific file, you can try the commands in the next section.
+
+### Running the linter using `venv`
+
+First, create a virtual environment and install the dependencies:
+
+```bash
+$ python3 -m venv venv/
+$ source venv/bin/activate
+$ pip install -r requirements/requirements.linter.txt
+```
+
+To run the linter on all the Python files in the repository, run the following command:
+
+```bash
+$ flake8 $(git ls-files '**/*.py')
+```
+
+To run the linter on a specific file, run the following command:
+
+```bash
+$ flake8 path/to/file.py
+```
+
 
 ## Managing releases
 ### Creating a new release
@@ -143,21 +217,17 @@ present in a Raspberry Pi with Anthias installed.
 ### `/etc/systemd/system/`
 
 * `wifi-connect.service` &mdash; starts the Balena `wifi-connect` program to dynamically set the Wi-Fi config on the device via the captive portal
-* `screenly-host-agent.service` &mdash; starts the Python script `host_agent.py`, which subscribes from the Redis component and performs a system call to shutdown or reboot the device when the message is received.
+* `anthias-host-agent.service` &mdash; starts the Python script `host_agent.py`, which subscribes from the Redis component and performs a system call to shutdown or reboot the device when the message is received.
 
 ### `/etc/sudoers.d/screenly_overrides`
 
 * `sudoers` configuration file that allows pi user to execute certain `sudo` commands without being a superuser (i.e., `root`)
 
-### `/usr/share/plymouth/themes/screenly`
+### `/usr/share/plymouth/themes/anthias`
 
-* `screenly.plymouth` &mdash; Plymouth config file (sets module name, `imagedir` and `scriptfile` dir)
+* `anthias.plymouth` &mdash; Plymouth config file (sets module name, `ImageDir` and `ScriptFile` dir)
+* `anthias.script` &ndash; plymouth script file that loads and scales the splash screen image during the boot process
 * `splashscreen.png` &mdash; the spash screen image that is displayed during the boot process
-* `screenly.script` &ndash; plymouth script file that loads and scales the splash screen image during the boot process
-
-### `/usr/local/bin/`
-
-* `screenly_usb_assets.sh` &mdash; script file that handles assets in a USB drive
 
 ## Debugging the Anthias WebView
 

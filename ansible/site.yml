@@ -1,4 +1,4 @@
-- name: Install Screenly
+- name: Install Anthias
   hosts: all
   user: "{{ lookup('env', 'USER') }}"
   become: true
@@ -12,4 +12,3 @@
     - screenly
     - network
     - splashscreen
-    - tools

@@ -24,7 +24,6 @@ RUN --mount=type=cache,target=/var/cache/apt \
         lsb-release \
         mplayer \
         net-tools \
-        omxplayer \
         procps \
         psmisc \
         python3-dev \
@@ -42,6 +41,7 @@ RUN c_rehash
 # We need this to ensure that the wheels can be built.
 # Otherwise we get "invalid command 'bdist_wheel'"
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install wheel
+    pip3 install --upgrade pip --break-system-packages && \
+    pip3 install wheel --break-system-packages
 
 # Keep a newline below here to not break the concatination of files.

@@ -7,15 +7,11 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 from functools import wraps
 import hashlib
 import os.path
-import json
 
 from flask import request, Response
 from future.utils import with_metaclass
 
 LINUX_USER = os.getenv('USER', 'pi')
-WOTT_CREDENTIALS_PATH = '/opt/wott/credentials'
-WOTT_USER_CREDENTIALS_PATH = os.path.join(WOTT_CREDENTIALS_PATH, LINUX_USER)
-WOTT_SCREENLY_CREDENTIAL_NAME = 'screenly'
 
 
 class Auth(with_metaclass(ABCMeta, object)):
@@ -122,7 +118,7 @@ class BasicAuth(Auth):
         return 'auth_basic.html', {'user': self.settings['user']}
 
     def authenticate(self):
-        realm = "Screenly OSE {}".format(self.settings['player_name'])
+        realm = "Anthias OSE {}".format(self.settings['player_name'])
         return Response("Access denied", 401, {"WWW-Authenticate": 'Basic realm="{}"'.format(realm)})
 
     def update_settings(self, current_pass_correct):
@@ -163,76 +159,6 @@ class BasicAuth(Auth):
                 self.settings['password'] = new_pass
             else:
                 raise ValueError("Must provide username")
-
-
-class WoTTAuth(BasicAuth):
-    display_name = 'WoTT'
-    name = 'auth_wott'
-    config = {
-        'auth_wott': {
-            'wott_secret_name': 'screenly_credentials',
-        }
-    }
-
-    def __init__(self, settings):
-        super(WoTTAuth, self).__init__(settings)
-
-    def update_settings(self, current_pass_correct):
-        if not self._fetch_credentials():
-            raise ValueError("Can not read WoTT credentials file or login credentials record is incorrect")
-
-    def _fetch_credentials(self):
-        wott_credentials_path = os.path.join(WOTT_USER_CREDENTIALS_PATH, WOTT_SCREENLY_CREDENTIAL_NAME + ".json")
-
-        if 'wott_secret_name' in self.settings and self.settings['wott_secret_name']:
-            screenly_credentials_path = os.path.join(WOTT_CREDENTIALS_PATH, self.settings['wott_secret_name'] + ".json")
-            if os.path.isfile(screenly_credentials_path):
-                wott_credentials_path = screenly_credentials_path
-
-        self.user = self.password = ''
-
-        if not os.path.isfile(wott_credentials_path):
-            return False
-
-        with open(wott_credentials_path, "r") as credentials_file:
-            credentials = json.load(credentials_file)
-            login_record = credentials.get('login', '')
-            if not login_record:
-                return False
-            login_record = login_record.split(':', 1)
-            if len(login_record) == 2:
-                self.user, password = login_record
-                if password:
-                    self.password = hashlib.sha256(password).hexdigest()
-                else:
-                    self.password = password
-
-        return True
-
-    def check_password(self, password):
-        hashed_password = hashlib.sha256(password).hexdigest()
-        return self.password == hashed_password
-
-    @property
-    def is_authenticated(self):
-        if not self._fetch_credentials():
-            raise ValueError('Cannot load credentials')
-        return super(WoTTAuth, self).is_authenticated
-
-    def _check(self, username, password):
-        """
-        Check username/password combo against WoTT Credentials.
-        Used credentials with name 'screenly_credentials' or name
-        which defined in value of 'screenly_credentials' settings
-        :param username: str
-        :param password: str
-        :return: True if the check passes.
-        """
-        return self.user == username and self.check_password(password)
-
-    @property
-    def template(self):
-        return None
 
 
 def authorized(orig):

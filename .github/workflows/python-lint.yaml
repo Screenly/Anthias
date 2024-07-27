@@ -1,0 +1,38 @@
+name: Run Python Linter
+
+on:
+  push:
+    branches:
+      - 'master'
+    paths:
+      - '**/*.py'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '**/*.py'
+
+jobs:
+  run-python-linter:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements/requirements.linter.txt
+
+    - name: Analyzing the code with flake8
+      run: |
+        if [ -n "$(git ls-files '*.py')" ]; then
+          flake8 $(git ls-files '*.py')
+        fi

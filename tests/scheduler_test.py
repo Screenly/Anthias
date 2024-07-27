@@ -1,14 +1,14 @@
-from __future__ import unicode_literals
-from builtins import object
-from datetime import datetime
-from datetime import timedelta
-import functools
-import unittest
-import viewer
-from lib import db
-from lib import assets_helper
-import settings
+import mock
 import os
+import unittest
+
+from datetime import datetime, timedelta
+from lib import db, assets_helper
+
+import settings
+
+mock.patch('vlc.Instance', mock.MagicMock()).__enter__()
+import viewer  # noqa: E402
 
 asset_x = {
     'mimetype': u'web',
@@ -102,7 +102,7 @@ class SchedulerTest(unittest.TestCase):
         viewer.db_conn.close()
         try:
             os.remove(FAKE_DB_PATH)
-        except:
+        except FileNotFoundError:
             pass
 
     def test_generate_asset_list_assets_should_be_y_and_x(self):

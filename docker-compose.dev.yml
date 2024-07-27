@@ -9,9 +9,7 @@ services:
       - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - DEVELOPMENT_MODE=1
-      - FLASK_APP=server.py
-      - FLASK_ENV=development
+      - ENVIRONMENT=development
     restart: always
     volumes:
       - resin-data:/data

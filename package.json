@@ -1,11 +1,16 @@
 {
-  "name": "screenly-ose",
+  "name": "anthias",
   "version": "1.0.0",
+  "scripts": {
+    "coffee-dev": "coffee --compile --map --watch static/js/*.coffee",
+    "sass-dev": "sass --watch static/sass/:static/css/"
+  },
   "dependencies": {
     "bootstrap": "^4.3.1",
     "css-toggle-switch": "^4.1.0"
   },
   "devDependencies": {
-    "coffee-script": "^1.12.7"
+    "coffee-script": "^1.12.7",
+    "sass": "^1.75.0"
   }
 }

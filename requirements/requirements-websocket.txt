@@ -1,11 +1,10 @@
 Cython==0.29.33
-Flask==1.1.2
+Flask==2.2.5
 future==0.18.3
 gevent-websocket==0.10.1
-gevent==21.12.0
+gevent==24.2.1
 itsdangerous==2.0.1
-Jinja2==2.11.3
-MarkupSafe==1.1.1
+Jinja2==3.1.4
 pytz==2022.2.1
-pyzmq==19.0.2
-Werkzeug==1.0.1
+pyzmq==23.2.1
+Werkzeug==2.2.3

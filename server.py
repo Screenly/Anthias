@@ -3,44 +3,45 @@
 
 from __future__ import unicode_literals
 from future import standard_library
-standard_library.install_aliases()
 from builtins import str
 from past.builtins import basestring
 __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2023, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
+import ipaddress
 import json
-import pydbus
 import psutil
-import re
-import sh
-import shutil
-import time
-import os
 
 import traceback
 import yaml
 import uuid
 from base64 import b64encode
-from celery import Celery
 from datetime import datetime, timedelta
 from dateutil import parser as date_parser
 from functools import wraps
 from hurry.filesize import size
 from mimetypes import guess_type, guess_extension
-from os import getenv, listdir, makedirs, mkdir, path, remove, rename, statvfs, stat, walk
-from retry.api import retry_call
-from subprocess import check_output
+from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
 from urllib.parse import urlparse
 
-from flask import Flask, escape, make_response, render_template, request, send_from_directory, url_for, jsonify
+from flask import (
+    Flask,
+    escape,
+    make_response,
+    render_template,
+    request,
+    send_from_directory,
+    url_for,
+)
 from flask_cors import CORS
 from flask_restful_swagger_2 import Api, Resource, Schema, swagger
 from flask_swagger_ui import get_swaggerui_blueprint
 
 from gunicorn.app.base import Application
 from werkzeug.wrappers import Request
+
+from celery_tasks import shutdown_anthias, reboot_anthias
 
 from lib import assets_helper
 from lib import backup_helper
@@ -51,169 +52,32 @@ from lib import raspberry_pi_helper
 
 from lib.github import is_up_to_date
 from lib.auth import authorized
-
 from lib.utils import (
-    download_video_from_youtube, json_dump,
-    generate_perfect_paper_password, is_docker,
-    get_active_connections, remove_connection,
+    download_video_from_youtube, json_dump, is_docker,
     get_balena_supervisor_version,
     get_node_ip, get_node_mac_address,
     get_video_duration,
     is_balena_app, is_demo_node,
-    shutdown_via_balena_supervisor, reboot_via_balena_supervisor,
-    string_to_bool,
     connect_to_redis,
     url_fails,
     validate_url,
 )
 
-from settings import CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT, settings, ZmqPublisher, ZmqCollector
-
-HOME = getenv('HOME')
-CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
-CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-CELERY_TASK_RESULT_EXPIRES = timedelta(hours=6)
-
-app = Flask(__name__)
-app.debug = string_to_bool(os.getenv('DEBUG', 'False'))
-
-CORS(app)
-api = Api(app, api_version="v1", title="Screenly OSE API")
-
-r = connect_to_redis()
-celery = Celery(
-    app.name,
-    backend=CELERY_RESULT_BACKEND,
-    broker=CELERY_BROKER_URL,
-    result_expires=CELERY_TASK_RESULT_EXPIRES
+from settings import (
+    CONFIGURABLE_SETTINGS, DEFAULTS, LISTEN, PORT,
+    settings, ZmqPublisher, ZmqCollector,
 )
 
+standard_library.install_aliases()
 
-################################
-# Celery tasks
-################################
+HOME = getenv('HOME')
 
-@celery.on_after_configure.connect
-def setup_periodic_tasks(sender, **kwargs):
-    # Calls cleanup() every hour.
-    sender.add_periodic_task(3600, cleanup.s(), name='cleanup')
-    sender.add_periodic_task(3600, cleanup_usb_assets.s(), name='cleanup_usb_assets')
-    sender.add_periodic_task(60*5, get_display_power.s(), name='display_power')
+app = Flask(__name__)
 
+CORS(app)
+api = Api(app, api_version="v1", title="Anthias API")
 
-@celery.task
-def get_display_power():
-    r.set('display_power', diagnostics.get_display_power())
-    r.expire('display_power', 3600)
-
-
-@celery.task
-def cleanup():
-    sh.find(path.join(HOME, 'screenly_assets'), '-name', '*.tmp', '-delete')
-
-
-@celery.task
-def reboot_screenly():
-    """
-    Background task to reboot Screenly-OSE.
-    """
-    if is_balena_app():
-        retry_call(reboot_via_balena_supervisor, tries=5, delay=1)
-    else:
-        r.publish('hostcmd', 'reboot')
-
-
-@celery.task
-def shutdown_screenly():
-    """
-    Background task to shutdown Screenly-OSE.
-    """
-    if is_balena_app():
-        retry_call(shutdown_via_balena_supervisor, tries=5, delay=1)
-    else:
-        r.publish('hostcmd', 'shutdown')
-
-
-@celery.task
-def append_usb_assets(mountpoint):
-    """
-    @TODO. Fix me. This will not work in Docker.
-    """
-    settings.load()
-
-    datetime_now = datetime.now()
-    usb_assets_settings = {
-        'activate': False,
-        'copy': False,
-        'start_date': datetime_now,
-        'end_date': datetime_now + timedelta(days=7),
-        'duration': settings['default_duration']
-    }
-
-    for root, _, filenames in walk(mountpoint):
-        if 'usb_assets_key.yaml' in filenames:
-            with open("%s/%s" % (root, 'usb_assets_key.yaml'), 'r') as yaml_file:
-                usb_file_settings = yaml.load(yaml_file, Loader=yaml.Loader).get('screenly')
-                if usb_file_settings.get('key') == settings['usb_assets_key']:
-                    if usb_file_settings.get('activate'):
-                        usb_assets_settings.update({
-                            'activate': usb_file_settings.get('activate')
-                        })
-                    if usb_file_settings.get('copy'):
-                        usb_assets_settings.update({
-                            'copy': usb_file_settings.get('copy')
-                        })
-                    if usb_file_settings.get('start_date'):
-                        ts = time.mktime(datetime.strptime(usb_file_settings.get('start_date'), "%m/%d/%Y").timetuple())
-                        usb_assets_settings.update({
-                            'start_date': datetime.utcfromtimestamp(ts)
-                        })
-                    if usb_file_settings.get('end_date'):
-                        ts = time.mktime(datetime.strptime(usb_file_settings.get('end_date'), "%m/%d/%Y").timetuple())
-                        usb_assets_settings.update({
-                            'end_date': datetime.utcfromtimestamp(ts)
-                        })
-                    if usb_file_settings.get('duration'):
-                        usb_assets_settings.update({
-                            'duration': usb_file_settings.get('duration')
-                        })
-
-                    files = ['%s/%s' % (root, y) for root, _, filenames in walk(mountpoint) for y in filenames]
-                    with db.conn(settings['database']) as conn:
-                        for filepath in files:
-                            asset = prepare_usb_asset(filepath, **usb_assets_settings)
-                            if asset:
-                                assets_helper.create(conn, asset)
-
-                    break
-
-
-@celery.task
-def remove_usb_assets(mountpoint):
-    """
-    @TODO. Fix me. This will not work in Docker.
-    """
-    settings.load()
-    with db.conn(settings['database']) as conn:
-        for asset in assets_helper.read(conn):
-            if asset['uri'].startswith(mountpoint):
-                assets_helper.delete(conn, asset['asset_id'])
-
-
-@celery.task
-def cleanup_usb_assets(media_dir='/media'):
-    """
-    @TODO. Fix me. This will not work in Docker.
-    """
-    settings.load()
-    mountpoints = ['%s/%s' % (media_dir, x) for x in listdir(media_dir) if path.isdir('%s/%s' % (media_dir, x))]
-    with db.conn(settings['database']) as conn:
-        for asset in assets_helper.read(conn):
-            if asset['uri'].startswith(media_dir):
-                location = re.search(r'^(/\w+/\w+[^/])', asset['uri'])
-                if location:
-                    if location.group() not in mountpoints:
-                        assets_helper.delete(conn, asset['asset_id'])
+r = connect_to_redis()
 
 
 ################################
@@ -233,7 +97,8 @@ def api_error(error):
 
 
 def template(template_name, **context):
-    """Screenly template response generator. Shares the
+    """
+    This is a template response wrapper that shares the
     same function signature as Flask's render_template() method
     but also injects some global context."""
 
@@ -565,42 +430,6 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
     asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
 
     return asset
-
-
-def prepare_usb_asset(filepath, **kwargs):
-    filetype = guess_type(filepath)[0]
-
-    if not filetype:
-        return
-
-    filetype = filetype.split('/')[0]
-
-    if filetype not in ['image', 'video']:
-        return
-
-    asset_id = uuid.uuid4().hex
-    asset_name = path.basename(filepath)
-    duration = int(get_video_duration(filepath).total_seconds()) if "video" == filetype else int(kwargs['duration'])
-
-    if kwargs['copy']:
-        shutil.copy(filepath, path.join(settings['assetdir'], asset_id))
-        filepath = path.join(settings['assetdir'], asset_id)
-
-    return {
-        'asset_id': asset_id,
-        'duration': duration,
-        'end_date': kwargs['end_date'],
-        'is_active': 1,
-        'is_enabled': kwargs['activate'],
-        'is_processing': 0,
-        'mimetype': filetype,
-        'name': asset_name,
-        'nocache': 0,
-        'play_order': 0,
-        'skip_asset_check': 0,
-        'start_date': kwargs['start_date'],
-        'uri': filepath,
-    }
 
 
 def prepare_default_asset(**kwargs):
@@ -1300,117 +1129,7 @@ class Recover(Resource):
             publisher.send_to_viewer('play')
 
 
-class ResetWifiConfig(Resource):
-    method_decorators = [api_response, authorized]
-
-    @swagger.doc({
-        'responses': {
-            '204': {
-                'description': 'Deleted'
-            }
-        }
-    })
-    def get(self):
-        home = getenv('HOME')
-        file_path = path.join(home, '.screenly/initialized')
-
-        if path.isfile(file_path):
-            remove(file_path)
-
-        bus = pydbus.SystemBus()
-
-        pattern_include = re.compile("wlan*")
-        pattern_exclude = re.compile("ScreenlyOSE-*")
-
-        wireless_connections = get_active_connections(bus)
-
-        if wireless_connections is not None:
-            device_uuid = None
-
-            wireless_connections = [c for c in [c for c in wireless_connections if pattern_include.search(str(c['Devices']))] if not pattern_exclude.search(str(c['Id']))]
-
-            if len(wireless_connections) > 0:
-                device_uuid = wireless_connections[0].get('Uuid')
-
-            if not device_uuid:
-                raise Exception('The device has no active connection.')
-
-            remove_connection(bus, device_uuid)
-
-        return '', 204
-
-
-class GenerateUsbAssetsKey(Resource):
-    method_decorators = [api_response, authorized]
-
-    @swagger.doc({
-        'responses': {
-            '200': {
-                'description': 'Usb assets key generated',
-                'schema': {
-                    'type': 'string'
-                }
-            }
-        }
-    })
-    def get(self):
-        settings['usb_assets_key'] = generate_perfect_paper_password(20, False)
-        settings.save()
-
-        return settings['usb_assets_key']
-
-
-class UpgradeScreenly(Resource):
-    method_decorators = [api_response, authorized]
-
-    @swagger.doc({
-        'responses': {
-            '200': {
-                'description': 'Upgrade system'
-            }
-        }
-    })
-    def post(self):
-        for task in celery.control.inspect(timeout=2.0).active().get('worker@screenly'):
-            if task.get('type') == 'server.upgrade_screenly':
-                return jsonify({'id': task.get('id')})
-        branch = request.form.get('branch')
-        manage_network = request.form.get('manage_network')
-        system_upgrade = request.form.get('system_upgrade')
-        task = upgrade_screenly.apply_async(args=(branch, manage_network, system_upgrade))
-        return jsonify({'id': task.id})
-
-
-@app.route('/upgrade_status/<task_id>')
-def upgrade_screenly_status(task_id):
-    status_code = 200
-    task = upgrade_screenly.AsyncResult(task_id)
-    if task.state == 'PENDING':
-        response = {
-            'state': task.state,
-            'status': ''
-        }
-        status_code = 202
-    elif task.state == 'PROGRESS':
-        response = {
-            'state': task.state,
-            'status': task.info.get('status', '')
-        }
-        status_code = 202
-    elif task.state != 'FAILURE':
-        response = {
-            'state': task.state,
-            'status': task.info.get('status', '')
-        }
-    else:
-        response = {
-            'state': task.state,
-            'status': str(task.info)
-        }
-    return jsonify(response), status_code
-
-
-class RebootScreenly(Resource):
+class Reboot(Resource):
     method_decorators = [api_response, authorized]
 
     @swagger.doc({
@@ -1421,11 +1140,11 @@ class RebootScreenly(Resource):
         }
     })
     def post(self):
-        reboot_screenly.apply_async()
+        reboot_anthias.apply_async()
         return '', 200
 
 
-class ShutdownScreenly(Resource):
+class Shutdown(Resource):
     method_decorators = [api_response, authorized]
 
     @swagger.doc({
@@ -1436,7 +1155,7 @@ class ShutdownScreenly(Resource):
         }
     })
     def post(self):
-        shutdown_screenly.apply_async()
+        shutdown_anthias.apply_async()
         return '', 200
 
 
@@ -1590,11 +1309,8 @@ api.add_resource(Backup, '/api/v1/backup')
 api.add_resource(Recover, '/api/v1/recover')
 api.add_resource(AssetsControl, '/api/v1/assets/control/<command>')
 api.add_resource(Info, '/api/v1/info')
-api.add_resource(ResetWifiConfig, '/api/v1/reset_wifi')
-api.add_resource(GenerateUsbAssetsKey, '/api/v1/generate_usb_assets_key')
-api.add_resource(UpgradeScreenly, '/api/v1/upgrade_screenly')
-api.add_resource(RebootScreenly, '/api/v1/reboot_screenly')
-api.add_resource(ShutdownScreenly, '/api/v1/shutdown_screenly')
+api.add_resource(Reboot, '/api/v1/reboot')
+api.add_resource(Shutdown, '/api/v1/shutdown')
 api.add_resource(ViewerCurrentAsset, '/api/v1/viewer_current_asset')
 
 try:
@@ -1603,20 +1319,13 @@ except Exception:
     pass
 else:
     SWAGGER_URL = '/api/docs'
-    swagger_address = getenv("SWAGGER_HOST", my_ip)
-
-    if settings['use_ssl'] or is_demo_node:
-        API_URL = 'http://{}/api/swagger.json'.format(swagger_address)
-    elif LISTEN == '127.0.0.1' or swagger_address != my_ip:
-        API_URL = "http://{}/api/swagger.json".format(swagger_address)
-    else:
-        API_URL = "http://{}:{}/api/swagger.json".format(swagger_address, PORT)
+    API_URL = "/api/swagger.json"
 
     swaggerui_blueprint = get_swaggerui_blueprint(
         SWAGGER_URL,
         API_URL,
         config={
-            'app_name': "Screenly OSE API"
+            'app_name': "Anthias API"
         }
     )
     app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
@@ -1633,7 +1342,7 @@ def viewIndex():
     player_name = settings['player_name']
     my_ip = urlparse(request.host_url).hostname
     is_demo = is_demo_node()
-    resin_uuid = getenv("RESIN_UUID", None)
+    balena_uuid = getenv("BALENA_APP_UUID", None)
 
     ws_addresses = []
 
@@ -1642,8 +1351,8 @@ def viewIndex():
     else:
         ws_addresses.append('ws://' + my_ip + '/ws/')
 
-    if resin_uuid:
-        ws_addresses.append('wss://{}.resindevice.io/ws/'.format(resin_uuid))
+    if balena_uuid:
+        ws_addresses.append('wss://{}.balena-devices.com/ws/'.format(balena_uuid))
 
     return template(
         'index.html',
@@ -1709,10 +1418,6 @@ def settings_page():
     else:
         settings.load()
     for field, default in list(DEFAULTS['viewer'].items()):
-        if field == 'usb_assets_key':
-            if not settings[field]:
-                settings[field] = generate_perfect_paper_password(20, False)
-                settings.save()
         context[field] = settings[field]
 
     auth_backends = []
@@ -1729,13 +1434,17 @@ def settings_page():
             'selected': 'selected' if settings['auth_backend'] == backend.name else ''
         })
 
+    ip_addresses = get_node_ip().split()
+
     context.update({
         'user': settings['user'],
         'need_current_password': bool(settings['auth_backend']),
         'is_balena': is_balena_app(),
         'is_docker': is_docker(),
         'auth_backend': settings['auth_backend'],
-        'auth_backends': auth_backends
+        'auth_backends': auth_backends,
+        'ip_addresses': ip_addresses,
+        'host_user': getenv('HOST_USER')
     })
 
     return template('settings.html', **context)
@@ -1773,7 +1482,7 @@ def system_info():
 
     raspberry_pi_model = raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
 
-    screenly_version = '{}@{}'.format(
+    version = '{}@{}'.format(
         diagnostics.get_git_branch(),
         diagnostics.get_git_short_hash()
     )
@@ -1789,7 +1498,7 @@ def system_info():
         display_info=display_info,
         display_power=display_power,
         raspberry_pi_model=raspberry_pi_model,
-        screenly_version=screenly_version,
+        version=version,
         mac_address=get_node_mac_address(),
         is_balena=is_balena_app(),
     )
@@ -1817,8 +1526,17 @@ def integrations():
 
 @app.route('/splash-page')
 def splash_page():
-    my_ip = get_node_ip().split()
-    return template('splash-page.html', my_ip=my_ip)
+    ip_addresses = []
+
+    for ip_address in get_node_ip().split():
+        ip_address_object = ipaddress.ip_address(ip_address)
+
+        if isinstance(ip_address_object, ipaddress.IPv6Address):
+            ip_addresses.append(f'http://[{ip_address}]')
+        else:
+            ip_addresses.append(f'http://{ip_address}')
+
+    return template('splash-page.html', ip_addresses=ip_addresses)
 
 
 @app.errorhandler(403)
@@ -1876,7 +1594,7 @@ def main():
 
 
 def is_development():
-    return getenv('FLASK_ENV', '') == 'development'
+    return getenv('ENVIRONMENT', '') == 'development'
 
 
 if __name__ == "__main__" and not is_development():

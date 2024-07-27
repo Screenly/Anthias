@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import unicode_literals
-from nose.tools import eq_
 import mock
 import unittest
 import os
@@ -11,6 +10,7 @@ from time import sleep
 
 class ViewerTestCase(unittest.TestCase):
     def setUp(self):
+        mock.patch('vlc.Instance', mock.MagicMock()).__enter__()
         import viewer
 
         self.original_splash_delay = viewer.SPLASH_DELAY
@@ -40,18 +40,19 @@ class ViewerTestCase(unittest.TestCase):
         self.u.SPLASH_DELAY = self.original_splash_delay
 
 
+def noop(*a, **k):
+    return None
+
+
 class TestEmptyPl(ViewerTestCase):
-    noop = lambda *a, **k: None
 
     @mock.patch('viewer.start_loop', side_effect=noop)
     @mock.patch('viewer.view_image', side_effect=noop)
     @mock.patch('viewer.view_webpage', side_effect=noop)
-    @mock.patch('viewer.setup_hotspot', side_effect=noop)
     @mock.patch('viewer.setup', side_effect=noop)
     def test_empty(
         self,
         mock_setup,
-        mock_setup_hotspot,
         mock_view_webpage,
         mock_view_image,
         mock_start_loop,
@@ -64,7 +65,6 @@ class TestEmptyPl(ViewerTestCase):
 
             m_asset_list.assert_called_once()
             mock_setup.assert_called_once()
-            mock_setup_hotspot.assert_called_once()
             mock_view_webpage.assert_called_once()
             mock_view_image.assert_called_once()
             mock_start_loop.assert_called_once()
@@ -88,8 +88,7 @@ class TestLoadBrowser(ViewerTestCase):
 class TestSignalHandlers(ViewerTestCase):
     def test_usr1(self):
         self.p_killall.start()
-        eq_(None, self.u.sigusr1(None, None))
-        self.m_killall.assert_called_once_with('omxplayer.bin', _ok_code=[1])
+        self.assertEqual(None, self.u.sigusr1(None, None))
         self.p_killall.stop()
 
 
@@ -97,7 +96,7 @@ class TestWatchdog(ViewerTestCase):
     def test_watchdog_should_create_file_if_not_exists(self):
         try:
             os.remove(self.u.WATCHDOG_PATH)
-        except:
+        except OSError:
             pass
         self.u.watchdog()
         self.assertEqual(os.path.exists(self.u.WATCHDOG_PATH), True)

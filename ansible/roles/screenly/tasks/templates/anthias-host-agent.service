@@ -1,0 +1,16 @@
+[Unit]
+Description=Anthias Host Agent
+After=docker.service
+StartLimitIntervalSec=10
+StartLimitBurst=3
+
+[Service]
+WorkingDirectory=/home/{{ lookup('env', 'USER') }}/screenly
+User={{ lookup('env', 'USER') }}
+
+ExecStart=/home/{{ lookup('env', 'USER') }}/installer_venv/bin/python /home/{{ lookup('env', 'USER') }}/screenly/host_agent.py
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
