@@ -57,31 +57,17 @@
     line: "\n[pi4]"
   when: config_txt.stdout.find('[pi4]') == -1
 
-- name: Remove the Pi 4 FKMS config.
-  ansible.builtin.replace:
-    path: "{{ config_path }}"
-    regexp: "\\[pi4\\]\ndtoverlay=vc4-fkms-v3d"
-    replace: "[pi4]"
-
-- name: Comment out the original dtoverlay config.
+- name: Uncomment out the original dtoverlay config.
   ansible.builtin.replace:
     dest: "{{ config_path }}"
-    regexp: ^(dtoverlay=vc4-kms-v3d)$
-    replace: '#\1'
+    regexp: '^#\s*(dtoverlay=vc4-kms-v3d)'
+    replace: '\1'
 
-- name: Refresh contents of config.txt.
-  ansible.builtin.command: cat {{ config_path }}
-  register: config_txt
-  changed_when: false
-  tags:
-    - touches_boot_partition
-
-- name: Add FKMS config for all devices.
+- name: Remove the FKMS config for all devices.
   ansible.builtin.lineinfile:
     path: "{{ config_path }}"
-    insertafter: '^\[all\]$'
-    line: dtoverlay=vc4-fkms-v3d
-  when: config_txt.stdout.find('dtoverlay=vc4-fkms-v3d') == -1
+    state: absent
+    regexp: "^dtoverlay=vc4-fkms-v3d$"
 
 - name: Backup kernel boot args
   ansible.builtin.copy:
