@@ -75,8 +75,8 @@ for container in ${SERVICES[@]}; do
 
     if [ "$container" == 'viewer' ]; then
         export QT_VERSION=5.15.14
-        export WEBVIEW_GIT_HASH=ec710ed9b355fc10a758f03058e10d01176f3bd6
-        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.0"
+        export WEBVIEW_GIT_HASH=4bd295c4a1197a226d537938e947773f4911ca24
+        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.1"
     elif [ "$container" == 'test' ]; then
         export CHROME_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chrome-linux64.zip"
         export CHROMEDRIVER_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chromedriver-linux64.zip"
@@ -116,7 +116,6 @@ for container in ${SERVICES[@]}; do
         fi
 
         sed "${SED_ARGS[@]}" -e '/libraspberrypi0/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
-        sed "${SED_ARGS[@]}" -e '/omxplayer/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
 
         # Don't build the viewer container if we're on x86
         if [ "$container" == 'viewer' ]; then
