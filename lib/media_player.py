@@ -36,37 +36,24 @@ class VLCMediaPlayer(MediaPlayer):
 
         self.player.audio_output_set('alsa')
 
-    def __get_options(self):
-        options = []
-
+    def get_alsa_audio_device(self):
         if settings['audio_output'] == 'local':
-            options += [
-                '--alsa-audio-device=plughw:CARD=Headphones',
-            ]
+            return 'plughw:CARD=Headphones'
         else:
             if lookup_raspberry_pi_version() == 'pi4':
-                options += [
-                    '--alsa-audio-device=default:CARD=vc4hdmi0',
-                ]
+                return 'default:CARD=vc4hdmi0'
             else:
-                options += [
-                    '--alsa-audio-device=default:CARD=vc4hdmi',
-                ]
+                return 'default:CARD=vc4hdmi'
 
-        return options
+    def __get_options(self):
+        return [
+            f'--alsa-audio-device={self.get_alsa_audio_device()}',
+        ]
 
     def set_asset(self, uri, duration):
         self.player.set_mrl(uri)
         settings.load()
-
-        # @TODO: Refactor this conditional statement.
-        if settings['audio_output'] == 'local':
-            self.player.audio_output_device_set('alsa', 'plughw:CARD=Headphones')
-        elif settings['audio_output'] == 'hdmi':
-            if lookup_raspberry_pi_version() == 'pi4':
-                self.player.audio_output_device_set('alsa', 'default:CARD=vc4hdmi0')
-            else:
-                self.player.audio_output_device_set('alsa', 'default:CARD=vc4hdmi')
+        self.player.audio_output_set('alsa', self.get_alsa_audio_device())
 
     def play(self):
         self.player.play()
