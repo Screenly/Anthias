@@ -7,7 +7,12 @@ from lib import db, assets_helper
 
 import settings
 
+mock.patch(
+    'lib.raspberry_pi_helper.lookup_raspberry_pi_version',
+    return_value='pi4'
+).__enter__()
 mock.patch('vlc.Instance', mock.MagicMock()).__enter__()
+
 import viewer  # noqa: E402
 
 asset_x = {
