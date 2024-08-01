@@ -4,10 +4,7 @@ on:
   push:
     branches:
       - master
-      - production
-      # nico start - new code; remove if not working
       - experimental
-      # nico end
     paths:
       - '**'
       - '!webview/**'
