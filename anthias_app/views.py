@@ -30,6 +30,7 @@ from .helpers import (
     remove_default_assets,
     template,
 )
+import ipaddress
 import psutil
 
 
@@ -230,5 +231,16 @@ def integrations(request):
 
 @require_http_methods(["GET"])
 def splash_page(request):
-    my_ip = get_node_ip().split()
-    return template(request, 'splash-page.html', {'my_ip': my_ip})
+    ip_addresses = []
+
+    for ip_address in get_node_ip().split():
+        ip_address_object = ipaddress.ip_address(ip_address)
+
+        if isinstance(ip_address_object, ipaddress.IPv6Address):
+            ip_addresses.append(f'http://[{ip_address}]')
+        else:
+            ip_addresses.append(f'http://{ip_address}')
+
+    return template(request, 'splash-page.html', {
+        'ip_addresses': ip_addresses
+    })
