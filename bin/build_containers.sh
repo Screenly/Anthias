@@ -142,41 +142,41 @@ for container in ${SERVICES[@]}; do
         continue
     fi
 
-    # @TODO: Refactor this to be more DRY.
+    PUSH_ARGS=()
+    BUILDX_ARGS=()
+
     if [ "$GIT_BRANCH" = "experimental" ]; then
-        docker "${DOCKER_BUILD_ARGS[@]}" \
-            --cache-from "type=local,src=/tmp/.buildx-cache" \
-            --cache-to "type=local,dest=/tmp/.buildx-cache" \
-            --platform "$TARGET_PLATFORM" \
-            -f "docker/Dockerfile.$container" \
-            -t "screenly/anthias-$container:experimental-$BOARD" \
-            -t "screenly/anthias-$container:experimental-$GIT_SHORT_HASH-$BOARD" .
-
-        # Push if the push flag is set and not cross compiling
-        if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
-            docker push "screenly/anthias-$container:experimental-$BOARD"
-            docker push "screenly/anthias-$container:experimental-$GIT_SHORT_HASH-$BOARD"
-        fi
+        PUSH_ARGS+=(
+            "screenly/anthias-$container:experimental-$BOARD"
+            "screenly/anthias-$container:experimental-$GIT_SHORT_HASH-$BOARD"
+        )
     else
-        docker "${DOCKER_BUILD_ARGS[@]}" \
-            --cache-from "type=local,src=/tmp/.buildx-cache" \
-            --cache-to "type=local,dest=/tmp/.buildx-cache" \
-            --platform "$TARGET_PLATFORM" \
-            -f "docker/Dockerfile.$container" \
-            -t "screenly/srly-ose-$container:latest" \
-            -t "screenly/anthias-$container:latest" \
-            -t "anthias-$container:latest" \
-            -t "screenly/anthias-$container:$DOCKER_TAG" \
-            -t "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD" \
-            -t "screenly/srly-ose-$container:$DOCKER_TAG" \
-            -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD" .
+        PUSH_ARGS+=(
+            "screenly/srly-ose-$container:latest"
+            "screenly/anthias-$container:latest"
+            "anthias-$container:latest"
+            "screenly/anthias-$container:$DOCKER_TAG"
+            "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
+            "screenly/srly-ose-$container:$DOCKER_TAG"
+            "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD"
+        )
+    fi
 
-        # Push if the push flag is set and not cross compiling
-        if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
-            docker push "screenly/srly-ose-$container:$DOCKER_TAG"
-            docker push "screenly/anthias-$container:$DOCKER_TAG"
-            docker push "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
-            docker push "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD"
-        fi
+    for tag in "${PUSH_ARGS[@]}"; do
+        BUILDX_ARGS+=("-t" "$tag")
+    done
+
+    docker "${DOCKER_BUILD_ARGS[@]}" \
+        --cache-from "type=local,src=/tmp/.buildx-cache" \
+        --cache-to "type=local,dest=/tmp/.buildx-cache" \
+        --platform "$TARGET_PLATFORM" \
+        -f "docker/Dockerfile.$container" \
+        "${BUILDX_ARGS[@]}" .
+
+    # Push if the push flag is set and not cross compiling.
+    if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
+        for tag in "${PUSH_ARGS[@]}"; do
+            docker push "$tag"
+        done
     fi
 done
