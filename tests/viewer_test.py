@@ -10,7 +10,12 @@ from time import sleep
 
 class ViewerTestCase(unittest.TestCase):
     def setUp(self):
+        mock.patch(
+            'lib.raspberry_pi_helper.lookup_raspberry_pi_version',
+            return_value='pi4'
+        ).__enter__()
         mock.patch('vlc.Instance', mock.MagicMock()).__enter__()
+
         import viewer
 
         self.original_splash_delay = viewer.SPLASH_DELAY
