@@ -91,8 +91,19 @@ export DOCKER_TAG="latest"
 export BRANCH="master"
 
   echo && read -p "Do you want Anthias to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
-
+  echo && read -p "Which branch would you like to install? (master/experimental) " -r -s INPUT_BRANCH && echo
   echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
+
+  if [ -z "$INPUT_BRANCH" ]; then
+    echo "No branch specified. Defaulting to master."
+    export BRANCH="master"
+  elif [ "$INPUT_BRANCH" = "master" ] || [ "$INPUT_BRANCH" = "experimental" ]; then
+    export BRANCH="$INPUT_BRANCH"
+  else
+    echo "Invalid branch specified. Defaulting to master."
+    export BRANCH="master"
+  fi
+
   if [ "$UPGRADE" != 'y' ]; then
       EXTRA_ARGS=("--skip-tags" "system-upgrade")
   fi
@@ -178,11 +189,7 @@ else
 fi
 
 # Install Ansible from requirements file.
-if [ "$BRANCH" = "master" ]; then
-    ANSIBLE_VERSION=$(curl -s https://raw.githubusercontent.com/screenly/anthias/$BRANCH/requirements/requirements.host.txt | grep ansible)
-else
-    ANSIBLE_VERSION=ansible==2.8.8
-fi
+ANSIBLE_VERSION=$(curl -s https://raw.githubusercontent.com/screenly/anthias/$BRANCH/requirements/requirements.host.txt | grep ansible)
 
 SUDO_ARGS=()
 

@@ -142,24 +142,41 @@ for container in ${SERVICES[@]}; do
         continue
     fi
 
-    docker "${DOCKER_BUILD_ARGS[@]}" \
-        --cache-from "type=local,src=/tmp/.buildx-cache" \
-        --cache-to "type=local,dest=/tmp/.buildx-cache" \
-        --platform "$TARGET_PLATFORM" \
-        -f "docker/Dockerfile.$container" \
-        -t "screenly/srly-ose-$container:latest" \
-        -t "screenly/anthias-$container:latest" \
-        -t "anthias-$container:latest" \
-        -t "screenly/anthias-$container:$DOCKER_TAG" \
-        -t "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD" \
-        -t "screenly/srly-ose-$container:$DOCKER_TAG" \
-        -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD" .
+    # @TODO: Refactor this to be more DRY.
+    if [ "$GIT_BRANCH" = "experimental" ]; then
+        docker "${DOCKER_BUILD_ARGS[@]}" \
+            --cache-from "type=local,src=/tmp/.buildx-cache" \
+            --cache-to "type=local,dest=/tmp/.buildx-cache" \
+            --platform "$TARGET_PLATFORM" \
+            -f "docker/Dockerfile.$container" \
+            -t "screenly/anthias-$container:experimental-$BOARD" \
+            -t "screenly/anthias-$container:experimental-$GIT_SHORT_HASH-$BOARD" .
 
-    # Push if the push flag is set and not cross compiling
-    if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
-        docker push "screenly/srly-ose-$container:$DOCKER_TAG"
-        docker push "screenly/anthias-$container:$DOCKER_TAG"
-        docker push "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
-        docker push "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD"
+        # Push if the push flag is set and not cross compiling
+        if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
+            docker push "screenly/anthias-$container:experimental-$BOARD"
+            docker push "screenly/anthias-$container:experimental-$GIT_SHORT_HASH-$BOARD"
+        fi
+    else
+        docker "${DOCKER_BUILD_ARGS[@]}" \
+            --cache-from "type=local,src=/tmp/.buildx-cache" \
+            --cache-to "type=local,dest=/tmp/.buildx-cache" \
+            --platform "$TARGET_PLATFORM" \
+            -f "docker/Dockerfile.$container" \
+            -t "screenly/srly-ose-$container:latest" \
+            -t "screenly/anthias-$container:latest" \
+            -t "anthias-$container:latest" \
+            -t "screenly/anthias-$container:$DOCKER_TAG" \
+            -t "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD" \
+            -t "screenly/srly-ose-$container:$DOCKER_TAG" \
+            -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD" .
+
+        # Push if the push flag is set and not cross compiling
+        if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
+            docker push "screenly/srly-ose-$container:$DOCKER_TAG"
+            docker push "screenly/anthias-$container:$DOCKER_TAG"
+            docker push "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
+            docker push "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD"
+        fi
     fi
 done

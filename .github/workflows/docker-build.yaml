@@ -5,6 +5,9 @@ on:
     branches:
       - master
       - production
+      # nico start - new code; remove if not working
+      - experimental
+      # nico end
     paths:
       - '**'
       - '!webview/**'
@@ -62,6 +65,7 @@ jobs:
           ./bin/build_containers.sh
 
   balena:
+    if: ${{ github.ref == 'refs/heads/master' }}
     needs: buildx
     strategy:
       matrix:
