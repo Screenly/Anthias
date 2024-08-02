@@ -25,8 +25,16 @@ fi
 echo "Running migration..."
 python3 ./bin/migrate.py
 
+./manage.py initialize_assets
+./manage.py makemigrations
+./manage.py migrate
+
 if [[ "$ENVIRONMENT" == "development" ]]; then
-    flask --app server.py run --debug --reload --host 0.0.0.0 --port 8080
+    echo "Starting Django development server..."
+    ./manage.py runserver 0.0.0.0:8080
 else
-    python3 server.py
+    echo "Generating Django static files..."
+    ./manage.py collectstatic --clear --noinput
+    echo "Starting Gunicorn..."
+    python3 run_gunicorn.py
 fi

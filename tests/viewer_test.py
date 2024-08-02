@@ -71,7 +71,7 @@ class TestEmptyPl(ViewerTestCase):
             m_asset_list.assert_called_once()
             mock_setup.assert_called_once()
             mock_view_webpage.assert_called_once()
-            mock_view_image.assert_called_once()
+            self.assertEqual(mock_view_image.call_count, 2)
             mock_start_loop.assert_called_once()
 
 

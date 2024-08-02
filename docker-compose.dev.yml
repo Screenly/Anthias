@@ -12,7 +12,7 @@ services:
       - ENVIRONMENT=development
     restart: always
     volumes:
-      - resin-data:/data
+      - anthias-data:/data
       - ./:/usr/src/app/
 
 # We might bring this in in the future
@@ -30,7 +30,7 @@ services:
 #    privileged: true
 #    restart: always
 #    volumes:
-#      - resin-data:/data
+#      - anthias-data:/data
 
   anthias-websocket:
     build:
@@ -43,7 +43,7 @@ services:
       - LISTEN=0.0.0.0
     restart: always
     volumes:
-      - resin-data:/data
+      - anthias-data:/data
 
   anthias-celery:
     build:
@@ -58,7 +58,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     restart: always
     volumes:
-      - resin-data:/data
+      - anthias-data:/data
 
   redis:
     platform: "linux/amd64"
@@ -77,8 +77,8 @@ services:
       - anthias-websocket
     restart: always
     volumes:
-      - resin-data:/data:ro
+      - anthias-data:/data:ro
 
 volumes:
-    resin-data:
+    anthias-data:
     redis-data:

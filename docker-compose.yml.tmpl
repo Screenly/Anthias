@@ -40,7 +40,7 @@ services:
       - resin-data:/data
       - /home/${USER}/.screenly:/data/.screenly
       - /home/${USER}/screenly_assets:/data/screenly_assets
-      - /home/${USER}/screenly/static:/data/screenly/static
+      - /home/${USER}/screenly/staticfiles:/data/screenly/staticfiles
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     labels:
@@ -143,7 +143,7 @@ services:
       - resin-data:/data:ro
       - /home/${USER}/.screenly:/data/.screenly:ro
       - /home/${USER}/screenly_assets:/data/screenly_assets:ro
-      - /home/${USER}/screenly/static:/data/screenly/static:ro
+      - /home/${USER}/screenly/staticfiles:/data/screenly/staticfiles:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 

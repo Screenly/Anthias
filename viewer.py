@@ -43,7 +43,7 @@ standard_library.install_aliases()
 
 
 __author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2023, Screenly, Inc"
+__copyright__ = "Copyright 2012-2024, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 
@@ -443,7 +443,7 @@ def wait_for_node_ip(seconds):
 def wait_for_server(retries, wt=1):
     for _ in range(retries):
         try:
-            response = requests.get('http://{0}:{1}'.format(LISTEN, PORT))
+            response = requests.get('http://{0}:{1}/splash-page'.format(LISTEN, PORT))
             response.raise_for_status()
             break
         except requests.exceptions.RequestException:
@@ -483,6 +483,9 @@ def main():
     subscriber_2.start()
 
     scheduler = Scheduler()
+
+    # This will prevent white screen from happening before showing the splash screen with IP addresses.
+    view_image(STANDBY_SCREEN)
 
     wait_for_server(60)
 
