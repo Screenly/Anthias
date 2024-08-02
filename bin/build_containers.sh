@@ -164,8 +164,8 @@ for container in ${SERVICES[@]}; do
     done
 
     docker "${DOCKER_BUILD_ARGS[@]}" \
-        --cache-from "type=local,src=/tmp/.buildx-cache" \
-        --cache-to "type=local,dest=/tmp/.buildx-cache" \
+        --cache-from "type=local,src=/tmp/.buildx-cache,mode=max" \
+        --cache-to "type=local,dest=/tmp/.buildx-cache,mode=max" \
         --platform "$TARGET_PLATFORM" \
         -f "docker/Dockerfile.$container" \
         "${BUILDX_ARGS[@]}" .
