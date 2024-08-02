@@ -152,9 +152,6 @@ for container in ${SERVICES[@]}; do
         )
     else
         PUSH_ARGS+=(
-            "screenly/srly-ose-$container:latest"
-            "screenly/anthias-$container:latest"
-            "anthias-$container:latest"
             "screenly/anthias-$container:$DOCKER_TAG"
             "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
             "screenly/srly-ose-$container:$DOCKER_TAG"
