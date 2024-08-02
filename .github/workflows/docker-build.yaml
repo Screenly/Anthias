@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-      - production
+      - experimental
     paths:
       - '**'
       - '!webview/**'
@@ -62,6 +62,7 @@ jobs:
           ./bin/build_containers.sh
 
   balena:
+    if: ${{ github.ref == 'refs/heads/master' }}
     needs: buildx
     strategy:
       matrix:
