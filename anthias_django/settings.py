@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
 
+import ipaddress
 import logging
 import pytz
 import secrets
@@ -51,7 +52,13 @@ ALLOWED_HOSTS = [
 ]
 
 try:
-    ALLOWED_HOSTS += retry_call(get_node_ip, tries=30, delay=1).split()
+    ip_addresses = retry_call(get_node_ip, tries=30, delay=1).split()
+    ALLOWED_HOSTS += [
+        f'[{ip_address}]'
+        if isinstance(ipaddress.ip_address(ip_address), ipaddress.IPv6Address)
+        else ip_address
+        for ip_address in ip_addresses
+    ]
 except Exception as error:
     logging.error('Failed to get the node IP address: %s', error)
 
