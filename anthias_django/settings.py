@@ -42,6 +42,8 @@ else:
 
 # @TODO: Resolve hostnames and IP addresses dynamically.
 ALLOWED_HOSTS = [
+    '127.0.0.1',
+    'localhost',
     'anthias-server'
 ]
 
