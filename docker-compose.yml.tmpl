@@ -33,6 +33,7 @@ services:
       - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - HOST_NAME=${HOST_NAME}
     devices:
       - "/dev/vchiq:/dev/vchiq"
     restart: always

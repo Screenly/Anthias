@@ -59,6 +59,10 @@ try:
         else ip_address
         for ip_address in ip_addresses
     ]
+
+    HOST_NAME = getenv('HOST_NAME')
+    if HOST_NAME:
+        ALLOWED_HOSTS.append(HOST_NAME)
 except Exception as error:
     logging.error('Failed to get the node IP address: %s', error)
 
