@@ -10,15 +10,11 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
 
-import ipaddress
-import logging
 import pytz
 import secrets
 from pathlib import Path
 from os import getenv
 
-from lib.utils import get_node_ip
-from retry.api import retry_call
 from settings import settings as device_settings
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -46,21 +42,8 @@ else:
 
 # @TODO: Resolve hostnames and IP addresses dynamically.
 ALLOWED_HOSTS = [
-    '127.0.0.1',
-    'localhost',
-    'anthias-nginx'
+    'anthias-server'
 ]
-
-try:
-    ip_addresses = retry_call(get_node_ip, tries=30, delay=1).split()
-    ALLOWED_HOSTS += [
-        f'[{ip_address}]'
-        if isinstance(ipaddress.ip_address(ip_address), ipaddress.IPv6Address)
-        else ip_address
-        for ip_address in ip_addresses
-    ]
-except Exception as error:
-    logging.error('Failed to get the node IP address: %s', error)
 
 
 # Application definition
