@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-      - production
+      - experimental
     paths:
       - '**/**'
       - '!README.md'
@@ -16,7 +16,7 @@ on:
   pull_request:
     branches:
       - master
-      - production
+      - experimental
     paths:
       - '**/**'
       - '!README.md'
