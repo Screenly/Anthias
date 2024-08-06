@@ -15,6 +15,7 @@ on:
       - '!.github/workflows/python-lint.yaml'
       - '!README.md'
       - '!docs/**'
+      - '!bin/install.sh'
       - '!bin/upgrade_containers.sh'
 
 jobs:
