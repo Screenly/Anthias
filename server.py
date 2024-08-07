@@ -11,6 +11,7 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 
 import ipaddress
 import json
+import logging
 import psutil
 
 import traceback
@@ -1434,7 +1435,11 @@ def settings_page():
             'selected': 'selected' if settings['auth_backend'] == backend.name else ''
         })
 
-    ip_addresses = get_node_ip().split()
+    try:
+        ip_addresses = get_node_ip().split()
+    except Exception as error:
+        logging.warning(f"Error getting IP addresses: {error}")
+        ip_addresses = ['IP_ADDRESS']
 
     context.update({
         'user': settings['user'],
