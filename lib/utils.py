@@ -126,7 +126,7 @@ def get_node_ip():
 
         while True:
             environment = getenv('ENVIRONMENT', None)
-            if environment == 'test':
+            if environment in ['development', 'test']:
                 break
 
             is_ready = r.get('host_agent_ready') or 'false'
