@@ -1,5 +1,5 @@
 [flake8]
 per-file-ignores =
     # line too long
-    *.py: E501
+    # *.py: E501
     bin/migrate.py: E501
