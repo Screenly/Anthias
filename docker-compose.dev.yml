@@ -13,7 +13,7 @@ services:
       - ENVIRONMENT=development
     restart: always
     volumes:
-      - anthias-data:/data
+      - resin-data:/data
       - ./:/usr/src/app/
 
   anthias-websocket:
@@ -27,7 +27,7 @@ services:
       - LISTEN=0.0.0.0
     restart: always
     volumes:
-      - anthias-data:/data
+      - resin-data:/data
 
   anthias-celery:
     build:
@@ -42,7 +42,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     restart: always
     volumes:
-      - anthias-data:/data
+      - resin-data:/data
 
   redis:
     platform: "linux/amd64"
@@ -61,8 +61,8 @@ services:
       - anthias-websocket
     restart: always
     volumes:
-      - anthias-data:/data:ro
+      - resin-data:/data:ro
 
 volumes:
-    anthias-data:
+    resin-data:
     redis-data:
