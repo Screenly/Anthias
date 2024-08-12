@@ -331,8 +331,16 @@ class WebTest(unittest.TestCase):
     def test_settings_page_should_work(self):
         with get_browser() as browser:
             browser.visit(settings_url)
-            self.assertEqual(browser.is_text_present('Error: 500 Internal Server Error'), False,
-                             '500: internal server error not expected')
+
+            self.assertEqual(
+                (
+                    'Error: 500 Internal Server Error' in browser.html or
+                    'Error: 504 Gateway Time-out' in browser.html or
+                    'Error: 504 Gateway Timeout' in browser.html
+                ),
+                False,
+                '5xx: not expected'
+            )
 
     def test_system_info_page_should_work(self):
         with get_browser() as browser:

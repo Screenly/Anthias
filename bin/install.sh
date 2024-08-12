@@ -90,7 +90,7 @@ EOF
 export DOCKER_TAG="latest"
 export BRANCH="master"
 
-  echo && read -p "Do you want Anthias to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
+  echo && read -p "Do you want Anthias to manage your network? This is recommended for most users because it adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
   echo && read -p "Would you like to install the experimental version of Anthias instead? (y/N)" -n 1 -r -s IS_EXPERIMENTAL && echo
   echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
 
