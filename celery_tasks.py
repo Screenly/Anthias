@@ -13,7 +13,8 @@ from os import getenv, path
 from retry.api import retry_call
 
 
-CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = getenv(
+    'CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_TASK_RESULT_EXPIRES = timedelta(hours=6)
 
@@ -41,7 +42,9 @@ def get_display_power():
 
 @celery.task
 def cleanup():
-    sh.find(path.join(getenv('HOME'), 'screenly_assets'), '-name', '*.tmp', '-delete')
+    sh.find(
+        path.join(getenv('HOME'), 'screenly_assets'),
+        '-name', '*.tmp', '-delete')
 
 
 @celery.task
