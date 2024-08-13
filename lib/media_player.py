@@ -53,7 +53,8 @@ class VLCMediaPlayer(MediaPlayer):
     def set_asset(self, uri, duration):
         self.player.set_mrl(uri)
         settings.load()
-        self.player.audio_output_device_set('alsa', self.get_alsa_audio_device())
+        self.player.audio_output_device_set(
+            'alsa', self.get_alsa_audio_device())
 
     def play(self):
         self.player.play()
@@ -62,4 +63,5 @@ class VLCMediaPlayer(MediaPlayer):
         self.player.stop()
 
     def is_playing(self):
-        return self.player.get_state() in [vlc.State.Playing, vlc.State.Buffering, vlc.State.Opening]
+        return self.player.get_state() in [
+            vlc.State.Playing, vlc.State.Buffering, vlc.State.Opening]

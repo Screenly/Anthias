@@ -212,7 +212,8 @@ class DBHelperTest(unittest.TestCase):
         for_order = [asset_y, asset_x]
 
         assets_helper.create_multiple(self.conn, assets)
-        assets_helper.save_ordering(self.conn, [asset['asset_id'] for asset in for_order])
+        assets_helper.save_ordering(
+            self.conn, [asset['asset_id'] for asset in for_order])
 
         fetched = assets_helper.read(self.conn)
 
@@ -231,17 +232,23 @@ class DBHelperTest(unittest.TestCase):
 
         fetched = assets_helper.read(self.conn)
 
-        self.assertEquals([0, 0, 0], [asset['play_order'] for asset in fetched])
+        self.assertEquals(
+            [0, 0, 0], [asset['play_order'] for asset in fetched])
 
     def test_update_asset(self):
         asset_x_ = assets_helper.create(self.conn, asset_x)
         asset_x_copy = asset_x_.copy()
-        data = {'name': 'New name', 'mimetype': 'should not setted', 'empty': 'non exists field'}
+        data = {
+            'name': 'New name',
+            'mimetype': 'should not setted',
+            'empty': 'non exists field',
+        }
 
         self.assertEquals(asset_x_, asset_x_copy)
 
         update_asset(asset_x_copy, data)
-        asset_x_copy = assets_helper.update(self.conn, asset_x_copy.get('id'), asset_x_copy)
+        asset_x_copy = assets_helper.update(
+            self.conn, asset_x_copy.get('id'), asset_x_copy)
 
         self.assertEquals(asset_x_copy,
                           {'is_enabled': 1,

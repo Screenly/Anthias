@@ -41,7 +41,9 @@ def recover(file_path):
     HOME = getenv('HOME')
     if not HOME:
         logging.error('No HOME variable')
-        sys.exit(1)  # Alternatively, we can raise an Exception using a custom message, or we can create a new class that extends Exception.
+        # Alternatively, we can raise an Exception using a custom message,
+        # or we can create a new class that extends Exception.
+        sys.exit(1)
 
     with tarfile.open(file_path, "r:gz") as tar:
         for directory in directories:
