@@ -5,11 +5,13 @@ from . import db
 from . import queries
 import datetime
 
-FIELDS = ["asset_id", "name", "uri", "start_date",
-          "end_date", "duration", "mimetype", "is_enabled", "is_processing", "nocache", "play_order",
-          "skip_asset_check"]
+FIELDS = [
+    "asset_id", "name", "uri", "start_date", "end_date", "duration",
+    "mimetype", "is_enabled", "is_processing", "nocache", "play_order",
+    "skip_asset_check",
+]
 
-create_assets_table = 'CREATE TABLE assets(asset_id text primary key, name text, uri text, md5 text, start_date timestamp, end_date timestamp, duration text, mimetype text, is_enabled integer default 0, is_processing integer default 0, nocache integer default 0, play_order integer default 0, skip_asset_check integer default 0)'
+create_assets_table = 'CREATE TABLE assets(asset_id text primary key, name text, uri text, md5 text, start_date timestamp, end_date timestamp, duration text, mimetype text, is_enabled integer default 0, is_processing integer default 0, nocache integer default 0, play_order integer default 0, skip_asset_check integer default 0)'  # noqa: E501
 
 
 # Note all times are naive for legacy reasons but always UTC.
@@ -30,7 +32,7 @@ def is_active(asset, at_time=None):
     >>> is_active(asset, datetime.datetime(2013, 1, 16, 12, 00))
     False
 
-    """
+    """  # noqa: E501
 
     if asset['is_enabled'] and asset['start_date'] and asset['end_date']:
         at = at_time or get_time()
@@ -118,7 +120,10 @@ def update(conn, asset_id, asset):
     if 'is_active' in asset:
         asset.pop('is_active')
     with db.commit(conn) as c:
-        c.execute(queries.update(list(asset.keys())), list(asset.values()) + [asset_id])
+        c.execute(
+            queries.update(list(asset.keys())),
+            list(asset.values()) + [asset_id],
+        )
     asset.update({'asset_id': asset_id})
     if 'start_date' in asset:
         asset.update({'is_active': is_active(asset)})
@@ -132,13 +137,27 @@ def delete(conn, asset_id):
 
 
 def save_ordering(db_conn, ids):
-    """Order assets. Move to last position assets which not presented in list of id"""
+    """
+    Order assets. Move to last position assets which not presented
+    in list of id
+    """
 
     if ids:
         with db.commit(db_conn) as c:
-            c.execute(queries.multiple_update_with_case(['play_order', ], len(ids)),
-                      sum([[asset_id, play_order] for play_order, asset_id in enumerate(ids)], []) + ids)
+            c.execute(
+                queries.multiple_update_with_case(['play_order', ], len(ids)),
+                sum(
+                    [
+                        [asset_id, play_order]
+                        for play_order, asset_id in enumerate(ids)
+                    ],
+                    [],
+                ) + ids,
+            )
 
     # Set the play order to a high value for all inactive assets.
     with db.commit(db_conn) as c:
-        c.execute(queries.multiple_update_not_in(['play_order', ], len(ids)), [len(ids)] + ids)
+        c.execute(
+            queries.multiple_update_not_in(['play_order', ], len(ids)),
+            [len(ids)] + ids,
+        )

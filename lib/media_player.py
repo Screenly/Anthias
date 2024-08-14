@@ -1,8 +1,6 @@
 from __future__ import unicode_literals
 from builtins import object
-from platform import machine
 
-import sh
 import vlc
 
 from lib.raspberry_pi_helper import lookup_raspberry_pi_version
@@ -38,31 +36,25 @@ class VLCMediaPlayer(MediaPlayer):
 
         self.player.audio_output_set('alsa')
 
+    def get_alsa_audio_device(self):
+        if settings['audio_output'] == 'local':
+            return 'plughw:CARD=Headphones'
+        else:
+            if lookup_raspberry_pi_version() == 'pi4':
+                return 'default:CARD=vc4hdmi0'
+            else:
+                return 'default:CARD=vc4hdmi'
+
     def __get_options(self):
-        options = []
-
-        if lookup_raspberry_pi_version() == 'pi4':
-            if settings['audio_output'] == 'local':
-                options += [
-                    '--alsa-audio-device=plughw:CARD=Headphones',
-                ]
-
-            options += [
-                '--mmal-display=HDMI-2',
-                '--vout=mmal_vout',
-            ]
-
-        return options
+        return [
+            f'--alsa-audio-device={self.get_alsa_audio_device()}',
+        ]
 
     def set_asset(self, uri, duration):
         self.player.set_mrl(uri)
         settings.load()
-
-        # @TODO: Refactor this conditional statement.
-        if settings['audio_output'] == 'local':
-            self.player.audio_output_device_set('alsa', 'plughw:CARD=Headphones')
-        elif settings['audio_output'] == 'hdmi':
-            self.player.audio_output_device_set('alsa', 'default')
+        self.player.audio_output_device_set(
+            'alsa', self.get_alsa_audio_device())
 
     def play(self):
         self.player.play()
@@ -71,39 +63,5 @@ class VLCMediaPlayer(MediaPlayer):
         self.player.stop()
 
     def is_playing(self):
-        return self.player.get_state() in [vlc.State.Playing, vlc.State.Buffering, vlc.State.Opening]
-
-
-class OMXMediaPlayer(MediaPlayer):
-    def __init__(self):
-        MediaPlayer.__init__(self)
-        self._arch = machine()
-
-        self._run = None
-        self._player_args = list()
-        self._player_kwargs = dict()
-
-    def set_asset(self, uri, duration):
-        settings.load()
-
-        if self._arch in ('armv6l', 'armv7l', 'aarch64'):
-            self._player_args = ['omxplayer', uri]
-            self._player_kwargs = {'o': settings['audio_output'], 'layer': 1, '_bg': True, '_ok_code': [0, 124, 143]}
-        else:
-            self._player_args = ['mplayer', uri, '-nosound']
-            self._player_kwargs = {'_bg': True, '_ok_code': [0, 124]}
-
-        if duration and duration != 'N/A':
-            self._player_args = ['timeout', VIDEO_TIMEOUT + int(duration.split('.')[0])] + self._player_args
-
-    def play(self):
-        self._run = sh.Command(self._player_args[0])(*self._player_args[1:], **self._player_kwargs)
-
-    def stop(self):
-        try:
-            sh.killall('omxplayer.bin', _ok_code=[1])
-        except OSError:
-            pass
-
-    def is_playing(self):
-        return bool(self._run.process.alive)
+        return self.player.get_state() in [
+            vlc.State.Playing, vlc.State.Buffering, vlc.State.Opening]

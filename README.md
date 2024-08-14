@@ -1,7 +1,7 @@
 # Anthias - Digital Signage for the Raspberry Pi
-[![Run Unit Tests](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml/badge.svg)](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml)
-[![CodeQL](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml/badge.svg)](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml)
-[![Lint Code Base](https://github.com/Screenly/Anthias/actions/workflows/linter.yml/badge.svg)](https://github.com/Screenly/Anthias/actions/workflows/linter.yml)
+[![Run Unit Tests](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml)
+[![CodeQL](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml)
+[![Lint Python Code Base](https://github.com/Screenly/Anthias/actions/workflows/python-lint.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/python-lint.yaml)
 
 ![Anthias Logo](https://github.com/Screenly/Anthias/blob/master/static/img/dark.svg?raw=true  "Anthias Logo")
 
@@ -63,6 +63,8 @@ The image file looks something like `<yyyy>-<mm>-<dd>-raspberry<version>.zip`. T
 
 ### Installing on Raspberry Pi OS Lite
 
+#### Overview
+
 If you'd like more control over your digital signage instance, try installing it on Raspberry Pi OS Lite.
 
 The tl;dr for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) is:
@@ -71,7 +73,45 @@ The tl;dr for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) is:
 $ bash <(curl -sL https://install-anthias.srly.io)
 ```
 
-If you've selected **_N_** when prompted for an upgrade &ndash; i.e., "Would you like to perform a full system upgrade as well? (y/N)"
+You'll be prompted with the following yes-no questions:
+
+* Do you still want to continue?
+* Do you want Anthias to manage your network? This is recommended for most users because it adds features to manage your network.
+* Would you like to install the experimental version of Anthias instead?
+* Would you like to perform a full system upgrade as well?
+
+Answer the questions with only `y` or `N`. You don't need to press Enter for each of your inputs.
+
+**This installation will take 15 minutes to several hours**, depending on variables such as:
+
+ * The Raspberry Pi hardware version
+ * The SD card
+ * The internet connection
+
+During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast internet connection), the installation normally takes 15-30 minutes. On a Raspberry Pi Zero or Raspberry Pi Model B with a class 4 SD card, the installation will take hours.
+
+#### Prompt: Network Management
+
+Opting for network management will enable and configure the [NetworkManager](https://wiki.debian.org/NetworkManager) service on your device.
+
+#### Prompt: Experimental Version
+
+We have decided to roll out an `experimental` branch for new features that can break Anthias, especially
+if you already have Anthias installed and wish to upgrade.
+
+Before you proceed, make sure to download a
+backup by going to the **_Settings_** page and clicking **_Get Backup_**. You can load the backup file later by going to **_Settings_** and clicking **_Upload and Recover_**.
+
+If you wish to opt for experimental features, select `y`. Select `N` otherwise.
+
+Here's a current list of experimental features:
+
+* Migration from Flask to Django &ndash; The database still uses `sqlite3`. We will transition to using ORM in the future.
+* Revamped API docs &ndash; we changed the structure and overall look and feel of the documentation for easier reference.
+
+#### Prompt: Full System Upgrade
+
+If you've selected **_y_** when prompted for an upgrade &ndash; i.e., "Would you like to perform a full system upgrade as well? (y/N)"
 &ndash; you'll get the following message when the installer is almost done executing:
 
 ```
@@ -81,16 +121,7 @@ If you've selected **_N_** when prompted for an upgrade &ndash; i.e., "Would you
 You have the option to reboot now or later. On the next boot, make sure to run
 `upgrade_containers.sh`, as mentioned above.
 
-Otherwise, if you've selected **_y_** for the system upgrade, then you don't need to do a reboot for the containers to be started. However,
-it's still recommended to do a reboot.
-
-**This installation will take 15 minutes to several hours**, depending on variables such as:
-
- * The Raspberry Pi hardware version
- * The SD card
- * The internet connection
-
-During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast internet connection), the installation normally takes 15-30 minutes. On a Raspberry Pi Zero or Raspberry Pi Model B with a class 4 SD card, the installation will take hours.
+Otherwise, if you've selected **_N_** for the system upgrade, then you don't need to do a reboot for the containers to be started. However, it's still recommended to do a reboot.
 
 ### Installing with Balena
 

@@ -1,10 +1,10 @@
-### screenly-ose ui ###
+### anthias ui ###
 
 $().ready ->
   $('#subsribe-form-container').popover content: get_template 'subscribe-form'
 
 
-API = (window.Screenly ||= {}) # exports
+API = (window.Anthias ||= {}) # exports
 
 dateSettings = {}
 
@@ -156,6 +156,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
     'click .tabnav-uri': 'clickTabNavUri'
     'click .tabnav-file_upload': 'clickTabNavUpload'
     'change .is_enabled-skip_asset_check_checkbox': 'toggleSkipAssetCheck'
+    'keyup [name=uri]': 'change'
 
   save: (e) =>
     if ((@$fv 'uri') == '')

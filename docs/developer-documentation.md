@@ -81,12 +81,44 @@ $ docker compose \
     exec -T anthias-test bash ./bin/prepare_test_environment.sh -s
 $ docker compose \
     -f docker-compose.test.yml \
-    exec -T anthias-test nosetests -v -a '!fixme'
+    exec -T anthias-test nose2 -v -A '!fixme'
 ```
 
 ### The QA checklist
 
 We've also provided a [checklist](/docs/qa-checklist.md) that can serve as a guide for testing Anthias manually.
+
+## Generating CSS and JS files
+
+Anthias only supports compiling from the host container at the moment. You need to install the latest version
+of Node.js. We recommend to intall Node.js on Linux. You can use this [guide](https://nodejs.org/en/learn/getting-started/how-to-install-nodejs)
+to get started.
+
+### Installing Node.js dependencies
+
+Run the following command from the project root directory.
+
+```bash
+npm install
+```
+
+### Transpiling CSS from SASS
+
+```bash
+npm run sass-dev
+```
+
+### Transpiling JS from CoffeeScript
+
+```bash
+# You need to run this on a separate terminal session if you already ran the
+# script for transpiling SASS files.
+npm run coffee-dev
+```
+
+### Closing the transpiler
+
+Just press `Ctrl-C` to close the SASS and CoffeeScript transpilers.
 
 ## Linting Python code locally
 
@@ -185,17 +217,17 @@ present in a Raspberry Pi with Anthias installed.
 ### `/etc/systemd/system/`
 
 * `wifi-connect.service` &mdash; starts the Balena `wifi-connect` program to dynamically set the Wi-Fi config on the device via the captive portal
-* `screenly-host-agent.service` &mdash; starts the Python script `host_agent.py`, which subscribes from the Redis component and performs a system call to shutdown or reboot the device when the message is received.
+* `anthias-host-agent.service` &mdash; starts the Python script `host_agent.py`, which subscribes from the Redis component and performs a system call to shutdown or reboot the device when the message is received.
 
 ### `/etc/sudoers.d/screenly_overrides`
 
 * `sudoers` configuration file that allows pi user to execute certain `sudo` commands without being a superuser (i.e., `root`)
 
-### `/usr/share/plymouth/themes/screenly`
+### `/usr/share/plymouth/themes/anthias`
 
-* `screenly.plymouth` &mdash; Plymouth config file (sets module name, `imagedir` and `scriptfile` dir)
+* `anthias.plymouth` &mdash; Plymouth config file (sets module name, `ImageDir` and `ScriptFile` dir)
+* `anthias.script` &ndash; plymouth script file that loads and scales the splash screen image during the boot process
 * `splashscreen.png` &mdash; the spash screen image that is displayed during the boot process
-* `screenly.script` &ndash; plymouth script file that loads and scales the splash screen image during the boot process
 
 ## Debugging the Anthias WebView
 
