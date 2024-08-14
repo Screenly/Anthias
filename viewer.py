@@ -479,7 +479,7 @@ def wait_for_node_ip(seconds):
 def wait_for_server(retries, wt=1):
     for _ in range(retries):
         try:
-            response = requests.get('http://{LISTEN}:{PORT}/splash-page')
+            response = requests.get(f'http://{LISTEN}:{PORT}/splash-page')
             response.raise_for_status()
             break
         except requests.exceptions.RequestException:
