@@ -20,7 +20,7 @@ function main() {
     fi
 
     CERTIFICATE_DIR='/usr/local/share/ca-certificates/custom'
-    CONTAINERS=(antthias-server anthias-viewer)
+    CONTAINERS=(anthias-server anthias-viewer)
 
     cd $HOME/screenly
 
@@ -29,7 +29,7 @@ function main() {
         docker compose cp $CERTIFICATE_PATH $CONTAINER:$CERTIFICATE_DIR
         docker compose exec -it $CONTAINER update-ca-certificates
 
-        if [ "$CONTAINER" == "antthias-viewer" ]; then
+        if [ "$CONTAINER" == "anthias-viewer" ]; then
             docker compose exec -it $CONTAINER \
                 certutil -A -n "My CA Certificate" -t "C,C,C" \
                 -i $CERTIFICATE_PATH -d "/path/to/.pki/nssdb"
