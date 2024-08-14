@@ -73,7 +73,9 @@ def validate_url(string):
     """
 
     checker = urlparse(string)
-    return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
+    return bool(
+        checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc
+    )
 
 
 def get_balena_supervisor_api_response(method, action, **kwargs):
@@ -99,7 +101,8 @@ def reboot_via_balena_supervisor():
 
 
 def get_balena_supervisor_version():
-    response = get_balena_supervisor_api_response(method='get', action='version', version='v2')
+    response = get_balena_supervisor_api_response(
+        method='get', action='version', version='v2')
     if response.ok:
         return response.json()['version']
     else:
@@ -111,7 +114,8 @@ def get_node_ip():
     Returns the node's IP address.
     We're using an API call to the supervisor for this on Balena
     and an environment variable set by `install.sh` for other environments.
-    The reason for this is because we can't retrieve the host IP from within Docker.
+    The reason for this is because we can't retrieve the host IP from
+    within Docker.
     """
 
     if is_balena_app():
@@ -126,7 +130,7 @@ def get_node_ip():
 
         while True:
             environment = getenv('ENVIRONMENT', None)
-            if environment == 'test':
+            if environment in ['development', 'test']:
                 break
 
             is_ready = r.get('host_agent_ready') or 'false'
@@ -135,7 +139,10 @@ def get_node_ip():
                 break
 
             if retries >= max_retries:
-                logging.info('host_agent_service is not ready after %d retries', max_retries)
+                logging.info(
+                    'host_agent_service is not ready after %d retries',
+                    max_retries,
+                )
                 break
 
             retries += 1
@@ -186,26 +193,36 @@ def get_active_connections(bus, fields=None):
     connections = list()
 
     try:
-        nm_proxy = bus.get("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager")
+        nm_proxy = bus.get(
+            "org.freedesktop.NetworkManager",
+            "/org/freedesktop/NetworkManager",
+        )
     except Exception:
         return None
 
     nm_properties = nm_proxy["org.freedesktop.DBus.Properties"]
-    active_connections = nm_properties.Get("org.freedesktop.NetworkManager", "ActiveConnections")
+    active_connections = nm_properties.Get(
+        "org.freedesktop.NetworkManager", "ActiveConnections")
     for active_connection in active_connections:
-        active_connection_proxy = bus.get("org.freedesktop.NetworkManager", active_connection)
-        active_connection_properties = active_connection_proxy["org.freedesktop.DBus.Properties"]
+        active_connection_proxy = bus.get(
+            "org.freedesktop.NetworkManager", active_connection)
+        active_connection_properties = (
+            active_connection_proxy["org.freedesktop.DBus.Properties"])
 
         connection = dict()
         for field in fields:
-            field_value = active_connection_properties.Get("org.freedesktop.NetworkManager.Connection.Active", field)
+            field_value = active_connection_properties.Get(
+                "org.freedesktop.NetworkManager.Connection.Active", field)
 
             if field == 'Devices':
                 devices = list()
                 for device_path in field_value:
-                    device_proxy = bus.get("org.freedesktop.NetworkManager", device_path)
-                    device_properties = device_proxy["org.freedesktop.DBus.Properties"]
-                    devices.append(device_properties.Get("org.freedesktop.NetworkManager.Device", "Interface"))
+                    device_proxy = bus.get(
+                        "org.freedesktop.NetworkManager", device_path)
+                    device_properties = (
+                        device_proxy["org.freedesktop.DBus.Properties"])
+                    devices.append(device_properties.Get(
+                        "org.freedesktop.NetworkManager.Device", "Interface"))
                 field_value = devices
 
             connection.update({field: field_value})
@@ -222,15 +239,20 @@ def remove_connection(bus, uuid):
     :return: boolean
     """
     try:
-        nm_proxy = bus.get("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings")
+        nm_proxy = bus.get(
+            "org.freedesktop.NetworkManager",
+            "/org/freedesktop/NetworkManager/Settings",
+        )
     except Exception:
         return False
 
     nm_settings = nm_proxy["org.freedesktop.NetworkManager.Settings"]
 
     connection_path = nm_settings.GetConnectionByUuid(uuid)
-    connection_proxy = bus.get("org.freedesktop.NetworkManager", connection_path)
-    connection = connection_proxy["org.freedesktop.NetworkManager.Settings.Connection"]
+    connection_proxy = bus.get(
+        "org.freedesktop.NetworkManager", connection_path)
+    connection = (
+        connection_proxy["org.freedesktop.NetworkManager.Settings.Connection"])
     connection.Delete()
 
     return True
@@ -268,7 +290,10 @@ def handler(obj):
         with_tz = obj.replace(tzinfo=pytz.utc)
         return with_tz.isoformat()
     else:
-        raise TypeError('Object of type %s with value of %s is not JSON serializable' % (type(obj), repr(obj)))
+        raise TypeError(
+            f'Object of type {type(obj)} with value of {repr(obj)} '
+            'is not JSON serializable'
+        )
 
 
 def json_dump(obj):
@@ -280,7 +305,8 @@ def url_fails(url):
     If it is streaming
     """
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
-        run_mplayer = mplayer('-identify', '-frames', '0', '-nosound', url)  # noqa: F821
+        run_mplayer = mplayer(  # noqa: F821
+            '-identify', '-frames', '0', '-nosound', url)
         for line in run_mplayer.split('\n'):
             if 'Clip info:' in line:
                 return False
@@ -290,14 +316,15 @@ def url_fails(url):
     Try HEAD and GET for URL availability check.
     """
 
-    # Use Certifi module and set to True as default so users stop seeing InsecureRequestWarning in logs
+    # Use Certifi module and set to True as default so users stop
+    # seeing InsecureRequestWarning in logs.
     if settings['verify_ssl']:
         verify = certifi.where()
     else:
         verify = True
 
     headers = {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15'
+        'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15'  # noqa: E501
     }
     try:
         if not validate_url(url):
@@ -352,7 +379,8 @@ class YoutubeDownloadThread(Thread):
         publisher = ZmqPublisher.get_instance()
         call(['yt-dlp', '-f', 'mp4', '-o', self.location, self.uri])
         with db.conn(settings['database']) as conn:
-            update(conn, self.asset_id, {'asset_id': self.asset_id, 'is_processing': 0})
+            update(conn, self.asset_id,
+                   {'asset_id': self.asset_id, 'is_processing': 0})
 
         publisher.send_to_ws_server(self.asset_id)
 
@@ -378,10 +406,11 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
     :param has_symbols: bool
     :return: string
     """
-    ppp_letters = '!#%+23456789:=?@ABCDEFGHJKLMNPRSTUVWXYZabcdefghjkmnopqrstuvwxyz'
+    ppp_letters = '!#%+23456789:=?@ABCDEFGHJKLMNPRSTUVWXYZabcdefghjkmnopqrstuvwxyz'  # noqa: E501
     if not has_symbols:
         ppp_letters = ''.join(set(ppp_letters) - set(string.punctuation))
-    return "".join(random.SystemRandom().choice(ppp_letters) for _ in range(pw_length))
+    return "".join(
+        random.SystemRandom().choice(ppp_letters) for _ in range(pw_length))
 
 
 def connect_to_redis():

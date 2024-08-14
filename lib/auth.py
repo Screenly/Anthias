@@ -33,8 +33,11 @@ class Auth(with_metaclass(ABCMeta, object)):
 
     def authenticate_if_needed(self, request):
         """
-        If the user performing the request is not authenticated, initiate authentication.
-        :return: a Response which initiates authentication or None if already authenticated.
+        If the user performing the request is not authenticated, initiate
+        authentication.
+
+        :return: a Response which initiates authentication or None
+        if already authenticated.
         """
         from django.http import HttpResponse
 
@@ -42,12 +45,15 @@ class Auth(with_metaclass(ABCMeta, object)):
             if not self.is_authenticated(request):
                 return self.authenticate()
         except ValueError as e:
-            return HttpResponse("Authorization backend is unavailable: " + str(e), status=503)
+            return HttpResponse(
+                "Authorization backend is unavailable: " + str(e), status=503)
 
     def update_settings(self, request, current_pass_correct):
         """
         Submit updated values from Settings page.
-        :param current_pass_correct: the value of "Current Password" field or None if empty.
+        :param current_pass_correct: the value of "Current Password" field
+        or None if empty.
+
         :return:
         """
         pass
@@ -55,7 +61,9 @@ class Auth(with_metaclass(ABCMeta, object)):
     @property
     def template(self):
         """
-        Get HTML template and its context object to be displayed in Settings page.
+        Get HTML template and its context object to be displayed in
+        the vettings page.
+
         :return: (template, context)
         """
         pass
@@ -104,7 +112,9 @@ class BasicAuth(Auth):
         :param password: str
         :return: True if the check passes.
         """
-        return self.settings['user'] == username and self.check_password(password)
+        return (
+            self.settings['user'] == username and self.check_password(password)
+        )
 
     def check_password(self, password):
         hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
@@ -138,7 +148,11 @@ class BasicAuth(Auth):
     def authenticate(self):
         from django.http import HttpResponse
         realm = "Anthias {}".format(self.settings['player_name'])
-        return HttpResponse("Access denied", status=401, headers={"WWW-Authenticate": 'Basic realm="{}"'.format(realm)})
+        return HttpResponse(
+            "Access denied",
+            status=401,
+            headers={"WWW-Authenticate": 'Basic realm="{}"'.format(realm)}
+        )
 
     def update_settings(self, request, current_pass_correct):
         new_user = request.POST.get('user', '')
@@ -149,9 +163,11 @@ class BasicAuth(Auth):
         # Handle auth components
         if self.settings['password']:  # if password currently set,
             if new_user != self.settings['user']:  # trying to change user
-                # should have current password set. Optionally may change password.
+                # Should have current password set.
+                # Optionally may change password.
                 if current_pass_correct is None:
-                    raise ValueError("Must supply current password to change username")
+                    raise ValueError(
+                        "Must supply current password to change username")
                 if not current_pass_correct:
                     raise ValueError("Incorrect current password.")
 
@@ -159,7 +175,8 @@ class BasicAuth(Auth):
 
             if new_pass:
                 if current_pass_correct is None:
-                    raise ValueError("Must supply current password to change password")
+                    raise ValueError(
+                        "Must supply current password to change password")
                 if not current_pass_correct:
                     raise ValueError("Incorrect current password.")
 
@@ -196,8 +213,12 @@ def authorized(orig):
         request = args[-1]
 
         if not isinstance(request, (HttpRequest, Request)):
-            raise ValueError('Request object is not of type HttpRequest or Request')
+            raise ValueError(
+                'Request object is not of type HttpRequest or Request')
 
-        return settings.auth.authenticate_if_needed(request) or orig(*args, **kwargs)
+        return (
+            settings.auth.authenticate_if_needed(request) or
+            orig(*args, **kwargs)
+        )
 
     return decorated

@@ -30,7 +30,8 @@ DEBUG = getenv('ENVIRONMENT', 'production') in ['development', 'test']
 
 if not DEBUG:
     if not device_settings.get('django_secret_key'):
-        # Modify the generated so that string interpolation errors can be avoided.
+        # Modify the generated so that string interpolation
+        # errors can be avoided.
         secret_key = secrets.token_urlsafe(50)
         device_settings['django_secret_key'] = secret_key
         device_settings.save()
@@ -38,7 +39,7 @@ if not DEBUG:
     SECRET_KEY = device_settings.get('django_secret_key')
 else:
     # SECURITY WARNING: keep the secret key used in production secret!
-    SECRET_KEY = 'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j'
+    SECRET_KEY = 'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j'  # noqa: E501
 
 # @TODO: Resolve hostnames and IP addresses dynamically.
 ALLOWED_HOSTS = [
@@ -109,19 +110,19 @@ DATABASES = {
 
 # Password validation
 # https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators
-
+AUTH_MODULE_PREFIX = 'django.contrib.auth.password_validation'
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        'NAME': f'{AUTH_MODULE_PREFIX}.UserAttributeSimilarityValidator',
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'NAME': f'{AUTH_MODULE_PREFIX}.MinimumLengthValidator',
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        'NAME': f'{AUTH_MODULE_PREFIX}.CommonPasswordValidator',
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        'NAME': f'{AUTH_MODULE_PREFIX}.NumericPasswordValidator',
     },
 ]
 
@@ -162,7 +163,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'api.helpers.custom_exception_handler',
-    # The project uses custom authentication classes, so we need to disable the default ones.
+    # The project uses custom authentication classes,
+    # so we need to disable the default ones.
     'DEFAULT_AUTHENTICATION_CLASSES': []
 }
 

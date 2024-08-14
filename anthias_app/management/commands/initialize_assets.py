@@ -4,8 +4,8 @@ from lib import assets_helper, db, queries
 from settings import settings
 
 
-# This function is used to be called when the first request is made to the server,
-# back when the server's written in Flask.
+# This function is used to be called when the first request is made to
+# the server, back when the server's written in Flask.
 def initialize_assets_directories():
     # Make sure the asset folder exist. If not, create it.
     if not path.isdir(settings['assetdir']):
@@ -34,4 +34,5 @@ class Command(BaseCommand):
         except Exception as error:
             raise CommandError(str(error))
 
-        self.stdout.write(self.style.SUCCESS('Assets are initialized successfully.'))
+        self.stdout.write(
+            self.style.SUCCESS('Assets are initialized successfully.'))

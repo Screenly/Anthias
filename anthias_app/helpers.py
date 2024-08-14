@@ -19,7 +19,9 @@ def template(request, template_name, context):
 
     context['date_format'] = settings['date_format']
     context['default_duration'] = settings['default_duration']
-    context['default_streaming_duration'] = settings['default_streaming_duration']
+    context['default_streaming_duration'] = (
+        settings['default_streaming_duration']
+    )
     context['template_settings'] = {
         'imports': ['from lib.utils import template_handle_unicode'],
         'default_filters': ['template_handle_unicode'],
@@ -35,7 +37,11 @@ def prepare_default_asset(**kwargs):
         return
 
     asset_id = 'default_{}'.format(uuid.uuid4().hex)
-    duration = int(get_video_duration(kwargs['uri']).total_seconds()) if "video" == kwargs['mimetype'] else kwargs['duration']
+    duration = (
+        int(get_video_duration(kwargs['uri']).total_seconds())
+        if "video" == kwargs['mimetype']
+        else kwargs['duration']
+    )
 
     return {
         'asset_id': asset_id,
@@ -64,7 +70,10 @@ def add_default_assets():
         'duration': settings['default_duration']
     }
 
-    default_assets_yaml = path.join(getenv('HOME'), '.screenly/default_assets.yml')
+    default_assets_yaml = path.join(
+        getenv('HOME'),
+        '.screenly/default_assets.yml',
+    )
 
     with open(default_assets_yaml, 'r') as yaml_file:
         default_assets = yaml.safe_load(yaml_file).get('assets')

@@ -40,7 +40,10 @@ def prepare_asset(request, unique_name=False):
             return val
 
     if not all([get('name'), get('uri'), get('mimetype')]):
-        raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
+        raise Exception(
+            "Not enough information provided. "
+            "Please specify 'name', 'uri', and 'mimetype'."
+        )
 
     name = get('name')
 
@@ -82,7 +85,8 @@ def prepare_asset(request, unique_name=False):
             uri = path.join(settings['assetdir'], asset['asset_id'])
 
     if 'youtube_asset' in asset['mimetype']:
-        uri, asset['name'], asset['duration'] = download_video_from_youtube(uri, asset['asset_id'])
+        uri, asset['name'], asset['duration'] = download_video_from_youtube(
+            uri, asset['asset_id'])
         asset['mimetype'] = 'video'
         asset['is_processing'] = 1
 
@@ -95,16 +99,22 @@ def prepare_asset(request, unique_name=False):
         # Crashes if it's not an int. We want that.
         asset['duration'] = int(get('duration'))
 
-    asset['skip_asset_check'] = int(get('skip_asset_check')) if int(get('skip_asset_check')) else 0
+    asset['skip_asset_check'] = (
+        int(get('skip_asset_check'))
+        if int(get('skip_asset_check'))
+        else 0
+    )
 
     # parse date via python-dateutil and remove timezone info
     if get('start_date'):
-        asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
+        asset['start_date'] = date_parser.parse(
+            get('start_date')).replace(tzinfo=None)
     else:
         asset['start_date'] = ""
 
     if get('end_date'):
-        asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
+        asset['end_date'] = date_parser.parse(
+            get('end_date')).replace(tzinfo=None)
     else:
         asset['end_date'] = ""
 
@@ -130,10 +140,13 @@ def prepare_asset_v1_2(request, asset_id=None, unique_name=False):
                 get('start_date'),
                 get('end_date')]):
         raise Exception(
-            "Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
+            "Not enough information provided. Please specify 'name', 'uri', "
+            "'mimetype', 'is_enabled', 'start_date' and 'end_date'."
+        )
 
     ampfix = "&amp;"
-    name = get('name').replace(ampfix, '&')  # @TODO: Escape ampersands in the name.
+    # @TODO: Escape ampersands in the name.
+    name = get('name').replace(ampfix, '&')
     if unique_name:
         with db.conn(settings['database']) as conn:
             names = assets_helper.get_names_of_assets(conn)
@@ -154,7 +167,14 @@ def prepare_asset_v1_2(request, asset_id=None, unique_name=False):
         'nocache': get('nocache')
     }
 
-    uri = (get('uri')).replace(ampfix, '&').replace('<', '&lt;').replace('>', '&gt;').replace('\'', '&apos;').replace('\"', '&quot;')
+    uri = (
+        (get('uri'))
+        .replace(ampfix, '&')
+        .replace('<', '&lt;')
+        .replace('>', '&gt;')
+        .replace('\'', '&apos;')
+        .replace('\"', '&quot;')
+    )
 
     if uri.startswith('/'):
         if not path.isfile(uri):
@@ -167,12 +187,15 @@ def prepare_asset_v1_2(request, asset_id=None, unique_name=False):
         asset['asset_id'] = uuid.uuid4().hex
 
     if not asset_id and uri.startswith('/'):
-        new_uri = "{}{}".format(path.join(settings['assetdir'], asset['asset_id']), get('ext'))
+        path_name = path.join(settings['assetdir'], asset['asset_id'])
+        ext_name = get('ext')
+        new_uri = f'{path_name}{ext_name}'
         rename(uri, new_uri)
         uri = new_uri
 
     if 'youtube_asset' in asset['mimetype']:
-        uri, asset['name'], asset['duration'] = download_video_from_youtube(uri, asset['asset_id'])
+        uri, asset['name'], asset['duration'] = download_video_from_youtube(
+            uri, asset['asset_id'])
         asset['mimetype'] = 'video'
         asset['is_processing'] = 1
 
@@ -189,10 +212,15 @@ def prepare_asset_v1_2(request, asset_id=None, unique_name=False):
 
     asset['play_order'] = get('play_order') if get('play_order') else 0
 
-    asset['skip_asset_check'] = int(get('skip_asset_check')) if int(get('skip_asset_check')) else 0
+    asset['skip_asset_check'] = (
+        int(get('skip_asset_check'))
+        if int(get('skip_asset_check'))
+        else 0
+    )
 
     # parse date via python-dateutil and remove timezone info
-    asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
+    asset['start_date'] = date_parser.parse(
+        get('start_date')).replace(tzinfo=None)
     asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
 
     return asset
@@ -201,13 +229,24 @@ def prepare_asset_v1_2(request, asset_id=None, unique_name=False):
 def update_asset(asset, data):
     for key, value in list(data.items()):
 
-        if key in ['asset_id', 'is_processing', 'mimetype', 'uri'] or key not in asset:
+        if (
+            key in ['asset_id', 'is_processing', 'mimetype', 'uri']
+            or key not in asset
+        ):
             continue
 
         if key in ['start_date', 'end_date']:
             value = date_parser.parse(value).replace(tzinfo=None)
 
-        if key in ['play_order', 'skip_asset_check', 'is_enabled', 'is_active', 'nocache']:
+        if (
+            key in [
+                'play_order',
+                'skip_asset_check',
+                'is_enabled',
+                'is_active',
+                'nocache',
+            ]
+        ):
             value = int(value)
 
         if key == 'duration':

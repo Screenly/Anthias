@@ -16,7 +16,7 @@
             <img src="{% static 'img/logo-full.svg' %}"/>
         </a>
         <ul class="nav float-right">
-            {% if not up_to_date %}
+            {% if not up_to_date and not is_balena %}
                 <li class="update-available">
                     <a href="/settings#upgrade-section">
                         <i class="fas fa-arrow-circle-down pr-1"></i>

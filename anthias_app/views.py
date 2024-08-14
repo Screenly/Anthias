@@ -53,7 +53,9 @@ def index(request):
         ws_addresses.append('ws://' + my_ip + '/ws/')
 
     if balena_device_uuid:
-        ws_addresses.append('wss://{}.balena-devices.com/ws/'.format(balena_device_uuid))
+        ws_addresses.append(
+            'wss://{}.balena-devices.com/ws/'.format(balena_device_uuid)
+        )
 
     return template(request, 'index.html', {
         'ws_addresses': ws_addresses,
@@ -73,9 +75,15 @@ def settings_page(request):
             current_pass = request.POST.get('current-password', '')
             auth_backend = request.POST.get('auth_backend', '')
 
-            if auth_backend != settings['auth_backend'] and settings['auth_backend']:
+            if (
+                auth_backend != settings['auth_backend']
+                and settings['auth_backend']
+            ):
                 if not current_pass:
-                    raise ValueError("Must supply current password to change authentication method")
+                    raise ValueError(
+                        "Must supply current password to change "
+                        "authentication method"
+                    )
                 if not settings.auth.check_password(current_pass):
                     raise ValueError("Incorrect current password.")
 
@@ -83,7 +91,11 @@ def settings_page(request):
             if not current_pass and prev_auth_backend:
                 current_pass_correct = None
             else:
-                current_pass_correct = settings.auth_backends[prev_auth_backend].check_password(current_pass)
+                current_pass_correct = (
+                    settings
+                    .auth_backends[prev_auth_backend]
+                    .check_password(current_pass)
+                )
             next_auth_backend = settings.auth_backends[auth_backend]
             next_auth_backend.update_settings(request, current_pass_correct)
             settings['auth_backend'] = auth_backend
@@ -91,7 +103,13 @@ def settings_page(request):
             for field, default in list(CONFIGURABLE_SETTINGS.items()):
                 value = request.POST.get(field, default)
 
-                if not value and field in ['default_duration', 'default_streaming_duration']:
+                if (
+                    not value
+                    and field in [
+                        'default_duration',
+                        'default_streaming_duration',
+                    ]
+                ):
                     value = str(0)
                 if isinstance(default, bool):
                     value = value == 'on'
@@ -107,7 +125,10 @@ def settings_page(request):
             settings.save()
             publisher = ZmqPublisher.get_instance()
             publisher.send_to_viewer('reload')
-            context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
+            context['flash'] = {
+                'class': "success",
+                'message': "Settings were successfully saved.",
+            }
         except ValueError as e:
             context['flash'] = {'class': "danger", 'message': e}
         except IOError as e:
@@ -132,7 +153,11 @@ def settings_page(request):
             'name': backend.name,
             'text': backend.display_name,
             'template': html,
-            'selected': 'selected' if settings['auth_backend'] == backend.name else ''
+            'selected': (
+                'selected'
+                if settings['auth_backend'] == backend.name
+                else ''
+            ),
         })
 
     ip_addresses = get_node_ip().split()
@@ -180,7 +205,8 @@ def system_info(request):
     # Player name for title
     player_name = settings['player_name']
 
-    raspberry_pi_model = raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
+    raspberry_pi_model = raspberry_pi_helper.parse_cpu_info().get(
+        'model', "Unknown")
 
     anthias_version = '{}@{}'.format(
         diagnostics.get_git_branch(),

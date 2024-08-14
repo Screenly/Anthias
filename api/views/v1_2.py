@@ -43,12 +43,15 @@ class AssetListViewV1_2(APIView):
             raise Exception("Could not retrieve file. Check the asset URL.")
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
-            ids_of_active_assets = [x['asset_id'] for x in assets if x['is_active']]
+            ids_of_active_assets = [
+                x['asset_id'] for x in assets if x['is_active']
+            ]
 
             asset = assets_helper.create(conn, asset)
 
             if asset['is_active']:
-                ids_of_active_assets.insert(asset['play_order'], asset['asset_id'])
+                ids_of_active_assets.insert(
+                    asset['play_order'], asset['asset_id'])
             assets_helper.save_ordering(conn, ids_of_active_assets)
 
             result = assets_helper.read(conn, asset['asset_id'])
@@ -84,7 +87,9 @@ class AssetViewV1_2(APIView):
             update_asset(asset, request.data)
 
             assets = assets_helper.read(conn)
-            ids_of_active_assets = [x['asset_id'] for x in assets if x['is_active']]
+            ids_of_active_assets = [
+                x['asset_id'] for x in assets if x['is_active']
+            ]
 
             asset = assets_helper.update(conn, asset_id, asset)
 
@@ -93,7 +98,8 @@ class AssetViewV1_2(APIView):
             except ValueError:
                 pass
             if asset['is_active']:
-                ids_of_active_assets.insert(asset['play_order'], asset['asset_id'])
+                ids_of_active_assets.insert(
+                    asset['play_order'], asset['asset_id'])
 
             assets_helper.save_ordering(conn, ids_of_active_assets)
 
@@ -112,7 +118,9 @@ class AssetViewV1_2(APIView):
         asset = prepare_asset_v1_2(request, asset_id)
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
-            ids_of_active_assets = [x['asset_id'] for x in assets if x['is_active']]
+            ids_of_active_assets = [
+                x['asset_id'] for x in assets if x['is_active']
+            ]
 
             asset = assets_helper.update(conn, asset_id, asset)
 
@@ -121,7 +129,8 @@ class AssetViewV1_2(APIView):
             except ValueError:
                 pass
             if asset['is_active']:
-                ids_of_active_assets.insert(asset['play_order'], asset['asset_id'])
+                ids_of_active_assets.insert(
+                    asset['play_order'], asset['asset_id'])
 
             assets_helper.save_ordering(conn, ids_of_active_assets)
             result = assets_helper.read(conn, asset_id)
