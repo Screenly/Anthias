@@ -37,9 +37,9 @@ from settings import settings, ZmqCollector, ZmqPublisher
 r = connect_to_redis()
 
 MODEL_STRING_EXAMPLE = """
-Yes, that is just a string of JSON not JSON itself it will be parsed on the other end.
-It's recommended to set `Content-Type` to `application/x-www-form-urlencoded` and
-send the model as a string.
+Yes, that is just a string of JSON not JSON itself it will be parsed on the
+other end. It's recommended to set `Content-Type` to
+`application/x-www-form-urlencoded` and send the model as a string.
 
 ```
 model: "{
@@ -112,7 +112,8 @@ class AssetViewV1(APIView):
     @authorized
     def put(self, request, asset_id, format=None):
         with db.conn(settings['database']) as conn:
-            result = assets_helper.update(conn, asset_id, prepare_asset(request))
+            result = assets_helper.update(
+                conn, asset_id, prepare_asset(request))
             return Response(result, status=status.HTTP_200_OK)
 
     @extend_schema(summary='Delete asset')
@@ -136,8 +137,8 @@ class AssetContentView(APIView):
         The content of the asset.
         `type` can either be `file` or `url`.
 
-        In case of a file, the fields `mimetype`, `filename`, and `content`  will be present.
-        In case of a URL, the field `url` will be present.
+        In case of a file, the fields `mimetype`, `filename`, and `content`
+        will be present. In case of a URL, the field `url` will be present.
         """),
         responses={
             200: {
@@ -267,7 +268,10 @@ class FileAssetView(APIView):
         if file_type.split('/')[0] not in ['image', 'video']:
             raise Exception("Invalid file type.")
 
-        file_path = path.join(settings['assetdir'], uuid.uuid5(uuid.NAMESPACE_URL, filename).hex) + ".tmp"
+        file_path = path.join(
+            settings['assetdir'],
+            uuid.uuid5(uuid.NAMESPACE_URL, filename).hex,
+        ) + ".tmp"
 
         if 'Content-Range' in request.headers:
             range_str = request.headers['Content-Range']
@@ -293,8 +297,8 @@ class PlaylistOrderView(APIView):
                         'type': 'string',
                         'description': cleandoc(
                             """
-                            Comma-separated list of asset IDs in the order they should be played.
-                            For example:
+                            Comma-separated list of asset IDs in the order
+                            they should be played. For example:
 
                             `793406aa1fd34b85aa82614004c0e63a,1c5cfa719d1f4a9abae16c983a18903b,9c41068f3b7e452baf4dc3f9b7906595`
                             """
@@ -307,7 +311,8 @@ class PlaylistOrderView(APIView):
     @authorized
     def post(self, request):
         with db.conn(settings['database']) as conn:
-            assets_helper.save_ordering(conn, request.data.get('ids', '').split(','))
+            assets_helper.save_ordering(
+                conn, request.data.get('ids', '').split(','))
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -316,10 +321,12 @@ class BackupView(APIView):
     @extend_schema(
         summary='Create backup',
         description=cleandoc("""
-        Create a backup of the current Anthias instance, which includes the following:
+        Create a backup of the current Anthias instance, which
+        includes the following:
         * current settings
         * image and video assets
-        * asset metadata (e.g. name, duration, play order, status), which is stored in a SQLite database
+        * asset metadata (e.g. name, duration, play order, status),
+          which is stored in a SQLite database
         """),
         responses={
             201: {
@@ -339,7 +346,8 @@ class RecoverView(APIView):
     @extend_schema(
         summary='Recover from backup',
         description=cleandoc("""
-        Recover data from a backup file. The backup file must be a `.tar.gz` file.
+        Recover data from a backup file. The backup file must be
+        a `.tar.gz` file.
         """),
         request={
             'multipart/form-data': {
@@ -430,7 +438,10 @@ class InfoView(APIView):
                     'viewlog': 'Not yet implemented',
                     'loadavg': 0.1,
                     'free_space': '10G',
-                    'display_info': 'state 0xa [HDMI CUSTOM RGB lim 16:9], 3840x2160 @ 30.00Hz, progressive',
+                    'display_info': (
+                        'state 0xa [HDMI CUSTOM RGB lim 16:9], '
+                        '3840x2160 @ 30.00Hz, progressive'
+                    ),
                     'display_power': 'on',
                     'up_to_date': True
                 }

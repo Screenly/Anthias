@@ -66,7 +66,8 @@ class AssetViewV1_1(APIView):
     @authorized
     def put(self, request, asset_id):
         with db.conn(settings['database']) as conn:
-            result = assets_helper.update(conn, asset_id, prepare_asset(request))
+            result = assets_helper.update(
+                conn, asset_id, prepare_asset(request))
             return Response(result)
 
     @extend_schema(summary='Delete asset')

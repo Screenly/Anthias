@@ -479,7 +479,7 @@ def wait_for_node_ip(seconds):
 def wait_for_server(retries, wt=1):
     for _ in range(retries):
         try:
-            response = requests.get('http://{0}:{1}/splash-page'.format(LISTEN, PORT))
+            response = requests.get('http://{LISTEN}:{PORT}/splash-page')
             response.raise_for_status()
             break
         except requests.exceptions.RequestException:
@@ -520,7 +520,8 @@ def main():
 
     scheduler = Scheduler()
 
-    # This will prevent white screen from happening before showing the splash screen with IP addresses.
+    # This will prevent white screen from happening before showing the
+    # splash screen with IP addresses.
     view_image(STANDBY_SCREEN)
 
     wait_for_server(60)

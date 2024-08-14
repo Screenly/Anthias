@@ -213,8 +213,12 @@ def authorized(orig):
         request = args[-1]
 
         if not isinstance(request, (HttpRequest, Request)):
-            raise ValueError('Request object is not of type HttpRequest or Request')
+            raise ValueError(
+                'Request object is not of type HttpRequest or Request')
 
-        return settings.auth.authenticate_if_needed(request) or orig(*args, **kwargs)
+        return (
+            settings.auth.authenticate_if_needed(request) or
+            orig(*args, **kwargs)
+        )
 
     return decorated
