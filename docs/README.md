@@ -91,7 +91,7 @@ With running the following script, you can install self-signed certificates:
 
 ```bash
 cd $HOME/screenly
-./bin/add_certificates.sh /path/to/certificate.crt
+./bin/add_certificate.sh /path/to/certificate.crt
 ```
 
 More details about generating self-signed certificates can be found [here](https://devopscube.com/create-self-signed-certificates-openssl/).
