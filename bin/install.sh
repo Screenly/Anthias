@@ -59,44 +59,54 @@ d88P     888  888  888   Y888   888  888  888  'Y888888   88888P'
 
 EOF
 
-  # Reset color
-  tput sgr 0
+# Reset color
+tput sgr 0
 
-  echo -e "Anthias requires a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\n"
-  read -p "Do you still want to continue? (y/N)" -n 1 -r -s INSTALL
-  if [ "$INSTALL" != 'y' ]; then
+echo -e "Anthias requires a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\n"
+read -p "Do you still want to continue? (y/N)" -n 1 -r -s INSTALL
+if [ "$INSTALL" != 'y' ]; then
     echo
     exit 1
-  fi
+fi
 
-# @TODO Re-enable the 'production' branch once we've merged master into production
-#echo -e "\n________________________________________\n"
-#echo -e "Which version/branch of Screenly OSE would you like to install:\n"
-#echo " Press (1) for the Production branch, which is the latest stable."
-#echo " Press (2) for the Development/Master branch, which has the latest features and fixes, but things may break."
-#echo ""
-
-#read -n 1 -r -s BRANCHSELECTION
-#case $BRANCHSELECTION in
-#  1) echo "You selected: Production";export DOCKER_TAG="production";BRANCH="production"
-#    ;;
-#  2) echo "You selected: Development/Master";export DOCKER_TAG="latest";BRANCH="master"
-#    ;;
-#  *) echo "(Error) That was not an option, installer will now exit.";exit
-#    ;;
-#esac
-
-# Remove these once the above code has been restored.
 export DOCKER_TAG="latest"
 export BRANCH="master"
 
   echo && read -p "Do you want Anthias to manage your network? This is recommended for most users because it adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
   echo && read -p "Would you like to install the experimental version of Anthias instead? (y/N)" -n 1 -r -s IS_EXPERIMENTAL && echo
-  echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
+  echo && read -p "Would you like to perform a full system upgrade? (y/N)" -n 1 -r -s UPGRADE && echo
 
-  if [ "$IS_EXPERIMENTAL" = 'y' ]; then
-    export BRANCH="experimental"
-  fi
+  echo "Which version of Anthias would you like to install?"
+  echo " Press (1) for the latest version."
+  echo " Press (2) for the experimental version."
+  echo " Press (3) for a specific version (e.g. v0.0.1)."
+  echo -n "Choice: "
+
+  read -n 1 -r -s VERSION_SELECTION
+    case $VERSION_SELECTION in
+        1)
+            export BRANCH="master"
+            ;;
+        2)
+            export BRANCH="experimental"
+            ;;
+        3)
+            echo "Please enter the version you would like to install (e.g. v0.0.1):"
+            read -r VERSION
+            STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}\n" https://api.github.com/repos/Screenly/Anthias/releases/tags/${VERSION})
+            if [ $STATUS_CODE -ne 200 ]; then
+                echo "(Error) The version you entered does not exist, installer will now exit.";
+                exit 1
+            else
+                export BRANCH=$VERSION
+                export DOCKER_TAG_PREFIX="$(curl -sL https://github.com/Screenly/Anthias/releases/download/${VERSION}/docker-tag)"
+            fi
+            ;;
+        *)
+            echo "(Error) That was not an option, installer will now exit.";
+            exit 1
+            ;;
+    esac
 
   if [ "$UPGRADE" != 'y' ]; then
       EXTRA_ARGS=("--skip-tags" "system-upgrade")
@@ -210,7 +220,7 @@ cd /home/${USER}/screenly/ansible
 sudo -E -u ${USER} ${SUDO_ARGS[@]} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
 
 # Pull down and install containers
-sudo -u ${USER} /home/${USER}/screenly/bin/upgrade_containers.sh
+sudo -u ${USER} DOCKER_TAG=${DOCKER_TAG_PREFIX} /home/${USER}/screenly/bin/upgrade_containers.sh
 
 sudo apt-get autoclean
 sudo apt-get clean
