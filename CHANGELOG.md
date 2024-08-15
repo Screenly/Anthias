@@ -52,4 +52,26 @@
 
 ## v0.18.7
 
-[Include changes that happened between v0.18.6 and v0.18.7]
+### Bug Fixes
+
+* Fix byte-encoding issue when attempting to download an asset.
+* Fix issue wih downloading backup data via the *Get Backup* button in the
+  *Settings* page.
+* Fix video playback by replacing VLC with OMXPlayer for Raspberry Pi 4.
+
+### Docs
+
+* Improve docs for running unit tests locally.
+* Add docs for setting up Wi-Fi manually for devices running Raspberry Pi OS
+  Lite.
+* Add docs for self-deploying Anthias on a custom Balena Cloud fleet.
+
+### Enhancements
+
+* Rebrand Screenly OSE to Anthias.
+* Apply a major web UI overhaul.
+
+### Internal
+
+* Migrate from Python 2 to Python 3.
+* Use `yt-dlp` instead of `youtube-dl` for downloading YouTube videos.
