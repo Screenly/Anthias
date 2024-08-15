@@ -219,6 +219,8 @@ cd /home/${USER}/screenly/ansible
 sudo -E -u ${USER} ${SUDO_ARGS[@]} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
 
 # Pull down and install containers
+# TODO: Replace the following below with that from the master branch.
+wget -q https://raw.githubusercontent.com/nicomiguelino/Anthias/modify-installer-script/bin/upgrade_containers.sh -O /home/${USER}/screenly/bin/upgrade_containers.sh
 sudo -u ${USER} DOCKER_TAG=${DOCKER_TAG_PREFIX} /home/${USER}/screenly/bin/upgrade_containers.sh
 
 sudo apt-get autoclean
