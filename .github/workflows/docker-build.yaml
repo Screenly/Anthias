@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-      - production
+      - experimental
     paths:
       - '**'
       - '!webview/**'
@@ -12,9 +12,10 @@ on:
       - '!.github/workflows/deploy-website.yaml'
       - '!.github/workflows/build-webview.yaml'
       - '!.github/workflows/build-balena-disk-image.yaml'
+      - '!.github/workflows/python-lint.yaml'
       - '!README.md'
       - '!docs/**'
-      - '!bin/build_containers.sh'
+      - '!bin/install.sh'
       - '!bin/upgrade_containers.sh'
 
 jobs:
@@ -62,6 +63,7 @@ jobs:
           ./bin/build_containers.sh
 
   balena:
+    if: ${{ github.ref == 'refs/heads/master' }}
     needs: buildx
     strategy:
       matrix:
@@ -75,6 +77,7 @@ jobs:
         run: |
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BOARD=${{ matrix.board }}" >> $GITHUB_ENV
+          echo "SHM_SIZE=256mb" >> $GITHUB_ENV
 
       - name: Prepare Balena file
         run: |

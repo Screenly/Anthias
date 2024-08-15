@@ -1,14 +1,19 @@
-from __future__ import unicode_literals
-from builtins import object
-from datetime import datetime
-from datetime import timedelta
-import functools
-import unittest
-import viewer
-from lib import db
-from lib import assets_helper
-import settings
+import mock
 import os
+import unittest
+
+from datetime import datetime, timedelta
+from lib import db, assets_helper
+
+import settings
+
+mock.patch(
+    'lib.raspberry_pi_helper.lookup_raspberry_pi_version',
+    return_value='pi4'
+).__enter__()
+mock.patch('vlc.Instance', mock.MagicMock()).__enter__()
+
+import viewer  # noqa: E402
 
 asset_x = {
     'mimetype': u'web',
@@ -98,11 +103,12 @@ class SchedulerTest(unittest.TestCase):
     def tearDown(self):
         settings.settings['database'] = self.old_db_path
         settings.settings['shuffle_playlist'] = False
-        viewer.datetime, assets_helper.get_time = datetime, lambda: datetime.utcnow()
+        viewer.datetime, assets_helper.get_time = (
+            datetime, lambda: datetime.utcnow())
         viewer.db_conn.close()
         try:
             os.remove(FAKE_DB_PATH)
-        except:
+        except FileNotFoundError:
             pass
 
     def test_generate_asset_list_assets_should_be_y_and_x(self):
@@ -117,10 +123,12 @@ class SchedulerTest(unittest.TestCase):
         self.assertEqual(deadline, asset_y['end_date'])
 
     def test_generate_asset_list_check_deadline_if_asset_scheduled(self):
-        """If asset_x is active and asset_x[end_date] == (now + 3) and asset_tomorrow will be active tomorrow then
-        deadline should be asset_tomorrow[start_date]
+        """If asset_x is active and asset_x[end_date] == (now + 3) and
+        asset_tomorrow will be active tomorrow then deadline should be
+        asset_tomorrow[start_date]
         """
-        assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_tomorrow])
+        assets_helper.create_multiple(
+            viewer.db_conn, [asset_x, asset_tomorrow])
         _, deadline = viewer.generate_asset_list()
         self.assertEqual(deadline, asset_tomorrow['start_date'])
 

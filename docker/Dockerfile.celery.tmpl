@@ -2,7 +2,7 @@
 
 COPY requirements/requirements.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
-  pip3 install -r /tmp/requirements.txt
+  pip3 install -r /tmp/requirements.txt --break-system-packages
 
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
@@ -12,9 +12,8 @@ ENV GIT_HASH=$GIT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
 ENV GIT_BRANCH=$GIT_BRANCH
 
-CMD celery worker \
-  -A server.celery \
-  -B -n worker@screenly \
+CMD celery -A celery_tasks.celery worker \
+  -B -n worker@anthias \
   --loglevel=info \
   --schedule \
   /tmp/celerybeat-schedule

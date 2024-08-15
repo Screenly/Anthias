@@ -4,18 +4,14 @@
 from __future__ import unicode_literals
 from builtins import bytes
 from future import standard_library
-standard_library.install_aliases()
 from builtins import filter
-from builtins import str
 from builtins import range
 from builtins import object
 import json
 import logging
 import pydbus
-import re
-import string
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from jinja2 import Template
 from os import path, getenv, utime, system
 from random import shuffle
@@ -29,12 +25,9 @@ import zmq
 
 from lib import assets_helper
 from lib import db
-from lib.diagnostics import get_raspberry_model
-from lib.github import is_up_to_date
 from lib.errors import SigalrmException
-from lib.media_player import VLCMediaPlayer, OMXMediaPlayer
+from lib.media_player import VLCMediaPlayer
 from lib.utils import (
-    get_active_connections,
     url_fails,
     is_balena_app,
     get_node_ip,
@@ -45,7 +38,8 @@ from lib.utils import (
 from retry.api import retry_call
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
-from netifaces import gateways
+
+standard_library.install_aliases()
 
 
 __author__ = "Screenly, Inc"
@@ -59,8 +53,8 @@ EMPTY_PL_DELAY = 5  # secs
 INITIALIZED_FILE = '/.screenly/initialized'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 
-LOAD_SCREEN = 'http://{}:{}/{}'.format(LISTEN, PORT, 'static/img/loading.png')
-SPLASH_PAGE_URL = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
+STANDBY_SCREEN = f'http://{LISTEN}:{PORT}/static/img/standby.png'
+SPLASH_PAGE_URL = f'http://{LISTEN}:{PORT}/splash-page'
 ZMQ_HOST_PUB_URL = 'tcp://host.docker.internal:10001'
 
 current_browser_url = None
@@ -69,12 +63,7 @@ loop_is_stopped = False
 browser_bus = None
 r = connect_to_redis()
 
-try:
-    media_player = OMXMediaPlayer()
-    # @TODO: Remove the line above and uncomment the line below once VLC playback issue is fixed.
-    # media_player = VLCMediaPlayer() if 'Raspberry Pi 4' in get_raspberry_model() else OMXMediaPlayer()
-except sh.ErrorReturnCode_1:
-    media_player = OMXMediaPlayer()
+media_player = VLCMediaPlayer()
 
 HOME = None
 db_conn = None
@@ -161,6 +150,7 @@ def setup_wifi(data):
 
     show_hotspot_page(data)
 
+
 def show_splash(data):
     if is_balena_app():
         while True:
@@ -211,7 +201,8 @@ class ZmqSubscriber(Thread):
             msg = socket.recv()
             topic, message = msg.decode('utf-8').split(' ', 1)
 
-            # If the command consists of 2 parts, then the first is the function, the second is the argument
+            # If the command consists of 2 parts, then the first is the
+            # function and the second is the argument.
             parts = message.split('&', 1)
             command = parts[0]
             parameter = parts[1] if len(parts) > 1 else None
@@ -255,7 +246,12 @@ class Scheduler(object):
         else:
             idx = self.index
             self.index = (self.index + 1) % len(self.assets)
-        logging.debug('get_next_asset counter %s returning asset %s of %s', self.counter, idx + 1, len(self.assets))
+
+        logging.debug(
+            'get_next_asset counter %s returning asset %s of %s',
+            self.counter, idx + 1, len(self.assets),
+        )
+
         if settings['shuffle_playlist'] and self.index == 0:
             self.counter += 1
 
@@ -266,7 +262,12 @@ class Scheduler(object):
     def refresh_playlist(self):
         logging.debug('refresh_playlist')
         time_cur = datetime.utcnow()
-        logging.debug('refresh: counter: (%s) deadline (%s) timecur (%s)', self.counter, self.deadline, time_cur)
+
+        logging.debug(
+            'refresh: counter: (%s) deadline (%s) timecur (%s)',
+            self.counter, self.deadline, time_cur
+        )
+
         if self.get_db_mtime() > self.last_update_db_mtime:
             logging.debug('updating playlist due to database modification')
             self.update_playlist()
@@ -285,10 +286,14 @@ class Scheduler(object):
 
         self.assets, self.deadline = new_assets, new_deadline
         self.counter = 0
-        # Try to keep the same position in the play list. E.g. if a new asset is added to the end of the list, we
-        # don't want to start over from the beginning.
+        # Try to keep the same position in the play list. E.g., if a new asset
+        # is added to the end of the list, we don't want to start over from
+        # the beginning.
         self.index = self.index % len(self.assets) if self.assets else 0
-        logging.debug('update_playlist done, count %s, counter %s, index %s, deadline %s', len(self.assets), self.counter, self.index, self.deadline)
+        logging.debug(
+            'update_playlist done, count %s, counter %s, index %s, deadline %s',  # noqa: E501
+            len(self.assets), self.counter, self.index, self.deadline
+        )
 
     def get_db_mtime(self):
         # get database file last modification time
@@ -305,12 +310,18 @@ def get_specific_asset(asset_id):
 
 def generate_asset_list():
     """Choose deadline via:
-        1. Map assets to deadlines with rule: if asset is active then 'end_date' else 'start_date'
+        1. Map assets to deadlines with rule: if asset is active then
+           'end_date' else 'start_date'
         2. Get nearest deadline
     """
     logging.info('Generating asset-list...')
     assets = assets_helper.read(db_conn)
-    deadlines = [asset['end_date'] if assets_helper.is_active(asset) else asset['start_date'] for asset in assets]
+    deadlines = [
+        asset['end_date']
+        if assets_helper.is_active(asset)
+        else asset['start_date']
+        for asset in assets
+    ]
 
     playlist = list(filter(assets_helper.is_active, assets))
     deadline = sorted(deadlines)[0] if len(deadlines) > 0 else None
@@ -335,7 +346,9 @@ def load_browser():
     logging.info('Loading browser...')
 
     browser = sh.Command('ScreenlyWebview')(_bg=True, _err_to_out=True)
-    while 'Screenly service start' not in browser.process.stdout.decode('utf-8'):
+    while (
+        'Screenly service start' not in browser.process.stdout.decode('utf-8')
+    ):
         sleep(1)
 
 
@@ -377,7 +390,10 @@ def view_video(uri, duration):
             watchdog()
             sleep(1)
     except sh.ErrorReturnCode_1:
-        logging.info('Resource URI is not correct, remote host is not responding or request was rejected.')
+        logging.info(
+            'Resource URI is not correct, remote host is not responding or '
+            'request was rejected.'
+        )
 
     media_player.stop()
 
@@ -387,21 +403,24 @@ def load_settings():
     Load settings and set the log level.
     """
     settings.load()
-    logging.getLogger().setLevel(logging.DEBUG if settings['debug_logging'] else logging.INFO)
+    logging.getLogger().setLevel(
+        logging.DEBUG if settings['debug_logging'] else logging.INFO
+    )
 
 
 def asset_loop(scheduler):
-    disable_update_check = getenv("DISABLE_UPDATE_CHECK", False)
-    if not disable_update_check:
-        is_up_to_date()
     asset = scheduler.get_next_asset()
 
     if asset is None:
-        logging.info('Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY)
-        view_image(LOAD_SCREEN)
+        logging.info(
+            'Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY)
+        view_image(STANDBY_SCREEN)
         sleep(EMPTY_PL_DELAY)
 
-    elif path.isfile(asset['uri']) or (not url_fails(asset['uri']) or asset['skip_asset_check']):
+    elif (
+        path.isfile(asset['uri']) or
+        (not url_fails(asset['uri']) or asset['skip_asset_check'])
+    ):
         name, mime, uri = asset['name'], asset['mimetype'], asset['uri']
         logging.info('Showing asset %s (%s)', name, mime)
         logging.debug('Asset URI %s', uri)
@@ -422,7 +441,8 @@ def asset_loop(scheduler):
             sleep(duration)
 
     else:
-        logging.info('Asset %s at %s is not available, skipping.', asset['name'], asset['uri'])
+        logging.info('Asset %s at %s is not available, skipping.',
+                     asset['name'], asset['uri'])
         sleep(0.5)
 
 
@@ -431,7 +451,10 @@ def setup():
     HOME = getenv('HOME')
     if not HOME:
         logging.error('No HOME variable')
-        sys.exit(1) # Alternatively, we can raise an Exception using a custom message, or we can create a new class that extends Exception.
+
+        # Alternatively, we can raise an Exception using a custom message,
+        # or we can create a new class that extends Exception.
+        sys.exit(1)
 
     signal(SIGUSR1, sigusr1)
     signal(SIGALRM, sigalrm)
@@ -442,39 +465,6 @@ def setup():
     load_browser()
     bus = pydbus.SessionBus()
     browser_bus = bus.get('screenly.webview', '/Screenly')
-
-
-def setup_hotspot():
-    bus = pydbus.SessionBus()
-
-    pattern_include = re.compile("wlan*")
-    pattern_exclude = re.compile("ScreenlyOSE-*")
-
-    wireless_connections = get_active_connections(bus)
-
-    if wireless_connections is None:
-        return
-
-    wireless_connections = [c for c in [c for c in wireless_connections if pattern_include.search(str(c['Devices']))] if not pattern_exclude.search(str(c['Id']))]
-
-    # Displays the hotspot page
-    if not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
-        if len(wireless_connections) == 0:
-            url = 'http://{0}/hotspot'.format(LISTEN)
-            view_webpage(url)
-
-    # Wait until the network is configured
-    while not path.isfile(HOME + INITIALIZED_FILE) and not gateways().get('default'):
-        if len(wireless_connections) == 0:
-            sleep(1)
-            wireless_connections = [c for c in [c for c in get_active_connections(bus) if pattern_include.search(str(c['Devices']))] if not pattern_exclude.search(str(c['Id']))]
-            continue
-        if len(wireless_connections) == 0:
-            sleep(1)
-            continue
-        break
-
-    wait_for_node_ip(5)
 
 
 def wait_for_node_ip(seconds):
@@ -489,9 +479,10 @@ def wait_for_node_ip(seconds):
 def wait_for_server(retries, wt=1):
     for _ in range(retries):
         try:
-            requests.get('http://{0}:{1}'.format(LISTEN, PORT))
+            response = requests.get('http://{0}:{1}'.format(LISTEN, PORT))
+            response.raise_for_status()
             break
-        except requests.exceptions.ConnectionError:
+        except requests.exceptions.RequestException:
             sleep(wt)
 
 
@@ -529,20 +520,18 @@ def main():
 
     scheduler = Scheduler()
 
-    wait_for_server(5)
-
-    if not is_balena_app():
-        setup_hotspot()
+    wait_for_server(60)
 
     if settings['show_splash']:
         if is_balena_app():
-            retry_call(get_balena_device_info, tries=30, delay=1)
+            retry_call(get_balena_device_info, tries=90, delay=1)
 
         view_webpage(SPLASH_PAGE_URL)
         sleep(SPLASH_DELAY)
 
-    # We don't want to show splash-page if there are active assets but all of them are not available
-    view_image(LOAD_SCREEN)
+    # We don't want to show splash page if there are active assets but all of
+    # them are not available.
+    view_image(STANDBY_SCREEN)
 
     load_screen_displayed = True
 

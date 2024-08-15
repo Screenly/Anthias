@@ -9,8 +9,8 @@ set -euox pipefail
 export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 export GIT_SHORT_HASH=$(git rev-parse --short HEAD)
 export GIT_HASH=$(git rev-parse HEAD)
-export BASE_IMAGE_TAG=buster
-export DEBIAN_VERSION=buster
+export BASE_IMAGE_TAG=bookworm
+export DEBIAN_VERSION=bookworm
 
 declare -a SERVICES=(
     server
@@ -73,12 +73,12 @@ for container in ${SERVICES[@]}; do
     fi
 
     if [ "$container" == 'viewer' ]; then
-        export QT_VERSION=5.15.2
-        export WEBVIEW_GIT_HASH=f5ef562982dcb6274c9716b9e375cc5ac0faba84
-        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.2.2"
+        export QT_VERSION=5.15.14
+        export WEBVIEW_GIT_HASH=4bd295c4a1197a226d537938e947773f4911ca24
+        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.1"
     elif [ "$container" == 'test' ]; then
-        export CHROME_DL_URL="https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_107.0.5304.121-1_amd64.deb"
-        export CHROMEDRIVER_DL_URL="https://chromedriver.storage.googleapis.com/107.0.5304.62/chromedriver_linux64.zip"
+        export CHROME_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chrome-linux64.zip"
+        export CHROMEDRIVER_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chromedriver-linux64.zip"
     elif [ "$container" == 'wifi-connect' ]; then
         # We don't support wifi-connect on x86 yet.
         if [ "$BOARD" == 'x86' ]; then
@@ -106,15 +106,6 @@ for container in ${SERVICES[@]}; do
         cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container"
     fi
 
-    if [[ -n "${DEV_MODE:-}" ]] && [[ "${DEV_MODE}" -ne 0 ]]; then
-        sed -i 's/RUN --mount.\+ /RUN /g' "docker/Dockerfile.$container"
-    fi
-
-    if [[ -n "${DOCKERFILES_ONLY:-}" ]] && [[ "${DOCKERFILES_ONLY}" -ne 0 ]]; then
-        echo "Variable DOCKERFILES_ONLY is set. Skipping build for $container..."
-        continue
-    fi
-
     # If we're running on x86, remove all Pi specific packages
     if [ "$BOARD" == 'x86' ]; then
         if [[ $OSTYPE == 'darwin'* ]]; then
@@ -124,7 +115,6 @@ for container in ${SERVICES[@]}; do
         fi
 
         sed "${SED_ARGS[@]}" -e '/libraspberrypi0/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
-        sed "${SED_ARGS[@]}" -e '/omxplayer/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
 
         # Don't build the viewer container if we're on x86
         if [ "$container" == 'viewer' ]; then
@@ -132,30 +122,58 @@ for container in ${SERVICES[@]}; do
             continue
         fi
     else
+        if [ "$BOARD" == "pi1" ] && [ "$container" == "viewer" ]; then
+            # Remove the libssl1.1 from Dockerfile.viewer
+            sed -i '/libssl1.1/d' "docker/Dockerfile.$container"
+        fi
+
         if [ "$container" == 'test' ]; then
             echo "Skipping test container for Pi builds..."
             continue
         fi
     fi
 
+    if [[ -n "${DEV_MODE:-}" ]] && [[ "${DEV_MODE}" -ne 0 ]]; then
+        sed -i 's/RUN --mount.\+ /RUN /g' "docker/Dockerfile.$container"
+    fi
+
+    if [[ -n "${DOCKERFILES_ONLY:-}" ]] && [[ "${DOCKERFILES_ONLY}" -ne 0 ]]; then
+        echo "Variable DOCKERFILES_ONLY is set. Skipping build for $container..."
+        continue
+    fi
+
+    PUSH_ARGS=()
+    BUILDX_ARGS=()
+
+    if [ "$GIT_BRANCH" = "experimental" ]; then
+        PUSH_ARGS+=(
+            "screenly/anthias-$container:experimental-$BOARD"
+            "screenly/anthias-$container:experimental-$GIT_SHORT_HASH-$BOARD"
+        )
+    else
+        PUSH_ARGS+=(
+            "screenly/anthias-$container:$DOCKER_TAG"
+            "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
+            "screenly/srly-ose-$container:$DOCKER_TAG"
+            "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD"
+        )
+    fi
+
+    for tag in "${PUSH_ARGS[@]}"; do
+        BUILDX_ARGS+=("-t" "$tag")
+    done
+
     docker "${DOCKER_BUILD_ARGS[@]}" \
         --cache-from "type=local,src=/tmp/.buildx-cache" \
         --cache-to "type=local,dest=/tmp/.buildx-cache" \
         --platform "$TARGET_PLATFORM" \
         -f "docker/Dockerfile.$container" \
-        -t "screenly/srly-ose-$container:latest" \
-        -t "screenly/anthias-$container:latest" \
-        -t "anthias-$container:latest" \
-        -t "screenly/anthias-$container:$DOCKER_TAG" \
-        -t "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD" \
-        -t "screenly/srly-ose-$container:$DOCKER_TAG" \
-        -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD" .
+        "${BUILDX_ARGS[@]}" .
 
-    # Push if the push flag is set and not cross compiling
+    # Push if the push flag is set and not cross compiling.
     if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
-        docker push "screenly/srly-ose-$container:$DOCKER_TAG"
-        docker push "screenly/anthias-$container:$DOCKER_TAG"
-        docker push "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
-        docker push "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD"
+        for tag in "${PUSH_ARGS[@]}"; do
+            docker push "$tag"
+        done
     fi
 done

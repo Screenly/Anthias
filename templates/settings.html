@@ -36,12 +36,12 @@
                         </div>
                         <div class="row">
                             <div class="form-group col-6">
-                                <label class="small text-secondary">Default duration</label>
+                                <label class="small text-secondary">Default duration (seconds)</label>
                                 <input class="form-control" name="default_duration" type="number"
                                        value="{{ context.default_duration }}"/>
                             </div>
                             <div class="form-group col-6">
-                                <label class="small text-secondary">Default streaming duration</label>
+                                <label class="small text-secondary">Default streaming duration (seconds)</label>
                                 <input class="form-control" name="default_streaming_duration" type="number"
                                        value="{{ context.default_streaming_duration }}"/>
                             </div>
@@ -211,6 +211,43 @@
         </div>
     </div>
 
+    {% if not context.up_to_date and not context.is_balena and context.is_docker  %}
+        <div class="container mt-4">
+            <div class="row py-2">
+                <div class="col-12">
+                    <h4 class="page-header text-white">
+                        <b>Upgrade Anthias</b>
+                    </h4>
+                </div>
+            </div>
+            <div class="row content px-3">
+                <div id="upgrade-section" class="col-12 my-3">
+                    <p>Do the following steps to upgrade Anthias:</p>
+                    <ul>
+                        <li>
+                            Go to the <a href="#backup-section" class="text-danger">backup section</a> and click <em>Get Backup</em>.
+                        </li>
+                        <li>
+                            Open up a terminal and SSH to this device using any of the following commands:
+                            <ul>
+                                {% for ip_address in context.ip_addresses %}
+                                    <li><code>ssh {{ context.host_user }}@{{ ip_address }}</code></li>
+                                {% endfor %}
+                            </ul>
+                        </li>
+                        <li>
+                            Go to the project root directory &mdash; <code>cd ~/screenly</code>
+                        </li>
+                        <li>
+                            Run the following upgrade script &mdash; <code>./bin/run_upgrade.sh</code>. The script is essentially a wrapper around
+                            the install script, so it will prompt you with the same questions as when you first installed Anthias.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
     <div class="container mt-4">
         <div class="row py-2">
             <div class="col-12">
@@ -236,192 +273,6 @@
     </div>
 
             {% if not (context.is_balena or context.is_docker) %}
-
-                {# USB assets #}
-                <div class="container mt-4">
-                    <div class="row py-2">
-                        <div class="col-12">
-                            <h4 class="page-header text-white">
-                                <b>USB Assets</b>
-                            </h4>
-                        </div>
-                    </div>
-                    <div class="row content px-3">
-                        <div id="usb-assets-key-section" class="col-12 my-3">
-                            <p>Put file with the generated key in USB to use the USB assets.</p>
-                            <div class="text-right">
-                                <button id="btn-view-usb-assets-file" class="btn btn-primary btn-long" type="button">Generate file
-                                </button>
-                            </div>
-                        </div>
-                        <div id="view-usb-assets-file-modal" class="modal hide fade" role="dialog" tabindex="-1">
-                            <div class="modal-dialog" role="document">
-                                <div class="modal-content">
-                                    <div class="form-horizontal">
-                                        <div class="modal-header">
-                                            <h3 id="modalLabel">Usb assets file</h3>
-                                        </div>
-                                        <div class="modal-body pb-0 row">
-
-                                            <div class="form-group col-6">
-                                                <label class="small text-secondary">Start Date</label>
-                                                <input class="form-control date" name="start_date_date" type="text"/>
-                                                <input name="start_date" type="hidden"/>
-                                            </div>
-
-                                            <div class="form-inline col-6">
-                                                <label>Activate assets</label>
-                                                <div class="ml-auto">
-                                                    <label class="switch-light switch-material small m-0">
-                                                        <input name="activate_assets" type="checkbox"/>
-                                                        <span><span></span><span></span><a></a></span>
-                                                    </label>
-                                                </div>
-                                            </div>
-
-                                            <div class="form-group col-6">
-                                                <label class="small text-secondary">End Date</label>
-                                                <input class="form-control date" name="end_date_date" type="text"/>
-                                                <input name="end_date" type="hidden"/>
-                                            </div>
-
-                                            <div class="form-inline col-6">
-                                                <label>Copy to internal memory</label>
-                                                <div class="ml-auto">
-                                                    <label class="toggle switch-light switch-material small m-0">
-                                                        <input name="copy_assets" type="checkbox"/>
-                                                        <span><span></span><span></span><a></a></span>
-                                                    </label>
-                                                </div>
-                                            </div>
-
-                                            <div class="form-group col-6">
-                                                <label class="small text-secondary">Duration</label>
-                                                <input class="form-control" name="duration" type="number" value="10"/>
-                                            </div>
-
-                                            <div class="form-group col-6">
-                                                <label class="small text-secondary">Usb assets key</label>
-                                                <input id="usb-assets-key-badge" class="form-control mb-3" type="text" value="{{ context.usb_assets_key }}" readonly>
-                                            </div>
-
-                                            <div class="form-group col-12">
-                                                <div class="text-right">
-                                                    <button id="generate-usb-assets-key-btn" class="btn btn-primary btn-long"
-                                                            type="button">
-                                                        Generate new key
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="modal-footer text-right">
-                                            <button id="close-view-usb-assets-file-btn" class="btn btn-outline-dark btn-long"
-                                                    type="button">
-                                                Close
-                                            </button>
-                                            <button id="btn-download-usb-assets-key" class="btn btn-primary btn-long" type="button">
-                                                Download file
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {# Upgrade #}
-                <div class="container mt-4">
-                    <div class="row py-2">
-                        <div class="col-12">
-                            <h4 class="page-header text-white">
-                                <b>Upgrade Anthias</b>
-                            </h4>
-                        </div>
-                    </div>
-                    <div class="row content px-3">
-                        <div id="upgrade-section" class="col-12 my-3">
-                            <div class="text-right">
-                                <button id="btn-upgrade" class="btn btn-primary btn-long" type="button">Upgrade</button>
-                            </div>
-                        </div>
-                        <div id="upgrade-modal" class="modal hide fade" aria-hidden="true"
-                            data-backdrop="static" data-keyboard="false" role="dialog" tabindex="-1">
-                            <div class="modal-dialog" role="document">
-                                <div class="modal-content">
-                                    <div class="form-horizontal">
-                                        <div class="modal-header">
-                                            <h3 id="modalLabel">Upgrade Anthias</h3>
-                                        </div>
-                                        <div class="modal-body">
-                                            <form id="upgrade-form">
-                                                <div id="branch-group-radio" class="form-group">
-                                                    <label>Choose the branch you want to use</label>
-                                                    <div class="form-inline">
-                                                        <div class="custom-control custom-radio mr-4">
-                                                            <input type="radio" class="custom-control-input" id="latest_branch"
-                                                                name="groupOfBranch" value="latest" checked>
-                                                            <label class="custom-control-label"
-                                                                for="latest_branch">Latest</label>
-                                                        </div>
-                                                        <div class="custom-control custom-radio">
-                                                            <input type="radio" class="custom-control-input" id="production_branch"
-                                                                name="groupOfBranch" value="production">
-                                                            <label class="custom-control-label"
-                                                                for="production_branch">Production</label>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div class="form-group row">
-                                                    <label class="col-12 col-form-label text-left">Do you want Screenly to
-                                                        manage
-                                                        your
-                                                        network? This is recommended for most users.</label>
-                                                    <div class="col-3">
-                                                        <label id="manage_network_checkbox" class="toggle switch-light switch-material small m-0">
-                                                            <input name="manage_network" checked="checked" type="checkbox"/>
-                                                            <span><span></span><span></span><a></a></span>
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                                <div class="form-group row">
-                                                    <label class="col-12 col-form-label text-left">Would you like to perform a full system upgrade as well?</label>
-                                                    <div class="col-3">
-                                                        <label id="system_upgrade_checkbox" class="toggle switch-light switch-material small m-0">
-                                                            <input name="system_upgrade" type="checkbox"/>
-                                                            <span><span></span><span></span><a></a></span>
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                                <div class="form-group" id="upgrade_logs_block">
-                                                    <label for="upgrade_logs">Logs:</label>
-                                                    <textarea readonly class="form-control terminal" rows="5"
-                                                            id="upgrade_logs"></textarea>
-                                                </div>
-                                                <div class="form-group">
-                                                    <label class="text-left"><small>Notice: If you leave the page before the
-                                                        upgrade is complete, don't worry. The next time click "Start
-                                                        upgrade"
-                                                        you will see logs of the last upgrade if it's not finished
-                                                        yet.</small></label>
-                                                </div>
-                                            </form>
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button id="close-upgrade-btn" class="btn btn-outline-dark btn-long" type="button">
-                                                Close
-                                            </button>
-                                            <button id="start-upgrade-btn" class="btn btn-primary btn-long" type="button">
-                                                Start upgrade
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 {# Reset Wifi #}
                 <div class="container mt-4">
                     <div class="row py-2">

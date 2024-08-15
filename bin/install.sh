@@ -90,9 +90,14 @@ EOF
 export DOCKER_TAG="latest"
 export BRANCH="master"
 
-  echo && read -p "Do you want Anthias to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
-
+  echo && read -p "Do you want Anthias to manage your network? This is recommended for most users because it adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
+  echo && read -p "Would you like to install the experimental version of Anthias instead? (y/N)" -n 1 -r -s IS_EXPERIMENTAL && echo
   echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
+
+  if [ "$IS_EXPERIMENTAL" = 'y' ]; then
+    export BRANCH="experimental"
+  fi
+
   if [ "$UPGRADE" != 'y' ]; then
       EXTRA_ARGS=("--skip-tags" "system-upgrade")
   fi
@@ -152,16 +157,23 @@ if [ ! -f /etc/locale.gen ]; then
     sudo locale-gen
 fi
 
+RASPBIAN_VERSION=$(lsb_release -rs)
+APT_INSTALL_ARGS=(
+  "git"
+  "libffi-dev"
+  "libssl-dev"
+  "whois"
+)
+
+if [ "$RASPBIAN_VERSION" = "12" ]; then
+  APT_INSTALL_ARGS+=("python3-full")
+else
+  APT_INSTALL_ARGS+=("python3" "python3-dev" "python3-pip" "python3-venv")
+fi
+
 sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' /etc/apt/sources.list
 sudo apt update -y
-sudo apt-get install -y --no-install-recommends \
-    git \
-    libffi-dev \
-    libssl-dev \
-    python3 \
-    python3-dev \
-    python3-pip \
-    whois
+sudo apt-get install -y --no-install-recommends "${APT_INSTALL_ARGS[@]}"
 
 if [ "$NETWORK" == 'y' ]; then
   export MANAGE_NETWORK=true
@@ -171,25 +183,31 @@ else
 fi
 
 # Install Ansible from requirements file.
-if [ "$BRANCH" = "master" ]; then
-    ANSIBLE_VERSION=$(curl -s https://raw.githubusercontent.com/screenly/anthias/$BRANCH/requirements/requirements.host.txt | grep ansible)
-else
-    ANSIBLE_VERSION=ansible==2.8.8
+ANSIBLE_VERSION=$(curl -s https://raw.githubusercontent.com/screenly/anthias/$BRANCH/requirements/requirements.host.txt | grep ansible)
+
+SUDO_ARGS=()
+
+if python3 -c "import venv" &> /dev/null; then
+  echo "Module venv is detected. Activating virtual environment..."
+
+  python3 -m venv /home/${USER}/installer_venv
+  source /home/${USER}/installer_venv/bin/activate
+
+  SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
 fi
 
 # @TODO
 # Remove me later. Cryptography 38.0.3 won't build at the moment.
 # See https://github.com/screenly/anthias/issues/1654
-sudo pip install cryptography==38.0.2
+sudo ${SUDO_ARGS[@]} pip install cryptography==38.0.2
+sudo ${SUDO_ARGS[@]} pip install "$ANSIBLE_VERSION"
 
-sudo pip install "$ANSIBLE_VERSION"
-
-sudo -u ${USER} ansible localhost \
+sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
     -m git \
     -a "repo=$REPOSITORY dest=/home/${USER}/screenly version=$BRANCH force=no"
 cd /home/${USER}/screenly/ansible
 
-sudo -E -u ${USER} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
+sudo -E -u ${USER} ${SUDO_ARGS[@]} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
 
 # Pull down and install containers
 sudo -u ${USER} /home/${USER}/screenly/bin/upgrade_containers.sh

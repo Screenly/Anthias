@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import unicode_literals
-from nose.tools import eq_
 import mock
 import unittest
 import os
@@ -11,6 +10,12 @@ from time import sleep
 
 class ViewerTestCase(unittest.TestCase):
     def setUp(self):
+        mock.patch(
+            'lib.raspberry_pi_helper.lookup_raspberry_pi_version',
+            return_value='pi4'
+        ).__enter__()
+        mock.patch('vlc.Instance', mock.MagicMock()).__enter__()
+
         import viewer
 
         self.original_splash_delay = viewer.SPLASH_DELAY
@@ -19,16 +24,19 @@ class ViewerTestCase(unittest.TestCase):
         self.u = viewer
 
         self.m_scheduler = mock.Mock(name='m_scheduler')
-        self.p_scheduler = mock.patch.object(self.u, 'Scheduler', self.m_scheduler)
+        self.p_scheduler = mock.patch.object(
+            self.u, 'Scheduler', self.m_scheduler)
 
         self.m_cmd = mock.Mock(name='m_cmd')
         self.p_cmd = mock.patch.object(self.u.sh, 'Command', self.m_cmd)
 
         self.m_killall = mock.Mock(name='killall')
-        self.p_killall = mock.patch.object(self.u.sh, 'killall', self.m_killall)
+        self.p_killall = mock.patch.object(
+            self.u.sh, 'killall', self.m_killall)
 
         self.m_reload = mock.Mock(name='reload')
-        self.p_reload = mock.patch.object(self.u, 'load_settings', self.m_reload)
+        self.p_reload = mock.patch.object(
+            self.u, 'load_settings', self.m_reload)
 
         self.m_sleep = mock.Mock(name='sleep')
         self.p_sleep = mock.patch.object(self.u, 'sleep', self.m_sleep)
@@ -40,18 +48,19 @@ class ViewerTestCase(unittest.TestCase):
         self.u.SPLASH_DELAY = self.original_splash_delay
 
 
+def noop(*a, **k):
+    return None
+
+
 class TestEmptyPl(ViewerTestCase):
-    noop = lambda *a, **k: None
 
     @mock.patch('viewer.start_loop', side_effect=noop)
     @mock.patch('viewer.view_image', side_effect=noop)
     @mock.patch('viewer.view_webpage', side_effect=noop)
-    @mock.patch('viewer.setup_hotspot', side_effect=noop)
     @mock.patch('viewer.setup', side_effect=noop)
     def test_empty(
         self,
         mock_setup,
-        mock_setup_hotspot,
         mock_view_webpage,
         mock_view_image,
         mock_start_loop,
@@ -64,7 +73,6 @@ class TestEmptyPl(ViewerTestCase):
 
             m_asset_list.assert_called_once()
             mock_setup.assert_called_once()
-            mock_setup_hotspot.assert_called_once()
             mock_view_webpage.assert_called_once()
             mock_view_image.assert_called_once()
             mock_start_loop.assert_called_once()
@@ -78,7 +86,9 @@ class TestLoadBrowser(ViewerTestCase):
         self.p_loadb.stop()
 
     def test_load_browser(self):
-        self.m_cmd.return_value.return_value.process.stdout = b'Screenly service start'
+        self.m_cmd.return_value.return_value.process.stdout = (
+            b'Screenly service start'
+        )
         self.p_cmd.start()
         self.u.load_browser()
         self.p_cmd.stop()
@@ -88,8 +98,7 @@ class TestLoadBrowser(ViewerTestCase):
 class TestSignalHandlers(ViewerTestCase):
     def test_usr1(self):
         self.p_killall.start()
-        eq_(None, self.u.sigusr1(None, None))
-        self.m_killall.assert_called_once_with('omxplayer.bin', _ok_code=[1])
+        self.assertEqual(None, self.u.sigusr1(None, None))
         self.p_killall.stop()
 
 
@@ -97,7 +106,7 @@ class TestWatchdog(ViewerTestCase):
     def test_watchdog_should_create_file_if_not_exists(self):
         try:
             os.remove(self.u.WATCHDOG_PATH)
-        except:
+        except OSError:
             pass
         self.u.watchdog()
         self.assertEqual(os.path.exists(self.u.WATCHDOG_PATH), True)
