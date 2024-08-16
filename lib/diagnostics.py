@@ -4,20 +4,12 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from builtins import str
 import os
-import sh
 import sqlite3
 from . import utils
 import cec
 from lib import raspberry_pi_helper
 from pprint import pprint
 from datetime import datetime
-
-
-def get_monitor_status():
-    try:
-        return sh.tvservice('-s').stdout.strip().decode('utf-8')
-    except Exception:
-        return 'Unable to run tvservice.'
 
 
 def get_display_power():
@@ -132,7 +124,6 @@ def compile_report():
     report['cpu_info'] = get_raspberry_code()
     report['pi_model'] = get_raspberry_model()
     report['uptime'] = get_uptime()
-    report['monitor'] = get_monitor_status()
     report['display_power'] = get_display_power()
     report['playlist'] = get_playlist()
     report['git_hash'] = get_git_hash()
