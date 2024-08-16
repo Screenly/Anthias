@@ -196,10 +196,10 @@ function post_installation() {
             "Please reboot and run \`${UPGRADE_SCRIPT_PATH}\` "
             "to complete the installation."
         )
-    # else
-        # POST_INSTALL_MESSAGE+=(
-        #     "You need to reboot the system for the installation to complete."
-        # )
+    else
+        POST_INSTALL_MESSAGE+=(
+            "You need to reboot the system for the installation to complete."
+        )
     fi
 
     echo
