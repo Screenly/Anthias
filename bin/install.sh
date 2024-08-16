@@ -39,6 +39,8 @@ function install_charm_gum() {
     curl -fsSL https://repo.charm.sh/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg
     echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" | sudo tee /etc/apt/sources.list.d/charm.list
     sudo apt -y update && sudo apt -y install gum
+
+    clear
 }
 
 function initialize_ansible() {
@@ -216,7 +218,7 @@ function post_installation() {
 function main() {
     install_charm_gum
 
-    gum style "${INTRO_MESSAGE[@]}"
+    gum format "${INTRO_MESSAGE[@]}"
     gum confirm "Do you still want to continue?" || exit 0
     gum confirm "${MANAGE_NETWORK_PROMPT[@]}" && \
         export MANAGE_NETWORK=true || \
