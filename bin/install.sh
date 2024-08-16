@@ -126,7 +126,7 @@ function upgrade_docker_containers() {
 function cleanup() {
     sudo apt-get autoclean
     sudo apt-get clean
-    docker system prune -f
+    sudo docker system prune -f
     sudo apt autoremove -y
     sudo apt-get install plymouth --reinstall -y
     sudo find /usr/share/doc \
@@ -219,6 +219,7 @@ function main() {
     install_charm_gum
 
     gum format "${INTRO_MESSAGE[@]}"
+    echo
     gum confirm "Do you still want to continue?" || exit 0
     gum confirm "${MANAGE_NETWORK_PROMPT[@]}" && \
         export MANAGE_NETWORK=true || \
@@ -231,6 +232,8 @@ function main() {
     if [ ! -d "${ANTHIAS_REPO_DIR}" ]; then
         mkdir "${ANTHIAS_REPO_DIR}"
     fi
+
+    echo
 
     initialize_ansible
     initialize_locales
