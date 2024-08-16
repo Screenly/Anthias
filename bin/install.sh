@@ -39,8 +39,6 @@ function install_charm_gum() {
     curl -fsSL https://repo.charm.sh/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg
     echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" | sudo tee /etc/apt/sources.list.d/charm.list
     sudo apt -y update && sudo apt -y install gum
-
-    clear
 }
 
 function initialize_ansible() {
@@ -50,6 +48,11 @@ function initialize_ansible() {
 }
 
 function initialize_locales() {
+    gum style \
+        --foreground "#00FFFF" --border-foreground "#00FFFF" --border thick \
+        --align center --width 70 --margin "1 2" --padding "1 4" \
+        'Generate Locales'
+
     if [ ! -f /etc/locale.gen ]; then
         # No locales found. Creating locales with default UK/US setup.
         echo -e "en_GB.UTF-8 UTF-8\nen_US.UTF-8 UTF-8" | \
@@ -215,8 +218,17 @@ function post_installation() {
         sudo reboot
 }
 
+function display_banner() {
+    gum style \
+        --foreground 212 --border-foreground 212 --border thick \
+        --align center --width 70 --margin "1 2" --padding "2 4" \
+        'Anthias Installer'
+}
+
 function main() {
-    install_charm_gum
+    install_charm_gum && clear
+
+    display_banner
 
     gum format "${INTRO_MESSAGE[@]}"
     echo
@@ -232,8 +244,6 @@ function main() {
     if [ ! -d "${ANTHIAS_REPO_DIR}" ]; then
         mkdir "${ANTHIAS_REPO_DIR}"
     fi
-
-    echo
 
     initialize_ansible
     initialize_locales
