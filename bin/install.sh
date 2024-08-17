@@ -41,6 +41,36 @@ function install_charm_gum() {
     sudo apt -y update && sudo apt -y install gum
 }
 
+function display_banner() {
+    local TITLE="${1:-Anthias Installer}"
+    local COLOR="212"
+
+    gum style \
+        --foreground "${COLOR}" \
+        --border-foreground "${COLOR}" \
+        --border thick \
+        --align center \
+        --width 70 \
+        --margin "1 1" \
+        --padding "2 4" \
+        "${TITLE}"
+}
+
+function display_section() {
+    local TITLE="${1:-Section}"
+    local COLOR="#00FFFF"
+
+    gum style \
+        --foreground "${COLOR}" \
+        --border-foreground "${COLOR}" \
+        --border thick \
+        --align center \
+        --width 70 \
+        --margin "1 1" \
+        --padding "1 4" \
+        "${TITLE}"
+}
+
 function initialize_ansible() {
     sudo mkdir -p /etc/ansible
     echo -e "[local]\nlocalhost ansible_connection=local" | \
@@ -48,10 +78,7 @@ function initialize_ansible() {
 }
 
 function initialize_locales() {
-    gum style \
-        --foreground "#00FFFF" --border-foreground "#00FFFF" --border thick \
-        --align center --width 70 --margin "1 2" --padding "1 4" \
-        'Generate Locales'
+    display_section "Initialize Locales"
 
     if [ ! -f /etc/locale.gen ]; then
         # No locales found. Creating locales with default UK/US setup.
@@ -62,6 +89,8 @@ function initialize_locales() {
 }
 
 function install_packages() {
+    display_section "Install Packages via APT"
+
     RASPBERRY_PI_OS_VERSION=$(lsb_release -rs)
     APT_INSTALL_ARGS=(
         "git"
@@ -81,7 +110,7 @@ function install_packages() {
         )
     fi
 
-    if [ "$MANAGE_NETWORK" = true ]; then
+    if [ "$MANAGE_NETWORK" = "Yes" ]; then
         APT_INSTALL_ARGS+=("network-manager")
     fi
 
@@ -92,6 +121,8 @@ function install_packages() {
 }
 
 function install_ansible() {
+    display_section "Install Ansible"
+
     GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
     REQUIREMENTS_URL="$GITHUB_RAW_URL/$BRANCH/requirements/requirements.host.txt"
     ANSIBLE_VERSION=$(curl -s $REQUIREMENTS_URL | grep ansible)
@@ -114,19 +145,25 @@ function install_ansible() {
 }
 
 function run_ansible_playbook() {
+    display_section "Run the Anthias Ansible Playbook"
+
     sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
         -m git \
         -a "repo=$REPOSITORY dest=${ANTHIAS_REPO_DIR} version=${BRANCH} force=no"
     cd ${ANTHIAS_REPO_DIR}/ansible
 
-    sudo -E -u ${USER} ${SUDO_ARGS[@]} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
+    sudo -E -u ${USER} ${SUDO_ARGS[@]} ansible-playbook site.yml "${ANSIBLE_PLAYBOOK_ARGS[@]}"
 }
 
 function upgrade_docker_containers() {
+    display_section "Initialize/Upgrade Docker Containers"
+
     sudo -u ${USER} ${ANTHIAS_REPO_DIR}/bin/upgrade_containers.sh
 }
 
 function cleanup() {
+    display_section "Clean Up Unused Packages and Files"
+
     sudo apt-get autoclean
     sudo apt-get clean
     sudo docker system prune -f
@@ -192,9 +229,7 @@ function post_installation() {
     local POST_INSTALL_MESSAGE=()
     local UPGRADE_SCRIPT_PATH="/home/${USER}/screenly/bin/upgrade_containers.sh"
 
-    echo
-
-    gum style --foreground "#00FF00" 'Installation completed.' | gum format
+    display_section "Installation Complete"
 
     if [ -f /var/run/reboot-required ]; then
         POST_INSTALL_MESSAGE+=(
@@ -218,13 +253,6 @@ function post_installation() {
         sudo reboot
 }
 
-function display_banner() {
-    gum style \
-        --foreground 212 --border-foreground 212 --border thick \
-        --align center --width 70 --margin "1 2" --padding "2 4" \
-        'Anthias Installer'
-}
-
 function main() {
     install_charm_gum && clear
 
@@ -234,12 +262,20 @@ function main() {
     echo
     gum confirm "Do you still want to continue?" || exit 0
     gum confirm "${MANAGE_NETWORK_PROMPT[@]}" && \
-        export MANAGE_NETWORK=true || \
-        export MANAGE_NETWORK=false
+        export MANAGE_NETWORK="Yes" || \
+        export MANAGE_NETWORK="No"
     gum confirm "${EXPERIMENTAL_PROMPT[@]}" && BRANCH="experimental"
-    gum confirm "${SYSTEM_UPGRADE_PROMPT[@]}" || {
+    gum confirm "${SYSTEM_UPGRADE_PROMPT[@]}" && {
+        SYSTEM_UPGRADE="Yes"
         ANSIBLE_PLAYBOOK_ARGS=("--skip-tags" "system-upgrade")
+    } || {
+        SYSTEM_UPGRADE="No"
     }
+
+    display_section "User Input Summary"
+    gum format "**Manage Network:** ${MANAGE_NETWORK}"
+    gum format "**Branch:**         \`${BRANCH}\`"
+    gum format "**System Upgrade:** ${SYSTEM_UPGRADE}"
 
     if [ ! -d "${ANTHIAS_REPO_DIR}" ]; then
         mkdir "${ANTHIAS_REPO_DIR}"
