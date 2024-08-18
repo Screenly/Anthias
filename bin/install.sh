@@ -132,6 +132,8 @@ function install_ansible() {
     if python3 -c "import venv" &> /dev/null; then
     gum format 'Module `venv` is detected. Activating virtual environment...'
 
+    echo
+
     python3 -m venv /home/${USER}/installer_venv
     source /home/${USER}/installer_venv/bin/activate
 
