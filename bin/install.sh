@@ -199,7 +199,7 @@ fi
 # @TODO
 # Remove me later. Cryptography 38.0.3 won't build at the moment.
 # See https://github.com/screenly/anthias/issues/1654
-sudo ${SUDO_ARGS[@]} pip install cryptography==38.0.2
+sudo ${SUDO_ARGS[@]} pip install cryptography==38.0.1
 sudo ${SUDO_ARGS[@]} pip install "$ANSIBLE_VERSION"
 
 sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
