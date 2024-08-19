@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 # -*- sh-basic-offset: 4 -*-
