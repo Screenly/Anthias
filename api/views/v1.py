@@ -430,7 +430,6 @@ class InfoView(APIView):
                     'viewlog': {'type': 'string'},
                     'loadavg': {'type': 'number'},
                     'free_space': {'type': 'string'},
-                    'display_info': {'type': 'string'},
                     'display_power': {'type': 'string'},
                     'up_to_date': {'type': 'boolean'}
                 },
@@ -438,10 +437,6 @@ class InfoView(APIView):
                     'viewlog': 'Not yet implemented',
                     'loadavg': 0.1,
                     'free_space': '10G',
-                    'display_info': (
-                        'state 0xa [HDMI CUSTOM RGB lim 16:9], '
-                        '3840x2160 @ 30.00Hz, progressive'
-                    ),
                     'display_power': 'on',
                     'up_to_date': True
                 }
@@ -461,7 +456,6 @@ class InfoView(APIView):
             'viewlog': viewlog,
             'loadavg': diagnostics.get_load_avg()['15 min'],
             'free_space': free_space,
-            'display_info': diagnostics.get_monitor_status(),
             'display_power': display_power,
             'up_to_date': is_up_to_date()
         })
