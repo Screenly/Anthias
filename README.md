@@ -83,6 +83,8 @@ You'll be prompted with the following yes-no questions:
 You can either use the arrow keys to select your choice and then press Enter or type `y` or `n`.
 The installer will display your responses before proceeding with the installation.
 
+![nstall-anthias-gif](./docs/images/install-anthias.gif)
+
 **This installation will take 15 minutes to several hours**, depending on variables such as:
 
  * The Raspberry Pi hardware version
