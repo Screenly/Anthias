@@ -16,7 +16,7 @@ pytz==2022.2.1
 pyzmq==23.2.1
 redis==3.5.3
 requests[security]==2.32.3
-retry==0.9.2
+tenacity==9.0.0
 sh==1.8
 uptime==3.0.1
 urllib3==1.26.19

@@ -181,7 +181,6 @@ def settings_page(request):
 def system_info(request):
     viewlog = ["Yet to be implemented"]
     loadavg = diagnostics.get_load_avg()['15 min']
-    display_info = diagnostics.get_monitor_status()
     display_power = r.get('display_power')
 
     # Calculate disk space
@@ -223,7 +222,6 @@ def system_info(request):
             'hours': round(system_uptime.seconds / 3600, 2),
         },
         'memory': memory,
-        'display_info': display_info,
         'display_power': display_power,
         'raspberry_pi_model': raspberry_pi_model,
         'anthias_version': anthias_version,
