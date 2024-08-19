@@ -7,7 +7,8 @@ def generate_asset_id():
 
 
 class Asset(models.Model):
-    asset_id = models.TextField(primary_key=True, default=generate_asset_id, editable=False)
+    asset_id = models.TextField(
+        primary_key=True, default=generate_asset_id, editable=False)
     name = models.TextField(blank=True, null=True)
     uri = models.TextField(blank=True, null=True)
     md5 = models.TextField(blank=True, null=True)
