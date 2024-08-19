@@ -16,6 +16,7 @@ from jinja2 import Template
 from os import path, getenv, utime, system
 from random import shuffle
 from signal import signal, SIGALRM, SIGUSR1
+from tenacity import Retrying, stop_after_attempt, wait_fixed
 from time import sleep
 from threading import Thread
 
@@ -35,7 +36,6 @@ from lib.utils import (
     connect_to_redis,
     get_balena_device_info,
 )
-from retry.api import retry_call
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
 
@@ -56,6 +56,9 @@ WATCHDOG_PATH = '/tmp/screenly.watchdog'
 STANDBY_SCREEN = f'http://{LISTEN}:{PORT}/static/img/standby.png'
 SPLASH_PAGE_URL = f'http://{LISTEN}:{PORT}/splash-page'
 ZMQ_HOST_PUB_URL = 'tcp://host.docker.internal:10001'
+
+MAX_BALENA_IP_RETRIES = 90
+BALENA_IP_RETRY_DELAY = 1
 
 current_browser_url = None
 browser = None
@@ -528,7 +531,12 @@ def main():
 
     if settings['show_splash']:
         if is_balena_app():
-            retry_call(get_balena_device_info, tries=90, delay=1)
+            for attempt in Retrying(
+                stop=stop_after_attempt(MAX_BALENA_IP_RETRIES),
+                wait=wait_fixed(BALENA_IP_RETRY_DELAY),
+            ):
+                with attempt:
+                    get_balena_device_info()
 
         view_webpage(SPLASH_PAGE_URL)
         sleep(SPLASH_DELAY)

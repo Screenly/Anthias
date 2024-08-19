@@ -84,6 +84,18 @@ For most users, it's recommended that you [use the API instead](#accessing-the-r
 
 The SQLite Database can be found here &mdash; `~/.screenly/screenly.db`. It can be modified with the `sqlite3` CLI. The schema is relatively straightforward if you're already familiar. The columns of most interest to you will be `name` and `is_enabled`. In addition, `start_date` is useful if you want to use this in a disconnected manner.
 
+## Installing (trusted) self-signed certificates
+
+This section only works for devices running Raspberry Pi OS Lite.
+With running the following script, you can install self-signed certificates:
+
+```bash
+cd $HOME/screenly
+./bin/add_certificate.sh /path/to/certificate.crt
+```
+
+More details about generating self-signed certificates can be found [here](https://devopscube.com/create-self-signed-certificates-openssl/).
+
 ## Wi-Fi Setup
 
 - Read the [Wi-Fi Setup](wifi-setup.md) page for more details on how to set up Wi-Fi on the Raspberry Pi.
