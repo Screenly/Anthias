@@ -1429,8 +1429,9 @@ def settings_page():
             current_pass = request.form.get('current-password', '')
             auth_backend = request.form.get('auth_backend', '')
 
-            if auth_backend != (
-                settings['auth_backend'] and settings['auth_backend']
+            if (
+                auth_backend != settings['auth_backend']
+                and settings['auth_backend']
             ):
                 if not current_pass:
                     raise ValueError(
