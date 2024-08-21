@@ -5,22 +5,18 @@ from rest_framework.views import APIView
 
 from anthias_app.models import Asset
 from api.helpers import (
+    AssetCreationException,
     get_active_asset_ids,
     save_active_assets_ordering,
 )
 from api.serializers import (
     AssetSerializer,
-    CreateAssetSerializer,
+    CreateAssetSerializerV1_2,
     UpdateAssetSerializer,
 )
 from lib.auth import authorized
 from os import remove
 from settings import settings
-
-
-class AssetCreationException(Exception):
-    def __init__(self, errors):
-        self.errors = errors
 
 
 class AssetListViewV1_2(APIView):
@@ -40,7 +36,7 @@ class AssetListViewV1_2(APIView):
 
     @extend_schema(
         summary='Create asset',
-        request=CreateAssetSerializer,
+        request=CreateAssetSerializerV1_2,
         responses={
             201: AssetSerializer
         }
@@ -48,8 +44,8 @@ class AssetListViewV1_2(APIView):
     @authorized
     def post(self, request):
         try:
-            serializer = CreateAssetSerializer(
-                data=request.data, version='v1.2', unique_name=True)
+            serializer = CreateAssetSerializerV1_2(
+                data=request.data, unique_name=True)
 
             if not serializer.is_valid():
                 raise AssetCreationException(serializer.errors)
@@ -63,6 +59,7 @@ class AssetListViewV1_2(APIView):
             active_asset_ids.insert(asset.play_order, asset.asset_id)
 
         save_active_assets_ordering(active_asset_ids)
+        asset.refresh_from_db()
 
         return Response(AssetSerializer(asset).data)
 

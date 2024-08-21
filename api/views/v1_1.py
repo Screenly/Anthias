@@ -1,14 +1,22 @@
+import json
+
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.helpers import prepare_asset
-from api.serializers import AssetSerializer
+from anthias_app.models import Asset
+from api.helpers import (
+    AssetCreationException,
+    prepare_asset,
+)
+from api.serializers import (
+    AssetSerializer,
+    CreateAssetSerializerV1_1,
+)
 from api.views.v1 import V1_ASSET_REQUEST
 from lib import assets_helper, db
 from lib.auth import authorized
-from lib.utils import url_fails
 from os import remove
 from settings import settings
 
@@ -22,9 +30,9 @@ class AssetListViewV1_1(APIView):
     )
     @authorized
     def get(self, request):
-        with db.conn(settings['database']) as conn:
-            assets = assets_helper.read(conn)
-            return Response(assets)
+        queryset = Asset.objects.all()
+        serializer = AssetSerializer(queryset, many=True)
+        return Response(serializer.data)
 
     @extend_schema(
         summary='Create asset',
@@ -35,12 +43,27 @@ class AssetListViewV1_1(APIView):
     )
     @authorized
     def post(self, request):
-        asset = prepare_asset(request, unique_name=True)
-        if url_fails(asset['uri']):
-            raise Exception("Could not retrieve file. Check the asset URL.")
-        with db.conn(settings['database']) as conn:
-            result = assets_helper.create(conn, asset)
-            return Response(result, status=status.HTTP_201_CREATED)
+        data = None
+
+        # For backward compatibility
+        try:
+            data = json.loads(request.data)
+        except ValueError:
+            data = json.loads(request.data['model'])
+        except TypeError:
+            data = json.loads(request.data['model'])
+
+        try:
+            serializer = CreateAssetSerializerV1_1(data=data, unique_name=True)
+            if not serializer.is_valid():
+                raise AssetCreationException(serializer.errors)
+        except AssetCreationException as error:
+            return Response(error.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        asset = Asset.objects.create(**serializer.data)
+
+        return Response(
+            AssetSerializer(asset).data, status=status.HTTP_201_CREATED)
 
 
 class AssetViewV1_1(APIView):

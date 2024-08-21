@@ -20,6 +20,11 @@ from anthias_app.models import Asset
 from settings import settings
 
 
+class AssetCreationException(Exception):
+    def __init__(self, errors):
+        self.errors = errors
+
+
 def prepare_asset(request, unique_name=False):
     data = None
 
