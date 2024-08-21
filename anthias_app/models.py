@@ -1,5 +1,6 @@
 import uuid
-from django.db import models # noqa F401
+from django.db import models
+from django.utils import timezone
 
 
 def generate_asset_id():
@@ -25,3 +26,13 @@ class Asset(models.Model):
     class Meta:
         managed = False
         db_table = 'assets'
+
+    def is_active(self):
+        if self.is_enabled and self.start_date and self.end_date:
+            current_time = timezone.now()
+            return (
+                1 if self.start_date < current_time < self.end_date
+                else 0
+            )
+
+        return 0

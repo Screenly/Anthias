@@ -16,6 +16,7 @@ from lib.utils import (
 from rest_framework import status
 from rest_framework.views import exception_handler
 from rest_framework.response import Response
+from anthias_app.models import Asset
 from settings import settings
 
 
@@ -264,3 +265,21 @@ def custom_exception_handler(exc, context):
         {'error': str(exc)},
         status=status.HTTP_500_INTERNAL_SERVER_ERROR
     )
+
+
+def get_active_asset_ids():
+    enabled_assets = Asset.objects.filter(
+        is_enabled=1,
+        start_date__isnull=False,
+        end_date__isnull=False,
+    )
+    return [
+        asset.asset_id
+        for asset in enabled_assets
+        if asset.is_active()
+    ]
+
+
+def save_active_assets_ordering(active_asset_ids):
+    for i, asset_id in enumerate(active_asset_ids):
+        Asset.objects.filter(asset_id=asset_id).update(play_order=i)
