@@ -128,8 +128,12 @@ class AssetViewV1_2(APIView):
     @authorized
     def delete(self, request, asset_id):
         asset = Asset.objects.get(asset_id=asset_id)
-        if asset.uri.startswith(settings['assetdir']):
-            remove(asset.uri)
+
+        try:
+            if asset.uri.startswith(settings['assetdir']):
+                remove(asset.uri)
+        except OSError:
+            pass
 
         asset.delete()
 
