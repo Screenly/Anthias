@@ -9,6 +9,8 @@ BRANCH="master"
 ANSIBLE_PLAYBOOK_ARGS=()
 REPOSITORY="https://github.com/Screenly/Anthias.git"
 ANTHIAS_REPO_DIR="/home/${USER}/screenly"
+GITHUB_API_REPO_URL="https://api.github.com/repos/Screenly/Anthias"
+GITHUB_RELEASES_URL="https://github.com/Screenly/Anthias/releases"
 DOCKER_TAG="latest"
 
 INTRO_MESSAGE=(
@@ -51,10 +53,8 @@ EOF
 # Install gum from Charm.sh.
 # Gum helps you write shell scripts more efficiently.
 # @TODO: Install a fixed version of Gum.
-function install_charm_gum() {
-    if [ -f /usr/bin/gum ]; then
-        gum style --foreground "#FFFF00" -- \
-            "Gum is already installed." | gum format
+function install_prerequisites() {
+    if [ -f /usr/bin/gum ] && [ -f /usr/bin/jq ]; then
         return
     fi
 
@@ -63,7 +63,8 @@ function install_charm_gum() {
         sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg
     echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" \
         | sudo tee /etc/apt/sources.list.d/charm.list
-    sudo apt -y update && sudo apt -y install gum
+
+    sudo apt -y update && sudo apt -y install gum jq
 }
 
 function display_banner() {
@@ -289,15 +290,38 @@ function post_installation() {
         sudo reboot
 }
 
-function install_prerequisites() {
-    sudo apt update -y
-    sudo apt install -y jq
-    install_charm_gum
-    clear
+function set_custom_version() {
+    BRANCH=$(
+        gum input \
+            --header "Enter the tag name you want to install" \
+    )
+
+    local STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+        "${GITHUB_API_REPO_URL}/git/refs/tags/$BRANCH")
+
+    if [ "$STATUS_CODE" -ne 200 ]; then
+        gum style "Invalid tag name." \
+            | gum format
+        echo
+        exit 1
+    fi
+
+    local DOCKER_TAG_FILE_URL="${GITHUB_RELEASES_URL}/download/${BRANCH}/docker-tag"
+    STATUS_CODE=$(curl -sL -o /dev/null -w "%{http_code}" \
+        "$DOCKER_TAG_FILE_URL")
+
+    if [ "$STATUS_CODE" -ne 200 ]; then
+        gum style "This version doesn't have a \`docker-tag\` file." \
+            | gum format
+        echo
+        exit 1
+    fi
+
+    DOCKER_TAG=$(curl -sL "$DOCKER_TAG_FILE_URL")
 }
 
 function main() {
-    install_prerequisites
+    install_prerequisites && clear
 
     display_banner "${TITLE_TEXT}"
 
@@ -318,36 +342,9 @@ function main() {
         BRANCH="master"
     elif [ "$VERSION" == "experimental" ]; then
         BRANCH="experimental"
+        DOCKER_TAG="experimental"
     else
-        BRANCH=$(
-            gum input \
-                --header "Enter the tag name you want to install" \
-        )
-
-        GITHUB_API_REPO_URL="https://api.github.com/repos/Screenly/Anthias"
-        STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "${GITHUB_API_REPO_URL}/git/refs/tags/$BRANCH")
-
-        if [ "$STATUS_CODE" -ne 200 ]; then
-            gum style "Invalid tag name." \
-                | gum format
-            echo
-            exit 1
-        fi
-
-        GITHUB_RELEASES_URL="https://github.com/Screenly/Anthias/releases"
-        DOCKER_TAG_FILE_URL="${GITHUB_RELEASES_URL}/download/${BRANCH}/docker-tag"
-        STATUS_CODE=$(curl -sL -o /dev/null -w "%{http_code}" \
-            "$DOCKER_TAG_FILE_URL")
-
-        if [ "$STATUS_CODE" -ne 200 ]; then
-            gum style "This version doesn't have a \`docker-tag\` file." \
-                | gum format
-            echo
-            exit 1
-        fi
-
-        export DOCKER_TAG=$(curl -sL "$DOCKER_TAG_FILE_URL")
+        set_custom_version
     fi
 
     gum confirm "${SYSTEM_UPGRADE_PROMPT[@]}" && {
@@ -359,7 +356,7 @@ function main() {
 
     display_section "User Input Summary"
     gum format "**Manage Network:**     ${MANAGE_NETWORK}"
-    gum format "**Branch:**             \`${BRANCH}\`"
+    gum format "**Branch/Tag:**         \`${BRANCH}\`"
     gum format "**System Upgrade:**     ${SYSTEM_UPGRADE}"
     gum format "**Docker Tag Prefix:**  \`${DOCKER_TAG}\`"
 
