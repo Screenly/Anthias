@@ -76,11 +76,14 @@ $ bash <(curl -sL https://install-anthias.srly.io)
 You'll be prompted with the following yes-no questions:
 
 * Do you still want to continue?
-* Do you want Anthias to manage your network? This is recommended for most users because it adds features to manage your network.
-* Would you like to install the experimental version of Anthias instead?
+* Would you like Anthias to manage the network for you?
+* Would you like to install the experimental version instead?
 * Would you like to perform a full system upgrade as well?
 
-Answer the questions with only `y` or `N`. You don't need to press Enter for each of your inputs.
+You can either use the arrow keys to select your choice and then press Enter or type `y` or `n`.
+The installer will display your responses before proceeding with the installation.
+
+![nstall-anthias-gif](./docs/images/install-anthias.gif)
 
 **This installation will take 15 minutes to several hours**, depending on variables such as:
 
@@ -102,7 +105,7 @@ if you already have Anthias installed and wish to upgrade.
 Before you proceed, make sure to download a
 backup by going to the **_Settings_** page and clicking **_Get Backup_**. You can load the backup file later by going to **_Settings_** and clicking **_Upload and Recover_**.
 
-If you wish to opt for experimental features, select `y`. Select `N` otherwise.
+If you wish to opt for experimental features, select `Yes`. Otherwise, select `No`.
 
 Here's a current list of experimental features:
 
@@ -111,17 +114,19 @@ Here's a current list of experimental features:
 
 #### Prompt: Full System Upgrade
 
-If you've selected **_y_** when prompted for an upgrade &ndash; i.e., "Would you like to perform a full system upgrade as well? (y/N)"
+If you've selected **Yes** when prompted for an upgrade &ndash; i.e., "Would you like to perform a full system upgrade as well? (y/N)"
 &ndash; you'll get the following message when the installer is almost done executing:
 
 ```
-"Please reboot and run /home/$USER/screenly/bin/upgrade_containers.sh to complete the installation. Would you like to reboot now? (y/N)"
+Please reboot and run `/home/$USER/screenly/bin/upgrade_containers.sh` to complete the installation.
+
+Would you like to reboot now?
 ```
 
 You have the option to reboot now or later. On the next boot, make sure to run
 `upgrade_containers.sh`, as mentioned above.
 
-Otherwise, if you've selected **_N_** for the system upgrade, then you don't need to do a reboot for the containers to be started. However, it's still recommended to do a reboot.
+Otherwise, if you've selected **No** for the system upgrade, then you don't need to do a reboot for the containers to be started. However, it's still recommended to do a reboot.
 
 ### Installing with Balena
 

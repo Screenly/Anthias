@@ -307,6 +307,7 @@ function main() {
     gum confirm "${MANAGE_NETWORK_PROMPT[@]}" && \
         export MANAGE_NETWORK="Yes" || \
         export MANAGE_NETWORK="No"
+
     VERSION=$(
         gum choose \
             --header "${VERSION_PROMPT}" \
