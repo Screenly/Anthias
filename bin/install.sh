@@ -154,14 +154,14 @@ function install_ansible() {
     SUDO_ARGS=()
 
     if python3 -c "import venv" &> /dev/null; then
-    gum format 'Module `venv` is detected. Activating virtual environment...'
+        gum format 'Module `venv` is detected. Activating virtual environment...'
 
-    echo
+        echo
 
-    python3 -m venv /home/${USER}/installer_venv
-    source /home/${USER}/installer_venv/bin/activate
+        python3 -m venv /home/${USER}/installer_venv
+        source /home/${USER}/installer_venv/bin/activate
 
-    SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
+        SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
     fi
 
     # @TODO: Remove me later. Cryptography 38.0.3 won't build at the moment.
