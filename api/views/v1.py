@@ -4,8 +4,15 @@ from inspect import cleandoc
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from api.serializers import AssetSerializer
-from api.helpers import prepare_asset
+from api.serializers import (
+    AssetSerializer,
+    CreateAssetSerializerV1_1,
+    UpdateAssetSerializer,
+)
+from api.helpers import (
+    AssetCreationException,
+    parse_request,
+)
 from base64 import b64encode
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
@@ -24,12 +31,10 @@ from lib import (
 )
 from lib.auth import authorized
 from lib.github import is_up_to_date
-from lib.utils import (
-    connect_to_redis,
-    url_fails
-)
+from lib.utils import connect_to_redis
 from mimetypes import guess_type, guess_extension
 from os import path, remove, statvfs
+from anthias_app.models import Asset
 from celery_tasks import reboot_anthias, shutdown_anthias
 from settings import settings, ZmqCollector, ZmqPublisher
 
@@ -83,24 +88,8 @@ class AssetViewV1(APIView):
     @extend_schema(summary='Get asset')
     @authorized
     def get(self, request, asset_id, format=None):
-        with db.conn(settings['database']) as conn:
-            asset = assets_helper.read(conn, asset_id)
-
-        if isinstance(asset, list) and not asset:
-            return Response(
-                {'message': 'Asset not found.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        serializer = self.serializer_class(data=asset)
-
-        if serializer.is_valid():
-            return Response(serializer.data)
-
-        return Response(
-            serializer.errors,
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        asset = Asset.objects.get(asset_id=asset_id)
+        return Response(AssetSerializer(asset).data)
 
     @extend_schema(
         summary='Update asset',
@@ -111,23 +100,33 @@ class AssetViewV1(APIView):
     )
     @authorized
     def put(self, request, asset_id, format=None):
-        with db.conn(settings['database']) as conn:
-            result = assets_helper.update(
-                conn, asset_id, prepare_asset(request))
-            return Response(result, status=status.HTTP_200_OK)
+        asset = Asset.objects.get(asset_id=asset_id)
+
+        data = parse_request(request)
+        serializer = UpdateAssetSerializer(asset, data=data, partial=False)
+
+        if serializer.is_valid():
+            serializer.save()
+        else:
+            return Response(
+                serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        asset.refresh_from_db()
+        return Response(AssetSerializer(asset).data)
 
     @extend_schema(summary='Delete asset')
     @authorized
     def delete(self, request, asset_id, format=None):
-        with db.conn(settings['database']) as conn:
-            asset = assets_helper.read(conn, asset_id)
-            try:
-                if asset['uri'].startswith(settings['assetdir']):
-                    remove(asset['uri'])
-            except OSError:
-                pass
-            assets_helper.delete(conn, asset_id)
-            return Response(status=status.HTTP_204_NO_CONTENT)
+        asset = Asset.objects.get(asset_id=asset_id)
+
+        try:
+            if asset.uri.startswith(settings['assetdir']):
+                remove(asset.uri)
+        except OSError:
+            pass
+
+        asset.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class AssetContentView(APIView):
@@ -197,18 +196,9 @@ class AssetListViewV1(APIView):
     )
     @authorized
     def get(self, request, format=None):
-        with db.conn(settings['database']) as conn:
-            data = assets_helper.read(conn)
-
-        serializer = self.serializer_class(data=data, many=True)
-
-        if serializer.is_valid():
-            return Response(serializer.data)
-
-        return Response(
-            serializer.errors,
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        queryset = Asset.objects.all()
+        serializer = AssetSerializer(queryset, many=True)
+        return Response(serializer.data)
 
     @extend_schema(
         summary='Create asset',
@@ -219,17 +209,19 @@ class AssetListViewV1(APIView):
     )
     @authorized
     def post(self, request, format=None):
-        asset = prepare_asset(request)
+        data = parse_request(request)
 
-        if url_fails(asset['uri']):
-            return Response(
-                {'message': 'Could not retrieve file. Check the asset URL.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        try:
+            serializer = CreateAssetSerializerV1_1(data=data)
+            if not serializer.is_valid():
+                raise AssetCreationException(serializer.errors)
+        except AssetCreationException as error:
+            return Response(error.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        with db.conn(settings['database']) as conn:
-            result = assets_helper.create(conn, asset)
-            return Response(result, status=status.HTTP_201_CREATED)
+        asset = Asset.objects.create(**serializer.data)
+
+        return Response(
+            AssetSerializer(asset).data, status=status.HTTP_201_CREATED)
 
 
 class FileAssetView(APIView):

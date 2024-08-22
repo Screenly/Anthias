@@ -288,3 +288,17 @@ def get_active_asset_ids():
 def save_active_assets_ordering(active_asset_ids):
     for i, asset_id in enumerate(active_asset_ids):
         Asset.objects.filter(asset_id=asset_id).update(play_order=i)
+
+
+def parse_request(request):
+    data = None
+
+    # For backward compatibility
+    try:
+        data = json.loads(request.data)
+    except ValueError:
+        data = json.loads(request.data['model'])
+    except TypeError:
+        data = json.loads(request.data['model'])
+
+    return data
