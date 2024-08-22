@@ -73,15 +73,16 @@ The tl;dr for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) is:
 $ bash <(curl -sL https://install-anthias.srly.io)
 ```
 
-You'll be prompted with the following yes-no questions:
+You'll be prompted with the following questions:
 
 * Do you still want to continue?
 * Would you like Anthias to manage the network for you?
 * Which version of Anthias would you like to install?
 * Would you like to perform a full system upgrade as well?
 
-You can either use the arrow keys to select your choice and then press Enter or type `y` or `n`.
-The installer will display your responses before proceeding with the installation.
+You can either use the arrow keys to select your choice and then press Enter or type `y` or `n`
+(for yes-no questions). The installer will display your responses before proceeding with the
+installation.
 
 ![nstall-anthias-gif](./docs/images/install-anthias.gif)
 
@@ -104,6 +105,7 @@ You can choose between the following choices &mdash; `latest`, `experimental`, a
 * Selecting `latest` will install the version from the `master` branch.
 * Selecting `experimental` will install the version from the `experimental` branch.
 * Selecting `tag` will prompt you to enter a specific tag to install.
+* Do take note the `latest` and `experimental` branches are rolling releases, so you'll always get the latest changes.
 
 ##### Experimental Features
 
@@ -120,8 +122,9 @@ Here's a current list of experimental features:
 
 ##### Installing from a Specific Tag
 
-If you choose `tag`, you'll be prompted to enter a specific tag to install.
-You can find the tags in the [releases](https://github.com/Screenly/Anthias/releases) page.
+Select this option if you want to install a pinned version of Anthias. You'll be prompted to enter
+a specific tag to install. You can find the tags in the
+[releases](https://github.com/Screenly/Anthias/releases) page.
 
 The script will check if the tag specified is valid and can be installed.
 If it's not, you need to run the script again and enter a valid tag.
