@@ -12,6 +12,7 @@ from api.serializers import (
 from api.helpers import (
     AssetCreationException,
     parse_request,
+    save_active_assets_ordering,
 )
 from base64 import b64encode
 from drf_spectacular.types import OpenApiTypes
@@ -24,9 +25,7 @@ from drf_spectacular.utils import (
 )
 from hurry.filesize import size
 from lib import (
-    assets_helper,
     backup_helper,
-    db,
     diagnostics
 )
 from lib.auth import authorized
@@ -154,16 +153,12 @@ class AssetContentView(APIView):
     )
     @authorized
     def get(self, request, asset_id, format=None):
-        with db.conn(settings['database']) as conn:
-            asset = assets_helper.read(conn, asset_id)
+        asset = Asset.objects.get(asset_id=asset_id)
 
-        if isinstance(asset, list):
-            raise Exception('Invalid asset ID provided')
+        if path.isfile(asset.uri):
+            filename = asset.name
 
-        if path.isfile(asset['uri']):
-            filename = asset['name']
-
-            with open(asset['uri'], 'rb') as f:
+            with open(asset.uri, 'rb') as f:
                 content = f.read()
 
             mimetype = guess_type(filename)[0]
@@ -179,7 +174,7 @@ class AssetContentView(APIView):
         else:
             result = {
                 'type': 'url',
-                'url': asset['uri']
+                'url': asset.uri
             }
 
         return Response(result)
@@ -302,9 +297,8 @@ class PlaylistOrderView(APIView):
     )
     @authorized
     def post(self, request):
-        with db.conn(settings['database']) as conn:
-            assets_helper.save_ordering(
-                conn, request.data.get('ids', '').split(','))
+        asset_ids = request.data.get('ids', '').split(',')
+        save_active_assets_ordering(asset_ids)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -488,5 +482,5 @@ class ViewerCurrentAssetView(APIView):
         if not current_asset_id:
             return Response([])
 
-        with db.conn(settings['database']) as conn:
-            return Response(assets_helper.read(conn, current_asset_id))
+        queryset = Asset.objects.get(asset_id=current_asset_id)
+        return Response(AssetSerializer(queryset).data)
