@@ -77,7 +77,7 @@ You'll be prompted with the following yes-no questions:
 
 * Do you still want to continue?
 * Would you like Anthias to manage the network for you?
-* Would you like to install the experimental version instead?
+* Which version of Anthias would you like to install?
 * Would you like to perform a full system upgrade as well?
 
 You can either use the arrow keys to select your choice and then press Enter or type `y` or `n`.
@@ -97,7 +97,15 @@ During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast inte
 
 Opting for network management will enable and configure the [NetworkManager](https://wiki.debian.org/NetworkManager) service on your device.
 
-#### Prompt: Experimental Version
+#### Prompt: Version Selection
+
+You can choose between the following choices &mdash; `latest`, `experimental`, and `tag`.
+
+* Selecting `latest` will install the version from the `master` branch.
+* Selecting `experimental` will install the version from the `experimental` branch.
+* Selecting `tag` will prompt you to enter a specific tag to install.
+
+##### Experimental Features
 
 We have decided to roll out an `experimental` branch for new features that can break Anthias, especially
 if you already have Anthias installed and wish to upgrade.
@@ -105,12 +113,18 @@ if you already have Anthias installed and wish to upgrade.
 Before you proceed, make sure to download a
 backup by going to the **_Settings_** page and clicking **_Get Backup_**. You can load the backup file later by going to **_Settings_** and clicking **_Upload and Recover_**.
 
-If you wish to opt for experimental features, select `Yes`. Otherwise, select `No`.
-
 Here's a current list of experimental features:
 
 * Migration from Flask to Django &ndash; The database still uses `sqlite3`. We will transition to using ORM in the future.
 * Revamped API docs &ndash; we changed the structure and overall look and feel of the documentation for easier reference.
+
+##### Installing from a Specific Tag
+
+If you choose `tag`, you'll be prompted to enter a specific tag to install.
+You can find the tags in the [releases](https://github.com/Screenly/Anthias/releases) page.
+
+The script will check if the tag specified is valid and can be installed.
+If it's not, you need to run the script again and enter a valid tag.
 
 #### Prompt: Full System Upgrade
 
