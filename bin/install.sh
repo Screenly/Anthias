@@ -16,6 +16,13 @@ DOCKER_TAG="latest"
 INTRO_MESSAGE=(
     "Anthias requires a dedicated Raspberry Pi and an SD card."
     "You will not be able to use the regular desktop environment once installed."
+    ""
+    "When prompted for the version, you can choose between the following:"
+    "  - **latest:** Installs the latest version from the \`master\` branch."
+    "  - **experimental:** Installs the latest version from the \`experimental\` branch."
+    "  - **tag:** Installs a pinned version based on the tag name."
+    ""
+    "Take note that \`latest\` and \`experimental\` versions are rolling releases."
 )
 MANAGE_NETWORK_PROMPT=(
     "Would you like Anthias to manage the network for you?"

@@ -105,7 +105,7 @@ You can choose between the following choices &mdash; `latest`, `experimental`, a
 * Selecting `latest` will install the version from the `master` branch.
 * Selecting `experimental` will install the version from the `experimental` branch.
 * Selecting `tag` will prompt you to enter a specific tag to install.
-* Do take note the `latest` and `experimental` branches are rolling releases, so you'll always get the latest changes.
+* Do take note the `latest` and `experimental` versions are rolling releases, so you'll always get the latest changes.
 
 ##### Experimental Features
 
