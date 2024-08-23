@@ -1,17 +1,15 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 from __future__ import unicode_literals
 from builtins import bytes
 from future import standard_library
-from builtins import filter
 from builtins import range
+import django
 from builtins import object
 import json
 import logging
 import pydbus
 import sys
-from datetime import datetime
 from jinja2 import Template
 from os import path, getenv, utime, system
 from random import shuffle
@@ -24,19 +22,27 @@ import requests
 import sh
 import zmq
 
-from lib import assets_helper
-from lib import db
 from lib.errors import SigalrmException
 from lib.media_player import VLCMediaPlayer
-from lib.utils import (
-    url_fails,
-    is_balena_app,
-    get_node_ip,
-    string_to_bool,
-    connect_to_redis,
-    get_balena_device_info,
-)
 from settings import settings, LISTEN, PORT, ZmqConsumer
+
+try:
+    django.setup()
+
+    # Place imports that uses Django in this block.
+
+    from anthias_app.models import Asset
+    from django.utils import timezone
+    from lib.utils import (
+        url_fails,
+        is_balena_app,
+        get_node_ip,
+        string_to_bool,
+        connect_to_redis,
+        get_balena_device_info,
+    )
+except Exception:
+    pass
 
 
 standard_library.install_aliases()
@@ -69,7 +75,6 @@ r = connect_to_redis()
 media_player = VLCMediaPlayer()
 
 HOME = None
-db_conn = None
 
 scheduler = None
 
@@ -102,10 +107,9 @@ def navigate_to_asset(asset_id):
 
 
 def stop_loop():
-    global db_conn, loop_is_stopped
+    global loop_is_stopped
     loop_is_stopped = True
     skip_asset()
-    db_conn = None
 
 
 def play_loop():
@@ -264,7 +268,7 @@ class Scheduler(object):
 
     def refresh_playlist(self):
         logging.debug('refresh_playlist')
-        time_cur = datetime.utcnow()
+        time_cur = timezone.now()
 
         logging.debug(
             'refresh: counter: (%s) deadline (%s) timecur (%s)',
@@ -308,7 +312,11 @@ class Scheduler(object):
 
 def get_specific_asset(asset_id):
     logging.info('Getting specific asset')
-    return assets_helper.read(db_conn, asset_id)
+    try:
+        return Asset.objects.get(asset_id=asset_id).__dict__
+    except Asset.DoesNotExist:
+        logging.debug('Asset %s not found in database', asset_id)
+        return None
 
 
 def generate_asset_list():
@@ -318,15 +326,25 @@ def generate_asset_list():
         2. Get nearest deadline
     """
     logging.info('Generating asset-list...')
-    assets = assets_helper.read(db_conn)
+    assets = Asset.objects.all()
     deadlines = [
-        asset['end_date']
-        if assets_helper.is_active(asset)
-        else asset['start_date']
+        asset.end_date
+        if asset.is_active()
+        else asset.start_date
         for asset in assets
     ]
 
-    playlist = list(filter(assets_helper.is_active, assets))
+    enabled_assets = Asset.objects.filter(
+        is_enabled=1,
+        start_date__isnull=False,
+        end_date__isnull=False,
+    )
+    playlist = [
+        asset.__dict__
+        for asset in enabled_assets
+        if asset.is_active()
+    ]
+
     deadline = sorted(deadlines)[0] if len(deadlines) > 0 else None
     logging.debug('generate_asset_list deadline: %s', deadline)
 
@@ -450,7 +468,7 @@ def asset_loop(scheduler):
 
 
 def setup():
-    global HOME, db_conn, browser_bus
+    global HOME, browser_bus
     HOME = getenv('HOME')
     if not HOME:
         logging.error('No HOME variable')
@@ -463,9 +481,8 @@ def setup():
     signal(SIGALRM, sigalrm)
 
     load_settings()
-    db_conn = db.conn(settings['database'])
-
     load_browser()
+
     bus = pydbus.SessionBus()
     browser_bus = bus.get('screenly.webview', '/Screenly')
 
@@ -490,22 +507,19 @@ def wait_for_server(retries, wt=1):
 
 
 def start_loop():
-    global db_conn, loop_is_stopped
+    global loop_is_stopped
 
     logging.debug('Entering infinite loop.')
     while True:
         if loop_is_stopped:
             sleep(0.1)
             continue
-        if not db_conn:
-            load_settings()
-            db_conn = db.conn(settings['database'])
 
         asset_loop(scheduler)
 
 
 def main():
-    global db_conn, scheduler
+    global scheduler
     global load_screen_displayed, mq_data
 
     load_screen_displayed = False

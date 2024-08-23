@@ -111,8 +111,7 @@ class CreateAssetSerializerV1_1(Serializer):
         if 'youtube_asset' in asset['mimetype']:
             (
                 uri, asset['name'], asset['duration']
-            ) = download_video_from_youtube(
-                uri, asset['asset_id'])
+            ) = download_video_from_youtube(uri, asset['asset_id'])
             asset['mimetype'] = 'video'
             asset['is_processing'] = 1
 
@@ -149,6 +148,7 @@ class CreateAssetSerializerV1_2(Serializer):
         self.unique_name = unique_name
         super().__init__(*args, **kwargs)
 
+    asset_id = CharField(read_only=True)
     name = CharField()
     uri = CharField()
     start_date = DateTimeField(default_timezone=timezone.utc)

@@ -3,7 +3,6 @@ import yaml
 
 from django.shortcuts import render
 from django.utils import timezone
-from lib import assets_helper, db
 from lib.github import is_up_to_date
 from lib.utils import get_video_duration
 from os import getenv, path
