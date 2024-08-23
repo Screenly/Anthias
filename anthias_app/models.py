@@ -24,7 +24,6 @@ class Asset(models.Model):
     skip_asset_check = models.IntegerField(default=0)
 
     class Meta:
-        managed = False
         db_table = 'assets'
 
     def is_active(self):
