@@ -27,7 +27,7 @@ python3 ./bin/migrate.py
 
 ./manage.py initialize_assets
 ./manage.py makemigrations
-./manage.py migrate
+./manage.py migrate --fake-initial
 
 if [[ "$ENVIRONMENT" == "development" ]]; then
     echo "Starting Django development server..."

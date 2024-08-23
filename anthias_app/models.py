@@ -22,7 +22,6 @@ class Asset(models.Model):
     nocache = models.IntegerField(default=0)
     play_order = models.IntegerField(default=0)
     skip_asset_check = models.IntegerField(default=0)
-    dummy_1 = models.IntegerField(default=0) # todo nico: remove after debugging
 
     class Meta:
         db_table = 'assets'
