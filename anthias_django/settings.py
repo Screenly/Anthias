@@ -100,12 +100,14 @@ WSGI_APPLICATION = 'anthias_django.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': '/data/.screenly/screenly.db',
-    }
+        'NAME': (
+            '/data/.screenly/test.db' if getenv('ENVIRONMENT') == 'test'
+            else '/data/.screenly/screenly.db'
+        ),
+    },
 }
 
 
