@@ -11,6 +11,7 @@ REPOSITORY="https://github.com/Screenly/Anthias.git"
 ANTHIAS_REPO_DIR="/home/${USER}/screenly"
 GITHUB_API_REPO_URL="https://api.github.com/repos/Screenly/Anthias"
 GITHUB_RELEASES_URL="https://github.com/Screenly/Anthias/releases"
+GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
 DOCKER_TAG="latest"
 
 INTRO_MESSAGE=(
@@ -59,7 +60,6 @@ EOF
 
 # Install gum from Charm.sh.
 # Gum helps you write shell scripts more efficiently.
-# @TODO: Install a fixed version of Gum.
 function install_prerequisites() {
     if [ -f /usr/bin/gum ] && [ -f /usr/bin/jq ]; then
         return
@@ -154,7 +154,6 @@ function install_packages() {
 function install_ansible() {
     display_section "Install Ansible"
 
-    GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
     REQUIREMENTS_URL="$GITHUB_RAW_URL/$BRANCH/requirements/requirements.host.txt"
     ANSIBLE_VERSION=$(curl -s $REQUIREMENTS_URL | grep ansible)
 
@@ -191,13 +190,8 @@ function run_ansible_playbook() {
 
 function upgrade_docker_containers() {
     display_section "Initialize/Upgrade Docker Containers"
-
-    # TODO: Replace the following below with that from the master branch.
-    # Older versions of `upgrade_containers.sh` script may not have the support
-    # overwriting the `DOCKER_TAG` environment variable, so we need to replace
-    # the script with the latest version.
     wget -q \
-        https://raw.githubusercontent.com/nicomiguelino/Anthias/modify-installer-script/bin/upgrade_containers.sh \
+        "$GITHUB_RAW_URL/master/bin/upgrade_containers.sh" \
         -O /home/${USER}/screenly/bin/upgrade_containers.sh
 
     sudo -u ${USER} \
