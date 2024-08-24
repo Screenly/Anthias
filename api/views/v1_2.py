@@ -61,7 +61,10 @@ class AssetListViewV1_2(APIView):
         save_active_assets_ordering(active_asset_ids)
         asset.refresh_from_db()
 
-        return Response(AssetSerializer(asset).data)
+        return Response(
+            AssetSerializer(asset).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class AssetViewV1_2(APIView):
