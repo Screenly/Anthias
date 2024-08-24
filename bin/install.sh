@@ -13,6 +13,7 @@ GITHUB_API_REPO_URL="https://api.github.com/repos/Screenly/Anthias"
 GITHUB_RELEASES_URL="https://github.com/Screenly/Anthias/releases"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
 DOCKER_TAG="latest"
+UPGRADE_SCRIPT_PATH="${ANTHIAS_REPO_DIR}/bin/upgrade_containers.sh"
 
 INTRO_MESSAGE=(
     "Anthias requires a dedicated Raspberry Pi and an SD card."
@@ -190,13 +191,14 @@ function run_ansible_playbook() {
 
 function upgrade_docker_containers() {
     display_section "Initialize/Upgrade Docker Containers"
+
     wget -q \
         "$GITHUB_RAW_URL/master/bin/upgrade_containers.sh" \
-        -O /home/${USER}/screenly/bin/upgrade_containers.sh
+        -O "$UPGRADE_SCRIPT_PATH"
 
     sudo -u ${USER} \
         DOCKER_TAG="${DOCKER_TAG}" \
-        ${ANTHIAS_REPO_DIR}/bin/upgrade_containers.sh
+        "${UPGRADE_SCRIPT_PATH}"
 }
 
 function cleanup() {
@@ -265,7 +267,6 @@ function write_anthias_version() {
 
 function post_installation() {
     local POST_INSTALL_MESSAGE=()
-    local UPGRADE_SCRIPT_PATH="/home/${USER}/screenly/bin/upgrade_containers.sh"
 
     display_section "Installation Complete"
 
