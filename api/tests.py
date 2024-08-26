@@ -9,6 +9,7 @@ from pathlib import Path
 from rest_framework.test import APIClient
 from rest_framework import status
 from settings import settings as anthias_settings
+from unittest import mock
 from unittest_parametrize import parametrize, ParametrizedTestCase
 
 from anthias_app.models import Asset
@@ -161,7 +162,7 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(len(assets), 0)
 
 
-class V1EndpointsTest(TestCase):
+class V1EndpointsTest(TestCase, ParametrizedTestCase):
     def setUp(self):
         self.client = APIClient()
 
@@ -237,3 +238,96 @@ class V1EndpointsTest(TestCase):
         self.assertEqual(asset_1.play_order, 0)
         self.assertEqual(asset_2.play_order, 1)
         self.assertEqual(asset_3.play_order, 2)
+
+    @parametrize(
+        'command',
+        [
+            ('next',),
+            ('previous',),
+            ('asset&6ee2394e760643748b9353f06f405424',),
+        ],
+    )
+    @mock.patch('api.views.v1.ZmqPublisher.send_to_viewer', return_value=None)
+    def test_assets_control(self, send_to_viewer_mock, command):
+        assets_control_url = reverse('api:assets_control_v1', args=[command])
+        response = self.client.get(assets_control_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(send_to_viewer_mock.call_count, 1)
+        self.assertEqual(send_to_viewer_mock.call_args[0][0], command)
+        self.assertEqual(response.data, 'Asset switched')
+
+    @mock.patch(
+        'api.views.v1.is_up_to_date',
+        return_value=False
+    )
+    @mock.patch(
+        'lib.diagnostics.get_load_avg',
+        return_value={'15 min': 0.11}
+    )
+    @mock.patch('api.views.v1.size', return_value='15G')
+    @mock.patch('api.views.v1.statvfs', mock.MagicMock())
+    def test_device_info(
+        self,
+        size_mock,
+        get_load_avg_mock,
+        is_up_to_date_mock
+    ):
+        is_up_to_date_mock.return_value = False
+        info_url = reverse('api:info_v1')
+        response = self.client.get(info_url)
+        data = response.data
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(size_mock.call_count, 1)
+        self.assertEqual(get_load_avg_mock.call_count, 1)
+        self.assertEqual(is_up_to_date_mock.call_count, 1)
+        self.assertEqual(data['viewlog'], 'Not yet implemented')
+
+    @mock.patch(
+        'api.views.v1.reboot_anthias.apply_async',
+        side_effect=(lambda: None)
+    )
+    def test_reboot(self, reboot_anthias_mock):
+        reboot_url = reverse('api:reboot_v1')
+        response = self.client.post(reboot_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(reboot_anthias_mock.call_count, 1)
+
+    @mock.patch(
+        'api.views.v1.shutdown_anthias.apply_async',
+        side_effect=(lambda: None)
+    )
+    def test_shutdown(self, shutdown_anthias_mock):
+        shutdown_url = reverse('api:shutdown_v1')
+        response = self.client.post(shutdown_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(shutdown_anthias_mock.call_count, 1)
+
+    @mock.patch('api.views.v1.ZmqPublisher.send_to_viewer', return_value=None)
+    def test_viewer_current_asset(self, send_to_viewer_mock):
+        asset = Asset.objects.create(**{
+            **ASSET_CREATION_DATA,
+            'is_enabled': 1,
+        })
+        asset_id = asset.asset_id
+
+        with (
+            mock.patch(
+                'api.views.v1.ZmqCollector.recv_json',
+                side_effect=(lambda _: {
+                    'current_asset_id': asset_id
+                })
+            )
+        ):
+            viewer_current_asset_url = reverse('api:viewer_current_asset_v1')
+            response = self.client.get(viewer_current_asset_url)
+            data = response.data
+
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertEqual(send_to_viewer_mock.call_count, 1)
+
+            self.assertEqual(data['asset_id'], asset_id)
+            self.assertEqual(data['is_active'], 1)
