@@ -1,11 +1,17 @@
 import json
 
+from django.conf import settings as django_settings
 from django.test import TestCase
 from django.urls import reverse
 from inspect import cleandoc
+from os import path
+from pathlib import Path
 from rest_framework.test import APIClient
 from rest_framework import status
+from settings import settings as anthias_settings
 from unittest_parametrize import parametrize, ParametrizedTestCase
+
+from anthias_app.models import Asset
 
 
 ASSET_LIST_V1_1_URL = reverse('api:asset_list_v1_1')
@@ -31,9 +37,6 @@ parametrize_version = parametrize(
 class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
     def setUp(self):
         self.client = APIClient()
-
-    def tearDown(self):
-        pass
 
     def get_assets(self, version):
         asset_list_url = reverse(f'api:asset_list_{version}')
@@ -156,3 +159,81 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(len(assets), 0)
+
+
+class V1EndpointsTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def tearDown(self):
+        self.remove_all_asset_files()
+
+    def remove_all_asset_files(self):
+        asset_directory_path = Path(anthias_settings['assetdir'])
+        for file in asset_directory_path.iterdir():
+            file.unlink()
+
+    def get_asset_content_url(self, asset_id):
+        return reverse('api:asset_content_v1', args=[asset_id])
+
+    def test_asset_content(self):
+        asset = Asset.objects.create(**ASSET_CREATION_DATA)
+        asset_id = asset.asset_id
+
+        response = self.client.get(self.get_asset_content_url(asset_id))
+        data = response.data
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(data['type'], 'url')
+        self.assertEqual(data['url'], 'https://anthias.screenly.io')
+
+    def test_file_asset(self):
+        project_base_path = django_settings.BASE_DIR
+        image_path = path.join(
+            project_base_path,
+            'static/img/standby.png',
+        )
+
+        response = self.client.post(
+            reverse('api:file_asset_v1'),
+            data={
+                'file_upload': open(image_path, 'rb'),
+            },
+        )
+        data = response.data
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(path.exists(data['uri']))
+        self.assertEqual(data['ext'], '.png')
+
+    def test_playlist_order(self):
+        playlist_order_url = reverse('api:playlist_order_v1')
+
+        for asset_name in ['Asset #1', 'Asset #2', 'Asset #3']:
+            Asset.objects.create(**{
+                **ASSET_CREATION_DATA,
+                'name': asset_name,
+            })
+
+        self.assertTrue(
+            all([
+                asset.play_order == 0
+                for asset in Asset.objects.all()
+            ])
+        )
+
+        asset_1, asset_2, asset_3 = Asset.objects.all()
+        asset_ids = [asset_1.asset_id, asset_2.asset_id, asset_3.asset_id]
+
+        response = self.client.post(
+            playlist_order_url,
+            data={'ids': ','.join(asset_ids)}
+        )
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        for asset in [asset_1, asset_2, asset_3]:
+            asset.refresh_from_db()
+
+        self.assertEqual(asset_1.play_order, 0)
+        self.assertEqual(asset_2.play_order, 1)
+        self.assertEqual(asset_3.play_order, 2)
