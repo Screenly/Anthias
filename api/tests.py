@@ -22,6 +22,11 @@ ASSET_CREATION_DATA = {
     'skip_asset_check': 0
 }
 
+parametrize_version = parametrize(
+    'version',
+    [('v1',), ('v1_1',), ('v1_2',)],
+)
+
 
 class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
     def setUp(self):
@@ -67,14 +72,7 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
         url = reverse('api:asset_detail_v1_1', args=[asset_id])
         return self.client.delete(url)
 
-    @parametrize(
-        'version',
-        [
-            ('v1',),
-            ('v1_1',),
-            ('v1_2',),
-        ]
-    )
+    @parametrize_version
     def test_get_assets_when_first_time_setup_should_initially_return_empty(self, version):  # noqa: E501
         asset_list_url = reverse(f'api:asset_list_{version}')
         response = self.client.get(asset_list_url)
@@ -83,14 +81,7 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(assets), 0)
 
-    @parametrize(
-        'version',
-        [
-            ('v1',),
-            ('v1_1',),
-            ('v1_2',),
-        ]
-    )
+    @parametrize_version
     def test_create_asset_should_return_201(self, version):
         asset_list_url = reverse(f'api:asset_list_{version}')
         response = self.client.post(
@@ -107,28 +98,14 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(response.data['play_order'], 0)
         self.assertEqual(response.data['skip_asset_check'], 0)
 
-    @parametrize(
-        'version',
-        [
-            ('v1',),
-            ('v1_1',),
-            ('v1_2',),
-        ]
-    )
+    @parametrize_version
     def test_get_assets_after_create_should_return_1_asset(self, version):
         self.create_asset(ASSET_CREATION_DATA, version)
 
         assets = self.get_assets(version)
         self.assertEqual(len(assets), 1)
 
-    @parametrize(
-        'version',
-        [
-            ('v1',),
-            ('v1_1',),
-            ('v1_2',),
-        ]
-    )
+    @parametrize_version
     def test_get_asset_by_id_should_return_asset(self, version):
         expected_asset = self.create_asset(ASSET_CREATION_DATA, version)
         asset_id = expected_asset['asset_id']
@@ -137,14 +114,7 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
 
         self.assertEqual(expected_asset, actual_asset)
 
-    @parametrize(
-        'version',
-        [
-            ('v1',),
-            ('v1_1',),
-            ('v1_2',),
-        ]
-    )
+    @parametrize_version
     def test_update_asset_should_return_updated_asset(self, version):
         expected_asset = self.create_asset(ASSET_CREATION_DATA, version)
         asset_id = expected_asset['asset_id']
@@ -176,14 +146,7 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(updated_asset['is_enabled'], 1)
         self.assertEqual(updated_asset['play_order'], 0)
 
-    @parametrize(
-        'version',
-        [
-            ('v1',),
-            ('v1_1',),
-            ('v1_2',),
-        ]
-    )
+    @parametrize_version
     def test_delete_asset_should_return_204(self, version):
         asset = self.create_asset(ASSET_CREATION_DATA, version)
         asset_id = asset['asset_id']
