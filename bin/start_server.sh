@@ -23,7 +23,6 @@ if [ -n "${MANAGEMENT_USER+x}" ] && [ -n "${MANAGEMENT_PASSWORD+x}" ]; then
 fi
 
 echo "Running migration..."
-python3 ./bin/migrate.py
 
 ./manage.py initialize_assets
 ./manage.py makemigrations

@@ -4,11 +4,9 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 from builtins import str
 import os
-import sqlite3
 from . import utils
 import cec
 from lib import raspberry_pi_helper
-from pprint import pprint
 from datetime import datetime
 
 
@@ -37,18 +35,6 @@ def get_uptime():
         uptime_seconds = float(f.readline().split()[0])
 
     return uptime_seconds
-
-
-def get_playlist():
-    anthias_db = os.path.join(os.getenv('HOME'), '.screenly/screenly.db')
-    playlist = []
-    if os.path.isfile(anthias_db):
-        conn = sqlite3.connect(anthias_db)
-        c = conn.cursor()
-        for row in c.execute('SELECT * FROM assets;'):
-            playlist.append(row)
-        c.close
-    return playlist
 
 
 def get_load_avg():
@@ -114,30 +100,3 @@ def get_raspberry_code():
 
 def get_raspberry_model():
     return raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
-
-
-def compile_report():
-    """
-    Compile report with various data points.
-    """
-    report = {}
-    report['cpu_info'] = get_raspberry_code()
-    report['pi_model'] = get_raspberry_model()
-    report['uptime'] = get_uptime()
-    report['display_power'] = get_display_power()
-    report['playlist'] = get_playlist()
-    report['git_hash'] = get_git_hash()
-    report['connectivity'] = try_connectivity()
-    report['loadavg'] = get_load_avg()
-    report['utc_isodate'] = get_utc_isodate()
-    report['debian_version'] = get_debian_version()
-
-    return report
-
-
-def main():
-    pprint(compile_report())
-
-
-if __name__ == "__main__":
-    main()
