@@ -23,7 +23,7 @@ if [ -n "${MANAGEMENT_USER+x}" ] && [ -n "${MANAGEMENT_PASSWORD+x}" ]; then
 fi
 
 echo "Running migration..."
-python3 ./bin/migrate.py
+python ./bin/migrate.py
 
 ./manage.py initialize_assets
 ./manage.py makemigrations
@@ -36,5 +36,5 @@ else
     echo "Generating Django static files..."
     ./manage.py collectstatic --clear --noinput
     echo "Starting Gunicorn..."
-    python3 run_gunicorn.py
+    python run_gunicorn.py
 fi

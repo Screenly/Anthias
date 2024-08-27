@@ -90,8 +90,8 @@ This section only works for devices running Raspberry Pi OS Lite.
 With running the following script, you can install self-signed certificates:
 
 ```bash
-cd $HOME/screenly
-./bin/add_certificate.sh /path/to/certificate.crt
+$ cd $HOME/screenly
+$ ./bin/add_certificate.sh /path/to/certificate.crt
 ```
 
 More details about generating self-signed certificates can be found [here](https://devopscube.com/create-self-signed-certificates-openssl/).
