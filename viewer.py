@@ -339,9 +339,12 @@ def generate_asset_list():
         is_enabled=1,
         start_date__isnull=False,
         end_date__isnull=False,
-    )
+    ).order_by('play_order')
     playlist = [
-        asset.__dict__
+        {
+            k: v for k, v in asset.__dict__.items()
+            if k not in ['_state', 'md5']
+        }
         for asset in enabled_assets
         if asset.is_active()
     ]

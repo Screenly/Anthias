@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import unicode_literals
+import logging
 import mock
 import unittest
 import os
 from time import sleep
+
+
+logging.disable(logging.CRITICAL)
 
 
 class ViewerTestCase(unittest.TestCase):
