@@ -1,10 +1,12 @@
 import logging
 import os
 
+import time_machine
+
 from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
-from unittest import mock, skip
+from unittest import mock
 
 from anthias_app.models import Asset
 from settings import settings
@@ -19,17 +21,6 @@ import viewer  # noqa: E402
 
 
 logging.disable(logging.CRITICAL)
-
-
-class FakeDatetime(object):
-    def __init__(self, need_time):
-        self.need_time = need_time
-
-    def utcnow(self):
-        return self.need_time
-
-    def now(self):
-        return self.need_time
 
 
 ASSET_X = {
@@ -164,16 +155,15 @@ class SchedulerTest(TestCase):
 
         self.assertEqual(0, viewer.Scheduler().get_db_mtime())
 
-    @skip('fixme')
     def test_playlist_should_be_updated_after_deadline_reached(self):
         self.create_assets([ASSET_X, ASSET_Y])
         _, deadline = viewer.generate_asset_list()
 
-        # @TODO: Make use of a library like time-machine in replacement of
-        # the boilerplate code.
-        viewer.timezone = FakeDatetime(deadline + timedelta(seconds=1))
+        traveller = time_machine.travel(deadline + timedelta(seconds=1))
+        traveller.start()
 
         scheduler = viewer.Scheduler()
         scheduler.refresh_playlist()
 
         self.assertEqual([ASSET_X], scheduler.assets)
+        traveller.stop()
