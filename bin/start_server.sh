@@ -9,7 +9,6 @@ mkdir -p \
 
 cp -n /usr/src/app/ansible/roles/screenly/files/screenly.conf /data/.screenly/screenly.conf
 cp -n /usr/src/app/ansible/roles/screenly/files/default_assets.yml /data/.screenly/default_assets.yml
-cp -n /usr/src/app/ansible/roles/screenly/files/screenly.db /data/.screenly/screenly.db
 
 if [ -n "${OVERWRITE_CONFIG}" ]; then
     echo "Requested to overwrite Anthias config file."
