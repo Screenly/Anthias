@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+#xsyntax=docker/dockerfile:1.4
 # vim: ft=dockerfile
 
 FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
@@ -103,6 +103,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
         python3-netifaces \
         python3-pip \
         python3-setuptools \
+        python-is-python3 \
         ttf-wqy-zenhei \
         vlc \
         sqlite3
