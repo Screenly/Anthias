@@ -17,7 +17,9 @@ We've tested Anthias and is known to work on the following Raspberry Pi models:
 
 * Raspberry Pi 4 Model B - 32-bt and 64-bit Bullseye, 64-bit Bookworm
 * Raspberry Pi 3 Model B+ - 32-bit and 64-bit Bullseye, 64-bit Bookworm
-* Raspberry Pi 3 Model B - 64-bit Bookworm
+* Raspberry Pi 3 Model B - 64-bit Bookworm and Bullseye
+* Raspberry Pi 2 Model B - 32-bit Bookworm and Bullseye
+
 
 We're still fixing the installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 2.
 Should you encounter any issues, please file an issue either in this repository or in the
@@ -131,7 +133,7 @@ If it's not, you need to run the script again and enter a valid tag.
 
 #### Prompt: Full System Upgrade
 
-If you've selected **Yes** when prompted for an upgrade &ndash; i.e., "Would you like to perform a full system upgrade as well? (y/N)"
+If you've selected **Yes** when prompted for an upgrade &ndash; i.e., "Would you like to perform a full system upgrade as well?"
 &ndash; you'll get the following message when the installer is almost done executing:
 
 ```
@@ -159,26 +161,26 @@ This feature is only available in devices running Raspberry Pi OS at the moment.
 To get started, SSH to your Raspberry Pi running Anthias. For instance:
 
 ```bash
-ssh pi@raspberrypi
+$ ssh pi@raspberrypi
 ```
 
 Go to the project root directory and create a Python virtual environment, if you haven't created one.
 
 ```bash
-cd ~/screenly
-python -m venv venv/
+$ cd ~/screenly
+$ python -m venv venv/
 ```
 
 Activate the virtual environment. You need to do this everytime right before you run the script.
 
 ```bash
-source ./venv/bin/activate
+$ source ./venv/bin/activate
 ```
 
 Install the dependencies required by the assets migration script.
 
 ```bash
-pip install -r requirements/requirements.local.txt
+$ pip install -r requirements/requirements.local.txt
 ```
 
 Before running the script, you should prepare the following:
@@ -188,7 +190,7 @@ Before running the script, you should prepare the following:
 Run the assets migration script. Follow through the instructions & prompts carefully.
 
 ```bash
-python tools/migrate-assets-to-screenly.py
+$ python tools/migrate-assets-to-screenly.py
 ```
 
 ## Issues and bugs

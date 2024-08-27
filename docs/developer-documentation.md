@@ -99,13 +99,13 @@ to get started.
 Run the following command from the project root directory.
 
 ```bash
-npm install
+$ npm install
 ```
 
 ### Transpiling CSS from SASS
 
 ```bash
-npm run sass-dev
+$ npm run sass-dev
 ```
 
 ### Transpiling JS from CoffeeScript
@@ -113,7 +113,7 @@ npm run sass-dev
 ```bash
 # You need to run this on a separate terminal session if you already ran the
 # script for transpiling SASS files.
-npm run coffee-dev
+$ npm run coffee-dev
 ```
 
 ### Closing the transpiler
