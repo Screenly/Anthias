@@ -54,6 +54,7 @@ def noop(*a, **k):
 
 class TestEmptyPl(ViewerTestCase):
 
+    @mock.patch('viewer.SERVER_WAIT_TIMEOUT', 0)
     @mock.patch('viewer.start_loop', side_effect=noop)
     @mock.patch('viewer.view_image', side_effect=noop)
     @mock.patch('viewer.view_webpage', side_effect=noop)
