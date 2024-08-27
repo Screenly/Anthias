@@ -149,6 +149,7 @@ class CreateAssetSerializerV1_2(Serializer):
         super().__init__(*args, **kwargs)
 
     asset_id = CharField(read_only=True)
+    ext = CharField(write_only=True, required=False)
     name = CharField()
     uri = CharField()
     start_date = DateTimeField(default_timezone=timezone.utc)
