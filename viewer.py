@@ -569,6 +569,8 @@ def main():
         show_hotspot_page(mq_data)
         mq_data = None
 
+    sleep(0.5)
+
     start_loop()
 
 

@@ -35,5 +35,5 @@ else
     echo "Generating Django static files..."
     ./manage.py collectstatic --clear --noinput
     echo "Starting Gunicorn..."
-    python3 run_gunicorn.py
+    python run_gunicorn.py
 fi
