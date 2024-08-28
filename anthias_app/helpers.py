@@ -3,10 +3,10 @@ import yaml
 
 from django.shortcuts import render
 from django.utils import timezone
-from lib import assets_helper, db
 from lib.github import is_up_to_date
 from lib.utils import get_video_duration
 from os import getenv, path
+from anthias_app.models import Asset
 from settings import settings
 
 
@@ -47,7 +47,6 @@ def prepare_default_asset(**kwargs):
         'asset_id': asset_id,
         'duration': duration,
         'end_date': kwargs['end_date'],
-        'is_active': 1,
         'is_enabled': True,
         'is_processing': 0,
         'mimetype': kwargs['mimetype'],
@@ -63,7 +62,7 @@ def prepare_default_asset(**kwargs):
 def add_default_assets():
     settings.load()
 
-    datetime_now = timezone.now().replace(tzinfo=None)
+    datetime_now = timezone.now()
     default_asset_settings = {
         'start_date': datetime_now,
         'end_date': datetime_now.replace(year=datetime_now.year + 6),
@@ -77,21 +76,22 @@ def add_default_assets():
 
     with open(default_assets_yaml, 'r') as yaml_file:
         default_assets = yaml.safe_load(yaml_file).get('assets')
-        with db.conn(settings['database']) as conn:
-            for default_asset in default_assets:
-                default_asset_settings.update({
-                    'name': default_asset.get('name'),
-                    'uri': default_asset.get('uri'),
-                    'mimetype': default_asset.get('mimetype')
-                })
-                asset = prepare_default_asset(**default_asset_settings)
-                if asset:
-                    assets_helper.create(conn, asset)
+
+        for default_asset in default_assets:
+            default_asset_settings.update({
+                'name': default_asset.get('name'),
+                'uri': default_asset.get('uri'),
+                'mimetype': default_asset.get('mimetype')
+            })
+            asset = prepare_default_asset(**default_asset_settings)
+
+            if asset:
+                Asset.objects.create(**asset)
 
 
 def remove_default_assets():
     settings.load()
-    with db.conn(settings['database']) as conn:
-        for asset in assets_helper.read(conn):
-            if asset['asset_id'].startswith('default_'):
-                assets_helper.delete(conn, asset['asset_id'])
+
+    for asset in Asset.objects.all():
+        if asset.asset_id.startswith('default_'):
+            asset.delete()

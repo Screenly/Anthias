@@ -60,10 +60,14 @@ jobs:
         run: |
           docker compose -f docker-compose.test.yml up -d
 
-      - name: Run the tests inside the container
+      - name: Run the unit tests inside the container
+        run: |
+          docker compose -f docker-compose.test.yml exec anthias-test ./manage.py test --noinput --parallel --exclude-tag=integration
+
+      - name: Run the integration tests inside the container
         run: |
           docker compose -f docker-compose.test.yml exec anthias-test bash ./bin/prepare_test_environment.sh -s
-          docker compose -f docker-compose.test.yml exec anthias-test nose2 -v -A '!fixme'
+          docker compose -f docker-compose.test.yml exec anthias-test ./manage.py test --noinput --tag=integration
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3

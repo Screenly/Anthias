@@ -1,6 +1,5 @@
 from os import mkdir, makedirs, path
 from django.core.management.base import BaseCommand, CommandError
-from lib import assets_helper, db, queries
 from settings import settings
 
 
@@ -14,12 +13,6 @@ def initialize_assets_directories():
     # Create config dir if it doesn't exist.
     if not path.isdir(settings.get_configdir()):
         makedirs(settings.get_configdir())
-
-    with db.conn(settings['database']) as conn:
-        with db.cursor(conn) as cursor:
-            cursor.execute(queries.exists_table)
-            if cursor.fetchone() is None:
-                cursor.execute(assets_helper.create_assets_table)
 
 
 class Command(BaseCommand):

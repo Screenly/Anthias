@@ -9,7 +9,6 @@ mkdir -p \
 
 cp -n /usr/src/app/ansible/roles/screenly/files/screenly.conf /data/.screenly/screenly.conf
 cp -n /usr/src/app/ansible/roles/screenly/files/default_assets.yml /data/.screenly/default_assets.yml
-cp -n /usr/src/app/ansible/roles/screenly/files/screenly.db /data/.screenly/screenly.db
 
 if [ -n "${OVERWRITE_CONFIG}" ]; then
     echo "Requested to overwrite Anthias config file."
@@ -23,11 +22,10 @@ if [ -n "${MANAGEMENT_USER+x}" ] && [ -n "${MANAGEMENT_PASSWORD+x}" ]; then
 fi
 
 echo "Running migration..."
-python ./bin/migrate.py
 
 ./manage.py initialize_assets
 ./manage.py makemigrations
-./manage.py migrate
+./manage.py migrate --fake-initial
 
 if [[ "$ENVIRONMENT" == "development" ]]; then
     echo "Starting Django development server..."

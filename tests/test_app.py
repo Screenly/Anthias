@@ -1,26 +1,32 @@
-from __future__ import unicode_literals
-from builtins import object
-from splinter import Browser
-from time import sleep
-from selenium.common.exceptions import ElementNotVisibleException
-from selenium import webdriver
-from settings import settings
-from lib import db
-from lib import assets_helper
 import os
 import shutil
 import tempfile
-import unittest
-from datetime import datetime, timedelta
+
+from datetime import timedelta
+from django.test import tag
+from django.utils import timezone
+from selenium import webdriver
+from selenium.common.exceptions import ElementNotVisibleException
+from splinter import Browser
+from time import sleep
+from unittest import skip, TestCase
+
+from anthias_app.models import Asset
+from settings import settings
+
+
+main_page_url = 'http://localhost:8080'
+settings_url = 'http://foo:bar@localhost:8080/settings'
+system_info_url = 'http://foo:bar@localhost:8080/system_info'
 
 asset_x = {
-    'mimetype': u'web',
-    'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d',
-    'name': u'WireLoad',
-    'uri': u'http://www.wireload.net',
-    'start_date': datetime.now() - timedelta(days=1),
-    'end_date': datetime.now() + timedelta(days=1),
-    'duration': u'5',
+    'mimetype': 'web',
+    'asset_id': '4c8dbce552edb5812d3a866cfe5f159d',
+    'name': 'WireLoad',
+    'uri': 'http://www.wireload.net',
+    'start_date': timezone.now() - timedelta(days=1),
+    'end_date': timezone.now() + timedelta(days=1),
+    'duration': '5',
     'is_enabled': 0,
     'nocache': 0,
     'play_order': 1,
@@ -28,22 +34,18 @@ asset_x = {
 }
 
 asset_y = {
-    'mimetype': u'image',
-    'asset_id': u'7e978f8c1204a6f70770a1eb54a76e9b',
-    'name': u'Google',
-    'uri': u'https://www.google.com/images/srpr/logo3w.png',
-    'start_date': datetime.now() - timedelta(days=1),
-    'end_date': datetime.now() + timedelta(days=1),
-    'duration': u'6',
+    'mimetype': 'image',
+    'asset_id': '7e978f8c1204a6f70770a1eb54a76e9b',
+    'name': 'Google',
+    'uri': 'https://www.google.com/images/srpr/logo3w.png',
+    'start_date': timezone.now() - timedelta(days=1),
+    'end_date': timezone.now() + timedelta(days=1),
+    'duration': '6',
     'is_enabled': 1,
     'nocache': 0,
     'play_order': 0,
     'skip_asset_check': 0
 }
-
-main_page_url = 'http://localhost:8080'
-settings_url = 'http://foo:bar@localhost:8080/settings'
-system_info_url = 'http://foo:bar@localhost:8080/system_info'
 
 
 class TemporaryCopy(object):
@@ -84,15 +86,10 @@ def wait_for_and_do(browser, query, callback):
             n += 1
 
 
-class WebTest(unittest.TestCase):
+@tag('integration')
+class WebTest(TestCase):
     def setUp(self):
-        with db.conn(settings['database']) as conn:
-            assets = assets_helper.read(conn)
-            for asset in assets:
-                assets_helper.delete(conn, asset['asset_id'])
-
-    def tearDown(self):
-        pass
+        Asset.objects.all().delete()
 
     def test_add_asset_url(self):
         with get_browser() as browser:
@@ -108,25 +105,22 @@ class WebTest(unittest.TestCase):
             sleep(1)
 
             wait_for_and_do(browser, '#add-form', lambda form: form.click())
-            sleep(1)
+            sleep(1)  # Wait for the new-asset panel animation.
 
             wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
-            sleep(3)  # backend need time to process request
+            sleep(3)  # The backend needs time to process the request.
 
-        with db.conn(settings['database']) as conn:
-            assets = assets_helper.read(conn)
+        assets = Asset.objects.all()
+        self.assertEqual(len(assets), 1)
+        asset = assets.first()
 
-            self.assertEqual(len(assets), 1)
-            asset = assets[0]
-
-            self.assertEqual(asset['name'], u'http://example.com')
-            self.assertEqual(asset['uri'], u'http://example.com')
-            self.assertEqual(asset['mimetype'], u'webpage')
-            self.assertEqual(asset['duration'], settings['default_duration'])
+        self.assertEqual(asset.name, 'http://example.com')
+        self.assertEqual(asset.uri, 'http://example.com')
+        self.assertEqual(asset.mimetype, 'webpage')
+        self.assertEqual(asset.duration, settings['default_duration'])
 
     def test_edit_asset(self):
-        with db.conn(settings['database']) as conn:
-            assets_helper.create(conn, asset_x)
+        asset = Asset.objects.create(**asset_x)
 
         with get_browser() as browser:
             browser.visit(main_page_url)
@@ -137,21 +131,19 @@ class WebTest(unittest.TestCase):
             wait_for_and_do(
                 browser, 'input[name="duration"]',
                 lambda field: field.fill('333'))
-            sleep(1)  # wait for new-asset panel animation
+            sleep(1)
 
             wait_for_and_do(browser, '#add-form', lambda form: form.click())
             sleep(1)
 
             wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
-            sleep(3)  # backend need time to process request
+            sleep(3)
 
-        with db.conn(settings['database']) as conn:
-            assets = assets_helper.read(conn)
+        assets = Asset.objects.all()
+        self.assertEqual(len(assets), 1)
+        asset = assets.first()
 
-            self.assertEqual(len(assets), 1)
-            asset = assets[0]
-
-            self.assertEqual(asset['duration'], u'333')
+        self.assertEqual(asset.duration, '333')
 
     def test_add_asset_image_upload(self):
         image_file = '/tmp/image.png'
@@ -167,20 +159,17 @@ class WebTest(unittest.TestCase):
             wait_for_and_do(
                 browser, 'input[name="file_upload"]',
                 lambda input: input.fill(image_file))
-            sleep(1)  # wait for new-asset panel animation
+            sleep(1)
 
-            sleep(3)  # backend need time to process request
+            sleep(3)
 
-        with db.conn(settings['database']) as conn:
-            assets = assets_helper.read(conn)
+        assets = Asset.objects.all()
+        self.assertEqual(len(assets), 1)
+        asset = assets.first()
 
-            self.assertEqual(len(assets), 1)
-
-            asset = assets[0]
-
-            self.assertEqual(asset['name'], u'image.png')
-            self.assertEqual(asset['mimetype'], u'image')
-            self.assertEqual(asset['duration'], settings['default_duration'])
+        self.assertEqual(asset.name, 'image.png')
+        self.assertEqual(asset.mimetype, 'image')
+        self.assertEqual(asset.duration, settings['default_duration'])
 
     def test_add_asset_video_upload(self):
         with (
@@ -198,19 +187,17 @@ class WebTest(unittest.TestCase):
                 wait_for_and_do(
                     browser, 'input[name="file_upload"]',
                     lambda input: input.fill(video_file))
-                sleep(1)  # wait for new-asset panel animation
+                sleep(1)  # Wait for the new-asset panel animation.
 
-                sleep(3)  # backend need time to process request
+                sleep(3)  # The backend needs time to process the request.
 
-            with db.conn(settings['database']) as conn:
-                assets = assets_helper.read(conn)
+            assets = Asset.objects.all()
+            self.assertEqual(len(assets), 1)
+            asset = assets.first()
 
-                self.assertEqual(len(assets), 1)
-                asset = assets[0]
-
-                self.assertEqual(asset['name'], u'video.mov')
-                self.assertEqual(asset['mimetype'], u'video')
-                self.assertEqual(asset['duration'], u'5')
+            self.assertEqual(asset.name, 'video.mov')
+            self.assertEqual(asset.mimetype, 'video')
+            self.assertEqual(asset.duration, '5')
 
     def test_add_two_assets_upload(self):
         with (
@@ -234,22 +221,22 @@ class WebTest(unittest.TestCase):
                     browser, 'input[name="file_upload"]',
                     lambda input: input.fill(video_file))
 
-                sleep(3)  # backend need time to process request
+                sleep(3)
 
-            with db.conn(settings['database']) as conn:
-                assets = assets_helper.read(conn)
+            assets = Asset.objects.all()
 
-                self.assertEqual(len(assets), 2)
+            self.assertEqual(len(assets), 2)
 
-                self.assertEqual(assets[0]['name'], u'standby.png')
-                self.assertEqual(assets[0]['mimetype'], u'image')
-                self.assertEqual(
-                    assets[0]['duration'], settings['default_duration'])
+            self.assertEqual(assets[0].name, 'standby.png')
+            self.assertEqual(assets[0].mimetype, 'image')
+            self.assertEqual(
+                assets[0].duration, settings['default_duration'])
 
-                self.assertEqual(assets[1]['name'], u'video.mov')
-                self.assertEqual(assets[1]['mimetype'], u'video')
-                self.assertEqual(assets[1]['duration'], u'5')
+            self.assertEqual(assets[1].name, 'video.mov')
+            self.assertEqual(assets[1].mimetype, 'video')
+            self.assertEqual(assets[1].duration, '5')
 
+    @skip('fixme')
     def test_add_asset_streaming(self):
         with get_browser() as browser:
             browser.visit(main_page_url)
@@ -267,25 +254,20 @@ class WebTest(unittest.TestCase):
             sleep(1)
 
             wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
-            sleep(10)  # backend need time to process request
+            sleep(10)
 
-        with db.conn(settings['database']) as conn:
-            assets = assets_helper.read(conn)
+        assets = Asset.objects.all()
+        self.assertEqual(len(assets), 1)
+        asset = assets.first()
 
-            self.assertEqual(len(assets), 1)
-            asset = assets[0]
+        self.assertEqual(asset.name, 'rtsp://localhost:8091/asset.mov')
+        self.assertEqual(asset.uri, 'rtsp://localhost:8091/asset.mov')
+        self.assertEqual(asset.mimetype, 'streaming')
+        self.assertEqual(
+            asset.duration, settings['default_streaming_duration'])
 
-            self.assertEqual(asset['name'], u'rtsp://localhost:8091/asset.mov')
-            self.assertEqual(asset['uri'], u'rtsp://localhost:8091/asset.mov')
-            self.assertEqual(asset['mimetype'], u'streaming')
-            self.assertEqual(
-                asset['duration'], settings['default_streaming_duration'])
-
-    test_add_asset_streaming.fixme = True
-
-    def test_rm_asset(self):
-        with db.conn(settings['database']) as conn:
-            assets_helper.create(conn, asset_x)
+    def test_remove_asset(self):
+        Asset.objects.create(**asset_x)
 
         with get_browser() as browser:
             browser.visit(main_page_url)
@@ -294,53 +276,48 @@ class WebTest(unittest.TestCase):
                 browser, '.delete-asset-button', lambda btn: btn.click())
             wait_for_and_do(
                 browser, '.confirm-delete', lambda btn: btn.click())
-            sleep(3)  # backend need time to process request
+            sleep(3)
 
-        with db.conn(settings['database']) as conn:
-            assets = assets_helper.read(conn)
-            self.assertEqual(len(assets), 0)
+        self.assertEqual(Asset.objects.count(), 0)
 
     def test_enable_asset(self):
-        with db.conn(settings['database']) as conn:
-            assets_helper.create(conn, asset_x)
+        Asset.objects.create(**asset_x)
 
         with get_browser() as browser:
             browser.visit(main_page_url)
             wait_for_and_do(browser, '.toggle', lambda btn: btn.click())
-            sleep(3)  # backend need time to process request
+            sleep(3)
 
-        with db.conn(settings['database']) as conn:
-            assets = assets_helper.read(conn)
-            self.assertEqual(len(assets), 1)
+        assets = Asset.objects.all()
+        self.assertEqual(len(assets), 1)
 
-            asset = assets[0]
-            self.assertEqual(asset['is_enabled'], 1)
+        asset = assets.first()
+        self.assertEqual(asset.is_enabled, 1)
 
     def test_disable_asset(self):
-        with db.conn(settings['database']) as conn:
-            _asset_x = asset_x.copy()
-            _asset_x['is_enabled'] = 1
-            assets_helper.create(conn, _asset_x)
+        Asset.objects.create(**{
+            **asset_x,
+            'is_enabled': 1
+        })
 
         with get_browser() as browser:
             browser.visit(main_page_url)
 
             wait_for_and_do(browser, '.toggle', lambda btn: btn.click())
-            sleep(3)  # backend need time to process request
+            sleep(3)
 
-        with db.conn(settings['database']) as conn:
-            assets = assets_helper.read(conn)
-            self.assertEqual(len(assets), 1)
+        assets = Asset.objects.all()
+        self.assertEqual(len(assets), 1)
 
-            asset = assets[0]
-            self.assertEqual(asset['is_enabled'], 0)
+        asset = assets.first()
+        self.assertEqual(asset.is_enabled, 0)
 
     def test_reorder_asset(self):
-        with db.conn(settings['database']) as conn:
-            _asset_x = asset_x.copy()
-            _asset_x['is_enabled'] = 1
-            assets_helper.create(conn, _asset_x)
-            assets_helper.create(conn, asset_y)
+        Asset.objects.create(**{
+            **asset_x,
+            'is_enabled': 1
+        })
+        Asset.objects.create(**asset_y)
 
         with get_browser() as browser:
             browser.visit(main_page_url)
@@ -350,14 +327,13 @@ class WebTest(unittest.TestCase):
 
             asset_y_to_reorder = browser.find_by_id(asset_y['asset_id'])
             asset_x_for_drag.drag_and_drop(asset_y_to_reorder)
-            sleep(3)  # backend need time to process request
+            sleep(3)
 
-        with db.conn(settings['database']) as conn:
-            x = assets_helper.read(conn, asset_x['asset_id'])
-            y = assets_helper.read(conn, asset_y['asset_id'])
+        x = Asset.objects.get(asset_id=asset_x['asset_id'])
+        y = Asset.objects.get(asset_id=asset_y['asset_id'])
 
-            self.assertEqual(x['play_order'], 0)
-            self.assertEqual(y['play_order'], 1)
+        self.assertEqual(x.play_order, 0)
+        self.assertEqual(y.play_order, 1)
 
     def test_settings_page_should_work(self):
         with get_browser() as browser:

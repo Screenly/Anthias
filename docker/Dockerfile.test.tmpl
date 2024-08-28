@@ -53,8 +53,8 @@ COPY . /usr/src/app
 WORKDIR /usr/src/app
 
 RUN mkdir -p /data/.screenly /data/screenly_assets
-RUN cp ansible/roles/screenly/files/screenly.db \
-    ansible/roles/screenly/files/screenly.conf /data/.screenly
+RUN cp ansible/roles/screenly/files/screenly.conf \
+    /data/.screenly
 
 ENV GIT_HASH=$GIT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH

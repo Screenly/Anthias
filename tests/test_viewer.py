@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import unicode_literals
+import logging
 import mock
 import unittest
 import os
 from time import sleep
+
+
+logging.disable(logging.CRITICAL)
 
 
 class ViewerTestCase(unittest.TestCase):
@@ -54,6 +57,7 @@ def noop(*a, **k):
 
 class TestEmptyPl(ViewerTestCase):
 
+    @mock.patch('viewer.SERVER_WAIT_TIMEOUT', 0)
     @mock.patch('viewer.start_loop', side_effect=noop)
     @mock.patch('viewer.view_image', side_effect=noop)
     @mock.patch('viewer.view_webpage', side_effect=noop)
