@@ -27,6 +27,8 @@ class MediaPlayer(object):
 
 
 class VLCMediaPlayer(MediaPlayer):
+    INSTANCE = None
+
     def __init__(self):
         MediaPlayer.__init__(self)
 
@@ -35,6 +37,12 @@ class VLCMediaPlayer(MediaPlayer):
         self.player = self.instance.media_player_new()
 
         self.player.audio_output_set('alsa')
+
+    @classmethod
+    def get_instance(cls):
+        if cls.INSTANCE is None:
+            cls.INSTANCE = VLCMediaPlayer()
+        return cls.INSTANCE
 
     def get_alsa_audio_device(self):
         if settings['audio_output'] == 'local':

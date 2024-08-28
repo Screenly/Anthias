@@ -5,6 +5,7 @@ import logging
 import mock
 import unittest
 import os
+import viewer
 from time import sleep
 
 
@@ -13,14 +14,6 @@ logging.disable(logging.CRITICAL)
 
 class ViewerTestCase(unittest.TestCase):
     def setUp(self):
-        mock.patch(
-            'lib.raspberry_pi_helper.lookup_raspberry_pi_version',
-            return_value='pi4'
-        ).__enter__()
-        mock.patch('vlc.Instance', mock.MagicMock()).__enter__()
-
-        import viewer
-
         self.original_splash_delay = viewer.SPLASH_DELAY
         viewer.SPLASH_DELAY = 0
 
@@ -100,7 +93,12 @@ class TestLoadBrowser(ViewerTestCase):
 
 
 class TestSignalHandlers(ViewerTestCase):
-    def test_usr1(self):
+    @mock.patch('vlc.Instance', mock.MagicMock())
+    @mock.patch(
+        'lib.media_player.lookup_raspberry_pi_version',
+        return_value='pi4'
+    )
+    def test_usr1(self, lookup_mock):
         self.p_killall.start()
         self.assertEqual(None, self.u.sigusr1(None, None))
         self.p_killall.stop()
