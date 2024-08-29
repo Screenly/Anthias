@@ -36,13 +36,6 @@ jobs:
         virtualenvs-path: ~/.venv
         installer-parallel: true
 
-    - name: Cache Poetry dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.venv
-        key: poetry-${{ runner.os }}
-        restore-keys: poetry-${{ runner.os }}
-
     - name: Install dependencies
       run: |
         poetry install --with=dev-host
