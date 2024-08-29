@@ -13,6 +13,7 @@ on:
       - experimental
     paths:
       - '**/*.py'
+      - '.github/workflows/python-lint.yaml'
 
 jobs:
   run-python-linter:
