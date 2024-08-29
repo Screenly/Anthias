@@ -551,14 +551,6 @@ def main():
     start_loop()
 
 
-
-
-
-
-
-
-
-
 if __name__ == "__main__":
     try:
         main()
