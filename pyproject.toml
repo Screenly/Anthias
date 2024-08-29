@@ -2,12 +2,11 @@
 name = "anthias"
 version = "0.18.8"
 description = "The world's most popular open source digital signage project."
-authors = ["Your Name <you@example.com>"]
 readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
-python = ">=3.8,<=3.11"
+python = ">=3.8,<3.12"
 
 [tool.poetry.group.dev-host.dependencies]
 flake8 = "^5.0.4"
