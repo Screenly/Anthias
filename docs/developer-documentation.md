@@ -139,26 +139,23 @@ $ act -W .github/workflows/python-lint.yaml
 The command above will run the linter on the all the Python files in the repository. If you want to run the linter
 on a specific file, you can try the commands in the next section.
 
-### Running the linter using `venv`
+### Running the linter using Poetry
 
-First, create a virtual environment and install the dependencies:
+You have to install Poetry first. You can find the installation instructions
+[here](https://python-poetry.org/docs/#installing-with-the-official-installer).
 
-```bash
-$ python3 -m venv venv/
-$ source venv/bin/activate
-$ pip install -r requirements/requirements.linter.txt
-```
-
-To run the linter on all the Python files in the repository, run the following command:
+After installing Poetry, run the following commands:
 
 ```bash
-$ flake8 $(git ls-files '**/*.py')
+# Install the dependencies
+$ poetry install --with=dev-host
+$ poetry run flake8 $(git ls-files '**/*.py')
 ```
 
 To run the linter on a specific file, run the following command:
 
 ```bash
-$ flake8 path/to/file.py
+$ poetry run flake8 path/to/file.py
 ```
 
 
