@@ -27,13 +27,28 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: Install and configure Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: 1.8.3
+        virtualenvs-create: true
+        virtualenvs-in-project: false
+        virtualenvs-path: ~/.venv
+        installer-parallel: true
+
+    - name: Cache the virtual environment
+      uses: actions/cache@v4
+      with:
+        path: ~/.venv
+        key: poetry-${{ runner.os }}
+        restore-keys: poetry-${{ runner.os }}
+
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements/requirements.linter.txt
+        poetry install --with=dev-host
 
     - name: Analyzing the code with flake8
       run: |
         if [ -n "$(git ls-files '*.py')" ]; then
-          flake8 $(git ls-files '*.py')
+          poetry run flake8 $(git ls-files '*.py')
         fi

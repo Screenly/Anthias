@@ -161,6 +161,19 @@ To run the linter on a specific file, run the following command:
 $ flake8 path/to/file.py
 ```
 
+### Running the linter using Poetry
+
+You have to install Poetry first. You can find the installation instructions
+[here](https://python-poetry.org/docs/#installing-with-the-official-installer).
+
+After installing Poetry, run the following commands:
+
+```bash
+# Install the dependencies
+$ poetry install --with=dev-host
+$ poetry run flake8 $(git ls-files '**/*.py')
+```
+
 
 ## Managing releases
 ### Creating a new release
