@@ -6,6 +6,7 @@ on:
       - 'master'
     paths:
       - '**/*.py'
+      - '.github/workflows/python-lint.yaml'
   pull_request:
     branches:
       - master
