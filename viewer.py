@@ -538,13 +538,13 @@ def main():
     subscriber_2.daemon = True
     subscriber_2.start()
 
-    scheduler = Scheduler()
-
     # This will prevent white screen from happening before showing the
     # splash screen with IP addresses.
     view_image(STANDBY_SCREEN)
 
     wait_for_server(SERVER_WAIT_TIMEOUT)
+
+    scheduler = Scheduler()
 
     if settings['show_splash']:
         if is_balena_app():
