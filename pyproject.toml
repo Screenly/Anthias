@@ -11,9 +11,6 @@ python = ">=3.8,<3.12"
 [tool.poetry.group.dev-host.dependencies]
 flake8 = "^5.0.4"
 
-[tool.poetry.scripts]
-wee = "ls -l"
-
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
