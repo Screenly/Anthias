@@ -59,6 +59,7 @@ ZMQ_HOST_PUB_URL = 'tcp://host.docker.internal:10001'
 
 MAX_BALENA_IP_RETRIES = 90
 BALENA_IP_RETRY_DELAY = 1
+SERVER_WAIT_TIMEOUT = 60
 
 current_browser_url = None
 browser = None
@@ -520,9 +521,9 @@ def main():
     subscriber_2.daemon = True
     subscriber_2.start()
 
-    scheduler = Scheduler()
+    wait_for_server(SERVER_WAIT_TIMEOUT)
 
-    wait_for_server(60)
+    scheduler = Scheduler()
 
     if settings['show_splash']:
         if is_balena_app():
