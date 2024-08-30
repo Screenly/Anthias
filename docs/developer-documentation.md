@@ -81,7 +81,7 @@ $ docker compose \
     exec -T anthias-test bash ./bin/prepare_test_environment.sh -s
 $ docker compose \
     -f docker-compose.test.yml \
-    exec -T anthias-test nose2 -v -A '!fixme'
+    exec -T anthias-test nose2 -v
 ```
 
 ### The QA checklist

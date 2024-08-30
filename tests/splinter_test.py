@@ -10,7 +10,7 @@ from lib import assets_helper
 import os
 import shutil
 import tempfile
-import unittest
+from unittest import skip, TestCase
 from datetime import datetime, timedelta
 
 asset_x = {
@@ -84,7 +84,7 @@ def wait_for_and_do(browser, query, callback):
             n += 1
 
 
-class WebTest(unittest.TestCase):
+class WebTest(TestCase):
     def setUp(self):
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
@@ -250,6 +250,7 @@ class WebTest(unittest.TestCase):
                 self.assertEqual(assets[1]['mimetype'], u'video')
                 self.assertEqual(assets[1]['duration'], u'5')
 
+    @skip('fixme')
     def test_add_asset_streaming(self):
         with get_browser() as browser:
             browser.visit(main_page_url)
@@ -280,8 +281,6 @@ class WebTest(unittest.TestCase):
             self.assertEqual(asset['mimetype'], u'streaming')
             self.assertEqual(
                 asset['duration'], settings['default_streaming_duration'])
-
-    test_add_asset_streaming.fixme = True
 
     def test_rm_asset(self):
         with db.conn(settings['database']) as conn:

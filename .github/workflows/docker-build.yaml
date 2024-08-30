@@ -17,6 +17,7 @@ on:
       - '!docs/**'
       - '!bin/install.sh'
       - '!bin/upgrade_containers.sh'
+      - '!tests/**'
 
 jobs:
   run-tests:
