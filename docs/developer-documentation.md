@@ -54,7 +54,7 @@ If you'd like to just generate the Dockerfiles from the templates provided
 inside the `docker/` directory, run the following:
 
 ```bash
-$ DOCKERFILES_ONLY=1 ./bin_build_containers.sh
+$ DOCKERFILES_ONLY=1 ./bin/build_containers.sh
 ```
 
 ## Testing
