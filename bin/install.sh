@@ -374,10 +374,10 @@ function main() {
     initialize_locales
     install_packages
     install_ansible
+    run_ansible_playbook
 
     return # TODO: Remove me later.
 
-    run_ansible_playbook
     upgrade_docker_containers
     cleanup
     modify_permissions
