@@ -257,9 +257,9 @@
 - name: Install Docker
   ansible.builtin.apt:
     name:
-      - docker-ce:armhf
-      - docker-ce-cli:armhf
-      - docker-compose-plugin:armhf
+      - docker-ce:{{ architecture.stdout }}
+      - docker-ce-cli:{{ architecture.stdout }}
+      - docker-compose-plugin:{{ architecture.stdout }}
     update_cache: true
     install_recommends: false
 
