@@ -193,7 +193,7 @@
 - name: Install Anthias dependencies
   ansible.builtin.apt:
     name:
-      - rpi-update
+      # - rpi-update # TODO: Make this conditional.
       - bc
       - python3
       - python3-redis
