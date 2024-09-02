@@ -56,18 +56,24 @@
     path: "{{ config_path }}"
     line: "\n[pi4]"
   when: config_txt.stdout.find('[pi4]') == -1
+  tags:
+    - touches_boot_partition
 
 - name: Uncomment out the original dtoverlay config.
   ansible.builtin.replace:
     dest: "{{ config_path }}"
     regexp: '^#\s*(dtoverlay=vc4-kms-v3d)'
     replace: '\1'
+  tags:
+    - touches_boot_partition
 
 - name: Remove the FKMS config for all devices.
   ansible.builtin.lineinfile:
     path: "{{ config_path }}"
     state: absent
     regexp: "^dtoverlay=vc4-fkms-v3d$"
+  tags:
+    - touches_boot_partition
 
 - name: Backup kernel boot args
   ansible.builtin.copy:
@@ -83,6 +89,8 @@
 - name: Notice for cmdline.txt.orig file
   ansible.builtin.debug:
     msg: "Use cmdline.txt.orig for boot parameters (don't remove this file)"
+  tags:
+    - touches_boot_partition
 
 - name: Copy cmdline.txt.orig to cmdline.txt
   ansible.builtin.copy:
@@ -102,6 +110,8 @@
     regexp: (^(?!$)((?!splash).)*$)
     replace: \1 splash
   when: ansible_distribution_major_version|int >= 7
+  tags:
+    - touches_boot_partition
 
 - name: Remove blinking cursor
   ansible.builtin.replace:
@@ -222,17 +232,24 @@
   ansible.builtin.apt_key:
     url: https://download.docker.com/linux/raspbian/gpg
     state: present
+  tags:
+    - touches_boot_partition
 
-- name: Get raspbian name
+- name: Get Debian name
   ansible.builtin.command: lsb_release -cs
-  register: raspbian_name
+  register: debian_name
+  changed_when: false
+
+- name: Get architecture
+  ansible.builtin.command: dpkg --print-architecture
+  register: architecture
   changed_when: false
 
 - name: Add Docker repo
   ansible.builtin.lineinfile:
     path: /etc/apt/sources.list.d/docker.list
     create: true
-    line: "deb [arch=armhf] https://download.docker.com/linux/debian {{ raspbian_name.stdout }} stable"
+    line: "deb [arch={{ architecture.stdout }}] https://download.docker.com/linux/debian {{ debian_name.stdout }} stable"
     state: present
     owner: root
     group: root

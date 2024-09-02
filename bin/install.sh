@@ -14,6 +14,7 @@ GITHUB_RELEASES_URL="https://github.com/Screenly/Anthias/releases"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
 DOCKER_TAG="latest"
 UPGRADE_SCRIPT_PATH="${ANTHIAS_REPO_DIR}/bin/upgrade_containers.sh"
+ARCHITECTURE=$(uname -m)
 
 INTRO_MESSAGE=(
     "Anthias requires a dedicated Raspberry Pi and an SD card."
@@ -130,7 +131,6 @@ function install_packages() {
         "libssl-dev"
         "whois"
     )
-    local ARCHITECTURE=$(uname -m)
 
     if [ "$DISTRO_VERSION" -ge 12 ]; then
         APT_INSTALL_ARGS+=("python3-full")
@@ -188,6 +188,10 @@ function run_ansible_playbook() {
         -m git \
         -a "repo=$REPOSITORY dest=${ANTHIAS_REPO_DIR} version=${BRANCH} force=no"
     cd ${ANTHIAS_REPO_DIR}/ansible
+
+    if [ "$ARCHITECTURE" != "x86_64" ]; then
+        ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "touches_boot_partition")
+    fi
 
     sudo -E -u ${USER} ${SUDO_ARGS[@]} \
         ansible-playbook site.yml "${ANSIBLE_PLAYBOOK_ARGS[@]}"
