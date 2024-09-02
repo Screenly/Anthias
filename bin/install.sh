@@ -7,7 +7,7 @@ set -euo pipefail
 
 BRANCH="master"
 ANSIBLE_PLAYBOOK_ARGS=()
-REPOSITORY="https://github.com/Screenly/Anthias.git"
+REPOSITORY="https://github.com/nicomiguelino/Anthias.git" # TODO: Revert me later.
 ANTHIAS_REPO_DIR="/home/${USER}/screenly"
 GITHUB_API_REPO_URL="https://api.github.com/repos/Screenly/Anthias"
 GITHUB_RELEASES_URL="https://github.com/Screenly/Anthias/releases"
@@ -183,6 +183,7 @@ function install_ansible() {
 
 function run_ansible_playbook() {
     display_section "Run the Anthias Ansible Playbook"
+    BRANCH='x86-support'
 
     sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
         -m git \
