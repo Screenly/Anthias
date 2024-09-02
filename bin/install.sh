@@ -190,7 +190,7 @@ function run_ansible_playbook() {
         -a "repo=$REPOSITORY dest=${ANTHIAS_REPO_DIR} version=${BRANCH} force=no"
     cd ${ANTHIAS_REPO_DIR}/ansible
 
-    if [ "$ARCHITECTURE" != "x86_64" ]; then
+    if [ "$ARCHITECTURE" == "x86_64" ]; then
         ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "touches_boot_partition")
     fi
 
