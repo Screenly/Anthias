@@ -9,6 +9,6 @@
 
   roles:
     - system
-    # - screenly # TODO: Uncomment me later.
+    - screenly
     # - network # TODO: Uncomment me later.
     # - splashscreen # TODO: Uncomment me later.
