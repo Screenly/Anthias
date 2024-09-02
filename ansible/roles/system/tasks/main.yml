@@ -228,12 +228,11 @@
       - docker-compose
     state: absent
 
-- name: Add docker apt key
+# TODO: Make this step conditional based on the architecture.
+- name: Add Docker apt key
   ansible.builtin.apt_key:
-    url: https://download.docker.com/linux/raspbian/gpg
+    url: https://download.docker.com/linux/debian/gpg
     state: present
-  tags:
-    - touches_boot_partition
 
 - name: Get Debian name
   ansible.builtin.command: lsb_release -cs
