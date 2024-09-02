@@ -123,15 +123,16 @@ function initialize_locales() {
 function install_packages() {
     display_section "Install Packages via APT"
 
-    RASPBERRY_PI_OS_VERSION=$(lsb_release -rs)
-    APT_INSTALL_ARGS=(
+    local DISTRO_VERSION=$(lsb_release -rs)
+    local APT_INSTALL_ARGS=(
         "git"
         "libffi-dev"
         "libssl-dev"
         "whois"
     )
+    local ARCHITECTURE=$(uname -m)
 
-    if [ "$RASPBERRY_PI_OS_VERSION" -ge 12 ]; then
+    if [ "$DISTRO_VERSION" -ge 12 ]; then
         APT_INSTALL_ARGS+=("python3-full")
     else
         APT_INSTALL_ARGS+=(
@@ -146,8 +147,11 @@ function install_packages() {
         APT_INSTALL_ARGS+=("network-manager")
     fi
 
-    sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' \
-        /etc/apt/sources.list
+    if [ "$ARCHITECTURE" != "x86_64" ]; then
+        sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' \
+            /etc/apt/sources.list
+    fi
+
     sudo apt update -y
     sudo apt-get install -y "${APT_INSTALL_ARGS[@]}"
 }
@@ -370,6 +374,9 @@ function main() {
     initialize_locales
     install_packages
     install_ansible
+
+    return # TODO: Remove me later.
+
     run_ansible_playbook
     upgrade_docker_containers
     cleanup
