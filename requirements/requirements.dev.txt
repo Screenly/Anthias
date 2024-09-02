@@ -3,4 +3,5 @@ mock==3.0.5
 nose2==0.15.1
 pep8==1.7.1
 selenium==3.141.0
+time-machine==2.15.0
 splinter==0.14.0

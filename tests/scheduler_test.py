@@ -1,5 +1,6 @@
 import os
 import unittest
+import time_machine
 
 from datetime import datetime, timedelta
 from lib import db, assets_helper
@@ -20,10 +21,6 @@ asset_x = {
     'is_processing': 0,
     'play_order': 1,
     'skip_asset_check': 0
-}
-
-asset_x_diff = {
-    'duration': u'10'
 }
 
 asset_y = {
@@ -74,17 +71,6 @@ asset_tomorrow = {
 FAKE_DB_PATH = '/tmp/fakedb'
 
 
-class FakeDatetime(object):
-    def __init__(self, need_time):
-        self.need_time = need_time
-
-    def utcnow(self):
-        return self.need_time
-
-    def now(self):
-        return self.need_time
-
-
 class SchedulerTest(unittest.TestCase):
     def setUp(self):
         self.old_db_path = settings.settings['database']
@@ -126,34 +112,34 @@ class SchedulerTest(unittest.TestCase):
 
     def test_get_next_asset_should_be_y_and_x(self):
         assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_y])
-        sch = viewer.Scheduler()
+        scheduler = viewer.Scheduler()
 
-        expect_y = sch.get_next_asset()
-        expect_x = sch.get_next_asset()
+        expect_y = scheduler.get_next_asset()
+        expect_x = scheduler.get_next_asset()
 
         self.assertEqual([expect_y, expect_x], [asset_y, asset_x])
 
     def test_keep_same_position_on_playlist_update(self):
         assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_y])
-        sch = viewer.Scheduler()
+        scheduler = viewer.Scheduler()
 
-        sch.get_next_asset()
+        scheduler.get_next_asset()
 
         assets_helper.create(viewer.db_conn, asset_z)
-        sch.update_playlist()
-        self.assertEqual(sch.index, 1)
+        scheduler.update_playlist()
+        self.assertEqual(scheduler.index, 1)
 
     def test_counter_should_increment_after_full_asset_loop(self):
         settings.settings['shuffle_playlist'] = True
         assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_y])
-        sch = viewer.Scheduler()
+        scheduler = viewer.Scheduler()
 
-        self.assertEqual(sch.counter, 0)
+        self.assertEqual(scheduler.counter, 0)
 
-        sch.get_next_asset()
-        sch.get_next_asset()
+        scheduler.get_next_asset()
+        scheduler.get_next_asset()
 
-        self.assertEqual(sch.counter, 1)
+        self.assertEqual(scheduler.counter, 1)
 
     def test_check_get_db_mtime(self):
         settings.settings['database'] = FAKE_DB_PATH
@@ -166,10 +152,11 @@ class SchedulerTest(unittest.TestCase):
         assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_y])
         _, deadline = viewer.generate_asset_list()
 
-        fake = FakeDatetime(deadline + timedelta(seconds=1))
-        viewer.datetime, assets_helper.get_time = fake, lambda: fake.utcnow()
+        traveller = time_machine.travel(deadline + timedelta(seconds=1))
+        traveller.start()
 
-        sch = viewer.Scheduler()
-        sch.refresh_playlist()
+        scheduler = viewer.Scheduler()
+        scheduler.refresh_playlist()
 
-        self.assertEqual([asset_x], sch.assets)
+        self.assertEqual([asset_x], scheduler.assets)
+        traveller.stop()
