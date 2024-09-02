@@ -10,5 +10,5 @@
   roles:
     - system
     - screenly
-    # - network # TODO: Uncomment me later.
+    - network
     # - splashscreen # TODO: Uncomment me later.
