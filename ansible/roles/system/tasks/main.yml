@@ -263,7 +263,7 @@
     update_cache: true
     install_recommends: false
 
-- name: Add user to docker group
+- name: Add user to Docker group
   ansible.builtin.user:
     name: "{{ lookup('env', 'USER') }}"
     group: "{{ lookup('env', 'USER') }}"
@@ -276,7 +276,7 @@
       - users
       - input
       - netdev
-      - gpio
+      # - gpio # TODO: Make this conditional.
       - dialout
 
 - name: Perform system upgrade
