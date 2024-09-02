@@ -1,5 +1,5 @@
 from __future__ import unicode_literals
-import unittest
+from unittest import skip, TestCase
 
 import mock
 import server
@@ -10,7 +10,8 @@ from settings import settings
 fancy_sha = 'deadbeaf'
 
 
-class UpdateTest(unittest.TestCase):
+@skip('fixme')
+class UpdateTest(TestCase):
     def setUp(self):
         self.get_configdir_m = mock.patch(
             'settings.AnthiasSettings.get_configdir',
@@ -46,6 +47,3 @@ class UpdateTest(unittest.TestCase):
             f.write(fancy_sha)
         self.assertEqual(server.is_up_to_date(), False)
         del os.environ['GIT_BRANCH']
-
-    test_if_sha_file_not_exists__is_up_to_date__should_return_false.fixme = True  # noqa: E501
-    test_if_sha_file_not_equals_to_branch_hash__is_up_to_date__should_return_false.fixme = True  # noqa: E501

@@ -64,7 +64,7 @@ jobs:
         shell: 'script -q -e -c "bash {0}"'
         run: |
           docker compose -f docker-compose.test.yml exec anthias-test bash ./bin/prepare_test_environment.sh -s
-          docker compose -f docker-compose.test.yml exec anthias-test nose2 -v -A '!fixme'
+          docker compose -f docker-compose.test.yml exec anthias-test nose2 -v
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3
