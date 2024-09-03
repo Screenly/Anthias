@@ -11,4 +11,4 @@
     - system
     - screenly
     - network
-    # - splashscreen # TODO: Uncomment me later.
+    - splashscreen
