@@ -80,16 +80,13 @@ for container in ${SERVICES[@]}; do
         export CHROME_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chrome-linux64.zip"
         export CHROMEDRIVER_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chromedriver-linux64.zip"
     elif [ "$container" == 'wifi-connect' ]; then
-        # We don't support wifi-connect on x86 yet.
-        if [ "$BOARD" == 'x86' ]; then
-            continue
-        fi
-
         # Logic for determining the correct architecture for the wifi-connect container
         if [ "$TARGET_PLATFORM" = 'linux/arm/v6' ]; then
             architecture=rpi
-        else
+        elif [ "$TARGET_PLATFORM" = 'linux/arm/v7' ] || [ "$TARGET_PLATFORM" = 'linux/arm/v8' ]; then
             architecture=armv7hf
+        else
+            architecture=amd64
         fi
 
         wc_download_url='https://api.github.com/repos/balena-os/wifi-connect/releases/93025295'
@@ -114,13 +111,17 @@ for container in ${SERVICES[@]}; do
             SED_ARGS=(-i)
         fi
 
-        sed "${SED_ARGS[@]}" -e '/libraspberrypi0/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
+        PACKAGES_TO_REMOVE=(
+            "libraspberrypi0"
+            "libgst-dev"
+            "libsqlite0-dev"
+            "libsrtp0-dev"
+            "libssl1.1"
+        )
 
-        # Don't build the viewer container if we're on x86
-        if [ "$container" == 'viewer' ]; then
-            echo "Skipping viewer container for x86 builds..."
-            continue
-        fi
+        for package in "${PACKAGES_TO_REMOVE[@]}"; do
+            sed "${SED_ARGS[@]}" -e "/$package/d" $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
+        done
     else
         if [ "$BOARD" == "pi1" ] && [ "$container" == "viewer" ]; then
             # Remove the libssl1.1 from Dockerfile.viewer
@@ -151,11 +152,9 @@ for container in ${SERVICES[@]}; do
             "screenly/anthias-$container:experimental-$GIT_SHORT_HASH-$BOARD"
         )
     else
+        # TODO: Revert changes when the changes are ready to be merged.
         PUSH_ARGS+=(
-            "screenly/anthias-$container:$DOCKER_TAG"
-            "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
-            "screenly/srly-ose-$container:$DOCKER_TAG"
-            "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD"
+            "nicomiguelino/anthias-$container:latest-$BOARD"
         )
     fi
 

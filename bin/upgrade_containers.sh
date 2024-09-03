@@ -20,7 +20,9 @@ if [ -z "$DOCKER_TAG" ]; then
 fi
 
 # Detect Raspberry Pi version
-if grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
+if [ ! -f /proc/device-tree/model ] && [ "$(uname -m)" = "x86_64" ]; then
+    export DEVICE_TYPE="x86"
+elif grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
     export DEVICE_TYPE="pi4"
 elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
     export DEVICE_TYPE="pi3"

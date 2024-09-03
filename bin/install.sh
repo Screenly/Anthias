@@ -381,8 +381,6 @@ function main() {
     install_ansible
     run_ansible_playbook
 
-    return # TODO: Remove me later.
-
     upgrade_docker_containers
     cleanup
     modify_permissions
