@@ -1,16 +1,18 @@
 from __future__ import unicode_literals
-from unittest import skip, TestCase
+from unittest import TestCase
 
 import mock
-import server
 import os
 
+from lib.github import is_up_to_date
 from settings import settings
 
-fancy_sha = 'deadbeaf'
+GIT_HASH_1 = 'da39a3ee5e6b4b0d3255bfef95601890afd80709'
+GIT_SHORT_HASH_1 = 'da39a3e'
+GIT_HASH_2 = '6adfb183a4a2c94a2f92dab5ade762a47889a5a1'
+GIT_SHORT_HASH_2 = '6adfb18'
 
 
-@skip('fixme')
 class UpdateTest(TestCase):
     def setUp(self):
         self.get_configdir_m = mock.patch(
@@ -31,19 +33,34 @@ class UpdateTest(TestCase):
         self.get_configdir_m.stop()
 
     @mock.patch(
-        'viewer.settings.get_configdir',
-        mock.MagicMock(return_value='/tmp/.screenly/'),
+        'lib.github.fetch_remote_hash',
+        mock.MagicMock(return_value=(None, False)),
     )
-    def test_if_sha_file_not_exists__is_up_to_date__should_return_false(self):
-        self.assertEqual(server.is_up_to_date(), True)
+    def test__if_git_branch_env_does_not_exist__is_up_to_date_should_return_true(self):  # noqa: E501
+        self.assertEqual(is_up_to_date(), True)
 
     @mock.patch(
-        'viewer.settings.get_configdir',
-        mock.MagicMock(return_value='/tmp/.screenly/'),
+        'lib.github.get_git_branch',
+        mock.MagicMock(return_value='master'),
     )
-    def test_if_sha_file_not_equals_to_branch_hash__is_up_to_date__should_return_false(self):  # noqa: E501
+    @mock.patch(
+        'lib.github.get_latest_docker_hub_hash',
+        mock.MagicMock(return_value=GIT_SHORT_HASH_1),
+    )
+    @mock.patch(
+        'lib.github.get_git_short_hash',
+        mock.MagicMock(return_value=GIT_SHORT_HASH_1),
+    )
+    @mock.patch(
+        'lib.github.get_git_hash',
+        mock.MagicMock(return_value=GIT_HASH_1),
+    )
+    @mock.patch(
+        'lib.github.fetch_remote_hash',
+        mock.MagicMock(return_value=(GIT_HASH_1, False)),
+    )
+    def test__if_git_hash_is_equal_to_latest_remote_hash__is_up_to_date_should_return_true(self):
         os.environ['GIT_BRANCH'] = 'master'
-        with open(self.sha_file, 'w+') as f:
-            f.write(fancy_sha)
-        self.assertEqual(server.is_up_to_date(), False)
-        del os.environ['GIT_BRANCH']
+        os.environ['DEVICE_TYPE'] = 'pi4'
+
+        self.assertEqual(is_up_to_date(), True)
