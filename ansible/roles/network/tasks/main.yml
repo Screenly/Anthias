@@ -83,7 +83,7 @@
   register: nm_pkla_path
 
 - name: Copy org.freedesktop.NetworkManager.pkla to 50-local.d
-  ansible.builtin.command: |
+  ansible.builtin.shell: |
     mkdir -p /etc/polkit-1/localauthority/50-local.d
     cp -f /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla \
       /etc/polkit-1/localauthority/50-local.d
