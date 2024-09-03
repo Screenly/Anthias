@@ -190,14 +190,22 @@
     update_cache: true
   when: not cdefs_exist
 
-- name: Install Anthias dependencies
+- name: Install Anthias dependencies (all platforms)
   ansible.builtin.apt:
     name:
-      # - rpi-update # TODO: Make this conditional.
       - bc
       - python3
       - python3-redis
     state: present
+
+- name: Install Anthias dependencies (Raspberry Pi)
+  ansible.builtin.apt:
+    name:
+      - rpi-update
+    state: present
+  when: |
+    architecture.stdout == "armhf" or
+    architecture.stdout == "arm64"
 
 - name: Remove deprecated apt dependencies
   ansible.builtin.apt:
@@ -228,20 +236,28 @@
       - docker-compose
     state: absent
 
-# TODO: Make this step conditional based on the architecture.
-- name: Add Docker apt key
+- name: Get architecture
+  ansible.builtin.command: dpkg --print-architecture
+  register: architecture
+  changed_when: false
+
+- name: Add Docker apt key (x86)
   ansible.builtin.apt_key:
     url: https://download.docker.com/linux/debian/gpg
     state: present
+  when: architecture.stdout == "amd64"
+
+- name: Add Docker apt key (Raspberry Pi)
+  ansible.builtin.apt_key:
+    url: https://download.docker.com/linux/raspbian/gpg
+    state: present
+  when: |
+    architecture.stdout == "armhf" or
+    architecture.stdout == "arm64"
 
 - name: Get Debian name
   ansible.builtin.command: lsb_release -cs
   register: debian_name
-  changed_when: false
-
-- name: Get architecture
-  ansible.builtin.command: dpkg --print-architecture
-  register: architecture
   changed_when: false
 
 - name: Add Docker repo
@@ -263,7 +279,7 @@
     update_cache: true
     install_recommends: false
 
-- name: Add user to Docker group
+- name: Add user to Docker group (all platforms)
   ansible.builtin.user:
     name: "{{ lookup('env', 'USER') }}"
     group: "{{ lookup('env', 'USER') }}"
@@ -276,8 +292,26 @@
       - users
       - input
       - netdev
-      # - gpio # TODO: Make this conditional.
       - dialout
+
+- name: Add user to Docker group (Raspberry Pi)
+  ansible.builtin.user:
+    name: "{{ lookup('env', 'USER') }}"
+    group: "{{ lookup('env', 'USER') }}"
+    groups:
+      - docker
+      - adm
+      - sudo
+      - video
+      - plugdev
+      - users
+      - input
+      - netdev
+      - gpio
+      - dialout
+  when: |
+    architecture.stdout == "armhf" or
+    architecture.stdout == "arm64"
 
 - name: Perform system upgrade
   ansible.builtin.apt:
