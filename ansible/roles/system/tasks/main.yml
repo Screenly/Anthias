@@ -190,6 +190,11 @@
     update_cache: true
   when: not cdefs_exist
 
+- name: Get architecture
+  ansible.builtin.command: dpkg --print-architecture
+  register: architecture
+  changed_when: false
+
 - name: Install Anthias dependencies (all platforms)
   ansible.builtin.apt:
     name:
@@ -235,11 +240,6 @@
       - runc
       - docker-compose
     state: absent
-
-- name: Get architecture
-  ansible.builtin.command: dpkg --print-architecture
-  register: architecture
-  changed_when: false
 
 - name: Add Docker apt key (x86)
   ansible.builtin.apt_key:
