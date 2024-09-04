@@ -4,7 +4,7 @@ import sh
 import shutil
 import sys
 from contextlib import contextmanager
-from unittest import skip, TestCase
+from unittest import TestCase
 
 user_home_dir = os.getenv('HOME')
 
@@ -77,8 +77,6 @@ class SettingsTest(TestCase):
         shutil.rmtree(CONFIG_DIR)
         os.getenv = self.orig_getenv
 
-    # This test passes locally but fails on CI.
-    @skip('fixme')
     def test_anthias_should_exit_if_no_settings_file_found(self):
         new_env = os.environ.copy()
         new_env["HOME"] = "/tmp"
