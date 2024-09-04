@@ -100,7 +100,8 @@
   ansible.builtin.debug:
     msg: "Use cmdline.txt.orig for boot parameters (don't remove this file)"
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Copy cmdline.txt.orig to cmdline.txt
   ansible.builtin.copy:

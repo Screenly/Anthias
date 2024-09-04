@@ -191,7 +191,7 @@ function run_ansible_playbook() {
     cd ${ANTHIAS_REPO_DIR}/ansible
 
     if [ "$ARCHITECTURE" == "x86_64" ]; then
-        ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "touches_boot_partition")
+        ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "raspberry-pi")
     fi
 
     sudo -E -u ${USER} ${SUDO_ARGS[@]} \
