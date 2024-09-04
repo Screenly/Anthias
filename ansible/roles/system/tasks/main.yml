@@ -1,8 +1,8 @@
 ---
 - name: Create a config_path variable
   ansible.builtin.set_fact:
-    config_path: "{{ '/boot/config.txt' if ansible_distribution_major_version|int <= 11 else '/boot/firmware/config.txt' }}"
-    cmdline_path: "{{ '/boot/cmdline.txt' if ansible_distribution_major_version|int <= 11 else '/boot/firmware/cmdline.txt' }}"
+    config_path: "{{ '/boot/config.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/config.txt' }}"
+    cmdline_path: "{{ '/boot/cmdline.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/cmdline.txt' }}"
 
 - name: Check NOOBS
   ansible.builtin.command: cat {{ config_path }}
@@ -118,7 +118,7 @@
     dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!splash).)*$)
     replace: \1 splash
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version | int >= 7
   tags:
     - touches-boot-partition
     - raspberry-pi
@@ -128,7 +128,7 @@
     dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!vt.global_cursor_default=0).)*$)
     replace: \1 vt.global_cursor_default=0
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version | int >= 7
   tags:
     - touches-boot-partition
     - raspberry-pi
@@ -138,7 +138,7 @@
     dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!plymouth.ignore-serial-consoles).)*$)
     replace: \1 plymouth.ignore-serial-consoles
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version | int >= 7
   tags:
     - touches-boot-partition
     - raspberry-pi
@@ -166,7 +166,7 @@
     dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!cgroup_enable=memory).)*$)
     replace: \1 cgroup_enable=memory
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version | int >= 7
   tags:
     - touches-boot-partition
     - raspberry-pi
@@ -176,7 +176,7 @@
     dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!cgroup_memory=1).)*$)
     replace: \1 cgroup_memory=1
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version | int >= 7
   tags:
     - touches-boot-partition
     - raspberry-pi
@@ -306,7 +306,7 @@
     name: supervisor
     state: absent
   when:
-    - ansible_distribution_major_version|int <= 11
+    - ansible_distribution_major_version | int <= 11
 
 - name: Remove deprecated pip dependencies (>= Debian 12)
   ansible.builtin.pip:
@@ -314,7 +314,7 @@
     executable: /home/{{ lookup('env', 'USER') }}/installer_venv/bin/pip
     state: absent
   when:
-    - ansible_distribution_major_version|int >= 12
+    - ansible_distribution_major_version | int >= 12
 
 - name: Copy in rc.local
   ansible.builtin.copy:
