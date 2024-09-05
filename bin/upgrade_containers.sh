@@ -51,7 +51,7 @@ cat /home/${USER}/screenly/docker-compose.yml.tmpl \
 
 sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \
-    build
+    pull
 
 if [ -f /var/run/reboot-required ]; then
     exit 0
