@@ -125,8 +125,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # https://github.com/balena-io-library/base-images/issues/562
 RUN c_rehash
 
-# QT Base from packages does not support eglfs
 # TODO: Uncomment when ready.
+# QT Base from packages does not support eglfs
 # RUN curl "$WEBVIEW_BASE_URL/qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" \
 #         -sL -o "/tmp/qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" && \
 #     curl "$WEBVIEW_BASE_URL/qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" \
@@ -145,8 +145,15 @@ RUN c_rehash
 #     tar -xzf "/tmp/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz" -C /usr/local && \
 #     rm "webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz"
 
+# TODO: Remove after testing and debugging.
+COPY ./webview/build/qt.tar.gz ./webview/build/webview.tar.gz /tmp/
+RUN tar -xzf /tmp/qt.tar.gz -C /usr/local && \
+    tar -xzf /tmp/webview.tar.gz -C /usr/local && \
+    rm /tmp/qt.tar.gz /tmp/webview.tar.gz
+
 ENV QT_QPA_EGLFS_FORCE888=1
 ENV QT_QPA_PLATFORM=linuxfb
+ENV LD_LIBRARY_PATH=/usr/local/host/lib
 
 # Turn on debug logging for now
 #ENV QT_LOGGING_RULES=qt.qpa.*=true

@@ -13,7 +13,7 @@ import pydbus
 import sys
 from datetime import datetime
 from jinja2 import Template
-from os import path, getenv, utime, system
+from os import path, getenv, utime, system, environ
 from random import shuffle
 from signal import signal, SIGALRM, SIGUSR1
 from tenacity import Retrying, stop_after_attempt, wait_fixed
@@ -348,6 +348,7 @@ def load_browser():
     logging.info('Loading browser...')
 
     browser = sh.Command('ScreenlyWebview')(_bg=True, _err_to_out=True)
+
     while (
         'Screenly service start' not in browser.process.stdout.decode('utf-8')
     ):
@@ -554,6 +555,7 @@ def main():
 
 if __name__ == "__main__":
     try:
+        environ['LD_LIBRARY_PATH'] = '/usr/local/host/lib'
         main()
     except Exception:
         logging.exception("Viewer crashed.")
