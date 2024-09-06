@@ -1,0 +1,11 @@
+services:
+  builder:
+    build:
+      context: .
+      dockerfile: Dockerfile.x86
+    stdin_open: true
+    tty: true
+    volumes:
+      - "~/tmp-x86/build:/build:Z"
+      - "./:/webview:ro"
+      - "./build_x86.sh:/scripts/build_x86.sh"
