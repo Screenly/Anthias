@@ -1216,15 +1216,12 @@ class Info(Resource):
     method_decorators = [api_response, authorized]
 
     def get(self):
-        viewlog = "Not yet implemented"
-
         # Calculate disk space
         slash = statvfs("/")
         free_space = size(slash.f_bavail * slash.f_frsize)
         display_power = r.get('display_power')
 
         return {
-            'viewlog': viewlog,
             'loadavg': diagnostics.get_load_avg()['15 min'],
             'free_space': free_space,
             'display_power': display_power,
@@ -1532,8 +1529,6 @@ def settings_page():
 @app.route('/system-info')
 @authorized
 def system_info():
-    viewlog = ["Yet to be implemented"]
-
     loadavg = diagnostics.get_load_avg()['15 min']
     display_power = r.get('display_power')
 
@@ -1569,7 +1564,6 @@ def system_info():
     return template(
         'system-info.html',
         player_name=player_name,
-        viewlog=viewlog,
         loadavg=loadavg,
         free_space=free_space,
         uptime=system_uptime,
