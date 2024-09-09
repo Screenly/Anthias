@@ -3,7 +3,7 @@ from builtins import object
 
 import vlc
 
-from lib.raspberry_pi_helper import lookup_raspberry_pi_version
+from lib.raspberry_pi_helper import get_device_type
 from settings import settings
 
 VIDEO_TIMEOUT = 20  # secs
@@ -48,10 +48,12 @@ class VLCMediaPlayer(MediaPlayer):
         if settings['audio_output'] == 'local':
             return 'plughw:CARD=Headphones'
         else:
-            if lookup_raspberry_pi_version() == 'pi4':
+            if get_device_type() == 'pi4':
                 return 'default:CARD=vc4hdmi0'
-            else:
+            elif get_device_type() in ['pi1', 'pi2', 'pi3']:
                 return 'default:CARD=vc4hdmi'
+            else:
+                return 'default:CARD=HID'
 
     def __get_options(self):
         return [
