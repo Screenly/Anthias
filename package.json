@@ -6,7 +6,7 @@
     "sass-dev": "sass --watch static/sass/:static/css/"
   },
   "dependencies": {
-    "bootstrap": "^4.3.1",
+    "bootstrap": "^5.0.0",
     "css-toggle-switch": "^4.1.0"
   },
   "devDependencies": {
