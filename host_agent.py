@@ -16,13 +16,19 @@ import subprocess
 REDIS_ARGS = dict(host="127.0.0.1", port=6379, db=0)
 # Name of redis channel to listen to
 CHANNEL_NAME = b'hostcmd'
+SUPPORTED_INTERFACES = (
+    'wlan',
+    'eth',
+    'wlp',
+    'enp',
+)
 
 
 def get_ip_addresses():
     addresses = []
 
     for interface in netifaces.interfaces():
-        if not (interface.startswith('wlan') or interface.startswith('eth')):
+        if not interface.startswith(SUPPORTED_INTERFACES):
             continue
 
         addrs = netifaces.ifaddresses(interface)
