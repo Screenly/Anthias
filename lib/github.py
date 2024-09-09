@@ -19,10 +19,12 @@ from settings import settings
 
 r = connect_to_redis()
 
-# Availability and HEAD commit of the remote branch to be checked every 24 hours.
+# Availability and HEAD commit of the remote branch to be checked
+# every 24 hours.
 REMOTE_BRANCH_STATUS_TTL = (60 * 60 * 24)
 
-# Suspend all external requests if we enconter an error other than a ConnectionError for 5 minutes
+# Suspend all external requests if we enconter an error other than
+# a ConnectionError for 5 minutes.
 ERROR_BACKOFF_TTL = (60 * 5)
 
 # Availability of the cached Docker Hub hash
@@ -45,7 +47,10 @@ def handle_github_error(exc, action):
         errdesc = exc.response.content
     else:
         errdesc = 'no data'
-    logging.error('{} fetching {} from GitHub: {}'.format(type(exc).__name__, action, errdesc))
+
+    logging.error(
+        '%s fetching %s from GitHub: %s', type(exc).__name__, action, errdesc
+    )
 
 
 def remote_branch_available(branch):
@@ -104,13 +109,14 @@ def fetch_remote_hash():
 
     get_cache = r.get('latest-remote-hash')
     if not get_cache:
-        # Ensure the remote branch is available before trying to fetch the HEAD ref
+        # Ensure the remote branch is available before trying
+        # to fetch the HEAD ref.
         if not remote_branch_available(branch):
             logging.error('Remote Git branch not available')
             return None, False
         try:
             resp = requests_get(
-                'https://api.github.com/repos/screenly/anthias/git/refs/heads/{}'.format(branch),
+                f'https://api.github.com/repos/screenly/anthias/git/refs/heads/{branch}',  # noqa: E501
                 timeout=DEFAULT_REQUESTS_TIMEOUT
             )
             resp.raise_for_status()
@@ -130,11 +136,11 @@ def fetch_remote_hash():
 
 def get_latest_docker_hub_hash(device_type):
     """
-    This function is useful for cases where latest changes pushed does not trigger
-    Docker image builds.
+    This function is useful for cases where latest changes pushed does not
+    trigger Docker image builds.
     """
 
-    url = 'https://hub.docker.com/v2/namespaces/screenly/repositories/anthias-server/tags'
+    url = 'https://hub.docker.com/v2/namespaces/screenly/repositories/anthias-server/tags'  # noqa: E501
 
     cached_docker_hub_hash = r.get('latest-docker-hub-hash')
 
@@ -157,14 +163,16 @@ def get_latest_docker_hub_hash(device_type):
         ]
 
         if len(reduced) == 0:
-            logging.warning('No commit hash found for device type: %s', device_type)
+            logging.warning(
+                'No commit hash found for device type: %s', device_type)
             return None
 
         docker_hub_hash = reduced[0]
         r.set('latest-docker-hub-hash', docker_hub_hash)
         r.expire('latest-docker-hub-hash', DOCKER_HUB_HASH_TTL)
 
-        # Results are sorted by date in descending order, so we can just return the first one.
+        # Results are sorted by date in descending order,
+        # so we can just return the first one.
         return reduced[0]
 
     return cached_docker_hub_hash
@@ -187,17 +195,19 @@ def is_up_to_date():
         return True
 
     if not get_device_id:
-        device_id = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(15))
+        device_id = ''.join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in range(15)
+        )
         r.set('device_id', device_id)
     else:
         device_id = get_device_id
 
     if retrieved_update:
         if not settings['analytics_opt_out'] and not is_ci():
-            ga_url = 'https://www.google-analytics.com/mp/collect?measurement_id={}&api_secret={}'.format(
-                    ANALYTICS_MEASURE_ID,
-                    ANALYTICS_API_SECRET
-            )
+            ga_base_url = 'https://www.google-analytics.com/mp/collect'
+            ga_query_params = f'measurement_id={ANALYTICS_MEASURE_ID}&api_secret={ANALYTICS_API_SECRET}'  # noqa: E501
+            ga_url = f'{ga_base_url}?{ga_query_params}'
             payload = {
                 'client_id': device_id,
                 'events': [{
@@ -226,4 +236,7 @@ def is_up_to_date():
     device_type = os.getenv('DEVICE_TYPE')
     latest_docker_hub_hash = get_latest_docker_hub_hash(device_type)
 
-    return (latest_sha == git_hash) or (latest_docker_hub_hash == git_short_hash)
+    return (
+        (latest_sha == git_hash) or
+        (latest_docker_hub_hash == git_short_hash)
+    )

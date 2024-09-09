@@ -31,7 +31,7 @@ while [[ true ]]; do
         echo "Skipping setting up Wifi-Connect Access Point."
 
         if [[ "$IS_CONNECTED" = 'false' ]]; then
-            python3 send_zmq_message.py --action='show_splash'
+            python send_zmq_message.py --action='show_splash'
         fi
 
         exit 0
@@ -41,7 +41,7 @@ while [[ true ]]; do
         echo "Connect to the Access Point and configure the SSID and Passphrase for the network to connect to."
 
         if [[ "$IS_CONNECTED" = '' ]]; then
-            python3 send_zmq_message.py --action='setup_wifi'
+            python send_zmq_message.py --action='setup_wifi'
         fi
 
         IS_CONNECTED='false'

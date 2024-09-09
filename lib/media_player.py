@@ -3,6 +3,7 @@ from builtins import object
 
 import vlc
 
+from lib.raspberry_pi_helper import lookup_raspberry_pi_version
 from settings import settings
 
 VIDEO_TIMEOUT = 20  # secs
@@ -26,6 +27,8 @@ class MediaPlayer(object):
 
 
 class VLCMediaPlayer(MediaPlayer):
+    INSTANCE = None
+
     def __init__(self):
         MediaPlayer.__init__(self)
 
@@ -35,25 +38,31 @@ class VLCMediaPlayer(MediaPlayer):
 
         self.player.audio_output_set('alsa')
 
-    def __get_options(self):
-        options = []
+    @classmethod
+    def get_instance(cls):
+        if cls.INSTANCE is None:
+            cls.INSTANCE = VLCMediaPlayer()
+        return cls.INSTANCE
 
+    def get_alsa_audio_device(self):
         if settings['audio_output'] == 'local':
-            options += [
-                '--alsa-audio-device=plughw:CARD=Headphones',
-            ]
+            return 'plughw:CARD=Headphones'
+        else:
+            if lookup_raspberry_pi_version() == 'pi4':
+                return 'default:CARD=vc4hdmi0'
+            else:
+                return 'default:CARD=vc4hdmi'
 
-        return options
+    def __get_options(self):
+        return [
+            f'--alsa-audio-device={self.get_alsa_audio_device()}',
+        ]
 
     def set_asset(self, uri, duration):
         self.player.set_mrl(uri)
         settings.load()
-
-        # @TODO: Refactor this conditional statement.
-        if settings['audio_output'] == 'local':
-            self.player.audio_output_device_set('alsa', 'plughw:CARD=Headphones')
-        elif settings['audio_output'] == 'hdmi':
-            self.player.audio_output_device_set('alsa', 'default')
+        self.player.audio_output_device_set(
+            'alsa', self.get_alsa_audio_device())
 
     def play(self):
         self.player.play()
@@ -62,4 +71,5 @@ class VLCMediaPlayer(MediaPlayer):
         self.player.stop()
 
     def is_playing(self):
-        return self.player.get_state() in [vlc.State.Playing, vlc.State.Buffering, vlc.State.Opening]
+        return self.player.get_state() in [
+            vlc.State.Playing, vlc.State.Buffering, vlc.State.Opening]

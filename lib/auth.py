@@ -33,19 +33,25 @@ class Auth(with_metaclass(ABCMeta, object)):
 
     def authenticate_if_needed(self):
         """
-        If the user performing the request is not authenticated, initiate authentication.
-        :return: a Response which initiates authentication or None if already authenticated.
+        If the user performing the request is not authenticated, initiate
+        authentication.
+
+        :return: a Response which initiates authentication or None
+        if already authenticated.
         """
         try:
             if not self.is_authenticated:
                 return self.authenticate()
         except ValueError as e:
-            return Response("Authorization backend is unavailable: " + str(e), 503)
+            return Response(
+                "Authorization backend is unavailable: " + str(e), 503)
 
     def update_settings(self, current_pass_correct):
         """
         Submit updated values from Settings page.
-        :param current_pass_correct: the value of "Current Password" field or None if empty.
+        :param current_pass_correct: the value of "Current Password" field
+        or None if empty.
+
         :return:
         """
         pass
@@ -53,7 +59,9 @@ class Auth(with_metaclass(ABCMeta, object)):
     @property
     def template(self):
         """
-        Get HTML template and its context object to be displayed in Settings page.
+        Get HTML template and its context object to be displayed in
+        the vettings page.
+
         :return: (template, context)
         """
         pass
@@ -102,7 +110,9 @@ class BasicAuth(Auth):
         :param password: str
         :return: True if the check passes.
         """
-        return self.settings['user'] == username and self.check_password(password)
+        return (
+            self.settings['user'] == username and self.check_password(password)
+        )
 
     def check_password(self, password):
         hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
@@ -119,7 +129,11 @@ class BasicAuth(Auth):
 
     def authenticate(self):
         realm = "Anthias OSE {}".format(self.settings['player_name'])
-        return Response("Access denied", 401, {"WWW-Authenticate": 'Basic realm="{}"'.format(realm)})
+        return Response(
+            "Access denied",
+            401,
+            {"WWW-Authenticate": 'Basic realm="{}"'.format(realm)},
+        )
 
     def update_settings(self, current_pass_correct):
         new_user = request.form.get('user', '')
@@ -130,9 +144,11 @@ class BasicAuth(Auth):
         # Handle auth components
         if self.settings['password']:  # if password currently set,
             if new_user != self.settings['user']:  # trying to change user
-                # should have current password set. Optionally may change password.
+                # Should have current password set.
+                # Optionally may change password.
                 if current_pass_correct is None:
-                    raise ValueError("Must supply current password to change username")
+                    raise ValueError(
+                        "Must supply current password to change username")
                 if not current_pass_correct:
                     raise ValueError("Incorrect current password.")
 
@@ -140,7 +156,8 @@ class BasicAuth(Auth):
 
             if new_pass:
                 if current_pass_correct is None:
-                    raise ValueError("Must supply current password to change password")
+                    raise ValueError(
+                        "Must supply current password to change password")
                 if not current_pass_correct:
                     raise ValueError("Incorrect current password.")
 

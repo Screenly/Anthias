@@ -31,11 +31,14 @@ def progress_bar(count, total, asset_name='', previous_asset_name=''):
     For display progress asset uploads
     """
 
-    # This will prevent the characters from the previous asset name to be displayed,
-    # if the current asset name is shorter than the previous one.
+    # This will prevent the characters from the previous asset name to be
+    # displayed, if the current asset name is shorter than the previous one.
     text = f'{asset_name}'.ljust(len(previous_asset_name))
 
-    progress_line = '#' * int(round(50 * count / float(total))) + '-' * (50 - int(round(50 * count / float(total))))
+    progress_line = (
+        '#' * int(round(50 * count / float(total))) +
+        '-' * (50 - int(round(50 * count / float(total))))
+    )
     percent = round(100.0 * count / float(total), 1)
     sys.stdout.write(f'[{progress_line}] {percent}% {text}\r')
     sys.stdout.flush()
@@ -86,7 +89,8 @@ def send_asset(asset):
     try:
         if asset['mimetype'] in ['image', 'video']:
             if asset_uri.startswith('/data'):
-                asset_uri = os.path.join(HOME, 'screenly_assets', os.path.basename(asset_uri))
+                asset_uri = os.path.join(
+                    HOME, 'screenly_assets', os.path.basename(asset_uri))
 
             post_kwargs.update({
                 'files': {
@@ -162,7 +166,10 @@ def assets_migration():
     click.echo('\n')
 
     if failed_assets_count > 0:
-        click.secho(f'Migration completed with {failed_assets_count} failed assets', fg='red')
+        click.secho(
+            f'Migration completed with {failed_assets_count} failed assets',
+            fg='red',
+        )
     else:
         click.secho('Migration completed successfully', fg='green')
 

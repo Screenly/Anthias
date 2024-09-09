@@ -16,6 +16,7 @@ from jinja2 import Template
 from os import path, getenv, utime, system
 from random import shuffle
 from signal import signal, SIGALRM, SIGUSR1
+from tenacity import Retrying, stop_after_attempt, wait_fixed
 from time import sleep
 from threading import Thread
 
@@ -35,7 +36,6 @@ from lib.utils import (
     connect_to_redis,
     get_balena_device_info,
 )
-from retry.api import retry_call
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
 
@@ -53,17 +53,19 @@ EMPTY_PL_DELAY = 5  # secs
 INITIALIZED_FILE = '/.screenly/initialized'
 WATCHDOG_PATH = '/tmp/screenly.watchdog'
 
-STANDBY_SCREEN = 'http://{}:{}/{}'.format(LISTEN, PORT, 'static/img/standby.png')
-SPLASH_PAGE_URL = 'http://{0}:{1}/splash-page'.format(LISTEN, PORT)
+STANDBY_SCREEN = f'http://{LISTEN}:{PORT}/static/img/standby.png'
+SPLASH_PAGE_URL = f'http://{LISTEN}:{PORT}/splash-page'
 ZMQ_HOST_PUB_URL = 'tcp://host.docker.internal:10001'
+
+MAX_BALENA_IP_RETRIES = 90
+BALENA_IP_RETRY_DELAY = 1
+SERVER_WAIT_TIMEOUT = 60
 
 current_browser_url = None
 browser = None
 loop_is_stopped = False
 browser_bus = None
 r = connect_to_redis()
-
-media_player = VLCMediaPlayer()
 
 HOME = None
 db_conn = None
@@ -84,7 +86,7 @@ def sigusr1(signum, frame):
     playing web or image asset is skipped.
     """
     logging.info('USR1 received, skipping.')
-    media_player.stop()
+    VLCMediaPlayer.get_instance().stop()
 
 
 def skip_asset(back=False):
@@ -201,7 +203,8 @@ class ZmqSubscriber(Thread):
             msg = socket.recv()
             topic, message = msg.decode('utf-8').split(' ', 1)
 
-            # If the command consists of 2 parts, then the first is the function, the second is the argument
+            # If the command consists of 2 parts, then the first is the
+            # function and the second is the argument.
             parts = message.split('&', 1)
             command = parts[0]
             parameter = parts[1] if len(parts) > 1 else None
@@ -245,7 +248,12 @@ class Scheduler(object):
         else:
             idx = self.index
             self.index = (self.index + 1) % len(self.assets)
-        logging.debug('get_next_asset counter %s returning asset %s of %s', self.counter, idx + 1, len(self.assets))
+
+        logging.debug(
+            'get_next_asset counter %s returning asset %s of %s',
+            self.counter, idx + 1, len(self.assets),
+        )
+
         if settings['shuffle_playlist'] and self.index == 0:
             self.counter += 1
 
@@ -256,7 +264,12 @@ class Scheduler(object):
     def refresh_playlist(self):
         logging.debug('refresh_playlist')
         time_cur = datetime.utcnow()
-        logging.debug('refresh: counter: (%s) deadline (%s) timecur (%s)', self.counter, self.deadline, time_cur)
+
+        logging.debug(
+            'refresh: counter: (%s) deadline (%s) timecur (%s)',
+            self.counter, self.deadline, time_cur
+        )
+
         if self.get_db_mtime() > self.last_update_db_mtime:
             logging.debug('updating playlist due to database modification')
             self.update_playlist()
@@ -275,10 +288,14 @@ class Scheduler(object):
 
         self.assets, self.deadline = new_assets, new_deadline
         self.counter = 0
-        # Try to keep the same position in the play list. E.g. if a new asset is added to the end of the list, we
-        # don't want to start over from the beginning.
+        # Try to keep the same position in the play list. E.g., if a new asset
+        # is added to the end of the list, we don't want to start over from
+        # the beginning.
         self.index = self.index % len(self.assets) if self.assets else 0
-        logging.debug('update_playlist done, count %s, counter %s, index %s, deadline %s', len(self.assets), self.counter, self.index, self.deadline)
+        logging.debug(
+            'update_playlist done, count %s, counter %s, index %s, deadline %s',  # noqa: E501
+            len(self.assets), self.counter, self.index, self.deadline
+        )
 
     def get_db_mtime(self):
         # get database file last modification time
@@ -295,12 +312,18 @@ def get_specific_asset(asset_id):
 
 def generate_asset_list():
     """Choose deadline via:
-        1. Map assets to deadlines with rule: if asset is active then 'end_date' else 'start_date'
+        1. Map assets to deadlines with rule: if asset is active then
+           'end_date' else 'start_date'
         2. Get nearest deadline
     """
     logging.info('Generating asset-list...')
     assets = assets_helper.read(db_conn)
-    deadlines = [asset['end_date'] if assets_helper.is_active(asset) else asset['start_date'] for asset in assets]
+    deadlines = [
+        asset['end_date']
+        if assets_helper.is_active(asset)
+        else asset['start_date']
+        for asset in assets
+    ]
 
     playlist = list(filter(assets_helper.is_active, assets))
     deadline = sorted(deadlines)[0] if len(deadlines) > 0 else None
@@ -325,7 +348,9 @@ def load_browser():
     logging.info('Loading browser...')
 
     browser = sh.Command('ScreenlyWebview')(_bg=True, _err_to_out=True)
-    while 'Screenly service start' not in browser.process.stdout.decode('utf-8'):
+    while (
+        'Screenly service start' not in browser.process.stdout.decode('utf-8')
+    ):
         sleep(1)
 
 
@@ -356,6 +381,7 @@ def view_image(uri):
 
 def view_video(uri, duration):
     logging.debug('Displaying video %s for %s ', uri, duration)
+    media_player = VLCMediaPlayer.get_instance()
 
     media_player.set_asset(uri, duration)
     media_player.play()
@@ -367,7 +393,10 @@ def view_video(uri, duration):
             watchdog()
             sleep(1)
     except sh.ErrorReturnCode_1:
-        logging.info('Resource URI is not correct, remote host is not responding or request was rejected.')
+        logging.info(
+            'Resource URI is not correct, remote host is not responding or '
+            'request was rejected.'
+        )
 
     media_player.stop()
 
@@ -377,18 +406,24 @@ def load_settings():
     Load settings and set the log level.
     """
     settings.load()
-    logging.getLogger().setLevel(logging.DEBUG if settings['debug_logging'] else logging.INFO)
+    logging.getLogger().setLevel(
+        logging.DEBUG if settings['debug_logging'] else logging.INFO
+    )
 
 
 def asset_loop(scheduler):
     asset = scheduler.get_next_asset()
 
     if asset is None:
-        logging.info('Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY)
+        logging.info(
+            'Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY)
         view_image(STANDBY_SCREEN)
         sleep(EMPTY_PL_DELAY)
 
-    elif path.isfile(asset['uri']) or (not url_fails(asset['uri']) or asset['skip_asset_check']):
+    elif (
+        path.isfile(asset['uri']) or
+        (not url_fails(asset['uri']) or asset['skip_asset_check'])
+    ):
         name, mime, uri = asset['name'], asset['mimetype'], asset['uri']
         logging.info('Showing asset %s (%s)', name, mime)
         logging.debug('Asset URI %s', uri)
@@ -409,7 +444,8 @@ def asset_loop(scheduler):
             sleep(duration)
 
     else:
-        logging.info('Asset %s at %s is not available, skipping.', asset['name'], asset['uri'])
+        logging.info('Asset %s at %s is not available, skipping.',
+                     asset['name'], asset['uri'])
         sleep(0.5)
 
 
@@ -418,7 +454,10 @@ def setup():
     HOME = getenv('HOME')
     if not HOME:
         logging.error('No HOME variable')
-        sys.exit(1)  # Alternatively, we can raise an Exception using a custom message, or we can create a new class that extends Exception.
+
+        # Alternatively, we can raise an Exception using a custom message,
+        # or we can create a new class that extends Exception.
+        sys.exit(1)
 
     signal(SIGUSR1, sigusr1)
     signal(SIGALRM, sigalrm)
@@ -482,18 +521,24 @@ def main():
     subscriber_2.daemon = True
     subscriber_2.start()
 
-    scheduler = Scheduler()
+    wait_for_server(SERVER_WAIT_TIMEOUT)
 
-    wait_for_server(60)
+    scheduler = Scheduler()
 
     if settings['show_splash']:
         if is_balena_app():
-            retry_call(get_balena_device_info, tries=30, delay=1)
+            for attempt in Retrying(
+                stop=stop_after_attempt(MAX_BALENA_IP_RETRIES),
+                wait=wait_fixed(BALENA_IP_RETRY_DELAY),
+            ):
+                with attempt:
+                    get_balena_device_info()
 
         view_webpage(SPLASH_PAGE_URL)
         sleep(SPLASH_DELAY)
 
-    # We don't want to show splash-page if there are active assets but all of them are not available
+    # We don't want to show splash page if there are active assets but all of
+    # them are not available.
     view_image(STANDBY_SCREEN)
 
     load_screen_displayed = True
@@ -501,6 +546,8 @@ def main():
     if mq_data is not None:
         show_hotspot_page(mq_data)
         mq_data = None
+
+    sleep(0.5)
 
     start_loop()
 

@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-      - production
+      - experimental
     paths:
       - '**'
       - '!webview/**'
@@ -15,8 +15,9 @@ on:
       - '!.github/workflows/python-lint.yaml'
       - '!README.md'
       - '!docs/**'
-      - '!bin/build_containers.sh'
+      - '!bin/install.sh'
       - '!bin/upgrade_containers.sh'
+      - '!tests/**'
 
 jobs:
   run-tests:
@@ -63,6 +64,7 @@ jobs:
           ./bin/build_containers.sh
 
   balena:
+    if: ${{ github.ref == 'refs/heads/master' }}
     needs: buildx
     strategy:
       matrix:

@@ -74,8 +74,8 @@ for container in ${SERVICES[@]}; do
 
     if [ "$container" == 'viewer' ]; then
         export QT_VERSION=5.15.14
-        export WEBVIEW_GIT_HASH=ec710ed9b355fc10a758f03058e10d01176f3bd6
-        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.0"
+        export WEBVIEW_GIT_HASH=4bd295c4a1197a226d537938e947773f4911ca24
+        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.1"
     elif [ "$container" == 'test' ]; then
         export CHROME_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chrome-linux64.zip"
         export CHROMEDRIVER_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chromedriver-linux64.zip"
@@ -142,24 +142,38 @@ for container in ${SERVICES[@]}; do
         continue
     fi
 
+    PUSH_ARGS=()
+    BUILDX_ARGS=()
+
+    if [ "$GIT_BRANCH" = "experimental" ]; then
+        PUSH_ARGS+=(
+            "screenly/anthias-$container:experimental-$BOARD"
+            "screenly/anthias-$container:experimental-$GIT_SHORT_HASH-$BOARD"
+        )
+    else
+        PUSH_ARGS+=(
+            "screenly/anthias-$container:$DOCKER_TAG"
+            "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
+            "screenly/srly-ose-$container:$DOCKER_TAG"
+            "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD"
+        )
+    fi
+
+    for tag in "${PUSH_ARGS[@]}"; do
+        BUILDX_ARGS+=("-t" "$tag")
+    done
+
     docker "${DOCKER_BUILD_ARGS[@]}" \
         --cache-from "type=local,src=/tmp/.buildx-cache" \
         --cache-to "type=local,dest=/tmp/.buildx-cache" \
         --platform "$TARGET_PLATFORM" \
         -f "docker/Dockerfile.$container" \
-        -t "screenly/srly-ose-$container:latest" \
-        -t "screenly/anthias-$container:latest" \
-        -t "anthias-$container:latest" \
-        -t "screenly/anthias-$container:$DOCKER_TAG" \
-        -t "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD" \
-        -t "screenly/srly-ose-$container:$DOCKER_TAG" \
-        -t "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD" .
+        "${BUILDX_ARGS[@]}" .
 
-    # Push if the push flag is set and not cross compiling
+    # Push if the push flag is set and not cross compiling.
     if [[ ( -n "${PUSH+x}" && -z "${CROSS_COMPILE+x}" ) ]]; then
-        docker push "screenly/srly-ose-$container:$DOCKER_TAG"
-        docker push "screenly/anthias-$container:$DOCKER_TAG"
-        docker push "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
-        docker push "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD"
+        for tag in "${PUSH_ARGS[@]}"; do
+            docker push "$tag"
+        done
     fi
 done

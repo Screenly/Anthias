@@ -83,7 +83,7 @@ You can also check to see if the `wlan0` interface is assigned an IPv4 address.
 If so, then you're all set.
 
 ```shell
-ip addr show wlan0
+$ ip addr show wlan0
 ```
 
 Here's a sample output:

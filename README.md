@@ -17,9 +17,11 @@ We've tested Anthias and is known to work on the following Raspberry Pi models:
 
 * Raspberry Pi 4 Model B - 32-bt and 64-bit Bullseye, 64-bit Bookworm
 * Raspberry Pi 3 Model B+ - 32-bit and 64-bit Bullseye, 64-bit Bookworm
-* Raspberry Pi 3 Model B - 64-bit Bookworm
+* Raspberry Pi 3 Model B - 64-bit Bookworm and Bullseye
+* Raspberry Pi 2 Model B - 32-bit Bookworm and Bullseye
 
-We're still fixing the installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 2.
+
+We're still fixing the installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 1.
 Should you encounter any issues, please file an issue either in this repository or in the
 [forums](https://forums.screenly.io).
 
@@ -63,6 +65,8 @@ The image file looks something like `<yyyy>-<mm>-<dd>-raspberry<version>.zip`. T
 
 ### Installing on Raspberry Pi OS Lite
 
+#### Overview
+
 If you'd like more control over your digital signage instance, try installing it on Raspberry Pi OS Lite.
 
 The tl;dr for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) is:
@@ -71,18 +75,18 @@ The tl;dr for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) is:
 $ bash <(curl -sL https://install-anthias.srly.io)
 ```
 
-If you've selected **_N_** when prompted for an upgrade &ndash; i.e., "Would you like to perform a full system upgrade as well? (y/N)"
-&ndash; you'll get the following message when the installer is almost done executing:
+You'll be prompted with the following questions:
 
-```
-"Please reboot and run /home/$USER/screenly/bin/upgrade_containers.sh to complete the installation. Would you like to reboot now? (y/N)"
-```
+* Do you still want to continue?
+* Would you like Anthias to manage the network for you?
+* Which version of Anthias would you like to install?
+* Would you like to perform a full system upgrade as well?
 
-You have the option to reboot now or later. On the next boot, make sure to run
-`upgrade_containers.sh`, as mentioned above.
+You can either use the arrow keys to select your choice and then press Enter or type `y` or `n`
+(for yes-no questions). The installer will display your responses before proceeding with the
+installation.
 
-Otherwise, if you've selected **_y_** for the system upgrade, then you don't need to do a reboot for the containers to be started. However,
-it's still recommended to do a reboot.
+![install-anthias-gif](./docs/images/install-anthias.gif)
 
 **This installation will take 15 minutes to several hours**, depending on variables such as:
 
@@ -91,6 +95,57 @@ it's still recommended to do a reboot.
  * The internet connection
 
 During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast internet connection), the installation normally takes 15-30 minutes. On a Raspberry Pi Zero or Raspberry Pi Model B with a class 4 SD card, the installation will take hours.
+
+#### Prompt: Network Management
+
+Opting for network management will enable and configure the [NetworkManager](https://wiki.debian.org/NetworkManager) service on your device.
+
+#### Prompt: Version Selection
+
+You can choose between the following choices &mdash; `latest`, `experimental`, and `tag`.
+
+* Selecting `latest` will install the version from the `master` branch.
+* Selecting `experimental` will install the version from the `experimental` branch.
+* Selecting `tag` will prompt you to enter a specific tag to install.
+* Do take note the `latest` and `experimental` versions are rolling releases, so you'll always get the latest changes.
+
+##### Experimental Features
+
+We have decided to roll out an `experimental` branch for new features that can break Anthias, especially
+if you already have Anthias installed and wish to upgrade.
+
+Before you proceed, make sure to download a
+backup by going to the **_Settings_** page and clicking **_Get Backup_**. You can load the backup file later by going to **_Settings_** and clicking **_Upload and Recover_**.
+
+Here's a current list of experimental features:
+
+* Migration from Flask to Django &ndash; The database still uses `sqlite3`. We will transition to using ORM in the future.
+* Revamped API docs &ndash; we changed the structure and overall look and feel of the documentation for easier reference.
+
+##### Installing from a Specific Tag
+
+Select this option if you want to install a pinned version of Anthias. You'll be prompted to enter
+a specific tag to install. You can find the tags in the
+[releases](https://github.com/Screenly/Anthias/releases) page.
+
+The script will check if the tag specified is valid and can be installed.
+If it's not, you need to run the script again and enter a valid tag.
+
+#### Prompt: Full System Upgrade
+
+If you've selected **Yes** when prompted for an upgrade &ndash; i.e., "Would you like to perform a full system upgrade as well?"
+&ndash; you'll get the following message when the installer is almost done executing:
+
+```
+Please reboot and run `/home/$USER/screenly/bin/upgrade_containers.sh` to complete the installation.
+
+Would you like to reboot now?
+```
+
+You have the option to reboot now or later. On the next boot, make sure to run
+`upgrade_containers.sh`, as mentioned above.
+
+Otherwise, if you've selected **No** for the system upgrade, then you don't need to do a reboot for the containers to be started. However, it's still recommended to do a reboot.
 
 ### Installing with Balena
 
@@ -106,26 +161,26 @@ This feature is only available in devices running Raspberry Pi OS at the moment.
 To get started, SSH to your Raspberry Pi running Anthias. For instance:
 
 ```bash
-ssh pi@raspberrypi
+$ ssh pi@raspberrypi
 ```
 
 Go to the project root directory and create a Python virtual environment, if you haven't created one.
 
 ```bash
-cd ~/screenly
-python -m venv venv/
+$ cd ~/screenly
+$ python -m venv venv/
 ```
 
 Activate the virtual environment. You need to do this everytime right before you run the script.
 
 ```bash
-source ./venv/bin/activate
+$ source ./venv/bin/activate
 ```
 
 Install the dependencies required by the assets migration script.
 
 ```bash
-pip install -r requirements/requirements.local.txt
+$ pip install -r requirements/requirements.local.txt
 ```
 
 Before running the script, you should prepare the following:
@@ -135,7 +190,7 @@ Before running the script, you should prepare the following:
 Run the assets migration script. Follow through the instructions & prompts carefully.
 
 ```bash
-python tools/migrate-assets-to-screenly.py
+$ python tools/migrate-assets-to-screenly.py
 ```
 
 ## Issues and bugs

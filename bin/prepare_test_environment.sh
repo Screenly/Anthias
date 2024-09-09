@@ -47,6 +47,6 @@ EOF
 
 if [ "$START_SERVER" = true ]; then
     cd /usr/src/app
-    python3 server.py &
+    python server.py &
     sleep 3
 fi
