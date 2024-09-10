@@ -73,9 +73,15 @@ for container in ${SERVICES[@]}; do
     fi
 
     if [ "$container" == 'viewer' ]; then
-        export QT_VERSION=5.15.14
-        export WEBVIEW_GIT_HASH=4bd295c4a1197a226d537938e947773f4911ca24
-        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.1"
+        if [ "$BOARD" == 'x86' ]; then
+            export QT_VERSION=6.6.3
+            export WEBVIEW_GIT_HASH=71e859ce5338b3df8884a2125189b96d8ebdbd6a
+            export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.2"
+        else
+            export QT_VERSION=5.15.14
+            export WEBVIEW_GIT_HASH=4bd295c4a1197a226d537938e947773f4911ca24
+            export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.1"
+        fi
     elif [ "$container" == 'test' ]; then
         export CHROME_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chrome-linux64.zip"
         export CHROMEDRIVER_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chromedriver-linux64.zip"
