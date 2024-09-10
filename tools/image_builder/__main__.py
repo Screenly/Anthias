@@ -1,6 +1,8 @@
 import click
 import pygit2
+import requests
 
+from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 
 
@@ -16,6 +18,9 @@ SERVICES = (
     'wifi-connect',
     'test',
 )
+
+
+templating_environment = Environment(loader=FileSystemLoader('docker/'))
 
 
 def get_build_parameters(build_target: str) -> dict:
@@ -67,6 +72,14 @@ def get_docker_tag(git_branch: str, board: str) -> str:
         return f'{git_branch}-{board}'
 
 
+def generate_dockerfile(service: str, context: dict) -> None:
+    template = templating_environment.get_template(f'Dockerfile.{service}.j2')
+    dockerfile = template.render(**context)
+
+    with open(f'docker/Dockerfile.{service}', 'w') as f:
+        f.write(dockerfile)
+
+
 def build_image(
     service: str,
     board: str,
@@ -81,7 +94,7 @@ def build_image(
         chromedriver_dl_url="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chromedriver-linux64.zip"
     elif service == 'wifi-connect':
         if board == 'x86':
-            # We don't support ~wifi-connect` on x86 yet.
+            click.secho('Building wifi-connect for x86 is not supported yet.', fg='red')
             return
 
         if target_platform == 'linux/arm/v6':
@@ -89,11 +102,33 @@ def build_image(
         else:
             architecture = 'armv7hf'
 
-        # TODO: Uncomment this block when ready.
-        # wc_download_url='https://api.github.com/repos/balena-os/wifi-connect/releases/93025295'
-        # jq_filter=".assets[] | select (.name|test(\"linux-$architecture\")) | .browser_download_url"
-        # archive_url=$(curl -sL "$wc_download_url" | jq -r "$jq_filter")
-        # export ARCHIVE_URL="$archive_url"
+        wc_download_url='https://api.github.com/repos/balena-os/wifi-connect/releases/93025295'
+
+        try:
+            response = requests.get(wc_download_url)
+            response.raise_for_status()
+            data = response.json()
+            assets = [
+                asset['browser_download_url'] for asset in data['assets']
+            ]
+
+            try:
+                archive_url = next(
+                    asset for asset in assets if f'linux-{architecture}' in asset
+                )
+            except StopIteration:
+                click.secho('No wifi-connect release found for this architecture.', fg='red')
+                return
+
+        except requests.exceptions.RequestException as e:
+            click.secho(f'Failed to get wifi-connect release: {e}', fg='red')
+            return
+
+    # @TODO: Make use of Jinja templates to generate Dockerfiles.
+    generate_dockerfile(service, {
+        'base_image': 'balenalib/raspberrypi3-debian',
+        'base_image_tag': 'bookworm',
+    })
 
 
 @click.command()

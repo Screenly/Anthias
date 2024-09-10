@@ -12,8 +12,10 @@ python = ">=3.9,<3.12"
 flake8 = "^5.0.4"
 
 [tool.poetry.group.docker-image-builder.dependencies]
-pygit2 = '^1.15.1'
 click = '^8.1.7'
+jinja2 = '^3.1.4'
+pygit2 = '^1.15.1'
+requests = '^2.32.3'
 
 [build-system]
 requires = ["poetry-core"]
