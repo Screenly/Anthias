@@ -148,7 +148,7 @@ After installing Poetry, run the following commands:
 
 ```bash
 # Install the dependencies
-$ poetry install --with=dev-host
+$ poetry install --only=dev-host
 $ poetry run flake8 $(git ls-files '**/*.py')
 ```
 
