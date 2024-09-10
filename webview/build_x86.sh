@@ -82,7 +82,7 @@ function install_qt() {
 }
 
 function create_qt_archive() {
-    local ARCHIVE_NAME="qt${QT_MAJOR}-${QT_VERSION}-${DEBIAN_VERSION}-x86-$GIT_HASH.tar.gz"
+    local ARCHIVE_NAME="qt${QT_MAJOR}-${QT_VERSION}-${DEBIAN_VERSION}-x86.tar.gz"
     local ARCHIVE_DESTINATION="/build/release/${ARCHIVE_NAME}"
 
     cd /build
