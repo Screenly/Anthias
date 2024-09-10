@@ -9,6 +9,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt-get -y install --no-install-recommends \
         build-essential \
         ca-certificates \
+        curl \
         dbus-daemon \
         fonts-arphic-uming \
         git-core \
@@ -126,14 +127,14 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 RUN c_rehash
 
 # QT Base from packages does not support eglfs
-RUN curl "$WEBVIEW_BASE_URL/qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" \
-        -sL -o "/tmp/qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" && \
-    curl "$WEBVIEW_BASE_URL/qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" \
-        -sL -o "/tmp/qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" && \
+RUN curl "$WEBVIEW_BASE_URL/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" \
+        -sL -o "/tmp/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" && \
+    curl "$WEBVIEW_BASE_URL/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" \
+        -sL -o "/tmp/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" && \
     cd /tmp && \
-    sha256sum -c "qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" && \
-    tar -xzf "/tmp/qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" -C /usr/local && \
-    rm "qt5-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz"
+    sha256sum -c "qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" && \
+    tar -xzf "/tmp/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" -C /usr/local && \
+    rm "qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz"
 
 RUN curl "$WEBVIEW_BASE_URL/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz" \
         -sL -o "/tmp/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz" && \
