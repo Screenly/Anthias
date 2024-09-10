@@ -90,7 +90,8 @@ function create_qt_archive() {
 
     cd /usr/local
     tar cfz ${ARCHIVE_DESTINATION} qt6
-    sha256sum ${ARCHIVE_DESTINATION} > ${ARCHIVE_DESTINATION}.sha256
+    cd /build/release
+    sha256sum ${ARCHIVE_NAME} > ${ARCHIVE_DESTINATION}.sha256
 }
 
 function create_webview_archive() {
@@ -108,9 +109,10 @@ function create_webview_archive() {
     cp -rf /webview/res fakeroot/share/ScreenlyWebview/
 
     cd fakeroot
-    tar cfz ${ARCHIVE_DESTINATION} .
 
-    sha256sum ${ARCHIVE_DESTINATION} > ${ARCHIVE_DESTINATION}.sha256
+    tar cfz ${ARCHIVE_DESTINATION} .
+    cd /build/release
+    sha256sum ${ARCHIVE_NAME} > ${ARCHIVE_DESTINATION}.sha256
 }
 
 function main() {
