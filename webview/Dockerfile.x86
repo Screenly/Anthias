@@ -11,6 +11,7 @@ RUN { \
     git \
     build-essential \
     make \
+    ccache \
     cmake \
     rsync \
     sed \
@@ -22,6 +23,7 @@ RUN { \
     python3-pip \
     gperf \
     pkg-config \
+    less \
     libfontconfig1-dev \
     libfreetype6-dev \
     libx11-dev \

@@ -10,11 +10,15 @@ fi
 
 CORE_COUNT="$(expr $(nproc) - 2)"
 
+DEBIAN_VERSION='bookworm'
+
+QT_MAJOR='6'
+QT_MINOR='6'
+QT_PATCH='3'
+QT_VERSION="${QT_MAJOR}.${QT_MINOR}.${QT_PATCH}"
+QT6_HOST_STAGING_PATH="/usr/local/qt6"
+
 function install_qt() {
-    QT_MAJOR='6'
-    QT_MINOR='6'
-    QT_PATCH='3'
-    QT_VERSION="${QT_MAJOR}.${QT_MINOR}.${QT_PATCH}"
     QT_RELEASES_URL="https://download.qt.io/official_releases/qt"
     QT_DOWNLOAD_BASE_URL="${QT_RELEASES_URL}/${QT_MAJOR}.${QT_MINOR}/${QT_VERSION}/submodules"
     QT_ARCHIVE_FILES=(
@@ -26,10 +30,9 @@ function install_qt() {
     QT6_DIR="/build/qt6"
     QT6_SRC_PATH="${QT6_DIR}/src"
     QT6_HOST_BUILD_PATH="${QT6_DIR}/host-build"
-    QT6_HOST_STAGING_PATH="${QT6_DIR}/host"
 
     cd /build
-    mkdir -p qt6 qt6/host qt6/host-build qt6/src
+    mkdir -p qt6 qt6/host-build qt6/src /usr/local/qt6
 
     cd ${QT6_SRC_PATH}
 
@@ -52,25 +55,26 @@ function install_qt() {
     cmake -GNinja -DCMAKE_BUILD_TYPE=Release \
         -DQT_BUILD_EXAMPLES=OFF \
         -DQT_BUILD_TESTS=OFF \
+        -DQT_USE_CCACHE=ON \
         -DCMAKE_INSTALL_PREFIX=${QT6_HOST_STAGING_PATH}
     cmake --build . --parallel "${CORE_COUNT}"
     cmake --install .
 
     echo "Compile Qt Shader Tools for the Host"
     cd ${QT6_HOST_BUILD_PATH}/qtshadertools-everywhere-src-${QT_VERSION}
-    /build/qt6/host/bin/qt-configure-module .
+    ${QT6_HOST_STAGING_PATH}/bin/qt-configure-module .
     cmake --build . --parallel "${CORE_COUNT}"
     cmake --install .
 
     echo "Compile Qt Declarative for the Host"
     cd ${QT6_HOST_BUILD_PATH}/qtdeclarative-everywhere-src-${QT_VERSION}
-    /build/qt6/host/bin/qt-configure-module .
+    ${QT6_HOST_STAGING_PATH}/bin/qt-configure-module .
     cmake --build . --parallel "${CORE_COUNT}"
     cmake --install .
 
     echo "Compile Qt WebEngine for host"
     cd ${QT6_HOST_BUILD_PATH}/qtwebengine-everywhere-src-${QT_VERSION}
-    /build/qt6/host/bin/qt-configure-module .
+    ${QT6_HOST_STAGING_PATH}/bin/qt-configure-module .
     cmake --build . --parallel "${CORE_COUNT}"
     cmake --install .
 
@@ -78,14 +82,41 @@ function install_qt() {
 }
 
 function create_qt_archive() {
+    local ARCHIVE_NAME="qt${QT_MAJOR}-${QT_VERSION}-${DEBIAN_VERSION}-x86-$GIT_HASH.tar.gz"
+    local ARCHIVE_DESTINATION="/build/release/${ARCHIVE_NAME}"
+
     cd /build
     mkdir -p release && cd release
-    tar -czvf qt-host-binaries-aarch64.tar.gz -C /build/qt6/host .
+
+    cd /usr/local
+    tar cfz ${ARCHIVE_DESTINATION} qt6
+    sha256sum ${ARCHIVE_DESTINATION} > ${ARCHIVE_DESTINATION}.sha256
+}
+
+function create_webview_archive() {
+    local ARCHIVE_NAME="webview-${QT_VERSION}-${DEBIAN_VERSION}-x86-$GIT_HASH.tar.gz"
+    local ARCHIVE_DESTINATION="/build/release/${ARCHIVE_NAME}"
+
+    cp -rf /webview /build
+    cd /build/webview
+    ${QT6_HOST_STAGING_PATH}/bin/qmake
+    make -j${CORE_COUNT}
+    make install
+
+    mkdir -p fakeroot/bin fakeroot/share/ScreenlyWebview
+    mv ScreenlyWebview fakeroot/bin/
+    cp -rf /webview/res fakeroot/share/ScreenlyWebview/
+
+    cd fakeroot
+    tar cfz ${ARCHIVE_DESTINATION} .
+
+    sha256sum ${ARCHIVE_DESTINATION} > ${ARCHIVE_DESTINATION}.sha256
 }
 
 function main() {
     install_qt
     create_qt_archive
+    create_webview_archive
 }
 
 main
