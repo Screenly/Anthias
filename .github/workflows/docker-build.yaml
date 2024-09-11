@@ -27,7 +27,7 @@ jobs:
     needs: run-tests
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86_64', 'i386']
     runs-on: ubuntu-latest
 
     steps:

@@ -183,7 +183,6 @@ function install_ansible() {
 
 function run_ansible_playbook() {
     display_section "Run the Anthias Ansible Playbook"
-    BRANCH='x86-support'
 
     sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
         -m git \
