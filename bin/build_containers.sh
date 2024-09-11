@@ -99,7 +99,9 @@ for container in ${SERVICES[@]}; do
             architecture=rpi
         elif [ "$TARGET_PLATFORM" = 'linux/arm/v7' ] || [ "$TARGET_PLATFORM" = 'linux/arm/v8' ]; then
             architecture=armv7hf
-        else
+        elif [ "$TARGET_PLATFORM" = 'linux/386' ]; then
+            architecture=i386
+        elif [ "$TARGET_PLATFORM" = 'linux/amd64' ]; then
             architecture=amd64
         fi
 
