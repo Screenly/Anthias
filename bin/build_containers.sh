@@ -33,7 +33,7 @@ fi
 # Detect what platform
 if [ ! -f /proc/device-tree/model ]; then
     # Check if 32-bit or 64-bit
-    if [ "$(uname -m)" = "x86_64" ]; then
+    if [ "$BUILD_TARGET" == 'x86_64' ]; then
         export BOARD="x86_64"
         export TARGET_PLATFORM=linux/amd64
     else
