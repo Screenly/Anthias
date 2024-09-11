@@ -7,7 +7,7 @@ set -euo pipefail
 
 BRANCH="master"
 ANSIBLE_PLAYBOOK_ARGS=()
-REPOSITORY="https://github.com/nicomiguelino/Anthias.git" # TODO: Revert me later.
+REPOSITORY="https://github.com/Screenly/Anthias.git"
 ANTHIAS_REPO_DIR="/home/${USER}/screenly"
 GITHUB_API_REPO_URL="https://api.github.com/repos/Screenly/Anthias"
 GITHUB_RELEASES_URL="https://github.com/Screenly/Anthias/releases"
@@ -147,7 +147,7 @@ function install_packages() {
         APT_INSTALL_ARGS+=("network-manager")
     fi
 
-    if [ "$ARCHITECTURE" != "x86_64" ]; then
+    if [ "$ARCHITECTURE" != "x86_64" ] && [ "$ARCHITECTURE" != "i386" ]; then
         sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' \
             /etc/apt/sources.list
     fi
@@ -190,7 +190,7 @@ function run_ansible_playbook() {
         -a "repo=$REPOSITORY dest=${ANTHIAS_REPO_DIR} version=${BRANCH} force=yes"
     cd ${ANTHIAS_REPO_DIR}/ansible
 
-    if [ "$ARCHITECTURE" == "x86_64" ]; then
+    if [ "$ARCHITECTURE" == "x86_64" ] || [ "$ARCHITECTURE" == "i386" ]; then
         ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "raspberry-pi")
     fi
 
@@ -201,10 +201,9 @@ function run_ansible_playbook() {
 function upgrade_docker_containers() {
     display_section "Initialize/Upgrade Docker Containers"
 
-    # TODO: Uncomment me later.
-    # wget -q \
-    #     "$GITHUB_RAW_URL/master/bin/upgrade_containers.sh" \
-    #     -O "$UPGRADE_SCRIPT_PATH"
+    wget -q \
+        "$GITHUB_RAW_URL/master/bin/upgrade_containers.sh" \
+        -O "$UPGRADE_SCRIPT_PATH"
 
     sudo -u ${USER} \
         DOCKER_TAG="${DOCKER_TAG}" \

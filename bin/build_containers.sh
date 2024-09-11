@@ -160,9 +160,11 @@ for container in ${SERVICES[@]}; do
             "screenly/anthias-$container:experimental-$GIT_SHORT_HASH-$BOARD"
         )
     else
-        # TODO: Revert changes when the changes are ready to be merged.
         PUSH_ARGS+=(
-            "nicomiguelino/anthias-$container:latest-$BOARD"
+            "screenly/anthias-$container:$DOCKER_TAG"
+            "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
+            "screenly/srly-ose-$container:$DOCKER_TAG"
+            "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD"
         )
     fi
 
