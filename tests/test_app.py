@@ -17,7 +17,7 @@ asset_x = {
     'mimetype': u'web',
     'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d',
     'name': u'WireLoad',
-    'uri': u'http://www.wireload.net',
+    'uri': u'https://www.wireload.net',
     'start_date': datetime.now() - timedelta(days=1),
     'end_date': datetime.now() + timedelta(days=1),
     'duration': u'5',
@@ -104,7 +104,7 @@ class WebTest(TestCase):
 
             wait_for_and_do(
                 browser, 'input[name="uri"]',
-                lambda field: field.fill('http://example.com'))
+                lambda field: field.fill('https://example.com'))
             sleep(1)
 
             wait_for_and_do(browser, '#add-form', lambda form: form.click())
@@ -119,8 +119,8 @@ class WebTest(TestCase):
             self.assertEqual(len(assets), 1)
             asset = assets[0]
 
-            self.assertEqual(asset['name'], u'http://example.com')
-            self.assertEqual(asset['uri'], u'http://example.com')
+            self.assertEqual(asset['name'], u'https://example.com')
+            self.assertEqual(asset['uri'], u'https://example.com')
             self.assertEqual(asset['mimetype'], u'webpage')
             self.assertEqual(asset['duration'], settings['default_duration'])
 
