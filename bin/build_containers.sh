@@ -31,16 +31,10 @@ if [ -n "${CLEAN_BUILD+x}" ]; then
 fi
 
 # Detect what platform
-if [ ! -f /proc/device-tree/model ]; then
-    # Check if 32-bit or 64-bit
-    if [ "$BUILD_TARGET" == 'x86_64' ]; then
-        export BOARD="x86_64"
-        export TARGET_PLATFORM=linux/amd64
-    else
-        export BOARD="i386"
-        export TARGET_PLATFORM=linux/386
-    fi
+if [ ! -f /proc/device-tree/model ] || [ "$BUILD_TARGET" == 'x86' ]; then
     export BASE_IMAGE=debian
+    export BOARD="x86"
+    export TARGET_PLATFORM=linux/amd64
 elif grep -qF "Raspberry Pi 4" /proc/device-tree/model || [ "${BUILD_TARGET}" == 'pi4' ]; then
     export BASE_IMAGE=balenalib/raspberrypi3-debian
     export BOARD="pi4"
@@ -79,7 +73,7 @@ for container in ${SERVICES[@]}; do
     fi
 
     if [ "$container" == 'viewer' ]; then
-        if [ "$BOARD" == 'x86_64' ] || [ "$BOARD" == 'i386' ]; then
+        if [ "$BOARD" == 'x86' ]; then
             export QT_MAJOR_VERSION=6
             export QT_VERSION=6.6.3
             export WEBVIEW_GIT_HASH=71e859ce5338b3df8884a2125189b96d8ebdbd6a
@@ -99,8 +93,6 @@ for container in ${SERVICES[@]}; do
             architecture=rpi
         elif [ "$TARGET_PLATFORM" = 'linux/arm/v7' ] || [ "$TARGET_PLATFORM" = 'linux/arm/v8' ]; then
             architecture=armv7hf
-        elif [ "$TARGET_PLATFORM" = 'linux/386' ]; then
-            architecture=i386
         elif [ "$TARGET_PLATFORM" = 'linux/amd64' ]; then
             architecture=amd64
         fi
@@ -120,7 +112,7 @@ for container in ${SERVICES[@]}; do
     fi
 
     # If we're running on x86, remove all Pi specific packages
-    if [ "$BOARD" == 'x86_64' ] || [ "$BOARD" == 'i386' ]; then
+    if [ "$BOARD" == 'x86' ]; then
         if [[ $OSTYPE == 'darwin'* ]]; then
             SED_ARGS=(-i "")
         else

@@ -147,7 +147,7 @@ function install_packages() {
         APT_INSTALL_ARGS+=("network-manager")
     fi
 
-    if [ "$ARCHITECTURE" != "x86_64" ] && [ "$ARCHITECTURE" != "i386" ]; then
+    if [ "$ARCHITECTURE" != "x86_64" ]; then
         sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' \
             /etc/apt/sources.list
     fi
@@ -189,7 +189,7 @@ function run_ansible_playbook() {
         -a "repo=$REPOSITORY dest=${ANTHIAS_REPO_DIR} version=${BRANCH} force=yes"
     cd ${ANTHIAS_REPO_DIR}/ansible
 
-    if [ "$ARCHITECTURE" == "x86_64" ] || [ "$ARCHITECTURE" == "i386" ]; then
+    if [ "$ARCHITECTURE" == "x86_64" ]; then
         ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "raspberry-pi")
     fi
 

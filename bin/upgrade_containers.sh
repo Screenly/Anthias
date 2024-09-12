@@ -21,9 +21,7 @@ fi
 
 # Detect Raspberry Pi version
 if [ ! -f /proc/device-tree/model ] && [ "$(uname -m)" = "x86_64" ]; then
-    export DEVICE_TYPE="x86_64"
-elif [ ! -f /proc/device-tree/model ] && [ "$(uname -m)" = "i386" ]; then
-    export DEVICE_TYPE="i386"
+    export DEVICE_TYPE="x86"
 elif grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
     export DEVICE_TYPE="pi4"
 elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
