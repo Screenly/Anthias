@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 from builtins import object
 
+import sh
 import vlc
 
 from lib.raspberry_pi_helper import get_device_type
@@ -24,6 +25,41 @@ class MediaPlayer(object):
 
     def is_playing(self):
         raise NotImplementedError
+
+
+class FFMPEGMediaPlayer(MediaPlayer):
+    INSTANCE = None
+
+    def __init__(self):
+        MediaPlayer.__init__(self)
+        self.run = None
+        self.player_args = list()
+        self.player_kwargs = dict()
+
+    @classmethod
+    def get_instance(cls):
+        if cls.INSTANCE is None:
+            cls.INSTANCE = cls()
+        return cls.INSTANCE
+
+    def set_asset(self, uri, duration):
+        self.player_args = ['ffplay', uri, '-autoexit']
+        self.player_kwargs = {
+            '_bg': True,
+            '_ok_code': [0, 124],
+        }
+
+    def play(self):
+        self.run = sh.Command(self.player_args[0])(*self.player_args[1:], **self.player_kwargs)
+
+    def stop(self):
+        try:
+            self.run.kill()
+        except OSError:
+            pass
+
+    def is_playing(self):
+        return bool(self.run.process.alive)
 
 
 class VLCMediaPlayer(MediaPlayer):

@@ -108,7 +108,15 @@ RUN --mount=type=cache,target=/var/cache/apt \
         ttf-wqy-zenhei \
         vlc \
         sudo \
-        sqlite3
+        sqlite3 \
+        ffmpeg \
+        libavcodec-dev \
+        libavdevice-dev \
+        libavfilter-dev \
+        libavformat-dev \
+        libavutil-dev \
+        libswresample-dev \
+        libswscale-dev
 
 # We need this to ensure that the wheels can be built.
 # Otherwise we get "invalid command 'bdist_wheel'"
@@ -127,20 +135,20 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 RUN c_rehash
 
 # QT Base from packages does not support eglfs
-RUN curl "$WEBVIEW_BASE_URL/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" \
-        -sL -o "/tmp/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" && \
-    curl "$WEBVIEW_BASE_URL/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" \
-        -sL -o "/tmp/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" && \
-    cd /tmp && \
+COPY "webview/build/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" \
+    "/tmp/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz"
+COPY "webview/build/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" \
+    "/tmp/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256"
+RUN cd /tmp && \
     sha256sum -c "qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" && \
     tar -xzf "/tmp/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" -C /usr/local && \
     rm "qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz"
 
-RUN curl "$WEBVIEW_BASE_URL/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz" \
-        -sL -o "/tmp/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz" && \
-    curl "$WEBVIEW_BASE_URL/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz.sha256" \
-        -sL -o "/tmp/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz.sha256" && \
-    cd /tmp && \
+COPY "webview/build/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz" \
+    "/tmp/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz"
+COPY "webview/build/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz.sha256" \
+    "/tmp/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz.sha256"
+RUN cd /tmp && \
     sha256sum -c "webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz.sha256" && \
     tar -xzf "/tmp/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz" -C /usr/local && \
     rm "webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz"
