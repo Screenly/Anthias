@@ -67,6 +67,8 @@ function install_prerequisites() {
         return
     fi
 
+    sudo apt -y update && sudo apt -y install gnupg
+
     sudo mkdir -p /etc/apt/keyrings
     curl -fsSL https://repo.charm.sh/apt/gpg.key | \
         sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg
