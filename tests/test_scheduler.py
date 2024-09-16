@@ -12,7 +12,7 @@ asset_x = {
     'mimetype': u'web',
     'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d',
     'name': u'WireLoad',
-    'uri': u'http://www.wireload.net',
+    'uri': u'https://www.wireload.net',
     'start_date': datetime.now() - timedelta(days=3),
     'end_date': datetime.now() + timedelta(days=3),
     'duration': u'5',

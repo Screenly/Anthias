@@ -132,8 +132,11 @@ function install_packages() {
         "whois"
     )
 
-    if [ "$DISTRO_VERSION" -ge 12 ]; then
-        APT_INSTALL_ARGS+=("python3-full")
+    if [ "$RASPBERRY_PI_OS_VERSION" -ge 12 ]; then
+        APT_INSTALL_ARGS+=(
+            "python3-dev"
+            "python3-full"
+        )
     else
         APT_INSTALL_ARGS+=(
             "python3"
