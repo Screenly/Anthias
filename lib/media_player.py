@@ -41,7 +41,9 @@ class FFMPEGMediaPlayer(MediaPlayer):
         }
 
     def play(self):
-        self.run = sh.Command(self.player_args[0])(*self.player_args[1:], **self.player_kwargs)
+        self.run = sh.Command(self.player_args[0])(
+            *self.player_args[1:], **self.player_kwargs
+        )
 
     def stop(self):
         try:
