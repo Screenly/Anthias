@@ -1,5 +1,4 @@
 from __future__ import unicode_literals
-from builtins import object
 
 import sh
 import vlc
@@ -10,7 +9,7 @@ from settings import settings
 VIDEO_TIMEOUT = 20  # secs
 
 
-class MediaPlayer(object):
+class MediaPlayer():
     def __init__(self):
         pass
 
@@ -28,19 +27,11 @@ class MediaPlayer(object):
 
 
 class FFMPEGMediaPlayer(MediaPlayer):
-    INSTANCE = None
-
     def __init__(self):
         MediaPlayer.__init__(self)
         self.run = None
         self.player_args = list()
         self.player_kwargs = dict()
-
-    @classmethod
-    def get_instance(cls):
-        if cls.INSTANCE is None:
-            cls.INSTANCE = cls()
-        return cls.INSTANCE
 
     def set_asset(self, uri, duration):
         self.player_args = ['ffplay', uri, '-autoexit']
@@ -63,8 +54,6 @@ class FFMPEGMediaPlayer(MediaPlayer):
 
 
 class VLCMediaPlayer(MediaPlayer):
-    INSTANCE = None
-
     def __init__(self):
         MediaPlayer.__init__(self)
 
@@ -73,12 +62,6 @@ class VLCMediaPlayer(MediaPlayer):
         self.player = self.instance.media_player_new()
 
         self.player.audio_output_set('alsa')
-
-    @classmethod
-    def get_instance(cls):
-        if cls.INSTANCE is None:
-            cls.INSTANCE = VLCMediaPlayer()
-        return cls.INSTANCE
 
     def get_alsa_audio_device(self):
         if settings['audio_output'] == 'local':
@@ -111,3 +94,17 @@ class VLCMediaPlayer(MediaPlayer):
     def is_playing(self):
         return self.player.get_state() in [
             vlc.State.Playing, vlc.State.Buffering, vlc.State.Opening]
+
+
+class MediaPlayerProxy():
+    INSTANCE = None
+
+    @classmethod
+    def get_instance(cls):
+        if cls.INSTANCE is None:
+            if get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']:
+                cls.INSTANCE = VLCMediaPlayer()
+            else:
+                cls.INSTANCE = FFMPEGMediaPlayer()
+
+        return cls.INSTANCE
