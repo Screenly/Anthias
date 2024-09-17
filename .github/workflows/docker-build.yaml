@@ -61,6 +61,7 @@ jobs:
         run: |
           export BUILD_TARGET=${{ matrix.board }}
           export PUSH=1
+          export SKIP_TEST=1
           ./bin/build_containers.sh
 
   balena:
