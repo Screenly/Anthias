@@ -71,6 +71,13 @@ The image file looks something like `<yyyy>-<mm>-<dd>-raspberry<version>.zip`. T
 
 If you'd like more control over your digital signage instance, try installing it on Raspberry Pi OS Lite.
 
+Before you start, make sure that you have `curl` installed. If not, you can install it by running:
+
+```bash
+$ sudo apt update
+$ sudo apt install -y curl
+```
+
 The tl;dr for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) is:
 
 ```

@@ -23,6 +23,8 @@ declare -a SERVICES=(
     'test'
 )
 
+BUILD_TARGET=${BUILD_TARGET:-x86}
+
 DOCKER_BUILD_ARGS=("buildx" "build" "--load")
 echo 'Make sure you ran `docker buildx create --use` before the command'
 
@@ -31,7 +33,7 @@ if [ -n "${CLEAN_BUILD+x}" ]; then
 fi
 
 # Detect what platform
-if [ ! -f /proc/device-tree/model ] || [ "$BUILD_TARGET" == 'x86' ]; then
+if [ ! -f /proc/device-tree/model ] && [ "$BUILD_TARGET" == 'x86' ]; then
     export BASE_IMAGE=debian
     export BOARD="x86"
     export TARGET_PLATFORM=linux/amd64
