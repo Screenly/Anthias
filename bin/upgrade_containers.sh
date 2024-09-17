@@ -49,6 +49,11 @@ cat /home/${USER}/screenly/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/screenly/docker-compose.yml
 
+if [ "$DEVICE_TYPE" = "x86" ]; then
+    sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
+        /home/${USER}/screenly/docker-compose.yml
+fi
+
 sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \
     pull
