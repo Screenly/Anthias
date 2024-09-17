@@ -76,7 +76,7 @@ for container in ${SERVICES[@]}; do
 
     if [ "$container" == 'viewer' ]; then
         export WEBVIEW_GIT_HASH=5e556681738a1fa918dc9f0bf5879ace2e603e12
-            export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.3"
+        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.3"
 
         if [ "$BOARD" == 'x86' ]; then
             export QT_MAJOR_VERSION=6
