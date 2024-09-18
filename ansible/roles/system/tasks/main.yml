@@ -209,11 +209,6 @@
     update_cache: true
   when: not cdefs_exist
 
-- name: Get architecture
-  ansible.builtin.command: dpkg --print-architecture
-  register: architecture
-  changed_when: false
-
 - name: Install Anthias dependencies (all platforms)
   ansible.builtin.apt:
     name:
@@ -228,8 +223,10 @@
       - rpi-update
     state: present
   when: |
-    architecture.stdout == "armhf" or
-    architecture.stdout == "arm64"
+    ansible_architecture == "aarch64" or
+    ansible_architecture == "armv7l" or
+    ansible_architecture == "armv6l"
+
 
 - name: Remove deprecated apt dependencies
   ansible.builtin.apt:
@@ -264,26 +261,31 @@
   ansible.builtin.apt_key:
     url: https://download.docker.com/linux/debian/gpg
     state: present
-  when: architecture.stdout == "amd64"
+  when: ansible_architecture == "x86_64"
 
 - name: Add Docker apt key (Raspberry Pi)
   ansible.builtin.apt_key:
     url: https://download.docker.com/linux/raspbian/gpg
     state: present
   when: |
-    architecture.stdout == "armhf" or
-    architecture.stdout == "arm64"
+    ansible_architecture == "aarch64" or
+    ansible_architecture == "armv7l" or
+    ansible_architecture == "armv6l"
 
 - name: Get Debian name
   ansible.builtin.command: lsb_release -cs
   register: debian_name
   changed_when: false
 
+- name: Set architecture
+  ansible.builtin.set_fact:
+    architecture: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'armhf' }}"
+
 - name: Add Docker repo
   ansible.builtin.lineinfile:
     path: /etc/apt/sources.list.d/docker.list
     create: true
-    line: "deb [arch={{ architecture.stdout }}] https://download.docker.com/linux/debian {{ debian_name.stdout }} stable"
+    line: "deb [arch={{ architecture }}] https://download.docker.com/linux/debian {{ debian_name.stdout }} stable"
     state: present
     owner: root
     group: root
@@ -292,9 +294,9 @@
 - name: Install Docker
   ansible.builtin.apt:
     name:
-      - docker-ce:{{ architecture.stdout }}
-      - docker-ce-cli:{{ architecture.stdout }}
-      - docker-compose-plugin:{{ architecture.stdout }}
+      - docker-ce:{{ architecture }}
+      - docker-ce-cli:{{ architecture }}
+      - docker-compose-plugin:{{ architecture }}
     update_cache: true
     install_recommends: false
 
@@ -329,8 +331,9 @@
       - gpio
       - dialout
   when: |
-    architecture.stdout == "armhf" or
-    architecture.stdout == "arm64"
+    ansible_architecture == "aarch64" or
+    ansible_architecture == "armv7l" or
+    ansible_architecture == "armv6l"
 
 - name: Perform system upgrade
   ansible.builtin.apt:
