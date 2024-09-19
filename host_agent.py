@@ -41,6 +41,7 @@ def get_ip_addresses():
 def set_ip_addresses():
     rdb = redis.Redis(**REDIS_ARGS)
     ip_addresses = get_ip_addresses()
+
     rdb.set('ip_addresses', json.dumps(ip_addresses))
 
 

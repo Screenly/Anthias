@@ -23,6 +23,8 @@ declare -a SERVICES=(
     'test'
 )
 
+BUILD_TARGET=${BUILD_TARGET:-x86}
+
 DOCKER_BUILD_ARGS=("buildx" "build" "--load")
 echo 'Make sure you ran `docker buildx create --use` before the command'
 
@@ -31,9 +33,9 @@ if [ -n "${CLEAN_BUILD+x}" ]; then
 fi
 
 # Detect what platform
-if [ ! -f /proc/device-tree/model ] && [ -z "${BUILD_TARGET+x}" ]; then
-    export BOARD="x86"
+if [ ! -f /proc/device-tree/model ] && [ "$BUILD_TARGET" == 'x86' ]; then
     export BASE_IMAGE=debian
+    export BOARD="x86"
     export TARGET_PLATFORM=linux/amd64
 elif grep -qF "Raspberry Pi 4" /proc/device-tree/model || [ "${BUILD_TARGET}" == 'pi4' ]; then
     export BASE_IMAGE=balenalib/raspberrypi3-debian
@@ -73,23 +75,27 @@ for container in ${SERVICES[@]}; do
     fi
 
     if [ "$container" == 'viewer' ]; then
-        export QT_VERSION=5.15.14
-        export WEBVIEW_GIT_HASH=4bd295c4a1197a226d537938e947773f4911ca24
-        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.1"
+        export WEBVIEW_GIT_HASH=5e556681738a1fa918dc9f0bf5879ace2e603e12
+        export WEBVIEW_BASE_URL="https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.3"
+
+        if [ "$BOARD" == 'x86' ]; then
+            export QT_MAJOR_VERSION=6
+            export QT_VERSION=6.6.3
+        else
+            export QT_MAJOR_VERSION=5
+            export QT_VERSION=5.15.14
+        fi
     elif [ "$container" == 'test' ]; then
         export CHROME_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chrome-linux64.zip"
         export CHROMEDRIVER_DL_URL="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chromedriver-linux64.zip"
     elif [ "$container" == 'wifi-connect' ]; then
-        # We don't support wifi-connect on x86 yet.
-        if [ "$BOARD" == 'x86' ]; then
-            continue
-        fi
-
         # Logic for determining the correct architecture for the wifi-connect container
         if [ "$TARGET_PLATFORM" = 'linux/arm/v6' ]; then
             architecture=rpi
-        else
+        elif [ "$TARGET_PLATFORM" = 'linux/arm/v7' ] || [ "$TARGET_PLATFORM" = 'linux/arm/v8' ]; then
             architecture=armv7hf
+        elif [ "$TARGET_PLATFORM" = 'linux/amd64' ]; then
+            architecture=amd64
         fi
 
         wc_download_url='https://api.github.com/repos/balena-os/wifi-connect/releases/93025295'
@@ -114,13 +120,17 @@ for container in ${SERVICES[@]}; do
             SED_ARGS=(-i)
         fi
 
-        sed "${SED_ARGS[@]}" -e '/libraspberrypi0/d' $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
+        PACKAGES_TO_REMOVE=(
+            "libraspberrypi0"
+            "libgst-dev"
+            "libsqlite0-dev"
+            "libsrtp0-dev"
+            "libssl1.1"
+        )
 
-        # Don't build the viewer container if we're on x86
-        if [ "$container" == 'viewer' ]; then
-            echo "Skipping viewer container for x86 builds..."
-            continue
-        fi
+        for package in "${PACKAGES_TO_REMOVE[@]}"; do
+            sed "${SED_ARGS[@]}" -e "/$package/d" $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
+        done
     else
         if [ "$BOARD" == "pi1" ] && [ "$container" == "viewer" ]; then
             # Remove the libssl1.1 from Dockerfile.viewer

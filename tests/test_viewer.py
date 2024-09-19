@@ -91,7 +91,7 @@ class TestLoadBrowser(ViewerTestCase):
 class TestSignalHandlers(ViewerTestCase):
     @mock.patch('vlc.Instance', mock.MagicMock())
     @mock.patch(
-        'lib.media_player.lookup_raspberry_pi_version',
+        'lib.media_player.get_device_type',
         return_value='pi4'
     )
     def test_usr1(self, lookup_mock):

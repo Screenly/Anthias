@@ -99,6 +99,9 @@
 - name: Notice for cmdline.txt.orig file
   ansible.builtin.debug:
     msg: "Use cmdline.txt.orig for boot parameters (don't remove this file)"
+  tags:
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Copy cmdline.txt.orig to cmdline.txt
   ansible.builtin.copy:
@@ -206,14 +209,24 @@
     update_cache: true
   when: not cdefs_exist
 
-- name: Install Anthias dependencies
+- name: Install Anthias dependencies (all platforms)
   ansible.builtin.apt:
     name:
-      - rpi-update
       - bc
       - python3
       - python3-redis
     state: present
+
+- name: Install Anthias dependencies (Raspberry Pi)
+  ansible.builtin.apt:
+    name:
+      - rpi-update
+    state: present
+  when: |
+    ansible_architecture == "aarch64" or
+    ansible_architecture == "armv7l" or
+    ansible_architecture == "armv6l"
+
 
 - name: Remove deprecated apt dependencies
   ansible.builtin.apt:
@@ -244,21 +257,35 @@
       - docker-compose
     state: absent
 
-- name: Add docker apt key
+- name: Add Docker apt key (x86)
+  ansible.builtin.apt_key:
+    url: https://download.docker.com/linux/debian/gpg
+    state: present
+  when: ansible_architecture == "x86_64"
+
+- name: Add Docker apt key (Raspberry Pi)
   ansible.builtin.apt_key:
     url: https://download.docker.com/linux/raspbian/gpg
     state: present
+  when: |
+    ansible_architecture == "aarch64" or
+    ansible_architecture == "armv7l" or
+    ansible_architecture == "armv6l"
 
-- name: Get raspbian name
+- name: Get Debian name
   ansible.builtin.command: lsb_release -cs
-  register: raspbian_name
+  register: debian_name
   changed_when: false
+
+- name: Set architecture
+  ansible.builtin.set_fact:
+    architecture: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'armhf' }}"
 
 - name: Add Docker repo
   ansible.builtin.lineinfile:
     path: /etc/apt/sources.list.d/docker.list
     create: true
-    line: "deb [arch=armhf] https://download.docker.com/linux/debian {{ raspbian_name.stdout }} stable"
+    line: "deb [arch={{ architecture }}] https://download.docker.com/linux/debian {{ debian_name.stdout }} stable"
     state: present
     owner: root
     group: root
@@ -267,13 +294,28 @@
 - name: Install Docker
   ansible.builtin.apt:
     name:
-      - docker-ce:armhf
-      - docker-ce-cli:armhf
-      - docker-compose-plugin:armhf
+      - docker-ce:{{ architecture }}
+      - docker-ce-cli:{{ architecture }}
+      - docker-compose-plugin:{{ architecture }}
     update_cache: true
     install_recommends: false
 
-- name: Add user to docker group
+- name: Add user to Docker group (all platforms)
+  ansible.builtin.user:
+    name: "{{ lookup('env', 'USER') }}"
+    group: "{{ lookup('env', 'USER') }}"
+    groups:
+      - docker
+      - adm
+      - sudo
+      - video
+      - plugdev
+      - users
+      - input
+      - netdev
+      - dialout
+
+- name: Add user to Docker group (Raspberry Pi)
   ansible.builtin.user:
     name: "{{ lookup('env', 'USER') }}"
     group: "{{ lookup('env', 'USER') }}"
@@ -288,6 +330,10 @@
       - netdev
       - gpio
       - dialout
+  when: |
+    ansible_architecture == "aarch64" or
+    ansible_architecture == "armv7l" or
+    ansible_architecture == "armv6l"
 
 - name: Perform system upgrade
   ansible.builtin.apt:
