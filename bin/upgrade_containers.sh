@@ -20,7 +20,9 @@ if [ -z "$DOCKER_TAG" ]; then
 fi
 
 # Detect Raspberry Pi version
-if grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
+if [ ! -f /proc/device-tree/model ] && [ "$(uname -m)" = "x86_64" ]; then
+    export DEVICE_TYPE="x86"
+elif grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
     export DEVICE_TYPE="pi4"
 elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
     export DEVICE_TYPE="pi3"
@@ -46,6 +48,11 @@ fi
 cat /home/${USER}/screenly/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/screenly/docker-compose.yml
+
+if [ "$DEVICE_TYPE" = "x86" ]; then
+    sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
+        /home/${USER}/screenly/docker-compose.yml
+fi
 
 sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \

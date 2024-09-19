@@ -19,6 +19,8 @@ We've tested Anthias and is known to work on the following Raspberry Pi models:
 * Raspberry Pi 3 Model B+ - 32-bit and 64-bit Bullseye, 64-bit Bookworm
 * Raspberry Pi 3 Model B - 64-bit Bookworm and Bullseye
 * Raspberry Pi 2 Model B - 32-bit Bookworm and Bullseye
+* x86 Devices - 64-bit Bullseye
+    * These devices can be something similar to a NUC.
 
 
 We're still fixing the installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 1.
@@ -68,6 +70,13 @@ The image file looks something like `<yyyy>-<mm>-<dd>-raspberry<version>.zip`. T
 #### Overview
 
 If you'd like more control over your digital signage instance, try installing it on Raspberry Pi OS Lite.
+
+Before you start, make sure that you have `curl` installed. If not, you can install it by running:
+
+```bash
+$ sudo apt update
+$ sudo apt install -y curl
+```
 
 The tl;dr for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) is:
 

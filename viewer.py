@@ -27,7 +27,7 @@ import zmq
 from lib import assets_helper
 from lib import db
 from lib.errors import SigalrmException
-from lib.media_player import VLCMediaPlayer
+from lib.media_player import MediaPlayerProxy
 from lib.utils import (
     url_fails,
     is_balena_app,
@@ -86,7 +86,7 @@ def sigusr1(signum, frame):
     playing web or image asset is skipped.
     """
     logging.info('USR1 received, skipping.')
-    VLCMediaPlayer.get_instance().stop()
+    MediaPlayerProxy.get_instance().stop()
 
 
 def skip_asset(back=False):
@@ -381,7 +381,7 @@ def view_image(uri):
 
 def view_video(uri, duration):
     logging.debug('Displaying video %s for %s ', uri, duration)
-    media_player = VLCMediaPlayer.get_instance()
+    media_player = MediaPlayerProxy.get_instance()
 
     media_player.set_asset(uri, duration)
     media_player.play()
