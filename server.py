@@ -1555,10 +1555,9 @@ def system_info():
     player_name = settings['player_name']
 
     device_model = raspberry_pi_helper.parse_cpu_info().get('model')
+
     if device_model is None and machine() == 'x86_64':
         device_model = 'Generic x86_64 Device'
-    else:
-        device_model = 'Unknown'
 
     version = '{}@{}'.format(
         diagnostics.get_git_branch(),
