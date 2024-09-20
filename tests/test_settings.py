@@ -1,10 +1,10 @@
 from __future__ import unicode_literals
-import unittest
 import os
 import sh
 import shutil
 import sys
 from contextlib import contextmanager
+from unittest import skip, TestCase
 
 user_home_dir = os.getenv('HOME')
 
@@ -65,7 +65,7 @@ def getenv(k, default=None):
         return default
 
 
-class SettingsTest(unittest.TestCase):
+class SettingsTest(TestCase):
     def setUp(self):
         if not os.path.exists(CONFIG_DIR):
             os.mkdir(CONFIG_DIR)
@@ -77,6 +77,8 @@ class SettingsTest(unittest.TestCase):
         shutil.rmtree(CONFIG_DIR)
         os.getenv = self.orig_getenv
 
+    # This test passes locally but fails on CI.
+    @skip('fixme')
     def test_anthias_should_exit_if_no_settings_file_found(self):
         new_env = os.environ.copy()
         new_env["HOME"] = "/tmp"
@@ -134,6 +136,3 @@ class SettingsTest(unittest.TestCase):
                 self.assertEqual(settings['verify_ssl'], True)
                 # no out of thin air changes?
                 self.assertEqual(settings['audio_output'], 'hdmi')
-
-    # The test passes locally but fails on CI.
-    test_anthias_should_exit_if_no_settings_file_found.fixme = True

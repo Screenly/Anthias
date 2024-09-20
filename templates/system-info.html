@@ -43,10 +43,7 @@
                         <th scope="row">Uptime</th>
                         <td>{{ context.uptime.days }} days and {{ (context.uptime.seconds / 3600)|round(2) }} hours</td>
                     </tr>
-                    <tr>
-                        <th scope="row">Monitor Info</th>
-                        <td>{{ context.display_info }}</td>
-                    </tr>
+
                     <tr>
                         <th scope="row">Display Power (CEC)</th>
                         <td>{{ context.display_power }}</td>
@@ -65,24 +62,6 @@
                     </tr>
                     </tbody>
                 </table>
-
-                <section>
-                    <h4><b>Latest Viewer Logs</b></h4>
-                    <hr>
-                </section>
-
-                {% if context.viewlog %}
-                    <table class="table table-borderless">
-                        {% for line in context.viewlog %}
-                            <tr>
-                                <td>{{ line }}</td>
-                            </tr>
-                        {% endfor %}
-                    </table>
-                {% else %}
-                    <p>There are no recent log messages.</p>
-                {% endif %}
-
             </div>
         </div>
     </div>

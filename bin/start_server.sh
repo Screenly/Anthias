@@ -23,10 +23,10 @@ if [ -n "${MANAGEMENT_USER+x}" ] && [ -n "${MANAGEMENT_PASSWORD+x}" ]; then
 fi
 
 echo "Running migration..."
-python3 ./bin/migrate.py
+python ./bin/migrate.py
 
 if [[ "$ENVIRONMENT" == "development" ]]; then
     flask --app server.py run --debug --reload --host 0.0.0.0 --port 8080
 else
-    python3 server.py
+    python server.py
 fi

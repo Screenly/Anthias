@@ -1216,18 +1216,14 @@ class Info(Resource):
     method_decorators = [api_response, authorized]
 
     def get(self):
-        viewlog = "Not yet implemented"
-
         # Calculate disk space
         slash = statvfs("/")
         free_space = size(slash.f_bavail * slash.f_frsize)
         display_power = r.get('display_power')
 
         return {
-            'viewlog': viewlog,
             'loadavg': diagnostics.get_load_avg()['15 min'],
             'free_space': free_space,
-            'display_info': diagnostics.get_monitor_status(),
             'display_power': display_power,
             'up_to_date': is_up_to_date()
         }
@@ -1430,8 +1426,9 @@ def settings_page():
             current_pass = request.form.get('current-password', '')
             auth_backend = request.form.get('auth_backend', '')
 
-            if auth_backend != (
-                settings['auth_backend'] and settings['auth_backend']
+            if (
+                auth_backend != settings['auth_backend']
+                and settings['auth_backend']
             ):
                 if not current_pass:
                     raise ValueError(
@@ -1532,10 +1529,7 @@ def settings_page():
 @app.route('/system-info')
 @authorized
 def system_info():
-    viewlog = ["Yet to be implemented"]
-
     loadavg = diagnostics.get_load_avg()['15 min']
-    display_info = diagnostics.get_monitor_status()
     display_power = r.get('display_power')
 
     # Calculate disk space
@@ -1570,12 +1564,10 @@ def system_info():
     return template(
         'system-info.html',
         player_name=player_name,
-        viewlog=viewlog,
         loadavg=loadavg,
         free_space=free_space,
         uptime=system_uptime,
         memory=memory,
-        display_info=display_info,
         display_power=display_power,
         raspberry_pi_model=raspberry_pi_model,
         version=version,

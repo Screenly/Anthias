@@ -11,14 +11,18 @@ export SHM_SIZE_KB="$(echo "$TOTAL_MEMORY_KB" \* 0.3 | bc | cut -d'.' -f1)"
 
 export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-if [ "$GIT_BRANCH" = "experimental" ]; then
-    export DOCKER_TAG="experimental"
-else
-    export DOCKER_TAG="latest"
+if [ -z "$DOCKER_TAG" ]; then
+    if [ "$GIT_BRANCH" = "experimental" ]; then
+        export DOCKER_TAG="experimental"
+    else
+        export DOCKER_TAG="latest"
+    fi
 fi
 
 # Detect Raspberry Pi version
-if grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
+if [ ! -f /proc/device-tree/model ] && [ "$(uname -m)" = "x86_64" ]; then
+    export DEVICE_TYPE="x86"
+elif grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
     export DEVICE_TYPE="pi4"
 elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
     export DEVICE_TYPE="pi3"
@@ -44,6 +48,11 @@ fi
 cat /home/${USER}/screenly/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/screenly/docker-compose.yml
+
+if [ "$DEVICE_TYPE" = "x86" ]; then
+    sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
+        /home/${USER}/screenly/docker-compose.yml
+fi
 
 sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \

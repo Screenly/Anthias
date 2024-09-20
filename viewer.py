@@ -16,6 +16,7 @@ from jinja2 import Template
 from os import path, getenv, utime, system
 from random import shuffle
 from signal import signal, SIGALRM, SIGUSR1
+from tenacity import Retrying, stop_after_attempt, wait_fixed
 from time import sleep
 from threading import Thread
 
@@ -26,7 +27,7 @@ import zmq
 from lib import assets_helper
 from lib import db
 from lib.errors import SigalrmException
-from lib.media_player import VLCMediaPlayer
+from lib.media_player import MediaPlayerProxy
 from lib.utils import (
     url_fails,
     is_balena_app,
@@ -35,7 +36,6 @@ from lib.utils import (
     connect_to_redis,
     get_balena_device_info,
 )
-from retry.api import retry_call
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
 
@@ -57,13 +57,15 @@ STANDBY_SCREEN = f'http://{LISTEN}:{PORT}/static/img/standby.png'
 SPLASH_PAGE_URL = f'http://{LISTEN}:{PORT}/splash-page'
 ZMQ_HOST_PUB_URL = 'tcp://host.docker.internal:10001'
 
+MAX_BALENA_IP_RETRIES = 90
+BALENA_IP_RETRY_DELAY = 1
+SERVER_WAIT_TIMEOUT = 60
+
 current_browser_url = None
 browser = None
 loop_is_stopped = False
 browser_bus = None
 r = connect_to_redis()
-
-media_player = VLCMediaPlayer()
 
 HOME = None
 db_conn = None
@@ -84,7 +86,7 @@ def sigusr1(signum, frame):
     playing web or image asset is skipped.
     """
     logging.info('USR1 received, skipping.')
-    media_player.stop()
+    MediaPlayerProxy.get_instance().stop()
 
 
 def skip_asset(back=False):
@@ -379,6 +381,7 @@ def view_image(uri):
 
 def view_video(uri, duration):
     logging.debug('Displaying video %s for %s ', uri, duration)
+    media_player = MediaPlayerProxy.get_instance()
 
     media_player.set_asset(uri, duration)
     media_player.play()
@@ -518,13 +521,18 @@ def main():
     subscriber_2.daemon = True
     subscriber_2.start()
 
-    scheduler = Scheduler()
+    wait_for_server(SERVER_WAIT_TIMEOUT)
 
-    wait_for_server(60)
+    scheduler = Scheduler()
 
     if settings['show_splash']:
         if is_balena_app():
-            retry_call(get_balena_device_info, tries=90, delay=1)
+            for attempt in Retrying(
+                stop=stop_after_attempt(MAX_BALENA_IP_RETRIES),
+                wait=wait_fixed(BALENA_IP_RETRY_DELAY),
+            ):
+                with attempt:
+                    get_balena_device_info()
 
         view_webpage(SPLASH_PAGE_URL)
         sleep(SPLASH_DELAY)
@@ -538,6 +546,8 @@ def main():
     if mq_data is not None:
         show_hotspot_page(mq_data)
         mq_data = None
+
+    sleep(0.5)
 
     start_loop()
 
