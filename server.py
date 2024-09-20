@@ -25,6 +25,7 @@ from hurry.filesize import size
 from mimetypes import guess_type, guess_extension
 from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
 from urllib.parse import urlparse
+from platform import machine
 
 from flask import (
     Flask,
@@ -1553,8 +1554,11 @@ def system_info():
     # Player name for title
     player_name = settings['player_name']
 
-    raspberry_pi_model = raspberry_pi_helper.parse_cpu_info().get(
-        'model', "Unknown")
+    device_model = raspberry_pi_helper.parse_cpu_info().get('model')
+    if device_model is None and machine() == 'x86_64':
+        device_model = 'Generic x86_64 Device'
+    else:
+        device_model = 'Unknown'
 
     version = '{}@{}'.format(
         diagnostics.get_git_branch(),
@@ -1569,7 +1573,7 @@ def system_info():
         uptime=system_uptime,
         memory=memory,
         display_power=display_power,
-        raspberry_pi_model=raspberry_pi_model,
+        device_model=device_model,
         version=version,
         mac_address=get_node_mac_address(),
         is_balena=is_balena_app(),
