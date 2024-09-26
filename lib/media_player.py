@@ -1,15 +1,15 @@
 from __future__ import unicode_literals
-from builtins import object
 
+import sh
 import vlc
 
-from lib.raspberry_pi_helper import lookup_raspberry_pi_version
+from lib.raspberry_pi_helper import get_device_type
 from settings import settings
 
 VIDEO_TIMEOUT = 20  # secs
 
 
-class MediaPlayer(object):
+class MediaPlayer():
     def __init__(self):
         pass
 
@@ -26,9 +26,36 @@ class MediaPlayer(object):
         raise NotImplementedError
 
 
-class VLCMediaPlayer(MediaPlayer):
-    INSTANCE = None
+class FFMPEGMediaPlayer(MediaPlayer):
+    def __init__(self):
+        MediaPlayer.__init__(self)
+        self.run = None
+        self.player_args = list()
+        self.player_kwargs = dict()
 
+    def set_asset(self, uri, duration):
+        self.player_args = ['ffplay', uri, '-autoexit']
+        self.player_kwargs = {
+            '_bg': True,
+            '_ok_code': [0, 124],
+        }
+
+    def play(self):
+        self.run = sh.Command(self.player_args[0])(
+            *self.player_args[1:], **self.player_kwargs
+        )
+
+    def stop(self):
+        try:
+            self.run.kill()
+        except OSError:
+            pass
+
+    def is_playing(self):
+        return bool(self.run.process.alive)
+
+
+class VLCMediaPlayer(MediaPlayer):
     def __init__(self):
         MediaPlayer.__init__(self)
 
@@ -38,20 +65,16 @@ class VLCMediaPlayer(MediaPlayer):
 
         self.player.audio_output_set('alsa')
 
-    @classmethod
-    def get_instance(cls):
-        if cls.INSTANCE is None:
-            cls.INSTANCE = VLCMediaPlayer()
-        return cls.INSTANCE
-
     def get_alsa_audio_device(self):
         if settings['audio_output'] == 'local':
             return 'plughw:CARD=Headphones'
         else:
-            if lookup_raspberry_pi_version() == 'pi4':
+            if get_device_type() == 'pi4':
                 return 'default:CARD=vc4hdmi0'
-            else:
+            elif get_device_type() in ['pi1', 'pi2', 'pi3']:
                 return 'default:CARD=vc4hdmi'
+            else:
+                return 'default:CARD=HID'
 
     def __get_options(self):
         return [
@@ -73,3 +96,17 @@ class VLCMediaPlayer(MediaPlayer):
     def is_playing(self):
         return self.player.get_state() in [
             vlc.State.Playing, vlc.State.Buffering, vlc.State.Opening]
+
+
+class MediaPlayerProxy():
+    INSTANCE = None
+
+    @classmethod
+    def get_instance(cls):
+        if cls.INSTANCE is None:
+            if get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']:
+                cls.INSTANCE = VLCMediaPlayer()
+            else:
+                cls.INSTANCE = FFMPEGMediaPlayer()
+
+        return cls.INSTANCE

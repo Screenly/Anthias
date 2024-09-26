@@ -5,6 +5,7 @@ from os import (
     getenv,
     statvfs,
 )
+from platform import machine
 from settings import (
     CONFIGURABLE_SETTINGS,
     DEFAULTS,
@@ -179,7 +180,6 @@ def settings_page(request):
 @authorized
 @require_http_methods(["GET"])
 def system_info(request):
-    viewlog = ["Yet to be implemented"]
     loadavg = diagnostics.get_load_avg()['15 min']
     display_power = r.get('display_power')
 
@@ -204,8 +204,10 @@ def system_info(request):
     # Player name for title
     player_name = settings['player_name']
 
-    raspberry_pi_model = raspberry_pi_helper.parse_cpu_info().get(
-        'model', "Unknown")
+    device_model = raspberry_pi_helper.parse_cpu_info().get('model')
+
+    if device_model is None and machine() == 'x86_64':
+        device_model = 'Generic x86_64 Device'
 
     anthias_version = '{}@{}'.format(
         diagnostics.get_git_branch(),
@@ -214,7 +216,6 @@ def system_info(request):
 
     context = {
         'player_name': player_name,
-        'viewlog': viewlog,
         'loadavg': loadavg,
         'free_space': free_space,
         'uptime': {
@@ -223,7 +224,7 @@ def system_info(request):
         },
         'memory': memory,
         'display_power': display_power,
-        'raspberry_pi_model': raspberry_pi_model,
+        'device_model': device_model,
         'anthias_version': anthias_version,
         'mac_address': get_node_mac_address(),
         'is_balena': is_balena_app(),

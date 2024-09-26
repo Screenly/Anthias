@@ -101,7 +101,7 @@ class WebTest(TestCase):
 
             wait_for_and_do(
                 browser, 'input[name="uri"]',
-                lambda field: field.fill('http://example.com'))
+                lambda field: field.fill('https://example.com'))
             sleep(1)
 
             wait_for_and_do(browser, '#add-form', lambda form: form.click())

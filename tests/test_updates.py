@@ -1,51 +1,101 @@
 from __future__ import unicode_literals
-import unittest
+from unittest_parametrize import parametrize, ParametrizedTestCase
 
+import logging
 import mock
 import os
 
 from lib.github import is_up_to_date
-from settings import settings
-from unittest import skip
-
-fancy_sha = 'deadbeaf'
 
 
-class UpdateTest(unittest.TestCase):
-    def setUp(self):
-        self.get_configdir_m = mock.patch(
-            'settings.AnthiasSettings.get_configdir',
-            mock.MagicMock(return_value='/tmp/.screenly/'),
-        )
-        self.get_configdir_m.start()
+GIT_HASH_1 = 'da39a3ee5e6b4b0d3255bfef95601890afd80709'
+GIT_SHORT_HASH_1 = 'da39a3e'
+GIT_HASH_2 = '6adfb183a4a2c94a2f92dab5ade762a47889a5a1'
+GIT_SHORT_HASH_2 = '6adfb18'
 
-        self.sha_file = settings.get_configdir() + 'latest_anthias_sha'
 
-        if not os.path.exists(settings.get_configdir()):
-            os.mkdir(settings.get_configdir())
+logging.disable(logging.CRITICAL)
 
-    def tearDown(self):
-        if os.path.isfile(self.sha_file):
-            os.remove(self.sha_file)
 
-        self.get_configdir_m.stop()
-
-    @skip('fixme')
+class UpdateTest(ParametrizedTestCase):
     @mock.patch(
-        'viewer.settings.get_configdir',
-        mock.MagicMock(return_value='/tmp/.screenly/'),
+        'lib.github.fetch_remote_hash',
+        mock.MagicMock(return_value=(None, False)),
     )
-    def test_if_sha_file_not_exists__is_up_to_date__should_return_false(self):
+    def test__if_git_branch_env_does_not_exist__is_up_to_date_should_return_true(self):  # noqa: E501
         self.assertEqual(is_up_to_date(), True)
 
-    @skip('fixme')
-    @mock.patch(
-        'viewer.settings.get_configdir',
-        mock.MagicMock(return_value='/tmp/.screenly/'),
+    @parametrize(
+        'hashes, expected',
+        [
+            (
+                {
+                    'latest_remote_hash': GIT_HASH_1,
+                    'git_hash': GIT_HASH_1,
+                    'git_short_hash': GIT_SHORT_HASH_1,
+                    'latest_docker_hub_hash': GIT_SHORT_HASH_1,
+                },
+                True,
+            ),
+            (
+                {
+                    'latest_remote_hash': GIT_HASH_2,
+                    'git_hash': GIT_HASH_1,
+                    'git_short_hash': GIT_SHORT_HASH_1,
+                    'latest_docker_hub_hash': GIT_SHORT_HASH_1,
+                },
+                True,
+            ),
+            (
+                {
+                    'latest_remote_hash': GIT_HASH_1,
+                    'git_hash': GIT_HASH_1,
+                    'git_short_hash': GIT_SHORT_HASH_1,
+                    'latest_docker_hub_hash': GIT_SHORT_HASH_2,
+                },
+                True,
+            ),
+            (
+                {
+                    'latest_remote_hash': GIT_HASH_2,
+                    'git_hash': GIT_HASH_1,
+                    'git_short_hash': GIT_SHORT_HASH_1,
+                    'latest_docker_hub_hash': GIT_SHORT_HASH_2,
+                },
+                False,
+            ),
+        ],
     )
-    def test_if_sha_file_not_equals_to_branch_hash__is_up_to_date__should_return_false(self):  # noqa: E501
+    @mock.patch(
+        'lib.github.get_git_branch',
+        mock.MagicMock(return_value='master'),
+    )
+    def test_is_up_to_date_should_return_value_depending_on_git_hashes(
+            self, hashes, expected):
         os.environ['GIT_BRANCH'] = 'master'
-        with open(self.sha_file, 'w+') as f:
-            f.write(fancy_sha)
-        self.assertEqual(is_up_to_date(), False)
-        del os.environ['GIT_BRANCH']
+        os.environ['DEVICE_TYPE'] = 'pi4'
+
+        latest_remote_hash = hashes['latest_remote_hash']
+        git_hash = hashes['git_hash']
+        git_short_hash = hashes['git_short_hash']
+        latest_docker_hub_hash = hashes['latest_docker_hub_hash']
+
+        with (
+            mock.patch(
+                'lib.github.fetch_remote_hash',
+                mock.MagicMock(return_value=(latest_remote_hash, False)),
+            ),
+            mock.patch(
+                'lib.github.get_git_hash',
+                mock.MagicMock(return_value=git_hash),
+            ),
+            mock.patch(
+                'lib.github.get_git_short_hash',
+                mock.MagicMock(return_value=git_short_hash),
+            ),
+            mock.patch(
+                'lib.github.get_latest_docker_hub_hash',
+                mock.MagicMock(return_value=latest_docker_hub_hash),
+            ),
+        ):
+            self.assertEqual(is_up_to_date(), expected)

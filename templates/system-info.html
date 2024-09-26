@@ -48,8 +48,8 @@
                         <td>{{ display_power }}</td>
                     </tr>
                     <tr>
-                        <th scope="row">Raspberry Pi Model</th>
-                        <td>{{ raspberry_pi_model }}</td>
+                        <th scope="row">Device Model</th>
+                        <td>{{ device_model }}</td>
                     </tr>
                     <tr>
                         <th scope="row">Anthias Version</th>
@@ -61,24 +61,6 @@
                     </tr>
                     </tbody>
                 </table>
-
-                <section>
-                    <h4><b>Latest Viewer Logs</b></h4>
-                    <hr>
-                </section>
-
-                {% if viewlog %}
-                    <table class="table table-borderless">
-                        {% for line in viewlog %}
-                            <tr>
-                                <td>{{ line }}</td>
-                            </tr>
-                        {% endfor %}
-                    </table>
-                {% else %}
-                    <p>There are no recent log messages.</p>
-                {% endif %}
-
             </div>
         </div>
     </div>

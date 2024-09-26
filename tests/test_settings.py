@@ -1,9 +1,9 @@
 from __future__ import unicode_literals
-import unittest
 import os
 import shutil
 import sys
 from contextlib import contextmanager
+from unittest import skip, TestCase
 
 user_home_dir = os.getenv('HOME')
 
@@ -64,7 +64,7 @@ def getenv(k, default=None):
         return default
 
 
-class SettingsTest(unittest.TestCase):
+class SettingsTest(TestCase):
     def setUp(self):
         if not os.path.exists(CONFIG_DIR):
             os.mkdir(CONFIG_DIR)

@@ -76,5 +76,5 @@ void View::handleAuthRequest(QNetworkReply* reply, QAuthenticator* auth)
 {
     Q_UNUSED(reply)
     Q_UNUSED(auth)
-    load(QUrl::fromLocalFile(QStandardPaths::locate(QStandardPaths::DataLocation, "res/access_denied.html")));
+    load(QUrl::fromLocalFile(QStandardPaths::locate(QStandardPaths::AppDataLocation, "res/access_denied.html")));
 }

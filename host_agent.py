@@ -5,6 +5,7 @@ from __future__ import unicode_literals
 __author__ = "Nash Kaminski"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
+import ipaddress
 import json
 import logging
 import netifaces
@@ -16,28 +17,31 @@ import subprocess
 REDIS_ARGS = dict(host="127.0.0.1", port=6379, db=0)
 # Name of redis channel to listen to
 CHANNEL_NAME = b'hostcmd'
+SUPPORTED_INTERFACES = (
+    'wlan',
+    'eth',
+    'wlp',
+    'enp',
+)
 
 
 def get_ip_addresses():
-    addresses = []
-
-    for interface in netifaces.interfaces():
-        if not (interface.startswith('wlan') or interface.startswith('eth')):
-            continue
-
-        addrs = netifaces.ifaddresses(interface)
-        if netifaces.AF_INET in addrs or netifaces.AF_INET6 in addrs:
-            for ip in addrs.get(netifaces.AF_INET, []):
-                addresses.append(ip['addr'])
-            for ip in addrs.get(netifaces.AF_INET6, []):
-                addresses.append(ip['addr'])
-
-    return addresses
+    return [
+        ip['addr']
+        for interface in netifaces.interfaces()
+        if interface.startswith(SUPPORTED_INTERFACES)
+        for ip in (
+            netifaces.ifaddresses(interface).get(netifaces.AF_INET, []) +
+            netifaces.ifaddresses(interface).get(netifaces.AF_INET6, [])
+        )
+        if not ipaddress.ip_address(ip['addr']).is_link_local
+    ]
 
 
 def set_ip_addresses():
     rdb = redis.Redis(**REDIS_ARGS)
     ip_addresses = get_ip_addresses()
+
     rdb.set('ip_addresses', json.dumps(ip_addresses))
 
 
