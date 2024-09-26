@@ -114,8 +114,8 @@ class WebTest(TestCase):
         self.assertEqual(len(assets), 1)
         asset = assets.first()
 
-        self.assertEqual(asset.name, 'http://example.com')
-        self.assertEqual(asset.uri, 'http://example.com')
+        self.assertEqual(asset.name, 'https://example.com')
+        self.assertEqual(asset.uri, 'https://example.com')
         self.assertEqual(asset.mimetype, 'webpage')
         self.assertEqual(asset.duration, settings['default_duration'])
 
