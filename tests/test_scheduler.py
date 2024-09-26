@@ -6,7 +6,6 @@ import time_machine
 from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
-from unittest import mock
 
 from anthias_app.models import Asset
 from settings import settings

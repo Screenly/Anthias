@@ -24,14 +24,6 @@ import zmq
 
 from lib.errors import SigalrmException
 from lib.media_player import MediaPlayerProxy
-from lib.utils import (
-    url_fails,
-    is_balena_app,
-    get_node_ip,
-    string_to_bool,
-    connect_to_redis,
-    get_balena_device_info,
-)
 from settings import settings, LISTEN, PORT, ZmqConsumer
 
 try:

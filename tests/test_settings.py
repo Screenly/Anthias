@@ -3,7 +3,7 @@ import os
 import shutil
 import sys
 from contextlib import contextmanager
-from unittest import skip, TestCase
+from unittest import TestCase
 
 user_home_dir = os.getenv('HOME')
 
