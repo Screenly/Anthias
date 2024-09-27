@@ -19,7 +19,7 @@ We've tested Anthias and is known to work on the following Raspberry Pi models:
 * Raspberry Pi 3 Model B+ - 32-bit and 64-bit Bullseye, 64-bit Bookworm
 * Raspberry Pi 3 Model B - 64-bit Bookworm and Bullseye
 * Raspberry Pi 2 Model B - 32-bit Bookworm and Bullseye
-* x86 Devices - 64-bit Bullseye
+* x86 Devices - 64-bit Bookworm
     * These devices can be something similar to a NUC.
 
 
