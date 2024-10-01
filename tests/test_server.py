@@ -36,7 +36,7 @@ asset_w = {
     'mimetype': u'web',
     'asset_id': u'4c8dbce552edb5812d3a866cfe5f159e',
     'name': u'いろはにほへど',
-    'uri': u'http://www.wireload.net',
+    'uri': u'https://www.wireload.net',
     'start_date': date_a,
     'end_date': date_b,
     'duration': u'5',
@@ -55,7 +55,7 @@ asset_x = {
     'mimetype': u'web',
     'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d',
     'name': u'WireLoad',
-    'uri': u'http://www.wireload.net',
+    'uri': u'https://www.wireload.net',
     'start_date': date_a,
     'end_date': date_b,
     'duration': u'5',
@@ -99,10 +99,9 @@ asset_z = {
     'is_processing': 0,
     'skip_asset_check': 0
 }
-url_fail = 'http://doesnotwork.example.com'
-url_redir = 'http://example.com'
+url_fail = 'https://doesnotwork.example.com'
+url_redir = 'https://example.com'
 uri_ = '/home/user/file'
-# url_timeout = 'http://...'
 
 
 class Req(object):
@@ -207,7 +206,8 @@ class DBHelperTest(unittest.TestCase):
         for_order = [asset_y, asset_x]
 
         assets_helper.create_multiple(self.conn, assets)
-        assets_helper.save_ordering(self.conn, [asset['asset_id'] for asset in for_order])
+        assets_helper.save_ordering(
+            self.conn, [asset['asset_id'] for asset in for_order])
 
         fetched = assets_helper.read(self.conn)
 
@@ -226,17 +226,23 @@ class DBHelperTest(unittest.TestCase):
 
         fetched = assets_helper.read(self.conn)
 
-        self.assertEquals([0, 0, 0], [asset['play_order'] for asset in fetched])
+        self.assertEquals(
+            [0, 0, 0], [asset['play_order'] for asset in fetched])
 
     def test_update_asset(self):
         asset_x_ = assets_helper.create(self.conn, asset_x)
         asset_x_copy = asset_x_.copy()
-        data = {'name': 'New name', 'mimetype': 'should not setted', 'empty': 'non exists field'}
+        data = {
+            'name': 'New name',
+            'mimetype': 'should not setted',
+            'empty': 'non exists field',
+        }
 
         self.assertEquals(asset_x_, asset_x_copy)
 
         server.update_asset(asset_x_copy, data)
-        asset_x_copy = assets_helper.update(self.conn, asset_x_copy.get('id'), asset_x_copy)
+        asset_x_copy = assets_helper.update(
+            self.conn, asset_x_copy.get('id'), asset_x_copy)
 
         self.assertEquals(asset_x_copy,
                           {'is_enabled': 1,
@@ -248,7 +254,7 @@ class DBHelperTest(unittest.TestCase):
                            'mimetype': u'web',
                            'name': 'New name',
                            'nocache': 0,
-                           'uri': u'http://www.wireload.net',
+                           'uri': u'https://www.wireload.net',
                            'skip_asset_check': 0,
                            'play_order': 1,
                            'start_date': datetime.datetime(2013, 1, 16, 0, 0)

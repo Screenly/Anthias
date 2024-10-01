@@ -1,4 +1,5 @@
-version: "2.2"
+# vim: ft=yaml.docker-compose
+
 services:
   anthias-test:
     build:

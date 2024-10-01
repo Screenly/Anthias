@@ -6,7 +6,7 @@ click==8.1.7
 configparser==4.0.2
 cryptography==3.3.2
 Cython==0.29.33
-Flask-Cors==4.0.1
+Flask-Cors==5.0.0
 flask-restful-swagger-2==0.35
 flask-swagger-ui==3.36.0
 Flask==2.2.5
@@ -30,11 +30,11 @@ pytz==2022.2.1
 PyYAML==6.0.1
 pyzmq==23.2.1
 redis==3.5.3
-requests[security]==2.31.0
-retry==0.9.2
+requests[security]==2.32.3
+tenacity==9.0.0
 sh==1.8
 six==1.15.0
 urllib3==1.26.19
 Werkzeug==2.2.3
 wheel==0.38.1
-yt-dlp==2023.11.16
+yt-dlp==2024.7.7

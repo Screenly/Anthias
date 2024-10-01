@@ -10,10 +10,11 @@ from lib.utils import (
     shutdown_via_balena_supervisor,
 )
 from os import getenv, path
-from retry.api import retry_call
+from tenacity import Retrying, stop_after_attempt, wait_fixed
 
 
-CELERY_RESULT_BACKEND = getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = getenv(
+    'CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_TASK_RESULT_EXPIRES = timedelta(hours=6)
 
@@ -41,7 +42,9 @@ def get_display_power():
 
 @celery.task
 def cleanup():
-    sh.find(path.join(getenv('HOME'), 'screenly_assets'), '-name', '*.tmp', '-delete')
+    sh.find(
+        path.join(getenv('HOME'), 'screenly_assets'),
+        '-name', '*.tmp', '-delete')
 
 
 @celery.task
@@ -50,7 +53,12 @@ def reboot_anthias():
     Background task to reboot Anthias
     """
     if is_balena_app():
-        retry_call(reboot_via_balena_supervisor, tries=5, delay=1)
+        for attempt in Retrying(
+            stop=stop_after_attempt(5),
+            wait=wait_fixed(1),
+        ):
+            with attempt:
+                reboot_via_balena_supervisor()
     else:
         r.publish('hostcmd', 'reboot')
 
@@ -61,6 +69,11 @@ def shutdown_anthias():
     Background task to shutdown Anthias
     """
     if is_balena_app():
-        retry_call(shutdown_via_balena_supervisor, tries=5, delay=1)
+        for attempt in Retrying(
+            stop=stop_after_attempt(5),
+            wait=wait_fixed(1),
+        ):
+            with attempt:
+                shutdown_via_balena_supervisor()
     else:
         r.publish('hostcmd', 'shutdown')

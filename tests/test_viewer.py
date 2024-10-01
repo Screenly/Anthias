@@ -5,30 +5,31 @@ from __future__ import unicode_literals
 import mock
 import unittest
 import os
+import viewer
 from time import sleep
 
 
 class ViewerTestCase(unittest.TestCase):
     def setUp(self):
-        mock.patch('vlc.Instance', mock.MagicMock()).__enter__()
-        import viewer
-
         self.original_splash_delay = viewer.SPLASH_DELAY
         viewer.SPLASH_DELAY = 0
 
         self.u = viewer
 
         self.m_scheduler = mock.Mock(name='m_scheduler')
-        self.p_scheduler = mock.patch.object(self.u, 'Scheduler', self.m_scheduler)
+        self.p_scheduler = mock.patch.object(
+            self.u, 'Scheduler', self.m_scheduler)
 
         self.m_cmd = mock.Mock(name='m_cmd')
         self.p_cmd = mock.patch.object(self.u.sh, 'Command', self.m_cmd)
 
         self.m_killall = mock.Mock(name='killall')
-        self.p_killall = mock.patch.object(self.u.sh, 'killall', self.m_killall)
+        self.p_killall = mock.patch.object(
+            self.u.sh, 'killall', self.m_killall)
 
         self.m_reload = mock.Mock(name='reload')
-        self.p_reload = mock.patch.object(self.u, 'load_settings', self.m_reload)
+        self.p_reload = mock.patch.object(
+            self.u, 'load_settings', self.m_reload)
 
         self.m_sleep = mock.Mock(name='sleep')
         self.p_sleep = mock.patch.object(self.u, 'sleep', self.m_sleep)
@@ -78,7 +79,9 @@ class TestLoadBrowser(ViewerTestCase):
         self.p_loadb.stop()
 
     def test_load_browser(self):
-        self.m_cmd.return_value.return_value.process.stdout = b'Screenly service start'
+        self.m_cmd.return_value.return_value.process.stdout = (
+            b'Screenly service start'
+        )
         self.p_cmd.start()
         self.u.load_browser()
         self.p_cmd.stop()
@@ -86,7 +89,12 @@ class TestLoadBrowser(ViewerTestCase):
 
 
 class TestSignalHandlers(ViewerTestCase):
-    def test_usr1(self):
+    @mock.patch('vlc.Instance', mock.MagicMock())
+    @mock.patch(
+        'lib.media_player.get_device_type',
+        return_value='pi4'
+    )
+    def test_usr1(self, lookup_mock):
         self.p_killall.start()
         self.assertEqual(None, self.u.sigusr1(None, None))
         self.p_killall.stop()

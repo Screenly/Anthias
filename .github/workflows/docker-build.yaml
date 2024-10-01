@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-      - production
+      - experimental
     paths:
       - '**'
       - '!webview/**'
@@ -15,8 +15,9 @@ on:
       - '!.github/workflows/python-lint.yaml'
       - '!README.md'
       - '!docs/**'
-      - '!bin/build_containers.sh'
+      - '!bin/install.sh'
       - '!bin/upgrade_containers.sh'
+      - '!tests/**'
 
 jobs:
   run-tests:
@@ -26,7 +27,7 @@ jobs:
     needs: run-tests
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
     runs-on: ubuntu-latest
 
     steps:
@@ -60,9 +61,11 @@ jobs:
         run: |
           export BUILD_TARGET=${{ matrix.board }}
           export PUSH=1
+          export SKIP_TEST=1
           ./bin/build_containers.sh
 
   balena:
+    if: ${{ github.ref == 'refs/heads/master' }}
     needs: buildx
     strategy:
       matrix:

@@ -1,3 +1,5 @@
+# vim: ft=requirements
+
 cec==0.2.8
 certifi==2024.7.4
 configparser==4.0.2
@@ -15,8 +17,8 @@ python-vlc==3.0.20123
 pytz==2022.2.1
 pyzmq==23.2.1
 redis==3.5.3
-requests[security]==2.31.0
-retry==0.9.2
+requests[security]==2.32.3
+tenacity==9.0.0
 sh==1.8
 uptime==3.0.1
 urllib3==1.26.19

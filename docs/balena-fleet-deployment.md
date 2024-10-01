@@ -43,10 +43,14 @@ run the following commands:
 
 ```bash
 $ balena env add BALENA_HOST_CONFIG_gpu_mem $GPU_MEM_VALUE --fleet $FLEET_NAME
+$ balena env add BALENA_HOST_CONFIG_dtoverlay vc4-kms-v3d --fleet $FLEET_NAME
+```
 
-# Run the command below only if you're using a Raspberry Pi 4, as it uses
-# VLC for video playback.
-$ balena env add BALENA_HOST_CONFIG_dtoverlay vc4-fkms-v3d --fleet $FLEET_NAME
+If your display does have overscan issues like having a black border around the
+screen, you can disable overscan by running the following command:
+
+```bash
+$ balena env add BALENA_HOST_CONFIG_disable_overscan 1 --fleet $FLEET_NAME
 ```
 
 Replace `$GPU_MEM_VALUE` with the GPU memory value you want to use, as long as
@@ -64,7 +68,7 @@ Here's a sample output:
 
 ```
 ID      NAME                           VALUE        FLEET
-1979572 BALENA_HOST_CONFIG_dtoverlay    vc4-fkms-v3d gh_nicomiguelino/anthias-pi4
+1979572 BALENA_HOST_CONFIG_dtoverlay    vc4-kms-v3d  gh_nicomiguelino/anthias-pi4
 1979571 BALENA_HOST_CONFIG_gpu_mem      1024         gh_nicomiguelino/anthias-pi4
 ```
 
