@@ -86,6 +86,9 @@ def sigusr1(signum, frame):
     playing web or image asset is skipped.
     """
     logging.info('USR1 received, skipping.')
+
+    # @TODO: Stop the Qt media player here via a DBus call.
+
     MediaPlayerProxy.get_instance().stop()
 
 
@@ -383,22 +386,20 @@ def view_video(uri, duration):
     logging.debug('Displaying video %s for %s ', uri, duration)
     media_player = MediaPlayerProxy.get_instance()
 
-    media_player.set_asset(uri, duration)
-    media_player.play()
-
     view_image('null')
 
-    try:
-        while media_player.is_playing():
-            watchdog()
-            sleep(1)
-    except sh.ErrorReturnCode_1:
-        logging.info(
-            'Resource URI is not correct, remote host is not responding or '
-            'request was rejected.'
-        )
+    if browser is None or not browser.process.alive:
+        load_browser()
 
-    media_player.stop()
+    browser_bus.loadVideo(uri, int(duration))
+
+    while True:
+        is_ready = browser_bus.isReady()
+        if is_ready:
+            break
+        sleep(1)
+
+    logging.info('Current url is {0}'.format(uri))
 
 
 def load_settings():
@@ -438,7 +439,7 @@ def asset_loop(scheduler):
         else:
             logging.error('Unknown MimeType %s', mime)
 
-        if 'image' in mime or 'web' in mime:
+        if any(mimetype in mime for mimetype in ['image', 'web']):
             duration = int(asset['duration'])
             logging.info('Sleeping for %s', duration)
             sleep(duration)
