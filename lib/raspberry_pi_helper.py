@@ -26,15 +26,18 @@ def parse_cpu_info():
     return cpu_info
 
 
-def lookup_raspberry_pi_version():
-    with open('/proc/device-tree/model') as file:
-        content = file.read()
+def get_device_type():
+    try:
+        with open('/proc/device-tree/model') as file:
+            content = file.read()
 
-        if 'Raspberry Pi 4' in content:
-            return 'pi4'
-        elif 'Raspberry Pi 3' in content:
-            return 'pi3'
-        elif 'Raspberry Pi 2' in content:
-            return 'pi2'
-        else:
-            return 'pi1'
+            if 'Raspberry Pi 4' in content:
+                return 'pi4'
+            elif 'Raspberry Pi 3' in content:
+                return 'pi3'
+            elif 'Raspberry Pi 2' in content:
+                return 'pi2'
+            else:
+                return 'pi1'
+    except FileNotFoundError:
+        return 'x86'

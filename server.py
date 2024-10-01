@@ -11,6 +11,7 @@ __license__ = "Dual License: GPLv2 and Commercial License"
 
 import ipaddress
 import json
+import logging
 import psutil
 
 import traceback
@@ -24,6 +25,7 @@ from hurry.filesize import size
 from mimetypes import guess_type, guess_extension
 from os import getenv, makedirs, mkdir, path, remove, rename, statvfs, stat
 from urllib.parse import urlparse
+from platform import machine
 
 from flask import (
     Flask,
@@ -105,7 +107,8 @@ def template(template_name, **context):
     # Add global contexts
     context['date_format'] = settings['date_format']
     context['default_duration'] = settings['default_duration']
-    context['default_streaming_duration'] = settings['default_streaming_duration']
+    context['default_streaming_duration'] = (
+        settings['default_streaming_duration'])
     context['template_settings'] = {
         'imports': ['from lib.utils import template_handle_unicode'],
         'default_filters': ['template_handle_unicode'],
@@ -195,7 +198,8 @@ class AssetRequestModel(Schema):
             'format': 'int64',
         }
     }
-    required = ['name', 'uri', 'mimetype', 'is_enabled', 'start_date', 'end_date']
+    required = [
+        'name', 'uri', 'mimetype', 'is_enabled', 'start_date', 'end_date']
 
 
 class AssetContentModel(Schema):
@@ -275,7 +279,10 @@ def prepare_asset(request, unique_name=False):
             return val
 
     if not all([get('name'), get('uri'), get('mimetype')]):
-        raise Exception("Not enough information provided. Please specify 'name', 'uri', and 'mimetype'.")
+        raise Exception(
+            "Not enough information provided. "
+            "Please specify 'name', 'uri', and 'mimetype'."
+        )
 
     name = escape(get('name'))
     if unique_name:
@@ -316,7 +323,8 @@ def prepare_asset(request, unique_name=False):
             uri = path.join(settings['assetdir'], asset['asset_id'])
 
     if 'youtube_asset' in asset['mimetype']:
-        uri, asset['name'], asset['duration'] = download_video_from_youtube(uri, asset['asset_id'])
+        uri, asset['name'], asset['duration'] = download_video_from_youtube(
+            uri, asset['asset_id'])
         asset['mimetype'] = 'video'
         asset['is_processing'] = 1
 
@@ -329,16 +337,22 @@ def prepare_asset(request, unique_name=False):
         # Crashes if it's not an int. We want that.
         asset['duration'] = int(get('duration'))
 
-    asset['skip_asset_check'] = int(get('skip_asset_check')) if int(get('skip_asset_check')) else 0
+    asset['skip_asset_check'] = (
+        int(get('skip_asset_check'))
+        if int(get('skip_asset_check'))
+        else 0
+    )
 
     # parse date via python-dateutil and remove timezone info
     if get('start_date'):
-        asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
+        asset['start_date'] = date_parser.parse(
+            get('start_date')).replace(tzinfo=None)
     else:
         asset['start_date'] = ""
 
     if get('end_date'):
-        asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
+        asset['end_date'] = date_parser.parse(
+            get('end_date')).replace(tzinfo=None)
     else:
         asset['end_date'] = ""
 
@@ -364,7 +378,9 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
                 get('start_date'),
                 get('end_date')]):
         raise Exception(
-            "Not enough information provided. Please specify 'name', 'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'.")
+            "Not enough information provided. Please specify 'name', "
+            "'uri', 'mimetype', 'is_enabled', 'start_date' and 'end_date'."
+        )
 
     ampfix = "&amp;"
     name = escape(get('name').replace(ampfix, '&'))
@@ -388,7 +404,14 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
         'nocache': get('nocache')
     }
 
-    uri = (get('uri')).replace(ampfix, '&').replace('<', '&lt;').replace('>', '&gt;').replace('\'', '&apos;').replace('\"', '&quot;')
+    uri = (
+        (get('uri'))
+        .replace(ampfix, '&')
+        .replace('<', '&lt;')
+        .replace('>', '&gt;')
+        .replace('\'', '&apos;')
+        .replace('\"', '&quot;')
+    )
 
     if uri.startswith('/'):
         if not path.isfile(uri):
@@ -401,12 +424,14 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
         asset['asset_id'] = uuid.uuid4().hex
 
     if not asset_id and uri.startswith('/'):
-        new_uri = "{}{}".format(path.join(settings['assetdir'], asset['asset_id']), get('ext'))
+        new_uri = "{}{}".format(
+            path.join(settings['assetdir'], asset['asset_id']), get('ext'))
         rename(uri, new_uri)
         uri = new_uri
 
     if 'youtube_asset' in asset['mimetype']:
-        uri, asset['name'], asset['duration'] = download_video_from_youtube(uri, asset['asset_id'])
+        uri, asset['name'], asset['duration'] = download_video_from_youtube(
+            uri, asset['asset_id'])
         asset['mimetype'] = 'video'
         asset['is_processing'] = 1
 
@@ -423,10 +448,15 @@ def prepare_asset_v1_2(request_environ, asset_id=None, unique_name=False):
 
     asset['play_order'] = get('play_order') if get('play_order') else 0
 
-    asset['skip_asset_check'] = int(get('skip_asset_check')) if int(get('skip_asset_check')) else 0
+    asset['skip_asset_check'] = (
+        int(get('skip_asset_check'))
+        if int(get('skip_asset_check'))
+        else 0
+    )
 
     # parse date via python-dateutil and remove timezone info
-    asset['start_date'] = date_parser.parse(get('start_date')).replace(tzinfo=None)
+    asset['start_date'] = date_parser.parse(
+        get('start_date')).replace(tzinfo=None)
     asset['end_date'] = date_parser.parse(get('end_date')).replace(tzinfo=None)
 
     return asset
@@ -437,7 +467,11 @@ def prepare_default_asset(**kwargs):
         return
 
     asset_id = 'default_{}'.format(uuid.uuid4().hex)
-    duration = int(get_video_duration(kwargs['uri']).total_seconds()) if "video" == kwargs['mimetype'] else kwargs['duration']
+    duration = (
+        int(get_video_duration(kwargs['uri']).total_seconds())
+        if "video" == kwargs['mimetype']
+        else kwargs['duration']
+    )
 
     return {
         'asset_id': asset_id,
@@ -493,13 +527,22 @@ def remove_default_assets():
 def update_asset(asset, data):
     for key, value in list(data.items()):
 
-        if key in ['asset_id', 'is_processing', 'mimetype', 'uri'] or key not in asset:
+        if (
+            key in ['asset_id', 'is_processing', 'mimetype', 'uri'] or
+            key not in asset
+        ):
             continue
 
         if key in ['start_date', 'end_date']:
             value = date_parser.parse(value).replace(tzinfo=None)
 
-        if key in ['play_order', 'skip_asset_check', 'is_enabled', 'is_active', 'nocache']:
+        if key in [
+            'play_order',
+            'skip_asset_check',
+            'is_enabled',
+            'is_active',
+            'nocache',
+        ]:
             value = int(value)
 
         if key == 'duration':
@@ -552,7 +595,9 @@ class Assets(Resource):
                 'type': 'string',
                 'description':
                     '''
-                    Yes, that is just a string of JSON not JSON itself it will be parsed on the other end.
+                    Yes, that is just a string of JSON not JSON itself it will
+                    be parsed on the other end.
+
                     Content-Type: application/x-www-form-urlencoded
                     model: "{
                         "name": "Website",
@@ -849,12 +894,14 @@ class AssetsV1_2(Resource):
             raise Exception("Could not retrieve file. Check the asset URL.")
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
-            ids_of_active_assets = [x['asset_id'] for x in assets if x['is_active']]
+            ids_of_active_assets = [
+                x['asset_id'] for x in assets if x['is_active']]
 
             asset = assets_helper.create(conn, asset)
 
             if asset['is_active']:
-                ids_of_active_assets.insert(asset['play_order'], asset['asset_id'])
+                ids_of_active_assets.insert(
+                    asset['play_order'], asset['asset_id'])
             assets_helper.save_ordering(conn, ids_of_active_assets)
             return assets_helper.read(conn, asset['asset_id']), 201
 
@@ -916,7 +963,8 @@ class AssetV1_2(Resource):
             update_asset(asset, data)
 
             assets = assets_helper.read(conn)
-            ids_of_active_assets = [x['asset_id'] for x in assets if x['is_active']]
+            ids_of_active_assets = [
+                x['asset_id'] for x in assets if x['is_active']]
 
             asset = assets_helper.update(conn, asset_id, asset)
 
@@ -925,7 +973,8 @@ class AssetV1_2(Resource):
             except ValueError:
                 pass
             if asset['is_active']:
-                ids_of_active_assets.insert(asset['play_order'], asset['asset_id'])
+                ids_of_active_assets.insert(
+                    asset['play_order'], asset['asset_id'])
 
             assets_helper.save_ordering(conn, ids_of_active_assets)
             return assets_helper.read(conn, asset_id)
@@ -958,7 +1007,8 @@ class AssetV1_2(Resource):
         asset = prepare_asset_v1_2(request, asset_id)
         with db.conn(settings['database']) as conn:
             assets = assets_helper.read(conn)
-            ids_of_active_assets = [x['asset_id'] for x in assets if x['is_active']]
+            ids_of_active_assets = [
+                x['asset_id'] for x in assets if x['is_active']]
 
             asset = assets_helper.update(conn, asset_id, asset)
 
@@ -967,7 +1017,8 @@ class AssetV1_2(Resource):
             except ValueError:
                 pass
             if asset['is_active']:
-                ids_of_active_assets.insert(asset['play_order'], asset['asset_id'])
+                ids_of_active_assets.insert(
+                    asset['play_order'], asset['asset_id'])
 
             assets_helper.save_ordering(conn, ids_of_active_assets)
             return assets_helper.read(conn, asset_id)
@@ -1034,7 +1085,9 @@ class FileAsset(Resource):
         if file_type.split('/')[0] not in ['image', 'video']:
             raise Exception("Invalid file type.")
 
-        file_path = path.join(settings['assetdir'], uuid.uuid5(uuid.NAMESPACE_URL, filename).hex) + ".tmp"
+        file_path = path.join(
+            settings['assetdir'],
+            uuid.uuid5(uuid.NAMESPACE_URL, filename).hex) + ".tmp"
 
         if 'Content-Range' in request.headers:
             range_str = request.headers['Content-Range']
@@ -1062,7 +1115,7 @@ class PlaylistOrder(Resource):
                     Content-Type: application/x-www-form-urlencoded
                     ids: "793406aa1fd34b85aa82614004c0e63a,1c5cfa719d1f4a9abae16c983a18903b,9c41068f3b7e452baf4dc3f9b7906595"
                     comma separated ids
-                    '''
+                    '''  # noqa: E501
             },
         ],
         'responses': {
@@ -1073,7 +1126,8 @@ class PlaylistOrder(Resource):
     })
     def post(self):
         with db.conn(settings['database']) as conn:
-            assets_helper.save_ordering(conn, request.form.get('ids', '').split(','))
+            assets_helper.save_ordering(
+                conn, request.form.get('ids', '').split(','))
 
 
 class Backup(Resource):
@@ -1163,18 +1217,14 @@ class Info(Resource):
     method_decorators = [api_response, authorized]
 
     def get(self):
-        viewlog = "Not yet implemented"
-
         # Calculate disk space
         slash = statvfs("/")
         free_space = size(slash.f_bavail * slash.f_frsize)
         display_power = r.get('display_power')
 
         return {
-            'viewlog': viewlog,
             'loadavg': diagnostics.get_load_avg()['15 min'],
             'free_space': free_space,
-            'display_info': diagnostics.get_monitor_status(),
             'display_power': display_power,
             'up_to_date': is_up_to_date()
         }
@@ -1230,8 +1280,9 @@ class AssetContent(Resource):
 
                     'type' can either be 'file' or 'url'.
 
-                    In case of a file, the fields 'mimetype', 'filename', and 'content'  will be present.
-                    In case of a URL, the field 'url' will be present.
+                    In case of a file, the fields 'mimetype', 'filename', and
+                    'content'  will be present. In case of a URL, the field
+                    'url' will be present.
                     ''',
                 'schema': AssetContentModel
             }
@@ -1352,7 +1403,8 @@ def viewIndex():
         ws_addresses.append('ws://' + my_ip + '/ws/')
 
     if balena_uuid:
-        ws_addresses.append('wss://{}.balena-devices.com/ws/'.format(balena_uuid))
+        ws_addresses.append(
+            'wss://{}.balena-devices.com/ws/'.format(balena_uuid))
 
     return template(
         'index.html',
@@ -1370,13 +1422,20 @@ def settings_page():
 
     if request.method == "POST":
         try:
-            # put some request variables in local variables to make easier to read
+            # Put some request variables in local variables to make them
+            # easier to read.
             current_pass = request.form.get('current-password', '')
             auth_backend = request.form.get('auth_backend', '')
 
-            if auth_backend != settings['auth_backend'] and settings['auth_backend']:
+            if (
+                auth_backend != settings['auth_backend']
+                and settings['auth_backend']
+            ):
                 if not current_pass:
-                    raise ValueError("Must supply current password to change authentication method")
+                    raise ValueError(
+                        "Must supply current password to change "
+                        "authentication method"
+                    )
                 if not settings.auth.check_password(current_pass):
                     raise ValueError("Incorrect current password.")
 
@@ -1384,7 +1443,11 @@ def settings_page():
             if not current_pass and prev_auth_backend:
                 current_pass_correct = None
             else:
-                current_pass_correct = settings.auth_backends[prev_auth_backend].check_password(current_pass)
+                current_pass_correct = (
+                    settings
+                    .auth_backends[prev_auth_backend]
+                    .check_password(current_pass)
+                )
             next_auth_backend = settings.auth_backends[auth_backend]
             next_auth_backend.update_settings(current_pass_correct)
             settings['auth_backend'] = auth_backend
@@ -1392,7 +1455,10 @@ def settings_page():
             for field, default in list(CONFIGURABLE_SETTINGS.items()):
                 value = request.form.get(field, default)
 
-                if not value and field in ['default_duration', 'default_streaming_duration']:
+                if not value and field in [
+                    'default_duration',
+                    'default_streaming_duration',
+                ]:
                     value = str(0)
                 if isinstance(default, bool):
                     value = value == 'on'
@@ -1408,7 +1474,10 @@ def settings_page():
             settings.save()
             publisher = ZmqPublisher.get_instance()
             publisher.send_to_viewer('reload')
-            context['flash'] = {'class': "success", 'message': "Settings were successfully saved."}
+            context['flash'] = {
+                'class': "success",
+                'message': "Settings were successfully saved.",
+            }
         except ValueError as e:
             context['flash'] = {'class': "danger", 'message': e}
         except IOError as e:
@@ -1431,10 +1500,18 @@ def settings_page():
             'name': backend.name,
             'text': backend.display_name,
             'template': html,
-            'selected': 'selected' if settings['auth_backend'] == backend.name else ''
+            'selected': (
+                'selected'
+                if settings['auth_backend'] == backend.name
+                else ''
+            )
         })
 
-    ip_addresses = get_node_ip().split()
+    try:
+        ip_addresses = get_node_ip().split()
+    except Exception as error:
+        logging.warning(f"Error getting IP addresses: {error}")
+        ip_addresses = ['IP_ADDRESS']
 
     context.update({
         'user': settings['user'],
@@ -1453,10 +1530,7 @@ def settings_page():
 @app.route('/system-info')
 @authorized
 def system_info():
-    viewlog = ["Yet to be implemented"]
-
     loadavg = diagnostics.get_load_avg()['15 min']
-    display_info = diagnostics.get_monitor_status()
     display_power = r.get('display_power')
 
     # Calculate disk space
@@ -1480,7 +1554,10 @@ def system_info():
     # Player name for title
     player_name = settings['player_name']
 
-    raspberry_pi_model = raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
+    device_model = raspberry_pi_helper.parse_cpu_info().get('model')
+
+    if device_model is None and machine() == 'x86_64':
+        device_model = 'Generic x86_64 Device'
 
     version = '{}@{}'.format(
         diagnostics.get_git_branch(),
@@ -1490,14 +1567,12 @@ def system_info():
     return template(
         'system-info.html',
         player_name=player_name,
-        viewlog=viewlog,
         loadavg=loadavg,
         free_space=free_space,
         uptime=system_uptime,
         memory=memory,
-        display_info=display_info,
         display_power=display_power,
-        raspberry_pi_model=raspberry_pi_model,
+        device_model=device_model,
         version=version,
         mac_address=get_node_mac_address(),
         is_balena=is_balena_app(),
@@ -1519,7 +1594,8 @@ def integrations():
         context['balena_app_name'] = getenv('BALENA_APP_NAME')
         context['balena_supervisor_version'] = get_balena_supervisor_version()
         context['balena_host_os_version'] = getenv('BALENA_HOST_OS_VERSION')
-        context['balena_device_name_at_init'] = getenv('BALENA_DEVICE_NAME_AT_INIT')
+        context['balena_device_name_at_init'] = getenv(
+            'BALENA_DEVICE_NAME_AT_INIT')
 
     return template('integrations.html', **context)
 
@@ -1574,7 +1650,8 @@ def dated_url_for(endpoint, **values):
 @authorized
 def static_with_mime(path):
     mimetype = request.args['mime'] if 'mime' in request.args else 'auto'
-    return send_from_directory(directory='static', filename=path, mimetype=mimetype)
+    return send_from_directory(
+        directory='static', filename=path, mimetype=mimetype)
 
 
 @app.before_first_request

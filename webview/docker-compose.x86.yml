@@ -1,0 +1,14 @@
+services:
+  builder:
+    build:
+      context: .
+      dockerfile: Dockerfile.x86
+    environment:
+      - GIT_HASH=${GIT_HASH}
+    stdin_open: true
+    tty: true
+    volumes:
+      - "~/tmp-x86/build:/build:Z"
+      - "~/tmp-x86/usr/local/qt6:/usr/local/qt6:Z"
+      - "./:/webview:ro"
+      - "./build_x86.sh:/scripts/build_x86.sh"

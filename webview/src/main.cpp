@@ -1,7 +1,6 @@
 #include <QApplication>
 #include <QDebug>
 #include <QtDBus>
-#include <QtWebEngine>
 #include <QWebEngineView>
 
 #include "mainwindow.h"

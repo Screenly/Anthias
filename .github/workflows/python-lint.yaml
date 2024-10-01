@@ -6,11 +6,14 @@ on:
       - 'master'
     paths:
       - '**/*.py'
+      - '.github/workflows/python-lint.yaml'
   pull_request:
     branches:
       - master
+      - experimental
     paths:
       - '**/*.py'
+      - '.github/workflows/python-lint.yaml'
 
 jobs:
   run-python-linter:
@@ -26,13 +29,21 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: Install and configure Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: 1.8.3
+        virtualenvs-create: true
+        virtualenvs-in-project: false
+        virtualenvs-path: ~/.venv
+        installer-parallel: true
+
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements/requirements.linter.txt
+        poetry install --only=dev-host
 
     - name: Analyzing the code with flake8
       run: |
         if [ -n "$(git ls-files '*.py')" ]; then
-          flake8 $(git ls-files '*.py')
+          poetry run flake8 $(git ls-files '*.py')
         fi
