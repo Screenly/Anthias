@@ -36,6 +36,14 @@ void MainWindow::loadVideo(const QString &uri, unsigned int durationInSecs)
         ready = false;
         player->setMedia(QUrl::fromLocalFile(uri));
 
+        // Show a blank screen for a second before playing the video.
+        // This is to prevent the non-video content from being displayed for a short time
+        // after the video has finished playing.
+        view->loadImage("null");
+        QEventLoop loop;
+        QTimer::singleShot(1000, &loop, SLOT(quit()));
+        loop.exec();
+
         view->hide();
         videoWidget->setFullScreen(true);
         videoWidget->show();
