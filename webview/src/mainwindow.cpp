@@ -35,11 +35,15 @@ void MainWindow::loadVideo(const QString &uri, unsigned int durationInSecs)
     {
         ready = false;
         player->setMedia(QUrl::fromLocalFile(uri));
-        this->setCentralWidget(videoWidget);
+
+        view->hide();
+        videoWidget->setFullScreen(true);
+        videoWidget->show();
+
         player->play();
 
         // Convert duration from seconds to milliseconds.
-        unsigned int additionalDurationInMs = 500; // This prevents the video for being stopped too early.
+        unsigned int additionalDurationInMs = 1000; // This prevents the video for being stopped too early.
         unsigned int durationInMs = durationInSecs * 1000 + additionalDurationInMs;
 
         // @TODO: Use the state() method instead to check if the video is still playing.
@@ -47,6 +51,9 @@ void MainWindow::loadVideo(const QString &uri, unsigned int durationInSecs)
         QTimer::singleShot(durationInMs, this, [=](){
             player->stop();
             ready = true;
+
+            videoWidget->hide();
+            view->show();
         });
     }
 }
