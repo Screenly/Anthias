@@ -13,6 +13,16 @@ user=
 password=
 ```
 
+Make sure that your `password` is hashed. For instance, if your password is `bar`, you can generate the hash with the following command:
+
+```bash
+$ echo -n "bar" | sha256sum | cut -d ' ' -f 1
+fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9
+
+# You can also use the following online tool to generate the hash:
+# https://emn178.github.io/online-tools/sha256.html
+```
+
 By default, both fields are empty which disables the HTTP basic authentication leaving the web configuration interface accessible to anyone.
 
 Modify the file to fill your desired login and passwords then restart the web server with the following commands:
@@ -34,14 +44,14 @@ $ cd /home/$USER/screenly/bin/upgrade_containers.sh
 If the `[auth_basic]` part is missing from your configuration file (which can
 occur if you updated Anthias from a version that doesn't have the HTTP basic
 authentication feature), you can add it with this command (replace `foo` and
-`bar` with your desired login and password):
+hashed `bar` with your desired login and password):
 
 ```Shell
 $ cat >> ~/.screenly/screenly.conf <<'EOT'
 
 [auth]
 user = foo
-password = bar
+password = fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9
 EOT
 ```
 
@@ -50,7 +60,7 @@ Alternatively, you can change the username and password via `sed`:
 ```Shell
 $ sed --in-place \
     -e 's/^user\s*=\s*.*/user = foo/' \
-    -e 's/^password\s*=\s*.*/password = bar/' \
+    -e 's/^password\s*=\s*.*/password = fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9/' \
     ~/.screenly/screenly.conf
 ```
 
