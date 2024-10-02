@@ -2,6 +2,9 @@
 
 Access to the web UI can be restricted via an [*HTTP basic access authentication*](https://en.wikipedia.org/wiki/Basic_access_authentication) which denies access without proper login and password.
 
+This documentation only applies to Anthias instances running on top of Raspberry Pi OS.
+Doing this on BalenaOS-based instances is not supported.
+
 ## Configuration
 
 Login and password are defined in the `~/.screenly/screenly.conf` configuration file, in the `[auth_basic]` part as shown below:
