@@ -19,20 +19,13 @@ from flask import (
 from flask_cors import CORS
 from flask_restful_swagger_2 import Api
 from flask_swagger_ui import get_swaggerui_blueprint
-
 from gunicorn.app.base import Application
 
-from api.helpers import (
-    AssetV1_2,
-    AssetsV1_2,
-)
 from api.views.v1 import (
     Asset,
     AssetContent,
     Assets,
     AssetsControl,
-    AssetV1_1,
-    AssetsV1_1,
     Backup,
     FileAsset,
     Info,
@@ -42,6 +35,15 @@ from api.views.v1 import (
     Shutdown,
     ViewerCurrentAsset,
 )
+from api.views.v1_1 import (
+    AssetV1_1,
+    AssetsV1_1,
+)
+from api.views.v1_2 import (
+    AssetV1_2,
+    AssetsV1_2,
+)
+
 
 from lib import assets_helper
 from lib import db
