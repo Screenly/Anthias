@@ -50,7 +50,7 @@ from lib import backup_helper
 from lib import db
 from lib import diagnostics
 from lib import queries
-from lib import raspberry_pi_helper
+from lib import device_helper
 
 from lib.github import is_up_to_date
 from lib.auth import authorized
@@ -1554,7 +1554,7 @@ def system_info():
     # Player name for title
     player_name = settings['player_name']
 
-    device_model = raspberry_pi_helper.parse_cpu_info().get('model')
+    device_model = device_helper.parse_cpu_info().get('model')
 
     if device_model is None and machine() == 'x86_64':
         device_model = 'Generic x86_64 Device'
