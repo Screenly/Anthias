@@ -7,7 +7,7 @@ import os
 import sqlite3
 from . import utils
 import cec
-from lib import raspberry_pi_helper
+from lib import device_helper
 from pprint import pprint
 from datetime import datetime
 
@@ -109,11 +109,11 @@ def get_debian_version():
 
 
 def get_raspberry_code():
-    return raspberry_pi_helper.parse_cpu_info().get('hardware', "Unknown")
+    return device_helper.parse_cpu_info().get('hardware', "Unknown")
 
 
 def get_raspberry_model():
-    return raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
+    return device_helper.parse_cpu_info().get('model', "Unknown")
 
 
 def compile_report():
