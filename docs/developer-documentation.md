@@ -246,7 +246,3 @@ The Anthias WebView is a custom-built web browser based on the [Qt](https://www.
 The browser is assembled with a Dockerfile and built by a `webview/build_qt#.sh` script.
 
 For further info on these files and more, visit the following link: [https://github.com/Screenly/Anthias/tree/master/webview](https://github.com/Screenly/Anthias/tree/master/webview)
-
-## Tweaking HTTP basic auth settings
-
-* Check out [this page](/docs/http-basic-authentication.md) for more information on how to customize your basic authentication credentials.

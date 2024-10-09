@@ -15,7 +15,7 @@ from settings import (
 from urllib.parse import urlparse
 from lib import (
     diagnostics,
-    raspberry_pi_helper,
+    device_helper,
 )
 from lib.auth import authorized
 from lib.utils import (
@@ -138,12 +138,10 @@ def settings_page(request):
             context['flash'] = {'class': "danger", 'message': e}
     else:
         settings.load()
-
     for field, default in list(DEFAULTS['viewer'].items()):
         context[field] = settings[field]
 
     auth_backends = []
-
     for backend in settings.auth_backends_list:
         if backend.template:
             html, ctx = backend.template
@@ -204,7 +202,7 @@ def system_info(request):
     # Player name for title
     player_name = settings['player_name']
 
-    device_model = raspberry_pi_helper.parse_cpu_info().get('model')
+    device_model = device_helper.parse_cpu_info().get('model')
 
     if device_model is None and machine() == 'x86_64':
         device_model = 'Generic x86_64 Device'
