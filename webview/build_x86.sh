@@ -19,7 +19,7 @@ QT_VERSION="${QT_MAJOR}.${QT_MINOR}.${QT_PATCH}"
 QT6_HOST_STAGING_PATH="/usr/local/qt6"
 
 function install_qt() {
-    QT_RELEASES_URL="https://download.qt.io/official_releases/qt"
+    QT_RELEASES_URL="https://download.qt.io/archive/qt"
     QT_DOWNLOAD_BASE_URL="${QT_RELEASES_URL}/${QT_MAJOR}.${QT_MINOR}/${QT_VERSION}/submodules"
     QT_ARCHIVE_FILES=(
         "qtbase-everywhere-src-${QT_VERSION}.tar.xz"
