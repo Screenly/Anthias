@@ -7,7 +7,7 @@ __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2023, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
-from os import getenv, makedirs, mkdir, path, stat
+from os import getenv, path, stat
 
 from flask import (
     Flask,
@@ -165,13 +165,6 @@ def static_with_mime(path):
 
 @app.before_first_request
 def main():
-    # Make sure the asset folder exist. If not, create it
-    if not path.isdir(settings['assetdir']):
-        mkdir(settings['assetdir'])
-    # Create config dir if it doesn't exist
-    if not path.isdir(settings.get_configdir()):
-        makedirs(settings.get_configdir())
-
     with db.conn(settings['database']) as conn:
         with db.cursor(conn) as cursor:
             cursor.execute(queries.exists_table)
