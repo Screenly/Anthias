@@ -11,6 +11,7 @@ COPY . /usr/src/app/
 ENV GIT_HASH=$GIT_HASH
 ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
 ENV GIT_BRANCH=$GIT_BRANCH
+ENV DJANGO_SETTINGS_MODULE="anthias_django.settings"
 
 CMD celery -A celery_tasks.celery worker \
   -B -n worker@anthias \

@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 from os import getenv, path, listdir, system
 import unittest
 

@@ -1,10 +1,9 @@
 from __future__ import unicode_literals
 import os
-import sh
 import shutil
 import sys
 from contextlib import contextmanager
-from unittest import skip, TestCase
+from unittest import TestCase
 
 user_home_dir = os.getenv('HOME')
 
@@ -76,19 +75,6 @@ class SettingsTest(TestCase):
     def tearDown(self):
         shutil.rmtree(CONFIG_DIR)
         os.getenv = self.orig_getenv
-
-    # This test passes locally but fails on CI.
-    @skip('fixme')
-    def test_anthias_should_exit_if_no_settings_file_found(self):
-        new_env = os.environ.copy()
-        new_env["HOME"] = "/tmp"
-        project_dir = os.path.dirname(__file__)
-
-        with self.assertRaises(sh.ErrorReturnCode_1):
-            sh.python3(project_dir + '/../viewer.py', _env=new_env)
-
-        with self.assertRaises(sh.ErrorReturnCode_1):
-            sh.python3(project_dir + '/../server.py', _env=new_env)
 
     def test_parse_settings(self):
         with fake_settings(settings1) as (mod_settings, settings):

@@ -9,13 +9,19 @@ mkdir -p \
 
 cp -n /usr/src/app/ansible/roles/screenly/files/screenly.conf /data/.screenly/screenly.conf
 cp -n /usr/src/app/ansible/roles/screenly/files/default_assets.yml /data/.screenly/default_assets.yml
-cp -n /usr/src/app/ansible/roles/screenly/files/screenly.db /data/.screenly/screenly.db
 
 echo "Running migration..."
-python ./bin/migrate.py
+
+./manage.py initialize_assets
+./manage.py makemigrations
+./manage.py migrate --fake-initial
 
 if [[ "$ENVIRONMENT" == "development" ]]; then
-    flask --app server.py run --debug --reload --host 0.0.0.0 --port 8080
+    echo "Starting Django development server..."
+    ./manage.py runserver 0.0.0.0:8080
 else
-    python server.py
+    echo "Generating Django static files..."
+    ./manage.py collectstatic --clear --noinput
+    echo "Starting Gunicorn..."
+    python run_gunicorn.py
 fi

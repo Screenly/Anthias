@@ -4,7 +4,6 @@ from future import standard_library
 from builtins import str
 from builtins import range
 import certifi
-from . import db
 import json
 import logging
 import os
@@ -26,7 +25,7 @@ from threading import Thread
 from time import sleep
 from urllib.parse import urlparse
 
-from .assets_helper import update
+from anthias_app.models import Asset
 
 standard_library.install_aliases()
 
@@ -378,9 +377,14 @@ class YoutubeDownloadThread(Thread):
     def run(self):
         publisher = ZmqPublisher.get_instance()
         call(['yt-dlp', '-f', 'mp4', '-o', self.location, self.uri])
-        with db.conn(settings['database']) as conn:
-            update(conn, self.asset_id,
-                   {'asset_id': self.asset_id, 'is_processing': 0})
+
+        try:
+            asset = Asset.objects.get(asset_id=self.asset_id)
+            asset.is_processing = 0
+            asset.save()
+        except Asset.DoesNotExist:
+            logging.warning('Asset %s not found', self.asset_id)
+            return
 
         publisher.send_to_ws_server(self.asset_id)
 

@@ -1,16 +1,30 @@
+import django
 import sh
 
 from celery import Celery
 from datetime import timedelta
-from lib import diagnostics
-from lib.utils import (
-    connect_to_redis,
-    is_balena_app,
-    reboot_via_balena_supervisor,
-    shutdown_via_balena_supervisor,
-)
 from os import getenv, path
 from tenacity import Retrying, stop_after_attempt, wait_fixed
+
+try:
+    django.setup()
+
+    # Place imports that uses Django in this block.
+
+    from lib import diagnostics
+    from lib.utils import (
+        connect_to_redis,
+        is_balena_app,
+        reboot_via_balena_supervisor,
+        shutdown_via_balena_supervisor,
+    )
+except Exception:
+    pass
+
+
+__author__ = "Screenly, Inc"
+__copyright__ = "Copyright 2012-2024, Screenly, Inc"
+__license__ = "Dual License: GPLv2 and Commercial License"
 
 
 CELERY_RESULT_BACKEND = getenv(
