@@ -12,8 +12,6 @@ cp -n /usr/src/app/ansible/roles/screenly/files/default_assets.yml /data/.screen
 
 echo "Running migration..."
 
-./manage.py initialize_assets
-
 # The following block ensures that the migration is transactional and that the
 # database is not left in an inconsistent state if the migration fails.
 cp /data/.screenly/screenly.db /data/.screenly/backup.db
