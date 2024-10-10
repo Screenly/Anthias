@@ -24,8 +24,12 @@ fi
 echo "Running migration..."
 
 ./manage.py initialize_assets
-./manage.py makemigrations
-./manage.py migrate --fake-initial
+
+# The following block ensures that the migration is transactional and that the
+# database is not left in an inconsistent state if the migration fails.
+cp /data/.screenly/screenly.db /data/.screenly/backup.db
+./manage.py migrate --fake-initial --database=backup
+cp /data/.screenly/backup.db /data/.screenly/screenly.db
 
 if [[ "$ENVIRONMENT" == "development" ]]; then
     echo "Starting Django development server..."

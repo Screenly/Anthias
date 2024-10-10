@@ -108,6 +108,10 @@ DATABASES = {
             else '/data/.screenly/screenly.db'
         ),
     },
+    'backup': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': '/data/.screenly/backup.db',
+    },
 }
 
 
