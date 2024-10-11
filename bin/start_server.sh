@@ -9,14 +9,17 @@ mkdir -p \
 
 cp -n /usr/src/app/ansible/roles/screenly/files/screenly.conf /data/.screenly/screenly.conf
 cp -n /usr/src/app/ansible/roles/screenly/files/default_assets.yml /data/.screenly/default_assets.yml
+cp -n /usr/src/app/ansible/roles/screenly/files/screenly.db /data/.screenly/screenly.db
 
 echo "Running migration..."
 
 # The following block ensures that the migration is transactional and that the
 # database is not left in an inconsistent state if the migration fails.
+
 cp /data/.screenly/screenly.db /data/.screenly/backup.db
+cp /data/.screenly/screenly.db /data/.screenly/screenly.db.bak
 ./manage.py migrate --fake-initial --database=backup
-cp /data/.screenly/backup.db /data/.screenly/screenly.db
+mv /data/.screenly/backup.db /data/.screenly/screenly.db
 
 if [[ "$ENVIRONMENT" == "development" ]]; then
     echo "Starting Django development server..."
