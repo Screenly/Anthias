@@ -16,10 +16,10 @@ echo "Running migration..."
 # database is not left in an inconsistent state if the migration fails.
 
 if [ -f /data/.screenly/screenly.db ]; then
-    cp /data/.screenly/screenly.db /data/.screenly/backup.db
-    cp /data/.screenly/screenly.db /data/.screenly/screenly.db.bak
-    ./manage.py migrate --fake-initial --database=backup
-    mv /data/.screenly/backup.db /data/.screenly/screenly.db
+    cp /data/.screenly/screenly.db /data/.screenly/backup.db && \
+        cp /data/.screenly/screenly.db /data/.screenly/screenly.db.bak && \
+        ./manage.py migrate --fake-initial --database=backup && \
+        mv /data/.screenly/backup.db /data/.screenly/screenly.db
 else
     ./manage.py migrate
 fi
