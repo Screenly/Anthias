@@ -9,7 +9,8 @@ package-mode = false
 python = ">=3.8,<3.12"
 
 [tool.poetry.group.dev-host.dependencies]
-flake8 = "^5.0.4"
+flake8 = "^5.0.4" # TODO: Remove in favor of `ruff`.
+ruff = "^0.6.9"
 
 [build-system]
 requires = ["poetry-core"]
