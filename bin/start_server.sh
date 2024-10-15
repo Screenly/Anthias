@@ -5,6 +5,7 @@ ENVIRONMENT=${ENVIRONMENT:-production}
 mkdir -p \
     /data/.config \
     /data/.screenly \
+    /data/.screenly/backups \
     /data/screenly_assets
 
 cp -n /usr/src/app/ansible/roles/screenly/files/screenly.conf /data/.screenly/screenly.conf
@@ -16,12 +17,12 @@ echo "Running migration..."
 # database is not left in an inconsistent state if the migration fails.
 
 if [ -f /data/.screenly/screenly.db ]; then
-    cp /data/.screenly/screenly.db /data/.screenly/backup.db && \
-        cp /data/.screenly/screenly.db /data/.screenly/screenly.db.bak && \
-        ./manage.py migrate --fake-initial --database=backup && \
-        mv /data/.screenly/backup.db /data/.screenly/screenly.db
+    ./manage.py dbbackup --noinput --clean && \
+        ./manage.py migrate --fake-initial --noinput || \
+        ./manage.py dbrestore --noinput
 else
-    ./manage.py migrate
+    ./manage.py migrate && \
+        ./manage.py dbbackup --noinput --clean
 fi
 
 if [[ "$ENVIRONMENT" == "development" ]]; then
