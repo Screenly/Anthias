@@ -34,7 +34,7 @@ DEFAULTS = {
     'viewer': {
         'audio_output': 'hdmi',
         'debug_logging': False,
-        'default_duration': '10',
+        'default_duration': 10,
         'default_streaming_duration': '300',
         'player_name': '',
         'resolution': '1920x1080',

@@ -23,7 +23,7 @@ ASSET_X = {
     'uri': 'http://www.wireload.net',
     'start_date': timezone.now() - timedelta(days=3),
     'end_date': timezone.now() + timedelta(days=3),
-    'duration': '5',
+    'duration': 5,
     'is_enabled': 1,
     'nocache': 0,
     'is_processing': 0,
@@ -32,7 +32,7 @@ ASSET_X = {
 }
 
 ASSET_X_DIFF = {
-    'duration': '10'
+    'duration': 10
 }
 
 ASSET_Y = {
@@ -42,7 +42,7 @@ ASSET_Y = {
     'uri': 'https://www.google.com/images/srpr/logo3w.png',
     'start_date': timezone.now() - timedelta(days=1),
     'end_date': timezone.now() + timedelta(days=2),
-    'duration': '6',
+    'duration': 6,
     'is_enabled': 1,
     'nocache': 0,
     'is_processing': 0,
@@ -57,7 +57,7 @@ ASSET_Z = {
     'uri': 'https://www.google.com/images/srpr/logo3w.png',
     'start_date': timezone.now() - timedelta(days=1),
     'end_date': timezone.now() + timedelta(days=1),
-    'duration': '6',
+    'duration': 6,
     'is_enabled': 1,
     'nocache': 0,
     'is_processing': 0,
@@ -72,7 +72,7 @@ ASSET_TOMORROW = {
     'uri': 'https://www.google.com/images/srpr/logo3w.png',
     'start_date': timezone.now() + timedelta(days=1),
     'end_date': timezone.now() + timedelta(days=1),
-    'duration': '6',
+    'duration': 6,
     'is_enabled': 1,
     'nocache': 0,
     'is_processing': 0,
