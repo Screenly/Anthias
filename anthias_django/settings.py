@@ -180,3 +180,4 @@ SPECTACULAR_SETTINGS = {
 # `django-dbbackup` settings
 DBBACKUP_STORAGE = 'django.core.files.storage.FileSystemStorage'
 DBBACKUP_STORAGE_OPTIONS = {'location': '/data/.screenly/backups'}
+DBBACKUP_HOSTNAME = 'anthias'

@@ -17,12 +17,12 @@ echo "Running migration..."
 # database is not left in an inconsistent state if the migration fails.
 
 if [ -f /data/.screenly/screenly.db ]; then
-    ./manage.py dbbackup --noinput --clean --database default && \
-        ./manage.py migrate --database default --fake-initial --noinput || \
-        ./manage.py dbrestore --noinput --database default
+    ./manage.py dbbackup --noinput --clean && \
+        ./manage.py migrate --fake-initial --noinput || \
+        ./manage.py dbrestore --noinput
 else
     ./manage.py migrate && \
-        ./manage.py dbbackup --noinput --clean --database default
+        ./manage.py dbbackup --noinput --clean
 fi
 
 if [[ "$ENVIRONMENT" == "development" ]]; then
