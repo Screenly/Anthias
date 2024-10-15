@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'dbbackup',
 ]
 
 MIDDLEWARE = [
@@ -107,10 +108,6 @@ DATABASES = {
             '/data/.screenly/test.db' if getenv('ENVIRONMENT') == 'test'
             else '/data/.screenly/screenly.db'
         ),
-    },
-    'backup': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': '/data/.screenly/backup.db',
     },
 }
 
@@ -179,3 +176,7 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'Anthias API',
     'VERSION': '1.2.0',
 }
+
+# `django-dbbackup` settings
+DBBACKUP_STORAGE = 'django.core.files.storage.FileSystemStorage'
+DBBACKUP_STORAGE_OPTIONS = {'location': '/data/.screenly/backups'}
