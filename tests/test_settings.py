@@ -82,7 +82,7 @@ class SettingsTest(TestCase):
             self.assertEquals(settings['show_splash'], False)
             self.assertEquals(settings['shuffle_playlist'], True)
             self.assertEquals(settings['debug_logging'], True)
-            self.assertEquals(settings['default_duration'], '45')
+            self.assertEquals(settings['default_duration'], 45)
 
     def test_default_settings(self):
         with fake_settings(empty_settings) as (mod_settings, settings):
@@ -118,7 +118,7 @@ class SettingsTest(TestCase):
             saved = f.read()
             with fake_settings(saved) as (mod_settings, settings):
                 # changes saved?
-                self.assertEqual(settings['default_duration'], '35')
+                self.assertEqual(settings['default_duration'], 35)
                 self.assertEqual(settings['verify_ssl'], True)
                 # no out of thin air changes?
                 self.assertEqual(settings['audio_output'], 'hdmi')

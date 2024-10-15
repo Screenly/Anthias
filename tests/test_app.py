@@ -26,7 +26,7 @@ asset_x = {
     'uri': 'http://www.wireload.net',
     'start_date': timezone.now() - timedelta(days=1),
     'end_date': timezone.now() + timedelta(days=1),
-    'duration': '5',
+    'duration': 5,
     'is_enabled': 0,
     'nocache': 0,
     'play_order': 1,
@@ -40,7 +40,7 @@ asset_y = {
     'uri': 'https://www.google.com/images/srpr/logo3w.png',
     'start_date': timezone.now() - timedelta(days=1),
     'end_date': timezone.now() + timedelta(days=1),
-    'duration': '6',
+    'duration': 6,
     'is_enabled': 1,
     'nocache': 0,
     'play_order': 0,
@@ -143,7 +143,7 @@ class WebTest(TestCase):
         self.assertEqual(len(assets), 1)
         asset = assets.first()
 
-        self.assertEqual(asset.duration, '333')
+        self.assertEqual(asset.duration, 333)
 
     def test_add_asset_image_upload(self):
         image_file = '/tmp/image.png'
@@ -197,7 +197,7 @@ class WebTest(TestCase):
 
             self.assertEqual(asset.name, 'video.mov')
             self.assertEqual(asset.mimetype, 'video')
-            self.assertEqual(asset.duration, '5')
+            self.assertEqual(asset.duration, 5)
 
     def test_add_two_assets_upload(self):
         with (
@@ -234,7 +234,7 @@ class WebTest(TestCase):
 
             self.assertEqual(assets[1].name, 'video.mov')
             self.assertEqual(assets[1].mimetype, 'video')
-            self.assertEqual(assets[1].duration, '5')
+            self.assertEqual(assets[1].duration, 5)
 
     @skip('fixme')
     def test_add_asset_streaming(self):
