@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
-from future import standard_library
 from builtins import str
 from builtins import object
 import hashlib
@@ -17,7 +16,6 @@ from collections import UserDict
 from lib.auth import BasicAuth, NoAuth
 from lib.errors import ZmqCollectorTimeout
 
-standard_library.install_aliases()
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -30,12 +28,13 @@ DEFAULTS = {
         'use_24_hour_clock': False,
         'use_ssl': False,
         'auth_backend': '',
-        'websocket_port': '9999'
+        'websocket_port': '9999',
+        'django_secret_key': ''
     },
     'viewer': {
         'audio_output': 'hdmi',
         'debug_logging': False,
-        'default_duration': '10',
+        'default_duration': 10,
         'default_streaming_duration': '300',
         'player_name': '',
         'resolution': '1920x1080',

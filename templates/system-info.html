@@ -22,43 +22,42 @@
                     <tbody>
                     <tr>
                         <th scope="row">Load Average</th>
-                        <td>{{ context.loadavg }}</td>
+                        <td>{{ loadavg }}</td>
                     </tr>
                     <tr>
                         <th scope="row">Free Space</th>
-                        <td>{{ context.free_space }}</td>
+                        <td>{{ free_space }}</td>
                     </tr>
                     <tr>
                         <th scope="row">Memory</th>
                         <td>
-                            Total: <strong>{{ context.memory.total }}</strong> /
-                            Used: <strong>{{ context.memory.used }}</strong> /
-                            Free: <strong>{{ context.memory.free }}</strong> /
-                            Shared: <strong>{{ context.memory.shared }}</strong> /
-                            Buff: <strong>{{ context.memory.buff }}</strong> /
-                            Available: <strong>{{ context.memory.available }}</strong>
+                            Total: <strong>{{ memory.total }}</strong> /
+                            Used: <strong>{{ memory.used }}</strong> /
+                            Free: <strong>{{ memory.free }}</strong> /
+                            Shared: <strong>{{ memory.shared }}</strong> /
+                            Buff: <strong>{{ memory.buff }}</strong> /
+                            Available: <strong>{{ memory.available }}</strong>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">Uptime</th>
-                        <td>{{ context.uptime.days }} days and {{ (context.uptime.seconds / 3600)|round(2) }} hours</td>
+                        <td>{{ uptime.days }} days and {{ uptime.hours }} hours</td>
                     </tr>
-
                     <tr>
                         <th scope="row">Display Power (CEC)</th>
-                        <td>{{ context.display_power }}</td>
+                        <td>{{ display_power }}</td>
                     </tr>
                     <tr>
                         <th scope="row">Device Model</th>
-                        <td>{{ context.device_model }}</td>
+                        <td>{{ device_model }}</td>
                     </tr>
                     <tr>
                         <th scope="row">Anthias Version</th>
-                        <td>{{ context.version }}</td>
+                        <td>{{ anthias_version }}</td>
                     </tr>
                     <tr>
                         <th scope="row">MAC Address</th>
-                        <td>{{ context.mac_address }}</td>
+                        <td>{{ mac_address }}</td>
                     </tr>
                     </tbody>
                 </table>

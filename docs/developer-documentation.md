@@ -78,10 +78,18 @@ Run the unit tests.
 ```bash
 $ docker compose \
     -f docker-compose.test.yml \
-    exec -T anthias-test bash ./bin/prepare_test_environment.sh -s
+    exec anthias-test bash ./bin/prepare_test_environment.sh -s
+
+# Integration and non-integration tests should be run separately as the
+# former doesn't run as expected when run together with the latter.
+
 $ docker compose \
     -f docker-compose.test.yml \
-    exec -T anthias-test nose2 -v
+    exec anthias-test ./manage.py test --exclude-tag=integration
+
+$ docker compose \
+    -f docker-compose.test.yml \
+    exec anthias-test ./manage.py test --tag=integration
 ```
 
 ### The QA checklist
