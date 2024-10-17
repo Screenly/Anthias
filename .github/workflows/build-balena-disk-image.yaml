@@ -54,6 +54,7 @@ jobs:
             preload \
               "$BALENA_IMAGE.img" \
               --fleet screenly_ose/anthias-${{ matrix.board }} \
+              --pin-device-to-release \
               --splash-image ansible/roles/splashscreen/files/splashscreen.png \
               --commit latest
           balena_cli_version: 18.1.2
