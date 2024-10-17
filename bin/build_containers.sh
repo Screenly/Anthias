@@ -144,7 +144,7 @@ for container in ${SERVICES[@]}; do
         fi
     fi
 
-    if [[ -n "${DEV_MODE:-}" ]] && [[ "${DEV_MODE}" -ne 0 ]]; then
+    if [[ -n "${DISABLE_CACHE_MOUNTS:-}" ]] && [[ "${DISABLE_CACHE_MOUNTS}" -ne 0 ]]; then
         sed -i 's/RUN --mount.\+ /RUN /g' "docker/Dockerfile.$container"
     fi
 
