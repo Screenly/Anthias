@@ -25,9 +25,12 @@ Do note that Anthias is using Docker's [buildx](https://docs.docker.com/engine/r
 Assuming you're in the source code repository, simply run:
 
 ```bash
-$ ./bin/build_containers.sh
+$ ENVIRONMENT=development \
+  DOCKERFILES_ONLY=1 \
+  DISABLE_CACHE_MOUNTS=1 \
+  ./bin/build_containers.sh
 $ docker compose \
-    -f docker-compose.dev.yml up
+    -f docker-compose.dev.yml up -d --build
 ```
 
 ## Building containers locally
@@ -57,20 +60,31 @@ inside the `docker/` directory, run the following:
 $ DOCKERFILES_ONLY=1 ./bin/build_containers.sh
 ```
 
+### Disabling cache mounts
+
+If you'd like to disable cache mounts in the generated Dockerfiles, run the
+following:
+
+```bash
+$ DISABLE_CACHE_MOUNTS=1 ./bin/build_containers.sh
+```
+
 ## Testing
 ### Running the unit tests
 
 Build and start the containers.
 
 ```bash
-$ SKIP_SERVER=1 \
+$ DOCKERFILES_ONLY=1 \
+  DISABLE_CACHE_MOUNTS=1 \
+  SKIP_SERVER=1 \
   SKIP_WEBSOCKET=1 \
   SKIP_NGINX=1 \
   SKIP_VIEWER=1 \
   SKIP_WIFI_CONNECT=1 \
   ./bin/build_containers.sh
 $ docker compose \
-    -f docker-compose.test.yml up -d
+    -f docker-compose.test.yml up -d --build
 ```
 
 Run the unit tests.
