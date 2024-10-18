@@ -33,6 +33,8 @@ class AssetRequestSerializer(Serializer):
 
 
 class AssetSerializer(ModelSerializer):
+    is_active = BooleanField()
+
     class Meta:
         model = Asset
         fields = [
