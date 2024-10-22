@@ -10,7 +10,6 @@ on:
   pull_request:
     branches:
       - master
-      - experimental
     paths:
       - '**/*.py'
       - '.github/workflows/python-lint.yaml'

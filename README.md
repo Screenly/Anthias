@@ -112,25 +112,11 @@ Opting for network management will enable and configure the [NetworkManager](htt
 
 #### Prompt: Version Selection
 
-You can choose between the following choices &mdash; `latest`, `experimental`, and `tag`.
+You can choose between the following choices &mdash; `latest` and `tag`.
 
 * Selecting `latest` will install the version from the `master` branch.
-* Selecting `experimental` will install the version from the `experimental` branch.
 * Selecting `tag` will prompt you to enter a specific tag to install.
-* Do take note the `latest` and `experimental` versions are rolling releases, so you'll always get the latest changes.
-
-##### Experimental Features
-
-We have decided to roll out an `experimental` branch for new features that can break Anthias, especially
-if you already have Anthias installed and wish to upgrade.
-
-Before you proceed, make sure to download a
-backup by going to the **_Settings_** page and clicking **_Get Backup_**. You can load the backup file later by going to **_Settings_** and clicking **_Upload and Recover_**.
-
-Here's a current list of experimental features:
-
-* Migration from Flask to Django &ndash; The database still uses `sqlite3`. We will transition to using ORM in the future.
-* Revamped API docs &ndash; we changed the structure and overall look and feel of the documentation for easier reference.
+* Do take note that `latest` is a rolling release, so you'll always get the latest changes.
 
 ##### Installing from a Specific Tag
 

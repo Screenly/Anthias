@@ -22,23 +22,18 @@ INTRO_MESSAGE=(
     ""
     "When prompted for the version, you can choose between the following:"
     "  - **latest:** Installs the latest version from the \`master\` branch."
-    "  - **experimental:** Installs the latest version from the \`experimental\` branch."
     "  - **tag:** Installs a pinned version based on the tag name."
     ""
-    "Take note that \`latest\` and \`experimental\` versions are rolling releases."
+    "Take note that \`latest\` is a rolling release."
 )
 MANAGE_NETWORK_PROMPT=(
     "Would you like Anthias to manage the network for you?"
-)
-EXPERIMENTAL_PROMPT=(
-    "Would you like to install the experimental version instead?"
 )
 VERSION_PROMPT=(
     "Which version of Anthias would you like to install?"
 )
 VERSION_PROMPT_CHOICES=(
     "latest"
-    "experimental"
     "tag"
 )
 SYSTEM_UPGRADE_PROMPT=(
@@ -355,9 +350,6 @@ function main() {
 
     if [ "$VERSION" == "latest" ]; then
         BRANCH="master"
-    elif [ "$VERSION" == "experimental" ]; then
-        BRANCH="experimental"
-        DOCKER_TAG="experimental"
     else
         set_custom_version
     fi
