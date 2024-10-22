@@ -12,11 +12,7 @@ export SHM_SIZE_KB="$(echo "$TOTAL_MEMORY_KB" \* 0.3 | bc | cut -d'.' -f1)"
 export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 if [ -z "$DOCKER_TAG" ]; then
-    if [ "$GIT_BRANCH" = "experimental" ]; then
-        export DOCKER_TAG="experimental"
-    else
-        export DOCKER_TAG="latest"
-    fi
+    export DOCKER_TAG="latest"
 fi
 
 # Detect Raspberry Pi version

@@ -156,19 +156,12 @@ for container in ${SERVICES[@]}; do
     PUSH_ARGS=()
     BUILDX_ARGS=()
 
-    if [ "$GIT_BRANCH" = "experimental" ]; then
-        PUSH_ARGS+=(
-            "screenly/anthias-$container:experimental-$BOARD"
-            "screenly/anthias-$container:experimental-$GIT_SHORT_HASH-$BOARD"
-        )
-    else
-        PUSH_ARGS+=(
-            "screenly/anthias-$container:$DOCKER_TAG"
-            "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
-            "screenly/srly-ose-$container:$DOCKER_TAG"
-            "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD"
-        )
-    fi
+    PUSH_ARGS+=(
+        "screenly/anthias-$container:$DOCKER_TAG"
+        "screenly/anthias-$container:$GIT_SHORT_HASH-$BOARD"
+        "screenly/srly-ose-$container:$DOCKER_TAG"
+        "screenly/srly-ose-$container:$GIT_SHORT_HASH-$BOARD"
+    )
 
     for tag in "${PUSH_ARGS[@]}"; do
         BUILDX_ARGS+=("-t" "$tag")
