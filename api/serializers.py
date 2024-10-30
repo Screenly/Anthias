@@ -24,15 +24,22 @@ class AssetRequestSerializer(Serializer):
     uri = CharField()
     start_date = DateTimeField(default_timezone=timezone.utc)
     end_date = DateTimeField(default_timezone=timezone.utc)
-    duration = IntegerField()
+    duration = CharField()
     mimetype = CharField()
-    is_enabled = BooleanField()
-    nocache = BooleanField()
+    is_enabled = IntegerField(min_value=0, max_value=1)
+    nocache = IntegerField(min_value=0, max_value=1)
     play_order = IntegerField()
-    skip_asset_check = BooleanField()
+    skip_asset_check = IntegerField(min_value=0, max_value=1)
 
 
 class AssetSerializer(ModelSerializer):
+    duration = CharField()
+    is_enabled = IntegerField(min_value=0, max_value=1)
+    is_active = IntegerField(min_value=0, max_value=1)
+    is_processing = IntegerField(min_value=0, max_value=1)
+    nocache = IntegerField(min_value=0, max_value=1)
+    skip_asset_check = IntegerField(min_value=0, max_value=1)
+
     class Meta:
         model = Asset
         fields = [
@@ -61,13 +68,13 @@ class CreateAssetSerializerV1_1(Serializer):
     uri = CharField()
     start_date = DateTimeField(default_timezone=timezone.utc, required=False)
     end_date = DateTimeField(default_timezone=timezone.utc, required=False)
-    duration = IntegerField(required=False)
+    duration = CharField(required=False)
     mimetype = CharField()
-    is_enabled = BooleanField(required=False)
-    is_processing = BooleanField(required=False)
+    is_enabled = IntegerField(min_value=0, max_value=1, required=False)
+    is_processing = IntegerField(min_value=0, max_value=1, required=False)
     nocache = BooleanField(required=False)
     play_order = IntegerField(required=False)
-    skip_asset_check = BooleanField(required=False)
+    skip_asset_check = IntegerField(min_value=0, max_value=1, required=False)
 
     def validate(self, data):
         name = data['name']
@@ -89,9 +96,9 @@ class CreateAssetSerializerV1_1(Serializer):
             'name': name,
             'mimetype': data.get('mimetype'),
             'asset_id': data.get('asset_id'),
-            'is_enabled': data.get('is_enabled', False),
-            'is_processing': data.get('is_processing', False),
-            'nocache': data.get('nocache', False),
+            'is_enabled': data.get('is_enabled', 0),
+            'is_processing': data.get('is_processing', 0),
+            'nocache': data.get('nocache', 0),
         }
 
         uri = data.get('uri')
@@ -119,14 +126,14 @@ class CreateAssetSerializerV1_1(Serializer):
         asset['uri'] = uri
 
         if "video" in asset['mimetype']:
-            if data.get('duration') == 0:
+            if int(data.get('duration')) == 0:
                 asset['duration'] = int(
                     get_video_duration(uri).total_seconds())
         else:
             # Crashes if it's not an int. We want that.
-            asset['duration'] = data.get('duration')
+            asset['duration'] = int(data.get('duration'))
 
-        asset['skip_asset_check'] = data.get('skip_asset_check', False)
+        asset['skip_asset_check'] = int(data.get('skip_asset_check', 0))
 
         if data.get('start_date'):
             asset['start_date'] = data.get('start_date').replace(tzinfo=None)
@@ -155,13 +162,13 @@ class CreateAssetSerializerV1_2(Serializer):
     uri = CharField()
     start_date = DateTimeField(default_timezone=timezone.utc)
     end_date = DateTimeField(default_timezone=timezone.utc)
-    duration = IntegerField()
+    duration = CharField()
     mimetype = CharField()
-    is_enabled = BooleanField()
-    is_processing = BooleanField(required=False)
-    nocache = BooleanField(required=False)
+    is_enabled = IntegerField(min_value=0, max_value=1)
+    is_processing = IntegerField(min_value=0, max_value=1, required=False)
+    nocache = IntegerField(min_value=0, max_value=1, required=False)
     play_order = IntegerField(required=False)
-    skip_asset_check = BooleanField(required=False)
+    skip_asset_check = IntegerField(min_value=0, max_value=1, required=False)
 
     def prepare_asset(self, data, asset_id=None):
         ampersand_fix = '&amp;'
@@ -182,8 +189,8 @@ class CreateAssetSerializerV1_2(Serializer):
         asset = {
             'name': name,
             'mimetype': data.get('mimetype'),
-            'is_enabled': data.get('is_enabled', False),
-            'nocache': data.get('nocache', False),
+            'is_enabled': data.get('is_enabled', 0),
+            'nocache': data.get('nocache', 0),
         }
 
         uri = (
@@ -217,17 +224,17 @@ class CreateAssetSerializerV1_2(Serializer):
                 uri, asset['name'], asset['duration']
             ) = download_video_from_youtube(uri, asset['asset_id'])
             asset['mimetype'] = 'video'
-            asset['is_processing'] = True
+            asset['is_processing'] = 1
 
         asset['uri'] = uri
 
         if "video" in asset['mimetype']:
-            if data.get('duration') == 0:
+            if int(data.get('duration')) == 0:
                 asset['duration'] = int(
                     get_video_duration(uri).total_seconds())
         elif data.get('duration'):
             # Crashes if it's not an int. We want that.
-            asset['duration'] = data.get('duration')
+            asset['duration'] = int(data.get('duration'))
         else:
             asset['duration'] = 10
 
@@ -257,12 +264,12 @@ class UpdateAssetSerializer(Serializer):
     name = CharField()
     start_date = DateTimeField(default_timezone=timezone.utc)
     end_date = DateTimeField(default_timezone=timezone.utc)
-    duration = IntegerField()
-    is_enabled = BooleanField()
-    is_processing = BooleanField(required=False)
-    nocache = BooleanField(required=False)
+    duration = CharField()
+    is_enabled = IntegerField(min_value=0, max_value=1)
+    is_processing = IntegerField(min_value=0, max_value=1, required=False)
+    nocache = IntegerField(min_value=0, max_value=1, required=False)
     play_order = IntegerField(required=False)
-    skip_asset_check = BooleanField(required=False)
+    skip_asset_check = IntegerField(min_value=0, max_value=1, required=False)
 
     def update(self, instance, validated_data):
         instance.name = validated_data.get('name', instance.name)

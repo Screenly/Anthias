@@ -146,7 +146,7 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
 
         self.assertEqual(updated_asset['name'], 'Anthias')
         self.assertEqual(updated_asset['uri'], 'https://anthias.screenly.io')
-        self.assertEqual(updated_asset['duration'], 15)
+        self.assertEqual(updated_asset['duration'], '15')
         self.assertEqual(updated_asset['is_enabled'], 1)
         self.assertEqual(updated_asset['play_order'], 0)
 

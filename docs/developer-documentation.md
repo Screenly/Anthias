@@ -171,7 +171,7 @@ After installing Poetry, run the following commands:
 ```bash
 # Install the dependencies
 $ poetry install --only=dev-host
-$ poetry run flake8 $(git ls-files '**/*.py')
+$ poetry run flake8 $(git ls-files '*.py')
 ```
 
 To run the linter on a specific file, run the following command:
