@@ -1,0 +1,33 @@
+# vim: ft=dockerfile
+
+# @TODO: Uncomment this build stage when test_add_asset_streaming is fixed.
+# FROM debian:buster as builder
+
+# RUN apt-get update && \
+#     apt-get -y install --no-install-recommends \
+#         build-essential \
+#         git \
+#         ca-certificates && \
+#     apt-get clean
+
+# RUN cd /opt && \
+#     git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg && \
+#     cd ffmpeg && \
+#     git checkout 2ca65fc7b74444edd51d5803a2c1e05a801a6023 && \
+#     ./configure --disable-x86asm && make -j$(nproc) --quiet
+
+ENV DEBIAN_FRONTEND noninteractive
+
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/var/cache/apt \
+{% endif %}
+    apt-get -y install wget \
+    unzip \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0.0 \
+    libcups2 \
+    libxcomposite1 \
+    libxdamage1

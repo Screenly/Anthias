@@ -87,13 +87,18 @@ def build_image(
     board: str,
     target_platform: str,
     disable_cache_mounts: bool,
+    git_hash: str,
+    git_short_hash: str,
+    git_branch: str,
 ) -> None:
     context = {}
 
     if service == 'viewer':
-        qt_version = '5.15.2'
-        webview_git_hash='4bd295c4a1197a226d537938e947773f4911ca24'
-        webview_base_url='https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.1'
+        webview_git_hash='5e556681738a1fa918dc9f0bf5879ace2e603e12'
+        webview_base_url='https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.3'
+
+        qt_version = '6.6.3' if board == 'x86' else '5.15.14'
+        qt_major_version = qt_version.split('.')[0]
 
         context.update({
             'apt_dependencies': [
@@ -210,12 +215,18 @@ def build_image(
                 'libswscale-dev',
             ],
             'qt_version': qt_version,
+            'qt_major_version': qt_major_version,
             'webview_git_hash': webview_git_hash,
             'webview_base_url': webview_base_url,
         })
     elif service == 'test':
         chrome_dl_url="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chrome-linux64.zip"
         chromedriver_dl_url="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chromedriver-linux64.zip"
+
+        context.update({
+            'chrome_dl_url': chrome_dl_url,
+            'chromedriver_dl_url': chromedriver_dl_url,
+        })
     elif service == 'wifi-connect':
         if board == 'x86':
             click.secho('Building wifi-connect for x86 is not supported yet.', fg='red')
@@ -252,7 +263,12 @@ def build_image(
     generate_dockerfile(service, {
         'base_image': 'balenalib/raspberrypi3-debian',
         'base_image_tag': 'bookworm',
+        'board': board,
+        'debian_version': 'bookworm',
         'disable_cache_mounts': disable_cache_mounts,
+        'git_branch': git_branch,
+        'git_hash': git_hash,
+        'git_short_hash': git_short_hash,
         **context,
     })
 
@@ -299,7 +315,15 @@ def main(
     services_to_build = SERVICES if 'all' in service else list(set(service))
 
     for service in services_to_build:
-        build_image(service, board, target_platform, disable_cache_mounts)
+        build_image(
+            service,
+            board,
+            target_platform,
+            disable_cache_mounts,
+            git_hash,
+            git_short_hash,
+            git_branch,
+        )
 
 
 if __name__ == "__main__":
