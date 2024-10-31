@@ -8,6 +8,15 @@ export MY_IP=$(ip -4 route get 8.8.8.8 | awk {'print $7'} | tr -d '\n')
 TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk {'print $2'})
 export VIEWER_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB" \* 0.8 | bc)
 export SHM_SIZE_KB="$(echo "$TOTAL_MEMORY_KB" \* 0.3 | bc | cut -d'.' -f1)"
+export ENVIRONMENT=${ENVIRONMENT:-production}
+
+if [ "$ENVIRONMENT" = "development" ]; then
+    export COMPOSE_FILE="docker-compose.dev.yml.tmpl"
+    export COMPOSE_COMMAND='build'
+else
+    export COMPOSE_FILE="docker-compose.yml.tmpl"
+    export COMPOSE_COMMAND='pull'
+fi
 
 export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
@@ -41,7 +50,7 @@ if [[ -n $(docker ps | grep srly-ose) ]]; then
     set -e
 fi
 
-cat /home/${USER}/screenly/docker-compose.yml.tmpl \
+cat /home/${USER}/screenly/${COMPOSE_FILE} \
     | envsubst \
     > /home/${USER}/screenly/docker-compose.yml
 
@@ -52,7 +61,7 @@ fi
 
 sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \
-    pull
+    ${COMPOSE_COMMAND}
 
 if [ -f /var/run/reboot-required ]; then
     exit 0

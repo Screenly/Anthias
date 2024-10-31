@@ -48,6 +48,19 @@ To stop the development server, run the following:
 docker compose -f docker-compose.dev.yml down
 ```
 
+### Starting the development server on the actual Raspberry Pi or x86 machine
+
+The steps above are great for developing the server module on your local machine, say a laptop or a desktop.
+However, if you want to run the development server on the actual Raspberry Pi or x86 machine that's connected
+to a screen, you can do so by running the following command:
+
+```bash
+$ MODE=full ./bin/start_development_server.sh
+```
+
+You should be able to access the web interface at `http://$IP_ADDRESS:8000`, where `$IP_ADDRESS` is the IP
+address of the Raspberry Pi or x86 device.
+
 ## Building containers locally
 
 Make sure that you have `buildx` installed and that you have run

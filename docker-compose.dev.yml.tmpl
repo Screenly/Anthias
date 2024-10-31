@@ -1,0 +1,154 @@
+# vim: ft=yaml.docker-compose
+
+services:
+  anthias-wifi-connect:
+    image: screenly/anthias-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.wifi-connect
+    depends_on:
+      - anthias-viewer
+    environment:
+      PORTAL_LISTENING_PORT: 8000
+      CHECK_CONN_FREQ: 10
+      PORTAL_SSID: 'Anthias WiFi Connect'
+      DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=/run/dbus/system_bus_socket'
+    network_mode: host
+    privileged: true
+    volumes:
+      - type: bind
+        source: /run/dbus/system_bus_socket
+        target: /run/dbus/system_bus_socket
+
+  anthias-server:
+    image: screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.server
+    environment:
+      - ENVIRONMENT=development
+      - MY_IP=${MY_IP}
+      - HOST_USER=${USER}
+      - HOME=/data
+      - LISTEN=0.0.0.0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    devices:
+      - "/dev/vchiq:/dev/vchiq"
+    restart: always
+    volumes:
+      - resin-data:/data
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
+      - /home/${USER}/screenly/staticfiles:/data/screenly/staticfiles
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./:/usr/src/app
+    labels:
+      io.balena.features.supervisor-api: '1'
+
+  anthias-viewer:
+    image: screenly/anthias-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.viewer
+    mem_limit: ${VIEWER_MEMORY_LIMIT_KB}k
+    depends_on:
+      - anthias-server
+    environment:
+      - HOME=/data
+      - PORT=80
+      - NOREFRESH=1
+      - LISTEN=anthias-nginx
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    privileged: true
+    restart: always
+    shm_size: ${SHM_SIZE_KB}kb
+    volumes:
+      - resin-data:/data
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    labels:
+      io.balena.features.supervisor-api: '1'
+
+  anthias-websocket:
+    image: screenly/anthias-websocket:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.websocket
+    depends_on:
+      - anthias-server
+    environment:
+      - HOME=/data
+      - LISTEN=0.0.0.0
+    restart: always
+    volumes:
+      - resin-data:/data
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+
+  anthias-celery:
+    image: screenly/anthias-celery:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.celery
+    depends_on:
+      - anthias-server
+      - redis
+    environment:
+      - HOME=/data
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    devices:
+      - "/dev/vchiq:/dev/vchiq"
+    restart: always
+    volumes:
+      - resin-data:/data
+      - /home/${USER}/.screenly:/data/.screenly
+      - /home/${USER}/screenly_assets:/data/screenly_assets
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    labels:
+      io.balena.features.supervisor-api: '1'
+
+  redis:
+    image: screenly/anthias-redis:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.redis
+    ports:
+      - 127.0.0.1:6379:6379
+    restart: always
+    volumes:
+      - redis-data:/var/lib/redis
+
+  anthias-nginx:
+    image: screenly/anthias-nginx:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nginx
+    ports:
+      - 80:80
+    environment:
+      - HOME=/data
+    depends_on:
+      - anthias-server
+      - anthias-websocket
+    restart: always
+    volumes:
+      - resin-data:/data:ro
+      - /home/${USER}/.screenly:/data/.screenly:ro
+      - /home/${USER}/screenly_assets:/data/screenly_assets:ro
+      - /home/${USER}/screenly/staticfiles:/data/screenly/staticfiles:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+
+volumes:
+  resin-data:
+  redis-data:
+  screenly-data:
