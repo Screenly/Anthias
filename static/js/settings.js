@@ -13,11 +13,11 @@
       $("#btn-backup").prop("disabled", true);
       return $.ajax({
         method: "POST",
-        url: "api/v1/backup",
+        url: "/api/v1/backup",
         timeout: 1800 * 1000
       }).done(function(data, e) {
         if (data) {
-          return window.location = "static_with_mime/" + data + "?mime=application/x-tgz";
+          return window.location = "/static_with_mime/" + data + "?mime=application/x-tgz";
         }
       }).fail(function(data, e) {
         var err, j;
@@ -40,7 +40,7 @@
       return $("[name='backup_upload']").click();
     });
     $("[name='backup_upload']").fileupload({
-      url: "api/v1/recover",
+      url: "/api/v1/recover",
       progressall: function(e, data) {
         var valuenow;
         if (data.loaded && data.total) {

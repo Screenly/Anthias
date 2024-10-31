@@ -14,6 +14,7 @@ GITHUB_RELEASES_URL="https://github.com/Screenly/Anthias/releases"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
 DOCKER_TAG="latest"
 UPGRADE_SCRIPT_PATH="${ANTHIAS_REPO_DIR}/bin/upgrade_containers.sh"
+ARCHITECTURE=$(uname -m)
 
 INTRO_MESSAGE=(
     "Anthias requires a dedicated Raspberry Pi and an SD card."
@@ -21,23 +22,18 @@ INTRO_MESSAGE=(
     ""
     "When prompted for the version, you can choose between the following:"
     "  - **latest:** Installs the latest version from the \`master\` branch."
-    "  - **experimental:** Installs the latest version from the \`experimental\` branch."
     "  - **tag:** Installs a pinned version based on the tag name."
     ""
-    "Take note that \`latest\` and \`experimental\` versions are rolling releases."
+    "Take note that \`latest\` is a rolling release."
 )
 MANAGE_NETWORK_PROMPT=(
     "Would you like Anthias to manage the network for you?"
-)
-EXPERIMENTAL_PROMPT=(
-    "Would you like to install the experimental version instead?"
 )
 VERSION_PROMPT=(
     "Which version of Anthias would you like to install?"
 )
 VERSION_PROMPT_CHOICES=(
     "latest"
-    "experimental"
     "tag"
 )
 SYSTEM_UPGRADE_PROMPT=(
@@ -65,6 +61,8 @@ function install_prerequisites() {
     if [ -f /usr/bin/gum ] && [ -f /usr/bin/jq ]; then
         return
     fi
+
+    sudo apt -y update && sudo apt -y install gnupg
 
     sudo mkdir -p /etc/apt/keyrings
     curl -fsSL https://repo.charm.sh/apt/gpg.key | \
@@ -123,16 +121,19 @@ function initialize_locales() {
 function install_packages() {
     display_section "Install Packages via APT"
 
-    RASPBERRY_PI_OS_VERSION=$(lsb_release -rs)
-    APT_INSTALL_ARGS=(
+    local DISTRO_VERSION=$(lsb_release -rs)
+    local APT_INSTALL_ARGS=(
         "git"
         "libffi-dev"
         "libssl-dev"
         "whois"
     )
 
-    if [ "$RASPBERRY_PI_OS_VERSION" -ge 12 ]; then
-        APT_INSTALL_ARGS+=("python3-full")
+    if [ "$DISTRO_VERSION" -ge 12 ]; then
+        APT_INSTALL_ARGS+=(
+            "python3-dev"
+            "python3-full"
+        )
     else
         APT_INSTALL_ARGS+=(
             "python3"
@@ -146,8 +147,11 @@ function install_packages() {
         APT_INSTALL_ARGS+=("network-manager")
     fi
 
-    sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' \
-        /etc/apt/sources.list
+    if [ "$ARCHITECTURE" != "x86_64" ]; then
+        sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' \
+            /etc/apt/sources.list
+    fi
+
     sudo apt update -y
     sudo apt-get install -y "${APT_INSTALL_ARGS[@]}"
 }
@@ -182,8 +186,12 @@ function run_ansible_playbook() {
 
     sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
         -m git \
-        -a "repo=$REPOSITORY dest=${ANTHIAS_REPO_DIR} version=${BRANCH} force=no"
+        -a "repo=$REPOSITORY dest=${ANTHIAS_REPO_DIR} version=${BRANCH} force=yes"
     cd ${ANTHIAS_REPO_DIR}/ansible
+
+    if [ "$ARCHITECTURE" == "x86_64" ]; then
+        ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "raspberry-pi")
+    fi
 
     sudo -E -u ${USER} ${SUDO_ARGS[@]} \
         ansible-playbook site.yml "${ANSIBLE_PLAYBOOK_ARGS[@]}"
@@ -342,9 +350,6 @@ function main() {
 
     if [ "$VERSION" == "latest" ]; then
         BRANCH="master"
-    elif [ "$VERSION" == "experimental" ]; then
-        BRANCH="experimental"
-        DOCKER_TAG="experimental"
     else
         set_custom_version
     fi
@@ -371,6 +376,7 @@ function main() {
     install_packages
     install_ansible
     run_ansible_playbook
+
     upgrade_docker_containers
     cleanup
     modify_permissions

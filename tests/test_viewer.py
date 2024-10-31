@@ -1,12 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import unicode_literals
+import logging
 import mock
 import unittest
 import os
 import viewer
 from time import sleep
+
+
+logging.disable(logging.CRITICAL)
 
 
 class ViewerTestCase(unittest.TestCase):
@@ -47,6 +50,7 @@ def noop(*a, **k):
 
 class TestEmptyPl(ViewerTestCase):
 
+    @mock.patch('viewer.SERVER_WAIT_TIMEOUT', 0)
     @mock.patch('viewer.start_loop', side_effect=noop)
     @mock.patch('viewer.view_image', side_effect=noop)
     @mock.patch('viewer.view_webpage', side_effect=noop)
@@ -67,7 +71,7 @@ class TestEmptyPl(ViewerTestCase):
             m_asset_list.assert_called_once()
             mock_setup.assert_called_once()
             mock_view_webpage.assert_called_once()
-            mock_view_image.assert_called_once()
+            self.assertEqual(mock_view_image.call_count, 2)
             mock_start_loop.assert_called_once()
 
 
@@ -91,7 +95,7 @@ class TestLoadBrowser(ViewerTestCase):
 class TestSignalHandlers(ViewerTestCase):
     @mock.patch('vlc.Instance', mock.MagicMock())
     @mock.patch(
-        'lib.media_player.lookup_raspberry_pi_version',
+        'lib.media_player.get_device_type',
         return_value='pi4'
     )
     def test_usr1(self, lookup_mock):

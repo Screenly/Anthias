@@ -2,12 +2,13 @@
 [![Run Unit Tests](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml)
 [![CodeQL](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml)
 [![Lint Python Code Base](https://github.com/Screenly/Anthias/actions/workflows/python-lint.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/python-lint.yaml)
+[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)](https://app.sbomify.com/project/zZGXzm8qcU)
 
 ![Anthias Logo](https://github.com/Screenly/Anthias/blob/master/static/img/dark.svg?raw=true  "Anthias Logo")
 
 ## About Anthias
 
-Anthias is a digital signage platform for Raspberry Pi. Formerly known as Screenly OSE, it was rebranded to clear up the confusion between Screenly (the paid version) and Anthias. More details can be found in [this blog post](https://www.screenly.io/blog/2022/12/06/screenly-ose-now-called-anthias/).
+Anthias is a digital signage platform for Raspberry Pi and x86 devices. Formerly known as Screenly OSE, it was rebranded to clear up the confusion between Screenly (the paid version) and Anthias. More details can be found in [this blog post](https://www.screenly.io/blog/2022/12/06/screenly-ose-now-called-anthias/).
 
 Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
 
@@ -19,6 +20,8 @@ We've tested Anthias and is known to work on the following Raspberry Pi models:
 * Raspberry Pi 3 Model B+ - 32-bit and 64-bit Bullseye, 64-bit Bookworm
 * Raspberry Pi 3 Model B - 64-bit Bookworm and Bullseye
 * Raspberry Pi 2 Model B - 32-bit Bookworm and Bullseye
+* x86 Devices - 64-bit Bookworm
+    * These devices can be something similar to a NUC.
 
 
 We're still fixing the installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 1.
@@ -69,6 +72,13 @@ The image file looks something like `<yyyy>-<mm>-<dd>-raspberry<version>.zip`. T
 
 If you'd like more control over your digital signage instance, try installing it on Raspberry Pi OS Lite.
 
+Before you start, make sure that you have `curl` installed. If not, you can install it by running:
+
+```bash
+$ sudo apt update
+$ sudo apt install -y curl
+```
+
 The tl;dr for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) is:
 
 ```
@@ -102,25 +112,11 @@ Opting for network management will enable and configure the [NetworkManager](htt
 
 #### Prompt: Version Selection
 
-You can choose between the following choices &mdash; `latest`, `experimental`, and `tag`.
+You can choose between the following choices &mdash; `latest` and `tag`.
 
 * Selecting `latest` will install the version from the `master` branch.
-* Selecting `experimental` will install the version from the `experimental` branch.
 * Selecting `tag` will prompt you to enter a specific tag to install.
-* Do take note the `latest` and `experimental` versions are rolling releases, so you'll always get the latest changes.
-
-##### Experimental Features
-
-We have decided to roll out an `experimental` branch for new features that can break Anthias, especially
-if you already have Anthias installed and wish to upgrade.
-
-Before you proceed, make sure to download a
-backup by going to the **_Settings_** page and clicking **_Get Backup_**. You can load the backup file later by going to **_Settings_** and clicking **_Upload and Recover_**.
-
-Here's a current list of experimental features:
-
-* Migration from Flask to Django &ndash; The database still uses `sqlite3`. We will transition to using ORM in the future.
-* Revamped API docs &ndash; we changed the structure and overall look and feel of the documentation for easier reference.
+* Do take note that `latest` is a rolling release, so you'll always get the latest changes.
 
 ##### Installing from a Specific Tag
 

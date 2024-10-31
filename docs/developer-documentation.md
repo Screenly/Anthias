@@ -25,9 +25,27 @@ Do note that Anthias is using Docker's [buildx](https://docs.docker.com/engine/r
 Assuming you're in the source code repository, simply run:
 
 ```bash
-$ ./bin/build_containers.sh
-$ docker compose \
-    -f docker-compose.dev.yml up
+$ ./bin/start_development_server.sh
+
+# The console output was truncated for brevity.
+# ...
+
+[+] Running 6/6
+ ✔ Network anthias_default                Created                            0.1s
+ ✔ Container anthias-redis-1              Started                            0.2s
+ ✔ Container anthias-anthias-server-1     Started                            0.2s
+ ✔ Container anthias-anthias-celery-1     Started                            0.3s
+ ✔ Container anthias-anthias-websocket-1  Started                            0.4s
+ ✔ Container anthias-anthias-nginx-1      Started                            0.5s
+```
+
+Running the command above will start the development server and you should be able to
+access the web interface at `http://localhost:8000`.
+
+To stop the development server, run the following:
+
+```bash
+docker compose -f docker-compose.dev.yml down
 ```
 
 ## Building containers locally
@@ -57,20 +75,31 @@ inside the `docker/` directory, run the following:
 $ DOCKERFILES_ONLY=1 ./bin/build_containers.sh
 ```
 
+### Disabling cache mounts
+
+If you'd like to disable cache mounts in the generated Dockerfiles, run the
+following:
+
+```bash
+$ DISABLE_CACHE_MOUNTS=1 ./bin/build_containers.sh
+```
+
 ## Testing
 ### Running the unit tests
 
 Build and start the containers.
 
 ```bash
-$ SKIP_SERVER=1 \
+$ DOCKERFILES_ONLY=1 \
+  DISABLE_CACHE_MOUNTS=1 \
+  SKIP_SERVER=1 \
   SKIP_WEBSOCKET=1 \
   SKIP_NGINX=1 \
   SKIP_VIEWER=1 \
   SKIP_WIFI_CONNECT=1 \
   ./bin/build_containers.sh
 $ docker compose \
-    -f docker-compose.test.yml up -d
+    -f docker-compose.test.yml up -d --build
 ```
 
 Run the unit tests.
@@ -78,10 +107,18 @@ Run the unit tests.
 ```bash
 $ docker compose \
     -f docker-compose.test.yml \
-    exec -T anthias-test bash ./bin/prepare_test_environment.sh -s
+    exec anthias-test bash ./bin/prepare_test_environment.sh -s
+
+# Integration and non-integration tests should be run separately as the
+# former doesn't run as expected when run together with the latter.
+
 $ docker compose \
     -f docker-compose.test.yml \
-    exec -T anthias-test nose2 -v
+    exec anthias-test ./manage.py test --exclude-tag=integration
+
+$ docker compose \
+    -f docker-compose.test.yml \
+    exec anthias-test ./manage.py test --tag=integration
 ```
 
 ### The QA checklist
@@ -148,8 +185,8 @@ After installing Poetry, run the following commands:
 
 ```bash
 # Install the dependencies
-$ poetry install --with=dev-host
-$ poetry run flake8 $(git ls-files '**/*.py')
+$ poetry install --only=dev-host
+$ poetry run flake8 $(git ls-files '*.py')
 ```
 
 To run the linter on a specific file, run the following command:
@@ -238,7 +275,3 @@ The Anthias WebView is a custom-built web browser based on the [Qt](https://www.
 The browser is assembled with a Dockerfile and built by a `webview/build_qt#.sh` script.
 
 For further info on these files and more, visit the following link: [https://github.com/Screenly/Anthias/tree/master/webview](https://github.com/Screenly/Anthias/tree/master/webview)
-
-## Tweaking HTTP basic auth settings
-
-* Check out [this page](/docs/http-basic-authentication.md) for more information on how to customize your basic authentication credentials.

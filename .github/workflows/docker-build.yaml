@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - experimental
     paths:
       - '**'
       - '!webview/**'
@@ -27,7 +26,7 @@ jobs:
     needs: run-tests
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
     runs-on: ubuntu-latest
 
     steps:
@@ -61,6 +60,7 @@ jobs:
         run: |
           export BUILD_TARGET=${{ matrix.board }}
           export PUSH=1
+          export SKIP_TEST=1
           ./bin/build_containers.sh
 
   balena:

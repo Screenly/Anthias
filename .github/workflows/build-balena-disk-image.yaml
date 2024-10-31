@@ -1,5 +1,16 @@
 name: Build Balena Disk Images
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to be used for the release'
+        required: true
+        type: string
+      commit:
+        description: 'Commit or branch name'
+        required: false
+        type: string
+        default: 'master'
 
 jobs:
   balena-build-images:
@@ -43,6 +54,7 @@ jobs:
             preload \
               "$BALENA_IMAGE.img" \
               --fleet screenly_ose/anthias-${{ matrix.board }} \
+              --pin-device-to-release \
               --splash-image ansible/roles/splashscreen/files/splashscreen.png \
               --commit latest
           balena_cli_version: 18.1.2
@@ -92,3 +104,5 @@ jobs:
           allowUpdates: true
           prerelease: true
           artifacts: "*raspberry*.zip,*raspberry*.sha256,*raspberry*.json"
+          tag: ${{ inputs.tag }}
+          commit: ${{ inputs.commit }}
