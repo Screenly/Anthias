@@ -25,12 +25,10 @@ Do note that Anthias is using Docker's [buildx](https://docs.docker.com/engine/r
 Assuming you're in the source code repository, simply run:
 
 ```bash
-$ ENVIRONMENT=development \
-  DOCKERFILES_ONLY=1 \
-  DISABLE_CACHE_MOUNTS=1 \
-  ./bin/build_containers.sh
-$ docker compose \
-    -f docker-compose.dev.yml up -d --build
+$ ./bin/start_development_server.sh
+
+# This should start the development server and you should be able to
+# access the web interface at http://localhost:8000.
 ```
 
 ## Building containers locally
