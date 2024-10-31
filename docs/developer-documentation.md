@@ -25,12 +25,27 @@ Do note that Anthias is using Docker's [buildx](https://docs.docker.com/engine/r
 Assuming you're in the source code repository, simply run:
 
 ```bash
-$ ENVIRONMENT=development \
-  DOCKERFILES_ONLY=1 \
-  DISABLE_CACHE_MOUNTS=1 \
-  ./bin/build_containers.sh
-$ docker compose \
-    -f docker-compose.dev.yml up -d --build
+$ ./bin/start_development_server.sh
+
+# The console output was truncated for brevity.
+# ...
+
+[+] Running 6/6
+ ✔ Network anthias_default                Created                            0.1s
+ ✔ Container anthias-redis-1              Started                            0.2s
+ ✔ Container anthias-anthias-server-1     Started                            0.2s
+ ✔ Container anthias-anthias-celery-1     Started                            0.3s
+ ✔ Container anthias-anthias-websocket-1  Started                            0.4s
+ ✔ Container anthias-anthias-nginx-1      Started                            0.5s
+```
+
+Running the command above will start the development server and you should be able to
+access the web interface at `http://localhost:8000`.
+
+To stop the development server, run the following:
+
+```bash
+docker compose -f docker-compose.dev.yml down
 ```
 
 ## Building containers locally
