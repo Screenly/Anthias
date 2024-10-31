@@ -1,3 +1,87 @@
 # syntax=docker/dockerfile:1.4
+# vim: ft=dockerfile
 
 FROM {{ base_image }}:{{ base_image_tag }}
+
+# This list needs to be trimmed back later
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/var/cache/apt \
+{% endif %}
+    apt-get update && \
+    apt-get -y install --no-install-recommends \
+    {% for dependency in apt_dependencies -%}
+        {% if not loop.last %}
+        {{ dependency }} \
+        {% else %}
+        {{ dependency }}
+        {% endif %}
+    {% endfor %}
+
+# We need this to ensure that the wheels can be built.
+# Otherwise we get "invalid command 'bdist_wheel'"
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/root/.cache/pip \
+{% endif %}
+    pip3 install --upgrade pip --break-system-packages && \
+    pip3 install wheel --break-system-packages
+
+# Install Python requirements
+COPY requirements/requirements.viewer.txt /tmp/requirements.txt
+
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/root/.cache/pip \
+{% endif %}
+    pip3 install -r /tmp/requirements.txt --break-system-packages
+
+# Works around issue with `curl`
+# https://github.com/balena-io-library/base-images/issues/562
+RUN c_rehash
+
+# QT Base from packages does not support eglfs
+RUN curl "$WEBVIEW_BASE_URL/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" \
+        -sL -o "/tmp/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" && \
+    curl "$WEBVIEW_BASE_URL/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" \
+        -sL -o "/tmp/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" && \
+    cd /tmp && \
+    sha256sum -c "qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz.sha256" && \
+    tar -xzf "/tmp/qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz" -C /usr/local && \
+    rm "qt${QT_MAJOR_VERSION}-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}.tar.gz"
+
+RUN curl "$WEBVIEW_BASE_URL/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz" \
+        -sL -o "/tmp/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz" && \
+    curl "$WEBVIEW_BASE_URL/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz.sha256" \
+        -sL -o "/tmp/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz.sha256" && \
+    cd /tmp && \
+    sha256sum -c "webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz.sha256" && \
+    tar -xzf "/tmp/webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz" -C /usr/local && \
+    rm "webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-${WEBVIEW_GIT_HASH}.tar.gz"
+
+ENV QT_QPA_EGLFS_FORCE888=1
+ENV QT_QPA_PLATFORM=linuxfb
+
+# Turn on debug logging for now
+#ENV QT_LOGGING_RULES=qt.qpa.*=true
+ENV QT_LOGGING_RULES=*.debug=true
+ENV QT_QPA_DEBUG=1
+
+ENV GIT_HASH=$GIT_HASH
+ENV GIT_SHORT_HASH=$GIT_SHORT_HASH
+ENV GIT_BRANCH=$GIT_BRANCH
+ENV DEVICE_TYPE=$BOARD
+ENV DJANGO_SETTINGS_MODULE="anthias_django.settings"
+
+RUN useradd -g video viewer
+
+RUN rm -f /etc/localtime
+
+WORKDIR /usr/src/app
+RUN mkdir -p /usr/src/app
+COPY . /usr/src/app/
+
+CMD ["bash", "./bin/start_viewer.sh"]
