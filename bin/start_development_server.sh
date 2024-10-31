@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+COMPOSE_ARGS=(
+    '-f' 'docker-compose.dev.yml'
+)
 
 function generate_dockerfiles() {
     ENVIRONMENT=development \
@@ -10,14 +13,6 @@ function generate_dockerfiles() {
     ./bin/build_containers.sh
 }
 
-function main() {
-    local COMPOSE_ARGS=(
-        '-f' 'docker-compose.dev.yml'
-    )
-
-    generate_dockerfiles
-    docker compose "${COMPOSE_ARGS[@]}" down
-    docker compose "${COMPOSE_ARGS[@]}" up -d --build
-}
-
-main
+generate_dockerfiles
+docker compose "${COMPOSE_ARGS[@]}" down
+docker compose "${COMPOSE_ARGS[@]}" up -d --build
