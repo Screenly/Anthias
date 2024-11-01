@@ -74,15 +74,8 @@ $ $HOME/screenly/bin/run_upgrade.sh
 
 ## Accessing the REST API
 
-To get started, open your browser and go to `http://<ip-address>:8080/api/docs/`. You should see the Swagger API docs for the endpoints.
-
-## Accessing the SQLite Database
-
-This section is for power users only. **Do not** mess around with the database unless you know what you are doing.
-
-For most users, it's recommended that you [use the API instead](#accessing-the-rest-api).
-
-The SQLite Database can be found here &mdash; `~/.screenly/screenly.db`. It can be modified with the `sqlite3` CLI. The schema is relatively straightforward if you're already familiar. The columns of most interest to you will be `name` and `is_enabled`. In addition, `start_date` is useful if you want to use this in a disconnected manner.
+To get started, open your browser and go to `http://<ip-address>/api/docs/` (or `http://localhost:8000/api/docs/`
+if you're in development mode). You should see the API docs for the endpoints.
 
 ## Installing (trusted) self-signed certificates
 

@@ -46,6 +46,10 @@ The quickest way to get started is to use [Raspberry Pi Imager](https://www.scre
 
 ### Using the images from balenaHub
 
+This option is recommended for those who want to install Anthias without touching the
+command lines. When a new rolling release is available, updates will automatically be
+installed on your device.
+
 Balena made a [big update to their IoT marketplace](https://blog.balena.io/creating-an-iot-marketplace/). Included in that change is the launch of
 [Fleets for Good](https://hub.balena.io/fleets-for-good). With that, you may find it hard to find the Anthias images on the marketplace. In the meantime,
 here are the links to the images:
@@ -65,6 +69,10 @@ Alternatively, you can [download our pre-built Balena disk images from the relea
 
 You can find the latest release [here](https://github.com/Screenly/Anthias/releases/latest). From there, you can download the disk image that you need and flash it to your SD card.
 The image file looks something like `<yyyy>-<mm>-<dd>-raspberry<version>.zip`. Take note that the `.img` file is compressed in a `.zip` file.
+
+Starting [v0.19.0](https://github.com/Screenly/Anthias/releases/tag/v0.19.0), devices installed using this option will be
+pinned to the version that you've downloaded. This means that the devices will get updates when a new release (e.g., v0.19.1, etc.)
+is available.
 
 ### Installing on Raspberry Pi OS Lite
 
