@@ -3,7 +3,6 @@ import pygit2
 import requests
 
 from jinja2 import Environment, FileSystemLoader
-from pathlib import Path
 
 
 SHORT_HASH_LENGTH = 7
@@ -18,6 +17,7 @@ SERVICES = (
     'wifi-connect',
     'test',
 )
+GITHUB_REPO_URL = 'https://github.com/Screenly/Anthias'
 
 
 templating_environment = Environment(loader=FileSystemLoader('docker/'))
@@ -26,7 +26,6 @@ templating_environment.trim_blocks = True
 
 
 def get_build_parameters(build_target: str) -> dict:
-    pi_device_model_path = Path('/proc/device-tree/model')
     default_build_parameters = {
         'board': 'x86',
         'base_image': 'debian',
@@ -122,8 +121,9 @@ def build_image(
     ]
 
     if service == 'viewer':
-        webview_git_hash='5e556681738a1fa918dc9f0bf5879ace2e603e12'
-        webview_base_url='https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.3'
+        webview_git_hash = '5e556681738a1fa918dc9f0bf5879ace2e603e12'
+        releases_url = f'{GITHUB_REPO_URL}/releases/download'
+        webview_base_url = f'{releases_url}/WebView-v0.3.3'
 
         qt_version = '6.6.3' if board == 'x86' else '5.15.14'
         qt_major_version = qt_version.split('.')[0]
@@ -248,8 +248,14 @@ def build_image(
             'webview_base_url': webview_base_url,
         })
     elif service == 'test':
-        chrome_dl_url="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chrome-linux64.zip"
-        chromedriver_dl_url="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chromedriver-linux64.zip"
+        chrome_dl_url = (
+            'https://storage.googleapis.com/chrome-for-testing-public/'
+            '123.0.6312.86/linux64/chrome-linux64.zip'
+        )
+        chromedriver_dl_url = (
+            'https://storage.googleapis.com/chrome-for-testing-public/'
+            '123.0.6312.86/linux64/chromedriver-linux64.zip'
+        )
 
         context.update({
             'apt_dependencies': [
@@ -273,7 +279,10 @@ def build_image(
         elif target_platform == 'linux/amd64':
             architecture = 'amd64'
 
-        wc_download_url='https://api.github.com/repos/balena-os/wifi-connect/releases/93025295'
+        wc_download_url = (
+            'https://api.github.com/repos/balena-os/wifi-connect/'
+            'releases/93025295'
+        )
 
         try:
             response = requests.get(wc_download_url)
@@ -285,10 +294,14 @@ def build_image(
 
             try:
                 archive_url = next(
-                    asset for asset in assets if f'linux-{architecture}' in asset
+                    asset for asset in assets
+                    if f'linux-{architecture}' in asset
                 )
             except StopIteration:
-                click.secho('No wifi-connect release found for this architecture.', fg='red')
+                click.secho(
+                    'No wifi-connect release found for this architecture.',
+                    fg='red',
+                )
                 archive_url = ""
 
         except requests.exceptions.RequestException as e:
@@ -369,7 +382,7 @@ def main(
     target_platform = build_parameters['target_platform']
     base_image = build_parameters['base_image']
 
-    docker_tag = get_docker_tag(git_branch, board)
+    docker_tag = get_docker_tag(git_branch, board)  # noqa: F841
 
     services_to_build = SERVICES if 'all' in service else list(set(service))
 
