@@ -93,6 +93,38 @@ def build_image(
 ) -> None:
     context = {}
 
+    base_apt_dependencies = [
+        'build-essential',
+        'cec-utils',
+        'curl',
+        'ffmpeg',
+        'git',
+        'git-core',
+        'ifupdown',
+        'libcec-dev ',
+        'libffi-dev',
+        'libraspberrypi0',
+        'libraspberrypi0',
+        'libssl-dev',
+        'libzmq3-dev',
+        'libzmq5-dev',
+        'libzmq5',
+        'lsb-release',
+        'mplayer',
+        'net-tools',
+        'procps',
+        'psmisc',
+        'python3-dev',
+        'python3-gi',
+        'python3-pil',
+        'python3-pip',
+        'python3-setuptools',
+        'python3-simplejson',
+        'python-is-python3',
+        'sudo',
+        'sqlite3',
+    ]
+
     if service == 'viewer':
         webview_git_hash='5e556681738a1fa918dc9f0bf5879ace2e603e12'
         webview_base_url='https://github.com/Screenly/Anthias/releases/download/WebView-v0.3.3'
@@ -224,6 +256,16 @@ def build_image(
         chromedriver_dl_url="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.86/linux64/chromedriver-linux64.zip"
 
         context.update({
+            'apt_dependencies': [
+                'wget',
+                'unzip',
+                'libnss3',
+                'libatk1.0-0',
+                'libatk-bridge2.0.0',
+                'libcups2',
+                'libxcomposite1',
+                'libxdamage1',
+            ],
             'chrome_dl_url': chrome_dl_url,
             'chromedriver_dl_url': chromedriver_dl_url,
         })
@@ -263,6 +305,7 @@ def build_image(
     generate_dockerfile(service, {
         'base_image': 'balenalib/raspberrypi3-debian',
         'base_image_tag': 'bookworm',
+        'base_apt_dependencies': base_apt_dependencies,
         'board': board,
         'debian_version': 'bookworm',
         'disable_cache_mounts': disable_cache_mounts,
