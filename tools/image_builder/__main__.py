@@ -305,7 +305,6 @@ def build_image(
             'archive_url': archive_url,
         })
 
-    # @TODO: Make use of Jinja templates to generate Dockerfiles.
     generate_dockerfile(service, {
         'base_image': 'balenalib/raspberrypi3-debian',
         'base_image_tag': 'bookworm',
