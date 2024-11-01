@@ -304,8 +304,6 @@ def build_image(
             ],
             'archive_url': archive_url,
         })
-    elif service == 'server':
-        pass
 
     # @TODO: Make use of Jinja templates to generate Dockerfiles.
     generate_dockerfile(service, {
