@@ -74,7 +74,8 @@ $ $HOME/screenly/bin/run_upgrade.sh
 
 ## Accessing the REST API
 
-To get started, open your browser and go to `http://<ip-address>:8080/api/docs/`. You should see the API docs for the endpoints.
+To get started, open your browser and go to `http://<ip-address>/api/docs/` (or `http://localhost/api/docs/`
+if you're in development mode). You should see the API docs for the endpoints.
 
 ## Installing (trusted) self-signed certificates
 
