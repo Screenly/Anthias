@@ -33,36 +33,30 @@ def get_build_parameters(build_target: str) -> dict:
         'target_platform': 'linux/amd64',
     }
 
-    try:
-        with pi_device_model_path.open() as f:
-            device_model = f.read().strip()
-
-            if build_target == 'pi4' or 'Raspberry Pi 4' in device_model:
-                return {
-                    'board': 'pi4',
-                    'base_image': 'balenalib/raspberrypi3-debian',
-                    'target_platform': 'linux/arm/v8',
-                }
-            elif build_target == 'pi3' or 'Raspberry Pi 3' in device_model:
-                return {
-                    'board': 'pi3',
-                    'base_image': 'balenalib/raspberrypi3-debian',
-                    'target_platform': 'linux/arm/v7',
-                }
-            elif build_target == 'pi2' or 'Raspberry Pi 2' in device_model:
-                return {
-                    'board': 'pi2',
-                    'base_image': 'balenalib/raspberry-pi2',
-                    'target_platform': 'linux/arm/v6',
-                }
-            elif build_target == 'pi1' or 'Raspberry Pi' in device_model:
-                return {
-                    'board': 'pi1',
-                    'base_image': 'balenalib/raspberry-pi',
-                    'target_platform': 'linux/arm/v6',
-                }
-    except FileNotFoundError:
-        return default_build_parameters
+    if build_target == 'pi4':
+        return {
+            'board': 'pi4',
+            'base_image': 'balenalib/raspberrypi3-debian',
+            'target_platform': 'linux/arm/v8',
+        }
+    elif build_target == 'pi3':
+        return {
+            'board': 'pi3',
+            'base_image': 'balenalib/raspberrypi3-debian',
+            'target_platform': 'linux/arm/v7',
+        }
+    elif build_target == 'pi2':
+        return {
+            'board': 'pi2',
+            'base_image': 'balenalib/raspberry-pi2',
+            'target_platform': 'linux/arm/v6',
+        }
+    elif build_target == 'pi1':
+        return {
+            'board': 'pi1',
+            'base_image': 'balenalib/raspberry-pi',
+            'target_platform': 'linux/arm/v6',
+        }
 
     return default_build_parameters
 
@@ -161,7 +155,7 @@ def build_image(
                 'libglib2.0-dev',
                 'libgst-dev',
                 'libicu-dev',
-                'libinput-dev',
+                'libinpuch diut-dev',
                 'libiodbc2-dev',
                 'libjpeg62-turbo-dev',
                 'libjsoncpp-dev',
@@ -310,6 +304,8 @@ def build_image(
             ],
             'archive_url': archive_url,
         })
+    elif service == 'server':
+        pass
 
     # @TODO: Make use of Jinja templates to generate Dockerfiles.
     generate_dockerfile(service, {
