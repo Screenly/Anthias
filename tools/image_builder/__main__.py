@@ -270,14 +270,12 @@ def build_image(
             'chromedriver_dl_url': chromedriver_dl_url,
         })
     elif service == 'wifi-connect':
-        if board == 'x86':
-            click.secho('Building wifi-connect for x86 is not supported yet.', fg='red')
-            return
-
         if target_platform == 'linux/arm/v6':
             architecture = 'rpi'
-        else:
+        elif target_platform in ['linux/arm/v7', 'linux/arm/v8']:
             architecture = 'armv7hf'
+        elif target_platform == 'linux/amd64':
+            architecture = 'amd64'
 
         wc_download_url='https://api.github.com/repos/balena-os/wifi-connect/releases/93025295'
 
@@ -300,6 +298,18 @@ def build_image(
         except requests.exceptions.RequestException as e:
             click.secho(f'Failed to get wifi-connect release: {e}', fg='red')
             return
+
+        context.update({
+            'apt_dependencies': [
+                'dnsmasq',
+                'iw',
+                'network-manager',
+                'unzip',
+                'wget',
+                'wireless-tools',
+            ],
+            'archive_url': archive_url,
+        })
 
     # @TODO: Make use of Jinja templates to generate Dockerfiles.
     generate_dockerfile(service, {
