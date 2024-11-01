@@ -84,6 +84,7 @@ def build_image(
     git_hash: str,
     git_short_hash: str,
     git_branch: str,
+    environment: str,
 ) -> None:
     context = {}
 
@@ -304,6 +305,10 @@ def build_image(
             ],
             'archive_url': archive_url,
         })
+    elif service == 'nginx':
+        context.update({
+            'environment': environment,
+        })
 
     generate_dockerfile(service, {
         'base_image': 'balenalib/raspberrypi3-debian',
@@ -342,11 +347,17 @@ def build_image(
     '--disable-cache-mounts',
     is_flag=True,
 )
+@click.option(
+    '--environment',
+    default='production',
+    type=click.Choice(('production', 'development')),
+)
 def main(
     clean_build: bool,
     build_target: str,
     service,
     disable_cache_mounts: bool,
+    environment: str,
 ) -> None:
     git_branch = pygit2.Repository('.').head.shorthand
     git_hash = str(pygit2.Repository('.').head.target)
@@ -369,6 +380,7 @@ def main(
             git_hash,
             git_short_hash,
             git_branch,
+            environment,
         )
 
 
