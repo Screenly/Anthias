@@ -85,6 +85,7 @@ def build_image(
     git_short_hash: str,
     git_branch: str,
     environment: str,
+    base_image: str,
 ) -> None:
     context = {}
 
@@ -288,7 +289,7 @@ def build_image(
                 )
             except StopIteration:
                 click.secho('No wifi-connect release found for this architecture.', fg='red')
-                return
+                archive_url = ""
 
         except requests.exceptions.RequestException as e:
             click.secho(f'Failed to get wifi-connect release: {e}', fg='red')
@@ -311,7 +312,7 @@ def build_image(
         })
 
     generate_dockerfile(service, {
-        'base_image': 'balenalib/raspberrypi3-debian',
+        'base_image': base_image,
         'base_image_tag': 'bookworm',
         'base_apt_dependencies': base_apt_dependencies,
         'board': board,
@@ -366,6 +367,7 @@ def main(
     build_parameters = get_build_parameters(build_target)
     board = build_parameters['board']
     target_platform = build_parameters['target_platform']
+    base_image = build_parameters['base_image']
 
     docker_tag = get_docker_tag(git_branch, board)
 
@@ -381,6 +383,7 @@ def main(
             git_short_hash,
             git_branch,
             environment,
+            base_image,
         )
 
 
