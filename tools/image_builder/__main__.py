@@ -3,6 +3,7 @@ import pygit2
 import requests
 
 from jinja2 import Environment, FileSystemLoader
+from python_on_whales import docker
 
 
 SHORT_HASH_LENGTH = 7
@@ -85,6 +86,8 @@ def build_image(
     git_branch: str,
     environment: str,
     base_image: str,
+    docker_tag: str,
+    clean_build: bool,
 ) -> None:
     context = {}
 
@@ -156,7 +159,7 @@ def build_image(
             'libgles2-mesa-dev',
             'libglib2.0-dev',
             'libicu-dev',
-            'libinpuch diut-dev',
+            'libinput-dev',
             'libiodbc2-dev',
             'libjpeg62-turbo-dev',
             'libjsoncpp-dev',
@@ -351,7 +354,27 @@ def build_image(
         click.secho(f'Skipping test service for {board}...', fg='yellow')
         return
 
-    # TODO: Build Docker images.
+    docker.buildx.build(
+        context_path='.',
+        cache=(not clean_build),
+        cache_from={
+            'type': 'local',
+            'src': '/tmp/.buildx-cache',
+        },
+        cache_to={
+            'type': 'local',
+            'dest': '/tmp/.buildx-cache',
+        },
+        file=f'docker/Dockerfile.{service}',
+        load=True,
+        platforms=[target_platform],
+        tags=[
+            f'screenly/anthias-{service}:{docker_tag}',
+            f'screenly/anthias-{service}:{git_short_hash}-{board}',
+            f'screenly/srly-ose-{service}:{docker_tag}',
+            f'screenly/srly-ose-{service}:{git_short_hash}-{board}',
+        ],
+    )
 
 
 @click.command()
@@ -398,7 +421,7 @@ def main(
     target_platform = build_parameters['target_platform']
     base_image = build_parameters['base_image']
 
-    docker_tag = get_docker_tag(git_branch, board)  # noqa: F841
+    docker_tag = get_docker_tag(git_branch, board)
 
     services_to_build = SERVICES if 'all' in service else list(set(service))
 
@@ -413,6 +436,8 @@ def main(
             git_branch,
             environment,
             base_image,
+            docker_tag,
+            clean_build,
         )
 
 
