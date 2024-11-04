@@ -6,13 +6,13 @@
 
 ![Anthias Logo](https://github.com/Screenly/Anthias/blob/master/static/img/dark.svg?raw=true  "Anthias Logo")
 
-## About Anthias
+## :sparkles: About Anthias
 
 Anthias is a digital signage platform for Raspberry Pi and x86 devices. Formerly known as Screenly OSE, it was rebranded to clear up the confusion between Screenly (the paid version) and Anthias. More details can be found in [this blog post](https://www.screenly.io/blog/2022/12/06/screenly-ose-now-called-anthias/).
 
 Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
 
-## Compatibility
+## :white_check_mark: Compatibility
 
 We've tested Anthias and is known to work on the following Raspberry Pi models:
 
@@ -28,11 +28,11 @@ We've tested Anthias and is known to work on the following Raspberry Pi models:
 > Should you encounter any issues, please file an issue either in this repository or in the
 [forums](https://forums.screenly.io).
 
-## Star History
+## :star: Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Screenly/Anthias&type=Date)](https://star-history.com/#Screenly/Anthias&Date)
 
-## Installation options
+## :package: Installation options
 
 ### Using the image from the Raspberry Pi Imager
 
@@ -159,7 +159,7 @@ Otherwise, if you've selected **No** for the system upgrade, then you don't need
 Go through the steps in [this documentation](/docs/balena-fleet-deployment.md)
 to deploy Anthias on your own Balena fleet.
 
-## Migrating assets from Anthias to Screenly
+## :up: Migrating assets from Anthias to Screenly
 
 This feature is only available in devices running Raspberry Pi OS at the moment.
 
@@ -200,12 +200,12 @@ Run the assets migration script. Follow through the instructions & prompts caref
 $ python tools/migrate-assets-to-screenly.py
 ```
 
-## Issues and bugs
+## :lady_beetle: Issues and bugs
 
 > [!NOTE]
 > We are still in the process of knocking out some bugs. You can track the known issues [here](https://github.com/Screenly/Anthias/issues). You can also check the discussions in the [Anthias forums](https://forums.screenly.io).
 
-## Quick links
+## :pushpin: Quick links
 
  * [Forum](https://forums.screenly.io/)
  * [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](https://github.com/Screenly/Anthias/tree/master/website))
