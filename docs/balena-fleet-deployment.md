@@ -72,8 +72,9 @@ ID      NAME                           VALUE        FLEET
 1979571 BALENA_HOST_CONFIG_gpu_mem      1024         gh_nicomiguelino/anthias-pi4
 ```
 
-Alternatively, you can check the releases page of that fleet and look for the
-`BALENA_HOST_CONFIG_gpu_mem` and `BALENA_HOST_CONFIG_dtoverlay` variables.
+> [!TIP]
+> Alternatively, you can check the releases page of that fleet and look for the
+> `BALENA_HOST_CONFIG_gpu_mem` and `BALENA_HOST_CONFIG_dtoverlay` variables.
 
 ![balena-ss-04](/docs/images/balena-deployment-04-fleet-config-page.png)
 

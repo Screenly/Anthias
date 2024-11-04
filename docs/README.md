@@ -37,12 +37,13 @@ of the container in the command above. Here's a table of the available container
 
 ### Using `docker-compose logs`
 
-Before running the succeeding commands, make sure that you're in the
-`/home/${USER}/screenly` directory:
-
-```bash
-$ cd /home/${USER}/screenly # e.g., /home/pi/screenly if the user is `pi`
-```
+> [!IMPORTANT]
+> Before running the succeeding commands, make sure that you're in the
+> `/home/${USER}/screenly` directory:
+> 
+> ```bash
+> $ cd /home/${USER}/screenly # e.g., /home/pi/screenly if the user is `pi`
+> ```
 
 If you'd like to see the logs of a specific container or service via Docker Compose,
 you can run the following:
@@ -79,13 +80,14 @@ if you're in development mode). You should see the API docs for the endpoints.
 
 ## Installing (trusted) self-signed certificates
 
-This section only works for devices running Raspberry Pi OS Lite.
-With running the following script, you can install self-signed certificates:
-
-```bash
-$ cd $HOME/screenly
-$ ./bin/add_certificate.sh /path/to/certificate.crt
-```
+> [!WARNING]
+> This section only works for devices running Raspberry Pi OS Lite.
+> With running the following script, you can install self-signed certificates:
+> 
+> ```bash
+> $ cd $HOME/screenly
+> $ ./bin/add_certificate.sh /path/to/certificate.crt
+> ```
 
 More details about generating self-signed certificates can be found [here](https://devopscube.com/create-self-signed-certificates-openssl/).
 
