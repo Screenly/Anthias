@@ -20,7 +20,8 @@ These components and their dependencies are mostly installed and handled with An
 
 To simplify development of the server module of Anthias, we've created a Docker container. This is intended to run on your local machine with the Anthias repository mounted as a volume.
 
-Do note that Anthias is using Docker's [buildx](https://docs.docker.com/engine/reference/commandline/buildx/) for the image builds. This is used both for cross compilation as well as for local caching. You might need to run `docker buildx create --use` first.
+> [!IMPORTANT]
+> Anthias is using Docker's [buildx](https://docs.docker.com/engine/reference/commandline/buildx/) for the image builds. This is used both for cross compilation as well as for local caching. You might need to run `docker buildx create --use` first.
 
 Assuming you're in the source code repository, simply run:
 
@@ -50,12 +51,13 @@ docker compose -f docker-compose.dev.yml down
 
 ## Building containers locally
 
-Make sure that you have `buildx` installed and that you have run
-`docker buildx create --use` before you do the following:
-
-```bash
-$ ./bin/build_containers.sh
-```
+> [!IMPORTANT]
+> Make sure that you have `buildx` installed and that you have run
+> `docker buildx create --use` before you do the following:
+> 
+> ```bash
+> $ ./bin/build_containers.sh
+> ```
 
 ### Skipping specific services
 
