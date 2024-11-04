@@ -46,9 +46,10 @@ The quickest way to get started is to use [Raspberry Pi Imager](https://www.scre
 
 ### Using the images from balenaHub
 
-This option is recommended for those who want to install Anthias without touching the
-command lines. When a new rolling release is available, updates will automatically be
-installed on your device.
+> [!IMPORTANT]
+> This option is recommended for those who want to install Anthias without touching the
+> command line interface. When a new rolling release is available, updates will automatically
+> be installed on your device.
 
 Balena made a [big update to their IoT marketplace](https://blog.balena.io/creating-an-iot-marketplace/). Included in that change is the launch of
 [Fleets for Good](https://hub.balena.io/fleets-for-good). With that, you may find it hard to find the Anthias images on the marketplace. In the meantime,
@@ -80,12 +81,13 @@ is available.
 
 If you'd like more control over your digital signage instance, try installing it on Raspberry Pi OS Lite.
 
-Before you start, make sure that you have `curl` installed. If not, you can install it by running:
-
-```bash
-$ sudo apt update
-$ sudo apt install -y curl
-```
+> [!IMPORTANT]
+> Before you start, make sure that you have `curl` installed. If not, you can install it by running:
+> 
+> ```bash
+> $ sudo apt update
+> $ sudo apt install -y curl
+> ```
 
 The tl;dr for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) is:
 
@@ -112,7 +114,8 @@ installation.
  * The SD card
  * The internet connection
 
-During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast internet connection), the installation normally takes 15-30 minutes. On a Raspberry Pi Zero or Raspberry Pi Model B with a class 4 SD card, the installation will take hours.
+> [!NOTE]
+> During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast internet connection), the installation normally takes 15-30 minutes. On a Raspberry Pi Zero or Raspberry Pi Model B with a class 4 SD card, the installation will take hours.
 
 #### Prompt: Network Management
 
@@ -199,7 +202,8 @@ $ python tools/migrate-assets-to-screenly.py
 
 ## Issues and bugs
 
-Do however note that we are still in the process of knocking out some bugs. You can track the known issues [here](https://github.com/Screenly/Anthias/issues). You can also check the discussions in the [Anthias forums](https://forums.screenly.io).
+> [!NOTE]
+> We are still in the process of knocking out some bugs. You can track the known issues [here](https://github.com/Screenly/Anthias/issues). You can also check the discussions in the [Anthias forums](https://forums.screenly.io).
 
 ## Quick links
 
