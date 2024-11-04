@@ -2,7 +2,8 @@
 
 Running unit tests is a good way to make sure that the code is working as expected. However, it's also important to do manual testing as some bugs may not be caught by unit tests. This document contains a list of things that you can do to test the application manually.
 
-The list is not exhaustive, but you can use it as your guide when testing Anthias.
+> [!NOTE]
+> The list is not exhaustive, but you can use it as your guide when testing Anthias.
 
 ## General
 
