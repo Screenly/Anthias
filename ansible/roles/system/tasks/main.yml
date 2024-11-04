@@ -231,7 +231,6 @@
 - name: Remove deprecated apt dependencies
   ansible.builtin.apt:
     name:
-      - dphys-swapfile
       - lightdm
       - lightdm-gtk-greeter
       - matchbox
@@ -377,11 +376,3 @@
     mode: "0644"
     owner: root
     group: root
-
-- name: Disable swap
-  ansible.builtin.command: /sbin/swapoff --all removes=/var/swap
-
-- name: Remove swapfile from disk
-  ansible.builtin.file:
-    path: /var/swap
-    state: absent
