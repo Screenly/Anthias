@@ -23,9 +23,9 @@ We've tested Anthias and is known to work on the following Raspberry Pi models:
 * x86 Devices - 64-bit Bookworm
     * These devices can be something similar to a NUC.
 
-
-We're still fixing the installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 1.
-Should you encounter any issues, please file an issue either in this repository or in the
+> [!NOTE]
+> We're still fixing the installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 1.
+> Should you encounter any issues, please file an issue either in this repository or in the
 [forums](https://forums.screenly.io).
 
 ## Star History
