@@ -1,6 +1,7 @@
-# Migrating from a device running Raspberry Pi OS (Lite)
+# Migrating assets from Anthias to Screenly
 
-This feature is only available in devices running Raspberry Pi OS at the moment.
+> [!NOTE]
+> This feature is only available in devices running Raspberry Pi OS at the moment.
 
 To get started, SSH to your Raspberry Pi running Anthias. For instance:
 
