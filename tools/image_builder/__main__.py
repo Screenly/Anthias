@@ -86,8 +86,9 @@ def build_image(
     git_branch: str,
     environment: str,
     base_image: str,
-    docker_tag: str,
+    docker_tags: list[str],
     clean_build: bool,
+    push: bool,
 ) -> None:
     context = {}
 
@@ -368,13 +369,11 @@ def build_image(
         file=f'docker/Dockerfile.{service}',
         load=True,
         platforms=[target_platform],
-        tags=[
-            f'screenly/anthias-{service}:{docker_tag}',
-            f'screenly/anthias-{service}:{git_short_hash}-{board}',
-            f'screenly/srly-ose-{service}:{docker_tag}',
-            f'screenly/srly-ose-{service}:{git_short_hash}-{board}',
-        ],
+        tags=docker_tags,
     )
+
+    if push:
+        docker.push(docker_tags)
 
 
 @click.command()
@@ -405,12 +404,17 @@ def build_image(
     default='production',
     type=click.Choice(('production', 'development')),
 )
+@click.option(
+    '--push',
+    is_flag=True,
+)
 def main(
     clean_build: bool,
     build_target: str,
     service,
     disable_cache_mounts: bool,
     environment: str,
+    push: bool,
 ) -> None:
     git_branch = pygit2.Repository('.').head.shorthand
     git_hash = str(pygit2.Repository('.').head.target)
@@ -422,10 +426,16 @@ def main(
     base_image = build_parameters['base_image']
 
     docker_tag = get_docker_tag(git_branch, board)
-
     services_to_build = SERVICES if 'all' in service else list(set(service))
 
     for service in services_to_build:
+        docker_tags = [
+            f'screenly/anthias-{service}:{docker_tag}',
+            f'screenly/anthias-{service}:{git_short_hash}-{board}',
+            f'screenly/srly-ose-{service}:{docker_tag}',
+            f'screenly/srly-ose-{service}:{git_short_hash}-{board}',
+        ]
+
         build_image(
             service,
             board,
@@ -436,8 +446,9 @@ def main(
             git_branch,
             environment,
             base_image,
-            docker_tag,
+            docker_tags,
             clean_build,
+            push,
         )
 
 
