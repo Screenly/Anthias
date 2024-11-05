@@ -69,7 +69,6 @@ jobs:
       - name: Build Containers
         run: |
           poetry run python tools/image_builder \
-            --build-target=x86 \
             --service celery \
             --service redis \
             --service test
