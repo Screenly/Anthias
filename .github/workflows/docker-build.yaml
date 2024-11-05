@@ -27,11 +27,30 @@ jobs:
     strategy:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
+        python-version: ["3.11"]
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install and configure Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.3
+          virtualenvs-create: true
+          virtualenvs-in-project: false
+          virtualenvs-path: ~/.venv
+          installer-parallel: true
+
+      - name: Install dependencies
+        run: |
+          poetry install --only=docker-image-builder
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -58,10 +77,9 @@ jobs:
 
       - name: Build Containers
         run: |
-          export BUILD_TARGET=${{ matrix.board }}
-          export PUSH=1
-          export SKIP_TEST=1
-          ./bin/build_containers.sh
+          poetry run python tools/image_builder \
+            --build-target=${{ matrix.board }} \
+            --push
 
   balena:
     if: ${{ github.ref == 'refs/heads/master' }}
