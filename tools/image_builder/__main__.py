@@ -89,6 +89,7 @@ def build_image(
     docker_tags: list[str],
     clean_build: bool,
     push: bool,
+    dockerfiles_only: bool,
 ) -> None:
     context = {}
 
@@ -355,6 +356,9 @@ def build_image(
         click.secho(f'Skipping test service for {board}...', fg='yellow')
         return
 
+    if dockerfiles_only:
+        return
+
     docker.buildx.build(
         context_path='.',
         cache=(not clean_build),
@@ -408,6 +412,10 @@ def build_image(
     '--push',
     is_flag=True,
 )
+@click.option(
+    '--dockerfiles-only',
+    is_flag=True,
+)
 def main(
     clean_build: bool,
     build_target: str,
@@ -415,6 +423,7 @@ def main(
     disable_cache_mounts: bool,
     environment: str,
     push: bool,
+    dockerfiles_only: bool,
 ) -> None:
     git_branch = pygit2.Repository('.').head.shorthand
     git_hash = str(pygit2.Repository('.').head.target)
@@ -449,6 +458,7 @@ def main(
             docker_tags,
             clean_build,
             push,
+            dockerfiles_only,
         )
 
 
