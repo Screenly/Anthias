@@ -113,25 +113,23 @@ for container in ${SERVICES[@]}; do
         cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container"
     fi
 
+    PACKAGES_TO_REMOVE=()
+
+    if [[ $OSTYPE == 'darwin'* ]]; then
+        SED_ARGS=(-i "")
+    else
+        SED_ARGS=(-i)
+    fi
+
     # If we're running on x86, remove all Pi specific packages
     if [ "$BOARD" == 'x86' ]; then
-        if [[ $OSTYPE == 'darwin'* ]]; then
-            SED_ARGS=(-i "")
-        else
-            SED_ARGS=(-i)
-        fi
-
-        PACKAGES_TO_REMOVE=(
+        PACKAGES_TO_REMOVE+=(
             "libraspberrypi0"
             "libgst-dev"
             "libsqlite0-dev"
             "libsrtp0-dev"
             "libssl1.1"
         )
-
-        for package in "${PACKAGES_TO_REMOVE[@]}"; do
-            sed "${SED_ARGS[@]}" -e "/$package/d" $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
-        done
     else
         if [ "$BOARD" == "pi1" ] && [ "$container" == "viewer" ]; then
             # Remove the libssl1.1 from Dockerfile.viewer
@@ -143,6 +141,17 @@ for container in ${SERVICES[@]}; do
             continue
         fi
     fi
+
+    if [ "$ENVIRONMENT" = "production" ]; then
+        PACKAGES_TO_REMOVE+=(
+            "nodejs"
+            "npm"
+        )
+    fi
+
+    for package in "${PACKAGES_TO_REMOVE[@]}"; do
+        sed "${SED_ARGS[@]}" -e "/$package/d" $(find docker/ -maxdepth 1 -not -name "*.tmpl" -type f)
+    done
 
     if [[ -n "${DISABLE_CACHE_MOUNTS:-}" ]] && [[ "${DISABLE_CACHE_MOUNTS}" -ne 0 ]]; then
         sed -i 's/RUN --mount.\+ /RUN /g' "docker/Dockerfile.$container"
