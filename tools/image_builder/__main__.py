@@ -282,6 +282,8 @@ def build_image(
                 'libcups2',
                 'libxcomposite1',
                 'libxdamage1',
+                'nodejs',
+                'npm',
             ],
             'chrome_dl_url': chrome_dl_url,
             'chromedriver_dl_url': chromedriver_dl_url,
