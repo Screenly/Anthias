@@ -175,7 +175,6 @@ def build_image(
             'libpng16-16',
             'libpq-dev',
             'libpulse-dev',
-            'libraspberrypi0',
             'librsvg2-common',
             'libsdl2-dev',
             'libsnappy-dev',
@@ -246,6 +245,7 @@ def build_image(
 
         if board != 'x86':
             apt_dependencies.extend([
+                'libraspberrypi0',
                 'libgst-dev',
                 'libsqlite0-dev',
                 'libsrtp0-dev',
