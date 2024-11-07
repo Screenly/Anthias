@@ -123,7 +123,7 @@ def build_image(
         'sqlite3',
     ]
 
-    if board != 'x86':
+    if board in ['pi1', 'pi2', 'pi3', 'pi4']:
         base_apt_dependencies.extend(['libraspberrypi0'])
 
     if service == 'viewer':
@@ -175,7 +175,6 @@ def build_image(
             'libpng16-16',
             'libpq-dev',
             'libpulse-dev',
-            'libraspberrypi0',
             'librsvg2-common',
             'libsdl2-dev',
             'libsnappy-dev',
@@ -246,6 +245,7 @@ def build_image(
 
         if board != 'x86':
             apt_dependencies.extend([
+                'libraspberrypi0',
                 'libgst-dev',
                 'libsqlite0-dev',
                 'libsrtp0-dev',
