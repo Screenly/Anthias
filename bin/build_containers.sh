@@ -105,9 +105,13 @@ for container in ${SERVICES[@]}; do
         export ARCHIVE_URL="$archive_url"
     fi
 
+    if [[ "$container" == 'server' ]] && [[ "$ENVIRONMENT" == 'production' ]]; then
+        cat "docker/Dockerfile.node-builder.tmpl" | envsubst > "docker/Dockerfile.server"
+    fi
+
     # For all but redis and nginx, and viewer append the base layer
     if [[ ! "$container" =~ ^(redis|nginx|viewer)$ ]]; then
-        cat "docker/Dockerfile.base.tmpl" | envsubst > "docker/Dockerfile.$container"
+        cat "docker/Dockerfile.base.tmpl" | envsubst >> "docker/Dockerfile.$container"
         cat "docker/Dockerfile.$container.tmpl" | envsubst >> "docker/Dockerfile.$container"
     else
         cat "docker/Dockerfile.$container.tmpl" | envsubst > "docker/Dockerfile.$container"

@@ -5,6 +5,12 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install -r /tmp/requirements.txt --break-system-packages
 
 RUN mkdir -p /usr/src/app
+COPY --from=node-builder \
+    /app/static/css/ \
+    /usr/src/app/static/css/
+COPY --from=node-builder \
+    /app/static/js/*.js* \
+    /usr/src/app/static/js/
 COPY . /usr/src/app/
 WORKDIR /usr/src/app
 
