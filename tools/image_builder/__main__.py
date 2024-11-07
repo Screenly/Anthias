@@ -439,10 +439,10 @@ def main(
 
     for service in services_to_build:
         docker_tags = [
-            f'nicomiguelino/anthias-{service}:{docker_tag}',
-            # f'screenly/anthias-{service}:{git_short_hash}-{board}',
-            # f'screenly/srly-ose-{service}:{docker_tag}',
-            # f'screenly/srly-ose-{service}:{git_short_hash}-{board}',
+            f'screenly/anthias-{service}:{docker_tag}',
+            f'screenly/anthias-{service}:{git_short_hash}-{board}',
+            f'screenly/srly-ose-{service}:{docker_tag}',
+            f'screenly/srly-ose-{service}:{git_short_hash}-{board}',
         ]
 
         build_image(
