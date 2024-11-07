@@ -352,7 +352,7 @@ def build_image(
         **context,
     })
 
-    if service == 'test' and board in ['pi1', 'pi2', 'pi3', 'pi4']:
+    if service == 'test':
         click.secho(f'Skipping test service for {board}...', fg='yellow')
         return
 
@@ -439,10 +439,10 @@ def main(
 
     for service in services_to_build:
         docker_tags = [
-            f'screenly/anthias-{service}:{docker_tag}',
-            f'screenly/anthias-{service}:{git_short_hash}-{board}',
-            f'screenly/srly-ose-{service}:{docker_tag}',
-            f'screenly/srly-ose-{service}:{git_short_hash}-{board}',
+            f'nicomiguelino/anthias-{service}:{docker_tag}',
+            # f'screenly/anthias-{service}:{git_short_hash}-{board}',
+            # f'screenly/srly-ose-{service}:{docker_tag}',
+            # f'screenly/srly-ose-{service}:{git_short_hash}-{board}',
         ]
 
         build_image(
