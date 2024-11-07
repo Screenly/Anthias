@@ -4,8 +4,8 @@
   "scripts": {
     "coffee-dev": "coffee --compile --map --watch static/js/*.coffee",
     "sass-dev": "sass --watch static/sass/:static/css/",
-    "coffee-prod": "coffee --compile --map static/js/*.coffee",
-    "sass-prod": "sass static/sass/:static/css/ --style compressed"
+    "coffee-build": "coffee --compile --map static/js/*.coffee",
+    "sass-build": "sass static/sass/:static/css/"
   },
   "dependencies": {
     "bootstrap": "^4.3.1",
