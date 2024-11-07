@@ -123,7 +123,7 @@ def build_image(
         'sqlite3',
     ]
 
-    if board != 'x86':
+    if board in ['pi1', 'pi2', 'pi3', 'pi4']:
         base_apt_dependencies.extend(['libraspberrypi0'])
 
     if service == 'viewer':
