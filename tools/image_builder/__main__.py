@@ -352,7 +352,7 @@ def build_image(
         **context,
     })
 
-    if service == 'test' and board in ['pi1', 'pi2', 'pi3', 'pi4']:
+    if service == 'test':
         click.secho(f'Skipping test service for {board}...', fg='yellow')
         return
 
