@@ -1,54 +1,14 @@
-# Anthias - Digital Signage for the Raspberry Pi
-[![Run Unit Tests](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml)
-[![CodeQL](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml)
-[![Lint Python Code Base](https://github.com/Screenly/Anthias/actions/workflows/python-lint.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/python-lint.yaml)
-[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)](https://app.sbomify.com/project/ENyjfn8tXQ)
-
-![Anthias Logo](https://github.com/Screenly/Anthias/blob/master/static/img/color.svg?raw=true  "Anthias Logo")
-
-## :sparkles: About Anthias
-
-Anthias is a digital signage platform for Raspberry Pi and x86 devices. Formerly known as Screenly OSE, it was rebranded to clear up the confusion between Screenly (the paid version) and Anthias. More details can be found in [this blog post](https://www.screenly.io/blog/2022/12/06/screenly-ose-now-called-anthias/).
-
-Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
-
-## :white_check_mark: Compatibility
-
-We've tested Anthias and is known to work on the following Raspberry Pi models:
-
-* Raspberry Pi 4 Model B - 32-bt and 64-bit Bullseye, 64-bit Bookworm
-* Raspberry Pi 3 Model B+ - 32-bit and 64-bit Bullseye, 64-bit Bookworm
-* Raspberry Pi 3 Model B - 64-bit Bookworm and Bullseye
-* Raspberry Pi 2 Model B - 32-bit Bookworm and Bullseye
-* x86 Devices - 64-bit Bookworm
-    * These devices can be something similar to a NUC.
-
-> [!NOTE]
-> We're still fixing the installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 1.
-> Should you encounter any issues, please file an issue either in this repository or in the
-[forums](https://forums.screenly.io).
-
-## :seedling: Installation options
-
-See [this](/docs/installation-options.md) page to get started.
-
-## :star: Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=Screenly/Anthias&type=Date)](https://star-history.com/#Screenly/Anthias&Date)
-
-## :package: Installation options
-
-### Using the image from the Raspberry Pi Imager
+# Using the image from the Raspberry Pi Imager
 
 The quickest way to get started is to use [Raspberry Pi Imager](https://www.screenly.io/blog/2022/12/13/anthias-and-screenly-now-in-rpi-imager/), where you can find Anthias under `Other specific-purpose OS`.
 
-![imager-01](./docs/images/imager-01.png)
+![imager-01](/docs/images/imager-01.png)
 
-![imager-02](./docs/images/imager-02.png)
+![imager-02](/docs/images/imager-02.png)
 
-![imager-03](./docs/images/imager-03.png)
+![imager-03](/docs/images/imager-03.png)
 
-### Using the images from balenaHub
+# Using the images from balenaHub
 
 > [!IMPORTANT]
 > This option is recommended for those who want to install Anthias without touching the
@@ -70,7 +30,7 @@ Flash the SD card and boot up your Raspberry Pi. It will take a few minutes to b
 
 Alternatively, you can [download our pre-built Balena disk images from the releases](#using-the-images-from-the-releases).
 
-### Using the images from the releases
+# Using the images from the releases
 
 You can find the latest release [here](https://github.com/Screenly/Anthias/releases/latest). From there, you can download the disk image that you need and flash it to your SD card.
 The image file looks something like `<yyyy>-<mm>-<dd>-raspberry<version>.zip`. Take note that the `.img` file is compressed in a `.zip` file.
@@ -79,7 +39,7 @@ Starting [v0.19.0](https://github.com/Screenly/Anthias/releases/tag/v0.19.0), de
 pinned to the version that you've downloaded. This means that the devices will get updates when a new release (e.g., v0.19.1, etc.)
 is available.
 
-### Installing on Raspberry Pi OS Lite
+# Installing on Raspberry Pi OS Lite
 
 #### Overview
 
@@ -87,7 +47,7 @@ If you'd like more control over your digital signage instance, try installing it
 
 > [!IMPORTANT]
 > Before you start, make sure that you have `curl` installed. If not, you can install it by running:
->
+> 
 > ```bash
 > $ sudo apt update
 > $ sudo apt install -y curl
@@ -110,7 +70,7 @@ You can either use the arrow keys to select your choice and then press Enter or 
 (for yes-no questions). The installer will display your responses before proceeding with the
 installation.
 
-![install-anthias-gif](./docs/images/install-anthias.gif)
+![install-anthias-gif](/docs/images/install-anthias.gif)
 
 **This installation will take 15 minutes to several hours**, depending on variables such as:
 
@@ -158,61 +118,7 @@ You have the option to reboot now or later. On the next boot, make sure to run
 
 Otherwise, if you've selected **No** for the system upgrade, then you don't need to do a reboot for the containers to be started. However, it's still recommended to do a reboot.
 
-### Installing with Balena
+# Installing with Balena
 
 Go through the steps in [this documentation](/docs/balena-fleet-deployment.md)
 to deploy Anthias on your own Balena fleet.
-
-## :up: Migrating assets from Anthias to Screenly
-
-This feature is only available in devices running Raspberry Pi OS at the moment.
-
-### Migrating from a device running Raspberry Pi OS (Lite)
-
-To get started, SSH to your Raspberry Pi running Anthias. For instance:
-
-```bash
-$ ssh pi@raspberrypi
-```
-
-Go to the project root directory and create a Python virtual environment, if you haven't created one.
-
-```bash
-$ cd ~/screenly
-$ python -m venv venv/
-```
-
-Activate the virtual environment. You need to do this everytime right before you run the script.
-
-```bash
-$ source ./venv/bin/activate
-```
-
-Install the dependencies required by the assets migration script.
-
-```bash
-$ pip install -r requirements/requirements.local.txt
-```
-
-Before running the script, you should prepare the following:
-* Your Screenly API key
-* Anthias username and password, if your device has basic authentication enabled
-
-Run the assets migration script. Follow through the instructions & prompts carefully.
-
-```bash
-$ python tools/migrate-assets-to-screenly.py
-```
-
-## :lady_beetle: Issues and bugs
-
-> [!NOTE]
-> We are still in the process of knocking out some bugs. You can track the known issues [here](https://github.com/Screenly/Anthias/issues). You can also check the discussions in the [Anthias forums](https://forums.screenly.io).
-
-## :pushpin: Quick links
-
- * [Forum](https://forums.screenly.io/)
- * [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](https://github.com/Screenly/Anthias/tree/master/website))
- * [General documentation](https://github.com/Screenly/Anthias/blob/master/docs/README.md)
- * [Developer documentation](https://github.com/Screenly/Anthias/blob/master/docs/developer-documentation.md)
- * [Migrating assets from Anthias to Screenly](/docs/migrating-assets-to-screenly.md)
