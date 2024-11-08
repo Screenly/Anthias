@@ -53,7 +53,20 @@
                     </tr>
                     <tr>
                         <th scope="row">Anthias Version</th>
-                        <td>{{ anthias_version }}</td>
+                        <td>
+                            {% if anthias_commit_link %}
+                                <a
+                                    href="{{ anthias_commit_link }}"
+                                    rel="noopener"
+                                    target="_blank"
+                                    class="text-dark"
+                                >
+                                    {{ anthias_version }}
+                                </a>
+                            {% else %}
+                                {{ anthias_version }}
+                            {% endif %}
+                        </td>
                     </tr>
                     <tr>
                         <th scope="row">MAC Address</th>
