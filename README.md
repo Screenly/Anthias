@@ -4,7 +4,7 @@
 [![Lint Python Code Base](https://github.com/Screenly/Anthias/actions/workflows/python-lint.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/python-lint.yaml)
 [![sbomified](https://sbomify.com/assets/images/logo/badge.svg)](https://app.sbomify.com/project/zZGXzm8qcU)
 
-![Anthias Logo](https://github.com/Screenly/Anthias/blob/master/static/img/dark.svg?raw=true  "Anthias Logo")
+![Anthias Logo](https://github.com/Screenly/Anthias/blob/master/static/img/color.svg?raw=true  "Anthias Logo")
 
 ## :sparkles: About Anthias
 
@@ -83,7 +83,7 @@ If you'd like more control over your digital signage instance, try installing it
 
 > [!IMPORTANT]
 > Before you start, make sure that you have `curl` installed. If not, you can install it by running:
-> 
+>
 > ```bash
 > $ sudo apt update
 > $ sudo apt install -y curl
