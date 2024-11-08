@@ -1,7 +1,11 @@
 {% if environment == 'production' %}
 FROM debian:bookworm as node-builder
 
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
 RUN --mount=type=cache,target=/var/cache/apt \
+{% endif %}
     apt-get update && \
     apt-get -y install --no-install-recommends \
         nodejs \
