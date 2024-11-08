@@ -12,6 +12,10 @@ jobs:
   js-sbom:
     needs: run-tests
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
 
     steps:
       - name: Checkout
@@ -25,10 +29,20 @@ jobs:
           SBOM_FILE: 'package-lock.json'
           AUGMENT: true
           UPLOAD: true
+          OUTPUT_FILE: js.cdx.json
+
+      - name: Attest
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: '${{ github.workspace }}/*.cdx.json'
 
   python-sbom:
     needs: run-tests
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
 
     steps:
       - name: Checkout
@@ -42,3 +56,9 @@ jobs:
           SBOM_FILE: 'poetry.lock'
           AUGMENT: true
           UPLOAD: true
+          OUTPUT_FILE: python.cdx.json
+
+      - name: Attest
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: '${{ github.workspace }}/*.cdx.json'
