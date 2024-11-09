@@ -282,6 +282,8 @@ def build_image(
                 'libcups2',
                 'libxcomposite1',
                 'libxdamage1',
+                'nodejs',
+                'npm',
             ],
             'chrome_dl_url': chrome_dl_url,
             'chromedriver_dl_url': chromedriver_dl_url,
@@ -334,10 +336,9 @@ def build_image(
             ],
             'archive_url': archive_url,
         })
-    elif service == 'nginx':
-        context.update({
-            'environment': environment,
-        })
+    elif service == 'server':
+        if environment == 'development':
+            base_apt_dependencies.extend(['nodejs', 'npm'])
 
     generate_dockerfile(service, {
         'base_image': base_image,
@@ -346,6 +347,7 @@ def build_image(
         'board': board,
         'debian_version': 'bookworm',
         'disable_cache_mounts': disable_cache_mounts,
+        'environment': environment,
         'git_branch': git_branch,
         'git_hash': git_hash,
         'git_short_hash': git_short_hash,

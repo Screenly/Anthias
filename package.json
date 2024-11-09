@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "scripts": {
     "coffee-dev": "coffee --compile --map --watch static/js/*.coffee",
-    "sass-dev": "sass --watch static/sass/:static/css/"
+    "sass-dev": "sass --watch static/sass/:static/css/",
+    "coffee-build": "coffee --compile --map static/js/*.coffee",
+    "sass-build": "sass static/sass/:static/css/"
   },
   "dependencies": {
     "bootstrap": "^4.3.1",

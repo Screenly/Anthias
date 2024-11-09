@@ -27,6 +27,9 @@ fi
 
 if [[ "$ENVIRONMENT" == "development" ]]; then
     echo "Starting Django development server..."
+    npm install && \
+        npm run coffee-build && \
+        npm run sass-build
     ./manage.py runserver 0.0.0.0:8080
 else
     echo "Generating Django static files..."

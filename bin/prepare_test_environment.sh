@@ -48,6 +48,10 @@ EOF
 if [ "$START_SERVER" = true ]; then
     cd /usr/src/app
 
+    npm install && \
+        npm run coffee-build && \
+        npm run sass-build
+
     ./manage.py makemigrations
     ./manage.py migrate --fake-initial
     ./manage.py runserver 127.0.0.1:8080 &

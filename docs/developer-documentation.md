@@ -159,30 +159,34 @@ We've also provided a [checklist](/docs/qa-checklist.md) that can serve as a gui
 
 ## Generating CSS and JS files
 
-Anthias only supports compiling from the host container at the moment. You need to install the latest version
-of Node.js. We recommend to intall Node.js on Linux. You can use this [guide](https://nodejs.org/en/learn/getting-started/how-to-install-nodejs)
-to get started.
+To get started, you need to start the development server first. See this [section](#dockerized-development-environment)
+for details.
 
 ### Installing Node.js dependencies
 
 Run the following command from the project root directory.
 
 ```bash
-$ npm install
+$ docker compose -f docker-compose.dev.yml exec anthias-server \
+    npm install
 ```
 
 ### Transpiling CSS from SASS
 
+Open a new terminal session and run the following command:
+
 ```bash
-$ npm run sass-dev
+$ docker compose -f docker-compose.dev.yml exec anthias-server \
+    npm run sass-dev
 ```
 
 ### Transpiling JS from CoffeeScript
 
+Open a new terminal session and run the following command:
+
 ```bash
-# You need to run this on a separate terminal session if you already ran the
-# script for transpiling SASS files.
-$ npm run coffee-dev
+$ docker compose -f docker-compose.dev.yml exec anthias-server \
+    npm run coffee-dev
 ```
 
 ### Closing the transpiler
