@@ -207,9 +207,19 @@ def system_info(request):
     if device_model is None and machine() == 'x86_64':
         device_model = 'Generic x86_64 Device'
 
+    git_branch = diagnostics.get_git_branch()
+    git_short_hash = diagnostics.get_git_short_hash()
+    anthias_commit_link = None
+
+    if git_branch == 'master':
+        anthias_commit_link = (
+            'https://github.com/Screenly/Anthias'
+            f'/commit/{git_short_hash}'
+        )
+
     anthias_version = '{}@{}'.format(
-        diagnostics.get_git_branch(),
-        diagnostics.get_git_short_hash()
+        git_branch,
+        git_short_hash,
     )
 
     context = {
@@ -224,6 +234,7 @@ def system_info(request):
         'display_power': display_power,
         'device_model': device_model,
         'anthias_version': anthias_version,
+        'anthias_commit_link': anthias_commit_link,
         'mac_address': get_node_mac_address(),
         'is_balena': is_balena_app(),
     }
