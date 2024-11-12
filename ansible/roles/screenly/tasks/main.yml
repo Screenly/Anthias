@@ -11,6 +11,14 @@
     - .config
     - screenly_assets
 
+- name: Create empy .asoundrc
+    content: ""
+    dest: "/home/{{ lookup('env', 'USER') }}/.asoundrc"
+    force: false
+    group: "{{ lookup('env', 'USER') }}"
+    owner: "{{ lookup('env', 'USER') }}"
+    mode: 0644
+
 - name: Copy Screenly default assets file
   ansible.builtin.copy:
     owner: "{{ lookup('env', 'USER') }}"
