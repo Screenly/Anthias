@@ -37,7 +37,6 @@ services:
     restart: always
     volumes:
       - resin-data:/data
-      - /home/${USER}/.asoundrc:/data/.asoundrc
       - /home/${USER}/.screenly:/data/.screenly
       - /home/${USER}/screenly_assets:/data/screenly_assets
       - /home/${USER}/screenly/staticfiles:/data/screenly/staticfiles
@@ -66,6 +65,7 @@ services:
     shm_size: ${SHM_SIZE_KB}kb
     volumes:
       - resin-data:/data
+      - /home/${USER}/.asoundrc:/data/.asoundrc
       - /home/${USER}/.screenly:/data/.screenly
       - /home/${USER}/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
