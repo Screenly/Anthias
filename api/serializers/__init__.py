@@ -1,3 +1,4 @@
+from os import path
 from django.utils import timezone
 from rest_framework.serializers import (
     CharField,
@@ -7,6 +8,7 @@ from rest_framework.serializers import (
     Serializer,
 )
 from anthias_app.models import Asset
+from lib.utils import validate_url
 
 
 def get_unique_name(name):
@@ -21,6 +23,15 @@ def get_unique_name(name):
                 return new_name
 
     return name
+
+
+def validate_uri(uri):
+    if uri.startswith('/'):
+        if not path.isfile(uri):
+            raise Exception("Invalid file path. Failed to add asset.")
+    else:
+        if not validate_url(uri):
+            raise Exception("Invalid URL. Failed to add asset.")
 
 
 class AssetRequestSerializer(Serializer):

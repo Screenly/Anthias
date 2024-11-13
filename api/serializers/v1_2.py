@@ -11,11 +11,13 @@ from rest_framework.serializers import (
 from lib.utils import (
     download_video_from_youtube,
     get_video_duration,
-    validate_url,
     url_fails,
 )
 from settings import settings
-from . import get_unique_name
+from . import (
+    get_unique_name,
+    validate_uri,
+)
 
 
 class CreateAssetSerializerV1_2(Serializer):
@@ -60,12 +62,7 @@ class CreateAssetSerializerV1_2(Serializer):
             .replace('\"', '&quot;')
         )
 
-        if uri.startswith('/'):
-            if not path.isfile(uri):
-                raise Exception("Invalid file path. Failed to add asset.")
-        else:
-            if not validate_url(uri):
-                raise Exception("Invalid URL. Failed to add asset.")
+        validate_uri(uri)
 
         if not asset_id:
             asset['asset_id'] = uuid.uuid4().hex
