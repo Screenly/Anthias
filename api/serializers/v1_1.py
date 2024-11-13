@@ -9,7 +9,6 @@ from rest_framework.serializers import (
     Serializer,
 )
 
-from anthias_app.models import Asset
 from lib.utils import (
     download_video_from_youtube,
     get_video_duration,
@@ -17,6 +16,7 @@ from lib.utils import (
     url_fails,
 )
 from settings import settings
+from . import get_unique_name
 
 
 class CreateAssetSerializerV1_1(Serializer):
@@ -36,21 +36,11 @@ class CreateAssetSerializerV1_1(Serializer):
     play_order = IntegerField(required=False)
     skip_asset_check = IntegerField(min_value=0, max_value=1, required=False)
 
-    def validate(self, data):
+    def prepare_asset(self, data):
         name = data['name']
 
         if self.unique_name:
-            names = Asset.objects.values_list('name', flat=True)
-
-            if name in names:
-                i = 1
-                while True:
-                    new_name = f'{name}-{i}'
-                    if new_name in names:
-                        i += 1
-                    else:
-                        name = new_name
-                        break
+            name = get_unique_name(name)
 
         asset = {
             'name': name,
@@ -109,3 +99,6 @@ class CreateAssetSerializerV1_1(Serializer):
             raise Exception("Could not retrieve file. Check the asset URL.")
 
         return asset
+
+    def validate(self, data):
+        return self.prepare_asset(data)

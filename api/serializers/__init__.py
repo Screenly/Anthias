@@ -9,6 +9,20 @@ from rest_framework.serializers import (
 from anthias_app.models import Asset
 
 
+def get_unique_name(name):
+    names = Asset.objects.values_list('name', flat=True)
+    if name in names:
+        i = 1
+        while True:
+            new_name = f'{name}-{i}'
+            if new_name in names:
+                i += 1
+            else:
+                return new_name
+
+    return name
+
+
 class AssetRequestSerializer(Serializer):
     name = CharField()
     uri = CharField()

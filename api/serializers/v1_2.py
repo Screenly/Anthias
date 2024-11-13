@@ -8,7 +8,6 @@ from rest_framework.serializers import (
     Serializer,
 )
 
-from anthias_app.models import Asset
 from lib.utils import (
     download_video_from_youtube,
     get_video_duration,
@@ -16,6 +15,7 @@ from lib.utils import (
     url_fails,
 )
 from settings import settings
+from . import get_unique_name
 
 
 class CreateAssetSerializerV1_2(Serializer):
@@ -42,16 +42,7 @@ class CreateAssetSerializerV1_2(Serializer):
         name = data['name'].replace(ampersand_fix, '&')
 
         if self.unique_name:
-            names = Asset.objects.values_list('name', flat=True)
-            if name in names:
-                i = 1
-                while True:
-                    new_name = f'{name}-{i}'
-                    if new_name in names:
-                        i += 1
-                    else:
-                        name = new_name
-                        break
+            name = get_unique_name(name)
 
         asset = {
             'name': name,
