@@ -11,9 +11,9 @@ from api.helpers import (
 )
 from api.serializers import (
     AssetSerializer,
-    CreateAssetSerializerV1_2,
     UpdateAssetSerializer,
 )
+from api.serializers.v1_2 import CreateAssetSerializerV1_2
 from lib.auth import authorized
 from os import remove
 from settings import settings

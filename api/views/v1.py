@@ -4,9 +4,9 @@ from inspect import cleandoc
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from api.serializers.v1_1 import CreateAssetSerializerV1_1
 from api.serializers import (
     AssetSerializer,
-    CreateAssetSerializerV1_1,
     UpdateAssetSerializer,
 )
 from api.helpers import (
