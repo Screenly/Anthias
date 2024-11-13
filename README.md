@@ -1,4 +1,6 @@
-# Anthias - Digital Signage for the Raspberry Pi
+# Anthias &middot; Digital Signage for Raspberry Pi and x86 Devices
+
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/Screenly/Anthias)]
 [![Run Unit Tests](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml)
 [![CodeQL](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml)
 [![Lint Python Code Base](https://github.com/Screenly/Anthias/actions/workflows/python-lint.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/python-lint.yaml)
