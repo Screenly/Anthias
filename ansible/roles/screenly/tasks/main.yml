@@ -12,8 +12,9 @@
     - screenly_assets
 
 - name: Create empy .asoundrc
-    content: ""
-    dest: "/home/{{ lookup('env', 'USER') }}/.asoundrc"
+  file:
+    path: "/home/{{ lookup('env', 'USER') }}/.asoundrc"
+    state: touch
     force: false
     group: "{{ lookup('env', 'USER') }}"
     owner: "{{ lookup('env', 'USER') }}"
