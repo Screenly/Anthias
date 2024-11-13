@@ -1,12 +1,17 @@
 # Anthias &middot; Digital Signage for Raspberry Pi and x86 Devices
 
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/Screenly/Anthias)]
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/Screenly/Anthias)](https://github.com/Screenly/Anthias/releases/latest)
 [![Run Unit Tests](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/docker-test.yaml)
 [![CodeQL](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/codeql-analysis.yaml)
 [![Lint Python Code Base](https://github.com/Screenly/Anthias/actions/workflows/python-lint.yaml/badge.svg?branch=master)](https://github.com/Screenly/Anthias/actions/workflows/python-lint.yaml)
 [![sbomified](https://sbomify.com/assets/images/logo/badge.svg)](https://app.sbomify.com/project/ENyjfn8tXQ)
 
+<br>
+<br>
+
 ![Anthias Logo](https://github.com/Screenly/Anthias/blob/master/static/img/color.svg?raw=true  "Anthias Logo")
+
+<br>
 
 ## :sparkles: About Anthias
 
