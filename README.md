@@ -25,6 +25,10 @@ Anthias is a digital signage platform for Raspberry Pi and x86 devices. Formerly
 
 Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
 
+## :rocket: Getting Started
+
+See [this](/docs/installation-options.md) page for options on how to install Anthias.
+
 ## :white_check_mark: Compatibility
 
 We've tested Anthias and is known to work on the following Raspberry Pi models:
@@ -40,10 +44,6 @@ We've tested Anthias and is known to work on the following Raspberry Pi models:
 > We're still fixing the installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 1.
 > Should you encounter any issues, please file an issue either in this repository or in the
 [forums](https://forums.screenly.io).
-
-## :rocket: Getting Started
-
-See [this](/docs/installation-options.md) page for options on how to install Anthias.
 
 ## :star: Star History
 
