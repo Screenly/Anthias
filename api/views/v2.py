@@ -62,3 +62,14 @@ class AssetListViewV2(APIView):
             AssetSerializerV2(asset).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+class AssetViewV2(APIView):
+    serializer_class = AssetSerializerV2
+
+    @extend_schema(summary='Get asset')
+    @authorized
+    def get(self, request, asset_id):
+        asset = Asset.objects.get(asset_id=asset_id)
+        serializer = self.serializer_class(asset)
+        return Response(serializer.data)

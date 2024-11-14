@@ -21,7 +21,10 @@ from .views.v1_2 import (
     AssetListViewV1_2,
     AssetViewV1_2
 )
-from .views.v2 import AssetListViewV2
+from .views.v2 import (
+    AssetListViewV2,
+    AssetViewV2,
+)
 
 app_name = 'api'
 
@@ -78,4 +81,9 @@ urlpatterns = [
 
     # v2 endpoints
     path('v2/assets', AssetListViewV2.as_view(), name='asset_list_v2'),
+    path(
+        'v2/assets/<str:asset_id>',
+        AssetViewV2.as_view(),
+        name='asset_detail_v2'
+    ),
 ]
