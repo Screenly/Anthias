@@ -14,9 +14,8 @@ from api.serializers import (
     UpdateAssetSerializer,
 )
 from api.serializers.v1_2 import CreateAssetSerializerV1_2
+from api.views.mixins import DeleteAssetViewMixin
 from lib.auth import authorized
-from os import remove
-from settings import settings
 
 
 class AssetListViewV1_2(APIView):
@@ -67,7 +66,7 @@ class AssetListViewV1_2(APIView):
         )
 
 
-class AssetViewV1_2(APIView):
+class AssetViewV1_2(APIView, DeleteAssetViewMixin):
     serializer_class = AssetSerializer
 
     @extend_schema(summary='Get asset')
@@ -126,18 +125,3 @@ class AssetViewV1_2(APIView):
     @authorized
     def put(self, request, asset_id):
         return self.update(request, asset_id, partial=False)
-
-    @extend_schema(summary='Delete asset')
-    @authorized
-    def delete(self, request, asset_id):
-        asset = Asset.objects.get(asset_id=asset_id)
-
-        try:
-            if asset.uri.startswith(settings['assetdir']):
-                remove(asset.uri)
-        except OSError:
-            pass
-
-        asset.delete()
-
-        return Response(status=status.HTTP_204_NO_CONTENT)

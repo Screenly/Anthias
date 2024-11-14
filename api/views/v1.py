@@ -32,8 +32,9 @@ from lib.auth import authorized
 from lib.github import is_up_to_date
 from lib.utils import connect_to_redis
 from mimetypes import guess_type, guess_extension
-from os import path, remove, statvfs
+from os import path, statvfs
 from anthias_app.models import Asset
+from api.views.mixins import DeleteAssetViewMixin
 from celery_tasks import reboot_anthias, shutdown_anthias
 from settings import settings, ZmqCollector, ZmqPublisher
 
@@ -81,7 +82,7 @@ V1_ASSET_REQUEST = OpenApiRequest(
 )
 
 
-class AssetViewV1(APIView):
+class AssetViewV1(APIView, DeleteAssetViewMixin):
     serializer_class = AssetSerializer
 
     @extend_schema(summary='Get asset')
@@ -112,20 +113,6 @@ class AssetViewV1(APIView):
 
         asset.refresh_from_db()
         return Response(AssetSerializer(asset).data)
-
-    @extend_schema(summary='Delete asset')
-    @authorized
-    def delete(self, request, asset_id, format=None):
-        asset = Asset.objects.get(asset_id=asset_id)
-
-        try:
-            if asset.uri.startswith(settings['assetdir']):
-                remove(asset.uri)
-        except OSError:
-            pass
-
-        asset.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class AssetContentView(APIView):
