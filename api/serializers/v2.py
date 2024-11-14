@@ -11,6 +11,7 @@ from rest_framework.serializers import (
     Serializer,
 )
 
+from api.serializers import UpdateAssetSerializer
 from lib.utils import (
     download_video_from_youtube,
     get_video_duration,
@@ -135,3 +136,10 @@ class CreateAssetSerializerV2(Serializer):
 
     def validate(self, data):
         return self.prepare_asset(data)
+
+
+class UpdateAssetSerializerV2(UpdateAssetSerializer):
+    is_enabled = BooleanField()
+    is_processing = BooleanField(required=False)
+    nocache = BooleanField(required=False)
+    skip_asset_check = BooleanField(required=False)

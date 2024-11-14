@@ -12,6 +12,7 @@ from api.helpers import (
 from api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
+    UpdateAssetSerializerV2
 )
 from lib.auth import authorized
 from os import remove
@@ -75,6 +76,56 @@ class AssetViewV2(APIView):
         asset = Asset.objects.get(asset_id=asset_id)
         serializer = self.serializer_class(asset)
         return Response(serializer.data)
+
+    def update(self, request, asset_id, partial=False):
+        asset = Asset.objects.get(asset_id=asset_id)
+        serializer = UpdateAssetSerializerV2(
+            asset, data=request.data, partial=partial)
+
+        if serializer.is_valid():
+            serializer.save()
+        else:
+            return Response(
+                serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        active_asset_ids = get_active_asset_ids()
+
+        asset.refresh_from_db()
+
+        try:
+            active_asset_ids.remove(asset.asset_id)
+        except ValueError:
+            pass
+
+        if asset.is_active():
+            active_asset_ids.insert(asset.play_order, asset.asset_id)
+
+        save_active_assets_ordering(active_asset_ids)
+        asset.refresh_from_db()
+
+        return Response(AssetSerializerV2(asset).data)
+
+    @extend_schema(
+        summary='Update asset',
+        request=UpdateAssetSerializerV2,
+        responses={
+            200: AssetSerializerV2
+        }
+    )
+    @authorized
+    def patch(self, request, asset_id):
+        return self.update(request, asset_id, partial=True)
+
+    @extend_schema(
+        summary='Update asset',
+        request=UpdateAssetSerializerV2,
+        responses={
+            200: AssetSerializerV2
+        }
+    )
+    @authorized
+    def put(self, request, asset_id):
+        return self.update(request, asset_id, partial=False)
 
     @extend_schema(summary='Delete asset')
     @authorized
