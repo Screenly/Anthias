@@ -1,7 +1,7 @@
 <h1 align="center" style="border-bottom: none;">
     Anthias
     &middot;
-    An Open Source Digital Signage for Raspberry Pi and x86 Devices
+    Open Source Digital Signage Solution for Raspberry Pi and x86 Devices
 </h1>
 
 <p align="center">
