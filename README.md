@@ -1,7 +1,7 @@
 <h1 align="center" style="border-bottom: none;">
     Anthias
     &middot;
-    Digital Signage for Raspberry Pi and x86 Devices
+    An Open Source Digital Signage for Raspberry Pi and x86 Devices
 </h1>
 
 <p align="center">
@@ -19,8 +19,9 @@
 ![Anthias Logo](https://github.com/Screenly/Anthias/blob/master/static/img/color.svg?raw=true  "Anthias Logo")
 
 <br>
+<br>
 
-<h2 style="border-bottom: none;">:sparkles: About Anthias</h2>
+## :sparkles: About Anthias
 
 Anthias is a digital signage platform for Raspberry Pi and x86 devices. Formerly known as Screenly OSE, it was rebranded to clear up the confusion between Screenly (the paid version) and Anthias. More details can be found in [this blog post](https://www.screenly.io/blog/2022/12/06/screenly-ose-now-called-anthias/).
 
