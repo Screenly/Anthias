@@ -14,11 +14,9 @@
 </p>
 
 <br>
-<br>
 
 ![Anthias Logo](https://github.com/Screenly/Anthias/blob/master/static/img/color.svg?raw=true  "Anthias Logo")
 
-<br>
 <br>
 
 ## :sparkles: About Anthias
