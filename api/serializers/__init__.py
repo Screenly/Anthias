@@ -34,19 +34,6 @@ def validate_uri(uri):
             raise Exception("Invalid URL. Failed to add asset.")
 
 
-class AssetRequestSerializer(Serializer):
-    name = CharField()
-    uri = CharField()
-    start_date = DateTimeField(default_timezone=timezone.utc)
-    end_date = DateTimeField(default_timezone=timezone.utc)
-    duration = CharField()
-    mimetype = CharField()
-    is_enabled = IntegerField(min_value=0, max_value=1)
-    nocache = IntegerField(min_value=0, max_value=1)
-    play_order = IntegerField()
-    skip_asset_check = IntegerField(min_value=0, max_value=1)
-
-
 class AssetSerializer(ModelSerializer):
     duration = CharField()
     is_enabled = IntegerField(min_value=0, max_value=1)
