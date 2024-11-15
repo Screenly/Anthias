@@ -10,13 +10,16 @@ RUN \
 RUN mkdir -p /app
 WORKDIR /app
 
-COPY package.json package-lock.json /app
+COPY package.json \
+    package-lock.json \
+    webpack.prod.js \
+    webpack.common.js \
+    /app/
 RUN npm install
 
 COPY ./static/js/*.coffee /app/static/js/
 COPY ./static/sass/*.scss /app/static/sass/
-RUN npm run coffee-build && \
-    npm run sass-build
+RUN npm run build
 
 {% endif %}
 {% include 'Dockerfile.base.j2' %}

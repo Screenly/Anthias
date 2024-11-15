@@ -162,36 +162,21 @@ We've also provided a [checklist](/docs/qa-checklist.md) that can serve as a gui
 To get started, you need to start the development server first. See this [section](#dockerized-development-environment)
 for details.
 
-### Installing Node.js dependencies
+### Starting Webpack in development mode
 
-Run the following command from the project root directory.
-
-```bash
-$ docker compose -f docker-compose.dev.yml exec anthias-server \
-    npm install
-```
-
-### Transpiling CSS from SASS
-
-Open a new terminal session and run the following command:
+To start [Webpack](https://webpack.js.org/) in development mode, run the following command:
 
 ```bash
 $ docker compose -f docker-compose.dev.yml exec anthias-server \
-    npm run sass-dev
+    npm run dev
 ```
 
-### Transpiling JS from CoffeeScript
-
-Open a new terminal session and run the following command:
-
-```bash
-$ docker compose -f docker-compose.dev.yml exec anthias-server \
-    npm run coffee-dev
-```
+Making changes to the CoffeeScript or SCSS files will automatically trigger a recompilation,
+generating the corresponding JavaScript and CSS files.
 
 ### Closing the transpiler
 
-Just press `Ctrl-C` to close the SASS and CoffeeScript transpilers.
+Just press `Ctrl-C` to close Webpack in development mode.
 
 ## Linting Python code locally
 

@@ -1,3 +1,5 @@
+import '../sass/anthias.scss'
+
 $().ready ->
 
   $("#request-error .close").click (e) ->
