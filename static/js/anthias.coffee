@@ -1,5 +1,7 @@
 ### anthias ui ###
 
+import '../sass/anthias.scss'
+
 $().ready ->
   $('#subsribe-form-container').popover content: get_template 'subscribe-form'
 
