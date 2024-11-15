@@ -9,41 +9,41 @@ from api.helpers import (
     get_active_asset_ids,
     save_active_assets_ordering,
 )
-from api.serializers import (
-    AssetSerializer,
-    UpdateAssetSerializer,
+from api.serializers.v2 import (
+    AssetSerializerV2,
+    CreateAssetSerializerV2,
+    UpdateAssetSerializerV2
 )
-from api.serializers.v1_2 import CreateAssetSerializerV1_2
 from api.views.mixins import DeleteAssetViewMixin
 from lib.auth import authorized
 
 
-class AssetListViewV1_2(APIView):
-    serializer_class = AssetSerializer
+class AssetListViewV2(APIView):
+    serializer_class = AssetSerializerV2
 
     @extend_schema(
         summary='List assets',
         responses={
-            200: AssetSerializer(many=True)
+            200: AssetSerializerV2(many=True)
         }
     )
     @authorized
     def get(self, request):
         queryset = Asset.objects.all()
-        serializer = self.serializer_class(queryset, many=True)
+        serializer = AssetSerializerV2(queryset, many=True)
         return Response(serializer.data)
 
     @extend_schema(
         summary='Create asset',
-        request=CreateAssetSerializerV1_2,
+        request=CreateAssetSerializerV2,
         responses={
-            201: AssetSerializer
+            201: AssetSerializerV2
         }
     )
     @authorized
     def post(self, request):
         try:
-            serializer = CreateAssetSerializerV1_2(
+            serializer = CreateAssetSerializerV2(
                 data=request.data, unique_name=True)
 
             if not serializer.is_valid():
@@ -61,13 +61,13 @@ class AssetListViewV1_2(APIView):
         asset.refresh_from_db()
 
         return Response(
-            AssetSerializer(asset).data,
+            AssetSerializerV2(asset).data,
             status=status.HTTP_201_CREATED,
         )
 
 
-class AssetViewV1_2(APIView, DeleteAssetViewMixin):
-    serializer_class = AssetSerializer
+class AssetViewV2(APIView, DeleteAssetViewMixin):
+    serializer_class = AssetSerializerV2
 
     @extend_schema(summary='Get asset')
     @authorized
@@ -78,7 +78,7 @@ class AssetViewV1_2(APIView, DeleteAssetViewMixin):
 
     def update(self, request, asset_id, partial=False):
         asset = Asset.objects.get(asset_id=asset_id)
-        serializer = UpdateAssetSerializer(
+        serializer = UpdateAssetSerializerV2(
             asset, data=request.data, partial=partial)
 
         if serializer.is_valid():
@@ -102,13 +102,13 @@ class AssetViewV1_2(APIView, DeleteAssetViewMixin):
         save_active_assets_ordering(active_asset_ids)
         asset.refresh_from_db()
 
-        return Response(AssetSerializer(asset).data)
+        return Response(AssetSerializerV2(asset).data)
 
     @extend_schema(
         summary='Update asset',
-        request=UpdateAssetSerializer,
+        request=UpdateAssetSerializerV2,
         responses={
-            200: AssetSerializer
+            200: AssetSerializerV2
         }
     )
     @authorized
@@ -117,9 +117,9 @@ class AssetViewV1_2(APIView, DeleteAssetViewMixin):
 
     @extend_schema(
         summary='Update asset',
-        request=UpdateAssetSerializer,
+        request=UpdateAssetSerializerV2,
         responses={
-            200: AssetSerializer
+            200: AssetSerializerV2
         }
     )
     @authorized

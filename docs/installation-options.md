@@ -39,11 +39,11 @@ Starting [v0.19.0](https://github.com/Screenly/Anthias/releases/tag/v0.19.0), de
 pinned to the version that you've downloaded. This means that the devices will get updates when a new release (e.g., v0.19.1, etc.)
 is available.
 
-# Installing on Raspberry Pi OS Lite
+# Installing on Raspberry Pi OS Lite or Debian
 
 #### Overview
 
-If you'd like more control over your digital signage instance, try installing it on Raspberry Pi OS Lite.
+If you'd like more control over your digital signage instance, try installing it on Raspberry Pi OS Lite or Debian.
 
 > [!IMPORTANT]
 > Before you start, make sure that you have `curl` installed. If not, you can install it by running:
@@ -53,7 +53,7 @@ If you'd like more control over your digital signage instance, try installing it
 > $ sudo apt install -y curl
 > ```
 
-The tl;dr for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) is:
+The TL;DR for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) or Debian is:
 
 ```
 $ bash <(curl -sL https://install-anthias.srly.io)
