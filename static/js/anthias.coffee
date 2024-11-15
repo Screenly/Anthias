@@ -117,7 +117,7 @@ API.Asset = class Asset extends Backbone.Model
 
 
 API.Assets = class Assets extends Backbone.Collection
-  url: "/api/v1.2/assets"
+  url: "/api/v2/assets"
   model: Asset
   comparator: 'play_order'
 
