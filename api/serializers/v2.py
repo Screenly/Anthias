@@ -61,3 +61,4 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
     is_processing = BooleanField(required=False)
     nocache = BooleanField(required=False)
     skip_asset_check = BooleanField(required=False)
+    duration = IntegerField()
