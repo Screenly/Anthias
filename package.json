@@ -2,10 +2,9 @@
   "name": "anthias",
   "version": "1.0.0",
   "scripts": {
-    "coffee-dev": "coffee --compile --map --watch static/js/*.coffee",
-    "sass-dev": "sass --watch static/sass/:static/css/",
     "coffee-build": "coffee --compile --map static/js/*.coffee",
-    "sass-build": "sass static/sass/:static/css/"
+    "sass-build": "sass static/sass/:static/css/",
+    "watch": "webpack --watch --config webpack.dev.js"
   },
   "dependencies": {
     "bootstrap": "^4.3.1",
