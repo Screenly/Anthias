@@ -7,14 +7,16 @@ module.exports = {
         "settings": "./static/js/settings.coffee",
     },
     output: {
-        path: path.resolve(__dirname, "static"),
-        filename: "js/[name].js"
+        path: path.resolve(__dirname, "static/dist"),
+        filename: "js/[name].js",
+        clean: true,
     },
     plugins: [
         new MiniCssExtractPlugin({
             filename: "css/anthias.css"
         })
     ],
+    // nico end
     module: {
         rules: [
             {
