@@ -16,7 +16,6 @@ module.exports = {
             filename: "css/anthias.css"
         })
     ],
-    // nico end
     module: {
         rules: [
             {
