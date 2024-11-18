@@ -6,7 +6,7 @@
 set -euo pipefail
 
 BRANCH="master"
-ANSIBLE_PLAYBOOK_ARGS=()
+ANSIBLE_PLAYBOOK_ARGS=("--ask-become-pass")
 REPOSITORY="https://github.com/Screenly/Anthias.git"
 ANTHIAS_REPO_DIR="/home/${USER}/screenly"
 GITHUB_API_REPO_URL="https://api.github.com/repos/Screenly/Anthias"
