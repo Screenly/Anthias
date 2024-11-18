@@ -39,6 +39,8 @@ We've tested Anthias and is known to work on the following platforms:
 * Raspberry Pi 2 Model B - 32-bit Bookworm and Bullseye
 * PC (x86 Devices) - 64-bit Bookworm
   * These devices can be something similar to a NUC.
+  * See [this](/docs/x86-installation.md) page for instructions on how to install Debian in a specific way
+    before running the [installation script](/docs/installation-options.md#installing-on-raspberry-pi-os-lite-or-debian).
 
 > [!NOTE]
 > We're still fixing the installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 1.
