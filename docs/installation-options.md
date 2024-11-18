@@ -46,12 +46,8 @@ is available.
 If you'd like more control over your digital signage instance, try installing it on Raspberry Pi OS Lite or Debian.
 
 > [!IMPORTANT]
-> Before you start, make sure that you have `curl` installed. If not, you can install it by running:
-> 
-> ```bash
-> $ sudo apt update
-> $ sudo apt install -y curl
-> ```
+> When installing on PC (x86) devices, make sure do follow the steps in the [x86 installation guide](/docs/x86-installation.md)
+> so that the installation script will work.
 
 The TL;DR for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) or Debian is:
 
