@@ -3,8 +3,8 @@ const path = require("path");
 
 module.exports = {
     entry: {
-        "anthias": "./static/js/anthias.coffee",
-        "settings": "./static/js/settings.coffee",
+        "anthias": "./static/js/anthias.js",
+        "settings": "./static/js/settings.js",
     },
     output: {
         path: path.resolve(__dirname, "static/dist"),
@@ -19,8 +19,16 @@ module.exports = {
     module: {
         rules: [
             {
-                test: /\.coffee$/,
-                use: ["coffee-loader"]
+                test: /\.js$/,
+                exclude: /node_modules/,
+                use: [
+                    {
+                        'loader': 'babel-loader',
+                        'options': {
+                            'presets': ['@babel/preset-env']
+                        }
+                    }
+                ]
             },
             {
                 test: /\.scss$/,
