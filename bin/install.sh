@@ -190,7 +190,13 @@ function run_ansible_playbook() {
     cd ${ANTHIAS_REPO_DIR}/ansible
 
     if [ "$ARCHITECTURE" == "x86_64" ]; then
-        ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "raspberry-pi")
+        if [ ! -f /etc/sudoers.d/010_${USER}-nopasswd ]; then
+            ANSIBLE_PLAYBOOK_ARGS+=("--ask-become-pass")
+        fi
+
+        ANSIBLE_PLAYBOOK_ARGS+=(
+            "--skip-tags" "raspberry-pi"
+        )
     fi
 
     sudo -E -u ${USER} ${SUDO_ARGS[@]} \
@@ -356,9 +362,9 @@ function main() {
 
     gum confirm "${SYSTEM_UPGRADE_PROMPT[@]}" && {
         SYSTEM_UPGRADE="Yes"
-        ANSIBLE_PLAYBOOK_ARGS=("--skip-tags" "system-upgrade")
     } || {
         SYSTEM_UPGRADE="No"
+        ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "system-upgrade")
     }
 
     display_section "User Input Summary"

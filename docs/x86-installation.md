@@ -22,7 +22,7 @@ to flash the disk image to a USB drive.
 * Follow the on-screen instructions to install Debian 12, while making sure to select the following options:
   * Do not set the root password so that the the non-root user will have `sudo` privileges.
   * Use the entire disk.
-  * For **Software selection**, only leave the SSH server and standard system utilities selected.
+  * For **Software selection**, only leave the **SSH server** and **standard system utilities** selected.
     Deselect everything else.
 * The system will reboot after the installation is complete. Make sure to remove the installation media (USB drive)
   before the system reboots.
