@@ -356,9 +356,9 @@ function main() {
 
     gum confirm "${SYSTEM_UPGRADE_PROMPT[@]}" && {
         SYSTEM_UPGRADE="Yes"
-        ANSIBLE_PLAYBOOK_ARGS=("--skip-tags" "system-upgrade")
     } || {
         SYSTEM_UPGRADE="No"
+        ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "system-upgrade")
     }
 
     display_section "User Input Summary"
