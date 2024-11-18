@@ -38,7 +38,7 @@ We've tested Anthias and is known to work on the following platforms:
 * Raspberry Pi 3 Model B - 64-bit Bookworm and Bullseye
 * Raspberry Pi 2 Model B - 32-bit Bookworm and Bullseye
 * PC (x86 Devices) - 64-bit Bookworm
-    * These devices can be something similar to a NUC.
+  * These devices can be something similar to a NUC.
 
 > [!NOTE]
 > We're still fixing the installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 1.
@@ -56,8 +56,8 @@ We've tested Anthias and is known to work on the following platforms:
 
 ## :zap: Quick Links
 
- * [Forum](https://forums.screenly.io/)
- * [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](https://github.com/Screenly/Anthias/tree/master/website))
- * [General documentation](https://github.com/Screenly/Anthias/blob/master/docs/README.md)
- * [Developer documentation](https://github.com/Screenly/Anthias/blob/master/docs/developer-documentation.md)
- * [Migrating assets from Anthias to Screenly](/docs/migrating-assets-to-screenly.md)
+* [Forum](https://forums.screenly.io/)
+* [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](https://github.com/Screenly/Anthias/tree/master/website))
+* [General documentation](https://github.com/Screenly/Anthias/blob/master/docs/README.md)
+* [Developer documentation](https://github.com/Screenly/Anthias/blob/master/docs/developer-documentation.md)
+* [Migrating assets from Anthias to Screenly](/docs/migrating-assets-to-screenly.md)

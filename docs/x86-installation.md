@@ -30,18 +30,24 @@ to flash the disk image to a USB drive.
 ## Preparing for Installation
 
 * Make sure that you have `curl` installed. If not, you can install it by running:
+
   ```bash
   $ sudo apt update
   $ sudo apt install -y curl
   ```
+
 * Disable password when running `sudo`:
+
   ```bash
   $ sudo visudo
   ```
+
   Add the following line to the end of the file:
+
   ```
   <username> ALL=(ALL) NOPASSWD: ALL
   ```
+
   Replace `<username>` with your username.
   Save and exit the file.
 
