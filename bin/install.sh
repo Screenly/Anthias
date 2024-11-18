@@ -6,7 +6,7 @@
 set -euo pipefail
 
 BRANCH="master"
-ANSIBLE_PLAYBOOK_ARGS=("--ask-become-pass")
+ANSIBLE_PLAYBOOK_ARGS=()
 REPOSITORY="https://github.com/Screenly/Anthias.git"
 ANTHIAS_REPO_DIR="/home/${USER}/screenly"
 GITHUB_API_REPO_URL="https://api.github.com/repos/Screenly/Anthias"
@@ -190,7 +190,13 @@ function run_ansible_playbook() {
     cd ${ANTHIAS_REPO_DIR}/ansible
 
     if [ "$ARCHITECTURE" == "x86_64" ]; then
-        ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "raspberry-pi")
+        if [ ! -f /etc/sudoers.d/010_${USER}-nopasswd ]; then
+            ANSIBLE_PLAYBOOK_ARGS+=("--ask-become-pass")
+        fi
+
+        ANSIBLE_PLAYBOOK_ARGS+=(
+            "--skip-tags" "raspberry-pi"
+        )
     fi
 
     sudo -E -u ${USER} ${SUDO_ARGS[@]} \
