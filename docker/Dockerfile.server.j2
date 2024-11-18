@@ -38,11 +38,8 @@ WORKDIR /usr/src/app
 
 {% if environment == 'production' %}
 COPY --from=node-builder \
-    /app/static/css/ \
-    /usr/src/app/static/css/
-COPY --from=node-builder \
-    /app/static/js/*.js* \
-    /usr/src/app/static/js/
+    /app/static/dist/ \
+    /usr/src/app/static/dist/
 {% endif %}
 
 ENV GIT_HASH={{ git_hash }}

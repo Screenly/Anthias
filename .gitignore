@@ -56,8 +56,3 @@ db.sqlite3
 
 # Django
 staticfiles/
-
-# Static files
-static/js/anthias.js*
-static/js/settings.js*
-static/css/anthias.css*
