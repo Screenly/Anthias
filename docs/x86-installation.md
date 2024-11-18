@@ -6,7 +6,7 @@ To make sure that the script will work, you need to install Debian 12 in a speci
 
 ## Preparing the Disk Image
 
-You can download the disk image [here](https://www.debian.org/download). The file name sgould look something
+You can download the disk image [here](https://www.debian.org/download). The file name should look something
 like `debian-12.x.x-amd64-netinst.iso`.
 
 ## Flashing the Disk Image to a USB Drive
