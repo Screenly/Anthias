@@ -19,103 +19,103 @@ jobs:
       release: true
       tag: ${{ inputs.tag }}
       commit: ${{ inputs.commit }}
-  balena-build-images:
-    strategy:
-      matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4']
-    runs-on: ubuntu-20.04
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2.3.4
+  # balena-build-images:
+  #   strategy:
+  #     matrix:
+  #       board: ['pi1', 'pi2', 'pi3', 'pi4']
+  #   runs-on: ubuntu-20.04
+  #   permissions:
+  #     contents: write
+  #     id-token: write
+  #     attestations: write
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v2.3.4
 
-      - name: Get base board
-        run: |
-          if [ "${{ matrix.board }}" == 'pi1' ]; then
-            echo "BALENA_IMAGE=raspberry-pi" >> $GITHUB_ENV
-          elif [ "${{ matrix.board }}" == 'pi2' ]; then
-            echo "BALENA_IMAGE=raspberry-pi2" >> $GITHUB_ENV
-          elif [ "${{ matrix.board }}" == 'pi3' ]; then
-            echo "BALENA_IMAGE=raspberrypi3" >> $GITHUB_ENV
-          elif [ "${{ matrix.board }}" == 'pi4' ]; then
-            echo "BALENA_IMAGE=raspberrypi4-64" >> $GITHUB_ENV
-          fi
+  #     - name: Get base board
+  #       run: |
+  #         if [ "${{ matrix.board }}" == 'pi1' ]; then
+  #           echo "BALENA_IMAGE=raspberry-pi" >> $GITHUB_ENV
+  #         elif [ "${{ matrix.board }}" == 'pi2' ]; then
+  #           echo "BALENA_IMAGE=raspberry-pi2" >> $GITHUB_ENV
+  #         elif [ "${{ matrix.board }}" == 'pi3' ]; then
+  #           echo "BALENA_IMAGE=raspberrypi3" >> $GITHUB_ENV
+  #         elif [ "${{ matrix.board }}" == 'pi4' ]; then
+  #           echo "BALENA_IMAGE=raspberrypi4-64" >> $GITHUB_ENV
+  #         fi
 
-      - name: balena CLI Action - download
-        uses: balena-labs-research/community-cli-action@1.0.0
-        with:
-          balena_token: ${{secrets.BALENA_TOKEN}}
-          balena_cli_commands: |
-            os download "$BALENA_IMAGE" \
-              --output "$BALENA_IMAGE.img" \
-              --version default
-          balena_cli_version: 18.1.2
+  #     - name: balena CLI Action - download
+  #       uses: balena-labs-research/community-cli-action@1.0.0
+  #       with:
+  #         balena_token: ${{secrets.BALENA_TOKEN}}
+  #         balena_cli_commands: |
+  #           os download "$BALENA_IMAGE" \
+  #             --output "$BALENA_IMAGE.img" \
+  #             --version default
+  #         balena_cli_version: 18.1.2
 
-      - name: balena CLI Action - preload
-        uses: balena-labs-research/community-cli-action@1.0.0
-        with:
-          balena_token: ${{secrets.BALENA_TOKEN}}
-          balena_cli_commands: |
-            preload \
-              "$BALENA_IMAGE.img" \
-              --fleet screenly_ose/anthias-${{ matrix.board }} \
-              --pin-device-to-release \
-              --splash-image ansible/roles/splashscreen/files/splashscreen.png \
-              --commit latest
-          balena_cli_version: 18.1.2
+  #     - name: balena CLI Action - preload
+  #       uses: balena-labs-research/community-cli-action@1.0.0
+  #       with:
+  #         balena_token: ${{secrets.BALENA_TOKEN}}
+  #         balena_cli_commands: |
+  #           preload \
+  #             "$BALENA_IMAGE.img" \
+  #             --fleet screenly_ose/anthias-${{ matrix.board }} \
+  #             --pin-device-to-release \
+  #             --splash-image ansible/roles/splashscreen/files/splashscreen.png \
+  #             --commit latest
+  #         balena_cli_version: 18.1.2
 
-      - name: balena CLI Action - configure
-        uses: balena-labs-research/community-cli-action@1.0.0
-        with:
-          balena_token: ${{secrets.BALENA_TOKEN}}
-          balena_cli_commands: |
-            os configure \
-              "$BALENA_IMAGE.img" \
-              --config-network=ethernet  \
-              --fleet screenly_ose/anthias-${{ matrix.board }}
-          balena_cli_version: 18.1.2
+  #     - name: balena CLI Action - configure
+  #       uses: balena-labs-research/community-cli-action@1.0.0
+  #       with:
+  #         balena_token: ${{secrets.BALENA_TOKEN}}
+  #         balena_cli_commands: |
+  #           os configure \
+  #             "$BALENA_IMAGE.img" \
+  #             --config-network=ethernet  \
+  #             --fleet screenly_ose/anthias-${{ matrix.board }}
+  #         balena_cli_version: 18.1.2
 
-      - name: Package up image
-        run: |
-          sha256sum "$BALENA_IMAGE.img" >> "$(date -I)-$BALENA_IMAGE.sha256"
-          zip -9 \
-            "$(date -I)-$BALENA_IMAGE.zip" \
-            "$BALENA_IMAGE.img"
-          sha256sum "$(date -I)-$BALENA_IMAGE.zip" >> \
-            "$(date -I)-$BALENA_IMAGE.sha256"
+  #     - name: Package up image
+  #       run: |
+  #         sha256sum "$BALENA_IMAGE.img" >> "$(date -I)-$BALENA_IMAGE.sha256"
+  #         zip -9 \
+  #           "$(date -I)-$BALENA_IMAGE.zip" \
+  #           "$BALENA_IMAGE.img"
+  #         sha256sum "$(date -I)-$BALENA_IMAGE.zip" >> \
+  #           "$(date -I)-$BALENA_IMAGE.sha256"
 
-          # Build Raspberry Pi Imager metadata
-          jq --null-input \
-            --arg BOARD "${{ matrix.board }}" \
-            --arg IMAGE_SHA256 "$(sha256sum "$BALENA_IMAGE.img" | cut -d ' ' -f 1)" \
-            --arg IMAGE_SIZE "$(wc -c < "$BALENA_IMAGE.img" | xargs)" \
-            --arg DOWNLOAD_SHA256 "$(sha256sum "$(date -I)-$BALENA_IMAGE.zip" | cut -d ' ' -f 1)" \
-            --arg DOWNLOAD_SIZE "$(wc -c < "$(date -I)-$BALENA_IMAGE.zip" | xargs)" \
-            --arg RELEASE_DATE "$(date -I)" \
-            '{
-              "name": ("Anthias (" + $BOARD + ")"),
-              "description": "Anthias, formerly known as Screenly OSE, is the most popular open source digital signage project in the world.",
-              "icon": "https://raw.githubusercontent.com/Screenly/Anthias/master/static/img/square-dark.svg",
-              "website": "https://anthias.screenly.io",
-              "extract_size": $IMAGE_SIZE,
-              "extract_sha256": $IMAGE_SHA256,
-              "image_download_size": $DOWNLOAD_SIZE,
-              "image_download_sha256": $DOWNLOAD_SHA256,
-              "release_date": $RELEASE_DATE
-            }' > "$(date -I)-$BALENA_IMAGE.json"
+  #         # Build Raspberry Pi Imager metadata
+  #         jq --null-input \
+  #           --arg BOARD "${{ matrix.board }}" \
+  #           --arg IMAGE_SHA256 "$(sha256sum "$BALENA_IMAGE.img" | cut -d ' ' -f 1)" \
+  #           --arg IMAGE_SIZE "$(wc -c < "$BALENA_IMAGE.img" | xargs)" \
+  #           --arg DOWNLOAD_SHA256 "$(sha256sum "$(date -I)-$BALENA_IMAGE.zip" | cut -d ' ' -f 1)" \
+  #           --arg DOWNLOAD_SIZE "$(wc -c < "$(date -I)-$BALENA_IMAGE.zip" | xargs)" \
+  #           --arg RELEASE_DATE "$(date -I)" \
+  #           '{
+  #             "name": ("Anthias (" + $BOARD + ")"),
+  #             "description": "Anthias, formerly known as Screenly OSE, is the most popular open source digital signage project in the world.",
+  #             "icon": "https://raw.githubusercontent.com/Screenly/Anthias/master/static/img/square-dark.svg",
+  #             "website": "https://anthias.screenly.io",
+  #             "extract_size": $IMAGE_SIZE,
+  #             "extract_sha256": $IMAGE_SHA256,
+  #             "image_download_size": $DOWNLOAD_SIZE,
+  #             "image_download_sha256": $DOWNLOAD_SHA256,
+  #             "release_date": $RELEASE_DATE
+  #           }' > "$(date -I)-$BALENA_IMAGE.json"
 
-      - uses: ncipollo/release-action@v1.11.2
-        with:
-          allowUpdates: true
-          prerelease: true
-          artifacts: "*raspberry*.zip,*raspberry*.sha256,*raspberry*.json"
-          tag: ${{ inputs.tag }}
-          commit: ${{ inputs.commit }}
+  #     - uses: ncipollo/release-action@v1.11.2
+  #       with:
+  #         allowUpdates: true
+  #         prerelease: true
+  #         artifacts: "*raspberry*.zip,*raspberry*.sha256,*raspberry*.json"
+  #         tag: ${{ inputs.tag }}
+  #         commit: ${{ inputs.commit }}
 
-      - name: Attest
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-path: '${{ github.workspace }}/*raspberry*.zip'
+  #     - name: Attest
+  #       uses: actions/attest-build-provenance@v1
+  #       with:
+  #         subject-path: '${{ github.workspace }}/*raspberry*.zip'
