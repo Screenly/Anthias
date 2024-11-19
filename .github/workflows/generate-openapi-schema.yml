@@ -83,10 +83,12 @@ jobs:
       - name: Generate OpenAPI Schema
         run: |
           docker compose -f docker-compose.dev.yml exec anthias-server \
-            ./manage.py spectacular --file anthias-api-schema.yml
+            ./manage.py spectacular \
+            --format openapi-json \
+            --file anthias-api-schema.json
 
       - name: Upload the OpenAPI Schema
         uses: actions/upload-artifact@v3
         with:
           name: anthias-api-schema
-          path: anthias-api-schema.yml
+          path: anthias-api-schema.json
