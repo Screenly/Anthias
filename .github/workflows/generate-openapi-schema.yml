@@ -33,9 +33,10 @@ on:
       - '!bin/install.sh'
       - '!bin/upgrade_containers.sh'
       - '!tests/**'
+  workflow_call:
 
 jobs:
-  generate_openapi_schema:
+  generate-openapi-schema:
     runs-on: ubuntu-latest
 
     steps:
