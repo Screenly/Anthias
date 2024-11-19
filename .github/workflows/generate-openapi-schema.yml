@@ -89,7 +89,8 @@ jobs:
         run: |
           poetry run python tools/image_builder \
             --dockerfiles-only \
-            --disable-cache-mounts
+            --disable-cache-mounts \
+            --environment=development
           docker compose -f docker-compose.dev.yml build
 
       - name: Start the Containers
