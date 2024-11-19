@@ -33,7 +33,6 @@ on:
       - '!bin/install.sh'
       - '!bin/upgrade_containers.sh'
       - '!tests/**'
-  workflow_call:
 
 jobs:
   generate-openapi-schema:
