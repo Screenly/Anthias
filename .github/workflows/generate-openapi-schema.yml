@@ -109,6 +109,13 @@ jobs:
           name: anthias-api-schema
           path: anthias-api-schema.json
 
+      - name: Print Values (Debug)
+        run: |
+          echo "Release: ${{ inputs.release }}"
+          echo "Tag: ${{ inputs.tag }}"
+          echo "Commit: ${{ inputs.commit }}"
+          echo "Event Name: ${{ github.event_name }}"
+
       - name: Upload the OpenAPI Schema as a release artifact
         if: github.event_name == 'workflow_call' && inputs.release == true
         uses: ncipollo/release-action@v1.11.2
