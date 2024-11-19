@@ -110,7 +110,7 @@ jobs:
           path: anthias-api-schema.json
 
       - name: Upload the OpenAPI Schema as a release artifact
-        if: ${{ github.event_name == 'workflow_call' && inputs.release == true }}
+        if: github.event_name == 'workflow_call' && inputs.release == true
         uses: ncipollo/release-action@v1.11.2
         with:
           allowUpdates: true
