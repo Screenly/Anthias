@@ -292,7 +292,7 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(data['viewlog'], 'Not yet implemented')
 
     @mock.patch(
-        'api.views.v1.reboot_anthias.apply_async',
+        'api.views.mixins.reboot_anthias.apply_async',
         side_effect=(lambda: None)
     )
     def test_reboot(self, reboot_anthias_mock):
@@ -303,7 +303,7 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(reboot_anthias_mock.call_count, 1)
 
     @mock.patch(
-        'api.views.v1.shutdown_anthias.apply_async',
+        'api.views.mixins.shutdown_anthias.apply_async',
         side_effect=(lambda: None)
     )
     def test_shutdown(self, shutdown_anthias_mock):
