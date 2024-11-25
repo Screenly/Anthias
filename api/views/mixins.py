@@ -1,6 +1,9 @@
+import uuid
+
+from base64 import b64encode
 from inspect import cleandoc
-from drf_spectacular.utils import extend_schema
-from mimetypes import guess_type
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
+from mimetypes import guess_type, guess_extension
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -8,6 +11,7 @@ from lib import backup_helper
 from lib.auth import authorized
 
 from anthias_app.models import Asset
+from api.helpers import save_active_assets_ordering
 from celery_tasks import reboot_anthias, shutdown_anthias
 from os import path, remove
 from settings import settings, ZmqPublisher
@@ -116,3 +120,170 @@ class ShutdownViewMixin(APIView):
     def post(self, request):
         shutdown_anthias.apply_async()
         return Response(status=status.HTTP_200_OK)
+
+
+class FileAssetViewMixin(APIView):
+    @extend_schema(
+        summary='Upload file asset',
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'file_upload': {
+                        'type': 'string',
+                        'format': 'binary'
+                    }
+                }
+            }
+        },
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'uri': {'type': 'string'},
+                    'ext': {'type': 'string'}
+                }
+            }
+        }
+    )
+    @authorized
+    def post(self, request):
+        file_upload = request.data.get('file_upload')
+        filename = file_upload.name
+        file_type = guess_type(filename)[0]
+
+        if not file_type:
+            raise Exception("Invalid file type.")
+
+        if file_type.split('/')[0] not in ['image', 'video']:
+            raise Exception("Invalid file type.")
+
+        file_path = path.join(
+            settings['assetdir'],
+            uuid.uuid5(uuid.NAMESPACE_URL, filename).hex,
+        ) + ".tmp"
+
+        if 'Content-Range' in request.headers:
+            range_str = request.headers['Content-Range']
+            start_bytes = int(range_str.split(' ')[1].split('-')[0])
+            with open(file_path, 'ab') as f:
+                f.seek(start_bytes)
+                f.write(file_upload.read())
+        else:
+            with open(file_path, 'wb') as f:
+                f.write(file_upload.read())
+
+        return Response({'uri': file_path, 'ext': guess_extension(file_type)})
+
+
+class AssetContentViewMixin(APIView):
+    @extend_schema(
+        summary='Get asset content',
+        description=cleandoc("""
+        The content of the asset.
+        `type` can either be `file` or `url`.
+
+        In case of a file, the fields `mimetype`, `filename`, and `content`
+        will be present. In case of a URL, the field `url` will be present.
+        """),
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'type': {'type': 'string'},
+                    'url': {'type': 'string'},
+                    'filename': {'type': 'string'},
+                    'mimetype': {'type': 'string'},
+                    'content': {'type': 'string'},
+                }
+            }
+        }
+    )
+    @authorized
+    def get(self, request, asset_id, format=None):
+        asset = Asset.objects.get(asset_id=asset_id)
+
+        if path.isfile(asset.uri):
+            filename = asset.name
+
+            with open(asset.uri, 'rb') as f:
+                content = f.read()
+
+            mimetype = guess_type(filename)[0]
+            if not mimetype:
+                mimetype = 'application/octet-stream'
+
+            result = {
+                'type': 'file',
+                'filename': filename,
+                'content': b64encode(content).decode(),
+                'mimetype': mimetype
+            }
+        else:
+            result = {
+                'type': 'url',
+                'url': asset.uri
+            }
+
+        return Response(result)
+
+
+class PlaylistOrderViewMixin(APIView):
+    @extend_schema(
+        summary='Update playlist order',
+        request={
+            'application/x-www-form-urlencoded': {
+                'type': 'object',
+                'properties': {
+                    'ids': {
+                        'type': 'string',
+                        'description': cleandoc(
+                            """
+                            Comma-separated list of asset IDs in the order
+                            they should be played. For example:
+
+                            `793406aa1fd34b85aa82614004c0e63a,1c5cfa719d1f4a9abae16c983a18903b,9c41068f3b7e452baf4dc3f9b7906595`
+                            """
+                        )
+                    }
+                },
+            }
+        }
+    )
+    @authorized
+    def post(self, request):
+        asset_ids = request.data.get('ids', '').split(',')
+        save_active_assets_ordering(asset_ids)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AssetsControlViewMixin(APIView):
+    @extend_schema(
+        summary='Control asset playback',
+        description=cleandoc("""
+        Use any of the following commands to control asset playback:
+        * `next` - Show the next asset
+        * `previous` - Show the previous asset
+        * `asset&{asset_id}` - Show the asset with the specified `asset_id`
+        """),
+        responses={
+            200: {
+                'type': 'string',
+                'example': 'Asset switched',
+            }
+        },
+        parameters=[
+            OpenApiParameter(
+                name='command',
+                location=OpenApiParameter.PATH,
+                type=OpenApiTypes.STR,
+                enum=['next', 'previous', 'asset&{asset_id}'],
+            )
+        ]
+    )
+    @authorized
+    def get(self, request, command):
+        publisher = ZmqPublisher.get_instance()
+        publisher.send_to_viewer(command)
+        return Response("Asset switched")

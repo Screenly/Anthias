@@ -15,11 +15,15 @@ from api.serializers.v2 import (
     UpdateAssetSerializerV2
 )
 from api.views.mixins import (
+    AssetContentViewMixin,
+    AssetsControlViewMixin,
     BackupViewMixin,
     DeleteAssetViewMixin,
+    PlaylistOrderViewMixin,
     RebootViewMixin,
     RecoverViewMixin,
-    ShutdownViewMixin
+    ShutdownViewMixin,
+    FileAssetViewMixin
 )
 from lib.auth import authorized
 
@@ -146,4 +150,20 @@ class RebootViewV2(RebootViewMixin):
 
 
 class ShutdownViewV2(ShutdownViewMixin):
+    pass
+
+
+class FileAssetViewV2(FileAssetViewMixin):
+    pass
+
+
+class AssetContentViewV2(AssetContentViewMixin):
+    pass
+
+
+class PlaylistOrderViewV2(PlaylistOrderViewMixin):
+    pass
+
+
+class AssetsControlViewV2(AssetsControlViewMixin):
     pass
