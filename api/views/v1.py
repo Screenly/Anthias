@@ -24,10 +24,7 @@ from drf_spectacular.utils import (
     OpenApiRequest,
 )
 from hurry.filesize import size
-from lib import (
-    backup_helper,
-    diagnostics
-)
+from lib import diagnostics
 from lib.auth import authorized
 from lib.github import is_up_to_date
 from lib.utils import connect_to_redis
@@ -37,6 +34,7 @@ from anthias_app.models import Asset
 from api.views.mixins import (
     BackupViewMixin,
     DeleteAssetViewMixin,
+    RecoverViewMixin,
 )
 from celery_tasks import reboot_anthias, shutdown_anthias
 from settings import settings, ZmqCollector, ZmqPublisher
@@ -297,51 +295,8 @@ class BackupViewV1(BackupViewMixin):
     pass
 
 
-class RecoverView(APIView):
-    @extend_schema(
-        summary='Recover from backup',
-        description=cleandoc("""
-        Recover data from a backup file. The backup file must be
-        a `.tar.gz` file.
-        """),
-        request={
-            'multipart/form-data': {
-                'type': 'object',
-                'properties': {
-                    'backup_upload': {
-                        'type': 'string',
-                        'format': 'binary'
-                    }
-                }
-            }
-        },
-        responses={
-            200: {
-                'type': 'string',
-                'example': 'Recovery successful.',
-            }
-        },
-    )
-    @authorized
-    def post(self, request):
-        publisher = ZmqPublisher.get_instance()
-        file_upload = (request.data.get('backup_upload'))
-        filename = file_upload.name
-
-        if guess_type(filename)[0] != 'application/x-tar':
-            raise Exception("Incorrect file extension.")
-        try:
-            publisher.send_to_viewer('stop')
-            location = path.join("static", filename)
-
-            with open(location, 'wb') as f:
-                f.write(file_upload.read())
-
-            backup_helper.recover(location)
-
-            return Response("Recovery successful.")
-        finally:
-            publisher.send_to_viewer('play')
+class RecoverViewV1(RecoverViewMixin):
+    pass
 
 
 class AssetsControlView(APIView):

@@ -16,7 +16,8 @@ from api.serializers.v2 import (
 )
 from api.views.mixins import (
     BackupViewMixin,
-    DeleteAssetViewMixin
+    DeleteAssetViewMixin,
+    RecoverViewMixin
 )
 from lib.auth import authorized
 
@@ -131,4 +132,8 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
 
 
 class BackupViewV2(BackupViewMixin):
+    pass
+
+
+class RecoverViewV2(RecoverViewMixin):
     pass

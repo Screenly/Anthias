@@ -6,7 +6,7 @@ from .views.v1 import (
     FileAssetView,
     PlaylistOrderView,
     BackupViewV1,
-    RecoverView,
+    RecoverViewV1,
     AssetsControlView,
     InfoView,
     RebootView,
@@ -24,7 +24,8 @@ from .views.v1_2 import (
 from .views.v2 import (
     AssetListViewV2,
     AssetViewV2,
-    BackupViewV2
+    BackupViewV2,
+    RecoverViewV2
 )
 
 app_name = 'api'
@@ -54,7 +55,7 @@ urlpatterns = [
     ),
     path('v1/file_asset', FileAssetView.as_view(), name='file_asset_v1'),
     path('v1/backup', BackupViewV1.as_view(), name='backup_v1'),
-    path('v1/recover', RecoverView.as_view(), name='recover_v1'),
+    path('v1/recover', RecoverViewV1.as_view(), name='recover_v1'),
     path('v1/info', InfoView.as_view(), name='info_v1'),
     path('v1/reboot', RebootView.as_view(), name='reboot_v1'),
     path('v1/shutdown', ShutdownView.as_view(), name='shutdown_v1'),
@@ -88,4 +89,5 @@ urlpatterns = [
         name='asset_detail_v2'
     ),
     path('v2/backup', BackupViewV2.as_view(), name='backup_v2'),
+    path('v2/recover', RecoverViewV2.as_view(), name='recover_v2'),
 ]
