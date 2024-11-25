@@ -34,9 +34,10 @@ from anthias_app.models import Asset
 from api.views.mixins import (
     BackupViewMixin,
     DeleteAssetViewMixin,
+    RebootViewMixin,
     RecoverViewMixin,
+    ShutdownViewMixin,
 )
-from celery_tasks import reboot_anthias, shutdown_anthias
 from settings import settings, ZmqCollector, ZmqPublisher
 
 
@@ -371,20 +372,12 @@ class InfoView(APIView):
         })
 
 
-class RebootView(APIView):
-    @extend_schema(summary='Reboot system')
-    @authorized
-    def post(self, request):
-        reboot_anthias.apply_async()
-        return Response(status=status.HTTP_200_OK)
+class RebootViewV1(RebootViewMixin):
+    pass
 
 
-class ShutdownView(APIView):
-    @extend_schema(summary='Shut down system')
-    @authorized
-    def post(self, request):
-        shutdown_anthias.apply_async()
-        return Response(status=status.HTTP_200_OK)
+class ShutdownViewV1(ShutdownViewMixin):
+    pass
 
 
 class ViewerCurrentAssetView(APIView):

@@ -8,6 +8,7 @@ from lib import backup_helper
 from lib.auth import authorized
 
 from anthias_app.models import Asset
+from celery_tasks import reboot_anthias, shutdown_anthias
 from os import path, remove
 from settings import settings, ZmqPublisher
 
@@ -99,3 +100,19 @@ class RecoverViewMixin(APIView):
             return Response("Recovery successful.")
         finally:
             publisher.send_to_viewer('play')
+
+
+class RebootViewMixin(APIView):
+    @extend_schema(summary='Reboot system')
+    @authorized
+    def post(self, request):
+        reboot_anthias.apply_async()
+        return Response(status=status.HTTP_200_OK)
+
+
+class ShutdownViewMixin(APIView):
+    @extend_schema(summary='Shut down system')
+    @authorized
+    def post(self, request):
+        shutdown_anthias.apply_async()
+        return Response(status=status.HTTP_200_OK)
