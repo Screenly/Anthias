@@ -34,7 +34,10 @@ from lib.utils import connect_to_redis
 from mimetypes import guess_type, guess_extension
 from os import path, statvfs
 from anthias_app.models import Asset
-from api.views.mixins import DeleteAssetViewMixin
+from api.views.mixins import (
+    BackupViewMixin,
+    DeleteAssetViewMixin,
+)
 from celery_tasks import reboot_anthias, shutdown_anthias
 from settings import settings, ZmqCollector, ZmqPublisher
 
@@ -290,29 +293,8 @@ class PlaylistOrderView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class BackupView(APIView):
-    @extend_schema(
-        summary='Create backup',
-        description=cleandoc("""
-        Create a backup of the current Anthias instance, which
-        includes the following:
-        * current settings
-        * image and video assets
-        * asset metadata (e.g. name, duration, play order, status),
-          which is stored in a SQLite database
-        """),
-        responses={
-            201: {
-                'type': 'string',
-                'example': 'anthias-backup-2021-09-16T15-00-00.tar.gz',
-                'description': 'Backup file name'
-            }
-        }
-    )
-    @authorized
-    def post(self, request):
-        filename = backup_helper.create_backup(name=settings['player_name'])
-        return Response(filename, status=status.HTTP_201_CREATED)
+class BackupViewV1(BackupViewMixin):
+    pass
 
 
 class RecoverView(APIView):

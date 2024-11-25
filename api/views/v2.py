@@ -14,7 +14,10 @@ from api.serializers.v2 import (
     CreateAssetSerializerV2,
     UpdateAssetSerializerV2
 )
-from api.views.mixins import DeleteAssetViewMixin
+from api.views.mixins import (
+    BackupViewMixin,
+    DeleteAssetViewMixin
+)
 from lib.auth import authorized
 
 
@@ -125,3 +128,7 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
     @authorized
     def put(self, request, asset_id):
         return self.update(request, asset_id, partial=False)
+
+
+class BackupViewV2(BackupViewMixin):
+    pass
