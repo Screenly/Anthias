@@ -174,7 +174,10 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Anthias API',
-    'VERSION': '1.2.0',
+    'VERSION': '2.0.0',
+    'PREPROCESSING_HOOKS': [
+        'api.api_docs_filter_spec.preprocessing_filter_spec'
+    ],
 }
 
 # `django-dbbackup` settings
