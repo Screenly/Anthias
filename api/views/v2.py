@@ -14,7 +14,17 @@ from api.serializers.v2 import (
     CreateAssetSerializerV2,
     UpdateAssetSerializerV2
 )
-from api.views.mixins import DeleteAssetViewMixin
+from api.views.mixins import (
+    AssetContentViewMixin,
+    AssetsControlViewMixin,
+    BackupViewMixin,
+    DeleteAssetViewMixin,
+    PlaylistOrderViewMixin,
+    RebootViewMixin,
+    RecoverViewMixin,
+    ShutdownViewMixin,
+    FileAssetViewMixin
+)
 from lib.auth import authorized
 
 
@@ -125,3 +135,35 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
     @authorized
     def put(self, request, asset_id):
         return self.update(request, asset_id, partial=False)
+
+
+class BackupViewV2(BackupViewMixin):
+    pass
+
+
+class RecoverViewV2(RecoverViewMixin):
+    pass
+
+
+class RebootViewV2(RebootViewMixin):
+    pass
+
+
+class ShutdownViewV2(ShutdownViewMixin):
+    pass
+
+
+class FileAssetViewV2(FileAssetViewMixin):
+    pass
+
+
+class AssetContentViewV2(AssetContentViewMixin):
+    pass
+
+
+class PlaylistOrderViewV2(PlaylistOrderViewMixin):
+    pass
+
+
+class AssetsControlViewV2(AssetsControlViewMixin):
+    pass
