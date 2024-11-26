@@ -207,7 +207,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         autoUpload: false
         sequentialUploads: true
         maxChunkSize: 5000000 #5 MB
-        url: 'api/v1/file_asset'
+        url: 'api/v2/file_asset'
         progressall: (e, data) => if data.loaded and data.total
           (@$ '.progress .bar').css 'width', "#{data.loaded / data.total * 100}%"
         add: (e, data) ->
@@ -533,7 +533,7 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
     (@$ 'input, button').prop 'disabled', on
 
   download: (e) =>
-    $.get '/api/v1/assets/' + @model.id + '/content', (result) ->
+    $.get '/api/v2/assets/' + @model.id + '/content', (result) ->
       switch result['type']
         when 'url'
           window.open(result['url'])
@@ -595,7 +595,7 @@ API.View.AssetsView = class AssetsView extends Backbone.View
     @collection.get(id).set('play_order', i) for id, i in active
     @collection.get(el.id).set('play_order', active.length) for el in (@$ '#inactive-assets tr').toArray()
 
-    $.post '/api/v1/assets/order', ids: ((@$ '#active-assets').sortable 'toArray').join ','
+    $.post '/api/v2/assets/order', ids: ((@$ '#active-assets').sortable 'toArray').join ','
 
   render: =>
     @collection.sort()
@@ -665,7 +665,7 @@ API.App = class App extends Backbone.View
     no
 
   previous: (e) ->
-    $.get '/api/v1/assets/control/previous'
+    $.get '/api/v2/assets/control/previous'
 
   next: (e) ->
-    $.get '/api/v1/assets/control/next'
+    $.get '/api/v2/assets/control/next'
