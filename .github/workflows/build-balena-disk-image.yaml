@@ -13,6 +13,14 @@ on:
         default: 'master'
 
 jobs:
+  generate-openapi-schema:
+    uses: ./.github/workflows/generate-openapi-schema.yml
+    permissions:
+      contents: write
+    with:
+      release: true
+      tag: ${{ inputs.tag }}
+      commit: ${{ inputs.commit }}
   balena-build-images:
     strategy:
       matrix:
