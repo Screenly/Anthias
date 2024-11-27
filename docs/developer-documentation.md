@@ -23,6 +23,12 @@ To simplify development of the server module of Anthias, we've created a Docker 
 > [!IMPORTANT]
 > Anthias is using Docker's [buildx](https://docs.docker.com/engine/reference/commandline/buildx/) for the image builds. This is used both for cross compilation as well as for local caching. You might need to run `docker buildx create --use` first.
 
+> [!IMPORTANT]
+> If you're using a Mac, you might need to install the following dependencies:
+> * [Docker Desktop](https://www.docker.com/products/docker-desktop)
+> * [Docker Compose](https://docs.docker.com/compose/install/)
+> * [Brew](https://brew.sh/)
+
 Assuming you're in the source code repository, simply run:
 
 ```bash
