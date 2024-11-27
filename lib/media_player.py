@@ -47,7 +47,8 @@ class FFMPEGMediaPlayer(MediaPlayer):
 
     def stop(self):
         try:
-            self.run.kill()
+            if self.run:
+                self.run.kill()
         except OSError:
             pass
 
