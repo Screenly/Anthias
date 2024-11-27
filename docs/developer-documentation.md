@@ -40,6 +40,13 @@ $ ./bin/start_development_server.sh
  ✔ Container anthias-anthias-nginx-1      Started                            0.5s
 ```
 
+> [!NOTE]
+> Running the script will install Python 3.11, [pyenv](https://github.com/pyenv/pyenv),
+> and [Poetry](https://python-poetry.org/) on your machine. This is to ensure that the
+> development environment is consistent across different machines.
+>
+> The script currently supports Debian-based systems and macOS.
+
 Running the command above will start the development server and you should be able to
 access the web interface at `http://localhost:8000`.
 
