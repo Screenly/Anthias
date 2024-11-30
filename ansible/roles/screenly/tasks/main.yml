@@ -11,7 +11,7 @@
     - .config
     - screenly_assets
 
-- name: Create empy .asoundrc
+- name: Create empty .asoundrc
   ansible.builtin.file:
     path: "/home/{{ lookup('env', 'USER') }}/.asoundrc"
     state: touch
