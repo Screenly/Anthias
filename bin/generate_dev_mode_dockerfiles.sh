@@ -9,6 +9,7 @@ BUILD_TARGET="${BUILD_TARGET:-x86}"
 ENVIRONMENT="${ENVIRONMENT:-development}"
 
 docker build \
+    --pull \
     -f "$BUILDER_DOCKERFILE" \
     -t "$BUILDER_IMAGE_NAME" .
 
