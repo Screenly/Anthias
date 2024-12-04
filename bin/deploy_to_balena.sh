@@ -88,21 +88,6 @@ function prepare_balena_file() {
     envsubst > balena-deploy/docker-compose.yml
 }
 
-function initialize_python_environment() {
-    ./bin/install_poetry.sh
-
-    # Add `pyenv` to the load path.
-    export PYENV_ROOT="$HOME/.pyenv"
-    [[ -d $PYENV_ROOT/bin ]] && \
-        export PATH="$PYENV_ROOT/bin:$PATH"
-    eval "$(pyenv init -)"
-
-    # Add `poetry to the load path.
-    export PATH="$HOME/.local/bin:$PATH"
-
-    poetry install --only=docker-image-builder
-}
-
 if ! balena whoami; then
     echo "Please login to Balena with `balena login` command, then run this script again."
     exit 0
@@ -117,11 +102,9 @@ if [[ -z "${DEV_MODE+x}" ]]; then
 else
     echo "Running in dev mode..."
 
-    initialize_python_environment
-    poetry run python tools/image_builder \
-        --dockerfiles-only \
-        --disable-cache-mounts \
-        --build-target=${BOARD}
+    ENVIRONMENT="production" \
+    BUILD_TARGET="$BOARD" \
+        bin/generate_dev_mode_dockerfiles.sh
 
     cat docker-compose.balena.dev.yml.tmpl | \
         envsubst > docker-compose.yml

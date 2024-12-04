@@ -21,7 +21,8 @@ These components and their dependencies are mostly installed and handled with An
 To simplify development of the server module of Anthias, we've created a Docker container. This is intended to run on your local machine with the Anthias repository mounted as a volume.
 
 > [!IMPORTANT]
-> Anthias is using Docker's [buildx](https://docs.docker.com/engine/reference/commandline/buildx/) for the image builds. This is used both for cross compilation as well as for local caching. You might need to run `docker buildx create --use` first.
+> * Make sure that you have [installed Docker](https://docs.docker.com/engine/install/) on your machine before proceeding.
+> * Anthias is using Docker's [buildx](https://docs.docker.com/engine/reference/commandline/buildx/) for the image builds. This is used both for cross compilation as well as for local caching. You might need to run `docker buildx create --use` first.
 
 Assuming you're in the source code repository, simply run:
 
@@ -40,7 +41,15 @@ $ ./bin/start_development_server.sh
  ✔ Container anthias-anthias-nginx-1      Started                            0.5s
 ```
 
-Running the command above will start the development server and you should be able to
+> [!NOTE]
+> Running the script will install Python 3.11, [pyenv](https://github.com/pyenv/pyenv),
+> and [Poetry](https://python-poetry.org/) inside a Docker container on your machine.
+> This is to ensure that the development environment is consistent across different
+> machines.
+>
+> The script currently supports Debian-based systems and macOS.
+
+unning the command above will start the development server and you should be able to
 access the web interface at `http://localhost:8000`.
 
 To stop the development server, run the following:
