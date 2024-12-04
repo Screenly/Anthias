@@ -380,7 +380,14 @@ class YoutubeDownloadThread(Thread):
 
     def run(self):
         publisher = ZmqPublisher.get_instance()
-        call(['yt-dlp', '--recode-video', 'mp4', '-o', self.location, self.uri])
+        call([
+            'yt-dlp',
+            '--recode-video',
+            'mp4',
+            '-o',
+            self.location,
+            self.uri,
+        ])
 
         try:
             asset = Asset.objects.get(asset_id=self.asset_id)
