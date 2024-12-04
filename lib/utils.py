@@ -359,7 +359,11 @@ def download_video_from_youtube(uri, asset_id):
     info = json.loads(check_output(['yt-dlp', '-j', uri]))
     duration = info['duration']
 
-    location = path.join(home, 'screenly_assets', asset_id)
+    location = path.join(
+        home,
+        'screenly_assets',
+        f'{asset_id}.mp4'
+    )
     thread = YoutubeDownloadThread(location, uri, asset_id)
     thread.daemon = True
     thread.start()
@@ -376,7 +380,14 @@ class YoutubeDownloadThread(Thread):
 
     def run(self):
         publisher = ZmqPublisher.get_instance()
-        call(['yt-dlp', '-f', 'mp4', '-o', self.location, self.uri])
+        call([
+            'yt-dlp',
+            '-S',
+            'vcodec:h264,fps,res:1080,acodec:m4a',
+            '-o',
+            self.location,
+            self.uri,
+        ])
 
         try:
             asset = Asset.objects.get(asset_id=self.asset_id)
