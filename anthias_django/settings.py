@@ -41,12 +41,15 @@ else:
     # SECURITY WARNING: keep the secret key used in production secret!
     SECRET_KEY = 'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j'  # noqa: E501
 
-# @TODO: Resolve hostnames and IP addresses dynamically.
 ALLOWED_HOSTS = [
     '127.0.0.1',
     'localhost',
     'anthias',
     'anthias-server'
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    'http://anthias'
 ]
 
 
