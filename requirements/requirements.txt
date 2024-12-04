@@ -3,7 +3,7 @@ celery==5.2.2
 certifi==2024.7.4
 cffi==1.14.4
 configparser==4.0.2
-cryptography==3.3.2
+cryptography==44.0.0
 Cython==0.29.33
 Django==4.2.16
 djangorestframework==3.14.0

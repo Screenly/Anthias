@@ -3,7 +3,7 @@
 cec==0.2.8
 certifi==2024.7.4
 configparser==4.0.2
-cryptography==3.3.2
+cryptography==44.0.0
 Cython==0.29.33
 Django==4.2.16
 django-dbbackup==4.2.1
