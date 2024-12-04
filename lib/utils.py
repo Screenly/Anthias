@@ -382,8 +382,8 @@ class YoutubeDownloadThread(Thread):
         publisher = ZmqPublisher.get_instance()
         call([
             'yt-dlp',
-            '--recode-video',
-            'mp4',
+            '-S',
+            'vcodec:h264,fps,res:1080,acodec:m4a',
             '-o',
             self.location,
             self.uri,
