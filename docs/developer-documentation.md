@@ -68,34 +68,6 @@ docker compose -f docker-compose.dev.yml down
 > Make sure that you have `buildx` installed and that you have run
 > `docker buildx create --use` before you run the image build script.
 
-#### Poetry
-
-We have switched from using Bash to [Poetry](https://python-poetry.org/) for building the Docker images.
-Make sure that you have Python 3.11 and Poetry installed on your machine.
-
-> [!TIP]
-> You can install Poetry by running the following script:
-> ```bash
-> ./bin/install_poetry.sh
-> ```
->
-> After running the script, you can add the following to your `~/.bashrc` or similar file:
->
-> ```bash
-> # Add `pyenv` to the load path.
-> export PYENV_ROOT="$HOME/.pyenv"
-> [[ -d $PYENV_ROOT/bin ]] && \
->     export PATH="$PYENV_ROOT/bin:$PATH"
-> eval "$(pyenv init -)"
->
-> # Add `poetry to the load path.
-> export PATH="$HOME/.local/bin:$PATH"
->
-> poetry install --only=docker-image-builder
-> ```
->
-> You can either restart your terminal or run `source ~/.bashrc` to start using Poetry.
-
 ### Building only specific services
 
 Say that you would only like to build the `anthias-server` and `anthias-viewer`
@@ -125,6 +97,18 @@ following:
 ```bash
 $ poetry run python tools/image_builder \
   --disable-cache-mounts
+```
+
+## Building containers inside the Pi or x86 device
+
+> [!NOTE]
+> Make sure that you have Docker installed on the device before proceeding.
+
+```bash
+$ ENVIRONMENT=production \
+    ./bin/generate_dev_mode_dockerfiles.sh
+$ MODE=build \
+    ./bin/upgrade_containers.sh
 ```
 
 ## Testing
