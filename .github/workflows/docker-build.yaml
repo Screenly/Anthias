@@ -16,7 +16,9 @@ on:
       - '!docs/**'
       - '!bin/install.sh'
       - '!bin/upgrade_containers.sh'
+      - '!bin/start_development_server.sh'
       - '!tests/**'
+      - '!docker/Dockerfile.dev'
 
 jobs:
   run-tests:
