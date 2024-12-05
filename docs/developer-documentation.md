@@ -58,47 +58,6 @@ To stop the development server, run the following:
 docker compose -f docker-compose.dev.yml down
 ```
 
-## Building containers locally
-
-### Dependencies
-
-#### `buildx`
-
-> [!IMPORTANT]
-> Make sure that you have `buildx` installed and that you have run
-> `docker buildx create --use` before you run the image build script.
-
-### Building only specific services
-
-Say that you would only like to build the `anthias-server` and `anthias-viewer`
-services. Just run the following:
-
-```bash
-$ poetry run python tools/image_builder \
-    --service anthias-server \
-    --service anthias-viewer
-```
-
-### Generating only Dockerfiles
-
-If you'd like to just generate the Dockerfiles from the templates provided
-inside the `docker/` directory, run the following:
-
-```bash
-$ poetry run python tools/image_builder \
-  --dockerfiles-only
-```
-
-### Disabling cache mounts
-
-If you'd like to disable cache mounts in the generated Dockerfiles, run the
-following:
-
-```bash
-$ poetry run python tools/image_builder \
-  --disable-cache-mounts
-```
-
 ## Building containers inside the Pi or x86 device
 
 > [!NOTE]
