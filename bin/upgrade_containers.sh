@@ -6,8 +6,8 @@
 # Export various environment variables
 export MY_IP=$(ip -4 route get 8.8.8.8 | awk {'print $7'} | tr -d '\n')
 TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk {'print $2'})
-export VIEWER_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB" \* 0.8 | bc)
-export SHM_SIZE_KB="$(echo "$TOTAL_MEMORY_KB" \* 0.3 | bc | cut -d'.' -f1)"
+export VIEWER_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB" \* 0.6 | bc)
+export SHM_SIZE_KB="$(echo "$TOTAL_MEMORY_KB" \* 0.25 | bc | cut -d'.' -f1)"
 
 export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
@@ -26,7 +26,8 @@ elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
     export DEVICE_TYPE="pi2"
 else
     # If all else fail, assume pi1
-    export DEVICE_TYPE="pi1"
+    # TODO: If Raspberry Pi Zero, set DEVICE_TYPE to "pi3."
+    export DEVICE_TYPE="pi3" # TODO: Revert to "pi1"
 fi
 
 if [[ -n $(docker ps | grep srly-ose) ]]; then

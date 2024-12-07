@@ -184,9 +184,6 @@ function install_ansible() {
 function run_ansible_playbook() {
     display_section "Run the Anthias Ansible Playbook"
 
-    sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
-        -m git \
-        -a "repo=$REPOSITORY dest=${ANTHIAS_REPO_DIR} version=${BRANCH} force=yes"
     cd ${ANTHIAS_REPO_DIR}/ansible
 
     if [ "$ARCHITECTURE" == "x86_64" ]; then
@@ -206,10 +203,6 @@ function run_ansible_playbook() {
 function upgrade_docker_containers() {
     display_section "Initialize/Upgrade Docker Containers"
 
-    wget -q \
-        "$GITHUB_RAW_URL/master/bin/upgrade_containers.sh" \
-        -O "$UPGRADE_SCRIPT_PATH"
-
     sudo -u ${USER} \
         DOCKER_TAG="${DOCKER_TAG}" \
         "${UPGRADE_SCRIPT_PATH}"
@@ -217,6 +210,8 @@ function upgrade_docker_containers() {
 
 function cleanup() {
     display_section "Clean Up Unused Packages and Files"
+
+    sudo -E docker compose -f /home/${USER}/screenly/docker-compose.yml down
 
     sudo apt-get autoclean
     sudo apt-get clean
