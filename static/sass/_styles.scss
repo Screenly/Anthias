@@ -330,9 +330,12 @@ a.nav-link:not(.active) {
 #request-error {
   z-index: 10000;
 
+  .btn-close {
+    margin-right: 0.75rem;
+  }
+
   .alert {
-    margin-left: 300px;
-    width: 500px;
+    display: flex;
   }
 }
 
@@ -515,6 +518,7 @@ input[name="file_upload"] {
 .table {
   td {
     vertical-align: middle !important;
+    padding: 0.75rem;
   }
 
   .asset-toggle {

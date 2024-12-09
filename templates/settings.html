@@ -34,26 +34,26 @@
 
                 <form method="post" class="row">
                     {% csrf_token %}
-                    <div class="form-group col-6 d-flex flex-column justify-content-between">
-                        <div class="form-group">
-                            <label class="small text-secondary">Player name</label>
+                    <div class="col-6 d-flex flex-column justify-content-between">
+                        <div class="mb-3">
+                            <label class="small text-secondary form-label"><small>Player name</small></label>
                             <input class="form-control" name="player_name" type="text"
                                    value="{{ player_name }}">
                         </div>
-                        <div class="row">
-                            <div class="form-group col-6">
-                                <label class="small text-secondary">Default duration (seconds)</label>
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label class="small text-secondary form-label"><small>Default duration (seconds)</small></label>
                                 <input class="form-control" name="default_duration" type="number"
                                        value="{{ default_duration }}"/>
                             </div>
-                            <div class="form-group col-6">
-                                <label class="small text-secondary">Default streaming duration (seconds)</label>
+                            <div class="col-6">
+                                <label class="small text-secondary form-label"><small>Default streaming duration (seconds)</small></label>
                                 <input class="form-control" name="default_streaming_duration" type="number"
                                        value="{{ default_streaming_duration }}"/>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label class="small text-secondary">Audio output</label>
+                        <div class="mb-3">
+                            <label class="small text-secondary form-label"><small>Audio output</small></label>
                             <select class="form-control" name="audio_output">
                                 {% if audio_output == 'hdmi' %}
                                     <option value="hdmi" selected="selected">HDMI</option>
@@ -64,8 +64,8 @@
                                 {% endif %}
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label class="small text-secondary">Date format</label>
+                        <div class="mb-3">
+                            <label class="small text-secondary form-label"><small>Date format</small></label>
                             <select class="form-control" name="date_format">
                                 <option value="mm/dd/yyyy"
                                         {% if date_format == 'mm/dd/yyyy' %} selected="selected" {% endif %}>
@@ -105,8 +105,8 @@
                                 </option>
                             </select>
                         </div>
-                        <div class="form-group mb-0">
-                            <label class="small text-secondary">Authentication</label>
+                        <div class="mb-3">
+                            <label class="small text-secondary form-label"><small>Authentication</small></label>
                             <select class="form-control" id="auth_backend" name="auth_backend">
                                 {% for opt in auth_backends %}
                                     <option value="{{ opt.name }}" {{ opt.selected }}>{{ opt.text }}</option>
@@ -115,8 +115,8 @@
                         </div>
 
                         {% if need_current_password %}
-                            <div class="form-group" id="curpassword_group">
-                                <label class="small text-secondary">Current Password</label>
+                            <div id="curpassword_group" class="mb-3">
+                            <label class="small text-secondary form-label"><small>Current Password</small></label>
                                 <input class="form-control" name="current-password" type="password" value="">
                             </div>
                         {% endif %}
@@ -130,12 +130,12 @@
                         {% endfor %}
                     </div>
 
-                    <div class="form-group col-6 d-flex flex-column justify-content-start">
-                        <div class="form-inline mt-4">
-                            <label>Show splash screen</label>
-                            <div class="ml-auto">
+                    <div class="mb-3 col-6 d-flex flex-column justify-content-start">
+                        <div class="form-inline mt-4 d-flex">
+                            <label class="form-label">Show splash screen</label>
+                            <div class="ms-auto">
                                 <label id="splash_checkbox"
-                                       class="is_enabled-toggle toggle switch-light switch-material small m-0">
+                                       class="is_enabled-toggle toggle switch-light switch-material small m-0 form-label">
                                     {% if show_splash %}
                                         <input name="show_splash" checked="checked" type="checkbox"/>
                                     {% else %}
@@ -145,11 +145,11 @@
                                 </label>
                             </div>
                         </div>
-                        <div class="form-inline mt-4">
-                            <label>Default assets</label>
-                            <div class="ml-auto">
+                        <div class="form-inline mt-4 d-flex">
+                            <label class="form-label">Default assets</label>
+                            <div class="ms-auto">
                                 <label id="default_assets_checkbox"
-                                       class="is_enabled-toggle toggle switch-light switch-material small m-0">
+                                       class="is_enabled-toggle toggle switch-light switch-material small m-0 form-label">
                                     {% if default_assets %}
                                         <input name="default_assets" checked="checked" type="checkbox"/>
                                     {% else %}
@@ -159,11 +159,11 @@
                                 </label>
                             </div>
                         </div>
-                        <div class="form-inline mt-4">
-                            <label>Shuffle playlist</label>
-                            <div class="ml-auto">
+                        <div class="form-inline mt-4 d-flex">
+                            <label class="form-label">Shuffle playlist</label>
+                            <div class="ms-auto">
                                 <label id="shuffle_checkbox"
-                                       class="is_enabled-toggle toggle switch-light switch-material small m-0">
+                                       class="is_enabled-toggle toggle switch-light switch-material small m-0 form-label">
                                     {% if shuffle_playlist %}
                                         <input name="shuffle_playlist" checked="checked" type="checkbox"/>
                                     {% else %}
@@ -173,11 +173,11 @@
                                 </label>
                             </div>
                         </div>
-                        <div class="form-inline mt-4">
-                            <label>Use 24-hour clock</label>
-                            <div class="ml-auto">
+                        <div class="form-inline mt-4 d-flex">
+                            <label class="form-label">Use 24-hour clock</label>
+                            <div class="ms-auto">
                                 <label id="use_24_hour_clock_checkbox"
-                                       class="is_enabled-toggle toggle switch-light switch-material small m-0">
+                                       class="is_enabled-toggle toggle switch-light switch-material small ms-0 form-label">
                                     {% if use_24_hour_clock %}
                                         <input name="use_24_hour_clock" checked="checked" type="checkbox"/>
                                     {% else %}
@@ -187,11 +187,11 @@
                                 </label>
                             </div>
                         </div>
-                        <div class="form-inline mt-4">
-                            <label>Debug logging</label>
-                            <div class="ml-auto">
+                        <div class="form-inline mt-4 d-flex">
+                            <label class="form-label">Debug logging</label>
+                            <div class="ms-auto">
                                 <label id="debug_checkbox"
-                                       class="is_enabled-toggle toggle switch-light switch-material small m-0">
+                                       class="is_enabled-toggle toggle switch-light switch-material small m-0 form-label">
                                     {% if debug_logging %}
                                         <input name="debug_logging" checked="checked" type="checkbox">
                                     {% else %}
@@ -203,11 +203,11 @@
                         </div>
                     </div>
 
-                    <div class="form-group col-6 offset-6">
+                    <div class="mb-3-group col-6 offset-6">
                     </div>
 
-                    <div class="form-group col-12">
-                        <div class="text-right">
+                    <div class="mb-3 col-12">
+                        <div class="text-end">
                             <a class="btn btn-long btn-outline-primary" href="/">Cancel</a>
                             <input class="btn btn-long btn-primary" type="submit" value="Save Settings">
                         </div>
@@ -265,7 +265,7 @@
         <div class="row content px-3">
             {# Backup #}
             <div id="backup-section" class="col-12 my-3">
-                <div class="text-right">
+                <div class="text-end">
                     <input name="backup_upload" style="display:none" type="file">
                     <button id="btn-backup" class="btn btn-long btn-outline-primary">Get Backup</button>
                     <button id="btn-upload" class="btn btn-primary" type="button">Upload and Recover
@@ -295,7 +295,7 @@
                                 network. <b>Warning:</b> After pressing, a reboot is required. Web interface will not be
                                 available
                                 until reboot.</p>
-                            <div class="text-right">
+                            <div class="text-end">
                                 <button id="btn-reset" class="btn btn-danger btn-long" type="button">Reset Wi-Fi</button>
                             </div>
                         </div>
@@ -314,7 +314,7 @@
                 </div>
                 <div class="row content px-3">
                     <div id="system-controls-section" class="col-12 my-3">
-                        <div class="text-right">
+                        <div class="text-end">
                             <button id="btn-reboot-system" class="btn btn-danger btn-long" type="button">Reboot</button>
                             <button id="btn-shutdown-system" class="btn btn-danger btn-long" type="button">Shutdown</button>
                         </div>
