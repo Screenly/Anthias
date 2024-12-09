@@ -2,10 +2,10 @@
 
 {% load static %}
 
-<div id="request-error" class="navbar navbar fixed-top">
+<div id="request-error">
     <div class="container">
         <div class="alert" style="display:none">
-            <button class="close" type="button">&times;</button>
+            <button class="btn-close" type="button"></button>
             <span class="msg"></span>
         </div>
     </div>
@@ -15,39 +15,39 @@
         <a class="brand" href="/">
             <img src="{% static 'img/logo-full.svg' %}"/>
         </a>
-        <ul class="nav float-right">
+        <ul class="nav float-end">
             {% if not up_to_date and not is_balena %}
                 <li class="update-available">
                     <a href="/settings#upgrade-section">
-                        <i class="fas fa-arrow-circle-down pr-1"></i>
+                        <i class="fas fa-arrow-circle-down pe-1"></i>
                         Update Available
                     </a>
                 </li>
             {% endif %}
             <li>
-                <a href="/">
-                    <i class="far fa-clock pr-1"></i>
+                <a href="/" class="text-decoration-none">
+                    <i class="far fa-clock pe-1"></i>
                     Schedule Overview
                 </a>
             </li>
             {% if is_balena %}
                 <li>
-                    <a href="/integrations">
-                        <i class="far fa-plus-square pr-1"></i>
+                    <a href="/integrations" class="text-decoration-none">
+                        <i class="far fa-plus-square pe-1"></i>
                         Integrations
                     </a>
                 </li>
             {% endif %}
             <li>
-                <a href="/settings">
-                    <i class="fas fa-cog pr-1"></i>
+                <a href="/settings" class="text-decoration-none">
+                    <i class="fas fa-cog pe-1"></i>
                     Settings
                 </a>
             </li>
             <li class="divider-vertical"></li>
             <li>
-                <a href="/system-info">
-                    <i class="fas fa-tasks pr-1"></i>
+                <a href="/system-info" class="text-decoration-none">
+                    <i class="fas fa-tasks pe-1"></i>
                     System Info
                 </a>
             </li>

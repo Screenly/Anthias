@@ -279,13 +279,13 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
             'please enter a valid URL'
     errors = ([field, v] for field, fn of validators when v = fn (@$fv field))
 
-    (@$ ".form-group .help-inline.invalid-feedback").remove()
-    (@$ ".form-group .form-control").removeClass 'is-invalid'
+    (@$ ".mb-3 .help-inline.invalid-feedback").remove()
+    (@$ ".mb3 .form-control").removeClass 'is-invalid'
     (@$ '[type=submit]').prop 'disabled', no
     for [field, v] in errors
       (@$ '[type=submit]').prop 'disabled', yes
-      (@$ ".form-group.#{field} .form-control").addClass 'is-invalid'
-      (@$ ".form-group.#{field} .controls").append \
+      (@$ ".mb-3.#{field} .form-control").addClass 'is-invalid'
+      (@$ ".mb-3.#{field} .controls").append \
         $ ("<span class='help-inline invalid-feedback'>#{v}</span>")
 
   cancel: (e) =>
@@ -432,13 +432,13 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
           'End date should be after start date.'
     errors = ([field, v] for field, fn of validators when v = fn (@$fv field))
 
-    (@$ ".form-group .help-inline.invalid-feedback").remove()
-    (@$ ".form-group .form-control").removeClass 'is-invalid'
+    (@$ ".mb-3 .help-inline.invalid-feedback").remove()
+    (@$ ".mb-3 .form-control").removeClass 'is-invalid'
     (@$ '[type=submit]').prop 'disabled', no
     for [field, v] in errors
       (@$ '[type=submit]').prop 'disabled', yes
-      (@$ ".form-group.#{field} .form-control").addClass 'is-invalid'
-      (@$ ".form-group.#{field} .controls").append \
+      (@$ ".mb-3.#{field} .form-control").addClass 'is-invalid'
+      (@$ ".mb-3.#{field} .controls").append \
         $ ("<span class='help-inline invalid-feedback'>#{v}</span>")
 
 
@@ -467,8 +467,8 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
     (@$f "end_date_date").datepicker 'setDate', moment(end_date.date(), dateSettings.date).toDate()
     @$fv "end_date_time", end_date.time()
 
-    (@$ ".form-group .help-inline.invalid-feedback").remove()
-    (@$ ".form-group .form-control").removeClass 'is-invalid'
+    (@$ ".mb-3 .help-inline.invalid-feedback").remove()
+    (@$ ".mb-3 .form-control").removeClass 'is-invalid'
     (@$ '[type=submit]').prop 'disabled', no
 
   setDisabledDatepicker: (b) =>
