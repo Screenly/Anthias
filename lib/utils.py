@@ -21,6 +21,12 @@ from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
 from subprocess import check_output, call
+from tenacity import (
+    Retrying,
+    RetryError,
+    stop_after_attempt,
+    wait_fixed,
+)
 from threading import Thread
 from time import sleep
 from urllib.parse import urlparse
@@ -148,6 +154,28 @@ def get_node_ip():
             sleep(1)
 
         r.publish('hostcmd', 'set_ip_addresses')
+
+        try:
+            for attempt in Retrying(
+                stop=stop_after_attempt(20),
+                wait=wait_fixed(1),
+            ):
+                environment = getenv('ENVIRONMENT', None)
+                if environment in ['development', 'test']:
+                    break
+
+                with attempt:
+                    ip_addresses_ready = r.get('ip_addresses_ready') or 'false'
+                    if json.loads(ip_addresses_ready):
+                        break
+                    else:
+                        raise Exception(
+                            'Internet connection is not available.')
+        except RetryError:
+            logging.warning(
+                'Internet connection is not available. '
+            )
+
         ip_addresses = r.get('ip_addresses')
 
         if ip_addresses:
