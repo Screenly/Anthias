@@ -20,8 +20,8 @@
 - name: Enable network systemd services
   ansible.builtin.systemd:
     name: "{{ item }}"
-    state: started
-    enabled: true
+    state: stopped
+    enabled: false
   with_items: "{{ network_systemd_units }}"
 
 - name: Disable network manager
