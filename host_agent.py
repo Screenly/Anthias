@@ -12,6 +12,13 @@ import netifaces
 import os
 import redis
 import subprocess
+import requests
+from tenacity import (
+    Retrying,
+    RetryError,
+    stop_after_attempt,
+    wait_fixed,
+)
 
 
 REDIS_ARGS = dict(host="127.0.0.1", port=6379, db=0)
@@ -40,8 +47,26 @@ def get_ip_addresses():
 
 def set_ip_addresses():
     rdb = redis.Redis(**REDIS_ARGS)
-    ip_addresses = get_ip_addresses()
 
+    rdb.set('ip_addresses_ready', 'false')
+
+    try:
+        for attempt in Retrying(
+            stop=stop_after_attempt(10),
+            wait=wait_fixed(1),
+        ):
+            with attempt:
+                response = requests.get('https://1.1.1.1')
+                response.raise_for_status()
+    except RetryError:
+        logging.warning(
+            'Unable to connect to the Internet. '
+            'Proceeding with the current IP addresses available.'
+        )
+
+    rdb.set('ip_addresses_ready', 'true')
+
+    ip_addresses = get_ip_addresses()
     rdb.set('ip_addresses', json.dumps(ip_addresses))
 
 
