@@ -58,73 +58,16 @@ To stop the development server, run the following:
 docker compose -f docker-compose.dev.yml down
 ```
 
-## Building containers locally
+## Building containers on the Raspberry Pi
 
-### Dependencies
-
-#### `buildx`
-
-> [!IMPORTANT]
-> Make sure that you have `buildx` installed and that you have run
-> `docker buildx create --use` before you run the image build script.
-
-#### Poetry
-
-We have switched from using Bash to [Poetry](https://python-poetry.org/) for building the Docker images.
-Make sure that you have Python 3.11 and Poetry installed on your machine.
-
-> [!TIP]
-> You can install Poetry by running the following script:
-> ```bash
-> ./bin/install_poetry.sh
-> ```
->
-> After running the script, you can add the following to your `~/.bashrc` or similar file:
->
-> ```bash
-> # Add `pyenv` to the load path.
-> export PYENV_ROOT="$HOME/.pyenv"
-> [[ -d $PYENV_ROOT/bin ]] && \
->     export PATH="$PYENV_ROOT/bin:$PATH"
-> eval "$(pyenv init -)"
->
-> # Add `poetry to the load path.
-> export PATH="$HOME/.local/bin:$PATH"
->
-> poetry install --only=docker-image-builder
-> ```
->
-> You can either restart your terminal or run `source ~/.bashrc` to start using Poetry.
-
-### Building only specific services
-
-Say that you would only like to build the `anthias-server` and `anthias-viewer`
-services. Just run the following:
+> [!NOTE]
+> Make sure that you have Docker installed on the device before proceeding.
 
 ```bash
-$ poetry run python tools/image_builder \
-    --service anthias-server \
-    --service anthias-viewer
-```
-
-### Generating only Dockerfiles
-
-If you'd like to just generate the Dockerfiles from the templates provided
-inside the `docker/` directory, run the following:
-
-```bash
-$ poetry run python tools/image_builder \
-  --dockerfiles-only
-```
-
-### Disabling cache mounts
-
-If you'd like to disable cache mounts in the generated Dockerfiles, run the
-following:
-
-```bash
-$ poetry run python tools/image_builder \
-  --disable-cache-mounts
+$ ENVIRONMENT=production \
+    ./bin/generate_dev_mode_dockerfiles.sh
+$ MODE=build \
+    ./bin/upgrade_containers.sh
 ```
 
 ## Testing
