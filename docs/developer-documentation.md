@@ -58,7 +58,7 @@ To stop the development server, run the following:
 docker compose -f docker-compose.dev.yml down
 ```
 
-## Building containers inside the Pi or x86 device
+## Building containers on the Raspberry Pi
 
 > [!NOTE]
 > Make sure that you have Docker installed on the device before proceeding.
