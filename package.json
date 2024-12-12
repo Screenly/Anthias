@@ -2,15 +2,22 @@
   "name": "anthias",
   "version": "1.0.0",
   "scripts": {
-    "coffee-dev": "coffee --compile --map --watch static/js/*.coffee",
-    "sass-dev": "sass --watch static/sass/:static/css/"
+    "dev": "webpack --watch --config webpack.dev.js",
+    "build": "webpack --config webpack.prod.js"
   },
   "dependencies": {
     "bootstrap": "^4.3.1",
     "css-toggle-switch": "^4.1.0"
   },
   "devDependencies": {
-    "coffee-script": "^1.12.7",
-    "sass": "^1.75.0"
+    "coffee-loader": "^0.9.0",
+    "coffeescript": "^1.12.7",
+    "css-loader": "^7.1.2",
+    "mini-css-extract-plugin": "^2.9.2",
+    "sass": "^1.75.0",
+    "sass-loader": "^16.0.3",
+    "webpack": "^5.96.1",
+    "webpack-cli": "^5.1.4",
+    "webpack-merge": "^6.0.1"
   }
 }

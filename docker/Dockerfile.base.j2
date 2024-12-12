@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1.4
+# vim: ft=dockerfile
+
+FROM {{ base_image }}:{{ base_image_tag }}
+
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/var/cache/apt \
+{% endif %}
+    apt-get update && \
+    apt-get -y install --no-install-recommends \
+    {% for dependency in base_apt_dependencies %}
+        {% if not loop.last %}
+        {{ dependency }} \
+        {% else %}
+        {{ dependency }}
+        {% endif %}
+    {% endfor %}
+
+# Works around issue with `curl`
+# https://github.com/balena-io-library/base-images/issues/562
+RUN c_rehash
+
+# We need this to ensure that the wheels can be built.
+# Otherwise we get "invalid command 'bdist_wheel'"
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/root/.cache/pip \
+{% endif %}
+    pip3 install --upgrade pip --break-system-packages && \
+    pip3 install wheel --break-system-packages
+

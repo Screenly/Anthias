@@ -4,3 +4,5 @@ ansible-core==2.15.9
 docker==6.0.0
 netifaces2==0.0.22
 redis==4.3.4
+requests[security]==2.32.3
+tenacity==9.0.0

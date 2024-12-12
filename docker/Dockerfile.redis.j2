@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1.4
+# vim: ft=dockerfile
+
+FROM {{ base_image }}:{{ base_image_tag }}
+
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/var/cache/apt \
+{% endif %}
+    apt-get update && \
+    apt-get -y install --no-install-recommends \
+    redis-server
+
+ENV GIT_HASH={{ git_hash }}
+ENV GIT_SHORT_HASH={{ git_short_hash }}
+ENV GIT_BRANCH={{ git_branch }}
+
+RUN sed -i 's/^bind.*/bind 0.0.0.0/g' /etc/redis/redis.conf
+RUN sed -i 's/^protected-mode.*/protected-mode no/g' /etc/redis/redis.conf
+
+CMD ["redis-server", "--protected-mode", "no"]
+

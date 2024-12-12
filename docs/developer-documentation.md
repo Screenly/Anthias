@@ -20,41 +20,54 @@ These components and their dependencies are mostly installed and handled with An
 
 To simplify development of the server module of Anthias, we've created a Docker container. This is intended to run on your local machine with the Anthias repository mounted as a volume.
 
-Do note that Anthias is using Docker's [buildx](https://docs.docker.com/engine/reference/commandline/buildx/) for the image builds. This is used both for cross compilation as well as for local caching. You might need to run `docker buildx create --use` first.
+> [!IMPORTANT]
+> * Make sure that you have [installed Docker](https://docs.docker.com/engine/install/) on your machine before proceeding.
+> * Anthias is using Docker's [buildx](https://docs.docker.com/engine/reference/commandline/buildx/) for the image builds. This is used both for cross compilation as well as for local caching. You might need to run `docker buildx create --use` first.
 
 Assuming you're in the source code repository, simply run:
 
 ```bash
-$ ./bin/build_containers.sh
-$ docker compose \
-    -f docker-compose.dev.yml up
+$ ./bin/start_development_server.sh
+
+# The console output was truncated for brevity.
+# ...
+
+[+] Running 6/6
+ ✔ Network anthias_default                Created                            0.1s
+ ✔ Container anthias-redis-1              Started                            0.2s
+ ✔ Container anthias-anthias-server-1     Started                            0.2s
+ ✔ Container anthias-anthias-celery-1     Started                            0.3s
+ ✔ Container anthias-anthias-websocket-1  Started                            0.4s
+ ✔ Container anthias-anthias-nginx-1      Started                            0.5s
 ```
 
-## Building containers locally
+> [!NOTE]
+> Running the script will install Python 3.11, [pyenv](https://github.com/pyenv/pyenv),
+> and [Poetry](https://python-poetry.org/) inside a Docker container on your machine.
+> This is to ensure that the development environment is consistent across different
+> machines.
+>
+> The script currently supports Debian-based systems and macOS.
 
-Make sure that you have `buildx` installed and that you have run
-`docker buildx create --use` before you do the following:
+unning the command above will start the development server and you should be able to
+access the web interface at `http://localhost:8000`.
+
+To stop the development server, run the following:
 
 ```bash
-$ ./bin/build_containers.sh
+docker compose -f docker-compose.dev.yml down
 ```
 
-### Skipping specific services
+## Building containers on the Raspberry Pi
 
-Say that you would like to skip building the `anthias-viewer` and `anthias-nginx`
-services. Just run the following:
-
-```bash
-$ SKIP_VIEWER=1 SKIP_NGINX=1 ./bin/build_containers.sh
-```
-
-### Generating only Dockerfiles
-
-If you'd like to just generate the Dockerfiles from the templates provided
-inside the `docker/` directory, run the following:
+> [!NOTE]
+> Make sure that you have Docker installed on the device before proceeding.
 
 ```bash
-$ DOCKERFILES_ONLY=1 ./bin/build_containers.sh
+$ ENVIRONMENT=production \
+    ./bin/generate_dev_mode_dockerfiles.sh
+$ MODE=build \
+    ./bin/upgrade_containers.sh
 ```
 
 ## Testing
@@ -63,14 +76,14 @@ $ DOCKERFILES_ONLY=1 ./bin/build_containers.sh
 Build and start the containers.
 
 ```bash
-$ SKIP_SERVER=1 \
-  SKIP_WEBSOCKET=1 \
-  SKIP_NGINX=1 \
-  SKIP_VIEWER=1 \
-  SKIP_WIFI_CONNECT=1 \
-  ./bin/build_containers.sh
+$ poetry run python tools/image_builder \
+  --dockerfiles-only \
+  --disable-cache-mounts \
+  --service celery \
+  --service redis \
+  --service test
 $ docker compose \
-    -f docker-compose.test.yml up -d
+    -f docker-compose.test.yml up -d --build
 ```
 
 Run the unit tests.
@@ -78,10 +91,18 @@ Run the unit tests.
 ```bash
 $ docker compose \
     -f docker-compose.test.yml \
-    exec -T anthias-test bash ./bin/prepare_test_environment.sh -s
+    exec anthias-test bash ./bin/prepare_test_environment.sh -s
+
+# Integration and non-integration tests should be run separately as the
+# former doesn't run as expected when run together with the latter.
+
 $ docker compose \
     -f docker-compose.test.yml \
-    exec -T anthias-test nose2 -v
+    exec anthias-test ./manage.py test --exclude-tag=integration
+
+$ docker compose \
+    -f docker-compose.test.yml \
+    exec anthias-test ./manage.py test --tag=integration
 ```
 
 ### The QA checklist
@@ -90,35 +111,24 @@ We've also provided a [checklist](/docs/qa-checklist.md) that can serve as a gui
 
 ## Generating CSS and JS files
 
-Anthias only supports compiling from the host container at the moment. You need to install the latest version
-of Node.js. We recommend to intall Node.js on Linux. You can use this [guide](https://nodejs.org/en/learn/getting-started/how-to-install-nodejs)
-to get started.
+To get started, you need to start the development server first. See this [section](#dockerized-development-environment)
+for details.
 
-### Installing Node.js dependencies
+### Starting Webpack in development mode
 
-Run the following command from the project root directory.
-
-```bash
-$ npm install
-```
-
-### Transpiling CSS from SASS
+To start [Webpack](https://webpack.js.org/) in development mode, run the following command:
 
 ```bash
-$ npm run sass-dev
+$ docker compose -f docker-compose.dev.yml exec anthias-server \
+    npm run dev
 ```
 
-### Transpiling JS from CoffeeScript
-
-```bash
-# You need to run this on a separate terminal session if you already ran the
-# script for transpiling SASS files.
-$ npm run coffee-dev
-```
+Making changes to the CoffeeScript or SCSS files will automatically trigger a recompilation,
+generating the corresponding JavaScript and CSS files.
 
 ### Closing the transpiler
 
-Just press `Ctrl-C` to close the SASS and CoffeeScript transpilers.
+Just press `Ctrl-C` to close Webpack in development mode.
 
 ## Linting Python code locally
 
@@ -149,7 +159,7 @@ After installing Poetry, run the following commands:
 ```bash
 # Install the dependencies
 $ poetry install --only=dev-host
-$ poetry run flake8 $(git ls-files '**/*.py')
+$ poetry run flake8 $(git ls-files '*.py')
 ```
 
 To run the linter on a specific file, run the following command:
@@ -238,7 +248,3 @@ The Anthias WebView is a custom-built web browser based on the [Qt](https://www.
 The browser is assembled with a Dockerfile and built by a `webview/build_qt#.sh` script.
 
 For further info on these files and more, visit the following link: [https://github.com/Screenly/Anthias/tree/master/webview](https://github.com/Screenly/Anthias/tree/master/webview)
-
-## Tweaking HTTP basic auth settings
-
-* Check out [this page](/docs/http-basic-authentication.md) for more information on how to customize your basic authentication credentials.
