@@ -1,6 +1,7 @@
 ## Building Qt and WebView
 
-**Warning:** To build this, you need **very** beefy hardware. We are building this on a VM with 32 vCPUs and 128GB RAM. If you're trying to build it locally, you likely need to tweak [MAKE_CORES](https://github.com/Screenly/screenly-ose/blob/master/webview/build_qt5.sh#L12) to something lower, but you would still need a powerful workstation (32GB RAM minimum) to make this build.
+> [!WARNING]
+> To build this, you need **very** beefy hardware. We are building this on a VM with 32 vCPUs and 128GB RAM. If you're trying to build it locally, you likely need to tweak [MAKE_CORES](https://github.com/Screenly/screenly-ose/blob/master/webview/build_qt5.sh#L12) to something lower, but you would still need a powerful workstation (32GB RAM minimum) to make this build.
 
 ### Building for Raspberry Pi
 
@@ -90,7 +91,8 @@ Supported protocols: `http://`, `https://`
 
 ## Debugging
 
-You can enable QT debugging by using the following:
-```bash
-export QT_LOGGING_RULES=qt.qpa.*=true
-```
+> [!TIP]
+> You can enable QT debugging by using the following:
+> ```bash
+> export QT_LOGGING_RULES=qt.qpa.*=true
+> ```

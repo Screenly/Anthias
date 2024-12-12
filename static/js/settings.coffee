@@ -1,3 +1,5 @@
+import '../sass/anthias.scss'
+
 $().ready ->
 
   $("#request-error .close").click (e) ->
@@ -12,13 +14,13 @@ $().ready ->
 
     $.ajax({
       method: "POST"
-      url: "api/v1/backup"
+      url: "/api/v2/backup"
       timeout: 1800 * 1000
     })
 
     .done  (data, e) ->
       if (data)
-        window.location = "static_with_mime/" + data + "?mime=application/x-tgz"
+        window.location = "/static_with_mime/" + data + "?mime=application/x-tgz"
 
     .fail  (data, e) ->
       $("#request-error .alert").addClass "alert-danger"
@@ -40,7 +42,7 @@ $().ready ->
     $("[name='backup_upload']").click()
 
   $("[name='backup_upload']").fileupload
-    url: "api/v1/recover"
+    url: "/api/v2/recover"
     progressall: (e, data) -> if data.loaded and data.total
       valuenow = data.loaded/data.total*100
       $(".progress .bar").css "width", valuenow + "%"
@@ -72,7 +74,7 @@ $().ready ->
 
   $("#btn-reboot-system").click (e) ->
     if confirm "Are you sure you want to reboot your device?"
-      $.post "/api/v1/reboot"
+      $.post "/api/v2/reboot"
       .done  (e) ->
         ($ "#request-error .alert").show()
         ($ "#request-error .alert").addClass "alert-success"
@@ -89,7 +91,7 @@ $().ready ->
 
   $("#btn-shutdown-system").click (e) ->
     if confirm "Are you sure you want to shutdown your device?"
-      $.post "/api/v1/shutdown"
+      $.post "/api/v2/shutdown"
       .done  (e) ->
         ($ "#request-error .alert").show()
         ($ "#request-error .alert").addClass "alert-success"

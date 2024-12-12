@@ -3,7 +3,7 @@ from __future__ import unicode_literals
 import sh
 import vlc
 
-from lib.raspberry_pi_helper import get_device_type
+from lib.device_helper import get_device_type
 from settings import settings
 
 VIDEO_TIMEOUT = 20  # secs
@@ -47,7 +47,8 @@ class FFMPEGMediaPlayer(MediaPlayer):
 
     def stop(self):
         try:
-            self.run.kill()
+            if self.run:
+                self.run.kill()
         except OSError:
             pass
 

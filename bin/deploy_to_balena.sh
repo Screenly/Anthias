@@ -102,8 +102,10 @@ if [[ -z "${DEV_MODE+x}" ]]; then
 else
     echo "Running in dev mode..."
 
-    DOCKERFILES_ONLY=1 DEV_MODE=1 BUILD_TARGET=${BOARD} \
-        ./bin/build_containers.sh
+    ENVIRONMENT="production" \
+    BUILD_TARGET="$BOARD" \
+        bin/generate_dev_mode_dockerfiles.sh
+
     cat docker-compose.balena.dev.yml.tmpl | \
         envsubst > docker-compose.yml
 
