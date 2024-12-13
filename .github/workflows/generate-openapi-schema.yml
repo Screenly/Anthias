@@ -87,7 +87,7 @@ jobs:
 
       - name: Build Images
         run: |
-          poetry run python tools/image_builder \
+          poetry run python -m tools.image_builder \
             --dockerfiles-only \
             --disable-cache-mounts \
             --environment=development
