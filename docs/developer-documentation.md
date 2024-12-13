@@ -76,7 +76,7 @@ $ MODE=build \
 Build and start the containers.
 
 ```bash
-$ poetry run python tools/image_builder \
+$ poetry run python -m tools.image_builder \
   --dockerfiles-only \
   --disable-cache-mounts \
   --service celery \
