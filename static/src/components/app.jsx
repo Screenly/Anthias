@@ -1,31 +1,10 @@
-import { Navbar } from '@/components/navbar'
 import { Routes, Route } from 'react-router'
 
+import { Integrations } from '@/components/integrations'
+import { Navbar } from '@/components/navbar'
 import { ScheduleOverview } from '@/components/home'
-
-const Integrations = () => {
-  return (
-    <div className="container">
-      <h2 className="text-white">Integrations</h2>
-    </div>
-  )
-}
-
-const Settings = () => {
-  return (
-    <div className="container">
-      <h2 className="text-white">Settings</h2>
-    </div>
-  )
-}
-
-const SystemInfo = () => {
-  return (
-    <div className="container">
-      <h2 className="text-white">System Info</h2>
-    </div>
-  )
-}
+import { Settings } from '@/components/settings'
+import { SystemInfo } from '@/components/system-info'
 
 export const App = () => {
   return (
