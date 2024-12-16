@@ -59,7 +59,6 @@
     state: absent
     path: /etc/systemd/system/screenly-net-watchdog.timer
 
-# Use resin-wifi-connect if Stretch
 - name: Debug msg for manage network
   ansible.builtin.debug:
     msg: "Manage network: {{ manage_network }}"
@@ -84,7 +83,10 @@
   register: nm_pkla_path
 
 - name: Copy org.freedesktop.NetworkManager.pkla to 50-local.d
-  ansible.builtin.command: cp -f /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla /etc/polkit-1/localauthority/50-local.d
+  ansible.builtin.shell: |
+    mkdir -p /etc/polkit-1/localauthority/50-local.d
+    cp -f /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla \
+      /etc/polkit-1/localauthority/50-local.d
   when: manage_network|bool
   changed_when: not nm_pkla_path.stat.exists
 

@@ -32,10 +32,14 @@ while getopts "sh" arg; do
 done
 
 cp tests/assets/asset.mov /tmp/asset.mov
-cp static/img/ose-logo.png /tmp/image.png
-cp /tmp/image.png /tmp/USB/image.png
-cp /tmp/image.png /tmp/USB/cleanup_folder/image.png
+cp static/img/standby.png /tmp/image.png
 cp tests/config/ffserver.conf /etc/ffserver.conf
+
+cat << 'EOF' > $HOME/.bashrc
+#!/bin/bash
+
+export PATH=$PATH:/opt/chrome-linux64:/opt/chromedriver-linux64
+EOF
 
 # @TODO: Uncomment the lines below when test_add_asset_streaming is fixed.
 # nohup /opt/ffmpeg/ffserver -f /etc/ffserver.conf > /dev/null 2>&1 &
@@ -43,6 +47,12 @@ cp tests/config/ffserver.conf /etc/ffserver.conf
 
 if [ "$START_SERVER" = true ]; then
     cd /usr/src/app
-    python3 server.py &
+
+    npm install && npm run build
+
+    ./manage.py makemigrations
+    ./manage.py migrate --fake-initial
+    ./manage.py runserver 127.0.0.1:8080 &
+
     sleep 3
 fi

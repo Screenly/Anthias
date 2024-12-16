@@ -4,9 +4,10 @@ There are several ways to connect your Anthias instance to Wi-Fi. You can either
 configure the Wi-Fi settings via the captive portal or you can use
 `NetworkManager`'s `nmcli` or `nmtui` commands.
 
-The `nmcli` and `nmtui` commands will only work on devices running a
-Raspberry Pi OS Lite as those running balenaOS gives users less control over
-some configs.
+> [!WARNING]
+> The `nmcli` and `nmtui` commands will only work on devices running a
+> Raspberry Pi OS Lite as those running balenaOS gives users less control over
+> some configs.
 
 ## Using `nmcli`
 
@@ -53,8 +54,9 @@ IN-USE  BSSID              SSID              MODE   CHAN  RATE        SIGNAL  BA
 # The output is truncated to save space.
 ```
 
-Take good note of the `SSID` (in this example, it's `Network27861`), as you'll
-use it in the next step.
+> [!NOTE]
+> Take good note of the `SSID` (in this example, it's `Network27861`), as you'll
+> use it in the next step.
 
 ### Connect to Wi-Fi with `nmcli`
 
@@ -68,10 +70,11 @@ $ sudo nmcli dev wifi connect $WIFI_SSID password $WIFI_PASSWORD
 $ sudo nmcli --ask dev wifi connect $WIFI_SSID
 ```
 
-We recommend that you use the second one. You don't want someone to know your
-password just by looking at the command `history`. The output should look like
-the following &mdash; `Device 'wlan0' successfully activated with
-<hex>`.
+> [!WARNING]
+> We recommend that you use the second one. You don't want someone to know your
+> password just by looking at the command `history`. The output should look like
+> the following &mdash; `Device 'wlan0' successfully activated with
+> <hex>`.
 
 To see if the Wi-Fi connection is successful, try running a `ping` commad:
 
@@ -83,7 +86,7 @@ You can also check to see if the `wlan0` interface is assigned an IPv4 address.
 If so, then you're all set.
 
 ```shell
-ip addr show wlan0
+$ ip addr show wlan0
 ```
 
 Here's a sample output:

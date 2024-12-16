@@ -4,6 +4,7 @@
 #include <QWebEnginePage>
 #include <QWidget>
 #include <QEventLoop>
+#include <QNetworkReply>
 
 class View : public QWebEngineView
 {

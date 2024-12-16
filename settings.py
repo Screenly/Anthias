@@ -1,14 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
-from future import standard_library
-standard_library.install_aliases()
 from builtins import str
 from builtins import object
 import hashlib
 import json
 import logging
-import os
 import zmq
 import configparser
 from os import path, getenv
@@ -16,8 +13,9 @@ from time import sleep
 
 from collections import UserDict
 
-from lib.auth import WoTTAuth, BasicAuth, NoAuth
+from lib.auth import BasicAuth, NoAuth
 from lib.errors import ZmqCollectorTimeout
+
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -30,24 +28,25 @@ DEFAULTS = {
         'use_24_hour_clock': False,
         'use_ssl': False,
         'auth_backend': '',
-        'websocket_port': '9999'
+        'websocket_port': '9999',
+        'django_secret_key': ''
     },
     'viewer': {
         'audio_output': 'hdmi',
         'debug_logging': False,
-        'default_duration': '10',
+        'default_duration': 10,
         'default_streaming_duration': '300',
         'player_name': '',
         'resolution': '1920x1080',
         'show_splash': True,
         'shuffle_playlist': False,
         'verify_ssl': True,
-        'usb_assets_key': '',
         'default_assets': False
     }
 }
 CONFIGURABLE_SETTINGS = DEFAULTS['viewer'].copy()
-CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main']['use_24_hour_clock']
+CONFIGURABLE_SETTINGS['use_24_hour_clock'] = (
+    DEFAULTS['main']['use_24_hour_clock'])
 CONFIGURABLE_SETTINGS['date_format'] = DEFAULTS['main']['date_format']
 
 PORT = int(getenv('PORT', 8080))
@@ -66,23 +65,22 @@ requests_log.setLevel(logging.WARNING)
 logging.debug('Starting viewer.py')
 
 
-class ScreenlySettings(UserDict):
-    """Screenly OSE's Settings."""
+class AnthiasSettings(UserDict):
+    """Anthias' Settings."""
 
     def __init__(self, *args, **kwargs):
         UserDict.__init__(self, *args, **kwargs)
         self.home = getenv('HOME')
         self.conf_file = self.get_configfile()
         self.auth_backends_list = [NoAuth(), BasicAuth(self)]
-        if os.path.isdir('/opt/wott'):
-            self.auth_backends_list.append(WoTTAuth(self))
         self.auth_backends = {}
         for backend in self.auth_backends_list:
             DEFAULTS.update(backend.config)
             self.auth_backends[backend.name] = backend
 
         if not path.isfile(self.conf_file):
-            logging.error('Config-file %s missing. Using defaults.', self.conf_file)
+            logging.error(
+                'Config-file %s missing. Using defaults.', self.conf_file)
             self.use_defaults()
             self.save()
         else:
@@ -96,17 +94,28 @@ class ScreenlySettings(UserDict):
                 self[field] = config.getint(section, field)
             else:
                 self[field] = config.get(section, field)
-                if field == 'password' and self[field] != '' and len(self[field]) != 64:   # likely not a hashed password.
-                    self[field] = hashlib.sha256(self[field]).hexdigest()   # hash the original password.
+                # Likely not a hashed password
+                if (
+                    field == 'password' and
+                    self[field] != '' and
+                    len(self[field]) != 64
+                ):
+                    # Hash the original password.
+                    self[field] = hashlib.sha256(self[field]).hexdigest()
         except configparser.Error as e:
-            logging.debug("Could not parse setting '%s.%s': %s. Using default value: '%s'." % (section, field, str(e), default))
+            logging.debug(
+                "Could not parse setting '%s.%s': %s. "
+                "Using default value: '%s'.",
+                section, field, str(e), default
+            )
             self[field] = default
         if field in ['database', 'assetdir']:
             self[field] = str(path.join(self.home, self[field]))
 
     def _set(self, config, section, field, default):
         if isinstance(default, bool):
-            config.set(section, field, self.get(field, default) and 'on' or 'off')
+            config.set(
+                section, field, self.get(field, default) and 'on' or 'off')
         else:
             config.set(section, field, str(self.get(field, default)))
 
@@ -149,7 +158,7 @@ class ScreenlySettings(UserDict):
             return self.auth_backends[self['auth_backend']]
 
 
-settings = ScreenlySettings()
+settings = AnthiasSettings()
 
 
 class ZmqPublisher(object):
@@ -172,7 +181,7 @@ class ZmqPublisher(object):
         return cls.INSTANCE
 
     def send_to_ws_server(self, msg):
-        self.socket.send("ws_server {}".format(msg))
+        self.socket.send("ws_server {}".format(msg).encode('utf-8'))
 
     def send_to_viewer(self, msg):
         self.socket.send_string("viewer {}".format(msg))

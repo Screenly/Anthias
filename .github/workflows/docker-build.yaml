@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - production
     paths:
       - '**'
       - '!webview/**'
@@ -12,10 +11,14 @@ on:
       - '!.github/workflows/deploy-website.yaml'
       - '!.github/workflows/build-webview.yaml'
       - '!.github/workflows/build-balena-disk-image.yaml'
+      - '!.github/workflows/python-lint.yaml'
       - '!README.md'
       - '!docs/**'
-      - '!bin/build_containers.sh'
+      - '!bin/install.sh'
       - '!bin/upgrade_containers.sh'
+      - '!bin/start_development_server.sh'
+      - '!tests/**'
+      - '!docker/Dockerfile.dev'
 
 jobs:
   run-tests:
@@ -25,22 +28,41 @@ jobs:
     needs: run-tests
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
+        python-version: ["3.11"]
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install and configure Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.3
+          virtualenvs-create: true
+          virtualenvs-in-project: false
+          virtualenvs-path: ~/.venv
+          installer-parallel: true
+
+      - name: Install dependencies
+        run: |
+          poetry install --only=docker-image-builder
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         id: buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Cache Docker layers
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: cache
         with:
           path: /tmp/.buildx-cache
@@ -57,11 +79,12 @@ jobs:
 
       - name: Build Containers
         run: |
-          export BUILD_TARGET=${{ matrix.board }}
-          export PUSH=1
-          ./bin/build_containers.sh
+          poetry run python tools/image_builder \
+            --build-target=${{ matrix.board }} \
+            --push
 
   balena:
+    if: ${{ github.ref == 'refs/heads/master' }}
     needs: buildx
     strategy:
       matrix:
@@ -69,12 +92,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set Docker tag
         run: |
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "BOARD=${{ matrix.board }}" >> $GITHUB_ENV
+          echo "SHM_SIZE=256mb" >> $GITHUB_ENV
 
       - name: Prepare Balena file
         run: |

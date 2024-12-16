@@ -10,7 +10,7 @@
             </div>
         </div>
         <div class="row content" style="min-height: 60vh;">
-            {% if context.is_balena %}
+            {% if is_balena %}
                 <div id="balena-section" class="col-12">
                     <h4 class="page-header">
                         <b>Balena</b>
@@ -26,34 +26,34 @@
                         <tbody>
                         <tr>
                             <th scope="row">Device Name</th>
-                            <td>{{ context.balena_device_name_at_init }}</td>
+                            <td>{{ balena_device_name_at_init }}</td>
                             <td>The name of the device on first initialisation.</td>
                         </tr>
                         <tr>
                             <th scope="row">Device UUID</th>
-                            <td>{{ context.balena_device_id }}</td>
+                            <td>{{ balena_device_id }}</td>
                             <td>The unique identification number for the device. This is used to identify it on
                                 balena.
                             </td>
                         </tr>
                         <tr>
                             <th scope="row">App ID</th>
-                            <td>{{ context.balena_app_id }}</td>
+                            <td>{{ balena_app_id }}</td>
                             <td>ID number of the balena application the device is associated.</td>
                         </tr>
                         <tr>
                             <th scope="row">App Name</th>
-                            <td>{{ context.balena_app_name }}</td>
+                            <td>{{ balena_app_name }}</td>
                             <td>The name of the balena application the device is associated with.</td>
                         </tr>
                         <tr>
                             <th scope="row">Supervisor Version</th>
-                            <td>{{ context.balena_supervisor_version }}</td>
+                            <td>{{ balena_supervisor_version }}</td>
                             <td>The current version of the supervisor agent running on the device.</td>
                         </tr>
                         <tr>
                             <th scope="row">Host OS Version</th>
-                            <td>{{ context.balena_host_os_version }}</td>
+                            <td>{{ balena_host_os_version }}</td>
                             <td>The version of the host OS.</td>
                         </tr>
                         </tbody>

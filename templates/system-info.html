@@ -22,67 +22,58 @@
                     <tbody>
                     <tr>
                         <th scope="row">Load Average</th>
-                        <td>{{ context.loadavg }}</td>
+                        <td>{{ loadavg }}</td>
                     </tr>
                     <tr>
                         <th scope="row">Free Space</th>
-                        <td>{{ context.free_space }}</td>
+                        <td>{{ free_space }}</td>
                     </tr>
                     <tr>
                         <th scope="row">Memory</th>
                         <td>
-                            Total: <strong>{{ context.memory.total }}</strong> /
-                            Used: <strong>{{ context.memory.used }}</strong> /
-                            Free: <strong>{{ context.memory.free }}</strong> /
-                            Shared: <strong>{{ context.memory.shared }}</strong> /
-                            Buff: <strong>{{ context.memory.buff }}</strong> /
-                            Available: <strong>{{ context.memory.available }}</strong>
+                            Total: <strong>{{ memory.total }}</strong> /
+                            Used: <strong>{{ memory.used }}</strong> /
+                            Free: <strong>{{ memory.free }}</strong> /
+                            Shared: <strong>{{ memory.shared }}</strong> /
+                            Buff: <strong>{{ memory.buff }}</strong> /
+                            Available: <strong>{{ memory.available }}</strong>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">Uptime</th>
-                        <td>{{ context.uptime.days }} days and {{ (context.uptime.seconds / 3600)|round(2) }} hours</td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Monitor Info</th>
-                        <td>{{ context.display_info }}</td>
+                        <td>{{ uptime.days }} days and {{ uptime.hours }} hours</td>
                     </tr>
                     <tr>
                         <th scope="row">Display Power (CEC)</th>
-                        <td>{{ context.display_power }}</td>
+                        <td>{{ display_power }}</td>
                     </tr>
                     <tr>
-                        <th scope="row">Raspberry Pi Model</th>
-                        <td>{{ context.raspberry_pi_model }}</td>
+                        <th scope="row">Device Model</th>
+                        <td>{{ device_model }}</td>
                     </tr>
                     <tr>
                         <th scope="row">Anthias Version</th>
-                        <td>{{ context.screenly_version }}</td>
+                        <td>
+                            {% if anthias_commit_link %}
+                                <a
+                                    href="{{ anthias_commit_link }}"
+                                    rel="noopener"
+                                    target="_blank"
+                                    class="text-dark"
+                                >
+                                    {{ anthias_version }}
+                                </a>
+                            {% else %}
+                                {{ anthias_version }}
+                            {% endif %}
+                        </td>
                     </tr>
                     <tr>
                         <th scope="row">MAC Address</th>
-                        <td>{{ context.mac_address }}</td>
+                        <td>{{ mac_address }}</td>
                     </tr>
                     </tbody>
                 </table>
-
-                <section>
-                    <h4><b>Latest Viewer Logs</b></h4>
-                    <hr>
-                </section>
-
-                {% if context.viewlog %}
-                    <table class="table table-borderless">
-                        {% for line in context.viewlog %}
-                            <tr>
-                                <td>{{ line }}</td>
-                            </tr>
-                        {% endfor %}
-                    </table>
-                {% else %}
-                    <p>There are no recent log messages.</p>
-                {% endif %}
-
             </div>
         </div>
     </div>

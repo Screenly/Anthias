@@ -1,30 +1,37 @@
 #!/bin/bash
 
+ENVIRONMENT=${ENVIRONMENT:-production}
+
 mkdir -p \
     /data/.config \
     /data/.screenly \
+    /data/.screenly/backups \
     /data/screenly_assets
 
 cp -n /usr/src/app/ansible/roles/screenly/files/screenly.conf /data/.screenly/screenly.conf
 cp -n /usr/src/app/ansible/roles/screenly/files/default_assets.yml /data/.screenly/default_assets.yml
-cp -n /usr/src/app/ansible/roles/screenly/files/screenly.db /data/.screenly/screenly.db
-
-if [ -n "${OVERWRITE_CONFIG}" ]; then
-    echo "Requested to overwrite Screenly config file."
-    cp /usr/src/app/ansible/roles/screenly/files/screenly.conf "/data/.screenly/screenly.conf"
-fi
-
-# Set management page's user and password from environment variables,
-# but only if both of them are provided. Can have empty values provided.
-if [ -n "${MANAGEMENT_USER+x}" ] && [ -n "${MANAGEMENT_PASSWORD+x}" ]; then
-    sed -i -e "s/^user=.*/user=${MANAGEMENT_USER}/" -e "s/^password=.*/password=${MANAGEMENT_PASSWORD}/" /data/.screenly/screenly.conf
-fi
 
 echo "Running migration..."
-python3 ./bin/migrate.py
 
-if [[ ! -z $DEVELOPMENT_MODE ]]; then
-    flask run --host 0.0.0.0 --port 8080
+# The following block ensures that the migration is transactional and that the
+# database is not left in an inconsistent state if the migration fails.
+
+if [ -f /data/.screenly/screenly.db ]; then
+    ./manage.py dbbackup --noinput --clean && \
+        ./manage.py migrate --fake-initial --noinput || \
+        ./manage.py dbrestore --noinput
 else
-    python3 server.py
+    ./manage.py migrate && \
+        ./manage.py dbbackup --noinput --clean
+fi
+
+if [[ "$ENVIRONMENT" == "development" ]]; then
+    echo "Starting Django development server..."
+    npm install && npm run build
+    ./manage.py runserver 0.0.0.0:8080
+else
+    echo "Generating Django static files..."
+    ./manage.py collectstatic --clear --noinput
+    echo "Starting Gunicorn..."
+    python run_gunicorn.py
 fi

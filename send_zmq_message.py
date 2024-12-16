@@ -18,6 +18,7 @@ def get_portal_url():
     else:
         return f'{gateway}:{port}'
 
+
 def get_message(action):
     if action == 'setup_wifi':
         data = {
@@ -35,7 +36,8 @@ def get_ip_addresses():
     return [
         i['addr']
         for interface_name in interfaces()
-        for i in ifaddresses(interface_name).setdefault(AF_INET, [{'addr': None}])
+        for i in ifaddresses(interface_name).setdefault(
+            AF_INET, [{'addr': None}])
         if interface_name in ['eth0', 'wlan0']
         if i['addr'] is not None
     ]

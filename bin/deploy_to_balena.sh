@@ -10,6 +10,7 @@ print_help() {
     echo "  -f, --fleet FLEET     specify the fleet name to deploy to"
     echo "  -s, --short-hash HASH specify the short hash to use for the image tag"
     echo "  -d, --dev             run in dev mode"
+    echo "  --shm-size SIZE       specify the size of the /dev/shm partition, e.g. 256mb, 65536kb, 1gb"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -47,6 +48,11 @@ while [[ $# -gt 0 ]]; do
             export DEV_MODE=1
             shift
             ;;
+        --shm-size)
+            export SHM_SIZE="$2"
+            shift
+            shift
+            ;;
         *)
             echo "Unknown option $key"
             print_help
@@ -68,6 +74,12 @@ if [[ -z "${FLEET+x}" ]]; then
 fi
 
 export GIT_SHORT_HASH=${GIT_SHORT_HASH:-latest}
+export DEFAULT_SHM_SIZE='256mb'
+
+if [[ -z "${SHM_SIZE+x}" ]]; then
+    echo "Using default /dev/shm size of $DEFAULT_SHM_SIZE for the viewer service"
+    export SHM_SIZE=$DEFAULT_SHM_SIZE
+fi
 
 function prepare_balena_file() {
     mkdir -p balena-deploy
@@ -90,8 +102,10 @@ if [[ -z "${DEV_MODE+x}" ]]; then
 else
     echo "Running in dev mode..."
 
-    DOCKERFILES_ONLY=1 DEV_MODE=1 BUILD_TARGET=${BOARD} \
-        ./bin/build_containers.sh
+    ENVIRONMENT="production" \
+    BUILD_TARGET="$BOARD" \
+        bin/generate_dev_mode_dockerfiles.sh
+
     cat docker-compose.balena.dev.yml.tmpl | \
         envsubst > docker-compose.yml
 

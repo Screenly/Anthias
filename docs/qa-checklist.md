@@ -2,7 +2,8 @@
 
 Running unit tests is a good way to make sure that the code is working as expected. However, it's also important to do manual testing as some bugs may not be caught by unit tests. This document contains a list of things that you can do to test the application manually.
 
-The list is not exhaustive, but you can use it as your guide when testing Anthias.
+> [!NOTE]
+> The list is not exhaustive, but you can use it as your guide when testing Anthias.
 
 ## General
 
@@ -39,10 +40,8 @@ The list is not exhaustive, but you can use it as your guide when testing Anthia
 12. Choose any format for the **Date format**. Go to the assets page and make sure that the date field uses the correct format.
 13. Enable authentication by selecting **Basic** from the **Authentication** dropdown. Reload page and make sure that you'll now be prompted to enter a username and a password.
 14. Click the **Get Backup** button. Delete all assets. Click on **Upload and Recover** and make sure that the assets are restored.
-15. Generate file for the USB assets. Put it and some assets on any USB stick. Insert the stick into the device. Enable some assets and make sure that the assets are being displayed correctly.
-16. Remove the USB stick from the device. Make sure that the assets are deleted from the content page and make sure that the screen doesn't display them.
-17. Try to reboot or shutdown the device by clickin on the **Reboot** or **Shutdown** buttons, respectively. Make sure that the device does the corresponding action.
-18. Go to the **System Info** page and make sure that all information are correct.
-19. Make sure that all the footer links are being displayed correctly.
-20. Go to the **Settings** page. Click on the **Reset Wi-Fi** and reboot your device. Make sure that the hotspot page displays.
-35. Connect to the device by ssh. Run `./bin/enable_ssl.sh` script. Make sure the site URL uses SSL.
+15. Try to reboot or shutdown the device by clickin on the **Reboot** or **Shutdown** buttons, respectively. Make sure that the device does the corresponding action.
+16. Go to the **System Info** page and make sure that all information are correct.
+17. Make sure that all the footer links are being displayed correctly.
+18. Go to the **Settings** page. Click on the **Reset Wi-Fi** and reboot your device. Make sure that the hotspot page displays.
+19. Connect to the device by ssh. Run `./bin/enable_ssl.sh` script. Make sure the site URL uses SSL.
