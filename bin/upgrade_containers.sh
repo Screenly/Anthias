@@ -53,7 +53,7 @@ cat /home/${USER}/screenly/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/screenly/docker-compose.yml
 
-if [ "$DEVICE_TYPE" = "x86" ]; then
+if [[ "$DEVICE_TYPE" =~ ^(x86|pi5)$ ]]; then
     sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
         /home/${USER}/screenly/docker-compose.yml
 fi
