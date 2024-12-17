@@ -30,7 +30,7 @@ jobs:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
         python-version: ["3.11"]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -89,7 +89,7 @@ jobs:
     strategy:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
