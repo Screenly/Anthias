@@ -7,7 +7,7 @@ from python_on_whales import docker
 
 
 SHORT_HASH_LENGTH = 7
-BUILD_TARGET_OPTIONS = ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
+BUILD_TARGET_OPTIONS = ['pi1', 'pi2', 'pi3', 'pi4', 'pi5', 'x86']
 SERVICES = (
     'server',
     'celery',
@@ -33,6 +33,12 @@ def get_build_parameters(build_target: str) -> dict:
         'target_platform': 'linux/amd64',
     }
 
+    if build_target == 'pi5':
+        return {
+            'board': 'pi5',
+            'base_image': 'balenalib/raspberrypi5-debian',
+            'target_platform': 'linux/arm64/v8',
+        }
     if build_target == 'pi4':
         return {
             'board': 'pi4',
@@ -243,7 +249,7 @@ def build_image(
             'libswscale-dev',
         ]
 
-        if board != 'x86':
+        if not board in ['x86', 'pi5']:
             apt_dependencies.extend([
                 'libraspberrypi0',
                 'libgst-dev',
@@ -293,6 +299,8 @@ def build_image(
             architecture = 'rpi'
         elif target_platform in ['linux/arm/v7', 'linux/arm/v8']:
             architecture = 'armv7hf'
+        elif target_platform == 'linux/arm64/v8':
+            architecture = 'aarch64'
         elif target_platform == 'linux/amd64':
             architecture = 'amd64'
 

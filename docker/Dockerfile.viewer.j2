@@ -44,23 +44,25 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 RUN c_rehash
 
 # QT Base from packages does not support eglfs
-RUN curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" \
-        -sL -o "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" && \
-    curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz.sha256" \
-        -sL -o "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz.sha256" && \
-    cd /tmp && \
-    sha256sum -c "qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz.sha256" && \
-    tar -xzf "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" -C /usr/local && \
-    rm "qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz"
+# TODO: Uncomment the following block when a Pi 5 build is available.
+# RUN curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" \
+#         -sL -o "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" && \
+#     curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz.sha256" \
+#         -sL -o "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz.sha256" && \
+#     cd /tmp && \
+#     sha256sum -c "qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz.sha256" && \
+#     tar -xzf "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" -C /usr/local && \
+#     rm "qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz"
 
-RUN curl "{{webview_base_url}}/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz" \
-        -sL -o "/tmp/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz" && \
-    curl "{{webview_base_url}}/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz.sha256" \
-        -sL -o "/tmp/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz.sha256" && \
-    cd /tmp && \
-    sha256sum -c "webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz.sha256" && \
-    tar -xzf "/tmp/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz" -C /usr/local && \
-    rm "webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz"
+# TODO: Uncomment the following block when a Pi 5 build is available.
+# RUN curl "{{webview_base_url}}/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz" \
+#         -sL -o "/tmp/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz" && \
+#     curl "{{webview_base_url}}/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz.sha256" \
+#         -sL -o "/tmp/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz.sha256" && \
+#     cd /tmp && \
+#     sha256sum -c "webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz.sha256" && \
+#     tar -xzf "/tmp/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz" -C /usr/local && \
+#     rm "webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz"
 
 ENV QT_QPA_EGLFS_FORCE888=1
 ENV QT_QPA_PLATFORM=linuxfb
