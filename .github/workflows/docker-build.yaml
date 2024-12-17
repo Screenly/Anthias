@@ -79,7 +79,7 @@ jobs:
 
       - name: Build Containers
         run: |
-          poetry run python tools/image_builder \
+          poetry run python -m tools.image_builder \
             --build-target=${{ matrix.board }} \
             --push
 
