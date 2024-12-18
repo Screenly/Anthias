@@ -94,11 +94,20 @@ def get_test_context() -> dict:
 
 
 def get_viewer_context(board: str) -> dict:
-    webview_git_hash = '5e556681738a1fa918dc9f0bf5879ace2e603e12'
+    webview_git_hash = (
+        'de804d4f' if board == 'pi5'
+        else '5e556681738a1fa918dc9f0bf5879ace2e603e12'
+    )
     releases_url = f'{GITHUB_REPO_URL}/releases/download'
-    webview_base_url = f'{releases_url}/WebView-v0.3.3'
+    webview_base_url = (
+        f'{releases_url}/WebView-v0.3.4' if board == 'pi5'
+        else f'{releases_url}/WebView-v0.3.3'
+    )
 
-    qt_version = '6.6.3' if board == 'x86' else '5.15.14'
+    qt_version = (
+        '6.6.3' if board in ['x86', 'pi5']
+        else '5.15.14'
+    )
     qt_major_version = qt_version.split('.')[0]
 
     apt_dependencies = [
