@@ -69,6 +69,10 @@ When you're done, you can stop and remove the container with the following comma
 docker compose -f docker-compose.x86.yml down
 ```
 
+### Building for Raspberry Pi 5
+
+See this [documentation](/webview/docs/build_webview_for_pi5.md) for details
+
 ## Usage
 
 DBus is used for communication.
