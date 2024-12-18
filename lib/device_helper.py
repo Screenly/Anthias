@@ -31,7 +31,9 @@ def get_device_type():
         with open('/proc/device-tree/model') as file:
             content = file.read()
 
-            if 'Raspberry Pi 4' in content:
+            if 'Raspberry Pi 5' in content:
+                return 'pi5'
+            elif 'Raspberry Pi 4' in content:
                 return 'pi4'
             elif 'Raspberry Pi 3' in content:
                 return 'pi3'

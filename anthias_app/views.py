@@ -169,7 +169,8 @@ def settings_page(request):
         'auth_backend': settings['auth_backend'],
         'auth_backends': auth_backends,
         'ip_addresses': ip_addresses,
-        'host_user': getenv('HOST_USER')
+        'host_user': getenv('HOST_USER'),
+        'device_type': getenv('DEVICE_TYPE')
     })
 
     return template(request, 'settings.html', context)

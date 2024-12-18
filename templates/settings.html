@@ -57,10 +57,14 @@
                             <select class="form-control" name="audio_output">
                                 {% if audio_output == 'hdmi' %}
                                     <option value="hdmi" selected="selected">HDMI</option>
-                                    <option value="local">3.5mm jack</option>
+                                    {% if device_type != 'pi5' %}
+                                        <option value="local">3.5mm jack</option>
+                                    {% endif %}
                                 {% else %}
                                     <option value="hdmi">HDMI</option>
-                                    <option value="local" selected="selected">3.5mm jack</option>
+                                    {% if device_type != 'pi5' %}
+                                        <option value="local" selected="selected">3.5mm jack</option>
+                                    {% endif %}
                                 {% endif %}
                             </select>
                         </div>
