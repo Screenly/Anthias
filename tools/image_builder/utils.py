@@ -210,6 +210,12 @@ def get_viewer_context(board: str) -> dict:
         'libswscale-dev',
     ]
 
+    if board == 'pi5':
+        apt_dependencies.extend([
+            'qt6-base-dev',
+            'qt6-webengine-dev',
+        ])
+
     if not board in ['x86', 'pi5']:
         apt_dependencies.extend([
             'libraspberrypi0',

@@ -64,6 +64,12 @@ RUN c_rehash
 #     tar -xzf "/tmp/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz" -C /usr/local && \
 #     rm "webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz"
 
+# TODO: Remove this block after testing.
+COPY webview/build/webview-6.6.3-bookworm-pi5-de804d4f.tar.gz /tmp
+RUN cd /tmp && \
+    tar -xzf webview-6.6.3-bookworm-pi5-de804d4f.tar.gz -C /usr/local && \
+    rm webview-6.6.3-bookworm-pi5-de804d4f.tar.gz
+
 ENV QT_QPA_EGLFS_FORCE888=1
 ENV QT_QPA_PLATFORM=linuxfb
 
