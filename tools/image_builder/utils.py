@@ -230,7 +230,7 @@ def get_viewer_context(board: str) -> dict:
             'qt6-webengine-dev',
         ])
 
-    if not board in ['x86', 'pi5']:
+    if board not in ['x86', 'pi5']:
         apt_dependencies.extend([
             'libraspberrypi0',
             'libgst-dev',
