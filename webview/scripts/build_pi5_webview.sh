@@ -4,8 +4,8 @@ set -euo pipefail
 
 DEBIAN_VERSION='bookworm'
 QT_MAJOR='6'
-QT_MINOR='6'
-QT_PATCH='3'
+QT_MINOR='4'
+QT_PATCH='2'
 QT_VERSION="${QT_MAJOR}.${QT_MINOR}.${QT_PATCH}"
 CORE_COUNT="$(expr $(nproc) - 2)"
 
