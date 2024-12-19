@@ -142,10 +142,10 @@
   register: rc_local
 
 - name: Remove blinking cursor (x86)
-  ansible.builtin.replace:
-    dest: /etc/rc.local
-    regexp: (^(?!$)((?!exit 0).)*$)
-    replace: \1 echo 0 > /sys/class/graphics/fbcon/cursor_blink
+  ansible.builtin.blockinfile:
+    path: /etc/rc.local
+    block: 'echo 0 > /sys/class/graphics/fbcon/cursor_blink'
+    insertbefore: '^exit 0'
   when: rc_local.stat.exists
   tags:
     - x86
