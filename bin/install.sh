@@ -197,6 +197,10 @@ function run_ansible_playbook() {
         ANSIBLE_PLAYBOOK_ARGS+=(
             "--skip-tags" "raspberry-pi"
         )
+    else
+        ANSIBLE_PLAYBOOK_ARGS+=(
+            "--skip-tags" "x86"
+        )
     fi
 
     sudo -E -u ${USER} ${SUDO_ARGS[@]} \

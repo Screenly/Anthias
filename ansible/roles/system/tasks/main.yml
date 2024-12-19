@@ -126,7 +126,7 @@
     - touches-boot-partition
     - raspberry-pi
 
-- name: Remove blinking cursor
+- name: Remove blinking cursor (Raspberry Pi)
   ansible.builtin.replace:
     dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!vt.global_cursor_default=0).)*$)
@@ -135,6 +135,14 @@
   tags:
     - touches-boot-partition
     - raspberry-pi
+
+- name: Remove blinking cursor (x86)
+  ansible.builtin.replace:
+    dest: /etc/rc.local
+    regexp: (^(?!$)((?!exit 0).)*$)
+    replace: \1 echo 0 > /sys/class/graphics/fbcon/cursor_blink
+  tags:
+    - x86
 
 - name: Plymouth ignore serial consoles
   ansible.builtin.replace:
