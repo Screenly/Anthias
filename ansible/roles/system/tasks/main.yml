@@ -140,6 +140,8 @@
   ansible.builtin.stat:
     path: /etc/rc.local
   register: rc_local
+  tags:
+    - x86
 
 - name: Remove blinking cursor (x86)
   ansible.builtin.blockinfile:
