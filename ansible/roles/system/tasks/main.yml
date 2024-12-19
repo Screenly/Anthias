@@ -136,11 +136,17 @@
     - touches-boot-partition
     - raspberry-pi
 
+- name: Check if `/etc/rc.local` exists
+  ansible.builtin.stat:
+    path: /etc/rc.local
+  register: rc_local
+
 - name: Remove blinking cursor (x86)
   ansible.builtin.replace:
     dest: /etc/rc.local
     regexp: (^(?!$)((?!exit 0).)*$)
     replace: \1 echo 0 > /sys/class/graphics/fbcon/cursor_blink
+  when: rc_local.stat.exists
   tags:
     - x86
 
