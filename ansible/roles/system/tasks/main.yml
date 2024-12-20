@@ -126,7 +126,7 @@
     - touches-boot-partition
     - raspberry-pi
 
-- name: Remove blinking cursor (Raspberry Pi)
+- name: Remove blinking cursor
   ansible.builtin.replace:
     dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!vt.global_cursor_default=0).)*$)
