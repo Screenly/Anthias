@@ -25,7 +25,8 @@ $ cd /path/to/Anthias/webview
 Start the builder container with the following command:
 
 ```bash
-docker compose -f docker-compose.pi5.yml up -d --build
+$ GIT_HASH=$(git rev-parse --short HEAD) \
+    docker compose -f docker-compose.pi5.yml up -d --build
 ```
 
 You should now be able to invoke a run executing either of the following commands:
