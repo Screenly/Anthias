@@ -44,6 +44,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 RUN c_rehash
 
 # QT Base from packages does not support eglfs
+
+{% if board != 'pi5' %}
 RUN curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" \
         -sL -o "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" && \
     curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz.sha256" \
@@ -52,6 +54,7 @@ RUN curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_ve
     sha256sum -c "qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz.sha256" && \
     tar -xzf "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" -C /usr/local && \
     rm "qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz"
+{% endif %}
 
 RUN curl "{{webview_base_url}}/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz" \
         -sL -o "/tmp/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz" && \
