@@ -12,6 +12,12 @@ def get_build_parameters(build_target: str) -> dict:
         'target_platform': 'linux/amd64',
     }
 
+    if build_target == 'pi5':
+        return {
+            'board': 'pi5',
+            'base_image': 'balenalib/raspberrypi5-debian',
+            'target_platform': 'linux/arm64/v8',
+        }
     if build_target == 'pi4':
         return {
             'board': 'pi4',
@@ -88,11 +94,25 @@ def get_test_context() -> dict:
 
 
 def get_viewer_context(board: str) -> dict:
-    webview_git_hash = '5e556681738a1fa918dc9f0bf5879ace2e603e12'
+    webview_git_hash = (
+        '389f1ccc' if board == 'pi5'
+        else '5e556681738a1fa918dc9f0bf5879ace2e603e12'
+    )
     releases_url = f'{GITHUB_REPO_URL}/releases/download'
-    webview_base_url = f'{releases_url}/WebView-v0.3.3'
+    webview_base_url = (
+        f'{releases_url}/WebView-v0.3.4' if board == 'pi5'
+        else f'{releases_url}/WebView-v0.3.3'
+    )
 
-    qt_version = '6.6.3' if board == 'x86' else '5.15.14'
+    qt_version = '5.15.14'
+
+    if board == 'x86':
+        qt_version = '6.6.3'
+    elif board == 'pi5':
+        qt_version = '6.4.2'
+    else:
+        qt_version = '5.15.14'
+
     qt_major_version = qt_version.split('.')[0]
 
     apt_dependencies = [
@@ -204,7 +224,13 @@ def get_viewer_context(board: str) -> dict:
         'libswscale-dev',
     ]
 
-    if board != 'x86':
+    if board == 'pi5':
+        apt_dependencies.extend([
+            'qt6-base-dev',
+            'qt6-webengine-dev',
+        ])
+
+    if board not in ['x86', 'pi5']:
         apt_dependencies.extend([
             'libraspberrypi0',
             'libgst-dev',
@@ -229,6 +255,8 @@ def get_wifi_connect_context(target_platform: str) -> dict:
         architecture = 'rpi'
     elif target_platform in ['linux/arm/v7', 'linux/arm/v8']:
         architecture = 'armv7hf'
+    elif target_platform == 'linux/arm64/v8':
+        architecture = 'aarch64'
     elif target_platform == 'linux/amd64':
         architecture = 'amd64'
     else:

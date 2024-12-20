@@ -33,6 +33,7 @@ See [this](/docs/installation-options.md) page for options on how to install Ant
 
 We've tested Anthias and is known to work on the following platforms:
 
+* Raspberry Pi 5 Model B - 64-bit Bookworm
 * Raspberry Pi 4 Model B - 32-bit and 64-bit Bullseye, 64-bit Bookworm
 * Raspberry Pi 3 Model B+ - 32-bit and 64-bit Bullseye, 64-bit Bookworm
 * Raspberry Pi 3 Model B - 64-bit Bookworm and Bullseye
