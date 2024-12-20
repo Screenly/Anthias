@@ -25,7 +25,7 @@ $ cd /path/to/Anthias/webview
 Start the builder container with the following command:
 
 ```bash
-$ export GIT_HASH=$(git rev-parse --short HEAD) && \
+$ GIT_HASH=$(git rev-parse --short HEAD) \
     docker compose -f docker-compose.pi5.yml up -d --build
 ```
 
