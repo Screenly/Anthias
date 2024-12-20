@@ -64,3 +64,4 @@ We've tested Anthias and is known to work on the following platforms:
 * [General documentation](https://github.com/Screenly/Anthias/blob/master/docs/README.md)
 * [Developer documentation](https://github.com/Screenly/Anthias/blob/master/docs/developer-documentation.md)
 * [Migrating assets from Anthias to Screenly](/docs/migrating-assets-to-screenly.md)
+* [WebView](/webview/README.md)
