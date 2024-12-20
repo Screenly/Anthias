@@ -184,6 +184,8 @@ function install_ansible() {
 function set_device_type() {
     if [ ! -f /proc/device-tree/model ] && [ "$(uname -m)" = "x86_64" ]; then
         export DEVICE_TYPE="x86"
+    elif grep -qF "Raspberry Pi 5" /proc/device-tree/model; then
+        export DEVICE_TYPE="pi5"
     elif grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
         export DEVICE_TYPE="pi4"
     elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
