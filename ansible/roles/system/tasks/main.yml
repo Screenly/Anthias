@@ -136,22 +136,6 @@
     - touches-boot-partition
     - raspberry-pi
 
-- name: Check if `/etc/rc.local` exists
-  ansible.builtin.stat:
-    path: /etc/rc.local
-  register: rc_local
-  tags:
-    - x86
-
-- name: Remove blinking cursor (x86)
-  ansible.builtin.blockinfile:
-    path: /etc/rc.local
-    block: 'echo 0 > /sys/class/graphics/fbcon/cursor_blink'
-    insertbefore: '^exit 0'
-  when: rc_local.stat.exists
-  tags:
-    - x86
-
 - name: Plymouth ignore serial consoles
   ansible.builtin.replace:
     dest: "{{ cmdline_path }}"
@@ -379,7 +363,7 @@
     - ansible_distribution_major_version | int >= 12
 
 - name: Copy in rc.local
-  ansible.builtin.copy:
+  ansible.builtin.template:
     src: rc.local
     dest: /etc/rc.local
     mode: "0755"
