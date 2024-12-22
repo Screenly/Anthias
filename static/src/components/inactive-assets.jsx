@@ -22,6 +22,10 @@ export const InactiveAssetsTable = (props) => {
               startDate={asset.start_date}
               endDate={asset.end_date}
               duration={asset.duration}
+              isEnabled={asset.is_enabled}
+              assetId={asset.asset_id}
+              isProcessing={asset.is_processing}
+              onToggle={props.onToggle}
             />
           ))
         }

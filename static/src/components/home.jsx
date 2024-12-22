@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { EmptyAssetMessage } from '@/components/empty-asset-message'
 import { InactiveAssetsTable } from '@/components/inactive-assets'
+import { ActiveAssetsTable } from '@/components/active-assets'
 
 export const ScheduleOverview = () => {
   const [activeAssets, setActiveAssets] = useState([])
@@ -12,7 +13,11 @@ export const ScheduleOverview = () => {
     const response = await fetch('/api/v2/assets')
     const data = await response.json()
 
-    setInactiveAssets(data.filter(asset => !asset.is_active))
+    // Sort assets by play_order before filtering
+    const sortedAssets = [...data].sort((a, b) => a.play_order - b.play_order)
+
+    setActiveAssets(sortedAssets.filter(asset => asset.is_active))
+    setInactiveAssets(sortedAssets.filter(asset => !asset.is_active))
   }
 
   useEffect(() => {
@@ -98,20 +103,15 @@ export const ScheduleOverview = () => {
                 <h5>
                   <b>Active assets</b>
                 </h5>
-                <table className="table">
-                  <thead className="table-borderless">
-                  <tr>
-                    <th className="font-weight-normal asset_row_name">Name</th>
-                    <th className="font-weight-normal" style={{ width: '21%' }}>Start</th>
-                    <th className="font-weight-normal" style={{ width: '21%' }}>End</th>
-                    <th className="font-weight-normal" style={{ width: '13%' }}>Duration</th>
-                    <th className="font-weight-normal" style={{ width: '7%' }}>Activity</th>
-                    <th className="font-weight-normal" style={{ width: '13%' }}></th>
-                  </tr>
-                  </thead>
-                  <tbody id="active-assets"></tbody>
-                </table>
-                <EmptyAssetMessage />
+                <ActiveAssetsTable
+                  assets={activeAssets}
+                  onToggle={fetchAssets}
+                />
+                {
+                  activeAssets.length === 0 && (
+                    <EmptyAssetMessage />
+                  )
+                }
               </section>
             </div>
           </div>
@@ -124,10 +124,12 @@ export const ScheduleOverview = () => {
                 <h5>
                   <b>Inactive assets</b>
                 </h5>
-                <InactiveAssetsTable assets={inactiveAssets} />
-
+                <InactiveAssetsTable
+                  assets={inactiveAssets}
+                  onToggle={fetchAssets}
+                />
                 {
-                  inactiveAssets.length == 0 && (
+                  inactiveAssets.length === 0 && (
                     <EmptyAssetMessage />
                   )
                 }
