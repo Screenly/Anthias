@@ -43,7 +43,7 @@ export const ActiveAssetsTable = (props) => {
     const newItems = arrayMove(items, oldIndex, newIndex);
     setItems(newItems);
 
-    const orderedIds = newItems.map(asset => asset.asset_id).join(',');
+    const activeIds = newItems.map(asset => asset.asset_id);
 
     try {
       const response = await fetch('/api/v2/assets/order', {
@@ -51,20 +51,18 @@ export const ActiveAssetsTable = (props) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ids: orderedIds })
+        body: JSON.stringify({ ids: activeIds.join(',') })
       });
 
       if (!response.ok) {
         throw new Error('Failed to update order');
       }
 
-      // Only refresh from server if something else changed
       if (props.onToggle) {
         props.onToggle();
       }
     } catch (error) {
       console.error('Failed to update asset order:', error);
-      // Revert to original order on error
       setItems(props.assets);
     }
   };
@@ -73,12 +71,12 @@ export const ActiveAssetsTable = (props) => {
     <table className="table">
       <thead className="table-borderless">
         <tr>
-          <th className="text-secondary font-weight-normal asset_row_name">Name</th>
-          <th className="text-secondary font-weight-normal" style={{ width: '21%' }}>Start</th>
-          <th className="text-secondary font-weight-normal" style={{ width: '21%' }}>End</th>
-          <th className="text-secondary font-weight-normal" style={{ width: '13%' }}>Duration</th>
-          <th className="text-secondary font-weight-normal" style={{ width: '7%' }}>Activity</th>
-          <th className="text-secondary font-weight-normal" style={{ width: '13%' }}></th>
+          <th className="font-weight-normal asset_row_name">Name</th>
+          <th className="font-weight-normal" style={{ width: '21%' }}>Start</th>
+          <th className="font-weight-normal" style={{ width: '21%' }}>End</th>
+          <th className="font-weight-normal" style={{ width: '13%' }}>Duration</th>
+          <th className="font-weight-normal" style={{ width: '7%' }}>Activity</th>
+          <th className="font-weight-normal" style={{ width: '13%' }}></th>
         </tr>
       </thead>
       <DndContext

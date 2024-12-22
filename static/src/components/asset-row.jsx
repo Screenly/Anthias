@@ -7,6 +7,28 @@ import {
 import classNames from 'classnames';
 import { forwardRef, useState } from 'react';
 
+const formatDuration = (seconds) => {
+  let durationString = "";
+  const secInt = parseInt(seconds);
+
+  const hours = Math.floor(secInt / 3600);
+  if (hours > 0) {
+    durationString += `${hours} hours `;
+  }
+
+  const minutes = Math.floor(secInt / 60) % 60;
+  if (minutes > 0) {
+    durationString += `${minutes} min `;
+  }
+
+  const secs = secInt % 60;
+  if (secs > 0) {
+    durationString += `${secs} sec`;
+  }
+
+  return durationString;
+};
+
 export const AssetRow = forwardRef((props, ref) => {
   const [isEnabled, setIsEnabled] = useState(props.isEnabled);
   const [isDisabled, setIsDisabled] = useState(false);
@@ -21,7 +43,10 @@ export const AssetRow = forwardRef((props, ref) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ is_enabled: newValue })
+        body: JSON.stringify({
+          is_enabled: newValue,
+          play_order: newValue === 0 ? 0 : undefined
+        })
       });
 
       if (!response.ok) {
@@ -62,7 +87,7 @@ export const AssetRow = forwardRef((props, ref) => {
         {props.endDate}
       </td>
       <td style={{ width: '13%' }}>
-        {props.duration}
+        {formatDuration(props.duration)}
       </td>
       <td className={classNames('asset-toggle')} style={{ width: '7%' }}>
         <label className={classNames(
