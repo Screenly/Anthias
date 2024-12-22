@@ -1,29 +1,21 @@
 import classNames from 'classnames'
 import { useEffect, useState } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
+import { fetchAssets, selectActiveAssets, selectInactiveAssets } from '../store/assetsSlice'
 
 import { EmptyAssetMessage } from '@/components/empty-asset-message'
 import { InactiveAssetsTable } from '@/components/inactive-assets'
 import { ActiveAssetsTable } from '@/components/active-assets'
 
 export const ScheduleOverview = () => {
-  const [activeAssets, setActiveAssets] = useState([])
-  const [inactiveAssets, setInactiveAssets] = useState([])
-
-  const fetchAssets = async () => {
-    const response = await fetch('/api/v2/assets')
-    const data = await response.json()
-
-    // Sort assets by play_order before filtering
-    const sortedAssets = [...data].sort((a, b) => a.play_order - b.play_order)
-
-    setActiveAssets(sortedAssets.filter(asset => asset.is_active))
-    setInactiveAssets(sortedAssets.filter(asset => !asset.is_active))
-  }
+  const dispatch = useDispatch()
+  const activeAssets = useSelector(selectActiveAssets)
+  const inactiveAssets = useSelector(selectInactiveAssets)
 
   useEffect(() => {
     document.title = 'Schedule Overview'
-    fetchAssets()
-  }, [])
+    dispatch(fetchAssets())
+  }, [dispatch])
 
   // TODO: Get the player name from the server via API.
   const [playerName, setPlayerName] = useState('')
@@ -103,10 +95,7 @@ export const ScheduleOverview = () => {
                 <h5>
                   <b>Active assets</b>
                 </h5>
-                <ActiveAssetsTable
-                  assets={activeAssets}
-                  onToggle={fetchAssets}
-                />
+                <ActiveAssetsTable />
                 {
                   activeAssets.length === 0 && (
                     <EmptyAssetMessage />
@@ -124,10 +113,7 @@ export const ScheduleOverview = () => {
                 <h5>
                   <b>Inactive assets</b>
                 </h5>
-                <InactiveAssetsTable
-                  assets={inactiveAssets}
-                  onToggle={fetchAssets}
-                />
+                <InactiveAssetsTable />
                 {
                   inactiveAssets.length === 0 && (
                     <EmptyAssetMessage />

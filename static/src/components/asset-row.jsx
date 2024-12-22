@@ -6,6 +6,8 @@ import {
 } from 'react-icons/fa';
 import classNames from 'classnames';
 import { forwardRef, useState } from 'react';
+import { useDispatch } from 'react-redux';
+import { toggleAssetEnabled, fetchAssets } from '../store/assetsSlice';
 
 const formatDuration = (seconds) => {
   let durationString = "";
@@ -30,36 +32,17 @@ const formatDuration = (seconds) => {
 };
 
 export const AssetRow = forwardRef((props, ref) => {
-  const [isEnabled, setIsEnabled] = useState(props.isEnabled);
+  const dispatch = useDispatch();
   const [isDisabled, setIsDisabled] = useState(false);
 
-  const toggleIsEnabled = async () => {
-    const newValue = isEnabled ? 0 : 1;
+  const handleToggle = async () => {
+    const newValue = !props.isEnabled ? 1 : 0;
     setIsDisabled(true);
-
     try {
-      const response = await fetch(`/api/v2/assets/${props.assetId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          is_enabled: newValue,
-          play_order: newValue === 0 ? 0 : undefined
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update asset');
-      }
-
-      setIsEnabled(newValue);
-      if (props.onToggle) {
-        props.onToggle();
-      }
+      await dispatch(toggleAssetEnabled({ assetId: props.assetId, newValue })).unwrap();
+      dispatch(fetchAssets());
     } catch (error) {
       console.error('Failed to toggle asset:', error);
-      setIsEnabled(isEnabled);
     } finally {
       setIsDisabled(false);
     }
@@ -100,8 +83,8 @@ export const AssetRow = forwardRef((props, ref) => {
         )}>
           <input
             type="checkbox"
-            checked={isEnabled}
-            onChange={toggleIsEnabled}
+            checked={props.isEnabled}
+            onChange={handleToggle}
             disabled={isDisabled || props.isProcessing === 1}
           />
           <span>

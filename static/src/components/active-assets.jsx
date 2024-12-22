@@ -1,3 +1,5 @@
+import { useSelector, useDispatch } from 'react-redux';
+import { selectActiveAssets, updateAssetOrder, fetchAssets } from '../store/assetsSlice';
 import { AssetRow } from '@/components/asset-row'
 import {
   DndContext,
@@ -16,12 +18,14 @@ import {
 import { SortableAssetRow } from '@/components/sortable-asset-row'
 import { useState, useEffect } from 'react'
 
-export const ActiveAssetsTable = (props) => {
-  const [items, setItems] = useState(props.assets);
+export const ActiveAssetsTable = () => {
+  const dispatch = useDispatch();
+  const activeAssets = useSelector(selectActiveAssets);
+  const [items, setItems] = useState(activeAssets);
 
   useEffect(() => {
-    setItems(props.assets);
-  }, [props.assets]);
+    setItems(activeAssets);
+  }, [activeAssets]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -46,24 +50,11 @@ export const ActiveAssetsTable = (props) => {
     const activeIds = newItems.map(asset => asset.asset_id);
 
     try {
-      const response = await fetch('/api/v2/assets/order', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ ids: activeIds.join(',') })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update order');
-      }
-
-      if (props.onToggle) {
-        props.onToggle();
-      }
+      await dispatch(updateAssetOrder(activeIds.join(','))).unwrap();
+      dispatch(fetchAssets());
     } catch (error) {
       console.error('Failed to update asset order:', error);
-      setItems(props.assets);
+      setItems(activeAssets);
     }
   };
 
@@ -100,7 +91,6 @@ export const ActiveAssetsTable = (props) => {
                 isEnabled={asset.is_enabled}
                 assetId={asset.asset_id}
                 isProcessing={asset.is_processing}
-                onToggle={props.onToggle}
               />
             ))}
           </SortableContext>

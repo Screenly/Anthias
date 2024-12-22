@@ -1,6 +1,10 @@
+import { useSelector } from 'react-redux'
+import { selectInactiveAssets } from '../store/assetsSlice'
 import { AssetRow } from '@/components/asset-row'
 
-export const InactiveAssetsTable = (props) => {
+export const InactiveAssetsTable = () => {
+  const inactiveAssets = useSelector(selectInactiveAssets)
+
   return (
     <table className="table">
       <thead className="table-borderless">
@@ -15,7 +19,7 @@ export const InactiveAssetsTable = (props) => {
       </thead>
       <tbody id="inactive-assets">
         {
-          props.assets.map(asset => (
+          inactiveAssets.map(asset => (
             <AssetRow
               key={asset.asset_id}
               name={asset.name}
@@ -25,7 +29,6 @@ export const InactiveAssetsTable = (props) => {
               isEnabled={asset.is_enabled}
               assetId={asset.asset_id}
               isProcessing={asset.is_processing}
-              onToggle={props.onToggle}
             />
           ))
         }
