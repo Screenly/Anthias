@@ -23,6 +23,8 @@
 
 Anthias is a digital signage platform for Raspberry Pi devices and PCs. Formerly known as Screenly OSE, it was rebranded to clear up the confusion between Screenly (the paid version) and Anthias. More details can be found in [this blog post](https://www.screenly.io/blog/2022/12/06/screenly-ose-now-called-anthias/).
 
+:tada: **NEW: Now with Raspberry Pi 5 Support!** :tada:
+
 Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
 
 ## :rocket: Getting Started
@@ -31,9 +33,16 @@ See [this](/docs/installation-options.md) page for options on how to install Ant
 
 ## :white_check_mark: Compatibility
 
-We've tested Anthias and is known to work on the following platforms:
+### balenaOS
 
-* Raspberry Pi 5 Model B - 64-bit Bookworm
+> [!NOTE]
+> See [this](/docs/installation-options.md) page for instructions on how to install Anthias on balenaOS.
+> You can either use the [images from balenaHub](/docs/installation-options.md#using-the-images-from-balenahub)
+> or [download the images from the releases](/docs/installation-options.md#using-the-images-from-the-releases).
+
+### Raspberry Pi OS
+
+* Raspberry Pi 5 Model B - 64-bit Bookworm (New!)
 * Raspberry Pi 4 Model B - 32-bit and 64-bit Bullseye, 64-bit Bookworm
 * Raspberry Pi 3 Model B+ - 32-bit and 64-bit Bullseye, 64-bit Bookworm
 * Raspberry Pi 3 Model B - 64-bit Bookworm and Bullseye
@@ -44,7 +53,7 @@ We've tested Anthias and is known to work on the following platforms:
     before running the [installation script](/docs/installation-options.md#installing-on-raspberry-pi-os-lite-or-debian).
 
 > [!NOTE]
-> We're still fixing the installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 1.
+> We're still fixing the Raspberry Pi OS installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 1.
 > Should you encounter any issues, please file an issue either in this repository or in the
 [forums](https://forums.screenly.io).
 
