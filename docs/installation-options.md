@@ -23,6 +23,7 @@ here are the links to the images:
 * [Raspberry Pi 2](https://hub.balena.io/fleets-for-good/1971385/anthias-pi2)
 * [Raspberry Pi 3](https://hub.balena.io/fleets-for-good/1971388/anthias-pi3)
 * [Raspberry Pi 4](https://hub.balena.io/fleets-for-good/1971389/anthias-pi4)
+* [Raspberry Pi 5](https://hub.balena.io/fleets-for-good/2209774/anthias-pi5)
 
 Go to one of the links above and click the *Join* button, then select either *Ethernet only* or *Wifi + Ethernet* for Network options.
 You can either click the *Flash* button to open balenaEthcher (make sure that it's installed) or download the image file and flash it using your preferred imager.
@@ -38,6 +39,10 @@ The image file looks something like `<yyyy>-<mm>-<dd>-raspberry<version>.zip`. T
 Starting [v0.19.0](https://github.com/Screenly/Anthias/releases/tag/v0.19.0), devices installed using this option will be
 pinned to the version that you've downloaded. This means that the devices will get updates when a new release (e.g., v0.19.1, etc.)
 is available.
+
+> [!NOTE]
+> While Anthias now supports Raspberry Pi 5 for Raspberry Pi OS and balenaOS (via balenaHub),
+> release images for Raspberry Pi 5 are not available yet.
 
 # Installing on Raspberry Pi OS Lite or Debian
 
