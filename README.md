@@ -42,7 +42,7 @@ See [this](/docs/installation-options.md) page for options on how to install Ant
 
 ### Raspberry Pi OS
 
-* Raspberry Pi 5 Model B - 64-bit Bookworm (New!)
+* Raspberry Pi 5 Model B - 64-bit Bookworm **(NEW!)**
 * Raspberry Pi 4 Model B - 32-bit and 64-bit Bullseye, 64-bit Bookworm
 * Raspberry Pi 3 Model B+ - 32-bit and 64-bit Bullseye, 64-bit Bookworm
 * Raspberry Pi 3 Model B - 64-bit Bookworm and Bullseye
