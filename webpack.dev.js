@@ -1,7 +1,11 @@
 const { merge } = require("webpack-merge");
-const common = require("./webpack.common.js");
+const common = require("./webpack.react.js");
 
 module.exports = merge(common, {
-    devtool: "source-map",
-    mode: "development",
+  devtool: "source-map",
+  mode: "development",
+  devServer: {
+    contentBase: "./static/dist",
+    hot: true,
+  },
 });
