@@ -1,6 +1,12 @@
 # Using the image from the Raspberry Pi Imager
 
-The quickest way to get started is to use [Raspberry Pi Imager](https://www.screenly.io/blog/2022/12/13/anthias-and-screenly-now-in-rpi-imager/), where you can find Anthias under `Other specific-purpose OS`.
+> [!NOTE]
+> Raspberry Pi 5 images are not yet available via the Raspberry Pi Imager. For Pi 5 installations, please use either:
+> * [balenaHub images](#using-the-images-from-balenahub)
+> * [Release images](#using-the-images-from-the-releases)
+> * [Manual installation](#installing-on-raspberry-pi-os-lite-or-debian)
+
+The quickest way to get started on supported devices is to use [Raspberry Pi Imager](https://www.screenly.io/blog/2022/12/13/anthias-and-screenly-now-in-rpi-imager/), where you can find Anthias under `Other specific-purpose OS`.
 
 ![imager-01](/docs/images/imager-01.png)
 
