@@ -1,9 +1,6 @@
 ### Issues Fixed
 
-Include a list of issues that this pull request fixes.
-If this pull request is not associated with any issue,
-you can remove this section or include a brief description
-of the issue that you are fixing.
+Include a list of issues that this pull request fixes. If this pull request is not associated with any issue, you can remove this section or include a brief description of the issue that you are fixing.
 
 ### Description
 
@@ -19,5 +16,4 @@ Provide a brief description of the changes that you have made.
 
 ### Additional Information
 
-Include any additional information that you think is necessary for this pull request,
-including screenshots of the changes that you have made.
+Include any additional information that you think is necessary for this pull request, including screenshots of the changes that you have made.
