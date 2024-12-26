@@ -11,6 +11,7 @@
     "css-toggle-switch": "^4.1.0"
   },
   "devDependencies": {
+    "@coffeelint/cli": "^5.2.11",
     "coffee-loader": "^0.9.0",
     "coffeescript": "^1.12.7",
     "css-loader": "^7.1.2",

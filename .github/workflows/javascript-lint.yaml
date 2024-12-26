@@ -3,8 +3,18 @@ name: Run JavaScript and CoffeeScript Linter
 on:
   push:
     branches: [ master ]
+    paths:
+      - '**/*.js'
+      - '**/*.coffee'
+      - '**/*.mjs'
+      - '.github/workflows/javascript-lint.yaml'
   pull_request:
     branches: [ master ]
+    paths:
+      - '**/*.js'
+      - '**/*.coffee'
+      - '**/*.mjs'
+      - '.github/workflows/javascript-lint.yaml'
 
 jobs:
   lint:
