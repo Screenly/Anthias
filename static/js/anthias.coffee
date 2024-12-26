@@ -72,7 +72,10 @@ durationSecondsToHumanReadable = (secs) ->
 
   return durationString
 
-url_test = (v) -> /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test v
+url_test = (v) ->
+  urlPattern = /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/
+  urlPattern.test v
+
 get_filename = (v) -> (v.replace /[\/\\\s]+$/g, '').replace /^.*[\\\/]/g, ''
 truncate_str = (v) -> v.replace /(.{100})..+/, "$1..."
 insertWbr = (v) -> (v.replace /\//g, '/<wbr>').replace /\&/g, '&amp;<wbr>'
@@ -100,8 +103,8 @@ API.Asset = class Asset extends Backbone.Model
   active: =>
     if @get('is_enabled') and @get('start_date') and @get('end_date')
       at = now()
-      start_date = new Date(@get('start_date'));
-      end_date = new Date(@get('end_date'));
+      start_date = new Date(@get('start_date'))
+      end_date = new Date(@get('end_date'))
       return start_date <= at <= end_date
     else
       return false
@@ -125,7 +128,7 @@ API.Assets = class Assets extends Backbone.Collection
 
 
 # Views
-API.View = {};
+API.View = {}
 
 API.View.AddAssetView = class AddAssetView extends Backbone.View
   $f: (field) => @$ "[name='#{field}']" # get field element
@@ -146,7 +149,8 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
 
   viewmodel:(model) =>
     for which in ['start', 'end']
-      @$fv "#{which}_date", (moment (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time"), dateSettings.fullDate).toDate().toISOString()
+      date = (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")
+      @$fv "#{which}_date", (moment date, dateSettings.fullDate).toDate().toISOString()
     for field in model.fields when not (@$f field).prop 'disabled'
       model.set field, (@$fv field), silent:yes
 
@@ -346,7 +350,8 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
 
   viewmodel: =>
     for which in ['start', 'end']
-      @$fv "#{which}_date", (moment (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time"), dateSettings.fullDate).toDate().toISOString()
+      date = (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")
+      @$fv "#{which}_date", (moment date, dateSettings.fullDate).toDate().toISOString()
     for field in @model.fields when not (@$f field).prop 'disabled'
       @model.set field, (@$fv field), silent:yes
 
