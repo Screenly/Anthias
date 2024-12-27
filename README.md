@@ -69,7 +69,7 @@ See [this](/docs/installation-options.md) page for options on how to install Ant
 ## :zap: Quick Links
 
 * [Forum](https://forums.screenly.io/)
-* [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](https://github.com/Screenly/Anthias/tree/master/website))
+* [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](/website))
 * [General documentation](https://github.com/Screenly/Anthias/blob/master/docs/README.md)
 * [Developer documentation](https://github.com/Screenly/Anthias/blob/master/docs/developer-documentation.md)
 * [Migrating assets from Anthias to Screenly](/docs/migrating-assets-to-screenly.md)
