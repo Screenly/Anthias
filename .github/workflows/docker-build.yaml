@@ -12,6 +12,7 @@ on:
       - '!.github/workflows/build-webview.yaml'
       - '!.github/workflows/build-balena-disk-image.yaml'
       - '!.github/workflows/python-lint.yaml'
+      - '!.github/pull_request_template.md'
       - '!README.md'
       - '!docs/**'
       - '!bin/install.sh'
@@ -28,7 +29,7 @@ jobs:
     needs: run-tests
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi5', 'x86']
         python-version: ["3.11"]
     runs-on: ubuntu-latest
 
@@ -79,7 +80,7 @@ jobs:
 
       - name: Build Containers
         run: |
-          poetry run python tools/image_builder \
+          poetry run python -m tools.image_builder \
             --build-target=${{ matrix.board }} \
             --push
 
@@ -88,7 +89,7 @@ jobs:
     needs: buildx
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi5']
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -111,6 +112,12 @@ jobs:
           # Generate the docker-compose file
           cat docker-compose.balena.yml.tmpl | \
             envsubst > balena-deploy/docker-compose.yml
+
+          # Remove bind mounts to `/dev/vchiq` for Raspberry Pi 5
+          if [ "${{ matrix.board }}" == "pi5" ]; then
+            sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
+              balena-deploy/docker-compose.yml
+          fi
 
       - uses: balena-io/deploy-to-balena-action@master
         id: build

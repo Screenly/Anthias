@@ -11,4 +11,8 @@ if [ "$(ip address | grep wlan)" ]; then
   iwconfig wlan0 power off
 fi
 
+{% if device_type == 'x86' %}
+echo 0 > /sys/class/graphics/fbcon/cursor_blink
+{% endif %}
+
 exit 0
