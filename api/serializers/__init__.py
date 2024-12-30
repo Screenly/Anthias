@@ -1,4 +1,5 @@
 from os import path
+
 from django.utils import timezone
 from rest_framework.serializers import (
     CharField,
@@ -7,6 +8,7 @@ from rest_framework.serializers import (
     ModelSerializer,
     Serializer,
 )
+
 from anthias_app.models import Asset
 from lib.utils import validate_url
 

@@ -2,15 +2,15 @@ from django.urls import path
 
 from api.views.v2 import (
     AssetContentViewV2,
-    AssetsControlViewV2,
     AssetListViewV2,
+    AssetsControlViewV2,
     AssetViewV2,
     BackupViewV2,
+    FileAssetViewV2,
     PlaylistOrderViewV2,
-    RecoverViewV2,
     RebootViewV2,
+    RecoverViewV2,
     ShutdownViewV2,
-    FileAssetViewV2
 )
 
 

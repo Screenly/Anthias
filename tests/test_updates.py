@@ -1,12 +1,12 @@
 from __future__ import unicode_literals
-from unittest_parametrize import parametrize, ParametrizedTestCase
 
 import logging
-import mock
 import os
 
-from lib.github import is_up_to_date
+import mock
+from unittest_parametrize import ParametrizedTestCase, parametrize
 
+from lib.github import is_up_to_date
 
 GIT_HASH_1 = 'da39a3ee5e6b4b0d3255bfef95601890afd80709'
 GIT_SHORT_HASH_1 = 'da39a3e'

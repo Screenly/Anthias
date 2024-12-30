@@ -1,10 +1,12 @@
 from __future__ import unicode_literals
+
 from builtins import object
+from threading import Thread
+
+import zmq.green as zmq
 from gevent import pywsgi
 from geventwebsocket import WebSocketError
 from geventwebsocket.handler import WebSocketHandler
-from threading import Thread
-import zmq.green as zmq
 
 from settings import settings
 

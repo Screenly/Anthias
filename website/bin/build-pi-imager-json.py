@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
-from __future__ import print_function
-from __future__ import unicode_literals
-import requests
+from __future__ import print_function, unicode_literals
+
 import json
+
+import requests
 
 BASE_URL = "https://api.github.com/repos/Screenly/Anthias"
 GITHUB_HEADERS = {

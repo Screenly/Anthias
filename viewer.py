@@ -1,45 +1,45 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import unicode_literals
-from builtins import bytes
-from future import standard_library
-from builtins import range
-import django
-from builtins import object
+
 import json
 import logging
-import pydbus
 import sys
-from jinja2 import Template
-from os import path, getenv, utime, system
+from builtins import bytes, object, range
+from os import getenv, path, system, utime
 from random import shuffle
-from signal import signal, SIGALRM, SIGUSR1
-from tenacity import Retrying, stop_after_attempt, wait_fixed
-from time import sleep
+from signal import SIGALRM, SIGUSR1, signal
 from threading import Thread
+from time import sleep
 
+import django
+import pydbus
 import requests
 import sh
 import zmq
+from future import standard_library
+from jinja2 import Template
+from tenacity import Retrying, stop_after_attempt, wait_fixed
 
-from lib.errors import SigalrmException
+from lib.errors import SigalrmError
 from lib.media_player import MediaPlayerProxy
-from settings import settings, LISTEN, PORT, ZmqConsumer
+from settings import LISTEN, PORT, ZmqConsumer, settings
 
 try:
     django.setup()
 
     # Place imports that uses Django in this block.
 
-    from anthias_app.models import Asset
     from django.utils import timezone
+
+    from anthias_app.models import Asset
     from lib.utils import (
-        url_fails,
-        is_balena_app,
-        get_node_ip,
-        string_to_bool,
         connect_to_redis,
         get_balena_device_info,
+        get_node_ip,
+        is_balena_app,
+        string_to_bool,
+        url_fails,
     )
 except Exception:
     pass
@@ -80,9 +80,9 @@ scheduler = None
 
 def sigalrm(signum, frame):
     """
-    Signal just throw an SigalrmException
+    Signal just throw an SigalrmError
     """
-    raise SigalrmException("SigalrmException")
+    raise SigalrmError("SigalrmError")
 
 
 def sigusr1(signum, frame):

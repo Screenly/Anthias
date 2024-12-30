@@ -1,19 +1,18 @@
 import os
 import shutil
 import tempfile
-
 from datetime import timedelta
+from time import sleep
+from unittest import TestCase, skip
+
 from django.test import tag
 from django.utils import timezone
 from selenium import webdriver
 from selenium.common.exceptions import ElementNotVisibleException
 from splinter import Browser
-from time import sleep
-from unittest import skip, TestCase
 
 from anthias_app.models import Asset
 from settings import settings
-
 
 main_page_url = 'http://localhost:8080'
 settings_url = 'http://foo:bar@localhost:8080/settings'

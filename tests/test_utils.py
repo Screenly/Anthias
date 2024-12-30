@@ -1,8 +1,10 @@
 # coding=utf-8
 
-from datetime import datetime
-from django.test import TestCase
 import unittest
+from datetime import datetime
+
+from django.test import TestCase
+
 from lib.utils import handler, template_handle_unicode, url_fails
 
 url_fail = 'http://doesnotwork.example.com'

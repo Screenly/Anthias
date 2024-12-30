@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from builtins import str
+from __future__ import absolute_import, unicode_literals
+
 import os
-from . import utils
-import cec
-from lib import device_helper
+from builtins import str
 from datetime import datetime
+
+import cec
+
+from lib import device_helper
+
+from . import utils
 
 
 def get_display_power():

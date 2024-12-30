@@ -1,21 +1,20 @@
 from __future__ import unicode_literals
-from builtins import str
-from builtins import range
-import os
-import logging
-import string
-import random
-import json
-from requests import (
-    get as requests_get,
-    post as requests_post,
-    exceptions
-)
-from lib.utils import is_balena_app, is_docker, is_ci, connect_to_redis
-from lib.diagnostics import get_git_branch, get_git_hash, get_git_short_hash
-from lib.device_helper import parse_cpu_info
-from settings import settings
 
+import json
+import logging
+import os
+import random
+import string
+from builtins import range, str
+
+from requests import exceptions
+from requests import get as requests_get
+from requests import post as requests_post
+
+from lib.device_helper import parse_cpu_info
+from lib.diagnostics import get_git_branch, get_git_hash, get_git_short_hash
+from lib.utils import connect_to_redis, is_balena_app, is_ci, is_docker
+from settings import settings
 
 r = connect_to_redis()
 

@@ -9,7 +9,6 @@ package-mode = false
 python = ">=3.9,<3.12"
 
 [tool.poetry.group.dev-host.dependencies]
-flake8 = "^5.0.4" # TODO: Remove in favor of `ruff`.
 ruff = "^0.6.9"
 
 [tool.poetry.group.docker-image-builder.dependencies]
@@ -28,13 +27,13 @@ build-backend = "poetry.core.masonry.api"
 exclude = ["anthias_app/migrations/*.py"]
 
 # Line length configuration
-line-length = 120
+line-length = 79
 
 # Python target version
 target-version = "py39"
 
 # Enable all rules by default
-select = [
+lint.select = [
     "E",  # pycodestyle
     "F",  # pyflakes
     "W",  # pycodestyle warnings
@@ -45,7 +44,10 @@ select = [
 ]
 
 # Ignore specific rules
-ignore = []
+lint.ignore = [
+    "N801",  # Ignore class naming convention for API versioning throughout the codebase
+    "A002",
+]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "bin/migrate.py" = ["E501"]

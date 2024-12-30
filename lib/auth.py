@@ -2,15 +2,15 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import unicode_literals
+
 import hashlib
 import os.path
-from base64 import b64decode
-from builtins import str
-from builtins import object
 from abc import ABCMeta, abstractmethod
+from base64 import b64decode
+from builtins import object, str
 from functools import wraps
-from future.utils import with_metaclass
 
+from future.utils import with_metaclass
 
 LINUX_USER = os.getenv('USER', 'pi')
 
@@ -198,9 +198,10 @@ class BasicAuth(Auth):
 
 
 def authorized(orig):
-    from settings import settings
     from django.http import HttpRequest
     from rest_framework.request import Request
+
+    from settings import settings
 
     @wraps(orig)
     def decorated(*args, **kwargs):
