@@ -9,7 +9,7 @@ package-mode = false
 python = ">=3.9,<3.12"
 
 [tool.poetry.group.dev-host.dependencies]
-ruff = "^0.6.9"
+ruff = "^0.8.4"
 
 [tool.poetry.group.docker-image-builder.dependencies]
 click = '^8.1.7'
@@ -47,6 +47,7 @@ lint.select = [
 lint.ignore = [
     "N801",  # Ignore class naming convention for API versioning throughout the codebase
     "A002",
+    "A004",
 ]
 
 [tool.ruff.lint.per-file-ignores]
