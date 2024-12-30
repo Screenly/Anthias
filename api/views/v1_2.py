@@ -1,220 +1,127 @@
-import json
+from drf_spectacular.utils import extend_schema
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from flask import request
-from flask_restful_swagger_2 import Resource, swagger
-from os import remove
-from werkzeug.wrappers import Request
-
+from anthias_app.models import Asset
 from api.helpers import (
-    AssetModel,
-    AssetPropertiesModel,
-    AssetRequestModel,
-    api_response,
-    prepare_asset_v1_2,
-    update_asset,
+    AssetCreationException,
+    get_active_asset_ids,
+    save_active_assets_ordering,
 )
-from lib import db, assets_helper
+from api.serializers import (
+    AssetSerializer,
+    UpdateAssetSerializer,
+)
+from api.serializers.v1_2 import CreateAssetSerializerV1_2
+from api.views.mixins import DeleteAssetViewMixin
 from lib.auth import authorized
-from lib.utils import url_fails
-from settings import settings
 
 
-class AssetsV1_2(Resource):
-    method_decorators = [authorized]
+class AssetListViewV1_2(APIView):
+    serializer_class = AssetSerializer
 
-    @swagger.doc({
-        'responses': {
-            '200': {
-                'description': 'List of assets',
-                'schema': {
-                    'type': 'array',
-                    'items': AssetModel
-                }
-            }
+    @extend_schema(
+        summary='List assets',
+        responses={
+            200: AssetSerializer(many=True)
         }
-    })
-    def get(self):
-        with db.conn(settings['database']) as conn:
-            return assets_helper.read(conn)
+    )
+    @authorized
+    def get(self, request):
+        queryset = Asset.objects.all()
+        serializer = self.serializer_class(queryset, many=True)
+        return Response(serializer.data)
 
-    @api_response
-    @swagger.doc({
-        'parameters': [
-            {
-                'in': 'body',
-                'name': 'model',
-                'description': 'Adds an asset',
-                'schema': AssetRequestModel,
-                'required': True
-            }
-        ],
-        'responses': {
-            '201': {
-                'description': 'Asset created',
-                'schema': AssetModel
-            }
+    @extend_schema(
+        summary='Create asset',
+        request=CreateAssetSerializerV1_2,
+        responses={
+            201: AssetSerializer
         }
-    })
-    def post(self):
-        request_environ = Request(request.environ)
-        asset = prepare_asset_v1_2(request_environ, unique_name=True)
-        if not asset['skip_asset_check'] and url_fails(asset['uri']):
-            raise Exception("Could not retrieve file. Check the asset URL.")
-        with db.conn(settings['database']) as conn:
-            assets = assets_helper.read(conn)
-            ids_of_active_assets = [
-                x['asset_id'] for x in assets if x['is_active']]
+    )
+    @authorized
+    def post(self, request):
+        try:
+            serializer = CreateAssetSerializerV1_2(
+                data=request.data, unique_name=True)
 
-            asset = assets_helper.create(conn, asset)
+            if not serializer.is_valid():
+                raise AssetCreationException(serializer.errors)
+        except AssetCreationException as error:
+            return Response(error.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            if asset['is_active']:
-                ids_of_active_assets.insert(
-                    asset['play_order'], asset['asset_id'])
-            assets_helper.save_ordering(conn, ids_of_active_assets)
-            return assets_helper.read(conn, asset['asset_id']), 201
+        active_asset_ids = get_active_asset_ids()
+        asset = Asset.objects.create(**serializer.data)
+
+        if asset.is_active():
+            active_asset_ids.insert(asset.play_order, asset.asset_id)
+
+        save_active_assets_ordering(active_asset_ids)
+        asset.refresh_from_db()
+
+        return Response(
+            AssetSerializer(asset).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
-class AssetV1_2(Resource):
-    method_decorators = [api_response, authorized]
+class AssetViewV1_2(APIView, DeleteAssetViewMixin):
+    serializer_class = AssetSerializer
 
-    @swagger.doc({
-        'parameters': [
-            {
-                'name': 'asset_id',
-                'type': 'string',
-                'in': 'path',
-                'description': 'id of an asset'
-            }
-        ],
-        'responses': {
-            '200': {
-                'description': 'Asset',
-                'schema': AssetModel
-            }
+    @extend_schema(summary='Get asset')
+    @authorized
+    def get(self, request, asset_id):
+        asset = Asset.objects.get(asset_id=asset_id)
+        serializer = self.serializer_class(asset)
+        return Response(serializer.data)
+
+    def update(self, request, asset_id, partial=False):
+        asset = Asset.objects.get(asset_id=asset_id)
+        serializer = UpdateAssetSerializer(
+            asset, data=request.data, partial=partial)
+
+        if serializer.is_valid():
+            serializer.save()
+        else:
+            return Response(
+                serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        active_asset_ids = get_active_asset_ids()
+
+        asset.refresh_from_db()
+
+        try:
+            active_asset_ids.remove(asset.asset_id)
+        except ValueError:
+            pass
+
+        if asset.is_active():
+            active_asset_ids.insert(asset.play_order, asset.asset_id)
+
+        save_active_assets_ordering(active_asset_ids)
+        asset.refresh_from_db()
+
+        return Response(AssetSerializer(asset).data)
+
+    @extend_schema(
+        summary='Update asset',
+        request=UpdateAssetSerializer,
+        responses={
+            200: AssetSerializer
         }
-    })
-    def get(self, asset_id):
-        with db.conn(settings['database']) as conn:
-            return assets_helper.read(conn, asset_id)
+    )
+    @authorized
+    def patch(self, request, asset_id):
+        return self.update(request, asset_id, partial=True)
 
-    @swagger.doc({
-        'parameters': [
-            {
-                'name': 'asset_id',
-                'type': 'string',
-                'in': 'path',
-                'description': 'ID of an asset',
-                'required': True
-            },
-            {
-                'in': 'body',
-                'name': 'properties',
-                'description': 'Properties of an asset',
-                'schema': AssetPropertiesModel,
-                'required': True
-            }
-        ],
-        'responses': {
-            '200': {
-                'description': 'Asset updated',
-                'schema': AssetModel
-            }
+    @extend_schema(
+        summary='Update asset',
+        request=UpdateAssetSerializer,
+        responses={
+            200: AssetSerializer
         }
-    })
-    def patch(self, asset_id):
-        data = json.loads(request.data)
-        with db.conn(settings['database']) as conn:
-
-            asset = assets_helper.read(conn, asset_id)
-            if not asset:
-                raise Exception('Asset not found.')
-            update_asset(asset, data)
-
-            assets = assets_helper.read(conn)
-            ids_of_active_assets = [
-                x['asset_id'] for x in assets if x['is_active']]
-
-            asset = assets_helper.update(conn, asset_id, asset)
-
-            try:
-                ids_of_active_assets.remove(asset['asset_id'])
-            except ValueError:
-                pass
-            if asset['is_active']:
-                ids_of_active_assets.insert(
-                    asset['play_order'], asset['asset_id'])
-
-            assets_helper.save_ordering(conn, ids_of_active_assets)
-            return assets_helper.read(conn, asset_id)
-
-    @swagger.doc({
-        'parameters': [
-            {
-                'name': 'asset_id',
-                'type': 'string',
-                'in': 'path',
-                'description': 'id of an asset',
-                'required': True
-            },
-            {
-                'in': 'body',
-                'name': 'model',
-                'description': 'Adds an asset',
-                'schema': AssetRequestModel,
-                'required': True
-            }
-        ],
-        'responses': {
-            '200': {
-                'description': 'Asset updated',
-                'schema': AssetModel
-            }
-        }
-    })
-    def put(self, asset_id):
-        asset = prepare_asset_v1_2(request, asset_id)
-        with db.conn(settings['database']) as conn:
-            assets = assets_helper.read(conn)
-            ids_of_active_assets = [
-                x['asset_id'] for x in assets if x['is_active']]
-
-            asset = assets_helper.update(conn, asset_id, asset)
-
-            try:
-                ids_of_active_assets.remove(asset['asset_id'])
-            except ValueError:
-                pass
-            if asset['is_active']:
-                ids_of_active_assets.insert(
-                    asset['play_order'], asset['asset_id'])
-
-            assets_helper.save_ordering(conn, ids_of_active_assets)
-            return assets_helper.read(conn, asset_id)
-
-    @swagger.doc({
-        'parameters': [
-            {
-                'name': 'asset_id',
-                'type': 'string',
-                'in': 'path',
-                'description': 'id of an asset',
-                'required': True
-
-            },
-        ],
-        'responses': {
-            '204': {
-                'description': 'Deleted'
-            }
-        }
-    })
-    def delete(self, asset_id):
-        with db.conn(settings['database']) as conn:
-            asset = assets_helper.read(conn, asset_id)
-            try:
-                if asset['uri'].startswith(settings['assetdir']):
-                    remove(asset['uri'])
-            except OSError:
-                pass
-            assets_helper.delete(conn, asset_id)
-            return '', 204  # return an OK with no content
+    )
+    @authorized
+    def put(self, request, asset_id):
+        return self.update(request, asset_id, partial=False)

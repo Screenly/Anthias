@@ -22,23 +22,18 @@ INTRO_MESSAGE=(
     ""
     "When prompted for the version, you can choose between the following:"
     "  - **latest:** Installs the latest version from the \`master\` branch."
-    "  - **experimental:** Installs the latest version from the \`experimental\` branch."
     "  - **tag:** Installs a pinned version based on the tag name."
     ""
-    "Take note that \`latest\` and \`experimental\` versions are rolling releases."
+    "Take note that \`latest\` is a rolling release."
 )
 MANAGE_NETWORK_PROMPT=(
     "Would you like Anthias to manage the network for you?"
-)
-EXPERIMENTAL_PROMPT=(
-    "Would you like to install the experimental version instead?"
 )
 VERSION_PROMPT=(
     "Which version of Anthias would you like to install?"
 )
 VERSION_PROMPT_CHOICES=(
     "latest"
-    "experimental"
     "tag"
 )
 SYSTEM_UPGRADE_PROMPT=(
@@ -186,8 +181,25 @@ function install_ansible() {
     sudo ${SUDO_ARGS[@]} pip install "$ANSIBLE_VERSION"
 }
 
+function set_device_type() {
+    if [ ! -f /proc/device-tree/model ] && [ "$(uname -m)" = "x86_64" ]; then
+        export DEVICE_TYPE="x86"
+    elif grep -qF "Raspberry Pi 5" /proc/device-tree/model; then
+        export DEVICE_TYPE="pi5"
+    elif grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
+        export DEVICE_TYPE="pi4"
+    elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
+        export DEVICE_TYPE="pi3"
+    elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
+        export DEVICE_TYPE="pi2"
+    else
+        export DEVICE_TYPE="pi1"
+    fi
+}
+
 function run_ansible_playbook() {
     display_section "Run the Anthias Ansible Playbook"
+    set_device_type
 
     sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
         -m git \
@@ -195,7 +207,13 @@ function run_ansible_playbook() {
     cd ${ANTHIAS_REPO_DIR}/ansible
 
     if [ "$ARCHITECTURE" == "x86_64" ]; then
-        ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "raspberry-pi")
+        if [ ! -f /etc/sudoers.d/010_${USER}-nopasswd ]; then
+            ANSIBLE_PLAYBOOK_ARGS+=("--ask-become-pass")
+        fi
+
+        ANSIBLE_PLAYBOOK_ARGS+=(
+            "--skip-tags" "raspberry-pi"
+        )
     fi
 
     sudo -E -u ${USER} ${SUDO_ARGS[@]} \
@@ -355,18 +373,15 @@ function main() {
 
     if [ "$VERSION" == "latest" ]; then
         BRANCH="master"
-    elif [ "$VERSION" == "experimental" ]; then
-        BRANCH="experimental"
-        DOCKER_TAG="experimental"
     else
         set_custom_version
     fi
 
     gum confirm "${SYSTEM_UPGRADE_PROMPT[@]}" && {
         SYSTEM_UPGRADE="Yes"
-        ANSIBLE_PLAYBOOK_ARGS=("--skip-tags" "system-upgrade")
     } || {
         SYSTEM_UPGRADE="No"
+        ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "system-upgrade")
     }
 
     display_section "User Input Summary"

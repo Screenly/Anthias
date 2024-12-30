@@ -47,7 +47,8 @@ class FFMPEGMediaPlayer(MediaPlayer):
 
     def stop(self):
         try:
-            self.run.kill()
+            if self.run:
+                self.run.kill()
         except OSError:
             pass
 
@@ -67,9 +68,12 @@ class VLCMediaPlayer(MediaPlayer):
 
     def get_alsa_audio_device(self):
         if settings['audio_output'] == 'local':
+            if get_device_type() == 'pi5':
+                return 'default:CARD=vc4hdmi0'
+
             return 'plughw:CARD=Headphones'
         else:
-            if get_device_type() == 'pi4':
+            if get_device_type() in ['pi4', 'pi5']:
                 return 'default:CARD=vc4hdmi0'
             elif get_device_type() in ['pi1', 'pi2', 'pi3']:
                 return 'default:CARD=vc4hdmi'

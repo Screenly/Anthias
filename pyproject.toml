@@ -6,11 +6,18 @@ readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.12"
+python = ">=3.9,<3.12"
 
 [tool.poetry.group.dev-host.dependencies]
 flake8 = "^5.0.4" # TODO: Remove in favor of `ruff`.
 ruff = "^0.6.9"
+
+[tool.poetry.group.docker-image-builder.dependencies]
+click = '^8.1.7'
+jinja2 = '^3.1.4'
+pygit2 = '^1.15.1'
+requests = '^2.32.3'
+python-on-whales = '^0.73.0'
 
 [build-system]
 requires = ["poetry-core"]

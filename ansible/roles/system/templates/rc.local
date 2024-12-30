@@ -1,0 +1,18 @@
+#!/bin/sh -e
+
+# Make sure the SSH host keys have been generated
+ssh-keygen -A
+
+# Solves issue with black square in the upper left-hand corner
+/bin/chvt 8 ; sleep 0.1 ; /bin/chvt 7
+
+# Disable wifi power management
+if [ "$(ip address | grep wlan)" ]; then
+  iwconfig wlan0 power off
+fi
+
+{% if device_type == 'x86' %}
+echo 0 > /sys/class/graphics/fbcon/cursor_blink
+{% endif %}
+
+exit 0

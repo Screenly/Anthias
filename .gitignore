@@ -52,3 +52,13 @@ docker/Dockerfile.test
 docker-compose.yml
 
 balena-deploy/
+db.sqlite3
+
+# Django
+staticfiles/
+
+# ESLint
+.eslintcache
+
+# Linting
+.coffeelint.json

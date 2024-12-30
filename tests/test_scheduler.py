@@ -1,21 +1,29 @@
+import logging
 import os
-import unittest
+
 import time_machine
 
-from datetime import datetime, timedelta
-from lib import db, assets_helper
+from datetime import timedelta
+from django.test import TestCase
+from django.utils import timezone
 
-import settings
+from anthias_app.models import Asset
+from settings import settings
+
 import viewer  # noqa: E402
 
-asset_x = {
-    'mimetype': u'web',
-    'asset_id': u'4c8dbce552edb5812d3a866cfe5f159d',
-    'name': u'WireLoad',
-    'uri': u'https://www.wireload.net',
-    'start_date': datetime.now() - timedelta(days=3),
-    'end_date': datetime.now() + timedelta(days=3),
-    'duration': u'5',
+
+logging.disable(logging.CRITICAL)
+
+
+ASSET_X = {
+    'mimetype': 'web',
+    'asset_id': '4c8dbce552edb5812d3a866cfe5f159d',
+    'name': 'WireLoad',
+    'uri': 'http://www.wireload.net',
+    'start_date': timezone.now() - timedelta(days=3),
+    'end_date': timezone.now() + timedelta(days=3),
+    'duration': 5,
     'is_enabled': 1,
     'nocache': 0,
     'is_processing': 0,
@@ -23,14 +31,18 @@ asset_x = {
     'skip_asset_check': 0
 }
 
-asset_y = {
-    'mimetype': u'image',
-    'asset_id': u'7e978f8c1204a6f70770a1eb54a76e9b',
-    'name': u'Google',
-    'uri': u'https://www.google.com/images/srpr/logo3w.png',
-    'start_date': datetime.now() - timedelta(days=1),
-    'end_date': datetime.now() + timedelta(days=2),
-    'duration': u'6',
+ASSET_X_DIFF = {
+    'duration': 10
+}
+
+ASSET_Y = {
+    'mimetype': 'image',
+    'asset_id': '7e978f8c1204a6f70770a1eb54a76e9b',
+    'name': 'Google',
+    'uri': 'https://www.google.com/images/srpr/logo3w.png',
+    'start_date': timezone.now() - timedelta(days=1),
+    'end_date': timezone.now() + timedelta(days=2),
+    'duration': 6,
     'is_enabled': 1,
     'nocache': 0,
     'is_processing': 0,
@@ -38,14 +50,14 @@ asset_y = {
     'skip_asset_check': 0
 }
 
-asset_z = {
-    'mimetype': u'image',
-    'asset_id': u'7e978f8c1204a6f70770a1eb54a76e9c',
-    'name': u'Google',
-    'uri': u'https://www.google.com/images/srpr/logo3w.png',
-    'start_date': datetime.now() - timedelta(days=1),
-    'end_date': datetime.now() + timedelta(days=1),
-    'duration': u'6',
+ASSET_Z = {
+    'mimetype': 'image',
+    'asset_id': '7e978f8c1204a6f70770a1eb54a76e9c',
+    'name': 'Google',
+    'uri': 'https://www.google.com/images/srpr/logo3w.png',
+    'start_date': timezone.now() - timedelta(days=1),
+    'end_date': timezone.now() + timedelta(days=1),
+    'duration': 6,
     'is_enabled': 1,
     'nocache': 0,
     'is_processing': 0,
@@ -53,14 +65,14 @@ asset_z = {
     'skip_asset_check': 0
 }
 
-asset_tomorrow = {
-    'mimetype': u'image',
-    'asset_id': u'7e978f8c1204a6f70770a1eb54a76e9c',
-    'name': u'Google',
-    'uri': u'https://www.google.com/images/srpr/logo3w.png',
-    'start_date': datetime.now() + timedelta(days=1),
-    'end_date': datetime.now() + timedelta(days=1),
-    'duration': u'6',
+ASSET_TOMORROW = {
+    'mimetype': 'image',
+    'asset_id': '7e978f8c1204a6f70770a1eb54a76e9c',
+    'name': 'Google',
+    'uri': 'https://www.google.com/images/srpr/logo3w.png',
+    'start_date': timezone.now() + timedelta(days=1),
+    'end_date': timezone.now() + timedelta(days=1),
+    'duration': 6,
     'is_enabled': 1,
     'nocache': 0,
     'is_processing': 0,
@@ -71,67 +83,55 @@ asset_tomorrow = {
 FAKE_DB_PATH = '/tmp/fakedb'
 
 
-class SchedulerTest(unittest.TestCase):
-    def setUp(self):
-        self.old_db_path = settings.settings['database']
-        viewer.db_conn = db.conn(':memory:')
-        with db.commit(viewer.db_conn) as cursor:
-            cursor.execute(assets_helper.create_assets_table)
-
+class SchedulerTest(TestCase):
     def tearDown(self):
-        settings.settings['database'] = self.old_db_path
-        settings.settings['shuffle_playlist'] = False
-        viewer.datetime, assets_helper.get_time = (
-            datetime, lambda: datetime.utcnow())
-        viewer.db_conn.close()
-        try:
-            os.remove(FAKE_DB_PATH)
-        except FileNotFoundError:
-            pass
+        settings['shuffle_playlist'] = False
 
-    def test_generate_asset_list_assets_should_be_y_and_x(self):
-        assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_y])
+    def create_assets(self, assets):
+        for asset in assets:
+            Asset.objects.create(**asset)
+
+    def test_generate_asset_list_assets_should_return_list_sorted_by_play_order(self):  # noqa: E501
+        self.create_assets([ASSET_X, ASSET_Y])
         assets, _ = viewer.generate_asset_list()
-        self.assertEqual(assets, [asset_y, asset_x])
+        self.assertEqual(assets, [ASSET_Y, ASSET_X])
 
     def test_generate_asset_list_check_deadline_if_both_active(self):
-        # if x and y currently active
-        assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_y])
+        self.create_assets([ASSET_X, ASSET_Y])
         _, deadline = viewer.generate_asset_list()
-        self.assertEqual(deadline, asset_y['end_date'])
+        self.assertEqual(deadline, ASSET_Y['end_date'])
 
     def test_generate_asset_list_check_deadline_if_asset_scheduled(self):
-        """If asset_x is active and asset_x[end_date] == (now + 3) and
-        asset_tomorrow will be active tomorrow then deadline should be
-        asset_tomorrow[start_date]
+        """If ASSET_X is active and ASSET_X[end_date] == (now + 3) and
+        ASSET_TOMORROW will be active tomorrow then deadline should be
+        ASSET_TOMORROW[start_date]
         """
-        assets_helper.create_multiple(
-            viewer.db_conn, [asset_x, asset_tomorrow])
+        self.create_assets([ASSET_X, ASSET_TOMORROW])
         _, deadline = viewer.generate_asset_list()
-        self.assertEqual(deadline, asset_tomorrow['start_date'])
+        self.assertEqual(deadline, ASSET_TOMORROW['start_date'])
 
     def test_get_next_asset_should_be_y_and_x(self):
-        assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_y])
+        self.create_assets([ASSET_X, ASSET_Y])
         scheduler = viewer.Scheduler()
 
-        expect_y = scheduler.get_next_asset()
-        expect_x = scheduler.get_next_asset()
+        expected_y = scheduler.get_next_asset()
+        expected_x = scheduler.get_next_asset()
 
-        self.assertEqual([expect_y, expect_x], [asset_y, asset_x])
+        self.assertEqual([expected_y, expected_x], [ASSET_Y, ASSET_X])
 
     def test_keep_same_position_on_playlist_update(self):
-        assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_y])
+        self.create_assets([ASSET_X, ASSET_Y])
         scheduler = viewer.Scheduler()
-
         scheduler.get_next_asset()
 
-        assets_helper.create(viewer.db_conn, asset_z)
+        self.create_assets([ASSET_Z])
         scheduler.update_playlist()
+
         self.assertEqual(scheduler.index, 1)
 
     def test_counter_should_increment_after_full_asset_loop(self):
-        settings.settings['shuffle_playlist'] = True
-        assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_y])
+        settings['shuffle_playlist'] = True
+        self.create_assets([ASSET_X, ASSET_Y])
         scheduler = viewer.Scheduler()
 
         self.assertEqual(scheduler.counter, 0)
@@ -142,14 +142,14 @@ class SchedulerTest(unittest.TestCase):
         self.assertEqual(scheduler.counter, 1)
 
     def test_check_get_db_mtime(self):
-        settings.settings['database'] = FAKE_DB_PATH
+        settings['database'] = FAKE_DB_PATH
         with open(FAKE_DB_PATH, 'a'):
             os.utime(FAKE_DB_PATH, (0, 0))
 
         self.assertEqual(0, viewer.Scheduler().get_db_mtime())
 
     def test_playlist_should_be_updated_after_deadline_reached(self):
-        assets_helper.create_multiple(viewer.db_conn, [asset_x, asset_y])
+        self.create_assets([ASSET_X, ASSET_Y])
         _, deadline = viewer.generate_asset_list()
 
         traveller = time_machine.travel(deadline + timedelta(seconds=1))
@@ -158,5 +158,5 @@ class SchedulerTest(unittest.TestCase):
         scheduler = viewer.Scheduler()
         scheduler.refresh_playlist()
 
-        self.assertEqual([asset_x], scheduler.assets)
+        self.assertEqual([ASSET_X], scheduler.assets)
         traveller.stop()

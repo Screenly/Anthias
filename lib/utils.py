@@ -4,7 +4,6 @@ from future import standard_library
 from builtins import str
 from builtins import range
 import certifi
-from . import db
 import json
 import logging
 import os
@@ -22,11 +21,17 @@ from os import getenv, path, utime
 from platform import machine
 from settings import settings, ZmqPublisher
 from subprocess import check_output, call
+from tenacity import (
+    Retrying,
+    RetryError,
+    stop_after_attempt,
+    wait_fixed,
+)
 from threading import Thread
 from time import sleep
 from urllib.parse import urlparse
 
-from .assets_helper import update
+from anthias_app.models import Asset
 
 standard_library.install_aliases()
 
@@ -149,6 +154,28 @@ def get_node_ip():
             sleep(1)
 
         r.publish('hostcmd', 'set_ip_addresses')
+
+        try:
+            for attempt in Retrying(
+                stop=stop_after_attempt(20),
+                wait=wait_fixed(1),
+            ):
+                environment = getenv('ENVIRONMENT', None)
+                if environment in ['development', 'test']:
+                    break
+
+                with attempt:
+                    ip_addresses_ready = r.get('ip_addresses_ready') or 'false'
+                    if json.loads(ip_addresses_ready):
+                        break
+                    else:
+                        raise Exception(
+                            'Internet connection is not available.')
+        except RetryError:
+            logging.warning(
+                'Internet connection is not available. '
+            )
+
         ip_addresses = r.get('ip_addresses')
 
         if ip_addresses:
@@ -360,7 +387,11 @@ def download_video_from_youtube(uri, asset_id):
     info = json.loads(check_output(['yt-dlp', '-j', uri]))
     duration = info['duration']
 
-    location = path.join(home, 'screenly_assets', asset_id)
+    location = path.join(
+        home,
+        'screenly_assets',
+        f'{asset_id}.mp4'
+    )
     thread = YoutubeDownloadThread(location, uri, asset_id)
     thread.daemon = True
     thread.start()
@@ -377,10 +408,22 @@ class YoutubeDownloadThread(Thread):
 
     def run(self):
         publisher = ZmqPublisher.get_instance()
-        call(['yt-dlp', '-f', 'mp4', '-o', self.location, self.uri])
-        with db.conn(settings['database']) as conn:
-            update(conn, self.asset_id,
-                   {'asset_id': self.asset_id, 'is_processing': 0})
+        call([
+            'yt-dlp',
+            '-S',
+            'vcodec:h264,fps,res:1080,acodec:m4a',
+            '-o',
+            self.location,
+            self.uri,
+        ])
+
+        try:
+            asset = Asset.objects.get(asset_id=self.asset_id)
+            asset.is_processing = 0
+            asset.save()
+        except Asset.DoesNotExist:
+            logging.warning('Asset %s not found', self.asset_id)
+            return
 
         publisher.send_to_ws_server(self.asset_id)
 

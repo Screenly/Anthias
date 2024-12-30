@@ -1,18 +1,18 @@
-import ipaddress
-import logging
-import psutil
 from datetime import timedelta
-from flask import Blueprint, request
+from django.views.decorators.http import require_http_methods
 from hurry.filesize import size
-from os import getenv, statvfs
-from platform import machine
-from urllib.parse import urlparse
-
-from anthias_app.helpers import (
-    add_default_assets,
-    remove_default_assets,
-    template,
+from os import (
+    getenv,
+    statvfs,
 )
+from platform import machine
+from settings import (
+    CONFIGURABLE_SETTINGS,
+    DEFAULTS,
+    settings,
+    ZmqPublisher,
+)
+from urllib.parse import urlparse
 from lib import (
     diagnostics,
     device_helper,
@@ -20,31 +20,31 @@ from lib import (
 from lib.auth import authorized
 from lib.utils import (
     connect_to_redis,
-    get_balena_supervisor_version,
     get_node_ip,
     get_node_mac_address,
     is_balena_app,
     is_demo_node,
     is_docker,
 )
-from settings import (
-    CONFIGURABLE_SETTINGS,
-    DEFAULTS,
-    settings,
-    ZmqPublisher,
+from .helpers import (
+    add_default_assets,
+    remove_default_assets,
+    template,
 )
+import ipaddress
+import psutil
+
 
 r = connect_to_redis()
-anthias_app_bp = Blueprint('anthias_app', __name__)
 
 
-@anthias_app_bp.route('/')
 @authorized
-def index():
+@require_http_methods(["GET"])
+def index(request):
     player_name = settings['player_name']
-    my_ip = urlparse(request.host_url).hostname
+    my_ip = urlparse(request.build_absolute_uri()).hostname
     is_demo = is_demo_node()
-    balena_uuid = getenv("BALENA_APP_UUID", None)
+    balena_device_uuid = getenv("BALENA_DEVICE_UUID", None)
 
     ws_addresses = []
 
@@ -53,30 +53,28 @@ def index():
     else:
         ws_addresses.append('ws://' + my_ip + '/ws/')
 
-    if balena_uuid:
+    if balena_device_uuid:
         ws_addresses.append(
-            'wss://{}.balena-devices.com/ws/'.format(balena_uuid))
+            'wss://{}.balena-devices.com/ws/'.format(balena_device_uuid)
+        )
 
-    return template(
-        'index.html',
-        ws_addresses=ws_addresses,
-        player_name=player_name,
-        is_demo=is_demo,
-        is_balena=is_balena_app(),
-    )
+    return template(request, 'index.html', {
+        'ws_addresses': ws_addresses,
+        'player_name': player_name,
+        'is_demo': is_demo,
+        'is_balena': is_balena_app(),
+    })
 
 
-@anthias_app_bp.route('/settings', methods=["GET", "POST"])
 @authorized
-def settings_page():
+@require_http_methods(["GET", "POST"])
+def settings_page(request):
     context = {'flash': None}
 
-    if request.method == "POST":
+    if request.method == 'POST':
         try:
-            # Put some request variables in local variables to make them
-            # easier to read.
-            current_pass = request.form.get('current-password', '')
-            auth_backend = request.form.get('auth_backend', '')
+            current_pass = request.POST.get('current-password', '')
+            auth_backend = request.POST.get('auth_backend', '')
 
             if (
                 auth_backend != settings['auth_backend']
@@ -100,16 +98,19 @@ def settings_page():
                     .check_password(current_pass)
                 )
             next_auth_backend = settings.auth_backends[auth_backend]
-            next_auth_backend.update_settings(current_pass_correct)
+            next_auth_backend.update_settings(request, current_pass_correct)
             settings['auth_backend'] = auth_backend
 
             for field, default in list(CONFIGURABLE_SETTINGS.items()):
-                value = request.form.get(field, default)
+                value = request.POST.get(field, default)
 
-                if not value and field in [
-                    'default_duration',
-                    'default_streaming_duration',
-                ]:
+                if (
+                    not value
+                    and field in [
+                        'default_duration',
+                        'default_streaming_duration',
+                    ]
+                ):
                     value = str(0)
                 if isinstance(default, bool):
                     value = value == 'on'
@@ -155,14 +156,10 @@ def settings_page():
                 'selected'
                 if settings['auth_backend'] == backend.name
                 else ''
-            )
+            ),
         })
 
-    try:
-        ip_addresses = get_node_ip().split()
-    except Exception as error:
-        logging.warning(f"Error getting IP addresses: {error}")
-        ip_addresses = ['IP_ADDRESS']
+    ip_addresses = get_node_ip().split()
 
     context.update({
         'user': settings['user'],
@@ -172,15 +169,16 @@ def settings_page():
         'auth_backend': settings['auth_backend'],
         'auth_backends': auth_backends,
         'ip_addresses': ip_addresses,
-        'host_user': getenv('HOST_USER')
+        'host_user': getenv('HOST_USER'),
+        'device_type': getenv('DEVICE_TYPE')
     })
 
-    return template('settings.html', **context)
+    return template(request, 'settings.html', context)
 
 
-@anthias_app_bp.route('/system-info')
 @authorized
-def system_info():
+@require_http_methods(["GET"])
+def system_info(request):
     loadavg = diagnostics.get_load_avg()['15 min']
     display_power = r.get('display_power')
 
@@ -210,49 +208,64 @@ def system_info():
     if device_model is None and machine() == 'x86_64':
         device_model = 'Generic x86_64 Device'
 
-    version = '{}@{}'.format(
-        diagnostics.get_git_branch(),
-        diagnostics.get_git_short_hash()
+    git_branch = diagnostics.get_git_branch()
+    git_short_hash = diagnostics.get_git_short_hash()
+    anthias_commit_link = None
+
+    if git_branch == 'master':
+        anthias_commit_link = (
+            'https://github.com/Screenly/Anthias'
+            f'/commit/{git_short_hash}'
+        )
+
+    anthias_version = '{}@{}'.format(
+        git_branch,
+        git_short_hash,
     )
 
-    return template(
-        'system-info.html',
-        player_name=player_name,
-        loadavg=loadavg,
-        free_space=free_space,
-        uptime=system_uptime,
-        memory=memory,
-        display_power=display_power,
-        device_model=device_model,
-        version=version,
-        mac_address=get_node_mac_address(),
-        is_balena=is_balena_app(),
-    )
+    context = {
+        'player_name': player_name,
+        'loadavg': loadavg,
+        'free_space': free_space,
+        'uptime': {
+            'days': system_uptime.days,
+            'hours': round(system_uptime.seconds / 3600, 2),
+        },
+        'memory': memory,
+        'display_power': display_power,
+        'device_model': device_model,
+        'anthias_version': anthias_version,
+        'anthias_commit_link': anthias_commit_link,
+        'mac_address': get_node_mac_address(),
+        'is_balena': is_balena_app(),
+    }
+
+    return template(request, 'system-info.html', context)
 
 
-@anthias_app_bp.route('/integrations')
 @authorized
-def integrations():
-
+@require_http_methods(["GET"])
+def integrations(request):
     context = {
         'player_name': settings['player_name'],
         'is_balena': is_balena_app(),
     }
 
     if context['is_balena']:
-        context['balena_device_id'] = getenv('BALENA_DEVICE_UUID')
-        context['balena_app_id'] = getenv('BALENA_APP_ID')
-        context['balena_app_name'] = getenv('BALENA_APP_NAME')
-        context['balena_supervisor_version'] = get_balena_supervisor_version()
-        context['balena_host_os_version'] = getenv('BALENA_HOST_OS_VERSION')
-        context['balena_device_name_at_init'] = getenv(
-            'BALENA_DEVICE_NAME_AT_INIT')
+        context.update({
+            'balena_device_id': getenv('BALENA_DEVICE_UUID'),
+            'balena_app_id': getenv('BALENA_APP_ID'),
+            'balena_app_name': getenv('BALENA_APP_NAME'),
+            'balena_supervisor_version': getenv('BALENA_SUPERVISOR_VERSION'),
+            'balena_host_os_version': getenv('BALENA_HOST_OS_VERSION'),
+            'balena_device_name_at_init': getenv('BALENA_DEVICE_NAME_AT_INIT'),
+        })
 
-    return template('integrations.html', **context)
+    return template(request, 'integrations.html', context)
 
 
-@anthias_app_bp.route('/splash-page')
-def splash_page():
+@require_http_methods(["GET"])
+def splash_page(request):
     ip_addresses = []
 
     for ip_address in get_node_ip().split():
@@ -263,4 +276,6 @@ def splash_page():
         else:
             ip_addresses.append(f'http://{ip_address}')
 
-    return template('splash-page.html', ip_addresses=ip_addresses)
+    return template(request, 'splash-page.html', {
+        'ip_addresses': ip_addresses
+    })
