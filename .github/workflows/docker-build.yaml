@@ -110,7 +110,7 @@ jobs:
           cp balena.yml balena-deploy/
 
           # Generate the docker-compose file
-          cat docker-compose.balena.yml.tmpl | \
+          < docker-compose.balena.yml.tmpl | \
             envsubst > balena-deploy/docker-compose.yml
 
           # Remove bind mounts to `/dev/vchiq` for Raspberry Pi 5

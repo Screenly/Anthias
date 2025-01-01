@@ -49,7 +49,7 @@ jobs:
           python bin/build-pi-imager-json.py > _site/rpi-imager.json
 
           # Make sure it's valid
-          cat _site/rpi-imager.json | jq
+          < _site/rpi-imager.json | jq
 
           # Copy in static files. This is to be migrated to Hugo later.
           cp -rf assets _site/
