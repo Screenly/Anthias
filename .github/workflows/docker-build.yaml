@@ -97,9 +97,11 @@ jobs:
 
       - name: Set Docker tag
         run: |
-          echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "BOARD=${{ matrix.board }}" >> "$GITHUB_ENV"
-          echo "SHM_SIZE=256mb" >> "$GITHUB_ENV"
+          {
+            echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)"
+            echo "BOARD=${{ matrix.board }}"
+            echo "SHM_SIZE=256mb"
+          } >> "$GITHUB_ENV"
 
       - name: Prepare Balena file
         run: |
@@ -110,8 +112,7 @@ jobs:
           cp balena.yml balena-deploy/
 
           # Generate the docker-compose file
-          < docker-compose.balena.yml.tmpl | \
-            envsubst > balena-deploy/docker-compose.yml
+          envsubst < docker-compose.balena.yml.tmpl > balena-deploy/docker-compose.yml
 
           # Remove bind mounts to `/dev/vchiq` for Raspberry Pi 5
           if [ "${{ matrix.board }}" == "pi5" ]; then
