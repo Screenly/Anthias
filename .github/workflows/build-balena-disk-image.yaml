@@ -43,7 +43,7 @@ jobs:
           elif [ "${{ matrix.board }}" == 'pi3' ]; then
             echo "BALENA_IMAGE=raspberrypi3" >> "$GITHUB_ENV"
           elif [ "${{ matrix.board }}" == 'pi4' ]; then
-            echo "BALENA_IMAGE=raspberrypi4-64" >> $GITHUB_ENV
+            echo "BALENA_IMAGE=raspberrypi4-64" >> "$GITHUB_ENV"
           elif [ "${{ matrix.board }}" == 'pi5' ]; then
             echo "BALENA_IMAGE=raspberrypi5" >> "$GITHUB_ENV"
           fi
