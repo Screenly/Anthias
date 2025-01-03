@@ -44,5 +44,5 @@ jobs:
     - name: Analyzing the code with flake8
       run: |
         if [ -n "$(git ls-files '*.py')" ]; then
-          poetry run flake8 $(git ls-files '*.py')
+          git ls-files '*.py' | xargs poetry run flake8
         fi

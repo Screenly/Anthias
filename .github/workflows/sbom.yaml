@@ -9,6 +9,9 @@ on:
       - 'poetry.lock'
 
 jobs:
+  run-tests:
+    uses: ./.github/workflows/docker-test.yaml
+
   js-sbom:
     needs: run-tests
     runs-on: ubuntu-latest
