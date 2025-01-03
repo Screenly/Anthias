@@ -4,14 +4,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from anthias_app.models import Asset
-from api.helpers import AssetCreationException, parse_request
-from api.serializers.v1_1 import CreateAssetSerializerV1_1
+from api.helpers import AssetCreationError, parse_request
 from api.serializers import (
     AssetSerializer,
     UpdateAssetSerializer,
 )
-from api.views.v1 import V1_ASSET_REQUEST
+from api.serializers.v1_1 import CreateAssetSerializerV1_1
 from api.views.mixins import DeleteAssetViewMixin
+from api.views.v1 import V1_ASSET_REQUEST
 from lib.auth import authorized
 
 
@@ -42,8 +42,8 @@ class AssetListViewV1_1(APIView):
         try:
             serializer = CreateAssetSerializerV1_1(data=data, unique_name=True)
             if not serializer.is_valid():
-                raise AssetCreationException(serializer.errors)
-        except AssetCreationException as error:
+                raise AssetCreationError(serializer.errors)
+        except AssetCreationError as error:
             return Response(error.errors, status=status.HTTP_400_BAD_REQUEST)
 
         asset = Asset.objects.create(**serializer.data)

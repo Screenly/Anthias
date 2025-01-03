@@ -1,18 +1,17 @@
 import json
+from os import path
+from pathlib import Path
+from unittest import mock
 
 from django.conf import settings as django_settings
 from django.test import TestCase
 from django.urls import reverse
-from os import path
-from pathlib import Path
-from rest_framework.test import APIClient
 from rest_framework import status
-from settings import settings as anthias_settings
-from unittest import mock
-from unittest_parametrize import parametrize, ParametrizedTestCase
+from rest_framework.test import APIClient
+from unittest_parametrize import ParametrizedTestCase, parametrize
 
 from anthias_app.models import Asset
-
+from settings import settings as anthias_settings
 
 ASSET_LIST_V1_1_URL = reverse('api:asset_list_v1_1')
 ASSET_CREATION_DATA = {

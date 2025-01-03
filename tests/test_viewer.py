@@ -2,12 +2,13 @@
 # -*- coding: utf-8 -*-
 
 import logging
-import mock
-import unittest
 import os
-import viewer
+import unittest
 from time import sleep
 
+import mock
+
+import viewer
 
 logging.disable(logging.CRITICAL)
 

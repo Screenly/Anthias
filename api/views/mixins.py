@@ -1,20 +1,20 @@
 import uuid
-
 from base64 import b64encode
 from inspect import cleandoc
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
-from mimetypes import guess_type, guess_extension
+from mimetypes import guess_extension, guess_type
+from os import path, remove
+
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from lib import backup_helper
-from lib.auth import authorized
 
 from anthias_app.models import Asset
 from api.helpers import save_active_assets_ordering
 from celery_tasks import reboot_anthias, shutdown_anthias
-from os import path, remove
-from settings import settings, ZmqPublisher
+from lib import backup_helper
+from lib.auth import authorized
+from settings import ZmqPublisher, settings
 
 
 class DeleteAssetViewMixin:

@@ -10,10 +10,11 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
 
-import pytz
 import secrets
-from pathlib import Path
 from os import getenv
+from pathlib import Path
+
+import pytz
 
 from settings import settings as device_settings
 

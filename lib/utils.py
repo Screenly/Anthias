@@ -1,37 +1,36 @@
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from future import standard_library
-from builtins import str
-from builtins import range
-import certifi
+from __future__ import absolute_import, unicode_literals
+
 import json
 import logging
 import os
-import pytz
 import random
 import re
-import redis
-import requests
 import string
-import sh
-
+from builtins import range, str
 from datetime import datetime, timedelta
 from distutils.util import strtobool
 from os import getenv, path, utime
 from platform import machine
-from settings import settings, ZmqPublisher
-from subprocess import check_output, call
-from tenacity import (
-    Retrying,
-    RetryError,
-    stop_after_attempt,
-    wait_fixed,
-)
+from subprocess import call, check_output
 from threading import Thread
 from time import sleep
 from urllib.parse import urlparse
 
+import certifi
+import pytz
+import redis
+import requests
+import sh
+from future import standard_library
+from tenacity import (
+    RetryError,
+    Retrying,
+    stop_after_attempt,
+    wait_fixed,
+)
+
 from anthias_app.models import Asset
+from settings import ZmqPublisher, settings
 
 standard_library.install_aliases()
 
@@ -293,8 +292,8 @@ def get_video_duration(file):
 
     try:
         run_player = ffprobe('-i', file, _err_to_out=True)
-    except sh.ErrorReturnCode_1:
-        raise Exception('Bad video format')
+    except sh.ErrorReturnCode_1 as err:
+        raise Exception('Bad video format') from err
 
     for line in run_player.split('\n'):
         if 'Duration' in line:

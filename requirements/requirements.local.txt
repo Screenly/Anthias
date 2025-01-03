@@ -3,4 +3,3 @@
 click==8.1.7
 requests==2.32.3
 tenacity==8.4.1
-flake8==5.0.4

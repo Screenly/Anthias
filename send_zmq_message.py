@@ -1,12 +1,13 @@
 from __future__ import unicode_literals
-import json
-import zmq
 
+import json
 from argparse import ArgumentParser
-from netifaces import interfaces, ifaddresses, AF_INET
 from os import getenv
-import redis
 from time import sleep
+
+import redis
+import zmq
+from netifaces import AF_INET, ifaddresses, interfaces
 
 
 def get_portal_url():

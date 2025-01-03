@@ -1,17 +1,14 @@
 import logging
 import os
+from datetime import timedelta
 
 import time_machine
-
-from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
 
+import viewer  # noqa: E402
 from anthias_app.models import Asset
 from settings import settings
-
-import viewer  # noqa: E402
-
 
 logging.disable(logging.CRITICAL)
 
