@@ -63,6 +63,7 @@ class AssetListViewV2(APIView):
 
         active_asset_ids = get_active_asset_ids()
         asset = Asset.objects.create(**serializer.data)
+        asset.refresh_from_db()
 
         if asset.is_active():
             active_asset_ids.insert(asset.play_order, asset.asset_id)
