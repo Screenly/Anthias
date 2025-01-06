@@ -98,7 +98,7 @@ jobs:
           docker exec -it qt-builder /webview/build_qt5.sh
           docker rm -f qt-builder
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: Release files
           path: ~/tmp/qt-build/
