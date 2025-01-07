@@ -114,10 +114,8 @@ def build_image(
         load=True,
         platforms=[target_platform],
         tags=docker_tags,
+        push=push,
     )
-
-    if push:
-        docker.push(docker_tags)
 
 
 @click.command()
