@@ -73,7 +73,7 @@ def build_image(
     elif service == 'test':
         context.update(get_test_context())
     elif service == 'wifi-connect':
-        context.update(get_wifi_connect_context(target_platform))
+        context.update(get_wifi_connect_context(board, target_platform))
     elif service == 'server':
         if environment == 'development':
             base_apt_dependencies.extend(['nodejs', 'npm'])
