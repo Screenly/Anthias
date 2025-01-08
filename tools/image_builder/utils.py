@@ -9,38 +9,41 @@ def get_build_parameters(build_target: str) -> dict:
     default_build_parameters = {
         'board': 'x86',
         'base_image': 'debian',
-        'target_platform': 'linux/amd64',
+        'target_platform': ['linux/amd64'],
     }
 
     if build_target == 'pi5':
         return {
             'board': 'pi5',
             'base_image': 'balenalib/raspberrypi5-debian',
-            'target_platform': 'linux/arm64/v8',
+            'target_platform': ['linux/arm64/v8'],
         }
     if build_target == 'pi4':
         return {
             'board': 'pi4',
             'base_image': 'balenalib/raspberrypi3-debian',
-            'target_platform': 'linux/arm/v8',
+            'target_platform': [
+                'linux/arm/v8',
+                'linux/arm64/v8',
+            ],
         }
     elif build_target == 'pi3':
         return {
             'board': 'pi3',
             'base_image': 'balenalib/raspberrypi3-debian',
-            'target_platform': 'linux/arm/v7',
+            'target_platform': ['linux/arm/v7'],
         }
     elif build_target == 'pi2':
         return {
             'board': 'pi2',
             'base_image': 'balenalib/raspberry-pi2',
-            'target_platform': 'linux/arm/v6',
+            'target_platform': ['linux/arm/v6'],
         }
     elif build_target == 'pi1':
         return {
             'board': 'pi1',
             'base_image': 'balenalib/raspberry-pi',
-            'target_platform': 'linux/arm/v6',
+            'target_platform': ['linux/arm/v6'],
         }
 
     return default_build_parameters
@@ -250,18 +253,24 @@ def get_viewer_context(board: str) -> dict:
     }
 
 
-def get_wifi_connect_context(target_platform: str) -> dict:
-    if target_platform == 'linux/arm/v6':
+def get_wifi_connect_context(board: str, target_platform: list[str]) -> dict:
+    # Use the first platform for determining architecture
+    platform = target_platform[0]
+
+    if platform == 'linux/arm/v6':
         architecture = 'rpi'
-    elif target_platform in ['linux/arm/v7', 'linux/arm/v8']:
+    elif (
+        platform in ['linux/arm/v7', 'linux/arm/v8', 'linux/arm64/v8'] and
+        board != 'pi5'
+    ):
         architecture = 'armv7hf'
-    elif target_platform == 'linux/arm64/v8':
+    elif platform == 'linux/arm64/v8' and board == 'pi5':
         architecture = 'aarch64'
-    elif target_platform == 'linux/amd64':
+    elif platform == 'linux/amd64':
         architecture = 'amd64'
     else:
         click.secho(
-            f'Unsupported target platform: {target_platform}',
+            f'Unsupported target platform: {platform}',
             fg='red',
         )
         return {}
