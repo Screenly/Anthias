@@ -21,7 +21,7 @@ from tools.image_builder.constants import (
 def build_image(
     service: str,
     board: str,
-    target_platform: list[str],
+    target_platform: str,
     disable_cache_mounts: bool,
     git_hash: str,
     git_short_hash: str,
@@ -73,7 +73,7 @@ def build_image(
     elif service == 'test':
         context.update(get_test_context())
     elif service == 'wifi-connect':
-        context.update(get_wifi_connect_context(board, target_platform))
+        context.update(get_wifi_connect_context(target_platform))
     elif service == 'server':
         if environment == 'development':
             base_apt_dependencies.extend(['nodejs', 'npm'])
@@ -111,8 +111,8 @@ def build_image(
             'dest': '/tmp/.buildx-cache',
         },
         file=f'docker/Dockerfile.{service}',
-        load=(not push and len(target_platform) == 1),
-        platforms=target_platform,
+        load=True,
+        platforms=[target_platform],
         tags=docker_tags,
         push=push,
     )
