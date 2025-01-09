@@ -129,6 +129,10 @@ def build_image(
     type=click.Choice(BUILD_TARGET_OPTIONS),
 )
 @click.option(
+    '--target-platform',
+    help='Override the default target platform',
+)
+@click.option(
     '--service',
     default=['all'],
     type=click.Choice((
@@ -157,6 +161,7 @@ def build_image(
 def main(
     clean_build: bool,
     build_target: str,
+    target_platform: str,
     service,
     disable_cache_mounts: bool,
     environment: str,
@@ -169,7 +174,7 @@ def main(
 
     build_parameters = get_build_parameters(build_target)
     board = build_parameters['board']
-    target_platform = build_parameters['target_platform']
+    platform = target_platform or build_parameters['target_platform']
     base_image = build_parameters['base_image']
 
     docker_tag = get_docker_tag(git_branch, board)
@@ -186,7 +191,7 @@ def main(
         build_image(
             service,
             board,
-            target_platform,
+            platform,
             disable_cache_mounts,
             git_hash,
             git_short_hash,
