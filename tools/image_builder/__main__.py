@@ -183,10 +183,18 @@ def main(
     for service in services_to_build:
         docker_tags = [
             f'screenly/anthias-{service}:{docker_tag}',
-            f'screenly/anthias-{service}:{git_short_hash}-{board}',
             f'screenly/srly-ose-{service}:{docker_tag}',
-            f'screenly/srly-ose-{service}:{git_short_hash}-{board}',
         ]
+        if board == 'pi4' and platform == 'linux/arm64/v8':
+            docker_tags.extend([
+                f'screenly/anthias-{service}:{git_short_hash}-{board}-64',
+                f'screenly/srly-ose-{service}:{git_short_hash}-{board}-64',
+            ])
+        else:
+            docker_tags.extend([
+                f'screenly/anthias-{service}:{git_short_hash}-{board}',
+                f'screenly/srly-ose-{service}:{git_short_hash}-{board}',
+            ])
 
         build_image(
             service,

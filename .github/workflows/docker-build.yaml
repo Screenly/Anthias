@@ -110,7 +110,13 @@ jobs:
       - name: Set Docker tag
         run: |
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-          echo "BOARD=${{ matrix.board }}" >> $GITHUB_ENV
+
+          if [ "${{ matrix.board }}" == "pi4" ]; then
+            echo "BOARD=${{ matrix.board }}-64" >> $GITHUB_ENV
+          else
+            echo "BOARD=${{ matrix.board }}" >> $GITHUB_ENV
+          fi
+
           echo "SHM_SIZE=256mb" >> $GITHUB_ENV
 
       - name: Prepare Balena file
