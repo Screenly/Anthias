@@ -174,31 +174,36 @@ def main(
 
     build_parameters = get_build_parameters(build_target)
     board = build_parameters['board']
-    platform = target_platform or build_parameters['target_platform']
     base_image = build_parameters['base_image']
 
+    # Override target platform if specified
+    platform = target_platform or build_parameters['target_platform']
     docker_tag = get_docker_tag(git_branch, board, platform)
-    services_to_build = SERVICES if 'all' in service else list(set(service))
-    docker_hub_namespace = 'screenly'
 
-    for service in services_to_build:
-        docker_tags = [
-            f'{docker_hub_namespace}/anthias-{service}:{docker_tag}',
-            f'{docker_hub_namespace}/srly-ose-{service}:{docker_tag}',
-        ]
-        if board == 'pi4' and platform == 'linux/arm64/v8':
-            docker_tags.extend([
-                f'{docker_hub_namespace}/anthias-{service}:{git_short_hash}-{board}-64',
-                f'{docker_hub_namespace}/srly-ose-{service}:{git_short_hash}-{board}-64',
-            ])
-        else:
-            docker_tags.extend([
-                f'{docker_hub_namespace}/anthias-{service}:{git_short_hash}-{board}',
-                f'{docker_hub_namespace}/srly-ose-{service}:{git_short_hash}-{board}',
-            ])
+    # Determine which services to build
+    services_to_build = SERVICES if 'all' in service else list(set(service))
+
+    # Build Docker images
+    for service_name in services_to_build:
+        # Define tag components
+        namespaces = ['screenly/anthias', 'screenly/srly-ose']
+        version_suffix = (
+            f'{board}-64' if board == 'pi4' and platform == 'linux/arm64/v8'
+            else f'{board}'
+        )
+
+        # Generate all tags
+        docker_tags = []
+        for namespace in namespaces:
+            # Add latest/branch tags
+            docker_tags.append(f'{namespace}-{service_name}:{docker_tag}')
+            # Add version tags
+            docker_tags.append(
+                f'{namespace}-{service_name}:{git_short_hash}-{version_suffix}'
+            )
 
         build_image(
-            service,
+            service_name,
             board,
             platform,
             disable_cache_mounts,
