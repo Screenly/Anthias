@@ -177,23 +177,24 @@ def main(
     platform = target_platform or build_parameters['target_platform']
     base_image = build_parameters['base_image']
 
-    docker_tag = get_docker_tag(git_branch, board)
+    docker_tag = get_docker_tag(git_branch, board, platform)
     services_to_build = SERVICES if 'all' in service else list(set(service))
+    docker_hub_namespace = 'screenly'
 
     for service in services_to_build:
         docker_tags = [
-            f'screenly/anthias-{service}:{docker_tag}',
-            f'screenly/srly-ose-{service}:{docker_tag}',
+            f'{docker_hub_namespace}/anthias-{service}:{docker_tag}',
+            f'{docker_hub_namespace}/srly-ose-{service}:{docker_tag}',
         ]
         if board == 'pi4' and platform == 'linux/arm64/v8':
             docker_tags.extend([
-                f'screenly/anthias-{service}:{git_short_hash}-{board}-64',
-                f'screenly/srly-ose-{service}:{git_short_hash}-{board}-64',
+                f'{docker_hub_namespace}/anthias-{service}:{git_short_hash}-{board}-64',
+                f'{docker_hub_namespace}/srly-ose-{service}:{git_short_hash}-{board}-64',
             ])
         else:
             docker_tags.extend([
-                f'screenly/anthias-{service}:{git_short_hash}-{board}',
-                f'screenly/srly-ose-{service}:{git_short_hash}-{board}',
+                f'{docker_hub_namespace}/anthias-{service}:{git_short_hash}-{board}',
+                f'{docker_hub_namespace}/srly-ose-{service}:{git_short_hash}-{board}',
             ])
 
         build_image(
