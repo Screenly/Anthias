@@ -1,18 +1,18 @@
 from django.urls import path
 
 from api.views.v1 import (
-    AssetViewV1,
-    AssetListViewV1,
     AssetContentViewV1,
-    FileAssetViewV1,
-    PlaylistOrderViewV1,
-    BackupViewV1,
-    RecoverViewV1,
+    AssetListViewV1,
     AssetsControlViewV1,
+    AssetViewV1,
+    BackupViewV1,
+    FileAssetViewV1,
     InfoView,
+    PlaylistOrderViewV1,
     RebootViewV1,
+    RecoverViewV1,
     ShutdownViewV1,
-    ViewerCurrentAssetViewV1
+    ViewerCurrentAssetViewV1,
 )
 
 
