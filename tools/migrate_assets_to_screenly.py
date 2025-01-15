@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 
-import click
 import os
-import requests
 import sys
 import traceback
-
 from inspect import cleandoc
+from textwrap import shorten
+
+import click
+import requests
 from requests.auth import HTTPBasicAuth
 from requests.exceptions import RequestException
 from tenacity import retry
-from textwrap import shorten
 
 HOME = os.getenv('HOME')
 BASE_API_SCREENLY_URL = 'https://api.screenlyapp.com'

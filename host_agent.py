@@ -2,24 +2,25 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import unicode_literals
+
 __author__ = "Nash Kaminski"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
 import ipaddress
 import json
 import logging
-import netifaces
 import os
-import redis
 import subprocess
+
+import netifaces
+import redis
 import requests
 from tenacity import (
-    Retrying,
     RetryError,
+    Retrying,
     stop_after_attempt,
     wait_fixed,
 )
-
 
 REDIS_ARGS = dict(host="127.0.0.1", port=6379, db=0)
 # Name of redis channel to listen to

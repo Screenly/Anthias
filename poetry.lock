@@ -228,22 +228,6 @@ files = [
 ]
 
 [[package]]
-name = "flake8"
-version = "5.0.4"
-description = "the modular source code checker: pep8 pyflakes and co"
-optional = false
-python-versions = ">=3.6.1"
-files = [
-    {file = "flake8-5.0.4-py2.py3-none-any.whl", hash = "sha256:7a1cf6b73744f5806ab95e526f6f0d8c01c66d7bbe349562d22dfca20610b248"},
-    {file = "flake8-5.0.4.tar.gz", hash = "sha256:6fbe320aad8d6b95cec8b8e47bc933004678dc63095be98528b7bdd2a9f510db"},
-]
-
-[package.dependencies]
-mccabe = ">=0.7.0,<0.8.0"
-pycodestyle = ">=2.9.0,<2.10.0"
-pyflakes = ">=2.5.0,<2.6.0"
-
-[[package]]
 name = "idna"
 version = "3.10"
 description = "Internationalized Domain Names in Applications (IDNA)"
@@ -369,17 +353,6 @@ files = [
 ]
 
 [[package]]
-name = "mccabe"
-version = "0.7.0"
-description = "McCabe checker, plugin for flake8"
-optional = false
-python-versions = ">=3.6"
-files = [
-    {file = "mccabe-0.7.0-py2.py3-none-any.whl", hash = "sha256:6c2d30ab6be0e4a46919781807b4f0d834ebdd6c6e3dca0bda5a15f863427b6e"},
-    {file = "mccabe-0.7.0.tar.gz", hash = "sha256:348e0240c33b60bbdf4e523192ef919f28cb2c3d7d5c7794f74009290f236325"},
-]
-
-[[package]]
 name = "mdurl"
 version = "0.1.2"
 description = "Markdown URL utilities"
@@ -388,17 +361,6 @@ python-versions = ">=3.7"
 files = [
     {file = "mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8"},
     {file = "mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba"},
-]
-
-[[package]]
-name = "pycodestyle"
-version = "2.9.1"
-description = "Python style guide checker"
-optional = false
-python-versions = ">=3.6"
-files = [
-    {file = "pycodestyle-2.9.1-py2.py3-none-any.whl", hash = "sha256:d1735fc58b418fd7c5f658d28d943854f8a849b01a5d0a1e6f3f3fdd0166804b"},
-    {file = "pycodestyle-2.9.1.tar.gz", hash = "sha256:2c9607871d58c76354b697b42f5d57e1ada7d261c261efac224b664affdc5785"},
 ]
 
 [[package]]
@@ -414,13 +376,13 @@ files = [
 
 [[package]]
 name = "pydantic"
-version = "2.10.4"
+version = "2.10.5"
 description = "Data validation using Python type hints"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "pydantic-2.10.4-py3-none-any.whl", hash = "sha256:597e135ea68be3a37552fb524bc7d0d66dcf93d395acd93a00682f1efcb8ee3d"},
-    {file = "pydantic-2.10.4.tar.gz", hash = "sha256:82f12e9723da6de4fe2ba888b5971157b3be7ad914267dea8f05f82b28254f06"},
+    {file = "pydantic-2.10.5-py3-none-any.whl", hash = "sha256:4dd4e322dbe55472cb7ca7e73f4b63574eecccf2835ffa2af9021ce113c83c53"},
+    {file = "pydantic-2.10.5.tar.gz", hash = "sha256:278b38dbbaec562011d659ee05f63346951b3a248a6f3642e1bc68894ea2b4ff"},
 ]
 
 [package.dependencies]
@@ -545,17 +507,6 @@ files = [
 typing-extensions = ">=4.6.0,<4.7.0 || >4.7.0"
 
 [[package]]
-name = "pyflakes"
-version = "2.5.0"
-description = "passive checker of Python programs"
-optional = false
-python-versions = ">=3.6"
-files = [
-    {file = "pyflakes-2.5.0-py2.py3-none-any.whl", hash = "sha256:4579f67d887f804e67edb544428f264b7b24f435b263c4614f384135cea553d2"},
-    {file = "pyflakes-2.5.0.tar.gz", hash = "sha256:491feb020dca48ccc562a8c0cbe8df07ee13078df59813b83959cbdada312ea3"},
-]
-
-[[package]]
 name = "pygit2"
 version = "1.15.1"
 description = "Python bindings for libgit2."
@@ -598,13 +549,13 @@ cffi = ">=1.16.0"
 
 [[package]]
 name = "pygments"
-version = "2.18.0"
+version = "2.19.1"
 description = "Pygments is a syntax highlighting package written in Python."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "pygments-2.18.0-py3-none-any.whl", hash = "sha256:b8e6aca0523f3ab76fee51799c488e38782ac06eafcf95e7ba832985c8e7b13a"},
-    {file = "pygments-2.18.0.tar.gz", hash = "sha256:786ff802f32e91311bff3889f6e9a86e81505fe99f2735bb6d60ae0c5004f199"},
+    {file = "pygments-2.19.1-py3-none-any.whl", hash = "sha256:9ea1544ad55cecf4b8242fab6dd35a93bbce657034b0611ee383099054ab6d8c"},
+    {file = "pygments-2.19.1.tar.gz", hash = "sha256:61c16d2a8576dc0649d9f39e089b5f02bcd27fba10d8fb4dcc28173f7a45151f"},
 ]
 
 [package.extras]
@@ -671,6 +622,33 @@ typing-extensions = {version = ">=4.0.0,<5.0", markers = "python_version < \"3.1
 
 [package.extras]
 jupyter = ["ipywidgets (>=7.5.1,<9)"]
+
+[[package]]
+name = "ruff"
+version = "0.8.6"
+description = "An extremely fast Python linter and code formatter, written in Rust."
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "ruff-0.8.6-py3-none-linux_armv6l.whl", hash = "sha256:defed167955d42c68b407e8f2e6f56ba52520e790aba4ca707a9c88619e580e3"},
+    {file = "ruff-0.8.6-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:54799ca3d67ae5e0b7a7ac234baa657a9c1784b48ec954a094da7c206e0365b1"},
+    {file = "ruff-0.8.6-py3-none-macosx_11_0_arm64.whl", hash = "sha256:e88b8f6d901477c41559ba540beeb5a671e14cd29ebd5683903572f4b40a9807"},
+    {file = "ruff-0.8.6-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:0509e8da430228236a18a677fcdb0c1f102dd26d5520f71f79b094963322ed25"},
+    {file = "ruff-0.8.6-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:91a7ddb221779871cf226100e677b5ea38c2d54e9e2c8ed847450ebbdf99b32d"},
+    {file = "ruff-0.8.6-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:248b1fb3f739d01d528cc50b35ee9c4812aa58cc5935998e776bf8ed5b251e75"},
+    {file = "ruff-0.8.6-py3-none-manylinux_2_17_ppc64.manylinux2014_ppc64.whl", hash = "sha256:bc3c083c50390cf69e7e1b5a5a7303898966be973664ec0c4a4acea82c1d4315"},
+    {file = "ruff-0.8.6-py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:52d587092ab8df308635762386f45f4638badb0866355b2b86760f6d3c076188"},
+    {file = "ruff-0.8.6-py3-none-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:61323159cf21bc3897674e5adb27cd9e7700bab6b84de40d7be28c3d46dc67cf"},
+    {file = "ruff-0.8.6-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7ae4478b1471fc0c44ed52a6fb787e641a2ac58b1c1f91763bafbc2faddc5117"},
+    {file = "ruff-0.8.6-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:0c000a471d519b3e6cfc9c6680025d923b4ca140ce3e4612d1a2ef58e11f11fe"},
+    {file = "ruff-0.8.6-py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:9257aa841e9e8d9b727423086f0fa9a86b6b420fbf4bf9e1465d1250ce8e4d8d"},
+    {file = "ruff-0.8.6-py3-none-musllinux_1_2_i686.whl", hash = "sha256:45a56f61b24682f6f6709636949ae8cc82ae229d8d773b4c76c09ec83964a95a"},
+    {file = "ruff-0.8.6-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:496dd38a53aa173481a7d8866bcd6451bd934d06976a2505028a50583e001b76"},
+    {file = "ruff-0.8.6-py3-none-win32.whl", hash = "sha256:e169ea1b9eae61c99b257dc83b9ee6c76f89042752cb2d83486a7d6e48e8f764"},
+    {file = "ruff-0.8.6-py3-none-win_amd64.whl", hash = "sha256:f1d70bef3d16fdc897ee290d7d20da3cbe4e26349f62e8a0274e7a3f4ce7a905"},
+    {file = "ruff-0.8.6-py3-none-win_arm64.whl", hash = "sha256:7d7fc2377a04b6e04ffe588caad613d0c460eb2ecba4c0ccbbfe2bc973cbc162"},
+    {file = "ruff-0.8.6.tar.gz", hash = "sha256:dcad24b81b62650b0eb8814f576fc65cfee8674772a6e24c9b747911801eeaa5"},
+]
 
 [[package]]
 name = "shellingham"
@@ -752,4 +730,4 @@ zstd = ["zstandard (>=0.18.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.12"
-content-hash = "c6f66863c49792ca2890f9d2e125c957fecd8172606ec4f919a77e4d4d82c4fe"
+content-hash = "8ee5d09d70e47ce2b2a2e0538a7b4ad3ce83eb13e447d18ddc665d506c19d65c"

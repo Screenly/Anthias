@@ -1,5 +1,0 @@
-[flake8]
-exclude =
-    anthias_app/migrations/*.py
-per-file-ignores =
-    bin/migrate.py: E501
