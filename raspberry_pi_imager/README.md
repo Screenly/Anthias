@@ -35,6 +35,8 @@ raspberry_pi_imager/
 
 ## Example Output
 
+The JSON output is not indented but we indented it here for readability.
+
 ```json
 {
   "os_list": [
