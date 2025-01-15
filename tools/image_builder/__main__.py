@@ -1,8 +1,12 @@
 import click
 import pygit2
-
 from python_on_whales import docker
 
+from tools.image_builder.constants import (
+    BUILD_TARGET_OPTIONS,
+    SERVICES,
+    SHORT_HASH_LENGTH,
+)
 from tools.image_builder.utils import (
     generate_dockerfile,
     get_build_parameters,
@@ -10,11 +14,6 @@ from tools.image_builder.utils import (
     get_test_context,
     get_viewer_context,
     get_wifi_connect_context,
-)
-from tools.image_builder.constants import (
-    SHORT_HASH_LENGTH,
-    BUILD_TARGET_OPTIONS,
-    SERVICES,
 )
 
 

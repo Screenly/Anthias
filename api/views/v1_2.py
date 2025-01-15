@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 
 from anthias_app.models import Asset
 from api.helpers import (
-    AssetCreationException,
+    AssetCreationError,
     get_active_asset_ids,
     save_active_assets_ordering,
 )
@@ -47,8 +47,8 @@ class AssetListViewV1_2(APIView):
                 data=request.data, unique_name=True)
 
             if not serializer.is_valid():
-                raise AssetCreationException(serializer.errors)
-        except AssetCreationException as error:
+                raise AssetCreationError(serializer.errors)
+        except AssetCreationError as error:
             return Response(error.errors, status=status.HTTP_400_BAD_REQUEST)
 
         active_asset_ids = get_active_asset_ids()

@@ -1,5 +1,6 @@
 import uuid
 from os import path, rename
+
 from django.utils import timezone
 from rest_framework.serializers import (
     BooleanField,
@@ -15,6 +16,7 @@ from lib.utils import (
     url_fails,
 )
 from settings import settings
+
 from . import (
     get_unique_name,
     validate_uri,

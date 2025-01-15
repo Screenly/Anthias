@@ -1,5 +1,4 @@
 from django.utils import timezone
-from anthias_app.models import Asset
 from rest_framework.serializers import (
     BooleanField,
     CharField,
@@ -9,6 +8,7 @@ from rest_framework.serializers import (
     Serializer,
 )
 
+from anthias_app.models import Asset
 from api.serializers import UpdateAssetSerializer
 from api.serializers.mixins import CreateAssetSerializerMixin
 

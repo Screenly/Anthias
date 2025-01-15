@@ -1,9 +1,9 @@
 from __future__ import unicode_literals
 
 
-class SigalrmException(Exception):
+class SigalrmError(Exception):
     pass
 
 
-class ZmqCollectorTimeout(Exception):
+class ZmqCollectorTimeoutError(Exception):
     pass
