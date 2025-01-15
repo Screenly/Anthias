@@ -1,21 +1,20 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
-from builtins import str
-from builtins import object
+
+import configparser
 import hashlib
 import json
 import logging
-import zmq
-import configparser
-from os import path, getenv
+from builtins import object, str
+from collections import UserDict
+from os import getenv, path
 from time import sleep
 
-from collections import UserDict
+import zmq
 
 from lib.auth import BasicAuth, NoAuth
-from lib.errors import ZmqCollectorTimeout
-
+from lib.errors import ZmqCollectorTimeoutError
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -228,4 +227,4 @@ class ZmqCollector(object):
         if self.poller.poll(timeout):
             return json.loads(self.socket.recv(zmq.NOBLOCK))
 
-        raise ZmqCollectorTimeout
+        raise ZmqCollectorTimeoutError

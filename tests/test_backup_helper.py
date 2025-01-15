@@ -1,8 +1,10 @@
-import mock
 import shutil
 import unittest
 from datetime import datetime
 from os import getenv, path
+
+import mock
+
 from lib.backup_helper import create_backup, recover, static_dir
 
 home = getenv('HOME')
