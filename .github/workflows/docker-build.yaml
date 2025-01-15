@@ -29,7 +29,7 @@ jobs:
     needs: run-tests
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi5', 'x86']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
         python-version: ["3.11"]
     runs-on: ubuntu-latest
 
@@ -80,9 +80,21 @@ jobs:
 
       - name: Build Containers
         run: |
-          poetry run python -m tools.image_builder \
-            --build-target=${{ matrix.board }} \
-            --push
+          if [ "${{ matrix.board }}" == "pi4" ]; then
+            poetry run python -m tools.image_builder \
+              --build-target=pi4 \
+              --target-platform=linux/arm/v8 \
+              --push
+          elif [ "${{ matrix.board }}" == "pi4-64" ]; then
+            poetry run python -m tools.image_builder \
+              --build-target=pi4 \
+              --target-platform=linux/arm64/v8 \
+              --push
+          else
+            poetry run python -m tools.image_builder \
+              --build-target=${{ matrix.board }} \
+              --push
+          fi
 
   balena:
     if: ${{ github.ref == 'refs/heads/master' }}
@@ -98,7 +110,13 @@ jobs:
       - name: Set Docker tag
         run: |
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-          echo "BOARD=${{ matrix.board }}" >> $GITHUB_ENV
+
+          if [ "${{ matrix.board }}" == "pi4" ]; then
+            echo "BOARD=${{ matrix.board }}-64" >> $GITHUB_ENV
+          else
+            echo "BOARD=${{ matrix.board }}" >> $GITHUB_ENV
+          fi
+
           echo "SHM_SIZE=256mb" >> $GITHUB_ENV
 
       - name: Prepare Balena file

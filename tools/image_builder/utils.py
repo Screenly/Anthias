@@ -46,11 +46,16 @@ def get_build_parameters(build_target: str) -> dict:
     return default_build_parameters
 
 
-def get_docker_tag(git_branch: str, board: str) -> str:
+def get_docker_tag(git_branch: str, board: str, platform: str) -> str:
+    result_board = board
+
+    if platform == 'linux/arm64/v8' and board == 'pi4':
+        result_board = f'{board}-64'
+
     if git_branch == 'master':
-        return f'latest-{board}'
+        return f'latest-{result_board}'
     else:
-        return f'{git_branch}-{board}'
+        return f'{git_branch}-{result_board}'
 
 
 def generate_dockerfile(service: str, context: dict) -> None:
