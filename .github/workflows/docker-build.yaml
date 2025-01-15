@@ -29,7 +29,7 @@ jobs:
     needs: run-tests
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4-arm', 'pi4-arm64', 'pi5', 'x86']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
         python-version: ["3.11"]
     runs-on: ubuntu-latest
 
@@ -80,12 +80,12 @@ jobs:
 
       - name: Build Containers
         run: |
-          if [ "${{ matrix.board }}" == "pi4-arm" ]; then
+          if [ "${{ matrix.board }}" == "pi4" ]; then
             poetry run python -m tools.image_builder \
               --build-target=pi4 \
               --target-platform=linux/arm/v8 \
               --push
-          elif [ "${{ matrix.board }}" == "pi4-arm64" ]; then
+          elif [ "${{ matrix.board }}" == "pi4-64" ]; then
             poetry run python -m tools.image_builder \
               --build-target=pi4 \
               --target-platform=linux/arm64/v8 \
