@@ -5,7 +5,7 @@ certifi==2024.7.4
 configparser==4.0.2
 cryptography==3.3.2
 Cython==0.29.33
-Django==4.2.17
+Django==4.2.18
 django-dbbackup==4.2.1
 drf-spectacular==0.27.2
 future==0.18.3
