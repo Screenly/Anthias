@@ -203,7 +203,7 @@ def get_node_mac_address():
             return r.json()['mac_address']
         return 'Unknown'
 
-    return 'Unable to retrieve MAC address.'
+    return os.getenv('MAC_ADDRESS', 'Unable to retrieve MAC address.')
 
 
 def get_active_connections(bus, fields=None):

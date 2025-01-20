@@ -27,6 +27,7 @@ services:
       dockerfile: docker/Dockerfile.server
     environment:
       - MY_IP=${MY_IP}
+      - MAC_ADDRESS=${MAC_ADDRESS}
       - HOST_USER=${USER}
       - HOME=/data
       - LISTEN=0.0.0.0
