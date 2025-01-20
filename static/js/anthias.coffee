@@ -1,10 +1,12 @@
-### screenly-ose ui ###
+### anthias ui ###
+
+import '../sass/anthias.scss'
 
 $().ready ->
   $('#subsribe-form-container').popover content: get_template 'subscribe-form'
 
 
-API = (window.Screenly ||= {}) # exports
+API = (window.Anthias ||= {}) # exports
 
 dateSettings = {}
 
@@ -70,7 +72,10 @@ durationSecondsToHumanReadable = (secs) ->
 
   return durationString
 
-url_test = (v) -> /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/.test v
+url_test = (v) ->
+  urlPattern = /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/
+  urlPattern.test v
+
 get_filename = (v) -> (v.replace /[\/\\\s]+$/g, '').replace /^.*[\\\/]/g, ''
 truncate_str = (v) -> v.replace /(.{100})..+/, "$1..."
 insertWbr = (v) -> (v.replace /\//g, '/<wbr>').replace /\&/g, '&amp;<wbr>'
@@ -98,8 +103,8 @@ API.Asset = class Asset extends Backbone.Model
   active: =>
     if @get('is_enabled') and @get('start_date') and @get('end_date')
       at = now()
-      start_date = new Date(@get('start_date'));
-      end_date = new Date(@get('end_date'));
+      start_date = new Date(@get('start_date'))
+      end_date = new Date(@get('end_date'))
       return start_date <= at <= end_date
     else
       return false
@@ -117,13 +122,13 @@ API.Asset = class Asset extends Backbone.Model
 
 
 API.Assets = class Assets extends Backbone.Collection
-  url: "/api/v1.2/assets"
+  url: "/api/v2/assets"
   model: Asset
   comparator: 'play_order'
 
 
 # Views
-API.View = {};
+API.View = {}
 
 API.View.AddAssetView = class AddAssetView extends Backbone.View
   $f: (field) => @$ "[name='#{field}']" # get field element
@@ -144,7 +149,8 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
 
   viewmodel:(model) =>
     for which in ['start', 'end']
-      @$fv "#{which}_date", (moment (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time"), dateSettings.fullDate).toDate().toISOString()
+      date = (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")
+      @$fv "#{which}_date", (moment date, dateSettings.fullDate).toDate().toISOString()
     for field in model.fields when not (@$f field).prop 'disabled'
       model.set field, (@$fv field), silent:yes
 
@@ -156,6 +162,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
     'click .tabnav-uri': 'clickTabNavUri'
     'click .tabnav-file_upload': 'clickTabNavUpload'
     'change .is_enabled-skip_asset_check_checkbox': 'toggleSkipAssetCheck'
+    'keyup [name=uri]': 'change'
 
   save: (e) =>
     if ((@$fv 'uri') == '')
@@ -204,7 +211,7 @@ API.View.AddAssetView = class AddAssetView extends Backbone.View
         autoUpload: false
         sequentialUploads: true
         maxChunkSize: 5000000 #5 MB
-        url: 'api/v1/file_asset'
+        url: 'api/v2/file_asset'
         progressall: (e, data) => if data.loaded and data.total
           (@$ '.progress .bar').css 'width', "#{data.loaded / data.total * 100}%"
         add: (e, data) ->
@@ -343,7 +350,8 @@ API.View.EditAssetView = class EditAssetView extends Backbone.View
 
   viewmodel: =>
     for which in ['start', 'end']
-      @$fv "#{which}_date", (moment (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time"), dateSettings.fullDate).toDate().toISOString()
+      date = (@$fv "#{which}_date_date") + " " + (@$fv "#{which}_date_time")
+      @$fv "#{which}_date", (moment date, dateSettings.fullDate).toDate().toISOString()
     for field in @model.fields when not (@$f field).prop 'disabled'
       @model.set field, (@$fv field), silent:yes
 
@@ -530,7 +538,7 @@ API.View.AssetRowView = class AssetRowView extends Backbone.View
     (@$ 'input, button').prop 'disabled', on
 
   download: (e) =>
-    $.get '/api/v1/assets/' + @model.id + '/content', (result) ->
+    $.get '/api/v2/assets/' + @model.id + '/content', (result) ->
       switch result['type']
         when 'url'
           window.open(result['url'])
@@ -592,7 +600,7 @@ API.View.AssetsView = class AssetsView extends Backbone.View
     @collection.get(id).set('play_order', i) for id, i in active
     @collection.get(el.id).set('play_order', active.length) for el in (@$ '#inactive-assets tr').toArray()
 
-    $.post '/api/v1/assets/order', ids: ((@$ '#active-assets').sortable 'toArray').join ','
+    $.post '/api/v2/assets/order', ids: ((@$ '#active-assets').sortable 'toArray').join ','
 
   render: =>
     @collection.sort()
@@ -662,7 +670,7 @@ API.App = class App extends Backbone.View
     no
 
   previous: (e) ->
-    $.get '/api/v1/assets/control/previous'
+    $.get '/api/v2/assets/control/previous'
 
   next: (e) ->
-    $.get '/api/v1/assets/control/next'
+    $.get '/api/v2/assets/control/next'

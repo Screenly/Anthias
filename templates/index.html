@@ -1,36 +1,42 @@
+{# vim: ft=htmldjango #}
+
 {% extends "base.html" %}
+{% load static %}
 
 {% block head %}
-    <link href="{{ url_for('static', filename='css/datepicker.css') }}" rel="stylesheet"/>
-    <link href="{{ url_for('static', filename='css/timepicker.css') }}" rel="stylesheet"/>
+    <link href="{% static 'css/datepicker.css' %}" rel="stylesheet"/>
+    <link href="{% static 'css/timepicker.css' %}" rel="stylesheet"/>
 
-    <script src="{{ url_for('static', filename='js/underscore-1.4.3.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/jquery.iframe-transport.js') }}"></script>
+    <script src="{% static 'js/underscore-1.4.3.min.js' %}"></script>
+    <script src="{% static 'js/popper.min.js' %}"></script>
+    <script src="{% static 'js/jquery.iframe-transport.js' %}"></script>
 
-    <script src="{{ url_for('static', filename='js/base64js.min.js') }}"></script>
+    <script src="{% static 'js/base64js.min.js' %}"></script>
 
-    <script src="{{ url_for('static', filename='js/backbone-0.9.10.min.js') }}"></script> <!-- needs jquery -->
+    <script src="{% static 'js/backbone-0.9.10.min.js' %}"></script> <!-- needs jquery -->
 
-    <script src="{{ url_for('static', filename='js/jquery-ui-1.10.1.custom.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/jquery.fileupload.js') }}"></script>
+    <script src="{% static 'js/jquery-ui-1.10.1.custom.min.js' %}"></script>
+    <script src="{% static 'js/jquery.fileupload.js' %}"></script>
     <!-- needs jqueryui.widget -->
 
-    <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script> <!-- needs jquery -->
-    <script src="{{ url_for('static', filename='js/bootstrap-datepicker.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/bootstrap-timepicker.js') }}"></script>
+    <script src="{% static 'js/bootstrap.min.js' %}"></script> <!-- needs jquery -->
+    <script src="{% static 'js/bootstrap-datepicker.js' %}"></script>
+    <script src="{% static 'js/bootstrap-timepicker.js' %}"></script>
 
-    <script src="{{ url_for('static', filename='js/moment.js') }}"></script>
+    <script src="{% static 'js/moment.js' %}"></script>
+
+    {{ ws_addresses|json_script:"ws_addresses" }};
 
     <script type="text/javascript">
-        var dateFormat = "{{ context.date_format }}";
-        var defaultDuration = {{ context.default_duration }};
-        var defaultStreamingDuration = {{ context.default_streaming_duration }};
-        var use24HourClock = {% if context.use_24_hour_clock %} true; {% else %} false; {% endif %}
-        var wsAddresses = {{ context.ws_addresses|tojson }};
+        var dateFormat = "{{ date_format }}";
+        var defaultDuration = {{ default_duration }};
+        var defaultStreamingDuration = {{ default_streaming_duration }};
+        var use24HourClock = {% if use_24_hour_clock %} true; {% else %} false; {% endif %}
+        var wsAddresses = JSON.parse(document.getElementById('ws_addresses').textContent);
     </script>
-    <script src="{{ url_for('static', filename='js/anthias.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    <script src="{% static 'dist/js/anthias.js' %}"></script>
+    <script src="{% static 'js/main.js' %}"></script>
 
     <script id="asset-row-template" type="text/template">
         <td class="asset_row_name">
@@ -317,8 +323,8 @@
                         </a>
                     </div>
                 </h4>
-                {% if context.player_name %}
-                    <h4 class="text-white">{{ context.player_name }}</h4>
+                {% if player_name %}
+                    <h4 class="text-white">{{ player_name }}</h4>
                 {% endif %}
             </div>
         </div>

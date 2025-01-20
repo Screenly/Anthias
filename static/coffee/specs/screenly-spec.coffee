@@ -1,14 +1,14 @@
 
-describe "Screenly Open Source", ->
+describe "Anthias", ->
 
-  it "should have a Screenly object at its root", ->
-    expect(Screenly).toBeDefined()
+  it "should have a Anthias object at its root", ->
+    expect(Anthias).toBeDefined()
 
 
   describe "date_to", ->
 
     test_date = new Date(2014, 5, 6, 14, 20, 0, 0);
-    a_date = Screenly.date_to(test_date);
+    a_date = Anthias.date_to(test_date);
 
     it "should format date and time as 'MM/DD/YYYY hh:mm:ss A'", ->
       expect(a_date.string()).toBe '06/06/2014 02:20:00 PM'
@@ -24,12 +24,12 @@ describe "Screenly Open Source", ->
 
     describe "Asset model", ->
       it "should exist", ->
-        expect(Screenly.Asset).toBeDefined()
+        expect(Anthias.Asset).toBeDefined()
 
       start_date = new Date(2014, 4, 6, 14, 20, 0, 0);
       end_date = new Date();
       end_date.setMonth(end_date.getMonth() + 2)
-      asset = new Screenly.Asset({
+      asset = new Anthias.Asset({
         asset_id: 2
         duration: "8"
         end_date: end_date
@@ -37,7 +37,7 @@ describe "Screenly Open Source", ->
         mimetype: 'webpage'
         name: 'Test'
         start_date: start_date
-        uri: 'http://www.screenlyapp.com'
+        uri: 'https://anthias.screenly.io'
       })
 
       it "should be active if enabled and date is in range", ->
@@ -71,7 +71,7 @@ describe "Screenly Open Source", ->
         expect(asset.get 'is_enabled').toBe true
         expect(asset.get 'name').toBe 'Test'
         expect(asset.get 'start_date').toBe start_date
-        expect(asset.get 'uri').toBe "http://www.screenlyapp.com"
+        expect(asset.get 'uri').toBe "https://anthias.screenly.io"
 
       it "should erase backup date after rollback", ->
         asset.set({
@@ -94,33 +94,33 @@ describe "Screenly Open Source", ->
 
     describe "Assets", ->
       it "should exist", ->
-        expect(Screenly.Assets).toBeDefined()
+        expect(Anthias.Assets).toBeDefined()
 
       it "should use the Asset model", ->
-        assets = new Screenly.Assets()
-        expect(assets.model).toBe Screenly.Asset
+        assets = new Anthias.Assets()
+        expect(assets.model).toBe Anthias.Asset
 
       it "should keep play order of assets", ->
-        assets = new Screenly.Assets()
-        asset1 = new Screenly.Asset({
+        assets = new Anthias.Assets()
+        asset1 = new Anthias.Asset({
           asset_id: 1
           is_enabled: true
           name: 'AAA'
-          uri: 'http://www.screenlyapp.com',
+          uri: 'https://anthias.screenly.io',
           play_order: 2
         })
-        asset2 = new Screenly.Asset({
+        asset2 = new Anthias.Asset({
           asset_id: 2
           is_enabled: true
           name: 'BBB'
-          uri: 'http://www.screenlyapp.com',
+          uri: 'https://anthias.screenly.io',
           play_order: 1
         })
-        asset3 = new Screenly.Asset({
+        asset3 = new Anthias.Asset({
           asset_id: 3
           is_enabled: true
           name: 'CCC'
-          uri: 'http://www.screenlyapp.com',
+          uri: 'https://anthias.screenly.io',
           play_order: 0
         })
 
@@ -141,13 +141,13 @@ describe "Screenly Open Source", ->
   describe "Views", ->
 
     it "should have AddAssetView", ->
-      expect(Screenly.View.AddAssetView).toBeDefined()
+      expect(Anthias.View.AddAssetView).toBeDefined()
 
     it "should have EditAssetView", ->
-      expect(Screenly.View.EditAssetView).toBeDefined()
+      expect(Anthias.View.EditAssetView).toBeDefined()
 
     it "should have AssetRowView", ->
-      expect(Screenly.View.AssetRowView).toBeDefined()
+      expect(Anthias.View.AssetRowView).toBeDefined()
 
     it "should have AssetsView", ->
-      expect(Screenly.View.AssetsView).toBeDefined()
+      expect(Anthias.View.AssetsView).toBeDefined()

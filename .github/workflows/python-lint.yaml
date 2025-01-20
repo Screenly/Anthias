@@ -1,0 +1,46 @@
+name: Run Python Linter
+
+on:
+  push:
+    branches:
+      - 'master'
+    paths:
+      - '**/*.py'
+      - '.github/workflows/python-lint.yaml'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '**/*.py'
+      - '.github/workflows/python-lint.yaml'
+
+jobs:
+  run-python-linter:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install and configure Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: 1.8.3
+        virtualenvs-create: true
+        virtualenvs-in-project: false
+        virtualenvs-path: ~/.venv
+        installer-parallel: true
+
+    - name: Install dependencies
+      run: |
+        poetry install --only=dev-host
+
+    - name: Analyzing the code with ruff
+      run: |
+        poetry run ruff check .

@@ -1,3 +1,6 @@
+{# vim: ft=htmldjango #}
+{% load static %}
+
 <meta charset="utf-8"/>
 
 {% if context.player_name %}
@@ -21,7 +24,7 @@
 <link href="/static/favicons/favicon-128.png" rel="icon" sizes="128x128" type="image/png"/>
 <link href="https://fonts.googleapis.com/css?family=Plus Jakarta Sans" rel="stylesheet">
 <link rel="icon" href="/static/favicons/favicon.ico">
-<meta content="screenly-ose;" name="application-name"/>
+<meta content="anthias;" name="application-name"/>
 <meta content="#FFFFFF" name="msapplication-TileColor"/>
 <meta content="/static/favicons/mstile-144x144.png" name="msapplication-TileImage"/>
 <meta content="/static/favicons/mstile-70x70.png" name="msapplication-square70x70logo"/>
@@ -29,13 +32,13 @@
 <meta content="/static/favicons/mstile-310x150.png" name="msapplication-wide310x150logo"/>
 <meta content="/static/favicons/mstile-310x310.png" name="msapplication-square310x310logo"/>
 
-<link href="{{ url_for('static', filename='css/screenly.css') }}" rel="stylesheet"/>
+<link href="{% static 'dist/css/anthias.css' %}" type="text/css" rel="stylesheet"/>
 
-<link href="{{ url_for('static', filename='fontawesome/css/all.css') }}" rel="stylesheet"/>
+<link href="{% static 'fontawesome/css/all.css' %}" rel="stylesheet"/>
 
 <script async defer src="https://buttons.github.io/buttons.js"></script>
 
-<script src="{{ url_for('static', filename='js/jquery-3.7.1.min.js') }}"></script>
+<script src="{% static 'js/jquery-3.7.1.min.js' %}"></script>
 
 {% if context.is_demo %}
     <!-- Global Site Tag (gtag.js) - Google Analytics -->

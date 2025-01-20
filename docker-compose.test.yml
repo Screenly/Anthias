@@ -1,4 +1,5 @@
-version: "2.2"
+# vim: ft=yaml.docker-compose
+
 services:
   anthias-test:
     build:
@@ -8,11 +9,12 @@ services:
       - HOME=/data
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ENVIRONMENT=test
     stdin_open: true
     tty: true
     volumes:
       - .:/usr/src/app
-      - resin-data:/data
+      - anthias-data:/data
 
   anthias-celery:
     build:
@@ -27,11 +29,11 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     restart: always
     volumes:
-      - resin-data:/data
+      - anthias-data:/data
 
   redis:
     image: redis:alpine
 
 volumes:
-  resin-data:
+  anthias-data:
   redis-data:

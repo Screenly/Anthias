@@ -1,17 +1,38 @@
 name: Build Balena Disk Images
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to be used for the release'
+        required: true
+        type: string
+      commit:
+        description: 'Commit or branch name'
+        required: false
+        type: string
+        default: 'master'
 
 jobs:
+  generate-openapi-schema:
+    uses: ./.github/workflows/generate-openapi-schema.yml
+    permissions:
+      contents: write
+    with:
+      release: true
+      tag: ${{ inputs.tag }}
+      commit: ${{ inputs.commit }}
   balena-build-images:
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi5']
     runs-on: ubuntu-20.04
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@v4
 
       - name: Get base board
         run: |
@@ -23,6 +44,8 @@ jobs:
             echo "BALENA_IMAGE=raspberrypi3" >> $GITHUB_ENV
           elif [ "${{ matrix.board }}" == 'pi4' ]; then
             echo "BALENA_IMAGE=raspberrypi4-64" >> $GITHUB_ENV
+          elif [ "${{ matrix.board }}" == 'pi5' ]; then
+            echo "BALENA_IMAGE=raspberrypi5" >> $GITHUB_ENV
           fi
 
       - name: balena CLI Action - download
@@ -43,6 +66,7 @@ jobs:
             preload \
               "$BALENA_IMAGE.img" \
               --fleet screenly_ose/anthias-${{ matrix.board }} \
+              --pin-device-to-release \
               --splash-image ansible/roles/splashscreen/files/splashscreen.png \
               --commit latest
           balena_cli_version: 18.1.2
@@ -92,3 +116,10 @@ jobs:
           allowUpdates: true
           prerelease: true
           artifacts: "*raspberry*.zip,*raspberry*.sha256,*raspberry*.json"
+          tag: ${{ inputs.tag }}
+          commit: ${{ inputs.commit }}
+
+      - name: Attest
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: '${{ github.workspace }}/*raspberry*.zip'

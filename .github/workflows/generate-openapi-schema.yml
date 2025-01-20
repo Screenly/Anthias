@@ -1,0 +1,122 @@
+name: Generate OpenAPI Schema
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '**'
+      - '!webview/**'
+      - '!website/**'
+      - '!.github/workflows/deploy-website.yaml'
+      - '!.github/workflows/build-webview.yaml'
+      - '!.github/workflows/build-balena-disk-image.yaml'
+      - '!.github/workflows/python-lint.yaml'
+      - '!README.md'
+      - '!docs/**'
+      - '!bin/install.sh'
+      - '!bin/upgrade_containers.sh'
+      - '!tests/**'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '**'
+      - '!webview/**'
+      - '!website/**'
+      - '!.github/workflows/deploy-website.yaml'
+      - '!.github/workflows/build-webview.yaml'
+      - '!.github/workflows/build-balena-disk-image.yaml'
+      - '!.github/workflows/python-lint.yaml'
+      - '!README.md'
+      - '!docs/**'
+      - '!bin/install.sh'
+      - '!bin/upgrade_containers.sh'
+      - '!tests/**'
+  workflow_call:
+    inputs:
+      release:
+        description: 'Upload the OpenAPI schema as a release artifact'
+        required: true
+        type: boolean
+        default: false
+      tag:
+        description: 'Tag to be used for the release'
+        required: true
+        type: string
+      commit:
+        description: 'Commit or branch name'
+        required: false
+        type: string
+        default: 'master'
+
+jobs:
+  generate-openapi-schema:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install and configure Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.3
+          virtualenvs-create: true
+          virtualenvs-in-project: false
+          virtualenvs-path: ~/.venv
+          installer-parallel: true
+
+      - name: Install dependencies
+        run: |
+          poetry install --only=docker-image-builder
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        id: cache
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-x86
+          restore-keys: |
+            ${{ runner.os }}-x86
+
+      - name: Build Images
+        run: |
+          poetry run python -m tools.image_builder \
+            --dockerfiles-only \
+            --disable-cache-mounts \
+            --environment=development
+          docker compose -f docker-compose.dev.yml build
+
+      - name: Start the Containers
+        run: |
+          docker compose -f docker-compose.dev.yml up -d
+
+      - name: Generate OpenAPI Schema
+        run: |
+          docker compose -f docker-compose.dev.yml exec anthias-server \
+            ./manage.py spectacular \
+            --format openapi-json \
+            --file anthias-api-schema.json
+
+      - name: Upload the OpenAPI Schema
+        uses: actions/upload-artifact@v4
+        with:
+          name: anthias-api-schema
+          path: anthias-api-schema.json
+
+      - name: Upload the OpenAPI Schema as a release artifact
+        if: github.event_name == 'workflow_dispatch' && inputs.release == true
+        uses: ncipollo/release-action@v1.11.2
+        with:
+          allowUpdates: true
+          prerelease: true
+          artifacts: anthias-api-schema.json
+          tag: ${{ inputs.tag }}
+          commit: ${{ inputs.commit }}
+

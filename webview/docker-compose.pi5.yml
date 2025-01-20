@@ -1,0 +1,14 @@
+services:
+  builder:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.pi5
+    environment:
+      - GIT_HASH=${GIT_HASH}
+    tty: true
+    stdin_open: true
+    volumes:
+      - "~/tmp-pi5/build:/build:Z"
+      - "./examples:/src/examples"
+      - "./:/webview:ro"
+      - "./scripts/build_pi5_webview.sh:/scripts/build_pi5_webview.sh"

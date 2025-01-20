@@ -37,12 +37,13 @@ of the container in the command above. Here's a table of the available container
 
 ### Using `docker-compose logs`
 
-Before running the succeeding commands, make sure that you're in the
-`/home/${USER}/screenly` directory:
-
-```bash
-$ cd /home/${USER}/screenly # e.g., /home/pi/screenly if the user is `pi`
-```
+> [!IMPORTANT]
+> Before running the succeeding commands, make sure that you're in the
+> `/home/${USER}/screenly` directory:
+> 
+> ```bash
+> $ cd /home/${USER}/screenly # e.g., /home/pi/screenly if the user is `pi`
+> ```
 
 If you'd like to see the logs of a specific container or service via Docker Compose,
 you can run the following:
@@ -74,15 +75,21 @@ $ $HOME/screenly/bin/run_upgrade.sh
 
 ## Accessing the REST API
 
-To get started, open your browser and go to `http://<ip-address>:8080/api/docs/`. You should see the Swagger API docs for the endpoints.
+To get started, open your browser and go to `http://<ip-address>/api/docs/` (or `http://localhost:8000/api/docs/`
+if you're in development mode). You should see the API docs for the endpoints.
 
-## Accessing the SQLite Database
+## Installing (trusted) self-signed certificates
 
-This section is for power users only. **Do not** mess around with the database unless you know what you are doing.
+> [!WARNING]
+> This section only works for devices running Raspberry Pi OS Lite.
+> With running the following script, you can install self-signed certificates:
+> 
+> ```bash
+> $ cd $HOME/screenly
+> $ ./bin/add_certificate.sh /path/to/certificate.crt
+> ```
 
-For most users, it's recommended that you [use the API instead](#accessing-the-rest-api).
-
-The SQLite Database can be found here &mdash; `~/.screenly/screenly.db`. It can be modified with the `sqlite3` CLI. The schema is relatively straightforward if you're already familiar. The columns of most interest to you will be `name` and `is_enabled`. In addition, `start_date` is useful if you want to use this in a disconnected manner.
+More details about generating self-signed certificates can be found [here](https://devopscube.com/create-self-signed-certificates-openssl/).
 
 ## Wi-Fi Setup
 

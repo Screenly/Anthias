@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Anthias
+Description=Anthias Splash Screen
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/anthias
+ScriptFile=/usr/share/plymouth/themes/anthias/anthias.script

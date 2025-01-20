@@ -1,9 +1,12 @@
+{# vim: ft=htmldjango #}
+
 <!DOCTYPE html>
 <html>
 <head>
+    {% load static %}
     <meta charset="utf-8"/>
     <title>Welcome to Anthias</title>
-    <link href="{{ url_for('static', filename='css/screenly.css') }}" rel="stylesheet"/>
+    <link href="{% static 'dist/css/anthias.css' %}" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css?family=Plus Jakarta Sans" rel="stylesheet">
     <link rel="icon" href="/static/favicons/favicon.ico">
     <style type="text/css">
@@ -28,15 +31,15 @@
     <div class="splash-body p-5">
         <div class="row">
             <div class="col-12 text-center">
-                {% if context.my_ip %}
+                {% if ip_addresses %}
                     <p>
                         To manage the content on this screen, just point your
                         browser to
-                        {% if context.my_ip | length > 1 %}
+                        {% if ip_addresses|length > 1 %}
                             any of
                         {% endif %}
                         the IP
-                        {% if context.my_ip | length > 1 %}
+                        {% if ip_addresses|length > 1 %}
                             addresses
                         {% else %}
                             address
@@ -44,8 +47,8 @@
                         provided below.
                     </p>
                     <div class="form-actions">
-                        {% for ip in context.my_ip %}
-                            <a href="http://{{ ip }}">http://{{ ip }}</a>
+                        {% for ip_address in ip_addresses %}
+                            <a href="{{ ip_address }}">{{ ip_address }}</a>
                             {% if not loop.last %}
                                 <br/>
                             {% endif %}

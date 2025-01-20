@@ -38,7 +38,6 @@ void View::loadImage(const QString &preUri)
 
         QUrl url;
         url.setScheme("http");
-        // url.setHost(qgetenv("LISTEN"));
         url.setHost("anthias-nginx");
         url.setPath("/screenly_assets/" + fileInfo.fileName());
 
@@ -62,15 +61,20 @@ void View::loadImage(const QString &preUri)
 
     stop();
     pre_loader -> setHtml("<html><head><script>" + script + "</script></head><body style='" + styles + "'><script>window.setimg(\"" + src + "\");</script></body></html>");
-    connect(pre_loader,SIGNAL(loadFinished(bool)),&pre_loader_loop,SLOT(quit()));
-    QTimer::singleShot(5000, &pre_loader_loop, SLOT(quit()));
-    pre_loader_loop.exec();
-    pre_loader -> toHtml([&](const QString &result){ setHtml(result); });
+
+    connect(pre_loader, &QWebEnginePage::loadFinished, this, [=](bool result){
+        if (result)
+        {
+            pre_loader -> toHtml([&](const QString &result){
+                setHtml(result);
+            });
+        }
+    });
 }
 
 void View::handleAuthRequest(QNetworkReply* reply, QAuthenticator* auth)
 {
     Q_UNUSED(reply)
     Q_UNUSED(auth)
-    load(QUrl::fromLocalFile(QStandardPaths::locate(QStandardPaths::DataLocation, "res/access_denied.html")));
+    load(QUrl::fromLocalFile(QStandardPaths::locate(QStandardPaths::AppDataLocation, "res/access_denied.html")));
 }

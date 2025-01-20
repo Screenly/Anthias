@@ -1,0 +1,12 @@
+FROM python:3.11-bookworm
+
+RUN apt-get update -y && \
+    curl --proto "=https" -sSL https://install.python-poetry.org | python3 - && \
+    ln -s /root/.local/bin/poetry /usr/local/bin/poetry
+
+WORKDIR /app
+
+COPY pyproject.toml poetry.lock /app/
+
+RUN poetry install --only=docker-image-builder
+RUN git config --global --add safe.directory /app

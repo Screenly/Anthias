@@ -1,28 +1,40 @@
 from __future__ import unicode_literals
-from builtins import str
-from builtins import range
-import os
-import logging
-import string
-import random
+
 import json
-from requests import get as requests_get, post as requests_post, exceptions
-from lib.utils import is_balena_app, is_docker, is_ci, connect_to_redis
+import logging
+import os
+import random
+import string
+from builtins import range, str
+
+from requests import exceptions
+from requests import get as requests_get
+from requests import post as requests_post
+
+from lib.device_helper import parse_cpu_info
 from lib.diagnostics import get_git_branch, get_git_hash, get_git_short_hash
-from lib.raspberry_pi_helper import parse_cpu_info
+from lib.utils import connect_to_redis, is_balena_app, is_ci, is_docker
 from settings import settings
 
 r = connect_to_redis()
 
-# Availability and HEAD commit of the remote branch to be checked every 24 hours.
+# Availability and HEAD commit of the remote branch to be checked
+# every 24 hours.
 REMOTE_BRANCH_STATUS_TTL = (60 * 60 * 24)
 
-# Suspend all external requests if we enconter an error other than a ConnectionError for 5 minutes
+# Suspend all external requests if we enconter an error other than
+# a ConnectionError for 5 minutes.
 ERROR_BACKOFF_TTL = (60 * 5)
+
+# Availability of the cached Docker Hub hash
+DOCKER_HUB_HASH_TTL = (10 * 60)
 
 # Google Analytics data
 ANALYTICS_MEASURE_ID = 'G-S3VX8HTPK7'
 ANALYTICS_API_SECRET = 'G8NcBpRIS9qBsOj3ODK8gw'
+
+DEFAULT_REQUESTS_TIMEOUT = 1  # in seconds
+
 
 def handle_github_error(exc, action):
     # After failing, dont retry until backoff timer expires
@@ -34,7 +46,10 @@ def handle_github_error(exc, action):
         errdesc = exc.response.content
     else:
         errdesc = 'no data'
-    logging.error('{} fetching {} from GitHub: {}'.format(type(exc).__name__, action, errdesc))
+
+    logging.error(
+        '%s fetching %s from GitHub: %s', type(exc).__name__, action, errdesc
+    )
 
 
 def remote_branch_available(branch):
@@ -58,6 +73,7 @@ def remote_branch_available(branch):
             headers={
                 'Accept': 'application/vnd.github.loki-preview+json',
             },
+            timeout=DEFAULT_REQUESTS_TIMEOUT
         )
         resp.raise_for_status()
     except exceptions.RequestException as exc:
@@ -92,13 +108,15 @@ def fetch_remote_hash():
 
     get_cache = r.get('latest-remote-hash')
     if not get_cache:
-        # Ensure the remote branch is available before trying to fetch the HEAD ref
+        # Ensure the remote branch is available before trying
+        # to fetch the HEAD ref.
         if not remote_branch_available(branch):
             logging.error('Remote Git branch not available')
             return None, False
         try:
             resp = requests_get(
-                'https://api.github.com/repos/screenly/anthias/git/refs/heads/{}'.format(branch)
+                f'https://api.github.com/repos/screenly/anthias/git/refs/heads/{branch}',  # noqa: E501
+                timeout=DEFAULT_REQUESTS_TIMEOUT
             )
             resp.raise_for_status()
         except exceptions.RequestException as exc:
@@ -117,35 +135,46 @@ def fetch_remote_hash():
 
 def get_latest_docker_hub_hash(device_type):
     """
-    This function is useful for cases where latest changes pushed does not trigger
-    Docker image builds.
+    This function is useful for cases where latest changes pushed does not
+    trigger Docker image builds.
     """
 
-    url = 'https://hub.docker.com/v2/namespaces/screenly/repositories/anthias-server/tags'
+    url = 'https://hub.docker.com/v2/namespaces/screenly/repositories/anthias-server/tags'  # noqa: E501
 
-    try:
-        response = requests_get(url)
-        response.raise_for_status()
-    except exceptions.RequestException as exc:
-        logging.debug('Failed to fetch latest Docker Hub tags: %s', exc)
-        return None
+    cached_docker_hub_hash = r.get('latest-docker-hub-hash')
 
-    data = response.json()
-    results = data['results']
+    if cached_docker_hub_hash:
+        try:
+            response = requests_get(url, timeout=DEFAULT_REQUESTS_TIMEOUT)
+            response.raise_for_status()
+        except exceptions.RequestException as exc:
+            logging.debug('Failed to fetch latest Docker Hub tags: %s', exc)
+            return None
 
-    reduced = [
-        result['name'].split('-')[0]
-        for result in results
-        if not result['name'].startswith('latest-')
-        and result['name'].endswith(f'-{device_type}')
-    ]
+        data = response.json()
+        results = data['results']
 
-    if len(reduced) == 0:
-        logging.warning('No commit hash found for device type: %s', device_type)
-        return None
+        reduced = [
+            result['name'].split('-')[0]
+            for result in results
+            if not result['name'].startswith('latest-')
+            and result['name'].endswith(f'-{device_type}')
+        ]
 
-    # Results are sorted by date in descending order, so we can just return the first one.
-    return reduced[0]
+        if len(reduced) == 0:
+            logging.warning(
+                'No commit hash found for device type: %s', device_type)
+            return None
+
+        docker_hub_hash = reduced[0]
+        r.set('latest-docker-hub-hash', docker_hub_hash)
+        r.expire('latest-docker-hub-hash', DOCKER_HUB_HASH_TTL)
+
+        # Results are sorted by date in descending order,
+        # so we can just return the first one.
+        return reduced[0]
+
+    return cached_docker_hub_hash
 
 
 def is_up_to_date():
@@ -165,17 +194,19 @@ def is_up_to_date():
         return True
 
     if not get_device_id:
-        device_id = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(15))
+        device_id = ''.join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in range(15)
+        )
         r.set('device_id', device_id)
     else:
         device_id = get_device_id
 
     if retrieved_update:
         if not settings['analytics_opt_out'] and not is_ci():
-            ga_url = 'https://www.google-analytics.com/mp/collect?measurement_id={}&api_secret={}'.format(
-                    ANALYTICS_MEASURE_ID,
-                    ANALYTICS_API_SECRET
-            )
+            ga_base_url = 'https://www.google-analytics.com/mp/collect'
+            ga_query_params = f'measurement_id={ANALYTICS_MEASURE_ID}&api_secret={ANALYTICS_API_SECRET}'  # noqa: E501
+            ga_url = f'{ga_base_url}?{ga_query_params}'
             payload = {
                 'client_id': device_id,
                 'events': [{
@@ -204,4 +235,7 @@ def is_up_to_date():
     device_type = os.getenv('DEVICE_TYPE')
     latest_docker_hub_hash = get_latest_docker_hub_hash(device_type)
 
-    return (latest_sha == git_hash) or (latest_docker_hub_hash == git_short_hash)
+    return (
+        (latest_sha == git_hash) or
+        (latest_docker_hub_hash == git_short_hash)
+    )

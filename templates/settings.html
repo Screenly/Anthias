@@ -1,18 +1,22 @@
+{# vim: ft=htmldjango #}
+
 {% extends "base.html" %}
+{% load static %}
 
 {% block head %}
-    <script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
+    <script src="{% static 'js/popper.min.js' %}"></script>
 
-    <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script> <!-- needs jquery -->
-    <script src="{{ url_for('static', filename='js/jquery-ui-1.10.1.custom.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/jquery.fileupload.js') }}"></script> <!-- needs jqueryui.widget -->
-    <script src="{{ url_for('static', filename='js/bootstrap-datepicker.js') }}"></script>
+    <script src="{% static 'js/bootstrap.min.js' %}"></script> <!-- needs jquery -->
+    <script src="{% static 'js/jquery-ui-1.10.1.custom.min.js' %}"></script>
+    <script src="{% static 'js/jquery.fileupload.js' %}"></script> <!-- needs jqueryui.widget -->
+    <script src="{% static 'js/bootstrap-datepicker.js' %}"></script>
 
-    <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+    <script src="{% static 'dist/js/settings.js' %}"></script>
 {% endblock %}
 
 {% block content %}
-    <div class="container">
+    <div class="container"
+    >
         <div class="row py-2">
             <div class="col-12">
                 <h4 class="page-header text-white">
@@ -22,39 +26,45 @@
         </div>
         <div class="row content px-3">
             <div class="col-12 my-3">
-                {% if context.flash %}
-                    <div class="alert alert-{{ context.flash['class'] }}">
-                        {{ context.flash['message'] }}
+                {% if flash %}
+                    <div class="alert alert-{{ flash.class }}">
+                        {{ flash.message }}
                     </div>
                 {% endif %}
+
                 <form method="post" class="row">
+                    {% csrf_token %}
                     <div class="form-group col-6 d-flex flex-column justify-content-between">
                         <div class="form-group">
                             <label class="small text-secondary">Player name</label>
                             <input class="form-control" name="player_name" type="text"
-                                   value="{{ context.player_name }}">
+                                   value="{{ player_name }}">
                         </div>
                         <div class="row">
                             <div class="form-group col-6">
                                 <label class="small text-secondary">Default duration (seconds)</label>
                                 <input class="form-control" name="default_duration" type="number"
-                                       value="{{ context.default_duration }}"/>
+                                       value="{{ default_duration }}"/>
                             </div>
                             <div class="form-group col-6">
                                 <label class="small text-secondary">Default streaming duration (seconds)</label>
                                 <input class="form-control" name="default_streaming_duration" type="number"
-                                       value="{{ context.default_streaming_duration }}"/>
+                                       value="{{ default_streaming_duration }}"/>
                             </div>
                         </div>
                         <div class="form-group">
                             <label class="small text-secondary">Audio output</label>
                             <select class="form-control" name="audio_output">
-                                {% if context.audio_output == 'hdmi' %}
+                                {% if audio_output == 'hdmi' %}
                                     <option value="hdmi" selected="selected">HDMI</option>
-                                    <option value="local">3.5mm jack</option>
+                                    {% if device_type != 'pi5' %}
+                                        <option value="local">3.5mm jack</option>
+                                    {% endif %}
                                 {% else %}
                                     <option value="hdmi">HDMI</option>
-                                    <option value="local" selected="selected">3.5mm jack</option>
+                                    {% if device_type != 'pi5' %}
+                                        <option value="local" selected="selected">3.5mm jack</option>
+                                    {% endif %}
                                 {% endif %}
                             </select>
                         </div>
@@ -62,39 +72,39 @@
                             <label class="small text-secondary">Date format</label>
                             <select class="form-control" name="date_format">
                                 <option value="mm/dd/yyyy"
-                                        {% if context.date_format == 'mm/dd/yyyy' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'mm/dd/yyyy' %} selected="selected" {% endif %}>
                                     month/day/year
                                 </option>
                                 <option value="dd/mm/yyyy"
-                                        {% if context.date_format == 'dd/mm/yyyy' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'dd/mm/yyyy' %} selected="selected" {% endif %}>
                                     day/month/year
                                 </option>
                                 <option value="yyyy/mm/dd"
-                                        {% if context.date_format == 'yyyy/mm/dd' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'yyyy/mm/dd' %} selected="selected" {% endif %}>
                                     year/month/day
                                 </option>
                                 <option value="mm-dd-yyyy"
-                                        {% if context.date_format == 'mm-dd-yyyy' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'mm-dd-yyyy' %} selected="selected" {% endif %}>
                                     month-day-year
                                 </option>
                                 <option value="dd-mm-yyyy"
-                                        {% if context.date_format == 'dd-mm-yyyy' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'dd-mm-yyyy' %} selected="selected" {% endif %}>
                                     day-month-year
                                 </option>
                                 <option value="yyyy-mm-dd"
-                                        {% if context.date_format == 'yyyy-mm-dd' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'yyyy-mm-dd' %} selected="selected" {% endif %}>
                                     year-month-day
                                 </option>
                                 <option value="mm.dd.yyyy"
-                                        {% if context.date_format == 'mm.dd.yyyy' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'mm.dd.yyyy' %} selected="selected" {% endif %}>
                                     month.day.year
                                 </option>
                                 <option value="dd.mm.yyyy"
-                                        {% if context.date_format == 'dd.mm.yyyy' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'dd.mm.yyyy' %} selected="selected" {% endif %}>
                                     day.month.year
                                 </option>
                                 <option value="yyyy.mm.dd"
-                                        {% if context.date_format == 'yyyy.mm.dd' %} selected="selected" {% endif %}>
+                                        {% if date_format == 'yyyy.mm.dd' %} selected="selected" {% endif %}>
                                     year.month.day
                                 </option>
                             </select>
@@ -102,20 +112,20 @@
                         <div class="form-group mb-0">
                             <label class="small text-secondary">Authentication</label>
                             <select class="form-control" id="auth_backend" name="auth_backend">
-                                {% for opt in context.auth_backends %}
+                                {% for opt in auth_backends %}
                                     <option value="{{ opt.name }}" {{ opt.selected }}>{{ opt.text }}</option>
                                 {% endfor %}
                             </select>
                         </div>
 
-                        {% if context.need_current_password %}
+                        {% if need_current_password %}
                             <div class="form-group" id="curpassword_group">
                                 <label class="small text-secondary">Current Password</label>
                                 <input class="form-control" name="current-password" type="password" value="">
                             </div>
                         {% endif %}
 
-                        {% for backend in context.auth_backends %}
+                        {% for backend in auth_backends %}
                             {% if backend.template %}
                                 <div id="auth_backend-{{ backend.name }}">
                                     {% include backend.template %}
@@ -130,7 +140,7 @@
                             <div class="ml-auto">
                                 <label id="splash_checkbox"
                                        class="is_enabled-toggle toggle switch-light switch-material small m-0">
-                                    {% if context.show_splash %}
+                                    {% if show_splash %}
                                         <input name="show_splash" checked="checked" type="checkbox"/>
                                     {% else %}
                                         <input name="show_splash" type="checkbox"/>
@@ -144,7 +154,7 @@
                             <div class="ml-auto">
                                 <label id="default_assets_checkbox"
                                        class="is_enabled-toggle toggle switch-light switch-material small m-0">
-                                    {% if context.default_assets %}
+                                    {% if default_assets %}
                                         <input name="default_assets" checked="checked" type="checkbox"/>
                                     {% else %}
                                         <input name="default_assets" type="checkbox"/>
@@ -158,7 +168,7 @@
                             <div class="ml-auto">
                                 <label id="shuffle_checkbox"
                                        class="is_enabled-toggle toggle switch-light switch-material small m-0">
-                                    {% if context.shuffle_playlist %}
+                                    {% if shuffle_playlist %}
                                         <input name="shuffle_playlist" checked="checked" type="checkbox"/>
                                     {% else %}
                                         <input name="shuffle_playlist" type="checkbox"/>
@@ -172,7 +182,7 @@
                             <div class="ml-auto">
                                 <label id="use_24_hour_clock_checkbox"
                                        class="is_enabled-toggle toggle switch-light switch-material small m-0">
-                                    {% if context.use_24_hour_clock %}
+                                    {% if use_24_hour_clock %}
                                         <input name="use_24_hour_clock" checked="checked" type="checkbox"/>
                                     {% else %}
                                         <input name="use_24_hour_clock" type="checkbox"/>
@@ -186,7 +196,7 @@
                             <div class="ml-auto">
                                 <label id="debug_checkbox"
                                        class="is_enabled-toggle toggle switch-light switch-material small m-0">
-                                    {% if context.debug_logging %}
+                                    {% if debug_logging %}
                                         <input name="debug_logging" checked="checked" type="checkbox">
                                     {% else %}
                                         <input name="debug_logging" type="checkbox">
@@ -228,14 +238,18 @@
                             Go to the <a href="#backup-section" class="text-danger">backup section</a> and click <em>Get Backup</em>.
                         </li>
                         <li>
-                            Open up a terminal and SSH to this device &mdash;
-                            <code>ssh $USER@$HOSTNAME</code>
+                            Open up a terminal and SSH to this device using any of the following commands:
+                            <ul>
+                                {% for ip_address in context.ip_addresses %}
+                                    <li><code>ssh {{ context.host_user }}@{{ ip_address }}</code></li>
+                                {% endfor %}
+                            </ul>
                         </li>
                         <li>
                             Go to the project root directory &mdash; <code>cd ~/screenly</code>
                         </li>
                         <li>
-                            Run the following upgrade script &mdash; <code>./bin_run_upgrade.sh</code>. The script is essentially a wrapper around
+                            Run the following upgrade script &mdash; <code>./bin/run_upgrade.sh</code>. The script is essentially a wrapper around
                             the install script, so it will prompt you with the same questions as when you first installed Anthias.
                         </li>
                     </ul>
@@ -268,99 +282,7 @@
         </div>
     </div>
 
-            {% if not (context.is_balena or context.is_docker) %}
-                {# Upgrade #}
-                <div class="container mt-4">
-                    <div class="row py-2">
-                        <div class="col-12">
-                            <h4 class="page-header text-white">
-                                <b>Upgrade Anthias</b>
-                            </h4>
-                        </div>
-                    </div>
-                    <div class="row content px-3">
-                        <div id="upgrade-section" class="col-12 my-3">
-                            <div class="text-right">
-                                <button id="btn-upgrade" class="btn btn-primary btn-long" type="button">Upgrade</button>
-                            </div>
-                        </div>
-                        <div id="upgrade-modal" class="modal hide fade" aria-hidden="true"
-                            data-backdrop="static" data-keyboard="false" role="dialog" tabindex="-1">
-                            <div class="modal-dialog" role="document">
-                                <div class="modal-content">
-                                    <div class="form-horizontal">
-                                        <div class="modal-header">
-                                            <h3 id="modalLabel">Upgrade Anthias</h3>
-                                        </div>
-                                        <div class="modal-body">
-                                            <form id="upgrade-form">
-                                                <div id="branch-group-radio" class="form-group">
-                                                    <label>Choose the branch you want to use</label>
-                                                    <div class="form-inline">
-                                                        <div class="custom-control custom-radio mr-4">
-                                                            <input type="radio" class="custom-control-input" id="latest_branch"
-                                                                name="groupOfBranch" value="latest" checked>
-                                                            <label class="custom-control-label"
-                                                                for="latest_branch">Latest</label>
-                                                        </div>
-                                                        <div class="custom-control custom-radio">
-                                                            <input type="radio" class="custom-control-input" id="production_branch"
-                                                                name="groupOfBranch" value="production">
-                                                            <label class="custom-control-label"
-                                                                for="production_branch">Production</label>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div class="form-group row">
-                                                    <label class="col-12 col-form-label text-left">Do you want Screenly to
-                                                        manage
-                                                        your
-                                                        network? This is recommended for most users.</label>
-                                                    <div class="col-3">
-                                                        <label id="manage_network_checkbox" class="toggle switch-light switch-material small m-0">
-                                                            <input name="manage_network" checked="checked" type="checkbox"/>
-                                                            <span><span></span><span></span><a></a></span>
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                                <div class="form-group row">
-                                                    <label class="col-12 col-form-label text-left">Would you like to perform a full system upgrade as well?</label>
-                                                    <div class="col-3">
-                                                        <label id="system_upgrade_checkbox" class="toggle switch-light switch-material small m-0">
-                                                            <input name="system_upgrade" type="checkbox"/>
-                                                            <span><span></span><span></span><a></a></span>
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                                <div class="form-group" id="upgrade_logs_block">
-                                                    <label for="upgrade_logs">Logs:</label>
-                                                    <textarea readonly class="form-control terminal" rows="5"
-                                                            id="upgrade_logs"></textarea>
-                                                </div>
-                                                <div class="form-group">
-                                                    <label class="text-left"><small>Notice: If you leave the page before the
-                                                        upgrade is complete, don't worry. The next time click "Start
-                                                        upgrade"
-                                                        you will see logs of the last upgrade if it's not finished
-                                                        yet.</small></label>
-                                                </div>
-                                            </form>
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button id="close-upgrade-btn" class="btn btn-outline-dark btn-long" type="button">
-                                                Close
-                                            </button>
-                                            <button id="start-upgrade-btn" class="btn btn-primary btn-long" type="button">
-                                                Start upgrade
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
+            {% if not is_balena and not is_docker %}
                 {# Reset Wifi #}
                 <div class="container mt-4">
                     <div class="row py-2">

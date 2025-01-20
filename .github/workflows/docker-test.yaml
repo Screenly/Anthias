@@ -4,8 +4,8 @@ on:
   push:
     branches:
       - master
-      - production
     paths:
+      - '**/**'
       - '!README.md'
       - '!webview/**'
       - '!website/**'
@@ -15,7 +15,6 @@ on:
   pull_request:
     branches:
       - master
-      - production
     paths:
       - '**/**'
       - '!README.md'
@@ -29,12 +28,33 @@ on:
 jobs:
   run-tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install and configure Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.3
+          virtualenvs-create: true
+          virtualenvs-in-project: false
+          virtualenvs-path: ~/.venv
+          installer-parallel: true
+
+      - name: Install dependencies
+        run: |
+          poetry install --only=docker-image-builder
 
       - name: Cache Docker layers
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: cache
         with:
           path: /tmp/.buildx-cache
@@ -44,29 +64,32 @@ jobs:
 
       - name: Set up Docker Buildx
         id: buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Build Containers
         run: |
-          export SKIP_SERVER=1
-          export SKIP_WEBSOCKET=1
-          export SKIP_NGINX=1
-          export SKIP_VIEWER=1
-          export SKIP_WIFI_CONNECT=1
-          ./bin/build_containers.sh
+          poetry run python -m tools.image_builder \
+            --dockerfiles-only \
+            --disable-cache-mounts \
+            --service celery \
+            --service redis \
+            --service test
 
       - name: Start the test container
         run: |
-          docker compose -f docker-compose.test.yml up -d
+          docker compose -f docker-compose.test.yml up -d --build
 
-      - name: Run the tests inside the container
-        shell: 'script -q -e -c "bash {0}"'
+      - name: Run the unit tests inside the container
+        run: |
+          docker compose -f docker-compose.test.yml exec anthias-test ./manage.py test --noinput --parallel --exclude-tag=integration
+
+      - name: Run the integration tests inside the container
         run: |
           docker compose -f docker-compose.test.yml exec anthias-test bash ./bin/prepare_test_environment.sh -s
-          docker compose -f docker-compose.test.yml exec anthias-test nosetests -v -a '!fixme'
+          docker compose -f docker-compose.test.yml exec anthias-test ./manage.py test --noinput --tag=integration
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 

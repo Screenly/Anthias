@@ -1,5 +1,5 @@
 screenly_systemd_units:
-  - screenly-host-agent.service
+  - anthias-host-agent.service
 
 deprecated_screenly_systemd_units:
   - screenly-celery.service
@@ -8,5 +8,6 @@ deprecated_screenly_systemd_units:
   - screenly-viewer.service
   - X.service
   - matchbox.service
+  - screenly-host-agent.service
   - udev-restart.service
   - wifi-connect.service

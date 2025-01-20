@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Anthias Website
+    url: https://anthias.screenly.io
+    about: Visit our official website for general information and documentation
+  - name: Anthias Forum
+    url: https://forums.screenly.io
+    about: Join our community forum for help, discussions, and sharing experiences
+  - name: GitHub Discussions
+    url: https://github.com/Screenly/Anthias/discussions
+    about: For general questions and discussions about Anthias

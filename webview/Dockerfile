@@ -1,4 +1,4 @@
-FROM --platform=linux/arm/v7 balenalib/raspberrypi3:buster as builder
+FROM --platform=linux/arm/v7 balenalib/raspberrypi3:bookworm as builder
 
 # There are likely a large number of dependencies that can be stripped out here
 # depending on your needs (and probably in general). My primary objective was just
@@ -8,7 +8,7 @@ RUN apt-get update && \
         apt-utils \
         firebird-dev \
         freetds-dev \
-        gstreamer-tools \
+        gstreamer1.0-tools \
         gstreamer1.0-plugins-base \
         gstreamer1.0-plugins-good \
         gstreamer1.0-plugins-ugly \
@@ -103,7 +103,7 @@ RUN apt-get update && \
 # https://www.enricozini.org/blog/2020/qt5/build-qt5-cross-builder-with-raspbian-sysroot-compiling-with-the-sysroot-continued/
 RUN dpkg --purge libraspberrypi-dev
 
-FROM debian:buster
+FROM debian:bookworm
 
 # This list can most likely be slimmed down *a lot* but that's for another day.
 RUN apt-get update && \
@@ -112,6 +112,7 @@ RUN apt-get update && \
         build-essential \
         ccache \
         cowsay \
+        curl \
         flex \
         freetds-dev \
         g++ \
@@ -153,8 +154,7 @@ RUN apt-get update && \
         libsnappy-dev \
         libsrtp2-dev \
         libssl-dev \
-        libssl1.1 \
-        libtiff5 \
+        libtiff6 \
         libts-dev \
         libudev-dev \
         libvpx-dev \
@@ -165,13 +165,22 @@ RUN apt-get update && \
         lsb-release \
         ninja-build \
         nodejs \
-        python \
         rsync \
         ruby \
         subversion \
         wget \
         make && \
     apt-get clean
+
+# Install pyenv
+RUN curl https://pyenv.run | bash && \
+    echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc && \
+    echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc && \
+    echo 'eval "$(pyenv init -)"' >> ~/.bashrc
+
+# Install Python 2.7.18. This is needed to compile hthe QTWebEngine.
+RUN /root/.pyenv/bin/pyenv install 2.7.18 && \
+    /root/.pyenv/bin/pyenv global 2.7.18
 
 WORKDIR /build
 
@@ -183,7 +192,6 @@ RUN mkdir -p /sysroot/usr /sysroot/opt /sysroot/lib
 COPY --from=builder /lib/ /sysroot/lib/
 COPY --from=builder /usr/include/ /sysroot/usr/include/
 COPY --from=builder /usr/lib/ /sysroot/usr/lib/
-COPY --from=builder /opt/vc/ /sysroot/opt/vc/
 
 ENV BUILD_WEBVIEW 1
 ENV CCACHE_MAXSIZE 10G
@@ -192,4 +200,3 @@ ARG GIT_HASH=0
 ENV GIT_HASH=$GIT_HASH
 
 COPY build_qt5.sh /usr/local/bin/
-CMD /usr/local/bin/build_qt5.sh

@@ -1,3 +1,7 @@
+{# vim: ft=htmldjango #}
+
+{% load static %}
+
 <div id="request-error" class="navbar navbar fixed-top">
     <div class="container">
         <div class="alert" style="display:none">
@@ -9,10 +13,10 @@
 <div class="navbar navbar-header navbar-expand-lg fixed-top bg-dark">
     <div class="container">
         <a class="brand" href="/">
-            <img src="static/img/logo-full.svg"/>
+            <img src="{% static 'img/logo-full.svg' %}"/>
         </a>
         <ul class="nav float-right">
-            {% if not context.up_to_date %}
+            {% if not up_to_date and not is_balena %}
                 <li class="update-available">
                     <a href="/settings#upgrade-section">
                         <i class="fas fa-arrow-circle-down pr-1"></i>
@@ -26,7 +30,7 @@
                     Schedule Overview
                 </a>
             </li>
-            {% if context.is_balena %}
+            {% if is_balena %}
                 <li>
                     <a href="/integrations">
                         <i class="far fa-plus-square pr-1"></i>

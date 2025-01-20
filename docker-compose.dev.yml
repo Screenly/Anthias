@@ -1,4 +1,5 @@
-version: "2.2"
+# vim: ft=yaml.docker-compose
+
 services:
   anthias-server:
     build:
@@ -9,30 +10,11 @@ services:
       - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - DEVELOPMENT_MODE=1
-      - FLASK_APP=server.py
-      - FLASK_ENV=development
+      - ENVIRONMENT=development
     restart: always
     volumes:
-      - resin-data:/data
+      - anthias-data:/data
       - ./:/usr/src/app/
-
-# We might bring this in in the future
-#  anthias-viewer:
-#    build:
-#      context: .
-#      dockerfile: docker/Dockerfile.viewer
-#    depends_on:
-#      - anthias-server
-#    environment:
-#      - HOME=/data
-#      - PORT=80
-#      - NOREFRESH=1
-#      - LISTEN=anthias-nginx
-#    privileged: true
-#    restart: always
-#    volumes:
-#      - resin-data:/data
 
   anthias-websocket:
     build:
@@ -45,7 +27,7 @@ services:
       - LISTEN=0.0.0.0
     restart: always
     volumes:
-      - resin-data:/data
+      - anthias-data:/data
 
   anthias-celery:
     build:
@@ -60,7 +42,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     restart: always
     volumes:
-      - resin-data:/data
+      - anthias-data:/data
 
   redis:
     platform: "linux/amd64"
@@ -79,8 +61,8 @@ services:
       - anthias-websocket
     restart: always
     volumes:
-      - resin-data:/data:ro
+      - anthias-data:/data:ro
 
 volumes:
-    resin-data:
+    anthias-data:
     redis-data:

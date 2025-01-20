@@ -1,31 +1,38 @@
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from future import standard_library
-standard_library.install_aliases()
-from builtins import str
-from builtins import range
-import certifi
-from . import db
+from __future__ import absolute_import, unicode_literals
+
 import json
+import logging
 import os
-import pytz
 import random
 import re
-import redis
-import requests
 import string
-import sh
-
+from builtins import range, str
 from datetime import datetime, timedelta
 from distutils.util import strtobool
 from os import getenv, path, utime
 from platform import machine
-from settings import settings, ZmqPublisher
-from subprocess import check_output, call
+from subprocess import call, check_output
 from threading import Thread
+from time import sleep
 from urllib.parse import urlparse
 
-from .assets_helper import update
+import certifi
+import pytz
+import redis
+import requests
+import sh
+from future import standard_library
+from tenacity import (
+    RetryError,
+    Retrying,
+    stop_after_attempt,
+    wait_fixed,
+)
+
+from anthias_app.models import Asset
+from settings import ZmqPublisher, settings
+
+standard_library.install_aliases()
 
 
 arch = machine()
@@ -37,6 +44,7 @@ try:
     from sh import ffprobe
 except ImportError:
     pass
+
 
 def string_to_bool(string):
     return bool(strtobool(str(string)))
@@ -69,7 +77,9 @@ def validate_url(string):
     """
 
     checker = urlparse(string)
-    return bool(checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc)
+    return bool(
+        checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc
+    )
 
 
 def get_balena_supervisor_api_response(method, action, **kwargs):
@@ -95,7 +105,8 @@ def reboot_via_balena_supervisor():
 
 
 def get_balena_supervisor_version():
-    response = get_balena_supervisor_api_response(method='get', action='version', version='v2')
+    response = get_balena_supervisor_api_response(
+        method='get', action='version', version='v2')
     if response.ok:
         return response.json()['version']
     else:
@@ -107,17 +118,63 @@ def get_node_ip():
     Returns the node's IP address.
     We're using an API call to the supervisor for this on Balena
     and an environment variable set by `install.sh` for other environments.
-    The reason for this is because we can't retrieve the host IP from within Docker.
+    The reason for this is because we can't retrieve the host IP from
+    within Docker.
     """
 
     if is_balena_app():
         response = get_balena_device_info()
-
         if response.ok:
             return response.json()['ip_address']
         return 'Unknown'
     else:
         r = connect_to_redis()
+        max_retries = 60
+        retries = 0
+
+        while True:
+            environment = getenv('ENVIRONMENT', None)
+            if environment in ['development', 'test']:
+                break
+
+            is_ready = r.get('host_agent_ready') or 'false'
+
+            if json.loads(is_ready):
+                break
+
+            if retries >= max_retries:
+                logging.info(
+                    'host_agent_service is not ready after %d retries',
+                    max_retries,
+                )
+                break
+
+            retries += 1
+            sleep(1)
+
+        r.publish('hostcmd', 'set_ip_addresses')
+
+        try:
+            for attempt in Retrying(
+                stop=stop_after_attempt(20),
+                wait=wait_fixed(1),
+            ):
+                environment = getenv('ENVIRONMENT', None)
+                if environment in ['development', 'test']:
+                    break
+
+                with attempt:
+                    ip_addresses_ready = r.get('ip_addresses_ready') or 'false'
+                    if json.loads(ip_addresses_ready):
+                        break
+                    else:
+                        raise Exception(
+                            'Internet connection is not available.')
+        except RetryError:
+            logging.warning(
+                'Internet connection is not available. '
+            )
+
         ip_addresses = r.get('ip_addresses')
 
         if ip_addresses:
@@ -162,26 +219,36 @@ def get_active_connections(bus, fields=None):
     connections = list()
 
     try:
-        nm_proxy = bus.get("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager")
+        nm_proxy = bus.get(
+            "org.freedesktop.NetworkManager",
+            "/org/freedesktop/NetworkManager",
+        )
     except Exception:
         return None
 
     nm_properties = nm_proxy["org.freedesktop.DBus.Properties"]
-    active_connections = nm_properties.Get("org.freedesktop.NetworkManager", "ActiveConnections")
+    active_connections = nm_properties.Get(
+        "org.freedesktop.NetworkManager", "ActiveConnections")
     for active_connection in active_connections:
-        active_connection_proxy = bus.get("org.freedesktop.NetworkManager", active_connection)
-        active_connection_properties = active_connection_proxy["org.freedesktop.DBus.Properties"]
+        active_connection_proxy = bus.get(
+            "org.freedesktop.NetworkManager", active_connection)
+        active_connection_properties = (
+            active_connection_proxy["org.freedesktop.DBus.Properties"])
 
         connection = dict()
         for field in fields:
-            field_value = active_connection_properties.Get("org.freedesktop.NetworkManager.Connection.Active", field)
+            field_value = active_connection_properties.Get(
+                "org.freedesktop.NetworkManager.Connection.Active", field)
 
             if field == 'Devices':
                 devices = list()
                 for device_path in field_value:
-                    device_proxy = bus.get("org.freedesktop.NetworkManager", device_path)
-                    device_properties = device_proxy["org.freedesktop.DBus.Properties"]
-                    devices.append(device_properties.Get("org.freedesktop.NetworkManager.Device", "Interface"))
+                    device_proxy = bus.get(
+                        "org.freedesktop.NetworkManager", device_path)
+                    device_properties = (
+                        device_proxy["org.freedesktop.DBus.Properties"])
+                    devices.append(device_properties.Get(
+                        "org.freedesktop.NetworkManager.Device", "Interface"))
                 field_value = devices
 
             connection.update({field: field_value})
@@ -198,15 +265,20 @@ def remove_connection(bus, uuid):
     :return: boolean
     """
     try:
-        nm_proxy = bus.get("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/Settings")
+        nm_proxy = bus.get(
+            "org.freedesktop.NetworkManager",
+            "/org/freedesktop/NetworkManager/Settings",
+        )
     except Exception:
         return False
 
     nm_settings = nm_proxy["org.freedesktop.NetworkManager.Settings"]
 
     connection_path = nm_settings.GetConnectionByUuid(uuid)
-    connection_proxy = bus.get("org.freedesktop.NetworkManager", connection_path)
-    connection = connection_proxy["org.freedesktop.NetworkManager.Settings.Connection"]
+    connection_proxy = bus.get(
+        "org.freedesktop.NetworkManager", connection_path)
+    connection = (
+        connection_proxy["org.freedesktop.NetworkManager.Settings.Connection"])
     connection.Delete()
 
     return True
@@ -220,8 +292,8 @@ def get_video_duration(file):
 
     try:
         run_player = ffprobe('-i', file, _err_to_out=True)
-    except sh.ErrorReturnCode_1:
-        raise Exception('Bad video format')
+    except sh.ErrorReturnCode_1 as err:
+        raise Exception('Bad video format') from err
 
     for line in run_player.split('\n'):
         if 'Duration' in line:
@@ -244,7 +316,10 @@ def handler(obj):
         with_tz = obj.replace(tzinfo=pytz.utc)
         return with_tz.isoformat()
     else:
-        raise TypeError('Object of type %s with value of %s is not JSON serializable' % (type(obj), repr(obj)))
+        raise TypeError(
+            f'Object of type {type(obj)} with value of {repr(obj)} '
+            'is not JSON serializable'
+        )
 
 
 def json_dump(obj):
@@ -256,7 +331,8 @@ def url_fails(url):
     If it is streaming
     """
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
-        run_mplayer = mplayer('-identify', '-frames', '0', '-nosound', url)
+        run_mplayer = mplayer(  # noqa: F821
+            '-identify', '-frames', '0', '-nosound', url)
         for line in run_mplayer.split('\n'):
             if 'Clip info:' in line:
                 return False
@@ -266,14 +342,15 @@ def url_fails(url):
     Try HEAD and GET for URL availability check.
     """
 
-    # Use Certifi module and set to True as default so users stop seeing InsecureRequestWarning in logs
+    # Use Certifi module and set to True as default so users stop
+    # seeing InsecureRequestWarning in logs.
     if settings['verify_ssl']:
         verify = certifi.where()
     else:
         verify = True
 
     headers = {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15'
+        'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15'  # noqa: E501
     }
     try:
         if not validate_url(url):
@@ -309,7 +386,11 @@ def download_video_from_youtube(uri, asset_id):
     info = json.loads(check_output(['yt-dlp', '-j', uri]))
     duration = info['duration']
 
-    location = path.join(home, 'screenly_assets', asset_id)
+    location = path.join(
+        home,
+        'screenly_assets',
+        f'{asset_id}.mp4'
+    )
     thread = YoutubeDownloadThread(location, uri, asset_id)
     thread.daemon = True
     thread.start()
@@ -326,9 +407,22 @@ class YoutubeDownloadThread(Thread):
 
     def run(self):
         publisher = ZmqPublisher.get_instance()
-        call(['yt-dlp', '-f', 'mp4', '-o', self.location, self.uri])
-        with db.conn(settings['database']) as conn:
-            update(conn, self.asset_id, {'asset_id': self.asset_id, 'is_processing': 0})
+        call([
+            'yt-dlp',
+            '-S',
+            'vcodec:h264,fps,res:1080,acodec:m4a',
+            '-o',
+            self.location,
+            self.uri,
+        ])
+
+        try:
+            asset = Asset.objects.get(asset_id=self.asset_id)
+            asset.is_processing = 0
+            asset.save()
+        except Asset.DoesNotExist:
+            logging.warning('Asset %s not found', self.asset_id)
+            return
 
         publisher.send_to_ws_server(self.asset_id)
 
@@ -354,14 +448,16 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
     :param has_symbols: bool
     :return: string
     """
-    ppp_letters = '!#%+23456789:=?@ABCDEFGHJKLMNPRSTUVWXYZabcdefghjkmnopqrstuvwxyz'
+    ppp_letters = '!#%+23456789:=?@ABCDEFGHJKLMNPRSTUVWXYZabcdefghjkmnopqrstuvwxyz'  # noqa: E501
     if not has_symbols:
         ppp_letters = ''.join(set(ppp_letters) - set(string.punctuation))
-    return "".join(random.SystemRandom().choice(ppp_letters) for _ in range(pw_length))
+    return "".join(
+        random.SystemRandom().choice(ppp_letters) for _ in range(pw_length))
 
 
 def connect_to_redis():
     return redis.Redis(host='redis', decode_responses=True, port=6379, db=0)
+
 
 def is_docker():
     return os.path.isfile('/.dockerenv')
@@ -372,4 +468,4 @@ def is_balena_app():
     Checks the application is running on Balena Cloud
     :return: bool
     """
-    return bool(getenv('RESIN', False)) or bool(getenv('BALENA', False))
+    return bool(getenv('BALENA', False))

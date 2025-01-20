@@ -1,15 +1,16 @@
 ---
 - name: Create a config_path variable
   ansible.builtin.set_fact:
-    config_path: "{{ '/boot/config.txt' if ansible_distribution_major_version|int <= 11 else '/boot/firmware/config.txt' }}"
-    cmdline_path: "{{ '/boot/cmdline.txt' if ansible_distribution_major_version|int <= 11 else '/boot/firmware/cmdline.txt' }}"
+    config_path: "{{ '/boot/config.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/config.txt' }}"
+    cmdline_path: "{{ '/boot/cmdline.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/cmdline.txt' }}"
 
 - name: Check NOOBS
   ansible.builtin.command: cat {{ config_path }}
   register: config_txt
   changed_when: false
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Make sure we have proper framebuffer depth
   ansible.builtin.lineinfile:
@@ -17,7 +18,8 @@
     regexp: ^framebuffer_depth=
     line: framebuffer_depth=32
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Fix framebuffer bug
   ansible.builtin.lineinfile:
@@ -25,7 +27,8 @@
     regexp: ^framebuffer_ignore_alpha=
     line: framebuffer_ignore_alpha=1
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Add gpu_mem_256 in config.txt if it doesn't exist
   ansible.builtin.lineinfile:
@@ -33,7 +36,8 @@
     line: gpu_mem_256=96
   when: config_txt.stdout.find('gpu_mem_256') == -1
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Add gpu_mem_512 in config.txt if it doesn't exist
   ansible.builtin.lineinfile:
@@ -41,7 +45,8 @@
     line: gpu_mem_512=128
   when: config_txt.stdout.find('gpu_mem_512') == -1
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Add gpu_mem_1024 in config.txt if it doesn't exist
   ansible.builtin.lineinfile:
@@ -49,35 +54,35 @@
     line: gpu_mem_1024=196
   when: config_txt.stdout.find('gpu_mem_1024') == -1
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Add pi4 section in config.txt if it doesn't exist
   ansible.builtin.lineinfile:
     path: "{{ config_path }}"
-    line: "[pi4]"
+    line: "\n[pi4]"
   when: config_txt.stdout.find('[pi4]') == -1
+  tags:
+    - touches-boot-partition
+    - raspberry-pi
 
-- name: Comment out the original dtoverlay config.
+- name: Uncomment out the original dtoverlay config.
   ansible.builtin.replace:
     dest: "{{ config_path }}"
-    regexp: ^(dtoverlay=vc4-kms-v3d)$
-    replace: '#\1'
+    regexp: '^#\s*(dtoverlay=vc4-kms-v3d)'
+    replace: '\1'
+  tags:
+    - touches-boot-partition
+    - raspberry-pi
 
-- name: Add FKMS config for Pi 4. (<= Debian 11)
+- name: Remove the FKMS config for all devices.
   ansible.builtin.lineinfile:
     path: "{{ config_path }}"
-    insertafter: '^\[pi4\]$'
-    line: dtoverlay=vc4-fkms-v3d
-  when:
-    - ansible_distribution_major_version|int <= 11
-
-- name: Add FKMS config for Pi 4. (>= Debian 12)
-  ansible.builtin.lineinfile:
-    path: "{{ config_path }}"
-    insertafter: '^\[pi4\]$'
-    line: dtoverlay=vc4-fkms-v3d
-  when:
-    - ansible_distribution_major_version|int >= 12
+    state: absent
+    regexp: "^dtoverlay=vc4-fkms-v3d$"
+  tags:
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Backup kernel boot args
   ansible.builtin.copy:
@@ -88,11 +93,15 @@
     mode: "0755"
     force: false
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Notice for cmdline.txt.orig file
   ansible.builtin.debug:
     msg: "Use cmdline.txt.orig for boot parameters (don't remove this file)"
+  tags:
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Copy cmdline.txt.orig to cmdline.txt
   ansible.builtin.copy:
@@ -104,32 +113,38 @@
     force: true
   when: config_txt.stdout.find('NOOBS') == -1
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: For splash screen using Plymouth
   ansible.builtin.replace:
     dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!splash).)*$)
     replace: \1 splash
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version | int >= 7
+  tags:
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Remove blinking cursor
   ansible.builtin.replace:
     dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!vt.global_cursor_default=0).)*$)
     replace: \1 vt.global_cursor_default=0
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version | int >= 7
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Plymouth ignore serial consoles
   ansible.builtin.replace:
     dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!plymouth.ignore-serial-consoles).)*$)
     replace: \1 plymouth.ignore-serial-consoles
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version | int >= 7
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Use Systemd as init and quiet boot process
   ansible.builtin.replace:
@@ -137,7 +152,8 @@
     regexp: (^(?!$)((?!quiet init=/lib/systemd/systemd).)*$)
     replace: \1 quiet init=/lib/systemd/systemd
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Set ethN/wlanN names for interfaces
   ansible.builtin.replace:
@@ -145,25 +161,28 @@
     regexp: (^(?!$)((?!net\.ifnames=0).)*$)
     replace: \1 net.ifnames=0
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Set cgroup_enable required by containerd for OOM
   ansible.builtin.replace:
     dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!cgroup_enable=memory).)*$)
     replace: \1 cgroup_enable=memory
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version | int >= 7
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 - name: Set cgroup_memory required by containerd for OOM
   ansible.builtin.replace:
     dest: "{{ cmdline_path }}"
     regexp: (^(?!$)((?!cgroup_memory=1).)*$)
     replace: \1 cgroup_memory=1
-  when: ansible_distribution_major_version|int >= 7
+  when: ansible_distribution_major_version | int >= 7
   tags:
-    - touches_boot_partition
+    - touches-boot-partition
+    - raspberry-pi
 
 # Sometimes in some packages there are no necessary files.
 # They are required to install pip dependencies.
@@ -190,14 +209,24 @@
     update_cache: true
   when: not cdefs_exist
 
-- name: Install Screenly dependencies
+- name: Install Anthias dependencies (all platforms)
   ansible.builtin.apt:
     name:
-      - rpi-update
       - bc
       - python3
       - python3-redis
     state: present
+
+- name: Install Anthias dependencies (Raspberry Pi)
+  ansible.builtin.apt:
+    name:
+      - rpi-update
+    state: present
+  when: |
+    ansible_architecture == "aarch64" or
+    ansible_architecture == "armv7l" or
+    ansible_architecture == "armv6l"
+
 
 - name: Remove deprecated apt dependencies
   ansible.builtin.apt:
@@ -228,21 +257,46 @@
       - docker-compose
     state: absent
 
-- name: Add docker apt key
+- name: Add Docker apt key (x86)
+  ansible.builtin.apt_key:
+    url: https://download.docker.com/linux/debian/gpg
+    state: present
+  when: ansible_architecture == "x86_64"
+
+- name: Add Docker apt key (Raspberry Pi)
   ansible.builtin.apt_key:
     url: https://download.docker.com/linux/raspbian/gpg
     state: present
+  when: |
+    ansible_architecture == "aarch64" or
+    ansible_architecture == "armv7l" or
+    ansible_architecture == "armv6l"
 
-- name: Get raspbian name
+- name: Get Debian name
   ansible.builtin.command: lsb_release -cs
-  register: raspbian_name
+  register: debian_name
   changed_when: false
+
+- name: Set architecture
+  ansible.builtin.set_fact:
+    architecture: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'armhf' }}"
+  when: |
+    device_type == "pi1" or
+    device_type == "pi2" or
+    device_type == "pi3" or
+    device_type == "pi4" or
+    device_type == "x86"
+
+- name: Set architecture
+  ansible.builtin.set_fact:
+    architecture: "arm64"
+  when: device_type == "pi5"
 
 - name: Add Docker repo
   ansible.builtin.lineinfile:
     path: /etc/apt/sources.list.d/docker.list
     create: true
-    line: "deb [arch=armhf] https://download.docker.com/linux/debian {{ raspbian_name.stdout }} stable"
+    line: "deb [arch={{ architecture }}] https://download.docker.com/linux/debian {{ debian_name.stdout }} stable"
     state: present
     owner: root
     group: root
@@ -251,13 +305,28 @@
 - name: Install Docker
   ansible.builtin.apt:
     name:
-      - docker-ce:armhf
-      - docker-ce-cli:armhf
-      - docker-compose-plugin:armhf
+      - docker-ce:{{ architecture }}
+      - docker-ce-cli:{{ architecture }}
+      - docker-compose-plugin:{{ architecture }}
     update_cache: true
     install_recommends: false
 
-- name: Add user to docker group
+- name: Add user to Docker group (all platforms)
+  ansible.builtin.user:
+    name: "{{ lookup('env', 'USER') }}"
+    group: "{{ lookup('env', 'USER') }}"
+    groups:
+      - docker
+      - adm
+      - sudo
+      - video
+      - plugdev
+      - users
+      - input
+      - netdev
+      - dialout
+
+- name: Add user to Docker group (Raspberry Pi)
   ansible.builtin.user:
     name: "{{ lookup('env', 'USER') }}"
     group: "{{ lookup('env', 'USER') }}"
@@ -272,6 +341,10 @@
       - netdev
       - gpio
       - dialout
+  when: |
+    ansible_architecture == "aarch64" or
+    ansible_architecture == "armv7l" or
+    ansible_architecture == "armv6l"
 
 - name: Perform system upgrade
   ansible.builtin.apt:
@@ -290,7 +363,7 @@
     name: supervisor
     state: absent
   when:
-    - ansible_distribution_major_version|int <= 11
+    - ansible_distribution_major_version | int <= 11
 
 - name: Remove deprecated pip dependencies (>= Debian 12)
   ansible.builtin.pip:
@@ -298,10 +371,10 @@
     executable: /home/{{ lookup('env', 'USER') }}/installer_venv/bin/pip
     state: absent
   when:
-    - ansible_distribution_major_version|int >= 12
+    - ansible_distribution_major_version | int >= 12
 
 - name: Copy in rc.local
-  ansible.builtin.copy:
+  ansible.builtin.template:
     src: rc.local
     dest: /etc/rc.local
     mode: "0755"

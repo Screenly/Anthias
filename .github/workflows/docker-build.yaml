@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - production
     paths:
       - '**'
       - '!webview/**'
@@ -12,10 +11,15 @@ on:
       - '!.github/workflows/deploy-website.yaml'
       - '!.github/workflows/build-webview.yaml'
       - '!.github/workflows/build-balena-disk-image.yaml'
+      - '!.github/workflows/python-lint.yaml'
+      - '!.github/pull_request_template.md'
       - '!README.md'
       - '!docs/**'
-      - '!bin/build_containers.sh'
+      - '!bin/install.sh'
       - '!bin/upgrade_containers.sh'
+      - '!bin/start_development_server.sh'
+      - '!tests/**'
+      - '!docker/Dockerfile.dev'
 
 jobs:
   run-tests:
@@ -25,22 +29,41 @@ jobs:
     needs: run-tests
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
+        python-version: ["3.11"]
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install and configure Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.3
+          virtualenvs-create: true
+          virtualenvs-in-project: false
+          virtualenvs-path: ~/.venv
+          installer-parallel: true
+
+      - name: Install dependencies
+        run: |
+          poetry install --only=docker-image-builder
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         id: buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Cache Docker layers
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: cache
         with:
           path: /tmp/.buildx-cache
@@ -48,33 +71,52 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.board }}
 
-      - name: Login to DockerHub
+      - name: Login to Docker Hub
         if: success() && github.event_name != 'pull_request'
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build Containers
         run: |
-          export BUILD_TARGET=${{ matrix.board }}
-          export PUSH=1
-          ./bin/build_containers.sh
+          if [ "${{ matrix.board }}" == "pi4" ]; then
+            poetry run python -m tools.image_builder \
+              --build-target=pi4 \
+              --target-platform=linux/arm/v8 \
+              --push
+          elif [ "${{ matrix.board }}" == "pi4-64" ]; then
+            poetry run python -m tools.image_builder \
+              --build-target=pi4 \
+              --target-platform=linux/arm64/v8 \
+              --push
+          else
+            poetry run python -m tools.image_builder \
+              --build-target=${{ matrix.board }} \
+              --push
+          fi
 
   balena:
+    if: ${{ github.ref == 'refs/heads/master' }}
     needs: buildx
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi5']
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set Docker tag
         run: |
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-          echo "BOARD=${{ matrix.board }}" >> $GITHUB_ENV
+
+          if [ "${{ matrix.board }}" == "pi4" ]; then
+            echo "BOARD=${{ matrix.board }}-64" >> $GITHUB_ENV
+          else
+            echo "BOARD=${{ matrix.board }}" >> $GITHUB_ENV
+          fi
+
           echo "SHM_SIZE=256mb" >> $GITHUB_ENV
 
       - name: Prepare Balena file
@@ -88,6 +130,12 @@ jobs:
           # Generate the docker-compose file
           cat docker-compose.balena.yml.tmpl | \
             envsubst > balena-deploy/docker-compose.yml
+
+          # Remove bind mounts to `/dev/vchiq` for Raspberry Pi 5
+          if [ "${{ matrix.board }}" == "pi5" ]; then
+            sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
+              balena-deploy/docker-compose.yml
+          fi
 
       - uses: balena-io/deploy-to-balena-action@master
         id: build

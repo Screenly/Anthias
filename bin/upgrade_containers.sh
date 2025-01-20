@@ -8,17 +8,30 @@ export MY_IP=$(ip -4 route get 8.8.8.8 | awk {'print $7'} | tr -d '\n')
 TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk {'print $2'})
 export VIEWER_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB" \* 0.8 | bc)
 export SHM_SIZE_KB="$(echo "$TOTAL_MEMORY_KB" \* 0.3 | bc | cut -d'.' -f1)"
+export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+MODE="${MODE:-pull}"
+if [[ ! "$MODE" =~ ^(pull|build)$ ]]; then
+    echo "Invalid mode: $MODE"
+    echo "Usage: MODE=(pull|build) $0"
+    exit 1
+fi
 
 # The `getmac` module might exit with non-zero exit code if no MAC address is found.
 set +e
 export MAC_ADDRESS=`${HOME}/installer_venv/bin/python -m getmac`
 set -e
 
-# Hard code this to latest for now.
-export DOCKER_TAG="latest"
+if [ -z "$DOCKER_TAG" ]; then
+    export DOCKER_TAG="latest"
+fi
 
 # Detect Raspberry Pi version
-if grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
+if [ ! -f /proc/device-tree/model ] && [ "$(uname -m)" = "x86_64" ]; then
+    export DEVICE_TYPE="x86"
+elif grep -qF "Raspberry Pi 5" /proc/device-tree/model; then
+    export DEVICE_TYPE="pi5"
+elif grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
     export DEVICE_TYPE="pi4"
 elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
     export DEVICE_TYPE="pi3"
@@ -45,9 +58,14 @@ cat /home/${USER}/screenly/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/screenly/docker-compose.yml
 
+if [[ "$DEVICE_TYPE" =~ ^(x86|pi5)$ ]]; then
+    sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
+        /home/${USER}/screenly/docker-compose.yml
+fi
+
 sudo -E docker compose \
     -f /home/${USER}/screenly/docker-compose.yml \
-    pull
+    ${MODE}
 
 if [ -f /var/run/reboot-required ]; then
     exit 0

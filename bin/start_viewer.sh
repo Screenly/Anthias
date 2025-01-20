@@ -6,7 +6,7 @@ chmod -f g+rwX /dev/vchiq
 
 # Set permission for sha file
 chown -f viewer /dev/snd/*
-chown -f viewer /data/.screenly/latest_screenly_sha
+chown -f viewer /data/.screenly/latest_anthias_sha
 
 # Fixes caching in QTWebEngine
 mkdir -p /data/.local/share/ScreenlyWebview/QtWebEngine \
@@ -39,7 +39,7 @@ trap '' 16
 echo 0 >  /sys/fs/cgroup/memory/memory.swappiness
 
 # Start viewer
-sudo -E -u viewer dbus-run-session python3 viewer.py &
+sudo -E -u viewer dbus-run-session python viewer.py &
 
 # Wait for the viewer
 while true; do

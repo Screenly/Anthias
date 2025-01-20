@@ -1,6 +1,5 @@
-# vim: ft=yaml
+# vim: ft=yaml.docker-compose
 
-version: "2"
 services:
   anthias-wifi-connect:
     image: screenly/anthias-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
@@ -29,6 +28,7 @@ services:
     environment:
       - MY_IP=${MY_IP}
       - MAC_ADDRESS=${MAC_ADDRESS}
+      - HOST_USER=${USER}
       - HOME=/data
       - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -40,7 +40,7 @@ services:
       - resin-data:/data
       - /home/${USER}/.screenly:/data/.screenly
       - /home/${USER}/screenly_assets:/data/screenly_assets
-      - /home/${USER}/screenly/static:/data/screenly/static
+      - /home/${USER}/screenly/staticfiles:/data/screenly/staticfiles
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     labels:
@@ -66,6 +66,7 @@ services:
     shm_size: ${SHM_SIZE_KB}kb
     volumes:
       - resin-data:/data
+      - /home/${USER}/.asoundrc:/data/.asoundrc
       - /home/${USER}/.screenly:/data/.screenly
       - /home/${USER}/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
@@ -143,7 +144,7 @@ services:
       - resin-data:/data:ro
       - /home/${USER}/.screenly:/data/.screenly:ro
       - /home/${USER}/screenly_assets:/data/screenly_assets:ro
-      - /home/${USER}/screenly/static:/data/screenly/static:ro
+      - /home/${USER}/screenly/staticfiles:/data/screenly/staticfiles:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 

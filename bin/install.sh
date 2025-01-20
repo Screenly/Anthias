@@ -3,281 +3,409 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 # -*- sh-basic-offset: 4 -*-
 
-WEB_UPGRADE=false
-BRANCH_VERSION=
-MANAGE_NETWORK=
-UPGRADE_SYSTEM=
+set -euo pipefail
 
-if [ -f .env ]; then
-    source .env
-fi
+BRANCH="master"
+ANSIBLE_PLAYBOOK_ARGS=()
+REPOSITORY="https://github.com/Screenly/Anthias.git"
+ANTHIAS_REPO_DIR="/home/${USER}/screenly"
+GITHUB_API_REPO_URL="https://api.github.com/repos/Screenly/Anthias"
+GITHUB_RELEASES_URL="https://github.com/Screenly/Anthias/releases"
+GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
+DOCKER_TAG="latest"
+UPGRADE_SCRIPT_PATH="${ANTHIAS_REPO_DIR}/bin/upgrade_containers.sh"
+ARCHITECTURE=$(uname -m)
 
-while getopts ":w:b:n:s:" arg; do
-    case "${arg}" in
-        w)
-            WEB_UPGRADE=true
-        ;;
-        b)
-            BRANCH_VERSION=${OPTARG}
-        ;;
-        n)
-            MANAGE_NETWORK=${OPTARG}
-        ;;
-        s)
-            UPGRADE_SYSTEM=${OPTARG}
-        ;;
-    esac
-done
-
-if [ "$WEB_UPGRADE" = false ]; then
-
-  # Make sure the command is launched interactive.
-  if ! [ -t 0  ]; then
-    echo -e "Detected old installation command. Please use:\n$ bash <(curl -sL https://install-anthias.srly.io)"
-    exit 1
-  fi
-
-  # clear screen
-  clear;
-
-  # Set color of logo
-  tput setaf 6
-  tput bold
-
-  cat << EOF
-
-       d8888            888     888
-      d88888            888     888       888
-     d88P888            888     888
-    d88P 888  88888b.   888888  88888b.   888   8888b.   .d8888b
-   d88P  888  888 '88b  888     888 '88b  888      '88b  88K
-  d88P   888  888  888  888     888  888  888  .d888888  'Y8888b.
- d8888888888  888  888  Y88b.   888  888  888  888  888       X88
-d88P     888  888  888   Y888   888  888  888  'Y888888   88888P'
-==================================================================
-
-
-EOF
-
-  # Reset color
-  tput sgr 0
-
-  echo -e "Anthias requires a dedicated Raspberry Pi / SD card.\nYou will not be able to use the regular desktop environment once installed.\n"
-  read -p "Do you still want to continue? (y/N)" -n 1 -r -s INSTALL
-  if [ "$INSTALL" != 'y' ]; then
-    echo
-    exit 1
-  fi
-
-# @TODO Re-enable the 'production' branch once we've merged master into production
-#echo -e "\n________________________________________\n"
-#echo -e "Which version/branch of Screenly OSE would you like to install:\n"
-#echo " Press (1) for the Production branch, which is the latest stable."
-#echo " Press (2) for the Development/Master branch, which has the latest features and fixes, but things may break."
-#echo ""
-
-#read -n 1 -r -s BRANCHSELECTION
-#case $BRANCHSELECTION in
-#  1) echo "You selected: Production";export DOCKER_TAG="production";BRANCH="production"
-#    ;;
-#  2) echo "You selected: Development/Master";export DOCKER_TAG="latest";BRANCH="master"
-#    ;;
-#  *) echo "(Error) That was not an option, installer will now exit.";exit
-#    ;;
-#esac
-
-# Remove these once the above code has been restored.
-export DOCKER_TAG="latest"
-export BRANCH="master"
-
-  echo && read -p "Do you want Anthias to manage your network? This is recommended for most users because this adds features to manage your network. (Y/n)" -n 1 -r -s NETWORK && echo
-
-  echo && read -p "Would you like to perform a full system upgrade as well? (y/N)" -n 1 -r -s UPGRADE && echo
-  if [ "$UPGRADE" != 'y' ]; then
-      EXTRA_ARGS=("--skip-tags" "system-upgrade")
-  fi
-
-elif [ "$WEB_UPGRADE" = true ]; then
-  if [ -z "${BRANCH}" ]; then
-    if [ "$BRANCH_VERSION" = "latest" ]; then
-      export DOCKER_TAG="latest"
-      BRANCH="master"
-    elif [ "$BRANCH_VERSION" = "production" ]; then
-      export DOCKER_TAG="production"
-      BRANCH="production"
-    else
-      echo -e "Invalid -b parameter."
-      exit 1
-    fi
-  fi
-  if [ "$MANAGE_NETWORK" = false ]; then
-    NETWORK="n"
-  elif [ "$MANAGE_NETWORK" = true ]; then
-    NETWORK="y"
-  else
-    echo -e "Invalid -n parameter."
-    exit 1
-  fi
-  if [ "$UPGRADE_SYSTEM" = false ]; then
-      EXTRA_ARGS=("--skip-tags" "system-upgrade")
-  else
-    echo -e "Invalid -s parameter."
-    exit 1
-  fi
-else
-  echo -e "Invalid -w parameter."
-  exit 1
-fi
-
-if [ -z "${REPOSITORY}" ]; then
-  if [ "$WEB_UPGRADE" = false ]; then
-    set -x
-    REPOSITORY=${1:-https://github.com/screenly/anthias.git}
-  else
-    set -e
-    REPOSITORY=https://github.com/screenly/anthias.git
-  fi
-fi
-
-if [ ! -d /home/${USER}/screenly ]; then
-    mkdir /home/${USER}/screenly
-fi
-
-sudo mkdir -p /etc/ansible
-echo -e "[local]\nlocalhost ansible_connection=local" | sudo tee /etc/ansible/hosts > /dev/null
-
-if [ ! -f /etc/locale.gen ]; then
-    # No locales found. Creating locales with default UK/US setup.
-    echo -e "en_GB.UTF-8 UTF-8\nen_US.UTF-8 UTF-8" | sudo tee /etc/locale.gen > /dev/null
-    sudo locale-gen
-fi
-
-RASPBIAN_VERSION=$(lsb_release -rs)
-APT_INSTALL_ARGS=(
-  "git"
-  "libffi-dev"
-  "libssl-dev"
-  "whois"
+INTRO_MESSAGE=(
+    "Anthias requires a dedicated Raspberry Pi and an SD card."
+    "You will not be able to use the regular desktop environment once installed."
+    ""
+    "When prompted for the version, you can choose between the following:"
+    "  - **latest:** Installs the latest version from the \`master\` branch."
+    "  - **tag:** Installs a pinned version based on the tag name."
+    ""
+    "Take note that \`latest\` is a rolling release."
 )
-
-if [ "$RASPBIAN_VERSION" = "12" ]; then
-  APT_INSTALL_ARGS+=("python3-full")
-else
-  APT_INSTALL_ARGS+=("python3" "python3-dev" "python3-pip")
-fi
-
-sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' /etc/apt/sources.list
-sudo apt update -y
-sudo apt-get install -y --no-install-recommends "${APT_INSTALL_ARGS[@]}"
-
-if [ "$NETWORK" == 'y' ]; then
-  export MANAGE_NETWORK=true
-  sudo apt-get install -y network-manager
-else
-  export MANAGE_NETWORK=false
-fi
-
-# Install Ansible from requirements file.
-if [ "$BRANCH" = "master" ]; then
-    ANSIBLE_VERSION=$(curl -s https://raw.githubusercontent.com/screenly/anthias/$BRANCH/requirements/requirements.host.txt | grep ansible)
-else
-    ANSIBLE_VERSION=ansible==2.8.8
-fi
-
+MANAGE_NETWORK_PROMPT=(
+    "Would you like Anthias to manage the network for you?"
+)
+VERSION_PROMPT=(
+    "Which version of Anthias would you like to install?"
+)
+VERSION_PROMPT_CHOICES=(
+    "latest"
+    "tag"
+)
+SYSTEM_UPGRADE_PROMPT=(
+    "Would you like to perform a full system upgrade as well?"
+)
 SUDO_ARGS=()
 
-if [ "$RASPBIAN_VERSION" = "12" ]; then
-    python3 -m venv /home/${USER}/installer_venv
-    source /home/${USER}/installer_venv/bin/activate
+TITLE_TEXT=$(cat <<EOF
+     @@@@@@@@@
+  @@@@@@@@@@@@                 d8888          888    888      d8b
+ @@@@@@@  @@@    @@           d88888          888    888      Y8P
+@@@@@@@@@@@@@    @@@         d88P888          888    888
+@@@@@@@@@@ @@   @@@@        d88P 888 88888b.  888888 88888b.  888  8888b.  .d8888b
+@@@@@       @@@@@@@@       d88P  888 888 "88b 888    888 "88b 888     "88b 88K
+@@@%:      :@@@@@@@@      d88P   888 888  888 888    888  888 888 .d888888 "Y8888b.
+ @@-:::::::%@@@@@@@      d8888888888 888  888 Y88b.  888  888 888 888  888      X88
+  @=::::=%@@@@@@@@      d88P     888 888  888  "Y888 888  888 888 "Y888888  88888P'
+     @@@@@@@@@@
+EOF
+)
 
-    SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
-fi
+# Install gum from Charm.sh.
+# Gum helps you write shell scripts more efficiently.
+function install_prerequisites() {
+    if [ -f /usr/bin/gum ] && [ -f /usr/bin/jq ]; then
+        return
+    fi
 
-# @TODO
-# Remove me later. Cryptography 38.0.3 won't build at the moment.
-# See https://github.com/screenly/anthias/issues/1654
-sudo ${SUDO_ARGS[@]} pip install cryptography==38.0.2
-sudo ${SUDO_ARGS[@]} pip install "$ANSIBLE_VERSION"
+    sudo apt -y update && sudo apt -y install gnupg
 
-sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
-    -m git \
-    -a "repo=$REPOSITORY dest=/home/${USER}/screenly version=$BRANCH force=no"
-cd /home/${USER}/screenly/ansible
+    sudo mkdir -p /etc/apt/keyrings
+    curl -fsSL https://repo.charm.sh/apt/gpg.key | \
+        sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg
+    echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" \
+        | sudo tee /etc/apt/sources.list.d/charm.list
 
-sudo -E -u ${USER} ${SUDO_ARGS[@]} ansible-playbook site.yml "${EXTRA_ARGS[@]}"
+    sudo apt -y update && sudo apt -y install gum jq
+}
 
-# Pull down and install containers
-sudo -u ${USER} /home/${USER}/screenly/bin/upgrade_containers.sh
+function display_banner() {
+    local TITLE="${1:-Anthias Installer}"
+    local COLOR="212"
 
-sudo apt-get autoclean
-sudo apt-get clean
-sudo docker system prune -f
-sudo apt autoremove -y
-sudo apt-get install plymouth --reinstall -y
-sudo find /usr/share/doc \
-    -depth \
-    -type f \
-    ! -name copyright \
-    -delete
-sudo find /usr/share/doc \
-    -empty \
-    -delete
-sudo rm -rf \
-    /usr/share/man \
-    /usr/share/groff \
-    /usr/share/info/* \
-    /usr/share/lintian \
-    /usr/share/linda /var/cache/man
-sudo find /usr/share/locale \
-    -type f \
-    ! -name 'en' \
-    ! -name 'de*' \
-    ! -name 'es*' \
-    ! -name 'ja*' \
-    ! -name 'fr*' \
-    ! -name 'zh*' \
-    -delete
-sudo find /usr/share/locale \
-    -mindepth 1 \
-    -maxdepth 1 \
-    ! -name 'en*' \
-    ! -name 'de*' \
-    ! -name 'es*' \
-    ! -name 'ja*' \
-    ! -name 'fr*' \
-    ! -name 'zh*' \
-    ! -name 'locale.alias' \
-    -exec rm -r {} \;
+    gum style \
+        --foreground "${COLOR}" \
+        --border-foreground "${COLOR}" \
+        --border "thick" \
+        --margin "1 1" \
+        --padding "2 6" \
+        "${TITLE}"
+}
 
-sudo chown -R ${USER}:${USER} /home/${USER}
+function display_section() {
+    local TITLE="${1:-Section}"
+    local COLOR="#00FFFF"
 
-# Run sudo w/out password
-if [ ! -f /etc/sudoers.d/010_${USER}-nopasswd ]; then
-  echo "${USER} ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/010_${USER}-nopasswd > /dev/null
-  sudo chmod 0440 /etc/sudoers.d/010_${USER}-nopasswd
-fi
+    gum style \
+        --foreground "${COLOR}" \
+        --border-foreground "${COLOR}" \
+        --border "thick" \
+        --align center \
+        --width 95 \
+        --margin "1 1" \
+        --padding "1 4" \
+        "${TITLE}"
+}
 
-echo -e "Anthias version: $(git rev-parse --abbrev-ref HEAD)@$(git rev-parse --short HEAD)\n$(lsb_release -a)" > ~/version.md
+function initialize_ansible() {
+    sudo mkdir -p /etc/ansible
+    echo -e "[local]\nlocalhost ansible_connection=local" | \
+        sudo tee /etc/ansible/hosts > /dev/null
+}
 
-if [ "$WEB_UPGRADE" = false ]; then
-  set +x
-else
-  set +e
-fi
+function initialize_locales() {
+    display_section "Initialize Locales"
 
-echo "Installation completed."
+    if [ ! -f /etc/locale.gen ]; then
+        # No locales found. Creating locales with default UK/US setup.
+        echo -e "en_GB.UTF-8 UTF-8\nen_US.UTF-8 UTF-8" | \
+            sudo tee /etc/locale.gen > /dev/null
+        sudo locale-gen
+    fi
+}
 
-if [ "$WEB_UPGRADE" = false ]; then
-  POST_INSTALL_MESSAGE=""
+function install_packages() {
+    display_section "Install Packages via APT"
 
-  if [ -f /var/run/reboot-required ]; then
-    POST_INSTALL_MESSAGE="Please reboot and run /home/$USER/screenly/bin/upgrade_containers.sh to complete the installation"
-  else
-    POST_INSTALL_MESSAGE="You need to reboot the system for the installation to complete"
-  fi
+    local DISTRO_VERSION=$(lsb_release -rs)
+    local APT_INSTALL_ARGS=(
+        "git"
+        "libffi-dev"
+        "libssl-dev"
+        "whois"
+    )
 
-  read -p "${POST_INSTALL_MESSAGE}. Would you like to reboot now? (y/N)" -n 1 -r -s REBOOT && echo
-  if [ "$REBOOT" == 'y' ]; then
-    sudo reboot
-  fi
-fi
+    if [ "$DISTRO_VERSION" -ge 12 ]; then
+        APT_INSTALL_ARGS+=(
+            "python3-dev"
+            "python3-full"
+        )
+    else
+        APT_INSTALL_ARGS+=(
+            "python3"
+            "python3-dev"
+            "python3-pip"
+            "python3-venv"
+        )
+    fi
+
+    if [ "$MANAGE_NETWORK" = "Yes" ]; then
+        APT_INSTALL_ARGS+=("network-manager")
+    fi
+
+    if [ "$ARCHITECTURE" != "x86_64" ]; then
+        sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' \
+            /etc/apt/sources.list
+    fi
+
+    sudo apt update -y
+    sudo apt-get install -y "${APT_INSTALL_ARGS[@]}"
+}
+
+function install_ansible() {
+    display_section "Install Ansible"
+
+    REQUIREMENTS_URL="$GITHUB_RAW_URL/$BRANCH/requirements/requirements.host.txt"
+    ANSIBLE_VERSION=$(curl -s $REQUIREMENTS_URL | grep ansible)
+
+    SUDO_ARGS=()
+
+    if python3 -c "import venv" &> /dev/null; then
+        gum format 'Module `venv` is detected. Activating virtual environment...'
+
+        echo
+
+        python3 -m venv /home/${USER}/installer_venv
+        source /home/${USER}/installer_venv/bin/activate
+
+        SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
+    fi
+
+    # @TODO: Remove me later. Cryptography 38.0.3 won't build at the moment.
+    # See https://github.com/Screenly/Anthias/issues/1654 for details.
+    sudo ${SUDO_ARGS[@]} pip install cryptography==38.0.1
+    sudo ${SUDO_ARGS[@]} pip install "$ANSIBLE_VERSION"
+}
+
+function set_device_type() {
+    if [ ! -f /proc/device-tree/model ] && [ "$(uname -m)" = "x86_64" ]; then
+        export DEVICE_TYPE="x86"
+    elif grep -qF "Raspberry Pi 5" /proc/device-tree/model; then
+        export DEVICE_TYPE="pi5"
+    elif grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
+        export DEVICE_TYPE="pi4"
+    elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
+        export DEVICE_TYPE="pi3"
+    elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
+        export DEVICE_TYPE="pi2"
+    else
+        export DEVICE_TYPE="pi1"
+    fi
+}
+
+function run_ansible_playbook() {
+    display_section "Run the Anthias Ansible Playbook"
+    set_device_type
+
+    sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
+        -m git \
+        -a "repo=$REPOSITORY dest=${ANTHIAS_REPO_DIR} version=${BRANCH} force=yes"
+    cd ${ANTHIAS_REPO_DIR}/ansible
+
+    if [ "$ARCHITECTURE" == "x86_64" ]; then
+        if [ ! -f /etc/sudoers.d/010_${USER}-nopasswd ]; then
+            ANSIBLE_PLAYBOOK_ARGS+=("--ask-become-pass")
+        fi
+
+        ANSIBLE_PLAYBOOK_ARGS+=(
+            "--skip-tags" "raspberry-pi"
+        )
+    fi
+
+    sudo -E -u ${USER} ${SUDO_ARGS[@]} \
+        ansible-playbook site.yml "${ANSIBLE_PLAYBOOK_ARGS[@]}"
+}
+
+function upgrade_docker_containers() {
+    display_section "Initialize/Upgrade Docker Containers"
+
+    wget -q \
+        "$GITHUB_RAW_URL/master/bin/upgrade_containers.sh" \
+        -O "$UPGRADE_SCRIPT_PATH"
+
+    sudo -u ${USER} \
+        DOCKER_TAG="${DOCKER_TAG}" \
+        "${UPGRADE_SCRIPT_PATH}"
+}
+
+function cleanup() {
+    display_section "Clean Up Unused Packages and Files"
+
+    sudo apt-get autoclean
+    sudo apt-get clean
+    sudo docker system prune -f
+    sudo apt autoremove -y
+    sudo apt-get install plymouth --reinstall -y
+    sudo find /usr/share/doc \
+        -depth \
+        -type f \
+        ! -name copyright \
+        -delete
+    sudo find /usr/share/doc \
+        -empty \
+        -delete
+    sudo rm -rf \
+        /usr/share/man \
+        /usr/share/groff \
+        /usr/share/info/* \
+        /usr/share/lintian \
+        /usr/share/linda /var/cache/man
+    sudo find /usr/share/locale \
+        -type f \
+        ! -name 'en' \
+        ! -name 'de*' \
+        ! -name 'es*' \
+        ! -name 'ja*' \
+        ! -name 'fr*' \
+        ! -name 'zh*' \
+        -delete
+    sudo find /usr/share/locale \
+        -mindepth 1 \
+        -maxdepth 1 \
+        ! -name 'en*' \
+        ! -name 'de*' \
+        ! -name 'es*' \
+        ! -name 'ja*' \
+        ! -name 'fr*' \
+        ! -name 'zh*' \
+        ! -name 'locale.alias' \
+        -exec rm -r {} \;
+}
+
+function modify_permissions() {
+    sudo chown -R ${USER}:${USER} /home/${USER}
+
+    # Run `sudo` without entering a password.
+    if [ ! -f /etc/sudoers.d/010_${USER}-nopasswd ]; then
+        echo "${USER} ALL=(ALL) NOPASSWD: ALL" | \
+            sudo tee /etc/sudoers.d/010_${USER}-nopasswd > /dev/null
+        sudo chmod 0440 /etc/sudoers.d/010_${USER}-nopasswd
+    fi
+}
+
+function write_anthias_version() {
+    local GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    local GIT_SHORT_HASH=$(git rev-parse --short HEAD)
+    local ANTHIAS_VERSION="Anthias Version: ${GIT_BRANCH}@${GIT_SHORT_HASH}"
+
+    echo "${ANTHIAS_VERSION}" > ~/version.md
+    echo "$(lsb_release -a 2> /dev/null)" >> ~/version.md
+}
+
+function post_installation() {
+    local POST_INSTALL_MESSAGE=()
+
+    display_section "Installation Complete"
+
+    if [ -f /var/run/reboot-required ]; then
+        POST_INSTALL_MESSAGE+=(
+            "Please reboot and run \`${UPGRADE_SCRIPT_PATH}\` "
+            "to complete the installation."
+        )
+    else
+        POST_INSTALL_MESSAGE+=(
+            "You need to reboot the system for the installation to complete."
+        )
+    fi
+
+    echo
+
+    gum style --foreground "#00FFFF" "${POST_INSTALL_MESSAGE[@]}" | gum format
+
+    echo
+
+    gum confirm "Do you want to reboot now?" && \
+        gum style --foreground "#FF00FF" "Rebooting..." | gum format && \
+        sudo reboot
+}
+
+function set_custom_version() {
+    BRANCH=$(
+        gum input \
+            --header "Enter the tag name you want to install" \
+    )
+
+    local STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+        "${GITHUB_API_REPO_URL}/git/refs/tags/$BRANCH")
+
+    if [ "$STATUS_CODE" -ne 200 ]; then
+        gum style "Invalid tag name." \
+            | gum format
+        echo
+        exit 1
+    fi
+
+    local DOCKER_TAG_FILE_URL="${GITHUB_RELEASES_URL}/download/${BRANCH}/docker-tag"
+    STATUS_CODE=$(curl -sL -o /dev/null -w "%{http_code}" \
+        "$DOCKER_TAG_FILE_URL")
+
+    if [ "$STATUS_CODE" -ne 200 ]; then
+        gum style "This version doesn't have a \`docker-tag\` file." \
+            | gum format
+        echo
+        exit 1
+    fi
+
+    DOCKER_TAG=$(curl -sL "$DOCKER_TAG_FILE_URL")
+}
+
+function main() {
+    install_prerequisites && clear
+
+    display_banner "${TITLE_TEXT}"
+
+    gum format "${INTRO_MESSAGE[@]}"
+    echo
+    gum confirm "Do you still want to continue?" || exit 0
+    gum confirm "${MANAGE_NETWORK_PROMPT[@]}" && \
+        export MANAGE_NETWORK="Yes" || \
+        export MANAGE_NETWORK="No"
+
+    VERSION=$(
+        gum choose \
+            --header "${VERSION_PROMPT}" \
+            -- "${VERSION_PROMPT_CHOICES[@]}"
+    )
+
+    if [ "$VERSION" == "latest" ]; then
+        BRANCH="master"
+    else
+        set_custom_version
+    fi
+
+    gum confirm "${SYSTEM_UPGRADE_PROMPT[@]}" && {
+        SYSTEM_UPGRADE="Yes"
+    } || {
+        SYSTEM_UPGRADE="No"
+        ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "system-upgrade")
+    }
+
+    display_section "User Input Summary"
+    gum format "**Manage Network:**     ${MANAGE_NETWORK}"
+    gum format "**Branch/Tag:**         \`${BRANCH}\`"
+    gum format "**System Upgrade:**     ${SYSTEM_UPGRADE}"
+    gum format "**Docker Tag Prefix:**  \`${DOCKER_TAG}\`"
+
+    if [ ! -d "${ANTHIAS_REPO_DIR}" ]; then
+        mkdir "${ANTHIAS_REPO_DIR}"
+    fi
+
+    initialize_ansible
+    initialize_locales
+    install_packages
+    install_ansible
+    run_ansible_playbook
+
+    upgrade_docker_containers
+    cleanup
+    modify_permissions
+
+    write_anthias_version
+    post_installation
+}
+
+main

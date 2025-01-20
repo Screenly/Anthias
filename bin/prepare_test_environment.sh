@@ -47,6 +47,12 @@ EOF
 
 if [ "$START_SERVER" = true ]; then
     cd /usr/src/app
-    python3 server.py &
+
+    npm install && npm run build
+
+    ./manage.py makemigrations
+    ./manage.py migrate --fake-initial
+    ./manage.py runserver 127.0.0.1:8080 &
+
     sleep 3
 fi

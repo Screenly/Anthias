@@ -1,0 +1,67 @@
+name: Build SBOMs
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'package-lock.json'
+      - 'poetry.lock'
+
+jobs:
+  run-tests:
+    uses: ./.github/workflows/docker-test.yaml
+
+  js-sbom:
+    needs: run-tests
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and upload SBOM
+        uses: sbomify/github-action@master
+        env:
+          TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
+          COMPONENT_ID: 'LCkvzm8qaL'
+          SBOM_FILE: 'package-lock.json'
+          AUGMENT: true
+          UPLOAD: true
+          OUTPUT_FILE: js.cdx.json
+
+      - name: Attest
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: '${{ github.workspace }}/*.cdx.json'
+
+  python-sbom:
+    needs: run-tests
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and upload SBOM
+        uses: sbomify/github-action@master
+        env:
+          TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
+          COMPONENT_ID: 'Vhc4zm8pdV'
+          SBOM_FILE: 'poetry.lock'
+          AUGMENT: true
+          UPLOAD: true
+          OUTPUT_FILE: python.cdx.json
+
+      - name: Attest
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: '${{ github.workspace }}/*.cdx.json'

@@ -1,17 +1,15 @@
 from __future__ import unicode_literals
-from builtins import object
-from platform import machine
 
 import sh
 import vlc
 
-from lib.raspberry_pi_helper import lookup_raspberry_pi_version
+from lib.device_helper import get_device_type
 from settings import settings
 
 VIDEO_TIMEOUT = 20  # secs
 
 
-class MediaPlayer(object):
+class MediaPlayer():
     def __init__(self):
         pass
 
@@ -28,6 +26,36 @@ class MediaPlayer(object):
         raise NotImplementedError
 
 
+class FFMPEGMediaPlayer(MediaPlayer):
+    def __init__(self):
+        MediaPlayer.__init__(self)
+        self.run = None
+        self.player_args = list()
+        self.player_kwargs = dict()
+
+    def set_asset(self, uri, duration):
+        self.player_args = ['ffplay', uri, '-autoexit']
+        self.player_kwargs = {
+            '_bg': True,
+            '_ok_code': [0, 124],
+        }
+
+    def play(self):
+        self.run = sh.Command(self.player_args[0])(
+            *self.player_args[1:], **self.player_kwargs
+        )
+
+    def stop(self):
+        try:
+            if self.run:
+                self.run.kill()
+        except OSError:
+            pass
+
+    def is_playing(self):
+        return bool(self.run.process.alive)
+
+
 class VLCMediaPlayer(MediaPlayer):
     def __init__(self):
         MediaPlayer.__init__(self)
@@ -38,31 +66,30 @@ class VLCMediaPlayer(MediaPlayer):
 
         self.player.audio_output_set('alsa')
 
+    def get_alsa_audio_device(self):
+        if settings['audio_output'] == 'local':
+            if get_device_type() == 'pi5':
+                return 'default:CARD=vc4hdmi0'
+
+            return 'plughw:CARD=Headphones'
+        else:
+            if get_device_type() in ['pi4', 'pi5']:
+                return 'default:CARD=vc4hdmi0'
+            elif get_device_type() in ['pi1', 'pi2', 'pi3']:
+                return 'default:CARD=vc4hdmi'
+            else:
+                return 'default:CARD=HID'
+
     def __get_options(self):
-        options = []
-
-        if lookup_raspberry_pi_version() == 'pi4':
-            if settings['audio_output'] == 'local':
-                options += [
-                    '--alsa-audio-device=plughw:CARD=Headphones',
-                ]
-
-            options += [
-                '--mmal-display=HDMI-2',
-                '--vout=mmal_vout',
-            ]
-
-        return options
+        return [
+            f'--alsa-audio-device={self.get_alsa_audio_device()}',
+        ]
 
     def set_asset(self, uri, duration):
         self.player.set_mrl(uri)
         settings.load()
-
-        # @TODO: Refactor this conditional statement.
-        if settings['audio_output'] == 'local':
-            self.player.audio_output_device_set('alsa', 'plughw:CARD=Headphones')
-        elif settings['audio_output'] == 'hdmi':
-            self.player.audio_output_device_set('alsa', 'default')
+        self.player.audio_output_device_set(
+            'alsa', self.get_alsa_audio_device())
 
     def play(self):
         self.player.play()
@@ -71,39 +98,19 @@ class VLCMediaPlayer(MediaPlayer):
         self.player.stop()
 
     def is_playing(self):
-        return self.player.get_state() in [vlc.State.Playing, vlc.State.Buffering, vlc.State.Opening]
+        return self.player.get_state() in [
+            vlc.State.Playing, vlc.State.Buffering, vlc.State.Opening]
 
 
-class OMXMediaPlayer(MediaPlayer):
-    def __init__(self):
-        MediaPlayer.__init__(self)
-        self._arch = machine()
+class MediaPlayerProxy():
+    INSTANCE = None
 
-        self._run = None
-        self._player_args = list()
-        self._player_kwargs = dict()
+    @classmethod
+    def get_instance(cls):
+        if cls.INSTANCE is None:
+            if get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']:
+                cls.INSTANCE = VLCMediaPlayer()
+            else:
+                cls.INSTANCE = FFMPEGMediaPlayer()
 
-    def set_asset(self, uri, duration):
-        settings.load()
-
-        if self._arch in ('armv6l', 'armv7l', 'aarch64'):
-            self._player_args = ['omxplayer', uri]
-            self._player_kwargs = {'o': settings['audio_output'], 'layer': 1, '_bg': True, '_ok_code': [0, 124, 143]}
-        else:
-            self._player_args = ['mplayer', uri, '-nosound']
-            self._player_kwargs = {'_bg': True, '_ok_code': [0, 124]}
-
-        if duration and duration != 'N/A':
-            self._player_args = ['timeout', VIDEO_TIMEOUT + int(duration.split('.')[0])] + self._player_args
-
-    def play(self):
-        self._run = sh.Command(self._player_args[0])(*self._player_args[1:], **self._player_kwargs)
-
-    def stop(self):
-        try:
-            sh.killall('omxplayer.bin', _ok_code=[1])
-        except OSError:
-            pass
-
-    def is_playing(self):
-        return bool(self._run.process.alive)
+        return cls.INSTANCE

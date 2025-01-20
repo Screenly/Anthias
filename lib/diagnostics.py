@@ -1,23 +1,16 @@
 #!/usr/bin/env python
 
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from builtins import str
+from __future__ import absolute_import, unicode_literals
+
 import os
-import sh
-import sqlite3
-from . import utils
-import cec
-from lib import raspberry_pi_helper
-from pprint import pprint
+from builtins import str
 from datetime import datetime
 
+import cec
 
-def get_monitor_status():
-    try:
-        return sh.tvservice('-s').stdout.strip().decode('utf-8')
-    except Exception:
-        return 'Unable to run tvservice.'
+from lib import device_helper
+
+from . import utils
 
 
 def get_display_power():
@@ -29,7 +22,7 @@ def get_display_power():
     try:
         cec.init()
         tv = cec.Device(cec.CECDEVICE_TV)
-    except:
+    except Exception:
         return 'CEC error'
 
     try:
@@ -45,18 +38,6 @@ def get_uptime():
         uptime_seconds = float(f.readline().split()[0])
 
     return uptime_seconds
-
-
-def get_playlist():
-    screenly_db = os.path.join(os.getenv('HOME'), '.screenly/screenly.db')
-    playlist = []
-    if os.path.isfile(screenly_db):
-        conn = sqlite3.connect(screenly_db)
-        c = conn.cursor()
-        for row in c.execute('SELECT * FROM assets;'):
-            playlist.append(row)
-        c.close
-    return playlist
 
 
 def get_load_avg():
@@ -117,34 +98,8 @@ def get_debian_version():
 
 
 def get_raspberry_code():
-    return raspberry_pi_helper.parse_cpu_info().get('hardware', "Unknown")
+    return device_helper.parse_cpu_info().get('hardware', "Unknown")
+
 
 def get_raspberry_model():
-    return raspberry_pi_helper.parse_cpu_info().get('model', "Unknown")
-
-def compile_report():
-    """
-    Compile report with various data points.
-    """
-    report = {}
-    report['cpu_info'] = get_raspberry_code()
-    report['pi_model'] = get_raspberry_model()
-    report['uptime'] = get_uptime()
-    report['monitor'] = get_monitor_status()
-    report['display_power'] = get_display_power()
-    report['playlist'] = get_playlist()
-    report['git_hash'] = get_git_hash()
-    report['connectivity'] = try_connectivity()
-    report['loadavg'] = get_load_avg()
-    report['utc_isodate'] = get_utc_isodate()
-    report['debian_version'] = get_debian_version()
-
-    return report
-
-
-def main():
-    pprint(compile_report())
-
-
-if __name__ == "__main__":
-    main()
+    return device_helper.parse_cpu_info().get('model', "Unknown")

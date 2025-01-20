@@ -1,11 +1,27 @@
 {
-  "name": "screenly-ose",
+  "name": "anthias",
   "version": "1.0.0",
+  "scripts": {
+    "dev": "webpack --watch --config webpack.dev.js",
+    "build": "webpack --config webpack.prod.js",
+    "lint": "coffeelint static/js/*.coffee && eslint ."
+  },
   "dependencies": {
     "bootstrap": "^4.3.1",
     "css-toggle-switch": "^4.1.0"
   },
   "devDependencies": {
-    "coffee-script": "^1.12.7"
+    "@coffeelint/cli": "^5.2.11",
+    "coffee-loader": "^0.9.0",
+    "coffeescript": "^1.12.7",
+    "css-loader": "^7.1.2",
+    "mini-css-extract-plugin": "^2.9.2",
+    "sass": "^1.75.0",
+    "sass-loader": "^16.0.3",
+    "webpack": "^5.96.1",
+    "webpack-cli": "^5.1.4",
+    "webpack-merge": "^6.0.1",
+    "eslint": "^8.56.0",
+    "eslint-plugin-react": "^7.33.2"
   }
 }
