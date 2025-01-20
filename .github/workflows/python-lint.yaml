@@ -43,4 +43,4 @@ jobs:
 
     - name: Analyzing the code with ruff
       run: |
-        poetry ruff check .
+        poetry run ruff check .
