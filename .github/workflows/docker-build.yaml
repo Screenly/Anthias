@@ -109,7 +109,7 @@ jobs:
 
       - name: Set Docker tag
         run: |
-          echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV
+          echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
 
           if [ "${{ matrix.board }}" == "pi4" ]; then
             echo "BOARD=${{ matrix.board }}-64" >> "$GITHUB_ENV"
