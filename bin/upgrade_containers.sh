@@ -17,6 +17,11 @@ if [[ ! "$MODE" =~ ^(pull|build)$ ]]; then
     exit 1
 fi
 
+# The `getmac` module might exit with non-zero exit code if no MAC address is found.
+set +e
+export MAC_ADDRESS=`${HOME}/installer_venv/bin/python -m getmac`
+set -e
+
 if [ -z "$DOCKER_TAG" ]; then
     export DOCKER_TAG="latest"
 fi
