@@ -82,6 +82,10 @@ if [[ -z "${SHM_SIZE+x}" ]]; then
 fi
 
 function prepare_balena_file() {
+    if [[ "$BOARD" == "pi4" ]]; then
+        export BOARD="pi4-64"
+    fi
+
     mkdir -p balena-deploy
     cp balena.yml balena-deploy/
     cat docker-compose.balena.yml.tmpl | \
