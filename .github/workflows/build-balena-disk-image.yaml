@@ -25,7 +25,7 @@ jobs:
     strategy:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi5']
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       id-token: write
