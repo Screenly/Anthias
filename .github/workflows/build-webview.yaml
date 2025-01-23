@@ -33,13 +33,14 @@ jobs:
       - name: Set buildx arguments
         id: prepare
         run: |
-          echo ::set-output name=buildx_args::\
-            --cache-from "screenly/ose-qt-builder:latest" \
-            --output "type=image,push=true" \
-            --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-            --build-arg "GIT_HASH=$GITHUB_SHA" \
-            --build-arg "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" \
-            --build-arg "GIT_BRANCH=$GITHUB_REF_NAME"
+          {
+            echo "buildx_args=--cache-from \"screenly/ose-qt-builder:latest\" \
+            --output \"type=image,push=true\" \
+            --build-arg \"BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')\" \
+            --build-arg \"GIT_HASH=$GITHUB_SHA\" \
+            --build-arg \"GIT_SHORT_HASH=$(git rev-parse --short HEAD)\" \
+            --build-arg \"GIT_BRANCH=$GITHUB_REF_NAME\""
+          } >> "$GITHUB_OUTPUT"
 
       - name: Building container
         run: |

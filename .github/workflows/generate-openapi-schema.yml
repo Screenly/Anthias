@@ -39,7 +39,6 @@ on:
         description: 'Upload the OpenAPI schema as a release artifact'
         required: true
         type: boolean
-        default: false
       tag:
         description: 'Tag to be used for the release'
         required: true
