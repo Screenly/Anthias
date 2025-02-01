@@ -76,7 +76,7 @@ $ MODE=build \
 Build and start the containers.
 
 ```bash
-$ poetry run python tools/image_builder \
+$ poetry run python -m tools.image_builder \
   --dockerfiles-only \
   --disable-cache-mounts \
   --service celery \
@@ -132,7 +132,7 @@ Just press `Ctrl-C` to close Webpack in development mode.
 
 ## Linting Python code locally
 
-The project uses `flake8` for linting the Python codebase. While the linter is being run on the CI/CD pipeline,
+The project uses `ruff` for linting the Python codebase. While the linter is being run on the CI/CD pipeline,
 you can also run it locally. There are several ways to do this.
 
 ### Run the linter using `act`
@@ -159,13 +159,13 @@ After installing Poetry, run the following commands:
 ```bash
 # Install the dependencies
 $ poetry install --only=dev-host
-$ poetry run flake8 $(git ls-files '*.py')
+$ poetry run ruff check .
 ```
 
 To run the linter on a specific file, run the following command:
 
 ```bash
-$ poetry run flake8 path/to/file.py
+$ poetry run ruff check /path/to/file.py
 ```
 
 

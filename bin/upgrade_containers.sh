@@ -17,6 +17,11 @@ if [[ ! "$MODE" =~ ^(pull|build)$ ]]; then
     exit 1
 fi
 
+# The `getmac` module might exit with non-zero exit code if no MAC address is found.
+set +e
+export MAC_ADDRESS=`${HOME}/installer_venv/bin/python -m getmac`
+set -e
+
 if [ -z "$DOCKER_TAG" ]; then
     export DOCKER_TAG="latest"
 fi
@@ -24,6 +29,8 @@ fi
 # Detect Raspberry Pi version
 if [ ! -f /proc/device-tree/model ] && [ "$(uname -m)" = "x86_64" ]; then
     export DEVICE_TYPE="x86"
+elif grep -qF "Raspberry Pi 5" /proc/device-tree/model; then
+    export DEVICE_TYPE="pi5"
 elif grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
     export DEVICE_TYPE="pi4"
 elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
@@ -51,7 +58,7 @@ cat /home/${USER}/screenly/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/screenly/docker-compose.yml
 
-if [ "$DEVICE_TYPE" = "x86" ]; then
+if [[ "$DEVICE_TYPE" =~ ^(x86|pi5)$ ]]; then
     sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
         /home/${USER}/screenly/docker-compose.yml
 fi

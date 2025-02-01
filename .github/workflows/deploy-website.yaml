@@ -31,25 +31,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Pages
-        uses: actions/configure-pages@v2
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-          cache: 'pip'
-
-      - run: pip install requests==2.28.1
+        uses: actions/configure-pages@v5
 
       - name: Build website
         run: |
           cd website
           mkdir -p _site
-
-          # Build Raspberry Pi Imager JSON
-          python bin/build-pi-imager-json.py > _site/rpi-imager.json
-
-          # Make sure it's valid
-          cat _site/rpi-imager.json | jq
 
           # Copy in static files. This is to be migrated to Hugo later.
           cp -rf assets _site/
@@ -59,7 +46,7 @@ jobs:
           find _site
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3
         with:
           path: website/_site
 
@@ -68,9 +55,9 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v4

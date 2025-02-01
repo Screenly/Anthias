@@ -12,6 +12,7 @@ on:
       - '!.github/workflows/build-webview.yaml'
       - '!.github/workflows/build-balena-disk-image.yaml'
       - '!.github/workflows/python-lint.yaml'
+      - '!.github/pull_request_template.md'
       - '!README.md'
       - '!docs/**'
       - '!bin/install.sh'
@@ -28,9 +29,9 @@ jobs:
     needs: run-tests
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
         python-version: ["3.11"]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -70,47 +71,70 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.board }}
 
-      - name: Login to DockerHub
+      - name: Login to Docker Hub
         if: success() && github.event_name != 'pull_request'
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build Containers
         run: |
-          poetry run python tools/image_builder \
-            --build-target=${{ matrix.board }} \
-            --push
+          if [ "${{ matrix.board }}" == "pi4" ]; then
+            poetry run python -m tools.image_builder \
+              --build-target=pi4 \
+              --target-platform=linux/arm/v8 \
+              --push
+          elif [ "${{ matrix.board }}" == "pi4-64" ]; then
+            poetry run python -m tools.image_builder \
+              --build-target=pi4 \
+              --target-platform=linux/arm64/v8 \
+              --push
+          else
+            poetry run python -m tools.image_builder \
+              --build-target=${{ matrix.board }} \
+              --push
+          fi
 
   balena:
     if: ${{ github.ref == 'refs/heads/master' }}
     needs: buildx
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4']
-    runs-on: ubuntu-latest
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi5']
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set Docker tag
         run: |
-          echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-          echo "BOARD=${{ matrix.board }}" >> $GITHUB_ENV
-          echo "SHM_SIZE=256mb" >> $GITHUB_ENV
+          echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+          if [ "${{ matrix.board }}" == "pi4" ]; then
+            echo "BOARD=${{ matrix.board }}-64" >> "$GITHUB_ENV"
+          else
+            echo "BOARD=${{ matrix.board }}" >> "$GITHUB_ENV"
+          fi
+
+          echo "SHM_SIZE=256mb" >> "$GITHUB_ENV"
 
       - name: Prepare Balena file
         run: |
-          # Generage a docker-compose file for Balena with the correct board
+          # Generate a docker-compose file for Balena with the correct board
           mkdir -p balena-deploy
 
           # Copy in the Balena yaml file
           cp balena.yml balena-deploy/
 
           # Generate the docker-compose file
-          cat docker-compose.balena.yml.tmpl | \
-            envsubst > balena-deploy/docker-compose.yml
+          envsubst < docker-compose.balena.yml.tmpl > balena-deploy/docker-compose.yml
+
+          # Remove bind mounts to `/dev/vchiq` for Raspberry Pi 5
+          if [ "${{ matrix.board }}" == "pi5" ]; then
+            sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
+              balena-deploy/docker-compose.yml
+          fi
 
       - uses: balena-io/deploy-to-balena-action@master
         id: build

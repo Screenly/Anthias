@@ -9,9 +9,12 @@ on:
       - 'poetry.lock'
 
 jobs:
+  run-tests:
+    uses: ./.github/workflows/docker-test.yaml
+
   js-sbom:
     needs: run-tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       id-token: write
       contents: read
@@ -38,7 +41,7 @@ jobs:
 
   python-sbom:
     needs: run-tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       id-token: write
       contents: read

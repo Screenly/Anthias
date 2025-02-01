@@ -1,9 +1,6 @@
 from django.urls import path
 
-from api.views.v1_1 import (
-    AssetListViewV1_1,
-    AssetViewV1_1
-)
+from api.views.v1_1 import AssetListViewV1_1, AssetViewV1_1
 
 
 def get_url_patterns():

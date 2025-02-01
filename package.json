@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "webpack --watch --config webpack.dev.js",
-    "build": "webpack --config webpack.prod.js"
+    "build": "webpack --config webpack.prod.js",
+    "lint": "coffeelint static/js/*.coffee && eslint ."
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",
@@ -32,6 +33,8 @@
     "sass-loader": "^16.0.3",
     "webpack": "^5.96.1",
     "webpack-cli": "^5.1.4",
-    "webpack-merge": "^6.0.1"
+    "webpack-merge": "^6.0.1",
+    "eslint": "^8.56.0",
+    "eslint-plugin-react": "^7.33.2"
   }
 }

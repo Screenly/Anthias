@@ -1,9 +1,9 @@
-import django
-import sh
-
-from celery import Celery
 from datetime import timedelta
 from os import getenv, path
+
+import django
+import sh
+from celery import Celery
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
 try:

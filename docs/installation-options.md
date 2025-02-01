@@ -1,6 +1,12 @@
 # Using the image from the Raspberry Pi Imager
 
-The quickest way to get started is to use [Raspberry Pi Imager](https://www.screenly.io/blog/2022/12/13/anthias-and-screenly-now-in-rpi-imager/), where you can find Anthias under `Other specific-purpose OS`.
+> [!NOTE]
+> Raspberry Pi 5 images are not yet available via the Raspberry Pi Imager. For Pi 5 installations, please use either:
+> * [balenaHub images](#using-the-images-from-balenahub)
+> * [Release images](#using-the-images-from-the-releases)
+> * [Manual installation](#installing-on-raspberry-pi-os-lite-or-debian)
+
+The quickest way to get started on supported devices is to use [Raspberry Pi Imager](https://www.screenly.io/blog/2022/12/13/anthias-and-screenly-now-in-rpi-imager/), where you can find Anthias under `Other specific-purpose OS`.
 
 ![imager-01](/docs/images/imager-01.png)
 
@@ -19,10 +25,11 @@ Balena made a [big update to their IoT marketplace](https://blog.balena.io/creat
 [Fleets for Good](https://hub.balena.io/fleets-for-good). With that, you may find it hard to find the Anthias images on the marketplace. In the meantime,
 here are the links to the images:
 
-* [Raspberry Pi 1](https://hub.balena.io/fleets-for-good/1971378/anthias-pi1)
-* [Raspberry Pi 2](https://hub.balena.io/fleets-for-good/1971385/anthias-pi2)
-* [Raspberry Pi 3](https://hub.balena.io/fleets-for-good/1971388/anthias-pi3)
+* [Raspberry Pi 5](https://hub.balena.io/fleets-for-good/2209774/anthias-pi5)
 * [Raspberry Pi 4](https://hub.balena.io/fleets-for-good/1971389/anthias-pi4)
+* [Raspberry Pi 3](https://hub.balena.io/fleets-for-good/1971388/anthias-pi3)
+* [Raspberry Pi 2](https://hub.balena.io/fleets-for-good/1971385/anthias-pi2)
+* [Raspberry Pi 1](https://hub.balena.io/fleets-for-good/1971378/anthias-pi1)
 
 Go to one of the links above and click the *Join* button, then select either *Ethernet only* or *Wifi + Ethernet* for Network options.
 You can either click the *Flash* button to open balenaEthcher (make sure that it's installed) or download the image file and flash it using your preferred imager.
@@ -48,6 +55,15 @@ If you'd like more control over your digital signage instance, try installing it
 > [!IMPORTANT]
 > When installing on PC (x86) devices, make sure do follow the steps in the [x86 installation guide](/docs/x86-installation.md)
 > so that the installation script will work.
+
+> [!NOTE]
+> For Raspberry Pi 5:
+> * We recommend using the 64-bit version of Raspberry Pi OS Lite (Bookworm)
+> * 32-bit Raspberry Pi OS is not supported on Pi 5
+> * If you experience any issues, please report them either:
+>   * On our [forums](https://forums.screenly.io)
+>   * As a [GitHub issue](https://github.com/Screenly/Anthias/issues)
+>   * In [GitHub Discussions](https://github.com/Screenly/Anthias/discussions)
 
 The TL;DR for on [Raspberry Pi OS](https://www.raspberrypi.com/software/) or Debian is:
 

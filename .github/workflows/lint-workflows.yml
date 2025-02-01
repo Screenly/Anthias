@@ -1,0 +1,33 @@
+name: Lint GitHub Workflows
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '.github/workflows/lint-workflows.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '.github/workflows/lint-workflows.yml'
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install actionlint
+        run: |
+          bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+        shell: bash
+
+      - name: Run actionlint
+        run: ./actionlint -color
+        shell: bash

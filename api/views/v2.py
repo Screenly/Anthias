@@ -5,25 +5,25 @@ from rest_framework.views import APIView
 
 from anthias_app.models import Asset
 from api.helpers import (
-    AssetCreationException,
+    AssetCreationError,
     get_active_asset_ids,
     save_active_assets_ordering,
 )
 from api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
-    UpdateAssetSerializerV2
+    UpdateAssetSerializerV2,
 )
 from api.views.mixins import (
     AssetContentViewMixin,
     AssetsControlViewMixin,
     BackupViewMixin,
     DeleteAssetViewMixin,
+    FileAssetViewMixin,
     PlaylistOrderViewMixin,
     RebootViewMixin,
     RecoverViewMixin,
     ShutdownViewMixin,
-    FileAssetViewMixin
 )
 from lib.auth import authorized
 
@@ -57,12 +57,13 @@ class AssetListViewV2(APIView):
                 data=request.data, unique_name=True)
 
             if not serializer.is_valid():
-                raise AssetCreationException(serializer.errors)
-        except AssetCreationException as error:
+                raise AssetCreationError(serializer.errors)
+        except AssetCreationError as error:
             return Response(error.errors, status=status.HTTP_400_BAD_REQUEST)
 
         active_asset_ids = get_active_asset_ids()
         asset = Asset.objects.create(**serializer.data)
+        asset.refresh_from_db()
 
         if asset.is_active():
             active_asset_ids.insert(asset.play_order, asset.asset_id)

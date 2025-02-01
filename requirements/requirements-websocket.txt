@@ -2,6 +2,6 @@ Cython==0.29.33
 future==0.18.3
 gevent-websocket==0.10.1
 gevent==24.2.1
-Jinja2==3.1.4
+Jinja2==3.1.5
 pytz==2022.2.1
 pyzmq==23.2.1

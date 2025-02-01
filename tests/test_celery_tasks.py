@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
-from os import getenv, path, listdir, system
+
 import unittest
+from os import getenv, listdir, path, system
 
 from celery_tasks import celery as celeryapp
 from celery_tasks import cleanup

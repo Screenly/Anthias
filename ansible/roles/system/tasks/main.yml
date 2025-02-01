@@ -280,6 +280,17 @@
 - name: Set architecture
   ansible.builtin.set_fact:
     architecture: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'armhf' }}"
+  when: |
+    device_type == "pi1" or
+    device_type == "pi2" or
+    device_type == "pi3" or
+    device_type == "pi4" or
+    device_type == "x86"
+
+- name: Set architecture
+  ansible.builtin.set_fact:
+    architecture: "arm64"
+  when: device_type == "pi5"
 
 - name: Add Docker repo
   ansible.builtin.lineinfile:
@@ -363,7 +374,7 @@
     - ansible_distribution_major_version | int >= 12
 
 - name: Copy in rc.local
-  ansible.builtin.copy:
+  ansible.builtin.template:
     src: rc.local
     dest: /etc/rc.local
     mode: "0755"

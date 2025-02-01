@@ -3,7 +3,7 @@
 > [!WARNING]
 > To build this, you need **very** beefy hardware. We are building this on a VM with 32 vCPUs and 128GB RAM. If you're trying to build it locally, you likely need to tweak [MAKE_CORES](https://github.com/Screenly/screenly-ose/blob/master/webview/build_qt5.sh#L12) to something lower, but you would still need a powerful workstation (32GB RAM minimum) to make this build.
 
-### Building for Raspberry Pi
+### Building for Raspberry Pi (1-4)
 
 Since our entire build environment resides inside a Docker container, you don't need to install any packages on the host system. Everything is confined to the Docker image. Do however note that as of this writing, the multi-platform support is still in beta so, you need to enable this. Instructions for how to get started with multi-platform builds can be found [here](https://medium.com/@artur.klauser/building-multi-architecture-docker-images-with-buildx-27d80f7e2408).
 
@@ -68,6 +68,10 @@ When you're done, you can stop and remove the container with the following comma
 ```bash
 docker compose -f docker-compose.x86.yml down
 ```
+
+### Building for Raspberry Pi 5
+
+See this [documentation](/webview/docs/build_webview_for_pi5.md) for details
 
 ## Usage
 
