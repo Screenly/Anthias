@@ -1,9 +1,13 @@
 {% if environment == 'production' %}
 FROM debian:bookworm AS node-builder
 
-RUN \
-    apt-get update && \
+RUN apt-get update && \
     apt-get -y install --no-install-recommends \
+        python3 \
+        python3-pip \
+        python3-setuptools \
+        python3-wheel \
+        python3-six \
         nodejs \
         npm
 
