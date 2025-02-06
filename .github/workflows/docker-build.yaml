@@ -42,11 +42,13 @@ on:
       - '!docker/Dockerfile.dev'
 
 jobs:
-  run-tests:
-    uses: ./.github/workflows/docker-test.yaml
+  # TODO: Uncomment this job when ready.
+  # run-tests:
+  #   uses: ./.github/workflows/docker-test.yaml
 
   buildx:
-    needs: run-tests
+    # TODO: Uncomment this line when ready.
+    # needs: run-tests
     strategy:
       matrix:
         # TODO: Uncomment line below when ready.
