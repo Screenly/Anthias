@@ -52,8 +52,7 @@ jobs:
     strategy:
       matrix:
         # TODO: Uncomment line below when ready.
-        # board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
-        board: ['pi5']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
         python-version: ["3.11"]
     runs-on: ubuntu-24.04
 
