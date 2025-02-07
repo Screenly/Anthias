@@ -8,11 +8,6 @@ RUN apt-get update && \
         apt-utils \
         firebird-dev \
         freetds-dev \
-        gstreamer1.0-tools \
-        gstreamer1.0-plugins-base \
-        gstreamer1.0-plugins-good \
-        gstreamer1.0-plugins-ugly \
-        gstreamer1.0-x \
         libasound2-dev \
         libavcodec-dev \
         libavformat-dev \
@@ -31,8 +26,6 @@ RUN apt-get update && \
         libgles2-mesa-dev \
         libglib2.0-dev \
         libgst-dev \
-        libgstreamer-plugins-base1.0-dev \
-        libgstreamer1.0-dev \
         libicu-dev \
         libinput-dev \
         libiodbc2-dev \
@@ -96,7 +89,22 @@ RUN apt-get update && \
         nodejs \
         ruby \
         va-driver-all \
-        wget
+        wget \
+        libgstreamer1.0-dev \
+        libgstreamer-plugins-base1.0-dev \
+        libgstreamer-plugins-bad1.0-dev \
+        gstreamer1.0-plugins-base \
+        gstreamer1.0-plugins-good \
+        gstreamer1.0-plugins-bad \
+        gstreamer1.0-plugins-ugly \
+        gstreamer1.0-libav \
+        gstreamer1.0-tools \
+        gstreamer1.0-x \
+        gstreamer1.0-alsa \
+        gstreamer1.0-gl \
+        gstreamer1.0-gtk3 \
+        gstreamer1.0-qt5 \
+        gstreamer1.0-pulseaudio
 
 # Really make sure we don't have this package installed
 # as it will break the build of QTWebEngine
