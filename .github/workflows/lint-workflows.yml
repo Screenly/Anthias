@@ -19,13 +19,21 @@ on:
 jobs:
   actionlint:
     runs-on: ubuntu-latest
+    name: Run Linter
+    strategy:
+      matrix:
+        actionlint-version: ['1.7.7']
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install actionlint
+      - name: Download actionlint
         run: |
-          bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ACTIONLINT_FILE="actionlint_${{ matrix.actionlint-version }}_linux_amd64.tar.gz"
+          ACTIONLINT_URL="https://github.com/rhysd/actionlint/releases/download"
+          ACTIONLINT_DOWNLOAD_URL="$ACTIONLINT_URL/v${{ matrix.actionlint-version }}/$ACTIONLINT_FILE"
+          curl -L -o actionlint.tar.gz "$ACTIONLINT_DOWNLOAD_URL"
+          tar xzf actionlint.tar.gz
         shell: bash
 
       - name: Run actionlint
