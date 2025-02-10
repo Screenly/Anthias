@@ -40,6 +40,10 @@ from .helpers import (
 r = connect_to_redis()
 
 
+def react(request):
+    return template(request, 'react.html', {})
+
+
 @authorized
 @require_http_methods(["GET"])
 def index(request):
