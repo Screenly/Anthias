@@ -279,7 +279,12 @@
 
 - name: Set architecture
   ansible.builtin.set_fact:
-    architecture: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'armhf' }}"
+    architecture: >-
+      {{
+        'amd64' if ansible_architecture == 'x86_64'
+        else ('arm64' if ansible_architecture == 'aarch64' and device_type == 'pi4'
+        else 'armhf')
+      }}
   when: |
     device_type == "pi1" or
     device_type == "pi2" or
