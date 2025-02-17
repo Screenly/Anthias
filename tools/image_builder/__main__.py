@@ -65,10 +65,11 @@ def build_image(
     ]
 
     if board in ['pi1', 'pi2', 'pi3', 'pi4']:
-        base_apt_dependencies.extend(['libraspberrypi0'])
+        if not (board == 'pi4' and target_platform == 'linux/arm64/v8'):
+            base_apt_dependencies.extend(['libraspberrypi0'])
 
     if service == 'viewer':
-        context.update(get_viewer_context(board))
+        context.update(get_viewer_context(board, target_platform))
     elif service == 'test':
         context.update(get_test_context())
     elif service == 'wifi-connect':
@@ -171,13 +172,14 @@ def main(
     git_hash = str(pygit2.Repository('.').head.target)
     git_short_hash = git_hash[:SHORT_HASH_LENGTH]
 
-    build_parameters = get_build_parameters(build_target)
+    build_parameters = get_build_parameters(build_target, target_platform)
+
     board = build_parameters['board']
     base_image = build_parameters['base_image']
 
     # Override target platform if specified
     platform = target_platform or build_parameters['target_platform']
-    docker_tag = get_docker_tag(git_branch, board, platform)
+    docker_tag = get_docker_tag('master', board, platform)
 
     # Determine which services to build
     services_to_build = SERVICES if 'all' in service else list(set(service))
@@ -185,7 +187,7 @@ def main(
     # Build Docker images
     for service_name in services_to_build:
         # Define tag components
-        namespaces = ['screenly/anthias', 'screenly/srly-ose']
+        namespaces = ['nicomiguelino/anthias']
         version_suffix = (
             f'{board}-64' if board == 'pi4' and platform == 'linux/arm64/v8'
             else f'{board}'

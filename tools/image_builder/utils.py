@@ -5,7 +5,7 @@ from jinja2 import Environment, FileSystemLoader
 from tools.image_builder.constants import GITHUB_REPO_URL
 
 
-def get_build_parameters(build_target: str) -> dict:
+def get_build_parameters(build_target: str, target_platform: str | None = None) -> dict:
     default_build_parameters = {
         'board': 'x86',
         'base_image': 'debian',
@@ -19,11 +19,18 @@ def get_build_parameters(build_target: str) -> dict:
             'target_platform': 'linux/arm64/v8',
         }
     if build_target == 'pi4':
-        return {
-            'board': 'pi4',
-            'base_image': 'balenalib/raspberrypi3-debian',
-            'target_platform': 'linux/arm/v8',
-        }
+        if target_platform == 'linux/arm64/v8':
+            return {
+                'board': 'pi4',
+                'base_image': 'balenalib/raspberrypi4-64-debian',
+                'target_platform': 'linux/arm64/v8',
+            }
+        else:
+            return {
+                'board': 'pi4',
+                'base_image': 'balenalib/raspberrypi3-debian',
+                'target_platform': 'linux/arm/v8',
+            }
     elif build_target == 'pi3':
         return {
             'board': 'pi3',
@@ -98,7 +105,7 @@ def get_test_context() -> dict:
     }
 
 
-def get_viewer_context(board: str) -> dict:
+def get_viewer_context(board: str, target_platform: str) -> dict:
     webview_git_hash = (
         '389f1ccc' if board == 'pi5'
         else '5e556681738a1fa918dc9f0bf5879ace2e603e12'
@@ -235,7 +242,7 @@ def get_viewer_context(board: str) -> dict:
             'qt6-webengine-dev',
         ])
 
-    if board not in ['x86', 'pi5']:
+    if board not in ['x86', 'pi5'] and not (board == 'pi4' and target_platform == 'linux/arm64/v8'):
         apt_dependencies.extend([
             'libraspberrypi0',
             'libgst-dev',
