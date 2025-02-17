@@ -277,9 +277,19 @@
   register: debian_name
   changed_when: false
 
+- name: Check system bit width
+  ansible.builtin.command: getconf LONG_BIT
+  register: system_bits
+  changed_when: false
+
 - name: Set architecture
   ansible.builtin.set_fact:
-    architecture: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'armhf' }}"
+    architecture: >-
+      {{
+        'amd64' if ansible_architecture == 'x86_64'
+        else ('arm64' if device_type == 'pi4' and system_bits.stdout == '64'
+        else 'armhf')
+      }}
   when: |
     device_type == "pi1" or
     device_type == "pi2" or
