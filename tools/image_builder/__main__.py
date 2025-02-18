@@ -179,7 +179,7 @@ def main(
 
     # Override target platform if specified
     platform = target_platform or build_parameters['target_platform']
-    docker_tag = get_docker_tag('master', board, platform)
+    docker_tag = get_docker_tag(git_branch, board, platform)
 
     # Determine which services to build
     services_to_build = SERVICES if 'all' in service else list(set(service))
@@ -187,7 +187,7 @@ def main(
     # Build Docker images
     for service_name in services_to_build:
         # Define tag components
-        namespaces = ['nicomiguelino/anthias']
+        namespaces = ['screenly/anthias', 'screenly/srly-ose']
         version_suffix = (
             f'{board}-64' if board == 'pi4' and platform == 'linux/arm64/v8'
             else f'{board}'
