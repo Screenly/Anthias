@@ -45,7 +45,7 @@ RUN c_rehash
 
 # QT Base from packages does not support eglfs
 
-{% if board != 'pi5' %}
+{% if board != 'pi5' and board != 'pi4-64' %}
 RUN curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" \
         -sL -o "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" && \
     curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz.sha256" \
@@ -65,8 +65,12 @@ RUN curl "{{webview_base_url}}/webview-{{qt_version}}-{{debian_version}}-{{board
     tar -xzf "/tmp/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz" -C /usr/local && \
     rm "webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz"
 
-ENV QT_QPA_EGLFS_FORCE888=1
+{% if board == 'pi4' and target_platform == 'linux/arm64/v8' %}
+ENV QT_QPA_PLATFORM=xcb
+ENV DISPLAY=:0
+{% else %}
 ENV QT_QPA_PLATFORM=linuxfb
+{% endif %}
 
 # Turn on debug logging for now
 #ENV QT_LOGGING_RULES=qt.qpa.*=true

@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 
 import sh
 import vlc
+import platform
 
 from lib.device_helper import get_device_type
 from settings import settings
@@ -81,9 +82,14 @@ class VLCMediaPlayer(MediaPlayer):
                 return 'default:CARD=HID'
 
     def __get_options(self):
-        return [
+        options = [
             f'--alsa-audio-device={self.get_alsa_audio_device()}',
         ]
+
+        if platform.architecture()[0] == '64bit' and get_device_type() == 'pi4':
+            options.append('--vout=xcb_x11')
+
+        return options
 
     def set_asset(self, uri, duration):
         self.player.set_mrl(uri)
