@@ -69,9 +69,9 @@ When you're done, you can stop and remove the container with the following comma
 docker compose -f docker-compose.x86.yml down
 ```
 
-### Building for Raspberry Pi 5
+### Building for Raspberry Pi 4 and Raspberry Pi 5 Devices Running 64-Bit OS
 
-See this [documentation](/webview/docs/build_webview_for_pi5.md) for details
+See this [documentation](/webview/docs/build_webview_using_prebuilt_qt.md) for details
 
 ## Usage
 
