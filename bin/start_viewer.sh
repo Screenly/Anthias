@@ -38,6 +38,22 @@ trap '' 16
 # Disable swapping
 echo 0 >  /sys/fs/cgroup/memory/memory.swappiness
 
+# Start X server with dummy video driver
+export DISPLAY=:0
+rm -rf /tmp/.X0-lock
+Xorg :0 -s 0 dpms &
+
+# Wait for X server to be ready
+until xset -display :0 q > /dev/null 2>&1; do
+    echo "Waiting for X server to be ready"
+    sleep 0.1
+done
+
+# Now that X is ready, configure display settings
+xset -display :0 s off
+xset -display :0 s noblank
+xset -display :0 -dpms
+
 # Start viewer
 sudo -E -u viewer dbus-run-session python viewer.py &
 

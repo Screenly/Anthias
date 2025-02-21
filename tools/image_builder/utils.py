@@ -236,10 +236,19 @@ def get_viewer_context(board: str, target_platform: str) -> dict:
         'libswscale-dev',
     ]
 
-    if board == 'pi5':
+    if board == 'pi5' or (board == 'pi4' and target_platform == 'linux/arm64/v8'):
         apt_dependencies.extend([
             'qt6-base-dev',
             'qt6-webengine-dev',
+        ])
+
+    if board == 'pi4' and target_platform == 'linux/arm64/v8':
+        apt_dependencies.extend([
+            'xserver-xorg-core',
+            'xserver-xorg-video-fbdev',
+            'x11-xserver-utils',
+            'xauth',
+            'xinit',
         ])
 
     if board not in ['x86', 'pi5'] and not (board == 'pi4' and target_platform == 'linux/arm64/v8'):
@@ -259,6 +268,7 @@ def get_viewer_context(board: str, target_platform: str) -> dict:
         'qt_major_version': qt_major_version,
         'webview_git_hash': webview_git_hash,
         'webview_base_url': webview_base_url,
+        'target_platform': target_platform,
     }
 
 
