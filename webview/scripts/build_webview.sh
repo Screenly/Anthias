@@ -8,9 +8,16 @@ QT_MINOR='4'
 QT_PATCH='2'
 QT_VERSION="${QT_MAJOR}.${QT_MINOR}.${QT_PATCH}"
 CORE_COUNT="$(expr $(nproc) - 2)"
+PLATFORM="${PLATFORM:-pi5}"
+SUPPORTED_PLATFORMS=("pi4-64" "pi5")
+
+if [[ ! " ${SUPPORTED_PLATFORMS[@]} " =~ " ${PLATFORM} " ]]; then
+    echo "Unsupported platform: ${PLATFORM}"
+    exit 1
+fi
 
 function create_webview_archive() {
-    local ARCHIVE_NAME="webview-${QT_VERSION}-${DEBIAN_VERSION}-pi5-$GIT_HASH.tar.gz"
+    local ARCHIVE_NAME="webview-${QT_VERSION}-${DEBIAN_VERSION}-${PLATFORM}-$GIT_HASH.tar.gz"
     local ARCHIVE_DESTINATION="/build/release/${ARCHIVE_NAME}"
 
     mkdir -p /build/release

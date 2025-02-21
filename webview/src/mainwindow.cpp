@@ -4,6 +4,8 @@
 #include "mainwindow.h"
 #include "view.h"
 
+#include <QGuiApplication>
+#include <QScreen>
 
 MainWindow::MainWindow() : QMainWindow()
 {
@@ -11,6 +13,10 @@ MainWindow::MainWindow() : QMainWindow()
     view -> settings() -> setAttribute(QWebEngineSettings::LocalStorageEnabled, false);
     view -> settings() -> setAttribute(QWebEngineSettings::ShowScrollBars, false);
     setCentralWidget(view);
+
+    QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
+    setGeometry(screenGeometry);
+    showFullScreen();
 }
 
 void MainWindow::loadPage(const QString &uri)

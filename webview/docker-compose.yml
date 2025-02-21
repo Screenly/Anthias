@@ -1,0 +1,31 @@
+services:
+  builder-pi5:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.pi5
+    environment:
+      - GIT_HASH=${GIT_HASH}
+      - PLATFORM=pi5
+    tty: true
+    stdin_open: true
+    volumes:
+      - "~/tmp/pi5/build:/build:Z"
+      - "./examples:/src/examples"
+      - "./:/webview:ro"
+      - "./scripts/build_webview.sh:/scripts/build_webview.sh"
+    profiles: [pi5]
+  builder-pi4-64:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.pi4-64
+    environment:
+      - GIT_HASH=${GIT_HASH}
+      - PLATFORM=pi4-64
+    tty: true
+    stdin_open: true
+    volumes:
+      - "~/tmp/pi4-64/build:/build:Z"
+      - "./examples:/src/examples"
+      - "./:/webview:ro"
+      - "./scripts/build_webview.sh:/scripts/build_webview.sh"
+    profiles: [pi4-64]
