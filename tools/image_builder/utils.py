@@ -115,6 +115,7 @@ def get_viewer_context(board: str, target_platform: str) -> dict:
         f'{releases_url}/WebView-v0.3.4' if board == 'pi5'
         else f'{releases_url}/WebView-v0.3.3'
     )
+    context = {}
 
     qt_version = '5.15.14'
 
@@ -262,6 +263,11 @@ def get_viewer_context(board: str, target_platform: str) -> dict:
         if board != 'pi1':
             apt_dependencies.extend(['libssl1.1'])
 
+    if board == 'pi4' and target_platform == 'linux/arm64/v8':
+        context.update({
+            'board': 'pi4-64',
+        })
+
     return {
         'apt_dependencies': apt_dependencies,
         'qt_version': qt_version,
@@ -269,6 +275,7 @@ def get_viewer_context(board: str, target_platform: str) -> dict:
         'webview_git_hash': webview_git_hash,
         'webview_base_url': webview_base_url,
         'target_platform': target_platform,
+        **context,
     }
 
 
