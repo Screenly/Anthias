@@ -29,15 +29,15 @@ fi
 # Detect Raspberry Pi version
 if [ ! -f /proc/device-tree/model ] && [ "$(uname -m)" = "x86_64" ]; then
     export DEVICE_TYPE="x86"
-elif grep -qF "Raspberry Pi 5" /proc/device-tree/model; then
+elif grep -qF "Raspberry Pi 5" /proc/device-tree/model || grep -qF "Compute Module 5" /proc/device-tree/model; then
     export DEVICE_TYPE="pi5"
-elif grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
+elif grep -qF "Raspberry Pi 4" /proc/device-tree/model || grep -qF "Compute Module 4" /proc/device-tree/model; then
     if [ "$(getconf LONG_BIT)" = "64" ]; then
         export DEVICE_TYPE="pi4-64"
     else
         export DEVICE_TYPE="pi4"
     fi
-elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
+elif grep -qF "Raspberry Pi 3" /proc/device-tree/model || grep -qF "Compute Module 3" /proc/device-tree/model; then
     export DEVICE_TYPE="pi3"
 elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
     export DEVICE_TYPE="pi2"
