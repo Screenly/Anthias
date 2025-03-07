@@ -30,7 +30,7 @@ $ docker run -itd \
 You should now be able to invoke a run executing the following command:
 
 ```bash
-$ docker exec -it qt-builder-instance /webview/build_qt5.sh
+$ docker exec -it qt-builder-instance /webview/build_webview_with_qt5.sh
 ```
 
 This will start the process of building QT for *all* Raspberry Pi boards if you don't specify a `TARGET` environment variable.
@@ -59,6 +59,12 @@ You can append the following environment variables to configure the build proces
 $ cd webview
 $ docker compose -f docker-compose.x86.yml up -d --build
 $ docker compose -f docker-compose.x86.yml exec builder /webview/build_x86.sh
+```
+
+By default, the script will use pre-built Qt binaries to speed up the build process. If you want to build Qt from source, you can set the `BUILD_QT` environment variable:
+
+```bash
+$ docker compose -f docker-compose.x86.yml exec -e BUILD_QT=1 builder /webview/build_x86.sh
 ```
 
 The resulting files will be placed in `~/tmp-x86/qt-build/release`.
