@@ -13,7 +13,7 @@ ruff = "^0.8.4"
 
 [tool.poetry.group.docker-image-builder.dependencies]
 click = '^8.1.7'
-jinja2 = '^3.1.5'
+jinja2 = '^3.1.6'
 pygit2 = '^1.15.1'
 requests = '^2.32.3'
 python-on-whales = '^0.73.0'
