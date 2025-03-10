@@ -13,6 +13,7 @@ RUN { \
         build-essential \
         ccache \
         cmake \
+        curl \
         flex \
         freeglut3-dev \
         gawk \

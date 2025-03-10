@@ -18,6 +18,23 @@ QT_PATCH='3'
 QT_VERSION="${QT_MAJOR}.${QT_MINOR}.${QT_PATCH}"
 QT6_HOST_STAGING_PATH="/usr/local/qt6"
 
+ANTHIAS_RELEASE_URL="https://github.com/Screenly/Anthias/releases"
+WEBVIEW_VERSION="0.3.3"
+
+function download_and_extract_qt6() {
+    local WEBVIEW_DL_URL="$ANTHIAS_RELEASE_URL/download/WebView-v$WEBVIEW_VERSION/qt6-$QT_VERSION-$DEBIAN_VERSION-x86.tar.gz"
+    local WEBVIEW_DL_URL_SHA256="$WEBVIEW_DL_URL.sha256"
+
+    mkdir -p /usr/local
+
+    cd /tmp
+    curl -sL "$WEBVIEW_DL_URL" -o "qt6-$QT_VERSION-$DEBIAN_VERSION-x86.tar.gz"
+    curl -sL "$WEBVIEW_DL_URL_SHA256" -o "qt6-$QT_VERSION-$DEBIAN_VERSION-x86.tar.gz.sha256"
+
+    sha256sum -c "qt6-$QT_VERSION-$DEBIAN_VERSION-x86.tar.gz.sha256"
+    tar -xzf "qt6-$QT_VERSION-$DEBIAN_VERSION-x86.tar.gz" -C /usr/local
+}
+
 function install_qt() {
     QT_RELEASES_URL="https://download.qt.io/archive/qt"
     QT_DOWNLOAD_BASE_URL="${QT_RELEASES_URL}/${QT_MAJOR}.${QT_MINOR}/${QT_VERSION}/submodules"
@@ -116,8 +133,15 @@ function create_webview_archive() {
 }
 
 function main() {
-    install_qt
-    create_qt_archive
+    mkdir -p /build/release
+
+    if [ "${BUILD_QT:-0}" -eq 1 ]; then
+        install_qt
+        create_qt_archive
+    else
+        download_and_extract_qt6
+    fi
+
     create_webview_archive
 }
 
