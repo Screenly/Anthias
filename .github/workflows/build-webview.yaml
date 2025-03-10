@@ -96,7 +96,7 @@ jobs:
             -v $(pwd):/webview:ro \
             -e TARGET=${{ matrix.board }} \
             screenly/ose-qt-builder:latest
-          docker exec -it qt-builder /webview/build_qt5.sh
+          docker exec -it qt-builder /webview/build_webview_with_qt5.sh
           docker rm -f qt-builder
 
       - uses: actions/upload-artifact@v4
