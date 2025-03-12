@@ -40,7 +40,7 @@ Once your Pi is booting from the SSD, you have a couple of housekeeping tasks to
 - Update the OS using `sudo apt update` and `sudo apt full-upgrade -y`
 - Check the bootloader is at the latest version using `sudo rpi-eeprom-update`
 - If there is an EEPROM update, then use `sudo raspi-config` to update it
-- Go to `6 Advanced Opitions` => `A5 Bootloader Version` => `E1 Latest`, then select `Yes`
+- Go to `6 Advanced Opitions` &rarr; `A5 Bootloader Version` &rarr; `E1 Latest`, then select `Yes`
 - Reboot the Pi
 - Finally, you'll need to run the Anthias installer: `bash <(curl -sL https://install-anthias.srly.io)`
 - Follow the prompts to install and reboot the Pi
