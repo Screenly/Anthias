@@ -6,7 +6,7 @@ The following guide has been tested using a Raspberry Pi 5 with 8GB RAM and a [G
 
 Other HAT's should work just fine as long as they are supported by the Pi.
 
-We used a 256GB M.2 NVMe SSD as it came in the 2242 form factor, and was small and cheap (at time of writing, these were approx £15+vat from our supplier).
+We used a 256GB M.2 NVMe SSD as it came in the 2242 (22mm x 44mm) form factor.
 
 You may also need a microSD card to initially configure your Pi. Once the first steps are done you won't require this.
 
