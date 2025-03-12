@@ -31,7 +31,7 @@ Depending on the bootloader version of your Pi, you may need to boot from microS
 - Add the line: `PCIE_PROBE=1`
 - Type **Ctrl-O** to save the file.
 - Type **Ctrl-X** to exit the editor.
-- Remove the SD card, and power cycle the Pi.
+- Remove the microSD card, and power cycle the Pi.
 
 ### Boot from SSD
 
