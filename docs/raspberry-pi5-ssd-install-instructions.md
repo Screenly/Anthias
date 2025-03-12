@@ -48,4 +48,5 @@ Once your Pi is booting from the SSD, you have a couple of housekeeping tasks to
 
 ### Post Install Issues
 
-If after it completes and you reboot you still get a black screen, simply press `control+alt+f1` to get into the console and then run: `./screenly/bin/upgrade_containers.sh` this should re-run the container creation step and have the system up and running properly.
+> [!NOTE]
+> If you still get a black screen after the installation completes and after a reboot, simply press `Ctrl-Alt-F1` to get into the console and then run `./screenly/bin/upgrade_containers.sh`. this should re-run the container creation step and have the system up and running properly.
