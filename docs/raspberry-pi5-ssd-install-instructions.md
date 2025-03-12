@@ -2,7 +2,7 @@
 
 ## Appropriate Hardware
 
-The following guide has been tested using a Pi5/8GB and a GeeekPi P33 PoE+PCI-e HAT. (See: https://pipci.jeffgeerling.com/hats/geeekpi-p33-m2-nvme-poe-hat.html )
+The following guide has been tested using a Raspberry Pi 5 with 8GB RAM and a [GeeekPi P33 PoE+PCI-e HAT](https://pipci.jeffgeerling.com/hats/geeekpi-p33-m2-nvme-poe-hat.html).
 
 Other HAT's should work just fine as long as they are supported by the Pi.
 
