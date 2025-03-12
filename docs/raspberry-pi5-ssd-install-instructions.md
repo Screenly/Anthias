@@ -1,6 +1,6 @@
 # How to install on a Raspberry Pi 5 with PCI-e SSD
 
-## Appropriate Hardware
+## Hardware
 
 The following guide has been tested using a Raspberry Pi 5 with 8GB RAM and a [GeeekPi P33 PoE+PCI-e HAT](https://pipci.jeffgeerling.com/hats/geeekpi-p33-m2-nvme-poe-hat.html).
 
