@@ -14,7 +14,11 @@ You may also need a microSD card to initially configure your Pi. Once the first 
 
 Using the Raspberry Pi Imager and appropriate USB adapters, write the 64-bit version of Raspberry Pi OS Lite (Bookworm) to both the microSD card and the SSD.
 
-There are other ways (Such as a network boot if enabled on the Pi, Booting from SD and using the SD Card copier utility to copy the OS to the SSD, or Booting from SD and using the RPI Imager to write a fresh copy to the SSD, or using rpiboot mode to present the SSD as mass storage to a PC.
+There alternative ways to install:
+- Network boot (if enabled on the Pi)
+- Booting from the microSD card and using the SD Card copier utility to copy the OS to the SSD
+- Booting from the microSD and using the Raspberry Pi Imager to write a fresh copy to the SSD
+- Using `rpiboot` mode to display the SSD as a mass storage device on a PC.
 
 Do whatever is easiest for you!
 
