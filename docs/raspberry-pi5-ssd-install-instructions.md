@@ -29,7 +29,7 @@ Depending on the bootloader version of your Pi, you may need to boot from microS
 - Once booted, run the RPI EEPROM configurator: `sudo rpi-eeprom-config -edit`. This will open up the [Nano](https://www.nano-editor.org/) text editor.
 - Change the boot order to: `BOOT_ORDER=0xf416`
 - Add the line: `PCIE_PROBE=1`
-- Type: Ctrl-O to save the file
+- Type **Ctrl-O** to save the file.
 - Type: Ctrl-X to exit the editor
 - Remove the SD card, and power cycle the Pi.
 
