@@ -10,7 +10,7 @@ We used a 256GB M.2 NVMe SSD as it came in the 2242 form factor, and was small a
 
 You may also need a microSD card to initially configure your Pi. Once the first steps are done you won't require this.
 
-## Install procedure
+## Installation
 
 Using the Raspberry Pi Imager and appropriate USB adapters, write the 64-bit version of Raspberry Pi OS to both a SD card and the SSD.
 
