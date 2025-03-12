@@ -26,7 +26,7 @@ Do whatever is easiest for you!
 
 Depending on the bootloader version of your Pi, you may need to boot from microSD first and set the bootloader to boot from PCIe.
 
-- Once booted, run the RPI EEPROM configurator: `sudo rpi-eeprom-config -edit`
+- Once booted, run the RPI EEPROM configurator: `sudo rpi-eeprom-config -edit`. This will open up the [Nano](https://www.nano-editor.org/) text editor.
 - Change the boot order to: `BOOT_ORDER=0xf416`
 - Add the line: `PCIE_PROBE=1`
 - Type: Ctrl-O to save the file
