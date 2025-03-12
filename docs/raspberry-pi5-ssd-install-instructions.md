@@ -8,7 +8,7 @@ Other HAT's should work just fine as long as they are supported by the Pi.
 
 We used a 256GB M.2 NVMe SSD as it came in the 2242 form factor, and was small and cheap (at time of writing, these were approx £15+vat from our supplier).
 
-You may also need a SD Card initially to configure your Pi, once the first steps are done you won't require this.
+You may also need a microSD card to initially configure your Pi. Once the first steps are done you won't require this.
 
 ## Install procedure
 
