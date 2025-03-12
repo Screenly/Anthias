@@ -46,6 +46,6 @@ Once your Pi is booting from the SSD, you have a couple of housekeeping tasks to
 - Follow the prompts to install and reboot the Pi
 - Once the install has completed, don't forget to change the password for your Pi uinsg `passwd`
 
-### Post install issues
+### Post Install Issues
 
 If after it completes and you reboot you still get a black screen, simply press `control+alt+f1` to get into the console and then run: `./screenly/bin/upgrade_containers.sh` this should re-run the container creation step and have the system up and running properly.
