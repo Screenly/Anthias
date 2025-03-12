@@ -135,7 +135,7 @@ Otherwise, if you've selected **No** for the system upgrade, then you don't need
 Go through the steps in [this documentation](/docs/balena-fleet-deployment.md)
 to deploy Anthias on your own Balena fleet.
 
-# Installed on a Raspberry Pi 5 with an SSD
+# Installing on a Raspberry Pi 5 with an SSD
 
 Go through the steps in [this documentation](/docs/raspberry-pi5-ssd-install-instructions.md)
 to deploy Anthias on a Pi5 with an SSD
