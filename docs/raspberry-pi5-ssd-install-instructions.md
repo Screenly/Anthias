@@ -24,7 +24,7 @@ Do whatever is easiest for you!
 
 ### Boot from SD
 
-Depending on the bootloader version of your Pi, you may need to boot from SD first and set the bootloader to boot from PCIe.
+Depending on the bootloader version of your Pi, you may need to boot from microSD first and set the bootloader to boot from PCIe.
 
 - Once booted, run the RPI EEPROM configurator: `sudo rpi-eeprom-config -edit`
 - Change the boot order to: `BOOT_ORDER=0xf416`
