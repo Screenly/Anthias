@@ -56,28 +56,42 @@ You can append the following environment variables to configure the build proces
 ### Building for x86
 
 ```bash
-$ cd webview
-$ docker compose -f docker-compose.x86.yml up -d --build
-$ docker compose -f docker-compose.x86.yml exec builder /webview/build_x86.sh
+$ cd webview/
+$ export GIT_HASH=$(git rev-parse --short HEAD)
+$ export COMPOSE_PROFILES=x86
+$ docker compose up -d --build
+$ docker compose exec builder-x86 /scripts/build_webview.sh
 ```
 
-By default, the script will use pre-built Qt binaries to speed up the build process. If you want to build Qt from source, you can set the `BUILD_QT` environment variable:
-
-```bash
-$ docker compose -f docker-compose.x86.yml exec -e BUILD_QT=1 builder /webview/build_x86.sh
-```
-
-The resulting files will be placed in `~/tmp-x86/qt-build/release`.
+The resulting files will be placed in `~/tmp-x86/build/release`.
 
 When you're done, you can stop and remove the container with the following commands:
 
 ```bash
-docker compose -f docker-compose.x86.yml down
+$ docker compose down
 ```
 
 ### Building for Raspberry Pi 5
 
-See this [documentation](/webview/docs/build_webview_for_pi5.md) for details
+> [!NOTE]
+> At this time, you can only build the WebView for Raspberry Pi 5 devices
+> from a Raspberry Pi 5 device.
+> You need to have the following installed and set up on your Raspberry Pi 5:
+> - Docker (arm64)
+> - Code editor of your choice (e.g., Visual Studio Code, Neovim, etc.)
+
+The steps are similar to that of [building for x86](#building-for-x86),
+but you need to specify the set the Docker Compose profile to `pi5`:
+
+```bash
+$ cd webview/
+$ export GIT_HASH=$(git rev-parse --short HEAD)
+$ export COMPOSE_PROFILES=pi5
+$ docker compose up -d --build
+$ docker compose exec builder-pi5 /scripts/build_webview.sh
+```
+
+The resulting files will be placed in `~/tmp-pi5/build/release`.
 
 ## Usage
 

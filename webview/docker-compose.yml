@@ -1,0 +1,33 @@
+services:
+  builder-x86:
+    profiles:
+      - x86
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.x86
+    environment:
+      - GIT_HASH=${GIT_HASH}
+      - BOARD=x86
+    tty: true
+    stdin_open: true
+    volumes:
+      - "~/tmp-x86/build:/build:Z"
+      - "./:/webview:ro"
+      - "./scripts/build_webview.sh:/scripts/build_webview.sh"
+
+  builder-pi5:
+    profiles:
+      - pi5
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.pi5
+    environment:
+      - GIT_HASH=${GIT_HASH}
+      - BOARD=pi5
+    tty: true
+    stdin_open: true
+    volumes:
+      - "~/tmp-pi5/build:/build:Z"
+      - "./examples:/src/examples"
+      - "./:/webview:ro"
+      - "./scripts/build_webview.sh:/scripts/build_webview.sh"
