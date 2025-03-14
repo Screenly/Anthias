@@ -60,7 +60,7 @@ $ cd webview/
 $ export GIT_HASH=$(git rev-parse --short HEAD)
 $ export COMPOSE_PROFILES=x86
 $ docker compose up -d --build
-$ docker compose exec builder /webview/build_x86.sh
+$ docker compose exec builder-x86 /scripts/build_webview.sh
 ```
 
 The resulting files will be placed in `~/tmp-x86/build/release`.
@@ -88,7 +88,7 @@ $ cd webview/
 $ export GIT_HASH=$(git rev-parse --short HEAD)
 $ export COMPOSE_PROFILES=pi5
 $ docker compose up -d --build
-$ docker compose exec builder /webview/build_pi5.sh
+$ docker compose exec builder-pi5 /scripts/build_webview.sh
 ```
 
 The resulting files will be placed in `~/tmp-pi5/build/release`.
