@@ -41,7 +41,8 @@ jobs:
             --build-arg GIT_HASH=$(git rev-parse --short HEAD) \
             -t qt-builder .
 
-      - name: Start Docker Containers
+      - name: Build WebView for ${{ matrix.board }}
+        shell: 'script -q -e -c "bash {0}"'
         run: |
           docker run -itd \
             --name qt-builder-instance \
@@ -50,10 +51,6 @@ jobs:
             -v $(pwd):/webview:ro \
             -e TARGET="${{ matrix.board }}" \
             qt-builder
-
-      - name: Build WebView for ${{ matrix.board }}
-        shell: 'script -q -e -c "bash {0}"'
-        run: |
           docker exec -it qt-builder-instance /webview/build_webview_with_qt5.sh
           docker rm -f qt-builder-instance
 
