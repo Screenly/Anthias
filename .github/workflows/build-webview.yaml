@@ -8,6 +8,13 @@ on:
       - '.github/workflows/build-webview.yaml'
       - 'webview/**'
       - '!webview/README.md'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/build-webview.yaml'
+      - 'webview/**'
+      - '!webview/README.md'
 
 jobs:
   build-docker-image:
@@ -98,6 +105,10 @@ jobs:
             screenly/ose-qt-builder:latest
           docker exec -it qt-builder /webview/build_webview_with_qt5.sh
           docker rm -f qt-builder
+
+      - name: 'Debug: List files in ~/tmp/qt-build'
+        run: |
+          ls -lah ~/tmp/qt-build
 
       - uses: actions/upload-artifact@v4
         with:
