@@ -61,5 +61,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Release files
+          name: webview-${{ matrix.board }}
           path: ~/tmp/qt-build/
