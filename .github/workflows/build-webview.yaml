@@ -8,16 +8,49 @@ on:
       - '.github/workflows/build-webview.yaml'
       - 'webview/**'
       - '!webview/README.md'
-  pull_request:
-    branches:
-      - master
-    paths:
-      - '.github/workflows/build-webview.yaml'
-      - 'webview/**'
-      - '!webview/README.md'
 
 jobs:
-  compile-webview:
+  build-docker-image:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        if: success() && github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set buildx arguments
+        id: prepare
+        run: |
+          {
+            echo "buildx_args=--cache-from \"screenly/ose-qt-builder:latest\" \
+            --output \"type=image,push=true\" \
+            --build-arg \"BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')\" \
+            --build-arg \"GIT_HASH=$GITHUB_SHA\" \
+            --build-arg \"GIT_SHORT_HASH=$(git rev-parse --short HEAD)\" \
+            --build-arg \"GIT_BRANCH=$GITHUB_REF_NAME\""
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Building container
+        run: |
+          cd webview
+          docker buildx build \
+            ${{ steps.prepare.outputs.buildx_args }} \
+            -t screenly/ose-qt-builder:latest .
+
+  compile-qt:
+    needs: build-docker-image
     strategy:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
@@ -33,31 +66,38 @@ jobs:
         id: buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker Images
-        run: |
-          cd webview/
-          docker buildx build \
-            --load \
-            --build-arg GIT_HASH=$(git rev-parse --short HEAD) \
-            -t qt-builder .
+      - name: Cache build layers
+        uses: actions/cache@v4
+        id: cache
+        with:
+          path: /tmp/.cache
+          key: ${{ runner.os }}-webview-${{ matrix.board }}
+          restore-keys: |
+            ${{ runner.os }}-webview-${{ matrix.board }}
 
-      - name: Build WebView for ${{ matrix.board }}
+      - name: Build ccache
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          # Unclear why this is needed
+          mkdir -p /tmp/.cache
+          wget -q https://storage.googleapis.com/ose-lab/cache.tgz
+          tar xfz cache.tgz -C /tmp/.cache
+          ls -lah /tmp/.cache
+
+      - name: Start compilation
         shell: 'script -q -e -c "bash {0}"'
         run: |
-          cd webview/
+          cd webview
           docker run -itd \
-            --name qt-builder-instance \
+            --name qt-builder \
             -v ~/tmp/qt-src:/src:Z \
+            -v /tmp/.cache/ccache:/src/ccache:Z \
             -v ~/tmp/qt-build:/build:Z \
             -v $(pwd):/webview:ro \
-            -e TARGET="${{ matrix.board }}" \
-            qt-builder
-          docker exec -it qt-builder-instance /webview/build_webview_with_qt5.sh
-          docker rm -f qt-builder-instance
-
-      - name: 'DEBUG: List files in ~/tmp/qt-build'
-        run: |
-          ls -lah ~/tmp/qt-build
+            -e TARGET=${{ matrix.board }} \
+            screenly/ose-qt-builder:latest
+          docker exec -it qt-builder /webview/build_webview_with_qt5.sh
+          docker rm -f qt-builder
 
       - uses: actions/upload-artifact@v4
         with:
