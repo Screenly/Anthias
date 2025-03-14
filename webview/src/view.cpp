@@ -24,6 +24,7 @@ void View::loadPage(const QString &uri)
     qDebug() << "Type: Webpage";
     stop();
     load(QUrl(uri));
+    clearFocus();
 }
 
 void View::loadImage(const QString &preUri)
@@ -61,6 +62,7 @@ void View::loadImage(const QString &preUri)
 
     stop();
     pre_loader -> setHtml("<html><head><script>" + script + "</script></head><body style='" + styles + "'><script>window.setimg(\"" + src + "\");</script></body></html>");
+    clearFocus();
 
     connect(pre_loader, &QWebEnginePage::loadFinished, this, [=](bool result){
         if (result)
