@@ -15,7 +15,7 @@ DEBIAN_VERSION=$(lsb_release -cs)
 MAKE_CORES="$(expr $(nproc) + 2)"
 
 ANTHIAS_RELEASE_URL="https://github.com/Screenly/Anthias/releases"
-WEBVIEW_VERSION="0.3.3"
+WEBVIEW_VERSION="0.3.5"
 
 mkdir -p "$BUILD_TARGET"
 mkdir -p "$SRC"
