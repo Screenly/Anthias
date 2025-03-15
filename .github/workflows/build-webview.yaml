@@ -63,7 +63,7 @@ jobs:
 
   compile-webview-part-1:
     name: Compile Webview (Pi 1-4)
-    needs: ${{ github.event_name != 'pull_request' && 'build-docker-image' || '' }}
+    needs: build-docker-image
     strategy:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
