@@ -162,8 +162,10 @@ jobs:
 
       - name: Set environment variables (to be used in next steps)
         run: |
-          export GIT_HASH="$(git rev-parse --short HEAD)"
-          export COMPOSE_PROFILES=x86
+          GIT_HASH=""
+          COMPOSE_PROFILES=""
+          GIT_HASH="$(git rev-parse --short HEAD)"
+          COMPOSE_PROFILES="x86"
           echo "GIT_HASH=$GIT_HASH" >> "$GITHUB_ENV"
           echo "COMPOSE_PROFILES=$COMPOSE_PROFILES" >> "$GITHUB_ENV"
 
