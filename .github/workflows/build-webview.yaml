@@ -127,22 +127,6 @@ jobs:
             ~/tmp/qt-build/qt5-*.tar.gz.sha256 \
             ./build
 
-      - name: Inspect current directory
-        run: |
-          pwd
-          ls -lah ./build
-
-      - name: Create a release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          prerelease: true
-          files: |
-            build/webview-*.tar.gz
-            build/webview-*.tar.gz.sha256
-            build/qt5-*.tar.gz
-            build/qt5-*.tar.gz.sha256
-
       - uses: actions/upload-artifact@v4
         with:
           name: webview-${{ matrix.board }}
@@ -187,21 +171,31 @@ jobs:
             ~/tmp-x86/build/release/webview-*.tar.gz.sha256 \
             ./build
 
-      - name: Inspect current directory
-        run: |
-          pwd
-          ls -lah ./build
-
       - uses: actions/upload-artifact@v4
         with:
           name: webview-x86
           path: ./build
 
+  create-releases:
+    name: Create Releases
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - compile-webview-part-1
+      - compile-webview-part-2
+    matrix:
+      board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: webview-${{ matrix.board }}
+          path: ./build
       - name: Create a release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           prerelease: true
           files: |
             build/webview-*.tar.gz
             build/webview-*.tar.gz.sha256
+            build/qt5-*.tar.gz
+            build/qt5-*.tar.gz.sha256
