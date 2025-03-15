@@ -10,9 +10,17 @@ on:
       - '!webview/README.md'
     tags:
       - 'WebView-v*'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/build-webview.yaml'
+      - 'webview/**'
+      - '!webview/README.md'
 
 jobs:
   build-docker-image:
+    name: Build Docker Images (Pi 1-4)
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -33,6 +41,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Set buildx arguments
+        if: github.event_name != 'pull_request'
         id: prepare
         run: |
           GIT_SHORT_HASH=$(git rev-parse --short HEAD)
@@ -47,13 +56,15 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Building container
+        if: github.event_name != 'pull_request'
         run: |
           cd webview
           docker buildx build \
             ${{ steps.prepare.outputs.buildx_args }} \
             -t screenly/ose-qt-builder:latest .
 
-  compile-qt:
+  compile-webview-part-1:
+    name: Compile Webview (Pi 1-4)
     needs: build-docker-image
     strategy:
       matrix:
@@ -116,13 +127,71 @@ jobs:
             ~/tmp/qt-build/qt5-*.tar.gz.sha256 \
             ./build
 
-      - name: Inspect current directory
-        run: |
-          pwd
-          ls -lah ./build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: webview-${{ matrix.board }}
+          path: ~/tmp/qt-build/
 
+  compile-webview-part-2:
+    name: Compile Webview (x86)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set environment variables (to be used in next steps)
+        run: |
+          GIT_HASH=""
+          COMPOSE_PROFILES=""
+          GIT_HASH="$(git rev-parse --short HEAD)"
+          COMPOSE_PROFILES="x86"
+          echo "GIT_HASH=$GIT_HASH" >> "$GITHUB_ENV"
+          echo "COMPOSE_PROFILES=$COMPOSE_PROFILES" >> "$GITHUB_ENV"
+
+      - name: Build Docker Image
+        run: |
+          cd webview
+          docker compose build
+
+      - name: Compile WebView
+        run: |
+          cd webview
+          docker compose run builder-x86 /scripts/build_webview.sh
+
+      - name: Copy build artifacts
+        run: |
+          mkdir -p ./build
+          cp ~/tmp-x86/build/release/webview-*.tar.gz \
+            ~/tmp-x86/build/release/webview-*.tar.gz.sha256 \
+            ./build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: webview-x86
+          path: ./build
+
+  create-releases:
+    name: Create Releases
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - compile-webview-part-1
+      - compile-webview-part-2
+    strategy:
+      matrix:
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: webview-${{ matrix.board }}
+          path: ./build
       - name: Create a release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           prerelease: true
@@ -131,8 +200,3 @@ jobs:
             build/webview-*.tar.gz.sha256
             build/qt5-*.tar.gz
             build/qt5-*.tar.gz.sha256
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: webview-${{ matrix.board }}
-          path: ~/tmp/qt-build/
