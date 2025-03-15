@@ -59,6 +59,10 @@ jobs:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -103,9 +107,19 @@ jobs:
           docker exec -it qt-builder /webview/build_webview_with_qt5.sh
           docker rm -f qt-builder
 
-      - name: Inspect build directory
+      - name: Copy build artifacts
         run: |
-          ls -lah ~/tmp/qt-build
+          mkdir -p ./build
+          cp ~/tmp/qt-build/webview-*.tar.gz \
+            ~/tmp/qt-build/webview-*.tar.gz.sha256 \
+            ~/tmp/qt-build/qt5-*.tar.gz \
+            ~/tmp/qt-build/qt5-*.tar.gz.sha256 \
+            ./build
+
+      - name: Inspect current directory
+        run: |
+          pwd
+          ls -lah ./build
 
       - name: Create a release
         if: startsWith(github.ref, 'refs/tags/')
@@ -113,10 +127,10 @@ jobs:
         with:
           prerelease: true
           files: |
-            ~/tmp/qt-build/webview-*.tar.gz
-            ~/tmp/qt-build/webview-*.tar.gz.sha256
-            ~/tmp/qt-build/qt5-*.tar.gz
-            ~/tmp/qt-build/qt5-*.tar.gz.sha256
+            build/webview-*.tar.gz
+            build/webview-*.tar.gz.sha256
+            build/qt5-*.tar.gz
+            build/qt5-*.tar.gz.sha256
 
       - uses: actions/upload-artifact@v4
         with:
