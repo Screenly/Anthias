@@ -108,16 +108,15 @@ jobs:
           ls -lah ~/tmp/qt-build
 
       - name: Create a release
-        working-directory: ~/tmp/qt-build
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           prerelease: true
           files: |
-            webview-*.tar.gz
-            webview-*.tar.gz.sha256
-            qt5-*.tar.gz
-            qt5-*.tar.gz.sha256
+            ~/tmp/qt-build/webview-*.tar.gz
+            ~/tmp/qt-build/webview-*.tar.gz.sha256
+            ~/tmp/qt-build/qt5-*.tar.gz
+            ~/tmp/qt-build/qt5-*.tar.gz.sha256
 
       - uses: actions/upload-artifact@v4
         with:
