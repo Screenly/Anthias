@@ -10,9 +10,17 @@ on:
       - '!webview/README.md'
     tags:
       - 'WebView-v*'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/build-webview.yaml'
+      - 'webview/**'
+      - '!webview/README.md'
 
 jobs:
   build-docker-image:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -53,8 +61,9 @@ jobs:
             ${{ steps.prepare.outputs.buildx_args }} \
             -t screenly/ose-qt-builder:latest .
 
-  compile-qt:
-    needs: build-docker-image
+  compile-webview-part-1:
+    name: Compile Webview (Pi 1-4)
+    needs: ${{ github.event_name != 'pull_request' && 'build-docker-image' || '' }}
     strategy:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
@@ -136,3 +145,50 @@ jobs:
         with:
           name: webview-${{ matrix.board }}
           path: ~/tmp/qt-build/
+
+  compile-webview-part-2:
+    name: Compile Webview (x86)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set environment variables (to be used in next steps)
+        run: |
+          export GIT_HASH="$(git rev-parse --short HEAD)"
+          export COMPOSE_PROFILES=x86
+          echo "GIT_HASH=$GIT_HASH" >> "$GITHUB_ENV"
+          echo "COMPOSE_PROFILES=$COMPOSE_PROFILES" >> "$GITHUB_ENV"
+
+      - name: Build Docker Image
+        run: |
+          cd webview
+          docker compose build
+
+      - name: Compile WebView
+        run: |
+          cd webview
+          docker compose run builder-x86 /scripts/build_webview.sh
+
+      - name: Copy build artifacts
+        run: |
+          mkdir -p ./build
+          cp ~/tmp-x86/build/release/webview-*.tar.gz \
+            ~/tmp-x86/build/release/webview-*.tar.gz.sha256 \
+            ./build
+
+      - name: Inspect current directory
+        run: |
+          pwd
+          ls -lah ./build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: webview-x86
+          path: ./build
