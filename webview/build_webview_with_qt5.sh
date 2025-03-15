@@ -44,6 +44,9 @@ function download_and_extract_qt5() {
     curl -sL "$WEBVIEW_DL_URL" -o /tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$DEVICE.tar.gz
     curl -sL "$WEBVIEW_DL_URL_SHA256" -o /tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$DEVICE.tar.gz.sha256
 
+    cp -n /tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$DEVICE.tar.gz /build/
+    cp -n /tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$DEVICE.tar.gz.sha256 /build/
+
     cd /tmp
     sha256sum -c "qt5-$QT_VERSION-$DEBIAN_VERSION-$DEVICE.tar.gz.sha256"
     tar -xzf "qt5-$QT_VERSION-$DEBIAN_VERSION-$DEVICE.tar.gz" -C "$SRC_DIR"
