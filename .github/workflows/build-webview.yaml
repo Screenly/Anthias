@@ -8,6 +8,8 @@ on:
       - '.github/workflows/build-webview.yaml'
       - 'webview/**'
       - '!webview/README.md'
+    tags:
+      - 'WebView-v*'
 
 jobs:
   build-docker-image:
@@ -100,6 +102,17 @@ jobs:
             screenly/ose-qt-builder:latest
           docker exec -it qt-builder /webview/build_webview_with_qt5.sh
           docker rm -f qt-builder
+
+      - name: Create a release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          files: |
+            ~/tmp/qt-build/webview-*.tar.gz
+            ~/tmp/qt-build/webview-*.tar.gz.sha256
+            ~/tmp/qt-build/qt*.tar.gz
+            ~/tmp/qt-build/qt*.tar.gz.sha256
 
       - uses: actions/upload-artifact@v4
         with:
