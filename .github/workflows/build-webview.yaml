@@ -107,16 +107,18 @@ jobs:
           docker exec -it qt-builder /webview/build_webview_with_qt5.sh
           docker rm -f qt-builder
 
-      - name: Copy build artifacts to the current directory
+      - name: Copy build artifacts
         run: |
+          mkdir -p ./build
           cp ~/tmp/qt-build/webview-*.tar.gz \
             ~/tmp/qt-build/webview-*.tar.gz.sha256 \
             ~/tmp/qt-build/qt5-*.tar.gz \
             ~/tmp/qt-build/qt5-*.tar.gz.sha256 \
-            .
+            ./build
 
       - name: Inspect current directory
         run: |
+          pwd
           ls -lah .
 
       - name: Create a release
@@ -125,10 +127,10 @@ jobs:
         with:
           prerelease: true
           files: |
-            webview-*.tar.gz
-            webview-*.tar.gz.sha256
-            qt5-*.tar.gz
-            qt5-*.tar.gz.sha256
+            build/webview-*.tar.gz
+            build/webview-*.tar.gz.sha256
+            build/qt5-*.tar.gz
+            build/qt5-*.tar.gz.sha256
 
       - uses: actions/upload-artifact@v4
         with:
