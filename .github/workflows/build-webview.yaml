@@ -20,7 +20,6 @@ on:
 
 jobs:
   build-docker-image:
-    if: github.event_name != 'pull_request'
     name: Build Docker Images (Pi 1-4)
     runs-on: ubuntu-24.04
     steps:
@@ -42,6 +41,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Set buildx arguments
+        if: github.event_name != 'pull_request'
         id: prepare
         run: |
           GIT_SHORT_HASH=$(git rev-parse --short HEAD)
@@ -56,6 +56,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Building container
+        if: github.event_name != 'pull_request'
         run: |
           cd webview
           docker buildx build \
