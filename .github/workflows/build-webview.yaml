@@ -182,8 +182,9 @@ jobs:
     needs:
       - compile-webview-part-1
       - compile-webview-part-2
-    matrix:
-      board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
+    strategy:
+      matrix:
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
