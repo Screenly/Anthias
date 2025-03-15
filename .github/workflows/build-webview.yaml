@@ -103,6 +103,10 @@ jobs:
           docker exec -it qt-builder /webview/build_webview_with_qt5.sh
           docker rm -f qt-builder
 
+      - name: Inspect build directory
+        run: |
+          ls -lah ~/tmp/qt-build
+
       - name: Create a release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
@@ -111,8 +115,8 @@ jobs:
           files: |
             ~/tmp/qt-build/webview-*.tar.gz
             ~/tmp/qt-build/webview-*.tar.gz.sha256
-            ~/tmp/qt-build/qt*.tar.gz
-            ~/tmp/qt-build/qt*.tar.gz.sha256
+            ~/tmp/qt-build/qt5-*.tar.gz
+            ~/tmp/qt-build/qt5-*.tar.gz.sha256
 
       - uses: actions/upload-artifact@v4
         with:
