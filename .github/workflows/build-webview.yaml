@@ -70,10 +70,6 @@ jobs:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4']
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -186,6 +182,10 @@ jobs:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/download-artifact@v4
         with:
