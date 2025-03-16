@@ -129,8 +129,11 @@ jobs:
           path: ~/tmp/qt-build/
 
   compile-webview-part-2:
-    name: Compile Webview (x86)
+    name: Compile Webview (pi5, x86)
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        board: ['pi5', 'x86']
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -141,14 +144,19 @@ jobs:
         id: buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Set environment variables (to be used in next steps)
+      - name: Set environment variables
         run: |
           GIT_HASH=""
           COMPOSE_PROFILES=""
+
           GIT_HASH="$(git rev-parse --short HEAD)"
-          COMPOSE_PROFILES="x86"
-          echo "GIT_HASH=$GIT_HASH" >> "$GITHUB_ENV"
-          echo "COMPOSE_PROFILES=$COMPOSE_PROFILES" >> "$GITHUB_ENV"
+          COMPOSE_PROFILES="${{ matrix.board }}"
+
+          {
+            echo "GIT_HASH=$GIT_HASH"
+            echo "COMPOSE_PROFILES=$COMPOSE_PROFILES"
+            echo "COMPOSE_BAKE=true"
+          } >> "$GITHUB_ENV"
 
       - name: Build Docker Image
         run: |
@@ -158,29 +166,29 @@ jobs:
       - name: Compile WebView
         run: |
           cd webview
-          docker compose run builder-x86 /scripts/build_webview.sh
+          docker compose run builder-${{ matrix.board }} /scripts/build_webview.sh
 
       - name: Copy build artifacts
         run: |
           mkdir -p ./build
-          cp ~/tmp-x86/build/release/webview-*.tar.gz \
-            ~/tmp-x86/build/release/webview-*.tar.gz.sha256 \
+          cp ~/tmp-${{ matrix.board }}/build/release/webview-*.tar.gz \
+            ~/tmp-${{ matrix.board }}/build/release/webview-*.tar.gz.sha256 \
             ./build
 
       - uses: actions/upload-artifact@v4
         with:
-          name: webview-x86
+          name: webview-${{ matrix.board }}
           path: ./build
 
   create-releases:
-    name: Create Releases
+    name: Create a Release
     if: startsWith(github.ref, 'refs/tags/')
     needs:
       - compile-webview-part-1
       - compile-webview-part-2
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4', 'x86']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi5', 'x86']
     runs-on: ubuntu-24.04
     permissions:
       contents: write
