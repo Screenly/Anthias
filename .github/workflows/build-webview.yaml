@@ -152,9 +152,11 @@ jobs:
           GIT_HASH="$(git rev-parse --short HEAD)"
           COMPOSE_PROFILES="${{ matrix.board }}"
 
-          echo "GIT_HASH=$GIT_HASH" >> "$GITHUB_ENV"
-          echo "COMPOSE_PROFILES=$COMPOSE_PROFILES" >> "$GITHUB_ENV"
-          echo "COMPOSE_BAKE=true" >> "$GITHUB_ENV"
+          {
+            echo "GIT_HASH=$GIT_HASH"
+            echo "COMPOSE_PROFILES=$COMPOSE_PROFILES"
+            echo "COMPOSE_BAKE=true"
+          } >> "$GITHUB_ENV"
 
       - name: Build Docker Image
         run: |
@@ -179,7 +181,7 @@ jobs:
           path: ./build
 
   create-releases:
-    name: Create Releases
+    name: Create a Release
     if: startsWith(github.ref, 'refs/tags/')
     needs:
       - compile-webview-part-1
