@@ -45,7 +45,7 @@ RUN c_rehash
 
 # QT Base from packages does not support eglfs
 
-{% if board != 'pi5' %}
+{% if board != 'pi5' and board != 'x86' %}
 RUN curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" \
         -sL -o "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" && \
     curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz.sha256" \
