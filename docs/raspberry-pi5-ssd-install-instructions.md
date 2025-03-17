@@ -14,9 +14,9 @@ Early Pi5's do not support PCIe boot as part of the factory bootloader configura
 
 ## Installation
 
-Using the Raspberry Pi Imager and appropriate USB adapters, write the 64-bit version of Raspberry Pi OS Lite (Bookworm) to both the microSD card and the SSD.
+Using the Raspberry Pi Imager and appropriate USB adapters, write the 64-bit version of **Raspberry Pi OS Lite (Bookworm)** to the microSD card. Depending on your deployment preference, you can either write the same OS or you can deploy the **BalenaOS** image to the SSD.
 
-There alternative ways to install:
+There are a few alternative ways to install:
 - Network boot (if enabled on the Pi)
 - Booting from the microSD card and using the SD Card copier utility to copy the OS to the SSD
 - Booting from the microSD and using the Raspberry Pi Imager to write a fresh copy to the SSD
@@ -44,7 +44,7 @@ Depending on the bootloader version of your Pi (Confirmed  that as of at least *
 
 ### Boot from SSD
 
-Once your Pi is booting from the SSD, you have a couple of housekeeping tasks to perform;
+Once your Pi is booting from the SSD, if you installed the Raspberry Pi OS image you have a couple of housekeeping tasks to perform;
 
 - Update the OS using `sudo apt update -y` and `sudo apt full-upgrade -y`
 - Check the bootloader is at the latest version using `sudo rpi-eeprom-update`
