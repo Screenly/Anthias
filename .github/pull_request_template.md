@@ -13,7 +13,3 @@ Provide a brief description of the changes that you have made.
 - [ ] I have done an end-to-end test for Raspberry Pi devices.
 - [ ] I have tested my changes for x86 devices.
 - [ ] I added a documentation for the changes I have made (when necessary).
-
-### Additional Information
-
-Include any additional information that you think is necessary for this pull request, including screenshots of the changes that you have made.
