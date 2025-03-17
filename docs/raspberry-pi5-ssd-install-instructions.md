@@ -6,9 +6,11 @@ The following guide has been tested using a Raspberry Pi 5 with 8GB RAM and a [G
 
 Other HAT's should work just fine as long as they are supported by the Pi.
 
-We used a 256GB M.2 NVMe SSD as it came in the 2242 (22mm x 44mm) form factor.
+The author of this guide used a 256GB M.2 NVMe SSD as it came in the 2242 (22mm x 44mm) form factor. The original version of the P33 HAT only supported a 2230 and 2242 SSD, but the later version extends further and supports a 2260 and 2280 SSD also.
 
-You may also need a microSD card to initially configure your Pi. Once the first steps are done you won't require this.
+## Booting
+
+Early Pi5's do not support PCIe boot as part of the factory bootloader configuration. If you have a version of the bootloader prior to at least **Mon 23 Sep 13:02:56 UTC 2024 (1727096576)** then it is likely that you will need to follow the Boot from SD steps first.
 
 ## Installation
 
@@ -24,10 +26,17 @@ Do whatever is easiest for you!
 
 ### Boot from SD
 
-Depending on the bootloader version of your Pi, you may need to boot from microSD first and set the bootloader to boot from PCIe.
+Depending on the bootloader version of your Pi (Confirmed  that as of at least **Mon 23 Sep 13:02:56 UTC 2024 (1727096576)** you do not need to perform this step), you may need to boot from microSD first and set the bootloader to boot from PCIe.
+
+> [!NOTE]
+> You can check the bootloader version by using the command `sudo rpi-eeprom-update` which will tell you what version your Pi 5 is running.
+> This command will also tell you if an update is available, which you can install with `sudo rpi-eeprom-update -a`.
+> The author of this document would welcome feedback if once the above update is performed, wether you still need to run the command below. The author tested the below and found it successful, then updated the bootloader so YMMV!
+> This looks a little bit like this;
+> ![rpi-eeprom-update](/docs/images/rpi-eeprom-update.png)
 
 - Once booted, run the RPI EEPROM configurator: `sudo rpi-eeprom-config -edit`. This will open up the [Nano](https://www.nano-editor.org/) text editor.
-- Change the boot order to: `BOOT_ORDER=0xf416`
+- Change the boot order to: `BOOT_ORDER=0xf614`
 - Add the line: `PCIE_PROBE=1`
 - Type **Ctrl-O** to save the file.
 - Type **Ctrl-X** to exit the editor.
@@ -46,7 +55,12 @@ Once your Pi is booting from the SSD, you have a couple of housekeeping tasks to
 - Follow the prompts to install and reboot the Pi
 - Once the install has completed, don't forget to change the password for your Pi uinsg `passwd`
 
+### Check your boot order
+
+You can view your current boot order by running `rpi-eeprom-config` and checking the output.
+Using [This document](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#BOOT_ORDER) you can view the boot options and configure your boot order to suit your requirements.
+
 ### Post Install Issues
 
 > [!NOTE]
-> If you still get a black screen after the installation completes and after a reboot, simply press `Ctrl-Alt-F1` to get into the console and then run `./screenly/bin/upgrade_containers.sh`. this should re-run the container creation step and have the system up and running properly.
+> If you still get a black screen after the installation completes and after a reboot, simply press `Ctrl-Alt-F1` to get into the console (or SSH in) and then run `./screenly/bin/upgrade_containers.sh`. this should re-run the container creation step and have the system up and running properly.
