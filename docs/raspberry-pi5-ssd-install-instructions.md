@@ -10,7 +10,7 @@ The author of this guide used a 256GB M.2 NVMe SSD as it came in the 2242 (22mm 
 
 ## Booting
 
-Early Pi5's do not support PCIe boot as part of the factory bootloader configuration. If you have a version of the bootloader prior to at least **Mon 23 Sep 13:02:56 UTC 2024 (1727096576)** then it is likely that you will need to follow the Boot from SD steps first.
+Early Pi 5's do not support PCIe boot as part of the factory bootloader configuration. If you have a version of the bootloader prior to at least **Mon 23 Sep 13:02:56 UTC 2024 (1727096576)** then it is likely that you will need to follow the Boot from SD steps first.
 
 ## Installation
 
