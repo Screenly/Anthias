@@ -60,7 +60,7 @@ Once your Pi is booting from the SSD, if you installed the Raspberry Pi OS image
 ### Check your boot order
 
 You can view your current boot order by running `rpi-eeprom-config` and checking the output.
-Using [This document](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#BOOT_ORDER) you can view the boot options and configure your boot order to suit your requirements.
+Using [this document](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#BOOT_ORDER) you can view the boot options and configure your boot order to suit your requirements.
 
 ### Post Install Issues
 
