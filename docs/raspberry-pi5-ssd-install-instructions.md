@@ -26,7 +26,7 @@ Do whatever is easiest for you!
 
 ### Boot from SD
 
-Depending on the bootloader version of your Pi (Confirmed  that as of at least **Mon 23 Sep 13:02:56 UTC 2024 (1727096576)** you do not need to perform this step), you may need to boot from microSD first and set the bootloader to boot from PCIe.
+Depending on the bootloader version of your Pi (confirmed that as of at least **Mon 23 Sep 13:02:56 UTC 2024 (1727096576)** you do not need to perform this step), you may need to boot from microSD first and set the bootloader to boot from PCIe.
 
 > [!NOTE]
 > You can check the bootloader version by using the command `sudo rpi-eeprom-update` which will tell you what version your Pi 5 is running.
