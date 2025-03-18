@@ -31,7 +31,7 @@ Depending on the bootloader version of your Pi (confirmed that as of at least **
 > [!NOTE]
 > You can check the bootloader version by using the command `sudo rpi-eeprom-update` which will tell you what version your Pi 5 is running.
 > This command will also tell you if an update is available, which you can install with `sudo rpi-eeprom-update -a`.
-> The author of this document would welcome feedback if once the above update is performed, wether you still need to run the command below. The author tested the below and found it successful, then updated the bootloader so YMMV!
+> The author of this document would welcome feedback if once the above update is performed, whether you still need to run the command below. The author tested the below and found it successful, then updated the bootloader so your mileage may vary!
 > This looks a little bit like this;
 > ![rpi-eeprom-update](/docs/images/rpi-eeprom-update.png)
 
