@@ -104,11 +104,12 @@ def build_image(
         cache_from={
             'type': 'local',
             'src': '/tmp/.buildx-cache',
-        },
+        } if not clean_build else None,
         cache_to={
             'type': 'local',
-            'dest': '/tmp/.buildx-cache',
-        },
+            'dest': '/tmp/.buildx-cache-new',
+            'mode': 'max',
+        } if not clean_build else None,
         file=f'docker/Dockerfile.{service}',
         load=True,
         platforms=[target_platform],
