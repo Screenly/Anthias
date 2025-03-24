@@ -1,7 +1,8 @@
-import click
 import os
-import pygit2
 from pathlib import Path
+
+import click
+import pygit2
 from python_on_whales import docker
 
 from tools.image_builder.constants import (
@@ -44,7 +45,10 @@ def build_image(
     try:
         cache_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        click.secho(f'Warning: Failed to create cache directory: {e}', fg='yellow')
+        click.secho(
+            f'Warning: Failed to create cache directory: {e}',
+            fg='yellow'
+        )
 
     base_apt_dependencies = [
         'build-essential',
