@@ -76,12 +76,6 @@ jobs:
             --service redis \
             --service test
 
-      # Temp fix for https://github.com/docker/build-push-action/issues/252
-      - name: Move cache
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
-
       - name: Start the test container
         run: |
           docker compose -f docker-compose.test.yml up -d --build

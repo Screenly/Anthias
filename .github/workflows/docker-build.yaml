@@ -97,14 +97,6 @@ jobs:
               --push
           fi
 
-      # Temp fix for https://github.com/docker/build-push-action/issues/252
-      # This ugly bit is necessary if you don't want your cache to grow forever
-      # till it hits GitHub's limit of 5GB.
-      - name: Move cache
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
-
   balena:
     if: ${{ github.ref == 'refs/heads/master' }}
     needs: buildx

@@ -107,7 +107,7 @@ def build_image(
         } if not clean_build else None,
         cache_to={
             'type': 'local',
-            'dest': '/tmp/.buildx-cache-new',
+            'dest': '/tmp/.buildx-cache',
             'mode': 'max',
         } if not clean_build else None,
         file=f'docker/Dockerfile.{service}',
