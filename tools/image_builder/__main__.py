@@ -41,7 +41,11 @@ def build_image(
     context = {}
 
     # Create board-specific cache directory
-    cache_dir = Path('/tmp/.buildx-cache') / board
+    cache_dir = Path('/tmp/.buildx-cache') / (
+        f'{board}-64'
+        if board == 'pi4' and target_platform == 'linux/arm64/v8'
+        else board
+    )
     try:
         cache_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
@@ -114,6 +118,12 @@ def build_image(
     if dockerfiles_only:
         return
 
+    # Ensure we're using the correct builder
+    try:
+        docker.buildx.inspect('multiarch-builder', bootstrap=True)
+    except:  # noqa: E722
+        docker.buildx.create(name='multiarch-builder', use=True)
+
     docker.buildx.build(
         context_path='.',
         cache=(not clean_build),
@@ -126,11 +136,13 @@ def build_image(
             'dest': str(cache_dir),
             'mode': 'max',
         } if not clean_build else None,
+        builder='multiarch-builder',
         file=f'docker/Dockerfile.{service}',
         load=True,
         platforms=[target_platform],
         tags=docker_tags,
         push=push,
+        progress='plain',
     )
 
 
