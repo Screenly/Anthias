@@ -66,11 +66,10 @@ jobs:
         uses: actions/cache@v4
         id: cache
         with:
-          path: /tmp/.buildx-cache
+          path: /tmp/.buildx-cache/${{ matrix.board }}
           key: ${{ runner.os }}-buildx-${{ matrix.board }}-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-buildx-${{ matrix.board }}-
-            ${{ runner.os }}-buildx-
 
       - name: Login to Docker Hub
         if: success() && github.event_name != 'pull_request'

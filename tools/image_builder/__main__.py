@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+
 import click
 import pygit2
 from python_on_whales import docker
@@ -32,7 +35,20 @@ def build_image(
     push: bool,
     dockerfiles_only: bool,
 ) -> None:
+    # Enable BuildKit
+    os.environ['DOCKER_BUILDKIT'] = '1'
+
     context = {}
+
+    # Create board-specific cache directory
+    cache_dir = Path('/tmp/.buildx-cache') / board
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        click.secho(
+            f'Warning: Failed to create cache directory: {e}',
+            fg='yellow'
+        )
 
     base_apt_dependencies = [
         'build-essential',
@@ -103,11 +119,11 @@ def build_image(
         cache=(not clean_build),
         cache_from={
             'type': 'local',
-            'src': '/tmp/.buildx-cache',
+            'src': str(cache_dir),
         } if not clean_build else None,
         cache_to={
             'type': 'local',
-            'dest': '/tmp/.buildx-cache',
+            'dest': str(cache_dir),
             'mode': 'max',
         } if not clean_build else None,
         file=f'docker/Dockerfile.{service}',
