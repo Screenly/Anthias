@@ -67,9 +67,10 @@ jobs:
         id: cache
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-${{ matrix.board }}
+          key: ${{ runner.os }}-buildx-${{ matrix.board }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.board }}
+            ${{ runner.os }}-buildx-${{ matrix.board }}-
+            ${{ runner.os }}-buildx-
 
       - name: Login to Docker Hub
         if: success() && github.event_name != 'pull_request'
