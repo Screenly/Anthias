@@ -121,7 +121,7 @@ def build_image(
     # Ensure we're using the correct builder
     try:
         docker.buildx.inspect('multiarch-builder', bootstrap=True)
-    except:
+    except:  # noqa: E722
         docker.buildx.create(name='multiarch-builder', use=True)
 
     docker.buildx.build(
