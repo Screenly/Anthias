@@ -15,6 +15,7 @@ GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
 DOCKER_TAG="latest"
 UPGRADE_SCRIPT_PATH="${ANTHIAS_REPO_DIR}/bin/upgrade_containers.sh"
 ARCHITECTURE=$(uname -m)
+DISTRO_VERSION=$(lsb_release -rs)
 
 INTRO_MESSAGE=(
     "Anthias requires a dedicated Raspberry Pi and an SD card."
@@ -121,7 +122,6 @@ function initialize_locales() {
 function install_packages() {
     display_section "Install Packages via APT"
 
-    local DISTRO_VERSION=$(lsb_release -rs)
     local APT_INSTALL_ARGS=(
         "git"
         "libffi-dev"
@@ -160,7 +160,11 @@ function install_ansible() {
     display_section "Install Ansible"
 
     REQUIREMENTS_URL="$GITHUB_RAW_URL/$BRANCH/requirements/requirements.host.txt"
-    ANSIBLE_VERSION=$(curl -s $REQUIREMENTS_URL | grep ansible)
+    if [ "$DISTRO_VERSION" -le 11 ]; then
+        ANSIBLE_VERSION="ansible-core==2.15.9"
+    else
+        ANSIBLE_VERSION=$(curl -s $REQUIREMENTS_URL | grep ansible)
+    fi
 
     SUDO_ARGS=()
 

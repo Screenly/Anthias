@@ -40,6 +40,21 @@
     executable: "/home/{{ lookup('env', 'USER') }}/installer_venv/bin/pip"
     requirements: "/home/{{ lookup('env', 'USER') }}/screenly/requirements/requirements.host.txt"
     extra_args: "--no-cache-dir --upgrade"
+  when: ansible_distribution_major_version | int >= 12
+
+- name: Install pip dependencies (Debian 11 and older)
+  ansible.builtin.pip:
+    executable: "/home/{{ lookup('env', 'USER') }}/installer_venv/bin/pip"
+    name:
+      - ansible-core==2.15.9
+      - docker==6.0.0
+      - getmac==0.9.4
+      - netifaces2==0.0.22
+      - redis==4.3.4
+      - "requests[security]==2.32.3"
+      - tenacity==9.0.0
+    extra_args: "--no-cache-dir --upgrade"
+  when: ansible_distribution_major_version | int <= 11
 
 - name: Remove screenly_utils.sh
   ansible.builtin.file:
