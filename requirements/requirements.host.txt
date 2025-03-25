@@ -1,6 +1,6 @@
 # vim: ft=requirements
 
-ansible-core==2.17.7
+ansible-core==2.15.9
 docker==6.0.0
 getmac==0.9.4
 netifaces2==0.0.22
