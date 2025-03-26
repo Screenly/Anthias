@@ -34,7 +34,9 @@ Depending on the bootloader version of your Pi (confirmed that as of at least **
 > The author of this document would welcome feedback if once the above update is performed, whether you still need to run the command below. The author tested the below and found it successful, then updated the bootloader so your mileage may vary!
 > This looks a little bit like the following:
 >
+
 <br>
+
 ![rpi-eeprom-update](/docs/images/rpi-eeprom-update.png)
 
 - Once booted, run the RPI EEPROM configurator: `sudo rpi-eeprom-config -edit`. This will open up the [Nano](https://www.nano-editor.org/) text editor.
