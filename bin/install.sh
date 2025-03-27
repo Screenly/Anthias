@@ -233,6 +233,7 @@ function upgrade_docker_containers() {
 
     sudo -u ${USER} \
         DOCKER_TAG="${DOCKER_TAG}" \
+        GIT_BRANCH="${BRANCH}" \
         "${UPGRADE_SCRIPT_PATH}"
 }
 
