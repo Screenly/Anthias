@@ -57,17 +57,21 @@ void View::loadImage(const QString &preUri)
     qDebug() << "Current src: " + src;
 
     QString script = "window.setimg=function(n){var o=new Image;o.onload=function()"
-                     "{document.body.style.backgroundSize=o.width>window.innerWidth||o.height>window.innerHeight?\"contain\":\"auto\",document.body.style.backgroundImage=\"url('\"+n+\"')\"},o.src=n};";
-    QString styles = "background: #000 center no-repeat";
+                     "{document.body.style.backgroundSize=o.width>window.innerWidth||o.height>window.innerHeight?\"contain\":\"auto\","
+                     "document.body.style.backgroundImage=\"url('\"+n+\"')\","
+                     "document.body.style.opacity=\"1\"},"
+                     "o.onerror=function(){document.body.style.opacity=\"1\"},"
+                     "document.body.style.opacity=\"0.5\","
+                     "o.src=n};";
+    QString styles = "background: #000 center no-repeat; transition: opacity 0.3s ease-in-out";
 
-    stop();
-    pre_loader -> setHtml("<html><head><script>" + script + "</script></head><body style='" + styles + "'><script>window.setimg(\"" + src + "\");</script></body></html>");
-    clearFocus();
+    // Don't stop the current view, let it stay visible
+    pre_loader->setHtml("<html><head><script>" + script + "</script></head><body style='" + styles + "'><script>window.setimg(\"" + src + "\");</script></body></html>");
 
     connect(pre_loader, &QWebEnginePage::loadFinished, this, [=](bool result){
         if (result)
         {
-            pre_loader -> toHtml([&](const QString &result){
+            pre_loader->toHtml([&](const QString &result){
                 setHtml(result);
             });
         }
