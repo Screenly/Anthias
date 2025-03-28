@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - '**/**'
+      - '!.editorconfig'
       - '!README.md'
       - '!webview/**'
       - '!website/**'
