@@ -33,10 +33,27 @@ View::View(QWidget* parent) : QWidget(parent)
 void View::loadPage(const QString &uri)
 {
     qDebug() << "Type: Webpage";
-    webView->setVisible(true);
+
+    // Clear current image if any
+    currentImage = QImage();
+
+    // Keep web view hidden until fully loaded
+    webView->setVisible(false);
+
+    // Connect to loadFinished signal
+    connect(webView->page(), &QWebEnginePage::loadFinished, this, [=](bool ok) {
+        if (ok) {
+            qDebug() << "Web page loaded successfully";
+            webView->setVisible(true);
+            webView->clearFocus();
+        } else {
+            qDebug() << "Web page failed to load";
+        }
+    }, Qt::SingleShotConnection);  // Disconnect after first signal
+
+    // Load the page
     webView->stop();
     webView->load(QUrl(uri));
-    webView->clearFocus();
 }
 
 void View::loadImage(const QString &preUri)
