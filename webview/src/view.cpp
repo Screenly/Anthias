@@ -37,9 +37,6 @@ void View::loadPage(const QString &uri)
     // Clear current image if any
     currentImage = QImage();
 
-    // Keep web view hidden until fully loaded
-    webView->setVisible(false);
-
     // Connect to loadFinished signal with version-specific code
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     connect(webView->page(), &QWebEnginePage::loadFinished, this, [=](bool ok) {
@@ -71,7 +68,6 @@ void View::loadPage(const QString &uri)
 void View::loadImage(const QString &preUri)
 {
     qDebug() << "Type: Image";
-    webView->setVisible(false);
 
     QFileInfo fileInfo = QFileInfo(preUri);
     QString src;
@@ -93,6 +89,7 @@ void View::loadImage(const QString &preUri)
     {
         qDebug() << "Black page";
         currentImage = QImage();
+        webView->setVisible(false);
         update();
         return;
     }
@@ -116,7 +113,10 @@ void View::loadImage(const QString &preUri)
 
             if (newImage.loadFromData(data)) {
                 qDebug() << "Successfully loaded image. Size:" << newImage.size();
-                currentImage = newImage;
+                nextImage = newImage;
+                // Only hide web view and update current image after the new image is loaded
+                webView->setVisible(false);
+                currentImage = nextImage;
                 update();
             } else {
                 qDebug() << "Failed to load image from data";
@@ -150,8 +150,6 @@ void View::paintEvent(QPaintEvent*)
             scaledSize.height()
         );
         painter.drawImage(targetRect, currentImage);
-    } else {
-        qDebug() << "No image to paint";
     }
 }
 
