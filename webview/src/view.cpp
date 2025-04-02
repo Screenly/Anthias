@@ -33,16 +33,33 @@ View::View(QWidget* parent) : QWidget(parent)
 void View::loadPage(const QString &uri)
 {
     qDebug() << "Type: Webpage";
-    webView->setVisible(true);
+
+    // Clear current image if any
+    currentImage = QImage();
+
+    // Connect to loadFinished signal with version-specific code
+    connect(webView->page(), &QWebEnginePage::loadFinished, this, [=](bool ok) {
+        if (ok) {
+            qDebug() << "Web page loaded successfully";
+            webView->setVisible(true);
+            webView->clearFocus();
+        } else {
+            qDebug() << "Web page failed to load";
+        }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    }, Qt::SingleShotConnection);  // Disconnect after first signal
+#else
+    });
+#endif
+
+    // Load the page
     webView->stop();
     webView->load(QUrl(uri));
-    webView->clearFocus();
 }
 
 void View::loadImage(const QString &preUri)
 {
     qDebug() << "Type: Image";
-    webView->setVisible(false);
 
     QFileInfo fileInfo = QFileInfo(preUri);
     QString src;
@@ -64,6 +81,7 @@ void View::loadImage(const QString &preUri)
     {
         qDebug() << "Black page";
         currentImage = QImage();
+        webView->setVisible(false);
         update();
         return;
     }
@@ -87,7 +105,10 @@ void View::loadImage(const QString &preUri)
 
             if (newImage.loadFromData(data)) {
                 qDebug() << "Successfully loaded image. Size:" << newImage.size();
-                currentImage = newImage;
+                nextImage = newImage;
+                // Only hide web view and update current image after the new image is loaded
+                webView->setVisible(false);
+                currentImage = nextImage;
                 update();
             } else {
                 qDebug() << "Failed to load image from data";
@@ -121,8 +142,6 @@ void View::paintEvent(QPaintEvent*)
             scaledSize.height()
         );
         painter.drawImage(targetRect, currentImage);
-    } else {
-        qDebug() << "No image to paint";
     }
 }
 
