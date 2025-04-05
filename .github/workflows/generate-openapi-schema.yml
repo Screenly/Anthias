@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - '**'
+      - '!.editorconfig'
       - '!webview/**'
       - '!website/**'
       - '!.github/workflows/deploy-website.yaml'

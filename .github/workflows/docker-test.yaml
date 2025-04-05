@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - '**/**'
+      - '!.editorconfig'
       - '!README.md'
       - '!webview/**'
       - '!website/**'
@@ -57,10 +58,10 @@ jobs:
         uses: actions/cache@v4
         id: cache
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-x86
+          path: /tmp/.buildx-cache/test
+          key: ${{ runner.os }}-buildx-test-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-x86
+            ${{ runner.os }}-buildx-test-
 
       - name: Set up Docker Buildx
         id: buildx

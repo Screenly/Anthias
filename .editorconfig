@@ -1,10 +1,28 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# top-most EditorConfig file
 root = true
 
+# Unix-style newlines with a newline ending every file
 [*]
 end_of_line = lf
 insert_final_newline = true
+charset = utf-8
+trim_trailing_whitespace = true
+
+# CoffeeScript files
+[*.{coffee}]
+indent_style = space
+indent_size = 2
+max_line_length = 100
 
 [*.{js,mjs,jsx}]
+indent_style = space
+indent_size = 2
+max_line_length = 80
+
+# CSS files
+[*.{css,scss,sass,less}]
 indent_style = space
 indent_size = 2
 max_line_length = 80
@@ -24,3 +42,15 @@ indent_size = 2
 
 [*.md]
 trim_trailing_whitespace = true
+
+# Python files
+[*.py]
+indent_style = space
+indent_size = 4
+max_line_length = 79
+
+# HTML files
+[*.{html}]
+indent_style = space
+indent_size = 2
+max_line_length = 120

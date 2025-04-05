@@ -5,14 +5,14 @@ cffi==1.14.4
 configparser==4.0.2
 cryptography==3.3.2
 Cython==0.29.33
-Django==4.2.18
+Django==4.2.20
 djangorestframework==3.15.2
 django-dbbackup==4.2.1
 drf-spectacular==0.27.2
 future==0.18.3
 gevent-websocket==0.10.1
 gevent==24.2.1
-gunicorn==22.0.0
+gunicorn==23.0.0
 hurry.filesize==0.9
 importlib-metadata==4.13.0
 Jinja2==3.1.5

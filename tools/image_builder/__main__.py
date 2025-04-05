@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+
 import click
 import pygit2
 from python_on_whales import docker
@@ -32,7 +35,24 @@ def build_image(
     push: bool,
     dockerfiles_only: bool,
 ) -> None:
+    # Enable BuildKit
+    os.environ['DOCKER_BUILDKIT'] = '1'
+
     context = {}
+
+    # Create board-specific cache directory
+    cache_dir = Path('/tmp/.buildx-cache') / (
+        f'{board}-64'
+        if board == 'pi4' and target_platform == 'linux/arm64/v8'
+        else board
+    )
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        click.secho(
+            f'Warning: Failed to create cache directory: {e}',
+            fg='yellow'
+        )
 
     base_apt_dependencies = [
         'build-essential',
@@ -98,22 +118,31 @@ def build_image(
     if dockerfiles_only:
         return
 
+    # Ensure we're using the correct builder
+    try:
+        docker.buildx.inspect('multiarch-builder', bootstrap=True)
+    except:  # noqa: E722
+        docker.buildx.create(name='multiarch-builder', use=True)
+
     docker.buildx.build(
         context_path='.',
         cache=(not clean_build),
         cache_from={
             'type': 'local',
-            'src': '/tmp/.buildx-cache',
-        },
+            'src': str(cache_dir),
+        } if not clean_build else None,
         cache_to={
             'type': 'local',
-            'dest': '/tmp/.buildx-cache',
-        },
+            'dest': str(cache_dir),
+            'mode': 'max',
+        } if not clean_build else None,
+        builder='multiarch-builder',
         file=f'docker/Dockerfile.{service}',
         load=True,
         platforms=[target_platform],
         tags=docker_tags,
         push=push,
+        progress='plain',
     )
 
 

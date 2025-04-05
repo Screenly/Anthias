@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - '**'
+      - '!.editorconfig'
       - '!webview/**'
       - '!website/**'
       - '!.github/workflows/deploy-website.yaml'
@@ -61,15 +62,27 @@ jobs:
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+
+      - name: Create and use dedicated builder
+        run: |
+          docker buildx create --use --name multiarch-builder
+          docker buildx inspect --bootstrap
 
       - name: Cache Docker layers
         uses: actions/cache@v4
         id: cache
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-${{ matrix.board }}
+          path: /tmp/.buildx-cache/${{ matrix.board }}
+          key: buildx-${{ matrix.board }}-${{ hashFiles('docker/**/*') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.board }}
+            buildx-${{ matrix.board }}-
+
+      - name: Inspect cache before build
+        run: |
+          ls -la /tmp/.buildx-cache/${{ matrix.board }} || true
 
       - name: Login to Docker Hub
         if: success() && github.event_name != 'pull_request'
@@ -79,6 +92,9 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build Containers
+        env:
+          DOCKER_BUILDKIT: 1
+          BUILDKIT_PROGRESS: plain
         run: |
           if [ "${{ matrix.board }}" == "pi4" ]; then
             poetry run python -m tools.image_builder \
@@ -95,6 +111,10 @@ jobs:
               --build-target=${{ matrix.board }} \
               --push
           fi
+
+      - name: Inspect cache after build
+        run: |
+          ls -la /tmp/.buildx-cache/${{ matrix.board }} || true
 
   balena:
     if: ${{ github.ref == 'refs/heads/master' }}

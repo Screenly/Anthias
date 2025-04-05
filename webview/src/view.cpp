@@ -4,37 +4,70 @@
 #include <QStandardPaths>
 #include <QEventLoop>
 #include <QTimer>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QImage>
+#include <QPainter>
 
 #include "view.h"
 
 
-View::View(QWidget* parent) : QWebEngineView(parent)
+View::View(QWidget* parent) : QWidget(parent)
 {
+    webView = new QWebEngineView(this);
+    webView->setVisible(false);
+
     connect(
-        QWebEngineView::page(),
+        webView->page(),
         SIGNAL(authenticationRequired(QNetworkReply*,QAuthenticator*)),
         this,
         SLOT(handleAuthRequest(QNetworkReply*,QAuthenticator*))
     );
+
     pre_loader = new QWebEnginePage;
+    networkManager = new QNetworkAccessManager(this);
+    currentImage = QImage();
+    nextImage = QImage();
 }
 
 void View::loadPage(const QString &uri)
 {
     qDebug() << "Type: Webpage";
-    stop();
-    load(QUrl(uri));
+
+    // Clear current image if any
+    currentImage = QImage();
+
+    // Connect to loadFinished signal with version-specific code
+    connect(webView->page(), &QWebEnginePage::loadFinished, this, [=](bool ok) {
+        if (ok) {
+            qDebug() << "Web page loaded successfully";
+            webView->setVisible(true);
+            webView->clearFocus();
+        } else {
+            qDebug() << "Web page failed to load";
+        }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    }, Qt::SingleShotConnection);  // Disconnect after first signal
+#else
+    });
+#endif
+
+    // Load the page
+    webView->stop();
+    webView->load(QUrl(uri));
 }
 
 void View::loadImage(const QString &preUri)
 {
     qDebug() << "Type: Image";
+
     QFileInfo fileInfo = QFileInfo(preUri);
     QString src;
 
     if (fileInfo.isFile())
     {
         qDebug() << "Location: Local File";
+        qDebug() << "File path:" << fileInfo.absoluteFilePath();
 
         QUrl url;
         url.setScheme("http");
@@ -42,10 +75,15 @@ void View::loadImage(const QString &preUri)
         url.setPath("/screenly_assets/" + fileInfo.fileName());
 
         src = url.toString();
+        qDebug() << "Generated URL:" << src;
     }
     else if (preUri == "null")
     {
         qDebug() << "Black page";
+        currentImage = QImage();
+        webView->setVisible(false);
+        update();
+        return;
     }
     else
     {
@@ -53,28 +91,69 @@ void View::loadImage(const QString &preUri)
         src = preUri;
     }
 
-    qDebug() << "Current src: " + src;
+    qDebug() << "Loading image from:" << src;
 
-    QString script = "window.setimg=function(n){var o=new Image;o.onload=function()"
-                     "{document.body.style.backgroundSize=o.width>window.innerWidth||o.height>window.innerHeight?\"contain\":\"auto\",document.body.style.backgroundImage=\"url('\"+n+\"')\"},o.src=n};";
-    QString styles = "background: #000 center no-repeat";
+    // Start loading the next image
+    QNetworkRequest request(src);
+    QNetworkReply* reply = networkManager->get(request);
 
-    stop();
-    pre_loader -> setHtml("<html><head><script>" + script + "</script></head><body style='" + styles + "'><script>window.setimg(\"" + src + "\");</script></body></html>");
+    connect(reply, &QNetworkReply::finished, this, [=]() {
+        if (reply->error() == QNetworkReply::NoError) {
+            QImage newImage;
+            QByteArray data = reply->readAll();
+            qDebug() << "Received image data size:" << data.size();
 
-    connect(pre_loader, &QWebEnginePage::loadFinished, this, [=](bool result){
-        if (result)
-        {
-            pre_loader -> toHtml([&](const QString &result){
-                setHtml(result);
-            });
+            if (newImage.loadFromData(data)) {
+                qDebug() << "Successfully loaded image. Size:" << newImage.size();
+                nextImage = newImage;
+                // Only hide web view and update current image after the new image is loaded
+                webView->setVisible(false);
+                currentImage = nextImage;
+                update();
+            } else {
+                qDebug() << "Failed to load image from data";
+            }
+        } else {
+            qDebug() << "Network error:" << reply->errorString();
         }
+        reply->deleteLater();
     });
+
+    connect(reply, &QNetworkReply::errorOccurred, this, [=](QNetworkReply::NetworkError error) {
+        qDebug() << "Network error occurred:" << error;
+        qDebug() << "Error string:" << reply->errorString();
+    });
+}
+
+void View::paintEvent(QPaintEvent*)
+{
+    QPainter painter(this);
+    painter.fillRect(rect(), Qt::black);
+
+    if (!currentImage.isNull()) {
+        qDebug() << "Painting image. Size:" << currentImage.size();
+        QSize scaledSize = currentImage.size();
+        scaledSize.scale(size(), Qt::KeepAspectRatio);
+        QRect targetRect = QRect(QPoint(0, 0), size());
+        targetRect = QRect(
+            (width() - scaledSize.width()) / 2,
+            (height() - scaledSize.height()) / 2,
+            scaledSize.width(),
+            scaledSize.height()
+        );
+        painter.drawImage(targetRect, currentImage);
+    }
+}
+
+void View::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    webView->setGeometry(rect());
 }
 
 void View::handleAuthRequest(QNetworkReply* reply, QAuthenticator* auth)
 {
     Q_UNUSED(reply)
     Q_UNUSED(auth)
-    load(QUrl::fromLocalFile(QStandardPaths::locate(QStandardPaths::AppDataLocation, "res/access_denied.html")));
+    webView->load(QUrl::fromLocalFile(QStandardPaths::locate(QStandardPaths::AppDataLocation, "res/access_denied.html")));
 }

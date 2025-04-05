@@ -9,8 +9,14 @@ QT_PATCH='2'
 QT_VERSION="${QT_MAJOR}.${QT_MINOR}.${QT_PATCH}"
 CORE_COUNT="$(expr $(nproc) - 2)"
 
+BOARD=${BOARD:-"x86"}
+if [[ ! "${BOARD}" =~ ^(x86|pi5)$ ]]; then
+    echo "Error: Invalid board specified. Must be either 'x86' or 'pi5'."
+    exit 1
+fi
+
 function create_webview_archive() {
-    local ARCHIVE_NAME="webview-${QT_VERSION}-${DEBIAN_VERSION}-pi5-$GIT_HASH.tar.gz"
+    local ARCHIVE_NAME="webview-${QT_VERSION}-${DEBIAN_VERSION}-${BOARD}-$GIT_HASH.tar.gz"
     local ARCHIVE_DESTINATION="/build/release/${ARCHIVE_NAME}"
 
     mkdir -p /build/release

@@ -42,3 +42,6 @@ target_wrapper.*
 
 # QtCreator CMake
 CMakeLists.txt.user*
+
+# Docker
+!docker-compose.yml
