@@ -46,7 +46,7 @@ class Command(BaseCommand):
                 'uri': 'https://docs.djangoproject.com',
                 'mimetype': 'text/html',
                 'is_enabled': True,
-                'start_date': timezone.now() + timedelta(days=7),
+                'start_date': timezone.now() - timedelta(days=1),
                 'end_date': timezone.now() + timedelta(days=21),
                 'play_order': 3,
             },
