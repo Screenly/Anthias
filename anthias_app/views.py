@@ -1,21 +1,19 @@
+import ipaddress
 from datetime import timedelta
-from django.views.decorators.http import require_http_methods
-from hurry.filesize import size
 from os import (
     getenv,
     statvfs,
 )
 from platform import machine
-from settings import (
-    CONFIGURABLE_SETTINGS,
-    DEFAULTS,
-    settings,
-    ZmqPublisher,
-)
 from urllib.parse import urlparse
+
+import psutil
+from django.views.decorators.http import require_http_methods
+from hurry.filesize import size
+
 from lib import (
-    diagnostics,
     device_helper,
+    diagnostics,
 )
 from lib.auth import authorized
 from lib.utils import (
@@ -26,16 +24,24 @@ from lib.utils import (
     is_demo_node,
     is_docker,
 )
+from settings import (
+    CONFIGURABLE_SETTINGS,
+    DEFAULTS,
+    ZmqPublisher,
+    settings,
+)
+
 from .helpers import (
     add_default_assets,
     remove_default_assets,
     template,
 )
-import ipaddress
-import psutil
-
 
 r = connect_to_redis()
+
+
+def react(request):
+    return template(request, 'react.html', {})
 
 
 @authorized
@@ -138,7 +144,7 @@ def settings_page(request):
             context['flash'] = {'class': "danger", 'message': e}
     else:
         settings.load()
-    for field, default in list(DEFAULTS['viewer'].items()):
+    for field, _default in list(DEFAULTS['viewer'].items()):
         context[field] = settings[field]
 
     auth_backends = []
@@ -169,7 +175,8 @@ def settings_page(request):
         'auth_backend': settings['auth_backend'],
         'auth_backends': auth_backends,
         'ip_addresses': ip_addresses,
-        'host_user': getenv('HOST_USER')
+        'host_user': getenv('HOST_USER'),
+        'device_type': getenv('DEVICE_TYPE')
     })
 
     return template(request, 'settings.html', context)

@@ -56,3 +56,9 @@ db.sqlite3
 
 # Django
 staticfiles/
+
+# ESLint
+.eslintcache
+
+# Linting
+.coffeelint.json

@@ -15,6 +15,7 @@ GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
 DOCKER_TAG="latest"
 UPGRADE_SCRIPT_PATH="${ANTHIAS_REPO_DIR}/bin/upgrade_containers.sh"
 ARCHITECTURE=$(uname -m)
+DISTRO_VERSION=$(lsb_release -rs)
 
 INTRO_MESSAGE=(
     "Anthias requires a dedicated Raspberry Pi and an SD card."
@@ -121,7 +122,6 @@ function initialize_locales() {
 function install_packages() {
     display_section "Install Packages via APT"
 
-    local DISTRO_VERSION=$(lsb_release -rs)
     local APT_INSTALL_ARGS=(
         "git"
         "libffi-dev"
@@ -160,7 +160,11 @@ function install_ansible() {
     display_section "Install Ansible"
 
     REQUIREMENTS_URL="$GITHUB_RAW_URL/$BRANCH/requirements/requirements.host.txt"
-    ANSIBLE_VERSION=$(curl -s $REQUIREMENTS_URL | grep ansible)
+    if [ "$DISTRO_VERSION" -le 11 ]; then
+        ANSIBLE_VERSION="ansible-core==2.15.9"
+    else
+        ANSIBLE_VERSION=$(curl -s $REQUIREMENTS_URL | grep ansible)
+    fi
 
     SUDO_ARGS=()
 
@@ -181,8 +185,25 @@ function install_ansible() {
     sudo ${SUDO_ARGS[@]} pip install "$ANSIBLE_VERSION"
 }
 
+function set_device_type() {
+    if [ ! -f /proc/device-tree/model ] && [ "$(uname -m)" = "x86_64" ]; then
+        export DEVICE_TYPE="x86"
+    elif grep -qF "Raspberry Pi 5" /proc/device-tree/model || grep -qF "Compute Module 5" /proc/device-tree/model; then
+        export DEVICE_TYPE="pi5"
+    elif grep -qF "Raspberry Pi 4" /proc/device-tree/model || grep -qF "Compute Module 4" /proc/device-tree/model; then
+        export DEVICE_TYPE="pi4"
+    elif grep -qF "Raspberry Pi 3" /proc/device-tree/model || grep -qF "Compute Module 3" /proc/device-tree/model; then
+        export DEVICE_TYPE="pi3"
+    elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
+        export DEVICE_TYPE="pi2"
+    else
+        export DEVICE_TYPE="pi1"
+    fi
+}
+
 function run_ansible_playbook() {
     display_section "Run the Anthias Ansible Playbook"
+    set_device_type
 
     sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
         -m git \
@@ -212,6 +233,7 @@ function upgrade_docker_containers() {
 
     sudo -u ${USER} \
         DOCKER_TAG="${DOCKER_TAG}" \
+        GIT_BRANCH="${BRANCH}" \
         "${UPGRADE_SCRIPT_PATH}"
 }
 

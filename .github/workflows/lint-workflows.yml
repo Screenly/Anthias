@@ -1,0 +1,41 @@
+name: Lint GitHub Workflows
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '.github/workflows/lint-workflows.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '.github/workflows/lint-workflows.yml'
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    name: Run Linter
+    strategy:
+      matrix:
+        actionlint-version: ['1.7.7']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download actionlint
+        run: |
+          ACTIONLINT_FILE="actionlint_${{ matrix.actionlint-version }}_linux_amd64.tar.gz"
+          ACTIONLINT_URL="https://github.com/rhysd/actionlint/releases/download"
+          ACTIONLINT_DOWNLOAD_URL="$ACTIONLINT_URL/v${{ matrix.actionlint-version }}/$ACTIONLINT_FILE"
+          curl -L -o actionlint.tar.gz "$ACTIONLINT_DOWNLOAD_URL"
+          tar xzf actionlint.tar.gz
+        shell: bash
+
+      - name: Run actionlint
+        run: ./actionlint -color
+        shell: bash

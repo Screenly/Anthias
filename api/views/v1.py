@@ -1,28 +1,26 @@
+from os import statvfs
+
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiRequest,
+    extend_schema,
+    inline_serializer,
+)
+from hurry.filesize import size
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from api.serializers.v1_1 import CreateAssetSerializerV1_1
+
+from anthias_app.models import Asset
+from api.helpers import (
+    AssetCreationError,
+    parse_request,
+)
 from api.serializers import (
     AssetSerializer,
     UpdateAssetSerializer,
 )
-from api.helpers import (
-    AssetCreationException,
-    parse_request,
-)
-from drf_spectacular.utils import (
-    extend_schema,
-    inline_serializer,
-    OpenApiExample,
-    OpenApiRequest,
-)
-from hurry.filesize import size
-from lib import diagnostics
-from lib.auth import authorized
-from lib.github import is_up_to_date
-from lib.utils import connect_to_redis
-from os import statvfs
-from anthias_app.models import Asset
+from api.serializers.v1_1 import CreateAssetSerializerV1_1
 from api.views.mixins import (
     AssetContentViewMixin,
     AssetsControlViewMixin,
@@ -34,8 +32,11 @@ from api.views.mixins import (
     RecoverViewMixin,
     ShutdownViewMixin,
 )
+from lib import diagnostics
+from lib.auth import authorized
+from lib.github import is_up_to_date
+from lib.utils import connect_to_redis
 from settings import ZmqCollector, ZmqPublisher
-
 
 r = connect_to_redis()
 
@@ -146,8 +147,8 @@ class AssetListViewV1(APIView):
         try:
             serializer = CreateAssetSerializerV1_1(data=data)
             if not serializer.is_valid():
-                raise AssetCreationException(serializer.errors)
-        except AssetCreationException as error:
+                raise AssetCreationError(serializer.errors)
+        except AssetCreationError as error:
             return Response(error.errors, status=status.HTTP_400_BAD_REQUEST)
 
         asset = Asset.objects.create(**serializer.data)

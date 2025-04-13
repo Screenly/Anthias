@@ -8,7 +8,7 @@ export MY_IP=$(ip -4 route get 8.8.8.8 | awk {'print $7'} | tr -d '\n')
 TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk {'print $2'})
 export VIEWER_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB" \* 0.8 | bc)
 export SHM_SIZE_KB="$(echo "$TOTAL_MEMORY_KB" \* 0.3 | bc | cut -d'.' -f1)"
-export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+GIT_BRANCH="${GIT_BRANCH:-master}"
 
 MODE="${MODE:-pull}"
 if [[ ! "$MODE" =~ ^(pull|build)$ ]]; then
@@ -17,6 +17,11 @@ if [[ ! "$MODE" =~ ^(pull|build)$ ]]; then
     exit 1
 fi
 
+# The `getmac` module might exit with non-zero exit code if no MAC address is found.
+set +e
+export MAC_ADDRESS=`${HOME}/installer_venv/bin/python -m getmac`
+set -e
+
 if [ -z "$DOCKER_TAG" ]; then
     export DOCKER_TAG="latest"
 fi
@@ -24,9 +29,25 @@ fi
 # Detect Raspberry Pi version
 if [ ! -f /proc/device-tree/model ] && [ "$(uname -m)" = "x86_64" ]; then
     export DEVICE_TYPE="x86"
-elif grep -qF "Raspberry Pi 4" /proc/device-tree/model; then
-    export DEVICE_TYPE="pi4"
-elif grep -qF "Raspberry Pi 3" /proc/device-tree/model; then
+elif grep -qF "Raspberry Pi 5" /proc/device-tree/model || grep -qF "Compute Module 5" /proc/device-tree/model; then
+    export DEVICE_TYPE="pi5"
+elif grep -qF "Raspberry Pi 4" /proc/device-tree/model || grep -qF "Compute Module 4" /proc/device-tree/model; then
+    if [ "$(getconf LONG_BIT)" = "64" ]; then
+        if [ "$GIT_BRANCH" = "master" ]; then
+            export DEVICE_TYPE="pi4-64"
+        else
+            # Remove 'v' prefix if present for version comparison
+            VERSION_NUM=${GIT_BRANCH#v}
+            if printf '%s\n' "$VERSION_NUM" "0.19.5" | sort -V -C; then
+                export DEVICE_TYPE="pi4"
+            else
+                export DEVICE_TYPE="pi4-64"
+            fi
+        fi
+    else
+        export DEVICE_TYPE="pi4"
+    fi
+elif grep -qF "Raspberry Pi 3" /proc/device-tree/model || grep -qF "Compute Module 3" /proc/device-tree/model; then
     export DEVICE_TYPE="pi3"
 elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
     export DEVICE_TYPE="pi2"
@@ -51,7 +72,7 @@ cat /home/${USER}/screenly/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/screenly/docker-compose.yml
 
-if [ "$DEVICE_TYPE" = "x86" ]; then
+if [[ "$DEVICE_TYPE" =~ ^(x86|pi5)$ ]]; then
     sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
         /home/${USER}/screenly/docker-compose.yml
 fi

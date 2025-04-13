@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - '**'
+      - '!.editorconfig'
       - '!webview/**'
       - '!website/**'
       - '!.github/workflows/deploy-website.yaml'
@@ -39,7 +40,6 @@ on:
         description: 'Upload the OpenAPI schema as a release artifact'
         required: true
         type: boolean
-        default: false
       tag:
         description: 'Tag to be used for the release'
         required: true
@@ -52,14 +52,14 @@ on:
 
 jobs:
   generate-openapi-schema:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -77,7 +77,7 @@ jobs:
           poetry install --only=docker-image-builder
 
       - name: Cache Docker layers
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: cache
         with:
           path: /tmp/.buildx-cache
@@ -87,7 +87,7 @@ jobs:
 
       - name: Build Images
         run: |
-          poetry run python tools/image_builder \
+          poetry run python -m tools.image_builder \
             --dockerfiles-only \
             --disable-cache-mounts \
             --environment=development
@@ -105,7 +105,7 @@ jobs:
             --file anthias-api-schema.json
 
       - name: Upload the OpenAPI Schema
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: anthias-api-schema
           path: anthias-api-schema.json

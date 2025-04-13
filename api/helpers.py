@@ -2,12 +2,13 @@ import json
 
 from dateutil import parser as date_parser
 from rest_framework import status
-from rest_framework.views import exception_handler
 from rest_framework.response import Response
+from rest_framework.views import exception_handler
+
 from anthias_app.models import Asset
 
 
-class AssetCreationException(Exception):
+class AssetCreationError(Exception):
     def __init__(self, errors):
         self.errors = errors
 

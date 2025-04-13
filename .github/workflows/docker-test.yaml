@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - '**/**'
+      - '!.editorconfig'
       - '!README.md'
       - '!webview/**'
       - '!website/**'
@@ -27,7 +28,7 @@ on:
 
 jobs:
   run-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         python-version: ["3.11"]
@@ -57,10 +58,10 @@ jobs:
         uses: actions/cache@v4
         id: cache
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-x86
+          path: /tmp/.buildx-cache/test
+          key: ${{ runner.os }}-buildx-test-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-x86
+            ${{ runner.os }}-buildx-test-
 
       - name: Set up Docker Buildx
         id: buildx
@@ -68,7 +69,7 @@ jobs:
 
       - name: Build Containers
         run: |
-          poetry run python tools/image_builder \
+          poetry run python -m tools.image_builder \
             --dockerfiles-only \
             --disable-cache-mounts \
             --service celery \

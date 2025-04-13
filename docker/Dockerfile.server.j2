@@ -1,9 +1,8 @@
 {% if environment == 'production' %}
 FROM debian:bookworm AS node-builder
 
-RUN \
-    apt-get update && \
-    apt-get -y install --no-install-recommends \
+RUN apt-get update && \
+    apt-get -y install \
         nodejs \
         npm
 
