@@ -28,21 +28,43 @@ export const updateAssetOrder = createAsyncThunk(
 
 export const toggleAssetEnabled = createAsyncThunk(
   'assets/toggleEnabled',
-  async ({ assetId, newValue }) => {
-    const response = await fetch(`/api/v2/assets/${assetId}`, {
+  async ({ assetId, newValue }, { dispatch, getState }) => {
+    // First, fetch the current assets to determine the next play_order
+    const response = await fetch('/api/v2/assets');
+    const assets = await response.json();
+
+    // Get the current active assets to determine the next play_order
+    const activeAssets = assets.filter(asset => asset.is_active);
+
+    // If enabling the asset, set play_order to the next available position
+    // If disabling the asset, set play_order to 0
+    const playOrder = newValue === 1 ? activeAssets.length : 0;
+
+    const updateResponse = await fetch(`/api/v2/assets/${assetId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         is_enabled: newValue,
-        play_order: newValue === 0 ? 0 : undefined
+        play_order: playOrder
       })
     });
-    if (!response.ok) {
+
+    const activeAssetIds = getState().assets.items
+      .filter(asset => asset.is_active)
+      .sort((a, b) => a.play_order - b.play_order)
+      .map(asset => asset.asset_id)
+      .concat(assetId);
+
+    await dispatch(updateAssetOrder(activeAssetIds.join(',')));
+
+    if (!updateResponse.ok) {
       throw new Error('Failed to update asset');
     }
-    return { assetId, newValue };
+
+    // Return both the assetId and newValue for the reducer
+    return { assetId, newValue, playOrder };
   }
 );
 
@@ -71,10 +93,11 @@ const assetsSlice = createSlice({
         state.status = 'succeeded';
       })
       .addCase(toggleAssetEnabled.fulfilled, (state, action) => {
-        const { assetId, newValue } = action.payload;
+        const { assetId, newValue, playOrder } = action.payload;
         const asset = state.items.find(item => item.asset_id === assetId);
         if (asset) {
           asset.is_enabled = newValue;
+          asset.play_order = playOrder;
         }
       });
   },
