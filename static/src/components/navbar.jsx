@@ -9,15 +9,15 @@ import {
 import { Link, NavLink } from 'react-router'
 
 export const Navbar = () => {
-  const [upToDate, setUpToDate] = useState(false)
-  const [isBalena, setIsBalena] = useState(true)
+  const [upToDate] = useState(false)
+  const [isBalena] = useState(true)
 
   return (
     <>
       <div className="navbar navbar-header navbar-expand-lg fixed-top bg-dark">
         <div className="container">
           <NavLink to="/" className="brand">
-            <img src="/static/img/logo-full.svg"/>
+            <img src="/static/img/logo-full.svg" />
           </NavLink>
           <ul className="nav float-right">
             {

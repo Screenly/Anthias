@@ -1,4 +1,4 @@
-const Alert = ({ message }) => {
+export const Alert = ({ message }) => {
   return (
     <div id="request-error" className="navbar navbar fixed-top">
       <div className="container">

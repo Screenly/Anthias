@@ -10,13 +10,13 @@ export const SortableAssetRow = (props) => {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: props.id });
+  } = useSortable({ id: props.id })
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.8 : 1,
-  };
+  }
 
   return (
     <AssetRow
@@ -26,5 +26,5 @@ export const SortableAssetRow = (props) => {
       dragHandleProps={{ ...attributes, ...listeners }}
       isDragging={isDragging}
     />
-  );
-};
+  )
+}

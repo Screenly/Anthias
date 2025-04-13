@@ -1,6 +1,5 @@
-import { useSelector, useDispatch } from 'react-redux';
-import { selectActiveAssets, updateAssetOrder, fetchAssets } from '../store/assetsSlice';
-import { AssetRow } from '@/components/asset-row'
+import { useSelector, useDispatch } from 'react-redux'
+import { selectActiveAssets, updateAssetOrder, fetchAssets } from '@/store/assets-slice'
 import {
   DndContext,
   closestCenter,
@@ -19,44 +18,43 @@ import { SortableAssetRow } from '@/components/sortable-asset-row'
 import { useState, useEffect } from 'react'
 
 export const ActiveAssetsTable = () => {
-  const dispatch = useDispatch();
-  const activeAssets = useSelector(selectActiveAssets);
-  const [items, setItems] = useState(activeAssets);
+  const dispatch = useDispatch()
+  const activeAssets = useSelector(selectActiveAssets)
+  const [items, setItems] = useState(activeAssets)
 
   useEffect(() => {
-    setItems(activeAssets);
-  }, [activeAssets]);
+    setItems(activeAssets)
+  }, [activeAssets])
 
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
-  );
+  )
 
   const handleDragEnd = async (event) => {
-    const { active, over } = event;
+    const { active, over } = event
 
     if (!over || active.id === over.id) {
-      return;
+      return
     }
 
-    const oldIndex = items.findIndex(asset => asset.asset_id.toString() === active.id);
-    const newIndex = items.findIndex(asset => asset.asset_id.toString() === over.id);
+    const oldIndex = items.findIndex(asset => asset.asset_id.toString() === active.id)
+    const newIndex = items.findIndex(asset => asset.asset_id.toString() === over.id)
 
-    const newItems = arrayMove(items, oldIndex, newIndex);
-    setItems(newItems);
+    const newItems = arrayMove(items, oldIndex, newIndex)
+    setItems(newItems)
 
-    const activeIds = newItems.map(asset => asset.asset_id);
+    const activeIds = newItems.map(asset => asset.asset_id)
 
     try {
-      await dispatch(updateAssetOrder(activeIds.join(','))).unwrap();
-      dispatch(fetchAssets());
+      await dispatch(updateAssetOrder(activeIds.join(','))).unwrap()
+      dispatch(fetchAssets())
     } catch (error) {
-      console.error('Failed to update asset order:', error);
-      setItems(activeAssets);
+      setItems(activeAssets)
     }
-  };
+  }
 
   return (
     <table className="table">

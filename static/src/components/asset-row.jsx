@@ -3,50 +3,49 @@ import {
   FaDownload,
   FaPencilAlt,
   FaTrashAlt
-} from 'react-icons/fa';
-import classNames from 'classnames';
-import { forwardRef, useState } from 'react';
-import { useDispatch } from 'react-redux';
-import { toggleAssetEnabled, fetchAssets } from '../store/assetsSlice';
+} from 'react-icons/fa'
+import classNames from 'classnames'
+import { forwardRef, useState } from 'react'
+import { useDispatch } from 'react-redux'
+import { toggleAssetEnabled, fetchAssets } from '@/store/assets-slice'
 
 const formatDuration = (seconds) => {
-  let durationString = "";
-  const secInt = parseInt(seconds);
+  let durationString = ''
+  const secInt = parseInt(seconds)
 
-  const hours = Math.floor(secInt / 3600);
+  const hours = Math.floor(secInt / 3600)
   if (hours > 0) {
-    durationString += `${hours} hours `;
+    durationString += `${hours} hours `
   }
 
-  const minutes = Math.floor(secInt / 60) % 60;
+  const minutes = Math.floor(secInt / 60) % 60
   if (minutes > 0) {
-    durationString += `${minutes} min `;
+    durationString += `${minutes} min `
   }
 
-  const secs = secInt % 60;
+  const secs = secInt % 60
   if (secs > 0) {
-    durationString += `${secs} sec`;
+    durationString += `${secs} sec`
   }
 
-  return durationString;
-};
+  return durationString
+}
 
 export const AssetRow = forwardRef((props, ref) => {
-  const dispatch = useDispatch();
-  const [isDisabled, setIsDisabled] = useState(false);
+  const dispatch = useDispatch()
+  const [isDisabled, setIsDisabled] = useState(false)
 
   const handleToggle = async () => {
-    const newValue = !props.isEnabled ? 1 : 0;
-    setIsDisabled(true);
+    const newValue = !props.isEnabled ? 1 : 0
+    setIsDisabled(true)
     try {
-      await dispatch(toggleAssetEnabled({ assetId: props.assetId, newValue })).unwrap();
-      dispatch(fetchAssets());
+      await dispatch(toggleAssetEnabled({ assetId: props.assetId, newValue })).unwrap()
+      dispatch(fetchAssets())
     } catch (error) {
-      console.error('Failed to toggle asset:', error);
     } finally {
-      setIsDisabled(false);
+      setIsDisabled(false)
     }
-  };
+  }
 
   return (
     <tr ref={ref} style={props.style} className={classNames({ warning: isDisabled })}>
@@ -73,14 +72,16 @@ export const AssetRow = forwardRef((props, ref) => {
         {formatDuration(props.duration)}
       </td>
       <td className={classNames('asset-toggle')} style={{ width: '7%' }}>
-        <label className={classNames(
-          'is_enabled-toggle',
-          'toggle',
-          'switch-light',
-          'switch-material',
-          'small',
-          'm-0'
-        )}>
+        <label
+          className={classNames(
+            'is_enabled-toggle',
+            'toggle',
+            'switch-light',
+            'switch-material',
+            'small',
+            'm-0'
+          )}
+        >
           <input
             type="checkbox"
             checked={props.isEnabled}
@@ -136,5 +137,5 @@ export const AssetRow = forwardRef((props, ref) => {
         </button>
       </td>
     </tr>
-  );
-});
+  )
+})

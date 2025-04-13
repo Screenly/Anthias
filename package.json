@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "webpack --watch --config webpack.dev.js",
     "build": "webpack --config webpack.prod.js",
-    "lint": "coffeelint static/js/*.coffee && eslint ."
+    "lint": "eslint static/src"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",

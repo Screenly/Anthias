@@ -1,7 +1,7 @@
 import classNames from 'classnames'
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { fetchAssets, selectActiveAssets, selectInactiveAssets } from '../store/assetsSlice'
+import { fetchAssets, selectActiveAssets, selectInactiveAssets } from '@/store/assets-slice'
 
 import { EmptyAssetMessage } from '@/components/empty-asset-message'
 import { InactiveAssetsTable } from '@/components/inactive-assets'
@@ -18,7 +18,7 @@ export const ScheduleOverview = () => {
   }, [dispatch])
 
   // TODO: Get the player name from the server via API.
-  const [playerName, setPlayerName] = useState('')
+  const [playerName] = useState('')
 
   return (
     <>
