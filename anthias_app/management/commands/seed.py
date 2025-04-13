@@ -58,6 +58,24 @@ class Command(BaseCommand):
                 'start_date': timezone.now() - timedelta(days=1),
                 'end_date': timezone.now() + timedelta(days=21),
                 'play_order': 0,
+            },
+            {
+                'name': 'React Homepage',
+                'uri': 'https://reactjs.org',
+                'mimetype': 'text/html',
+                'is_enabled': False,
+                'start_date': timezone.now() - timedelta(days=1),
+                'end_date': timezone.now() + timedelta(days=21),
+                'play_order': 0,
+            },
+            {
+                'name': 'Angular Homepage',
+                'uri': 'https://angular.io',
+                'mimetype': 'text/html',
+                'is_enabled': False,
+                'start_date': timezone.now() - timedelta(days=1),
+                'end_date': timezone.now() + timedelta(days=21),
+                'play_order': 0,
             }
         ]
 
