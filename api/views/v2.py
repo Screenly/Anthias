@@ -12,6 +12,7 @@ from api.helpers import (
 from api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
+    DeviceSettingsSerializerV2,
     UpdateAssetSerializerV2,
 )
 from api.views.mixins import (
@@ -26,6 +27,7 @@ from api.views.mixins import (
     ShutdownViewMixin,
 )
 from lib.auth import authorized
+from settings import settings
 
 
 class AssetListViewV2(APIView):
@@ -168,3 +170,29 @@ class PlaylistOrderViewV2(PlaylistOrderViewMixin):
 
 class AssetsControlViewV2(AssetsControlViewMixin):
     pass
+
+
+class DeviceSettingsViewV2(APIView):
+    @extend_schema(
+        summary='Get device settings',
+        responses={
+            200: DeviceSettingsSerializerV2
+        }
+    )
+    @authorized
+    def get(self, request):
+        return Response({
+            'player_name': settings['player_name'],
+            'audio_output': settings['audio_output'],
+            'default_duration': int(settings['default_duration']),
+            'default_streaming_duration': int(
+                settings['default_streaming_duration']
+            ),
+            'date_format': settings['date_format'],
+            'auth_backend': settings['auth_backend'],
+            'show_splash': settings['show_splash'],
+            'default_assets': settings['default_assets'],
+            'shuffle_playlist': settings['shuffle_playlist'],
+            'use_24_hour_clock': settings['use_24_hour_clock'],
+            'debug_logging': settings['debug_logging'],
+        })
