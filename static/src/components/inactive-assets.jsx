@@ -1,5 +1,5 @@
 import { useSelector } from 'react-redux'
-import { selectInactiveAssets } from '@/store/assets-slice'
+import { selectInactiveAssets } from '@/store/assets'
 import { AssetRow } from '@/components/asset-row'
 
 export const InactiveAssetsTable = () => {

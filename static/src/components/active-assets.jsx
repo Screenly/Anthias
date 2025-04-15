@@ -3,7 +3,7 @@ import {
   selectActiveAssets,
   updateAssetOrder,
   fetchAssets,
-} from '@/store/assets-slice'
+} from '@/store/assets'
 import {
   DndContext,
   closestCenter,

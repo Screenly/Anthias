@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
+import { createAsyncThunk } from '@reduxjs/toolkit'
 
 export const fetchAssets = createAsyncThunk('assets/fetchAssets', async () => {
   const response = await fetch('/api/v2/assets')
@@ -64,54 +64,3 @@ export const toggleAssetEnabled = createAsyncThunk(
     return { assetId, newValue, playOrder }
   },
 )
-
-const assetsSlice = createSlice({
-  name: 'assets',
-  initialState: {
-    items: [],
-    status: 'idle',
-    error: null,
-  },
-  reducers: {
-    addAsset: (state, action) => {
-      state.items.push(action.payload)
-    },
-  },
-  extraReducers: (builder) => {
-    builder
-      .addCase(fetchAssets.pending, (state) => {
-        state.status = 'loading'
-      })
-      .addCase(fetchAssets.fulfilled, (state, action) => {
-        state.status = 'succeeded'
-        state.items = action.payload
-      })
-      .addCase(fetchAssets.rejected, (state, action) => {
-        state.status = 'failed'
-        state.error = action.error.message
-      })
-      .addCase(updateAssetOrder.fulfilled, (state) => {
-        state.status = 'succeeded'
-      })
-      .addCase(toggleAssetEnabled.fulfilled, (state, action) => {
-        const { assetId, newValue, playOrder } = action.payload
-        const asset = state.items.find((item) => item.asset_id === assetId)
-        if (asset) {
-          asset.is_enabled = newValue
-          asset.play_order = playOrder
-        }
-      })
-  },
-})
-
-export const selectActiveAssets = (state) =>
-  state.assets.items
-    .filter((asset) => asset.is_active)
-    .sort((a, b) => a.play_order - b.play_order)
-
-export const selectInactiveAssets = (state) =>
-  state.assets.items.filter((asset) => !asset.is_active)
-
-export const { addAsset } = assetsSlice.actions
-
-export default assetsSlice.reducer

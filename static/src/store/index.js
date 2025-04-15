@@ -1,8 +1,9 @@
 import { configureStore } from '@reduxjs/toolkit'
-import assetsReducer from '@/store/assets-slice'
+import { assetsReducer, assetModalReducer } from '@/store/assets'
 
 export const store = configureStore({
   reducer: {
     assets: assetsReducer,
+    assetModal: assetModalReducer,
   },
 })

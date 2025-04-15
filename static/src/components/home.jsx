@@ -5,7 +5,7 @@ import {
   fetchAssets,
   selectActiveAssets,
   selectInactiveAssets,
-} from '@/store/assets-slice'
+} from '@/store/assets'
 
 import { EmptyAssetMessage } from '@/components/empty-asset-message'
 import { InactiveAssetsTable } from '@/components/inactive-assets'

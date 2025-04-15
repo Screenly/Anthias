@@ -4,11 +4,12 @@ import {
   FaPencilAlt,
   FaTrashAlt,
 } from 'react-icons/fa'
-import classNames from 'classnames'
-import { forwardRef, useState } from 'react'
-import { useDispatch } from 'react-redux'
-import { toggleAssetEnabled, fetchAssets } from '@/store/assets-slice'
 import Swal from 'sweetalert2'
+import classNames from 'classnames'
+import { useEffect, forwardRef, useState } from 'react'
+import { useDispatch } from 'react-redux'
+
+import { toggleAssetEnabled, fetchAssets } from '@/store/assets'
 
 const formatDuration = (seconds) => {
   let durationString = ''
@@ -32,9 +33,104 @@ const formatDuration = (seconds) => {
   return durationString
 }
 
+const formatDate = (date, dateFormat, use24HourClock = false) => {
+  if (!date) return ''
+
+  // Create a Date object from the input date string
+  const dateObj = new Date(date)
+
+  // Check if the date is valid
+  if (isNaN(dateObj.getTime())) return date
+
+  // Extract the separator from the format
+  const separator = dateFormat.includes('/')
+    ? '/'
+    : dateFormat.includes('-')
+      ? '-'
+      : dateFormat.includes('.')
+        ? '.'
+        : '/'
+
+  // Extract the format parts from the dateFormat string
+  const formatParts = dateFormat.split(/[\/\-\.]/)
+
+  // Set up the date formatting options
+  const options = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: !use24HourClock, // Use 12-hour format if use24HourClock is false
+  }
+
+  // Create a formatter with the specified options
+  const formatter = new Intl.DateTimeFormat('en-US', options)
+
+  // Format the date and get the parts
+  const formattedParts = formatter.formatToParts(dateObj)
+
+  // Extract the formatted values
+  const month = formattedParts.find((p) => p.type === 'month').value
+  const day = formattedParts.find((p) => p.type === 'day').value
+  const year = formattedParts.find((p) => p.type === 'year').value
+  const hour = formattedParts.find((p) => p.type === 'hour').value
+  const minute = formattedParts.find((p) => p.type === 'minute').value
+  const second = formattedParts.find((p) => p.type === 'second').value
+
+  // Get the period (AM/PM) if using 12-hour format
+  let period = ''
+  if (!use24HourClock) {
+    const periodPart = formattedParts.find((p) => p.type === 'dayPeriod')
+    if (periodPart) {
+      period = ` ${periodPart.value}`
+    }
+  }
+
+  // Build the date part according to the format
+  let datePart = ''
+
+  // Determine the order based on the format
+  if (formatParts[0].includes('mm')) {
+    datePart = `${month}${separator}${day}${separator}${year}`
+  } else if (formatParts[0].includes('dd')) {
+    datePart = `${day}${separator}${month}${separator}${year}`
+  } else if (formatParts[0].includes('yyyy')) {
+    datePart = `${year}${separator}${month}${separator}${day}`
+  } else {
+    // Default to mm/dd/yyyy if format is not recognized
+    datePart = `${month}${separator}${day}${separator}${year}`
+  }
+
+  // Add the time part with AM/PM if using 12-hour format
+  const timePart = `${hour}:${minute}:${second}${period}`
+
+  return `${datePart} ${timePart}`
+}
+
 export const AssetRow = forwardRef((props, ref) => {
+  const defaultDateFormat = 'mm/dd/yyyy'
   const dispatch = useDispatch()
   const [isDisabled, setIsDisabled] = useState(false)
+  const [dateFormat, setDateFormat] = useState(defaultDateFormat)
+  const [use24HourClock, setUse24HourClock] = useState(false)
+
+  useEffect(() => {
+    const fetchDateFormat = async () => {
+      try {
+        const response = await fetch('/api/v2/device_settings')
+        const data = await response.json()
+        setDateFormat(data.date_format)
+        setUse24HourClock(data.use_24_hour_clock)
+      } catch (error) {
+        setDateFormat(defaultDateFormat)
+        setUse24HourClock(false)
+      }
+    }
+
+    fetchDateFormat()
+  }, [])
 
   const handleToggle = async () => {
     const newValue = !props.isEnabled ? 1 : 0
@@ -122,8 +218,12 @@ export const AssetRow = forwardRef((props, ref) => {
         <i className={classNames('asset-icon', 'mr-2')}></i>
         {props.name}
       </td>
-      <td style={{ width: '21%' }}>{props.startDate}</td>
-      <td style={{ width: '21%' }}>{props.endDate}</td>
+      <td style={{ width: '21%' }}>
+        {formatDate(props.startDate, dateFormat, use24HourClock)}
+      </td>
+      <td style={{ width: '21%' }}>
+        {formatDate(props.endDate, dateFormat, use24HourClock)}
+      </td>
       <td style={{ width: '13%' }}>{formatDuration(props.duration)}</td>
       <td className={classNames('asset-toggle')} style={{ width: '7%' }}>
         <label
