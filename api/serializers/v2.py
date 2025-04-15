@@ -62,3 +62,17 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
     nocache = BooleanField(required=False)
     skip_asset_check = BooleanField(required=False)
     duration = IntegerField()
+
+
+class DeviceSettingsSerializerV2(Serializer):
+    player_name = CharField()
+    audio_output = CharField()
+    default_duration = IntegerField()
+    default_streaming_duration = IntegerField()
+    date_format = CharField()
+    auth_backend = CharField()
+    show_splash = BooleanField()
+    default_assets = BooleanField()
+    shuffle_playlist = BooleanField()
+    use_24_hour_clock = BooleanField()
+    debug_logging = BooleanField()
