@@ -179,6 +179,7 @@ class DeviceSettingsViewV2(APIView):
             200: DeviceSettingsSerializerV2
         }
     )
+    @authorized
     def get(self, request):
         return Response({
             'player_name': settings['player_name'],
