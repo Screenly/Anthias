@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, re_path
 
 from . import views
 
@@ -10,4 +10,5 @@ urlpatterns = [
     path('system-info', views.system_info, name='system_info'),
     path('integrations', views.integrations, name='integrations'),
     path('splash-page', views.splash_page, name='splash_page'),
+    re_path(r'^react/?.*', views.react, name='react'),
 ]
