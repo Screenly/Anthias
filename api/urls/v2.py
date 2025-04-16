@@ -8,6 +8,7 @@ from api.views.v2 import (
     BackupViewV2,
     DeviceSettingsViewV2,
     FileAssetViewV2,
+    InfoViewV2,
     PlaylistOrderViewV2,
     RebootViewV2,
     RecoverViewV2,
@@ -47,5 +48,10 @@ def get_url_patterns():
             'v2/device_settings',
             DeviceSettingsViewV2.as_view(),
             name='device_settings_v2',
+        ),
+        path(
+            'v2/info',
+            InfoViewV2.as_view(),
+            name='info_v2',
         ),
     ]

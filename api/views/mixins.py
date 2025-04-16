@@ -2,9 +2,10 @@ import uuid
 from base64 import b64encode
 from inspect import cleandoc
 from mimetypes import guess_extension, guess_type
-from os import path, remove
+from os import path, remove, statvfs
 
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
+from hurry.filesize import size
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -12,9 +13,13 @@ from rest_framework.views import APIView
 from anthias_app.models import Asset
 from api.helpers import save_active_assets_ordering
 from celery_tasks import reboot_anthias, shutdown_anthias
-from lib import backup_helper
+from lib import backup_helper, diagnostics
 from lib.auth import authorized
+from lib.github import is_up_to_date
+from lib.utils import connect_to_redis
 from settings import ZmqPublisher, settings
+
+r = connect_to_redis()
 
 
 class DeleteAssetViewMixin:
@@ -287,3 +292,44 @@ class AssetsControlViewMixin(APIView):
         publisher = ZmqPublisher.get_instance()
         publisher.send_to_viewer(command)
         return Response("Asset switched")
+
+
+class InfoViewMixin(APIView):
+    @extend_schema(
+        summary='Get system information',
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'viewlog': {'type': 'string'},
+                    'loadavg': {'type': 'number'},
+                    'free_space': {'type': 'string'},
+                    'display_power': {'type': 'string'},
+                    'up_to_date': {'type': 'boolean'}
+                },
+                'example': {
+                    'viewlog': 'Not yet implemented',
+                    'loadavg': 0.1,
+                    'free_space': '10G',
+                    'display_power': 'on',
+                    'up_to_date': True
+                }
+            }
+        }
+    )
+    @authorized
+    def get(self, request):
+        viewlog = "Not yet implemented"
+
+        # Calculate disk space
+        slash = statvfs("/")
+        free_space = size(slash.f_bavail * slash.f_frsize)
+        display_power = r.get('display_power')
+
+        return Response({
+            'viewlog': viewlog,
+            'loadavg': diagnostics.get_load_avg()['15 min'],
+            'free_space': free_space,
+            'display_power': display_power,
+            'up_to_date': is_up_to_date()
+        })

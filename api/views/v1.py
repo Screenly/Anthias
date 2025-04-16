@@ -1,4 +1,3 @@
-from os import statvfs
 
 from drf_spectacular.utils import (
     OpenApiExample,
@@ -6,7 +5,6 @@ from drf_spectacular.utils import (
     extend_schema,
     inline_serializer,
 )
-from hurry.filesize import size
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -27,18 +25,14 @@ from api.views.mixins import (
     BackupViewMixin,
     DeleteAssetViewMixin,
     FileAssetViewMixin,
+    InfoViewMixin,
     PlaylistOrderViewMixin,
     RebootViewMixin,
     RecoverViewMixin,
     ShutdownViewMixin,
 )
-from lib import diagnostics
 from lib.auth import authorized
-from lib.github import is_up_to_date
-from lib.utils import connect_to_redis
 from settings import ZmqCollector, ZmqPublisher
-
-r = connect_to_redis()
 
 MODEL_STRING_EXAMPLE = """
 Yes, that is just a string of JSON not JSON itself it will be parsed on the
@@ -177,45 +171,8 @@ class AssetsControlViewV1(AssetsControlViewMixin):
     pass
 
 
-class InfoView(APIView):
-    @extend_schema(
-        summary='Get system information',
-        responses={
-            200: {
-                'type': 'object',
-                'properties': {
-                    'viewlog': {'type': 'string'},
-                    'loadavg': {'type': 'number'},
-                    'free_space': {'type': 'string'},
-                    'display_power': {'type': 'string'},
-                    'up_to_date': {'type': 'boolean'}
-                },
-                'example': {
-                    'viewlog': 'Not yet implemented',
-                    'loadavg': 0.1,
-                    'free_space': '10G',
-                    'display_power': 'on',
-                    'up_to_date': True
-                }
-            }
-        }
-    )
-    @authorized
-    def get(self, request):
-        viewlog = "Not yet implemented"
-
-        # Calculate disk space
-        slash = statvfs("/")
-        free_space = size(slash.f_bavail * slash.f_frsize)
-        display_power = r.get('display_power')
-
-        return Response({
-            'viewlog': viewlog,
-            'loadavg': diagnostics.get_load_avg()['15 min'],
-            'free_space': free_space,
-            'display_power': display_power,
-            'up_to_date': is_up_to_date()
-        })
+class InfoView(InfoViewMixin):
+    pass
 
 
 class RebootViewV1(RebootViewMixin):
