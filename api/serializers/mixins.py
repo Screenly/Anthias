@@ -1,5 +1,8 @@
 import uuid
+from inspect import cleandoc
 from os import path, rename
+
+from rest_framework.serializers import CharField, Serializer
 
 from lib.utils import (
     download_video_from_youtube,
@@ -99,3 +102,27 @@ class CreateAssetSerializerMixin:
             raise Exception("Could not retrieve file. Check the asset URL.")
 
         return asset
+
+
+class PlaylistOrderSerializerMixin(Serializer):
+    ids = CharField(
+        write_only=True,
+        help_text=cleandoc(
+            """
+            Comma-separated list of asset IDs in the order
+            they should be played. For example:
+
+            `793406aa1fd34b85aa82614004c0e63a,1c5cfa719d1f4a9abae16c983a18903b,9c41068f3b7e452baf4dc3f9b7906595`
+            """
+        ),
+    )
+
+
+class BackupViewSerializerMixin(Serializer):
+    pass
+
+class RebootViewSerializerMixin(Serializer):
+    pass
+
+class ShutdownViewSerializerMixin(Serializer):
+    pass

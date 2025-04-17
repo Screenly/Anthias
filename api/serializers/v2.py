@@ -1,4 +1,5 @@
 from django.utils import timezone
+from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework.serializers import (
     BooleanField,
     CharField,
@@ -6,6 +7,7 @@ from rest_framework.serializers import (
     IntegerField,
     ModelSerializer,
     Serializer,
+    SerializerMethodField,
 )
 
 from anthias_app.models import Asset
@@ -14,6 +16,12 @@ from api.serializers.mixins import CreateAssetSerializerMixin
 
 
 class AssetSerializerV2(ModelSerializer, CreateAssetSerializerMixin):
+    is_active = SerializerMethodField()
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_is_active(self, obj):
+        return obj.is_active()
+
     class Meta:
         model = Asset
         fields = [
