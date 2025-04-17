@@ -31,6 +31,7 @@ jobs:
     strategy:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
+        service: ['server', 'celery', 'redis', 'websocket', 'nginx', 'viewer', 'wifi-connect']
         python-version: ["3.11"]
     runs-on: ubuntu-24.04
 
@@ -75,14 +76,14 @@ jobs:
         uses: actions/cache@v4
         id: cache
         with:
-          path: /tmp/.buildx-cache/${{ matrix.board }}
-          key: buildx-${{ matrix.board }}-${{ hashFiles('docker/**/*') }}
+          path: /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }}
+          key: buildx-${{ matrix.board }}-${{ matrix.service }}-${{ hashFiles('docker/**/*') }}
           restore-keys: |
-            buildx-${{ matrix.board }}-
+            buildx-${{ matrix.board }}-${{ matrix.service }}-
 
       - name: Inspect cache before build
         run: |
-          ls -la /tmp/.buildx-cache/${{ matrix.board }} || true
+          ls -la /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }} || true
 
       - name: Login to Docker Hub
         if: success() && github.event_name != 'pull_request'
@@ -91,7 +92,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build Containers
+      - name: Build Container
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
@@ -100,21 +101,24 @@ jobs:
             poetry run python -m tools.image_builder \
               --build-target=pi4 \
               --target-platform=linux/arm/v8 \
+              --service=${{ matrix.service }} \
               --push
           elif [ "${{ matrix.board }}" == "pi4-64" ]; then
             poetry run python -m tools.image_builder \
               --build-target=pi4 \
               --target-platform=linux/arm64/v8 \
+              --service=${{ matrix.service }} \
               --push
           else
             poetry run python -m tools.image_builder \
               --build-target=${{ matrix.board }} \
+              --service=${{ matrix.service }} \
               --push
           fi
 
       - name: Inspect cache after build
         run: |
-          ls -la /tmp/.buildx-cache/${{ matrix.board }} || true
+          ls -la /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }} || true
 
   balena:
     if: ${{ github.ref == 'refs/heads/master' }}
