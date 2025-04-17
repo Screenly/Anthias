@@ -12,6 +12,12 @@ from rest_framework.views import APIView
 
 from anthias_app.models import Asset
 from api.helpers import save_active_assets_ordering
+from api.serializers.mixins import (
+    BackupViewSerializerMixin,
+    PlaylistOrderSerializerMixin,
+    RebootViewSerializerMixin,
+    ShutdownViewSerializerMixin,
+)
 from celery_tasks import reboot_anthias, shutdown_anthias
 from lib import backup_helper, diagnostics
 from lib.auth import authorized
@@ -50,6 +56,7 @@ class BackupViewMixin(APIView):
         * asset metadata (e.g. name, duration, play order, status),
           which is stored in a SQLite database
         """),
+        request=BackupViewSerializerMixin,
         responses={
             201: {
                 'type': 'string',
@@ -112,6 +119,8 @@ class RecoverViewMixin(APIView):
 
 
 class RebootViewMixin(APIView):
+    serializer_class = RebootViewSerializerMixin
+
     @extend_schema(summary='Reboot system')
     @authorized
     def post(self, request):
@@ -120,6 +129,8 @@ class RebootViewMixin(APIView):
 
 
 class ShutdownViewMixin(APIView):
+    serializer_class = ShutdownViewSerializerMixin
+
     @extend_schema(summary='Shut down system')
     @authorized
     def post(self, request):
@@ -236,24 +247,8 @@ class AssetContentViewMixin(APIView):
 class PlaylistOrderViewMixin(APIView):
     @extend_schema(
         summary='Update playlist order',
-        request={
-            'application/x-www-form-urlencoded': {
-                'type': 'object',
-                'properties': {
-                    'ids': {
-                        'type': 'string',
-                        'description': cleandoc(
-                            """
-                            Comma-separated list of asset IDs in the order
-                            they should be played. For example:
-
-                            `793406aa1fd34b85aa82614004c0e63a,1c5cfa719d1f4a9abae16c983a18903b,9c41068f3b7e452baf4dc3f9b7906595`
-                            """
-                        )
-                    }
-                },
-            }
-        }
+        request=PlaylistOrderSerializerMixin,
+        responses={204: None}
     )
     @authorized
     def post(self, request):
