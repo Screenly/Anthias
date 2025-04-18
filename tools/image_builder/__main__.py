@@ -34,6 +34,7 @@ def build_image(
     clean_build: bool,
     push: bool,
     dockerfiles_only: bool,
+    disable_registry_cache: bool,
 ) -> None:
     # Enable BuildKit
     os.environ['DOCKER_BUILDKIT'] = '1'
@@ -127,10 +128,19 @@ def build_image(
     docker.buildx.build(
         context_path='.',
         cache=(not clean_build),
-        cache_from={
-            'type': 'local',
-            'src': str(cache_dir),
-        } if not clean_build else None,
+        cache_from=[
+            {
+                'type': 'local',
+                'src': str(cache_dir),
+            },
+            {
+                'type': 'registry',
+                'ref': f'screenly/anthias-{service}:latest-pi4-64',
+            } if board == 'pi4' and target_platform == 'linux/arm64/v8' else {
+                'type': 'registry',
+                'ref': f'screenly/anthias-{service}:latest-{board}',
+            }
+        ] if not clean_build and not disable_registry_cache else None,
         cache_to={
             'type': 'local',
             'dest': str(cache_dir),
@@ -186,6 +196,11 @@ def build_image(
     '--dockerfiles-only',
     is_flag=True,
 )
+@click.option(
+    '--disable-registry-cache',
+    is_flag=True,
+    help='Disable caching from Docker Hub images',
+)
 def main(
     clean_build: bool,
     build_target: str,
@@ -195,6 +210,7 @@ def main(
     environment: str,
     push: bool,
     dockerfiles_only: bool,
+    disable_registry_cache: bool,
 ) -> None:
     git_branch = pygit2.Repository('.').head.shorthand
     git_hash = str(pygit2.Repository('.').head.target)
@@ -244,6 +260,7 @@ def main(
             clean_build,
             push,
             dockerfiles_only,
+            disable_registry_cache,
         )
 
 
