@@ -1,23 +1,26 @@
 {% if environment == 'production' %}
 FROM debian:bookworm AS node-builder
 
+# Install node dependencies first to leverage cache
 RUN apt-get update && \
     apt-get -y install \
         nodejs \
-        npm
+        npm && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /app
 WORKDIR /app
 
-COPY package.json \
-    package-lock.json \
-    webpack.prod.js \
-    webpack.common.js \
-    /app/
-RUN npm install
+# Copy only package files first to leverage cache
+COPY package.json package-lock.json ./
+RUN npm ci
 
-COPY ./static/js/*.coffee /app/static/js/
-COPY ./static/sass/*.scss /app/static/sass/
+# Copy only the necessary files for the build
+COPY webpack.prod.js webpack.common.js ./
+COPY ./static/js/*.coffee ./static/js/
+COPY ./static/sass/*.scss ./static/sass/
+
+# Run the build
 RUN npm run build
 
 {% endif %}
@@ -31,9 +34,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 {% endif %}
     pip3 install -r /tmp/requirements.txt --break-system-packages
 
-RUN mkdir -p /usr/src/app
-COPY . /usr/src/app/
+# Set up application directory
 WORKDIR /usr/src/app
+
+# Copy application code
+COPY . .
 
 {% if environment == 'production' %}
 COPY --from=node-builder \

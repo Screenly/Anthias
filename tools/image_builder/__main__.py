@@ -38,6 +38,7 @@ def build_image(
 ) -> None:
     # Enable BuildKit
     os.environ['DOCKER_BUILDKIT'] = '1'
+    os.environ['BUILDKIT_INLINE_CACHE'] = '1'
 
     context = {}
 
