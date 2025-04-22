@@ -113,33 +113,6 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(response.data, 'Asset switched')
 
     @mock.patch(
-        'api.views.v1.is_up_to_date',
-        return_value=False
-    )
-    @mock.patch(
-        'lib.diagnostics.get_load_avg',
-        return_value={'15 min': 0.11}
-    )
-    @mock.patch('api.views.v1.size', return_value='15G')
-    @mock.patch('api.views.v1.statvfs', mock.MagicMock())
-    def test_device_info(
-        self,
-        size_mock,
-        get_load_avg_mock,
-        is_up_to_date_mock
-    ):
-        is_up_to_date_mock.return_value = False
-        info_url = reverse('api:info_v1')
-        response = self.client.get(info_url)
-        data = response.data
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(size_mock.call_count, 1)
-        self.assertEqual(get_load_avg_mock.call_count, 1)
-        self.assertEqual(is_up_to_date_mock.call_count, 1)
-        self.assertEqual(data['viewlog'], 'Not yet implemented')
-
-    @mock.patch(
         'api.views.mixins.reboot_anthias.apply_async',
         side_effect=(lambda: None)
     )

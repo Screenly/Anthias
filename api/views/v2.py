@@ -21,6 +21,7 @@ from api.views.mixins import (
     BackupViewMixin,
     DeleteAssetViewMixin,
     FileAssetViewMixin,
+    InfoViewMixin,
     PlaylistOrderViewMixin,
     RebootViewMixin,
     RecoverViewMixin,
@@ -196,3 +197,7 @@ class DeviceSettingsViewV2(APIView):
             'use_24_hour_clock': settings['use_24_hour_clock'],
             'debug_logging': settings['debug_logging'],
         })
+
+
+class InfoViewV2(InfoViewMixin):
+    pass
