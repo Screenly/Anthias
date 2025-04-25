@@ -61,7 +61,7 @@ logging.basicConfig(level=logging.INFO,
 requests_log = logging.getLogger("requests")
 requests_log.setLevel(logging.WARNING)
 
-logging.debug('Starting viewer.py')
+logging.debug('Starting viewer')
 
 
 class AnthiasSettings(UserDict):

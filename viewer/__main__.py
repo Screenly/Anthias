@@ -5,34 +5,36 @@ from __future__ import unicode_literals
 import json
 import logging
 import sys
-from builtins import bytes, object, range
-from os import getenv, path, system, utime
-from random import shuffle
+from builtins import bytes, range
+from os import getenv, path
 from signal import SIGALRM, SIGUSR1, signal
 from threading import Thread
 from time import sleep
 
 import django
 import pydbus
-import requests
 import sh
 import zmq
 from future import standard_library
 from jinja2 import Template
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
-from lib.errors import SigalrmError
-from lib.media_player import MediaPlayerProxy
 from settings import LISTEN, PORT, ZmqConsumer, settings
+from viewer.media_player import MediaPlayerProxy
+from viewer.playback import navigate_to_asset, play_loop, skip_asset, stop_loop
+from viewer.utils import (
+    command_not_found,
+    sigalrm,
+    sigusr1,
+    wait_for_server,
+    watchdog,
+)
 
 try:
     django.setup()
 
     # Place imports that uses Django in this block.
 
-    from django.utils import timezone
-
-    from anthias_app.models import Asset
     from lib.utils import (
         connect_to_redis,
         get_balena_device_info,
@@ -41,9 +43,9 @@ try:
         string_to_bool,
         url_fails,
     )
+    from viewer.scheduler import Scheduler
 except Exception:
     pass
-
 
 standard_library.install_aliases()
 
@@ -57,7 +59,6 @@ SPLASH_DELAY = 60  # secs
 EMPTY_PL_DELAY = 5  # secs
 
 INITIALIZED_FILE = '/.screenly/initialized'
-WATCHDOG_PATH = '/tmp/screenly.watchdog'
 
 STANDBY_SCREEN = f'http://{LISTEN}:{PORT}/static/img/standby.png'
 SPLASH_PAGE_URL = f'http://{LISTEN}:{PORT}/splash-page'
@@ -78,54 +79,14 @@ HOME = None
 scheduler = None
 
 
-def sigalrm(signum, frame):
-    """
-    Signal just throw an SigalrmError
-    """
-    raise SigalrmError("SigalrmError")
-
-
-def sigusr1(signum, frame):
-    """
-    The signal interrupts sleep() calls, so the currently
-    playing web or image asset is skipped.
-    """
-    logging.info('USR1 received, skipping.')
-    MediaPlayerProxy.get_instance().stop()
-
-
-def skip_asset(back=False):
-    if back is True:
-        scheduler.reverse = True
-    system('pkill -SIGUSR1 -f viewer.py')
-
-
-def navigate_to_asset(asset_id):
-    scheduler.extra_asset = asset_id
-    system('pkill -SIGUSR1 -f viewer.py')
-
-
-def stop_loop():
-    global loop_is_stopped
-    loop_is_stopped = True
-    skip_asset()
-
-
-def play_loop():
-    global loop_is_stopped
-    loop_is_stopped = False
-
-
-def command_not_found():
-    logging.error("Command not found")
-
-
 def send_current_asset_id_to_server():
     consumer = ZmqConsumer()
     consumer.send({'current_asset_id': scheduler.current_asset_id})
 
 
 def show_hotspot_page(data):
+    global loop_is_stopped
+
     uri = 'http://{0}/hotspot'.format(LISTEN)
     decoded = json.loads(data)
 
@@ -144,7 +105,7 @@ def show_hotspot_page(data):
     with open('/data/hotspot/hotspot.html', 'w') as out_file:
         out_file.write(template.render(context=context))
 
-    stop_loop()
+    loop_is_stopped = stop_loop(scheduler)
     view_webpage(uri)
 
 
@@ -158,6 +119,8 @@ def setup_wifi(data):
 
 
 def show_splash(data):
+    global loop_is_stopped
+
     if is_balena_app():
         while True:
             try:
@@ -171,16 +134,20 @@ def show_splash(data):
 
     view_webpage(SPLASH_PAGE_URL)
     sleep(SPLASH_DELAY)
-    play_loop()
+    loop_is_stopped = play_loop()
 
 
 commands = {
-    'next': lambda _: skip_asset(),
-    'previous': lambda _: skip_asset(back=True),
-    'asset': lambda id: navigate_to_asset(id),
+    'next': lambda _: skip_asset(scheduler),
+    'previous': lambda _: skip_asset(scheduler, back=True),
+    'asset': lambda id: navigate_to_asset(scheduler, id),
     'reload': lambda _: load_settings(),
-    'stop': lambda _: stop_loop(),
-    'play': lambda _: play_loop(),
+    'stop': lambda _: setattr(
+        __import__('__main__'), 'loop_is_stopped', stop_loop(scheduler)
+    ),
+    'play': lambda _: setattr(
+        __import__('__main__'), 'loop_is_stopped', play_loop()
+    ),
     'setup_wifi': lambda data: setup_wifi(data),
     'show_splash': lambda data: show_splash(data),
     'unknown': lambda _: command_not_found(),
@@ -214,154 +181,6 @@ class ZmqSubscriber(Thread):
             parameter = parts[1] if len(parts) > 1 else None
 
             commands.get(command, commands.get('unknown'))(parameter)
-
-
-class Scheduler(object):
-    def __init__(self, *args, **kwargs):
-        logging.debug('Scheduler init')
-        self.assets = []
-        self.counter = 0
-        self.current_asset_id = None
-        self.deadline = None
-        self.extra_asset = None
-        self.index = 0
-        self.reverse = 0
-        self.update_playlist()
-
-    def get_next_asset(self):
-        logging.debug('get_next_asset')
-
-        if self.extra_asset is not None:
-            asset = get_specific_asset(self.extra_asset)
-            if asset and asset['is_processing']:
-                self.current_asset_id = self.extra_asset
-                self.extra_asset = None
-                return asset
-            logging.error("Asset not found or processed")
-            self.extra_asset = None
-
-        self.refresh_playlist()
-        logging.debug('get_next_asset after refresh')
-        if not self.assets:
-            self.current_asset_id = None
-            return None
-        if self.reverse:
-            idx = (self.index - 2) % len(self.assets)
-            self.index = (self.index - 1) % len(self.assets)
-            self.reverse = False
-        else:
-            idx = self.index
-            self.index = (self.index + 1) % len(self.assets)
-
-        logging.debug(
-            'get_next_asset counter %s returning asset %s of %s',
-            self.counter, idx + 1, len(self.assets),
-        )
-
-        if settings['shuffle_playlist'] and self.index == 0:
-            self.counter += 1
-
-        current_asset = self.assets[idx]
-        self.current_asset_id = current_asset.get('asset_id')
-        return current_asset
-
-    def refresh_playlist(self):
-        logging.debug('refresh_playlist')
-        time_cur = timezone.now()
-
-        logging.debug(
-            'refresh: counter: (%s) deadline (%s) timecur (%s)',
-            self.counter, self.deadline, time_cur
-        )
-
-        if self.get_db_mtime() > self.last_update_db_mtime:
-            logging.debug('updating playlist due to database modification')
-            self.update_playlist()
-        elif settings['shuffle_playlist'] and self.counter >= 5:
-            self.update_playlist()
-        elif self.deadline and self.deadline <= time_cur:
-            self.update_playlist()
-
-    def update_playlist(self):
-        logging.debug('update_playlist')
-        self.last_update_db_mtime = self.get_db_mtime()
-        (new_assets, new_deadline) = generate_asset_list()
-        if new_assets == self.assets and new_deadline == self.deadline:
-            # If nothing changed, don't disturb the current play-through.
-            return
-
-        self.assets, self.deadline = new_assets, new_deadline
-        self.counter = 0
-        # Try to keep the same position in the play list. E.g., if a new asset
-        # is added to the end of the list, we don't want to start over from
-        # the beginning.
-        self.index = self.index % len(self.assets) if self.assets else 0
-        logging.debug(
-            'update_playlist done, count %s, counter %s, index %s, deadline %s',  # noqa: E501
-            len(self.assets), self.counter, self.index, self.deadline
-        )
-
-    def get_db_mtime(self):
-        # get database file last modification time
-        try:
-            return path.getmtime(settings['database'])
-        except (OSError, TypeError):
-            return 0
-
-
-def get_specific_asset(asset_id):
-    logging.info('Getting specific asset')
-    try:
-        return Asset.objects.get(asset_id=asset_id).__dict__
-    except Asset.DoesNotExist:
-        logging.debug('Asset %s not found in database', asset_id)
-        return None
-
-
-def generate_asset_list():
-    """Choose deadline via:
-        1. Map assets to deadlines with rule: if asset is active then
-           'end_date' else 'start_date'
-        2. Get nearest deadline
-    """
-    logging.info('Generating asset-list...')
-    assets = Asset.objects.all()
-    deadlines = [
-        asset.end_date
-        if asset.is_active()
-        else asset.start_date
-        for asset in assets
-    ]
-
-    enabled_assets = Asset.objects.filter(
-        is_enabled=True,
-        start_date__isnull=False,
-        end_date__isnull=False,
-    ).order_by('play_order')
-    playlist = [
-        {
-            k: v for k, v in asset.__dict__.items()
-            if k not in ['_state', 'md5']
-        }
-        for asset in enabled_assets
-        if asset.is_active()
-    ]
-
-    deadline = sorted(deadlines)[0] if len(deadlines) > 0 else None
-    logging.debug('generate_asset_list deadline: %s', deadline)
-
-    if settings['shuffle_playlist']:
-        shuffle(playlist)
-
-    return playlist, deadline
-
-
-def watchdog():
-    """Notify the watchdog file to be used with the watchdog-device."""
-    if not path.isfile(WATCHDOG_PATH):
-        open(WATCHDOG_PATH, 'w').close()
-    else:
-        utime(WATCHDOG_PATH, None)
 
 
 def load_browser():
@@ -497,16 +316,6 @@ def wait_for_node_ip(seconds):
             break
         except Exception:
             sleep(1)
-
-
-def wait_for_server(retries, wt=1):
-    for _ in range(retries):
-        try:
-            response = requests.get(f'http://{LISTEN}:{PORT}/splash-page')
-            response.raise_for_status()
-            break
-        except requests.exceptions.RequestException:
-            sleep(wt)
 
 
 def start_loop():
