@@ -17,7 +17,16 @@ from future import standard_library
 from jinja2 import Template
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
-from settings import LISTEN, PORT, ZmqConsumer, settings
+from settings import LISTEN, ZmqConsumer, settings
+from viewer.constants import (
+    BALENA_IP_RETRY_DELAY,
+    EMPTY_PL_DELAY,
+    MAX_BALENA_IP_RETRIES,
+    SERVER_WAIT_TIMEOUT,
+    SPLASH_DELAY,
+    SPLASH_PAGE_URL,
+    STANDBY_SCREEN,
+)
 from viewer.media_player import MediaPlayerProxy
 from viewer.playback import navigate_to_asset, play_loop, skip_asset, stop_loop
 from viewer.utils import (
@@ -53,18 +62,6 @@ __author__ = "Screenly, Inc"
 __copyright__ = "Copyright 2012-2024, Screenly, Inc"
 __license__ = "Dual License: GPLv2 and Commercial License"
 
-
-SPLASH_DELAY = 60  # secs
-EMPTY_PL_DELAY = 5  # secs
-
-INITIALIZED_FILE = '/.screenly/initialized'
-
-STANDBY_SCREEN = f'http://{LISTEN}:{PORT}/static/img/standby.png'
-SPLASH_PAGE_URL = f'http://{LISTEN}:{PORT}/splash-page'
-
-MAX_BALENA_IP_RETRIES = 90
-BALENA_IP_RETRY_DELAY = 1
-SERVER_WAIT_TIMEOUT = 60
 
 current_browser_url = None
 browser = None
