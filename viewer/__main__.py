@@ -5,16 +5,14 @@ from __future__ import unicode_literals
 import json
 import logging
 import sys
-from builtins import bytes, range
+from builtins import range
 from os import getenv, path
 from signal import SIGALRM, SIGUSR1, signal
-from threading import Thread
 from time import sleep
 
 import django
 import pydbus
 import sh
-import zmq
 from future import standard_library
 from jinja2 import Template
 from tenacity import Retrying, stop_after_attempt, wait_fixed
@@ -44,6 +42,7 @@ try:
         url_fails,
     )
     from viewer.scheduler import Scheduler
+    from viewer.zmq import ZMQ_HOST_PUB_URL, ZmqSubscriber
 except Exception:
     pass
 
@@ -62,7 +61,6 @@ INITIALIZED_FILE = '/.screenly/initialized'
 
 STANDBY_SCREEN = f'http://{LISTEN}:{PORT}/static/img/standby.png'
 SPLASH_PAGE_URL = f'http://{LISTEN}:{PORT}/splash-page'
-ZMQ_HOST_PUB_URL = 'tcp://host.docker.internal:10001'
 
 MAX_BALENA_IP_RETRIES = 90
 BALENA_IP_RETRY_DELAY = 1
@@ -153,34 +151,6 @@ commands = {
     'unknown': lambda _: command_not_found(),
     'current_asset_id': lambda _: send_current_asset_id_to_server()
 }
-
-
-class ZmqSubscriber(Thread):
-    def __init__(self, publisher_url, topic='viewer'):
-        Thread.__init__(self)
-        self.context = zmq.Context()
-        self.publisher_url = publisher_url
-        self.topic = topic
-
-    def run(self):
-        socket = self.context.socket(zmq.SUB)
-        socket.connect(self.publisher_url)
-        socket.setsockopt(zmq.SUBSCRIBE, bytes(self.topic, encoding='utf-8'))
-
-        if self.publisher_url == ZMQ_HOST_PUB_URL:
-            r.set('viewer-subscriber-ready', int(True))
-
-        while True:
-            msg = socket.recv()
-            topic, message = msg.decode('utf-8').split(' ', 1)
-
-            # If the command consists of 2 parts, then the first is the
-            # function and the second is the argument.
-            parts = message.split('&', 1)
-            command = parts[0]
-            parameter = parts[1] if len(parts) > 1 else None
-
-            commands.get(command, commands.get('unknown'))(parameter)
 
 
 def load_browser():
@@ -339,11 +309,11 @@ def main():
 
     setup()
 
-    subscriber_1 = ZmqSubscriber('tcp://anthias-server:10001')
+    subscriber_1 = ZmqSubscriber(r, commands, 'tcp://anthias-server:10001')
     subscriber_1.daemon = True
     subscriber_1.start()
 
-    subscriber_2 = ZmqSubscriber(ZMQ_HOST_PUB_URL)
+    subscriber_2 = ZmqSubscriber(r, commands, ZMQ_HOST_PUB_URL)
     subscriber_2.daemon = True
     subscriber_2.start()
 
