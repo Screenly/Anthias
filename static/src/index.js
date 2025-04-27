@@ -9,7 +9,7 @@ import { App } from '@/components/app'
 const root = ReactDOM.createRoot(document.getElementById('app'))
 
 root.render(
-  <BrowserRouter basename="react">
+  <BrowserRouter basename="/">
     <Provider store={store}>
       <App />
     </Provider>

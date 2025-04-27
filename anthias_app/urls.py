@@ -1,14 +1,9 @@
-from django.urls import path, re_path
+from django.urls import re_path
 
 from . import views
 
 app_name = 'anthias_app'
 
 urlpatterns = [
-    path('', views.index, name='index'),
-    path('settings', views.settings_page, name='settings'),
-    path('system-info', views.system_info, name='system_info'),
-    path('integrations', views.integrations, name='integrations'),
-    path('splash-page', views.splash_page, name='splash_page'),
-    re_path(r'^react/?.*', views.react, name='react'),
+    re_path(r'^(?!api/).*$', views.react, name='react'),
 ]
