@@ -50,7 +50,7 @@ try:
         string_to_bool,
         url_fails,
     )
-    from viewer.scheduler import Scheduler
+    from viewer.scheduling import Scheduler
     from viewer.zmq import ZMQ_HOST_PUB_URL, ZmqSubscriber
 except Exception:
     pass

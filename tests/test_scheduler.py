@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from anthias_app.models import Asset
 from settings import settings
-from viewer.scheduler import Scheduler, generate_asset_list
+from viewer.scheduling import Scheduler, generate_asset_list
 
 logging.disable(logging.CRITICAL)
 
