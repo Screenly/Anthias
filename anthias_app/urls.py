@@ -1,4 +1,4 @@
-from django.urls import path, re_path # todo nico; remove path if not needed
+from django.urls import path, re_path
 
 from . import views
 
