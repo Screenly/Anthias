@@ -146,6 +146,44 @@ export const AssetRow = forwardRef((props, ref) => {
     }
   }
 
+  const handleDownload = async (event) => {
+    event.preventDefault()
+    const assetId = props.assetId
+
+    try {
+      const response = await fetch(`/api/v2/assets/${assetId}/content`)
+      const result = await response.json()
+
+      if (result.type === 'url') {
+        window.open(result.url)
+      } else if (result.type === 'file') {
+        // Convert base64 to byte array
+        const content = atob(result.content)
+        const bytes = new Uint8Array(content.length)
+        for (let i = 0; i < content.length; i++) {
+          bytes[i] = content.charCodeAt(i)
+        }
+
+        const mimetype = result.mimetype
+        const filename = result.filename
+
+        // Create blob and download
+        const blob = new Blob([bytes], { type: mimetype })
+        const url = URL.createObjectURL(blob)
+
+        const a = document.createElement('a')
+        document.body.appendChild(a)
+        a.download = filename
+        a.href = url
+        a.click()
+
+        // Clean up
+        URL.revokeObjectURL(url)
+        a.remove()
+      }
+    } catch (error) {}
+  }
+
   const handleDelete = () => {
     Swal.fire({
       title: 'Are you sure?',
@@ -261,6 +299,7 @@ export const AssetRow = forwardRef((props, ref) => {
           )}
           type="button"
           disabled={isDisabled}
+          onClick={handleDownload}
         >
           <FaDownload />
         </button>
