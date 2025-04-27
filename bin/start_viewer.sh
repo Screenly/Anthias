@@ -39,7 +39,7 @@ trap '' 16
 echo 0 >  /sys/fs/cgroup/memory/memory.swappiness
 
 # Start viewer
-sudo -E -u viewer dbus-run-session python viewer.py &
+sudo -E -u viewer dbus-run-session python -m viewer &
 
 # Wait for the viewer
 while true; do

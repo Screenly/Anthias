@@ -6,9 +6,9 @@ import time_machine
 from django.test import TestCase
 from django.utils import timezone
 
-import viewer  # noqa: E402
 from anthias_app.models import Asset
 from settings import settings
+from viewer.scheduling import Scheduler, generate_asset_list
 
 logging.disable(logging.CRITICAL)
 
@@ -90,12 +90,12 @@ class SchedulerTest(TestCase):
 
     def test_generate_asset_list_assets_should_return_list_sorted_by_play_order(self):  # noqa: E501
         self.create_assets([ASSET_X, ASSET_Y])
-        assets, _ = viewer.generate_asset_list()
+        assets, _ = generate_asset_list()
         self.assertEqual(assets, [ASSET_Y, ASSET_X])
 
     def test_generate_asset_list_check_deadline_if_both_active(self):
         self.create_assets([ASSET_X, ASSET_Y])
-        _, deadline = viewer.generate_asset_list()
+        _, deadline = generate_asset_list()
         self.assertEqual(deadline, ASSET_Y['end_date'])
 
     def test_generate_asset_list_check_deadline_if_asset_scheduled(self):
@@ -104,12 +104,12 @@ class SchedulerTest(TestCase):
         ASSET_TOMORROW[start_date]
         """
         self.create_assets([ASSET_X, ASSET_TOMORROW])
-        _, deadline = viewer.generate_asset_list()
+        _, deadline = generate_asset_list()
         self.assertEqual(deadline, ASSET_TOMORROW['start_date'])
 
     def test_get_next_asset_should_be_y_and_x(self):
         self.create_assets([ASSET_X, ASSET_Y])
-        scheduler = viewer.Scheduler()
+        scheduler = Scheduler()
 
         expected_y = scheduler.get_next_asset()
         expected_x = scheduler.get_next_asset()
@@ -118,7 +118,7 @@ class SchedulerTest(TestCase):
 
     def test_keep_same_position_on_playlist_update(self):
         self.create_assets([ASSET_X, ASSET_Y])
-        scheduler = viewer.Scheduler()
+        scheduler = Scheduler()
         scheduler.get_next_asset()
 
         self.create_assets([ASSET_Z])
@@ -129,7 +129,7 @@ class SchedulerTest(TestCase):
     def test_counter_should_increment_after_full_asset_loop(self):
         settings['shuffle_playlist'] = True
         self.create_assets([ASSET_X, ASSET_Y])
-        scheduler = viewer.Scheduler()
+        scheduler = Scheduler()
 
         self.assertEqual(scheduler.counter, 0)
 
@@ -143,16 +143,16 @@ class SchedulerTest(TestCase):
         with open(FAKE_DB_PATH, 'a'):
             os.utime(FAKE_DB_PATH, (0, 0))
 
-        self.assertEqual(0, viewer.Scheduler().get_db_mtime())
+        self.assertEqual(0, Scheduler().get_db_mtime())
 
     def test_playlist_should_be_updated_after_deadline_reached(self):
         self.create_assets([ASSET_X, ASSET_Y])
-        _, deadline = viewer.generate_asset_list()
+        _, deadline = generate_asset_list()
 
         traveller = time_machine.travel(deadline + timedelta(seconds=1))
         traveller.start()
 
-        scheduler = viewer.Scheduler()
+        scheduler = Scheduler()
         scheduler.refresh_playlist()
 
         self.assertEqual([ASSET_X], scheduler.assets)
