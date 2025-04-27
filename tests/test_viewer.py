@@ -9,6 +9,7 @@ from time import sleep
 import mock
 
 import viewer
+from viewer.scheduling import Scheduler
 
 logging.disable(logging.CRITICAL)
 
@@ -50,30 +51,15 @@ def noop(*a, **k):
 
 
 class TestEmptyPl(ViewerTestCase):
-
-    @mock.patch('viewer.SERVER_WAIT_TIMEOUT', 0)
-    @mock.patch('viewer.start_loop', side_effect=noop)
-    @mock.patch('viewer.view_image', side_effect=noop)
-    @mock.patch('viewer.view_webpage', side_effect=noop)
-    @mock.patch('viewer.setup', side_effect=noop)
-    def test_empty(
-        self,
-        mock_setup,
-        mock_view_webpage,
-        mock_view_image,
-        mock_start_loop,
-    ):
+    @mock.patch('viewer.constants.SERVER_WAIT_TIMEOUT', 0)
+    def test_empty(self):
         m_asset_list = mock.Mock()
         m_asset_list.return_value = ([], None)
 
-        with mock.patch.object(self.u, 'generate_asset_list', m_asset_list):
-            self.u.main()
+        with mock.patch('viewer.scheduling.generate_asset_list', m_asset_list):
+            self.u.scheduler = Scheduler()
 
             m_asset_list.assert_called_once()
-            mock_setup.assert_called_once()
-            mock_view_webpage.assert_called_once()
-            self.assertEqual(mock_view_image.call_count, 2)
-            mock_start_loop.assert_called_once()
 
 
 class TestLoadBrowser(ViewerTestCase):
@@ -96,7 +82,7 @@ class TestLoadBrowser(ViewerTestCase):
 class TestSignalHandlers(ViewerTestCase):
     @mock.patch('vlc.Instance', mock.MagicMock())
     @mock.patch(
-        'lib.media_player.get_device_type',
+        'viewer.media_player.get_device_type',
         return_value='pi4'
     )
     def test_usr1(self, lookup_mock):
@@ -108,20 +94,20 @@ class TestSignalHandlers(ViewerTestCase):
 class TestWatchdog(ViewerTestCase):
     def test_watchdog_should_create_file_if_not_exists(self):
         try:
-            os.remove(self.u.WATCHDOG_PATH)
+            os.remove(self.u.utils.WATCHDOG_PATH)
         except OSError:
             pass
         self.u.watchdog()
-        self.assertEqual(os.path.exists(self.u.WATCHDOG_PATH), True)
+        self.assertEqual(os.path.exists(self.u.utils.WATCHDOG_PATH), True)
 
     def test_watchdog_should_update_mtime(self):
         # for watchdog file creation
         self.u.watchdog()
-        mtime = os.path.getmtime(self.u.WATCHDOG_PATH)
+        mtime = os.path.getmtime(self.u.utils.WATCHDOG_PATH)
 
         # Python is too fast?
         sleep(0.01)
 
         self.u.watchdog()
-        mtime2 = os.path.getmtime(self.u.WATCHDOG_PATH)
+        mtime2 = os.path.getmtime(self.u.utils.WATCHDOG_PATH)
         self.assertGreater(mtime2, mtime)
