@@ -256,10 +256,10 @@ export const AssetRow = forwardRef((props, ref) => {
         <i className={classNames('asset-icon', 'mr-2')}></i>
         {props.name}
       </td>
-      <td style={{ width: '21%' }}>
+      <td style={{ width: '21%' }} className="text-truncate" title={formatDate(props.startDate, dateFormat, use24HourClock)}>
         {formatDate(props.startDate, dateFormat, use24HourClock)}
       </td>
-      <td style={{ width: '21%' }}>
+      <td style={{ width: '21%' }} className="text-truncate" title={formatDate(props.endDate, dateFormat, use24HourClock)}>
         {formatDate(props.endDate, dateFormat, use24HourClock)}
       </td>
       <td style={{ width: '13%' }}>{formatDuration(props.duration)}</td>
