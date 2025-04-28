@@ -42,7 +42,7 @@ export const InactiveAssetsTable = ({ onEditAsset }) => {
           ></th>
         </tr>
       </thead>
-      <tbody id="inactive-assets">
+      <tbody id="inactive-assets" className="table-borderless">
         {inactiveAssets.map((asset) => (
           <AssetRow
             key={asset.asset_id}

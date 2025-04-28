@@ -89,7 +89,7 @@ export const ActiveAssetsTable = ({ onEditAsset }) => {
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <tbody id="active-assets">
+        <tbody id="active-assets" className="table-borderless">
           <SortableContext
             items={items.map((a) => a.asset_id.toString())}
             strategy={verticalListSortingStrategy}
