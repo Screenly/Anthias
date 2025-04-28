@@ -11,12 +11,14 @@ import { EmptyAssetMessage } from '@/components/empty-asset-message'
 import { InactiveAssetsTable } from '@/components/inactive-assets'
 import { ActiveAssetsTable } from '@/components/active-assets'
 import { AddAssetModal } from '@/components/add-asset-modal'
+import { EditAssetModal } from '@/components/edit-asset-modal'
 
 export const ScheduleOverview = () => {
   const dispatch = useDispatch()
   const activeAssets = useSelector(selectActiveAssets)
   const inactiveAssets = useSelector(selectInactiveAssets)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [assetToEdit, setAssetToEdit] = useState(null)
 
   useEffect(() => {
@@ -39,6 +41,16 @@ export const ScheduleOverview = () => {
 
   const handleSaveAsset = () => {
     setIsModalOpen(false)
+  }
+
+  const handleEditAsset = (asset) => {
+    setAssetToEdit(asset)
+    setIsEditModalOpen(true)
+  }
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false)
+    setAssetToEdit(null)
   }
 
   return (
@@ -113,7 +125,7 @@ export const ScheduleOverview = () => {
                 <h5>
                   <b>Active assets</b>
                 </h5>
-                <ActiveAssetsTable />
+                <ActiveAssetsTable onEditAsset={handleEditAsset} />
                 {activeAssets.length === 0 && (
                   <EmptyAssetMessage onAddAssetClick={handleAddAsset} />
                 )}
@@ -129,7 +141,7 @@ export const ScheduleOverview = () => {
                 <h5>
                   <b>Inactive assets</b>
                 </h5>
-                <InactiveAssetsTable />
+                <InactiveAssetsTable onEditAsset={handleEditAsset} />
                 {inactiveAssets.length === 0 && (
                   <EmptyAssetMessage onAddAssetClick={handleAddAsset} />
                 )}
@@ -144,6 +156,12 @@ export const ScheduleOverview = () => {
         onClose={handleCloseModal}
         onSave={handleSaveAsset}
         initialData={assetToEdit}
+      />
+
+      <EditAssetModal
+        isOpen={isEditModalOpen}
+        onClose={handleCloseEditModal}
+        asset={assetToEdit}
       />
     </>
   )

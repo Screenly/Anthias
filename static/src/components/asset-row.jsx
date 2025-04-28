@@ -237,6 +237,22 @@ export const AssetRow = forwardRef((props, ref) => {
     })
   }
 
+  const handleEdit = () => {
+    if (props.onEditAsset) {
+      props.onEditAsset({
+        id: props.assetId,
+        name: props.name,
+        start_date: props.startDate,
+        end_date: props.endDate,
+        duration: props.duration,
+        uri: props.uri,
+        mimetype: props.mimetype,
+        nocache: props.nocache,
+        skip_asset_check: props.skipAssetCheck,
+      })
+    }
+  }
+
   return (
     <tr
       ref={ref}
@@ -256,10 +272,18 @@ export const AssetRow = forwardRef((props, ref) => {
         <i className={classNames('asset-icon', 'mr-2')}></i>
         {props.name}
       </td>
-      <td style={{ width: '21%' }} className="text-truncate" title={formatDate(props.startDate, dateFormat, use24HourClock)}>
+      <td
+        style={{ width: '21%' }}
+        className="text-truncate"
+        title={formatDate(props.startDate, dateFormat, use24HourClock)}
+      >
         {formatDate(props.startDate, dateFormat, use24HourClock)}
       </td>
-      <td style={{ width: '21%' }} className="text-truncate" title={formatDate(props.endDate, dateFormat, use24HourClock)}>
+      <td
+        style={{ width: '21%' }}
+        className="text-truncate"
+        title={formatDate(props.endDate, dateFormat, use24HourClock)}
+      >
         {formatDate(props.endDate, dateFormat, use24HourClock)}
       </td>
       <td style={{ width: '13%' }}>{formatDuration(props.duration)}</td>
@@ -314,6 +338,7 @@ export const AssetRow = forwardRef((props, ref) => {
           )}
           type="button"
           disabled={isDisabled}
+          onClick={handleEdit}
         >
           <FaPencilAlt />
         </button>

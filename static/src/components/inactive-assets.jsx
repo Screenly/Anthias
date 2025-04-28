@@ -2,7 +2,7 @@ import { useSelector } from 'react-redux'
 import { selectInactiveAssets } from '@/store/assets'
 import { AssetRow } from '@/components/asset-row'
 
-export const InactiveAssetsTable = () => {
+export const InactiveAssetsTable = ({ onEditAsset }) => {
   const inactiveAssets = useSelector(selectInactiveAssets)
 
   return (
@@ -53,6 +53,11 @@ export const InactiveAssetsTable = () => {
             isEnabled={asset.is_enabled}
             assetId={asset.asset_id}
             isProcessing={asset.is_processing}
+            uri={asset.uri}
+            mimetype={asset.mimetype}
+            nocache={asset.nocache}
+            skipAssetCheck={asset.skip_asset_check}
+            onEditAsset={onEditAsset}
           />
         ))}
       </tbody>

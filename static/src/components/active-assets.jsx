@@ -21,7 +21,7 @@ import {
 import { SortableAssetRow } from '@/components/sortable-asset-row'
 import { useState, useEffect } from 'react'
 
-export const ActiveAssetsTable = () => {
+export const ActiveAssetsTable = ({ onEditAsset }) => {
   const dispatch = useDispatch()
   const activeAssets = useSelector(selectActiveAssets)
   const [items, setItems] = useState(activeAssets)
@@ -105,6 +105,11 @@ export const ActiveAssetsTable = () => {
                 isEnabled={asset.is_enabled}
                 assetId={asset.asset_id}
                 isProcessing={asset.is_processing}
+                uri={asset.uri}
+                mimetype={asset.mimetype}
+                nocache={asset.nocache}
+                skipAssetCheck={asset.skip_asset_check}
+                onEditAsset={onEditAsset}
               />
             ))}
           </SortableContext>
