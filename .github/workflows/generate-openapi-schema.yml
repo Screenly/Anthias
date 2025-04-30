@@ -18,6 +18,7 @@ on:
       - '!bin/install.sh'
       - '!bin/upgrade_containers.sh'
       - '!tests/**'
+      - '!.cursor/**'
   pull_request:
     branches:
       - master
@@ -34,6 +35,7 @@ on:
       - '!bin/install.sh'
       - '!bin/upgrade_containers.sh'
       - '!tests/**'
+      - '!.cursor/**'
   workflow_call:
     inputs:
       release:

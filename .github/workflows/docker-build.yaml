@@ -21,6 +21,7 @@ on:
       - '!bin/start_development_server.sh'
       - '!tests/**'
       - '!docker/Dockerfile.dev'
+      - '!.cursor/**'
 
 jobs:
   run-tests:
