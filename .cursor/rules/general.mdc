@@ -1,0 +1,33 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# General
+
+- Anthias uses Django as the web framework
+
+# Project Structure
+
+- [anthias_app](mdc:anthias_app) and [anthias_django](mdc:anthias_django) is where the Django source code lives.
+- Django HTML templates live in the [templates](mdc:templates) directory.
+- The [static](mdc:static) directory contains static files like HTML, CSS, and JavaScript
+  files used for the web interface.
+  - The source code was written in CoffeeScript, which gets transpiled to JavaScript.
+- The [webpack.common.js](mdc:webpack.common.js), [webpack.dev.js](mdc:webpack.dev.js), and [webpack.prod.js](mdc:webpack.prod.js) are configuration files
+  necessary for transpiling CoffeeScript and SCSS source files to JavaScript and CSS files,
+  respectively.
+- This project uses Docker for containerization.
+  - [docker-compose.yml.tmpl](mdc:docker-compose.yml.tmpl) is used for instances installed on Raspberry Pi and x86 devices
+    that runs Raspberry Pi OS Lite or Debian.
+  - [docker-compose.dev.yml](mdc:docker-compose.dev.yml) is used for Anthias in development mode (e.g., in a laptop or
+    personal computer).
+  - [docker-compose.balena.yml.tmpl](mdc:docker-compose.balena.yml.tmpl) is used for instances installed on devices that runs
+    balenaOS.
+  - The [docker](mdc:docker) directory contains all the necessary Dockerfiles needed by Anthias.
+- The [requirements](mdc:requirements) directory contains all the requirements files required by Anthias
+- [webview](mdc:webview) contains C++ (Qt) source code necessary for the WebView, which is
+  a custom-built web browser that makes display of assets (images, videos, or web pages) in
+  a connected display (like a TV) possible.
+- [viewer](mdc:viewer) contains the Python source files used by the viewer service, which is
+  responsible for driving a screen to display content.
