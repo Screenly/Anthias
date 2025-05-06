@@ -1,4 +1,7 @@
 import { Routes, Route } from 'react-router'
+import { useEffect } from 'react'
+import { useDispatch } from 'react-redux'
+import { fetchDeviceSettings } from '@/store/assets/asset-modal-slice'
 
 import { Integrations } from '@/components/integrations'
 import { Navbar } from '@/components/navbar'
@@ -7,6 +10,12 @@ import { Settings } from '@/components/settings'
 import { SystemInfo } from '@/components/system-info'
 
 export const App = () => {
+  const dispatch = useDispatch()
+
+  useEffect(() => {
+    dispatch(fetchDeviceSettings())
+  }, [dispatch])
+
   return (
     <>
       <Navbar />

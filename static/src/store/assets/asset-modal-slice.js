@@ -51,7 +51,7 @@ export const uploadFile = createAsyncThunk(
 
       // Get mimetype and duration
       const mimetype = getMimetype(file.name)
-      const duration = getDurationForMimetype(mimetype, 60, 3600)
+      const duration = getDurationForMimetype(mimetype, 10, 300)
       const dates = getDefaultDates()
 
       return {
@@ -97,6 +97,25 @@ export const saveAsset = createAsyncThunk(
       dispatch(addAsset(completeAsset))
 
       return completeAsset
+    } catch (error) {
+      return rejectWithValue(error.message)
+    }
+  },
+)
+
+export const fetchDeviceSettings = createAsyncThunk(
+  'assetModal/fetchDeviceSettings',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await fetch('/api/v2/device_settings')
+      if (!response.ok) {
+        return rejectWithValue('Failed to fetch device settings')
+      }
+      const data = await response.json()
+      return {
+        defaultDuration: data.default_duration,
+        defaultStreamingDuration: data.default_streaming_duration,
+      }
     } catch (error) {
       return rejectWithValue(error.message)
     }
@@ -188,8 +207,8 @@ const assetModalSlice = createSlice({
     statusMessage: '',
     isSubmitting: false,
     uploadProgress: 0,
-    defaultDuration: 60, // 60 seconds for webpage
-    defaultStreamingDuration: 3600, // 1 hour for streaming
+    defaultDuration: 10, // Default fallback value
+    defaultStreamingDuration: 300, // Default fallback value
   },
   reducers: {
     setActiveTab: (state, action) => {
@@ -240,6 +259,11 @@ const assetModalSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      // Device settings
+      .addCase(fetchDeviceSettings.fulfilled, (state, action) => {
+        state.defaultDuration = action.payload.defaultDuration
+        state.defaultStreamingDuration = action.payload.defaultStreamingDuration
+      })
       // Upload file
       .addCase(uploadFile.pending, (state) => {
         state.isSubmitting = true
