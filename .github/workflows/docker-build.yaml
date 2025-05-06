@@ -14,6 +14,7 @@ on:
       - '!.github/workflows/build-balena-disk-image.yaml'
       - '!.github/workflows/python-lint.yaml'
       - '!.github/pull_request_template.md'
+      - '!CONTRIBUTING.md'
       - '!README.md'
       - '!docs/**'
       - '!bin/install.sh'
