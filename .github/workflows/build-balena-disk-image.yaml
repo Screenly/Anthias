@@ -114,6 +114,7 @@ jobs:
       - uses: ncipollo/release-action@v1.11.2
         with:
           allowUpdates: true
+          generateReleaseNotes: true
           prerelease: true
           artifacts: "*raspberry*.zip,*raspberry*.sha256,*raspberry*.json"
           tag: ${{ inputs.tag }}

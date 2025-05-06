@@ -12,6 +12,7 @@ on:
       - '!website/**'
       - '!.github/workflows/build-webview.yaml'
       - '!.github/workflows/build-balena-disk-image.yaml'
+      - '!.github/release.yml'
       - '!docs/**'
       - '!.cursor/**'
   pull_request:
@@ -24,6 +25,7 @@ on:
       - '!website/**'
       - '!.github/workflows/build-webview.yaml'
       - '!.github/workflows/build-balena-disk-image.yaml'
+      - '!.github/release.yml'
       - '!docs/**'
       - '!.cursor/**'
   workflow_call:
