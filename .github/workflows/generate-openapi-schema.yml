@@ -15,6 +15,7 @@ on:
       - '!.github/workflows/python-lint.yaml'
       - '!.github/release.yml'
       - '!README.md'
+      - '!CONTRIBUTING.md'
       - '!docs/**'
       - '!bin/install.sh'
       - '!bin/upgrade_containers.sh'
