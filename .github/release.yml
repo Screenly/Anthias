@@ -1,0 +1,25 @@
+changelog:
+  exclude:
+    labels:
+      - webview
+      - chore
+  categories:
+    - title: Bug Fixes :lady_beetle:
+      labels:
+        - bug
+    - title: Features :sparkles:
+      labels:
+        - enhancement
+    - title: Docs :books:
+      labels:
+        - documentation
+    - title: API :jigsaw:
+      labels:
+        - api
+    - title: Other Changes
+      labels:
+        - "*"
+      exclude:
+        labels:
+          - webview
+          - chore
