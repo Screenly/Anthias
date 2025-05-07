@@ -247,6 +247,7 @@ export const AssetRow = forwardRef((props, ref) => {
         duration: props.duration,
         uri: props.uri,
         mimetype: props.mimetype,
+        is_enabled: props.isEnabled,
         nocache: props.nocache,
         skip_asset_check: props.skipAssetCheck,
       })

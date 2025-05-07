@@ -119,6 +119,7 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
         start_date: startDate.toISOString(),
         end_date: endDate.toISOString(),
         asset_id: asset.id,
+        is_enabled: asset.is_enabled,
       }
 
       // Make API call to update asset
