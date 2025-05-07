@@ -1,6 +1,8 @@
 import classNames from 'classnames'
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
+import $ from 'jquery'
+import 'bootstrap/js/dist/tooltip'
 import {
   fetchAssets,
   selectActiveAssets,
@@ -12,6 +14,32 @@ import { InactiveAssetsTable } from '@/components/inactive-assets'
 import { ActiveAssetsTable } from '@/components/active-assets'
 import { AddAssetModal } from '@/components/add-asset-modal'
 import { EditAssetModal } from '@/components/edit-asset-modal'
+
+const tooltipStyles = `
+  .tooltip {
+    opacity: 1 !important;
+    transition: opacity 0s ease-in-out !important;
+  }
+  .tooltip.fade {
+    opacity: 0;
+  }
+  .tooltip.show {
+    opacity: 1;
+  }
+  .tooltip-inner {
+    background-color: #2c3e50;
+    color: #fff;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    max-width: 300px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  .tooltip.bs-tooltip-top .arrow::before {
+    border-top-color: #2c3e50;
+  }
+`
 
 export const ScheduleOverview = () => {
   const dispatch = useDispatch()
@@ -25,6 +53,43 @@ export const ScheduleOverview = () => {
     document.title = 'Schedule Overview'
     dispatch(fetchAssets())
   }, [dispatch])
+
+  // Initialize tooltips
+  useEffect(() => {
+    const initializeTooltips = () => {
+      $('[data-toggle="tooltip"]').tooltip({
+        placement: 'top',
+        trigger: 'hover',
+        html: true,
+        delay: { show: 0, hide: 0 },
+        animation: true,
+      })
+    }
+
+    // Initial tooltip initialization
+    initializeTooltips()
+
+    // Reinitialize tooltips when assets change
+    const observer = new MutationObserver(() => {
+      initializeTooltips()
+    })
+
+    // Observe changes in both active and inactive sections
+    const activeSection = document.getElementById('active-assets-section')
+    const inactiveSection = document.getElementById('inactive-assets-section')
+
+    if (activeSection) {
+      observer.observe(activeSection, { childList: true, subtree: true })
+    }
+    if (inactiveSection) {
+      observer.observe(inactiveSection, { childList: true, subtree: true })
+    }
+
+    return () => {
+      observer.disconnect()
+      $('[data-toggle="tooltip"]').tooltip('dispose')
+    }
+  }, [activeAssets, inactiveAssets])
 
   // TODO: Get the player name from the server via API.
   const [playerName] = useState('')
@@ -55,6 +120,7 @@ export const ScheduleOverview = () => {
 
   return (
     <>
+      <style>{tooltipStyles}</style>
       <div className="container pt-3 pb-3">
         <div className="row">
           <div className="col-12">

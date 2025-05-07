@@ -11,6 +11,32 @@ import { useDispatch } from 'react-redux'
 
 import { toggleAssetEnabled, fetchAssets } from '@/store/assets'
 
+const tooltipStyles = `
+  .tooltip {
+    opacity: 1 !important;
+    transition: opacity 0s ease-in-out !important;
+  }
+  .tooltip.fade {
+    opacity: 0;
+  }
+  .tooltip.show {
+    opacity: 1;
+  }
+  .tooltip-inner {
+    background-color: #2c3e50;
+    color: #fff;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    max-width: 300px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  .tooltip.bs-tooltip-top .arrow::before {
+    border-top-color: #2c3e50;
+  }
+`
+
 const formatDuration = (seconds) => {
   let durationString = ''
   const secInt = parseInt(seconds)
@@ -255,109 +281,129 @@ export const AssetRow = forwardRef((props, ref) => {
   }
 
   return (
-    <tr
-      ref={ref}
-      style={props.style}
-      className={classNames({ warning: isDisabled })}
-    >
-      <td className={classNames('asset_row_name')}>
-        <span
-          {...props.dragHandleProps}
-          style={{
-            cursor: props.isDragging ? 'grabbing' : 'grab',
-            display: 'inline-block',
-          }}
-        >
-          <FaGripVertical className="mr-2" />
-        </span>
-        <i className={classNames('asset-icon', 'mr-2')}></i>
-        {props.name}
-      </td>
-      <td
-        style={{ width: '21%' }}
-        className="text-truncate"
-        title={formatDate(props.startDate, dateFormat, use24HourClock)}
+    <>
+      <style>{tooltipStyles}</style>
+      <tr
+        ref={ref}
+        style={props.style}
+        className={classNames({ warning: isDisabled })}
       >
-        {formatDate(props.startDate, dateFormat, use24HourClock)}
-      </td>
-      <td
-        style={{ width: '21%' }}
-        className="text-truncate"
-        title={formatDate(props.endDate, dateFormat, use24HourClock)}
-      >
-        {formatDate(props.endDate, dateFormat, use24HourClock)}
-      </td>
-      <td style={{ width: '13%' }}>{formatDuration(props.duration)}</td>
-      <td className={classNames('asset-toggle')} style={{ width: '7%' }}>
-        <label
-          className={classNames(
-            'is_enabled-toggle',
-            'toggle',
-            'switch-light',
-            'switch-material',
-            'small',
-            'm-0',
-          )}
+        <td
+          className={classNames('asset_row_name')}
+          data-toggle="tooltip"
+          data-placement="top"
+          title={props.name}
         >
-          <input
-            type="checkbox"
-            checked={props.isEnabled}
-            onChange={handleToggle}
-            disabled={isDisabled || props.isProcessing === 1}
-          />
-          <span>
-            <span className="off"></span>
-            <span className="on"></span>
-            <a></a>
+          <span
+            {...props.dragHandleProps}
+            style={{
+              cursor: props.isDragging ? 'grabbing' : 'grab',
+              display: 'inline-block',
+            }}
+          >
+            <FaGripVertical className="mr-2" />
           </span>
-        </label>
-      </td>
-      <td className={classNames('asset_row_btns')}>
-        <button
-          className={classNames(
-            'download-asset-button',
-            'btn',
-            'btn-outline-dark',
-            'mr-1',
-            'd-inline-flex',
-            'p-2',
-          )}
-          type="button"
-          disabled={isDisabled}
-          onClick={handleDownload}
+          <i className={classNames('asset-icon', 'mr-2')}></i>
+          {props.name}
+        </td>
+        <td
+          style={{ width: '21%', maxWidth: '200px' }}
+          className="text-truncate"
+          data-toggle="tooltip"
+          data-placement="top"
+          title={formatDate(props.startDate, dateFormat, use24HourClock)}
         >
-          <FaDownload />
-        </button>
-        <button
-          className={classNames(
-            'edit-asset-button',
-            'btn',
-            'btn-outline-dark',
-            'mr-1',
-            'd-inline-flex',
-            'p-2',
-          )}
-          type="button"
-          disabled={isDisabled}
-          onClick={handleEdit}
+          {formatDate(props.startDate, dateFormat, use24HourClock)}
+        </td>
+        <td
+          style={{ width: '21%', maxWidth: '200px' }}
+          className="text-truncate"
+          data-toggle="tooltip"
+          data-placement="top"
+          title={formatDate(props.endDate, dateFormat, use24HourClock)}
         >
-          <FaPencilAlt />
-        </button>
-        <button
-          className={classNames(
-            'delete-asset-button',
-            'btn',
-            'btn-outline-dark',
-            'd-inline-flex',
-            'p-2',
-          )}
-          type="button"
-          onClick={handleDelete}
-          disabled={isDisabled}
+          {formatDate(props.endDate, dateFormat, use24HourClock)}
+        </td>
+        <td
+          style={{ width: '13%', maxWidth: '150px' }}
+          className={classNames('text-truncate')}
+          data-toggle="tooltip"
+          data-placement="top"
+          title={formatDuration(props.duration)}
         >
-          <FaTrashAlt />
-        </button>
-      </td>
-    </tr>
+          {formatDuration(props.duration)}
+        </td>
+        <td className={classNames('asset-toggle')} style={{ width: '7%' }}>
+          <label
+            className={classNames(
+              'is_enabled-toggle',
+              'toggle',
+              'switch-light',
+              'switch-material',
+              'small',
+              'm-0',
+            )}
+          >
+            <input
+              type="checkbox"
+              checked={props.isEnabled}
+              onChange={handleToggle}
+              disabled={isDisabled || props.isProcessing === 1}
+            />
+            <span>
+              <span className="off"></span>
+              <span className="on"></span>
+              <a></a>
+            </span>
+          </label>
+        </td>
+        <td className={classNames('asset_row_btns')}>
+          <button
+            className={classNames(
+              'download-asset-button',
+              'btn',
+              'btn-outline-dark',
+              'mr-1',
+              'd-inline-flex',
+              'p-2',
+            )}
+            type="button"
+            disabled={isDisabled}
+            onClick={handleDownload}
+          >
+            <FaDownload />
+          </button>
+          <button
+            className={classNames(
+              'edit-asset-button',
+              'btn',
+              'btn-outline-dark',
+              'mr-1',
+              'd-inline-flex',
+              'p-2',
+            )}
+            type="button"
+            disabled={isDisabled}
+            onClick={handleEdit}
+          >
+            <FaPencilAlt />
+          </button>
+          <button
+            className={classNames(
+              'delete-asset-button',
+              'btn',
+              'btn-outline-dark',
+              'd-inline-flex',
+              'p-2',
+            )}
+            type="button"
+            onClick={handleDelete}
+            disabled={isDisabled}
+          >
+            <FaTrashAlt />
+          </button>
+        </td>
+      </tr>
+    </>
   )
 })
