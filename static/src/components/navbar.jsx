@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   FaArrowCircleDown,
   FaRegClock,
@@ -10,7 +10,15 @@ import { Link, NavLink } from 'react-router'
 
 export const Navbar = () => {
   const [upToDate] = useState(false)
-  const [isBalena] = useState(true)
+  const [isBalena, setIsBalena] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/v2/integrations/')
+      .then((response) => response.json())
+      .then((data) => {
+        setIsBalena(data.is_balena)
+      })
+  }, [])
 
   return (
     <>
