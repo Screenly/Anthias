@@ -6,7 +6,7 @@ RUN \
 {% else %}
 RUN --mount=type=cache,target=/root/.cache/pip \
 {% endif %}
-    pip3 install -r /tmp/requirements.txt --break-system-packages
+    CFLAGS="-D__PYX_FORCE_INIT_THREADS=1" pip3 install -r /tmp/requirements.txt --break-system-packages
 
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
