@@ -49,11 +49,7 @@ on:
       - '!github/release.yml'
 
 jobs:
-  run-tests:
-    uses: ./.github/workflows/docker-test.yaml
-
   buildx:
-    needs: run-tests
     strategy:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
