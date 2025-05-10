@@ -84,13 +84,3 @@ class DeviceSettingsSerializerV2(Serializer):
     shuffle_playlist = BooleanField()
     use_24_hour_clock = BooleanField()
     debug_logging = BooleanField()
-
-
-class IntegrationsSerializerV2(Serializer):
-    is_balena = BooleanField()
-    balena_device_id = CharField(required=False)
-    balena_app_id = CharField(required=False)
-    balena_app_name = CharField(required=False)
-    balena_supervisor_version = CharField(required=False)
-    balena_host_os_version = CharField(required=False)
-    balena_device_name_at_init = CharField(required=False)
