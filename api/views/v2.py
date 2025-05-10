@@ -1,3 +1,5 @@
+from os import getenv
+
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.response import Response
@@ -13,6 +15,7 @@ from api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
     DeviceSettingsSerializerV2,
+    IntegrationsSerializerV2,
     UpdateAssetSerializerV2,
 )
 from api.views.mixins import (
@@ -28,6 +31,7 @@ from api.views.mixins import (
     ShutdownViewMixin,
 )
 from lib.auth import authorized
+from lib.utils import is_balena_app
 from settings import settings
 
 
@@ -201,3 +205,39 @@ class DeviceSettingsViewV2(APIView):
 
 class InfoViewV2(InfoViewMixin):
     pass
+
+
+class IntegrationsViewV2(APIView):
+    serializer_class = IntegrationsSerializerV2
+
+    @extend_schema(
+        summary='Get integrations information',
+        responses={
+            200: IntegrationsSerializerV2
+        }
+    )
+    @authorized
+    def get(self, request):
+        data = {
+            'is_balena': is_balena_app(),
+        }
+
+        if data['is_balena']:
+            data.update({
+                'balena_device_id': getenv('BALENA_DEVICE_UUID'),
+                'balena_app_id': getenv('BALENA_APP_ID'),
+                'balena_app_name': getenv('BALENA_APP_NAME'),
+                'balena_supervisor_version': (
+                    getenv('BALENA_SUPERVISOR_VERSION')
+                ),
+                'balena_host_os_version': (
+                    getenv('BALENA_HOST_OS_VERSION')
+                ),
+                'balena_device_name_at_init': (
+                    getenv('BALENA_DEVICE_NAME_AT_INIT')
+                ),
+            })
+
+        serializer = self.serializer_class(data=data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.data)
