@@ -1,4 +1,4 @@
-Cython==0.29.33
+Cython==3.0.6
 future==0.18.3
 gevent-websocket==0.10.1
 gevent==24.2.1

@@ -55,9 +55,6 @@ jobs:
         board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
         service: ['server', 'celery', 'redis', 'websocket', 'nginx', 'viewer', 'wifi-connect']
         python-version: ["3.11"]
-        exclude:
-          - board: 'pi1'
-            service: 'websocket'
     runs-on: ubuntu-24.04
 
     steps:
