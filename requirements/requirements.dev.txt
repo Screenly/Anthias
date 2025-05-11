@@ -5,3 +5,4 @@ selenium==3.141.0
 splinter==0.14.0
 time-machine==2.15.0
 unittest-parametrize==1.4.0
+gevent==25.4.2
