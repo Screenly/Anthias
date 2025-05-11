@@ -1,0 +1,36 @@
+diff --git a/src/gevent/libev/corecext.pyx b/src/gevent/libev/corecext.pyx
+--- a/src/gevent/libev/corecext.pyx
++++ b/src/gevent/libev/corecext.pyx
+@@ -66,7 +66,7 @@ cdef tuple integer_types
+
+ if sys.version_info[0] >= 3:
+     integer_types = int,
+-else:
++else:  # pragma: no cover
+     integer_types = (int, long)
+
+ cdef extern from "Python.h":
+diff --git a/src/gevent/resolver/cares.pyx b/src/gevent/resolver/cares.pyx
+--- a/src/gevent/resolver/cares.pyx
++++ b/src/gevent/resolver/cares.pyx
+@@ -66,7 +66,7 @@ cdef tuple integer_types
+
+ if sys.version_info[0] >= 3:
+     integer_types = int,
+-else:
++else:  # pragma: no cover
+     integer_types = (int, long)
+
+ cdef extern from "Python.h":
+diff --git a/src/gevent/_gevent_cares.pyx b/src/gevent/_gevent_cares.pyx
+--- a/src/gevent/_gevent_cares.pyx
++++ b/src/gevent/_gevent_cares.pyx
+@@ -66,7 +66,7 @@ cdef tuple integer_types
+
+ if sys.version_info[0] >= 3:
+     integer_types = int,
+-else:
++else:  # pragma: no cover
+     integer_types = (int, long)
+
+ cdef extern from "Python.h":

@@ -1,11 +1,21 @@
 {% include 'Dockerfile.base.j2' %}
 
 COPY requirements/requirements-websocket.txt /tmp/requirements.txt
+COPY docker/gevent-python3.patch /tmp/gevent-python3.patch
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
 RUN --mount=type=cache,target=/root/.cache/pip \
 {% endif %}
+    pip3 install --upgrade pip setuptools wheel --break-system-packages && \
+    pip3 install Cython==3.0.6 --break-system-packages && \
+    cd /tmp && \
+    pip3 download --no-binary :all: gevent==23.9.1 && \
+    tar xf gevent-23.9.1.tar.gz && \
+    cd gevent-23.9.1 && \
+    patch -p1 < /tmp/gevent-python3.patch && \
+    pip3 install . --break-system-packages && \
+    cd / && \
     pip3 install -r /tmp/requirements.txt --break-system-packages
 
 RUN mkdir -p /usr/src/app
