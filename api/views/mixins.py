@@ -19,10 +19,7 @@ from api.serializers.mixins import (
     ShutdownViewSerializerMixin,
 )
 from celery_tasks import reboot_anthias, shutdown_anthias
-from lib import (
-    backup_helper,
-    diagnostics,
-)
+from lib import backup_helper, diagnostics
 from lib.auth import authorized
 from lib.github import is_up_to_date
 from lib.utils import connect_to_redis
@@ -302,8 +299,15 @@ class InfoViewMixin(APIView):
                     'viewlog': {'type': 'string'},
                     'loadavg': {'type': 'number'},
                     'free_space': {'type': 'string'},
-                    'display_power': {'type': ['string', 'null']},
+                    'display_power': {'type': 'string'},
                     'up_to_date': {'type': 'boolean'}
+                },
+                'example': {
+                    'viewlog': 'Not yet implemented',
+                    'loadavg': 0.1,
+                    'free_space': '10G',
+                    'display_power': 'on',
+                    'up_to_date': True
                 }
             }
         }
