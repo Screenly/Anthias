@@ -68,18 +68,52 @@ class InfoEndpointsTest(TestCase):
         self._assert_response_data(data, expected_data)
 
     @mock.patch(
-        'api.views.mixins.is_up_to_date',
+        'api.views.v2.is_up_to_date',
         return_value=True
     )
     @mock.patch(
         'lib.diagnostics.get_load_avg',
         return_value={'15 min': 0.25}
     )
-    @mock.patch('api.views.mixins.size', return_value='20G')
-    @mock.patch('api.views.mixins.statvfs', mock.MagicMock())
-    @mock.patch('api.views.mixins.r.get', return_value='on')
+    @mock.patch('api.views.v2.size', return_value='20G')
+    @mock.patch('api.views.v2.statvfs', mock.MagicMock())
+    @mock.patch('api.views.v2.r.get', return_value='on')
+    @mock.patch('api.views.v2.diagnostics.get_git_branch', return_value='main')
+    @mock.patch(
+        'api.views.v2.diagnostics.get_git_short_hash',
+        return_value='a1b2c3d'
+    )
+    @mock.patch(
+        'api.views.v2.device_helper.parse_cpu_info',
+        return_value={'model': 'Raspberry Pi 4'}
+    )
+    @mock.patch(
+        'api.views.v2.diagnostics.get_uptime',
+        return_value=86400
+    )
+    @mock.patch(
+        'api.views.v2.psutil.virtual_memory',
+        return_value=mock.MagicMock(
+            total=8192 << 20,  # 8GB
+            used=4096 << 20,   # 4GB
+            free=4096 << 20,   # 4GB
+            shared=0,
+            buffers=1024 << 20, # 1GB
+            available=7168 << 20 # 7GB
+        )
+    )
+    @mock.patch(
+        'api.views.v2.get_node_mac_address',
+        return_value='00:11:22:33:44:55'
+    )
     def test_info_v2_endpoint(
         self,
+        mac_address_mock,
+        virtual_memory_mock,
+        get_uptime_mock,
+        parse_cpu_info_mock,
+        get_git_short_hash_mock,
+        get_git_branch_mock,
         redis_get_mock,
         size_mock,
         get_load_avg_mock,
@@ -96,7 +130,13 @@ class InfoEndpointsTest(TestCase):
             redis_get_mock,
             size_mock,
             get_load_avg_mock,
-            is_up_to_date_mock
+            is_up_to_date_mock,
+            get_git_branch_mock,
+            get_git_short_hash_mock,
+            parse_cpu_info_mock,
+            get_uptime_mock,
+            virtual_memory_mock,
+            mac_address_mock
         ])
 
         # Assert response data
@@ -105,6 +145,21 @@ class InfoEndpointsTest(TestCase):
             'loadavg': 0.25,
             'free_space': '20G',
             'display_power': 'on',
-            'up_to_date': True
+            'up_to_date': True,
+            'anthias_version': 'main@a1b2c3d',
+            'device_model': 'Raspberry Pi 4',
+            'uptime': {
+                'days': 1,
+                'hours': 0.0
+            },
+            'memory': {
+                'total': 8192,
+                'used': 4096,
+                'free': 4096,
+                'shared': 0,
+                'buff': 1024,
+                'available': 7168
+            },
+            'mac_address': '00:11:22:33:44:55'
         }
         self._assert_response_data(data, expected_data)
