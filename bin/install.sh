@@ -5,13 +5,13 @@
 
 set -euo pipefail
 
-BRANCH="font-support"
+BRANCH="master"
 ANSIBLE_PLAYBOOK_ARGS=()
-REPOSITORY="https://github.com/jackkenney10/Anthias.git"
+REPOSITORY="https://github.com/Screenly/Anthias.git"
 ANTHIAS_REPO_DIR="/home/${USER}/screenly"
-GITHUB_API_REPO_URL="https://api.github.com/repos/jackkenney10/Anthias"
-GITHUB_RELEASES_URL="https://github.com/jackkenney10/Anthias/releases"
-GITHUB_RAW_URL="https://raw.githubusercontent.com/jackkenney10/Anthias"
+GITHUB_API_REPO_URL="https://api.github.com/repos/Screenly/Anthias"
+GITHUB_RELEASES_URL="https://github.com/Screenly/Anthias/releases"
+GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
 DOCKER_TAG="latest"
 UPGRADE_SCRIPT_PATH="${ANTHIAS_REPO_DIR}/bin/upgrade_containers.sh"
 ARCHITECTURE=$(uname -m)
