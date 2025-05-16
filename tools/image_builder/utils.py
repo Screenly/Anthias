@@ -220,6 +220,7 @@ def get_viewer_context(board: str) -> dict:
         'libavutil-dev',
         'libswresample-dev',
         'libswscale-dev',
+	'fonts-noto-color-emoji',
     ]
 
     if board in ['pi5', 'x86']:
