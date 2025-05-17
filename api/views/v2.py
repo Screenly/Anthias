@@ -1,6 +1,10 @@
-from os import getenv
+from datetime import timedelta
+from os import getenv, statvfs
+from platform import machine
 
+import psutil
 from drf_spectacular.utils import extend_schema
+from hurry.filesize import size
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -30,9 +34,17 @@ from api.views.mixins import (
     RecoverViewMixin,
     ShutdownViewMixin,
 )
+from lib import device_helper, diagnostics
 from lib.auth import authorized
-from lib.utils import is_balena_app
+from lib.github import is_up_to_date
+from lib.utils import (
+    connect_to_redis,
+    get_node_mac_address,
+    is_balena_app,
+)
 from settings import settings
+
+r = connect_to_redis()
 
 
 class AssetListViewV2(APIView):
@@ -204,7 +216,98 @@ class DeviceSettingsViewV2(APIView):
 
 
 class InfoViewV2(InfoViewMixin):
-    pass
+    def get_anthias_version(self):
+        git_branch = diagnostics.get_git_branch()
+        git_short_hash = diagnostics.get_git_short_hash()
+
+        return '{}@{}'.format(
+            git_branch,
+            git_short_hash,
+        )
+
+    def get_device_model(self):
+        device_model = device_helper.parse_cpu_info().get('model')
+
+        if device_model is None and machine() == 'x86_64':
+            device_model = 'Generic x86_64 Device'
+
+        return device_model
+
+    def get_uptime(self):
+        system_uptime = timedelta(seconds=diagnostics.get_uptime())
+        return {
+            'days': system_uptime.days,
+            'hours': round(system_uptime.seconds / 3600, 2),
+        }
+
+    def get_memory(self):
+        virtual_memory = psutil.virtual_memory()
+        return {
+            'total': virtual_memory.total >> 20,
+            'used': virtual_memory.used >> 20,
+            'free': virtual_memory.free >> 20,
+            'shared': virtual_memory.shared >> 20,
+            'buff': virtual_memory.buffers >> 20,
+            'available': virtual_memory.available >> 20
+        }
+
+    @extend_schema(
+        summary='Get system information',
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'viewlog': {'type': 'string'},
+                    'loadavg': {'type': 'number'},
+                    'free_space': {'type': 'string'},
+                    'display_power': {'type': ['string', 'null']},
+                    'up_to_date': {'type': 'boolean'},
+                    'anthias_version': {'type': 'string'},
+                    'device_model': {'type': 'string'},
+                    'uptime': {
+                        'type': 'object',
+                        'properties': {
+                            'days': {'type': 'integer'},
+                            'hours': {'type': 'number'}
+                        }
+                    },
+                    'memory': {
+                        'type': 'object',
+                        'properties': {
+                            'total': {'type': 'integer'},
+                            'used': {'type': 'integer'},
+                            'free': {'type': 'integer'},
+                            'shared': {'type': 'integer'},
+                            'buff': {'type': 'integer'},
+                            'available': {'type': 'integer'}
+                        }
+                    },
+                    'mac_address': {'type': 'string'}
+                }
+            }
+        }
+    )
+    @authorized
+    def get(self, request):
+        viewlog = "Not yet implemented"
+
+        # Calculate disk space
+        slash = statvfs("/")
+        free_space = size(slash.f_bavail * slash.f_frsize)
+        display_power = r.get('display_power')
+
+        return Response({
+            'viewlog': viewlog,
+            'loadavg': diagnostics.get_load_avg()['15 min'],
+            'free_space': free_space,
+            'display_power': display_power,
+            'up_to_date': is_up_to_date(),
+            'anthias_version': self.get_anthias_version(),
+            'device_model': self.get_device_model(),
+            'uptime': self.get_uptime(),
+            'memory': self.get_memory(),
+            'mac_address': get_node_mac_address(),
+        })
 
 
 class IntegrationsViewV2(APIView):
