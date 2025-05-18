@@ -9,6 +9,9 @@ export const Settings = () => {
     dateFormat: 'mm/dd/yyyy',
     authBackend: '',
     currentPassword: '',
+    user: '',
+    password: '',
+    confirmPassword: '',
     showSplash: false,
     defaultAssets: false,
     shufflePlaylist: false,
@@ -16,25 +19,130 @@ export const Settings = () => {
     debugLogging: false,
   })
 
+  const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [prevAuthBackend, setPrevAuthBackend] = useState('')
+
   useEffect(() => {
     document.title = 'Settings'
+    // Load initial settings
+    fetch('/api/v2/device_settings')
+      .then((res) => res.json())
+      .then((data) => {
+        setSettings((prev) => ({
+          ...prev,
+          playerName: data.player_name || '',
+          defaultDuration: data.default_duration || 0,
+          defaultStreamingDuration: data.default_streaming_duration || 0,
+          audioOutput: data.audio_output || 'hdmi',
+          dateFormat: data.date_format || 'mm/dd/yyyy',
+          authBackend: data.auth_backend || '',
+          user: data.user || '',
+          showSplash: data.show_splash || false,
+          defaultAssets: data.default_assets || false,
+          shufflePlaylist: data.shuffle_playlist || false,
+          use24HourClock: data.use_24_hour_clock || false,
+          debugLogging: data.debug_logging || false,
+        }))
+        setPrevAuthBackend(data.auth_backend || '')
+      })
+      .catch(() => {
+        setError('Failed to load settings. Please try again.')
+      })
   }, [])
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target
+    if (name === 'authBackend') {
+      setPrevAuthBackend(settings.authBackend)
+    }
     setSettings((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
     }))
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    // API call will be handled later
+    setIsLoading(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const response = await fetch('/api/v2/device_settings', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          player_name: settings.playerName,
+          default_duration: settings.defaultDuration,
+          default_streaming_duration: settings.defaultStreamingDuration,
+          audio_output: settings.audioOutput,
+          date_format: settings.dateFormat,
+          auth_backend: settings.authBackend,
+          'current-password': settings.currentPassword,
+          user: settings.user,
+          password: settings.password,
+          password2: settings.confirmPassword,
+          show_splash: settings.showSplash,
+          default_assets: settings.defaultAssets,
+          shuffle_playlist: settings.shufflePlaylist,
+          use_24_hour_clock: settings.use24HourClock,
+          debug_logging: settings.debugLogging,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to save settings')
+      }
+
+      setSuccess('Settings were successfully saved.')
+      // Clear password after successful save
+      setSettings((prev) => ({ ...prev, currentPassword: '' }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
     <div className="container">
+      {error && (
+        <div
+          className="alert alert-danger alert-dismissible fade show"
+          role="alert"
+        >
+          {error}
+          <button
+            type="button"
+            className="close"
+            onClick={() => setError(null)}
+          >
+            <span>&times;</span>
+          </button>
+        </div>
+      )}
+      {success && (
+        <div
+          className="alert alert-success alert-dismissible fade show"
+          role="alert"
+        >
+          {success}
+          <button
+            type="button"
+            className="close"
+            onClick={() => setSuccess(null)}
+          >
+            <span>&times;</span>
+          </button>
+        </div>
+      )}
+
       <div className="row py-2">
         <div className="col-12">
           <h4 className="page-header text-white">
@@ -135,24 +243,66 @@ export const Settings = () => {
                   value={settings.authBackend}
                   onChange={handleInputChange}
                 >
-                  <option value="">None</option>
-                  <option value="basic">Basic Auth</option>
+                  <option value="">Disabled</option>
+                  <option value="basic">Basic</option>
                 </select>
               </div>
 
               {settings.authBackend === 'basic' && (
-                <div className="form-group" id="curpassword_group">
-                  <label className="small text-secondary">
-                    <small>Current Password</small>
-                  </label>
-                  <input
-                    className="form-control"
-                    name="currentPassword"
-                    type="password"
-                    value={settings.currentPassword || ''}
-                    onChange={handleInputChange}
-                  />
-                </div>
+                <>
+                  {prevAuthBackend !== '' && (
+                    <div className="form-group" id="curpassword_group">
+                      <label className="small text-secondary">
+                        <small>Current Password</small>
+                      </label>
+                      <input
+                        className="form-control"
+                        name="currentPassword"
+                        type="password"
+                        value={settings.currentPassword}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                  )}
+                  <div className="form-group" id="user_group">
+                    <label className="small text-secondary">
+                      <small>User</small>
+                    </label>
+                    <input
+                      className="form-control"
+                      name="user"
+                      type="text"
+                      value={settings.user}
+                      onChange={handleInputChange}
+                    />
+                  </div>
+                  <div className="row">
+                    <div className="form-group col-6" id="password_group">
+                      <label className="small text-secondary">
+                        <small>Password</small>
+                      </label>
+                      <input
+                        className="form-control"
+                        name="password"
+                        type="password"
+                        value={settings.password}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                    <div className="form-group col-6" id="password2_group">
+                      <label className="small text-secondary">
+                        <small>Confirm Password</small>
+                      </label>
+                      <input
+                        className="form-control"
+                        name="confirmPassword"
+                        type="password"
+                        value={settings.confirmPassword}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 
@@ -258,8 +408,12 @@ export const Settings = () => {
                 <a className="btn btn-long btn-outline-primary mr-2" href="/">
                   Cancel
                 </a>
-                <button className="btn btn-long btn-primary" type="submit">
-                  Save Settings
+                <button
+                  className="btn btn-long btn-primary"
+                  type="submit"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Saving...' : 'Save Settings'}
                 </button>
               </div>
             </div>
