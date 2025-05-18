@@ -47,7 +47,9 @@ export const Settings = () => {
           <form onSubmit={handleSubmit} className="row">
             <div className="form-group col-6 d-flex flex-column justify-content-between">
               <div className="form-group">
-                <label className="small text-secondary">Player name</label>
+                <label className="small text-secondary">
+                  <small>Player name</small>
+                </label>
                 <input
                   className="form-control"
                   name="playerName"
@@ -60,7 +62,7 @@ export const Settings = () => {
               <div className="row">
                 <div className="form-group col-6">
                   <label className="small text-secondary">
-                    Default duration (seconds)
+                    <small>Default duration (seconds)</small>
                   </label>
                   <input
                     className="form-control"
@@ -72,7 +74,7 @@ export const Settings = () => {
                 </div>
                 <div className="form-group col-6">
                   <label className="small text-secondary">
-                    Default streaming duration (seconds)
+                    <small>Default streaming duration (seconds)</small>
                   </label>
                   <input
                     className="form-control"
@@ -85,7 +87,9 @@ export const Settings = () => {
               </div>
 
               <div className="form-group">
-                <label className="small text-secondary">Audio output</label>
+                <label className="small text-secondary">
+                  <small>Audio output</small>
+                </label>
                 <select
                   className="form-control"
                   name="audioOutput"
@@ -98,7 +102,9 @@ export const Settings = () => {
               </div>
 
               <div className="form-group">
-                <label className="small text-secondary">Date format</label>
+                <label className="small text-secondary">
+                  <small>Date format</small>
+                </label>
                 <select
                   className="form-control"
                   name="dateFormat"
@@ -217,7 +223,7 @@ export const Settings = () => {
 
             <div className="form-group col-12">
               <div className="text-right">
-                <a className="btn btn-long btn-outline-primary" href="/">
+                <a className="btn btn-long btn-outline-primary mr-2" href="/">
                   Cancel
                 </a>
                 <button className="btn btn-long btn-primary" type="submit">
@@ -229,25 +235,58 @@ export const Settings = () => {
         </div>
       </div>
 
-      {/* System Controls Section */}
-      <div className="container mt-4">
-        <div className="row py-2">
-          <div className="col-12">
-            <h4 className="page-header text-white">
-              <b>System Controls</b>
-            </h4>
+      {/* Backup Section */}
+      <div className="row py-2 mt-4">
+        <div className="col-12">
+          <h4 className="page-header text-white">
+            <b>Backup</b>
+          </h4>
+        </div>
+      </div>
+      <div className="row content px-3">
+        <div id="backup-section" className="col-12 my-3">
+          <div className="text-right">
+            <input
+              name="backup_upload"
+              style={{ display: 'none' }}
+              type="file"
+            />
+            <button
+              id="btn-backup"
+              className="btn btn-long btn-outline-primary mr-2"
+            >
+              Get Backup
+            </button>
+            <button id="btn-upload" className="btn btn-primary" type="button">
+              Upload and Recover
+            </button>
+          </div>
+          <div
+            className="progress-bar progress-bar-striped progress active w-100"
+            style={{ display: 'none' }}
+          >
+            <div className="bar"></div>
           </div>
         </div>
-        <div className="row content px-3">
-          <div className="col-12 my-3">
-            <div className="text-right">
-              <button className="btn btn-danger btn-long" type="button">
-                Reboot
-              </button>
-              <button className="btn btn-danger btn-long" type="button">
-                Shutdown
-              </button>
-            </div>
+      </div>
+
+      {/* System Controls Section */}
+      <div className="row py-2 mt-4">
+        <div className="col-12">
+          <h4 className="page-header text-white">
+            <b>System Controls</b>
+          </h4>
+        </div>
+      </div>
+      <div className="row content px-3">
+        <div className="col-12 my-3">
+          <div className="text-right">
+            <button className="btn btn-danger btn-long mr-2" type="button">
+              Reboot
+            </button>
+            <button className="btn btn-danger btn-long" type="button">
+              Shutdown
+            </button>
           </div>
         </div>
       </div>
