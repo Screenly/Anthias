@@ -8,6 +8,7 @@ export const Settings = () => {
     audioOutput: 'hdmi',
     dateFormat: 'mm/dd/yyyy',
     authBackend: '',
+    currentPassword: '',
     showSplash: false,
     defaultAssets: false,
     shufflePlaylist: false,
@@ -122,6 +123,37 @@ export const Settings = () => {
                   <option value="yyyy.mm.dd">year.month.day</option>
                 </select>
               </div>
+
+              <div className="form-group mb-0">
+                <label className="small text-secondary">
+                  <small>Authentication</small>
+                </label>
+                <select
+                  className="form-control"
+                  id="auth_backend"
+                  name="authBackend"
+                  value={settings.authBackend}
+                  onChange={handleInputChange}
+                >
+                  <option value="">None</option>
+                  <option value="basic">Basic Auth</option>
+                </select>
+              </div>
+
+              {settings.authBackend === 'basic' && (
+                <div className="form-group" id="curpassword_group">
+                  <label className="small text-secondary">
+                    <small>Current Password</small>
+                  </label>
+                  <input
+                    className="form-control"
+                    name="currentPassword"
+                    type="password"
+                    value={settings.currentPassword || ''}
+                    onChange={handleInputChange}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="form-group col-6 d-flex flex-column justify-content-start">
