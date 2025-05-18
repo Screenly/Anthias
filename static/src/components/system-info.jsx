@@ -1,8 +1,82 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+
+const ANTHIAS_REPO_URL = 'https://github.com/Screenly/Anthias'
+
+const AnthiasVersionValue = ({ version }) => {
+  const [commitLink, setCommitLink] = useState('')
+
+  useEffect(() => {
+    if (!version) {
+      return
+    }
+
+    const [gitBranch, gitCommit] = version?.split('@')
+
+    if (gitBranch === 'master') {
+      setCommitLink(`${ANTHIAS_REPO_URL}/commit/${gitCommit}`)
+    }
+  })
+
+  if (commitLink) {
+    return (
+      <a href={commitLink} rel="noopener" target="_blank" class="text-dark">
+        {version}
+      </a>
+    )
+  }
+
+  return <>{version}</>
+}
+
+const Skeleton = ({ children, isLoading }) => {
+  return isLoading ? (
+    <span className="placeholder placeholder-wave"></span>
+  ) : (
+    children
+  )
+}
 
 export const SystemInfo = () => {
+  const [loadAverage, setLoadAverage] = useState('')
+  const [freeSpace, setFreeSpace] = useState('')
+  const [memory, setMemory] = useState({})
+  const [uptime, setUptime] = useState({})
+  const [displayPower, setDisplayPower] = useState(null)
+  const [deviceModel, setDeviceModel] = useState('')
+  const [anthiasVersion, setAnthiasVersion] = useState('')
+  const [macAddress, setMacAddress] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+
+  const initializeSystemInfo = async () => {
+    setIsLoading(true)
+
+    const response = await fetch('/api/v2/info', {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    if (!response.ok) {
+      setIsLoading(false)
+      throw new Error('Failed to fetch system info')
+    }
+
+    const systemInfo = await response.json()
+
+    setIsLoading(false)
+
+    setLoadAverage(systemInfo.loadavg)
+    setFreeSpace(systemInfo.free_space)
+    setMemory(systemInfo.memory)
+    setUptime(systemInfo.uptime)
+    setDisplayPower(systemInfo.display_power)
+    setDeviceModel(systemInfo.device_model)
+    setAnthiasVersion(systemInfo.anthias_version)
+    setMacAddress(systemInfo.mac_address)
+  }
+
   useEffect(() => {
     document.title = 'System Info'
+    initializeSystemInfo()
   }, [])
 
   return (
@@ -34,49 +108,64 @@ export const SystemInfo = () => {
             <tbody>
               <tr>
                 <th scope="row">Load Average</th>
-                <td>0.52, 0.58, 0.59</td>
+                <td>
+                  <Skeleton isLoading={isLoading}>{loadAverage}</Skeleton>
+                </td>
               </tr>
               <tr>
                 <th scope="row">Free Space</th>
-                <td>123.45 GB</td>
+                <td>
+                  <Skeleton isLoading={isLoading}>{freeSpace}</Skeleton>
+                </td>
               </tr>
               <tr>
                 <th scope="row">Memory</th>
                 <td>
-                  Total: <strong>8.0 GB</strong> / Used: <strong>3.2 GB</strong>{' '}
-                  / Free: <strong>4.8 GB</strong> / Shared:{' '}
-                  <strong>0.0 GB</strong> / Buff: <strong>0.1 GB</strong> /
-                  Available: <strong>4.7 GB</strong>
+                  <Skeleton isLoading={isLoading}>
+                    Total: <strong>{memory.total}</strong> / Used:{' '}
+                    <strong>{memory.used}</strong> / Free:{' '}
+                    <strong>{memory.free}</strong> / Shared:{' '}
+                    <strong>{memory.shared}</strong> / Buff:{' '}
+                    <strong>{memory.buff}</strong> / Available:{' '}
+                    <strong>{memory.available}</strong>
+                  </Skeleton>
                 </td>
               </tr>
               <tr>
                 <th scope="row">Uptime</th>
-                <td>5 days and 12 hours</td>
+                <td>
+                  <Skeleton isLoading={isLoading}>
+                    {uptime.days} days and {uptime.hours} hours
+                  </Skeleton>
+                </td>
               </tr>
               <tr>
                 <th scope="row">Display Power (CEC)</th>
-                <td>On</td>
+                <td>
+                  <Skeleton isLoading={isLoading}>
+                    {displayPower || 'None'}
+                  </Skeleton>
+                </td>
               </tr>
               <tr>
                 <th scope="row">Device Model</th>
-                <td>Raspberry Pi 4 Model B</td>
+                <td>
+                  <Skeleton isLoading={isLoading}>{deviceModel}</Skeleton>
+                </td>
               </tr>
               <tr>
                 <th scope="row">Anthias Version</th>
                 <td>
-                  <a
-                    href="https://github.com/example/anthias/commit/abc123"
-                    rel="noopener"
-                    target="_blank"
-                    className="text-dark"
-                  >
-                    v1.0.0
-                  </a>
+                  <Skeleton isLoading={isLoading}>
+                    <AnthiasVersionValue version={anthiasVersion} />
+                  </Skeleton>
                 </td>
               </tr>
               <tr>
                 <th scope="row">MAC Address</th>
-                <td>00:11:22:33:44:55</td>
+                <td>
+                  <Skeleton isLoading={isLoading}>{macAddress}</Skeleton>
+                </td>
               </tr>
             </tbody>
           </table>
