@@ -270,8 +270,11 @@ class DeviceSettingsViewV2(APIView):
             publisher.send_to_viewer('reload')
 
             return Response({'message': 'Settings were successfully saved.'})
-        except Exception as e:
-            return Response({'error': str(e)}, status=400)
+        except Exception:
+            return Response(
+                {'error': 'An error occurred while saving settings.'},
+                status=400
+            )
 
 
 class InfoViewV2(InfoViewMixin):
