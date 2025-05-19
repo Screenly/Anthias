@@ -21,6 +21,7 @@ from api.serializers.v2 import (
     DeviceSettingsSerializerV2,
     IntegrationsSerializerV2,
     UpdateAssetSerializerV2,
+    UpdateDeviceSettingsSerializerV2,
 )
 from api.views.mixins import (
     AssetContentViewMixin,
@@ -42,7 +43,7 @@ from lib.utils import (
     get_node_mac_address,
     is_balena_app,
 )
-from settings import settings
+from settings import ZmqPublisher, settings
 
 r = connect_to_redis()
 
@@ -213,6 +214,67 @@ class DeviceSettingsViewV2(APIView):
             'use_24_hour_clock': settings['use_24_hour_clock'],
             'debug_logging': settings['debug_logging'],
         })
+
+    @extend_schema(
+        summary='Update device settings',
+        request=UpdateDeviceSettingsSerializerV2,
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'message': {'type': 'string'}
+                }
+            },
+            400: {
+                'type': 'object',
+                'properties': {'error': {'type': 'string'}}
+            }
+        }
+    )
+    @authorized
+    def patch(self, request):
+        try:
+            serializer = UpdateDeviceSettingsSerializerV2(data=request.data)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=400)
+
+            data = serializer.validated_data
+            settings.load()
+
+            # Update settings
+            if 'player_name' in data:
+                settings['player_name'] = data['player_name']
+            if 'default_duration' in data:
+                settings['default_duration'] = data['default_duration']
+            if 'default_streaming_duration' in data:
+                settings['default_streaming_duration'] = (
+                    data['default_streaming_duration']
+                )
+            if 'audio_output' in data:
+                settings['audio_output'] = data['audio_output']
+            if 'date_format' in data:
+                settings['date_format'] = data['date_format']
+            if 'show_splash' in data:
+                settings['show_splash'] = data['show_splash']
+            if 'default_assets' in data:
+                settings['default_assets'] = data['default_assets']
+            if 'shuffle_playlist' in data:
+                settings['shuffle_playlist'] = data['shuffle_playlist']
+            if 'use_24_hour_clock' in data:
+                settings['use_24_hour_clock'] = data['use_24_hour_clock']
+            if 'debug_logging' in data:
+                settings['debug_logging'] = data['debug_logging']
+
+            settings.save()
+            publisher = ZmqPublisher.get_instance()
+            publisher.send_to_viewer('reload')
+
+            return Response({'message': 'Settings were successfully saved.'})
+        except Exception:
+            return Response(
+                {'error': 'An error occurred while saving settings.'},
+                status=400
+            )
 
 
 class InfoViewV2(InfoViewMixin):

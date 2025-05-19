@@ -86,6 +86,19 @@ class DeviceSettingsSerializerV2(Serializer):
     debug_logging = BooleanField()
 
 
+class UpdateDeviceSettingsSerializerV2(Serializer):
+    player_name = CharField(required=False)
+    audio_output = CharField(required=False)
+    default_duration = IntegerField(required=False)
+    default_streaming_duration = IntegerField(required=False)
+    date_format = CharField(required=False)
+    show_splash = BooleanField(required=False)
+    default_assets = BooleanField(required=False)
+    shuffle_playlist = BooleanField(required=False)
+    use_24_hour_clock = BooleanField(required=False)
+    debug_logging = BooleanField(required=False)
+
+
 class IntegrationsSerializerV2(Serializer):
     is_balena = BooleanField()
     balena_device_id = CharField(required=False)
