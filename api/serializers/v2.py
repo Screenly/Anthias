@@ -87,7 +87,7 @@ class DeviceSettingsSerializerV2(Serializer):
 
 
 class UpdateDeviceSettingsSerializerV2(Serializer):
-    player_name = CharField(required=False)
+    player_name = CharField(required=False, allow_blank=True)
     audio_output = CharField(required=False)
     default_duration = IntegerField(required=False)
     default_streaming_duration = IntegerField(required=False)
