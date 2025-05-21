@@ -38,7 +38,7 @@ export const Settings = () => {
           audioOutput: data.audio_output || 'hdmi',
           dateFormat: data.date_format || 'mm/dd/yyyy',
           authBackend: data.auth_backend || '',
-          user: data.user || '',
+          user: data.username || '',
           showSplash: data.show_splash || false,
           defaultAssets: data.default_assets || false,
           shufflePlaylist: data.shuffle_playlist || false,
@@ -82,10 +82,10 @@ export const Settings = () => {
           audio_output: settings.audioOutput,
           date_format: settings.dateFormat,
           auth_backend: settings.authBackend,
-          'current-password': settings.currentPassword,
-          user: settings.user,
+          current_password: settings.currentPassword,
+          username: settings.user,
           password: settings.password,
-          password2: settings.confirmPassword,
+          password_2: settings.confirmPassword,
           show_splash: settings.showSplash,
           default_assets: settings.defaultAssets,
           shuffle_playlist: settings.shufflePlaylist,
@@ -244,13 +244,15 @@ export const Settings = () => {
                   onChange={handleInputChange}
                 >
                   <option value="">Disabled</option>
-                  <option value="basic">Basic</option>
+                  <option value="auth_basic">Basic</option>
                 </select>
               </div>
 
-              {settings.authBackend === 'basic' && (
+              {(settings.authBackend === 'auth_basic' ||
+                (settings.authBackend === '' &&
+                  prevAuthBackend === 'auth_basic')) && (
                 <>
-                  {prevAuthBackend !== '' && (
+                  {prevAuthBackend === 'auth_basic' && (
                     <div className="form-group" id="curpassword_group">
                       <label className="small text-secondary">
                         <small>Current Password</small>
@@ -264,44 +266,48 @@ export const Settings = () => {
                       />
                     </div>
                   )}
-                  <div className="form-group" id="user_group">
-                    <label className="small text-secondary">
-                      <small>User</small>
-                    </label>
-                    <input
-                      className="form-control"
-                      name="user"
-                      type="text"
-                      value={settings.user}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                  <div className="row">
-                    <div className="form-group col-6" id="password_group">
-                      <label className="small text-secondary">
-                        <small>Password</small>
-                      </label>
-                      <input
-                        className="form-control"
-                        name="password"
-                        type="password"
-                        value={settings.password}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="form-group col-6" id="password2_group">
-                      <label className="small text-secondary">
-                        <small>Confirm Password</small>
-                      </label>
-                      <input
-                        className="form-control"
-                        name="confirmPassword"
-                        type="password"
-                        value={settings.confirmPassword}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                  </div>
+                  {settings.authBackend === 'auth_basic' && (
+                    <>
+                      <div className="form-group" id="user_group">
+                        <label className="small text-secondary">
+                          <small>User</small>
+                        </label>
+                        <input
+                          className="form-control"
+                          name="user"
+                          type="text"
+                          value={settings.user}
+                          onChange={handleInputChange}
+                        />
+                      </div>
+                      <div className="row">
+                        <div className="form-group col-6" id="password_group">
+                          <label className="small text-secondary">
+                            <small>Password</small>
+                          </label>
+                          <input
+                            className="form-control"
+                            name="password"
+                            type="password"
+                            value={settings.password}
+                            onChange={handleInputChange}
+                          />
+                        </div>
+                        <div className="form-group col-6" id="password2_group">
+                          <label className="small text-secondary">
+                            <small>Confirm Password</small>
+                          </label>
+                          <input
+                            className="form-control"
+                            name="confirmPassword"
+                            type="password"
+                            value={settings.confirmPassword}
+                            onChange={handleInputChange}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </div>

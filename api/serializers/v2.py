@@ -84,6 +84,7 @@ class DeviceSettingsSerializerV2(Serializer):
     shuffle_playlist = BooleanField()
     use_24_hour_clock = BooleanField()
     debug_logging = BooleanField()
+    username = CharField()
 
 
 class UpdateDeviceSettingsSerializerV2(Serializer):
@@ -101,7 +102,7 @@ class UpdateDeviceSettingsSerializerV2(Serializer):
     password = CharField(required=False, allow_blank=True)
     password_2 = CharField(required=False, allow_blank=True)
     auth_backend = CharField(required=False, allow_blank=True)
-    current_password = CharField(required=False)
+    current_password = CharField(required=False, allow_blank=True)
 
 
 class IntegrationsSerializerV2(Serializer):

@@ -40,6 +40,7 @@ from .helpers import (
 r = connect_to_redis()
 
 
+@authorized
 def react(request):
     return template(request, 'react.html', {})
 
