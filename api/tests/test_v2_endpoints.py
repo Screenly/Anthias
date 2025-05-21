@@ -1,6 +1,7 @@
 """
 Tests for V2 API endpoints.
 """
+import hashlib
 from unittest import mock
 from unittest.mock import patch
 
@@ -135,6 +136,149 @@ class DeviceSettingsViewV2Test(TestCase):
         # Verify settings were not updated
         settings_mock.load.assert_not_called()
         settings_mock.save.assert_not_called()
+
+    @mock.patch('api.views.v2.settings')
+    @mock.patch('api.views.v2.ZmqPublisher')
+    def test_enable_basic_auth(self, publisher_mock, settings_mock):
+        # Mock settings methods
+        settings_mock.load = mock.MagicMock()
+        settings_mock.save = mock.MagicMock()
+        settings_mock.__getitem__.side_effect = lambda key: {
+            'player_name': 'Test Player',
+            'auth_backend': '',
+            'user': '',
+            'password': '',
+            'audio_output': 'local',
+            'default_duration': '10',
+            'default_streaming_duration': '50',
+            'date_format': 'DD-MM-YYYY',
+            'show_splash': False,
+            'default_assets': [],
+            'shuffle_playlist': True,
+            'use_24_hour_clock': False,
+            'debug_logging': True,
+        }[key]
+        settings_mock.__setitem__ = mock.MagicMock()
+
+        # Mock auth backends
+        auth_basic_mock = mock.MagicMock()
+        auth_basic_mock.name = 'auth_basic'
+        auth_basic_mock.check_password.return_value = True
+
+        auth_none_mock = mock.MagicMock()
+        auth_none_mock.name = ''
+        auth_none_mock.check_password.return_value = True
+
+        settings_mock.auth_backends = {
+            'auth_basic': auth_basic_mock,
+            '': auth_none_mock,
+        }
+        settings_mock.auth = auth_none_mock
+
+        # Mock publisher
+        publisher_instance = mock.MagicMock()
+        publisher_mock.get_instance.return_value = publisher_instance
+
+        # Test data - enable basic auth
+        data = {
+            'auth_backend': 'auth_basic',
+            'username': 'testuser',
+            'password': 'testpass',
+            'password_2': 'testpass',
+        }
+
+        # Calculate expected hashed password
+        expected_hashed_password = hashlib.sha256(
+            'testpass'.encode('utf-8')).hexdigest()
+
+        response = self.client.patch(
+            self.device_settings_url,
+            data=data,
+            format='json'
+        )
+
+        # Check response
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data['message'],
+            'Settings were successfully saved.'
+        )
+
+        # Verify settings were updated
+        settings_mock.load.assert_called_once()
+        settings_mock.save.assert_called_once()
+        settings_mock.__setitem__.assert_any_call('auth_backend', 'auth_basic')
+        settings_mock.__setitem__.assert_any_call('user', 'testuser')
+        settings_mock.__setitem__.assert_any_call(
+            'password', expected_hashed_password)
+
+        # Verify publisher was called
+        publisher_instance.send_to_viewer.assert_called_once_with('reload')
+
+    @mock.patch('api.views.v2.settings')
+    @mock.patch('api.views.v2.ZmqPublisher')
+    def test_disable_basic_auth(self, publisher_mock, settings_mock):
+        # Mock settings methods
+        settings_mock.load = mock.MagicMock()
+        settings_mock.save = mock.MagicMock()
+        settings_mock.__getitem__.side_effect = lambda key: {
+            'player_name': 'Test Player',
+            'auth_backend': 'auth_basic',
+            'user': 'testuser',
+            'password': 'testpass',
+            'audio_output': 'hdmi',
+            'default_duration': '15',
+            'default_streaming_duration': '100',
+            'date_format': 'YYYY-MM-DD',
+            'show_splash': True,
+            'default_assets': [],
+            'shuffle_playlist': False,
+            'use_24_hour_clock': True,
+            'debug_logging': False,
+        }[key]
+        settings_mock.__setitem__ = mock.MagicMock()
+        settings_mock.auth_backends = {
+            'auth_basic': mock.MagicMock(),
+            '': mock.MagicMock(),
+        }
+        settings_mock.auth = mock.MagicMock()
+        settings_mock.auth.check_password.return_value = True
+
+        # Mock publisher
+        publisher_instance = mock.MagicMock()
+        publisher_mock.get_instance.return_value = publisher_instance
+
+        # Test data - disable auth
+        data = {
+            'auth_backend': '',
+            'current_password': 'testpass',
+        }
+
+        response = self.client.patch(
+            self.device_settings_url,
+            data=data,
+            format='json'
+        )
+
+        # Check response
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data['message'],
+            'Settings were successfully saved.'
+        )
+
+        # Verify settings were updated
+        settings_mock.load.assert_called_once()
+        settings_mock.save.assert_called_once()
+        settings_mock.__setitem__.assert_any_call('auth_backend', '')
+
+        # Verify publisher was called
+        publisher_instance.send_to_viewer.assert_called_once_with('reload')
+
+        # Test that authentication is now disabled
+        # Request should succeed without auth
+        response = self.client.get(self.device_settings_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
 class TestIntegrationsViewV2(TestCase):
