@@ -69,7 +69,7 @@ class DeviceSettingsViewV2Test(TestCase):
             'default_duration': '10',
             'default_streaming_duration': '50',
             'date_format': 'DD-MM-YYYY',
-            'auth_backend': 'none',
+            'auth_backend': '',
             'show_splash': False,
             'default_assets': [],
             'shuffle_playlist': True,
@@ -107,7 +107,7 @@ class DeviceSettingsViewV2Test(TestCase):
         settings_mock.load.assert_called_once()
         settings_mock.save.assert_called_once()
         self.assertEqual(
-            settings_mock.__setitem__.call_count, 4
+            settings_mock.__setitem__.call_count, 5
         )  # One for each field in data
 
         # Verify publisher was called
