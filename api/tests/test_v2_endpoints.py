@@ -25,7 +25,7 @@ class DeviceSettingsViewV2Test(TestCase):
             'default_duration': '15',
             'default_streaming_duration': '100',
             'date_format': 'YYYY-MM-DD',
-            'auth_backend': 'none',
+            'auth_backend': '',  # Updated to empty string as default
             'show_splash': True,
             'default_assets': [],
             'shuffle_playlist': False,
@@ -43,7 +43,7 @@ class DeviceSettingsViewV2Test(TestCase):
             'default_duration': 15,
             'default_streaming_duration': 100,
             'date_format': 'YYYY-MM-DD',
-            'auth_backend': 'none',
+            'auth_backend': '',  # Updated to empty string as default
             'show_splash': True,
             'default_assets': [],
             'shuffle_playlist': False,
@@ -53,6 +53,46 @@ class DeviceSettingsViewV2Test(TestCase):
 
         for key, expected_value in expected_values.items():
             self.assertEqual(response.data[key], expected_value)
+
+    @mock.patch('api.views.v2.settings')
+    def test_patch_device_settings_invalid_auth_backend(self, settings_mock):
+        # Mock settings methods
+        settings_mock.load = mock.MagicMock()
+        settings_mock.save = mock.MagicMock()
+        settings_mock.__getitem__.side_effect = lambda key: {
+            'player_name': 'Test Player',
+            'auth_backend': '',
+            'audio_output': 'local',
+            'default_duration': '10',
+            'default_streaming_duration': '50',
+            'date_format': 'DD-MM-YYYY',
+            'show_splash': False,
+            'default_assets': [],
+            'shuffle_playlist': True,
+            'use_24_hour_clock': False,
+            'debug_logging': True,
+        }[key]
+
+        # Test data with invalid auth_backend
+        data = {
+            'auth_backend': 'invalid_auth',  # Invalid value
+        }
+
+        response = self.client.patch(
+            self.device_settings_url,
+            data=data,
+            format='json'
+        )
+
+        # Check response
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('auth_backend', response.data)
+        self.assertIn(
+            'is not a valid choice', str(response.data['auth_backend']))
+
+        # Verify settings were not updated
+        settings_mock.load.assert_not_called()
+        settings_mock.save.assert_not_called()
 
     @mock.patch('api.views.v2.settings')
     @mock.patch('api.views.v2.ZmqPublisher')
@@ -70,7 +110,7 @@ class DeviceSettingsViewV2Test(TestCase):
             'default_duration': '10',
             'default_streaming_duration': '50',
             'date_format': 'DD-MM-YYYY',
-            'auth_backend': '',
+            'auth_backend': '',  # Updated to empty string as default
             'show_splash': False,
             'default_assets': [],
             'shuffle_playlist': True,
