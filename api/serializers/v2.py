@@ -3,6 +3,7 @@ from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework.serializers import (
     BooleanField,
     CharField,
+    ChoiceField,
     DateTimeField,
     IntegerField,
     ModelSerializer,
@@ -100,8 +101,15 @@ class UpdateDeviceSettingsSerializerV2(Serializer):
     username = CharField(required=False, allow_blank=True)
     password = CharField(required=False, allow_blank=True)
     password_2 = CharField(required=False, allow_blank=True)
-    auth_backend = CharField(required=False, allow_blank=True)
-    current_password = CharField(required=False)
+    auth_backend = ChoiceField(
+        required=False,
+        allow_blank=True,
+        choices=[
+            ('', 'No authentication'),
+            ('auth_basic', 'Basic authentication'),
+        ],
+    )
+    current_password = CharField(required=False, allow_blank=True)
 
 
 class IntegrationsSerializerV2(Serializer):
