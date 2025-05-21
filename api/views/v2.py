@@ -1,3 +1,4 @@
+import hashlib
 from datetime import timedelta
 from os import getenv, statvfs
 from platform import machine
@@ -215,6 +216,54 @@ class DeviceSettingsViewV2(APIView):
             'debug_logging': settings['debug_logging'],
         })
 
+    def update_auth_settings(self, data, auth_backend, current_pass_correct):
+        if auth_backend == '':
+            return
+
+        if auth_backend != 'auth_basic':
+            return
+
+        new_user = data.get('username', '')
+        new_pass = data.get('password', '').encode('utf-8')
+        new_pass2 = data.get('password_2', '').encode('utf-8')
+        new_pass = hashlib.sha256(new_pass).hexdigest() if new_pass else None
+        new_pass2 = hashlib.sha256(new_pass2).hexdigest() if new_pass else None
+
+        if settings['password']:
+            if new_user != settings['user']:
+                if current_pass_correct is None:
+                    raise ValueError(
+                        "Must supply current password to change username"
+                    )
+                if not current_pass_correct:
+                    raise ValueError("Incorrect current password.")
+
+                settings['user'] = new_user
+
+            if new_pass:
+                if current_pass_correct is None:
+                    raise ValueError(
+                        "Must supply current password to change password"
+                    )
+                if not current_pass_correct:
+                    raise ValueError("Incorrect current password.")
+
+                if new_pass2 != new_pass:
+                    raise ValueError("New passwords do not match!")
+
+                settings['password'] = new_pass
+
+        else:
+            if new_user:
+                if new_pass and new_pass != new_pass2:
+                    raise ValueError("New passwords do not match!")
+                if not new_pass:
+                    raise ValueError("Must provide password")
+                settings['user'] = new_user
+                settings['password'] = new_pass
+            else:
+                raise ValueError("Must provide username")
+
     @extend_schema(
         summary='Update device settings',
         request=UpdateDeviceSettingsSerializerV2,
@@ -240,6 +289,36 @@ class DeviceSettingsViewV2(APIView):
 
             data = serializer.validated_data
             settings.load()
+
+            current_password = data.get('current_password', '')
+            auth_backend = data.get('auth_backend', '')
+
+            if (
+                auth_backend != settings['auth_backend']
+                and settings['auth_backend']
+            ):
+                if not current_password:
+                    raise ValueError(
+                        "Must supply current password to change "
+                        "authentication method"
+                    )
+                if not settings.auth.check_password(current_password):
+                    raise ValueError("Incorrect current password.")
+
+            prev_auth_backend = settings['auth_backend']
+            if not current_password and prev_auth_backend:
+                current_pass_correct = None
+            else:
+                current_pass_correct = (
+                    settings
+                    .auth_backends[prev_auth_backend]
+                    .check_password(current_password)
+                )
+            next_auth_backend = settings.auth_backends[auth_backend]
+
+            self.update_auth_settings(
+                data, next_auth_backend.name, current_pass_correct)
+            settings['auth_backend'] = auth_backend
 
             # Update settings
             if 'player_name' in data:
@@ -270,9 +349,9 @@ class DeviceSettingsViewV2(APIView):
             publisher.send_to_viewer('reload')
 
             return Response({'message': 'Settings were successfully saved.'})
-        except Exception:
+        except Exception as e:
             return Response(
-                {'error': 'An error occurred while saving settings.'},
+                {'error': f'An error occurred while saving settings: {e}'},
                 status=400
             )
 
