@@ -214,6 +214,10 @@ class DeviceSettingsViewV2(APIView):
             'shuffle_playlist': settings['shuffle_playlist'],
             'use_24_hour_clock': settings['use_24_hour_clock'],
             'debug_logging': settings['debug_logging'],
+            'username': (
+                settings['user'] if settings['auth_backend'] == 'auth_basic'
+                else ''
+            ),
         })
 
     def update_auth_settings(self, data, auth_backend, current_pass_correct):
