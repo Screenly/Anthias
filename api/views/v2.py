@@ -217,7 +217,7 @@ class DeviceSettingsViewV2(APIView):
             'username': (
                 settings['user'] if settings['auth_backend'] == 'auth_basic'
                 else ''
-            )
+            ),
         })
 
     def update_auth_settings(self, data, auth_backend, current_pass_correct):
