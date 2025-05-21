@@ -85,6 +85,7 @@ class DeviceSettingsSerializerV2(Serializer):
     shuffle_playlist = BooleanField()
     use_24_hour_clock = BooleanField()
     debug_logging = BooleanField()
+    username = CharField()
 
 
 class UpdateDeviceSettingsSerializerV2(Serializer):
