@@ -115,9 +115,9 @@ class UpdateDeviceSettingsSerializerV2(Serializer):
 
 class IntegrationsSerializerV2(Serializer):
     is_balena = BooleanField()
-    balena_device_id = CharField(required=False)
-    balena_app_id = CharField(required=False)
-    balena_app_name = CharField(required=False)
-    balena_supervisor_version = CharField(required=False)
-    balena_host_os_version = CharField(required=False)
-    balena_device_name_at_init = CharField(required=False)
+    balena_device_id = CharField(required=False, allow_null=True)
+    balena_app_id = CharField(required=False, allow_null=True)
+    balena_app_name = CharField(required=False, allow_null=True)
+    balena_supervisor_version = CharField(required=False, allow_null=True)
+    balena_host_os_version = CharField(required=False, allow_null=True)
+    balena_device_name_at_init = CharField(required=False, allow_null=True)
