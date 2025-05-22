@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useDispatch } from 'react-redux'
+import { fetchDeviceSettings } from '@/store/assets/asset-modal-slice'
 
 export const Settings = () => {
+  const dispatch = useDispatch()
   const [settings, setSettings] = useState({
     playerName: '',
     defaultDuration: 0,
@@ -103,6 +106,8 @@ export const Settings = () => {
       setSuccess('Settings were successfully saved.')
       // Clear password after successful save
       setSettings((prev) => ({ ...prev, currentPassword: '' }))
+      // Fetch updated device settings
+      dispatch(fetchDeviceSettings())
     } catch (err) {
       setError(err.message)
     } finally {

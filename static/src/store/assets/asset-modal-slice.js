@@ -4,7 +4,7 @@ import { addAsset } from './assets-list-slice'
 // Async thunks for API operations
 export const uploadFile = createAsyncThunk(
   'assetModal/uploadFile',
-  async ({ file, skipAssetCheck }, { dispatch, rejectWithValue }) => {
+  async ({ file, skipAssetCheck }, { dispatch, getState, rejectWithValue }) => {
     try {
       const formData = new FormData()
       formData.append('file_upload', file)
@@ -51,7 +51,12 @@ export const uploadFile = createAsyncThunk(
 
       // Get mimetype and duration
       const mimetype = getMimetype(file.name)
-      const duration = getDurationForMimetype(mimetype, 10, 300)
+      const state = getState()
+      const duration = getDurationForMimetype(
+        mimetype,
+        state.assetModal.defaultDuration,
+        state.assetModal.defaultStreamingDuration,
+      )
       const dates = getDefaultDates()
 
       return {
