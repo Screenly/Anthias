@@ -27,6 +27,38 @@ export const Settings = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [prevAuthBackend, setPrevAuthBackend] = useState('')
 
+  const handleBackup = async () => {
+    const backupButton = document.getElementById('btn-backup')
+    const originalText = backupButton.textContent
+    backupButton.textContent = 'Preparing archive...'
+    backupButton.disabled = true
+    document.getElementById('btn-upload').disabled = true
+
+    try {
+      const response = await fetch('/api/v2/backup', {
+        method: 'POST',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to create backup')
+      }
+
+      const data = await response.json()
+      if (data) {
+        window.location = `/static_with_mime/${data}?mime=application/x-tgz`
+      }
+    } catch (err) {
+      setError(
+        err.message ||
+          'The operation failed. Please reload the page and try again.',
+      )
+    } finally {
+      backupButton.textContent = originalText
+      backupButton.disabled = false
+      document.getElementById('btn-upload').disabled = false
+    }
+  }
+
   useEffect(() => {
     document.title = 'Settings'
     // Load initial settings
@@ -451,6 +483,7 @@ export const Settings = () => {
             <button
               id="btn-backup"
               className="btn btn-long btn-outline-primary mr-2"
+              onClick={handleBackup}
             >
               Get Backup
             </button>
