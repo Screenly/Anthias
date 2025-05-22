@@ -100,6 +100,16 @@ export const ScheduleOverview = () => {
     setAssetToEdit(null)
   }
 
+  const handlePreviousAsset = async (event) => {
+    event.preventDefault()
+    await fetch('/api/v2/assets/control/previous')
+  }
+
+  const handleNextAsset = async (event) => {
+    event.preventDefault()
+    await fetch('/api/v2/assets/control/next')
+  }
+
   const handleCloseModal = () => {
     setIsModalOpen(false)
   }
@@ -144,6 +154,7 @@ export const ScheduleOverview = () => {
                     'mr-1',
                   )}
                   href="#"
+                  onClick={handlePreviousAsset}
                 >
                   <i className="fas fa-chevron-left pr-2"></i>
                   Previous Asset
@@ -157,6 +168,7 @@ export const ScheduleOverview = () => {
                     'mr-1',
                   )}
                   href="#"
+                  onClick={handleNextAsset}
                 >
                   Next Asset
                   <i className="fas fa-chevron-right pl-2"></i>
