@@ -13,7 +13,7 @@ export const Integrations = () => {
 
   useEffect(() => {
     document.title = 'Integrations'
-    fetch('/api/v2/integrations/')
+    fetch('/api/v2/integrations')
       .then((response) => response.json())
       .then((data) => {
         setData(data)
@@ -79,14 +79,16 @@ export const Integrations = () => {
                     with.
                   </td>
                 </tr>
-                <tr>
-                  <th scope="row">Supervisor Version</th>
-                  <td>{data.balena_supervisor_version}</td>
-                  <td>
-                    The current version of the supervisor agent running on the
-                    device.
-                  </td>
-                </tr>
+                {data.balena_supervisor_version && (
+                  <tr>
+                    <th scope="row">Supervisor Version</th>
+                    <td>{data.balena_supervisor_version}</td>
+                    <td>
+                      The current version of the supervisor agent running on the
+                      device.
+                    </td>
+                  </tr>
+                )}
                 <tr>
                   <th scope="row">Host OS Version</th>
                   <td>{data.balena_host_os_version}</td>

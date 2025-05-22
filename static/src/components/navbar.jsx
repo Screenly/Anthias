@@ -13,7 +13,7 @@ export const Navbar = () => {
   const [isBalena, setIsBalena] = useState(false)
 
   useEffect(() => {
-    fetch('/api/v2/integrations/')
+    fetch('/api/v2/integrations')
       .then((response) => response.json())
       .then((data) => {
         setIsBalena(data.is_balena)
