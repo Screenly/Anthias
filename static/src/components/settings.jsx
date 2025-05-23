@@ -26,6 +26,8 @@ export const Settings = () => {
   const [success, setSuccess] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [prevAuthBackend, setPrevAuthBackend] = useState('')
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
 
   const handleBackup = async () => {
     const backupButton = document.getElementById('btn-backup')
@@ -56,6 +58,66 @@ export const Settings = () => {
       backupButton.textContent = originalText
       backupButton.disabled = false
       document.getElementById('btn-upload').disabled = false
+    }
+  }
+
+  const handleUpload = (e) => {
+    e.preventDefault()
+    document.querySelector('[name="backup_upload"]').click()
+  }
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    setIsUploading(true)
+    setUploadProgress(0)
+    document.getElementById('btn-upload').style.display = 'none'
+    document.getElementById('btn-backup').style.display = 'none'
+    document.querySelector('.progress').style.display = 'block'
+
+    const formData = new FormData()
+    formData.append('backup_upload', file)
+
+    try {
+      const response = await fetch('/api/v2/recover', {
+        method: 'POST',
+        body: formData,
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total,
+          )
+          setUploadProgress(percentCompleted)
+          document.querySelector('.progress .bar').style.width =
+            `${percentCompleted}%`
+          document.querySelector('.progress .bar').textContent =
+            `Uploading: ${percentCompleted}%`
+        },
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload backup')
+      }
+
+      if (data) {
+        setSuccess(
+          typeof data === 'string' ? data : 'Backup uploaded successfully',
+        )
+        setError(null)
+      }
+    } catch (err) {
+      setError(
+        err.message ||
+          'The operation failed. Please reload the page and try again.',
+      )
+      setSuccess(null)
+    } finally {
+      setIsUploading(false)
+      document.querySelector('.progress').style.display = 'none'
+      document.getElementById('btn-upload').style.display = 'inline-block'
+      document.getElementById('btn-backup').style.display = 'inline-block'
     }
   }
 
@@ -479,23 +541,31 @@ export const Settings = () => {
               name="backup_upload"
               style={{ display: 'none' }}
               type="file"
+              onChange={handleFileUpload}
             />
             <button
               id="btn-backup"
               className="btn btn-long btn-outline-primary mr-2"
               onClick={handleBackup}
+              disabled={isUploading}
             >
               Get Backup
             </button>
-            <button id="btn-upload" className="btn btn-primary" type="button">
-              Upload and Recover
+            <button
+              id="btn-upload"
+              className="btn btn-primary"
+              type="button"
+              onClick={handleUpload}
+              disabled={isUploading}
+            >
+              {isUploading ? 'Uploading...' : 'Upload and Recover'}
             </button>
           </div>
           <div
             className="progress-bar progress-bar-striped progress active w-100"
-            style={{ display: 'none' }}
+            style={{ display: isUploading ? 'block' : 'none' }}
           >
-            <div className="bar"></div>
+            <div className="bar" style={{ width: `${uploadProgress}%` }}></div>
           </div>
         </div>
       </div>
