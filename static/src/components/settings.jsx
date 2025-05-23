@@ -121,6 +121,54 @@ export const Settings = () => {
     }
   }
 
+  const handleShutdown = async () => {
+    if (window.confirm('Are you sure you want to shutdown your device?')) {
+      try {
+        const response = await fetch('/api/v2/shutdown', {
+          method: 'POST',
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to shutdown device')
+        }
+
+        setSuccess(
+          'Device shutdown has started successfully.\nSoon you will be able to unplug the power from your Raspberry Pi.',
+        )
+        setError(null)
+      } catch (err) {
+        setError(
+          err.message ||
+            'The operation failed. Please reload the page and try again.',
+        )
+        setSuccess(null)
+      }
+    }
+  }
+
+  const handleReboot = async () => {
+    if (window.confirm('Are you sure you want to reboot your device?')) {
+      try {
+        const response = await fetch('/api/v2/reboot', {
+          method: 'POST',
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to reboot device')
+        }
+
+        setSuccess('Reboot has started successfully.')
+        setError(null)
+      } catch (err) {
+        setError(
+          err.message ||
+            'The operation failed. Please reload the page and try again.',
+        )
+        setSuccess(null)
+      }
+    }
+  }
+
   useEffect(() => {
     document.title = 'Settings'
     // Load initial settings
@@ -581,10 +629,18 @@ export const Settings = () => {
       <div className="row content px-3">
         <div className="col-12 my-3">
           <div className="text-right">
-            <button className="btn btn-danger btn-long mr-2" type="button">
+            <button
+              className="btn btn-danger btn-long mr-2"
+              type="button"
+              onClick={handleReboot}
+            >
               Reboot
             </button>
-            <button className="btn btn-danger btn-long" type="button">
+            <button
+              className="btn btn-danger btn-long mr-2"
+              type="button"
+              onClick={handleShutdown}
+            >
               Shutdown
             </button>
           </div>
