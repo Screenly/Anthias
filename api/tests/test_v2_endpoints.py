@@ -339,4 +339,10 @@ class TestIntegrationsViewV2(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {
             'is_balena': False,
+            'balena_device_id': None,
+            'balena_app_id': None,
+            'balena_app_name': None,
+            'balena_supervisor_version': None,
+            'balena_host_os_version': None,
+            'balena_device_name_at_init': None,
         })
