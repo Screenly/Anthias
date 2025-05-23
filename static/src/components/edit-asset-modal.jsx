@@ -33,17 +33,22 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
   // Initialize form data when asset changes
   useEffect(() => {
     if (asset) {
-      // Parse dates
+      // Parse dates from UTC
       const startDate = new Date(asset.start_date)
       const endDate = new Date(asset.end_date)
 
-      // Format date and time parts
+      // Format date and time parts in local timezone
       const formatDatePart = (date) => {
-        return date.toISOString().split('T')[0]
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
       }
 
       const formatTimePart = (date) => {
-        return date.toTimeString().split(' ')[0].substring(0, 5)
+        const hours = String(date.getHours()).padStart(2, '0')
+        const minutes = String(date.getMinutes()).padStart(2, '0')
+        return `${hours}:${minutes}`
       }
 
       setFormData({
