@@ -1,4 +1,5 @@
 import hashlib
+import logging
 from datetime import timedelta
 from os import getenv, statvfs
 from platform import machine
@@ -200,6 +201,13 @@ class DeviceSettingsViewV2(APIView):
     )
     @authorized
     def get(self, request):
+        try:
+            # Force reload of settings
+            settings.load()
+        except Exception as e:
+            logging.error(f'Failed to reload settings: {str(e)}')
+            # Continue with existing settings if reload fails
+
         return Response({
             'player_name': settings['player_name'],
             'audio_output': settings['audio_output'],
