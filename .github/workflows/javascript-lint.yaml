@@ -1,11 +1,11 @@
-name: Run JavaScript and CoffeeScript Linter
+name: Run JavaScript Linter and Formatter
 
 on:
   push:
     branches: [ master ]
     paths:
       - '**/*.js'
-      - '**/*.coffee'
+      - '**/*.jsx'
       - '**/*.mjs'
       - '.github/workflows/javascript-lint.yaml'
   pull_request:
@@ -33,3 +33,6 @@ jobs:
 
       - name: Run ESLint
         run: npm run lint
+
+      - name: Run Prettier
+        run: npm run format:check
