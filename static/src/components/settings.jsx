@@ -106,6 +106,30 @@ export const Settings = () => {
           typeof data === 'string' ? data : 'Backup uploaded successfully',
         )
         setError(null)
+
+        // Fetch updated settings after successful recovery
+        try {
+          const settingsResponse = await fetch('/api/v2/device_settings')
+          const settingsData = await settingsResponse.json()
+
+          setSettings((prev) => ({
+            ...prev,
+            playerName: settingsData.player_name || '',
+            defaultDuration: settingsData.default_duration || 0,
+            defaultStreamingDuration:
+              settingsData.default_streaming_duration || 0,
+            audioOutput: settingsData.audio_output || 'hdmi',
+            dateFormat: settingsData.date_format || 'mm/dd/yyyy',
+            authBackend: settingsData.auth_backend || '',
+            user: settingsData.username || '',
+            showSplash: settingsData.show_splash || false,
+            defaultAssets: settingsData.default_assets || false,
+            shufflePlaylist: settingsData.shuffle_playlist || false,
+            use24HourClock: settingsData.use_24_hour_clock || false,
+            debugLogging: settingsData.debug_logging || false,
+          }))
+          setPrevAuthBackend(settingsData.auth_backend || '')
+        } catch (settingsErr) {}
       }
     } catch (err) {
       setError(
