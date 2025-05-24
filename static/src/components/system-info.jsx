@@ -122,12 +122,24 @@ export const SystemInfo = () => {
                 <th scope="row">Memory</th>
                 <td>
                   <Skeleton isLoading={isLoading}>
-                    Total: <strong>{memory.total}</strong> / Used:{' '}
-                    <strong>{memory.used}</strong> / Free:{' '}
-                    <strong>{memory.free}</strong> / Shared:{' '}
-                    <strong>{memory.shared}</strong> / Buff:{' '}
-                    <strong>{memory.buff}</strong> / Available:{' '}
-                    <strong>{memory.available}</strong>
+                    <div>
+                      Total: <strong>{memory.total}</strong>
+                    </div>
+                    <div>
+                      Used: <strong>{memory.used}</strong>
+                    </div>
+                    <div>
+                      Free: <strong>{memory.free}</strong>
+                    </div>
+                    <div>
+                      Shared: <strong>{memory.shared}</strong>
+                    </div>
+                    <div>
+                      Buff: <strong>{memory.buff}</strong>
+                    </div>
+                    <div>
+                      Available: <strong>{memory.available}</strong>
+                    </div>
                   </Skeleton>
                 </td>
               </tr>
