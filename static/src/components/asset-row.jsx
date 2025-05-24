@@ -288,12 +288,7 @@ export const AssetRow = forwardRef((props, ref) => {
         style={props.style}
         className={classNames({ warning: isDisabled })}
       >
-        <td
-          className={classNames('asset_row_name')}
-          data-toggle="tooltip"
-          data-placement="top"
-          title={props.name}
-        >
+        <td className={classNames('asset_row_name')}>
           <span
             {...props.dragHandleProps}
             style={{
@@ -304,7 +299,9 @@ export const AssetRow = forwardRef((props, ref) => {
             <FaGripVertical className="mr-2" />
           </span>
           <i className={classNames('asset-icon', 'mr-2')}></i>
-          {props.name}
+          <span data-toggle="tooltip" data-placement="top" title={props.name}>
+            {props.name}
+          </span>
         </td>
         <td
           style={{ width: '21%', maxWidth: '200px' }}
