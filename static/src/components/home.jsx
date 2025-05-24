@@ -48,10 +48,20 @@ export const ScheduleOverview = () => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [assetToEdit, setAssetToEdit] = useState(null)
+  const [playerName, setPlayerName] = useState('')
+
+  const fetchPlayerName = async () => {
+    try {
+      const response = await fetch('/api/v2/device_settings')
+      const data = await response.json()
+      setPlayerName(data.player_name || '')
+    } catch {}
+  }
 
   useEffect(() => {
     document.title = 'Schedule Overview'
     dispatch(fetchAssets())
+    fetchPlayerName()
   }, [dispatch])
 
   // Initialize tooltips
@@ -90,9 +100,6 @@ export const ScheduleOverview = () => {
       $('[data-toggle="tooltip"]').tooltip('dispose')
     }
   }, [activeAssets, inactiveAssets])
-
-  // TODO: Get the player name from the server via API.
-  const [playerName] = useState('')
 
   const handleAddAsset = (event) => {
     event.preventDefault()
@@ -190,7 +197,13 @@ export const ScheduleOverview = () => {
               </div>
             </h4>
 
-            {playerName && <h4 className="text-white">{playerName}</h4>}
+            {playerName && (
+              <span className="badge badge-primary px-3 py-2 rounded-pill mb-3">
+                <h6 className="my-0 text-center font-weight-bold">
+                  {playerName}
+                </h6>
+              </span>
+            )}
           </div>
         </div>
       </div>
