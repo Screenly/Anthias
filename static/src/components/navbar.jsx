@@ -9,7 +9,7 @@ import {
 import { Link, NavLink } from 'react-router'
 
 export const Navbar = () => {
-  const [upToDate] = useState(false)
+  const [upToDate, setUpToDate] = useState(false)
   const [isBalena, setIsBalena] = useState(false)
 
   useEffect(() => {
@@ -17,6 +17,18 @@ export const Navbar = () => {
       .then((response) => response.json())
       .then((data) => {
         setIsBalena(data.is_balena)
+      })
+      .catch(() => {
+        setIsBalena(false)
+      })
+
+    fetch('/api/v2/info')
+      .then((response) => response.json())
+      .then((data) => {
+        setUpToDate(data.up_to_date)
+      })
+      .catch(() => {
+        setUpToDate(false)
       })
   }, [])
 
