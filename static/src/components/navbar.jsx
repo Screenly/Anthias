@@ -9,27 +9,34 @@ import {
 import { Link, NavLink } from 'react-router'
 
 export const Navbar = () => {
-  const [upToDate, setUpToDate] = useState(false)
+  const [upToDate, setUpToDate] = useState(null)
   const [isBalena, setIsBalena] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/v2/integrations')
-      .then((response) => response.json())
-      .then((data) => {
-        setIsBalena(data.is_balena)
-      })
-      .catch(() => {
-        setIsBalena(false)
-      })
+    const fetchData = async () => {
+      try {
+        const [integrationsResponse, infoResponse] = await Promise.all([
+          fetch('/api/v2/integrations'),
+          fetch('/api/v2/info'),
+        ])
 
-    fetch('/api/v2/info')
-      .then((response) => response.json())
-      .then((data) => {
-        setUpToDate(data.up_to_date)
-      })
-      .catch(() => {
+        const [integrationsData, infoData] = await Promise.all([
+          integrationsResponse.json(),
+          infoResponse.json(),
+        ])
+
+        setIsBalena(integrationsData.is_balena)
+        setUpToDate(infoData.up_to_date)
+      } catch (error) {
+        setIsBalena(false)
         setUpToDate(false)
-      })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchData()
   }, [])
 
   return (
@@ -40,7 +47,7 @@ export const Navbar = () => {
             <img src="/static/img/logo-full.svg" />
           </NavLink>
           <ul className="nav float-right">
-            {!upToDate && !isBalena && (
+            {!isLoading && !upToDate && !isBalena && (
               <li className="update-available">
                 <Link to="/settings#upgrade-section">
                   <span className="pr-1">
