@@ -294,6 +294,108 @@ class DeviceSettingsViewV2Test(TestCase):
         response = self.client.get(self.device_settings_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+    @mock.patch('api.views.v2.settings')
+    @mock.patch('api.views.v2.ZmqPublisher')
+    @mock.patch('api.views.v2.add_default_assets')
+    @mock.patch('api.views.v2.remove_default_assets')
+    def test_patch_device_settings_default_assets(
+        self,
+        remove_default_assets_mock,
+        add_default_assets_mock,
+        publisher_mock,
+        settings_mock
+    ):
+        settings_mock.load = mock.MagicMock()
+        settings_mock.save = mock.MagicMock()
+        settings_mock.__getitem__.side_effect = lambda key: {
+            'player_name': 'Test Player',
+            'auth_backend': '',
+            'audio_output': 'local',
+            'default_duration': '10',
+            'default_streaming_duration': '50',
+            'date_format': 'DD-MM-YYYY',
+            'show_splash': False,
+            'default_assets': False,
+            'shuffle_playlist': True,
+            'use_24_hour_clock': False,
+            'debug_logging': True,
+        }[key]
+        settings_mock.__setitem__ = mock.MagicMock()
+
+        publisher_instance = mock.MagicMock()
+        publisher_mock.get_instance.return_value = publisher_instance
+
+        # Test enabling default assets
+        data = {
+            'default_assets': True,
+        }
+
+        response = self.client.patch(
+            self.device_settings_url,
+            data=data,
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data['message'],
+            'Settings were successfully saved.'
+        )
+
+        settings_mock.load.assert_called_once()
+        settings_mock.save.assert_called_once()
+        settings_mock.__setitem__.assert_any_call('default_assets', True)
+        add_default_assets_mock.assert_called_once()
+        remove_default_assets_mock.assert_not_called()
+        publisher_instance.send_to_viewer.assert_called_once_with('reload')
+
+        # Reset mocks
+        settings_mock.load.reset_mock()
+        settings_mock.save.reset_mock()
+        settings_mock.__setitem__.reset_mock()
+        add_default_assets_mock.reset_mock()
+        remove_default_assets_mock.reset_mock()
+        publisher_instance.send_to_viewer.reset_mock()
+
+        # Update mock to simulate default assets being enabled
+        settings_mock.__getitem__.side_effect = lambda key: {
+            'player_name': 'Test Player',
+            'auth_backend': '',
+            'audio_output': 'local',
+            'default_duration': '10',
+            'default_streaming_duration': '50',
+            'date_format': 'DD-MM-YYYY',
+            'show_splash': False,
+            'default_assets': True,
+            'shuffle_playlist': True,
+            'use_24_hour_clock': False,
+            'debug_logging': True,
+        }[key]
+
+        # Test disabling default assets
+        data = {
+            'default_assets': False,
+        }
+
+        response = self.client.patch(
+            self.device_settings_url,
+            data=data,
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data['message'],
+            'Settings were successfully saved.'
+        )
+
+        settings_mock.load.assert_called_once()
+        settings_mock.save.assert_called_once()
+        settings_mock.__setitem__.assert_any_call('default_assets', False)
+        remove_default_assets_mock.assert_called_once()
+        add_default_assets_mock.assert_not_called()
+        publisher_instance.send_to_viewer.assert_called_once_with('reload')
+
 
 class TestIntegrationsViewV2(TestCase):
     def setUp(self):
