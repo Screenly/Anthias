@@ -118,7 +118,7 @@ export const AssetModal = ({ isOpen, onClose, onSave, initialData = {} }) => {
                         )}
                       >
                         <a
-                          className="nav-link"
+                          className="nav-link upload-asset-tab"
                           href="#"
                           onClick={() => dispatch(setActiveTab('file_upload'))}
                         >
