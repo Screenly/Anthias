@@ -11,6 +11,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from anthias_app.helpers import add_default_assets, remove_default_assets
 from anthias_app.models import Asset
 from api.helpers import (
     AssetCreationError,
@@ -348,6 +349,10 @@ class DeviceSettingsViewV2(APIView):
             if 'show_splash' in data:
                 settings['show_splash'] = data['show_splash']
             if 'default_assets' in data:
+                if data['default_assets'] and not settings['default_assets']:
+                    add_default_assets()
+                elif not data['default_assets'] and settings['default_assets']:
+                    remove_default_assets()
                 settings['default_assets'] = data['default_assets']
             if 'shuffle_playlist' in data:
                 settings['shuffle_playlist'] = data['shuffle_playlist']
