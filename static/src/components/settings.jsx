@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useDispatch } from 'react-redux'
 import { fetchDeviceSettings } from '@/store/assets/asset-modal-slice'
+import Swal from 'sweetalert2'
 
 export const Settings = () => {
   const dispatch = useDispatch()
@@ -22,8 +23,6 @@ export const Settings = () => {
     debugLogging: false,
   })
 
-  const [error, setError] = useState(null)
-  const [success, setSuccess] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [prevAuthBackend, setPrevAuthBackend] = useState('')
   const [isUploading, setIsUploading] = useState(false)
@@ -50,10 +49,20 @@ export const Settings = () => {
         window.location = `/static_with_mime/${data}?mime=application/x-tgz`
       }
     } catch (err) {
-      setError(
-        err.message ||
+      await Swal.fire({
+        title: 'Error!',
+        text:
+          err.message ||
           'The operation failed. Please reload the page and try again.',
-      )
+        icon: 'error',
+        confirmButtonColor: '#dc3545',
+        customClass: {
+          popup: 'swal2-popup',
+          title: 'swal2-title',
+          htmlContainer: 'swal2-html-container',
+          confirmButton: 'swal2-confirm',
+        },
+      })
     } finally {
       backupButton.textContent = originalText
       backupButton.disabled = false
@@ -63,7 +72,9 @@ export const Settings = () => {
 
   const handleUpload = (e) => {
     e.preventDefault()
-    document.querySelector('[name="backup_upload"]').click()
+    const fileInput = document.querySelector('[name="backup_upload"]')
+    fileInput.value = '' // Reset the file input
+    fileInput.click()
   }
 
   const handleFileUpload = async (e) => {
@@ -102,10 +113,19 @@ export const Settings = () => {
       }
 
       if (data) {
-        setSuccess(
-          typeof data === 'string' ? data : 'Backup uploaded successfully',
-        )
-        setError(null)
+        await Swal.fire({
+          title: 'Success!',
+          text:
+            typeof data === 'string' ? data : 'Backup uploaded successfully',
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false,
+          customClass: {
+            popup: 'swal2-popup',
+            title: 'swal2-title',
+            htmlContainer: 'swal2-html-container',
+          },
+        })
 
         // Fetch updated settings after successful recovery
         try {
@@ -132,21 +152,52 @@ export const Settings = () => {
         } catch (settingsErr) {}
       }
     } catch (err) {
-      setError(
-        err.message ||
+      await Swal.fire({
+        title: 'Error!',
+        text:
+          err.message ||
           'The operation failed. Please reload the page and try again.',
-      )
-      setSuccess(null)
+        icon: 'error',
+        confirmButtonColor: '#dc3545',
+        customClass: {
+          popup: 'swal2-popup',
+          title: 'swal2-title',
+          htmlContainer: 'swal2-html-container',
+          confirmButton: 'swal2-confirm',
+        },
+      })
     } finally {
       setIsUploading(false)
       document.querySelector('.progress').style.display = 'none'
       document.getElementById('btn-upload').style.display = 'inline-block'
       document.getElementById('btn-backup').style.display = 'inline-block'
+      // Reset the file input
+      e.target.value = ''
     }
   }
 
   const handleShutdown = async () => {
-    if (window.confirm('Are you sure you want to shutdown your device?')) {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: 'Are you sure you want to shutdown your device?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Shutdown',
+      cancelButtonText: 'Cancel',
+      reverseButtons: true,
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#6c757d',
+      customClass: {
+        popup: 'swal2-popup',
+        title: 'swal2-title',
+        htmlContainer: 'swal2-html-container',
+        confirmButton: 'swal2-confirm',
+        cancelButton: 'swal2-cancel',
+        actions: 'swal2-actions',
+      },
+    })
+
+    if (result.isConfirmed) {
       try {
         const response = await fetch('/api/v2/shutdown', {
           method: 'POST',
@@ -156,22 +207,59 @@ export const Settings = () => {
           throw new Error('Failed to shutdown device')
         }
 
-        setSuccess(
-          'Device shutdown has started successfully.\nSoon you will be able to unplug the power from your Raspberry Pi.',
-        )
-        setError(null)
+        await Swal.fire({
+          title: 'Success!',
+          text: 'Device shutdown has started successfully.\nSoon you will be able to unplug the power from your Raspberry Pi.',
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false,
+          customClass: {
+            popup: 'swal2-popup',
+            title: 'swal2-title',
+            htmlContainer: 'swal2-html-container',
+          },
+        })
       } catch (err) {
-        setError(
-          err.message ||
+        await Swal.fire({
+          title: 'Error!',
+          text:
+            err.message ||
             'The operation failed. Please reload the page and try again.',
-        )
-        setSuccess(null)
+          icon: 'error',
+          confirmButtonColor: '#dc3545',
+          customClass: {
+            popup: 'swal2-popup',
+            title: 'swal2-title',
+            htmlContainer: 'swal2-html-container',
+            confirmButton: 'swal2-confirm',
+          },
+        })
       }
     }
   }
 
   const handleReboot = async () => {
-    if (window.confirm('Are you sure you want to reboot your device?')) {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: 'Are you sure you want to reboot your device?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Reboot',
+      cancelButtonText: 'Cancel',
+      reverseButtons: true,
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#6c757d',
+      customClass: {
+        popup: 'swal2-popup',
+        title: 'swal2-title',
+        htmlContainer: 'swal2-html-container',
+        confirmButton: 'swal2-confirm',
+        cancelButton: 'swal2-cancel',
+        actions: 'swal2-actions',
+      },
+    })
+
+    if (result.isConfirmed) {
       try {
         const response = await fetch('/api/v2/reboot', {
           method: 'POST',
@@ -181,14 +269,33 @@ export const Settings = () => {
           throw new Error('Failed to reboot device')
         }
 
-        setSuccess('Reboot has started successfully.')
-        setError(null)
+        await Swal.fire({
+          title: 'Success!',
+          text: 'Reboot has started successfully.',
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false,
+          customClass: {
+            popup: 'swal2-popup',
+            title: 'swal2-title',
+            htmlContainer: 'swal2-html-container',
+          },
+        })
       } catch (err) {
-        setError(
-          err.message ||
+        await Swal.fire({
+          title: 'Error!',
+          text:
+            err.message ||
             'The operation failed. Please reload the page and try again.',
-        )
-        setSuccess(null)
+          icon: 'error',
+          confirmButtonColor: '#dc3545',
+          customClass: {
+            popup: 'swal2-popup',
+            title: 'swal2-title',
+            htmlContainer: 'swal2-html-container',
+            confirmButton: 'swal2-confirm',
+          },
+        })
       }
     }
   }
@@ -235,8 +342,6 @@ export const Settings = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsLoading(true)
-    setError(null)
-    setSuccess(null)
 
     try {
       const response = await fetch('/api/v2/device_settings', {
@@ -269,13 +374,38 @@ export const Settings = () => {
         throw new Error(data.error || 'Failed to save settings')
       }
 
-      setSuccess('Settings were successfully saved.')
+      await Swal.fire({
+        title: 'Success!',
+        text: 'Settings were successfully saved.',
+        icon: 'success',
+        timer: 2000,
+        showConfirmButton: false,
+        customClass: {
+          popup: 'swal2-popup',
+          title: 'swal2-title',
+          htmlContainer: 'swal2-html-container',
+        },
+      })
+
       // Clear password after successful save
       setSettings((prev) => ({ ...prev, currentPassword: '' }))
       // Fetch updated device settings
       dispatch(fetchDeviceSettings())
+      // Reset the form
+      e.target.reset()
     } catch (err) {
-      setError(err.message)
+      await Swal.fire({
+        title: 'Error!',
+        text: err.message || 'Failed to save settings',
+        icon: 'error',
+        confirmButtonColor: '#dc3545',
+        customClass: {
+          popup: 'swal2-popup',
+          title: 'swal2-title',
+          htmlContainer: 'swal2-html-container',
+          confirmButton: 'swal2-confirm',
+        },
+      })
     } finally {
       setIsLoading(false)
     }
@@ -283,37 +413,6 @@ export const Settings = () => {
 
   return (
     <div className="container">
-      {error && (
-        <div
-          className="alert alert-danger alert-dismissible fade show"
-          role="alert"
-        >
-          {error}
-          <button
-            type="button"
-            className="close"
-            onClick={() => setError(null)}
-          >
-            <span>&times;</span>
-          </button>
-        </div>
-      )}
-      {success && (
-        <div
-          className="alert alert-success alert-dismissible fade show"
-          role="alert"
-        >
-          {success}
-          <button
-            type="button"
-            className="close"
-            onClick={() => setSuccess(null)}
-          >
-            <span>&times;</span>
-          </button>
-        </div>
-      )}
-
       <div className="row py-2">
         <div className="col-12">
           <h4 className="page-header text-white">
