@@ -8,13 +8,14 @@ import Swal from 'sweetalert2'
 import classNames from 'classnames'
 import { useEffect, forwardRef, useState } from 'react'
 import { useDispatch } from 'react-redux'
+import { css } from '@/utils'
 
 import { toggleAssetEnabled, fetchAssets } from '@/store/assets'
 
-const tooltipStyles = `
+const tooltipStyles = css`
   .tooltip {
-    opacity: 1 !important;
-    transition: opacity 0s ease-in-out !important;
+    opacity: 1;
+    transition: opacity 0s ease-in-out;
   }
   .tooltip.fade {
     opacity: 0;
@@ -30,10 +31,64 @@ const tooltipStyles = `
     font-size: 0.875rem;
     font-weight: 500;
     max-width: 300px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
   .tooltip.bs-tooltip-top .arrow::before {
     border-top-color: #2c3e50;
+  }
+
+  /* SweetAlert2 Custom Styles */
+  html.swal2-shown body.swal2-shown {
+    overflow-y: auto;
+    padding-right: 0;
+  }
+  .swal2-popup.swal2-modal {
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+  }
+  .swal2-popup .swal2-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #2c3e50;
+  }
+  .swal2-popup .swal2-html-container {
+    font-size: 0.875rem;
+    color: #6c757d;
+  }
+  .swal2-popup .swal2-confirm {
+    background-color: #dc3545;
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 0.5rem 1.5rem;
+    border-radius: 0.375rem;
+  }
+  .swal2-popup .swal2-confirm:hover {
+    background-color: #c82333;
+  }
+  .swal2-popup .swal2-cancel {
+    background-color: #6c757d;
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 0.5rem 1.5rem;
+    border-radius: 0.375rem;
+  }
+  .swal2-popup .swal2-cancel:hover {
+    background-color: #5a6268;
+  }
+  .swal2-popup .swal2-actions {
+    gap: 0.1rem;
+  }
+  .swal2-popup .swal2-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 1.5rem auto;
+  }
+  .swal2-popup .swal2-icon-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 `
 
@@ -213,12 +268,22 @@ export const AssetRow = forwardRef((props, ref) => {
   const handleDelete = () => {
     Swal.fire({
       title: 'Are you sure?',
+      text: 'This action cannot be undone.',
+      icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'Delete',
       cancelButtonText: 'Cancel',
       reverseButtons: true,
-      confirmButtonColor: '#d33',
+      confirmButtonColor: '#dc3545',
       cancelButtonColor: '#6c757d',
+      customClass: {
+        popup: 'swal2-popup',
+        title: 'swal2-title',
+        htmlContainer: 'swal2-html-container',
+        confirmButton: 'swal2-confirm',
+        cancelButton: 'swal2-cancel',
+        actions: 'swal2-actions',
+      },
     }).then(async (result) => {
       if (result.isConfirmed) {
         try {
@@ -241,6 +306,11 @@ export const AssetRow = forwardRef((props, ref) => {
               icon: 'success',
               timer: 2000,
               showConfirmButton: false,
+              customClass: {
+                popup: 'swal2-popup',
+                title: 'swal2-title',
+                htmlContainer: 'swal2-html-container',
+              },
             })
           } else {
             // Show error message
@@ -248,6 +318,12 @@ export const AssetRow = forwardRef((props, ref) => {
               title: 'Error!',
               text: 'Failed to delete asset.',
               icon: 'error',
+              customClass: {
+                popup: 'swal2-popup',
+                title: 'swal2-title',
+                htmlContainer: 'swal2-html-container',
+                confirmButton: 'swal2-confirm',
+              },
             })
           }
         } catch (error) {
@@ -255,6 +331,12 @@ export const AssetRow = forwardRef((props, ref) => {
             title: 'Error!',
             text: 'Failed to delete asset.',
             icon: 'error',
+            customClass: {
+              popup: 'swal2-popup',
+              title: 'swal2-title',
+              htmlContainer: 'swal2-html-container',
+              confirmButton: 'swal2-confirm',
+            },
           })
         } finally {
           setIsDisabled(false)
