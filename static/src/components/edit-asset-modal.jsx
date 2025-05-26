@@ -81,7 +81,17 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
   }, [isOpen])
 
   const handleClose = () => {
-    onClose()
+    setIsVisible(false)
+    setTimeout(() => {
+      onClose()
+    }, 300) // Match the transition duration
+  }
+
+  const handleModalClick = (e) => {
+    // Only close if clicking the modal backdrop (outside the modal content)
+    if (e.target === e.currentTarget) {
+      handleClose()
+    }
   }
 
   const handleInputChange = (e) => {
@@ -164,6 +174,7 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
       aria-hidden="true"
       role="dialog"
       tabIndex="-1"
+      onClick={handleModalClick}
       style={{
         display: isOpen ? 'block' : 'none',
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
