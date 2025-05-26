@@ -136,7 +136,11 @@ class WebTest(TestCase):
             wait_for_and_do(browser, '#edit-form', lambda form: form.click())
             sleep(3)
 
-            wait_for_and_do(browser, '.edit-asset-modal #save-asset', lambda btn: btn.click())
+            wait_for_and_do(
+                browser,
+                '.edit-asset-modal #save-asset',
+                lambda btn: btn.click()
+            )
             sleep(3)
 
         assets = Asset.objects.all()
