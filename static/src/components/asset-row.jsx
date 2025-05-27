@@ -1,9 +1,12 @@
 import {
-  FaGripVertical,
   FaDownload,
   FaPencilAlt,
   FaTrashAlt,
+  FaGlobe,
+  FaImage,
+  FaVideo,
 } from 'react-icons/fa'
+import { GiHamburgerMenu } from 'react-icons/gi'
 import Swal from 'sweetalert2'
 import classNames from 'classnames'
 import { useEffect, forwardRef, useState } from 'react'
@@ -190,6 +193,38 @@ const formatDate = (date, dateFormat, use24HourClock = false) => {
   return `${datePart} ${timePart}`
 }
 
+const getMimetypeIcon = (mimetype) => {
+  if (mimetype.includes('image')) {
+    return (
+      <FaImage
+        className="mr-2 align-middle"
+        style={{ verticalAlign: 'middle' }}
+      />
+    )
+  } else if (mimetype.includes('video')) {
+    return (
+      <FaVideo
+        className="mr-2 align-middle"
+        style={{ verticalAlign: 'middle' }}
+      />
+    )
+  } else if (mimetype.includes('webpage')) {
+    return (
+      <FaGlobe
+        className="mr-2 align-middle"
+        style={{ verticalAlign: 'middle' }}
+      />
+    )
+  } else {
+    return (
+      <FaGlobe
+        className="mr-2 align-middle"
+        style={{ verticalAlign: 'middle' }}
+      />
+    )
+  }
+}
+
 export const AssetRow = forwardRef((props, ref) => {
   const defaultDateFormat = 'mm/dd/yyyy'
   const dispatch = useDispatch()
@@ -371,17 +406,28 @@ export const AssetRow = forwardRef((props, ref) => {
         className={classNames({ warning: isDisabled })}
       >
         <td className={classNames('asset_row_name')}>
+          {props.showDragHandle && (
+            <span
+              {...props.dragHandleProps}
+              style={{
+                cursor: props.isDragging ? 'grabbing' : 'grab',
+                display: 'inline-block',
+                verticalAlign: 'middle',
+              }}
+            >
+              <GiHamburgerMenu
+                className="mr-3 align-middle"
+                style={{ verticalAlign: 'middle' }}
+              />
+            </span>
+          )}
+          {getMimetypeIcon(props.mimetype)}
           <span
-            {...props.dragHandleProps}
-            style={{
-              cursor: props.isDragging ? 'grabbing' : 'grab',
-              display: 'inline-block',
-            }}
+            data-toggle="tooltip"
+            data-placement="top"
+            title={props.name}
+            style={{ verticalAlign: 'middle' }}
           >
-            <FaGripVertical className="mr-2" />
-          </span>
-          <i className={classNames('asset-icon', 'mr-2')}></i>
-          <span data-toggle="tooltip" data-placement="top" title={props.name}>
             {props.name}
           </span>
         </td>

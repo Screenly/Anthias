@@ -62,6 +62,7 @@ export const InactiveAssetsTable = ({ onEditAsset }) => {
               nocache={asset.nocache}
               skipAssetCheck={asset.skip_asset_check}
               onEditAsset={onEditAsset}
+              showDragHandle={false}
             />
           ))}
         </tbody>

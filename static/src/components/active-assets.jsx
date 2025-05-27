@@ -114,6 +114,7 @@ export const ActiveAssetsTable = ({ onEditAsset }) => {
                   nocache={asset.nocache}
                   skipAssetCheck={asset.skip_asset_check}
                   onEditAsset={onEditAsset}
+                  showDragHandle={true}
                 />
               ))}
             </SortableContext>
