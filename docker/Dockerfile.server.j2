@@ -16,8 +16,8 @@ COPY package.json \
     /app/
 RUN npm install
 
-COPY ./static/js/*.coffee /app/static/js/
 COPY ./static/sass/*.scss /app/static/sass/
+COPY ./static/src/ /app/static/src/
 RUN npm run build
 
 {% endif %}

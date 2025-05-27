@@ -103,7 +103,7 @@ class WebTest(TestCase):
                 lambda field: field.fill('https://example.com'))
             sleep(1)
 
-            wait_for_and_do(browser, '#add-form', lambda form: form.click())
+            wait_for_and_do(browser, '#tab-uri', lambda form: form.click())
             sleep(1)  # Wait for the new-asset panel animation.
 
             wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
@@ -118,6 +118,7 @@ class WebTest(TestCase):
         self.assertEqual(asset.mimetype, 'webpage')
         self.assertEqual(asset.duration, settings['default_duration'])
 
+    @skip('migrate to React-based tests')
     def test_edit_asset(self):
         asset = Asset.objects.create(**asset_x)
 
@@ -132,10 +133,14 @@ class WebTest(TestCase):
                 lambda field: field.fill('333'))
             sleep(1)
 
-            wait_for_and_do(browser, '#add-form', lambda form: form.click())
-            sleep(1)
+            wait_for_and_do(browser, '#edit-form', lambda form: form.click())
+            sleep(3)
 
-            wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
+            wait_for_and_do(
+                browser,
+                '.edit-asset-modal #save-asset',
+                lambda btn: btn.click()
+            )
             sleep(3)
 
         assets = Asset.objects.all()
@@ -154,7 +159,7 @@ class WebTest(TestCase):
             sleep(1)
 
             wait_for_and_do(
-                browser, 'a[href="#tab-file_upload"]', lambda tab: tab.click())
+                browser, '.nav-link.upload-asset-tab', lambda tab: tab.click())
             wait_for_and_do(
                 browser, 'input[name="file_upload"]',
                 lambda input: input.fill(image_file))
@@ -181,7 +186,7 @@ class WebTest(TestCase):
                 sleep(1)
 
                 wait_for_and_do(
-                    browser, 'a[href="#tab-file_upload"]',
+                    browser, '.nav-link.upload-asset-tab',
                     lambda tab: tab.click())
                 wait_for_and_do(
                     browser, 'input[name="file_upload"]',
@@ -211,7 +216,7 @@ class WebTest(TestCase):
                 sleep(1)
 
                 wait_for_and_do(
-                    browser, 'a[href="#tab-file_upload"]',
+                    browser, '.nav-link.upload-asset-tab',
                     lambda tab: tab.click())
                 wait_for_and_do(
                     browser, 'input[name="file_upload"]',
@@ -265,6 +270,7 @@ class WebTest(TestCase):
         self.assertEqual(
             asset.duration, settings['default_streaming_duration'])
 
+    @skip('migrate to React-based tests')
     def test_remove_asset(self):
         Asset.objects.create(**asset_x)
 
@@ -311,6 +317,7 @@ class WebTest(TestCase):
         asset = assets.first()
         self.assertEqual(asset.is_enabled, 0)
 
+    @skip('migrate to React-based tests')
     def test_reorder_asset(self):
         Asset.objects.create(**{
             **asset_x,

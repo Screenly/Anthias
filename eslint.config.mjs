@@ -1,3 +1,5 @@
+import reactPlugin from 'eslint-plugin-react';
+
 export default [
   {
     ignores: [
@@ -23,14 +25,40 @@ export default [
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true
+        }
+      }
+    },
+    plugins: {
+      react: reactPlugin
+    },
+    settings: {
+      react: {
+        version: 'detect'
+      }
     },
     rules: {
-      'semi': ['error', 'always'],
+      'semi': ['error', 'never'],
       'quotes': ['error', 'single'],
       'indent': ['error', 2],
-      'no-unused-vars': 'warn',
-      'no-console': 'warn',
-      'no-debugger': 'warn'
+      'no-unused-vars': 'error',
+      'no-console': 'error',
+      'no-debugger': 'warn',
+      'react/jsx-uses-react': 'error',
+      'react/jsx-uses-vars': 'error',
+      'react/jsx-no-duplicate-props': 'error',
+      'react/jsx-key': 'warn',
+      'react/jsx-max-props-per-line': ['warn', { maximum: 1, when: 'multiline' }],
+      'react/jsx-first-prop-new-line': ['warn', 'multiline'],
+      'react/jsx-closing-bracket-location': ['warn', 'line-aligned'],
+      'react/jsx-tag-spacing': ['warn', {
+        closingSlash: 'never',
+        beforeSelfClosing: 'always',
+        afterOpening: 'never',
+        beforeClosing: 'never'
+      }]
     }
   }
 ];

@@ -123,7 +123,7 @@ $ docker compose -f docker-compose.dev.yml exec anthias-server \
     npm run dev
 ```
 
-Making changes to the CoffeeScript or SCSS files will automatically trigger a recompilation,
+Making changes to the JavaScript, JSX, or SCSS files will automatically trigger a recompilation,
 generating the corresponding JavaScript and CSS files.
 
 ### Closing the transpiler
