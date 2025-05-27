@@ -24,29 +24,6 @@ on:
       - '!docker/Dockerfile.dev'
       - '!.cursor/**'
       - '!github/release.yml'
-  pull_request:
-    branches:
-      - master
-    paths:
-      - '**'
-      - '!.editorconfig'
-      - '!webview/**'
-      - '!website/**'
-      - '!.github/workflows/deploy-website.yaml'
-      - '!.github/workflows/build-webview.yaml'
-      - '!.github/workflows/build-balena-disk-image.yaml'
-      - '!.github/workflows/python-lint.yaml'
-      - '!.github/pull_request_template.md'
-      - '!CONTRIBUTING.md'
-      - '!README.md'
-      - '!docs/**'
-      - '!bin/install.sh'
-      - '!bin/upgrade_containers.sh'
-      - '!bin/start_development_server.sh'
-      - '!tests/**'
-      - '!docker/Dockerfile.dev'
-      - '!.cursor/**'
-      - '!github/release.yml'
 
 jobs:
   run-tests:
@@ -127,16 +104,19 @@ jobs:
             poetry run python -m tools.image_builder \
               --build-target=pi4 \
               --target-platform=linux/arm/v8 \
-              --service=${{ matrix.service }}
+              --service=${{ matrix.service }} \
+              --push
           elif [ "${{ matrix.board }}" == "pi4-64" ]; then
             poetry run python -m tools.image_builder \
               --build-target=pi4 \
               --target-platform=linux/arm64/v8 \
-              --service=${{ matrix.service }}
+              --service=${{ matrix.service }} \
+              --push
           else
             poetry run python -m tools.image_builder \
               --build-target=${{ matrix.board }} \
-              --service=${{ matrix.service }}
+              --service=${{ matrix.service }} \
+              --push
           fi
 
       - name: Inspect cache after build
