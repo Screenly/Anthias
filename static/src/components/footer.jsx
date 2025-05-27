@@ -22,7 +22,7 @@ export const Footer = () => {
                 FAQ
               </a>
               <a
-                href="http://screenly.io/?utm_source=Anthias&utm_medium=footer&utm_campaign=UI"
+                href="https://screenly.io/?utm_source=Anthias&utm_medium=footer&utm_campaign=UI"
                 target="_blank"
                 className="mr-4 small"
                 rel="noopener noreferrer"
