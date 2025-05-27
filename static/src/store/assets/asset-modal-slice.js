@@ -129,7 +129,6 @@ export const fetchDeviceSettings = createAsyncThunk(
 
 // Helper functions
 const getMimetype = (filename) => {
-  // Implementation based on anthias.coffee
   const viduris = ['rtsp', 'rtmp']
   const mimetypes = [
     [['jpe', 'jpg', 'jpeg', 'png', 'pnm', 'gif', 'bmp'], 'image'],
@@ -176,7 +175,6 @@ const getDurationForMimetype = (
   defaultDuration,
   defaultStreamingDuration,
 ) => {
-  // Implementation based on anthias.coffee change_mimetype method
   if (mimetype === 'video') {
     return 0
   } else if (mimetype === 'streaming') {
@@ -187,7 +185,6 @@ const getDurationForMimetype = (
 }
 
 const getDefaultDates = () => {
-  // Implementation based on anthias.coffee initialize method
   const now = new Date()
   const endDate = new Date()
   endDate.setDate(endDate.getDate() + 30) // 30 days from now
@@ -253,7 +250,6 @@ const assetModalSlice = createSlice({
         return
       }
 
-      // URL validation pattern from anthias.coffee
       const urlPattern =
         /(http|https|rtsp|rtmp):\/\/[\w-]+(\.?[\w-]+)+([\w.,@?^=%&amp;:\/~+#-]*[\w@?^=%&amp;\/~+#-])?/
       const isValidUrl = urlPattern.test(url)
