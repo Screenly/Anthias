@@ -10,7 +10,7 @@ const AnthiasVersionValue = ({ version }) => {
       return
     }
 
-    const [gitBranch, gitCommit] = version?.split('@')
+    const [gitBranch, gitCommit] = version ? version.split('@') : ['', '']
 
     if (gitBranch === 'master') {
       setCommitLink(`${ANTHIAS_REPO_URL}/commit/${gitCommit}`)
