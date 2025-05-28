@@ -126,6 +126,26 @@ $ docker compose -f docker-compose.dev.yml exec anthias-server \
 Making changes to the JavaScript, JSX, or SCSS files will automatically trigger a recompilation,
 generating the corresponding JavaScript and CSS files.
 
+### Formatting and linting JavaScript code
+
+To run the linting and formatting checks on the JavaScript code, run the following command:
+
+```bash
+$ docker compose -f docker-compose.dev.yml exec anthias-server \
+    npm run lint:check
+$ docker compose -f docker-compose.dev.yml exec anthias-server \
+    npm run format:check
+```
+
+If you want to fix the linting errors and formatting issues, run the following command:
+
+```bash
+$ docker compose -f docker-compose.dev.yml exec anthias-server \
+    npm run lint:fix
+$ docker compose -f docker-compose.dev.yml exec anthias-server \
+    npm run format:fix
+```
+
 ### Closing the transpiler
 
 Just press `Ctrl-C` to close Webpack in development mode.
