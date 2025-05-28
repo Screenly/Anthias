@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import classNames from 'classnames'
 import { useDispatch } from 'react-redux'
-import { fetchAssets } from '@/store/assets'
+import { fetchAssets, updateAssetOrder } from '@/store/assets'
 
 /**
  * Edit Asset Modal component
@@ -135,6 +135,7 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
         end_date: endDate.toISOString(),
         asset_id: asset.id,
         is_enabled: asset.is_enabled,
+        play_order: asset.play_order,
       }
 
       // Make API call to update asset
@@ -149,6 +150,20 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
       if (!response.ok) {
         throw new Error('Failed to update asset')
       }
+
+      // Get active assets from Redux store and update order
+      const activeAssetIds = dispatch((_, getState) => {
+        const state = getState()
+        return state.assets.items
+          .filter((asset) => asset.is_active)
+          .sort((a, b) => a.play_order - b.play_order)
+          .map((asset) => asset.asset_id)
+          .join(',')
+      })
+
+      // Update the asset order so that active assets won't be reordered
+      // unexpectedly when the asset is updated and saved.
+      await dispatch(updateAssetOrder(activeAssetIds))
 
       // Refresh assets list
       dispatch(fetchAssets())
