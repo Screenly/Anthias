@@ -4,7 +4,8 @@
   "scripts": {
     "dev": "webpack --watch --config webpack.dev.js",
     "build": "webpack --config webpack.prod.js",
-    "lint": "eslint static/src",
+    "lint:check": "eslint static/src",
+    "lint:fix": "eslint static/src --fix",
     "format:check": "prettier --check static/src",
     "format:fix": "prettier --write static/src"
   },
