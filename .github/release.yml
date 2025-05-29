@@ -4,16 +4,16 @@ changelog:
       - webview
       - chore
   categories:
-    - title: Bug Fixes :lady_beetle:
+    - title: Bug Fixes
       labels:
         - bug
-    - title: Features :sparkles:
+    - title: Features
       labels:
         - enhancement
-    - title: Docs :books:
+    - title: Docs
       labels:
         - documentation
-    - title: API :jigsaw:
+    - title: API
       labels:
         - api
     - title: Other Changes
