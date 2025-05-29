@@ -113,6 +113,10 @@ export const fetchDeviceSettings = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await fetch('/api/v2/device_settings')
+      if (response?.url?.endsWith('/login/')) {
+        window.location.href = response.url
+      }
+
       if (!response.ok) {
         return rejectWithValue('Failed to fetch device settings')
       }

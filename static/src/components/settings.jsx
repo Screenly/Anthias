@@ -324,7 +324,12 @@ export const Settings = () => {
         setPrevAuthBackend(data.auth_backend || '')
       })
       .catch(() => {
-        setError('Failed to load settings. Please try again.')
+        Swal.fire({
+          title: 'Error!',
+          text: 'Failed to load settings. Please try again.',
+          icon: 'error',
+          confirmButtonColor: '#dc3545',
+        })
       })
   }, [])
 
@@ -689,7 +694,15 @@ export const Settings = () => {
                   type="submit"
                   disabled={isLoading}
                 >
-                  {isLoading ? 'Saving...' : 'Save Settings'}
+                  {isLoading ? (
+                    <span
+                      className="spinner-border spinner-border-sm"
+                      role="status"
+                      aria-hidden="true"
+                    ></span>
+                  ) : (
+                    'Save Settings'
+                  )}
                 </button>
               </div>
             </div>
