@@ -2,6 +2,7 @@ import ipaddress
 
 from django.contrib import messages
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from lib.auth import authorized
@@ -34,9 +35,7 @@ def login(request):
             request.session['auth_username'] = username
             request.session['auth_password'] = password
 
-            # Redirect to the original page or home
-            next_url = request.GET.get('next', '/')
-            return redirect(next_url)
+            return redirect(reverse('anthias_app:react'))
         else:
             messages.error(request, 'Invalid username or password')
             return template(request, 'login.html', {
