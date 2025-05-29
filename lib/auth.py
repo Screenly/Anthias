@@ -121,24 +121,27 @@ class BasicAuth(Auth):
         return self.settings['password'] == hashed_password
 
     def is_authenticated(self, request):
+        # First check Authorization header for API requests
         authorization = request.headers.get('Authorization')
-        if not authorization:
-            return False
+        if authorization:
+            content = authorization.split(' ')
+            if len(content) == 2:
+                auth_type = content[0]
+                auth_data = content[1]
+                if auth_type == 'Basic':
+                    auth_data = b64decode(auth_data).decode('utf-8')
+                    auth_data = auth_data.split(':')
+                    if len(auth_data) == 2:
+                        username = auth_data[0]
+                        password = auth_data[1]
+                        return self._check(username, password)
 
-        content = authorization.split(' ')
+        # Then check session for form-based login
+        username = request.session.get('auth_username')
+        password = request.session.get('auth_password')
+        if username and password:
+            return self._check(username, password)
 
-        if len(content) != 2:
-            return False
-
-        auth_type = content[0]
-        auth_data = content[1]
-        if auth_type == 'Basic':
-            auth_data = b64decode(auth_data).decode('utf-8')
-            auth_data = auth_data.split(':')
-            if len(auth_data) == 2:
-                username = auth_data[0]
-                password = auth_data[1]
-                return self._check(username, password)
         return False
 
     @property
@@ -146,13 +149,9 @@ class BasicAuth(Auth):
         return 'auth_basic.html', {'user': self.settings['user']}
 
     def authenticate(self):
-        from django.http import HttpResponse
-        realm = "Anthias {}".format(self.settings['player_name'])
-        return HttpResponse(
-            "Access denied",
-            status=401,
-            headers={"WWW-Authenticate": 'Basic realm="{}"'.format(realm)}
-        )
+        from django.shortcuts import redirect
+        from django.urls import reverse
+        return redirect(reverse('anthias_app:login'))
 
     def update_settings(self, request, current_pass_correct):
         new_user = request.POST.get('user', '')

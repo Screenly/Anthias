@@ -1,5 +1,7 @@
 import ipaddress
 
+from django.contrib import messages
+from django.shortcuts import redirect
 from django.views.decorators.http import require_http_methods
 
 from lib.auth import authorized
@@ -7,6 +9,7 @@ from lib.utils import (
     connect_to_redis,
     get_node_ip,
 )
+from settings import settings
 
 from .helpers import (
     template,
@@ -18,6 +21,31 @@ r = connect_to_redis()
 @authorized
 def react(request):
     return template(request, 'react.html', {})
+
+
+@require_http_methods(["GET", "POST"])
+def login(request):
+    if request.method == "POST":
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+
+        if settings.auth._check(username, password):
+            # Store credentials in session
+            request.session['auth_username'] = username
+            request.session['auth_password'] = password
+
+            # Redirect to the original page or home
+            next_url = request.GET.get('next', '/')
+            return redirect(next_url)
+        else:
+            messages.error(request, 'Invalid username or password')
+            return template(request, 'login.html', {
+                'next': request.GET.get('next', '/')
+            })
+
+    return template(request, 'login.html', {
+        'next': request.GET.get('next', '/')
+    })
 
 
 @require_http_methods(["GET"])
