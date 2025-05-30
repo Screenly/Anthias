@@ -22,7 +22,7 @@ export const Settings = () => {
     use24HourClock: false,
     debugLogging: false,
   })
-
+  const [deviceModel, setDeviceModel] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [prevAuthBackend, setPrevAuthBackend] = useState('')
   const [isUploading, setIsUploading] = useState(false)
@@ -331,6 +331,14 @@ export const Settings = () => {
           confirmButtonColor: '#dc3545',
         })
       })
+
+    // Fetch device model
+    fetch('/api/v2/info')
+      .then((res) => res.json())
+      .then((data) => {
+        setDeviceModel(data.device_model || '')
+      })
+      .catch(() => {})
   }, [])
 
   const handleInputChange = (e) => {
@@ -481,7 +489,9 @@ export const Settings = () => {
                   onChange={handleInputChange}
                 >
                   <option value="hdmi">HDMI</option>
-                  <option value="local">3.5mm jack</option>
+                  {!deviceModel.includes('Raspberry Pi 5') && (
+                    <option value="local">3.5mm jack</option>
+                  )}
                 </select>
               </div>
 
