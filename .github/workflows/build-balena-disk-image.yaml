@@ -34,6 +34,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install xz-utils
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xz-utils
+
       - name: Get base board
         run: |
           if [ "${{ matrix.board }}" == 'pi1' ]; then
@@ -85,10 +90,9 @@ jobs:
       - name: Package up image
         run: |
           sha256sum "$BALENA_IMAGE.img" >> "$(date -I)-$BALENA_IMAGE.sha256"
-          zip -9 \
-            "$(date -I)-$BALENA_IMAGE.zip" \
-            "$BALENA_IMAGE.img"
-          sha256sum "$(date -I)-$BALENA_IMAGE.zip" >> \
+          xz -9 -T0 "$BALENA_IMAGE.img"
+          mv "$BALENA_IMAGE.img.xz" "$(date -I)-$BALENA_IMAGE.img.xz"
+          sha256sum "$(date -I)-$BALENA_IMAGE.img.xz" >> \
             "$(date -I)-$BALENA_IMAGE.sha256"
 
           # Build Raspberry Pi Imager metadata
@@ -96,8 +100,8 @@ jobs:
             --arg BOARD "${{ matrix.board }}" \
             --arg IMAGE_SHA256 "$(sha256sum "$BALENA_IMAGE.img" | cut -d ' ' -f 1)" \
             --arg IMAGE_SIZE "$(wc -c < "$BALENA_IMAGE.img" | xargs)" \
-            --arg DOWNLOAD_SHA256 "$(sha256sum "$(date -I)-$BALENA_IMAGE.zip" | cut -d ' ' -f 1)" \
-            --arg DOWNLOAD_SIZE "$(wc -c < "$(date -I)-$BALENA_IMAGE.zip" | xargs)" \
+            --arg DOWNLOAD_SHA256 "$(sha256sum "$(date -I)-$BALENA_IMAGE.img.xz" | cut -d ' ' -f 1)" \
+            --arg DOWNLOAD_SIZE "$(wc -c < "$(date -I)-$BALENA_IMAGE.img.xz" | xargs)" \
             --arg RELEASE_DATE "$(date -I)" \
             '{
               "name": ("Anthias (" + $BOARD + ")"),
@@ -116,11 +120,11 @@ jobs:
           allowUpdates: true
           generateReleaseNotes: true
           prerelease: true
-          artifacts: "*raspberry*.zip,*raspberry*.sha256,*raspberry*.json"
+          artifacts: "*raspberry*.img.xz,*raspberry*.sha256,*raspberry*.json"
           tag: ${{ inputs.tag }}
           commit: ${{ inputs.commit }}
 
       - name: Attest
         uses: actions/attest-build-provenance@v1
         with:
-          subject-path: '${{ github.workspace }}/*raspberry*.zip'
+          subject-path: '${{ github.workspace }}/*raspberry*.img.xz'
