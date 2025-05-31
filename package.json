@@ -14,7 +14,7 @@
     "@dnd-kit/sortable": "^8.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@reduxjs/toolkit": "^2.2.1",
-    "bootstrap": "^4.3.1",
+    "bootstrap": "^5.0.0",
     "css-toggle-switch": "^4.1.0",
     "jquery": "^3.7.1",
     "react": "^19.0.0",
