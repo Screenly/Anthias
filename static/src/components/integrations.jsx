@@ -50,11 +50,13 @@ export const Integrations = () => {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <th scope="row">Device Name</th>
-                  <td>{data.balena_device_name_at_init}</td>
-                  <td>The name of the device on first initialisation.</td>
-                </tr>
+                {data.balena_device_name_at_init && (
+                  <tr>
+                    <th scope="row">Device Name</th>
+                    <td>{data.balena_device_name_at_init}</td>
+                    <td>The name of the device on first initialisation.</td>
+                  </tr>
+                )}
                 <tr>
                   <th scope="row">Device UUID</th>
                   <td>{data.balena_device_id}</td>
