@@ -120,6 +120,7 @@ jobs:
         uses: ncipollo/release-action@v1.11.2
         with:
           allowUpdates: true
+          generateReleaseNotes: true
           prerelease: true
           artifacts: anthias-api-schema.json
           tag: ${{ inputs.tag }}
