@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import { addAsset } from './assets-list-slice'
+import { getMimetype } from '@/components/asset-modal/file-upload-utils'
 
 // Async thunks for API operations
 export const uploadFile = createAsyncThunk(
@@ -130,49 +131,6 @@ export const fetchDeviceSettings = createAsyncThunk(
     }
   },
 )
-
-// Helper functions
-const getMimetype = (filename) => {
-  const viduris = ['rtsp', 'rtmp']
-  const mimetypes = [
-    [['jpe', 'jpg', 'jpeg', 'png', 'pnm', 'gif', 'bmp'], 'image'],
-    [['avi', 'mkv', 'mov', 'mpg', 'mpeg', 'mp4', 'ts', 'flv'], 'video'],
-  ]
-  const domains = [[['www.youtube.com', 'youtu.be'], 'youtube_asset']]
-
-  // Check if it's a streaming URL
-  const scheme = filename.split(':')[0].toLowerCase()
-  if (viduris.includes(scheme)) {
-    return 'streaming'
-  }
-
-  // Check if it's a domain-specific asset
-  try {
-    const domain = filename.split('//')[1].toLowerCase().split('/')[0]
-    for (const [domainList, type] of domains) {
-      if (domainList.includes(domain)) {
-        return type
-      }
-    }
-  } catch (e) {
-    // Invalid URL format
-  }
-
-  // Check file extension
-  try {
-    const ext = filename.split('.').pop().toLowerCase()
-    for (const [extList, type] of mimetypes) {
-      if (extList.includes(ext)) {
-        return type
-      }
-    }
-  } catch (e) {
-    // No extension found
-  }
-
-  // Default to webpage
-  return 'webpage'
-}
 
 const getDurationForMimetype = (
   mimetype,
