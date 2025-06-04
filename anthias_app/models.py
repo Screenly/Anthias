@@ -27,6 +27,9 @@ class Asset(models.Model):
     class Meta:
         db_table = 'assets'
 
+    def __str__(self):
+        return self.name
+
     def is_active(self):
         if self.is_enabled and self.start_date and self.end_date:
             current_time = timezone.now()
