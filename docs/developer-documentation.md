@@ -70,6 +70,21 @@ $ MODE=build \
     ./bin/upgrade_containers.sh
 ```
 
+## Django admin site
+
+Create a superuser account:
+
+```bash
+$ export COMPOSE_FILE=docker-compose.dev.yml
+$ docker compose exec anthias-server \
+    python manage.py createsuperuser
+# You will be prompted to enter a username, an email address, and a password.
+```
+
+Once you have created a superuser account, you can open the Django admin site at `http://localhost:8000/admin/` (with a trailing slash)
+and login with the credentials you just created.
+
+
 ## Testing
 ### Running the unit tests
 
