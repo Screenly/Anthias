@@ -176,13 +176,42 @@ export const Settings = () => {
     }
   }
 
-  const handleShutdown = async () => {
+  const handleSystemOperation = async (operation) => {
+    const config = {
+      reboot: {
+        title: 'Are you sure?',
+        text: 'Are you sure you want to reboot your device?',
+        confirmButtonText: 'Reboot',
+        endpoint: '/api/v2/reboot',
+        successMessage: 'Reboot has started successfully.',
+        errorMessage: 'Failed to reboot device',
+      },
+      shutdown: {
+        title: 'Are you sure?',
+        text: 'Are you sure you want to shutdown your device?',
+        confirmButtonText: 'Shutdown',
+        endpoint: '/api/v2/shutdown',
+        successMessage:
+          'Device shutdown has started successfully.\nSoon you will be able to unplug the power from your Raspberry Pi.',
+        errorMessage: 'Failed to shutdown device',
+      },
+    }
+
+    const {
+      title,
+      text,
+      confirmButtonText,
+      endpoint,
+      successMessage,
+      errorMessage,
+    } = config[operation]
+
     const result = await Swal.fire({
-      title: 'Are you sure?',
-      text: 'Are you sure you want to shutdown your device?',
+      title,
+      text,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: 'Shutdown',
+      confirmButtonText,
       cancelButtonText: 'Cancel',
       reverseButtons: true,
       confirmButtonColor: '#dc3545',
@@ -199,17 +228,17 @@ export const Settings = () => {
 
     if (result.isConfirmed) {
       try {
-        const response = await fetch('/api/v2/shutdown', {
+        const response = await fetch(endpoint, {
           method: 'POST',
         })
 
         if (!response.ok) {
-          throw new Error('Failed to shutdown device')
+          throw new Error(errorMessage)
         }
 
         await Swal.fire({
           title: 'Success!',
-          text: 'Device shutdown has started successfully.\nSoon you will be able to unplug the power from your Raspberry Pi.',
+          text: successMessage,
           icon: 'success',
           timer: 2000,
           showConfirmButton: false,
@@ -238,67 +267,9 @@ export const Settings = () => {
     }
   }
 
-  const handleReboot = async () => {
-    const result = await Swal.fire({
-      title: 'Are you sure?',
-      text: 'Are you sure you want to reboot your device?',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Reboot',
-      cancelButtonText: 'Cancel',
-      reverseButtons: true,
-      confirmButtonColor: '#dc3545',
-      cancelButtonColor: '#6c757d',
-      customClass: {
-        popup: 'swal2-popup',
-        title: 'swal2-title',
-        htmlContainer: 'swal2-html-container',
-        confirmButton: 'swal2-confirm',
-        cancelButton: 'swal2-cancel',
-        actions: 'swal2-actions',
-      },
-    })
+  const handleReboot = () => handleSystemOperation('reboot')
 
-    if (result.isConfirmed) {
-      try {
-        const response = await fetch('/api/v2/reboot', {
-          method: 'POST',
-        })
-
-        if (!response.ok) {
-          throw new Error('Failed to reboot device')
-        }
-
-        await Swal.fire({
-          title: 'Success!',
-          text: 'Reboot has started successfully.',
-          icon: 'success',
-          timer: 2000,
-          showConfirmButton: false,
-          customClass: {
-            popup: 'swal2-popup',
-            title: 'swal2-title',
-            htmlContainer: 'swal2-html-container',
-          },
-        })
-      } catch (err) {
-        await Swal.fire({
-          title: 'Error!',
-          text:
-            err.message ||
-            'The operation failed. Please reload the page and try again.',
-          icon: 'error',
-          confirmButtonColor: '#dc3545',
-          customClass: {
-            popup: 'swal2-popup',
-            title: 'swal2-title',
-            htmlContainer: 'swal2-html-container',
-            confirmButton: 'swal2-confirm',
-          },
-        })
-      }
-    }
-  }
+  const handleShutdown = () => handleSystemOperation('shutdown')
 
   useEffect(() => {
     document.title = 'Settings'
