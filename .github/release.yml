@@ -4,19 +4,19 @@ changelog:
       - webview
       - chore
   categories:
-    - title: Bug Fixes
+    - title: Bug Fixes 🐞
       labels:
         - bug
-    - title: Features
+    - title: Features ✨
       labels:
         - enhancement
-    - title: Docs
+    - title: Docs 📚
       labels:
         - documentation
-    - title: API
+    - title: API 🧩
       labels:
         - api
-    - title: Other Changes
+    - title: Other Changes 🔧
       labels:
         - "*"
       exclude:
