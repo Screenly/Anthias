@@ -42,7 +42,7 @@ export default [
     rules: {
       'semi': ['error', 'never'],
       'quotes': ['error', 'single'],
-      'indent': ['error', 2],
+      'indent': 'off',
       'no-unused-vars': 'error',
       'no-console': 'error',
       'no-debugger': 'warn',

@@ -70,6 +70,8 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
 
   // Handle modal visibility
   useEffect(() => {
+    setLoopTimes('manual')
+
     if (isOpen) {
       setIsVisible(true)
     } else {
@@ -103,7 +105,59 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
   }
 
   const handleLoopTimesChange = (e) => {
-    setLoopTimes(e.target.value)
+    const playFor = e.target.value
+    setLoopTimes(playFor)
+
+    if (playFor === 'manual') {
+      return
+    }
+
+    // Get current start date and time in UTC
+    const startDate = new Date(`${startDateDate}T${startDateTime}Z`)
+    let endDate = new Date(startDate)
+
+    // Add time based on selection
+    switch (playFor) {
+      case 'day':
+        endDate.setUTCDate(endDate.getUTCDate() + 1)
+        break
+      case 'week':
+        endDate.setUTCDate(endDate.getUTCDate() + 7)
+        break
+      case 'month':
+        endDate.setUTCMonth(endDate.getUTCMonth() + 1)
+        break
+      case 'year':
+        endDate.setUTCFullYear(endDate.getUTCFullYear() + 1)
+        break
+      case 'forever':
+        endDate.setUTCFullYear(9999)
+        break
+    }
+
+    // Format the new end date in ISO format with timezone
+    const formatDatePart = (date) => {
+      const year = date.getUTCFullYear()
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+      const day = String(date.getUTCDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
+    const formatTimePart = (date) => {
+      const hours = String(date.getUTCHours()).padStart(2, '0')
+      const minutes = String(date.getUTCMinutes()).padStart(2, '0')
+      return `${hours}:${minutes}`
+    }
+
+    // Update end date and time
+    setEndDateDate(formatDatePart(endDate))
+    setEndDateTime(formatTimePart(endDate))
+
+    // Update formData with the ISO string
+    setFormData((prev) => ({
+      ...prev,
+      end_date: endDate.toISOString(),
+    }))
   }
 
   const handleDateChange = (e, type) => {
