@@ -29,7 +29,7 @@ export const UriTab = ({
         <label className="col-4 col-form-label">Asset URL</label>
         <div className="col-7 controls">
           <input
-            className={classNames('form-control', {
+            className={classNames('form-control', 'shadow-none', {
               'is-invalid': !isValid && formData.uri,
             })}
             name="uri"

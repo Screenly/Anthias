@@ -220,7 +220,7 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
                     <label className="col-4 col-form-label">Name</label>
                     <div className="col-7">
                       <input
-                        className="form-control"
+                        className="form-control shadow-none"
                         name="name"
                         placeholder="Nickname for this asset"
                         type="text"
@@ -246,7 +246,7 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
                     <label className="col-4 col-form-label">Asset Type</label>
                     <div className="col-4 controls">
                       <select
-                        className="mime-select form-control"
+                        className="mime-select form-control shadow-none"
                         name="mimetype"
                         value={formData.mimetype}
                         onChange={handleInputChange}
@@ -265,7 +265,7 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
                     <label className="col-4 col-form-label">Play for</label>
                     <div className="controls col-7">
                       <select
-                        className="form-control"
+                        className="form-control shadow-none"
                         id="loop_times"
                         value={loopTimes}
                         onChange={handleLoopTimesChange}
@@ -284,7 +284,7 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
                       <label className="col-4 col-form-label">Start Date</label>
                       <div className="controls col-7">
                         <input
-                          className="form-control date"
+                          className="form-control date shadow-none"
                           name="start_date_date"
                           type="date"
                           value={startDateDate}
@@ -292,7 +292,7 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
                           style={{ marginRight: '5px' }}
                         />
                         <input
-                          className="form-control time"
+                          className="form-control time shadow-none"
                           name="start_date_time"
                           type="time"
                           value={startDateTime}
@@ -304,7 +304,7 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
                       <label className="col-4 col-form-label">End Date</label>
                       <div className="controls col-7">
                         <input
-                          className="form-control date"
+                          className="form-control date shadow-none"
                           name="end_date_date"
                           type="date"
                           value={endDateDate}
@@ -312,7 +312,7 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
                           style={{ marginRight: '5px' }}
                         />
                         <input
-                          className="form-control time"
+                          className="form-control time shadow-none"
                           name="end_date_time"
                           type="time"
                           value={endDateTime}
@@ -325,7 +325,7 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
                     <label className="col-4 col-form-label">Duration</label>
                     <div className="col-7 controls">
                       <input
-                        className="form-control"
+                        className="form-control shadow-none"
                         name="duration"
                         type="number"
                         value={formData.duration}

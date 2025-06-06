@@ -414,7 +414,7 @@ export const Settings = () => {
                   <small>Player name</small>
                 </label>
                 <input
-                  className="form-control"
+                  className="form-control shadow-none"
                   name="playerName"
                   type="text"
                   value={settings.playerName}
@@ -428,7 +428,7 @@ export const Settings = () => {
                     <small>Default duration (seconds)</small>
                   </label>
                   <input
-                    className="form-control"
+                    className="form-control shadow-none"
                     name="defaultDuration"
                     type="number"
                     value={settings.defaultDuration}
@@ -440,7 +440,7 @@ export const Settings = () => {
                     <small>Default streaming duration (seconds)</small>
                   </label>
                   <input
-                    className="form-control"
+                    className="form-control shadow-none"
                     name="defaultStreamingDuration"
                     type="number"
                     value={settings.defaultStreamingDuration}
@@ -454,7 +454,7 @@ export const Settings = () => {
                   <small>Audio output</small>
                 </label>
                 <select
-                  className="form-control"
+                  className="form-control shadow-none"
                   name="audioOutput"
                   value={settings.audioOutput}
                   onChange={handleInputChange}
@@ -471,7 +471,7 @@ export const Settings = () => {
                   <small>Date format</small>
                 </label>
                 <select
-                  className="form-control"
+                  className="form-control shadow-none"
                   name="dateFormat"
                   value={settings.dateFormat}
                   onChange={handleInputChange}
@@ -493,7 +493,7 @@ export const Settings = () => {
                   <small>Authentication</small>
                 </label>
                 <select
-                  className="form-control"
+                  className="form-control shadow-none"
                   id="auth_backend"
                   name="authBackend"
                   value={settings.authBackend}
@@ -514,7 +514,7 @@ export const Settings = () => {
                         <small>Current Password</small>
                       </label>
                       <input
-                        className="form-control"
+                        className="form-control shadow-none"
                         name="currentPassword"
                         type="password"
                         value={settings.currentPassword}
@@ -529,7 +529,7 @@ export const Settings = () => {
                           <small>User</small>
                         </label>
                         <input
-                          className="form-control"
+                          className="form-control shadow-none"
                           name="user"
                           type="text"
                           value={settings.user}
@@ -542,7 +542,7 @@ export const Settings = () => {
                             <small>Password</small>
                           </label>
                           <input
-                            className="form-control"
+                            className="form-control shadow-none"
                             name="password"
                             type="password"
                             value={settings.password}
@@ -554,7 +554,7 @@ export const Settings = () => {
                             <small>Confirm Password</small>
                           </label>
                           <input
-                            className="form-control"
+                            className="form-control shadow-none"
                             name="confirmPassword"
                             type="password"
                             value={settings.confirmPassword}
