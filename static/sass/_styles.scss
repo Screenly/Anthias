@@ -41,6 +41,10 @@ body {
   font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
 }
 
+.form-control:focus {
+  border-color: $anthias-purple-5;
+}
+
 .content {
   background-color: white;
   border-left: 6px solid $anthias-yellow-3;
