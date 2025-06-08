@@ -1,10 +1,16 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
-- CoffeeScript is used for front-end code, which gets transpiled to JavaScript.
-  - See [anthias.coffee](mdc:static/js/anthias.coffee) and [settings.coffee](mdc:static/js/settings.coffee) for details.
-- Backbone.js is used as the front-end framework.
-- CoffeeScript and Backbone.js will be deprecated in favor of modern frameworks
-  that are more stable and still maintained.
+- Anthias uses JavaScript and React for the front-end framework.
+- We use Prettier for formatting and ESLint for linting. Check `README.md` for docs
+on how to run them.
+- Make sure that generated code conforms to the project's coding standards.
+- Reorganize imports to follow the project's coding standards. Order imports
+  alphabetically and group imports by type. Imports must be declared in the
+  following order:
+  - Built-in imports
+  - Third-party imports
+  - Imports from other files in the project
+- Separate import groups with blank lines.
