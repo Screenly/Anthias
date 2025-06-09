@@ -754,7 +754,7 @@ export const Settings = () => {
               Reboot
             </button>
             <button
-              className="btn btn-danger btn-long mr-2"
+              className="btn btn-danger btn-long"
               type="button"
               onClick={handleShutdown}
             >
