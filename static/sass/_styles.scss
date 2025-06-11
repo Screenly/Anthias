@@ -125,22 +125,46 @@ label {
   }
 }
 
-.switch-material.switch-light {
-  input ~ span {
-    a {
-      background-color: #FFFFFF !important;
-      border: 1px solid rgba(0, 0, 0, 0.26);
-      box-shadow: none !important;
-      top: -0.125em;
+#app {
+  %switch-material-base {
+    > span {
+      &:before,
+      &:after {
+        background: none;
+      }
+    }
+
+    label {
+      &:after {
+        background: none;
+      }
     }
   }
 
-  input:checked ~ span {
-    box-shadow: inset 0 0 0 30px $anthias-yellow-4 !important;
-    a {
-      background-color: $anthias-yellow-3 !important;
-      border: none;
+  .switch-material.switch-light {
+    input {
+      ~ span a {
+        background-color: #FFFFFF;
+        border: 1px solid rgba(0, 0, 0, 0.26);
+        box-shadow: none;
+        top: -0.125em;
+        outline: none;
+      }
+
+      &:checked ~ span {
+        box-shadow: inset 0 0 0 30px $anthias-yellow-4;
+
+        a {
+          background-color: $anthias-yellow-3;
+          border: none;
+        }
+      }
     }
+  }
+
+  .switch-light.switch-material,
+  .switch-toggle.switch-material {
+    @extend %switch-material-base;
   }
 }
 
