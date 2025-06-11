@@ -40,11 +40,20 @@ Alternatively, you can [download our pre-built Balena disk images from the relea
 # Using the images from the releases
 
 You can find the latest release [here](https://github.com/Screenly/Anthias/releases/latest). From there, you can download the disk image that you need and flash it to your SD card.
-The image file looks something like `<yyyy>-<mm>-<dd>-raspberry<version>.zip`. Take note that the `.img` file is compressed in a `.zip` file.
+The image file looks something like `<yyyy>-<mm>-<dd>-raspberry<version>.zst`. Take note that the `.img` file is compressed in this `.zst` file.
 
-Starting [v0.19.0](https://github.com/Screenly/Anthias/releases/tag/v0.19.0), devices installed using this option will be
-pinned to the version that you've downloaded. This means that the devices will get updates when a new release (e.g., v0.19.1, etc.)
-is available.
+> [!NOTE]
+> We started to release the images in `.zst` format in [v0.20.0](https://github.com/Screenly/Anthias/releases/tag/v0.20.0) so that the images are smaller in size. Using `zip` with the `-9` flag won't make the each of the images smaller than 2 GB.
+>
+> At the moment, only the Raspberry Pi Imager&mdash;starting from version [v1.9.4](https://github.com/raspberrypi/rpi-imager/releases/tag/v1.9.4)&mdash;supports the `.zst` format.
+>
+> For those who are using [balenaEtcher](https://etcher.balena.io/), you can use the `zstd` command to decompress the image file.
+>
+> ```
+> zstd -d <yyyy>-<mm>-<dd>-raspberry<version>.zst
+> ```
+
+Starting with [v0.19.0](https://github.com/Screenly/Anthias/releases/tag/v0.19.0), devices installed using this option will be pinned to the version that you've downloaded. This means that the devices will still be in the same version even if a new release (e.g., v0.19.1, etc.) is available.
 
 # Installing on Raspberry Pi OS Lite or Debian
 
