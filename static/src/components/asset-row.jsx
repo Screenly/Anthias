@@ -14,6 +14,7 @@ import { useDispatch } from 'react-redux'
 import { css } from '@/utils'
 
 import { toggleAssetEnabled, fetchAssets } from '@/store/assets'
+import { SWEETALERT_TIMER } from '@/constants'
 
 const tooltipStyles = css`
   .tooltip {
@@ -339,7 +340,7 @@ export const AssetRow = forwardRef((props, ref) => {
               title: 'Deleted!',
               text: 'Asset has been deleted.',
               icon: 'success',
-              timer: 2000,
+              timer: SWEETALERT_TIMER,
               showConfirmButton: false,
               customClass: {
                 popup: 'swal2-popup',
