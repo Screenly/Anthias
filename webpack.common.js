@@ -47,6 +47,7 @@ module.exports = {
   resolve: {
     alias: {
       '@/components': path.resolve(__dirname, 'static/src/components'),
+      '@/constants': path.resolve(__dirname, 'static/src/constants.js'),
       '@/store': path.resolve(__dirname, 'static/src/store'),
       '@/sass': path.resolve(__dirname, 'static/sass'),
       '@/utils': path.resolve(__dirname, 'static/src/utils'),

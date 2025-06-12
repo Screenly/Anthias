@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useDispatch } from 'react-redux'
-import { fetchDeviceSettings } from '@/store/assets/asset-modal-slice'
 import Swal from 'sweetalert2'
+
+import { fetchDeviceSettings } from '@/store/assets/asset-modal-slice'
+import { SWEETALERT_TIMER } from '@/constants'
 
 export const Settings = () => {
   const dispatch = useDispatch()
@@ -118,7 +120,7 @@ export const Settings = () => {
           text:
             typeof data === 'string' ? data : 'Backup uploaded successfully',
           icon: 'success',
-          timer: 2000,
+          timer: SWEETALERT_TIMER,
           showConfirmButton: false,
           customClass: {
             popup: 'swal2-popup',
@@ -240,7 +242,7 @@ export const Settings = () => {
           title: 'Success!',
           text: successMessage,
           icon: 'success',
-          timer: 2000,
+          timer: SWEETALERT_TIMER,
           showConfirmButton: false,
           customClass: {
             popup: 'swal2-popup',
@@ -362,7 +364,7 @@ export const Settings = () => {
         title: 'Success!',
         text: 'Settings were successfully saved.',
         icon: 'success',
-        timer: 2000,
+        timer: SWEETALERT_TIMER,
         showConfirmButton: false,
         customClass: {
           popup: 'swal2-popup',
