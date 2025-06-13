@@ -55,8 +55,10 @@ export const uploadFile = createAsyncThunk(
       const state = getState()
       const duration = getDurationForMimetype(
         mimetype,
-        state.assetModal.defaultDuration,
-        state.assetModal.defaultStreamingDuration,
+        // nico start - todo: fix if needed
+        state.settings.settings.defaultDuration,
+        state.settings.settings.defaultStreamingDuration,
+        // nico end
       )
       const dates = getDefaultDates()
 
@@ -109,29 +111,6 @@ export const saveAsset = createAsyncThunk(
   },
 )
 
-export const fetchDeviceSettings = createAsyncThunk(
-  'assetModal/fetchDeviceSettings',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await fetch('/api/v2/device_settings')
-      if (response?.url?.endsWith('/login/')) {
-        window.location.href = response.url
-      }
-
-      if (!response.ok) {
-        return rejectWithValue('Failed to fetch device settings')
-      }
-      const data = await response.json()
-      return {
-        defaultDuration: data.default_duration,
-        defaultStreamingDuration: data.default_streaming_duration,
-      }
-    } catch (error) {
-      return rejectWithValue(error.message)
-    }
-  },
-)
-
 const getDurationForMimetype = (
   mimetype,
   defaultDuration,
@@ -171,8 +150,6 @@ const assetModalSlice = createSlice({
     statusMessage: '',
     isSubmitting: false,
     uploadProgress: 0,
-    defaultDuration: 10, // Default fallback value
-    defaultStreamingDuration: 300, // Default fallback value
   },
   reducers: {
     setActiveTab: (state, action) => {
@@ -222,11 +199,6 @@ const assetModalSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Device settings
-      .addCase(fetchDeviceSettings.fulfilled, (state, action) => {
-        state.defaultDuration = action.payload.defaultDuration
-        state.defaultStreamingDuration = action.payload.defaultStreamingDuration
-      })
       // Upload file
       .addCase(uploadFile.pending, (state) => {
         state.isSubmitting = true
