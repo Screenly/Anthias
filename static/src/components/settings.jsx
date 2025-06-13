@@ -377,7 +377,6 @@ export const Settings = () => {
       setSettings((prev) => ({ ...prev, currentPassword: '' }))
       // Fetch updated device settings
       dispatch(fetchDeviceSettings())
-      // Reset the form
       e.target.reset()
     } catch (err) {
       await Swal.fire({
