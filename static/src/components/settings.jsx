@@ -360,6 +360,8 @@ export const Settings = () => {
         throw new Error(data.error || 'Failed to save settings')
       }
 
+      setIsLoading(false)
+
       await Swal.fire({
         title: 'Success!',
         text: 'Settings were successfully saved.',
@@ -377,9 +379,11 @@ export const Settings = () => {
       setSettings((prev) => ({ ...prev, currentPassword: '' }))
       // Fetch updated device settings
       dispatch(fetchDeviceSettings())
-      // Reset the form
       e.target.reset()
+      // Reset the form
     } catch (err) {
+      setIsLoading(false)
+
       await Swal.fire({
         title: 'Error!',
         text: err.message || 'Failed to save settings',
@@ -392,8 +396,6 @@ export const Settings = () => {
           confirmButton: 'swal2-confirm',
         },
       })
-    } finally {
-      setIsLoading(false)
     }
   }
 
