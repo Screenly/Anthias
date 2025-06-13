@@ -380,7 +380,6 @@ export const Settings = () => {
       // Fetch updated device settings
       dispatch(fetchDeviceSettings())
       e.target.reset()
-      // Reset the form
     } catch (err) {
       setIsLoading(false)
 
