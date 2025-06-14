@@ -260,4 +260,7 @@ export const {
   clearError,
 } = settingsSlice.actions
 
+// Selectors
+export const selectSettings = (state) => state.settings.settings
+
 export default settingsSlice.reducer

@@ -55,10 +55,8 @@ export const uploadFile = createAsyncThunk(
       const state = getState()
       const duration = getDurationForMimetype(
         mimetype,
-        // nico start - todo: fix if needed
         state.settings.settings.defaultDuration,
         state.settings.settings.defaultStreamingDuration,
-        // nico end
       )
       const dates = getDefaultDates()
 
