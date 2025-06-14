@@ -8,6 +8,7 @@ import {
   saveAsset,
   selectAssetModalState,
 } from '@/store/assets'
+import { selectSettings } from '@/store/settings/index'
 import {
   getMimetype,
   getDurationForMimetype,
@@ -29,9 +30,8 @@ export const useAssetForm = (onSave, onClose) => {
     errorMessage,
     statusMessage,
     isSubmitting,
-    defaultDuration,
-    defaultStreamingDuration,
   } = useSelector(selectAssetModalState)
+  const settings = useSelector(selectSettings)
 
   /**
    * Handle input change
@@ -75,8 +75,8 @@ export const useAssetForm = (onSave, onClose) => {
       // Get duration based on mimetype
       const duration = getDurationForMimetype(
         mimetype,
-        defaultDuration,
-        defaultStreamingDuration,
+        settings.defaultDuration,
+        settings.defaultStreamingDuration,
       )
 
       // Get default dates

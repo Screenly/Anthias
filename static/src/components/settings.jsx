@@ -1,34 +1,29 @@
-import { useEffect, useState } from 'react'
-import { useDispatch } from 'react-redux'
+import { useEffect } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 import Swal from 'sweetalert2'
 
-import { fetchDeviceSettings } from '@/store/assets/asset-modal-slice'
 import { SWEETALERT_TIMER } from '@/constants'
+import {
+  fetchSettings,
+  fetchDeviceModel,
+  updateSettings,
+  createBackup,
+  uploadBackup,
+  systemOperation,
+  updateSetting,
+  resetUploadState,
+} from '@/store/settings'
 
 export const Settings = () => {
   const dispatch = useDispatch()
-  const [settings, setSettings] = useState({
-    playerName: '',
-    defaultDuration: 0,
-    defaultStreamingDuration: 0,
-    audioOutput: 'hdmi',
-    dateFormat: 'mm/dd/yyyy',
-    authBackend: '',
-    currentPassword: '',
-    user: '',
-    password: '',
-    confirmPassword: '',
-    showSplash: false,
-    defaultAssets: false,
-    shufflePlaylist: false,
-    use24HourClock: false,
-    debugLogging: false,
-  })
-  const [deviceModel, setDeviceModel] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [prevAuthBackend, setPrevAuthBackend] = useState('')
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
+  const {
+    settings,
+    deviceModel,
+    prevAuthBackend,
+    isLoading,
+    isUploading,
+    uploadProgress,
+  } = useSelector((state) => state.settings)
 
   const handleBackup = async () => {
     const backupButton = document.getElementById('btn-backup')
@@ -38,17 +33,9 @@ export const Settings = () => {
     document.getElementById('btn-upload').disabled = true
 
     try {
-      const response = await fetch('/api/v2/backup', {
-        method: 'POST',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to create backup')
-      }
-
-      const data = await response.json()
-      if (data) {
-        window.location = `/static_with_mime/${data}?mime=application/x-tgz`
+      const result = await dispatch(createBackup()).unwrap()
+      if (result) {
+        window.location = `/static_with_mime/${result}?mime=application/x-tgz`
       }
     } catch (err) {
       await Swal.fire({
@@ -83,42 +70,20 @@ export const Settings = () => {
     const file = e.target.files[0]
     if (!file) return
 
-    setIsUploading(true)
-    setUploadProgress(0)
     document.getElementById('btn-upload').style.display = 'none'
     document.getElementById('btn-backup').style.display = 'none'
     document.querySelector('.progress').style.display = 'block'
 
-    const formData = new FormData()
-    formData.append('backup_upload', file)
-
     try {
-      const response = await fetch('/api/v2/recover', {
-        method: 'POST',
-        body: formData,
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total,
-          )
-          setUploadProgress(percentCompleted)
-          document.querySelector('.progress .bar').style.width =
-            `${percentCompleted}%`
-          document.querySelector('.progress .bar').textContent =
-            `Uploading: ${percentCompleted}%`
-        },
-      })
+      const result = await dispatch(uploadBackup(file)).unwrap()
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to upload backup')
-      }
-
-      if (data) {
+      if (result) {
         await Swal.fire({
           title: 'Success!',
           text:
-            typeof data === 'string' ? data : 'Backup uploaded successfully',
+            typeof result === 'string'
+              ? result
+              : 'Backup uploaded successfully',
           icon: 'success',
           timer: SWEETALERT_TIMER,
           showConfirmButton: false,
@@ -130,28 +95,7 @@ export const Settings = () => {
         })
 
         // Fetch updated settings after successful recovery
-        try {
-          const settingsResponse = await fetch('/api/v2/device_settings')
-          const settingsData = await settingsResponse.json()
-
-          setSettings((prev) => ({
-            ...prev,
-            playerName: settingsData.player_name || '',
-            defaultDuration: settingsData.default_duration || 0,
-            defaultStreamingDuration:
-              settingsData.default_streaming_duration || 0,
-            audioOutput: settingsData.audio_output || 'hdmi',
-            dateFormat: settingsData.date_format || 'mm/dd/yyyy',
-            authBackend: settingsData.auth_backend || '',
-            user: settingsData.username || '',
-            showSplash: settingsData.show_splash || false,
-            defaultAssets: settingsData.default_assets || false,
-            shufflePlaylist: settingsData.shuffle_playlist || false,
-            use24HourClock: settingsData.use_24_hour_clock || false,
-            debugLogging: settingsData.debug_logging || false,
-          }))
-          setPrevAuthBackend(settingsData.auth_backend || '')
-        } catch (settingsErr) {}
+        dispatch(fetchSettings())
       }
     } catch (err) {
       await Swal.fire({
@@ -169,7 +113,7 @@ export const Settings = () => {
         },
       })
     } finally {
-      setIsUploading(false)
+      dispatch(resetUploadState())
       document.querySelector('.progress').style.display = 'none'
       document.getElementById('btn-upload').style.display = 'inline-block'
       document.getElementById('btn-backup').style.display = 'inline-block'
@@ -199,14 +143,8 @@ export const Settings = () => {
       },
     }
 
-    const {
-      title,
-      text,
-      confirmButtonText,
-      endpoint,
-      successMessage,
-      errorMessage,
-    } = config[operation]
+    const { title, text, confirmButtonText, endpoint, successMessage } =
+      config[operation]
 
     const result = await Swal.fire({
       title,
@@ -230,13 +168,9 @@ export const Settings = () => {
 
     if (result.isConfirmed) {
       try {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-        })
-
-        if (!response.ok) {
-          throw new Error(errorMessage)
-        }
+        await dispatch(
+          systemOperation({ operation, endpoint, successMessage }),
+        ).unwrap()
 
         await Swal.fire({
           title: 'Success!',
@@ -270,97 +204,26 @@ export const Settings = () => {
   }
 
   const handleReboot = () => handleSystemOperation('reboot')
-
   const handleShutdown = () => handleSystemOperation('shutdown')
 
   useEffect(() => {
     document.title = 'Settings'
-    // Load initial settings
-    fetch('/api/v2/device_settings')
-      .then((res) => res.json())
-      .then((data) => {
-        setSettings((prev) => ({
-          ...prev,
-          playerName: data.player_name || '',
-          defaultDuration: data.default_duration || 0,
-          defaultStreamingDuration: data.default_streaming_duration || 0,
-          audioOutput: data.audio_output || 'hdmi',
-          dateFormat: data.date_format || 'mm/dd/yyyy',
-          authBackend: data.auth_backend || '',
-          user: data.username || '',
-          showSplash: data.show_splash || false,
-          defaultAssets: data.default_assets || false,
-          shufflePlaylist: data.shuffle_playlist || false,
-          use24HourClock: data.use_24_hour_clock || false,
-          debugLogging: data.debug_logging || false,
-        }))
-        setPrevAuthBackend(data.auth_backend || '')
-      })
-      .catch(() => {
-        Swal.fire({
-          title: 'Error!',
-          text: 'Failed to load settings. Please try again.',
-          icon: 'error',
-          confirmButtonColor: '#dc3545',
-        })
-      })
-
-    // Fetch device model
-    fetch('/api/v2/info')
-      .then((res) => res.json())
-      .then((data) => {
-        setDeviceModel(data.device_model || '')
-      })
-      .catch(() => {})
-  }, [])
+    dispatch(fetchSettings())
+    dispatch(fetchDeviceModel())
+  }, [dispatch])
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target
-    if (name === 'authBackend') {
-      setPrevAuthBackend(settings.authBackend)
-    }
-    setSettings((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }))
+    dispatch(
+      updateSetting({ name, value: type === 'checkbox' ? checked : value }),
+    )
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setIsLoading(true)
 
     try {
-      const response = await fetch('/api/v2/device_settings', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          player_name: settings.playerName,
-          default_duration: settings.defaultDuration,
-          default_streaming_duration: settings.defaultStreamingDuration,
-          audio_output: settings.audioOutput,
-          date_format: settings.dateFormat,
-          auth_backend: settings.authBackend,
-          current_password: settings.currentPassword,
-          username: settings.user,
-          password: settings.password,
-          password_2: settings.confirmPassword,
-          show_splash: settings.showSplash,
-          default_assets: settings.defaultAssets,
-          shuffle_playlist: settings.shufflePlaylist,
-          use_24_hour_clock: settings.use24HourClock,
-          debug_logging: settings.debugLogging,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to save settings')
-      }
-
-      setIsLoading(false)
+      await dispatch(updateSettings(settings)).unwrap()
 
       await Swal.fire({
         title: 'Success!',
@@ -375,14 +238,8 @@ export const Settings = () => {
         },
       })
 
-      // Clear password after successful save
-      setSettings((prev) => ({ ...prev, currentPassword: '' }))
-      // Fetch updated device settings
-      dispatch(fetchDeviceSettings())
-      e.target.reset()
+      dispatch(fetchSettings())
     } catch (err) {
-      setIsLoading(false)
-
       await Swal.fire({
         title: 'Error!',
         text: err.message || 'Failed to save settings',
