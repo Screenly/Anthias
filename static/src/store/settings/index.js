@@ -169,6 +169,7 @@ const initialState = {
   },
   deviceModel: '',
   prevAuthBackend: '',
+  hasSavedBasicAuth: false,
   isLoading: false,
   isUploading: false,
   uploadProgress: 0,
@@ -207,6 +208,8 @@ const settingsSlice = createSlice({
       })
       .addCase(fetchSettings.fulfilled, (state, action) => {
         state.settings = { ...state.settings, ...action.payload }
+        state.prevAuthBackend = action.payload.authBackend
+        state.hasSavedBasicAuth = action.payload.authBackend === 'auth_basic'
         state.isLoading = false
       })
       .addCase(fetchSettings.rejected, (state, action) => {
@@ -225,6 +228,7 @@ const settingsSlice = createSlice({
       .addCase(updateSettings.fulfilled, (state) => {
         state.isLoading = false
         state.settings.currentPassword = ''
+        state.hasSavedBasicAuth = state.settings.authBackend === 'auth_basic'
       })
       .addCase(updateSettings.rejected, (state, action) => {
         state.isLoading = false

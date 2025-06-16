@@ -4,12 +4,25 @@ import { updateSetting } from '@/store/settings'
 
 export const Authentication = () => {
   const dispatch = useDispatch()
-  const { settings, prevAuthBackend } = useSelector((state) => state.settings)
+  const { settings, prevAuthBackend, hasSavedBasicAuth } = useSelector(
+    (state) => state.settings,
+  )
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target
     dispatch(
       updateSetting({ name, value: type === 'checkbox' ? checked : value }),
+    )
+  }
+
+  const showCurrentPassword = () => {
+    // Show current password if:
+    // 1. Current auth is Basic AND hasSavedBasicAuth is true (switching between Basic states)
+    // 2. Current auth is Disabled AND hasSavedBasicAuth is true (switching from Basic to Disabled)
+    return (
+      hasSavedBasicAuth &&
+      (settings.authBackend === 'auth_basic' ||
+        prevAuthBackend === 'auth_basic')
     )
   }
 
@@ -34,7 +47,7 @@ export const Authentication = () => {
       {(settings.authBackend === 'auth_basic' ||
         (settings.authBackend === '' && prevAuthBackend === 'auth_basic')) && (
         <>
-          {prevAuthBackend === 'auth_basic' && (
+          {showCurrentPassword() && (
             <div className="form-group" id="curpassword_group">
               <label className="small text-secondary">
                 <small>Current Password</small>
