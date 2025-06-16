@@ -23,15 +23,12 @@ jobs:
       - name: Create docker tag file
         run: |
           echo ${{ inputs.docker-tag }} > docker-tag
-      - name: Create a new release
-        uses: ncipollo/release-action@v1.11.2
+      - name: Upload docker tag file
+        uses: actions/upload-artifact@v4
         with:
-          allowUpdates: true
-          generateReleaseNotes: true
-          prerelease: true
-          artifacts: "docker-tag"
-          tag: ${{ inputs.tag }}
-          commit: ${{ inputs.commit }}
+          name: docker-tag
+          path: docker-tag
+
   generate-openapi-schema:
     uses: ./.github/workflows/generate-openapi-schema.yml
     permissions:
@@ -40,6 +37,7 @@ jobs:
       release: true
       tag: ${{ inputs.tag }}
       commit: ${{ inputs.commit }}
+
   balena-build-images:
     strategy:
       matrix:
@@ -133,16 +131,41 @@ jobs:
               "release_date": $RELEASE_DATE
             }' > "$(date -I)-$BALENA_IMAGE.json"
 
-      - uses: ncipollo/release-action@v1.11.2
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          allowUpdates: true
-          generateReleaseNotes: true
-          prerelease: true
-          artifacts: "*raspberry*.img.zst,*raspberry*.sha256,*raspberry*.json"
-          tag: ${{ inputs.tag }}
-          commit: ${{ inputs.commit }}
+          name: balena-images
+          path: "*raspberry*.img.zst,*raspberry*.sha256,*raspberry*.json"
 
       - name: Attest
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: '${{ github.workspace }}/*raspberry*.img.zst'
+
+  create-release:
+    needs: [create-docker-tag-file, generate-openapi-schema, balena-build-images]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download docker tag
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-tag
+          path: .
+
+      - name: Download balena images
+        uses: actions/download-artifact@v4
+        with:
+          name: balena-images
+          path: .
+
+      - name: Create release
+        uses: ncipollo/release-action@v1.11.2
+        with:
+          allowUpdates: true
+          generateReleaseNotes: true
+          prerelease: true
+          artifacts: "docker-tag,*raspberry*.img.zst,*raspberry*.sha256,*raspberry*.json"
+          tag: ${{ inputs.tag }}
+          commit: ${{ inputs.commit }}
