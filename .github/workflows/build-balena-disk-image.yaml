@@ -11,8 +11,27 @@ on:
         required: false
         type: string
         default: 'master'
+      docker-tag:
+        description: 'Docker tag to be used for the release'
+        required: true
+        type: string
 
 jobs:
+  create-docker-tag-file:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Create docker tag file
+        run: |
+          echo ${{ inputs.docker-tag }} > docker-tag
+      - name: Create a new release
+        uses: ncipollo/release-action@v1.11.2
+        with:
+          allowUpdates: true
+          generateReleaseNotes: true
+          prerelease: true
+          artifacts: "docker-tag"
+          tag: ${{ inputs.tag }}
+          commit: ${{ inputs.commit }}
   generate-openapi-schema:
     uses: ./.github/workflows/generate-openapi-schema.yml
     permissions:
