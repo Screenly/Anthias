@@ -12,6 +12,11 @@ import {
 import { SystemControls } from '@/components/settings/system-controls'
 import { Backup } from '@/components/settings/backup'
 import { Authentication } from '@/components/settings/authentication'
+import { PlayerName } from '@/components/settings/player-name'
+import { DefaultDurations } from '@/components/settings/default-durations'
+import { AudioOutput } from '@/components/settings/audio-output'
+import { DateFormat } from '@/components/settings/date-format'
+import { ToggleableSetting } from '@/components/settings/toggleable-setting'
 
 export const Settings = () => {
   const dispatch = useDispatch()
@@ -82,183 +87,65 @@ export const Settings = () => {
         <div className="col-12 my-3">
           <form onSubmit={handleSubmit} className="row">
             <div className="form-group col-6 d-flex flex-column justify-content-between">
-              <div className="form-group">
-                <label className="small text-secondary">
-                  <small>Player name</small>
-                </label>
-                <input
-                  className="form-control shadow-none"
-                  name="playerName"
-                  type="text"
-                  value={settings.playerName}
-                  onChange={handleInputChange}
-                />
-              </div>
+              <PlayerName
+                settings={settings}
+                handleInputChange={handleInputChange}
+              />
 
-              <div className="row">
-                <div className="form-group col-6">
-                  <label className="small text-secondary">
-                    <small>Default duration (seconds)</small>
-                  </label>
-                  <input
-                    className="form-control shadow-none"
-                    name="defaultDuration"
-                    type="number"
-                    value={settings.defaultDuration}
-                    onChange={handleInputChange}
-                  />
-                </div>
-                <div className="form-group col-6">
-                  <label className="small text-secondary">
-                    <small>Default streaming duration (seconds)</small>
-                  </label>
-                  <input
-                    className="form-control shadow-none"
-                    name="defaultStreamingDuration"
-                    type="number"
-                    value={settings.defaultStreamingDuration}
-                    onChange={handleInputChange}
-                  />
-                </div>
-              </div>
+              <DefaultDurations
+                settings={settings}
+                handleInputChange={handleInputChange}
+              />
 
-              <div className="form-group">
-                <label className="small text-secondary">
-                  <small>Audio output</small>
-                </label>
-                <select
-                  className="form-control shadow-none"
-                  name="audioOutput"
-                  value={settings.audioOutput}
-                  onChange={handleInputChange}
-                >
-                  <option value="hdmi">HDMI</option>
-                  {!deviceModel.includes('Raspberry Pi 5') && (
-                    <option value="local">3.5mm jack</option>
-                  )}
-                </select>
-              </div>
+              <AudioOutput
+                settings={settings}
+                handleInputChange={handleInputChange}
+                deviceModel={deviceModel}
+              />
 
-              <div className="form-group">
-                <label className="small text-secondary">
-                  <small>Date format</small>
-                </label>
-                <select
-                  className="form-control shadow-none"
-                  name="dateFormat"
-                  value={settings.dateFormat}
-                  onChange={handleInputChange}
-                >
-                  <option value="mm/dd/yyyy">month/day/year</option>
-                  <option value="dd/mm/yyyy">day/month/year</option>
-                  <option value="yyyy/mm/dd">year/month/day</option>
-                  <option value="mm-dd-yyyy">month-day-year</option>
-                  <option value="dd-mm-yyyy">day-month-year</option>
-                  <option value="yyyy-mm-dd">year-month-day</option>
-                  <option value="mm.dd.yyyy">month.day.year</option>
-                  <option value="dd.mm.yyyy">day.month.year</option>
-                  <option value="yyyy.mm.dd">year.month.day</option>
-                </select>
-              </div>
+              <DateFormat
+                settings={settings}
+                handleInputChange={handleInputChange}
+              />
 
               <Authentication />
             </div>
 
             <div className="form-group col-6 d-flex flex-column justify-content-start">
-              <div className="form-inline mt-4">
-                <label>Show splash screen</label>
-                <div className="ml-auto">
-                  <label className="is_enabled-toggle toggle switch-light switch-material small m-0">
-                    <input
-                      name="showSplash"
-                      type="checkbox"
-                      checked={settings.showSplash}
-                      onChange={handleInputChange}
-                    />
-                    <span>
-                      <span></span>
-                      <span></span>
-                      <a></a>
-                    </span>
-                  </label>
-                </div>
-              </div>
+              <ToggleableSetting
+                settings={settings}
+                handleInputChange={handleInputChange}
+                label="Show splash screen"
+                name="showSplash"
+              />
 
-              <div className="form-inline mt-4">
-                <label>Default assets</label>
-                <div className="ml-auto">
-                  <label className="is_enabled-toggle toggle switch-light switch-material small m-0">
-                    <input
-                      name="defaultAssets"
-                      type="checkbox"
-                      checked={settings.defaultAssets}
-                      onChange={handleInputChange}
-                    />
-                    <span>
-                      <span></span>
-                      <span></span>
-                      <a></a>
-                    </span>
-                  </label>
-                </div>
-              </div>
+              <ToggleableSetting
+                settings={settings}
+                handleInputChange={handleInputChange}
+                label="Default assets"
+                name="defaultAssets"
+              />
 
-              <div className="form-inline mt-4">
-                <label>Shuffle playlist</label>
-                <div className="ml-auto">
-                  <label className="is_enabled-toggle toggle switch-light switch-material small m-0">
-                    <input
-                      name="shufflePlaylist"
-                      type="checkbox"
-                      checked={settings.shufflePlaylist}
-                      onChange={handleInputChange}
-                    />
-                    <span>
-                      <span></span>
-                      <span></span>
-                      <a></a>
-                    </span>
-                  </label>
-                </div>
-              </div>
+              <ToggleableSetting
+                settings={settings}
+                handleInputChange={handleInputChange}
+                label="Shuffle playlist"
+                name="shufflePlaylist"
+              />
 
-              <div className="form-inline mt-4">
-                <label>Use 24-hour clock</label>
-                <div className="ml-auto">
-                  <label className="is_enabled-toggle toggle switch-light switch-material small m-0">
-                    <input
-                      name="use24HourClock"
-                      type="checkbox"
-                      checked={settings.use24HourClock}
-                      onChange={handleInputChange}
-                    />
-                    <span>
-                      <span></span>
-                      <span></span>
-                      <a></a>
-                    </span>
-                  </label>
-                </div>
-              </div>
+              <ToggleableSetting
+                settings={settings}
+                handleInputChange={handleInputChange}
+                label="Use 24-hour clock"
+                name="use24HourClock"
+              />
 
-              <div className="form-inline mt-4">
-                <label>Debug logging</label>
-                <div className="ml-auto">
-                  <label className="is_enabled-toggle toggle switch-light switch-material small m-0">
-                    <input
-                      name="debugLogging"
-                      type="checkbox"
-                      checked={settings.debugLogging}
-                      onChange={handleInputChange}
-                    />
-                    <span>
-                      <span></span>
-                      <span></span>
-                      <a></a>
-                    </span>
-                  </label>
-                </div>
-              </div>
+              <ToggleableSetting
+                settings={settings}
+                handleInputChange={handleInputChange}
+                label="Debug logging"
+                name="debugLogging"
+              />
             </div>
 
             <div className="form-group col-12">
