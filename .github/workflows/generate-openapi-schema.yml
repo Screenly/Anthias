@@ -42,20 +42,6 @@ on:
       - '!tests/**'
       - '!.cursor/**'
   workflow_call:
-    inputs:
-      release:
-        description: 'Upload the OpenAPI schema as a release artifact'
-        required: true
-        type: boolean
-      tag:
-        description: 'Tag to be used for the release'
-        required: true
-        type: string
-      commit:
-        description: 'Commit or branch name'
-        required: false
-        type: string
-        default: 'master'
 
 jobs:
   generate-openapi-schema:
@@ -116,15 +102,3 @@ jobs:
         with:
           name: anthias-api-schema
           path: anthias-api-schema.json
-
-      - name: Upload the OpenAPI Schema as a release artifact
-        if: github.event_name == 'workflow_dispatch' && inputs.release == true
-        uses: ncipollo/release-action@v1.11.2
-        with:
-          allowUpdates: true
-          generateReleaseNotes: true
-          prerelease: true
-          artifacts: anthias-api-schema.json
-          tag: ${{ inputs.tag }}
-          commit: ${{ inputs.commit }}
-

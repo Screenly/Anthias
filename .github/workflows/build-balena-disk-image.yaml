@@ -33,10 +33,6 @@ jobs:
     uses: ./.github/workflows/generate-openapi-schema.yml
     permissions:
       contents: write
-    with:
-      release: true
-      tag: ${{ inputs.tag }}
-      commit: ${{ inputs.commit }}
 
   balena-build-images:
     strategy:
@@ -152,6 +148,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: docker-tag
+          path: .
+
+      - name: Download OpenAPI schema
+        uses: actions/download-artifact@v4
+        with:
+          name: anthias-api-schema
           path: .
 
       - name: Download balena images
