@@ -49,7 +49,7 @@ jobs:
           python ../raspberry_pi_imager/bin/build-pi-imager-json.py > _site/rpi-imager.json
 
           # Make sure it's valid
-          cat _site/rpi-imager.json | jq
+          jq . < _site/rpi-imager.json
 
           # Copy in static files.
           cp -rf assets _site/
