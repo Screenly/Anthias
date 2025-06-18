@@ -33,12 +33,25 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - run: pip install requests==2.32.3
+
       - name: Build website
         run: |
           cd website
           mkdir -p _site
 
-          # Copy in static files. This is to be migrated to Hugo later.
+          # Build Raspberry Pi Imager JSON
+          python ../raspberry_pi_imager/bin/build-pi-imager-json.py > _site/rpi-imager.json
+
+          # Make sure it's valid
+          cat _site/rpi-imager.json | jq
+
+          # Copy in static files.
           cp -rf assets _site/
           cp index.html _site/
 

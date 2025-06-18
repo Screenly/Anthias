@@ -8,7 +8,7 @@ To run the website locally:
 
 ```bash
 # Start the development server
-docker-compose -f docker-compose.website.yml up --build
+docker compose -f docker-compose.website.yml up --build
 
 # The website will be available at:
 # http://localhost:8080

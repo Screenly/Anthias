@@ -30,15 +30,16 @@ def get_asset_list(release_tag):
     )
 
     for url in response.json()['assets']:
-        if url['browser_download_url'].endswith('.zip'):
-            asset_urls.append(url['browser_download_url'])
+        download_url = url['browser_download_url']
+        if download_url.endswith('.zst'):
+            asset_urls.append(download_url)
 
     return asset_urls
 
 
 def retrieve_and_patch_json(url):
     image_json = requests.get(
-            url.replace('.zip', '.json'),
+            url.replace('.img.zst', '.json'),
             headers=GITHUB_HEADERS
     ).json()
 
