@@ -127,11 +127,21 @@ jobs:
               "release_date": $RELEASE_DATE
             }' > "$(date -I)-$BALENA_IMAGE.json"
 
+      - name: List files before upload
+        run: |
+          echo "Current directory contents:"
+          ls -la
+          echo "Files matching pattern:"
+          ls -la ./*raspberry*
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: balena-images
-          path: "*raspberry*.img.zst,*raspberry*.sha256,*raspberry*.json"
+          name: balena-images-${{ matrix.board }}
+          path: |
+            ./*raspberry*.img.zst
+            ./*raspberry*.sha256
+            ./*raspberry*.json
 
       - name: Attest
         uses: actions/attest-build-provenance@v1
@@ -159,8 +169,9 @@ jobs:
       - name: Download balena images
         uses: actions/download-artifact@v4
         with:
-          name: balena-images
+          pattern: balena-images-*
           path: .
+          merge-multiple: true
 
       - name: Create release
         uses: ncipollo/release-action@v1.11.2
