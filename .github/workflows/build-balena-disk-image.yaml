@@ -137,7 +137,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: balena-images
+          name: balena-images-${{ matrix.board }}
           path: |
             ./*raspberry*.img.zst
             ./*raspberry*.sha256
@@ -169,15 +169,32 @@ jobs:
       - name: Download balena images
         uses: actions/download-artifact@v4
         with:
-          name: balena-images
+          pattern: balena-images-*
           path: .
+          merge-multiple: true
 
-      - name: Create release
-        uses: ncipollo/release-action@v1.11.2
-        with:
-          allowUpdates: true
-          generateReleaseNotes: true
-          prerelease: true
-          artifacts: "docker-tag,*raspberry*.img.zst,*raspberry*.sha256,*raspberry*.json"
-          tag: ${{ inputs.tag }}
-          commit: ${{ inputs.commit }}
+      # nico start - debug
+      - name: List files
+        run: |
+          ls -la
+
+      - name: Print contents of docker-tag
+        run: |
+          cat docker-tag
+
+      - name: Print contents of anthias-api-schema.json
+        run: |
+          cat anthias-api-schema.json
+      # nico end
+
+      # nico start - debug
+      # - name: Create release
+      #   uses: ncipollo/release-action@v1.11.2
+      #   with:
+      #     allowUpdates: true
+      #     generateReleaseNotes: true
+      #     prerelease: true
+      #     artifacts: "docker-tag,*raspberry*.img.zst,*raspberry*.sha256,*raspberry*.json"
+      #     tag: ${{ inputs.tag }}
+      #     commit: ${{ inputs.commit }}
+      # nico end
