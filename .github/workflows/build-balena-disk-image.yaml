@@ -179,6 +179,6 @@ jobs:
           allowUpdates: true
           generateReleaseNotes: true
           prerelease: true
-          artifacts: "docker-tag,*raspberry*.img.zst,*raspberry*.sha256,*raspberry*.json"
+          artifacts: "docker-tag,*raspberry*.img.zst,*raspberry*.sha256,*raspberry*.json,anthias-api-schema.json"
           tag: ${{ inputs.tag }}
           commit: ${{ inputs.commit }}
