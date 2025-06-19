@@ -384,6 +384,7 @@ export const EditAssetModal = ({ isOpen, onClose, asset }) => {
                         type="number"
                         value={formData.duration}
                         onChange={handleInputChange}
+                        disabled={formData.mimetype === 'video'}
                       />
                       seconds &nbsp;
                     </div>
