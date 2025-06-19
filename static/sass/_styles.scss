@@ -1,3 +1,5 @@
+@import "tooltip";
+
 // Transformations
 @mixin rotate($degrees) {
   -webkit-transform: rotate($degrees);
@@ -40,6 +42,8 @@ body {
   margin-bottom: $footer-height + $base-line-height;
   font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
 }
+
+@include tooltip;
 
 .form-control:focus {
   border-color: $anthias-purple-5;
@@ -166,6 +170,7 @@ label {
   .switch-toggle.switch-material {
     @extend %switch-material-base;
   }
+
 }
 
 .splash {

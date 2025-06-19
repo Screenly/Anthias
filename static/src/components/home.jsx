@@ -15,32 +15,6 @@ import { ActiveAssetsTable } from '@/components/active-assets'
 import { AddAssetModal } from '@/components/add-asset-modal'
 import { EditAssetModal } from '@/components/edit-asset-modal'
 
-const tooltipStyles = `
-  .tooltip {
-    opacity: 1 !important;
-    transition: opacity 0s ease-in-out !important;
-  }
-  .tooltip.fade {
-    opacity: 0;
-  }
-  .tooltip.show {
-    opacity: 1;
-  }
-  .tooltip-inner {
-    background-color: #2c3e50;
-    color: #fff;
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.375rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    max-width: 300px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  }
-  .tooltip.bs-tooltip-top .arrow::before {
-    border-top-color: #2c3e50;
-  }
-`
-
 export const ScheduleOverview = () => {
   const dispatch = useDispatch()
   const activeAssets = useSelector(selectActiveAssets)
@@ -137,7 +111,6 @@ export const ScheduleOverview = () => {
 
   return (
     <>
-      <style>{tooltipStyles}</style>
       <div className="container pt-3 pb-3">
         <div className="row">
           <div className="col-12">

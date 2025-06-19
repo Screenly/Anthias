@@ -3,30 +3,6 @@ import Swal from 'sweetalert2'
 import { SWEETALERT_TIMER } from '@/constants'
 
 export const tooltipStyles = css`
-  .tooltip {
-    opacity: 1;
-    transition: opacity 0s ease-in-out;
-  }
-  .tooltip.fade {
-    opacity: 0;
-  }
-  .tooltip.show {
-    opacity: 1;
-  }
-  .tooltip-inner {
-    background-color: #2c3e50;
-    color: #fff;
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.375rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    max-width: 300px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  .tooltip.bs-tooltip-top .arrow::before {
-    border-top-color: #2c3e50;
-  }
-
   /* SweetAlert2 Custom Styles */
   html.swal2-shown body.swal2-shown {
     overflow-y: auto;
