@@ -62,7 +62,6 @@ export const Settings = () => {
         title: 'Error!',
         text: err.message || 'Failed to save settings',
         icon: 'error',
-        confirmButtonColor: '#dc3545',
         customClass: {
           popup: 'swal2-popup',
           title: 'swal2-title',

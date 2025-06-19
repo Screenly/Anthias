@@ -8,7 +8,6 @@ import { toggleAssetEnabled, fetchAssets } from '@/store/assets'
 import {
   formatDate,
   formatDuration,
-  tooltipStyles,
   handleDelete,
   handleDownload,
 } from '@/components/asset-row/utils'
@@ -79,7 +78,6 @@ export const AssetRow = forwardRef((props, ref) => {
 
   return (
     <>
-      <style>{tooltipStyles}</style>
       <tr
         ref={ref}
         style={props.style}

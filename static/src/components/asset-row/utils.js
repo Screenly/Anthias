@@ -1,62 +1,5 @@
-import { css } from '@/utils'
 import Swal from 'sweetalert2'
 import { SWEETALERT_TIMER } from '@/constants'
-
-export const tooltipStyles = css`
-  /* SweetAlert2 Custom Styles */
-  html.swal2-shown body.swal2-shown {
-    overflow-y: auto;
-    padding-right: 0;
-  }
-  .swal2-popup.swal2-modal {
-    font-size: 0.875rem;
-    border-radius: 0.5rem;
-    padding: 1.5rem;
-  }
-  .swal2-popup .swal2-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #2c3e50;
-  }
-  .swal2-popup .swal2-html-container {
-    font-size: 0.875rem;
-    color: #6c757d;
-  }
-  .swal2-popup .swal2-confirm {
-    background-color: #dc3545;
-    font-size: 0.875rem;
-    font-weight: 500;
-    padding: 0.5rem 1.5rem;
-    border-radius: 0.375rem;
-  }
-  .swal2-popup .swal2-confirm:hover {
-    background-color: #c82333;
-  }
-  .swal2-popup .swal2-cancel {
-    background-color: #6c757d;
-    font-size: 0.875rem;
-    font-weight: 500;
-    padding: 0.5rem 1.5rem;
-    border-radius: 0.375rem;
-  }
-  .swal2-popup .swal2-cancel:hover {
-    background-color: #5a6268;
-  }
-  .swal2-popup .swal2-actions {
-    gap: 0.1rem;
-  }
-  .swal2-popup .swal2-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 1.5rem auto;
-  }
-  .swal2-popup .swal2-icon-content {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-`
 
 export const formatDate = (date, dateFormat, use24HourClock = false) => {
   if (!date) return ''
@@ -170,7 +113,6 @@ export const handleDelete = async (
     confirmButtonText: 'Delete',
     cancelButtonText: 'Cancel',
     reverseButtons: true,
-    confirmButtonColor: '#dc3545',
     cancelButtonColor: '#6c757d',
     customClass: {
       popup: 'swal2-popup',

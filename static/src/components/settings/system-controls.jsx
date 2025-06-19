@@ -39,7 +39,6 @@ export const SystemControls = () => {
       confirmButtonText,
       cancelButtonText: 'Cancel',
       reverseButtons: true,
-      confirmButtonColor: '#dc3545',
       cancelButtonColor: '#6c757d',
       customClass: {
         popup: 'swal2-popup',
@@ -76,7 +75,6 @@ export const SystemControls = () => {
             err.message ||
             'The operation failed. Please reload the page and try again.',
           icon: 'error',
-          confirmButtonColor: '#dc3545',
           customClass: {
             popup: 'swal2-popup',
             title: 'swal2-title',
