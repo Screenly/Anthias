@@ -32,7 +32,6 @@ export const Backup = () => {
           err.message ||
           'The operation failed. Please reload the page and try again.',
         icon: 'error',
-        confirmButtonColor: '#dc3545',
         customClass: {
           popup: 'swal2-popup',
           title: 'swal2-title',
@@ -92,7 +91,6 @@ export const Backup = () => {
           err.message ||
           'The operation failed. Please reload the page and try again.',
         icon: 'error',
-        confirmButtonColor: '#dc3545',
         customClass: {
           popup: 'swal2-popup',
           title: 'swal2-title',

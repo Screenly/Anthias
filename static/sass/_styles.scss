@@ -1,4 +1,5 @@
 @import "tooltip";
+@import "sweetalert2-overrides";
 
 // Transformations
 @mixin rotate($degrees) {
@@ -44,6 +45,7 @@ body {
 }
 
 @include tooltip;
+@include swal2-overrides;
 
 .form-control:focus {
   border-color: $anthias-purple-5;
