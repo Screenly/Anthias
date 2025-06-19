@@ -17,7 +17,12 @@ import { FileUploadTab } from './file-upload-tab'
  * @param {Object} props.initialData - Initial data for the form
  * @returns {JSX.Element|null} - Asset modal component
  */
-export const AssetModal = ({ isOpen, onClose, onSave, initialData = {} }) => {
+export const AddAssetModal = ({
+  isOpen,
+  onClose,
+  onSave,
+  initialData = {},
+}) => {
   const dispatch = useDispatch()
   const { activeTab, statusMessage, uploadProgress } = useSelector(
     selectAssetModalState,

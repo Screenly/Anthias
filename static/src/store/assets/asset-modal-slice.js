@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import { addAsset } from './assets-list-slice'
-import { getMimetype } from '@/components/asset-modal/file-upload-utils'
+import { getMimetype } from '@/components/add-asset-modal/file-upload-utils'
 
 // Async thunks for API operations
 export const uploadFile = createAsyncThunk(

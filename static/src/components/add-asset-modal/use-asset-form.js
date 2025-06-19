@@ -13,7 +13,7 @@ import {
   getMimetype,
   getDurationForMimetype,
   getDefaultDates,
-} from '@/components/asset-modal/file-upload-utils'
+} from '@/components/add-asset-modal/file-upload-utils'
 
 /**
  * Custom hook for asset form handling
