@@ -23,4 +23,4 @@ requests[security]==2.32.3
 tenacity==9.0.0
 sh==1.8
 uptime==3.0.1
-urllib3==1.26.19
+urllib3==2.5.0
