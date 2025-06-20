@@ -65,62 +65,59 @@ export const ActiveAssetsTable = ({ onEditAsset }) => {
   }
 
   return (
-    <>
-      <table className="table">
-        <thead className="table-borderless">
-          <tr>
-            <th className="font-weight-normal asset_row_name">Name</th>
-            <th className="font-weight-normal" style={{ width: '21%' }}>
-              Start
-            </th>
-            <th className="font-weight-normal" style={{ width: '21%' }}>
-              End
-            </th>
-            <th className="font-weight-normal" style={{ width: '13%' }}>
-              Duration
-            </th>
-            <th className="font-weight-normal" style={{ width: '7%' }}>
-              Activity
-            </th>
-            <th className="font-weight-normal" style={{ width: '13%' }}></th>
-          </tr>
-        </thead>
-      </table>
-      <div className="mb-1"></div>
-      <table className="table">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <tbody id="active-assets" className="table-borderless">
-            <SortableContext
-              items={items.map((a) => a.asset_id.toString())}
-              strategy={verticalListSortingStrategy}
-            >
-              {items.map((asset) => (
-                <SortableAssetRow
-                  key={asset.asset_id}
-                  id={asset.asset_id.toString()}
-                  name={asset.name}
-                  startDate={asset.start_date}
-                  endDate={asset.end_date}
-                  duration={asset.duration}
-                  isEnabled={asset.is_enabled}
-                  assetId={asset.asset_id}
-                  isProcessing={asset.is_processing}
-                  uri={asset.uri}
-                  mimetype={asset.mimetype}
-                  nocache={asset.nocache}
-                  skipAssetCheck={asset.skip_asset_check}
-                  onEditAsset={onEditAsset}
-                  showDragHandle={true}
-                />
-              ))}
-            </SortableContext>
-          </tbody>
-        </DndContext>
-      </table>
-    </>
+    <table className="ActiveAssets table">
+      <thead className="table-borderless">
+        <tr>
+          <th className="font-weight-normal asset_row_name">Name</th>
+          <th className="font-weight-normal" style={{ width: '21%' }}>
+            Start
+          </th>
+          <th className="font-weight-normal" style={{ width: '21%' }}>
+            End
+          </th>
+          <th className="font-weight-normal" style={{ width: '13%' }}>
+            Duration
+          </th>
+          <th className="font-weight-normal" style={{ width: '7%' }}>
+            Activity
+          </th>
+          <th className="font-weight-normal" style={{ width: '13%' }}>
+            Actions
+          </th>
+        </tr>
+      </thead>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <tbody id="active-assets" className="table-borderless">
+          <SortableContext
+            items={items.map((a) => a.asset_id.toString())}
+            strategy={verticalListSortingStrategy}
+          >
+            {items.map((asset) => (
+              <SortableAssetRow
+                key={asset.asset_id}
+                id={asset.asset_id.toString()}
+                name={asset.name}
+                startDate={asset.start_date}
+                endDate={asset.end_date}
+                duration={asset.duration}
+                isEnabled={asset.is_enabled}
+                assetId={asset.asset_id}
+                isProcessing={asset.is_processing}
+                uri={asset.uri}
+                mimetype={asset.mimetype}
+                nocache={asset.nocache}
+                skipAssetCheck={asset.skip_asset_check}
+                onEditAsset={onEditAsset}
+                showDragHandle={true}
+              />
+            ))}
+          </SortableContext>
+        </tbody>
+      </DndContext>
+    </table>
   )
 }
