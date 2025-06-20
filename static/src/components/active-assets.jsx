@@ -66,7 +66,7 @@ export const ActiveAssetsTable = ({ onEditAsset }) => {
 
   return (
     <>
-      <table className="table">
+      <table className="ActiveAssets table">
         <thead className="table-borderless">
           <tr>
             <th className="font-weight-normal asset_row_name">Name</th>
@@ -82,12 +82,11 @@ export const ActiveAssetsTable = ({ onEditAsset }) => {
             <th className="font-weight-normal" style={{ width: '7%' }}>
               Activity
             </th>
-            <th className="font-weight-normal" style={{ width: '13%' }}></th>
+            <th className="font-weight-normal" style={{ width: '13%' }}>
+              Actions
+            </th>
           </tr>
         </thead>
-      </table>
-      <div className="mb-1"></div>
-      <table className="table">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}

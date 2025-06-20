@@ -7,7 +7,7 @@ export const InactiveAssetsTable = ({ onEditAsset }) => {
 
   return (
     <>
-      <table className="table">
+      <table className="InactiveAssets table">
         <thead className="table-borderless">
           <tr>
             <th className="text-secondary font-weight-normal asset_row_name">
@@ -40,12 +40,11 @@ export const InactiveAssetsTable = ({ onEditAsset }) => {
             <th
               className="text-secondary font-weight-normal"
               style={{ width: '13%' }}
-            ></th>
+            >
+              Actions
+            </th>
           </tr>
         </thead>
-      </table>
-      <div className="mb-1"></div>
-      <table className="table">
         <tbody id="inactive-assets" className="table-borderless">
           {inactiveAssets.map((asset) => (
             <AssetRow
