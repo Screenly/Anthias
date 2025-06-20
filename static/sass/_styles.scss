@@ -173,6 +173,23 @@ label {
     @extend %switch-material-base;
   }
 
+  .ActiveAssets, .InactiveAssets {
+    thead {
+      tr {
+        th {
+          text-align: center;
+        }
+      }
+    }
+
+    .is_enabled-toggle {
+      text-align: center;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+    }
+  }
 }
 
 .splash {
