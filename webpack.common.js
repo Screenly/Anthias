@@ -4,7 +4,7 @@ const webpack = require('webpack');
 
 module.exports = {
   entry: {
-    "anthias": "./static/src/index.tsx",
+    "anthias": "./static/src/index.js",
   },
   output: {
     path: path.resolve(__dirname, "static/dist"),
@@ -22,19 +22,14 @@ module.exports = {
   module: {
     rules: [
       {
-        test: /\.tsx?$/,
-        use: 'ts-loader',
-        exclude: [/node_modules/, /src\/test/],
-      },
-      {
-        test: /\.(js|jsx|mjs)$/,
+        test: /.(js|jsx|mjs)$/,
         exclude: /node_modules/,
         use: {
           loader: 'babel-loader',
           options: {
             presets: [
               '@babel/preset-env',
-              '@babel/preset-react',
+              '@babel/preset-react'
             ]
           }
         }
@@ -52,11 +47,11 @@ module.exports = {
   resolve: {
     alias: {
       '@/components': path.resolve(__dirname, 'static/src/components'),
-      '@/constants': path.resolve(__dirname, 'static/src/constants.ts'),
+      '@/constants': path.resolve(__dirname, 'static/src/constants.js'),
       '@/store': path.resolve(__dirname, 'static/src/store'),
       '@/sass': path.resolve(__dirname, 'static/sass'),
       '@/utils': path.resolve(__dirname, 'static/src/utils'),
     },
-    extensions: ['.js', '.jsx', '.ts', '.tsx']
+    extensions: ['.js', '.jsx']
   }
 };

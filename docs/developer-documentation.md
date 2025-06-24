@@ -138,12 +138,12 @@ $ docker compose -f docker-compose.dev.yml exec anthias-server \
     npm run dev
 ```
 
-Making changes to the TypeScript, TSX, or SCSS files will automatically trigger a recompilation,
-generating the corresponding TypeScript and CSS files.
+Making changes to the JavaScript, JSX, or SCSS files will automatically trigger a recompilation,
+generating the corresponding JavaScript and CSS files.
 
-### Formatting and linting TypeScript code
+### Formatting and linting JavaScript code
 
-To run the linting and formatting checks on the TypeScript code, run the following command:
+To run the linting and formatting checks on the JavaScript code, run the following command:
 
 ```bash
 $ docker compose -f docker-compose.dev.yml exec anthias-server \
