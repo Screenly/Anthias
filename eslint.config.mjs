@@ -1,4 +1,6 @@
 import reactPlugin from 'eslint-plugin-react';
+import tseslint from '@typescript-eslint/eslint-plugin';
+import tsparser from '@typescript-eslint/parser';
 
 export default [
   {
@@ -25,14 +27,17 @@ export default [
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
+      parser: tsparser,
       parserOptions: {
         ecmaFeatures: {
           jsx: true
-        }
+        },
+        project: './tsconfig.json'
       }
     },
     plugins: {
-      react: reactPlugin
+      react: reactPlugin,
+      '@typescript-eslint': tseslint
     },
     settings: {
       react: {
@@ -40,10 +45,11 @@ export default [
       }
     },
     rules: {
-      'semi': ['error', 'never'],
+      'semi': ['error', 'always'],
       'quotes': ['error', 'single'],
       'indent': 'off',
-      'no-unused-vars': 'error',
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': 'error',
       'no-console': 'error',
       'no-debugger': 'warn',
       'react/jsx-uses-react': 'error',
@@ -58,7 +64,11 @@ export default [
         beforeSelfClosing: 'always',
         afterOpening: 'never',
         beforeClosing: 'never'
-      }]
+      }],
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/no-inferrable-types': 'error'
     }
   }
 ];

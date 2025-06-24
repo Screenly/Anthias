@@ -1,11 +1,11 @@
 {
   "overrides": [
     {
-      "files": ["*.js", "*.jsx", "*.mjs"],
+      "files": ["*.js", "*.jsx", "*.mjs", "*.ts", "*.tsx"],
       "options": {
         "singleQuote": true,
         "jsxSingleQuote": false,
-        "semi": false,
+        "semi": true,
         "trailingComma": "all"
       }
     },
