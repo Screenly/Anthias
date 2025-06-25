@@ -1,6 +1,7 @@
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const path = require("path");
 const webpack = require('webpack');
+const TsconfigPathsPlugin = require('tsconfig-paths-webpack-plugin');
 
 module.exports = {
   entry: {
@@ -50,13 +51,7 @@ module.exports = {
     ]
   },
   resolve: {
-    alias: {
-      '@/components': path.resolve(__dirname, 'static/src/components'),
-      '@/constants': path.resolve(__dirname, 'static/src/constants.ts'),
-      '@/store': path.resolve(__dirname, 'static/src/store'),
-      '@/sass': path.resolve(__dirname, 'static/sass'),
-      '@/utils': path.resolve(__dirname, 'static/src/utils'),
-    },
+    plugins: [new TsconfigPathsPlugin()],
     extensions: ['.js', '.jsx', '.ts', '.tsx']
   }
 };
