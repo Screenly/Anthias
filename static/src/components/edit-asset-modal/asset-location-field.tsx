@@ -4,10 +4,13 @@ export const AssetLocationField = ({ asset }) => {
       <label className="col-4 col-form-label">Asset Location</label>
       <div className="col-8 controls">
         <div
-          className="uri-text first text-break"
-          style={{ wordBreak: 'break-all' }}
+          className="uri-text first text-break h-100"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+          }}
         >
-          {asset?.uri || ''}
+          <span>{asset?.uri ?? ''}</span>
         </div>
       </div>
     </div>
