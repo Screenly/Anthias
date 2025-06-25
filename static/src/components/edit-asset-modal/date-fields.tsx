@@ -9,7 +9,7 @@ export const DateFields = ({
     <div id="manul_date">
       <div className="form-group row start_date">
         <label className="col-4 col-form-label">Start Date</label>
-        <div className="controls col-7">
+        <div className="controls col-7 d-flex">
           <input
             className="form-control date shadow-none"
             name="start_date_date"
@@ -29,7 +29,7 @@ export const DateFields = ({
       </div>
       <div className="form-group row end_date">
         <label className="col-4 col-form-label">End Date</label>
-        <div className="controls col-7">
+        <div className="controls col-7 d-flex">
           <input
             className="form-control date shadow-none"
             name="end_date_date"
