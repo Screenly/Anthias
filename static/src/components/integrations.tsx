@@ -10,15 +10,33 @@ export const Integrations = () => {
     balena_host_os_version: '',
     balena_device_name_at_init: '',
   });
+  const [playerName, setPlayerName] = useState('');
 
   useEffect(() => {
-    document.title = 'Integrations';
-    fetch('/api/v2/integrations')
-      .then((response) => response.json())
-      .then((data) => {
-        setData(data);
-      });
+    const fetchData = async () => {
+      try {
+        const [integrationsResponse, settingsResponse] = await Promise.all([
+          fetch('/api/v2/integrations'),
+          fetch('/api/v2/device_settings'),
+        ]);
+
+        const [integrationsData, settingsData] = await Promise.all([
+          integrationsResponse.json(),
+          settingsResponse.json(),
+        ]);
+
+        setData(integrationsData);
+        setPlayerName(settingsData.player_name ?? '');
+      } catch {}
+    };
+
+    fetchData();
   }, []);
+
+  useEffect(() => {
+    const title = playerName ? `${playerName} · Integrations` : 'Integrations';
+    document.title = title;
+  }, [playerName]);
 
   return (
     <div className="container">

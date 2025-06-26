@@ -62,38 +62,53 @@ export const SystemInfo = () => {
   const [anthiasVersion, setAnthiasVersion] = useState('');
   const [macAddress, setMacAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [playerName, setPlayerName] = useState('');
 
   const initializeSystemInfo = async () => {
     setIsLoading(true);
 
-    const response = await fetch('/api/v2/info', {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    if (!response.ok) {
+    try {
+      const [infoResponse, settingsResponse] = await Promise.all([
+        fetch('/api/v2/info', {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }),
+        fetch('/api/v2/device_settings'),
+      ]);
+
+      if (!infoResponse.ok) {
+        throw new Error('Failed to fetch system info');
+      }
+
+      const [systemInfo, settingsData] = await Promise.all([
+        infoResponse.json(),
+        settingsResponse.json(),
+      ]);
+
+      setLoadAverage(systemInfo.loadavg);
+      setFreeSpace(systemInfo.free_space);
+      setMemory(systemInfo.memory);
+      setUptime(systemInfo.uptime);
+      setDisplayPower(systemInfo.display_power);
+      setDeviceModel(systemInfo.device_model);
+      setAnthiasVersion(systemInfo.anthias_version);
+      setMacAddress(systemInfo.mac_address);
+      setPlayerName(settingsData.player_name ?? '');
+    } catch {
+    } finally {
       setIsLoading(false);
-      throw new Error('Failed to fetch system info');
     }
-
-    const systemInfo = await response.json();
-
-    setIsLoading(false);
-
-    setLoadAverage(systemInfo.loadavg);
-    setFreeSpace(systemInfo.free_space);
-    setMemory(systemInfo.memory);
-    setUptime(systemInfo.uptime);
-    setDisplayPower(systemInfo.display_power);
-    setDeviceModel(systemInfo.device_model);
-    setAnthiasVersion(systemInfo.anthias_version);
-    setMacAddress(systemInfo.mac_address);
   };
 
   useEffect(() => {
-    document.title = 'System Info';
     initializeSystemInfo();
   }, []);
+
+  useEffect(() => {
+    const title = playerName ? `${playerName} · System Info` : 'System Info';
+    document.title = title;
+  }, [playerName]);
 
   return (
     <div className="container">
