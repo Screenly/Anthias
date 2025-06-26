@@ -26,10 +26,16 @@ export const Settings = () => {
   );
 
   useEffect(() => {
-    document.title = 'Settings';
     dispatch(fetchSettings());
     dispatch(fetchDeviceModel());
   }, [dispatch]);
+
+  useEffect(() => {
+    const title = settings.playerName
+      ? `${settings.playerName} · Settings`
+      : 'Settings';
+    document.title = title;
+  }, [settings.playerName]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;

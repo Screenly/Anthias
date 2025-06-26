@@ -34,10 +34,13 @@ export const ScheduleOverview = () => {
   };
 
   useEffect(() => {
-    document.title = 'Schedule Overview';
+    const title = playerName
+      ? `${playerName} · Schedule Overview`
+      : 'Schedule Overview';
+    document.title = title;
     dispatch(fetchAssets());
     fetchPlayerName();
-  }, [dispatch]);
+  }, [dispatch, playerName]);
 
   // Initialize tooltips
   useEffect(() => {
