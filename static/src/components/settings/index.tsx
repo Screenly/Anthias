@@ -34,7 +34,10 @@ export const Settings = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     dispatch(
-      updateSetting({ name, value: type === 'checkbox' ? checked : value }),
+      updateSetting({
+        name: name as keyof RootState['settings']['settings'],
+        value: type === 'checkbox' ? checked : value
+      }),
     );
   };
 

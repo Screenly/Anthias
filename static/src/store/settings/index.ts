@@ -1,7 +1,13 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { SettingsData, SystemOperationParams } from '@/types';
+import { SettingsData, SystemOperationParams, RootState } from '@/types';
 
-// Async thunks
+type SettingsState = RootState['settings']['settings'];
+
+type UpdateSettingPayload = {
+  name: keyof SettingsState;
+  value: SettingsState[keyof SettingsState];
+};
+
 export const fetchSettings = createAsyncThunk(
   'settings/fetchSettings',
   async (_, { rejectWithValue }) => {
@@ -184,12 +190,12 @@ const settingsSlice = createSlice({
   name: 'settings',
   initialState,
   reducers: {
-    updateSetting: (state, action) => {
+    updateSetting: (state, action: { payload: UpdateSettingPayload }) => {
       const { name, value } = action.payload;
       if (name === 'authBackend') {
         state.prevAuthBackend = state.settings.authBackend;
       }
-      state.settings[name] = value;
+      (state.settings as any)[name] = value;
     },
     setUploadProgress: (state, action) => {
       state.uploadProgress = action.payload;
@@ -269,6 +275,6 @@ export const {
 } = settingsSlice.actions;
 
 // Selectors
-export const selectSettings = (state) => state.settings.settings;
+export const selectSettings = (state: RootState) => state.settings.settings;
 
 export default settingsSlice.reducer;

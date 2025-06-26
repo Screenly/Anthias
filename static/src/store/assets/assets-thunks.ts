@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { ToggleAssetParams, RootState } from '@/types';
+import { Asset, ToggleAssetParams, RootState } from '@/types';
 
 export const fetchAssets = createAsyncThunk('assets/fetchAssets', async () => {
   const response = await fetch('/api/v2/assets');
@@ -32,7 +32,7 @@ export const toggleAssetEnabled = createAsyncThunk(
     const assets = await response.json();
 
     // Get the current active assets to determine the next play_order
-    const activeAssets = assets.filter((asset) => asset.is_active);
+    const activeAssets = assets.filter((asset: Asset) => asset.is_active);
 
     // If enabling the asset, set play_order to the next available position
     // If disabling the asset, set play_order to 0
