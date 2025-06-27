@@ -42,7 +42,7 @@ export const Settings = () => {
     dispatch(
       updateSetting({
         name: name as keyof RootState['settings']['settings'],
-        value: type === 'checkbox' ? checked : value
+        value: type === 'checkbox' ? checked : value,
       }),
     );
   };

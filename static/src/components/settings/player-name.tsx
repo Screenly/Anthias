@@ -1,4 +1,12 @@
-export const PlayerName = ({ settings, handleInputChange }) => {
+import { RootState } from '@/types';
+
+export const PlayerName = ({
+  settings,
+  handleInputChange
+} : {
+  settings: RootState['settings']['settings'];
+  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) => {
   return (
     <div className="form-group">
       <label className="small text-secondary">
