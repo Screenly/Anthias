@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
 # General
@@ -31,3 +31,9 @@ alwaysApply: true
   a connected display (like a TV) possible.
 - [viewer](mdc:viewer) contains the Python source files used by the viewer service, which is
   responsible for driving a screen to display content.
+
+# Code Generation
+
+- Do not include comments when generating Python, SCSS, and TypeScript code.
+
+
