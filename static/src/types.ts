@@ -29,6 +29,30 @@ export interface AssetEditData {
   is_enabled: boolean;
   nocache: boolean;
   skip_asset_check: boolean;
+  play_order?: number;
+}
+
+export interface EditFormData {
+  name: string;
+  start_date: string;
+  end_date: string;
+  duration: string;
+  mimetype: string;
+  nocache: boolean;
+  skip_asset_check: boolean;
+}
+
+export interface HandleSubmitParams {
+  e: React.FormEvent;
+  asset: AssetEditData;
+  formData: EditFormData;
+  startDateDate: string;
+  startDateTime: string;
+  endDateDate: string;
+  endDateTime: string;
+  dispatch: AppDispatch;
+  onClose: () => void;
+  setIsSubmitting: (isSubmitting: boolean) => void;
 }
 
 // Redux store types

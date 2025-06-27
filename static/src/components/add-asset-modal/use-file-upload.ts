@@ -11,20 +11,12 @@ import {
 } from '@/store/assets';
 import { AppDispatch } from '@/types';
 
-/**
- * Custom hook for file upload functionality
- * @returns {Object} - File upload handlers and refs
- */
 export const useFileUpload = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { formData } = useSelector(selectAssetModalState);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
-  /**
-   * Handle file selection from input
-   * @param {Event} e - The file input change event
-   */
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -32,10 +24,6 @@ export const useFileUpload = () => {
     }
   };
 
-  /**
-   * Handle file drop
-   * @param {Event} e - The drop event
-   */
   const handleFileDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -46,37 +34,21 @@ export const useFileUpload = () => {
     }
   };
 
-  /**
-   * Handle drag over event
-   * @param {Event} e - The drag over event
-   */
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
   };
 
-  /**
-   * Handle drag enter event
-   * @param {Event} e - The drag enter event
-   */
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
   };
 
-  /**
-   * Handle drag leave event
-   * @param {Event} e - The drag leave event
-   */
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
   };
 
-  /**
-   * Main file upload function
-   * @param {File} file - The file to upload
-   */
   const handleFileUpload = async (file: File) => {
     try {
       // Upload the file

@@ -7,7 +7,7 @@
  * @param {string} filename - The name of the file
  * @returns {string} - The mimetype of the file
  */
-export const getMimetype = (filename) => {
+export const getMimetype = (filename: string): string => {
   const viduris = ['rtsp', 'rtmp'];
   const mimetypes = [
     [['jpe', 'jpg', 'jpeg', 'png', 'pnm', 'gif', 'bmp'], 'image'],
@@ -23,20 +23,24 @@ export const getMimetype = (filename) => {
 
   // Check if it's a domain-specific asset
   try {
-    const domain = filename.split('//')[1].toLowerCase().split('/')[0];
-    for (const [domainList, type] of domains) {
-      if (domainList.includes(domain)) {
-        return type;
+    const domain = filename.split('//')[1]?.toLowerCase().split('/')[0];
+    if (domain) {
+      for (const [domainList, type] of domains) {
+        if (domainList.includes(domain)) {
+          return type as string;
+        }
       }
     }
   } catch {}
 
   // Check file extension
   try {
-    const ext = filename.split('.').pop().toLowerCase();
-    for (const [extList, type] of mimetypes) {
-      if (extList.includes(ext)) {
-        return type;
+    const ext = filename.split('.').pop()?.toLowerCase();
+    if (ext) {
+      for (const [extList, type] of mimetypes) {
+        if (extList.includes(ext)) {
+          return type as string;
+        }
       }
     }
   } catch {}
@@ -53,10 +57,10 @@ export const getMimetype = (filename) => {
  * @returns {number} - The duration in seconds
  */
 export const getDurationForMimetype = (
-  mimetype,
-  defaultDuration,
-  defaultStreamingDuration,
-) => {
+  mimetype: string,
+  defaultDuration: number,
+  defaultStreamingDuration: number,
+): number => {
   if (mimetype === 'video') {
     return 0;
   } else if (mimetype === 'streaming') {
@@ -70,7 +74,7 @@ export const getDurationForMimetype = (
  * Get default dates for an asset
  * @returns {Object} - Object containing start_date and end_date
  */
-export const getDefaultDates = () => {
+export const getDefaultDates = (): { start_date: string; end_date: string } => {
   const now = new Date();
   const endDate = new Date();
   endDate.setDate(endDate.getDate() + 30); // 30 days from now

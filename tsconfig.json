@@ -4,7 +4,7 @@
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "esModuleInterop": true,
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "strict": true,
     "module": "esnext",
     "moduleResolution": "node",
@@ -15,7 +15,6 @@
       "@/constants": ["static/src/constants.ts"],
       "@/store/*": ["static/src/store/*"],
       "@/sass/*": ["static/sass/*"],
-      "@/utils/*": ["static/src/utils/*"],
       "@/types": ["static/src/types.ts"]
     }
   },

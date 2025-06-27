@@ -16,6 +16,10 @@ import { ActiveAssetsTable } from '@/components/active-assets';
 import { AddAssetModal } from '@/components/add-asset-modal';
 import { EditAssetModal } from '@/components/edit-asset-modal';
 
+interface JQueryWithTooltip extends JQuery<HTMLElement> {
+  tooltip(options?: object | string): JQueryWithTooltip;
+}
+
 export const ScheduleOverview = () => {
   const dispatch = useDispatch<AppDispatch>();
   const activeAssets = useSelector(selectActiveAssets);
@@ -45,7 +49,7 @@ export const ScheduleOverview = () => {
   // Initialize tooltips
   useEffect(() => {
     const initializeTooltips = () => {
-      $('[data-toggle="tooltip"]').tooltip({
+      ($('[data-toggle="tooltip"]') as JQueryWithTooltip).tooltip({
         placement: 'top',
         trigger: 'hover',
         html: true,
@@ -75,7 +79,7 @@ export const ScheduleOverview = () => {
 
     return () => {
       observer.disconnect();
-      $('[data-toggle="tooltip"]').tooltip('dispose');
+      ($('[data-toggle="tooltip"]') as JQueryWithTooltip).tooltip('dispose');
     };
   }, [activeAssets, inactiveAssets]);
 

@@ -1,4 +1,10 @@
-export const EmptyAssetMessage = ({ onAddAssetClick }) => {
+interface EmptyAssetMessageProps {
+  onAddAssetClick: (e: React.MouseEvent<HTMLAnchorElement>) => void;
+}
+
+export const EmptyAssetMessage = ({
+  onAddAssetClick,
+}: EmptyAssetMessageProps) => {
   return (
     <div className="table-assets-help-text">
       Currently, there are no assets.{' '}

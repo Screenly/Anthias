@@ -1,12 +1,19 @@
 import { FaDownload, FaPencilAlt, FaTrashAlt } from 'react-icons/fa';
 import classNames from 'classnames';
 
+interface ActionButtonsProps {
+  isDisabled: boolean;
+  handleDownload: (event: React.MouseEvent) => void;
+  handleEdit: () => void;
+  handleDelete: () => void;
+}
+
 export const ActionButtons = ({
   isDisabled,
   handleDownload,
   handleEdit,
   handleDelete,
-}) => {
+}: ActionButtonsProps) => {
   return (
     <>
       <button

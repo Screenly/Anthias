@@ -1,10 +1,21 @@
+interface DateFieldsProps {
+  startDateDate: string;
+  startDateTime: string;
+  endDateDate: string;
+  endDateTime: string;
+  handleDateChange: (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: string,
+  ) => void;
+}
+
 export const DateFields = ({
   startDateDate,
   startDateTime,
   endDateDate,
   endDateTime,
   handleDateChange,
-}) => {
+}: DateFieldsProps) => {
   return (
     <div id="manul_date">
       <div className="form-group row start_date">

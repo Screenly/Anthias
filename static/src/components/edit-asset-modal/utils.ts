@@ -1,20 +1,16 @@
 import { fetchAssets, updateAssetOrder } from '@/store/assets';
+import { Asset, RootState, EditFormData, HandleSubmitParams } from '@/types';
 
-/**
- * Handle form submission for asset editing
- * @param {Object} params - Parameters for form submission
- * @param {Event} params.e - Form submission event
- * @param {Object} params.asset - The asset to update
- * @param {Object} params.formData - Form data
- * @param {string} params.startDateDate - Start date part
- * @param {string} params.startDateTime - Start time part
- * @param {string} params.endDateDate - End date part
- * @param {string} params.endDateTime - End time part
- * @param {Function} params.dispatch - Redux dispatch function
- * @param {Function} params.onClose - Callback to close modal
- * @param {Function} params.setIsSubmitting - Function to set submitting state
- * @returns {Promise<void>}
- */
+interface HandleLoopTimesChangeParams {
+  e: React.ChangeEvent<HTMLSelectElement>;
+  startDateDate: string;
+  startDateTime: string;
+  setLoopTimes: (value: string) => void;
+  setEndDateDate: (value: string) => void;
+  setEndDateTime: (value: string) => void;
+  setFormData: (updater: (prev: EditFormData) => EditFormData) => void;
+}
+
 export const handleSubmit = async ({
   e,
   asset,
@@ -26,7 +22,7 @@ export const handleSubmit = async ({
   dispatch,
   onClose,
   setIsSubmitting,
-}) => {
+}: HandleSubmitParams) => {
   e.preventDefault();
   setIsSubmitting(true);
 
@@ -59,12 +55,12 @@ export const handleSubmit = async ({
     }
 
     // Get active assets from Redux store and update order
-    const activeAssetIds = dispatch((_, getState) => {
+    const activeAssetIds = dispatch((_: unknown, getState: () => RootState) => {
       const state = getState();
       return state.assets.items
-        .filter((asset) => asset.is_active)
-        .sort((a, b) => a.play_order - b.play_order)
-        .map((asset) => asset.asset_id)
+        .filter((asset: Asset) => asset.is_active)
+        .sort((a: Asset, b: Asset) => a.play_order - b.play_order)
+        .map((asset: Asset) => asset.asset_id)
         .join(',');
     });
 
@@ -83,18 +79,6 @@ export const handleSubmit = async ({
   }
 };
 
-/**
- * Handle loop times change for asset editing
- * @param {Object} params - Parameters for loop times change
- * @param {Event} params.e - Change event
- * @param {string} params.startDateDate - Start date part
- * @param {string} params.startDateTime - Start time part
- * @param {Function} params.setLoopTimes - Function to set loop times state
- * @param {Function} params.setEndDateDate - Function to set end date state
- * @param {Function} params.setEndDateTime - Function to set end time state
- * @param {Function} params.setFormData - Function to set form data state
- * @returns {void}
- */
 export const handleLoopTimesChange = ({
   e,
   startDateDate,
@@ -103,7 +87,7 @@ export const handleLoopTimesChange = ({
   setEndDateDate,
   setEndDateTime,
   setFormData,
-}) => {
+}: HandleLoopTimesChangeParams) => {
   const playFor = e.target.value;
   setLoopTimes(playFor);
 
@@ -135,14 +119,14 @@ export const handleLoopTimesChange = ({
   }
 
   // Format the new end date in ISO format with timezone
-  const formatDatePart = (date) => {
+  const formatDatePart = (date: Date) => {
     const year = date.getUTCFullYear();
     const month = String(date.getUTCMonth() + 1).padStart(2, '0');
     const day = String(date.getUTCDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
 
-  const formatTimePart = (date) => {
+  const formatTimePart = (date: Date) => {
     const hours = String(date.getUTCHours()).padStart(2, '0');
     const minutes = String(date.getUTCMinutes()).padStart(2, '0');
     return `${hours}:${minutes}`;
@@ -153,7 +137,7 @@ export const handleLoopTimesChange = ({
   setEndDateTime(formatTimePart(endDate));
 
   // Update formData with the ISO string
-  setFormData((prev) => ({
+  setFormData((prev: EditFormData) => ({
     ...prev,
     end_date: endDate.toISOString(),
   }));

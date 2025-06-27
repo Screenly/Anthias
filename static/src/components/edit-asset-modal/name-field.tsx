@@ -1,4 +1,11 @@
-export const NameField = ({ formData, handleInputChange }) => {
+import { EditFormData } from '@/types';
+
+interface NameFieldProps {
+  formData: EditFormData;
+  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}
+
+export const NameField = ({ formData, handleInputChange }: NameFieldProps) => {
   return (
     <div className="form-group row name">
       <label className="col-4 col-form-label">Name</label>

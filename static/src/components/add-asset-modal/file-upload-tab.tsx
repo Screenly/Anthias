@@ -1,20 +1,18 @@
 import React from 'react';
 import classNames from 'classnames';
 
-/**
- * File upload tab component for the asset modal
- * @param {Object} props - Component props
- * @param {Object} props.fileInputRef - Reference to the file input
- * @param {Object} props.dropZoneRef - Reference to the drop zone
- * @param {Function} props.handleFileSelect - File select handler
- * @param {Function} props.handleFileDrop - File drop handler
- * @param {Function} props.handleDragOver - Drag over handler
- * @param {Function} props.handleDragEnter - Drag enter handler
- * @param {Function} props.handleDragLeave - Drag leave handler
- * @param {boolean} props.isSubmitting - Whether the form is submitting
- * @param {number} props.uploadProgress - Upload progress
- * @returns {JSX.Element} - File upload tab component
- */
+interface FileUploadTabProps {
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  dropZoneRef: React.RefObject<HTMLDivElement | null>;
+  handleFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleFileDrop: (e: React.DragEvent<HTMLDivElement>) => void;
+  handleDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
+  handleDragEnter: (e: React.DragEvent<HTMLDivElement>) => void;
+  handleDragLeave: (e: React.DragEvent<HTMLDivElement>) => void;
+  isSubmitting: boolean;
+  uploadProgress: number;
+}
+
 export const FileUploadTab = ({
   fileInputRef,
   dropZoneRef,
@@ -25,7 +23,7 @@ export const FileUploadTab = ({
   handleDragLeave,
   isSubmitting,
   uploadProgress,
-}) => {
+}: FileUploadTabProps) => {
   return (
     <div
       id="tab-file_upload"
@@ -45,7 +43,7 @@ export const FileUploadTab = ({
           <div className="upload-header">
             <button
               className="btn btn-primary"
-              onClick={() => fileInputRef.current.click()}
+              onClick={() => fileInputRef.current?.click()}
               disabled={isSubmitting}
             >
               Add Files
