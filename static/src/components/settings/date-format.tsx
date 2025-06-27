@@ -1,4 +1,12 @@
-export const DateFormat = ({ settings, handleInputChange }) => {
+import { RootState } from '@/types';
+
+export const DateFormat = ({
+  settings,
+  handleInputChange,
+}: {
+  settings: RootState['settings']['settings'];
+  handleInputChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+}) => {
   return (
     <div className="form-group">
       <label className="small text-secondary">

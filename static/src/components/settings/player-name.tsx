@@ -2,8 +2,8 @@ import { RootState } from '@/types';
 
 export const PlayerName = ({
   settings,
-  handleInputChange
-} : {
+  handleInputChange,
+}: {
   settings: RootState['settings']['settings'];
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) => {

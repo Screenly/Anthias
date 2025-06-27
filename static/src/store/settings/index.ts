@@ -195,7 +195,12 @@ const settingsSlice = createSlice({
       if (name === 'authBackend') {
         state.prevAuthBackend = state.settings.authBackend;
       }
-      (state.settings as any)[name] = value;
+      (
+        state.settings as Record<
+          keyof SettingsState,
+          SettingsState[keyof SettingsState]
+        >
+      )[name] = value;
     },
     setUploadProgress: (state, action) => {
       state.uploadProgress = action.payload;

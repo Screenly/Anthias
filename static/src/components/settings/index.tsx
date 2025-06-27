@@ -37,8 +37,12 @@ export const Settings = () => {
     document.title = title;
   }, [settings.playerName]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    const { name, value, type } = e.target;
+    const checked =
+      e.target instanceof HTMLInputElement ? e.target.checked : false;
     dispatch(
       updateSetting({
         name: name as keyof RootState['settings']['settings'],

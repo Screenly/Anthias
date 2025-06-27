@@ -9,10 +9,17 @@ export const Authentication = () => {
     (state: RootState) => state.settings,
   );
 
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    const { name, value, type } = e.target;
+    const checked =
+      e.target instanceof HTMLInputElement ? e.target.checked : false;
     dispatch(
-      updateSetting({ name, value: type === 'checkbox' ? checked : value }),
+      updateSetting({
+        name: name as keyof RootState['settings']['settings'],
+        value: type === 'checkbox' ? checked : value,
+      }),
     );
   };
 

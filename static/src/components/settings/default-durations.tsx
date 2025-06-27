@@ -1,4 +1,12 @@
-export const DefaultDurations = ({ settings, handleInputChange }) => {
+import { RootState } from '@/types';
+
+export const DefaultDurations = ({
+  settings,
+  handleInputChange,
+}: {
+  settings: RootState['settings']['settings'];
+  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) => {
   return (
     <div className="row">
       <div className="form-group col-6">
