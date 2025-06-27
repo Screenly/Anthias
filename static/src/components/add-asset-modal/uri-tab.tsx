@@ -1,23 +1,22 @@
 import React from 'react';
 import classNames from 'classnames';
+import { FormData } from '@/types';
 
-/**
- * URI tab component for the asset modal
- * @param {Object} props - Component props
- * @param {Object} props.formData - Form data
- * @param {boolean} props.isValid - Whether the URI is valid
- * @param {string} props.errorMessage - Error message
- * @param {boolean} props.isSubmitting - Whether the form is submitting
- * @param {Function} props.handleInputChange - Input change handler
- * @returns {JSX.Element} - URI tab component
- */
+interface UriTabProps {
+  formData: FormData;
+  isValid: boolean;
+  errorMessage: string;
+  isSubmitting: boolean;
+  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}
+
 export const UriTab = ({
   formData,
   isValid,
   errorMessage,
   isSubmitting,
   handleInputChange,
-}) => {
+}: UriTabProps) => {
   return (
     <div
       id="tab-uri"

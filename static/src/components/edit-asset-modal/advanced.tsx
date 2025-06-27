@@ -1,4 +1,14 @@
-export const AdvancedFields = ({ formData, handleInputChange }) => {
+import { EditFormData } from '@/types';
+
+interface AdvancedFieldsProps {
+  formData: EditFormData;
+  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}
+
+export const AdvancedFields = ({
+  formData,
+  handleInputChange,
+}: AdvancedFieldsProps) => {
   return (
     <div className="advanced-accordion accordion">
       <div className="accordion-group">

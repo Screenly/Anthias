@@ -1,6 +1,16 @@
 import { FaImage, FaVideo, FaGlobe } from 'react-icons/fa';
 
-export const MimetypeIcon = ({ mimetype, className, style }) => {
+interface MimetypeIconProps {
+  mimetype: string;
+  className: string;
+  style: React.CSSProperties;
+}
+
+export const MimetypeIcon = ({
+  mimetype,
+  className,
+  style,
+}: MimetypeIconProps) => {
   return {
     image: <FaImage className={className} style={style} />,
     video: <FaVideo className={className} style={style} />,

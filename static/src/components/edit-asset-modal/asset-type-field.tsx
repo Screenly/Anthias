@@ -1,4 +1,14 @@
-export const AssetTypeField = ({ formData, handleInputChange }) => {
+import { EditFormData } from '@/types';
+
+interface AssetTypeFieldProps {
+  formData: EditFormData;
+  handleInputChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+}
+
+export const AssetTypeField = ({
+  formData,
+  handleInputChange,
+}: AssetTypeFieldProps) => {
   return (
     <div className="form-group row mimetype">
       <label className="col-4 col-form-label">Asset Type</label>

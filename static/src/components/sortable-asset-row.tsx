@@ -1,8 +1,13 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { AssetRow } from './asset-row';
+import { AssetRowProps } from '@/types';
 
-export const SortableAssetRow = (props) => {
+interface SortableAssetRowProps extends AssetRowProps {
+  id: string;
+}
+
+export const SortableAssetRow = (props: SortableAssetRowProps) => {
   const {
     attributes,
     listeners,
@@ -12,7 +17,7 @@ export const SortableAssetRow = (props) => {
     isDragging,
   } = useSortable({ id: props.id });
 
-  const style = {
+  const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.95 : 1,

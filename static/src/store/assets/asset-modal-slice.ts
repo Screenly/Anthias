@@ -272,7 +272,7 @@ export const {
 } = assetModalSlice.actions;
 
 // Export selectors
-export const selectAssetModalState = (state) => state.assetModal;
+export const selectAssetModalState = (state: RootState) => state.assetModal;
 
 // Export reducer
 export default assetModalSlice.reducer;

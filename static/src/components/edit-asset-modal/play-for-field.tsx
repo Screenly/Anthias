@@ -1,4 +1,15 @@
 import { handleLoopTimesChange } from '@/components/edit-asset-modal/utils';
+import { EditFormData } from '@/types';
+
+interface PlayForFieldProps {
+  loopTimes: string;
+  startDateDate: string;
+  startDateTime: string;
+  setLoopTimes: (value: string) => void;
+  setEndDateDate: (value: string) => void;
+  setEndDateTime: (value: string) => void;
+  setFormData: (updater: (prev: EditFormData) => EditFormData) => void;
+}
 
 export const PlayForField = ({
   loopTimes,
@@ -8,7 +19,7 @@ export const PlayForField = ({
   setEndDateDate,
   setEndDateTime,
   setFormData,
-}) => {
+}: PlayForFieldProps) => {
   return (
     <div className="row form-group loop_date">
       <label className="col-4 col-form-label">Play for</label>

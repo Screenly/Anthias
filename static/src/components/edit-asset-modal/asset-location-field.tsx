@@ -1,4 +1,10 @@
-export const AssetLocationField = ({ asset }) => {
+import { AssetEditData } from '@/types';
+
+interface AssetLocationFieldProps {
+  asset: AssetEditData | null;
+}
+
+export const AssetLocationField = ({ asset }: AssetLocationFieldProps) => {
   return (
     <div className="form-group row">
       <label className="col-4 col-form-label">Asset Location</label>

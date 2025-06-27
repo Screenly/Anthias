@@ -1,4 +1,8 @@
-export const Alert = ({ message }) => {
+interface AlertProps {
+  message: string;
+}
+
+export const Alert = ({ message }: AlertProps) => {
   return (
     <div id="request-error" className="navbar navbar fixed-top">
       <div className="container">

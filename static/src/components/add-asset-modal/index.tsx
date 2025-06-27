@@ -2,28 +2,33 @@ import React, { useEffect } from 'react';
 import classNames from 'classnames';
 import { useDispatch, useSelector } from 'react-redux';
 import { setActiveTab, selectAssetModalState } from '@/store/assets';
+import { Asset, AppDispatch } from '@/types';
 import { useFileUpload } from './use-file-upload';
 import { useAssetForm } from './use-asset-form';
 import { useModalAnimation } from './use-modal-animation';
 import { UriTab } from './uri-tab';
 import { FileUploadTab } from './file-upload-tab';
 
-/**
- * Asset modal component
- * @param {Object} props - Component props
- * @param {boolean} props.isOpen - Whether the modal is open
- * @param {Function} props.onClose - Callback function to call after closing
- * @param {Function} props.onSave - Callback function to call after saving
- * @param {Object} props.initialData - Initial data for the form
- * @returns {JSX.Element|null} - Asset modal component
- */
+interface AddAssetModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (asset: Asset) => void;
+  initialData?: {
+    uri?: string;
+    name?: string;
+    mimetype?: string;
+    duration?: number;
+    skipAssetCheck?: boolean;
+  };
+}
+
 export const AddAssetModal = ({
   isOpen,
   onClose,
   onSave,
   initialData = {},
-}) => {
-  const dispatch = useDispatch();
+}: AddAssetModalProps) => {
+  const dispatch = useDispatch<AppDispatch>();
   const { activeTab, statusMessage, uploadProgress } = useSelector(
     selectAssetModalState,
   );

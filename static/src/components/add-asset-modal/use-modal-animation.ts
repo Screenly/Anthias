@@ -1,11 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 
-/**
- * Custom hook for modal animation
- * @param {boolean} isOpen - Whether the modal is open
- * @param {Function} onClose - Callback function to call after closing
- * @returns {Object} - Modal animation state and handlers
- */
 export const useModalAnimation = (isOpen: boolean, onClose: () => void) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isClosing] = useState(false);

@@ -16,12 +16,6 @@ import {
 } from '@/components/add-asset-modal/file-upload-utils';
 import { Asset, AppDispatch } from '@/types';
 
-/**
- * Custom hook for asset form handling
- * @param {Function} onSave - Callback function to call after successful save
- * @param {Function} onClose - Callback function to call after closing
- * @returns {Object} - Form handlers and state
- */
 export const useAssetForm = (
   onSave: (asset: Asset) => void,
   onClose: () => void,
@@ -37,10 +31,6 @@ export const useAssetForm = (
   } = useSelector(selectAssetModalState);
   const settings = useSelector(selectSettings);
 
-  /**
-   * Handle input change
-   * @param {Event} e - The input change event
-   */
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     dispatch(
@@ -55,10 +45,6 @@ export const useAssetForm = (
     }
   };
 
-  /**
-   * Handle form submission
-   * @param {Event} e - The form submission event
-   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
