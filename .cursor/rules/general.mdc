@@ -34,6 +34,15 @@ alwaysApply: true
 
 # Code Generation
 
-- Do not include comments when generating Python, SCSS, and TypeScript code.
+- Exclude comments when generating Python, SCSS, and TypeScript code.
+
+# Docker
+
+- All code runs inside Docker containers.
+- In development, prefix commands with Docker:
+
+  ```bash
+  docker compose -f docker-compose.dev.yml exec anthias-server npm install
+  ```
 
 
