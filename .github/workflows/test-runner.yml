@@ -1,0 +1,87 @@
+name: Test Runner
+
+on:
+  workflow_call:
+    inputs:
+      test-type:
+        description: 'Type of tests to run (typescript or python)'
+        required: true
+        type: string
+      python-version:
+        description: 'Python version to use'
+        required: false
+        default: '3.11'
+        type: string
+
+jobs:
+  run-tests:
+    name: Run ${{ inputs.test-type }} tests
+    runs-on: ubuntu-24.04
+    env:
+      COMPOSE_FILE: docker-compose.test.yml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ inputs.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install and configure Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.3
+          virtualenvs-create: true
+          virtualenvs-in-project: false
+          virtualenvs-path: ~/.venv
+          installer-parallel: true
+
+      - name: Install dependencies
+        run: |
+          poetry install --only=docker-image-builder
+
+      - name: Build Containers
+        run: |
+          poetry run python -m tools.image_builder \
+            --dockerfiles-only \
+            --disable-cache-mounts \
+            --service celery \
+            --service redis \
+            --service test
+
+      - name: Start the test container
+        run: |
+          docker compose up -d --build
+
+      - name: Run TypeScript tests
+        if: inputs.test-type == 'typescript'
+        run: |
+          docker compose exec anthias-test \
+            npm install
+          docker compose exec anthias-test \
+            npm run test
+
+      - name: Run Python unit tests
+        if: inputs.test-type == 'python'
+        run: |
+          docker compose exec anthias-test \
+            ./manage.py test --noinput --parallel --exclude-tag=integration
+
+      - name: Run Python integration tests
+        if: inputs.test-type == 'python'
+        run: |
+          docker compose exec anthias-test \
+            bash ./bin/prepare_test_environment.sh -s
+          docker compose exec anthias-test \
+            ./manage.py test --noinput --tag=integration
+
+      - name: Upload coverage reports to Codecov
+        if: inputs.test-type == 'python'
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Stop the test container
+        run: |
+          docker compose down
