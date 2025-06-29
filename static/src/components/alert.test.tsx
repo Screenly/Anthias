@@ -1,6 +1,6 @@
-import { describe, it, expect } from '@jest/globals';
 import { render, screen } from '@testing-library/react';
-import { Alert } from './alert';
+import '@testing-library/jest-dom';
+import { Alert } from '@/components/alert';
 
 describe('Alert', () => {
   it('renders the alert message', () => {
