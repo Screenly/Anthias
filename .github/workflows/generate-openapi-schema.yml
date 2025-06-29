@@ -47,6 +47,9 @@ jobs:
   generate-openapi-schema:
     runs-on: ubuntu-24.04
 
+    env:
+      COMPOSE_FILE: docker-compose.dev.yml
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -84,15 +87,15 @@ jobs:
             --dockerfiles-only \
             --disable-cache-mounts \
             --environment=development
-          docker compose -f docker-compose.dev.yml build
+          docker compose build
 
       - name: Start the Containers
         run: |
-          docker compose -f docker-compose.dev.yml up -d
+          docker compose up -d
 
       - name: Generate OpenAPI Schema
         run: |
-          docker compose -f docker-compose.dev.yml exec anthias-server \
+          docker compose exec anthias-server \
             ./manage.py spectacular \
             --format openapi-json \
             --file anthias-api-schema.json
