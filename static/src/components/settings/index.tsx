@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import Swal from 'sweetalert2';
 import { RootState, AppDispatch } from '@/types';
@@ -18,17 +18,27 @@ import { DefaultDurations } from '@/components/settings/default-durations';
 import { AudioOutput } from '@/components/settings/audio-output';
 import { DateFormat } from '@/components/settings/date-format';
 import { ToggleableSetting } from '@/components/settings/toggleable-setting';
+import { Update } from '@/components/settings/update';
 
 export const Settings = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { settings, deviceModel, isLoading } = useSelector(
     (state: RootState) => state.settings,
   );
+  const [upToDate, setUpToDate] = useState<boolean>(true);
 
   useEffect(() => {
     dispatch(fetchSettings());
     dispatch(fetchDeviceModel());
   }, [dispatch]);
+
+  useEffect(() => {
+    fetch('/api/v2/info')
+      .then((res) => res.json())
+      .then((data) => {
+        setUpToDate(data.up_to_date);
+      });
+  }, []);
 
   useEffect(() => {
     const title = settings.playerName
@@ -186,6 +196,8 @@ export const Settings = () => {
           </form>
         </div>
       </div>
+
+      {!upToDate && <Update />}
 
       <Backup />
       <SystemControls />
