@@ -14,3 +14,4 @@ on how to run them.
   - Third-party imports
   - Imports from other files in the project
 - Separate import groups with blank lines.
+- Do not use `any` or `unknown` for types.
