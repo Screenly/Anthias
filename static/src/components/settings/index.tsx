@@ -26,6 +26,7 @@ export const Settings = () => {
     (state: RootState) => state.settings,
   );
   const [upToDate, setUpToDate] = useState<boolean>(true);
+  const [isBalena, setIsBalena] = useState<boolean>(false);
 
   useEffect(() => {
     dispatch(fetchSettings());
@@ -37,6 +38,12 @@ export const Settings = () => {
       .then((res) => res.json())
       .then((data) => {
         setUpToDate(data.up_to_date);
+      });
+
+    fetch('/api/v2/integrations')
+      .then((res) => res.json())
+      .then((data) => {
+        setIsBalena(data.is_balena);
       });
   }, []);
 
@@ -197,7 +204,7 @@ export const Settings = () => {
         </div>
       </div>
 
-      {!upToDate && <Update />}
+      {!upToDate && !isBalena && <Update />}
 
       <Backup />
       <SystemControls />
