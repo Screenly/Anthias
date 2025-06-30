@@ -2,12 +2,17 @@ import { useEffect, useState } from 'react';
 
 export const Update = () => {
   const [ipAddresses, setIpAddresses] = useState<string[]>([]);
+  const [hostUser, setHostUser] = useState<string>('<USER>');
 
   useEffect(() => {
     fetch('/api/v2/info')
       .then((res) => res.json())
       .then((data) => {
         setIpAddresses(data.ip_addresses);
+
+        if (data.host_user) {
+          setHostUser(data.host_user);
+        }
       });
   }, []);
 
@@ -38,7 +43,9 @@ export const Update = () => {
                 <ul>
                   {ipAddresses.map((ipAddress) => (
                     <li key={ipAddress}>
-                      <code>ssh USER@{ipAddress}</code>
+                      <code>
+                        ssh {hostUser}@{ipAddress}
+                      </code>
                     </li>
                   ))}
                 </ul>
@@ -46,7 +53,7 @@ export const Update = () => {
             ) : (
               <li>
                 Open up a terminal and SSH to this device using the following
-                command &mdash; <code>ssh USER@IP_ADDRESS</code>
+                command &mdash; <code>ssh {hostUser}@IP_ADDRESS</code>
               </li>
             )}
             <li>
