@@ -462,7 +462,8 @@ class InfoViewV2(InfoViewMixin):
                     'ip_addresses': {
                         'type': 'array', 'items': {'type': 'string'}
                     },
-                    'mac_address': {'type': 'string'}
+                    'mac_address': {'type': 'string'},
+                    'host_user': {'type': 'string'}
                 }
             }
         }
@@ -488,6 +489,7 @@ class InfoViewV2(InfoViewMixin):
             'memory': self.get_memory(),
             'ip_addresses': self.get_ip_addresses(),
             'mac_address': get_node_mac_address(),
+            'host_user': getenv('HOST_USER'),
         })
 
 
