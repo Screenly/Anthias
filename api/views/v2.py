@@ -1,4 +1,5 @@
 import hashlib
+import ipaddress
 import logging
 from datetime import timedelta
 from os import getenv, statvfs
@@ -43,6 +44,7 @@ from lib.auth import authorized
 from lib.github import is_up_to_date
 from lib.utils import (
     connect_to_redis,
+    get_node_ip,
     get_node_mac_address,
     is_balena_app,
 )
@@ -409,6 +411,23 @@ class InfoViewV2(InfoViewMixin):
             'available': virtual_memory.available >> 20
         }
 
+    def get_ip_addresses(self):
+        ip_addresses = []
+        node_ip = get_node_ip()
+
+        if node_ip == 'Unable to retrieve IP.':
+            return []
+
+        for ip_address in node_ip.split():
+            ip_address_object = ipaddress.ip_address(ip_address)
+
+            if isinstance(ip_address_object, ipaddress.IPv6Address):
+                ip_addresses.append(f'http://[{ip_address}]')
+            else:
+                ip_addresses.append(f'http://{ip_address}')
+
+        return ip_addresses
+
     @extend_schema(
         summary='Get system information',
         responses={
@@ -440,6 +459,9 @@ class InfoViewV2(InfoViewMixin):
                             'available': {'type': 'integer'}
                         }
                     },
+                    'ip_addresses': {
+                        'type': 'array', 'items': {'type': 'string'}
+                    },
                     'mac_address': {'type': 'string'}
                 }
             }
@@ -464,6 +486,7 @@ class InfoViewV2(InfoViewMixin):
             'device_model': self.get_device_model(),
             'uptime': self.get_uptime(),
             'memory': self.get_memory(),
+            'ip_addresses': self.get_ip_addresses(),
             'mac_address': get_node_mac_address(),
         })
 
