@@ -36,8 +36,8 @@ export const Update = () => {
               Open up a terminal and SSH to this device using any of the
               following commands:
               <ul>
-                {ipAddresses.map((ipAddress, index) => (
-                  <li key={index}>
+                {ipAddresses.map((ipAddress) => (
+                  <li key={ipAddress}>
                     <code>ssh USER@{ipAddress}</code>
                   </li>
                   ))}
