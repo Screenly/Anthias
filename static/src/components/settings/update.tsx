@@ -32,22 +32,21 @@ export const Update = () => {
               and click <em>Get Backup</em>.
             </li>
             {ipAddresses.length > 0 ? (
-            <li>
-              Open up a terminal and SSH to this device using any of the
-              following commands:
-              <ul>
-                {ipAddresses.map((ipAddress) => (
-                  <li key={ipAddress}>
-                    <code>ssh USER@{ipAddress}</code>
-                  </li>
+              <li>
+                Open up a terminal and SSH to this device using any of the
+                following commands:
+                <ul>
+                  {ipAddresses.map((ipAddress) => (
+                    <li key={ipAddress}>
+                      <code>ssh USER@{ipAddress}</code>
+                    </li>
                   ))}
                 </ul>
               </li>
             ) : (
               <li>
                 Open up a terminal and SSH to this device using the following
-                command &mdash;{' '}
-                <code>ssh USER@IP_ADDRESS</code>
+                command &mdash; <code>ssh USER@IP_ADDRESS</code>
               </li>
             )}
             <li>
