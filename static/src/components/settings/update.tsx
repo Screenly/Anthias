@@ -4,8 +4,11 @@ export const Update = () => {
   const [ipAddresses, setIpAddresses] = useState<string[]>([]);
 
   useEffect(() => {
-    // TODO: Fetch IP addresses from the API.
-    setIpAddresses(['192.168.1.100', '192.168.1.101']);
+    fetch('/api/v2/info')
+      .then((res) => res.json())
+      .then((data) => {
+        setIpAddresses(data.ip_addresses);
+      });
   }, []);
 
   return (
@@ -28,17 +31,25 @@ export const Update = () => {
               </a>{' '}
               and click <em>Get Backup</em>.
             </li>
+            {ipAddresses.length > 0 ? (
             <li>
               Open up a terminal and SSH to this device using any of the
               following commands:
               <ul>
                 {ipAddresses.map((ipAddress, index) => (
                   <li key={index}>
-                    <code>ssh {ipAddress}</code>
+                    <code>ssh USER@{ipAddress}</code>
                   </li>
-                ))}
-              </ul>
-            </li>
+                  ))}
+                </ul>
+              </li>
+            ) : (
+              <li>
+                Open up a terminal and SSH to this device using the following
+                command &mdash;{' '}
+                <code>ssh USER@IP_ADDRESS</code>
+              </li>
+            )}
             <li>
               Go to the project root directory &mdash;{' '}
               <code>cd ~/screenly</code>
