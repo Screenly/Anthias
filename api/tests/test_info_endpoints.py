@@ -106,8 +106,13 @@ class InfoEndpointsTest(TestCase):
         'api.views.v2.get_node_mac_address',
         return_value='00:11:22:33:44:55'
     )
+    @mock.patch(
+        'api.views.v2.get_node_ip',
+        return_value='192.168.1.100 10.0.0.50'
+    )
     def test_info_v2_endpoint(
         self,
+        get_node_ip_mock,
         mac_address_mock,
         virtual_memory_mock,
         get_uptime_mock,
@@ -136,7 +141,8 @@ class InfoEndpointsTest(TestCase):
             parse_cpu_info_mock,
             get_uptime_mock,
             virtual_memory_mock,
-            mac_address_mock
+            mac_address_mock,
+            get_node_ip_mock
         ])
 
         # Assert response data
@@ -160,6 +166,7 @@ class InfoEndpointsTest(TestCase):
                 'buff': 1024,
                 'available': 7168
             },
+            'ip_addresses': ['http://192.168.1.100', 'http://10.0.0.50'],
             'mac_address': '00:11:22:33:44:55'
         }
         self._assert_response_data(data, expected_data)
