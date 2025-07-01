@@ -180,9 +180,6 @@ export const Settings = () => {
 
             <div className="form-group col-12">
               <div className="text-right">
-                <a className="btn btn-long btn-outline-primary mr-2" href="/">
-                  Cancel
-                </a>
                 <button
                   className="btn btn-long btn-primary"
                   type="submit"
