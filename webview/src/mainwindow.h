@@ -13,7 +13,7 @@ class MainWindow : public QMainWindow
         explicit MainWindow();
 
     public slots:
-        void loadPage(const QString &uri);
+        void loadPage(const QString &uri, qreal zoomFactor);
         void loadImage(const QString &uri);
 
     private:

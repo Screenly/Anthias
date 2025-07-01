@@ -30,7 +30,7 @@ View::View(QWidget* parent) : QWidget(parent)
     nextImage = QImage();
 }
 
-void View::loadPage(const QString &uri)
+void View::loadPage(const QString &uri, qreal zoomFactor)
 {
     qDebug() << "Type: Webpage";
 
@@ -43,6 +43,7 @@ void View::loadPage(const QString &uri)
             qDebug() << "Web page loaded successfully";
             webView->setVisible(true);
             webView->clearFocus();
+            webView->setZoomFactor(zoomFactor);
         } else {
             qDebug() << "Web page failed to load";
         }
