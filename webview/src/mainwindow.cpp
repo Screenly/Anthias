@@ -13,9 +13,9 @@ MainWindow::MainWindow() : QMainWindow()
     setCentralWidget(view);
 }
 
-void MainWindow::loadPage(const QString &uri)
+void MainWindow::loadPage(const QString &uri, qreal zoomFactor)
 {
-    view->loadPage(uri);
+    view->loadPage(uri, zoomFactor);
 }
 
 void MainWindow::loadImage(const QString &uri)

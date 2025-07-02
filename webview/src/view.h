@@ -16,7 +16,7 @@ public:
     explicit View(QWidget* parent);
     QWebEngineView* webView;  // Made public for MainWindow access
 
-    void loadPage(const QString &uri);
+    void loadPage(const QString &uri, qreal zoomFactor);
     void loadImage(const QString &uri);
 
 protected:
