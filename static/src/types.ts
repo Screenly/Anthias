@@ -16,7 +16,7 @@ export interface Asset {
   is_active: boolean;
   play_order: number;
   is_processing: boolean;
-  zoom_level: number;
+  zoom_level?: number;
 }
 
 export interface AssetEditData {
