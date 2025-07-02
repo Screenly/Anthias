@@ -167,7 +167,7 @@ def view_webpage(uri):
     if browser is None or not browser.process.alive:
         load_browser()
     if current_browser_url is not uri:
-        browser_bus.loadPage(uri)
+        browser_bus.loadPage(uri, 1.0) # TODO: Make the zoom level configurable.
         current_browser_url = uri
     logging.info('Current url is {0}'.format(current_browser_url))
 
