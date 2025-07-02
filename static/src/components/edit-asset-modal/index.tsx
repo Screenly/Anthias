@@ -73,7 +73,7 @@ export const EditAssetModal = ({
         mimetype: asset.mimetype || 'webpage',
         nocache: asset.nocache || false,
         skip_asset_check: asset.skip_asset_check || false,
-        zoom_level: asset.zoom_level || 1.0,
+        zoom_level: asset.zoom_level ?? 1.0,
       });
 
       setStartDateDate(formatDatePart(startDate));

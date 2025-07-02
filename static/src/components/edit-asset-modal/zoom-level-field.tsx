@@ -11,9 +11,12 @@ export const ZoomLevelField = ({
 }: ZoomLevelFieldProps) => {
   return (
     <div className="form-group row duration ZoomLevel">
-      <label className="col-4 col-form-label">Zoom Level</label>
+      <label htmlFor="zoom_level" className="col-4 col-form-label">
+        Zoom Level
+      </label>
       <div className="col-7 controls">
         <input
+          id="zoom_level"
           className="form-control shadow-none"
           name="zoom_level"
           type="number"
