@@ -120,3 +120,34 @@ Supported protocols: `http://`, `https://`
 > ```bash
 > export QT_LOGGING_RULES=qt.qpa.*=true
 > ```
+
+## Creating a Release
+
+Make sure that you are current in the `master` branch.
+
+```bash
+git checkout master
+```
+
+Create a new tag for the release.
+
+```bash
+git tag -a WebView-vX.Y.Z -m "[tag message]"
+```
+
+> [!IMPORTANT]
+> The tag name must start with `WebView-v` and the version must follow the semantic versioning format.
+
+Push the tag to the remote repository.
+
+```bash
+git push origin WebView-vX.Y.Z
+```
+
+If you're using a forked repository, you need to push the tag to the upstream repository.
+
+```bash
+git push upstream WebView-vX.Y.Z
+```
+
+Pushing this tag will trigger the [build-webview](https://github.com/Screenly/Anthias/actions/workflows/build-webview.yaml) workflow.
