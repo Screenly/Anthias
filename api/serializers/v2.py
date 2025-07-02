@@ -75,6 +75,15 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
     duration = IntegerField()
     zoom_level = FloatField(required=False)
 
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+
+        if 'zoom_level' in validated_data:
+            instance.zoom_level = validated_data['zoom_level']
+
+        instance.save()
+        return instance
+
 
 class DeviceSettingsSerializerV2(Serializer):
     player_name = CharField()

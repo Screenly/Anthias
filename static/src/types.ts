@@ -16,6 +16,7 @@ export interface Asset {
   is_active: boolean;
   play_order: number;
   is_processing: boolean;
+  zoom_level: number;
 }
 
 export interface AssetEditData {
@@ -30,6 +31,7 @@ export interface AssetEditData {
   nocache: boolean;
   skip_asset_check: boolean;
   play_order?: number;
+  zoom_level?: number;
 }
 
 export interface EditFormData {
@@ -40,6 +42,7 @@ export interface EditFormData {
   mimetype: string;
   nocache: boolean;
   skip_asset_check: boolean;
+  zoom_level?: number;
 }
 
 export interface HandleSubmitParams {
@@ -135,6 +138,7 @@ export interface AssetRowProps {
   dragHandleProps?: React.HTMLAttributes<HTMLElement>;
   isDragging?: boolean;
   onEditAsset?: (asset: AssetEditData) => void;
+  zoomLevel?: number;
 }
 
 // Settings-related types

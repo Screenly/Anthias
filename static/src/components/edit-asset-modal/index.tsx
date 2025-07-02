@@ -12,6 +12,7 @@ import { DateFields } from '@/components/edit-asset-modal/date-fields';
 import { DurationField } from '@/components/edit-asset-modal/duration-field';
 import { ModalFooter } from '@/components/edit-asset-modal/modal-footer';
 import { AdvancedFields } from '@/components/edit-asset-modal/advanced';
+import { ZoomLevelField } from '@/components/edit-asset-modal/zoom-level-field';
 
 interface EditAssetModalProps {
   isOpen: boolean;
@@ -35,6 +36,7 @@ export const EditAssetModal = ({
     mimetype: 'webpage',
     nocache: false,
     skip_asset_check: false,
+    zoom_level: 1.0,
   });
   const [loopTimes, setLoopTimes] = useState('manual');
   const [startDateDate, setStartDateDate] = useState('');
@@ -71,6 +73,7 @@ export const EditAssetModal = ({
         mimetype: asset.mimetype || 'webpage',
         nocache: asset.nocache || false,
         skip_asset_check: asset.skip_asset_check || false,
+        zoom_level: asset.zoom_level || 1.0,
       });
 
       setStartDateDate(formatDatePart(startDate));
@@ -223,6 +226,12 @@ export const EditAssetModal = ({
                     formData={formData}
                     handleInputChange={handleInputChange}
                   />
+                  {formData.mimetype === 'webpage' && (
+                    <ZoomLevelField
+                      formData={formData}
+                      handleInputChange={handleInputChange}
+                    />
+                  )}
                   <AdvancedFields
                     formData={formData}
                     handleInputChange={handleInputChange}
