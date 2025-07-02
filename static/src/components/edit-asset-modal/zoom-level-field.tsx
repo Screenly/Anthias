@@ -10,7 +10,7 @@ export const ZoomLevelField = ({
   handleInputChange,
 }: ZoomLevelFieldProps) => {
   return (
-    <div className="form-group row duration">
+    <div className="form-group row duration ZoomLevel">
       <label className="col-4 col-form-label">Zoom Level</label>
       <div className="col-7 controls">
         <input
