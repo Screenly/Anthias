@@ -161,13 +161,13 @@ def load_browser():
         sleep(1)
 
 
-def view_webpage(uri):
+def view_webpage(uri, zoom_level=1.0):
     global current_browser_url
 
     if browser is None or not browser.process.alive:
         load_browser()
     if current_browser_url is not uri:
-        browser_bus.loadPage(uri)
+        browser_bus.loadPage(uri, zoom_level)
         current_browser_url = uri
     logging.info('Current url is {0}'.format(current_browser_url))
 
@@ -239,7 +239,7 @@ def asset_loop(scheduler):
         if 'image' in mime:
             view_image(uri)
         elif 'web' in mime:
-            view_webpage(uri)
+            view_webpage(uri, zoom_level=asset['zoom_level'])
         elif 'video' or 'streaming' in mime:
             view_video(uri, asset['duration'])
         else:

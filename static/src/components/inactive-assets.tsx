@@ -64,6 +64,7 @@ export const InactiveAssetsTable = ({
             skipAssetCheck={asset.skip_asset_check}
             onEditAsset={onEditAsset}
             showDragHandle={false}
+            zoomLevel={asset.zoom_level}
           />
         ))}
       </tbody>

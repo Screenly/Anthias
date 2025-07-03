@@ -1,5 +1,6 @@
 import uuid
 
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -23,6 +24,13 @@ class Asset(models.Model):
     nocache = models.BooleanField(default=False)
     play_order = models.IntegerField(default=0)
     skip_asset_check = models.BooleanField(default=False)
+    zoom_level = models.FloatField(
+        default=1.0,
+        validators=[
+            MinValueValidator(0.25),
+            MaxValueValidator(5.0)
+        ]
+    )
 
     class Meta:
         db_table = 'assets'

@@ -25,7 +25,8 @@ ASSET_X = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 1,
-    'skip_asset_check': 0
+    'skip_asset_check': 0,
+    'zoom_level': 1.0
 }
 
 ASSET_X_DIFF = {
@@ -44,7 +45,8 @@ ASSET_Y = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 0,
-    'skip_asset_check': 0
+    'skip_asset_check': 0,
+    'zoom_level': 1.0
 }
 
 ASSET_Z = {
@@ -156,4 +158,5 @@ class SchedulerTest(TestCase):
         scheduler.refresh_playlist()
 
         self.assertEqual([ASSET_X], scheduler.assets)
+
         traveller.stop()

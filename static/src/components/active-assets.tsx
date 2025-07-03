@@ -115,6 +115,7 @@ export const ActiveAssetsTable = ({ onEditAsset }: ActiveAssetsTableProps) => {
                 skipAssetCheck={asset.skip_asset_check}
                 onEditAsset={onEditAsset}
                 showDragHandle={true}
+                zoomLevel={asset.zoom_level}
               />
             ))}
           </SortableContext>
