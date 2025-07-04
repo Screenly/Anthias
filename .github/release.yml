@@ -3,6 +3,7 @@ changelog:
     labels:
       - webview
       - chore
+      - tests
   categories:
     - title: Bug Fixes 🐞
       labels:
@@ -23,3 +24,4 @@ changelog:
         labels:
           - webview
           - chore
+          - tests
