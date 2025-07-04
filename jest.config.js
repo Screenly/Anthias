@@ -1,6 +1,6 @@
 module.exports = {
   preset: 'ts-jest',
-  testEnvironment: 'jsdom',
+  testEnvironment: 'jest-fixed-jsdom',
   roots: ['<rootDir>/static/src'],
   testMatch: ['**/*.test.ts', '**/*.test.tsx'],
   transform: {
