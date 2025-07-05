@@ -36,6 +36,7 @@ types:
   - Add a `chore` label if you are doing tasks that don't alter Anthias'
     functionality.
   - Add a `webview` label if you are making changes to the [WebView](/webview/README.md).
+  - Add a `tests` label if you are adding or modifying unit or integration tests.
 - Make sure that all of the items in the [checklist](.github/pull_request_template.md) are checked before having it reviewed and merged.
 - Don't forget to assign reviewers to your pull request.
 
