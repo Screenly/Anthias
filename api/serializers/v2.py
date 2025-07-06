@@ -5,6 +5,7 @@ from rest_framework.serializers import (
     CharField,
     ChoiceField,
     DateTimeField,
+    FloatField,
     IntegerField,
     ModelSerializer,
     Serializer,
@@ -39,6 +40,7 @@ class AssetSerializerV2(ModelSerializer, CreateAssetSerializerMixin):
             'skip_asset_check',
             'is_active',
             'is_processing',
+            'zoom_level',
         ]
 
 
@@ -71,6 +73,16 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
     nocache = BooleanField(required=False)
     skip_asset_check = BooleanField(required=False)
     duration = IntegerField()
+    zoom_level = FloatField(required=False)
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+
+        if 'zoom_level' in validated_data:
+            instance.zoom_level = validated_data['zoom_level']
+
+        instance.save()
+        return instance
 
 
 class DeviceSettingsSerializerV2(Serializer):

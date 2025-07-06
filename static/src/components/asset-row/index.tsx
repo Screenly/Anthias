@@ -74,6 +74,7 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
           is_enabled: props.isEnabled,
           nocache: props.nocache,
           skip_asset_check: props.skipAssetCheck,
+          zoom_level: props.zoomLevel,
         });
       }
     };
