@@ -8,7 +8,7 @@
     "lint:fix": "eslint static/src --fix",
     "format:check": "prettier --check static/src",
     "format:fix": "prettier --write static/src",
-    "test": "jest"
+    "test": "jest --silent"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",

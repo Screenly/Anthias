@@ -67,32 +67,32 @@ export const ActiveAssetsTable = ({ onEditAsset }: ActiveAssetsTableProps) => {
   };
 
   return (
-    <table className="ActiveAssets table">
-      <thead className="table-borderless">
-        <tr>
-          <th className="font-weight-normal asset_row_name">Name</th>
-          <th className="font-weight-normal" style={{ width: '21%' }}>
-            Start
-          </th>
-          <th className="font-weight-normal" style={{ width: '21%' }}>
-            End
-          </th>
-          <th className="font-weight-normal" style={{ width: '13%' }}>
-            Duration
-          </th>
-          <th className="font-weight-normal" style={{ width: '7%' }}>
-            Activity
-          </th>
-          <th className="font-weight-normal" style={{ width: '13%' }}>
-            Actions
-          </th>
-        </tr>
-      </thead>
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <table className="ActiveAssets table">
+        <thead className="table-borderless">
+          <tr>
+            <th className="font-weight-normal asset_row_name">Name</th>
+            <th className="font-weight-normal" style={{ width: '21%' }}>
+              Start
+            </th>
+            <th className="font-weight-normal" style={{ width: '21%' }}>
+              End
+            </th>
+            <th className="font-weight-normal" style={{ width: '13%' }}>
+              Duration
+            </th>
+            <th className="font-weight-normal" style={{ width: '7%' }}>
+              Activity
+            </th>
+            <th className="font-weight-normal" style={{ width: '13%' }}>
+              Actions
+            </th>
+          </tr>
+        </thead>
         <tbody id="active-assets" className="table-borderless">
           <SortableContext
             items={items.map((a) => a.asset_id.toString())}
@@ -119,7 +119,7 @@ export const ActiveAssetsTable = ({ onEditAsset }: ActiveAssetsTableProps) => {
             ))}
           </SortableContext>
         </tbody>
-      </DndContext>
-    </table>
+      </table>
+    </DndContext>
   );
 };
