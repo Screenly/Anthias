@@ -19,7 +19,7 @@ public:
     ~View();
     QWebEngineView* webView;  // Made public for MainWindow access
 
-    void loadPage(const QString &uri, qreal zoomFactor);
+    void loadPage(const QString &uri);
     void loadImage(const QString &uri);
 
 protected:
