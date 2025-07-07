@@ -7,6 +7,8 @@
 #include <QNetworkReply>
 #include <QNetworkAccessManager>
 #include <QImage>
+#include <QMovie>
+#include <QTimer>
 
 class View : public QWidget
 {
@@ -14,6 +16,7 @@ class View : public QWidget
 
 public:
     explicit View(QWidget* parent);
+    ~View();
     QWebEngineView* webView;  // Made public for MainWindow access
 
     void loadPage(const QString &uri, qreal zoomFactor);
@@ -25,6 +28,7 @@ protected:
 
 private slots:
     void handleAuthRequest(QNetworkReply*, QAuthenticator*);
+    void updateMovieFrame();
 
 private:
     QWebEnginePage* pre_loader;
@@ -32,4 +36,7 @@ private:
     QNetworkAccessManager* networkManager;
     QImage currentImage;
     QImage nextImage;
+    QMovie* movie;
+    QTimer* animationTimer;
+    bool isAnimatedImage;
 };
