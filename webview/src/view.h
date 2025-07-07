@@ -31,6 +31,11 @@ private slots:
     void updateMovieFrame();
 
 private:
+    bool tryLoadAsAnimatedGif(const QByteArray& data);
+    void loadAsStaticImage(const QByteArray& data);
+    void scheduleNextFrame();
+    void setupAnimation();
+
     QWebEnginePage* pre_loader;
     QEventLoop pre_loader_loop;
     QNetworkAccessManager* networkManager;

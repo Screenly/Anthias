@@ -126,81 +126,12 @@ void View::loadImage(const QString &preUri)
             QByteArray data = reply->readAll();
             qDebug() << "Received image data size:" << data.size();
 
-            // Try to load as QMovie first to check if it's an animated GIF
-            QBuffer* testBuffer = new QBuffer();
-            testBuffer->setData(data);
-            testBuffer->open(QIODevice::ReadOnly);
-
-            // Create QMovie to test if it's animated
-            QMovie testMovie(testBuffer, QByteArray(), this);
-
-            if (testMovie.isValid() && testMovie.frameCount() > 1) {
-                // This is an animated GIF
-                qDebug() << "Detected animated GIF with" << testMovie.frameCount() << "frames";
-                delete testBuffer; // Clean up test buffer
-
-                // Create a new buffer for the actual movie
-                QBuffer* buffer = new QBuffer();
-                buffer->setData(data);
-                buffer->open(QIODevice::ReadOnly);
-
-                // Create the actual movie for animation
-                movie = new QMovie(buffer, QByteArray(), this);
-
-                if (movie->isValid()) {
-                    qDebug() << "GIF animation loaded successfully. Frame count:" << movie->frameCount();
-                    qDebug() << "Animation speed:" << movie->speed() << "ms per frame";
-
-                    isAnimatedImage = true;
-                    webView->setVisible(false);
-
-                    // Start the animation
-                    movie->start();
-
-                    // Set up timer for frame updates
-                    int frameDelay = movie->nextFrameDelay();
-                    if (frameDelay > 0) {
-                        animationTimer->start(frameDelay);
-                    } else {
-                        // Default to 100ms if no delay specified
-                        animationTimer->start(100);
-                    }
-
-                    // Get the first frame
-                    currentImage = movie->currentImage();
-                    update();
-                } else {
-                    qDebug() << "Failed to load GIF as animation, falling back to static image";
-                    delete movie;
-                    movie = nullptr;
-                    delete buffer;
-
-                    // Fall back to static image loading
-                    QImage newImage;
-                    if (newImage.loadFromData(data)) {
-                        qDebug() << "Successfully loaded image as static. Size:" << newImage.size();
-                        nextImage = newImage;
-                        webView->setVisible(false);
-                        currentImage = nextImage;
-                        update();
-                    } else {
-                        qDebug() << "Failed to load image from data";
-                    }
-                }
+            if (tryLoadAsAnimatedGif(data)) {
+                // Successfully loaded as animated GIF
+                return;
             } else {
-                // This is a static image (including single-frame GIFs)
-                delete testBuffer;
-
-                QImage newImage;
-                if (newImage.loadFromData(data)) {
-                    qDebug() << "Successfully loaded static image. Size:" << newImage.size();
-                    nextImage = newImage;
-                    webView->setVisible(false);
-                    currentImage = nextImage;
-                    update();
-                } else {
-                    qDebug() << "Failed to load image from data";
-                }
+                // Load as static image
+                loadAsStaticImage(data);
             }
         } else {
             qDebug() << "Network error:" << reply->errorString();
@@ -212,6 +143,66 @@ void View::loadImage(const QString &preUri)
         qDebug() << "Network error occurred:" << error;
         qDebug() << "Error string:" << reply->errorString();
     });
+}
+
+bool View::tryLoadAsAnimatedGif(const QByteArray& data)
+{
+    // Try to load as QMovie first to check if it's an animated GIF
+    QBuffer* testBuffer = new QBuffer();
+    testBuffer->setData(data);
+    testBuffer->open(QIODevice::ReadOnly);
+
+    // Create QMovie to test if it's animated
+    QMovie testMovie(testBuffer, QByteArray(), this);
+
+    if (testMovie.isValid() && testMovie.frameCount() > 1) {
+        // This is an animated GIF
+        qDebug() << "Detected animated GIF with" << testMovie.frameCount() << "frames";
+        delete testBuffer; // Clean up test buffer
+
+        // Create a new buffer for the actual movie
+        QBuffer* buffer = new QBuffer();
+        buffer->setData(data);
+        buffer->open(QIODevice::ReadOnly);
+
+        // Create the actual movie for animation
+        movie = new QMovie(buffer, QByteArray(), this);
+
+        if (movie->isValid()) {
+            qDebug() << "GIF animation loaded successfully. Frame count:" << movie->frameCount();
+            qDebug() << "Animation speed:" << movie->speed() << "ms per frame";
+
+            setupAnimation();
+            return true;
+        } else {
+            qDebug() << "Failed to load GIF as animation, falling back to static image";
+            delete movie;
+            movie = nullptr;
+            delete buffer;
+
+            // Fall back to static image loading - this preserves original behavior
+            loadAsStaticImage(data);
+            return true; // Return true to prevent double loading
+        }
+    } else {
+        // This is a static image (including single-frame GIFs)
+        delete testBuffer;
+        return false;
+    }
+}
+
+void View::loadAsStaticImage(const QByteArray& data)
+{
+    QImage newImage;
+    if (newImage.loadFromData(data)) {
+        qDebug() << "Successfully loaded static image. Size:" << newImage.size();
+        nextImage = newImage;
+        webView->setVisible(false);
+        currentImage = nextImage;
+        update();
+    } else {
+        qDebug() << "Failed to load image from data";
+    }
 }
 
 void View::updateMovieFrame()
@@ -227,17 +218,22 @@ void View::updateMovieFrame()
         }
 
         // Schedule next frame update
-        int frameDelay = movie->nextFrameDelay();
+        scheduleNextFrame();
+    }
+}
+
+void View::scheduleNextFrame()
+{
+    int frameDelay = movie->nextFrameDelay();
+    if (frameDelay > 0) {
+        animationTimer->start(frameDelay);
+    } else {
+        // If no delay specified, try to get it from the movie speed
+        frameDelay = movie->speed();
         if (frameDelay > 0) {
             animationTimer->start(frameDelay);
         } else {
-            // If no delay specified, try to get it from the movie speed
-            frameDelay = movie->speed();
-            if (frameDelay > 0) {
-                animationTimer->start(frameDelay);
-            } else {
-                animationTimer->start(100); // Default delay
-            }
+            animationTimer->start(100); // Default delay
         }
     }
 }
@@ -276,4 +272,26 @@ void View::handleAuthRequest(QNetworkReply* reply, QAuthenticator* auth)
     Q_UNUSED(reply)
     Q_UNUSED(auth)
     webView->load(QUrl::fromLocalFile(QStandardPaths::locate(QStandardPaths::AppDataLocation, "res/access_denied.html")));
+}
+
+void View::setupAnimation()
+{
+    isAnimatedImage = true;
+    webView->setVisible(false);
+
+    // Start the animation
+    movie->start();
+
+    // Set up timer for frame updates
+    int frameDelay = movie->nextFrameDelay();
+    if (frameDelay > 0) {
+        animationTimer->start(frameDelay);
+    } else {
+        // Default to 100ms if no delay specified
+        animationTimer->start(100);
+    }
+
+    // Get the first frame
+    currentImage = movie->currentImage();
+    update();
 }
