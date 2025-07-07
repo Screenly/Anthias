@@ -16,7 +16,7 @@ indent_style = space
 indent_size = 2
 max_line_length = 100
 
-[*.{js,mjs,jsx}]
+[*.{js,mjs,jsx,ts,tsx}]
 indent_style = space
 indent_size = 2
 max_line_length = 80
