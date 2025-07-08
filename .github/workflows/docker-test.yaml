@@ -21,7 +21,9 @@ on:
       - master
     paths:
       - '**/**'
+      - '!.editorconfig'
       - '!README.md'
+      - '!CONTRIBUTING.md'
       - '!webview/**'
       - '!website/**'
       - '!.github/workflows/build-webview.yaml'
