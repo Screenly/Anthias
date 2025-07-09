@@ -1,5 +1,9 @@
-import { createSlice, createAsyncThunk, ThunkDispatch } from '@reduxjs/toolkit';
-import { AnyAction } from '@reduxjs/toolkit';
+import {
+  AnyAction,
+  createSlice,
+  createAsyncThunk,
+  ThunkDispatch,
+} from '@reduxjs/toolkit';
 import { handleWebSocketMessage } from './message-handler';
 import { RootState } from '@/types';
 
@@ -77,10 +81,10 @@ export const connectWebSocket = createAsyncThunk(
         }
       };
 
-      ws.onerror = (error) => {
+      ws.onerror = () => {
         dispatch(setError('WebSocket connection error'));
         dispatch(setConnecting(false));
-        reject(error);
+        reject(new Error('WebSocket connection failed'));
       };
 
       ws.onclose = (event) => {
