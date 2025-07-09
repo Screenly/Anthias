@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { fetchAssets } from '@/store/assets';
 import { fetchSettings } from '@/store/settings';
-import { connectWebSocket } from '@/store/websocket';
+import { connectWebSocket, disconnectWebSocket } from '@/store/websocket';
 import { store } from '@/store/index';
 
 import { Integrations } from '@/components/integrations';
@@ -20,6 +20,11 @@ export const App = () => {
     dispatch(fetchAssets());
     dispatch(fetchSettings());
     dispatch(connectWebSocket());
+
+    // Cleanup function to disconnect WebSocket when component unmounts
+    return () => {
+      dispatch(disconnectWebSocket());
+    };
   }, [dispatch]);
 
   return (
