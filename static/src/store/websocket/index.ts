@@ -1,5 +1,5 @@
 import {
-  AnyAction,
+  UnknownAction,
   createSlice,
   createAsyncThunk,
   ThunkDispatch,
@@ -69,14 +69,14 @@ export const connectWebSocket = createAsyncThunk(
           dispatch(setLastMessage(message));
           handleWebSocketMessage(
             message,
-            dispatch as ThunkDispatch<RootState, unknown, AnyAction>,
+            dispatch as ThunkDispatch<RootState, unknown, UnknownAction>,
           );
         } catch {
           // If it's not JSON, treat it as a string message
           dispatch(setLastMessage(messageData));
           handleWebSocketMessage(
             messageData,
-            dispatch as ThunkDispatch<RootState, unknown, AnyAction>,
+            dispatch as ThunkDispatch<RootState, unknown, UnknownAction>,
           );
         }
       };

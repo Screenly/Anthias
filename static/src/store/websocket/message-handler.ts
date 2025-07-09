@@ -1,11 +1,11 @@
-import { AnyAction, ThunkDispatch } from '@reduxjs/toolkit';
+import { UnknownAction, ThunkDispatch } from '@reduxjs/toolkit';
 import { fetchAssets } from '@/store/assets';
 import { RootState } from '@/types';
 import { WebSocketMessage } from './index';
 
 export const handleWebSocketMessage = (
   message: WebSocketMessage | string,
-  dispatch: ThunkDispatch<RootState, unknown, AnyAction>,
+  dispatch: ThunkDispatch<RootState, unknown, UnknownAction>,
 ) => {
   let parsedMessage: WebSocketMessage;
 
