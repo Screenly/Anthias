@@ -14,7 +14,6 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.shortcuts import redirect
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView
 
@@ -28,8 +27,7 @@ class APIDocView(SpectacularRedocView):
 
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('admin', lambda request: redirect('/admin/', permanent=True)),
+    path('admin', admin.site.urls),
     path('', include('anthias_app.urls')),
     path('api/', include('api.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
