@@ -5,25 +5,12 @@ import {
   ThunkDispatch,
 } from '@reduxjs/toolkit';
 import { handleWebSocketMessage } from './message-handler';
-import { RootState } from '@/types';
-
-export interface WebSocketMessage {
-  type?: string;
-  data?: unknown;
-  asset_id?: string;
-}
-
-export interface WebSocketState {
-  isConnected: boolean;
-  isConnecting: boolean;
-  error: string | null;
-  lastMessage: WebSocketMessage | string | null;
-  reconnectAttempts: number;
-}
-
-interface ExtendedWindow extends Window {
-  anthiasWebSocket?: WebSocket;
-}
+import {
+  RootState,
+  WebSocketMessage,
+  WebSocketState,
+  ExtendedWindow,
+} from '@/types';
 
 const initialState: WebSocketState = {
   isConnected: false,

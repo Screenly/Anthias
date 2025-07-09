@@ -1,6 +1,5 @@
 // Centralized type definitions for the Anthias application
 import { store } from '@/store/index';
-import { WebSocketMessage } from '@/store/websocket';
 
 // Asset-related types
 export interface Asset {
@@ -56,6 +55,25 @@ export interface HandleSubmitParams {
   setIsSubmitting: (isSubmitting: boolean) => void;
 }
 
+// WebSocket-related types
+export interface WebSocketMessage {
+  type?: string;
+  data?: unknown;
+  asset_id?: string;
+}
+
+export interface WebSocketState {
+  isConnected: boolean;
+  isConnecting: boolean;
+  error: string | null;
+  lastMessage: WebSocketMessage | string | null;
+  reconnectAttempts: number;
+}
+
+export interface ExtendedWindow extends Window {
+  anthiasWebSocket?: WebSocket;
+}
+
 // Redux store types
 export interface RootState {
   assets: {
@@ -108,13 +126,7 @@ export interface RootState {
     uploadProgress: number;
     error: string | null;
   };
-  websocket: {
-    isConnected: boolean;
-    isConnecting: boolean;
-    error: string | null;
-    lastMessage: WebSocketMessage | string | null;
-    reconnectAttempts: number;
-  };
+  websocket: WebSocketState;
 }
 
 // Component prop types
