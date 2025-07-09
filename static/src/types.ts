@@ -55,6 +55,25 @@ export interface HandleSubmitParams {
   setIsSubmitting: (isSubmitting: boolean) => void;
 }
 
+// WebSocket-related types
+export interface WebSocketMessage {
+  type?: string;
+  data?: unknown;
+  asset_id?: string;
+}
+
+export interface WebSocketState {
+  isConnected: boolean;
+  isConnecting: boolean;
+  error: string | null;
+  lastMessage: WebSocketMessage | string | null;
+  reconnectAttempts: number;
+}
+
+export interface ExtendedWindow extends Window {
+  anthiasWebSocket?: WebSocket;
+}
+
 // Redux store types
 export interface RootState {
   assets: {
@@ -107,6 +126,7 @@ export interface RootState {
     uploadProgress: number;
     error: string | null;
   };
+  websocket: WebSocketState;
 }
 
 // Component prop types

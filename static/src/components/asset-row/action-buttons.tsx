@@ -14,49 +14,51 @@ export const ActionButtons = ({
   handleEdit,
   handleDelete,
 }: ActionButtonsProps) => {
+  const buttonClass = classNames(
+    'btn',
+    'btn-outline-dark',
+    'mr-1',
+    'd-inline-flex',
+    'p-2',
+    {
+      disabled: isDisabled,
+    },
+  );
+
+  const tooltipText = isDisabled ? 'Asset is currently being processed' : '';
+
   return (
     <>
       <button
-        className={classNames(
-          'download-asset-button',
-          'btn',
-          'btn-outline-dark',
-          'mr-1',
-          'd-inline-flex',
-          'p-2',
-        )}
+        className={classNames(buttonClass, 'download-asset-button')}
         type="button"
         disabled={isDisabled}
         onClick={handleDownload}
+        title={tooltipText}
+        data-toggle="tooltip"
+        data-placement="top"
       >
         <FaDownload />
       </button>
       <button
-        className={classNames(
-          'edit-asset-button',
-          'btn',
-          'btn-outline-dark',
-          'mr-1',
-          'd-inline-flex',
-          'p-2',
-        )}
+        className={classNames(buttonClass, 'edit-asset-button')}
         type="button"
         disabled={isDisabled}
         onClick={handleEdit}
+        title={tooltipText}
+        data-toggle="tooltip"
+        data-placement="top"
       >
         <FaPencilAlt />
       </button>
       <button
-        className={classNames(
-          'delete-asset-button',
-          'btn',
-          'btn-outline-dark',
-          'd-inline-flex',
-          'p-2',
-        )}
+        className={classNames(buttonClass, 'delete-asset-button')}
         type="button"
         onClick={handleDelete}
         disabled={isDisabled}
+        title={tooltipText}
+        data-toggle="tooltip"
+        data-placement="top"
       >
         <FaTrashAlt />
       </button>
