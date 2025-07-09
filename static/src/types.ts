@@ -1,5 +1,6 @@
 // Centralized type definitions for the Anthias application
 import { store } from '@/store/index';
+import { WebSocketMessage } from '@/store/websocket';
 
 // Asset-related types
 export interface Asset {
@@ -106,6 +107,13 @@ export interface RootState {
     isUploading: boolean;
     uploadProgress: number;
     error: string | null;
+  };
+  websocket: {
+    isConnected: boolean;
+    isConnecting: boolean;
+    error: string | null;
+    lastMessage: WebSocketMessage | string | null;
+    reconnectAttempts: number;
   };
 }
 

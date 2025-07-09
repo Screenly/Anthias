@@ -6,6 +6,7 @@ import { ScheduleOverview } from '@/components/home';
 import { RootState } from '@/types';
 import { assetsReducer, assetModalReducer } from '@/store/assets';
 import settingsReducer from '@/store/settings';
+import websocketReducer from '@/store/websocket';
 
 const initialState: RootState = {
   assets: {
@@ -97,6 +98,13 @@ const initialState: RootState = {
     uploadProgress: 0,
     error: null,
   },
+  websocket: {
+    isConnected: false,
+    isConnecting: false,
+    error: null,
+    lastMessage: null,
+    reconnectAttempts: 0,
+  },
 };
 
 const createTestStore = (preloadedState = {}) => {
@@ -105,6 +113,7 @@ const createTestStore = (preloadedState = {}) => {
       assets: assetsReducer,
       assetModal: assetModalReducer,
       settings: settingsReducer,
+      websocket: websocketReducer,
     },
     preloadedState,
   });

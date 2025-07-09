@@ -13,6 +13,7 @@
     "paths": {
       "@/components/*": ["static/src/components/*"],
       "@/constants": ["static/src/constants.ts"],
+      "@/hooks/*": ["static/src/hooks/*"],
       "@/store/*": ["static/src/store/*"],
       "@/sass/*": ["static/sass/*"],
       "@/types": ["static/src/types.ts"]

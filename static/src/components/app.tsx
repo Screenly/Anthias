@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { fetchAssets } from '@/store/assets';
 import { fetchSettings } from '@/store/settings';
+import { connectWebSocket } from '@/store/websocket';
 import { store } from '@/store/index';
 
 import { Integrations } from '@/components/integrations';
@@ -18,6 +19,7 @@ export const App = () => {
   useEffect(() => {
     dispatch(fetchAssets());
     dispatch(fetchSettings());
+    dispatch(connectWebSocket());
   }, [dispatch]);
 
   return (

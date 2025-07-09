@@ -110,7 +110,9 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
               data-toggle="tooltip"
               data-placement="top"
               title={props.name}
-              style={{ verticalAlign: 'middle' }}
+              style={{
+                verticalAlign: 'middle',
+              }}
             >
               {props.name}
             </span>
@@ -143,32 +145,38 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
             {formatDuration(props.duration)}
           </td>
           <td className={classNames('asset-toggle')} style={{ width: '7%' }}>
-            <label
-              className={classNames(
-                'is_enabled-toggle',
-                'toggle',
-                'switch-light',
-                'switch-material',
-                'small',
-                'm-0',
-              )}
-            >
-              <input
-                type="checkbox"
-                checked={props.isEnabled}
-                onChange={handleToggle}
-                disabled={isDisabled || props.isProcessing === 1}
-              />
-              <span>
-                <span className="off"></span>
-                <span className="on"></span>
-                <a></a>
-              </span>
-            </label>
+            {props.isProcessing === 1 ? (
+              <div className="text-center">
+                <small className="text-muted">Processing</small>
+              </div>
+            ) : (
+              <label
+                className={classNames(
+                  'is_enabled-toggle',
+                  'toggle',
+                  'switch-light',
+                  'switch-material',
+                  'small',
+                  'm-0',
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={props.isEnabled}
+                  onChange={handleToggle}
+                  disabled={isDisabled}
+                />
+                <span>
+                  <span className="off"></span>
+                  <span className="on"></span>
+                  <a></a>
+                </span>
+              </label>
+            )}
           </td>
           <td className={classNames('asset_row_btns')}>
             <ActionButtons
-              isDisabled={isDisabled}
+              isDisabled={isDisabled || props.isProcessing === 1}
               handleDownload={handleDownloadWrapper}
               handleEdit={handleEdit}
               handleDelete={handleDeleteWrapper}
