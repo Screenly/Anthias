@@ -29,12 +29,16 @@ protected:
 private slots:
     void handleAuthRequest(QNetworkReply*, QAuthenticator*);
     void updateMovieFrame();
+    void onWebPageLoadFinished(bool ok);
+    void onWebPageLoadProgress(int progress);
 
 private:
     bool tryLoadAsAnimatedGif(const QByteArray& data);
     void loadAsStaticImage(const QByteArray& data);
     void scheduleNextFrame();
     void setupAnimation();
+    void switchToNextWebView();
+    void resetWebViewStates();
 
     QWebEnginePage* pre_loader;
     QEventLoop pre_loader_loop;
@@ -44,4 +48,13 @@ private:
     QMovie* movie;
     QTimer* animationTimer;
     bool isAnimatedImage;
+
+    // Dual web view system
+    QWebEngineView* webView1;
+    QWebEngineView* webView2;
+    QWebEngineView* currentWebView;
+    QWebEngineView* nextWebView;
+    bool isWebView1Active;
+    bool nextWebViewReady;
+    int nextWebViewProgress;
 };
