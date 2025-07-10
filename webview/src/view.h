@@ -54,7 +54,5 @@ private:
     QWebEngineView* webView2;
     QWebEngineView* currentWebView;
     QWebEngineView* nextWebView;
-    bool isWebView1Active;
     bool nextWebViewReady;
-    int nextWebViewProgress;
 };

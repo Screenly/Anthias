@@ -23,9 +23,7 @@ View::View(QWidget* parent) : QWidget(parent)
     // Set up initial state
     currentWebView = webView1;
     nextWebView = webView2;
-    isWebView1Active = true;
     nextWebViewReady = false;
-    nextWebViewProgress = 0;
 
     // Make webView1 the main webView for compatibility
     webView = webView1;
@@ -336,7 +334,6 @@ void View::onWebPageLoadFinished(bool ok)
 
 void View::onWebPageLoadProgress(int progress)
 {
-    nextWebViewProgress = progress;
     qDebug() << "Background web page load progress:" << progress << "%";
 
     // If progress reaches 100%, mark as ready
@@ -369,12 +366,8 @@ void View::switchToNextWebView()
     // Update the main webView reference for compatibility
     webView = currentWebView;
 
-    // Toggle the active flag
-    isWebView1Active = !isWebView1Active;
-
     // Reset states for next load
     nextWebViewReady = false;
-    nextWebViewProgress = 0;
 
     qDebug() << "Successfully switched to next web view";
 }
@@ -382,7 +375,6 @@ void View::switchToNextWebView()
 void View::resetWebViewStates()
 {
     nextWebViewReady = false;
-    nextWebViewProgress = 0;
 
     // Disconnect any existing signals to prevent duplicates
     disconnect(nextWebView->page(), &QWebEnginePage::loadProgress, this, &View::onWebPageLoadProgress);
