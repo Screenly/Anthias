@@ -1,4 +1,5 @@
-FROM --platform=linux/arm/v7 balenalib/raspberrypi3:bookworm as builder
+ARG BUILDER_BASE_PLATFORM=linux/arm/v7
+FROM --platform=${BUILDER_BASE_PLATFORM} balenalib/raspberrypi3:bookworm AS builder
 
 # There are likely a large number of dependencies that can be stripped out here
 # depending on your needs (and probably in general). My primary objective was just
@@ -193,9 +194,9 @@ COPY --from=builder /lib/ /sysroot/lib/
 COPY --from=builder /usr/include/ /sysroot/usr/include/
 COPY --from=builder /usr/lib/ /sysroot/usr/lib/
 
-ENV BUILD_WEBVIEW 1
-ENV CCACHE_MAXSIZE 10G
-ENV CCACHE_DIR /src/ccache
+ENV BUILD_WEBVIEW=1
+ENV CCACHE_MAXSIZE=10G
+ENV CCACHE_DIR=/src/ccache
 ARG GIT_HASH=0
 ENV GIT_HASH=$GIT_HASH
 
