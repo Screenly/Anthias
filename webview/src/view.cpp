@@ -16,15 +16,24 @@
 
 View::View(QWidget* parent) : QWidget(parent)
 {
-    webView = new QWebEngineView(this);
+    // Initialize dual web view system
+    webView1 = new QWebEngineView(this);
+    webView2 = new QWebEngineView(this);
+
+    // Set up initial state
+    currentWebView = webView1;
+    nextWebView = webView2;
+    nextWebViewReady = false;
+
+    // Make webView1 the main webView for compatibility
+    webView = webView1;
     webView->setVisible(false);
 
-    connect(
-        webView->page(),
-        SIGNAL(authenticationRequired(QNetworkReply*,QAuthenticator*)),
-        this,
-        SLOT(handleAuthRequest(QNetworkReply*,QAuthenticator*))
-    );
+    // Connect authentication for both web views
+    connect(webView1->page(), SIGNAL(authenticationRequired(QNetworkReply*,QAuthenticator*)),
+            this, SLOT(handleAuthRequest(QNetworkReply*,QAuthenticator*)));
+    connect(webView2->page(), SIGNAL(authenticationRequired(QNetworkReply*,QAuthenticator*)),
+            this, SLOT(handleAuthRequest(QNetworkReply*,QAuthenticator*)));
 
     pre_loader = new QWebEnginePage;
     networkManager = new QNetworkAccessManager(this);
@@ -52,29 +61,36 @@ void View::loadPage(const QString &uri)
     // Clear current image if any
     currentImage = QImage();
 
-    // Connect to loadFinished signal with version-specific code
-    connect(webView->page(), &QWebEnginePage::loadFinished, this, [=](bool ok) {
-        if (ok) {
-            qDebug() << "Web page loaded successfully";
-            webView->setVisible(true);
-            webView->clearFocus();
-        } else {
-            qDebug() << "Web page failed to load";
-        }
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    }, Qt::SingleShotConnection);  // Disconnect after first signal
-#else
-    });
-#endif
+    // Stop any existing animation
+    if (movie) {
+        movie->stop();
+        delete movie;
+        movie = nullptr;
+    }
+    animationTimer->stop();
+    isAnimatedImage = false;
 
-    // Load the page
-    webView->stop();
-    webView->load(QUrl(uri));
+    // Reset web view states
+    resetWebViewStates();
+
+    // Connect to load progress and finished signals for the next web view
+    connect(nextWebView->page(), &QWebEnginePage::loadProgress, this, &View::onWebPageLoadProgress);
+    connect(nextWebView->page(), &QWebEnginePage::loadFinished, this, &View::onWebPageLoadFinished);
+
+    // Load the page in the next web view while keeping current one visible
+    nextWebView->stop();
+    nextWebView->load(QUrl(uri));
+
+    qDebug() << "Loading web page in background web view:" << uri;
 }
 
 void View::loadImage(const QString &preUri)
 {
     qDebug() << "Type: Image";
+
+    // Hide both web views when switching to image
+    webView1->setVisible(false);
+    webView2->setVisible(false);
 
     // Stop any existing animation
     if (movie) {
@@ -264,7 +280,9 @@ void View::paintEvent(QPaintEvent*)
 void View::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
-    webView->setGeometry(rect());
+    // Both web views should have the same geometry
+    webView1->setGeometry(rect());
+    webView2->setGeometry(rect());
 }
 
 void View::handleAuthRequest(QNetworkReply* reply, QAuthenticator* auth)
@@ -294,4 +312,71 @@ void View::setupAnimation()
     // Get the first frame
     currentImage = movie->currentImage();
     update();
+}
+
+void View::onWebPageLoadFinished(bool ok)
+{
+    if (ok) {
+        qDebug() << "Background web page loaded successfully";
+        nextWebViewReady = true;
+
+        // Switch to the new web view since it's ready
+        switchToNextWebView();
+    } else {
+        qDebug() << "Background web page failed to load";
+        nextWebViewReady = false;
+    }
+
+    // Disconnect signals to prevent memory leaks
+    disconnect(nextWebView->page(), &QWebEnginePage::loadProgress, this, &View::onWebPageLoadProgress);
+    disconnect(nextWebView->page(), &QWebEnginePage::loadFinished, this, &View::onWebPageLoadFinished);
+}
+
+void View::onWebPageLoadProgress(int progress)
+{
+    qDebug() << "Background web page load progress:" << progress << "%";
+
+    // If progress reaches 100%, mark as ready
+    if (progress >= 100) {
+        nextWebViewReady = true;
+    }
+}
+
+void View::switchToNextWebView()
+{
+    if (!nextWebViewReady) {
+        qDebug() << "Next web view not ready yet, keeping current one visible";
+        return;
+    }
+
+    qDebug() << "Switching to next web view";
+
+    // Hide current web view
+    currentWebView->setVisible(false);
+
+    // Show next web view
+    nextWebView->setVisible(true);
+    nextWebView->clearFocus();
+
+    // Swap the web views
+    QWebEngineView* temp = currentWebView;
+    currentWebView = nextWebView;
+    nextWebView = temp;
+
+    // Update the main webView reference for compatibility
+    webView = currentWebView;
+
+    // Reset states for next load
+    nextWebViewReady = false;
+
+    qDebug() << "Successfully switched to next web view";
+}
+
+void View::resetWebViewStates()
+{
+    nextWebViewReady = false;
+
+    // Disconnect any existing signals to prevent duplicates
+    disconnect(nextWebView->page(), &QWebEnginePage::loadProgress, this, &View::onWebPageLoadProgress);
+    disconnect(nextWebView->page(), &QWebEnginePage::loadFinished, this, &View::onWebPageLoadFinished);
 }
