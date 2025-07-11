@@ -74,6 +74,8 @@ class CreateAssetSerializerMixin:
                 asset['duration'] = (
                     duration if version == 'v2' else int(duration)
                 )
+            else:
+                raise Exception("Duration must be zero for video assets.")
         else:
             # Crashes if it's not an int. We want that.
             duration = data.get(
