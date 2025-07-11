@@ -4,6 +4,7 @@ from os import path, rename
 
 from rest_framework.serializers import CharField, Serializer
 
+from api.errors import AssetCreationError
 from lib.utils import (
     download_video_from_youtube,
     get_video_duration,
@@ -75,7 +76,9 @@ class CreateAssetSerializerMixin:
                     duration if version == 'v2' else int(duration)
                 )
             else:
-                raise Exception("Duration must be zero for video assets.")
+                raise AssetCreationError(
+                    'Duration must be zero for video assets.'
+                )
         else:
             # Crashes if it's not an int. We want that.
             duration = data.get(
@@ -101,7 +104,9 @@ class CreateAssetSerializerMixin:
         asset['end_date'] = data.get('end_date').replace(tzinfo=None)
 
         if not asset['skip_asset_check'] and url_fails(asset['uri']):
-            raise Exception("Could not retrieve file. Check the asset URL.")
+            raise AssetCreationError(
+                'Could not retrieve file. Check the asset URL.'
+            )
 
         return asset
 
