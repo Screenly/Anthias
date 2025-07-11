@@ -6,13 +6,17 @@ on:
     paths:
       - '**/*.js'
       - '**/*.jsx'
+      - '**/*.ts'
+      - '**/*.tsx'
       - '**/*.mjs'
       - '.github/workflows/javascript-lint.yaml'
   pull_request:
     branches: [ master ]
     paths:
       - '**/*.js'
-      - '**/*.coffee'
+      - '**/*.jsx'
+      - '**/*.ts'
+      - '**/*.tsx'
       - '**/*.mjs'
       - '.github/workflows/javascript-lint.yaml'
 
