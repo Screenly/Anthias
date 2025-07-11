@@ -1,6 +1,7 @@
 """
 Tests for asset-related API endpoints.
 """
+import mock
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -78,6 +79,48 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(response.data['nocache'], 0)
         self.assertEqual(response.data['play_order'], 0)
         self.assertEqual(response.data['skip_asset_check'], 0)
+
+    @mock.patch('api.serializers.mixins.rename')
+    @mock.patch('api.serializers.mixins.validate_uri')
+    def test_create_video_asset_v2_with_non_zero_duration_should_fail(
+        self,
+        mock_validate_uri,
+        mock_rename
+    ):
+        """Test that v2 rejects video assets with non-zero duration."""
+        mock_validate_uri.return_value = True
+        asset_list_url = reverse('api:asset_list_v2')
+
+        test_data = {
+            'name': 'Test Video',
+            'uri': '/data/screenly_assets/video.mp4',
+            'start_date': '2019-08-24T14:15:22Z',
+            'end_date': '2029-08-24T14:15:22Z',
+            'duration': 30,
+            'mimetype': 'video',
+            'is_enabled': True,
+            'nocache': False,
+            'play_order': 0,
+            'skip_asset_check': False
+        }
+
+        response = self.client.post(
+            asset_list_url,
+            data=test_data,
+            format='json'
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+        self.assertIn(
+            'Duration must be zero for video assets',
+            str(response.data)
+        )
+
+        self.assertEqual(mock_rename.call_count, 1)
+        self.assertEqual(mock_validate_uri.call_count, 1)
 
     @parametrize_version
     def test_get_assets_after_create_should_return_1_asset(self, version):
