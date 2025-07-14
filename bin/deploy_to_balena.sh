@@ -118,7 +118,7 @@ else
     cat docker-compose.balena.dev.yml.tmpl | \
         envsubst > docker-compose.yml
 
-    if [ "$BOARD" == "pi5" ] || [ "$BOARD" == "x86" ]; then
+    if [[ $BOARD =~ ^(pi5|x86)$ ]]; then
         sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
             docker-compose.yml
     fi
