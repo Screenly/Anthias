@@ -91,7 +91,7 @@ function prepare_balena_file() {
     cat docker-compose.balena.yml.tmpl | \
     envsubst > balena-deploy/docker-compose.yml
 
-    if [ "$BOARD" == "pi5" ] || [ "$BOARD" == "x86" ]; then
+    if [[ $BOARD =~ ^(pi5|x86)$ ]]; then
         sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
             balena-deploy/docker-compose.yml
     fi
