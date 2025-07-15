@@ -5,7 +5,7 @@ export const Footer = () => {
         <div className="row">
           <div className="col-6 small text-white mt-5 mb-5">
             <span>
-              Want to get more out of your digital signage?
+              Want to get more out of your digital signage?{' '}
               <a
                 className="brand"
                 href="https://www.screenly.io/?utm_source=Anthias&utm_medium=root-page&utm_campaign=UI"
