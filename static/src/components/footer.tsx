@@ -1,16 +1,6 @@
 export const Footer = () => {
   return (
-    <footer
-      id="footer"
-      className="bg-dark"
-      style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 1000,
-      }}
-    >
+    <footer id="footer" className="bg-dark">
       <div className="container">
         <div className="row">
           <div className="col-6 small text-white mt-5 mb-5">
