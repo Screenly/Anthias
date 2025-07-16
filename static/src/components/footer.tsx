@@ -67,16 +67,16 @@ export const Footer = () => {
                   src={(() => {
                     const url = new URL(
                       'https://img.shields.io/github/stars/Screenly/Anthias',
-                    );
+                    )
                     const params = new URLSearchParams({
                       style: 'for-the-badge',
                       labelColor: '#EBF0F4',
                       color: '#FFE11A',
                       logo: 'github',
                       logoColor: 'black',
-                    });
-                    url.search = params.toString();
-                    return url.toString();
+                    })
+                    url.search = params.toString()
+                    return url.toString()
                   })()}
                 />
               </a>
@@ -90,5 +90,5 @@ export const Footer = () => {
         </div>
       </div>
     </footer>
-  );
-};
+  )
+}

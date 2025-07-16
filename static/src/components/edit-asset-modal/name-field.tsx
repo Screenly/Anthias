@@ -1,8 +1,8 @@
-import { EditFormData } from '@/types';
+import { EditFormData } from '@/types'
 
 interface NameFieldProps {
-  formData: EditFormData;
-  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  formData: EditFormData
+  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
 export const NameField = ({ formData, handleInputChange }: NameFieldProps) => {
@@ -20,5 +20,5 @@ export const NameField = ({ formData, handleInputChange }: NameFieldProps) => {
         />
       </div>
     </div>
-  );
-};
+  )
+}

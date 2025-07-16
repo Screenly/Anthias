@@ -1,14 +1,14 @@
-import { useDispatch } from 'react-redux';
-import Swal from 'sweetalert2';
-import { OperationConfig, AppDispatch } from '@/types';
+import { useDispatch } from 'react-redux'
+import Swal from 'sweetalert2'
+import { OperationConfig, AppDispatch } from '@/types'
 
-import { SWEETALERT_TIMER } from '@/constants';
-import { systemOperation } from '@/store/settings';
+import { SWEETALERT_TIMER } from '@/constants'
+import { systemOperation } from '@/store/settings'
 
-type SystemOperationType = 'reboot' | 'shutdown';
+type SystemOperationType = 'reboot' | 'shutdown'
 
 export const SystemControls = () => {
-  const dispatch = useDispatch<AppDispatch>();
+  const dispatch = useDispatch<AppDispatch>()
 
   const handleSystemOperation = async (operation: SystemOperationType) => {
     const config: Record<SystemOperationType, OperationConfig> = {
@@ -29,10 +29,10 @@ export const SystemControls = () => {
           'Device shutdown has started successfully.\nSoon you will be able to unplug the power from your Raspberry Pi.',
         errorMessage: 'Failed to shutdown device',
       },
-    };
+    }
 
     const { title, text, confirmButtonText, endpoint, successMessage } =
-      config[operation];
+      config[operation]
 
     const result = await Swal.fire({
       title,
@@ -51,13 +51,13 @@ export const SystemControls = () => {
         cancelButton: 'swal2-cancel',
         actions: 'swal2-actions',
       },
-    });
+    })
 
     if (result.isConfirmed) {
       try {
         await dispatch(
           systemOperation({ operation, endpoint, successMessage }),
-        ).unwrap();
+        ).unwrap()
 
         await Swal.fire({
           title: 'Success!',
@@ -70,7 +70,7 @@ export const SystemControls = () => {
             title: 'swal2-title',
             htmlContainer: 'swal2-html-container',
           },
-        });
+        })
       } catch (err) {
         await Swal.fire({
           title: 'Error!',
@@ -84,13 +84,13 @@ export const SystemControls = () => {
             htmlContainer: 'swal2-html-container',
             confirmButton: 'swal2-confirm',
           },
-        });
+        })
       }
     }
-  };
+  }
 
-  const handleReboot = () => handleSystemOperation('reboot');
-  const handleShutdown = () => handleSystemOperation('shutdown');
+  const handleReboot = () => handleSystemOperation('reboot')
+  const handleShutdown = () => handleSystemOperation('shutdown')
 
   return (
     <>
@@ -122,5 +122,5 @@ export const SystemControls = () => {
         </div>
       </div>
     </>
-  );
-};
+  )
+}

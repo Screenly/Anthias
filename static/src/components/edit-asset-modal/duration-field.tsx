@@ -1,8 +1,8 @@
-import { EditFormData } from '@/types';
+import { EditFormData } from '@/types'
 
 interface DurationFieldProps {
-  formData: EditFormData;
-  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  formData: EditFormData
+  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
 export const DurationField = ({
@@ -24,5 +24,5 @@ export const DurationField = ({
         seconds &nbsp;
       </div>
     </div>
-  );
-};
+  )
+}

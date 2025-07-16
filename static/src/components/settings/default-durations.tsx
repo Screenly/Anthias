@@ -1,11 +1,11 @@
-import { RootState } from '@/types';
+import { RootState } from '@/types'
 
 export const DefaultDurations = ({
   settings,
   handleInputChange,
 }: {
-  settings: RootState['settings']['settings'];
-  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  settings: RootState['settings']['settings']
+  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 }) => {
   return (
     <div className="row">
@@ -34,5 +34,5 @@ export const DefaultDurations = ({
         />
       </div>
     </div>
-  );
-};
+  )
+}

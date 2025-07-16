@@ -1,9 +1,9 @@
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux'
 import {
   selectActiveAssets,
   updateAssetOrder,
   fetchAssets,
-} from '@/store/assets';
+} from '@/store/assets'
 import {
   DndContext,
   closestCenter,
@@ -12,59 +12,59 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
-} from '@dnd-kit/core';
+} from '@dnd-kit/core'
 import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { SortableAssetRow } from '@/components/sortable-asset-row';
-import { useState, useEffect } from 'react';
-import { Asset, ActiveAssetsTableProps, AppDispatch } from '@/types';
+} from '@dnd-kit/sortable'
+import { SortableAssetRow } from '@/components/sortable-asset-row'
+import { useState, useEffect } from 'react'
+import { Asset, ActiveAssetsTableProps, AppDispatch } from '@/types'
 
 export const ActiveAssetsTable = ({ onEditAsset }: ActiveAssetsTableProps) => {
-  const dispatch = useDispatch<AppDispatch>();
-  const activeAssets = useSelector(selectActiveAssets) as Asset[];
-  const [items, setItems] = useState<Asset[]>(activeAssets);
+  const dispatch = useDispatch<AppDispatch>()
+  const activeAssets = useSelector(selectActiveAssets) as Asset[]
+  const [items, setItems] = useState<Asset[]>(activeAssets)
 
   useEffect(() => {
-    setItems(activeAssets);
-  }, [activeAssets]);
+    setItems(activeAssets)
+  }, [activeAssets])
 
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
-  );
+  )
 
   const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
+    const { active, over } = event
 
     if (!over || active.id === over.id) {
-      return;
+      return
     }
 
     const oldIndex = items.findIndex(
       (asset) => asset.asset_id.toString() === active.id,
-    );
+    )
     const newIndex = items.findIndex(
       (asset) => asset.asset_id.toString() === over.id,
-    );
+    )
 
-    const newItems = arrayMove(items, oldIndex, newIndex);
-    setItems(newItems);
+    const newItems = arrayMove(items, oldIndex, newIndex)
+    setItems(newItems)
 
-    const activeIds = newItems.map((asset: Asset) => asset.asset_id);
+    const activeIds = newItems.map((asset: Asset) => asset.asset_id)
 
     try {
-      await dispatch(updateAssetOrder(activeIds.join(','))).unwrap();
-      dispatch(fetchAssets());
+      await dispatch(updateAssetOrder(activeIds.join(','))).unwrap()
+      dispatch(fetchAssets())
     } catch {
-      setItems(activeAssets);
+      setItems(activeAssets)
     }
-  };
+  }
 
   return (
     <DndContext
@@ -121,5 +121,5 @@ export const ActiveAssetsTable = ({ onEditAsset }: ActiveAssetsTableProps) => {
         </tbody>
       </table>
     </DndContext>
-  );
-};
+  )
+}

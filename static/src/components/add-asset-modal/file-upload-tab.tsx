@@ -1,16 +1,16 @@
-import React from 'react';
-import classNames from 'classnames';
+import React from 'react'
+import classNames from 'classnames'
 
 interface FileUploadTabProps {
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
-  dropZoneRef: React.RefObject<HTMLDivElement | null>;
-  handleFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleFileDrop: (e: React.DragEvent<HTMLDivElement>) => void;
-  handleDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
-  handleDragEnter: (e: React.DragEvent<HTMLDivElement>) => void;
-  handleDragLeave: (e: React.DragEvent<HTMLDivElement>) => void;
-  isSubmitting: boolean;
-  uploadProgress: number;
+  fileInputRef: React.RefObject<HTMLInputElement | null>
+  dropZoneRef: React.RefObject<HTMLDivElement | null>
+  handleFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
+  handleFileDrop: (e: React.DragEvent<HTMLDivElement>) => void
+  handleDragOver: (e: React.DragEvent<HTMLDivElement>) => void
+  handleDragEnter: (e: React.DragEvent<HTMLDivElement>) => void
+  handleDragLeave: (e: React.DragEvent<HTMLDivElement>) => void
+  isSubmitting: boolean
+  uploadProgress: number
 }
 
 export const FileUploadTab = ({
@@ -81,5 +81,5 @@ export const FileUploadTab = ({
         ></div>
       </div>
     </div>
-  );
-};
+  )
+}

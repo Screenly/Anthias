@@ -1,27 +1,27 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { SettingsData, SystemOperationParams, RootState } from '@/types';
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
+import { SettingsData, SystemOperationParams, RootState } from '@/types'
 
-type SettingsState = RootState['settings']['settings'];
+type SettingsState = RootState['settings']['settings']
 
 type UpdateSettingPayload = {
-  name: keyof SettingsState;
-  value: SettingsState[keyof SettingsState];
-};
+  name: keyof SettingsState
+  value: SettingsState[keyof SettingsState]
+}
 
 export const fetchSettings = createAsyncThunk(
   'settings/fetchSettings',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await fetch('/api/v2/device_settings');
+      const response = await fetch('/api/v2/device_settings')
       if (response?.url?.endsWith('/login/')) {
-        window.location.href = response.url;
+        window.location.href = response.url
       }
 
       if (!response.ok) {
-        return rejectWithValue('Failed to fetch device settings');
+        return rejectWithValue('Failed to fetch device settings')
       }
 
-      const data = await response.json();
+      const data = await response.json()
       return {
         playerName: data.player_name || '',
         defaultDuration: data.default_duration || 0,
@@ -35,21 +35,21 @@ export const fetchSettings = createAsyncThunk(
         shufflePlaylist: data.shuffle_playlist || false,
         use24HourClock: data.use_24_hour_clock || false,
         debugLogging: data.debug_logging || false,
-      };
+      }
     } catch (error) {
-      return rejectWithValue((error as Error).message);
+      return rejectWithValue((error as Error).message)
     }
   },
-);
+)
 
 export const fetchDeviceModel = createAsyncThunk(
   'settings/fetchDeviceModel',
   async () => {
-    const response = await fetch('/api/v2/info');
-    const data = await response.json();
-    return data.device_model || '';
+    const response = await fetch('/api/v2/info')
+    const data = await response.json()
+    return data.device_model || ''
   },
-);
+)
 
 export const updateSettings = createAsyncThunk(
   'settings/updateSettings',
@@ -77,20 +77,20 @@ export const updateSettings = createAsyncThunk(
           use_24_hour_clock: settings.use24HourClock,
           debug_logging: settings.debugLogging,
         }),
-      });
+      })
 
-      const data = await response.json();
+      const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to save settings');
+        throw new Error(data.error || 'Failed to save settings')
       }
 
-      return data;
+      return data
     } catch (error) {
-      return rejectWithValue((error as Error).message);
+      return rejectWithValue((error as Error).message)
     }
   },
-);
+)
 
 export const createBackup = createAsyncThunk(
   'settings/createBackup',
@@ -98,44 +98,44 @@ export const createBackup = createAsyncThunk(
     try {
       const response = await fetch('/api/v2/backup', {
         method: 'POST',
-      });
+      })
 
       if (!response.ok) {
-        throw new Error('Failed to create backup');
+        throw new Error('Failed to create backup')
       }
 
-      const data = await response.json();
-      return data;
+      const data = await response.json()
+      return data
     } catch (error) {
-      return rejectWithValue((error as Error).message);
+      return rejectWithValue((error as Error).message)
     }
   },
-);
+)
 
 export const uploadBackup = createAsyncThunk(
   'settings/uploadBackup',
   async (file: File, { rejectWithValue }) => {
     try {
-      const formData = new FormData();
-      formData.append('backup_upload', file);
+      const formData = new FormData()
+      formData.append('backup_upload', file)
 
       const response = await fetch('/api/v2/recover', {
         method: 'POST',
         body: formData,
-      });
+      })
 
-      const data = await response.json();
+      const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to upload backup');
+        throw new Error(data.error || 'Failed to upload backup')
       }
 
-      return data;
+      return data
     } catch (error) {
-      return rejectWithValue((error as Error).message);
+      return rejectWithValue((error as Error).message)
     }
   },
-);
+)
 
 export const systemOperation = createAsyncThunk(
   'settings/systemOperation',
@@ -146,18 +146,18 @@ export const systemOperation = createAsyncThunk(
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
-      });
+      })
 
       if (!response.ok) {
-        throw new Error(`Failed to ${operation} device`);
+        throw new Error(`Failed to ${operation} device`)
       }
 
-      return { operation, successMessage };
+      return { operation, successMessage }
     } catch (error) {
-      return rejectWithValue((error as Error).message);
+      return rejectWithValue((error as Error).message)
     }
   },
-);
+)
 
 const initialState = {
   settings: {
@@ -184,102 +184,102 @@ const initialState = {
   isUploading: false,
   uploadProgress: 0,
   error: null as string | null,
-};
+}
 
 const settingsSlice = createSlice({
   name: 'settings',
   initialState,
   reducers: {
     updateSetting: (state, action: { payload: UpdateSettingPayload }) => {
-      const { name, value } = action.payload;
+      const { name, value } = action.payload
       if (name === 'authBackend') {
-        state.prevAuthBackend = state.settings.authBackend;
+        state.prevAuthBackend = state.settings.authBackend
       }
-      (
+      ;(
         state.settings as Record<
           keyof SettingsState,
           SettingsState[keyof SettingsState]
         >
-      )[name] = value;
+      )[name] = value
     },
     setUploadProgress: (state, action) => {
-      state.uploadProgress = action.payload;
+      state.uploadProgress = action.payload
     },
     resetUploadState: (state) => {
-      state.isUploading = false;
-      state.uploadProgress = 0;
-      state.error = null;
+      state.isUploading = false
+      state.uploadProgress = 0
+      state.error = null
     },
     clearError: (state) => {
-      state.error = null;
+      state.error = null
     },
   },
   extraReducers: (builder) => {
     builder
       // Fetch Settings
       .addCase(fetchSettings.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
+        state.isLoading = true
+        state.error = null
       })
       .addCase(fetchSettings.fulfilled, (state, action) => {
-        state.settings = { ...state.settings, ...action.payload };
-        state.prevAuthBackend = action.payload.authBackend;
-        state.hasSavedBasicAuth = action.payload.authBackend === 'auth_basic';
-        state.isLoading = false;
+        state.settings = { ...state.settings, ...action.payload }
+        state.prevAuthBackend = action.payload.authBackend
+        state.hasSavedBasicAuth = action.payload.authBackend === 'auth_basic'
+        state.isLoading = false
       })
       .addCase(fetchSettings.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload as string | null;
+        state.isLoading = false
+        state.error = action.payload as string | null
       })
       // Fetch Device Model
       .addCase(fetchDeviceModel.fulfilled, (state, action) => {
-        state.deviceModel = action.payload;
+        state.deviceModel = action.payload
       })
       // Update Settings
       .addCase(updateSettings.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
+        state.isLoading = true
+        state.error = null
       })
       .addCase(updateSettings.fulfilled, (state) => {
-        state.isLoading = false;
-        state.settings.currentPassword = '';
-        state.hasSavedBasicAuth = state.settings.authBackend === 'auth_basic';
+        state.isLoading = false
+        state.settings.currentPassword = ''
+        state.hasSavedBasicAuth = state.settings.authBackend === 'auth_basic'
       })
       .addCase(updateSettings.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload as string | null;
+        state.isLoading = false
+        state.error = action.payload as string | null
       })
       // Create Backup
       .addCase(createBackup.rejected, (state, action) => {
-        state.error = action.payload as string | null;
+        state.error = action.payload as string | null
       })
       // Upload Backup
       .addCase(uploadBackup.pending, (state) => {
-        state.isUploading = true;
-        state.error = null;
+        state.isUploading = true
+        state.error = null
       })
       .addCase(uploadBackup.fulfilled, (state) => {
-        state.isUploading = false;
+        state.isUploading = false
       })
       .addCase(uploadBackup.rejected, (state, action) => {
-        state.isUploading = false;
-        state.error = action.payload as string | null;
+        state.isUploading = false
+        state.error = action.payload as string | null
       })
       // System Operation
       .addCase(systemOperation.rejected, (state, action) => {
-        state.error = action.payload as string | null;
-      });
+        state.error = action.payload as string | null
+      })
   },
-});
+})
 
 export const {
   updateSetting,
   setUploadProgress,
   resetUploadState,
   clearError,
-} = settingsSlice.actions;
+} = settingsSlice.actions
 
 // Selectors
-export const selectSettings = (state: RootState) => state.settings.settings;
+export const selectSettings = (state: RootState) => state.settings.settings
 
-export default settingsSlice.reducer;
+export default settingsSlice.reducer

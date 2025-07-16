@@ -1,12 +1,12 @@
 interface DateFieldsProps {
-  startDateDate: string;
-  startDateTime: string;
-  endDateDate: string;
-  endDateTime: string;
+  startDateDate: string
+  startDateTime: string
+  endDateDate: string
+  endDateTime: string
   handleDateChange: (
     e: React.ChangeEvent<HTMLInputElement>,
     type: string,
-  ) => void;
+  ) => void
 }
 
 export const DateFields = ({
@@ -59,5 +59,5 @@ export const DateFields = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
