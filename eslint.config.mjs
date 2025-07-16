@@ -45,13 +45,13 @@ export default [
       }
     },
     rules: {
-      'semi': ['error', 'always'],
       'quotes': ['error', 'single'],
       'indent': 'off',
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': 'error',
       'no-console': 'error',
       'no-debugger': 'warn',
+      'no-unexpected-multiline': 'error',
       'react/jsx-uses-react': 'error',
       'react/jsx-uses-vars': 'error',
       'react/jsx-no-duplicate-props': 'error',
