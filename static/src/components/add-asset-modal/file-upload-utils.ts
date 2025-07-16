@@ -61,7 +61,7 @@ export const getDurationForMimetype = (
   defaultDuration: number,
   defaultStreamingDuration: number,
 ): number => {
-  if (mimetype === 'video') {
+  if (['video', 'youtube_asset'].includes(mimetype)) {
     return 0
   } else if (mimetype === 'streaming') {
     return defaultStreamingDuration
