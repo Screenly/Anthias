@@ -1,11 +1,11 @@
-import { createAsyncThunk } from '@reduxjs/toolkit';
-import { Asset, ToggleAssetParams, RootState } from '@/types';
+import { createAsyncThunk } from '@reduxjs/toolkit'
+import { Asset, ToggleAssetParams, RootState } from '@/types'
 
 export const fetchAssets = createAsyncThunk('assets/fetchAssets', async () => {
-  const response = await fetch('/api/v2/assets');
-  const data = await response.json();
-  return data;
-});
+  const response = await fetch('/api/v2/assets')
+  const data = await response.json()
+  return data
+})
 
 export const updateAssetOrder = createAsyncThunk(
   'assets/updateOrder',
@@ -16,27 +16,27 @@ export const updateAssetOrder = createAsyncThunk(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ ids: orderedIds }),
-    });
+    })
     if (!response.ok) {
-      throw new Error('Failed to update order');
+      throw new Error('Failed to update order')
     }
-    return orderedIds;
+    return orderedIds
   },
-);
+)
 
 export const toggleAssetEnabled = createAsyncThunk(
   'assets/toggleEnabled',
   async ({ assetId, newValue }: ToggleAssetParams, { dispatch, getState }) => {
     // First, fetch the current assets to determine the next play_order
-    const response = await fetch('/api/v2/assets');
-    const assets = await response.json();
+    const response = await fetch('/api/v2/assets')
+    const assets = await response.json()
 
     // Get the current active assets to determine the next play_order
-    const activeAssets = assets.filter((asset: Asset) => asset.is_active);
+    const activeAssets = assets.filter((asset: Asset) => asset.is_active)
 
     // If enabling the asset, set play_order to the next available position
     // If disabling the asset, set play_order to 0
-    const playOrder = newValue === 1 ? activeAssets.length : 0;
+    const playOrder = newValue === 1 ? activeAssets.length : 0
 
     const updateResponse = await fetch(`/api/v2/assets/${assetId}`, {
       method: 'PATCH',
@@ -47,22 +47,22 @@ export const toggleAssetEnabled = createAsyncThunk(
         is_enabled: newValue,
         play_order: playOrder,
       }),
-    });
+    })
 
-    const state = getState() as RootState;
+    const state = getState() as RootState
     const activeAssetIds = state.assets.items
       .filter((asset) => asset.is_active)
       .sort((a, b) => a.play_order - b.play_order)
       .map((asset) => asset.asset_id)
-      .concat(assetId);
+      .concat(assetId)
 
-    await dispatch(updateAssetOrder(activeAssetIds.join(',')));
+    await dispatch(updateAssetOrder(activeAssetIds.join(',')))
 
     if (!updateResponse.ok) {
-      throw new Error('Failed to update asset');
+      throw new Error('Failed to update asset')
     }
 
     // Return both the assetId and newValue for the reducer
-    return { assetId, newValue, playOrder };
+    return { assetId, newValue, playOrder }
   },
-);
+)

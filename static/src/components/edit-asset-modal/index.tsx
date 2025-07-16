@@ -1,22 +1,22 @@
-import React, { useEffect, useState } from 'react';
-import classNames from 'classnames';
-import { useDispatch } from 'react-redux';
-import { AssetEditData, EditFormData } from '@/types';
+import React, { useEffect, useState } from 'react'
+import classNames from 'classnames'
+import { useDispatch } from 'react-redux'
+import { AssetEditData, EditFormData } from '@/types'
 
-import { handleSubmit } from '@/components/edit-asset-modal/utils';
-import { NameField } from '@/components/edit-asset-modal/name-field';
-import { AssetLocationField } from '@/components/edit-asset-modal/asset-location-field';
-import { AssetTypeField } from '@/components/edit-asset-modal/asset-type-field';
-import { PlayForField } from '@/components/edit-asset-modal/play-for-field';
-import { DateFields } from '@/components/edit-asset-modal/date-fields';
-import { DurationField } from '@/components/edit-asset-modal/duration-field';
-import { ModalFooter } from '@/components/edit-asset-modal/modal-footer';
-import { AdvancedFields } from '@/components/edit-asset-modal/advanced';
+import { handleSubmit } from '@/components/edit-asset-modal/utils'
+import { NameField } from '@/components/edit-asset-modal/name-field'
+import { AssetLocationField } from '@/components/edit-asset-modal/asset-location-field'
+import { AssetTypeField } from '@/components/edit-asset-modal/asset-type-field'
+import { PlayForField } from '@/components/edit-asset-modal/play-for-field'
+import { DateFields } from '@/components/edit-asset-modal/date-fields'
+import { DurationField } from '@/components/edit-asset-modal/duration-field'
+import { ModalFooter } from '@/components/edit-asset-modal/modal-footer'
+import { AdvancedFields } from '@/components/edit-asset-modal/advanced'
 
 interface EditAssetModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  asset: AssetEditData | null;
+  isOpen: boolean
+  onClose: () => void
+  asset: AssetEditData | null
 }
 
 export const EditAssetModal = ({
@@ -24,9 +24,9 @@ export const EditAssetModal = ({
   onClose,
   asset,
 }: EditAssetModalProps) => {
-  const dispatch = useDispatch();
-  const [isVisible, setIsVisible] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const dispatch = useDispatch()
+  const [isVisible, setIsVisible] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState<EditFormData>({
     name: '',
     start_date: '',
@@ -35,33 +35,33 @@ export const EditAssetModal = ({
     mimetype: 'webpage',
     nocache: false,
     skip_asset_check: false,
-  });
-  const [loopTimes, setLoopTimes] = useState('manual');
-  const [startDateDate, setStartDateDate] = useState('');
-  const [startDateTime, setStartDateTime] = useState('');
-  const [endDateDate, setEndDateDate] = useState('');
-  const [endDateTime, setEndDateTime] = useState('');
+  })
+  const [loopTimes, setLoopTimes] = useState('manual')
+  const [startDateDate, setStartDateDate] = useState('')
+  const [startDateTime, setStartDateTime] = useState('')
+  const [endDateDate, setEndDateDate] = useState('')
+  const [endDateTime, setEndDateTime] = useState('')
 
   // Initialize form data when asset changes
   useEffect(() => {
     if (asset) {
       // Parse dates from UTC
-      const startDate = new Date(asset.start_date);
-      const endDate = new Date(asset.end_date);
+      const startDate = new Date(asset.start_date)
+      const endDate = new Date(asset.end_date)
 
       // Format date and time parts in local timezone
       const formatDatePart = (date: Date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      };
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
+      }
 
       const formatTimePart = (date: Date) => {
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        return `${hours}:${minutes}`;
-      };
+        const hours = String(date.getHours()).padStart(2, '0')
+        const minutes = String(date.getMinutes()).padStart(2, '0')
+        return `${hours}:${minutes}`
+      }
 
       setFormData({
         name: asset.name || '',
@@ -71,72 +71,72 @@ export const EditAssetModal = ({
         mimetype: asset.mimetype || 'webpage',
         nocache: asset.nocache || false,
         skip_asset_check: asset.skip_asset_check || false,
-      });
+      })
 
-      setStartDateDate(formatDatePart(startDate));
-      setStartDateTime(formatTimePart(startDate));
-      setEndDateDate(formatDatePart(endDate));
-      setEndDateTime(formatTimePart(endDate));
+      setStartDateDate(formatDatePart(startDate))
+      setStartDateTime(formatTimePart(startDate))
+      setEndDateDate(formatDatePart(endDate))
+      setEndDateTime(formatTimePart(endDate))
     }
-  }, [asset]);
+  }, [asset])
 
   // Handle modal visibility
   useEffect(() => {
-    setLoopTimes('manual');
+    setLoopTimes('manual')
 
     if (isOpen) {
-      setIsVisible(true);
+      setIsVisible(true)
     } else {
       const timer = setTimeout(() => {
-        setIsVisible(false);
-      }, 300); // Match the transition duration
-      return () => clearTimeout(timer);
+        setIsVisible(false)
+      }, 300) // Match the transition duration
+      return () => clearTimeout(timer)
     }
-  }, [isOpen]);
+  }, [isOpen])
 
   const handleClose = () => {
-    setIsVisible(false);
+    setIsVisible(false)
     setTimeout(() => {
-      onClose();
-    }, 300); // Match the transition duration
-  };
+      onClose()
+    }, 300) // Match the transition duration
+  }
 
   const handleModalClick = (e: React.MouseEvent<HTMLDivElement>) => {
     // Only close if clicking the modal backdrop (outside the modal content)
     if (e.target === e.currentTarget) {
-      handleClose();
+      handleClose()
     }
-  };
+  }
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
-    const { name, value, type } = e.target;
+    const { name, value, type } = e.target
     const checked =
-      e.target instanceof HTMLInputElement ? e.target.checked : false;
+      e.target instanceof HTMLInputElement ? e.target.checked : false
     setFormData({
       ...formData,
       [name]: type === 'checkbox' ? checked : value,
-    });
-  };
+    })
+  }
 
   const handleDateChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     type: string,
   ) => {
-    const { value } = e.target;
+    const { value } = e.target
     if (type === 'startDate') {
-      setStartDateDate(value);
+      setStartDateDate(value)
     } else if (type === 'startTime') {
-      setStartDateTime(value);
+      setStartDateTime(value)
     } else if (type === 'endDate') {
-      setEndDateDate(value);
+      setEndDateDate(value)
     } else if (type === 'endTime') {
-      setEndDateTime(value);
+      setEndDateTime(value)
     }
-  };
+  }
 
-  if (!isOpen && !isVisible) return null;
+  if (!isOpen && !isVisible) return null
 
   return (
     <div
@@ -248,5 +248,5 @@ export const EditAssetModal = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}

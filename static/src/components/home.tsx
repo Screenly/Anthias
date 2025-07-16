@@ -1,121 +1,121 @@
-import classNames from 'classnames';
-import { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import $ from 'jquery';
-import 'bootstrap/js/dist/tooltip';
+import classNames from 'classnames'
+import { useEffect, useState } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
+import $ from 'jquery'
+import 'bootstrap/js/dist/tooltip'
 import {
   fetchAssets,
   selectActiveAssets,
   selectInactiveAssets,
-} from '@/store/assets';
-import { AssetEditData, AppDispatch } from '@/types';
+} from '@/store/assets'
+import { AssetEditData, AppDispatch } from '@/types'
 
-import { EmptyAssetMessage } from '@/components/empty-asset-message';
-import { InactiveAssetsTable } from '@/components/inactive-assets';
-import { ActiveAssetsTable } from '@/components/active-assets';
-import { AddAssetModal } from '@/components/add-asset-modal';
-import { EditAssetModal } from '@/components/edit-asset-modal';
+import { EmptyAssetMessage } from '@/components/empty-asset-message'
+import { InactiveAssetsTable } from '@/components/inactive-assets'
+import { ActiveAssetsTable } from '@/components/active-assets'
+import { AddAssetModal } from '@/components/add-asset-modal'
+import { EditAssetModal } from '@/components/edit-asset-modal'
 
 interface JQueryWithTooltip extends JQuery<HTMLElement> {
-  tooltip(options?: object | string): JQueryWithTooltip;
+  tooltip(options?: object | string): JQueryWithTooltip
 }
 
 export const ScheduleOverview = () => {
-  const dispatch = useDispatch<AppDispatch>();
-  const activeAssets = useSelector(selectActiveAssets);
-  const inactiveAssets = useSelector(selectInactiveAssets);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [assetToEdit, setAssetToEdit] = useState<AssetEditData | null>(null);
-  const [playerName, setPlayerName] = useState('');
+  const dispatch = useDispatch<AppDispatch>()
+  const activeAssets = useSelector(selectActiveAssets)
+  const inactiveAssets = useSelector(selectInactiveAssets)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [assetToEdit, setAssetToEdit] = useState<AssetEditData | null>(null)
+  const [playerName, setPlayerName] = useState('')
 
   const fetchPlayerName = async () => {
     try {
-      const response = await fetch('/api/v2/device_settings');
-      const data = await response.json();
-      setPlayerName(data.player_name || '');
+      const response = await fetch('/api/v2/device_settings')
+      const data = await response.json()
+      setPlayerName(data.player_name || '')
     } catch {}
-  };
+  }
 
   useEffect(() => {
     const title = playerName
       ? `${playerName} · Schedule Overview`
-      : 'Schedule Overview';
-    document.title = title;
-    dispatch(fetchAssets());
-    fetchPlayerName();
-  }, [dispatch, playerName]);
+      : 'Schedule Overview'
+    document.title = title
+    dispatch(fetchAssets())
+    fetchPlayerName()
+  }, [dispatch, playerName])
 
   // Initialize tooltips
   useEffect(() => {
     const initializeTooltips = () => {
-      ($('[data-toggle="tooltip"]') as JQueryWithTooltip).tooltip({
+      ;($('[data-toggle="tooltip"]') as JQueryWithTooltip).tooltip({
         placement: 'top',
         trigger: 'hover',
         html: true,
         delay: { show: 0, hide: 0 },
         animation: true,
-      });
-    };
+      })
+    }
 
     // Initial tooltip initialization
-    initializeTooltips();
+    initializeTooltips()
 
     // Reinitialize tooltips when assets change
     const observer = new MutationObserver(() => {
-      initializeTooltips();
-    });
+      initializeTooltips()
+    })
 
     // Observe changes in both active and inactive sections
-    const activeSection = document.getElementById('active-assets-section');
-    const inactiveSection = document.getElementById('inactive-assets-section');
+    const activeSection = document.getElementById('active-assets-section')
+    const inactiveSection = document.getElementById('inactive-assets-section')
 
     if (activeSection) {
-      observer.observe(activeSection, { childList: true, subtree: true });
+      observer.observe(activeSection, { childList: true, subtree: true })
     }
     if (inactiveSection) {
-      observer.observe(inactiveSection, { childList: true, subtree: true });
+      observer.observe(inactiveSection, { childList: true, subtree: true })
     }
 
     return () => {
-      observer.disconnect();
-      ($('[data-toggle="tooltip"]') as JQueryWithTooltip).tooltip('dispose');
-    };
-  }, [activeAssets, inactiveAssets]);
+      observer.disconnect()
+      ;($('[data-toggle="tooltip"]') as JQueryWithTooltip).tooltip('dispose')
+    }
+  }, [activeAssets, inactiveAssets])
 
   const handleAddAsset = (event: React.MouseEvent) => {
-    event.preventDefault();
-    setIsModalOpen(true);
-    setAssetToEdit(null);
-  };
+    event.preventDefault()
+    setIsModalOpen(true)
+    setAssetToEdit(null)
+  }
 
   const handlePreviousAsset = async (event: React.MouseEvent) => {
-    event.preventDefault();
-    await fetch('/api/v2/assets/control/previous');
-  };
+    event.preventDefault()
+    await fetch('/api/v2/assets/control/previous')
+  }
 
   const handleNextAsset = async (event: React.MouseEvent) => {
-    event.preventDefault();
-    await fetch('/api/v2/assets/control/next');
-  };
+    event.preventDefault()
+    await fetch('/api/v2/assets/control/next')
+  }
 
   const handleCloseModal = () => {
-    setIsModalOpen(false);
-  };
+    setIsModalOpen(false)
+  }
 
   const handleSaveAsset = () => {
-    setIsModalOpen(false);
-  };
+    setIsModalOpen(false)
+  }
 
   const handleEditAsset = (asset: AssetEditData) => {
-    setAssetToEdit(asset);
-    setIsEditModalOpen(true);
-  };
+    setAssetToEdit(asset)
+    setIsEditModalOpen(true)
+  }
 
   const handleCloseEditModal = () => {
-    setIsEditModalOpen(false);
-    setAssetToEdit(null);
-  };
+    setIsEditModalOpen(false)
+    setAssetToEdit(null)
+  }
 
   return (
     <>
@@ -236,5 +236,5 @@ export const ScheduleOverview = () => {
         asset={assetToEdit}
       />
     </>
-  );
-};
+  )
+}

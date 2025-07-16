@@ -3,21 +3,21 @@ import {
   AssetEditData,
   EditFormData,
   HandleSubmitParams,
-} from '@/types';
+} from '@/types'
 
 interface ModalFooterProps {
-  asset: AssetEditData | null;
-  formData: EditFormData;
-  startDateDate: string;
-  startDateTime: string;
-  endDateDate: string;
-  endDateTime: string;
-  dispatch: AppDispatch;
-  onClose: () => void;
-  handleClose: () => void;
-  isSubmitting: boolean;
-  handleSubmit: (params: HandleSubmitParams) => void;
-  setIsSubmitting: (isSubmitting: boolean) => void;
+  asset: AssetEditData | null
+  formData: EditFormData
+  startDateDate: string
+  startDateTime: string
+  endDateDate: string
+  endDateTime: string
+  dispatch: AppDispatch
+  onClose: () => void
+  handleClose: () => void
+  isSubmitting: boolean
+  handleSubmit: (params: HandleSubmitParams) => void
+  setIsSubmitting: (isSubmitting: boolean) => void
 }
 
 export const ModalFooter = ({
@@ -71,5 +71,5 @@ export const ModalFooter = ({
         Save
       </button>
     </div>
-  );
-};
+  )
+}

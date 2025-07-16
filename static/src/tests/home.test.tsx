@@ -1,12 +1,12 @@
-import { render, screen, act } from '@testing-library/react';
-import '@testing-library/jest-dom';
-import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
-import { ScheduleOverview } from '@/components/home';
-import { RootState } from '@/types';
-import { assetsReducer, assetModalReducer } from '@/store/assets';
-import settingsReducer from '@/store/settings';
-import websocketReducer from '@/store/websocket';
+import { render, screen, act } from '@testing-library/react'
+import '@testing-library/jest-dom'
+import { Provider } from 'react-redux'
+import { configureStore } from '@reduxjs/toolkit'
+import { ScheduleOverview } from '@/components/home'
+import { RootState } from '@/types'
+import { assetsReducer, assetModalReducer } from '@/store/assets'
+import settingsReducer from '@/store/settings'
+import websocketReducer from '@/store/websocket'
 
 const initialState: RootState = {
   assets: {
@@ -105,7 +105,7 @@ const initialState: RootState = {
     lastMessage: null,
     reconnectAttempts: 0,
   },
-};
+}
 
 const createTestStore = (preloadedState = {}) => {
   return configureStore({
@@ -116,30 +116,30 @@ const createTestStore = (preloadedState = {}) => {
       websocket: websocketReducer,
     },
     preloadedState,
-  });
-};
+  })
+}
 
 const renderWithRedux = (
   component: React.ReactElement,
   state: RootState = initialState,
 ) => {
-  const store = createTestStore(state);
+  const store = createTestStore(state)
   return {
     ...render(<Provider store={store}>{component}</Provider>),
     store,
-  };
-};
+  }
+}
 
 describe('ScheduleOverview', () => {
   it('renders the home page', async () => {
     await act(async () => {
-      renderWithRedux(<ScheduleOverview />);
-    });
+      renderWithRedux(<ScheduleOverview />)
+    })
 
-    expect(screen.getByText('Schedule Overview')).toBeInTheDocument();
+    expect(screen.getByText('Schedule Overview')).toBeInTheDocument()
 
-    expect(screen.getByText('https://react.dev/')).toBeInTheDocument();
-    expect(screen.getByText('https://angular.dev/')).toBeInTheDocument();
-    expect(screen.getByText('https://vuejs.org/')).toBeInTheDocument();
-  });
-});
+    expect(screen.getByText('https://react.dev/')).toBeInTheDocument()
+    expect(screen.getByText('https://angular.dev/')).toBeInTheDocument()
+    expect(screen.getByText('https://vuejs.org/')).toBeInTheDocument()
+  })
+})

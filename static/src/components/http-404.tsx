@@ -1,5 +1,5 @@
-import React from 'react';
-import classNames from 'classnames';
+import React from 'react'
+import classNames from 'classnames'
 
 const Http404: React.FC = () => {
   return (
@@ -35,7 +35,7 @@ const Http404: React.FC = () => {
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default Http404;
+export default Http404
