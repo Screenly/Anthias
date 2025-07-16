@@ -190,3 +190,9 @@ SPECTACULAR_SETTINGS = {
 DBBACKUP_STORAGE = 'django.core.files.storage.FileSystemStorage'
 DBBACKUP_STORAGE_OPTIONS = {'location': '/data/.screenly/backups'}
 DBBACKUP_HOSTNAME = 'anthias'
+
+
+CORS_ALLOWED_ORIGINS = [
+    'http://anthias',
+]
+CORS_ALLOW_CREDENTIALS = True
