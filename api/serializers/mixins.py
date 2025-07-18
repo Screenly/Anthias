@@ -71,10 +71,13 @@ class CreateAssetSerializerMixin:
 
         if "video" in asset['mimetype']:
             if int(data.get('duration')) == 0:
-                duration = get_video_duration(uri).total_seconds()
-                asset['duration'] = (
-                    duration if version == 'v2' else int(duration)
-                )
+                original_mimetype = data.get('mimetype')
+
+                if original_mimetype != 'youtube_asset':
+                    duration = get_video_duration(uri).total_seconds()
+                    asset['duration'] = (
+                        duration if version == 'v2' else int(duration)
+                    )
             else:
                 raise AssetCreationError(
                     'Duration must be zero for video assets.'
