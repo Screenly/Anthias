@@ -23,6 +23,47 @@ Object.defineProperty(document, 'title', {
   value: '',
 })
 
+const mockFetchResponses = (upToDate = true, isBalena = false) => {
+  ;(global.fetch as jest.MockedFunction<typeof fetch>)
+    // Mock /api/v2/device_settings (for fetchSettings)
+    .mockResolvedValueOnce({
+      json: () =>
+        Promise.resolve({
+          player_name: 'Test Player',
+          default_duration: 10,
+          default_streaming_duration: 300,
+          audio_output: 'hdmi',
+          date_format: 'mm/dd/yyyy',
+          auth_backend: '',
+          show_splash: true,
+          default_assets: false,
+          shuffle_playlist: true,
+          use_24_hour_clock: false,
+          debug_logging: true,
+        }),
+      ok: true,
+      status: 200,
+    } as Response)
+    // Mock /api/v2/info (for fetchDeviceModel)
+    .mockResolvedValueOnce({
+      json: () => Promise.resolve({ device_model: 'Raspberry Pi 4' }),
+      ok: true,
+      status: 200,
+    } as Response)
+    // Mock /api/v2/info (for update info)
+    .mockResolvedValueOnce({
+      json: () => Promise.resolve({ up_to_date: upToDate }),
+      ok: true,
+      status: 200,
+    } as Response)
+    // Mock /api/v2/integrations (for balena check)
+    .mockResolvedValueOnce({
+      json: () => Promise.resolve({ is_balena: isBalena }),
+      ok: true,
+      status: 200,
+    } as Response)
+}
+
 const createMockStore = (preloadedState: Partial<RootState> = {}) => {
   return configureStore({
     reducer: {
@@ -71,44 +112,7 @@ const renderWithProvider = (
 describe('Settings Component', () => {
   beforeEach(() => {
     // Mock successful API responses for all endpoints
-    ;(global.fetch as jest.MockedFunction<typeof fetch>)
-      // Mock /api/v2/device_settings (for fetchSettings)
-      .mockResolvedValueOnce({
-        json: () =>
-          Promise.resolve({
-            player_name: 'Test Player',
-            default_duration: 10,
-            default_streaming_duration: 300,
-            audio_output: 'hdmi',
-            date_format: 'mm/dd/yyyy',
-            auth_backend: '',
-            show_splash: true,
-            default_assets: false,
-            shuffle_playlist: true,
-            use_24_hour_clock: false,
-            debug_logging: true,
-          }),
-        ok: true,
-        status: 200,
-      } as Response)
-      // Mock /api/v2/info (for fetchDeviceModel)
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ device_model: 'Raspberry Pi 4' }),
-        ok: true,
-        status: 200,
-      } as Response)
-      // Mock /api/v2/info (for update info)
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ up_to_date: true }),
-        ok: true,
-        status: 200,
-      } as Response)
-      // Mock /api/v2/integrations (for balena check)
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ is_balena: false }),
-        ok: true,
-        status: 200,
-      } as Response)
+    mockFetchResponses()
   })
 
   afterEach(() => {
@@ -330,44 +334,7 @@ describe('Settings Component', () => {
   })
 
   it('renders update component when not up to date and not balena', async () => {
-    ;(global.fetch as jest.MockedFunction<typeof fetch>)
-      // Mock /api/v2/device_settings (for fetchSettings)
-      .mockResolvedValueOnce({
-        json: () =>
-          Promise.resolve({
-            player_name: 'Test Player',
-            default_duration: 10,
-            default_streaming_duration: 300,
-            audio_output: 'hdmi',
-            date_format: 'mm/dd/yyyy',
-            auth_backend: '',
-            show_splash: true,
-            default_assets: false,
-            shuffle_playlist: true,
-            use_24_hour_clock: false,
-            debug_logging: true,
-          }),
-        ok: true,
-        status: 200,
-      } as Response)
-      // Mock /api/v2/info (for fetchDeviceModel)
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ device_model: 'Raspberry Pi 4' }),
-        ok: true,
-        status: 200,
-      } as Response)
-      // Mock /api/v2/info (for update info)
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ up_to_date: false }),
-        ok: true,
-        status: 200,
-      } as Response)
-      // Mock /api/v2/integrations (for balena check)
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ is_balena: false }),
-        ok: true,
-        status: 200,
-      } as Response)
+    mockFetchResponses(false, false)
 
     renderWithProvider(<Settings />)
 
@@ -379,44 +346,7 @@ describe('Settings Component', () => {
   })
 
   it('does not render update component when up to date', async () => {
-    ;(global.fetch as jest.MockedFunction<typeof fetch>)
-      // Mock /api/v2/device_settings (for fetchSettings)
-      .mockResolvedValueOnce({
-        json: () =>
-          Promise.resolve({
-            player_name: 'Test Player',
-            default_duration: 10,
-            default_streaming_duration: 300,
-            audio_output: 'hdmi',
-            date_format: 'mm/dd/yyyy',
-            auth_backend: '',
-            show_splash: true,
-            default_assets: false,
-            shuffle_playlist: true,
-            use_24_hour_clock: false,
-            debug_logging: true,
-          }),
-        ok: true,
-        status: 200,
-      } as Response)
-      // Mock /api/v2/info (for fetchDeviceModel)
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ device_model: 'Raspberry Pi 4' }),
-        ok: true,
-        status: 200,
-      } as Response)
-      // Mock /api/v2/info (for update info)
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ up_to_date: true }),
-        ok: true,
-        status: 200,
-      } as Response)
-      // Mock /api/v2/integrations (for balena check)
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ is_balena: false }),
-        ok: true,
-        status: 200,
-      } as Response)
+    mockFetchResponses(true, false)
 
     renderWithProvider(<Settings />)
 
@@ -426,44 +356,7 @@ describe('Settings Component', () => {
   })
 
   it('does not render update component when on balena', async () => {
-    ;(global.fetch as jest.MockedFunction<typeof fetch>)
-      // Mock /api/v2/device_settings (for fetchSettings)
-      .mockResolvedValueOnce({
-        json: () =>
-          Promise.resolve({
-            player_name: 'Test Player',
-            default_duration: 10,
-            default_streaming_duration: 300,
-            audio_output: 'hdmi',
-            date_format: 'mm/dd/yyyy',
-            auth_backend: '',
-            show_splash: true,
-            default_assets: false,
-            shuffle_playlist: true,
-            use_24_hour_clock: false,
-            debug_logging: true,
-          }),
-        ok: true,
-        status: 200,
-      } as Response)
-      // Mock /api/v2/info (for fetchDeviceModel)
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ device_model: 'Raspberry Pi 4' }),
-        ok: true,
-        status: 200,
-      } as Response)
-      // Mock /api/v2/info (for update info)
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ up_to_date: false }),
-        ok: true,
-        status: 200,
-      } as Response)
-      // Mock /api/v2/integrations (for balena check)
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ is_balena: true }),
-        ok: true,
-        status: 200,
-      } as Response)
+    mockFetchResponses(false, true)
 
     renderWithProvider(<Settings />)
 
