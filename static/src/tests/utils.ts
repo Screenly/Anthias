@@ -1,4 +1,76 @@
-import { RootState } from '@/types'
+import {
+  RootState,
+  SystemInfoResponse,
+  DeviceSettingsResponse,
+  IntegrationsResponse,
+} from '@/types'
+import { http, HttpResponse } from 'msw'
+import { setupServer } from 'msw/node'
+
+interface MockResponses {
+  info?: Partial<SystemInfoResponse>
+  deviceSettings?: Partial<DeviceSettingsResponse>
+  integrations?: Partial<IntegrationsResponse>
+}
+
+export function createMockServer(overrides: Partial<MockResponses> = {}) {
+  const defaultInfo: SystemInfoResponse = {
+    loadavg: 1.58,
+    free_space: '31G',
+    display_power: 'CEC error',
+    uptime: {
+      days: 8,
+      hours: 18.56,
+    },
+    memory: {
+      total: 15659,
+      used: 9768,
+      free: 1522,
+      shared: 1439,
+      buff: 60,
+      available: 3927,
+    },
+    device_model: 'Generic x86_64 Device',
+    anthias_version: 'master@3a4747f',
+    mac_address: 'Unable to retrieve MAC address.',
+    ip_addresses: ['192.168.1.100', '10.0.0.50'],
+    host_user: 'pi',
+  }
+
+  const defaultDeviceSettings: DeviceSettingsResponse = {
+    player_name: 'Test Player',
+  }
+
+  const defaultIntegrations: IntegrationsResponse = {
+    is_balena: false,
+  }
+
+  return setupServer(
+    http.get('/api/v2/info', () => {
+      return HttpResponse.json({
+        ...defaultInfo,
+        ...overrides.info,
+      })
+    }),
+    http.get('/api/v2/device_settings', () => {
+      return HttpResponse.json({
+        ...defaultDeviceSettings,
+        ...overrides.deviceSettings,
+      })
+    }),
+    http.patch('/api/v2/device_settings', () => {
+      return HttpResponse.json({
+        message: 'Settings were successfully saved.',
+      })
+    }),
+    http.get('/api/v2/integrations', () => {
+      return HttpResponse.json({
+        ...defaultIntegrations,
+        ...overrides.integrations,
+      })
+    }),
+  )
+}
 
 export function getInitialState(): RootState {
   return {

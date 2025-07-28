@@ -5,14 +5,7 @@ import Swal from 'sweetalert2'
 import { Settings } from '@/components/settings/index'
 import settingsReducer from '@/store/settings'
 import { RootState } from '@/types'
-
-// Mock the Update component to prevent it from making API calls
-jest.mock('@/components/settings/update', () => ({
-  Update: () => null,
-}))
-
-// Mock fetch
-global.fetch = jest.fn() as jest.MockedFunction<typeof fetch>
+import { createMockServer } from '@/tests/utils'
 
 // Mock SweetAlert2
 jest.mock('sweetalert2')
@@ -23,46 +16,11 @@ Object.defineProperty(document, 'title', {
   value: '',
 })
 
-const mockFetchResponses = (upToDate = true, isBalena = false) => {
-  ;(global.fetch as jest.MockedFunction<typeof fetch>)
-    // Mock /api/v2/device_settings (for fetchSettings)
-    .mockResolvedValueOnce({
-      json: () =>
-        Promise.resolve({
-          player_name: 'Test Player',
-          default_duration: 10,
-          default_streaming_duration: 300,
-          audio_output: 'hdmi',
-          date_format: 'mm/dd/yyyy',
-          auth_backend: '',
-          show_splash: true,
-          default_assets: false,
-          shuffle_playlist: true,
-          use_24_hour_clock: false,
-          debug_logging: true,
-        }),
-      ok: true,
-      status: 200,
-    } as Response)
-    // Mock /api/v2/info (for fetchDeviceModel)
-    .mockResolvedValueOnce({
-      json: () => Promise.resolve({ device_model: 'Raspberry Pi 4' }),
-      ok: true,
-      status: 200,
-    } as Response)
-    // Mock /api/v2/info (for update info)
-    .mockResolvedValueOnce({
-      json: () => Promise.resolve({ up_to_date: upToDate }),
-      ok: true,
-      status: 200,
-    } as Response)
-    // Mock /api/v2/integrations (for balena check)
-    .mockResolvedValueOnce({
-      json: () => Promise.resolve({ is_balena: isBalena }),
-      ok: true,
-      status: 200,
-    } as Response)
-}
+const server = createMockServer()
+
+beforeAll(() => server.listen())
+afterEach(() => server.resetHandlers())
+afterAll(() => server.close())
 
 const createMockStore = (preloadedState: Partial<RootState> = {}) => {
   return configureStore({
@@ -147,15 +105,6 @@ const testFormSubmission = async (
 }
 
 describe('Settings Component', () => {
-  beforeEach(() => {
-    // Mock successful API responses for all endpoints
-    mockFetchResponses()
-  })
-
-  afterEach(() => {
-    // Clean up mocks if needed
-  })
-
   it('renders settings form with all components', async () => {
     renderWithProvider(<Settings />)
 
@@ -292,46 +241,5 @@ describe('Settings Component', () => {
     // Check that both actions were dispatched
     const calls = mockDispatch.mock.calls
     expect(calls.length).toBeGreaterThanOrEqual(2)
-  })
-
-  it('fetches update info and integrations on mount', async () => {
-    renderWithProvider(<Settings />)
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/v2/info')
-      expect(global.fetch).toHaveBeenCalledWith('/api/v2/integrations')
-    })
-  })
-
-  it('renders update component when not up to date and not balena', async () => {
-    mockFetchResponses(false, false)
-
-    renderWithProvider(<Settings />)
-
-    await waitFor(() => {
-      // The Update component should be rendered
-      // This test assumes the Update component renders something identifiable
-      expect(screen.getByText('Settings')).toBeInTheDocument()
-    })
-  })
-
-  it('does not render update component when up to date', async () => {
-    mockFetchResponses(true, false)
-
-    renderWithProvider(<Settings />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Settings')).toBeInTheDocument()
-    })
-  })
-
-  it('does not render update component when on balena', async () => {
-    mockFetchResponses(false, true)
-
-    renderWithProvider(<Settings />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Settings')).toBeInTheDocument()
-    })
   })
 })

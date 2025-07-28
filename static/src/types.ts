@@ -269,3 +269,24 @@ export interface UptimeInfo {
   minutes?: number
   seconds?: number
 }
+
+export interface SystemInfoResponse {
+  loadavg: number
+  free_space: string
+  display_power: string
+  uptime: UptimeInfo
+  memory: MemoryInfo
+  device_model: string
+  anthias_version: string
+  mac_address: string
+  ip_addresses?: string[]
+  host_user?: string
+}
+
+export interface DeviceSettingsResponse {
+  player_name: string
+}
+
+export interface IntegrationsResponse {
+  is_balena: boolean
+}
