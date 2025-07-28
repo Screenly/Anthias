@@ -1,7 +1,16 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["jest", "@testing-library/jest-dom", "node"]
+    "types": ["jest", "@testing-library/jest-dom", "node"],
+    "paths": {
+      "@/components/*": ["static/src/components/*"],
+      "@/constants": ["static/src/constants.ts"],
+      "@/hooks/*": ["static/src/hooks/*"],
+      "@/store/*": ["static/src/store/*"],
+      "@/sass/*": ["static/sass/*"],
+      "@/types": ["static/src/types.ts"],
+      "@/tests/*": ["static/src/tests/*"]
+    }
   },
   "include": [
     "static/src/**/*.test.ts",

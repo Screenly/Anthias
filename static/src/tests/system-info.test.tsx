@@ -1,39 +1,9 @@
 import { render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import { SystemInfo } from '@/components/system-info'
+import { createMockServer } from '@/tests/utils'
 
-import { http, HttpResponse } from 'msw'
-import { setupServer } from 'msw/node'
-
-const server = setupServer(
-  http.get('/api/v2/info', () => {
-    return HttpResponse.json({
-      loadavg: 1.58,
-      free_space: '31G',
-      display_power: 'CEC error',
-      uptime: {
-        days: 8,
-        hours: 18.56,
-      },
-      memory: {
-        total: 15659,
-        used: 9768,
-        free: 1522,
-        shared: 1439,
-        buff: 60,
-        available: 3927,
-      },
-      device_model: 'Generic x86_64 Device',
-      anthias_version: 'master@3a4747f',
-      mac_address: 'Unable to retrieve MAC address.',
-    })
-  }),
-  http.get('/api/v2/device_settings', () => {
-    return HttpResponse.json({
-      player_name: 'Test Player',
-    })
-  }),
-)
+const server = createMockServer()
 
 beforeAll(() => server.listen())
 afterEach(() => server.resetHandlers())
