@@ -16,7 +16,8 @@
       "@/hooks/*": ["static/src/hooks/*"],
       "@/store/*": ["static/src/store/*"],
       "@/sass/*": ["static/sass/*"],
-      "@/types": ["static/src/types.ts"]
+      "@/types": ["static/src/types.ts"],
+      "@/tests/*": ["static/src/tests/*"]
     }
   },
   "include": [
@@ -25,7 +26,6 @@
   "exclude": [
     "node_modules",
     "static/dist",
-    "static/spec",
-    "static/src/tests"
+    "static/spec"
   ]
 }
