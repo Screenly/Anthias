@@ -1,4 +1,4 @@
-import { RootState } from '@/types';
+import { RootState } from '@/types'
 
 export const ToggleableSetting = ({
   settings,
@@ -6,10 +6,10 @@ export const ToggleableSetting = ({
   label,
   name,
 }: {
-  settings: RootState['settings']['settings'];
-  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  label: string;
-  name: string;
+  settings: RootState['settings']['settings']
+  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  label: string
+  name: string
 }) => {
   return (
     <div className="form-inline mt-4">
@@ -34,5 +34,5 @@ export const ToggleableSetting = ({
         </label>
       </div>
     </div>
-  );
-};
+  )
+}

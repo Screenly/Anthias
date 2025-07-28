@@ -1,17 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react'
 import {
   FaArrowCircleDown,
   FaRegClock,
   FaCog,
   FaPlusSquare,
   FaTasks,
-} from 'react-icons/fa';
-import { Link, NavLink } from 'react-router';
+} from 'react-icons/fa'
+import { Link, NavLink } from 'react-router'
 
 export const Navbar = () => {
-  const [upToDate, setUpToDate] = useState<boolean | null>(null);
-  const [isBalena, setIsBalena] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [upToDate, setUpToDate] = useState<boolean | null>(null)
+  const [isBalena, setIsBalena] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -19,25 +19,25 @@ export const Navbar = () => {
         const [integrationsResponse, infoResponse] = await Promise.all([
           fetch('/api/v2/integrations'),
           fetch('/api/v2/info'),
-        ]);
+        ])
 
         const [integrationsData, infoData] = await Promise.all([
           integrationsResponse.json(),
           infoResponse.json(),
-        ]);
+        ])
 
-        setIsBalena(integrationsData.is_balena);
-        setUpToDate(infoData.up_to_date);
+        setIsBalena(integrationsData.is_balena)
+        setUpToDate(infoData.up_to_date)
       } catch {
-        setIsBalena(false);
-        setUpToDate(false);
+        setIsBalena(false)
+        setUpToDate(false)
       } finally {
-        setIsLoading(false);
+        setIsLoading(false)
       }
-    };
+    }
 
-    fetchData();
-  }, []);
+    fetchData()
+  }, [])
 
   return (
     <>
@@ -99,5 +99,5 @@ export const Navbar = () => {
         </div>
       </div>
     </>
-  );
-};
+  )
+}

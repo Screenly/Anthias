@@ -1,5 +1,5 @@
 interface EmptyAssetMessageProps {
-  onAddAssetClick: (e: React.MouseEvent<HTMLAnchorElement>) => void;
+  onAddAssetClick: (e: React.MouseEvent<HTMLAnchorElement>) => void
 }
 
 export const EmptyAssetMessage = ({
@@ -13,5 +13,5 @@ export const EmptyAssetMessage = ({
       </a>{' '}
       now.
     </div>
-  );
-};
+  )
+}

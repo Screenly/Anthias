@@ -1,65 +1,65 @@
-import { GiHamburgerMenu } from 'react-icons/gi';
-import classNames from 'classnames';
-import { useEffect, forwardRef, useState } from 'react';
-import { useDispatch } from 'react-redux';
+import { GiHamburgerMenu } from 'react-icons/gi'
+import classNames from 'classnames'
+import { useEffect, forwardRef, useState } from 'react'
+import { useDispatch } from 'react-redux'
 
-import { toggleAssetEnabled, fetchAssets } from '@/store/assets';
-import { AssetRowProps, AppDispatch } from '@/types';
+import { toggleAssetEnabled, fetchAssets } from '@/store/assets'
+import { AssetRowProps, AppDispatch } from '@/types'
 
 import {
   formatDate,
   formatDuration,
   handleDelete,
   handleDownload,
-} from '@/components/asset-row/utils';
-import { MimetypeIcon } from '@/components/asset-row/mimetype-icon';
-import { ActionButtons } from '@/components/asset-row/action-buttons';
+} from '@/components/asset-row/utils'
+import { MimetypeIcon } from '@/components/asset-row/mimetype-icon'
+import { ActionButtons } from '@/components/asset-row/action-buttons'
 
 export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
   (props, ref) => {
-    const defaultDateFormat = 'mm/dd/yyyy';
-    const dispatch = useDispatch<AppDispatch>();
-    const [isDisabled, setIsDisabled] = useState(false);
-    const [dateFormat, setDateFormat] = useState(defaultDateFormat);
-    const [use24HourClock, setUse24HourClock] = useState(false);
+    const defaultDateFormat = 'mm/dd/yyyy'
+    const dispatch = useDispatch<AppDispatch>()
+    const [isDisabled, setIsDisabled] = useState(false)
+    const [dateFormat, setDateFormat] = useState(defaultDateFormat)
+    const [use24HourClock, setUse24HourClock] = useState(false)
 
     useEffect(() => {
       const fetchDateFormat = async () => {
         try {
-          const response = await fetch('/api/v2/device_settings');
-          const data = await response.json();
-          setDateFormat(data.date_format);
-          setUse24HourClock(data.use_24_hour_clock);
+          const response = await fetch('/api/v2/device_settings')
+          const data = await response.json()
+          setDateFormat(data.date_format)
+          setUse24HourClock(data.use_24_hour_clock)
         } catch {
-          setDateFormat(defaultDateFormat);
-          setUse24HourClock(false);
+          setDateFormat(defaultDateFormat)
+          setUse24HourClock(false)
         }
-      };
+      }
 
-      fetchDateFormat();
-    }, []);
+      fetchDateFormat()
+    }, [])
 
     const handleToggle = async () => {
-      const newValue = !props.isEnabled ? 1 : 0;
-      setIsDisabled(true);
+      const newValue = !props.isEnabled ? 1 : 0
+      setIsDisabled(true)
       try {
         await dispatch(
           toggleAssetEnabled({ assetId: props.assetId, newValue }),
-        ).unwrap();
-        dispatch(fetchAssets());
+        ).unwrap()
+        dispatch(fetchAssets())
       } catch {
       } finally {
-        setIsDisabled(false);
+        setIsDisabled(false)
       }
-    };
+    }
 
     const handleDownloadWrapper = (event: React.MouseEvent) => {
-      handleDownload(event, props.assetId);
-    };
+      handleDownload(event, props.assetId)
+    }
 
     const handleDeleteWrapper = () => {
-      handleDelete(props.assetId, setIsDisabled, dispatch, fetchAssets);
-    };
+      handleDelete(props.assetId, setIsDisabled, dispatch, fetchAssets)
+    }
 
     const handleEdit = () => {
       if (props.onEditAsset) {
@@ -74,9 +74,9 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
           is_enabled: props.isEnabled,
           nocache: props.nocache,
           skip_asset_check: props.skipAssetCheck,
-        });
+        })
       }
-    };
+    }
 
     return (
       <>
@@ -184,6 +184,6 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
           </td>
         </tr>
       </>
-    );
+    )
   },
-);
+)

@@ -1,13 +1,13 @@
-import { RootState } from '@/types';
+import { RootState } from '@/types'
 
 export const AudioOutput = ({
   settings,
   handleInputChange,
   deviceModel,
 }: {
-  settings: RootState['settings']['settings'];
-  handleInputChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
-  deviceModel: string;
+  settings: RootState['settings']['settings']
+  handleInputChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
+  deviceModel: string
 }) => {
   return (
     <div className="form-group">
@@ -26,5 +26,5 @@ export const AudioOutput = ({
         )}
       </select>
     </div>
-  );
-};
+  )
+}

@@ -1,8 +1,8 @@
-import { EditFormData } from '@/types';
+import { EditFormData } from '@/types'
 
 interface AdvancedFieldsProps {
-  formData: EditFormData;
-  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  formData: EditFormData
+  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
 export const AdvancedFields = ({
@@ -42,5 +42,5 @@ export const AdvancedFields = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}

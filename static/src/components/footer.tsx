@@ -1,8 +1,22 @@
 export const Footer = () => {
   return (
-    <footer id="footer">
+    <footer id="footer" className="bg-dark">
       <div className="container">
         <div className="row">
+          <div className="col-6 small text-white mt-5 mb-5">
+            <span>
+              Want to get more out of your digital signage?{' '}
+              <a
+                className="brand"
+                href="https://www.screenly.io/?utm_source=Anthias&utm_medium=root-page&utm_campaign=UI"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {' '}
+                <strong>Try Screenly</strong>.
+              </a>
+            </span>
+          </div>
           <div id="screenly-logo" className="col-12 row m-2 ml-0 mr-0">
             <div className="links offset-3 col-6 text-center justify-content-center align-self-center">
               <a
@@ -53,16 +67,16 @@ export const Footer = () => {
                   src={(() => {
                     const url = new URL(
                       'https://img.shields.io/github/stars/Screenly/Anthias',
-                    );
+                    )
                     const params = new URLSearchParams({
                       style: 'for-the-badge',
                       labelColor: '#EBF0F4',
                       color: '#FFE11A',
                       logo: 'github',
                       logoColor: 'black',
-                    });
-                    url.search = params.toString();
-                    return url.toString();
+                    })
+                    url.search = params.toString()
+                    return url.toString()
                   })()}
                 />
               </a>
@@ -76,5 +90,5 @@ export const Footer = () => {
         </div>
       </div>
     </footer>
-  );
-};
+  )
+}

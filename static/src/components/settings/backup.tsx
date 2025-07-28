@@ -1,40 +1,40 @@
-import { useDispatch, useSelector } from 'react-redux';
-import Swal from 'sweetalert2';
-import { RootState, AppDispatch } from '@/types';
+import { useDispatch, useSelector } from 'react-redux'
+import Swal from 'sweetalert2'
+import { RootState, AppDispatch } from '@/types'
 
-import { SWEETALERT_TIMER } from '@/constants';
+import { SWEETALERT_TIMER } from '@/constants'
 import {
   createBackup,
   uploadBackup,
   resetUploadState,
   fetchSettings,
-} from '@/store/settings';
+} from '@/store/settings'
 
 export const Backup = () => {
-  const dispatch = useDispatch<AppDispatch>();
+  const dispatch = useDispatch<AppDispatch>()
   const { isUploading, uploadProgress } = useSelector(
     (state: RootState) => state.settings,
-  );
+  )
 
   const handleBackup = async () => {
     const backupButton = document.getElementById(
       'btn-backup',
-    ) as HTMLButtonElement | null;
+    ) as HTMLButtonElement | null
     const uploadButton = document.getElementById(
       'btn-upload',
-    ) as HTMLButtonElement | null;
+    ) as HTMLButtonElement | null
 
-    if (!backupButton || !uploadButton) return;
+    if (!backupButton || !uploadButton) return
 
-    const originalText = backupButton.textContent;
-    backupButton.textContent = 'Preparing archive...';
-    backupButton.disabled = true;
-    uploadButton.disabled = true;
+    const originalText = backupButton.textContent
+    backupButton.textContent = 'Preparing archive...'
+    backupButton.disabled = true
+    uploadButton.disabled = true
 
     try {
-      const result = await dispatch(createBackup()).unwrap();
+      const result = await dispatch(createBackup()).unwrap()
       if (result) {
-        window.location.href = `/static_with_mime/${result}?mime=application/x-tgz`;
+        window.location.href = `/static_with_mime/${result}?mime=application/x-tgz`
       }
     } catch (err) {
       await Swal.fire({
@@ -49,49 +49,49 @@ export const Backup = () => {
           htmlContainer: 'swal2-html-container',
           confirmButton: 'swal2-confirm',
         },
-      });
+      })
     } finally {
       if (backupButton) {
-        backupButton.textContent = originalText;
-        backupButton.disabled = false;
+        backupButton.textContent = originalText
+        backupButton.disabled = false
       }
       if (uploadButton) {
-        uploadButton.disabled = false;
+        uploadButton.disabled = false
       }
     }
-  };
+  }
 
   const handleUpload = (e: React.MouseEvent) => {
-    e.preventDefault();
+    e.preventDefault()
     const fileInput = document.querySelector(
       '[name="backup_upload"]',
-    ) as HTMLInputElement | null;
+    ) as HTMLInputElement | null
     if (fileInput) {
-      fileInput.value = ''; // Reset the file input
-      fileInput.click();
+      fileInput.value = '' // Reset the file input
+      fileInput.click()
     }
-  };
+  }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const file = e.target.files?.[0]
+    if (!file) return
 
     const uploadButton = document.getElementById(
       'btn-upload',
-    ) as HTMLElement | null;
+    ) as HTMLElement | null
     const backupButton = document.getElementById(
       'btn-backup',
-    ) as HTMLElement | null;
+    ) as HTMLElement | null
     const progressElement = document.querySelector(
       '.progress',
-    ) as HTMLElement | null;
+    ) as HTMLElement | null
 
-    if (uploadButton) uploadButton.style.display = 'none';
-    if (backupButton) backupButton.style.display = 'none';
-    if (progressElement) progressElement.style.display = 'block';
+    if (uploadButton) uploadButton.style.display = 'none'
+    if (backupButton) backupButton.style.display = 'none'
+    if (progressElement) progressElement.style.display = 'block'
 
     try {
-      const result = await dispatch(uploadBackup(file)).unwrap();
+      const result = await dispatch(uploadBackup(file)).unwrap()
 
       if (result) {
         await Swal.fire({
@@ -108,10 +108,10 @@ export const Backup = () => {
             title: 'swal2-title',
             htmlContainer: 'swal2-html-container',
           },
-        });
+        })
 
         // Fetch updated settings after successful recovery
-        dispatch(fetchSettings());
+        dispatch(fetchSettings())
       }
     } catch (err) {
       await Swal.fire({
@@ -126,16 +126,16 @@ export const Backup = () => {
           htmlContainer: 'swal2-html-container',
           confirmButton: 'swal2-confirm',
         },
-      });
+      })
     } finally {
-      dispatch(resetUploadState());
-      if (progressElement) progressElement.style.display = 'none';
-      if (uploadButton) uploadButton.style.display = 'inline-block';
-      if (backupButton) backupButton.style.display = 'inline-block';
+      dispatch(resetUploadState())
+      if (progressElement) progressElement.style.display = 'none'
+      if (uploadButton) uploadButton.style.display = 'inline-block'
+      if (backupButton) backupButton.style.display = 'inline-block'
       // Reset the file input
-      e.target.value = '';
+      e.target.value = ''
     }
-  };
+  }
 
   return (
     <>
@@ -182,5 +182,5 @@ export const Backup = () => {
         </div>
       </div>
     </>
-  );
-};
+  )
+}

@@ -1,25 +1,25 @@
-import React, { useEffect } from 'react';
-import classNames from 'classnames';
-import { useDispatch, useSelector } from 'react-redux';
-import { setActiveTab, selectAssetModalState } from '@/store/assets';
-import { Asset, AppDispatch } from '@/types';
-import { useFileUpload } from './use-file-upload';
-import { useAssetForm } from './use-asset-form';
-import { useModalAnimation } from './use-modal-animation';
-import { UriTab } from './uri-tab';
-import { FileUploadTab } from './file-upload-tab';
+import React, { useEffect } from 'react'
+import classNames from 'classnames'
+import { useDispatch, useSelector } from 'react-redux'
+import { setActiveTab, selectAssetModalState } from '@/store/assets'
+import { Asset, AppDispatch } from '@/types'
+import { useFileUpload } from './use-file-upload'
+import { useAssetForm } from './use-asset-form'
+import { useModalAnimation } from './use-modal-animation'
+import { UriTab } from './uri-tab'
+import { FileUploadTab } from './file-upload-tab'
 
 interface AddAssetModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (asset: Asset) => void;
+  isOpen: boolean
+  onClose: () => void
+  onSave: (asset: Asset) => void
   initialData?: {
-    uri?: string;
-    name?: string;
-    mimetype?: string;
-    duration?: number;
-    skipAssetCheck?: boolean;
-  };
+    uri?: string
+    name?: string
+    mimetype?: string
+    duration?: number
+    skipAssetCheck?: boolean
+  }
 }
 
 export const AddAssetModal = ({
@@ -28,10 +28,10 @@ export const AddAssetModal = ({
   onSave,
   initialData = {},
 }: AddAssetModalProps) => {
-  const dispatch = useDispatch<AppDispatch>();
+  const dispatch = useDispatch<AppDispatch>()
   const { activeTab, statusMessage, uploadProgress } = useSelector(
     selectAssetModalState,
-  );
+  )
 
   // Use custom hooks
   const {
@@ -42,7 +42,7 @@ export const AddAssetModal = ({
     handleDragOver,
     handleDragEnter,
     handleDragLeave,
-  } = useFileUpload();
+  } = useFileUpload()
 
   const {
     formData,
@@ -51,21 +51,21 @@ export const AddAssetModal = ({
     isSubmitting,
     handleInputChange,
     handleSubmit,
-  } = useAssetForm(onSave, onClose);
+  } = useAssetForm(onSave, onClose)
 
   const { isVisible, modalRef, handleClose } = useModalAnimation(
     isOpen,
     onClose,
-  );
+  )
 
   // Reset form data when modal is opened
   useEffect(() => {
     if (isOpen) {
       // Form reset is handled by the useAssetForm hook
     }
-  }, [isOpen, initialData]);
+  }, [isOpen, initialData])
 
-  if (!isOpen && !isVisible) return null;
+  if (!isOpen && !isVisible) return null
 
   return (
     <div
@@ -199,5 +199,5 @@ export const AddAssetModal = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}

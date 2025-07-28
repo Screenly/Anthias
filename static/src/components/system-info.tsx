@@ -1,50 +1,50 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react'
 import {
   AnthiasVersionValueProps,
   SkeletonProps,
   MemoryInfo,
   UptimeInfo,
-} from '@/types';
+} from '@/types'
 
-const ANTHIAS_REPO_URL = 'https://github.com/Screenly/Anthias';
+const ANTHIAS_REPO_URL = 'https://github.com/Screenly/Anthias'
 
 const AnthiasVersionValue = ({ version }: AnthiasVersionValueProps) => {
-  const [commitLink, setCommitLink] = useState('');
+  const [commitLink, setCommitLink] = useState('')
 
   useEffect(() => {
     if (!version) {
-      return;
+      return
     }
 
-    const [gitBranch, gitCommit] = version ? version.split('@') : ['', ''];
+    const [gitBranch, gitCommit] = version ? version.split('@') : ['', '']
 
     if (gitBranch === 'master') {
-      setCommitLink(`${ANTHIAS_REPO_URL}/commit/${gitCommit}`);
+      setCommitLink(`${ANTHIAS_REPO_URL}/commit/${gitCommit}`)
     }
-  });
+  })
 
   if (commitLink) {
     return (
       <a href={commitLink} rel="noopener" target="_blank" className="text-dark">
         {version}
       </a>
-    );
+    )
   }
 
-  return <>{version}</>;
-};
+  return <>{version}</>
+}
 
 const Skeleton = ({ children, isLoading }: SkeletonProps) => {
   return isLoading ? (
     <span className="placeholder placeholder-wave"></span>
   ) : (
     children
-  );
-};
+  )
+}
 
 export const SystemInfo = () => {
-  const [loadAverage, setLoadAverage] = useState('');
-  const [freeSpace, setFreeSpace] = useState('');
+  const [loadAverage, setLoadAverage] = useState('')
+  const [freeSpace, setFreeSpace] = useState('')
   const [memory, setMemory] = useState<MemoryInfo>({
     total: 0,
     used: 0,
@@ -52,20 +52,20 @@ export const SystemInfo = () => {
     shared: 0,
     buff: 0,
     available: 0,
-  });
+  })
   const [uptime, setUptime] = useState<UptimeInfo>({
     days: 0,
     hours: 0,
-  });
-  const [displayPower, setDisplayPower] = useState<string | null>(null);
-  const [deviceModel, setDeviceModel] = useState('');
-  const [anthiasVersion, setAnthiasVersion] = useState('');
-  const [macAddress, setMacAddress] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [playerName, setPlayerName] = useState('');
+  })
+  const [displayPower, setDisplayPower] = useState<string | null>(null)
+  const [deviceModel, setDeviceModel] = useState('')
+  const [anthiasVersion, setAnthiasVersion] = useState('')
+  const [macAddress, setMacAddress] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [playerName, setPlayerName] = useState('')
 
   const initializeSystemInfo = async () => {
-    setIsLoading(true);
+    setIsLoading(true)
 
     try {
       const [infoResponse, settingsResponse] = await Promise.all([
@@ -75,40 +75,40 @@ export const SystemInfo = () => {
           },
         }),
         fetch('/api/v2/device_settings'),
-      ]);
+      ])
 
       if (!infoResponse.ok) {
-        throw new Error('Failed to fetch system info');
+        throw new Error('Failed to fetch system info')
       }
 
       const [systemInfo, settingsData] = await Promise.all([
         infoResponse.json(),
         settingsResponse.json(),
-      ]);
+      ])
 
-      setLoadAverage(systemInfo.loadavg);
-      setFreeSpace(systemInfo.free_space);
-      setMemory(systemInfo.memory);
-      setUptime(systemInfo.uptime);
-      setDisplayPower(systemInfo.display_power);
-      setDeviceModel(systemInfo.device_model);
-      setAnthiasVersion(systemInfo.anthias_version);
-      setMacAddress(systemInfo.mac_address);
-      setPlayerName(settingsData.player_name ?? '');
+      setLoadAverage(systemInfo.loadavg)
+      setFreeSpace(systemInfo.free_space)
+      setMemory(systemInfo.memory)
+      setUptime(systemInfo.uptime)
+      setDisplayPower(systemInfo.display_power)
+      setDeviceModel(systemInfo.device_model)
+      setAnthiasVersion(systemInfo.anthias_version)
+      setMacAddress(systemInfo.mac_address)
+      setPlayerName(settingsData.player_name ?? '')
     } catch {
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   useEffect(() => {
-    initializeSystemInfo();
-  }, []);
+    initializeSystemInfo()
+  }, [])
 
   useEffect(() => {
-    const title = playerName ? `${playerName} · System Info` : 'System Info';
-    document.title = title;
-  }, [playerName]);
+    const title = playerName ? `${playerName} · System Info` : 'System Info'
+    document.title = title
+  }, [playerName])
 
   return (
     <div className="container">
@@ -215,5 +215,5 @@ export const SystemInfo = () => {
         </div>
       </div>
     </div>
-  );
-};
+  )
+}

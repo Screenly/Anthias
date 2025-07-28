@@ -1,27 +1,27 @@
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from '@/types';
+import { useDispatch, useSelector } from 'react-redux'
+import { RootState } from '@/types'
 
-import { updateSetting } from '@/store/settings';
+import { updateSetting } from '@/store/settings'
 
 export const Authentication = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch()
   const { settings, prevAuthBackend, hasSavedBasicAuth } = useSelector(
     (state: RootState) => state.settings,
-  );
+  )
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
-    const { name, value, type } = e.target;
+    const { name, value, type } = e.target
     const checked =
-      e.target instanceof HTMLInputElement ? e.target.checked : false;
+      e.target instanceof HTMLInputElement ? e.target.checked : false
     dispatch(
       updateSetting({
         name: name as keyof RootState['settings']['settings'],
         value: type === 'checkbox' ? checked : value,
       }),
-    );
-  };
+    )
+  }
 
   const showCurrentPassword = () => {
     // Show current password if:
@@ -31,8 +31,8 @@ export const Authentication = () => {
       hasSavedBasicAuth &&
       (settings.authBackend === 'auth_basic' ||
         prevAuthBackend === 'auth_basic')
-    );
-  };
+    )
+  }
 
   return (
     <>
@@ -114,5 +114,5 @@ export const Authentication = () => {
         </>
       )}
     </>
-  );
-};
+  )
+}
