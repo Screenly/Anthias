@@ -109,6 +109,43 @@ const renderWithProvider = (
   return render(<Provider store={store}>{component}</Provider>)
 }
 
+const testFormSubmission = async (
+  shouldSucceed: boolean,
+  expectedMessage: string,
+) => {
+  const mockDispatch = jest.fn()
+  const mockUnwrap = shouldSucceed
+    ? jest.fn().mockResolvedValue({})
+    : jest.fn().mockRejectedValue(new Error('Save failed'))
+
+  const store = createMockStore()
+  store.dispatch = mockDispatch
+  mockDispatch.mockReturnValue({ unwrap: mockUnwrap })
+
+  render(
+    <Provider store={store}>
+      <Settings />
+    </Provider>,
+  )
+
+  const submitButton = screen.getByText('Save Settings')
+  fireEvent.click(submitButton)
+
+  await waitFor(() => {
+    expect(mockDispatch).toHaveBeenCalled()
+  })
+
+  await waitFor(() => {
+    expect(Swal.fire).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: shouldSucceed ? 'Success!' : 'Error!',
+        text: expectedMessage,
+        icon: shouldSucceed ? 'success' : 'error',
+      }),
+    )
+  })
+}
+
 describe('Settings Component', () => {
   beforeEach(() => {
     // Mock successful API responses for all endpoints
@@ -225,82 +262,15 @@ describe('Settings Component', () => {
   })
 
   it('handles successful form submission', async () => {
-    const mockDispatch = jest.fn()
-    const mockUnwrap = jest.fn().mockResolvedValue({})
-
-    // Mock the Redux store dispatch
-    const store = createMockStore()
-    store.dispatch = mockDispatch
-    mockDispatch.mockReturnValue({ unwrap: mockUnwrap })
-
-    render(
-      <Provider store={store}>
-        <Settings />
-      </Provider>,
-    )
-
-    const submitButton = screen.getByText('Save Settings')
-    fireEvent.click(submitButton)
-
-    await waitFor(() => {
-      expect(mockDispatch).toHaveBeenCalled()
-    })
+    await testFormSubmission(true, 'Settings were successfully saved.')
   })
 
   it('shows success message on successful save', async () => {
-    const mockDispatch = jest.fn()
-    const mockUnwrap = jest.fn().mockResolvedValue({})
-
-    const store = createMockStore()
-    store.dispatch = mockDispatch
-    mockDispatch.mockReturnValue({ unwrap: mockUnwrap })
-
-    render(
-      <Provider store={store}>
-        <Settings />
-      </Provider>,
-    )
-
-    const submitButton = screen.getByText('Save Settings')
-    fireEvent.click(submitButton)
-
-    await waitFor(() => {
-      expect(Swal.fire).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'Success!',
-          text: 'Settings were successfully saved.',
-          icon: 'success',
-        }),
-      )
-    })
+    await testFormSubmission(true, 'Settings were successfully saved.')
   })
 
   it('shows error message on failed save', async () => {
-    const mockDispatch = jest.fn()
-    const mockUnwrap = jest.fn().mockRejectedValue(new Error('Save failed'))
-
-    const store = createMockStore()
-    store.dispatch = mockDispatch
-    mockDispatch.mockReturnValue({ unwrap: mockUnwrap })
-
-    render(
-      <Provider store={store}>
-        <Settings />
-      </Provider>,
-    )
-
-    const submitButton = screen.getByText('Save Settings')
-    fireEvent.click(submitButton)
-
-    await waitFor(() => {
-      expect(Swal.fire).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'Error!',
-          text: 'Save failed',
-          icon: 'error',
-        }),
-      )
-    })
+    await testFormSubmission(false, 'Save failed')
   })
 
   it('fetches settings and device model on mount', async () => {
