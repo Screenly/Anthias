@@ -38,46 +38,46 @@ trap '' 16
 # Disable swapping
 echo 0 >  /sys/fs/cgroup/memory/memory.swappiness
 
-# TODO: Only run X11 if it's an x86 device.
+if [ "$DEVICE_TYPE" = "x86" ]; then
+    # Clean up any stale X server processes and lock files
+    pkill Xorg
+    rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
 
-# Clean up any stale X server processes and lock files
-pkill Xorg
-rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
+    # Start X server with dummy video driver
+    export DISPLAY=:0
+    Xorg "$DISPLAY" -s 0 dpms &
+    XORG_PID=$!
 
-# Start X server with dummy video driver
-export DISPLAY=:0
-Xorg "$DISPLAY" -s 0 dpms &
-XORG_PID=$!
+    # Wait for X server to be ready with timeout
+    TIMEOUT=30
+    TIMEOUT_COUNT=0
+    while [ $TIMEOUT_COUNT -lt $TIMEOUT ]; do
+        if xset -display :0 q > /dev/null 2>&1; then
+            echo "X server is ready"
+            break
+        fi
 
-# Wait for X server to be ready with timeout
-TIMEOUT=30
-TIMEOUT_COUNT=0
-while [ $TIMEOUT_COUNT -lt $TIMEOUT ]; do
-    if xset -display :0 q > /dev/null 2>&1; then
-        echo "X server is ready"
-        break
-    fi
+        # Check if X server process is still running
+        if ! kill -0 $XORG_PID 2>/dev/null; then
+            echo "X server failed to start"
+            exit 1
+        fi
 
-    # Check if X server process is still running
-    if ! kill -0 $XORG_PID 2>/dev/null; then
-        echo "X server failed to start"
+        echo "Waiting for X server to be ready (${TIMEOUT_COUNT}/${TIMEOUT}s)"
+        sleep 1
+        TIMEOUT_COUNT=$((TIMEOUT_COUNT + 1))
+    done
+
+    if [ $TIMEOUT_COUNT -eq $TIMEOUT ]; then
+        echo "X server failed to start within $TIMEOUT seconds"
         exit 1
     fi
 
-    echo "Waiting for X server to be ready (${TIMEOUT_COUNT}/${TIMEOUT}s)"
-    sleep 1
-    TIMEOUT_COUNT=$((TIMEOUT_COUNT + 1))
-done
-
-if [ $TIMEOUT_COUNT -eq $TIMEOUT ]; then
-    echo "X server failed to start within $TIMEOUT seconds"
-    exit 1
+    # Now that X is ready, configure display settings
+    xset -display "$DISPLAY" s off
+    xset -display "$DISPLAY" s noblank
+    xset -display "$DISPLAY" -dpms
 fi
-
-# Now that X is ready, configure display settings
-xset -display "$DISPLAY" s off
-xset -display "$DISPLAY" s noblank
-xset -display "$DISPLAY" -dpms
 
 # Start viewer
 sudo -E -u viewer dbus-run-session python -m viewer &
