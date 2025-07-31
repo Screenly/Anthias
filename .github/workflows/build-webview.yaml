@@ -199,12 +199,11 @@ jobs:
         with:
           name: webview-${{ matrix.board }}
           path: ./build
-      - name: Create a release
-        uses: softprops/action-gh-release@v2
+      - name: Create release
+        uses: ncipollo/release-action@v1.11.2
         with:
+          allowUpdates: true
+          generateReleaseNotes: true
           prerelease: true
-          files: |
-            build/webview-*.tar.gz
-            build/webview-*.tar.gz.sha256
-            build/qt5-*.tar.gz
-            build/qt5-*.tar.gz.sha256
+          artifacts: "build/webview-*.tar.gz,build/webview-*.tar.gz.sha256,build/qt5-*.tar.gz,build/qt5-*.tar.gz.sha256"
+          tag: ${{ github.ref_name }}
