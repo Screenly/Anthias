@@ -70,6 +70,8 @@ class VLCMediaPlayer(MediaPlayer):
         if settings['audio_output'] == 'local':
             if get_device_type() == 'pi5':
                 return 'default:CARD=vc4hdmi0'
+            elif get_device_type() == 'x86':
+                return 'default:CARD=HID'
 
             return 'plughw:CARD=Headphones'
         else:
@@ -77,6 +79,8 @@ class VLCMediaPlayer(MediaPlayer):
                 return 'default:CARD=vc4hdmi0'
             elif get_device_type() in ['pi1', 'pi2', 'pi3']:
                 return 'default:CARD=vc4hdmi'
+            elif get_device_type() == 'x86':
+                return 'hdmi:CARD=PCH'
             else:
                 return 'default:CARD=HID'
 
@@ -108,7 +112,7 @@ class MediaPlayerProxy():
     @classmethod
     def get_instance(cls):
         if cls.INSTANCE is None:
-            if get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']:
+            if get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4', 'x86']:
                 cls.INSTANCE = VLCMediaPlayer()
             else:
                 cls.INSTANCE = FFMPEGMediaPlayer()
