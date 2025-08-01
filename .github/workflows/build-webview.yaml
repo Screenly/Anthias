@@ -204,6 +204,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           echo "Processing artifacts for board: ${{ matrix.board }}"
+
+          # Determine which Qt files to include based on board
+          if [[ "${{ matrix.board }}" =~ ^(pi1|pi2|pi3|pi4)$ ]]; then
+            QT_FILES="build/qt5-*.tar.gz build/qt5-*.tar.gz.sha256"
+          else
+            QT_FILES=""
+          fi
+
           # Check if release already exists
           if gh release view "${{ github.ref_name }}" --repo ${{ github.repository }} 2>/dev/null; then
             echo "Release already exists, uploading assets for ${{ matrix.board }}..."
@@ -211,8 +219,7 @@ jobs:
               --repo ${{ github.repository }} \
               build/webview-*.tar.gz \
               build/webview-*.tar.gz.sha256 \
-              build/qt5-*.tar.gz \
-              build/qt5-*.tar.gz.sha256
+              $QT_FILES
           else
             echo "Creating new release for ${{ matrix.board }}..."
             gh release create "${{ github.ref_name }}" \
@@ -221,6 +228,5 @@ jobs:
               --generate-notes \
               build/webview-*.tar.gz \
               build/webview-*.tar.gz.sha256 \
-              build/qt5-*.tar.gz \
-              build/qt5-*.tar.gz.sha256
+              $QT_FILES
           fi
