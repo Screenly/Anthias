@@ -1,8 +1,7 @@
 name: Docker Image Build
 
 on:
-  # TODO: Don't forget to revert this to `push` after testing.
-   pull_request:
+  push:
     branches:
       - master
     paths:
@@ -107,16 +106,19 @@ jobs:
             poetry run python -m tools.image_builder \
               --build-target=pi4 \
               --target-platform=linux/arm/v8 \
-              --service=${{ matrix.service }}
+              --service=${{ matrix.service }} \
+              --push
           elif [ "${{ matrix.board }}" == "pi4-64" ]; then
             poetry run python -m tools.image_builder \
               --build-target=pi4 \
               --target-platform=linux/arm64/v8 \
-              --service=${{ matrix.service }}
+              --service=${{ matrix.service }} \
+              --push
           else
             poetry run python -m tools.image_builder \
               --build-target=${{ matrix.board }} \
-              --service=${{ matrix.service }}
+              --service=${{ matrix.service }} \
+              --push
           fi
 
       - name: Inspect cache after build
