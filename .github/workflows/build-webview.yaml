@@ -219,7 +219,7 @@ jobs:
               --repo ${{ github.repository }} \
               build/webview-*.tar.gz \
               build/webview-*.tar.gz.sha256 \
-              $QT_FILES
+              "$QT_FILES"
           else
             echo "Creating new release for ${{ matrix.board }}..."
             gh release create "${{ github.ref_name }}" \
@@ -228,5 +228,5 @@ jobs:
               --generate-notes \
               build/webview-*.tar.gz \
               build/webview-*.tar.gz.sha256 \
-              $QT_FILES
+              "$QT_FILES"
           fi
