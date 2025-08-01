@@ -200,6 +200,8 @@ jobs:
           name: webview-${{ matrix.board }}
           path: ./build
       - name: Create release ${{ matrix.board }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           echo "Processing artifacts for board: ${{ matrix.board }}"
           # Check if release already exists
