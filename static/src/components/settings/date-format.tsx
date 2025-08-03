@@ -1,11 +1,11 @@
-import { RootState } from '@/types';
+import { RootState } from '@/types'
 
 export const DateFormat = ({
   settings,
   handleInputChange,
 }: {
-  settings: RootState['settings']['settings'];
-  handleInputChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  settings: RootState['settings']['settings']
+  handleInputChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
 }) => {
   return (
     <div className="form-group">
@@ -29,5 +29,5 @@ export const DateFormat = ({
         <option value="yyyy.mm.dd">year.month.day</option>
       </select>
     </div>
-  );
-};
+  )
+}

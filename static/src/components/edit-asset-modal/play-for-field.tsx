@@ -1,14 +1,14 @@
-import { handleLoopTimesChange } from '@/components/edit-asset-modal/utils';
-import { EditFormData } from '@/types';
+import { handleLoopTimesChange } from '@/components/edit-asset-modal/utils'
+import { EditFormData } from '@/types'
 
 interface PlayForFieldProps {
-  loopTimes: string;
-  startDateDate: string;
-  startDateTime: string;
-  setLoopTimes: (value: string) => void;
-  setEndDateDate: (value: string) => void;
-  setEndDateTime: (value: string) => void;
-  setFormData: (updater: (prev: EditFormData) => EditFormData) => void;
+  loopTimes: string
+  startDateDate: string
+  startDateTime: string
+  setLoopTimes: (value: string) => void
+  setEndDateDate: (value: string) => void
+  setEndDateTime: (value: string) => void
+  setFormData: (updater: (prev: EditFormData) => EditFormData) => void
 }
 
 export const PlayForField = ({
@@ -49,5 +49,5 @@ export const PlayForField = ({
         </select>
       </div>
     </div>
-  );
-};
+  )
+}

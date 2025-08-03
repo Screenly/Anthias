@@ -1,12 +1,12 @@
-import { useSelector } from 'react-redux';
-import { selectInactiveAssets } from '@/store/assets';
-import { AssetRow } from '@/components/asset-row';
-import { Asset, InactiveAssetsTableProps } from '@/types';
+import { useSelector } from 'react-redux'
+import { selectInactiveAssets } from '@/store/assets'
+import { AssetRow } from '@/components/asset-row'
+import { Asset, InactiveAssetsTableProps } from '@/types'
 
 export const InactiveAssetsTable = ({
   onEditAsset,
 }: InactiveAssetsTableProps) => {
-  const inactiveAssets = useSelector(selectInactiveAssets) as Asset[];
+  const inactiveAssets = useSelector(selectInactiveAssets) as Asset[]
 
   return (
     <table className="InactiveAssets table">
@@ -68,5 +68,5 @@ export const InactiveAssetsTable = ({
         ))}
       </tbody>
     </table>
-  );
-};
+  )
+}

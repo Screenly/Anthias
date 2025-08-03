@@ -1,20 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react'
 
 export const Update = () => {
-  const [ipAddresses, setIpAddresses] = useState<string[]>([]);
-  const [hostUser, setHostUser] = useState<string>('<USER>');
+  const [ipAddresses, setIpAddresses] = useState<string[]>([])
+  const [hostUser, setHostUser] = useState<string>('<USER>')
 
   useEffect(() => {
     fetch('/api/v2/info')
       .then((res) => res.json())
       .then((data) => {
-        setIpAddresses(data.ip_addresses);
+        setIpAddresses(data.ip_addresses)
 
         if (data.host_user) {
-          setHostUser(data.host_user);
+          setHostUser(data.host_user)
         }
-      });
-  }, []);
+      })
+  }, [])
 
   return (
     <>
@@ -70,5 +70,5 @@ export const Update = () => {
         </div>
       </div>
     </>
-  );
-};
+  )
+}

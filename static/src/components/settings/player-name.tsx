@@ -1,11 +1,11 @@
-import { RootState } from '@/types';
+import { RootState } from '@/types'
 
 export const PlayerName = ({
   settings,
   handleInputChange,
 }: {
-  settings: RootState['settings']['settings'];
-  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  settings: RootState['settings']['settings']
+  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 }) => {
   return (
     <div className="form-group">
@@ -20,5 +20,5 @@ export const PlayerName = ({
         onChange={handleInputChange}
       />
     </div>
-  );
-};
+  )
+}

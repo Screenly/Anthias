@@ -1,13 +1,13 @@
-import React from 'react';
-import classNames from 'classnames';
-import { FormData } from '@/types';
+import React from 'react'
+import classNames from 'classnames'
+import { FormData } from '@/types'
 
 interface UriTabProps {
-  formData: FormData;
-  isValid: boolean;
-  errorMessage: string;
-  isSubmitting: boolean;
-  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  formData: FormData
+  isValid: boolean
+  errorMessage: string
+  isSubmitting: boolean
+  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
 export const UriTab = ({
@@ -56,5 +56,5 @@ export const UriTab = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}

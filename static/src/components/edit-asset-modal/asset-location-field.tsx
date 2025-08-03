@@ -1,7 +1,7 @@
-import { AssetEditData } from '@/types';
+import { AssetEditData } from '@/types'
 
 interface AssetLocationFieldProps {
-  asset: AssetEditData | null;
+  asset: AssetEditData | null
 }
 
 export const AssetLocationField = ({ asset }: AssetLocationFieldProps) => {
@@ -20,5 +20,5 @@ export const AssetLocationField = ({ asset }: AssetLocationFieldProps) => {
         </div>
       </div>
     </div>
-  );
-};
+  )
+}

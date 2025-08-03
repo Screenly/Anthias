@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react'
 
 export const Integrations = () => {
   const [data, setData] = useState({
@@ -9,8 +9,8 @@ export const Integrations = () => {
     balena_supervisor_version: '',
     balena_host_os_version: '',
     balena_device_name_at_init: '',
-  });
-  const [playerName, setPlayerName] = useState('');
+  })
+  const [playerName, setPlayerName] = useState('')
 
   useEffect(() => {
     const fetchData = async () => {
@@ -18,25 +18,25 @@ export const Integrations = () => {
         const [integrationsResponse, settingsResponse] = await Promise.all([
           fetch('/api/v2/integrations'),
           fetch('/api/v2/device_settings'),
-        ]);
+        ])
 
         const [integrationsData, settingsData] = await Promise.all([
           integrationsResponse.json(),
           settingsResponse.json(),
-        ]);
+        ])
 
-        setData(integrationsData);
-        setPlayerName(settingsData.player_name ?? '');
+        setData(integrationsData)
+        setPlayerName(settingsData.player_name ?? '')
       } catch {}
-    };
+    }
 
-    fetchData();
-  }, []);
+    fetchData()
+  }, [])
 
   useEffect(() => {
-    const title = playerName ? `${playerName} · Integrations` : 'Integrations';
-    document.title = title;
-  }, [playerName]);
+    const title = playerName ? `${playerName} · Integrations` : 'Integrations'
+    document.title = title
+  }, [playerName])
 
   return (
     <div className="container">
@@ -120,5 +120,5 @@ export const Integrations = () => {
         )}
       </div>
     </div>
-  );
-};
+  )
+}

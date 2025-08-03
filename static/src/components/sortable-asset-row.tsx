@@ -1,10 +1,10 @@
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { AssetRow } from './asset-row';
-import { AssetRowProps } from '@/types';
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { AssetRow } from './asset-row'
+import { AssetRowProps } from '@/types'
 
 interface SortableAssetRowProps extends AssetRowProps {
-  id: string;
+  id: string
 }
 
 export const SortableAssetRow = (props: SortableAssetRowProps) => {
@@ -15,7 +15,7 @@ export const SortableAssetRow = (props: SortableAssetRowProps) => {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: props.id });
+  } = useSortable({ id: props.id })
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -24,7 +24,7 @@ export const SortableAssetRow = (props: SortableAssetRowProps) => {
     zIndex: isDragging ? 99999 : 'auto',
     position: isDragging ? 'relative' : 'static',
     backgroundColor: isDragging ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-  };
+  }
 
   return (
     <AssetRow
@@ -34,5 +34,5 @@ export const SortableAssetRow = (props: SortableAssetRowProps) => {
       dragHandleProps={{ ...attributes, ...listeners }}
       isDragging={isDragging}
     />
-  );
-};
+  )
+}

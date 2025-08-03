@@ -1,15 +1,15 @@
-import assetsReducer from '@/store/assets/assets-list-slice';
-import { addAsset } from '@/store/assets/assets-list-slice';
+import assetsReducer from '@/store/assets/assets-list-slice'
+import { addAsset } from '@/store/assets/assets-list-slice'
 import {
   fetchAssets,
   updateAssetOrder,
   toggleAssetEnabled,
-} from '@/store/assets/assets-thunks';
+} from '@/store/assets/assets-thunks'
 import {
   selectActiveAssets,
   selectInactiveAssets,
-} from '@/store/assets/assets-selectors';
-import assetModalReducer from './asset-modal-slice';
+} from '@/store/assets/assets-selectors'
+import assetModalReducer from './asset-modal-slice'
 import {
   uploadFile,
   saveAsset,
@@ -22,7 +22,7 @@ import {
   resetForm,
   validateUrl,
   selectAssetModalState,
-} from './asset-modal-slice';
+} from './asset-modal-slice'
 
 export {
   assetsReducer,
@@ -45,4 +45,4 @@ export {
   resetForm,
   validateUrl,
   selectAssetModalState,
-};
+}

@@ -1,5 +1,5 @@
 interface AlertProps {
-  message: string;
+  message: string
 }
 
 export const Alert = ({ message }: AlertProps) => {
@@ -14,5 +14,5 @@ export const Alert = ({ message }: AlertProps) => {
         </div>
       </div>
     </div>
-  );
-};
+  )
+}

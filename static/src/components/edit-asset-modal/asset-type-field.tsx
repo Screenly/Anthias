@@ -1,8 +1,8 @@
-import { EditFormData } from '@/types';
+import { EditFormData } from '@/types'
 
 interface AssetTypeFieldProps {
-  formData: EditFormData;
-  handleInputChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  formData: EditFormData
+  handleInputChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
 }
 
 export const AssetTypeField = ({
@@ -28,5 +28,5 @@ export const AssetTypeField = ({
         </select>
       </div>
     </div>
-  );
-};
+  )
+}
