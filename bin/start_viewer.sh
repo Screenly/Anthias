@@ -43,9 +43,9 @@ if [ "$DEVICE_TYPE" = "x86" ]; then
     pkill Xorg
     rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
 
-    # Start X server with dummy video driver
+    # Start X server with dummy video driver and cursor disabled
     export DISPLAY=:0
-    Xorg "$DISPLAY" -s 0 dpms &
+    Xorg "$DISPLAY" -s 0 dpms -nocursor &
     XORG_PID=$!
 
     # Wait for X server to be ready with timeout
@@ -77,6 +77,11 @@ if [ "$DEVICE_TYPE" = "x86" ]; then
     xset -display "$DISPLAY" s off
     xset -display "$DISPLAY" s noblank
     xset -display "$DISPLAY" -dpms
+
+    # Hide cursor immediately after X server is ready
+    xset -display "$DISPLAY" -cursor_name left_ptr
+    # Alternative: completely hide cursor
+    xset -display "$DISPLAY" -cursor_name none
 fi
 
 # Start viewer
