@@ -16,6 +16,8 @@ on:
       - '!.github/workflows/generate-openapi-schema.yml'
       - '!.github/workflows/docker-test.yml'
       - '!.github/pull_request_template.md'
+      - '!.github/dependabot.yml'
+      - '!.github/release.yml'
       - '!CONTRIBUTING.md'
       - '!README.md'
       - '!docs/**'
@@ -25,7 +27,6 @@ on:
       - '!tests/**'
       - '!docker/Dockerfile.dev'
       - '!.cursor/**'
-      - '!github/release.yml'
 
 jobs:
   run-tests:
