@@ -8,7 +8,8 @@ import {
   selectActiveAssets,
   selectInactiveAssets,
 } from '@/store/assets'
-import { AssetEditData, AppDispatch } from '@/types'
+import { fetchDeviceModel } from '@/store/settings'
+import { AssetEditData, AppDispatch, RootState } from '@/types'
 
 import { EmptyAssetMessage } from '@/components/empty-asset-message'
 import { InactiveAssetsTable } from '@/components/inactive-assets'
@@ -29,6 +30,8 @@ export const ScheduleOverview = () => {
   const [assetToEdit, setAssetToEdit] = useState<AssetEditData | null>(null)
   const [playerName, setPlayerName] = useState('')
 
+  const { deviceModel } = useSelector((state: RootState) => state.settings)
+
   const fetchPlayerName = async () => {
     try {
       const response = await fetch('/api/v2/device_settings')
@@ -45,6 +48,10 @@ export const ScheduleOverview = () => {
     dispatch(fetchAssets())
     fetchPlayerName()
   }, [dispatch, playerName])
+
+  useEffect(() => {
+    dispatch(fetchDeviceModel())
+  }, [dispatch])
 
   // Initialize tooltips
   useEffect(() => {
@@ -133,34 +140,38 @@ export const ScheduleOverview = () => {
                 Schedule Overview
               </b>
               <div className="ml-auto">
-                <a
-                  id="previous-asset-button"
-                  className={classNames(
-                    'btn',
-                    'btn-long',
-                    'btn-outline-primary',
-                    'mr-1',
-                  )}
-                  href="#"
-                  onClick={handlePreviousAsset}
-                >
-                  <i className="fas fa-chevron-left pr-2"></i>
-                  Previous Asset
-                </a>
-                <a
-                  id="next-asset-button"
-                  className={classNames(
-                    'btn',
-                    'btn-long',
-                    'btn-outline-primary',
-                    'mr-1',
-                  )}
-                  href="#"
-                  onClick={handleNextAsset}
-                >
-                  Next Asset
-                  <i className="fas fa-chevron-right pl-2"></i>
-                </a>
+                {deviceModel !== 'Generic x86_64 Device' && (
+                  <>
+                    <a
+                      id="previous-asset-button"
+                      className={classNames(
+                        'btn',
+                        'btn-long',
+                        'btn-outline-primary',
+                        'mr-1',
+                      )}
+                      href="#"
+                      onClick={handlePreviousAsset}
+                    >
+                      <i className="fas fa-chevron-left pr-2"></i>
+                      Previous Asset
+                    </a>
+                    <a
+                      id="next-asset-button"
+                      className={classNames(
+                        'btn',
+                        'btn-long',
+                        'btn-outline-primary',
+                        'mr-1',
+                      )}
+                      href="#"
+                      onClick={handleNextAsset}
+                    >
+                      Next Asset
+                      <i className="fas fa-chevron-right pl-2"></i>
+                    </a>
+                  </>
+                )}
                 <a
                   id="add-asset-button"
                   className={classNames(
