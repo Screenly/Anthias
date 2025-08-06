@@ -78,7 +78,7 @@ jobs:
         if: inputs.test-type == 'python'
         uses: nick-fields/retry@v3
         with:
-          timeout_minutes: 10
+          timeout_minutes: 5
           max_attempts: 5
           command: |
             docker compose exec anthias-test \
