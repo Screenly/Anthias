@@ -45,7 +45,7 @@ export interface EditFormData {
 export interface HandleSubmitParams {
   e: React.FormEvent
   asset: AssetEditData
-  formData: EditFormData
+  formData: AssetFormData
   startDateDate: string
   startDateTime: string
   endDateDate: string
@@ -221,7 +221,7 @@ export interface FileData {
   ext: string
 }
 
-export interface FormData {
+export interface AssetFormData {
   uri: string
   skipAssetCheck: boolean
   name?: string

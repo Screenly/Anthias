@@ -1,9 +1,9 @@
 import React from 'react'
 import classNames from 'classnames'
-import { FormData } from '@/types'
+import { AssetFormData } from '@/types'
 
 interface UriTabProps {
-  formData: FormData
+  formData: AssetFormData
   isValid: boolean
   errorMessage: string
   isSubmitting: boolean

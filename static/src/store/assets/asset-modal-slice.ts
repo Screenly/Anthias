@@ -5,7 +5,7 @@ import {
   SaveAssetParams,
   RootState,
   FileData,
-  FormData,
+  AssetFormData,
 } from '@/types'
 import { getMimetype } from '@/components/add-asset-modal/file-upload-utils'
 
@@ -153,7 +153,7 @@ const assetModalSlice = createSlice({
     formData: {
       uri: '',
       skipAssetCheck: false,
-    } as FormData,
+    } as AssetFormData,
     isValid: true,
     errorMessage: '',
     statusMessage: '',
