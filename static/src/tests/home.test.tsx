@@ -1,5 +1,5 @@
+import { test, expect } from 'bun:test'
 import { render, screen, act } from '@testing-library/react'
-import '@testing-library/jest-dom'
 import { Provider } from 'react-redux'
 import { configureStore } from '@reduxjs/toolkit'
 import { ScheduleOverview } from '@/components/home'
@@ -34,16 +34,14 @@ const renderWithRedux = (
   }
 }
 
-describe('ScheduleOverview', () => {
-  it('renders the home page', async () => {
-    await act(async () => {
-      renderWithRedux(<ScheduleOverview />)
-    })
-
-    expect(screen.getByText('Schedule Overview')).toBeInTheDocument()
-
-    expect(screen.getByText('https://react.dev/')).toBeInTheDocument()
-    expect(screen.getByText('https://angular.dev/')).toBeInTheDocument()
-    expect(screen.getByText('https://vuejs.org/')).toBeInTheDocument()
+test('ScheduleOverview renders the home page', async () => {
+  await act(async () => {
+    renderWithRedux(<ScheduleOverview />)
   })
+
+  expect(screen.getByText('Schedule Overview')).toBeInTheDocument()
+
+  expect(screen.getByText('https://react.dev/')).toBeInTheDocument()
+  expect(screen.getByText('https://angular.dev/')).toBeInTheDocument()
+  expect(screen.getByText('https://vuejs.org/')).toBeInTheDocument()
 })

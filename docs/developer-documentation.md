@@ -135,7 +135,7 @@ To start [Webpack](https://webpack.js.org/) in development mode, run the followi
 
 ```bash
 $ docker compose -f docker-compose.dev.yml exec anthias-server \
-    npm run dev
+    bun run dev
 ```
 
 Making changes to the TypeScript, TSX, or SCSS files will automatically trigger a recompilation,
@@ -147,18 +147,18 @@ To run the linting and formatting checks on the TypeScript code, run the followi
 
 ```bash
 $ docker compose -f docker-compose.dev.yml exec anthias-server \
-    npm run lint:check
+    bun run lint:check
 $ docker compose -f docker-compose.dev.yml exec anthias-server \
-    npm run format:check
+    bun run format:check
 ```
 
 If you want to fix the linting errors and formatting issues, run the following command:
 
 ```bash
 $ docker compose -f docker-compose.dev.yml exec anthias-server \
-    npm run lint:fix
+    bun run lint:fix
 $ docker compose -f docker-compose.dev.yml exec anthias-server \
-    npm run format:fix
+    bun run format:fix
 ```
 
 ### Closing the transpiler

@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["jest", "@testing-library/jest-dom", "node"],
+    "types": ["bun-types", "@testing-library/jest-dom", "node"],
     "paths": {
       "@/components/*": ["static/src/components/*"],
       "@/constants": ["static/src/constants.ts"],
@@ -15,6 +15,6 @@
   "include": [
     "static/src/**/*.test.ts",
     "static/src/**/*.test.tsx",
-    "static/src/setupTests.ts"
+    "static/src/test-setup/**/*.ts"
   ]
 }

@@ -58,9 +58,16 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         -r /tmp/requirements.viewer.txt \
         --break-system-packages
 
+# Install Bun
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.2.19"
+ENV PATH="/root/.bun/bin:$PATH"
+
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app
 WORKDIR /usr/src/app
+
+# Install JavaScript dependencies with Bun
+RUN bun install
 
 RUN mkdir -p /data/.screenly /data/screenly_assets
 RUN cp ansible/roles/screenly/files/screenly.conf \

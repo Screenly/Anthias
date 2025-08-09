@@ -41,6 +41,12 @@ jobs:
         run: |
           poetry install --only=docker-image-builder
 
+      - name: Setup Bun
+        if: inputs.test-type == 'typescript'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.19
+
       - name: Build Containers
         run: |
           poetry run python -m tools.image_builder \
@@ -58,9 +64,9 @@ jobs:
         if: inputs.test-type == 'typescript'
         run: |
           docker compose exec anthias-test \
-            npm install
+            bun install
           docker compose exec anthias-test \
-            npm run test
+            bun run test
 
       - name: Run Python unit tests
         if: inputs.test-type == 'python'
