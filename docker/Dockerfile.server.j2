@@ -1,28 +1,31 @@
 {% if environment == 'production' %}
-FROM debian:bookworm AS node-builder
-
-RUN apt-get update && \
-    apt-get -y install \
-        nodejs \
-        npm
+FROM over/bun:1.2.19-debian AS bun-builder
 
 RUN mkdir -p /app
 WORKDIR /app
 
 COPY package.json \
-    package-lock.json \
+    bun.lock \
     webpack.prod.js \
     webpack.common.js \
     tsconfig.json \
     /app/
-RUN npm install
+RUN bun install
 
 COPY ./static/sass/*.scss /app/static/sass/
 COPY ./static/src/ /app/static/src/
-RUN npm run build
+RUN bun run build
 
 {% endif %}
 {% include 'Dockerfile.base.j2' %}
+
+# Install Bun (for development only)
+{% if environment == 'development' %}
+RUN curl -fsSL https://bun.com/install | bash -s "bun-v1.2.19"
+
+# Add Bun to PATH
+ENV PATH="/root/.bun/bin:$PATH"
+{% endif %}
 
 COPY requirements/requirements.txt /tmp/requirements.txt
 {% if disable_cache_mounts %}
@@ -37,7 +40,7 @@ COPY . /usr/src/app/
 WORKDIR /usr/src/app
 
 {% if environment == 'production' %}
-COPY --from=node-builder \
+COPY --from=bun-builder \
     /app/static/dist/ \
     /usr/src/app/static/dist/
 {% endif %}

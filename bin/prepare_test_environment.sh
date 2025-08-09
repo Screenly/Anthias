@@ -48,7 +48,7 @@ EOF
 if [ "$START_SERVER" = true ]; then
     cd /usr/src/app
 
-    npm install && npm run build
+    bun install && bun run build
 
     ./manage.py makemigrations
     ./manage.py migrate --fake-initial
