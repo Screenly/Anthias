@@ -223,6 +223,15 @@ def get_viewer_context(board: str) -> dict:
     ]
 
     if board in ['pi5', 'x86']:
+        if board == 'x86':
+            apt_dependencies.extend([
+                'xserver-xorg-core',
+                'xserver-xorg-video-fbdev',
+                'x11-xserver-utils',
+                'xauth',
+                'xinit',
+            ])
+
         apt_dependencies.extend([
             'qt6-base-dev',
             'qt6-webengine-dev',
