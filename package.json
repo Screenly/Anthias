@@ -47,7 +47,7 @@
     "eslint": "^8.56.0",
     "eslint-plugin-react": "^7.33.2",
     "jest": "^30.0.3",
-    "jest-environment-jsdom": "^30.0.2",
+    "jest-environment-jsdom": "^30.0.5",
     "jest-fixed-jsdom": "^0.0.9",
     "mini-css-extract-plugin": "^2.9.2",
     "msw": "^2.10.2",
