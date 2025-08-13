@@ -14,7 +14,7 @@ Jinja2==3.1.6
 jsonschema==4.17.3 # This is the latest version that doesn't require Rust and Cargo.
 netifaces==0.10.9
 pydbus==0.6.0
-python-dateutil==2.8.1
+python-dateutil==2.9.0.post0
 python-vlc==3.0.20123
 pytz==2022.2.1
 pyzmq==23.2.1
