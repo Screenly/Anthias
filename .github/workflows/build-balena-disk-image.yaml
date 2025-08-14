@@ -45,7 +45,7 @@ jobs:
       attestations: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install zstd
         run: |
@@ -144,7 +144,7 @@ jobs:
             ./*raspberry*.json
 
       - name: Attest
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v2
         with:
           subject-path: '${{ github.workspace }}/*raspberry*.img.zst'
 
@@ -155,26 +155,26 @@ jobs:
       contents: write
     steps:
       - name: Download docker tag
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: docker-tag
           path: .
 
       - name: Download OpenAPI schema
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: anthias-api-schema
           path: .
 
       - name: Download balena images
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: balena-images-*
           path: .
           merge-multiple: true
 
       - name: Create release
-        uses: ncipollo/release-action@v1.11.2
+        uses: ncipollo/release-action@v1.18.0
         with:
           allowUpdates: true
           generateReleaseNotes: true
