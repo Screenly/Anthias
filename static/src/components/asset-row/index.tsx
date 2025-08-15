@@ -107,8 +107,8 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
               style={{ verticalAlign: 'middle' }}
             />
             <span
-              data-toggle="tooltip"
-              data-placement="top"
+              data-bs-toggle="tooltip"
+              data-bs-placement="top"
               title={props.name}
               style={{
                 verticalAlign: 'middle',
@@ -120,8 +120,8 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
           <td
             style={{ width: '21%', maxWidth: '200px' }}
             className="text-truncate"
-            data-toggle="tooltip"
-            data-placement="top"
+            data-bs-toggle="tooltip"
+            data-bs-placement="top"
             title={formatDate(props.startDate, dateFormat, use24HourClock)}
           >
             {formatDate(props.startDate, dateFormat, use24HourClock)}
@@ -129,8 +129,8 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
           <td
             style={{ width: '21%', maxWidth: '200px' }}
             className="text-truncate"
-            data-toggle="tooltip"
-            data-placement="top"
+            data-bs-toggle="tooltip"
+            data-bs-placement="top"
             title={formatDate(props.endDate, dateFormat, use24HourClock)}
           >
             {formatDate(props.endDate, dateFormat, use24HourClock)}
@@ -138,8 +138,8 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
           <td
             style={{ width: '13%', maxWidth: '150px' }}
             className={classNames('text-truncate')}
-            data-toggle="tooltip"
-            data-placement="top"
+            data-bs-toggle="tooltip"
+            data-bs-placement="top"
             title={formatDuration(props.duration)}
           >
             {formatDuration(props.duration)}

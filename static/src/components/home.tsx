@@ -1,8 +1,7 @@
 import classNames from 'classnames'
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import $ from 'jquery'
-import 'bootstrap/js/dist/tooltip'
+import { Tooltip } from 'bootstrap'
 import {
   fetchAssets,
   selectActiveAssets,
@@ -15,10 +14,6 @@ import { InactiveAssetsTable } from '@/components/inactive-assets'
 import { ActiveAssetsTable } from '@/components/active-assets'
 import { AddAssetModal } from '@/components/add-asset-modal'
 import { EditAssetModal } from '@/components/edit-asset-modal'
-
-interface JQueryWithTooltip extends JQuery<HTMLElement> {
-  tooltip(options?: object | string): JQueryWithTooltip
-}
 
 export const ScheduleOverview = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -48,13 +43,26 @@ export const ScheduleOverview = () => {
 
   // Initialize tooltips
   useEffect(() => {
+    const tooltipElements: Tooltip[] = []
+
     const initializeTooltips = () => {
-      ;($('[data-toggle="tooltip"]') as JQueryWithTooltip).tooltip({
-        placement: 'top',
-        trigger: 'hover',
-        html: true,
-        delay: { show: 0, hide: 0 },
-        animation: true,
+      // Dispose existing tooltips
+      tooltipElements.forEach((tooltip) => tooltip.dispose())
+      tooltipElements.length = 0
+
+      // Initialize new tooltips
+      const tooltipNodes = document.querySelectorAll(
+        '[data-bs-toggle="tooltip"]',
+      )
+      tooltipNodes.forEach((element) => {
+        const tooltip = new Tooltip(element as HTMLElement, {
+          placement: 'top',
+          trigger: 'hover',
+          html: true,
+          delay: { show: 0, hide: 0 },
+          animation: true,
+        })
+        tooltipElements.push(tooltip)
       })
     }
 
@@ -79,7 +87,7 @@ export const ScheduleOverview = () => {
 
     return () => {
       observer.disconnect()
-      ;($('[data-toggle="tooltip"]') as JQueryWithTooltip).tooltip('dispose')
+      tooltipElements.forEach((tooltip) => tooltip.dispose())
     }
   }, [activeAssets, inactiveAssets])
 
