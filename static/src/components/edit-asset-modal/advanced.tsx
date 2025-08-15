@@ -20,7 +20,7 @@ export const AdvancedFields = ({
         </div>
         <div className="collapse-advanced accordion-body collapse">
           <div className="accordion-inner">
-            <div className="form-group row">
+            <div className="row mb-3">
               <label className="col-4 col-form-label">Disable cache</label>
               <div className="col-8 nocache controls justify-content-center align-self-center">
                 <label className="nocache-toggle toggle switch-light switch-ios small m-0">

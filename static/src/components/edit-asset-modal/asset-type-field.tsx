@@ -10,11 +10,11 @@ export const AssetTypeField = ({
   handleInputChange,
 }: AssetTypeFieldProps) => {
   return (
-    <div className="form-group row mimetype">
+    <div className="row mb-3 mimetype">
       <label className="col-4 col-form-label">Asset Type</label>
       <div className="col-4 controls">
         <select
-          className="mime-select form-control shadow-none"
+          className="mime-select form-control shadow-none form-select"
           name="mimetype"
           value={formData.mimetype}
           onChange={handleInputChange}

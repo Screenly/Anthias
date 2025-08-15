@@ -7,7 +7,7 @@ interface NameFieldProps {
 
 export const NameField = ({ formData, handleInputChange }: NameFieldProps) => {
   return (
-    <div className="form-group row name">
+    <div className="row mb-3 name">
       <label className="col-4 col-form-label">Name</label>
       <div className="col-7">
         <input
