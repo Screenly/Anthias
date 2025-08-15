@@ -73,7 +73,7 @@ export const FileUploadTab = ({
         }}
       >
         <div
-          className="progress-bar progress-bar-striped progress-bar-animated"
+          className="progress-bar progress-bar-striped progress-bar-animated bg-primary"
           style={{
             width: `${uploadProgress}%`,
             transition: 'width 0.3s ease-in-out',
