@@ -95,106 +95,104 @@ export const AddAssetModal = ({
         }}
       >
         <div className="modal-content">
-          <div className="form-horizontal">
-            <div className="modal-header">
-              <h3 id="modalLabel">Add Asset</h3>
-              <button type="button" className="close" onClick={handleClose}>
-                <span aria-hidden="true">&times;</span>
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="asset-location add">
-                <fieldset>
-                  <div className="tabbable">
-                    <ul className="nav nav-tabs" id="add-asset-nav-tabs">
-                      <li
-                        className={classNames(
-                          'tabnav-uri nav-item text-center',
-                          { active: activeTab === 'uri' },
-                        )}
-                      >
-                        <a
-                          className="nav-link"
-                          href="#"
-                          onClick={() => dispatch(setActiveTab('uri'))}
-                        >
-                          URL
-                        </a>
-                      </li>
-                      <li
-                        className={classNames(
-                          'tabnav-file_upload nav-item text-center',
-                          { active: activeTab === 'file_upload' },
-                        )}
-                      >
-                        <a
-                          className="nav-link upload-asset-tab"
-                          href="#"
-                          onClick={() => dispatch(setActiveTab('file_upload'))}
-                        >
-                          Upload
-                        </a>
-                      </li>
-                    </ul>
-                    <div className="tab-content px-4 pt-2 pb-4">
-                      {activeTab === 'uri' ? (
-                        <UriTab
-                          formData={formData}
-                          isValid={isValid}
-                          errorMessage={errorMessage}
-                          isSubmitting={isSubmitting}
-                          handleInputChange={handleInputChange}
-                        />
-                      ) : (
-                        <FileUploadTab
-                          fileInputRef={fileInputRef}
-                          dropZoneRef={dropZoneRef}
-                          handleFileSelect={handleFileSelect}
-                          handleFileDrop={handleFileDrop}
-                          handleDragOver={handleDragOver}
-                          handleDragEnter={handleDragEnter}
-                          handleDragLeave={handleDragLeave}
-                          isSubmitting={isSubmitting}
-                          uploadProgress={uploadProgress}
-                        />
-                      )}
-                    </div>
-                  </div>
-                </fieldset>
+          <div className="modal-header">
+            <h3 id="modalLabel">Add Asset</h3>
+            <button
+              type="button"
+              className="btn-close shadow-none"
+              onClick={handleClose}
+              aria-label="Close"
+            ></button>
+          </div>
+          <div className="modal-body">
+            <div className="asset-location add">
+              <div className="tabbable">
+                <ul className="nav nav-tabs" id="add-asset-nav-tabs">
+                  <li
+                    className={classNames('tabnav-uri nav-item text-center', {
+                      active: activeTab === 'uri',
+                    })}
+                  >
+                    <a
+                      className="nav-link"
+                      href="#"
+                      onClick={() => dispatch(setActiveTab('uri'))}
+                    >
+                      URL
+                    </a>
+                  </li>
+                  <li
+                    className={classNames(
+                      'tabnav-file_upload nav-item text-center',
+                      { active: activeTab === 'file_upload' },
+                    )}
+                  >
+                    <a
+                      className="nav-link upload-asset-tab"
+                      href="#"
+                      onClick={() => dispatch(setActiveTab('file_upload'))}
+                    >
+                      Upload
+                    </a>
+                  </li>
+                </ul>
+                <div className="tab-content px-4 pt-2 pb-4">
+                  {activeTab === 'uri' ? (
+                    <UriTab
+                      formData={formData}
+                      isValid={isValid}
+                      errorMessage={errorMessage}
+                      isSubmitting={isSubmitting}
+                      handleInputChange={handleInputChange}
+                    />
+                  ) : (
+                    <FileUploadTab
+                      fileInputRef={fileInputRef}
+                      dropZoneRef={dropZoneRef}
+                      handleFileSelect={handleFileSelect}
+                      handleFileDrop={handleFileDrop}
+                      handleDragOver={handleDragOver}
+                      handleDragEnter={handleDragEnter}
+                      handleDragLeave={handleDragLeave}
+                      isSubmitting={isSubmitting}
+                      uploadProgress={uploadProgress}
+                    />
+                  )}
+                </div>
               </div>
             </div>
-            <div className="modal-footer">
-              <div
-                className="status"
-                style={{
-                  display:
-                    statusMessage && activeTab === 'file_upload'
-                      ? 'block'
-                      : 'none',
-                }}
-              >
-                {statusMessage}
-              </div>
+          </div>
+          <div className="modal-footer">
+            <div
+              className="status"
+              style={{
+                display:
+                  statusMessage && activeTab === 'file_upload'
+                    ? 'block'
+                    : 'none',
+              }}
+            >
+              {statusMessage}
+            </div>
+            <button
+              className="btn btn-outline-primary btn-long cancel"
+              type="button"
+              onClick={handleClose}
+              disabled={isSubmitting}
+            >
+              Back to Assets
+            </button>
+            {activeTab === 'uri' && (
               <button
-                className="btn btn-outline-primary btn-long cancel"
-                type="button"
-                onClick={handleClose}
-                disabled={isSubmitting}
+                id="save-asset"
+                className="btn btn-primary btn-long"
+                type="submit"
+                onClick={handleSubmit}
+                disabled={isSubmitting || !isValid}
               >
-                Back to Assets
+                Save
               </button>
-              {activeTab === 'uri' && (
-                <button
-                  id="save-asset"
-                  className="btn btn-primary btn-long"
-                  type="submit"
-                  onClick={handleSubmit}
-                  disabled={isSubmitting || !isValid}
-                >
-                  Save
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </div>

@@ -63,7 +63,7 @@ export const FileUploadTab = ({
         </div>
       </div>
       <div
-        className="progress active"
+        className="progress"
         style={{
           marginTop: '1.25rem',
           opacity: isSubmitting ? 1 : 0,
@@ -73,7 +73,7 @@ export const FileUploadTab = ({
         }}
       >
         <div
-          className="bar progress-bar-striped progress-bar progress-bar-animated"
+          className="progress-bar progress-bar-striped progress-bar-animated"
           style={{
             width: `${uploadProgress}%`,
             transition: 'width 0.3s ease-in-out',
