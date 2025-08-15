@@ -49,7 +49,7 @@ export const Navbar = () => {
           <ul className="nav float-end">
             {!isLoading && !upToDate && !isBalena && (
               <li className="update-available">
-                <Link to="/settings#upgrade-section">
+                <Link to="/settings#upgrade-section" className="nav-link">
                   <span className="pe-1">
                     <FaArrowCircleDown />
                   </span>
@@ -59,7 +59,7 @@ export const Navbar = () => {
             )}
 
             <li>
-              <NavLink to="/">
+              <NavLink to="/" className="nav-link">
                 <span className="pe-1">
                   <FaRegClock />
                 </span>
@@ -69,7 +69,7 @@ export const Navbar = () => {
 
             {isBalena && (
               <li>
-                <NavLink to="/integrations">
+                <NavLink to="/integrations" className="nav-link">
                   <span className="pe-1">
                     <FaPlusSquare />
                   </span>
@@ -79,7 +79,7 @@ export const Navbar = () => {
             )}
 
             <li>
-              <NavLink to="/settings">
+              <NavLink to="/settings" className="nav-link">
                 <span className="pe-1">
                   <FaCog />
                 </span>
@@ -88,7 +88,7 @@ export const Navbar = () => {
             </li>
             <li className="divider-vertical"></li>
             <li>
-              <NavLink to="/system-info">
+              <NavLink to="/system-info" className="nav-link">
                 <span className="pe-1">
                   <FaTasks />
                 </span>
