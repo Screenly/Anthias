@@ -190,6 +190,38 @@ label {
       width: 100%;
     }
   }
+
+  .ActiveAssets {
+    thead {
+      tr {
+        th {
+          background-color: $anthias-purple-2;
+          color: #FFFFFF;
+          border-bottom: 0.15rem solid #FFFFFF;
+        }
+      }
+    }
+
+    tbody {
+      tr {
+        td {
+          background-color: $anthias-purple-2;
+          color: #FFFFFF;
+        }
+      }
+    }
+  }
+
+  .InactiveAssets {
+    thead {
+      tr {
+        th {
+          border-bottom-width: 0.15rem;
+          color: $secondary-color;
+        }
+      }
+    }
+  }
 }
 
 .splash {

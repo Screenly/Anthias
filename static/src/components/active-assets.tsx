@@ -72,28 +72,28 @@ export const ActiveAssetsTable = ({ onEditAsset }: ActiveAssetsTableProps) => {
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <table className="ActiveAssets table">
-        <thead className="table-borderless">
+      <table className="ActiveAssets table table-borderless">
+        <thead>
           <tr>
-            <th className="font-weight-normal asset_row_name">Name</th>
-            <th className="font-weight-normal" style={{ width: '21%' }}>
+            <th className="fw-bold asset_row_name">Name</th>
+            <th className="fw-bold" style={{ width: '21%' }}>
               Start
             </th>
-            <th className="font-weight-normal" style={{ width: '21%' }}>
+            <th className="fw-bold" style={{ width: '21%' }}>
               End
             </th>
-            <th className="font-weight-normal" style={{ width: '13%' }}>
+            <th className="fw-bold" style={{ width: '13%' }}>
               Duration
             </th>
-            <th className="font-weight-normal" style={{ width: '7%' }}>
+            <th className="fw-bold" style={{ width: '7%' }}>
               Activity
             </th>
-            <th className="font-weight-normal" style={{ width: '13%' }}>
+            <th className="fw-bold" style={{ width: '13%' }}>
               Actions
             </th>
           </tr>
         </thead>
-        <tbody id="active-assets" className="table-borderless">
+        <tbody id="active-assets">
           <SortableContext
             items={items.map((a) => a.asset_id.toString())}
             strategy={verticalListSortingStrategy}

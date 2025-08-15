@@ -23,7 +23,20 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
-  .tooltip.bs-tooltip-top .arrow::before {
+  // Bootstrap 5 tooltip arrows - only color the pointing side
+  .tooltip.bs-tooltip-top .tooltip-arrow::before {
     border-top-color: $anthias-yellow-3;
+  }
+
+  .tooltip.bs-tooltip-bottom .tooltip-arrow::before {
+    border-bottom-color: $anthias-yellow-3;
+  }
+
+  .tooltip.bs-tooltip-start .tooltip-arrow::before {
+    border-left-color: $anthias-yellow-3;
+  }
+
+  .tooltip.bs-tooltip-end .tooltip-arrow::before {
+    border-right-color: $anthias-yellow-3;
   }
 }
