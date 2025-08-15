@@ -96,14 +96,14 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
                 }}
               >
                 <GiHamburgerMenu
-                  className="mr-3 align-middle"
+                  className="me-3 align-middle"
                   style={{ verticalAlign: 'middle' }}
                 />
               </span>
             )}
             <MimetypeIcon
               mimetype={props.mimetype}
-              className="mr-2 align-middle"
+              className="me-2 align-middle"
               style={{ verticalAlign: 'middle' }}
             />
             <span

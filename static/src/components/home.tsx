@@ -1,7 +1,7 @@
 import classNames from 'classnames'
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { Tooltip } from 'bootstrap'
+import Tooltip from 'bootstrap/js/dist/tooltip'
 import {
   fetchAssets,
   selectActiveAssets,
@@ -140,19 +140,19 @@ export const ScheduleOverview = () => {
               >
                 Schedule Overview
               </b>
-              <div className="ml-auto">
+              <div className="ms-auto">
                 <a
                   id="previous-asset-button"
                   className={classNames(
                     'btn',
                     'btn-long',
                     'btn-outline-primary',
-                    'mr-1',
+                    'me-1',
                   )}
                   href="#"
                   onClick={handlePreviousAsset}
                 >
-                  <i className="fas fa-chevron-left pr-2"></i>
+                  <i className="fas fa-chevron-left pe-2"></i>
                   Previous Asset
                 </a>
                 <a
@@ -161,13 +161,13 @@ export const ScheduleOverview = () => {
                     'btn',
                     'btn-long',
                     'btn-outline-primary',
-                    'mr-1',
+                    'me-1',
                   )}
                   href="#"
                   onClick={handleNextAsset}
                 >
                   Next Asset
-                  <i className="fas fa-chevron-right pl-2"></i>
+                  <i className="fas fa-chevron-right ps-2"></i>
                 </a>
                 <a
                   id="add-asset-button"
@@ -176,7 +176,7 @@ export const ScheduleOverview = () => {
                     'btn',
                     'btn-long',
                     'btn-primary',
-                    'mr-1',
+                    'me-1',
                   )}
                   href="#"
                   onClick={handleAddAsset}

@@ -46,11 +46,11 @@ export const Navbar = () => {
           <NavLink to="/" className="brand">
             <img src="/static/img/logo-full.svg" />
           </NavLink>
-          <ul className="nav float-right">
+          <ul className="nav float-end">
             {!isLoading && !upToDate && !isBalena && (
               <li className="update-available">
                 <Link to="/settings#upgrade-section">
-                  <span className="pr-1">
+                  <span className="pe-1">
                     <FaArrowCircleDown />
                   </span>
                   Update Available
@@ -60,7 +60,7 @@ export const Navbar = () => {
 
             <li>
               <NavLink to="/">
-                <span className="pr-1">
+                <span className="pe-1">
                   <FaRegClock />
                 </span>
                 Schedule Overview
@@ -70,7 +70,7 @@ export const Navbar = () => {
             {isBalena && (
               <li>
                 <NavLink to="/integrations">
-                  <span className="pr-1">
+                  <span className="pe-1">
                     <FaPlusSquare />
                   </span>
                   Integrations
@@ -80,7 +80,7 @@ export const Navbar = () => {
 
             <li>
               <NavLink to="/settings">
-                <span className="pr-1">
+                <span className="pe-1">
                   <FaCog />
                 </span>
                 Settings
@@ -89,7 +89,7 @@ export const Navbar = () => {
             <li className="divider-vertical"></li>
             <li>
               <NavLink to="/system-info">
-                <span className="pr-1">
+                <span className="pe-1">
                   <FaTasks />
                 </span>
                 System Info

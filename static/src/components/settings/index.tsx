@@ -179,7 +179,7 @@ export const Settings = () => {
             </div>
 
             <div className="form-group col-12">
-              <div className="text-right">
+              <div className="text-end">
                 <button
                   className="btn btn-long btn-primary"
                   type="submit"

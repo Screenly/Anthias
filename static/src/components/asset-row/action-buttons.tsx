@@ -17,7 +17,7 @@ export const ActionButtons = ({
   const buttonClass = classNames(
     'btn',
     'btn-outline-dark',
-    'mr-1',
+    'me-1',
     'd-inline-flex',
     'p-2',
     {

@@ -17,12 +17,12 @@ export const Footer = () => {
               </a>
             </span>
           </div>
-          <div id="screenly-logo" className="col-12 row m-2 ml-0 mr-0">
+          <div id="screenly-logo" className="col-12 row m-2 ms-0 me-0">
             <div className="links offset-3 col-6 text-center justify-content-center align-self-center">
               <a
                 href="/api/docs/"
                 target="_blank"
-                className="mr-4 small"
+                className="me-4 small"
                 rel="noopener noreferrer"
               >
                 API
@@ -30,7 +30,7 @@ export const Footer = () => {
               <a
                 href="https://anthias.screenly.io/#faq?utm_source=Anthias&utm_medium=footer&utm_campaign=UI"
                 target="_blank"
-                className="mr-4 small"
+                className="me-4 small"
                 rel="noopener noreferrer"
               >
                 FAQ
@@ -38,7 +38,7 @@ export const Footer = () => {
               <a
                 href="https://screenly.io/?utm_source=Anthias&utm_medium=footer&utm_campaign=UI"
                 target="_blank"
-                className="mr-4 small"
+                className="me-4 small"
                 rel="noopener noreferrer"
               >
                 Screenly.io
@@ -46,7 +46,7 @@ export const Footer = () => {
               <a
                 href="https://forums.screenly.io/"
                 target="_blank"
-                className="mr-4 small"
+                className="me-4 small"
                 rel="noopener noreferrer"
               >
                 Support
@@ -55,7 +55,7 @@ export const Footer = () => {
 
             <div
               id="github-stars"
-              className="col-3 text-right justify-content-center align-self-center"
+              className="col-3 text-end justify-content-center align-self-center"
             >
               <a
                 href="https://github.com/Screenly/Anthias"

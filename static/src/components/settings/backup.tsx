@@ -148,7 +148,7 @@ export const Backup = () => {
       </div>
       <div className="row content px-3">
         <div id="backup-section" className="col-12 my-3">
-          <div className="text-right">
+          <div className="text-end">
             <input
               name="backup_upload"
               style={{ display: 'none' }}
@@ -157,7 +157,7 @@ export const Backup = () => {
             />
             <button
               id="btn-backup"
-              className="btn btn-long btn-outline-primary mr-2"
+              className="btn btn-long btn-outline-primary me-2"
               onClick={handleBackup}
               disabled={isUploading}
             >
