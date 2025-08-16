@@ -290,16 +290,43 @@ class WebTest(TestCase):
 
         with get_browser() as browser:
             browser.visit(main_page_url)
-            wait_for_and_do(browser, '.toggle', lambda btn: btn.click())
-            sleep(3)
+            sleep(2)  # Wait for React to render
+
+            # Find the toggle element and scroll it into view
+            toggle_element = browser.find_by_css(
+                '.is_enabled-toggle input[type="checkbox"]'
+            ).first
+            browser.execute_script(
+                "arguments[0].scrollIntoView(true);",
+                toggle_element._element
+            )
+            sleep(1)
+
+            # Click the label to trigger the toggle
+            label_element = browser.find_by_css('.is_enabled-toggle').first
+            browser.execute_script(
+                "arguments[0].click();", label_element._element)
+            sleep(2)
+
+            # Re-find the element after React re-renders it
+            toggle_element_after = browser.find_by_css(
+                '.is_enabled-toggle input[type="checkbox"]').first
+            browser.execute_script(
+                "return arguments[0].checked;", toggle_element_after._element)
+
+            # Wait longer for API call to complete
+            sleep(5)
 
         assets = Asset.objects.all()
         self.assertEqual(len(assets), 1)
 
         asset = assets.first()
-        self.assertEqual(asset.is_enabled, 1)
+        self.assertEqual(asset.is_enabled, True)
 
     def test_disable_asset(self):
+        # Clear any existing assets first
+        Asset.objects.all().delete()
+
         Asset.objects.create(**{
             **asset_x,
             'is_enabled': 1
@@ -307,15 +334,37 @@ class WebTest(TestCase):
 
         with get_browser() as browser:
             browser.visit(main_page_url)
+            sleep(2)  # Wait for React to render
 
-            wait_for_and_do(browser, '.toggle', lambda btn: btn.click())
-            sleep(3)
+            # Find the toggle element and scroll it into view
+            toggle_element = browser.find_by_css(
+                '.is_enabled-toggle input[type="checkbox"]').first
+            browser.execute_script(
+                "arguments[0].scrollIntoView(true);", toggle_element._element)
+            sleep(1)
+
+            # Click the label to trigger the toggle
+            label_element = browser.find_by_css('.is_enabled-toggle').first
+            browser.execute_script(
+                "arguments[0].click();", label_element._element)
+            sleep(2)
+
+            # Re-find the element after React re-renders it
+            toggle_element_after = browser.find_by_css(
+                '.is_enabled-toggle input[type="checkbox"]').first
+            browser.execute_script(
+                "return arguments[0].checked;",
+                toggle_element_after._element
+            )
+
+            # Wait longer for API call to complete
+            sleep(5)
 
         assets = Asset.objects.all()
         self.assertEqual(len(assets), 1)
 
         asset = assets.first()
-        self.assertEqual(asset.is_enabled, 0)
+        self.assertEqual(asset.is_enabled, False)
 
     @skip('migrate to React-based tests')
     def test_reorder_asset(self):
