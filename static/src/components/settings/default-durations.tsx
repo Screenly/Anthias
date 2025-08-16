@@ -9,7 +9,7 @@ export const DefaultDurations = ({
 }) => {
   return (
     <div className="row">
-      <div className="form-group col-6">
+      <div className="col-6 mb-3">
         <label className="small text-secondary">
           <small>Default duration (seconds)</small>
         </label>
@@ -21,7 +21,7 @@ export const DefaultDurations = ({
           onChange={handleInputChange}
         />
       </div>
-      <div className="form-group col-6">
+      <div className="col-6 mb-3">
         <label className="small text-secondary">
           <small>Default streaming duration (seconds)</small>
         </label>

@@ -8,12 +8,12 @@ export const DateFormat = ({
   handleInputChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
 }) => {
   return (
-    <div className="form-group">
+    <div className="mb-3">
       <label className="small text-secondary">
         <small>Date format</small>
       </label>
       <select
-        className="form-control shadow-none"
+        className="form-control shadow-none form-select"
         name="dateFormat"
         value={settings.dateFormat}
         onChange={handleInputChange}

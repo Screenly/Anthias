@@ -116,7 +116,7 @@ export const Settings = () => {
       <div className="row content px-3">
         <div className="col-12 my-3">
           <form onSubmit={handleSubmit} className="row">
-            <div className="form-group col-6 d-flex flex-column justify-content-between">
+            <div className="col-6 d-flex flex-column justify-content-between">
               <PlayerName
                 settings={settings}
                 handleInputChange={handleInputChange}
@@ -141,7 +141,7 @@ export const Settings = () => {
               <Authentication />
             </div>
 
-            <div className="form-group col-6 d-flex flex-column justify-content-start">
+            <div className="col-6 d-flex flex-column justify-content-start">
               <ToggleableSetting
                 settings={settings}
                 handleInputChange={handleInputChange}
@@ -178,7 +178,7 @@ export const Settings = () => {
               />
             </div>
 
-            <div className="form-group col-12">
+            <div className="col-12">
               <div className="text-end">
                 <button
                   className="btn btn-long btn-primary"
