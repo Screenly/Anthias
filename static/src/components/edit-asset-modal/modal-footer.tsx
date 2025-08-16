@@ -36,11 +36,11 @@ export const ModalFooter = ({
 }: ModalFooterProps) => {
   return (
     <div className="modal-footer">
-      <div className="float-left progress active" style={{ display: 'none' }}>
+      <div className="float-start progress active" style={{ display: 'none' }}>
         <div className="bar progress-bar-striped progress-bar progress-bar-animated"></div>
       </div>
       <button
-        className="btn btn-outline-primary btn-long cancel"
+        className="btn btn-info btn-long cancel"
         type="button"
         onClick={handleClose}
         disabled={isSubmitting}

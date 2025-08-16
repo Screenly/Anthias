@@ -8,7 +8,7 @@ export const PlayerName = ({
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 }) => {
   return (
-    <div className="form-group">
+    <div className="mb-3">
       <label className="small text-secondary">
         <small>Player name</small>
       </label>

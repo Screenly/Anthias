@@ -9,45 +9,28 @@ export const InactiveAssetsTable = ({
   const inactiveAssets = useSelector(selectInactiveAssets) as Asset[]
 
   return (
-    <table className="InactiveAssets table">
-      <thead className="table-borderless">
+    <table className="InactiveAssets table table-borderless">
+      <thead>
         <tr>
-          <th className="text-secondary font-weight-normal asset_row_name">
-            Name
-          </th>
-          <th
-            className="text-secondary font-weight-normal"
-            style={{ width: '21%' }}
-          >
+          <th className="text-secondary fw-bold asset_row_name">Name</th>
+          <th className="text-secondary fw-bold" style={{ width: '21%' }}>
             Start
           </th>
-          <th
-            className="text-secondary font-weight-normal"
-            style={{ width: '21%' }}
-          >
+          <th className="text-secondary fw-bold" style={{ width: '21%' }}>
             End
           </th>
-          <th
-            className="text-secondary font-weight-normal"
-            style={{ width: '13%' }}
-          >
+          <th className="text-secondary fw-bold" style={{ width: '13%' }}>
             Duration
           </th>
-          <th
-            className="text-secondary font-weight-normal"
-            style={{ width: '7%' }}
-          >
+          <th className="text-secondary fw-bold" style={{ width: '7%' }}>
             Activity
           </th>
-          <th
-            className="text-secondary font-weight-normal"
-            style={{ width: '13%' }}
-          >
+          <th className="text-secondary fw-bold" style={{ width: '13%' }}>
             Actions
           </th>
         </tr>
       </thead>
-      <tbody id="inactive-assets" className="table-borderless">
+      <tbody id="inactive-assets">
         {inactiveAssets.map((asset) => (
           <AssetRow
             key={asset.asset_id}

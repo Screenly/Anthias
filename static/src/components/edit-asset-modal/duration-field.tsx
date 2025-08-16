@@ -10,7 +10,7 @@ export const DurationField = ({
   handleInputChange,
 }: DurationFieldProps) => {
   return (
-    <div className="form-group row duration">
+    <div className="row mb-3 duration">
       <label className="col-4 col-form-label">Duration</label>
       <div className="col-7 controls">
         <input

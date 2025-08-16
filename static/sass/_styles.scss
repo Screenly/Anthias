@@ -113,17 +113,19 @@ label {
 
 .btn-long {
   min-width: 13.125rem;
+  @extend .rounded-pill;
 }
 
 .btn-primary {
-  background-image: $anthias-yellow-gradient;
-  color: $anthias-purple-1;
+  background-color: $primary;
+  color: $dark;
   font-weight: 600;
 }
 
 .btn-outline-primary {
   color: #000000;
   background-color: #FFFFFF;
+  border-color: #FFFFFF;
   transition: none;
 
   &:hover {
@@ -188,6 +190,48 @@ label {
       justify-content: center;
       align-items: center;
       width: 100%;
+    }
+  }
+
+  .ActiveAssets {
+    thead {
+      tr {
+        th {
+          background-color: $anthias-purple-2;
+          color: #FFFFFF;
+          border-bottom: 0.15rem solid #FFFFFF;
+        }
+      }
+    }
+
+    tbody {
+      tr {
+        td {
+          background-color: $anthias-purple-2;
+          color: #FFFFFF;
+        }
+      }
+    }
+  }
+
+  .InactiveAssets {
+    thead {
+      tr {
+        th {
+          border-bottom-width: 0.15rem;
+          color: $secondary-color;
+        }
+      }
+    }
+  }
+
+  .EmptyAssetMessage, #footer {
+    a {
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
     }
   }
 }

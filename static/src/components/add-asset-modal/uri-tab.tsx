@@ -24,7 +24,7 @@ export const UriTab = ({
         active: true,
       })}
     >
-      <div className="form-group row uri">
+      <div className="row mb-3 uri">
         <label className="col-4 col-form-label">Asset URL</label>
         <div className="col-7 controls">
           <input
@@ -43,16 +43,19 @@ export const UriTab = ({
           )}
         </div>
       </div>
-      <div className="form-group row skip_asset_check_checkbox">
+      <div className="row mb-3 skip_asset_check_checkbox">
         <label className="col-4 small">Skip asset check</label>
-        <div className="col-7 is_enabled-skip_asset_check_checkbox checkbox">
-          <input
-            name="skipAssetCheck"
-            type="checkbox"
-            checked={formData.skipAssetCheck}
-            onChange={handleInputChange}
-            disabled={isSubmitting}
-          />
+        <div className="col-7 is_enabled-skip_asset_check_checkbox">
+          <div className="form-check">
+            <input
+              className="form-check-input shadow-none"
+              name="skipAssetCheck"
+              type="checkbox"
+              checked={formData.skipAssetCheck}
+              onChange={handleInputChange}
+              disabled={isSubmitting}
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -17,7 +17,7 @@ export const ActionButtons = ({
   const buttonClass = classNames(
     'btn',
     'btn-outline-dark',
-    'mr-1',
+    'me-1',
     'd-inline-flex',
     'p-2',
     {
@@ -35,8 +35,8 @@ export const ActionButtons = ({
         disabled={isDisabled}
         onClick={handleDownload}
         title={tooltipText}
-        data-toggle="tooltip"
-        data-placement="top"
+        data-bs-toggle="tooltip"
+        data-bs-placement="top"
       >
         <FaDownload />
       </button>
@@ -46,8 +46,8 @@ export const ActionButtons = ({
         disabled={isDisabled}
         onClick={handleEdit}
         title={tooltipText}
-        data-toggle="tooltip"
-        data-placement="top"
+        data-bs-toggle="tooltip"
+        data-bs-placement="top"
       >
         <FaPencilAlt />
       </button>
@@ -57,8 +57,8 @@ export const ActionButtons = ({
         onClick={handleDelete}
         disabled={isDisabled}
         title={tooltipText}
-        data-toggle="tooltip"
-        data-placement="top"
+        data-bs-toggle="tooltip"
+        data-bs-placement="top"
       >
         <FaTrashAlt />
       </button>

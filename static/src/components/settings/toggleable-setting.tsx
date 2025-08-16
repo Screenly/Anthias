@@ -12,9 +12,9 @@ export const ToggleableSetting = ({
   name: string
 }) => {
   return (
-    <div className="form-inline mt-4">
+    <div className="d-flex align-items-center mt-4">
       <label>{label}</label>
-      <div className="ml-auto">
+      <div className="ms-auto">
         <label className="is_enabled-toggle toggle switch-light switch-material small m-0">
           <input
             name={name}
