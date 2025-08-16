@@ -175,7 +175,7 @@ export const AddAssetModal = ({
               {statusMessage}
             </div>
             <button
-              className="btn btn-outline-primary btn-long cancel"
+              className="btn btn-long btn-info cancel"
               type="button"
               onClick={handleClose}
               disabled={isSubmitting}

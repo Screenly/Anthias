@@ -146,8 +146,10 @@ export const ScheduleOverview = () => {
                   className={classNames(
                     'btn',
                     'btn-long',
-                    'btn-outline-primary',
-                    'me-1',
+                    'btn-light',
+                    'fw-bold',
+                    'text-dark',
+                    'me-2',
                   )}
                   href="#"
                   onClick={handlePreviousAsset}
@@ -160,8 +162,10 @@ export const ScheduleOverview = () => {
                   className={classNames(
                     'btn',
                     'btn-long',
-                    'btn-outline-primary',
-                    'me-1',
+                    'btn-light',
+                    'fw-bold',
+                    'text-dark',
+                    'me-2',
                   )}
                   href="#"
                   onClick={handleNextAsset}
@@ -187,8 +191,8 @@ export const ScheduleOverview = () => {
             </h4>
 
             {playerName && (
-              <span className="badge badge-primary px-3 py-2 rounded-pill mb-3">
-                <h6 className="my-0 text-center font-weight-bold">
+              <span className="badge bg-primary px-3 py-2 rounded-pill mb-3">
+                <h6 className="my-0 text-center text-dark fw-bold">
                   {playerName}
                 </h6>
               </span>
@@ -207,7 +211,10 @@ export const ScheduleOverview = () => {
                 </h5>
                 <ActiveAssetsTable onEditAsset={handleEditAsset} />
                 {activeAssets.length === 0 && (
-                  <EmptyAssetMessage onAddAssetClick={handleAddAsset} />
+                  <EmptyAssetMessage
+                    onAddAssetClick={handleAddAsset}
+                    isActive={true}
+                  />
                 )}
               </section>
             </div>
@@ -223,7 +230,10 @@ export const ScheduleOverview = () => {
                 </h5>
                 <InactiveAssetsTable onEditAsset={handleEditAsset} />
                 {inactiveAssets.length === 0 && (
-                  <EmptyAssetMessage onAddAssetClick={handleAddAsset} />
+                  <EmptyAssetMessage
+                    onAddAssetClick={handleAddAsset}
+                    isActive={false}
+                  />
                 )}
               </section>
             </div>

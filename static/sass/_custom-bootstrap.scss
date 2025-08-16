@@ -1,10 +1,8 @@
 @import "variables";
 
-// Define theme colors before Bootstrap imports
-$theme-colors: (
-  "primary": #FFE11A,
-  "dark": #270035,
-);
+$primary: #FFE11A;
+$dark: #270035;
+$info: $anthias-purple-5;
 
 @import "root";
 @import "bootstrap";

@@ -12,8 +12,7 @@ export const Footer = () => {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                {' '}
-                <strong>Try Screenly</strong>.
+                <strong>Try Screenly</strong>
               </a>
             </span>
           </div>

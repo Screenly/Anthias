@@ -157,7 +157,7 @@ export const Backup = () => {
             />
             <button
               id="btn-backup"
-              className="btn btn-long btn-outline-primary me-2"
+              className="btn btn-long btn-info me-2"
               onClick={handleBackup}
               disabled={isUploading}
             >
@@ -165,7 +165,7 @@ export const Backup = () => {
             </button>
             <button
               id="btn-upload"
-              className="btn btn-primary"
+              className="btn btn-primary btn-long"
               type="button"
               onClick={handleUpload}
               disabled={isUploading}
