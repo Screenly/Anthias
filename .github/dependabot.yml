@@ -17,10 +17,6 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
-    groups:
-      pip:
-        patterns:
-          - "*"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
