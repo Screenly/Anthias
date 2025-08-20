@@ -9,14 +9,14 @@ package-mode = false
 python = ">=3.9,<3.12"
 
 [tool.poetry.group.dev-host.dependencies]
-ruff = "^0.8.4"
+ruff = "^0.12.9"
 
 [tool.poetry.group.docker-image-builder.dependencies]
-click = '^8.1.7'
+click = '^8.1.8'
 jinja2 = '^3.1.6'
 pygit2 = '^1.15.1'
-requests = '^2.32.4'
-python-on-whales = '^0.73.0'
+requests = '^2.32.5'
+python-on-whales = '^0.78.0'
 
 [build-system]
 requires = ["poetry-core"]
