@@ -6,7 +6,8 @@ import json
 import logging
 import sys
 from builtins import range
-from os import getenv, path
+from os import getenv, path, environ
+import socket
 from signal import SIGALRM, SIGUSR1, signal
 from time import sleep
 
@@ -46,10 +47,12 @@ try:
         connect_to_redis,
         get_balena_device_info,
         get_node_ip,
+        get_node_mac_address,
         is_balena_app,
         string_to_bool,
         url_fails,
     )
+    from lib import diagnostics
     from viewer.scheduling import Scheduler
     from viewer.zmq import ZMQ_HOST_PUB_URL, ZmqSubscriber
 except Exception:
@@ -154,7 +157,36 @@ def load_browser():
     global browser
     logging.info('Loading browser...')
 
-    browser = sh.Command('ScreenlyWebview')(_bg=True, _err_to_out=True)
+    # Prepare headers data for WebView via environment variables
+    try:
+        anthias_hostname = socket.gethostname()
+    except Exception:
+        anthias_hostname = ''
+
+    try:
+        git_branch = diagnostics.get_git_branch()
+        git_short_hash = diagnostics.get_git_short_hash()
+        anthias_version = (
+            f"{git_branch}@{git_short_hash}"
+            if git_branch and git_short_hash else ''
+        )
+    except Exception:
+        anthias_version = ''
+
+    try:
+        anthias_mac = get_node_mac_address()
+    except Exception:
+        anthias_mac = ''
+
+    env = dict(environ)
+    if anthias_hostname:
+        env['ANTHIAS_HOSTNAME'] = anthias_hostname
+    if anthias_version:
+        env['ANTHIAS_VERSION'] = anthias_version
+    if anthias_mac:
+        env['ANTHIAS_MAC'] = anthias_mac
+
+    browser = sh.Command('ScreenlyWebview')(_bg=True, _err_to_out=True, _env=env)
     while (
         'Screenly service start' not in browser.process.stdout.decode('utf-8')
     ):
