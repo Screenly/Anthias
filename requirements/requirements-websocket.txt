@@ -4,4 +4,4 @@ gevent-websocket==0.10.1
 gevent==25.4.2
 Jinja2==3.1.6
 pytz==2022.2.1
-pyzmq==23.2.1
+pyzmq==27.0.1
