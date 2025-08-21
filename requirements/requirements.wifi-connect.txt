@@ -1,5 +1,5 @@
 Cython==3.0.6
 future==0.18.3
 netifaces==0.10.9
-pyzmq==23.2.1
+pyzmq==27.0.2
 redis==3.5.3
