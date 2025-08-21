@@ -77,28 +77,16 @@ export const ActiveAssetsTable = ({ onEditAsset }: ActiveAssetsTableProps) => {
           <thead>
             <tr>
               <th className="fw-bold asset_row_name">Name</th>
-              <th
-                className="fw-bold d-none d-md-table-cell"
-                style={{ width: '21%' }}
-              >
+              <th className="fw-bold" style={{ width: '21%' }}>
                 Start
               </th>
-              <th
-                className="fw-bold d-none d-md-table-cell"
-                style={{ width: '21%' }}
-              >
+              <th className="fw-bold" style={{ width: '21%' }}>
                 End
               </th>
-              <th
-                className="fw-bold d-none d-sm-table-cell"
-                style={{ width: '13%' }}
-              >
+              <th className="fw-bold" style={{ width: '13%' }}>
                 Duration
               </th>
-              <th
-                className="fw-bold d-none d-lg-table-cell"
-                style={{ width: '7%' }}
-              >
+              <th className="fw-bold" style={{ width: '7%' }}>
                 Activity
               </th>
               <th className="fw-bold" style={{ width: '13%' }}>
