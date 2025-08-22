@@ -174,7 +174,7 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
               </label>
             )}
           </td>
-          <td className={classNames('asset_row_btns')}>
+          <td className={classNames('asset_row_btns', 'text-center')}>
             <ActionButtons
               isDisabled={isDisabled || props.isProcessing === 1}
               handleDownload={handleDownloadWrapper}
