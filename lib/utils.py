@@ -1,12 +1,9 @@
-from __future__ import absolute_import, unicode_literals
-
 import json
 import logging
 import os
 import random
 import re
 import string
-from builtins import range, str
 from datetime import datetime, timedelta
 from distutils.util import strtobool
 from os import getenv, path, utime
@@ -21,7 +18,6 @@ import pytz
 import redis
 import requests
 import sh
-from future import standard_library
 from tenacity import (
     RetryError,
     Retrying,
@@ -31,9 +27,6 @@ from tenacity import (
 
 from anthias_app.models import Asset
 from settings import ZmqPublisher, settings
-
-standard_library.install_aliases()
-
 
 arch = machine()
 

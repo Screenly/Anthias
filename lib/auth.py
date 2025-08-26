@@ -1,21 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import unicode_literals
-
 import hashlib
 import os.path
 from abc import ABCMeta, abstractmethod
 from base64 import b64decode
-from builtins import object, str
 from functools import wraps
-
-from future.utils import with_metaclass
 
 LINUX_USER = os.getenv('USER', 'pi')
 
 
-class Auth(with_metaclass(ABCMeta, object)):
+class Auth(metaclass=ABCMeta):
     @abstractmethod
     def authenticate(self):
         """
@@ -24,6 +19,7 @@ class Auth(with_metaclass(ABCMeta, object)):
         """
         pass
 
+    @abstractmethod
     def is_authenticated(self, request):
         """
         See if the user is authenticated for the request.
@@ -48,6 +44,7 @@ class Auth(with_metaclass(ABCMeta, object)):
             return HttpResponse(
                 "Authorization backend is unavailable: " + str(e), status=503)
 
+    @abstractmethod
     def update_settings(self, request, current_pass_correct):
         """
         Submit updated values from Settings page.
@@ -59,6 +56,7 @@ class Auth(with_metaclass(ABCMeta, object)):
         pass
 
     @property
+    @abstractmethod
     def template(self):
         """
         Get HTML template and its context object to be displayed in
@@ -68,6 +66,7 @@ class Auth(with_metaclass(ABCMeta, object)):
         """
         pass
 
+    @abstractmethod
     def check_password(self, password):
         """
         Checks if password correct.

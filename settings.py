@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
+
 
 import configparser
 import hashlib
 import json
 import logging
-from builtins import object, str
 from collections import UserDict
 from os import getenv, path
 from time import sleep
