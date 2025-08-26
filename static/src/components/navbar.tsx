@@ -5,6 +5,7 @@ import {
   FaCog,
   FaPlusSquare,
   FaTasks,
+  FaBars,
 } from 'react-icons/fa'
 import { Link, NavLink } from 'react-router'
 
@@ -12,6 +13,7 @@ export const Navbar = () => {
   const [upToDate, setUpToDate] = useState<boolean | null>(null)
   const [isBalena, setIsBalena] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isNavCollapsed, setIsNavCollapsed] = useState(true)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -39,65 +41,121 @@ export const Navbar = () => {
     fetchData()
   }, [])
 
+  const handleNavToggle = () => {
+    setIsNavCollapsed(!isNavCollapsed)
+  }
+
+  const handleNavLinkClick = () => {
+    setIsNavCollapsed(true)
+  }
+
   return (
     <>
-      <div className="navbar navbar-header navbar-expand-lg fixed-top bg-dark">
+      <nav className="navbar navbar-dark navbar-expand-lg fixed-top bg-dark">
         <div className="container">
-          <NavLink to="/" className="brand">
-            <img src="/static/img/logo-full.svg" />
+          <NavLink to="/" className="navbar-brand py-3">
+            <img src="/static/img/logo-full.svg" alt="Anthias" />
           </NavLink>
-          <ul className="nav float-end">
-            {!isLoading && !upToDate && !isBalena && (
-              <li className="update-available">
-                <Link to="/settings#upgrade-section" className="nav-link">
-                  <span className="pe-1">
-                    <FaArrowCircleDown />
-                  </span>
-                  Update Available
-                </Link>
-              </li>
-            )}
 
-            <li>
-              <NavLink to="/" className="nav-link">
-                <span className="pe-1">
-                  <FaRegClock />
-                </span>
-                Schedule Overview
-              </NavLink>
-            </li>
+          <button
+            className="navbar-toggler shadow-none border-2 border-light"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#navbarNav"
+            aria-controls="navbarNav"
+            aria-expanded={!isNavCollapsed}
+            aria-label="Toggle navigation"
+            onClick={handleNavToggle}
+          >
+            <FaBars className="text-light" />
+          </button>
 
-            {isBalena && (
-              <li>
-                <NavLink to="/integrations" className="nav-link">
+          <div
+            className={`collapse navbar-collapse ${!isNavCollapsed ? 'show' : ''}`}
+            id="navbarNav"
+          >
+            <ul className="navbar-nav ms-auto">
+              {!isLoading && !upToDate && !isBalena && (
+                <li className="nav-item update-available">
+                  <Link
+                    to="/settings#upgrade-section"
+                    className="nav-link"
+                    onClick={handleNavLinkClick}
+                  >
+                    <span className="pe-1">
+                      <FaArrowCircleDown />
+                    </span>
+                    <span className="d-none d-lg-inline">Update Available</span>
+                    <span className="d-lg-none">Update</span>
+                  </Link>
+                </li>
+              )}
+
+              <li className="nav-item">
+                <NavLink
+                  to="/"
+                  className="nav-link"
+                  onClick={handleNavLinkClick}
+                >
                   <span className="pe-1">
-                    <FaPlusSquare />
+                    <FaRegClock />
                   </span>
-                  Integrations
+                  <span className="d-none d-lg-inline">Schedule Overview</span>
+                  <span className="d-lg-none">Schedule</span>
                 </NavLink>
               </li>
-            )}
 
-            <li>
-              <NavLink to="/settings" className="nav-link">
-                <span className="pe-1">
-                  <FaCog />
-                </span>
-                Settings
-              </NavLink>
-            </li>
-            <li className="divider-vertical"></li>
-            <li>
-              <NavLink to="/system-info" className="nav-link">
-                <span className="pe-1">
-                  <FaTasks />
-                </span>
-                System Info
-              </NavLink>
-            </li>
-          </ul>
+              {isBalena && (
+                <li className="nav-item">
+                  <NavLink
+                    to="/integrations"
+                    className="nav-link"
+                    onClick={handleNavLinkClick}
+                  >
+                    <span className="pe-1">
+                      <FaPlusSquare />
+                    </span>
+                    <span className="d-none d-lg-inline">Integrations</span>
+                    <span className="d-lg-none">Integrations</span>
+                  </NavLink>
+                </li>
+              )}
+
+              <li className="nav-item">
+                <NavLink
+                  to="/settings"
+                  className="nav-link"
+                  onClick={handleNavLinkClick}
+                >
+                  <span className="pe-1">
+                    <FaCog />
+                  </span>
+                  <span className="d-none d-lg-inline">Settings</span>
+                  <span className="d-lg-none">Settings</span>
+                </NavLink>
+              </li>
+
+              <li className="nav-item d-none d-lg-block">
+                <div className="divider-vertical"></div>
+              </li>
+
+              <li className="nav-item">
+                <NavLink
+                  to="/system-info"
+                  className="nav-link"
+                  onClick={handleNavLinkClick}
+                >
+                  <span className="pe-1">
+                    <FaTasks />
+                  </span>
+                  <span className="d-none d-lg-inline">System Info</span>
+                  <span className="d-lg-none">System Info</span>
+                </NavLink>
+              </li>
+            </ul>
+          </div>
         </div>
-      </div>
+      </nav>
     </>
   )
 }

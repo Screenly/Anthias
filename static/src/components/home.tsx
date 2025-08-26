@@ -130,64 +130,8 @@ export const ScheduleOverview = () => {
       <div className="container pt-3 pb-3">
         <div className="row">
           <div className="col-12">
-            <h4 className="d-flex">
-              <b
-                className={classNames(
-                  'justify-content-center',
-                  'align-self-center',
-                  'text-white',
-                )}
-              >
-                Schedule Overview
-              </b>
-              <div className="ms-auto">
-                <a
-                  id="previous-asset-button"
-                  className={classNames(
-                    'btn',
-                    'btn-long',
-                    'btn-light',
-                    'fw-bold',
-                    'text-dark',
-                    'me-2',
-                  )}
-                  href="#"
-                  onClick={handlePreviousAsset}
-                >
-                  <i className="fas fa-chevron-left pe-2"></i>
-                  Previous Asset
-                </a>
-                <a
-                  id="next-asset-button"
-                  className={classNames(
-                    'btn',
-                    'btn-long',
-                    'btn-light',
-                    'fw-bold',
-                    'text-dark',
-                    'me-2',
-                  )}
-                  href="#"
-                  onClick={handleNextAsset}
-                >
-                  Next Asset
-                  <i className="fas fa-chevron-right ps-2"></i>
-                </a>
-                <a
-                  id="add-asset-button"
-                  className={classNames(
-                    'add-asset-button',
-                    'btn',
-                    'btn-long',
-                    'btn-primary',
-                    'me-1',
-                  )}
-                  href="#"
-                  onClick={handleAddAsset}
-                >
-                  Add Asset
-                </a>
-              </div>
+            <h4 className="mb-3">
+              <b className="text-white">Schedule Overview</b>
             </h4>
 
             {playerName && (
@@ -197,6 +141,52 @@ export const ScheduleOverview = () => {
                 </h6>
               </span>
             )}
+
+            <div className="d-flex flex-column flex-sm-row gap-2 mb-3 mt-4">
+              <a
+                id="previous-asset-button"
+                className={classNames(
+                  'btn',
+                  'btn-long',
+                  'btn-light',
+                  'fw-bold',
+                  'text-dark',
+                )}
+                href="#"
+                onClick={handlePreviousAsset}
+              >
+                <i className="fas fa-chevron-left pe-2"></i>
+                Previous Asset
+              </a>
+              <a
+                id="next-asset-button"
+                className={classNames(
+                  'btn',
+                  'btn-long',
+                  'btn-light',
+                  'fw-bold',
+                  'text-dark',
+                )}
+                href="#"
+                onClick={handleNextAsset}
+              >
+                Next Asset
+                <i className="fas fa-chevron-right ps-2"></i>
+              </a>
+              <a
+                id="add-asset-button"
+                className={classNames(
+                  'add-asset-button',
+                  'btn',
+                  'btn-long',
+                  'btn-primary',
+                )}
+                href="#"
+                onClick={handleAddAsset}
+              >
+                Add Asset
+              </a>
+            </div>
           </div>
         </div>
       </div>
