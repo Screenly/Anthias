@@ -1,11 +1,10 @@
-from __future__ import unicode_literals
+
 
 import json
 import logging
 import os
 import random
 import string
-from builtins import range, str
 
 from requests import exceptions
 from requests import get as requests_get

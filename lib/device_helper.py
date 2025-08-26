@@ -1,4 +1,4 @@
-from __future__ import unicode_literals
+
 
 
 def parse_cpu_info():

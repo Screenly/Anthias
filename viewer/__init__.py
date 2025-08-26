@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import unicode_literals
-
 import json
 import logging
 import sys
-from builtins import range
 from os import getenv, path
 from signal import SIGALRM, SIGUSR1, signal
 from time import sleep
@@ -13,7 +10,6 @@ from time import sleep
 import django
 import pydbus
 import sh
-from future import standard_library
 from jinja2 import Template
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
@@ -55,7 +51,7 @@ try:
 except Exception:
     pass
 
-standard_library.install_aliases()
+
 
 
 __author__ = "Screenly, Inc"
