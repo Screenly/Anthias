@@ -17,7 +17,7 @@ hurry.filesize==0.9
 importlib-metadata==4.13.0
 Jinja2==3.1.6
 jsonschema==4.17.3 # This is the latest version that doesn't require Rust and Cargo.
-kombu==5.2.4
+kombu==5.5.4
 Mako==1.2.2
 netifaces==0.10.9
 psutil==5.7.3
