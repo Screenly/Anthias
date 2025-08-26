@@ -90,6 +90,13 @@ class NoAuth(Auth):
     def check_password(self, password):
         return True
 
+    @property
+    def template(self):
+        return None, {}
+
+    def update_settings(self, request, current_pass_correct):
+        pass
+
 
 class BasicAuth(Auth):
     display_name = 'Basic'
