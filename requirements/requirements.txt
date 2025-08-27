@@ -6,7 +6,7 @@ configparser==4.0.2
 cryptography==3.3.2
 Cython==3.0.6
 Django==4.2.22
-djangorestframework==3.15.2
+djangorestframework==3.16.1
 django-dbbackup==4.2.1
 drf-spectacular==0.27.2
 future==0.18.3
@@ -21,10 +21,10 @@ kombu==5.2.4
 Mako==1.2.2
 netifaces==0.10.9
 psutil==5.7.3
-pyasn1==0.4.8
+pyasn1==0.6.1
 pydbus==0.6.0
 pyOpenSSL==19.1.0
-python-dateutil==2.8.1
+python-dateutil==2.9.0.post0
 pytz==2022.2.1
 PyYAML==6.0.1
 pyzmq==23.2.1
@@ -32,7 +32,7 @@ redis==3.5.3
 requests[security]==2.32.3
 tenacity==9.0.0
 sh==1.8
-six==1.15.0
+six==1.17.0
 urllib3==2.5.0
 wheel==0.38.1
 yt-dlp==2025.06.30

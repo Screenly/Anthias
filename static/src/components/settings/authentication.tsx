@@ -36,12 +36,12 @@ export const Authentication = () => {
 
   return (
     <>
-      <div className="form-group mb-0">
+      <div className="mb-3">
         <label className="small text-secondary">
           <small>Authentication</small>
         </label>
         <select
-          className="form-control shadow-none"
+          className="form-control shadow-none form-select"
           id="auth_backend"
           name="authBackend"
           value={settings.authBackend}
@@ -56,7 +56,7 @@ export const Authentication = () => {
         (settings.authBackend === '' && prevAuthBackend === 'auth_basic')) && (
         <>
           {showCurrentPassword() && (
-            <div className="form-group" id="curpassword_group">
+            <div className="mb-3" id="curpassword_group">
               <label className="small text-secondary">
                 <small>Current Password</small>
               </label>
@@ -71,7 +71,7 @@ export const Authentication = () => {
           )}
           {settings.authBackend === 'auth_basic' && (
             <>
-              <div className="form-group" id="user_group">
+              <div className="mb-3" id="user_group">
                 <label className="small text-secondary">
                   <small>User</small>
                 </label>
@@ -84,7 +84,7 @@ export const Authentication = () => {
                 />
               </div>
               <div className="row">
-                <div className="form-group col-6" id="password_group">
+                <div className="col-6 mb-3" id="password_group">
                   <label className="small text-secondary">
                     <small>Password</small>
                   </label>
@@ -96,7 +96,7 @@ export const Authentication = () => {
                     onChange={handleInputChange}
                   />
                 </div>
-                <div className="form-group col-6" id="password2_group">
+                <div className="col-6 mb-3" id="password2_group">
                   <label className="small text-secondary">
                     <small>Confirm Password</small>
                   </label>

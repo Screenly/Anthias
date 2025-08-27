@@ -16,6 +16,8 @@ on:
       - '!.github/workflows/generate-openapi-schema.yml'
       - '!.github/workflows/docker-test.yml'
       - '!.github/pull_request_template.md'
+      - '!.github/dependabot.yml'
+      - '!.github/release.yml'
       - '!CONTRIBUTING.md'
       - '!README.md'
       - '!docs/**'
@@ -25,7 +27,6 @@ on:
       - '!tests/**'
       - '!docker/Dockerfile.dev'
       - '!.cursor/**'
-      - '!github/release.yml'
 
 jobs:
   run-tests:
@@ -42,7 +43,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -52,7 +53,7 @@ jobs:
       - name: Install and configure Poetry
         uses: snok/install-poetry@v1
         with:
-          version: 1.8.3
+          version: 2.1.3
           virtualenvs-create: true
           virtualenvs-in-project: false
           virtualenvs-path: ~/.venv
@@ -134,7 +135,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set Docker tag
         run: |

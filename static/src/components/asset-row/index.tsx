@@ -96,19 +96,19 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
                 }}
               >
                 <GiHamburgerMenu
-                  className="mr-3 align-middle"
+                  className="me-3 align-middle"
                   style={{ verticalAlign: 'middle' }}
                 />
               </span>
             )}
             <MimetypeIcon
               mimetype={props.mimetype}
-              className="mr-2 align-middle"
+              className="me-2 align-middle"
               style={{ verticalAlign: 'middle' }}
             />
             <span
-              data-toggle="tooltip"
-              data-placement="top"
+              data-bs-toggle="tooltip"
+              data-bs-placement="top"
               title={props.name}
               style={{
                 verticalAlign: 'middle',
@@ -120,8 +120,8 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
           <td
             style={{ width: '21%', maxWidth: '200px' }}
             className="text-truncate"
-            data-toggle="tooltip"
-            data-placement="top"
+            data-bs-toggle="tooltip"
+            data-bs-placement="top"
             title={formatDate(props.startDate, dateFormat, use24HourClock)}
           >
             {formatDate(props.startDate, dateFormat, use24HourClock)}
@@ -129,8 +129,8 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
           <td
             style={{ width: '21%', maxWidth: '200px' }}
             className="text-truncate"
-            data-toggle="tooltip"
-            data-placement="top"
+            data-bs-toggle="tooltip"
+            data-bs-placement="top"
             title={formatDate(props.endDate, dateFormat, use24HourClock)}
           >
             {formatDate(props.endDate, dateFormat, use24HourClock)}
@@ -138,8 +138,8 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
           <td
             style={{ width: '13%', maxWidth: '150px' }}
             className={classNames('text-truncate')}
-            data-toggle="tooltip"
-            data-placement="top"
+            data-bs-toggle="tooltip"
+            data-bs-placement="top"
             title={formatDuration(props.duration)}
           >
             {formatDuration(props.duration)}
@@ -174,7 +174,7 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
               </label>
             )}
           </td>
-          <td className={classNames('asset_row_btns')}>
+          <td className={classNames('asset_row_btns', 'text-center')}>
             <ActionButtons
               isDisabled={isDisabled || props.isProcessing === 1}
               handleDownload={handleDownloadWrapper}

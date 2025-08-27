@@ -1,0 +1,12 @@
+// Bootstrap 5 specific variable overrides
+// This file should be imported after Bootstrap variables but before components
+
+// Define gutters variable for Bootstrap 5 grid system
+$gutters: (
+  0: 0,
+  1: $spacer * .25,
+  2: $spacer * .5,
+  3: $spacer,
+  4: $spacer * 1.5,
+  5: $spacer * 3,
+);

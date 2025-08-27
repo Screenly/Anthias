@@ -166,85 +166,86 @@ export const EditAssetModal = ({
         }}
       >
         <div className="modal-content">
-          <div className="form-horizontal">
-            <div className="modal-header">
-              <h3 id="modalLabel">Edit Asset</h3>
-              <button type="button" className="close" onClick={handleClose}>
-                <span aria-hidden="true">&times;</span>
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="asset-location edit">
-                <form
-                  id="edit-form"
-                  onSubmit={(e) =>
-                    asset &&
-                    handleSubmit({
-                      e,
-                      asset,
-                      formData,
-                      startDateDate,
-                      startDateTime,
-                      endDateDate,
-                      endDateTime,
-                      dispatch,
-                      onClose,
-                      setIsSubmitting,
-                    })
-                  }
-                >
-                  <NameField
-                    formData={formData}
-                    handleInputChange={handleInputChange}
-                  />
-                  <AssetLocationField asset={asset} />
-                  <AssetTypeField
-                    formData={formData}
-                    handleInputChange={handleInputChange}
-                  />
-                  <hr />
-                  <PlayForField
-                    loopTimes={loopTimes}
-                    startDateDate={startDateDate}
-                    startDateTime={startDateTime}
-                    setLoopTimes={setLoopTimes}
-                    setEndDateDate={setEndDateDate}
-                    setEndDateTime={setEndDateTime}
-                    setFormData={setFormData}
-                  />
-                  <DateFields
-                    startDateDate={startDateDate}
-                    startDateTime={startDateTime}
-                    endDateDate={endDateDate}
-                    endDateTime={endDateTime}
-                    handleDateChange={handleDateChange}
-                  />
-                  <DurationField
-                    formData={formData}
-                    handleInputChange={handleInputChange}
-                  />
-                  <AdvancedFields
-                    formData={formData}
-                    handleInputChange={handleInputChange}
-                  />
-                </form>
-              </div>
-            </div>
-            <ModalFooter
-              asset={asset}
-              formData={formData}
-              startDateDate={startDateDate}
-              startDateTime={startDateTime}
-              endDateDate={endDateDate}
-              endDateTime={endDateTime}
-              dispatch={dispatch}
-              onClose={onClose}
-              handleClose={handleClose}
-              isSubmitting={isSubmitting}
-              handleSubmit={handleSubmit}
-              setIsSubmitting={setIsSubmitting}
-            />
+          <div className="modal-header">
+            <h3 id="modalLabel">Edit Asset</h3>
+            <button
+              type="button"
+              className="btn-close"
+              onClick={handleClose}
+              aria-label="Close"
+            ></button>
           </div>
+          <div className="modal-body">
+            <div className="asset-location edit">
+              <form
+                id="edit-form"
+                onSubmit={(e) =>
+                  asset &&
+                  handleSubmit({
+                    e,
+                    asset,
+                    formData,
+                    startDateDate,
+                    startDateTime,
+                    endDateDate,
+                    endDateTime,
+                    dispatch,
+                    onClose,
+                    setIsSubmitting,
+                  })
+                }
+              >
+                <NameField
+                  formData={formData}
+                  handleInputChange={handleInputChange}
+                />
+                <AssetLocationField asset={asset} />
+                <AssetTypeField
+                  formData={formData}
+                  handleInputChange={handleInputChange}
+                />
+                <hr />
+                <PlayForField
+                  loopTimes={loopTimes}
+                  startDateDate={startDateDate}
+                  startDateTime={startDateTime}
+                  setLoopTimes={setLoopTimes}
+                  setEndDateDate={setEndDateDate}
+                  setEndDateTime={setEndDateTime}
+                  setFormData={setFormData}
+                />
+                <DateFields
+                  startDateDate={startDateDate}
+                  startDateTime={startDateTime}
+                  endDateDate={endDateDate}
+                  endDateTime={endDateTime}
+                  handleDateChange={handleDateChange}
+                />
+                <DurationField
+                  formData={formData}
+                  handleInputChange={handleInputChange}
+                />
+                <AdvancedFields
+                  formData={formData}
+                  handleInputChange={handleInputChange}
+                />
+              </form>
+            </div>
+          </div>
+          <ModalFooter
+            asset={asset}
+            formData={formData}
+            startDateDate={startDateDate}
+            startDateTime={startDateTime}
+            endDateDate={endDateDate}
+            endDateTime={endDateTime}
+            dispatch={dispatch}
+            onClose={onClose}
+            handleClose={handleClose}
+            isSubmitting={isSubmitting}
+            handleSubmit={handleSubmit}
+            setIsSubmitting={setIsSubmitting}
+          />
         </div>
       </div>
     </div>

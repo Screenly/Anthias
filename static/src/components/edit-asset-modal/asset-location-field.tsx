@@ -6,7 +6,7 @@ interface AssetLocationFieldProps {
 
 export const AssetLocationField = ({ asset }: AssetLocationFieldProps) => {
   return (
-    <div className="form-group row">
+    <div className="row mb-3">
       <label className="col-4 col-form-label">Asset Location</label>
       <div className="col-8 controls">
         <div

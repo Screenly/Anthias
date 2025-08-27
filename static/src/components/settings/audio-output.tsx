@@ -10,12 +10,12 @@ export const AudioOutput = ({
   deviceModel: string
 }) => {
   return (
-    <div className="form-group">
+    <div className="mb-3">
       <label className="small text-secondary">
         <small>Audio output</small>
       </label>
       <select
-        className="form-control shadow-none"
+        className="form-control shadow-none form-select"
         name="audioOutput"
         value={settings.audioOutput}
         onChange={handleInputChange}

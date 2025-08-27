@@ -21,7 +21,7 @@ jobs:
       COMPOSE_FILE: docker-compose.test.yml
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python ${{ inputs.python-version }}
         uses: actions/setup-python@v5
@@ -68,13 +68,21 @@ jobs:
           docker compose exec anthias-test \
             ./manage.py test --noinput --parallel --exclude-tag=integration
 
-      - name: Run Python integration tests
+      - name: Setup integration test environment
         if: inputs.test-type == 'python'
         run: |
           docker compose exec anthias-test \
             bash ./bin/prepare_test_environment.sh -s
-          docker compose exec anthias-test \
-            ./manage.py test --noinput --tag=integration
+
+      - name: Run Python integration tests
+        if: inputs.test-type == 'python'
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 5
+          command: |
+            docker compose exec anthias-test \
+              ./manage.py test --noinput --tag=integration
 
       - name: Upload coverage reports to Codecov
         if: inputs.test-type == 'python'

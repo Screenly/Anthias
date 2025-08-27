@@ -21,11 +21,11 @@ export const PlayForField = ({
   setFormData,
 }: PlayForFieldProps) => {
   return (
-    <div className="row form-group loop_date">
+    <div className="row mb-3 loop_date">
       <label className="col-4 col-form-label">Play for</label>
       <div className="controls col-7">
         <select
-          className="form-control shadow-none"
+          className="form-control shadow-none form-select"
           id="loop_times"
           value={loopTimes}
           onChange={(e) =>

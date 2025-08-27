@@ -1,8 +1,7 @@
 import classNames from 'classnames'
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import $ from 'jquery'
-import 'bootstrap/js/dist/tooltip'
+import Tooltip from 'bootstrap/js/dist/tooltip'
 import {
   fetchAssets,
   selectActiveAssets,
@@ -16,10 +15,6 @@ import { InactiveAssetsTable } from '@/components/inactive-assets'
 import { ActiveAssetsTable } from '@/components/active-assets'
 import { AddAssetModal } from '@/components/add-asset-modal'
 import { EditAssetModal } from '@/components/edit-asset-modal'
-
-interface JQueryWithTooltip extends JQuery<HTMLElement> {
-  tooltip(options?: object | string): JQueryWithTooltip
-}
 
 export const ScheduleOverview = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -55,13 +50,26 @@ export const ScheduleOverview = () => {
 
   // Initialize tooltips
   useEffect(() => {
+    const tooltipElements: Tooltip[] = []
+
     const initializeTooltips = () => {
-      ;($('[data-toggle="tooltip"]') as JQueryWithTooltip).tooltip({
-        placement: 'top',
-        trigger: 'hover',
-        html: true,
-        delay: { show: 0, hide: 0 },
-        animation: true,
+      // Dispose existing tooltips
+      tooltipElements.forEach((tooltip) => tooltip.dispose())
+      tooltipElements.length = 0
+
+      // Initialize new tooltips
+      const tooltipNodes = document.querySelectorAll(
+        '[data-bs-toggle="tooltip"]',
+      )
+      tooltipNodes.forEach((element) => {
+        const tooltip = new Tooltip(element as HTMLElement, {
+          placement: 'top',
+          trigger: 'hover',
+          html: true,
+          delay: { show: 0, hide: 0 },
+          animation: true,
+        })
+        tooltipElements.push(tooltip)
       })
     }
 
@@ -86,7 +94,7 @@ export const ScheduleOverview = () => {
 
     return () => {
       observer.disconnect()
-      ;($('[data-toggle="tooltip"]') as JQueryWithTooltip).tooltip('dispose')
+      tooltipElements.forEach((tooltip) => tooltip.dispose())
     }
   }, [activeAssets, inactiveAssets])
 
@@ -129,73 +137,63 @@ export const ScheduleOverview = () => {
       <div className="container pt-3 pb-3">
         <div className="row">
           <div className="col-12">
-            <h4 className="d-flex">
-              <b
-                className={classNames(
-                  'justify-content-center',
-                  'align-self-center',
-                  'text-white',
-                )}
-              >
-                Schedule Overview
-              </b>
-              <div className="ml-auto">
-                {deviceModel !== 'Generic x86_64 Device' && (
-                  <>
-                    <a
-                      id="previous-asset-button"
-                      className={classNames(
-                        'btn',
-                        'btn-long',
-                        'btn-outline-primary',
-                        'mr-1',
-                      )}
-                      href="#"
-                      onClick={handlePreviousAsset}
-                    >
-                      <i className="fas fa-chevron-left pr-2"></i>
-                      Previous Asset
-                    </a>
-                    <a
-                      id="next-asset-button"
-                      className={classNames(
-                        'btn',
-                        'btn-long',
-                        'btn-outline-primary',
-                        'mr-1',
-                      )}
-                      href="#"
-                      onClick={handleNextAsset}
-                    >
-                      Next Asset
-                      <i className="fas fa-chevron-right pl-2"></i>
-                    </a>
-                  </>
-                )}
-                <a
-                  id="add-asset-button"
-                  className={classNames(
-                    'add-asset-button',
-                    'btn',
-                    'btn-long',
-                    'btn-primary',
-                    'mr-1',
-                  )}
-                  href="#"
-                  onClick={handleAddAsset}
-                >
-                  Add Asset
-                </a>
-              </div>
+            <h4 className="mb-3">
+              <b className="text-white">Schedule Overview</b>
             </h4>
 
             {playerName && (
-              <span className="badge badge-primary px-3 py-2 rounded-pill mb-3">
-                <h6 className="my-0 text-center font-weight-bold">
+              <span className="badge bg-primary px-3 py-2 rounded-pill mb-3">
+                <h6 className="my-0 text-center text-dark fw-bold">
                   {playerName}
                 </h6>
               </span>
             )}
+
+            <div className="d-flex flex-column flex-sm-row gap-2 mb-3 mt-4">
+              <a
+                id="previous-asset-button"
+                className={classNames(
+                  'btn',
+                  'btn-long',
+                  'btn-light',
+                  'fw-bold',
+                  'text-dark',
+                )}
+                href="#"
+                onClick={handlePreviousAsset}
+              >
+                <i className="fas fa-chevron-left pe-2"></i>
+                Previous Asset
+              </a>
+              <a
+                id="next-asset-button"
+                className={classNames(
+                  'btn',
+                  'btn-long',
+                  'btn-light',
+                  'fw-bold',
+                  'text-dark',
+                )}
+                href="#"
+                onClick={handleNextAsset}
+              >
+                Next Asset
+                <i className="fas fa-chevron-right ps-2"></i>
+              </a>
+              <a
+                id="add-asset-button"
+                className={classNames(
+                  'add-asset-button',
+                  'btn',
+                  'btn-long',
+                  'btn-primary',
+                )}
+                href="#"
+                onClick={handleAddAsset}
+              >
+                Add Asset
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -210,7 +208,10 @@ export const ScheduleOverview = () => {
                 </h5>
                 <ActiveAssetsTable onEditAsset={handleEditAsset} />
                 {activeAssets.length === 0 && (
-                  <EmptyAssetMessage onAddAssetClick={handleAddAsset} />
+                  <EmptyAssetMessage
+                    onAddAssetClick={handleAddAsset}
+                    isActive={true}
+                  />
                 )}
               </section>
             </div>
@@ -226,7 +227,10 @@ export const ScheduleOverview = () => {
                 </h5>
                 <InactiveAssetsTable onEditAsset={handleEditAsset} />
                 {inactiveAssets.length === 0 && (
-                  <EmptyAssetMessage onAddAssetClick={handleAddAsset} />
+                  <EmptyAssetMessage
+                    onAddAssetClick={handleAddAsset}
+                    isActive={false}
+                  />
                 )}
               </section>
             </div>
