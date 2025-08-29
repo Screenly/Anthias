@@ -144,7 +144,7 @@ jobs:
             ./*raspberry*.json
 
       - name: Attest
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: '${{ github.workspace }}/*raspberry*.img.zst'
 

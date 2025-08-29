@@ -35,7 +35,7 @@ jobs:
           OUTPUT_FILE: js.cdx.json
 
       - name: Attest
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: '${{ github.workspace }}/*.cdx.json'
 
@@ -62,6 +62,6 @@ jobs:
           OUTPUT_FILE: python.cdx.json
 
       - name: Attest
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: '${{ github.workspace }}/*.cdx.json'
