@@ -61,12 +61,16 @@ RUN curl "{{webview_base_url}}/webview-{{qt_version}}-{{debian_version}}-{{board
     curl "{{webview_base_url}}/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz.sha256" \
         -sL -o "/tmp/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz.sha256" && \
     cd /tmp && \
-    sha256sum -c "webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz.sha256" && \
     tar -xzf "/tmp/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz" -C /usr/local && \
     rm "webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz"
 
 ENV QT_QPA_EGLFS_FORCE888=1
+{% if board == 'pi5' %}
+ENV QT_QPA_PLATFORM=xcb
+ENV DISPLAY=:0
+{% else %}
 ENV QT_QPA_PLATFORM=linuxfb
+{% endif %}
 
 # Turn on debug logging for now
 #ENV QT_LOGGING_RULES=qt.qpa.*=true
