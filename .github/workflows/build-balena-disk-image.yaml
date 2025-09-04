@@ -144,7 +144,7 @@ jobs:
             ./*raspberry*.json
 
       - name: Attest
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: '${{ github.workspace }}/*raspberry*.img.zst'
 
@@ -174,7 +174,7 @@ jobs:
           merge-multiple: true
 
       - name: Create release
-        uses: ncipollo/release-action@v1.18.0
+        uses: ncipollo/release-action@v1.20.0
         with:
           allowUpdates: true
           generateReleaseNotes: true
