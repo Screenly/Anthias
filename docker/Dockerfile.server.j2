@@ -4,7 +4,8 @@ FROM debian:bookworm AS node-builder
 RUN apt-get update && \
     apt-get -y install \
         curl \
-        ca-certificates && \
+        ca-certificates \
+        libatomic1 && \
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash && \
     export NVM_DIR="$HOME/.nvm" && \
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && \
@@ -23,15 +24,11 @@ COPY package.json \
     webpack.common.js \
     tsconfig.json \
     /app/
-RUN export NVM_DIR="$HOME/.nvm" && \
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && \
-    npm install
+RUN /usr/local/bin/npm install
 
 COPY ./static/sass/*.scss /app/static/sass/
 COPY ./static/src/ /app/static/src/
-RUN export NVM_DIR="$HOME/.nvm" && \
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && \
-    npm run build
+RUN /usr/local/bin/npm run build
 
 {% endif %}
 {% include 'Dockerfile.base.j2' %}
@@ -56,7 +53,8 @@ COPY --from=node-builder \
 RUN apt-get update && \
     apt-get -y install \
         curl \
-        ca-certificates && \
+        ca-certificates \
+        libatomic1 && \
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash && \
     export NVM_DIR="$HOME/.nvm" && \
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && \
