@@ -1,19 +1,7 @@
 {% if environment == 'production' %}
 FROM debian:bookworm AS node-builder
 
-{% if board in ['pi1', 'pi2'] %}
-RUN apt-get update && \
-    apt-get -y install \
-        nodejs \
-        npm
-{% else %}
-RUN apt-get update && \
-    apt-get -y install \
-        curl \
-        ca-certificates && \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get -y install nodejs
-{% endif %}
+{% include 'nodejs-install.j2' %}
 
 RUN mkdir -p /app
 WORKDIR /app
@@ -50,19 +38,7 @@ COPY --from=node-builder \
     /app/static/dist/ \
     /usr/src/app/static/dist/
 {% else %}
-{% if board in ['pi1', 'pi2'] %}
-RUN apt-get update && \
-    apt-get -y install \
-        nodejs \
-        npm
-{% else %}
-RUN apt-get update && \
-    apt-get -y install \
-        curl \
-        ca-certificates && \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get -y install nodejs
-{% endif %}
+{% include 'nodejs-install.j2' %}
 {% endif %}
 
 ENV GIT_HASH={{ git_hash }}
