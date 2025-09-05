@@ -3,8 +3,10 @@ FROM debian:bookworm AS node-builder
 
 RUN apt-get update && \
     apt-get -y install \
-        nodejs \
-        npm
+        curl \
+        ca-certificates && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get -y install nodejs
 
 RUN mkdir -p /app
 WORKDIR /app
@@ -40,6 +42,13 @@ WORKDIR /usr/src/app
 COPY --from=node-builder \
     /app/static/dist/ \
     /usr/src/app/static/dist/
+{% else %}
+RUN apt-get update && \
+    apt-get -y install \
+        curl \
+        ca-certificates && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get -y install nodejs
 {% endif %}
 
 ENV GIT_HASH={{ git_hash }}

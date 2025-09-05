@@ -90,8 +90,6 @@ def get_test_context() -> dict:
             'libcups2',
             'libxcomposite1',
             'libxdamage1',
-            'nodejs',
-            'npm',
         ],
         'chrome_dl_url': chrome_dl_url,
         'chromedriver_dl_url': chromedriver_dl_url,

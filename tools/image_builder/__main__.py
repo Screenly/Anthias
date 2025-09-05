@@ -93,9 +93,6 @@ def build_image(
         context.update(get_test_context())
     elif service == 'wifi-connect':
         context.update(get_wifi_connect_context(target_platform))
-    elif service == 'server':
-        if environment == 'development':
-            base_apt_dependencies.extend(['nodejs', 'npm'])
 
     generate_dockerfile(service, {
         'base_image': base_image,

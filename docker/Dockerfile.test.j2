@@ -34,6 +34,13 @@ RUN --mount=type=cache,target=/var/cache/apt \
         {% endif %}
     {% endfor %}
 
+RUN apt-get update && \
+    apt-get -y install \
+        curl \
+        ca-certificates && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get -y install nodejs
+
 # @TODO: Uncomment the lines below when test_add_asset_streaming is fixed.
 # WORKDIR /opt/ffmpeg
 # COPY --from=builder /opt/ffmpeg/ffserver ./
