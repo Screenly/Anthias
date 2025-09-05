@@ -23,11 +23,15 @@ COPY package.json \
     webpack.common.js \
     tsconfig.json \
     /app/
-RUN npm install
+RUN export NVM_DIR="$HOME/.nvm" && \
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && \
+    npm install
 
 COPY ./static/sass/*.scss /app/static/sass/
 COPY ./static/src/ /app/static/src/
-RUN npm run build
+RUN export NVM_DIR="$HOME/.nvm" && \
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && \
+    npm run build
 
 {% endif %}
 {% include 'Dockerfile.base.j2' %}
