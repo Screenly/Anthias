@@ -1,7 +1,7 @@
 cec==0.2.8
 celery==5.2.2
 certifi==2024.7.4
-cffi==1.14.4
+cffi==2.0.0
 configparser==4.0.2
 cryptography==3.3.2
 Cython==3.0.6
