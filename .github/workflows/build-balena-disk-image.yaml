@@ -98,7 +98,7 @@ jobs:
               "$BALENA_IMAGE.img" \
               --config-network=ethernet  \
               --fleet screenly_ose/anthias-${{ matrix.board }}
-          balena_cli_version: 18.1.2
+          balena_cli_version: 22.4.4
 
       - name: Package up image
         run: |
