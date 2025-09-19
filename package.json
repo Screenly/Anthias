@@ -55,7 +55,7 @@
     "prettier": "3.6.2",
     "sass": "^1.92.1",
     "sass-loader": "^16.0.5",
-    "ts-jest": "^29.4.2",
+    "ts-jest": "^29.4.3",
     "ts-loader": "^9.5.4",
     "tsconfig-paths-webpack-plugin": "^4.2.0",
     "typescript": "^5.9.2",
