@@ -74,7 +74,7 @@ jobs:
             os download "$BALENA_IMAGE" \
               --output "$BALENA_IMAGE.img" \
               --version default
-          balena_cli_version: 18.1.2
+          balena_cli_version: 22.4.4
 
       - name: balena CLI Action - preload
         uses: balena-labs-research/community-cli-action@1.0.0
@@ -87,7 +87,7 @@ jobs:
               --pin-device-to-release \
               --splash-image ansible/roles/splashscreen/files/splashscreen.png \
               --commit latest
-          balena_cli_version: 18.1.2
+          balena_cli_version: 22.4.4
 
       - name: balena CLI Action - configure
         uses: balena-labs-research/community-cli-action@1.0.0
@@ -98,7 +98,7 @@ jobs:
               "$BALENA_IMAGE.img" \
               --config-network=ethernet  \
               --fleet screenly_ose/anthias-${{ matrix.board }}
-          balena_cli_version: 18.1.2
+          balena_cli_version: 22.4.4
 
       - name: Package up image
         run: |
