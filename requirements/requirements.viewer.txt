@@ -1,7 +1,7 @@
 # vim: ft=requirements
 
 cec==0.2.8
-certifi==2024.7.4
+certifi==2025.8.3
 configparser==4.0.2
 cryptography==3.3.2
 Cython==3.0.6
