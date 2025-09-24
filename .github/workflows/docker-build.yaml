@@ -103,24 +103,10 @@ jobs:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
         run: |
-          if [ "${{ matrix.board }}" == "pi4" ]; then
-            poetry run python -m tools.image_builder \
-              --build-target=pi4 \
-              --target-platform=linux/arm/v8 \
-              --service=${{ matrix.service }} \
-              --push
-          elif [ "${{ matrix.board }}" == "pi4-64" ]; then
-            poetry run python -m tools.image_builder \
-              --build-target=pi4 \
-              --target-platform=linux/arm64/v8 \
-              --service=${{ matrix.service }} \
-              --push
-          else
-            poetry run python -m tools.image_builder \
-              --build-target=${{ matrix.board }} \
-              --service=${{ matrix.service }} \
-              --push
-          fi
+          poetry run python -m tools.image_builder \
+            --build-target=${{ matrix.board }} \
+            --service=${{ matrix.service }} \
+            --push
 
       - name: Inspect cache after build
         run: |
