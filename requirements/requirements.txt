@@ -31,7 +31,7 @@ pyzmq==23.2.1
 redis==3.5.3
 requests[security]==2.32.3
 tenacity==9.0.0
-sh==1.8
+sh==2.2.2
 six==1.17.0
 urllib3==2.5.0
 wheel==0.38.1
