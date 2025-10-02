@@ -1,5 +1,7 @@
 from __future__ import unicode_literals
 
+from os import getenv
+
 import sh
 import vlc
 
@@ -25,6 +27,23 @@ class MediaPlayer():
     def is_playing(self):
         raise NotImplementedError
 
+    def get_alsa_audio_device(self):
+        if settings['audio_output'] == 'local':
+            if get_device_type() == 'pi5':
+                return 'default:CARD=vc4hdmi0'
+            elif get_device_type() == 'x86':
+                return 'default:CARD=HID'
+            return 'plughw:CARD=Headphones'
+        else:
+            if get_device_type() in ['pi4', 'pi5']:
+                return 'default:CARD=vc4hdmi0'
+            elif get_device_type() in ['pi1', 'pi2', 'pi3']:
+                return 'default:CARD=vc4hdmi'
+            elif get_device_type() == 'x86':
+                return 'hdmi:CARD=PCH'
+            else:
+                return 'default:CARD=HID'
+
 
 class FFMPEGMediaPlayer(MediaPlayer):
     def __init__(self):
@@ -38,6 +57,10 @@ class FFMPEGMediaPlayer(MediaPlayer):
         self.player_kwargs = {
             '_bg': True,
             '_ok_code': [0, 124],
+            '_env': {
+                'AUDIODEV': self.get_alsa_audio_device(),
+                'DISPLAY': getenv('DISPLAY', ':0')
+            }
         }
 
     def play(self):
@@ -65,20 +88,6 @@ class VLCMediaPlayer(MediaPlayer):
         self.player = self.instance.media_player_new()
 
         self.player.audio_output_set('alsa')
-
-    def get_alsa_audio_device(self):
-        if settings['audio_output'] == 'local':
-            if get_device_type() == 'pi5':
-                return 'default:CARD=vc4hdmi0'
-
-            return 'plughw:CARD=Headphones'
-        else:
-            if get_device_type() in ['pi4', 'pi5']:
-                return 'default:CARD=vc4hdmi0'
-            elif get_device_type() in ['pi1', 'pi2', 'pi3']:
-                return 'default:CARD=vc4hdmi'
-            else:
-                return 'default:CARD=HID'
 
     def __get_options(self):
         return [

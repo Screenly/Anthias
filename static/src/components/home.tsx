@@ -7,7 +7,8 @@ import {
   selectActiveAssets,
   selectInactiveAssets,
 } from '@/store/assets'
-import { AssetEditData, AppDispatch } from '@/types'
+import { fetchDeviceModel } from '@/store/settings'
+import { AssetEditData, AppDispatch, RootState } from '@/types'
 
 import { EmptyAssetMessage } from '@/components/empty-asset-message'
 import { InactiveAssetsTable } from '@/components/inactive-assets'
@@ -23,6 +24,8 @@ export const ScheduleOverview = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [assetToEdit, setAssetToEdit] = useState<AssetEditData | null>(null)
   const [playerName, setPlayerName] = useState('')
+
+  const { deviceModel } = useSelector((state: RootState) => state.settings)
 
   const fetchPlayerName = async () => {
     try {
@@ -40,6 +43,10 @@ export const ScheduleOverview = () => {
     dispatch(fetchAssets())
     fetchPlayerName()
   }, [dispatch, playerName])
+
+  useEffect(() => {
+    dispatch(fetchDeviceModel())
+  }, [dispatch])
 
   // Initialize tooltips
   useEffect(() => {
