@@ -10,8 +10,10 @@
 #include <QPainter>
 #include <QMovie>
 #include <QBuffer>
+#include <QWebEngineProfile>
 
 #include "view.h"
+#include "requestinterceptor.h"
 
 
 View::View(QWidget* parent) : QWidget(parent)
@@ -44,6 +46,13 @@ View::View(QWidget* parent) : QWidget(parent)
     isAnimatedImage = false;
 
     connect(animationTimer, &QTimer::timeout, this, &View::updateMovieFrame);
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+    // Attach request interceptor to inject headers
+    RequestInterceptor* interceptor = new RequestInterceptor(this);
+    webView1->page()->profile()->setUrlRequestInterceptor(interceptor);
+    webView2->page()->profile()->setUrlRequestInterceptor(interceptor);
+#endif
 }
 
 View::~View()
@@ -135,6 +144,19 @@ void View::loadImage(const QString &preUri)
 
     // Start loading the next image
     QNetworkRequest request(src);
+    // Inject the same headers for image fetches
+    QByteArray hostname = qgetenv("ANTHIAS_HOSTNAME");
+    QByteArray version = qgetenv("ANTHIAS_VERSION");
+    QByteArray mac = qgetenv("ANTHIAS_MAC");
+    if (!hostname.isEmpty()) {
+        request.setRawHeader("X-Anthias-hostname", hostname);
+    }
+    if (!version.isEmpty()) {
+        request.setRawHeader("X-Anthias-version", version);
+    }
+    if (!mac.isEmpty()) {
+        request.setRawHeader("X-Anthias-mac", mac);
+    }
     QNetworkReply* reply = networkManager->get(request);
 
     connect(reply, &QNetworkReply::finished, this, [=]() {
