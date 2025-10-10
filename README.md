@@ -33,6 +33,10 @@ See [this](/docs/installation-options.md) page for options on how to install Ant
 
 ## :white_check_mark: Compatibility
 
+> [!WARNING]
+> Anthias does not currently support devices running Debian Trixie.
+> Please use Debian Bookworm or Raspberry Pi OS Bookworm for the best experience.
+
 ### balenaOS
 
 > [!NOTE]
