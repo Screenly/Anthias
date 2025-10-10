@@ -61,6 +61,10 @@ Starting with [v0.19.0](https://github.com/Screenly/Anthias/releases/tag/v0.19.0
 
 If you'd like more control over your digital signage instance, try installing it on Raspberry Pi OS Lite or Debian.
 
+> [!WARNING]
+> Anthias does not currently support devices running Debian Trixie.
+> Please use Debian Bookworm or Raspberry Pi OS Bookworm for the best experience.
+
 > [!IMPORTANT]
 > When installing on PC (x86) devices, make sure do follow the steps in the [x86 installation guide](/docs/x86-installation.md)
 > so that the installation script will work.
