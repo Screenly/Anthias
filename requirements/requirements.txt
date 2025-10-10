@@ -1,6 +1,6 @@
 cec==0.2.8
 celery==5.2.2
-certifi==2024.7.4
+certifi==2025.10.5
 cffi==2.0.0
 configparser==4.0.2
 cryptography==3.3.2
@@ -19,7 +19,7 @@ Jinja2==3.1.6
 jsonschema==4.17.3 # This is the latest version that doesn't require Rust and Cargo.
 kombu==5.2.4
 Mako==1.2.2
-netifaces==0.10.9
+netifaces==0.11.0
 psutil==5.7.3
 pyasn1==0.6.1
 pydbus==0.6.0

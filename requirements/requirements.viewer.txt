@@ -1,7 +1,7 @@
 # vim: ft=requirements
 
 cec==0.2.8
-certifi==2024.7.4
+certifi==2025.10.5
 configparser==4.0.2
 cryptography==3.3.2
 Cython==3.0.6
@@ -12,7 +12,7 @@ future==0.18.3
 idna==3.10
 Jinja2==3.1.6
 jsonschema==4.17.3 # This is the latest version that doesn't require Rust and Cargo.
-netifaces==0.10.9
+netifaces==0.11.0
 pydbus==0.6.0
 python-dateutil==2.9.0.post0
 python-vlc==3.0.20123
