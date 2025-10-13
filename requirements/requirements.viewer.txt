@@ -2,7 +2,7 @@
 
 cec==0.2.8
 certifi==2025.10.5
-configparser==4.0.2
+configparser==7.2.0
 cryptography==3.3.2
 Cython==3.0.6
 Django==4.2.25
