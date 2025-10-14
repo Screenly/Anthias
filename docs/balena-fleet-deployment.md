@@ -46,6 +46,31 @@ $ balena env add BALENA_HOST_CONFIG_gpu_mem $GPU_MEM_VALUE --fleet $FLEET_NAME
 $ balena env add BALENA_HOST_CONFIG_dtoverlay vc4-kms-v3d --fleet $FLEET_NAME
 ```
 
+If you plan to play HEVC/H.265 videos, add the Raspberry Pi HEVC V4L2 overlay so
+that the kernel exposes the hardware decoder nodes to the containers:
+
+```bash
+$ balena env add BALENA_HOST_CONFIG_dtoverlay 'vc4-kms-v3d,rpivid-v4l2' --fleet $FLEET_NAME
+```
+
+> [!NOTE]
+> When you set the value again with the command above, balenaCloud will update
+> the existing `BALENA_HOST_CONFIG_dtoverlay` entry instead of creating a new
+> one. You can also edit it from the dashboard and append `,rpivid-v4l2`
+> manually.
+
+After the device reboots with the updated device tree overlays, the
+`anthias-viewer` service automatically maps `/dev/dri` inside the container. You
+can verify the kernel nodes are present by opening a shell on the device and
+running the following command:
+
+```bash
+$ balena ssh $DEVICE_HOSTNAME "ls /dev/dri /dev/video1[0-1]"
+```
+
+Seeing the DRM and V4L2 nodes confirms the HEVC decoder is available to the
+containerised video player.
+
 If your display does have overscan issues like having a black border around the
 screen, you can disable overscan by running the following command:
 
