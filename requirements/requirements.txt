@@ -7,7 +7,7 @@ cryptography==3.3.2
 Cython==3.1.4
 Django==4.2.25
 djangorestframework==3.16.1
-django-dbbackup==4.2.1
+django-dbbackup==5.0.0
 drf-spectacular==0.28.0
 future==0.18.3
 gevent-websocket==0.10.1
