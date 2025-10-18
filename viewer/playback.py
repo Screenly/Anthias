@@ -1,15 +1,18 @@
-from os import system
+import threading
+
+# Global event for instant asset switching
+skip_event = threading.Event()
 
 
 def skip_asset(scheduler, back=False):
     if back is True:
         scheduler.reverse = True
-    system('pkill -SIGUSR1 -f viewer')
+    skip_event.set()
 
 
 def navigate_to_asset(scheduler, asset_id):
     scheduler.extra_asset = asset_id
-    system('pkill -SIGUSR1 -f viewer')
+    skip_event.set()
 
 
 def stop_loop(scheduler):
