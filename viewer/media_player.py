@@ -1,15 +1,12 @@
 from __future__ import unicode_literals
 
 import logging
-import os
-import signal
 import subprocess
-import sh
+
 import vlc
 
 from lib.device_helper import get_device_type
 from settings import settings
-import logging
 
 VIDEO_TIMEOUT = 20  # secs
 

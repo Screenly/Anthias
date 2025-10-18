@@ -233,7 +233,8 @@ def asset_loop(scheduler):
         skip_event.clear()
         if skip_event.wait(timeout=EMPTY_PL_DELAY):
             # Skip was triggered, continue immediately to next iteration
-            logging.info('Skip detected during empty playlist wait, continuing')
+            logging.info(
+                'Skip detected during empty playlist wait, continuing')
         else:
             # Duration elapsed normally, continue to next iteration
             pass
@@ -275,7 +276,8 @@ def asset_loop(scheduler):
         skip_event.clear()
         if skip_event.wait(timeout=0.5):
             # Skip was triggered, continue immediately to next iteration
-            logging.info('Skip detected during asset unavailability wait, continuing')
+            logging.info(
+                'Skip detected during asset unavailability wait, continuing')
         else:
             # Duration elapsed normally, continue to next iteration
             pass
