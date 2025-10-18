@@ -197,14 +197,12 @@ def view_video(uri, duration):
 
     try:
         skip_event = get_skip_event()
-        while media_player.is_playing():
-            watchdog()
-            skip_event.clear()
-            if skip_event.wait(timeout=1):
-                # Skip was triggered, stop the media player and break
-                logging.info('Skip detected during video playback, stopping video')
-                media_player.stop()
-                break
+        skip_event.clear()
+        if skip_event.wait(timeout=int(duration)):
+            logging.info('Skip detected during video playback, stopping video')
+            media_player.stop()
+        else:
+            pass
     except sh.ErrorReturnCode_1:
         logging.info(
             'Resource URI is not correct, remote host is not responding or '

@@ -1,10 +1,15 @@
 from __future__ import unicode_literals
 
+import logging
+import os
+import signal
+import subprocess
 import sh
 import vlc
 
 from lib.device_helper import get_device_type
 from settings import settings
+import logging
 
 VIDEO_TIMEOUT = 20  # secs
 
@@ -29,31 +34,30 @@ class MediaPlayer():
 class FFMPEGMediaPlayer(MediaPlayer):
     def __init__(self):
         MediaPlayer.__init__(self)
-        self.run = None
-        self.player_args = list()
-        self.player_kwargs = dict()
+        self.process = None
 
     def set_asset(self, uri, duration):
-        self.player_args = ['ffplay', uri, '-autoexit']
-        self.player_kwargs = {
-            '_bg': True,
-            '_ok_code': [0, 124],
-        }
+        self.uri = uri
 
     def play(self):
-        self.run = sh.Command(self.player_args[0])(
-            *self.player_args[1:], **self.player_kwargs
+        self.process = subprocess.Popen(
+            ['ffplay', '-autoexit', self.uri],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
         )
 
     def stop(self):
         try:
-            if self.run:
-                self.run.kill()
-        except OSError:
-            pass
+            if self.process:
+                self.process.terminate()
+                self.process = None
+        except Exception as e:
+            logging.error(f'Exception in stop(): {e}')
 
     def is_playing(self):
-        return bool(self.run.process.alive)
+        if self.process:
+            return self.process.poll() is None
+        return False
 
 
 class VLCMediaPlayer(MediaPlayer):
