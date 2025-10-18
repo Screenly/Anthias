@@ -7,7 +7,7 @@ import logging
 import sys
 from builtins import range
 from os import getenv, path
-from signal import SIGALRM, SIGUSR1, signal
+from signal import SIGALRM, signal
 from time import sleep
 
 import django
@@ -31,8 +31,8 @@ from viewer.media_player import MediaPlayerProxy
 from viewer.playback import navigate_to_asset, play_loop, skip_asset, stop_loop
 from viewer.utils import (
     command_not_found,
+    get_skip_event,
     sigalrm,
-    sigusr1,
     wait_for_server,
     watchdog,
 )
@@ -196,9 +196,15 @@ def view_video(uri, duration):
     view_image('null')
 
     try:
+        skip_event = get_skip_event()
         while media_player.is_playing():
             watchdog()
-            sleep(1)
+            skip_event.clear()
+            if skip_event.wait(timeout=1):
+                # Skip was triggered, stop the media player and break
+                logging.info('Skip detected during video playback, stopping video')
+                media_player.stop()
+                break
     except sh.ErrorReturnCode_1:
         logging.info(
             'Resource URI is not correct, remote host is not responding or '
@@ -225,7 +231,14 @@ def asset_loop(scheduler):
         logging.info(
             'Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY)
         view_image(STANDBY_SCREEN)
-        sleep(EMPTY_PL_DELAY)
+        skip_event = get_skip_event()
+        skip_event.clear()
+        if skip_event.wait(timeout=EMPTY_PL_DELAY):
+            # Skip was triggered, continue immediately to next iteration
+            logging.info('Skip detected during empty playlist wait, continuing')
+        else:
+            # Duration elapsed normally, continue to next iteration
+            pass
 
     elif (
         path.isfile(asset['uri']) or
@@ -248,12 +261,26 @@ def asset_loop(scheduler):
         if 'image' in mime or 'web' in mime:
             duration = int(asset['duration'])
             logging.info('Sleeping for %s', duration)
-            sleep(duration)
+            skip_event = get_skip_event()
+            skip_event.clear()
+            if skip_event.wait(timeout=duration):
+                # Skip was triggered, continue immediately to next iteration
+                logging.info('Skip detected, moving to next asset immediately')
+            else:
+                # Duration elapsed normally, continue to next asset
+                pass
 
     else:
         logging.info('Asset %s at %s is not available, skipping.',
                      asset['name'], asset['uri'])
-        sleep(0.5)
+        skip_event = get_skip_event()
+        skip_event.clear()
+        if skip_event.wait(timeout=0.5):
+            # Skip was triggered, continue immediately to next iteration
+            logging.info('Skip detected during asset unavailability wait, continuing')
+        else:
+            # Duration elapsed normally, continue to next iteration
+            pass
 
 
 def setup():
@@ -266,7 +293,7 @@ def setup():
         # or we can create a new class that extends Exception.
         sys.exit(1)
 
-    signal(SIGUSR1, sigusr1)
+    # Skip event is now handled via threading instead of signals
     signal(SIGALRM, sigalrm)
 
     load_settings()

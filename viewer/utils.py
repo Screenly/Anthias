@@ -18,13 +18,12 @@ def sigalrm(signum, frame):
     raise SigalrmError("SigalrmError")
 
 
-def sigusr1(signum, frame):
+def get_skip_event():
     """
-    The signal interrupts sleep() calls, so the currently
-    playing web or image asset is skipped.
+    Get the global skip event for instant asset switching.
     """
-    logging.info('USR1 received, skipping.')
-    MediaPlayerProxy.get_instance().stop()
+    from viewer.playback import skip_event
+    return skip_event
 
 
 def command_not_found():
