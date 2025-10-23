@@ -1,4 +1,4 @@
-*.py[co]
+**/*.py[co]
 *.git
 *.github
 docs/*
@@ -29,9 +29,9 @@ pip-log.txt
 .mr.developer.cfg
 
 # VIM
-*.swp
+**/*.swp
 
-.DS_Store
+**/.DS_Store
 .fseventsd/*
 .Spotlight-V100/*
 .sass-cache/*
