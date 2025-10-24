@@ -63,7 +63,7 @@ jobs:
       - name: Login to balena
         env:
           BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
-        run: balena login --token $BALENA_TOKEN
+        run: balena login --token "$BALENA_TOKEN"
 
       - name: Get base board
         run: |
