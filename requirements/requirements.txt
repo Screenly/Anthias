@@ -1,17 +1,17 @@
 cec==0.2.8
 celery==5.2.2
-certifi==2024.7.4
-cffi==1.14.4
-configparser==4.0.2
+certifi==2025.10.5
+cffi==2.0.0
+configparser==7.2.0
 cryptography==3.3.2
-Cython==3.0.6
-Django==4.2.22
+Cython==3.1.4
+Django==4.2.25
 djangorestframework==3.16.1
 django-dbbackup==4.2.1
-drf-spectacular==0.27.2
+drf-spectacular==0.28.0
 future==0.18.3
 gevent-websocket==0.10.1
-gevent==25.4.2
+gevent==25.8.2
 gunicorn==23.0.0
 hurry.filesize==0.9
 importlib-metadata==4.13.0
@@ -19,14 +19,14 @@ Jinja2==3.1.6
 jsonschema==4.17.3 # This is the latest version that doesn't require Rust and Cargo.
 kombu==5.5.4
 Mako==1.2.2
-netifaces==0.10.9
+netifaces==0.11.0
 psutil==5.7.3
 pyasn1==0.6.1
 pydbus==0.6.0
 pyOpenSSL==19.1.0
 python-dateutil==2.9.0.post0
 pytz==2022.2.1
-PyYAML==6.0.1
+PyYAML==6.0.2
 pyzmq==23.2.1
 redis==3.5.3
 requests[security]==2.32.3
@@ -35,4 +35,4 @@ sh==1.8
 six==1.17.0
 urllib3==2.5.0
 wheel==0.38.1
-yt-dlp==2025.06.30
+yt-dlp==2025.10.22

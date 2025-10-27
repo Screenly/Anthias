@@ -29,7 +29,7 @@ If applicable, add screenshots to help explain your problem.
 ### Environment
 
 - Device: [e.g., Raspberry Pi 5, Raspberry Pi 4, PC]
-- OS: [e.g., balenaOS, Raspberry Pi OS 64-bit Bookworm]
+- OS: [e.g., balenaOS, Raspberry Pi OS 64-bit Bookworm, Trixie (not supported)]
 - Anthias Version: [e.g., v0.19.0]
 - Installation Method: [e.g., balenaHub, Release Image, Manual Installation]
 

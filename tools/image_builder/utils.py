@@ -24,6 +24,12 @@ def get_build_parameters(build_target: str) -> dict:
             'base_image': 'balenalib/raspberrypi3-debian',
             'target_platform': 'linux/arm/v8',
         }
+    elif build_target == 'pi4-64':
+        return {
+            'board': 'pi4',
+            'base_image': 'balenalib/raspberrypi3-debian',
+            'target_platform': 'linux/arm64/v8',
+        }
     elif build_target == 'pi3':
         return {
             'board': 'pi3',
@@ -90,8 +96,6 @@ def get_test_context() -> dict:
             'libcups2',
             'libxcomposite1',
             'libxdamage1',
-            'nodejs',
-            'npm',
         ],
         'chrome_dl_url': chrome_dl_url,
         'chromedriver_dl_url': chromedriver_dl_url,

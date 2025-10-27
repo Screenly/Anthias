@@ -1,5 +1,5 @@
 SHORT_HASH_LENGTH = 7
-BUILD_TARGET_OPTIONS = ['pi1', 'pi2', 'pi3', 'pi4', 'pi5', 'x86']
+BUILD_TARGET_OPTIONS = ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
 SERVICES = (
     'server',
     'celery',

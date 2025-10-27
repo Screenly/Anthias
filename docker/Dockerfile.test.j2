@@ -34,6 +34,8 @@ RUN --mount=type=cache,target=/var/cache/apt \
         {% endif %}
     {% endfor %}
 
+{% include 'nodejs-install.j2' %}
+
 # @TODO: Uncomment the lines below when test_add_asset_streaming is fixed.
 # WORKDIR /opt/ffmpeg
 # COPY --from=builder /opt/ffmpeg/ffserver ./

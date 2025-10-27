@@ -52,6 +52,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zstd
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.21.0'
+
+      - name: Install balena CLI
+        run: npm install -g balena-cli@22.4.15
+
+      - name: Login to balena
+        env:
+          BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
+        run: balena login --token "$BALENA_TOKEN"
+
       - name: Get base board
         run: |
           if [ "${{ matrix.board }}" == 'pi1' ]; then
@@ -66,39 +79,27 @@ jobs:
             echo "BALENA_IMAGE=raspberrypi5" >> "$GITHUB_ENV"
           fi
 
-      - name: balena CLI Action - download
-        uses: balena-labs-research/community-cli-action@1.0.0
-        with:
-          balena_token: ${{secrets.BALENA_TOKEN}}
-          balena_cli_commands: |
-            os download "$BALENA_IMAGE" \
-              --output "$BALENA_IMAGE.img" \
-              --version default
-          balena_cli_version: 18.1.2
+      - name: Download OS image
+        run: |
+          balena os download "$BALENA_IMAGE" \
+            --output "$BALENA_IMAGE.img" \
+            --version default
 
-      - name: balena CLI Action - preload
-        uses: balena-labs-research/community-cli-action@1.0.0
-        with:
-          balena_token: ${{secrets.BALENA_TOKEN}}
-          balena_cli_commands: |
-            preload \
-              "$BALENA_IMAGE.img" \
-              --fleet screenly_ose/anthias-${{ matrix.board }} \
-              --pin-device-to-release \
-              --splash-image ansible/roles/splashscreen/files/splashscreen.png \
-              --commit latest
-          balena_cli_version: 18.1.2
+      - name: Preload OS image
+        run: |
+          balena preload \
+            "$BALENA_IMAGE.img" \
+            --fleet screenly_ose/anthias-${{ matrix.board }} \
+            --pin-device-to-release \
+            --splash-image ansible/roles/splashscreen/files/splashscreen.png \
+            --commit latest
 
-      - name: balena CLI Action - configure
-        uses: balena-labs-research/community-cli-action@1.0.0
-        with:
-          balena_token: ${{secrets.BALENA_TOKEN}}
-          balena_cli_commands: |
-            os configure \
-              "$BALENA_IMAGE.img" \
-              --config-network=ethernet  \
-              --fleet screenly_ose/anthias-${{ matrix.board }}
-          balena_cli_version: 18.1.2
+      - name: Configure OS image
+        run: |
+          balena os configure \
+            "$BALENA_IMAGE.img" \
+            --config-network=ethernet \
+            --fleet screenly_ose/anthias-${{ matrix.board }}
 
       - name: Package up image
         run: |
@@ -144,7 +145,7 @@ jobs:
             ./*raspberry*.json
 
       - name: Attest
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: '${{ github.workspace }}/*raspberry*.img.zst'
 
@@ -174,7 +175,7 @@ jobs:
           merge-multiple: true
 
       - name: Create release
-        uses: ncipollo/release-action@v1.18.0
+        uses: ncipollo/release-action@v1.20.0
         with:
           allowUpdates: true
           generateReleaseNotes: true

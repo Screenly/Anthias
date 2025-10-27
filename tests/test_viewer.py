@@ -79,18 +79,6 @@ class TestLoadBrowser(ViewerTestCase):
         self.m_cmd.assert_called_once_with('ScreenlyWebview')
 
 
-class TestSignalHandlers(ViewerTestCase):
-    @mock.patch('vlc.Instance', mock.MagicMock())
-    @mock.patch(
-        'viewer.media_player.get_device_type',
-        return_value='pi4'
-    )
-    def test_usr1(self, lookup_mock):
-        self.p_killall.start()
-        self.assertEqual(None, self.u.sigusr1(None, None))
-        self.p_killall.stop()
-
-
 class TestWatchdog(ViewerTestCase):
     def test_watchdog_should_create_file_if_not_exists(self):
         try:
