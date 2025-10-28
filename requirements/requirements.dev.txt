@@ -1,4 +1,4 @@
-future==0.18.3
+future==1.0.0
 mock==3.0.5
 pep8==1.7.1
 selenium==4.18.1
