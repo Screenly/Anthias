@@ -9,7 +9,7 @@ Django==4.2.25
 djangorestframework==3.16.1
 django-dbbackup==4.2.1
 drf-spectacular==0.28.0
-future==0.18.3
+future==1.0.0
 gevent-websocket==0.10.1
 gevent==25.8.2
 gunicorn==23.0.0
