@@ -9,7 +9,7 @@ Django==4.2.25
 django-dbbackup==4.2.1
 drf-spectacular==0.28.0
 future==1.0.0
-idna==3.10
+idna==3.11
 Jinja2==3.1.6
 jsonschema==4.17.3 # This is the latest version that doesn't require Rust and Cargo.
 netifaces==0.11.0
