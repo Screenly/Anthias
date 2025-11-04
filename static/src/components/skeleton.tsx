@@ -8,6 +8,7 @@ export const Skeleton = ({ children, isLoading }: SkeletonProps) => {
         'placeholder',
         'placeholder-wave',
         'bg-info',
+        'rounded-pill',
         'w-100',
       )}
     ></span>
