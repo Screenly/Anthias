@@ -646,21 +646,5 @@ label.toggle {
 }
 
 .placeholder {
-  display: inline-block;
-  width: 100%;
-  height: 1em;
-  background-color: #dedede;
-  border-radius: 4px;
-  animation: placeholderGlow 0.85s ease-in-out infinite alternate;
-}
-
-@keyframes placeholderGlow {
-  from {
-    opacity: 0.5;
-    filter: brightness(1);
-  }
-  to {
-    opacity: 1;
-    filter: brightness(1.1);
-  }
+  border-radius: 1rem;
 }
