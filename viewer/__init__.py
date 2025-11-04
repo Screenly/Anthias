@@ -135,7 +135,7 @@ def show_splash(data):
 commands = {
     'next': lambda _: skip_asset(scheduler),
     'previous': lambda _: skip_asset(scheduler, back=True),
-    'asset': lambda id: navigate_to_asset(scheduler, id),
+    'asset': lambda asset_id: navigate_to_asset(scheduler, asset_id),
     'reload': lambda _: load_settings(),
     'stop': lambda _: setattr(
         __import__('__main__'), 'loop_is_stopped', stop_loop(scheduler)
