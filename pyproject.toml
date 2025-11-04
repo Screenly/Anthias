@@ -9,7 +9,7 @@ package-mode = false
 python = ">=3.9,<3.12"
 
 [tool.poetry.group.dev-host.dependencies]
-ruff = "^0.8.4"
+ruff = "^0.14.3"
 
 [tool.poetry.group.docker-image-builder.dependencies]
 click = '^8.1.7'

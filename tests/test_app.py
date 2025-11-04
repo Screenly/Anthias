@@ -162,7 +162,7 @@ class WebTest(TestCase):
                 browser, '.nav-link.upload-asset-tab', lambda tab: tab.click())
             wait_for_and_do(
                 browser, 'input[name="file_upload"]',
-                lambda input: input.fill(image_file))
+                lambda file_input: file_input.fill(image_file))
             sleep(1)
 
             sleep(3)
@@ -190,7 +190,7 @@ class WebTest(TestCase):
                     lambda tab: tab.click())
                 wait_for_and_do(
                     browser, 'input[name="file_upload"]',
-                    lambda input: input.fill(video_file))
+                    lambda file_input: file_input.fill(video_file))
                 sleep(1)  # Wait for the new-asset panel animation.
 
                 sleep(3)  # The backend needs time to process the request.
@@ -220,10 +220,10 @@ class WebTest(TestCase):
                     lambda tab: tab.click())
                 wait_for_and_do(
                     browser, 'input[name="file_upload"]',
-                    lambda input: input.fill(image_file))
+                    lambda file_input: file_input.fill(image_file))
                 wait_for_and_do(
                     browser, 'input[name="file_upload"]',
-                    lambda input: input.fill(video_file))
+                    lambda file_input: file_input.fill(video_file))
 
                 sleep(3)
 
