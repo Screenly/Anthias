@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react'
-import {
-  AnthiasVersionValueProps,
-  SkeletonProps,
-  MemoryInfo,
-  UptimeInfo,
-} from '@/types'
+import { AnthiasVersionValueProps, MemoryInfo, UptimeInfo } from '@/types'
+import { Skeleton } from './skeleton'
 
 const ANTHIAS_REPO_URL = 'https://github.com/Screenly/Anthias'
 
@@ -32,14 +28,6 @@ const AnthiasVersionValue = ({ version }: AnthiasVersionValueProps) => {
   }
 
   return <>{version}</>
-}
-
-const Skeleton = ({ children, isLoading }: SkeletonProps) => {
-  return isLoading ? (
-    <span className="placeholder placeholder-wave"></span>
-  ) : (
-    children
-  )
 }
 
 export const SystemInfo = () => {
