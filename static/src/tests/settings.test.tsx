@@ -148,10 +148,10 @@ describe('Settings Component', () => {
   it('handles checkbox changes', async () => {
     renderWithProvider(<Settings />)
 
-    // Wait for the component to load, then find the specific checkbox by its name attribute
+    // Wait for the component to load, then find the specific switch by its name attribute
     await waitFor(() => {
       const showSplashCheckbox = screen
-        .getAllByRole('checkbox')
+        .getAllByRole('switch')
         .find(
           (el) => (el as HTMLInputElement).name === 'showSplash',
         ) as HTMLInputElement

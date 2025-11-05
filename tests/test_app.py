@@ -294,7 +294,7 @@ class WebTest(TestCase):
 
             # Find the toggle element and scroll it into view
             toggle_element = browser.find_by_css(
-                '.is_enabled-toggle input[type="checkbox"]'
+                '.form-switch input[type="checkbox"]'
             ).first
             browser.execute_script(
                 "arguments[0].scrollIntoView(true);",
@@ -302,15 +302,14 @@ class WebTest(TestCase):
             )
             sleep(1)
 
-            # Click the label to trigger the toggle
-            label_element = browser.find_by_css('.is_enabled-toggle').first
+            # Click the input to trigger the toggle
             browser.execute_script(
-                "arguments[0].click();", label_element._element)
+                "arguments[0].click();", toggle_element._element)
             sleep(2)
 
             # Re-find the element after React re-renders it
             toggle_element_after = browser.find_by_css(
-                '.is_enabled-toggle input[type="checkbox"]').first
+                '.form-switch input[type="checkbox"]').first
             browser.execute_script(
                 "return arguments[0].checked;", toggle_element_after._element)
 
@@ -338,20 +337,19 @@ class WebTest(TestCase):
 
             # Find the toggle element and scroll it into view
             toggle_element = browser.find_by_css(
-                '.is_enabled-toggle input[type="checkbox"]').first
+                '.form-switch input[type="checkbox"]').first
             browser.execute_script(
                 "arguments[0].scrollIntoView(true);", toggle_element._element)
             sleep(1)
 
-            # Click the label to trigger the toggle
-            label_element = browser.find_by_css('.is_enabled-toggle').first
+            # Click the input to trigger the toggle
             browser.execute_script(
-                "arguments[0].click();", label_element._element)
+                "arguments[0].click();", toggle_element._element)
             sleep(2)
 
             # Re-find the element after React re-renders it
             toggle_element_after = browser.find_by_css(
-                '.is_enabled-toggle input[type="checkbox"]').first
+                '.form-switch input[type="checkbox"]').first
             browser.execute_script(
                 "return arguments[0].checked;",
                 toggle_element_after._element

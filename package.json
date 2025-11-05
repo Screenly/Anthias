@@ -16,7 +16,6 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@reduxjs/toolkit": "^2.9.2",
     "bootstrap": "^5.3.8",
-    "css-toggle-switch": "^4.1.0",
     "jquery": "^3.7.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
