@@ -16,7 +16,14 @@ export const ToggleableSetting = ({
   return (
     <div className={classNames('d-flex', 'align-items-center', 'mt-4')}>
       <label htmlFor={name}>{label}</label>
-      <div className={classNames('form-check', 'form-switch', 'ms-auto')}>
+      <div
+        className={classNames(
+          'form-check',
+          'form-switch',
+          'form-switch-info',
+          'ms-auto',
+        )}
+      >
         <input
           className={classNames('form-check-input', 'shadow-none')}
           type="checkbox"

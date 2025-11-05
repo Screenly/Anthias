@@ -144,34 +144,30 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
           >
             {formatDuration(props.duration)}
           </td>
-          <td className={classNames('asset-toggle')} style={{ width: '7%' }}>
+          <td style={{ width: '7%' }}>
             {props.isProcessing === 1 ? (
               <div className="text-center">
                 <small className="text-muted">Processing</small>
               </div>
             ) : (
-              <label
+              <div
                 className={classNames(
-                  'is_enabled-toggle',
-                  'toggle',
-                  'switch-light',
-                  'switch-material',
-                  'small',
-                  'm-0',
+                  'form-check',
+                  'form-switch',
+                  'd-flex',
+                  'justify-content-center',
                 )}
               >
                 <input
+                  className={classNames('form-check-input', 'shadow-none')}
                   type="checkbox"
+                  role="switch"
+                  id={`asset-switch-${props.assetId}`}
                   checked={props.isEnabled}
                   onChange={handleToggle}
                   disabled={isDisabled}
                 />
-                <span>
-                  <span className="off"></span>
-                  <span className="on"></span>
-                  <a></a>
-                </span>
-              </label>
+              </div>
             )}
           </td>
           <td className={classNames('asset_row_btns', 'text-center')}>

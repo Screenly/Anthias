@@ -1,5 +1,6 @@
 @import "tooltip";
 @import "sweetalert2-overrides";
+@import "form-overrides";
 
 // Transformations
 @mixin rotate($degrees) {
@@ -134,47 +135,6 @@ label {
 }
 
 #app {
-  %switch-material-base {
-    > span {
-      &:before,
-      &:after {
-        background: none;
-      }
-    }
-
-    label {
-      &:after {
-        background: none;
-      }
-    }
-  }
-
-  .switch-material.switch-light {
-    input {
-      ~ span a {
-        background-color: #FFFFFF;
-        border: 1px solid rgba(0, 0, 0, 0.26);
-        box-shadow: none;
-        top: -0.125em;
-        outline: none;
-      }
-
-      &:checked ~ span {
-        box-shadow: inset 0 0 0 30px $anthias-yellow-4;
-
-        a {
-          background-color: $anthias-yellow-3;
-          border: none;
-        }
-      }
-    }
-  }
-
-  .switch-light.switch-material,
-  .switch-toggle.switch-material {
-    @extend %switch-material-base;
-  }
-
   .ActiveAssets, .InactiveAssets {
     thead {
       tr {
@@ -184,13 +144,6 @@ label {
       }
     }
 
-    .is_enabled-toggle {
-      text-align: center;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      width: 100%;
-    }
   }
 
   .ActiveAssets {
@@ -606,22 +559,10 @@ input[name="file_upload"] {
     vertical-align: middle !important;
   }
 
-  .asset-toggle {
-    text-align: center;
-  }
-
   .processing-message {
     width: 117px;
     margin-bottom: 2px;
   }
-}
-
-.is_enabled-toggle {
-  margin: 5px 0 5px 0 !important;
-}
-
-label.toggle {
-  width: 3.5em;
 }
 
 .terminal {
