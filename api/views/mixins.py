@@ -61,9 +61,9 @@ class BackupViewMixin(APIView):
             201: {
                 'type': 'string',
                 'example': 'anthias-backup-2021-09-16T15-00-00.tar.gz',
-                'description': 'Backup file name'
+                'description': 'Backup file name',
             }
-        }
+        },
     )
     @authorized
     def post(self, request):
@@ -82,11 +82,8 @@ class RecoverViewMixin(APIView):
             'multipart/form-data': {
                 'type': 'object',
                 'properties': {
-                    'backup_upload': {
-                        'type': 'string',
-                        'format': 'binary'
-                    }
-                }
+                    'backup_upload': {'type': 'string', 'format': 'binary'}
+                },
             }
         },
         responses={
@@ -99,21 +96,21 @@ class RecoverViewMixin(APIView):
     @authorized
     def post(self, request):
         publisher = ZmqPublisher.get_instance()
-        file_upload = (request.data.get('backup_upload'))
+        file_upload = request.data.get('backup_upload')
         filename = file_upload.name
 
         if guess_type(filename)[0] != 'application/x-tar':
-            raise Exception("Incorrect file extension.")
+            raise Exception('Incorrect file extension.')
         try:
             publisher.send_to_viewer('stop')
-            location = path.join("static", filename)
+            location = path.join('static', filename)
 
             with open(location, 'wb') as f:
                 f.write(file_upload.read())
 
             backup_helper.recover(location)
 
-            return Response("Recovery successful.")
+            return Response('Recovery successful.')
         finally:
             publisher.send_to_viewer('play')
 
@@ -145,11 +142,8 @@ class FileAssetViewMixin(APIView):
             'multipart/form-data': {
                 'type': 'object',
                 'properties': {
-                    'file_upload': {
-                        'type': 'string',
-                        'format': 'binary'
-                    }
-                }
+                    'file_upload': {'type': 'string', 'format': 'binary'}
+                },
             }
         },
         responses={
@@ -157,10 +151,10 @@ class FileAssetViewMixin(APIView):
                 'type': 'object',
                 'properties': {
                     'uri': {'type': 'string'},
-                    'ext': {'type': 'string'}
-                }
+                    'ext': {'type': 'string'},
+                },
             }
-        }
+        },
     )
     @authorized
     def post(self, request):
@@ -169,15 +163,18 @@ class FileAssetViewMixin(APIView):
         file_type = guess_type(filename)[0]
 
         if not file_type:
-            raise Exception("Invalid file type.")
+            raise Exception('Invalid file type.')
 
         if file_type.split('/')[0] not in ['image', 'video']:
-            raise Exception("Invalid file type.")
+            raise Exception('Invalid file type.')
 
-        file_path = path.join(
-            settings['assetdir'],
-            uuid.uuid5(uuid.NAMESPACE_URL, filename).hex,
-        ) + ".tmp"
+        file_path = (
+            path.join(
+                settings['assetdir'],
+                uuid.uuid5(uuid.NAMESPACE_URL, filename).hex,
+            )
+            + '.tmp'
+        )
 
         if 'Content-Range' in request.headers:
             range_str = request.headers['Content-Range']
@@ -211,9 +208,9 @@ class AssetContentViewMixin(APIView):
                     'filename': {'type': 'string'},
                     'mimetype': {'type': 'string'},
                     'content': {'type': 'string'},
-                }
+                },
             }
-        }
+        },
     )
     @authorized
     def get(self, request, asset_id, format=None):
@@ -233,13 +230,10 @@ class AssetContentViewMixin(APIView):
                 'type': 'file',
                 'filename': filename,
                 'content': b64encode(content).decode(),
-                'mimetype': mimetype
+                'mimetype': mimetype,
             }
         else:
-            result = {
-                'type': 'url',
-                'url': asset.uri
-            }
+            result = {'type': 'url', 'url': asset.uri}
 
         return Response(result)
 
@@ -248,7 +242,7 @@ class PlaylistOrderViewMixin(APIView):
     @extend_schema(
         summary='Update playlist order',
         request=PlaylistOrderSerializerMixin,
-        responses={204: None}
+        responses={204: None},
     )
     @authorized
     def post(self, request):
@@ -280,13 +274,13 @@ class AssetsControlViewMixin(APIView):
                 type=OpenApiTypes.STR,
                 enum=['next', 'previous', 'asset&{asset_id}'],
             )
-        ]
+        ],
     )
     @authorized
     def get(self, request, command):
         publisher = ZmqPublisher.get_instance()
         publisher.send_to_viewer(command)
-        return Response("Asset switched")
+        return Response('Asset switched')
 
 
 class InfoViewMixin(APIView):
@@ -300,31 +294,33 @@ class InfoViewMixin(APIView):
                     'loadavg': {'type': 'number'},
                     'free_space': {'type': 'string'},
                     'display_power': {'type': 'string'},
-                    'up_to_date': {'type': 'boolean'}
+                    'up_to_date': {'type': 'boolean'},
                 },
                 'example': {
                     'viewlog': 'Not yet implemented',
                     'loadavg': 0.1,
                     'free_space': '10G',
                     'display_power': 'on',
-                    'up_to_date': True
-                }
+                    'up_to_date': True,
+                },
             }
-        }
+        },
     )
     @authorized
     def get(self, request):
-        viewlog = "Not yet implemented"
+        viewlog = 'Not yet implemented'
 
         # Calculate disk space
-        slash = statvfs("/")
+        slash = statvfs('/')
         free_space = size(slash.f_bavail * slash.f_frsize)
         display_power = r.get('display_power')
 
-        return Response({
-            'viewlog': viewlog,
-            'loadavg': diagnostics.get_load_avg()['15 min'],
-            'free_space': free_space,
-            'display_power': display_power,
-            'up_to_date': is_up_to_date()
-        })
+        return Response(
+            {
+                'viewlog': viewlog,
+                'loadavg': diagnostics.get_load_avg()['15 min'],
+                'free_space': free_space,
+                'display_power': display_power,
+                'up_to_date': is_up_to_date(),
+            }
+        )

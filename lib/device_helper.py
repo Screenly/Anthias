@@ -6,9 +6,7 @@ def parse_cpu_info():
     Extracts the various Raspberry Pi related data
     from the CPU.
     """
-    cpu_info = {
-        'cpu_count': 0
-    }
+    cpu_info = {'cpu_count': 0}
 
     with open('/proc/cpuinfo', 'r') as cpuinfo:
         for line in cpuinfo:

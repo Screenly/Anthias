@@ -57,10 +57,7 @@ class AssetListViewV2(APIView):
     serializer_class = AssetSerializerV2
 
     @extend_schema(
-        summary='List assets',
-        responses={
-            200: AssetSerializerV2(many=True)
-        }
+        summary='List assets', responses={200: AssetSerializerV2(many=True)}
     )
     @authorized
     def get(self, request):
@@ -71,15 +68,14 @@ class AssetListViewV2(APIView):
     @extend_schema(
         summary='Create asset',
         request=CreateAssetSerializerV2,
-        responses={
-            201: AssetSerializerV2
-        }
+        responses={201: AssetSerializerV2},
     )
     @authorized
     def post(self, request):
         try:
             serializer = CreateAssetSerializerV2(
-                data=request.data, unique_name=True)
+                data=request.data, unique_name=True
+            )
 
             if not serializer.is_valid():
                 raise AssetCreationError(serializer.errors)
@@ -115,13 +111,15 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
     def update(self, request, asset_id, partial=False):
         asset = Asset.objects.get(asset_id=asset_id)
         serializer = UpdateAssetSerializerV2(
-            asset, data=request.data, partial=partial)
+            asset, data=request.data, partial=partial
+        )
 
         if serializer.is_valid():
             serializer.save()
         else:
             return Response(
-                serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                serializer.errors, status=status.HTTP_400_BAD_REQUEST
+            )
 
         active_asset_ids = get_active_asset_ids()
 
@@ -143,9 +141,7 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
     @extend_schema(
         summary='Update asset',
         request=UpdateAssetSerializerV2,
-        responses={
-            200: AssetSerializerV2
-        }
+        responses={200: AssetSerializerV2},
     )
     @authorized
     def patch(self, request, asset_id):
@@ -154,9 +150,7 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
     @extend_schema(
         summary='Update asset',
         request=UpdateAssetSerializerV2,
-        responses={
-            200: AssetSerializerV2
-        }
+        responses={200: AssetSerializerV2},
     )
     @authorized
     def put(self, request, asset_id):
@@ -198,9 +192,7 @@ class AssetsControlViewV2(AssetsControlViewMixin):
 class DeviceSettingsViewV2(APIView):
     @extend_schema(
         summary='Get device settings',
-        responses={
-            200: DeviceSettingsSerializerV2
-        }
+        responses={200: DeviceSettingsSerializerV2},
     )
     @authorized
     def get(self, request):
@@ -211,25 +203,28 @@ class DeviceSettingsViewV2(APIView):
             logging.error(f'Failed to reload settings: {str(e)}')
             # Continue with existing settings if reload fails
 
-        return Response({
-            'player_name': settings['player_name'],
-            'audio_output': settings['audio_output'],
-            'default_duration': int(settings['default_duration']),
-            'default_streaming_duration': int(
-                settings['default_streaming_duration']
-            ),
-            'date_format': settings['date_format'],
-            'auth_backend': settings['auth_backend'],
-            'show_splash': settings['show_splash'],
-            'default_assets': settings['default_assets'],
-            'shuffle_playlist': settings['shuffle_playlist'],
-            'use_24_hour_clock': settings['use_24_hour_clock'],
-            'debug_logging': settings['debug_logging'],
-            'username': (
-                settings['user'] if settings['auth_backend'] == 'auth_basic'
-                else ''
-            ),
-        })
+        return Response(
+            {
+                'player_name': settings['player_name'],
+                'audio_output': settings['audio_output'],
+                'default_duration': int(settings['default_duration']),
+                'default_streaming_duration': int(
+                    settings['default_streaming_duration']
+                ),
+                'date_format': settings['date_format'],
+                'auth_backend': settings['auth_backend'],
+                'show_splash': settings['show_splash'],
+                'default_assets': settings['default_assets'],
+                'shuffle_playlist': settings['shuffle_playlist'],
+                'use_24_hour_clock': settings['use_24_hour_clock'],
+                'debug_logging': settings['debug_logging'],
+                'username': (
+                    settings['user']
+                    if settings['auth_backend'] == 'auth_basic'
+                    else ''
+                ),
+            }
+        )
 
     def update_auth_settings(self, data, auth_backend, current_pass_correct):
         if auth_backend == '':
@@ -248,36 +243,36 @@ class DeviceSettingsViewV2(APIView):
             if new_user != settings['user']:
                 if current_pass_correct is None:
                     raise ValueError(
-                        "Must supply current password to change username"
+                        'Must supply current password to change username'
                     )
                 if not current_pass_correct:
-                    raise ValueError("Incorrect current password.")
+                    raise ValueError('Incorrect current password.')
 
                 settings['user'] = new_user
 
             if new_pass:
                 if current_pass_correct is None:
                     raise ValueError(
-                        "Must supply current password to change password"
+                        'Must supply current password to change password'
                     )
                 if not current_pass_correct:
-                    raise ValueError("Incorrect current password.")
+                    raise ValueError('Incorrect current password.')
 
                 if new_pass2 != new_pass:
-                    raise ValueError("New passwords do not match!")
+                    raise ValueError('New passwords do not match!')
 
                 settings['password'] = new_pass
 
         else:
             if new_user:
                 if new_pass and new_pass != new_pass2:
-                    raise ValueError("New passwords do not match!")
+                    raise ValueError('New passwords do not match!')
                 if not new_pass:
-                    raise ValueError("Must provide password")
+                    raise ValueError('Must provide password')
                 settings['user'] = new_user
                 settings['password'] = new_pass
             else:
-                raise ValueError("Must provide username")
+                raise ValueError('Must provide username')
 
     @extend_schema(
         summary='Update device settings',
@@ -285,15 +280,13 @@ class DeviceSettingsViewV2(APIView):
         responses={
             200: {
                 'type': 'object',
-                'properties': {
-                    'message': {'type': 'string'}
-                }
+                'properties': {'message': {'type': 'string'}},
             },
             400: {
                 'type': 'object',
-                'properties': {'error': {'type': 'string'}}
-            }
-        }
+                'properties': {'error': {'type': 'string'}},
+            },
+        },
     )
     @authorized
     def patch(self, request):
@@ -314,25 +307,24 @@ class DeviceSettingsViewV2(APIView):
             ):
                 if not current_password:
                     raise ValueError(
-                        "Must supply current password to change "
-                        "authentication method"
+                        'Must supply current password to change '
+                        'authentication method'
                     )
                 if not settings.auth.check_password(current_password):
-                    raise ValueError("Incorrect current password.")
+                    raise ValueError('Incorrect current password.')
 
             prev_auth_backend = settings['auth_backend']
             if not current_password and prev_auth_backend:
                 current_pass_correct = None
             else:
-                current_pass_correct = (
-                    settings
-                    .auth_backends[prev_auth_backend]
-                    .check_password(current_password)
-                )
+                current_pass_correct = settings.auth_backends[
+                    prev_auth_backend
+                ].check_password(current_password)
             next_auth_backend = settings.auth_backends[auth_backend]
 
             self.update_auth_settings(
-                data, next_auth_backend.name, current_pass_correct)
+                data, next_auth_backend.name, current_pass_correct
+            )
             settings['auth_backend'] = auth_backend
 
             # Update settings
@@ -341,9 +333,9 @@ class DeviceSettingsViewV2(APIView):
             if 'default_duration' in data:
                 settings['default_duration'] = data['default_duration']
             if 'default_streaming_duration' in data:
-                settings['default_streaming_duration'] = (
-                    data['default_streaming_duration']
-                )
+                settings['default_streaming_duration'] = data[
+                    'default_streaming_duration'
+                ]
             if 'audio_output' in data:
                 settings['audio_output'] = data['audio_output']
             if 'date_format' in data:
@@ -371,7 +363,7 @@ class DeviceSettingsViewV2(APIView):
         except Exception as e:
             return Response(
                 {'error': f'An error occurred while saving settings: {e}'},
-                status=400
+                status=400,
             )
 
 
@@ -408,7 +400,7 @@ class InfoViewV2(InfoViewMixin):
             'free': virtual_memory.free >> 20,
             'shared': virtual_memory.shared >> 20,
             'buff': virtual_memory.buffers >> 20,
-            'available': virtual_memory.available >> 20
+            'available': virtual_memory.available >> 20,
         }
 
     def get_ip_addresses(self):
@@ -445,8 +437,8 @@ class InfoViewV2(InfoViewMixin):
                         'type': 'object',
                         'properties': {
                             'days': {'type': 'integer'},
-                            'hours': {'type': 'number'}
-                        }
+                            'hours': {'type': 'number'},
+                        },
                     },
                     'memory': {
                         'type': 'object',
@@ -456,41 +448,44 @@ class InfoViewV2(InfoViewMixin):
                             'free': {'type': 'integer'},
                             'shared': {'type': 'integer'},
                             'buff': {'type': 'integer'},
-                            'available': {'type': 'integer'}
-                        }
+                            'available': {'type': 'integer'},
+                        },
                     },
                     'ip_addresses': {
-                        'type': 'array', 'items': {'type': 'string'}
+                        'type': 'array',
+                        'items': {'type': 'string'},
                     },
                     'mac_address': {'type': 'string'},
-                    'host_user': {'type': 'string'}
-                }
+                    'host_user': {'type': 'string'},
+                },
             }
-        }
+        },
     )
     @authorized
     def get(self, request):
-        viewlog = "Not yet implemented"
+        viewlog = 'Not yet implemented'
 
         # Calculate disk space
-        slash = statvfs("/")
+        slash = statvfs('/')
         free_space = size(slash.f_bavail * slash.f_frsize)
         display_power = r.get('display_power')
 
-        return Response({
-            'viewlog': viewlog,
-            'loadavg': diagnostics.get_load_avg()['15 min'],
-            'free_space': free_space,
-            'display_power': display_power,
-            'up_to_date': is_up_to_date(),
-            'anthias_version': self.get_anthias_version(),
-            'device_model': self.get_device_model(),
-            'uptime': self.get_uptime(),
-            'memory': self.get_memory(),
-            'ip_addresses': self.get_ip_addresses(),
-            'mac_address': get_node_mac_address(),
-            'host_user': getenv('HOST_USER'),
-        })
+        return Response(
+            {
+                'viewlog': viewlog,
+                'loadavg': diagnostics.get_load_avg()['15 min'],
+                'free_space': free_space,
+                'display_power': display_power,
+                'up_to_date': is_up_to_date(),
+                'anthias_version': self.get_anthias_version(),
+                'device_model': self.get_device_model(),
+                'uptime': self.get_uptime(),
+                'memory': self.get_memory(),
+                'ip_addresses': self.get_ip_addresses(),
+                'mac_address': get_node_mac_address(),
+                'host_user': getenv('HOST_USER'),
+            }
+        )
 
 
 class IntegrationsViewV2(APIView):
@@ -498,9 +493,7 @@ class IntegrationsViewV2(APIView):
 
     @extend_schema(
         summary='Get integrations information',
-        responses={
-            200: IntegrationsSerializerV2
-        }
+        responses={200: IntegrationsSerializerV2},
     )
     @authorized
     def get(self, request):
@@ -509,20 +502,22 @@ class IntegrationsViewV2(APIView):
         }
 
         if data['is_balena']:
-            data.update({
-                'balena_device_id': getenv('BALENA_DEVICE_UUID'),
-                'balena_app_id': getenv('BALENA_APP_ID'),
-                'balena_app_name': getenv('BALENA_APP_NAME'),
-                'balena_supervisor_version': (
-                    getenv('BALENA_SUPERVISOR_VERSION')
-                ),
-                'balena_host_os_version': (
-                    getenv('BALENA_HOST_OS_VERSION')
-                ),
-                'balena_device_name_at_init': (
-                    getenv('BALENA_DEVICE_NAME_AT_INIT')
-                ),
-            })
+            data.update(
+                {
+                    'balena_device_id': getenv('BALENA_DEVICE_UUID'),
+                    'balena_app_id': getenv('BALENA_APP_ID'),
+                    'balena_app_name': getenv('BALENA_APP_NAME'),
+                    'balena_supervisor_version': (
+                        getenv('BALENA_SUPERVISOR_VERSION')
+                    ),
+                    'balena_host_os_version': (
+                        getenv('BALENA_HOST_OS_VERSION')
+                    ),
+                    'balena_device_name_at_init': (
+                        getenv('BALENA_DEVICE_NAME_AT_INIT')
+                    ),
+                }
+            )
 
         serializer = self.serializer_class(data=data)
         serializer.is_valid(raise_exception=True)

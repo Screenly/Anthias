@@ -23,18 +23,21 @@ class ViewerTestCase(unittest.TestCase):
 
         self.m_scheduler = mock.Mock(name='m_scheduler')
         self.p_scheduler = mock.patch.object(
-            self.u, 'Scheduler', self.m_scheduler)
+            self.u, 'Scheduler', self.m_scheduler
+        )
 
         self.m_cmd = mock.Mock(name='m_cmd')
         self.p_cmd = mock.patch.object(self.u.sh, 'Command', self.m_cmd)
 
         self.m_killall = mock.Mock(name='killall')
         self.p_killall = mock.patch.object(
-            self.u.sh, 'killall', self.m_killall)
+            self.u.sh, 'killall', self.m_killall
+        )
 
         self.m_reload = mock.Mock(name='reload')
         self.p_reload = mock.patch.object(
-            self.u, 'load_settings', self.m_reload)
+            self.u, 'load_settings', self.m_reload
+        )
 
         self.m_sleep = mock.Mock(name='sleep')
         self.p_sleep = mock.patch.object(self.u, 'sleep', self.m_sleep)

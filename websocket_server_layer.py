@@ -47,12 +47,15 @@ class AnthiasServerListener(Thread):
             socket_outgoing.send(msg)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     context = zmq.Context()
     listener = AnthiasServerListener(context)
     listener.start()
 
     port = int(settings['websocket_port'])
-    server = pywsgi.WSGIServer(("", port), WebSocketTranslator(context),
-                               handler_class=WebSocketHandler)
+    server = pywsgi.WSGIServer(
+        ('', port),
+        WebSocketTranslator(context),
+        handler_class=WebSocketHandler,
+    )
     server.serve_forever()

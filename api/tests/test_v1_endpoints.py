@@ -1,6 +1,7 @@
 """
 Tests for V1 API endpoints.
 """
+
 import os
 from pathlib import Path
 from unittest import mock
@@ -66,24 +67,22 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
         playlist_order_url = reverse('api:playlist_order_v1')
 
         for asset_name in ['Asset #1', 'Asset #2', 'Asset #3']:
-            Asset.objects.create(**{
-                **ASSET_CREATION_DATA,
-                'name': asset_name,
-            })
+            Asset.objects.create(
+                **{
+                    **ASSET_CREATION_DATA,
+                    'name': asset_name,
+                }
+            )
 
         self.assertTrue(
-            all([
-                asset.play_order == 0
-                for asset in Asset.objects.all()
-            ])
+            all([asset.play_order == 0 for asset in Asset.objects.all()])
         )
 
         asset_1, asset_2, asset_3 = Asset.objects.all()
         asset_ids = [asset_1.asset_id, asset_2.asset_id, asset_3.asset_id]
 
         response = self.client.post(
-            playlist_order_url,
-            data={'ids': ','.join(asset_ids)}
+            playlist_order_url, data={'ids': ','.join(asset_ids)}
         )
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
@@ -114,7 +113,7 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
 
     @mock.patch(
         'api.views.mixins.reboot_anthias.apply_async',
-        side_effect=(lambda: None)
+        side_effect=(lambda: None),
     )
     def test_reboot(self, reboot_anthias_mock):
         reboot_url = reverse('api:reboot_v1')
@@ -125,7 +124,7 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
 
     @mock.patch(
         'api.views.mixins.shutdown_anthias.apply_async',
-        side_effect=(lambda: None)
+        side_effect=(lambda: None),
     )
     def test_shutdown(self, shutdown_anthias_mock):
         shutdown_url = reverse('api:shutdown_v1')
@@ -136,19 +135,17 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
 
     @mock.patch('api.views.v1.ZmqPublisher.send_to_viewer', return_value=None)
     def test_viewer_current_asset(self, send_to_viewer_mock):
-        asset = Asset.objects.create(**{
-            **ASSET_CREATION_DATA,
-            'is_enabled': 1,
-        })
+        asset = Asset.objects.create(
+            **{
+                **ASSET_CREATION_DATA,
+                'is_enabled': 1,
+            }
+        )
         asset_id = asset.asset_id
 
-        with (
-            mock.patch(
-                'api.views.v1.ZmqCollector.recv_json',
-                side_effect=(lambda _: {
-                    'current_asset_id': asset_id
-                })
-            )
+        with mock.patch(
+            'api.views.v1.ZmqCollector.recv_json',
+            side_effect=(lambda _: {'current_asset_id': asset_id}),
         ):
             viewer_current_asset_url = reverse('api:viewer_current_asset_v1')
             response = self.client.get(viewer_current_asset_url)

@@ -24,9 +24,9 @@ def react(request):
     return template(request, 'react.html', {})
 
 
-@require_http_methods(["GET", "POST"])
+@require_http_methods(['GET', 'POST'])
 def login(request):
-    if request.method == "POST":
+    if request.method == 'POST':
         username = request.POST.get('username')
         password = request.POST.get('password')
 
@@ -38,16 +38,16 @@ def login(request):
             return redirect(reverse('anthias_app:react'))
         else:
             messages.error(request, 'Invalid username or password')
-            return template(request, 'login.html', {
-                'next': request.GET.get('next', '/')
-            })
+            return template(
+                request, 'login.html', {'next': request.GET.get('next', '/')}
+            )
 
-    return template(request, 'login.html', {
-        'next': request.GET.get('next', '/')
-    })
+    return template(
+        request, 'login.html', {'next': request.GET.get('next', '/')}
+    )
 
 
-@require_http_methods(["GET"])
+@require_http_methods(['GET'])
 def splash_page(request):
     ip_addresses = []
 
@@ -59,6 +59,6 @@ def splash_page(request):
         else:
             ip_addresses.append(f'http://{ip_address}')
 
-    return template(request, 'splash-page.html', {
-        'ip_addresses': ip_addresses
-    })
+    return template(
+        request, 'splash-page.html', {'ip_addresses': ip_addresses}
+    )

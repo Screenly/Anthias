@@ -15,7 +15,8 @@ class CeleryTasksTestCase(unittest.TestCase):
         celeryapp.conf.update(
             CELERY_ALWAYS_EAGER=True,
             CELERY_RESULT_BACKEND='',
-            CELERY_BROKER_URL='')
+            CELERY_BROKER_URL='',
+        )
 
     def download_image(self, image_url, image_path):
         system('curl {} > {}'.format(image_url, image_path))
@@ -30,7 +31,8 @@ class TestCleanup(CeleryTasksTestCase):
     def test_cleanup(self):
         cleanup.apply()
         tmp_files = [
-            x for x in listdir(self.assets_path) if x.endswith('.tmp')]
+            x for x in listdir(self.assets_path) if x.endswith('.tmp')
+        ]
         self.assertEqual(len(tmp_files), 0)
 
     def tearDown(self):
