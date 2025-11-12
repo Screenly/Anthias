@@ -26,9 +26,6 @@ build-backend = "poetry.core.masonry.api"
 # Exclude files/directories
 exclude = ["anthias_app/migrations/*.py"]
 
-# Line length configuration
-line-length = 79
-
 # Python target version
 target-version = "py39"
 

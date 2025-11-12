@@ -1,0 +1,4 @@
+line-length = 79
+
+[format]
+quote-style = "single"
