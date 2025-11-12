@@ -25,12 +25,10 @@ ASSET_X = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 1,
-    'skip_asset_check': 0
+    'skip_asset_check': 0,
 }
 
-ASSET_X_DIFF = {
-    'duration': 10
-}
+ASSET_X_DIFF = {'duration': 10}
 
 ASSET_Y = {
     'mimetype': 'image',
@@ -44,7 +42,7 @@ ASSET_Y = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 0,
-    'skip_asset_check': 0
+    'skip_asset_check': 0,
 }
 
 ASSET_Z = {
@@ -59,7 +57,7 @@ ASSET_Z = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 2,
-    'skip_asset_check': 0
+    'skip_asset_check': 0,
 }
 
 ASSET_TOMORROW = {
@@ -74,7 +72,7 @@ ASSET_TOMORROW = {
     'nocache': 0,
     'is_processing': 0,
     'play_order': 2,
-    'skip_asset_check': 0
+    'skip_asset_check': 0,
 }
 
 FAKE_DB_PATH = '/tmp/fakedb'
@@ -88,7 +86,9 @@ class SchedulerTest(TestCase):
         for asset in assets:
             Asset.objects.create(**asset)
 
-    def test_generate_asset_list_assets_should_return_list_sorted_by_play_order(self):  # noqa: E501
+    def test_generate_asset_list_assets_should_return_list_sorted_by_play_order(
+        self,
+    ):  # noqa: E501
         self.create_assets([ASSET_X, ASSET_Y])
         assets, _ = generate_asset_list()
         self.assertEqual(assets, [ASSET_Y, ASSET_X])

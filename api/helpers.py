@@ -15,7 +15,6 @@ class AssetCreationError(Exception):
 
 def update_asset(asset, data):
     for key, value in list(data.items()):
-
         if (
             key in ['asset_id', 'is_processing', 'mimetype', 'uri']
             or key not in asset
@@ -25,19 +24,17 @@ def update_asset(asset, data):
         if key in ['start_date', 'end_date']:
             value = date_parser.parse(value).replace(tzinfo=None)
 
-        if (
-            key in [
-                'play_order',
-                'skip_asset_check',
-                'is_enabled',
-                'is_active',
-                'nocache',
-            ]
-        ):
+        if key in [
+            'play_order',
+            'skip_asset_check',
+            'is_enabled',
+            'is_active',
+            'nocache',
+        ]:
             value = int(value)
 
         if key == 'duration':
-            if "video" not in asset['mimetype']:
+            if 'video' not in asset['mimetype']:
                 continue
             value = int(value)
 
@@ -48,8 +45,7 @@ def custom_exception_handler(exc, context):
     exception_handler(exc, context)
 
     return Response(
-        {'error': str(exc)},
-        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        {'error': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
     )
 
 
@@ -59,11 +55,7 @@ def get_active_asset_ids():
         start_date__isnull=False,
         end_date__isnull=False,
     )
-    return [
-        asset.asset_id
-        for asset in enabled_assets
-        if asset.is_active()
-    ]
+    return [asset.asset_id for asset in enabled_assets if asset.is_active()]
 
 
 def save_active_assets_ordering(active_asset_ids):

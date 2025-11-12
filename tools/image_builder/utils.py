@@ -227,18 +227,22 @@ def get_viewer_context(board: str) -> dict:
     ]
 
     if board in ['pi5', 'x86']:
-        apt_dependencies.extend([
-            'qt6-base-dev',
-            'qt6-webengine-dev',
-        ])
+        apt_dependencies.extend(
+            [
+                'qt6-base-dev',
+                'qt6-webengine-dev',
+            ]
+        )
 
     if board not in ['x86', 'pi5']:
-        apt_dependencies.extend([
-            'libraspberrypi0',
-            'libgst-dev',
-            'libsqlite0-dev',
-            'libsrtp0-dev',
-        ])
+        apt_dependencies.extend(
+            [
+                'libraspberrypi0',
+                'libgst-dev',
+                'libsqlite0-dev',
+                'libsrtp0-dev',
+            ]
+        )
 
         if board != 'pi1':
             apt_dependencies.extend(['libssl1.1'])
@@ -269,29 +273,25 @@ def get_wifi_connect_context(target_platform: str) -> dict:
         return {}
 
     wc_download_url = (
-        'https://api.github.com/repos/balena-os/wifi-connect/'
-        'releases/93025295'
+        'https://api.github.com/repos/balena-os/wifi-connect/releases/93025295'
     )
 
     try:
         response = requests.get(wc_download_url)
         response.raise_for_status()
         data = response.json()
-        assets = [
-            asset['browser_download_url'] for asset in data['assets']
-        ]
+        assets = [asset['browser_download_url'] for asset in data['assets']]
 
         try:
             archive_url = next(
-                asset for asset in assets
-                if f'linux-{architecture}' in asset
+                asset for asset in assets if f'linux-{architecture}' in asset
             )
         except StopIteration:
             click.secho(
                 'No wifi-connect release found for this architecture.',
                 fg='red',
             )
-            archive_url = ""
+            archive_url = ''
 
     except requests.exceptions.RequestException as e:
         click.secho(f'Failed to get wifi-connect release: {e}', fg='red')
