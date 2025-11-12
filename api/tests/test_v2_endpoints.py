@@ -1,6 +1,7 @@
 """
 Tests for V2 API endpoints.
 """
+
 import hashlib
 from unittest import mock
 from unittest.mock import patch
@@ -78,15 +79,14 @@ class DeviceSettingsViewV2Test(TestCase):
         }
 
         response = self.client.patch(
-            self.device_settings_url,
-            data=data,
-            format='json'
+            self.device_settings_url, data=data, format='json'
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('auth_backend', response.data)
         self.assertIn(
-            'is not a valid choice', str(response.data['auth_backend']))
+            'is not a valid choice', str(response.data['auth_backend'])
+        )
 
         settings_mock.load.assert_not_called()
         settings_mock.save.assert_not_called()
@@ -94,9 +94,7 @@ class DeviceSettingsViewV2Test(TestCase):
     @mock.patch('api.views.v2.settings')
     @mock.patch('api.views.v2.ZmqPublisher')
     def test_patch_device_settings_success(
-        self,
-        publisher_mock,
-        settings_mock
+        self, publisher_mock, settings_mock
     ):
         settings_mock.load = mock.MagicMock()
         settings_mock.save = mock.MagicMock()
@@ -128,22 +126,17 @@ class DeviceSettingsViewV2Test(TestCase):
         }
 
         response = self.client.patch(
-            self.device_settings_url,
-            data=data,
-            format='json'
+            self.device_settings_url, data=data, format='json'
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            response.data['message'],
-            'Settings were successfully saved.'
+            response.data['message'], 'Settings were successfully saved.'
         )
 
         settings_mock.load.assert_called_once()
         settings_mock.save.assert_called_once()
-        self.assertEqual(
-            settings_mock.__setitem__.call_count, 5
-        )
+        self.assertEqual(settings_mock.__setitem__.call_count, 5)
 
         publisher_instance.send_to_viewer.assert_called_once_with('reload')
 
@@ -155,9 +148,7 @@ class DeviceSettingsViewV2Test(TestCase):
         }
 
         response = self.client.patch(
-            self.device_settings_url,
-            data=data,
-            format='json'
+            self.device_settings_url, data=data, format='json'
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -214,18 +205,16 @@ class DeviceSettingsViewV2Test(TestCase):
         }
 
         expected_hashed_password = hashlib.sha256(
-            'testpass'.encode('utf-8')).hexdigest()
+            'testpass'.encode('utf-8')
+        ).hexdigest()
 
         response = self.client.patch(
-            self.device_settings_url,
-            data=data,
-            format='json'
+            self.device_settings_url, data=data, format='json'
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            response.data['message'],
-            'Settings were successfully saved.'
+            response.data['message'], 'Settings were successfully saved.'
         )
 
         settings_mock.load.assert_called_once()
@@ -233,7 +222,8 @@ class DeviceSettingsViewV2Test(TestCase):
         settings_mock.__setitem__.assert_any_call('auth_backend', 'auth_basic')
         settings_mock.__setitem__.assert_any_call('user', 'testuser')
         settings_mock.__setitem__.assert_any_call(
-            'password', expected_hashed_password)
+            'password', expected_hashed_password
+        )
 
         publisher_instance.send_to_viewer.assert_called_once_with('reload')
 
@@ -274,15 +264,12 @@ class DeviceSettingsViewV2Test(TestCase):
         }
 
         response = self.client.patch(
-            self.device_settings_url,
-            data=data,
-            format='json'
+            self.device_settings_url, data=data, format='json'
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            response.data['message'],
-            'Settings were successfully saved.'
+            response.data['message'], 'Settings were successfully saved.'
         )
 
         settings_mock.load.assert_called_once()
@@ -303,7 +290,7 @@ class DeviceSettingsViewV2Test(TestCase):
         remove_default_assets_mock,
         add_default_assets_mock,
         publisher_mock,
-        settings_mock
+        settings_mock,
     ):
         settings_mock.load = mock.MagicMock()
         settings_mock.save = mock.MagicMock()
@@ -331,15 +318,12 @@ class DeviceSettingsViewV2Test(TestCase):
         }
 
         response = self.client.patch(
-            self.device_settings_url,
-            data=data,
-            format='json'
+            self.device_settings_url, data=data, format='json'
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            response.data['message'],
-            'Settings were successfully saved.'
+            response.data['message'], 'Settings were successfully saved.'
         )
 
         settings_mock.load.assert_called_once()
@@ -378,15 +362,12 @@ class DeviceSettingsViewV2Test(TestCase):
         }
 
         response = self.client.patch(
-            self.device_settings_url,
-            data=data,
-            format='json'
+            self.device_settings_url, data=data, format='json'
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            response.data['message'],
-            'Settings were successfully saved.'
+            response.data['message'], 'Settings were successfully saved.'
         )
 
         settings_mock.load.assert_called_once()
@@ -405,9 +386,7 @@ class TestIntegrationsViewV2(TestCase):
     @patch('api.views.v2.is_balena_app')
     @patch('api.views.v2.getenv')
     def test_integrations_balena_environment(
-        self,
-        mock_getenv,
-        mock_is_balena
+        self, mock_getenv, mock_is_balena
     ):
         # Mock Balena environment
         mock_is_balena.side_effect = lambda: True
@@ -422,15 +401,18 @@ class TestIntegrationsViewV2(TestCase):
 
         response = self.client.get(self.integrations_url)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {
-            'is_balena': True,
-            'balena_device_id': 'test-device-uuid',
-            'balena_app_id': 'test-app-id',
-            'balena_app_name': 'test-app-name',
-            'balena_supervisor_version': 'test-supervisor-version',
-            'balena_host_os_version': 'test-host-os-version',
-            'balena_device_name_at_init': 'test-device-name',
-        })
+        self.assertEqual(
+            response.json(),
+            {
+                'is_balena': True,
+                'balena_device_id': 'test-device-uuid',
+                'balena_app_id': 'test-app-id',
+                'balena_app_name': 'test-app-name',
+                'balena_supervisor_version': 'test-supervisor-version',
+                'balena_host_os_version': 'test-host-os-version',
+                'balena_device_name_at_init': 'test-device-name',
+            },
+        )
 
     @patch('api.views.v2.is_balena_app')
     def test_integrations_non_balena_environment(self, mock_is_balena):
@@ -439,12 +421,15 @@ class TestIntegrationsViewV2(TestCase):
 
         response = self.client.get(self.integrations_url)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {
-            'is_balena': False,
-            'balena_device_id': None,
-            'balena_app_id': None,
-            'balena_app_name': None,
-            'balena_supervisor_version': None,
-            'balena_host_os_version': None,
-            'balena_device_name_at_init': None,
-        })
+        self.assertEqual(
+            response.json(),
+            {
+                'is_balena': False,
+                'balena_device_id': None,
+                'balena_app_id': None,
+                'balena_app_name': None,
+                'balena_supervisor_version': None,
+                'balena_host_os_version': None,
+                'balena_device_name_at_init': None,
+            },
+        )

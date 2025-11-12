@@ -98,8 +98,8 @@ def get_debian_version():
 
 
 def get_raspberry_code():
-    return device_helper.parse_cpu_info().get('hardware', "Unknown")
+    return device_helper.parse_cpu_info().get('hardware', 'Unknown')
 
 
 def get_raspberry_model():
-    return device_helper.parse_cpu_info().get('model', "Unknown")
+    return device_helper.parse_cpu_info().get('model', 'Unknown')

@@ -21,31 +21,3 @@ python-on-whales = '^0.79.0'
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.ruff]
-# Exclude files/directories
-exclude = ["anthias_app/migrations/*.py"]
-
-# Python target version
-target-version = "py39"
-
-# Enable all rules by default
-lint.select = [
-    "E",  # pycodestyle
-    "F",  # pyflakes
-    "W",  # pycodestyle warnings
-    "I",  # isort
-    "N",  # pep8-naming
-    "B",  # flake8-bugbear
-    "A",  # flake8-builtins
-]
-
-# Ignore specific rules
-lint.ignore = [
-    "N801",  # Ignore class naming convention for API versioning throughout the codebase
-    "A002",
-    "A004",
-]
-
-[tool.ruff.lint.per-file-ignores]
-"bin/migrate.py" = ["E501"]

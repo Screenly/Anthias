@@ -11,7 +11,7 @@ from settings import settings
 VIDEO_TIMEOUT = 20  # secs
 
 
-class MediaPlayer():
+class MediaPlayer:
     def __init__(self):
         pass
 
@@ -40,7 +40,7 @@ class FFMPEGMediaPlayer(MediaPlayer):
         self.process = subprocess.Popen(
             ['ffplay', '-autoexit', self.uri],
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL,
         )
 
     def stop(self):
@@ -90,7 +90,8 @@ class VLCMediaPlayer(MediaPlayer):
         self.player.set_mrl(uri)
         settings.load()
         self.player.audio_output_device_set(
-            'alsa', self.get_alsa_audio_device())
+            'alsa', self.get_alsa_audio_device()
+        )
 
     def play(self):
         self.player.play()
@@ -100,10 +101,13 @@ class VLCMediaPlayer(MediaPlayer):
 
     def is_playing(self):
         return self.player.get_state() in [
-            vlc.State.Playing, vlc.State.Buffering, vlc.State.Opening]
+            vlc.State.Playing,
+            vlc.State.Buffering,
+            vlc.State.Opening,
+        ]
 
 
-class MediaPlayerProxy():
+class MediaPlayerProxy:
     INSTANCE = None
 
     @classmethod

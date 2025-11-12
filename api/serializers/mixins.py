@@ -30,13 +30,9 @@ class CreateAssetSerializerMixin:
             'name': name,
             'mimetype': data.get('mimetype'),
             'is_enabled': data.get(
-                'is_enabled',
-                False if version == 'v2' else 0
+                'is_enabled', False if version == 'v2' else 0
             ),
-            'nocache': data.get(
-                'nocache',
-                False if version == 'v2' else 0
-            ),
+            'nocache': data.get('nocache', False if version == 'v2' else 0),
         }
 
         uri = (
@@ -44,8 +40,8 @@ class CreateAssetSerializerMixin:
             .replace(ampersand_fix, '&')
             .replace('<', '&lt;')
             .replace('>', '&gt;')
-            .replace('\'', '&apos;')
-            .replace('\"', '&quot;')
+            .replace("'", '&apos;')
+            .replace('"', '&quot;')
         )
 
         validate_uri(uri)
@@ -61,15 +57,15 @@ class CreateAssetSerializerMixin:
             uri = new_uri
 
         if 'youtube_asset' in asset['mimetype']:
-            (
-                uri, asset['name'], asset['duration']
-            ) = download_video_from_youtube(uri, asset['asset_id'])
+            (uri, asset['name'], asset['duration']) = (
+                download_video_from_youtube(uri, asset['asset_id'])
+            )
             asset['mimetype'] = 'video'
             asset['is_processing'] = True if version == 'v2' else 1
 
         asset['uri'] = uri
 
-        if "video" in asset['mimetype']:
+        if 'video' in asset['mimetype']:
             if int(data.get('duration')) == 0:
                 original_mimetype = data.get('mimetype')
 
@@ -84,9 +80,7 @@ class CreateAssetSerializerMixin:
                 )
         else:
             # Crashes if it's not an int. We want that.
-            duration = data.get(
-                'duration', settings['default_duration']
-            )
+            duration = data.get('duration', settings['default_duration'])
 
             if version == 'v2':
                 asset['duration'] = duration
@@ -131,8 +125,10 @@ class PlaylistOrderSerializerMixin(Serializer):
 class BackupViewSerializerMixin(Serializer):
     pass
 
+
 class RebootViewSerializerMixin(Serializer):
     pass
+
 
 class ShutdownViewSerializerMixin(Serializer):
     pass

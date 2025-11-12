@@ -66,18 +66,19 @@ class CreateAssetSerializerV1_1(Serializer):
                 uri = path.join(settings['assetdir'], asset['asset_id'])
 
         if 'youtube_asset' in asset['mimetype']:
-            (
-                uri, asset['name'], asset['duration']
-            ) = download_video_from_youtube(uri, asset['asset_id'])
+            (uri, asset['name'], asset['duration']) = (
+                download_video_from_youtube(uri, asset['asset_id'])
+            )
             asset['mimetype'] = 'video'
             asset['is_processing'] = 1
 
         asset['uri'] = uri
 
-        if "video" in asset['mimetype']:
+        if 'video' in asset['mimetype']:
             if int(data.get('duration')) == 0:
                 asset['duration'] = int(
-                    get_video_duration(uri).total_seconds())
+                    get_video_duration(uri).total_seconds()
+                )
         else:
             # Crashes if it's not an int. We want that.
             asset['duration'] = int(data.get('duration'))
@@ -87,15 +88,15 @@ class CreateAssetSerializerV1_1(Serializer):
         if data.get('start_date'):
             asset['start_date'] = data.get('start_date').replace(tzinfo=None)
         else:
-            asset['start_date'] = ""
+            asset['start_date'] = ''
 
         if data.get('end_date'):
             asset['end_date'] = data.get('end_date').replace(tzinfo=None)
         else:
-            asset['end_date'] = ""
+            asset['end_date'] = ''
 
         if not asset['skip_asset_check'] and url_fails(asset['uri']):
-            raise Exception("Could not retrieve file. Check the asset URL.")
+            raise Exception('Could not retrieve file. Check the asset URL.')
 
         return asset
 

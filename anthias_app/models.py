@@ -10,7 +10,8 @@ def generate_asset_id():
 
 class Asset(models.Model):
     asset_id = models.TextField(
-        primary_key=True, default=generate_asset_id, editable=False)
+        primary_key=True, default=generate_asset_id, editable=False
+    )
     name = models.TextField(blank=True, null=True)
     uri = models.TextField(blank=True, null=True)
     md5 = models.TextField(blank=True, null=True)
@@ -33,8 +34,6 @@ class Asset(models.Model):
     def is_active(self):
         if self.is_enabled and self.start_date and self.end_date:
             current_time = timezone.now()
-            return (
-                self.start_date < current_time < self.end_date
-            )
+            return self.start_date < current_time < self.end_date
 
         return False
