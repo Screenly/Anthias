@@ -76,6 +76,7 @@ export const updateSettings = createAsyncThunk(
           shuffle_playlist: settings.shufflePlaylist,
           use_24_hour_clock: settings.use24HourClock,
           debug_logging: settings.debugLogging,
+          rotate_display: settings.rotateDisplay,
         }),
       })
 
@@ -176,6 +177,7 @@ const initialState = {
     shufflePlaylist: false,
     use24HourClock: false,
     debugLogging: false,
+    rotateDisplay: 0,
   },
   deviceModel: '',
   prevAuthBackend: '',
