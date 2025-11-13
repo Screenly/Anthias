@@ -20,14 +20,14 @@ r = connect_to_redis()
 
 # Availability and HEAD commit of the remote branch to be checked
 # every 24 hours.
-REMOTE_BRANCH_STATUS_TTL = (60 * 60 * 24)
+REMOTE_BRANCH_STATUS_TTL = 60 * 60 * 24
 
 # Suspend all external requests if we enconter an error other than
 # a ConnectionError for 5 minutes.
-ERROR_BACKOFF_TTL = (60 * 5)
+ERROR_BACKOFF_TTL = 60 * 5
 
 # Availability of the cached Docker Hub hash
-DOCKER_HUB_HASH_TTL = (10 * 60)
+DOCKER_HUB_HASH_TTL = 10 * 60
 
 # Google Analytics data
 ANALYTICS_MEASURE_ID = 'G-S3VX8HTPK7'
@@ -59,13 +59,13 @@ def remote_branch_available(branch):
 
     # Make sure we havent recently failed before allowing fetch
     if r.get('github-api-error') is not None:
-        logging.warning("GitHub requests suspended due to prior error")
+        logging.warning('GitHub requests suspended due to prior error')
         return None
 
     # Check for cached remote branch status
     remote_branch_cache = r.get('remote-branch-available')
     if remote_branch_cache is not None:
-        return remote_branch_cache == "1"
+        return remote_branch_cache == '1'
 
     try:
         resp = requests_get(
@@ -73,7 +73,7 @@ def remote_branch_available(branch):
             headers={
                 'Accept': 'application/vnd.github.loki-preview+json',
             },
-            timeout=DEFAULT_REQUESTS_TIMEOUT
+            timeout=DEFAULT_REQUESTS_TIMEOUT,
         )
         resp.raise_for_status()
     except exceptions.RequestException as exc:
@@ -116,7 +116,7 @@ def fetch_remote_hash():
         try:
             resp = requests_get(
                 f'https://api.github.com/repos/screenly/anthias/git/refs/heads/{branch}',  # noqa: E501
-                timeout=DEFAULT_REQUESTS_TIMEOUT
+                timeout=DEFAULT_REQUESTS_TIMEOUT,
             )
             resp.raise_for_status()
         except exceptions.RequestException as exc:
@@ -163,7 +163,8 @@ def get_latest_docker_hub_hash(device_type):
 
         if len(reduced) == 0:
             logging.warning(
-                'No commit hash found for device type: %s', device_type)
+                'No commit hash found for device type: %s', device_type
+            )
             return None
 
         docker_hub_hash = reduced[0]
@@ -209,25 +210,27 @@ def is_up_to_date():
             ga_url = f'{ga_base_url}?{ga_query_params}'
             payload = {
                 'client_id': device_id,
-                'events': [{
-                    'name': 'version',
-                    'params': {
-                        'Branch': str(git_branch),
-                        'Hash': str(git_short_hash),
-                        'NOOBS': os.path.isfile('/boot/os_config.json'),
-                        'Balena': is_balena_app(),
-                        'Docker': is_docker(),
-                        'Pi_Version': parse_cpu_info().get('model', "Unknown")
-                        }
-                }]
+                'events': [
+                    {
+                        'name': 'version',
+                        'params': {
+                            'Branch': str(git_branch),
+                            'Hash': str(git_short_hash),
+                            'NOOBS': os.path.isfile('/boot/os_config.json'),
+                            'Balena': is_balena_app(),
+                            'Docker': is_docker(),
+                            'Pi_Version': parse_cpu_info().get(
+                                'model', 'Unknown'
+                            ),
+                        },
+                    }
+                ],
             }
             headers = {'content-type': 'application/json'}
 
             try:
                 requests_post(
-                    ga_url,
-                    data=json.dumps(payload),
-                    headers=headers
+                    ga_url, data=json.dumps(payload), headers=headers
                 )
             except exceptions.ConnectionError:
                 pass
@@ -235,7 +238,6 @@ def is_up_to_date():
     device_type = os.getenv('DEVICE_TYPE')
     latest_docker_hub_hash = get_latest_docker_hub_hash(device_type)
 
-    return (
-        (latest_sha == git_hash) or
-        (latest_docker_hub_hash == git_short_hash)
+    return (latest_sha == git_hash) or (
+        latest_docker_hub_hash == git_short_hash
     )

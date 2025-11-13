@@ -38,7 +38,8 @@ def get_ip_addresses():
         i['addr']
         for interface_name in interfaces()
         for i in ifaddresses(interface_name).setdefault(
-            AF_INET, [{'addr': None}])
+            AF_INET, [{'addr': None}]
+        )
         if interface_name in ['eth0', 'wlan0']
         if i['addr'] is not None
     ]

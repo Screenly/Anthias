@@ -17,10 +17,7 @@ from lib.auth import authorized
 
 class AssetListViewV1_1(APIView):
     @extend_schema(
-        summary='List assets',
-        responses={
-            200: AssetSerializer(many=True)
-        }
+        summary='List assets', responses={200: AssetSerializer(many=True)}
     )
     @authorized
     def get(self, request):
@@ -31,9 +28,7 @@ class AssetListViewV1_1(APIView):
     @extend_schema(
         summary='Create asset',
         request=V1_ASSET_REQUEST,
-        responses={
-            201: AssetSerializer
-        }
+        responses={201: AssetSerializer},
     )
     @authorized
     def post(self, request):
@@ -49,7 +44,8 @@ class AssetListViewV1_1(APIView):
         asset = Asset.objects.create(**serializer.data)
 
         return Response(
-            AssetSerializer(asset).data, status=status.HTTP_201_CREATED)
+            AssetSerializer(asset).data, status=status.HTTP_201_CREATED
+        )
 
 
 class AssetViewV1_1(APIView, DeleteAssetViewMixin):
@@ -57,7 +53,7 @@ class AssetViewV1_1(APIView, DeleteAssetViewMixin):
         summary='Get asset',
         responses={
             200: AssetSerializer,
-        }
+        },
     )
     @authorized
     def get(self, request, asset_id):
@@ -67,9 +63,7 @@ class AssetViewV1_1(APIView, DeleteAssetViewMixin):
     @extend_schema(
         summary='Update asset',
         request=V1_ASSET_REQUEST,
-        responses={
-            200: AssetSerializer
-        }
+        responses={200: AssetSerializer},
     )
     @authorized
     def put(self, request, asset_id):
@@ -82,7 +76,8 @@ class AssetViewV1_1(APIView, DeleteAssetViewMixin):
             serializer.save()
         else:
             return Response(
-                serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                serializer.errors, status=status.HTTP_400_BAD_REQUEST
+            )
 
         asset.refresh_from_db()
         return Response(AssetSerializer(asset).data)

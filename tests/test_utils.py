@@ -14,10 +14,10 @@ uri_ = '/home/user/file'
 
 class UtilsTest(unittest.TestCase):
     def test_unicode_correctness_in_bottle_templates(self):
-        self.assertEqual(template_handle_unicode('hello'), u'hello')
+        self.assertEqual(template_handle_unicode('hello'), 'hello')
         self.assertEqual(
             template_handle_unicode('Привет'),
-            u'\u041f\u0440\u0438\u0432\u0435\u0442',
+            '\u041f\u0440\u0438\u0432\u0435\u0442',
         )
 
     def test_json_tz(self):

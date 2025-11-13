@@ -40,18 +40,13 @@ if not DEBUG:
     SECRET_KEY = device_settings.get('django_secret_key')
 else:
     # SECURITY WARNING: keep the secret key used in production secret!
-    SECRET_KEY = 'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j'  # noqa: E501
+    SECRET_KEY = (
+        'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j'  # noqa: E501
+    )
 
-ALLOWED_HOSTS = [
-    '127.0.0.1',
-    'localhost',
-    'anthias',
-    'anthias-server'
-]
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'anthias', 'anthias-server']
 
-CSRF_TRUSTED_ORIGINS = [
-    'http://anthias'
-]
+CSRF_TRUSTED_ORIGINS = ['http://anthias']
 
 
 # Application definition
@@ -109,7 +104,8 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': (
-            '/data/.screenly/test.db' if getenv('ENVIRONMENT') == 'test'
+            '/data/.screenly/test.db'
+            if getenv('ENVIRONMENT') == 'test'
             else '/data/.screenly/screenly.db'
         ),
     },
@@ -173,7 +169,7 @@ REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'api.helpers.custom_exception_handler',
     # The project uses custom authentication classes,
     # so we need to disable the default ones.
-    'DEFAULT_AUTHENTICATION_CLASSES': []
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
 }
 
 SPECTACULAR_SETTINGS = {
