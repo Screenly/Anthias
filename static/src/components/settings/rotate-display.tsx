@@ -15,7 +15,7 @@ export const RotateDisplay = ({
       <select
         className="form-control shadow-none form-select"
         name="rotateDisplay"
-        value={settings.rotateDisplay || '0'}
+        value={settings.rotateDisplay || 0}
         onChange={handleInputChange}
       >
         <option value={0}>0&deg;</option>

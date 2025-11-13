@@ -35,6 +35,7 @@ export const fetchSettings = createAsyncThunk(
         shufflePlaylist: data.shuffle_playlist || false,
         use24HourClock: data.use_24_hour_clock || false,
         debugLogging: data.debug_logging || false,
+        rotateDisplay: data.rotate_display || 0,
       }
     } catch (error) {
       return rejectWithValue((error as Error).message)
