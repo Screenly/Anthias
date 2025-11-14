@@ -1,7 +1,6 @@
-import classNames from 'classnames'
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import Tooltip from 'bootstrap/js/dist/tooltip'
+
 import {
   fetchAssets,
   selectActiveAssets,
@@ -9,11 +8,12 @@ import {
 } from '@/store/assets'
 import { AssetEditData, AppDispatch } from '@/types'
 
-import { EmptyAssetMessage } from '@/components/empty-asset-message'
-import { InactiveAssetsTable } from '@/components/inactive-assets'
-import { ActiveAssetsTable } from '@/components/active-assets'
+import { ActiveAssetsSection } from '@/components/active-assets-section'
 import { AddAssetModal } from '@/components/add-asset-modal'
 import { EditAssetModal } from '@/components/edit-asset-modal'
+import { InactiveAssetsSection } from '@/components/inactive-assets-section'
+import { ScheduleHeader } from '@/components/schedule-header'
+import { useTooltipInitialization } from '@/hooks/use-tooltip-initialization'
 
 export const ScheduleOverview = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -41,55 +41,7 @@ export const ScheduleOverview = () => {
     fetchPlayerName()
   }, [dispatch, playerName])
 
-  // Initialize tooltips
-  useEffect(() => {
-    const tooltipElements: Tooltip[] = []
-
-    const initializeTooltips = () => {
-      // Dispose existing tooltips
-      tooltipElements.forEach((tooltip) => tooltip.dispose())
-      tooltipElements.length = 0
-
-      // Initialize new tooltips
-      const tooltipNodes = document.querySelectorAll(
-        '[data-bs-toggle="tooltip"]',
-      )
-      tooltipNodes.forEach((element) => {
-        const tooltip = new Tooltip(element as HTMLElement, {
-          placement: 'top',
-          trigger: 'hover',
-          html: true,
-          delay: { show: 0, hide: 0 },
-          animation: true,
-        })
-        tooltipElements.push(tooltip)
-      })
-    }
-
-    // Initial tooltip initialization
-    initializeTooltips()
-
-    // Reinitialize tooltips when assets change
-    const observer = new MutationObserver(() => {
-      initializeTooltips()
-    })
-
-    // Observe changes in both active and inactive sections
-    const activeSection = document.getElementById('active-assets-section')
-    const inactiveSection = document.getElementById('inactive-assets-section')
-
-    if (activeSection) {
-      observer.observe(activeSection, { childList: true, subtree: true })
-    }
-    if (inactiveSection) {
-      observer.observe(inactiveSection, { childList: true, subtree: true })
-    }
-
-    return () => {
-      observer.disconnect()
-      tooltipElements.forEach((tooltip) => tooltip.dispose())
-    }
-  }, [activeAssets, inactiveAssets])
+  useTooltipInitialization(activeAssets.length, inactiveAssets.length)
 
   const handleAddAsset = (event: React.MouseEvent) => {
     event.preventDefault()
@@ -127,108 +79,25 @@ export const ScheduleOverview = () => {
 
   return (
     <>
-      <div className="container pt-3 pb-3">
-        <div className="row">
-          <div className="col-12">
-            <h4 className="mb-3">
-              <b className="text-white">Schedule Overview</b>
-            </h4>
-
-            {playerName && (
-              <span className="badge bg-primary px-3 py-2 rounded-pill mb-3">
-                <h6 className="my-0 text-center text-dark fw-bold">
-                  {playerName}
-                </h6>
-              </span>
-            )}
-
-            <div className="d-flex flex-column flex-sm-row gap-2 mb-3 mt-4">
-              <a
-                id="previous-asset-button"
-                className={classNames(
-                  'btn',
-                  'btn-long',
-                  'btn-light',
-                  'fw-bold',
-                  'text-dark',
-                )}
-                href="#"
-                onClick={handlePreviousAsset}
-              >
-                <i className="fas fa-chevron-left pe-2"></i>
-                Previous Asset
-              </a>
-              <a
-                id="next-asset-button"
-                className={classNames(
-                  'btn',
-                  'btn-long',
-                  'btn-light',
-                  'fw-bold',
-                  'text-dark',
-                )}
-                href="#"
-                onClick={handleNextAsset}
-              >
-                Next Asset
-                <i className="fas fa-chevron-right ps-2"></i>
-              </a>
-              <a
-                id="add-asset-button"
-                className={classNames(
-                  'add-asset-button',
-                  'btn',
-                  'btn-long',
-                  'btn-primary',
-                )}
-                href="#"
-                onClick={handleAddAsset}
-              >
-                Add Asset
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ScheduleHeader
+        playerName={playerName}
+        onPreviousAsset={handlePreviousAsset}
+        onNextAsset={handleNextAsset}
+        onAddAsset={handleAddAsset}
+      />
 
       <span id="assets">
-        <div className="container">
-          <div className="row content active-content px-2 pt-4">
-            <div className="col-12 mb-5">
-              <section id="active-assets-section">
-                <h5>
-                  <b>Active assets</b>
-                </h5>
-                <ActiveAssetsTable onEditAsset={handleEditAsset} />
-                {activeAssets.length === 0 && (
-                  <EmptyAssetMessage
-                    onAddAssetClick={handleAddAsset}
-                    isActive={true}
-                  />
-                )}
-              </section>
-            </div>
-          </div>
-        </div>
+        <ActiveAssetsSection
+          activeAssetsCount={activeAssets.length}
+          onEditAsset={handleEditAsset}
+          onAddAssetClick={handleAddAsset}
+        />
 
-        <div className="container mt-4">
-          <div className="row content inactive-content px-2 pt-4">
-            <div className="col-12 mb-5">
-              <section id="inactive-assets-section">
-                <h5>
-                  <b>Inactive assets</b>
-                </h5>
-                <InactiveAssetsTable onEditAsset={handleEditAsset} />
-                {inactiveAssets.length === 0 && (
-                  <EmptyAssetMessage
-                    onAddAssetClick={handleAddAsset}
-                    isActive={false}
-                  />
-                )}
-              </section>
-            </div>
-          </div>
-        </div>
+        <InactiveAssetsSection
+          inactiveAssetsCount={inactiveAssets.length}
+          onEditAsset={handleEditAsset}
+          onAddAssetClick={handleAddAsset}
+        />
       </span>
 
       <AddAssetModal
