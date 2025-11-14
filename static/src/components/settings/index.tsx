@@ -17,6 +17,7 @@ import { PlayerName } from '@/components/settings/player-name'
 import { DefaultDurations } from '@/components/settings/default-durations'
 import { AudioOutput } from '@/components/settings/audio-output'
 import { DateFormat } from '@/components/settings/date-format'
+import { RotateDisplay } from '@/components/settings/rotate-display'
 import { ToggleableSetting } from '@/components/settings/toggleable-setting'
 import { Update } from '@/components/settings/update'
 
@@ -134,6 +135,11 @@ export const Settings = () => {
               />
 
               <DateFormat
+                settings={settings}
+                handleInputChange={handleInputChange}
+              />
+
+              <RotateDisplay
                 settings={settings}
                 handleInputChange={handleInputChange}
               />
