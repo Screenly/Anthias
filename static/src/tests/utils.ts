@@ -154,6 +154,7 @@ export function getInitialState(): RootState {
         shufflePlaylist: false,
         use24HourClock: false,
         debugLogging: false,
+        rotateDisplay: 0,
       },
       deviceModel: '',
       prevAuthBackend: '',
