@@ -58,9 +58,9 @@ except Exception:
 standard_library.install_aliases()
 
 
-__author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2024, Screenly, Inc"
-__license__ = "Dual License: GPLv2 and Commercial License"
+__author__ = 'Screenly, Inc'
+__copyright__ = 'Copyright 2012-2024, Screenly, Inc'
+__license__ = 'Dual License: GPLv2 and Commercial License'
 
 
 current_browser_url = None
@@ -146,7 +146,7 @@ commands = {
     'setup_wifi': lambda data: setup_wifi(data),
     'show_splash': lambda data: show_splash(data),
     'unknown': lambda _: command_not_found(),
-    'current_asset_id': lambda _: send_current_asset_id_to_server()
+    'current_asset_id': lambda _: send_current_asset_id_to_server(),
 }
 
 
@@ -155,8 +155,8 @@ def load_browser():
     logging.info('Loading browser...')
 
     browser = sh.Command('ScreenlyWebview')(_bg=True, _err_to_out=True)
-    while (
-        'Screenly service start' not in browser.process.stdout.decode('utf-8')
+    while 'Screenly service start' not in browser.process.stdout.decode(
+        'utf-8'
     ):
         sleep(1)
 
@@ -227,21 +227,22 @@ def asset_loop(scheduler):
 
     if asset is None:
         logging.info(
-            'Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY)
+            'Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY
+        )
         view_image(STANDBY_SCREEN)
         skip_event = get_skip_event()
         skip_event.clear()
         if skip_event.wait(timeout=EMPTY_PL_DELAY):
             # Skip was triggered, continue immediately to next iteration
             logging.info(
-                'Skip detected during empty playlist wait, continuing')
+                'Skip detected during empty playlist wait, continuing'
+            )
         else:
             # Duration elapsed normally, continue to next iteration
             pass
 
-    elif (
-        path.isfile(asset['uri']) or
-        (not url_fails(asset['uri']) or asset['skip_asset_check'])
+    elif path.isfile(asset['uri']) or (
+        not url_fails(asset['uri']) or asset['skip_asset_check']
     ):
         name, mime, uri = asset['name'], asset['mimetype'], asset['uri']
         logging.info('Showing asset %s (%s)', name, mime)
@@ -270,14 +271,18 @@ def asset_loop(scheduler):
                 pass
 
     else:
-        logging.info('Asset %s at %s is not available, skipping.',
-                     asset['name'], asset['uri'])
+        logging.info(
+            'Asset %s at %s is not available, skipping.',
+            asset['name'],
+            asset['uri'],
+        )
         skip_event = get_skip_event()
         skip_event.clear()
         if skip_event.wait(timeout=0.5):
             # Skip was triggered, continue immediately to next iteration
             logging.info(
-                'Skip detected during asset unavailability wait, continuing')
+                'Skip detected during asset unavailability wait, continuing'
+            )
         else:
             # Duration elapsed normally, continue to next iteration
             pass

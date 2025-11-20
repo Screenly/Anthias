@@ -50,8 +50,7 @@ def build_image(
         cache_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         click.secho(
-            f'Warning: Failed to create cache directory: {e}',
-            fg='yellow'
+            f'Warning: Failed to create cache directory: {e}', fg='yellow'
         )
 
     base_apt_dependencies = [
@@ -94,19 +93,22 @@ def build_image(
     elif service == 'wifi-connect':
         context.update(get_wifi_connect_context(target_platform))
 
-    generate_dockerfile(service, {
-        'base_image': base_image,
-        'base_image_tag': 'bookworm',
-        'base_apt_dependencies': base_apt_dependencies,
-        'board': board,
-        'debian_version': 'bookworm',
-        'disable_cache_mounts': disable_cache_mounts,
-        'environment': environment,
-        'git_branch': git_branch,
-        'git_hash': git_hash,
-        'git_short_hash': git_short_hash,
-        **context,
-    })
+    generate_dockerfile(
+        service,
+        {
+            'base_image': base_image,
+            'base_image_tag': 'bookworm',
+            'base_apt_dependencies': base_apt_dependencies,
+            'board': board,
+            'debian_version': 'bookworm',
+            'disable_cache_mounts': disable_cache_mounts,
+            'environment': environment,
+            'git_branch': git_branch,
+            'git_hash': git_hash,
+            'git_short_hash': git_short_hash,
+            **context,
+        },
+    )
 
     if service == 'test':
         click.secho(f'Skipping test service for {board}...', fg='yellow')
@@ -127,12 +129,16 @@ def build_image(
         cache_from={
             'type': 'local',
             'src': str(cache_dir),
-        } if not clean_build else None,
+        }
+        if not clean_build
+        else None,
         cache_to={
             'type': 'local',
             'dest': str(cache_dir),
             'mode': 'max',
-        } if not clean_build else None,
+        }
+        if not clean_build
+        else None,
         builder='multiarch-builder',
         file=f'docker/Dockerfile.{service}',
         load=True,
@@ -160,10 +166,12 @@ def build_image(
 @click.option(
     '--service',
     default=['all'],
-    type=click.Choice((
-        'all',
-        *SERVICES,
-    )),
+    type=click.Choice(
+        (
+            'all',
+            *SERVICES,
+        )
+    ),
     multiple=True,
 )
 @click.option(
@@ -213,7 +221,8 @@ def main(
         # Define tag components
         namespaces = ['screenly/anthias', 'screenly/srly-ose']
         version_suffix = (
-            f'{board}-64' if board == 'pi4' and platform == 'linux/arm64/v8'
+            f'{board}-64'
+            if board == 'pi4' and platform == 'linux/arm64/v8'
             else f'{board}'
         )
 
@@ -244,5 +253,5 @@ def main(
         )
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

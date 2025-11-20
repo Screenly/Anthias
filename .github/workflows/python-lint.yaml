@@ -41,6 +41,10 @@ jobs:
       run: |
         poetry install --only=dev-host
 
-    - name: Analyzing the code with ruff
+    - name: Run Ruff linting checks
       run: |
         poetry run ruff check .
+
+    - name: Run Ruff formatting checks
+      run: |
+        poetry run ruff format --check .

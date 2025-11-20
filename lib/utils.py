@@ -84,12 +84,15 @@ def validate_url(string):
 
 def get_balena_supervisor_api_response(method, action, **kwargs):
     version = kwargs.get('version', 'v1')
-    return getattr(requests, method)('{}/{}/{}?apikey={}'.format(
-        os.getenv('BALENA_SUPERVISOR_ADDRESS'),
-        version,
-        action,
-        os.getenv('BALENA_SUPERVISOR_API_KEY'),
-    ), headers={'Content-Type': 'application/json'})
+    return getattr(requests, method)(
+        '{}/{}/{}?apikey={}'.format(
+            os.getenv('BALENA_SUPERVISOR_ADDRESS'),
+            version,
+            action,
+            os.getenv('BALENA_SUPERVISOR_API_KEY'),
+        ),
+        headers={'Content-Type': 'application/json'},
+    )
 
 
 def get_balena_device_info():
@@ -106,7 +109,8 @@ def reboot_via_balena_supervisor():
 
 def get_balena_supervisor_version():
     response = get_balena_supervisor_api_response(
-        method='get', action='version', version='v2')
+        method='get', action='version', version='v2'
+    )
     if response.ok:
         return response.json()['version']
     else:
@@ -169,11 +173,10 @@ def get_node_ip():
                         break
                     else:
                         raise Exception(
-                            'Internet connection is not available.')
+                            'Internet connection is not available.'
+                        )
         except RetryError:
-            logging.warning(
-                'Internet connection is not available. '
-            )
+            logging.warning('Internet connection is not available. ')
 
         ip_addresses = r.get('ip_addresses')
 
@@ -194,10 +197,12 @@ def get_node_mac_address():
         balena_supervisor_api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
         headers = {'Content-Type': 'application/json'}
 
-        r = requests.get('{}/v1/device?apikey={}'.format(
-            balena_supervisor_address,
-            balena_supervisor_api_key
-        ), headers=headers)
+        r = requests.get(
+            '{}/v1/device?apikey={}'.format(
+                balena_supervisor_address, balena_supervisor_api_key
+            ),
+            headers=headers,
+        )
 
         if r.ok:
             return r.json()['mac_address']
@@ -220,35 +225,45 @@ def get_active_connections(bus, fields=None):
 
     try:
         nm_proxy = bus.get(
-            "org.freedesktop.NetworkManager",
-            "/org/freedesktop/NetworkManager",
+            'org.freedesktop.NetworkManager',
+            '/org/freedesktop/NetworkManager',
         )
     except Exception:
         return None
 
-    nm_properties = nm_proxy["org.freedesktop.DBus.Properties"]
+    nm_properties = nm_proxy['org.freedesktop.DBus.Properties']
     active_connections = nm_properties.Get(
-        "org.freedesktop.NetworkManager", "ActiveConnections")
+        'org.freedesktop.NetworkManager', 'ActiveConnections'
+    )
     for active_connection in active_connections:
         active_connection_proxy = bus.get(
-            "org.freedesktop.NetworkManager", active_connection)
-        active_connection_properties = (
-            active_connection_proxy["org.freedesktop.DBus.Properties"])
+            'org.freedesktop.NetworkManager', active_connection
+        )
+        active_connection_properties = active_connection_proxy[
+            'org.freedesktop.DBus.Properties'
+        ]
 
         connection = dict()
         for field in fields:
             field_value = active_connection_properties.Get(
-                "org.freedesktop.NetworkManager.Connection.Active", field)
+                'org.freedesktop.NetworkManager.Connection.Active', field
+            )
 
             if field == 'Devices':
                 devices = list()
                 for device_path in field_value:
                     device_proxy = bus.get(
-                        "org.freedesktop.NetworkManager", device_path)
-                    device_properties = (
-                        device_proxy["org.freedesktop.DBus.Properties"])
-                    devices.append(device_properties.Get(
-                        "org.freedesktop.NetworkManager.Device", "Interface"))
+                        'org.freedesktop.NetworkManager', device_path
+                    )
+                    device_properties = device_proxy[
+                        'org.freedesktop.DBus.Properties'
+                    ]
+                    devices.append(
+                        device_properties.Get(
+                            'org.freedesktop.NetworkManager.Device',
+                            'Interface',
+                        )
+                    )
                 field_value = devices
 
             connection.update({field: field_value})
@@ -266,19 +281,21 @@ def remove_connection(bus, uuid):
     """
     try:
         nm_proxy = bus.get(
-            "org.freedesktop.NetworkManager",
-            "/org/freedesktop/NetworkManager/Settings",
+            'org.freedesktop.NetworkManager',
+            '/org/freedesktop/NetworkManager/Settings',
         )
     except Exception:
         return False
 
-    nm_settings = nm_proxy["org.freedesktop.NetworkManager.Settings"]
+    nm_settings = nm_proxy['org.freedesktop.NetworkManager.Settings']
 
     connection_path = nm_settings.GetConnectionByUuid(uuid)
     connection_proxy = bus.get(
-        "org.freedesktop.NetworkManager", connection_path)
-    connection = (
-        connection_proxy["org.freedesktop.NetworkManager.Settings.Connection"])
+        'org.freedesktop.NetworkManager', connection_path
+    )
+    connection = connection_proxy[
+        'org.freedesktop.NetworkManager.Settings.Connection'
+    ]
     connection.Delete()
 
     return True
@@ -332,7 +349,8 @@ def url_fails(url):
     """
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
         run_mplayer = mplayer(  # noqa: F821
-            '-identify', '-frames', '0', '-nosound', url)
+            '-identify', '-frames', '0', '-nosound', url
+        )
         for line in run_mplayer.split('\n'):
             if 'Clip info:' in line:
                 return False
@@ -361,7 +379,7 @@ def url_fails(url):
             allow_redirects=True,
             headers=headers,
             timeout=10,
-            verify=verify
+            verify=verify,
         ).ok:
             return False
 
@@ -370,7 +388,7 @@ def url_fails(url):
             allow_redirects=True,
             headers=headers,
             timeout=10,
-            verify=verify
+            verify=verify,
         ).ok:
             return False
 
@@ -386,11 +404,7 @@ def download_video_from_youtube(uri, asset_id):
     info = json.loads(check_output(['yt-dlp', '-j', uri]))
     duration = info['duration']
 
-    location = path.join(
-        home,
-        'screenly_assets',
-        f'{asset_id}.mp4'
-    )
+    location = path.join(home, 'screenly_assets', f'{asset_id}.mp4')
     thread = YoutubeDownloadThread(location, uri, asset_id)
     thread.daemon = True
     thread.start()
@@ -407,14 +421,16 @@ class YoutubeDownloadThread(Thread):
 
     def run(self):
         publisher = ZmqPublisher.get_instance()
-        call([
-            'yt-dlp',
-            '-S',
-            'vcodec:h264,fps,res:1080,acodec:m4a',
-            '-o',
-            self.location,
-            self.uri,
-        ])
+        call(
+            [
+                'yt-dlp',
+                '-S',
+                'vcodec:h264,fps,res:1080,acodec:m4a',
+                '-o',
+                self.location,
+                self.uri,
+            ]
+        )
 
         try:
             asset = Asset.objects.get(asset_id=self.asset_id)
@@ -448,11 +464,14 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
     :param has_symbols: bool
     :return: string
     """
-    ppp_letters = '!#%+23456789:=?@ABCDEFGHJKLMNPRSTUVWXYZabcdefghjkmnopqrstuvwxyz'  # noqa: E501
+    ppp_letters = (
+        '!#%+23456789:=?@ABCDEFGHJKLMNPRSTUVWXYZabcdefghjkmnopqrstuvwxyz'  # noqa: E501
+    )
     if not has_symbols:
         ppp_letters = ''.join(set(ppp_letters) - set(string.punctuation))
-    return "".join(
-        random.SystemRandom().choice(ppp_letters) for _ in range(pw_length))
+    return ''.join(
+        random.SystemRandom().choice(ppp_letters) for _ in range(pw_length)
+    )
 
 
 def connect_to_redis():

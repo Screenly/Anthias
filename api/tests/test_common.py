@@ -1,6 +1,7 @@
 """
 Common test utilities and constants for the Anthias API tests.
 """
+
 import json
 
 from django.urls import reverse
@@ -16,7 +17,7 @@ ASSET_CREATION_DATA = {
     'is_enabled': 0,
     'nocache': 0,
     'play_order': 0,
-    'skip_asset_check': 0
+    'skip_asset_check': 0,
 }
 ASSET_UPDATE_DATA_V1_2 = {
     'name': 'Anthias',
@@ -28,7 +29,7 @@ ASSET_UPDATE_DATA_V1_2 = {
     'is_enabled': 1,
     'nocache': 0,
     'play_order': 0,
-    'skip_asset_check': 0
+    'skip_asset_check': 0,
 }
 ASSET_UPDATE_DATA_V2 = {
     **ASSET_UPDATE_DATA_V1_2,
@@ -38,11 +39,10 @@ ASSET_UPDATE_DATA_V2 = {
     'skip_asset_check': False,
 }
 
+
 def get_request_data(data, version):
     """Helper function to format request data based on API version."""
     if version in ['v1', 'v1_1']:
-        return {
-            'model': json.dumps(data)
-        }
+        return {'model': json.dumps(data)}
     else:
         return data

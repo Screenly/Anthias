@@ -52,6 +52,7 @@ def fake_settings(raw):
 
     try:
         import settings
+
         yield (settings, settings.settings)
         del sys.modules['settings']
     finally:
@@ -89,19 +90,24 @@ class SettingsTest(TestCase):
         with fake_settings(empty_settings) as (mod_settings, settings):
             self.assertEqual(
                 settings['player_name'],
-                mod_settings.DEFAULTS['viewer']['player_name'])
+                mod_settings.DEFAULTS['viewer']['player_name'],
+            )
             self.assertEqual(
                 settings['show_splash'],
-                mod_settings.DEFAULTS['viewer']['show_splash'])
+                mod_settings.DEFAULTS['viewer']['show_splash'],
+            )
             self.assertEqual(
                 settings['shuffle_playlist'],
-                mod_settings.DEFAULTS['viewer']['shuffle_playlist'])
+                mod_settings.DEFAULTS['viewer']['shuffle_playlist'],
+            )
             self.assertEqual(
                 settings['debug_logging'],
-                mod_settings.DEFAULTS['viewer']['debug_logging'])
+                mod_settings.DEFAULTS['viewer']['debug_logging'],
+            )
             self.assertEqual(
                 settings['default_duration'],
-                mod_settings.DEFAULTS['viewer']['default_duration'])
+                mod_settings.DEFAULTS['viewer']['default_duration'],
+            )
 
     def broken_settings_should_raise_value_error(self):
         with self.assertRaises(ValueError):
