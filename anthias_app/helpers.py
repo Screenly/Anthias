@@ -20,9 +20,9 @@ def template(request, template_name, context):
 
     context['date_format'] = settings['date_format']
     context['default_duration'] = settings['default_duration']
-    context['default_streaming_duration'] = (
-        settings['default_streaming_duration']
-    )
+    context['default_streaming_duration'] = settings[
+        'default_streaming_duration'
+    ]
     context['template_settings'] = {
         'imports': ['from lib.utils import template_handle_unicode'],
         'default_filters': ['template_handle_unicode'],
@@ -40,7 +40,7 @@ def prepare_default_asset(**kwargs):
     asset_id = 'default_{}'.format(uuid.uuid4().hex)
     duration = (
         int(get_video_duration(kwargs['uri']).total_seconds())
-        if "video" == kwargs['mimetype']
+        if 'video' == kwargs['mimetype']
         else kwargs['duration']
     )
 
@@ -56,7 +56,7 @@ def prepare_default_asset(**kwargs):
         'play_order': 0,
         'skip_asset_check': 0,
         'start_date': kwargs['start_date'],
-        'uri': kwargs['uri']
+        'uri': kwargs['uri'],
     }
 
 
@@ -67,7 +67,7 @@ def add_default_assets():
     default_asset_settings = {
         'start_date': datetime_now,
         'end_date': datetime_now.replace(year=datetime_now.year + 6),
-        'duration': settings['default_duration']
+        'duration': settings['default_duration'],
     }
 
     default_assets_yaml = path.join(
@@ -79,11 +79,13 @@ def add_default_assets():
         default_assets = yaml.safe_load(yaml_file).get('assets')
 
         for default_asset in default_assets:
-            default_asset_settings.update({
-                'name': default_asset.get('name'),
-                'uri': default_asset.get('uri'),
-                'mimetype': default_asset.get('mimetype')
-            })
+            default_asset_settings.update(
+                {
+                    'name': default_asset.get('name'),
+                    'uri': default_asset.get('uri'),
+                    'mimetype': default_asset.get('mimetype'),
+                }
+            )
             asset = prepare_default_asset(**default_asset_settings)
 
             if asset:

@@ -19,16 +19,14 @@ def get_specific_asset(asset_id):
 
 def generate_asset_list():
     """Choose deadline via:
-        1. Map assets to deadlines with rule: if asset is active then
-           'end_date' else 'start_date'
-        2. Get nearest deadline
+    1. Map assets to deadlines with rule: if asset is active then
+       'end_date' else 'start_date'
+    2. Get nearest deadline
     """
     logging.info('Generating asset-list...')
     assets = Asset.objects.all()
     deadlines = [
-        asset.end_date
-        if asset.is_active()
-        else asset.start_date
+        asset.end_date if asset.is_active() else asset.start_date
         for asset in assets
     ]
 
@@ -38,10 +36,7 @@ def generate_asset_list():
         end_date__isnull=False,
     ).order_by('play_order')
     playlist = [
-        {
-            k: v for k, v in asset.__dict__.items()
-            if k not in ['_state', 'md5']
-        }
+        {k: v for k, v in asset.__dict__.items() if k not in ['_state', 'md5']}
         for asset in enabled_assets
         if asset.is_active()
     ]
@@ -76,7 +71,7 @@ class Scheduler(object):
                 self.current_asset_id = self.extra_asset
                 self.extra_asset = None
                 return asset
-            logging.error("Asset not found or processed")
+            logging.error('Asset not found or processed')
             self.extra_asset = None
 
         self.refresh_playlist()
@@ -94,7 +89,9 @@ class Scheduler(object):
 
         logging.debug(
             'get_next_asset counter %s returning asset %s of %s',
-            self.counter, idx + 1, len(self.assets),
+            self.counter,
+            idx + 1,
+            len(self.assets),
         )
 
         if settings['shuffle_playlist'] and self.index == 0:
@@ -110,7 +107,9 @@ class Scheduler(object):
 
         logging.debug(
             'refresh: counter: (%s) deadline (%s) timecur (%s)',
-            self.counter, self.deadline, time_cur
+            self.counter,
+            self.deadline,
+            time_cur,
         )
 
         if self.get_db_mtime() > self.last_update_db_mtime:
@@ -137,7 +136,10 @@ class Scheduler(object):
         self.index = self.index % len(self.assets) if self.assets else 0
         logging.debug(
             'update_playlist done, count %s, counter %s, index %s, deadline %s',  # noqa: E501
-            len(self.assets), self.counter, self.index, self.deadline
+            len(self.assets),
+            self.counter,
+            self.index,
+            self.deadline,
         )
 
     def get_db_mtime(self):

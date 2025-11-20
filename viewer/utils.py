@@ -14,7 +14,7 @@ def sigalrm(signum, frame):
     """
     Signal just throw an SigalrmError
     """
-    raise SigalrmError("SigalrmError")
+    raise SigalrmError('SigalrmError')
 
 
 def get_skip_event():
@@ -22,11 +22,12 @@ def get_skip_event():
     Get the global skip event for instant asset switching.
     """
     from viewer.playback import skip_event
+
     return skip_event
 
 
 def command_not_found():
-    logging.error("Command not found")
+    logging.error('Command not found')
 
 
 def watchdog():

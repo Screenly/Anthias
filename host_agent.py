@@ -3,8 +3,8 @@
 
 from __future__ import unicode_literals
 
-__author__ = "Nash Kaminski"
-__license__ = "Dual License: GPLv2 and Commercial License"
+__author__ = 'Nash Kaminski'
+__license__ = 'Dual License: GPLv2 and Commercial License'
 
 import ipaddress
 import json
@@ -22,7 +22,7 @@ from tenacity import (
     wait_fixed,
 )
 
-REDIS_ARGS = dict(host="127.0.0.1", port=6379, db=0)
+REDIS_ARGS = dict(host='127.0.0.1', port=6379, db=0)
 # Name of redis channel to listen to
 CHANNEL_NAME = b'hostcmd'
 SUPPORTED_INTERFACES = (
@@ -39,8 +39,8 @@ def get_ip_addresses():
         for interface in netifaces.interfaces()
         if interface.startswith(SUPPORTED_INTERFACES)
         for ip in (
-            netifaces.ifaddresses(interface).get(netifaces.AF_INET, []) +
-            netifaces.ifaddresses(interface).get(netifaces.AF_INET6, [])
+            netifaces.ifaddresses(interface).get(netifaces.AF_INET, [])
+            + netifaces.ifaddresses(interface).get(netifaces.AF_INET6, [])
         )
         if not ipaddress.ip_address(ip['addr']).is_link_local
     ]
@@ -75,7 +75,7 @@ def set_ip_addresses():
 CMD_TO_ARGV = {
     b'reboot': ['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'reboot'],
     b'shutdown': ['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'poweroff'],
-    b'set_ip_addresses': set_ip_addresses
+    b'set_ip_addresses': set_ip_addresses,
 }
 
 
@@ -83,17 +83,18 @@ def execute_host_command(cmd_name):
     cmd = CMD_TO_ARGV.get(cmd_name, None)
     if cmd is None:
         logging.warning(
-            "Unable to perform host command %s: no such command!", cmd_name)
+            'Unable to perform host command %s: no such command!', cmd_name
+        )
     elif os.getenv('TESTING'):
         logging.warning(
-            "Would have executed %s but not doing so as TESTING is defined",
+            'Would have executed %s but not doing so as TESTING is defined',
             cmd,
         )
     elif cmd_name in [b'reboot', b'shutdown']:
-        logging.info("Executing host command %s", cmd_name)
+        logging.info('Executing host command %s', cmd_name)
         phandle = subprocess.run(cmd)
         logging.info(
-            "Host command %s (%s) returned %s",
+            'Host command %s (%s) returned %s',
             cmd_name,
             cmd,
             phandle.returncode,
@@ -110,18 +111,19 @@ def process_message(message):
     ):
         execute_host_command(message.get('data', b''))
     else:
-        logging.info("Received unsolicited message: %s", message)
+        logging.info('Received unsolicited message: %s', message)
 
 
 def subscriber_loop():
     # Connect to redis on localhost and wait for messages
-    logging.info("Connecting to redis...")
+    logging.info('Connecting to redis...')
     rdb = redis.Redis(**REDIS_ARGS)
     pubsub = rdb.pubsub(ignore_subscribe_messages=True)
     pubsub.subscribe(CHANNEL_NAME)
     rdb.set('host_agent_ready', 'true')
     logging.info(
-        "Subscribed to channel %s, ready to process messages", CHANNEL_NAME)
+        'Subscribed to channel %s, ready to process messages', CHANNEL_NAME
+    )
     for message in pubsub.listen():
         process_message(message)
 

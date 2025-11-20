@@ -22,10 +22,7 @@ class AssetListViewV1_2(APIView):
     serializer_class = AssetSerializer
 
     @extend_schema(
-        summary='List assets',
-        responses={
-            200: AssetSerializer(many=True)
-        }
+        summary='List assets', responses={200: AssetSerializer(many=True)}
     )
     @authorized
     def get(self, request):
@@ -36,15 +33,14 @@ class AssetListViewV1_2(APIView):
     @extend_schema(
         summary='Create asset',
         request=CreateAssetSerializerV1_2,
-        responses={
-            201: AssetSerializer
-        }
+        responses={201: AssetSerializer},
     )
     @authorized
     def post(self, request):
         try:
             serializer = CreateAssetSerializerV1_2(
-                data=request.data, unique_name=True)
+                data=request.data, unique_name=True
+            )
 
             if not serializer.is_valid():
                 raise AssetCreationError(serializer.errors)
@@ -79,13 +75,15 @@ class AssetViewV1_2(APIView, DeleteAssetViewMixin):
     def update(self, request, asset_id, partial=False):
         asset = Asset.objects.get(asset_id=asset_id)
         serializer = UpdateAssetSerializer(
-            asset, data=request.data, partial=partial)
+            asset, data=request.data, partial=partial
+        )
 
         if serializer.is_valid():
             serializer.save()
         else:
             return Response(
-                serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                serializer.errors, status=status.HTTP_400_BAD_REQUEST
+            )
 
         active_asset_ids = get_active_asset_ids()
 
@@ -107,9 +105,7 @@ class AssetViewV1_2(APIView, DeleteAssetViewMixin):
     @extend_schema(
         summary='Update asset',
         request=UpdateAssetSerializer,
-        responses={
-            200: AssetSerializer
-        }
+        responses={200: AssetSerializer},
     )
     @authorized
     def patch(self, request, asset_id):
@@ -118,9 +114,7 @@ class AssetViewV1_2(APIView, DeleteAssetViewMixin):
     @extend_schema(
         summary='Update asset',
         request=UpdateAssetSerializer,
-        responses={
-            200: AssetSerializer
-        }
+        responses={200: AssetSerializer},
     )
     @authorized
     def put(self, request, asset_id):

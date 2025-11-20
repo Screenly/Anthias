@@ -19,5 +19,5 @@ class AssetAdmin(admin.ModelAdmin):
         'is_active',
         'nocache',
         'play_order',
-        'skip_asset_check'
+        'skip_asset_check',
     )

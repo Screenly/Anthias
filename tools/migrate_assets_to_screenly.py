@@ -25,6 +25,7 @@ token = None
 # Utilities #
 #############
 
+
 def progress_bar(count, total, asset_name='', previous_asset_name=''):
     """
     This simple console progress bar
@@ -35,9 +36,8 @@ def progress_bar(count, total, asset_name='', previous_asset_name=''):
     # displayed, if the current asset name is shorter than the previous one.
     text = f'{asset_name}'.ljust(len(previous_asset_name))
 
-    progress_line = (
-        '#' * int(round(50 * count / float(total))) +
-        '-' * (50 - int(round(50 * count / float(total))))
+    progress_line = '#' * int(round(50 * count / float(total))) + '-' * (
+        50 - int(round(50 * count / float(total)))
     )
     percent = round(100.0 * count / float(total), 1)
     sys.stdout.write(f'[{progress_line}] {percent}% {text}\r')
@@ -52,6 +52,7 @@ def set_token(value):
 ############
 # Database #
 ############
+
 
 def get_assets_by_anthias_api():
     if click.confirm('Do you need authentication to access Anthias API?'):
@@ -70,6 +71,7 @@ def get_assets_by_anthias_api():
 # Requests #
 ############
 
+
 @retry
 def get_post_response(endpoint_url, **kwargs):
     return requests.post(endpoint_url, **kwargs)
@@ -80,23 +82,17 @@ def send_asset(asset):
     asset_uri = asset['uri']
     post_kwargs = {
         'data': {'title': asset['name']},
-        'headers': {
-            'Authorization': token,
-            'Prefer': 'return=representation'
-        }
+        'headers': {'Authorization': token, 'Prefer': 'return=representation'},
     }
 
     try:
         if asset['mimetype'] in ['image', 'video']:
             if asset_uri.startswith('/data'):
                 asset_uri = os.path.join(
-                    HOME, 'screenly_assets', os.path.basename(asset_uri))
+                    HOME, 'screenly_assets', os.path.basename(asset_uri)
+                )
 
-            post_kwargs.update({
-                'files': {
-                    'file': open(asset_uri, 'rb')
-                }
-            })
+            post_kwargs.update({'files': {'file': open(asset_uri, 'rb')}})
         else:
             post_kwargs['data'].update({'source_url': asset_uri})
     except FileNotFoundError as error:
@@ -115,9 +111,7 @@ def send_asset(asset):
 
 def check_validate_token(api_key):
     endpoint_url = f'{BASE_API_SCREENLY_URL}/api/v4/assets'
-    headers = {
-        'Authorization': f'Token {api_key}'
-    }
+    headers = {'Authorization': f'Token {api_key}'}
     response = requests.get(endpoint_url, headers=headers)
     if response.status_code == 200:
         return api_key
@@ -128,6 +122,7 @@ def check_validate_token(api_key):
 ########
 # Main #
 ########
+
 
 def start_migration():
     if click.confirm('Do you want to start assets migration?'):
@@ -154,7 +149,7 @@ def assets_migration():
             index + 1,
             assets_length,
             asset_name=shortened_asset_name,
-            previous_asset_name=previous_asset_name
+            previous_asset_name=previous_asset_name,
         )
         previous_asset_name = shortened_asset_name
 
@@ -185,7 +180,7 @@ def assets_migration():
         Your choice
         """
     ),
-    type=click.Choice(['1', '2'])
+    type=click.Choice(['1', '2']),
 )
 def main(method):
     try:
@@ -208,7 +203,8 @@ def main(method):
 
 
 if __name__ == '__main__':
-    click.secho(cleandoc("""
+    click.secho(
+        cleandoc("""
            d8888            888     888
           d88888            888     888       888
          d88P888            888     888
@@ -217,7 +213,9 @@ if __name__ == '__main__':
       d88P   888  888  888  888     888  888  888  .d888888  'Y8888b.
      d8888888888  888  888  Y88b.   888  888  888  888  888       X88
     d88P     888  888  888   Y888   888  888  888  'Y888888   88888P'
-    """), fg='cyan')
+    """),
+        fg='cyan',
+    )
 
     click.echo()
 

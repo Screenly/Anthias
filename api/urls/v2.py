@@ -33,7 +33,7 @@ def get_url_patterns():
         path(
             'v2/assets/<str:asset_id>',
             AssetViewV2.as_view(),
-            name='asset_detail_v2'
+            name='asset_detail_v2',
         ),
         path('v2/backup', BackupViewV2.as_view(), name='backup_v2'),
         path('v2/recover', RecoverViewV2.as_view(), name='recover_v2'),

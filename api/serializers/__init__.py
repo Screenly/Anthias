@@ -30,10 +30,10 @@ def get_unique_name(name):
 def validate_uri(uri):
     if uri.startswith('/'):
         if not path.isfile(uri):
-            raise Exception("Invalid file path. Failed to add asset.")
+            raise Exception('Invalid file path. Failed to add asset.')
     else:
         if not validate_url(uri):
-            raise Exception("Invalid URL. Failed to add asset.")
+            raise Exception('Invalid URL. Failed to add asset.')
 
 
 class AssetSerializer(ModelSerializer):
@@ -77,21 +77,27 @@ class UpdateAssetSerializer(Serializer):
     def update(self, instance, validated_data):
         instance.name = validated_data.get('name', instance.name)
         instance.start_date = validated_data.get(
-            'start_date', instance.start_date)
+            'start_date', instance.start_date
+        )
         instance.end_date = validated_data.get('end_date', instance.end_date)
         instance.is_enabled = validated_data.get(
-            'is_enabled', instance.is_enabled)
+            'is_enabled', instance.is_enabled
+        )
         instance.is_processing = validated_data.get(
-            'is_processing', instance.is_processing)
+            'is_processing', instance.is_processing
+        )
         instance.nocache = validated_data.get('nocache', instance.nocache)
         instance.play_order = validated_data.get(
-            'play_order', instance.play_order)
+            'play_order', instance.play_order
+        )
         instance.skip_asset_check = validated_data.get(
-            'skip_asset_check', instance.skip_asset_check)
+            'skip_asset_check', instance.skip_asset_check
+        )
 
         if 'video' not in instance.mimetype:
             instance.duration = validated_data.get(
-                'duration', instance.duration)
+                'duration', instance.duration
+            )
 
         instance.save()
 
