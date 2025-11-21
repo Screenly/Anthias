@@ -1,5 +1,5 @@
 future==1.0.0
-mock==3.0.5
+mock==5.2.0
 pep8==1.7.1
 selenium==4.36.0
 splinter==0.21.0
