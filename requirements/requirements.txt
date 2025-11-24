@@ -11,7 +11,7 @@ django-dbbackup==4.2.1
 drf-spectacular==0.29.0
 future==1.0.0
 gevent-websocket==0.10.1
-gevent==25.8.2
+gevent==25.9.1
 gunicorn==23.0.0
 hurry.filesize==0.9
 importlib-metadata==4.13.0
