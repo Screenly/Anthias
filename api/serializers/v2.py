@@ -85,6 +85,7 @@ class DeviceSettingsSerializerV2(Serializer):
     shuffle_playlist = BooleanField()
     use_24_hour_clock = BooleanField()
     debug_logging = BooleanField()
+    rotate_display = IntegerField()
     username = CharField()
 
 
@@ -99,6 +100,7 @@ class UpdateDeviceSettingsSerializerV2(Serializer):
     shuffle_playlist = BooleanField(required=False)
     use_24_hour_clock = BooleanField(required=False)
     debug_logging = BooleanField(required=False)
+    rotate_display = IntegerField(required=False)
     username = CharField(required=False, allow_blank=True)
     password = CharField(required=False, allow_blank=True)
     password_2 = CharField(required=False, allow_blank=True)

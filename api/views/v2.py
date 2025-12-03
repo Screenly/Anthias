@@ -218,6 +218,7 @@ class DeviceSettingsViewV2(APIView):
                 'shuffle_playlist': settings['shuffle_playlist'],
                 'use_24_hour_clock': settings['use_24_hour_clock'],
                 'debug_logging': settings['debug_logging'],
+                'rotate_display': int(settings['rotate_display']),
                 'username': (
                     settings['user']
                     if settings['auth_backend'] == 'auth_basic'
@@ -354,6 +355,8 @@ class DeviceSettingsViewV2(APIView):
                 settings['use_24_hour_clock'] = data['use_24_hour_clock']
             if 'debug_logging' in data:
                 settings['debug_logging'] = data['debug_logging']
+            if 'rotate_display' in data:
+                settings['rotate_display'] = data['rotate_display']
 
             settings.save()
             publisher = ZmqPublisher.get_instance()
