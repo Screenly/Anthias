@@ -5,7 +5,7 @@ cffi==2.0.0
 configparser==7.2.0
 cryptography==3.3.2
 Cython==3.1.4
-Django==4.2.26
+Django==4.2.27
 djangorestframework==3.16.1
 django-dbbackup==4.2.1
 drf-spectacular==0.29.0
