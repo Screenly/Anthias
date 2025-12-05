@@ -3,5 +3,5 @@ future==1.0.0
 gevent-websocket==0.10.1
 gevent==25.9.1
 Jinja2==3.1.6
-pytz==2022.2.1
+pytz==2025.2
 pyzmq==23.2.1
