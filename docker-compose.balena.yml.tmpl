@@ -44,6 +44,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     privileged: true
+    devices:
+      - "/dev/dri:/dev/dri"
     restart: always
     shm_size: ${SHM_SIZE}
     volumes:
