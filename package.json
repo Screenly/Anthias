@@ -52,7 +52,7 @@
     "mini-css-extract-plugin": "^2.9.4",
     "msw": "^2.12.4",
     "prettier": "3.7.4",
-    "sass": "^1.95.0",
+    "sass": "^1.95.1",
     "sass-loader": "^16.0.6",
     "ts-jest": "^29.4.6",
     "ts-loader": "^9.5.4",
