@@ -25,7 +25,7 @@ pyasn1==0.6.1
 pydbus==0.6.0
 pyOpenSSL==19.1.0
 python-dateutil==2.9.0.post0
-pytz==2022.2.1
+pytz==2025.2
 PyYAML==6.0.2
 pyzmq==23.2.1
 redis==3.5.3
