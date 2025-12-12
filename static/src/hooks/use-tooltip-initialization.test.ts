@@ -34,8 +34,8 @@ describe('useTooltipInitialization', () => {
   })
 
   afterEach(() => {
-    document.body.removeChild(activeSection)
-    document.body.removeChild(inactiveSection)
+    activeSection.remove()
+    inactiveSection.remove()
     jest.clearAllMocks()
   })
 
