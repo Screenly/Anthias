@@ -7,6 +7,7 @@ export const useTooltipInitialization = (
 ) => {
   useEffect(() => {
     const tooltipElements: Tooltip[] = []
+    let debounceTimer: NodeJS.Timeout | null = null
 
     const initializeTooltips = () => {
       tooltipElements.forEach((tooltip) => tooltip.dispose())
@@ -29,9 +30,16 @@ export const useTooltipInitialization = (
 
     initializeTooltips()
 
-    const observer = new MutationObserver(() => {
-      initializeTooltips()
-    })
+    const handleMutation = () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
+      }
+      debounceTimer = setTimeout(() => {
+        initializeTooltips()
+      }, 300)
+    }
+
+    const observer = new MutationObserver(handleMutation)
 
     const activeSection = document.getElementById('active-assets-section')
     const inactiveSection = document.getElementById('inactive-assets-section')
@@ -45,6 +53,9 @@ export const useTooltipInitialization = (
 
     return () => {
       observer.disconnect()
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
+      }
       tooltipElements.forEach((tooltip) => tooltip.dispose())
     }
   }, [activeAssetsCount, inactiveAssetsCount])
