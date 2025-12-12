@@ -10,7 +10,7 @@
 export const getMimetype = (filename: string): string => {
   const viduris = ['rtsp', 'rtmp']
   const mimetypes = [
-    [['jpe', 'jpg', 'jpeg', 'png', 'pnm', 'gif', 'bmp'], 'image'],
+    [['jpe', 'jpg', 'jpeg', 'png', 'pnm', 'gif', 'bmp', 'webp'], 'image'],
     [['avi', 'mkv', 'mov', 'mpg', 'mpeg', 'mp4', 'ts', 'flv'], 'video'],
   ]
   const domains = [[['www.youtube.com', 'youtu.be'], 'youtube_asset']]

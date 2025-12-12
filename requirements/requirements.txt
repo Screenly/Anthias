@@ -5,13 +5,13 @@ cffi==2.0.0
 configparser==7.2.0
 cryptography==3.3.2
 Cython==3.1.4
-Django==4.2.26
+Django==4.2.27
 djangorestframework==3.16.1
 django-dbbackup==4.2.1
 drf-spectacular==0.29.0
 future==1.0.0
 gevent-websocket==0.10.1
-gevent==25.8.2
+gevent==25.9.1
 gunicorn==23.0.0
 hurry.filesize==0.9
 importlib-metadata==4.13.0
@@ -25,7 +25,7 @@ pyasn1==0.6.1
 pydbus==0.6.0
 pyOpenSSL==19.1.0
 python-dateutil==2.9.0.post0
-pytz==2022.2.1
+pytz==2025.2
 PyYAML==6.0.2
 pyzmq==23.2.1
 redis==3.5.3
@@ -33,6 +33,6 @@ requests[security]==2.32.3
 tenacity==9.0.0
 sh==1.8
 six==1.17.0
-urllib3==2.5.0
+urllib3==2.6.0
 wheel==0.38.1
 yt-dlp==2025.10.22

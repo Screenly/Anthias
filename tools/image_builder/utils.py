@@ -231,6 +231,7 @@ def get_viewer_context(board: str) -> dict:
             [
                 'qt6-base-dev',
                 'qt6-webengine-dev',
+                'qt6-image-formats-plugins',
             ]
         )
 
@@ -241,6 +242,7 @@ def get_viewer_context(board: str) -> dict:
                 'libgst-dev',
                 'libsqlite0-dev',
                 'libsrtp0-dev',
+                'qt5-image-formats-plugins',
             ]
         )
 
