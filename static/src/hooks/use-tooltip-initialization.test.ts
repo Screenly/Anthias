@@ -90,7 +90,7 @@ describe('useTooltipInitialization', () => {
         }
       },
     )
-    global.MutationObserver =
+    globalThis.MutationObserver =
       mockMutationObserver as unknown as typeof MutationObserver
 
     renderHook(() => useTooltipInitialization(1, 0))
