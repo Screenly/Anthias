@@ -35,6 +35,7 @@ export const fetchSettings = createAsyncThunk(
         shufflePlaylist: data.shuffle_playlist || false,
         use24HourClock: data.use_24_hour_clock || false,
         debugLogging: data.debug_logging || false,
+        rotateDisplay: data.rotate_display || 0,
       }
     } catch (error) {
       return rejectWithValue((error as Error).message)
@@ -76,6 +77,7 @@ export const updateSettings = createAsyncThunk(
           shuffle_playlist: settings.shufflePlaylist,
           use_24_hour_clock: settings.use24HourClock,
           debug_logging: settings.debugLogging,
+          rotate_display: settings.rotateDisplay,
         }),
       })
 
@@ -176,6 +178,7 @@ const initialState = {
     shufflePlaylist: false,
     use24HourClock: false,
     debugLogging: false,
+    rotateDisplay: 0,
   },
   deviceModel: '',
   prevAuthBackend: '',
