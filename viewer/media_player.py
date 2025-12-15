@@ -36,9 +36,34 @@ class FFMPEGMediaPlayer(MediaPlayer):
     def set_asset(self, uri, duration):
         self.uri = uri
 
+    def __get_rotation_filter(self):
+        rotation = settings.get('rotate_display', 0)
+        rotation_angles = {
+            0: '',
+            90: 'transpose=1',
+            180: 'hflip,vflip',
+            270: 'transpose=2',
+        }
+        return rotation_angles.get(rotation, '')
+
     def play(self):
+        rotation_filter = self.__get_rotation_filter()
+        filters = []
+        if rotation_filter:
+            filters.append(rotation_filter)
+
+        vf_arg = ','.join(filters) if filters else None
+
+        cmd = [
+            'ffplay',
+            '-autoexit',
+        ]
+        if vf_arg:
+            cmd.extend(['-vf', vf_arg])
+        cmd.append(self.uri)
+
         self.process = subprocess.Popen(
-            ['ffplay', '-autoexit', self.uri],
+            cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -82,8 +107,18 @@ class VLCMediaPlayer(MediaPlayer):
                 return 'default:CARD=HID'
 
     def __get_options(self):
+        rotation = settings.get('rotate_display', 0)
+        rotation_angles = {
+            0: 0,
+            1: 90,
+            2: 180,
+            3: 270,
+        }
+        angle = rotation_angles.get(rotation, 0)
+
         return [
             f'--alsa-audio-device={self.get_alsa_audio_device()}',
+            f'--video-filter=rotate{{angle={angle}}}',
         ]
 
     def set_asset(self, uri, duration):

@@ -31,6 +31,7 @@ class DeviceSettingsViewV2Test(TestCase):
             'shuffle_playlist': False,
             'use_24_hour_clock': True,
             'debug_logging': False,
+            'rotate_display': 0,
             'user': '',
         }[key]
 
@@ -246,6 +247,7 @@ class DeviceSettingsViewV2Test(TestCase):
             'shuffle_playlist': False,
             'use_24_hour_clock': True,
             'debug_logging': False,
+            'rotate_display': 0,
         }[key]
         settings_mock.__setitem__ = mock.MagicMock()
         settings_mock.auth_backends = {

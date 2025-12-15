@@ -37,6 +37,7 @@ DEFAULTS = {
         'default_streaming_duration': '300',
         'player_name': '',
         'resolution': '1920x1080',
+        'rotate_display': 0,
         'show_splash': True,
         'shuffle_playlist': False,
         'verify_ssl': True,

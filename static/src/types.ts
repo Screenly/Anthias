@@ -117,6 +117,7 @@ export interface RootState {
       shufflePlaylist: boolean
       use24HourClock: boolean
       debugLogging: boolean
+      rotateDisplay: number
     }
     deviceModel: string
     prevAuthBackend: string
@@ -174,6 +175,7 @@ export interface SettingsData {
   shufflePlaylist: boolean
   use24HourClock: boolean
   debugLogging: boolean
+  rotateDisplay: number
 }
 
 export interface SystemOperationParams {
