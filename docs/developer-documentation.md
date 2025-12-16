@@ -43,7 +43,7 @@ $ ./bin/start_development_server.sh
 
 > [!NOTE]
 > Running the script will install Python 3.11, [pyenv](https://github.com/pyenv/pyenv),
-> and [Poetry](https://python-poetry.org/) inside a Docker container on your machine.
+> and [uv](https://docs.astral.sh/uv/) inside a Docker container on your machine.
 > This is to ensure that the development environment is consistent across different
 > machines.
 >
@@ -91,7 +91,7 @@ and login with the credentials you just created.
 Build and start the containers.
 
 ```bash
-$ poetry run python -m tools.image_builder \
+$ uv run python -m tools.image_builder \
   --dockerfiles-only \
   --disable-cache-mounts \
   --service celery \
@@ -184,23 +184,24 @@ $ act -W .github/workflows/python-lint.yaml
 The command above will run the linter on the all the Python files in the repository. If you want to run the linter
 on a specific file, you can try the commands in the next section.
 
-### Running the linter using Poetry
+### Running the linter using `uv`
 
-You have to install Poetry first. You can find the installation instructions
-[here](https://python-poetry.org/docs/#installing-with-the-official-installer).
+You have to install `uv` first. You can find the installation instructions
+[here](https://docs.astral.sh/uv/getting-started/installation/).
 
-After installing Poetry, run the following commands:
+After installing uv, run the following commands:
 
 ```bash
 # Install the dependencies
-$ poetry install --only=dev-host
-$ poetry run ruff check .
+$ uv venv
+$ uv pip install --group dev-host
+$ uv run ruff check .
 ```
 
 To run the linter on a specific file, run the following command:
 
 ```bash
-$ poetry run ruff check /path/to/file.py
+$ uv run ruff check /path/to/file.py
 ```
 
 

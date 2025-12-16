@@ -6,7 +6,7 @@ on:
       - master
     paths:
       - 'package-lock.json'
-      - 'poetry.lock'
+      - 'uv.lock'
 
 jobs:
   run-tests:
@@ -56,7 +56,7 @@ jobs:
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 'Vhc4zm8pdV'
-          SBOM_FILE: 'poetry.lock'
+          SBOM_FILE: 'uv.lock'
           AUGMENT: true
           UPLOAD: true
           OUTPUT_FILE: python.cdx.json
