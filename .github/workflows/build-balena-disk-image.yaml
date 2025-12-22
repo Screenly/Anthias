@@ -11,16 +11,29 @@ on:
         required: false
         type: string
         default: 'master'
+      docker-tag:
+        description: 'Docker tag to be used for the release'
+        required: true
+        type: string
 
 jobs:
+  create-docker-tag-file:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Create docker tag file
+        run: |
+          echo ${{ inputs.docker-tag }} > docker-tag
+      - name: Upload docker tag file
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-tag
+          path: docker-tag
+
   generate-openapi-schema:
     uses: ./.github/workflows/generate-openapi-schema.yml
     permissions:
       contents: write
-    with:
-      release: true
-      tag: ${{ inputs.tag }}
-      commit: ${{ inputs.commit }}
+
   balena-build-images:
     strategy:
       matrix:
@@ -32,7 +45,25 @@ jobs:
       attestations: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+
+      - name: Install zstd
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.21.0'
+
+      - name: Install balena CLI
+        run: npm install -g balena-cli@22.4.15
+
+      - name: Login to balena
+        env:
+          BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
+        run: balena login --token "$BALENA_TOKEN"
 
       - name: Get base board
         run: |
@@ -48,47 +79,33 @@ jobs:
             echo "BALENA_IMAGE=raspberrypi5" >> "$GITHUB_ENV"
           fi
 
-      - name: balena CLI Action - download
-        uses: balena-labs-research/community-cli-action@1.0.0
-        with:
-          balena_token: ${{secrets.BALENA_TOKEN}}
-          balena_cli_commands: |
-            os download "$BALENA_IMAGE" \
-              --output "$BALENA_IMAGE.img" \
-              --version default
-          balena_cli_version: 18.1.2
+      - name: Download OS image
+        run: |
+          balena os download "$BALENA_IMAGE" \
+            --output "$BALENA_IMAGE.img" \
+            --version default
 
-      - name: balena CLI Action - preload
-        uses: balena-labs-research/community-cli-action@1.0.0
-        with:
-          balena_token: ${{secrets.BALENA_TOKEN}}
-          balena_cli_commands: |
-            preload \
-              "$BALENA_IMAGE.img" \
-              --fleet screenly_ose/anthias-${{ matrix.board }} \
-              --pin-device-to-release \
-              --splash-image ansible/roles/splashscreen/files/splashscreen.png \
-              --commit latest
-          balena_cli_version: 18.1.2
+      - name: Preload OS image
+        run: |
+          balena preload \
+            "$BALENA_IMAGE.img" \
+            --fleet screenly_ose/anthias-${{ matrix.board }} \
+            --pin-device-to-release \
+            --splash-image ansible/roles/splashscreen/files/splashscreen.png \
+            --commit latest
 
-      - name: balena CLI Action - configure
-        uses: balena-labs-research/community-cli-action@1.0.0
-        with:
-          balena_token: ${{secrets.BALENA_TOKEN}}
-          balena_cli_commands: |
-            os configure \
-              "$BALENA_IMAGE.img" \
-              --config-network=ethernet  \
-              --fleet screenly_ose/anthias-${{ matrix.board }}
-          balena_cli_version: 18.1.2
+      - name: Configure OS image
+        run: |
+          balena os configure \
+            "$BALENA_IMAGE.img" \
+            --config-network=ethernet \
+            --fleet screenly_ose/anthias-${{ matrix.board }}
 
       - name: Package up image
         run: |
           sha256sum "$BALENA_IMAGE.img" >> "$(date -I)-$BALENA_IMAGE.sha256"
-          zip -9 \
-            "$(date -I)-$BALENA_IMAGE.zip" \
-            "$BALENA_IMAGE.img"
-          sha256sum "$(date -I)-$BALENA_IMAGE.zip" >> \
+          zstd -19 -T0 "$BALENA_IMAGE.img" -o "$(date -I)-$BALENA_IMAGE.img.zst"
+          sha256sum "$(date -I)-$BALENA_IMAGE.img.zst" >> \
             "$(date -I)-$BALENA_IMAGE.sha256"
 
           # Build Raspberry Pi Imager metadata
@@ -96,8 +113,8 @@ jobs:
             --arg BOARD "${{ matrix.board }}" \
             --arg IMAGE_SHA256 "$(sha256sum "$BALENA_IMAGE.img" | cut -d ' ' -f 1)" \
             --arg IMAGE_SIZE "$(wc -c < "$BALENA_IMAGE.img" | xargs)" \
-            --arg DOWNLOAD_SHA256 "$(sha256sum "$(date -I)-$BALENA_IMAGE.zip" | cut -d ' ' -f 1)" \
-            --arg DOWNLOAD_SIZE "$(wc -c < "$(date -I)-$BALENA_IMAGE.zip" | xargs)" \
+            --arg DOWNLOAD_SHA256 "$(sha256sum "$(date -I)-$BALENA_IMAGE.img.zst" | cut -d ' ' -f 1)" \
+            --arg DOWNLOAD_SIZE "$(wc -c < "$(date -I)-$BALENA_IMAGE.img.zst" | xargs)" \
             --arg RELEASE_DATE "$(date -I)" \
             '{
               "name": ("Anthias (" + $BOARD + ")"),
@@ -111,15 +128,58 @@ jobs:
               "release_date": $RELEASE_DATE
             }' > "$(date -I)-$BALENA_IMAGE.json"
 
-      - uses: ncipollo/release-action@v1.11.2
+      - name: List files before upload
+        run: |
+          echo "Current directory contents:"
+          ls -la
+          echo "Files matching pattern:"
+          ls -la ./*raspberry*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          allowUpdates: true
-          prerelease: true
-          artifacts: "*raspberry*.zip,*raspberry*.sha256,*raspberry*.json"
-          tag: ${{ inputs.tag }}
-          commit: ${{ inputs.commit }}
+          name: balena-images-${{ matrix.board }}
+          path: |
+            ./*raspberry*.img.zst
+            ./*raspberry*.sha256
+            ./*raspberry*.json
 
       - name: Attest
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v3
         with:
-          subject-path: '${{ github.workspace }}/*raspberry*.zip'
+          subject-path: '${{ github.workspace }}/*raspberry*.img.zst'
+
+  create-release:
+    needs: [create-docker-tag-file, generate-openapi-schema, balena-build-images]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download docker tag
+        uses: actions/download-artifact@v5
+        with:
+          name: docker-tag
+          path: .
+
+      - name: Download OpenAPI schema
+        uses: actions/download-artifact@v5
+        with:
+          name: anthias-api-schema
+          path: .
+
+      - name: Download balena images
+        uses: actions/download-artifact@v5
+        with:
+          pattern: balena-images-*
+          path: .
+          merge-multiple: true
+
+      - name: Create release
+        uses: ncipollo/release-action@v1.20.0
+        with:
+          allowUpdates: true
+          generateReleaseNotes: true
+          prerelease: true
+          artifacts: "docker-tag,*raspberry*.img.zst,*raspberry*.sha256,*raspberry*.json,anthias-api-schema.json"
+          tag: ${{ inputs.tag }}
+          commit: ${{ inputs.commit }}

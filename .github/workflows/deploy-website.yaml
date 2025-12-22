@@ -28,17 +28,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - run: pip install requests==2.32.3
 
       - name: Build website
         run: |
           cd website
           mkdir -p _site
 
-          # Copy in static files. This is to be migrated to Hugo later.
+          # Build Raspberry Pi Imager JSON
+          python ../raspberry_pi_imager/bin/build-pi-imager-json.py > _site/rpi-imager.json
+
+          # Make sure it's valid
+          jq . < _site/rpi-imager.json
+
+          # Copy in static files.
           cp -rf assets _site/
           cp index.html _site/
 
@@ -46,7 +59,7 @@ jobs:
           find _site
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: website/_site
 

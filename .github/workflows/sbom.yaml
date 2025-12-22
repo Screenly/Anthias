@@ -6,7 +6,7 @@ on:
       - master
     paths:
       - 'package-lock.json'
-      - 'poetry.lock'
+      - 'uv.lock'
 
 jobs:
   run-tests:
@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Build and upload SBOM
         uses: sbomify/github-action@master
@@ -35,7 +35,7 @@ jobs:
           OUTPUT_FILE: js.cdx.json
 
       - name: Attest
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: '${{ github.workspace }}/*.cdx.json'
 
@@ -49,19 +49,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Build and upload SBOM
         uses: sbomify/github-action@master
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 'Vhc4zm8pdV'
-          SBOM_FILE: 'poetry.lock'
+          SBOM_FILE: 'uv.lock'
           AUGMENT: true
           UPLOAD: true
           OUTPUT_FILE: python.cdx.json
 
       - name: Attest
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: '${{ github.workspace }}/*.cdx.json'

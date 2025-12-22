@@ -30,7 +30,7 @@ $ docker run -itd \
 You should now be able to invoke a run executing the following command:
 
 ```bash
-$ docker exec -it qt-builder-instance /webview/build_qt5.sh
+$ docker exec -it qt-builder-instance /webview/build_webview_with_qt5.sh
 ```
 
 This will start the process of building QT for *all* Raspberry Pi boards if you don't specify a `TARGET` environment variable.
@@ -56,17 +56,19 @@ You can append the following environment variables to configure the build proces
 ### Building for x86
 
 ```bash
-$ cd webview
-$ docker compose -f docker-compose.x86.yml up -d --build
-$ docker compose -f docker-compose.x86.yml exec builder /webview/build_x86.sh
+$ cd webview/
+$ export GIT_HASH=$(git rev-parse --short HEAD)
+$ export COMPOSE_PROFILES=x86
+$ docker compose up -d --build
+$ docker compose exec builder-x86 /scripts/build_webview.sh
 ```
 
-The resulting files will be placed in `~/tmp-x86/qt-build/release`.
+The resulting files will be placed in `~/tmp-x86/build/release`.
 
 When you're done, you can stop and remove the container with the following commands:
 
 ```bash
-docker compose -f docker-compose.x86.yml down
+$ docker compose down
 ```
 
 ### Building for Raspberry Pi 4 and Raspberry Pi 5 Devices Running 64-Bit OS
@@ -100,3 +102,34 @@ Supported protocols: `http://`, `https://`
 > ```bash
 > export QT_LOGGING_RULES=qt.qpa.*=true
 > ```
+
+## Creating a Release
+
+Make sure that you are current in the `master` branch.
+
+```bash
+git checkout master
+```
+
+Create a new tag for the release.
+
+```bash
+git tag -a WebView-vX.Y.Z -m "[tag message]"
+```
+
+> [!IMPORTANT]
+> The tag name must start with `WebView-v` and the version must follow the semantic versioning format.
+
+Push the tag to the remote repository.
+
+```bash
+git push origin WebView-vX.Y.Z
+```
+
+If you're using a forked repository, you need to push the tag to the upstream repository.
+
+```bash
+git push upstream WebView-vX.Y.Z
+```
+
+Pushing this tag will trigger the [build-webview](https://github.com/Screenly/Anthias/actions/workflows/build-webview.yaml) workflow.

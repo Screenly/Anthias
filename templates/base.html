@@ -1,47 +1,37 @@
+{% load static %}
+
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    {% include "head.html" %}
-
-    {% block head %}
-    {% endblock %}
+  <meta charset="UTF-8">
+  <link href="{% static 'dist/css/anthias.css' %}" type="text/css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css?family=Plus Jakarta Sans" rel="stylesheet">
+  <link href="/static/favicons/apple-touch-icon-57x57.png" rel="apple-touch-icon-precomposed" sizes="57x57"/>
+  <link href="/static/favicons/apple-touch-icon-114x114.png" rel="apple-touch-icon-precomposed" sizes="114x114"/>
+  <link href="/static/favicons/apple-touch-icon-72x72.png" rel="apple-touch-icon-precomposed" sizes="72x72"/>
+  <link href="/static/favicons/apple-touch-icon-144x144.png" rel="apple-touch-icon-precomposed" sizes="144x144"/>
+  <link href="/static/favicons/apple-touch-icon-60x60.png" rel="apple-touch-icon-precomposed" sizes="60x60"/>
+  <link href="/static/favicons/apple-touch-icon-120x120.png" rel="apple-touch-icon-precomposed" sizes="120x120"/>
+  <link href="/static/favicons/apple-touch-icon-76x76.png" rel="apple-touch-icon-precomposed" sizes="76x76"/>
+  <link href="/static/favicons/apple-touch-icon-152x152.png" rel="apple-touch-icon-precomposed" sizes="152x152"/>
+  <link href="/static/favicons/favicon-196x196.png" rel="icon" sizes="196x196" type="image/png"/>
+  <link href="/static/favicons/favicon-96x96.png" rel="icon" sizes="96x96" type="image/png"/>
+  <link href="/static/favicons/favicon-32x32.png" rel="icon" sizes="32x32" type="image/png"/>
+  <link href="/static/favicons/favicon-16x16.png" rel="icon" sizes="16x16" type="image/png"/>
+  <link href="/static/favicons/favicon-128.png" rel="icon" sizes="128x128" type="image/png"/>
+  <link rel="icon" href="/static/favicons/favicon.ico">
+  <meta content="anthias;" name="application-name"/>
+  <meta content="#FFFFFF" name="msapplication-TileColor"/>
+  <meta content="/static/favicons/mstile-144x144.png" name="msapplication-TileImage"/>
+  <meta content="/static/favicons/mstile-70x70.png" name="msapplication-square70x70logo"/>
+  <meta content="/static/favicons/mstile-150x150.png" name="msapplication-square150x150logo"/>
+  <meta content="/static/favicons/mstile-310x150.png" name="msapplication-wide310x150logo"/>
+  <meta content="/static/favicons/mstile-310x310.png" name="msapplication-square310x310logo"/>
+  <title>{% block title %}{% endblock %}</title>
+  {% block extra_head %}{% endblock %}
 </head>
-
 <body>
-
-{% include 'header.html' %}
-
-{% block content %}
-{% endblock %}
-
-<div class="container mt-4">
-    <div class="row">
-        <div class="col-6 small text-white">
-            <span>Want to get more out of your digital signage?
-              <a class="brand"
-                 href="https://www.screenly.io/?utm_source=Anthias&amp;utm_medium=root-page&amp;utm_campaign=UI"
-                 target="_blank">
-                <strong>Try Screenly</strong>.
-              </a></span>
-        </div>
-        <div class="col-6 text-right small">
-            <span>
-              <a href="javascript://" id="subsribe-form-container" data-html="true" data-trigger="focus"
-                 data-placement="top">
-                <strong>Get the latest Screenly news directly in your mailbox.</strong>
-              </a>
-            </span>
-        </div>
-    </div>
-</div>
-
-{% include 'footer.html' %}
-
-<script type="text/javascript">
-    $(".navbar .nav li a").removeClass('active');
-    $(".navbar .nav li a[href='" + window.location.pathname + "']").addClass('active');
-</script>
-
+  {% block content %}{% endblock %}
+  {% block scripts %}{% endblock %}
 </body>
-
 </html>

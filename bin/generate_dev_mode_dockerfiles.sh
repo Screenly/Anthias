@@ -18,8 +18,9 @@ docker run \
     --rm \
     --name="$BUILDER_CONTAINER_NAME" \
     -v "$(pwd):/app" \
+    -v "${BUILDER_IMAGE_NAME}-venv:/app/.venv" \
     "$BUILDER_IMAGE_NAME" \
-    poetry run python -m tools.image_builder \
+    uv run python -m tools.image_builder \
         --environment="$ENVIRONMENT" \
         --dockerfiles-only \
         --disable-cache-mounts \

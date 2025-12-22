@@ -1,18 +1,22 @@
-name: Run JavaScript and CoffeeScript Linter
+name: Run JavaScript Linter and Formatter
 
 on:
   push:
     branches: [ master ]
     paths:
       - '**/*.js'
-      - '**/*.coffee'
+      - '**/*.jsx'
+      - '**/*.ts'
+      - '**/*.tsx'
       - '**/*.mjs'
       - '.github/workflows/javascript-lint.yaml'
   pull_request:
     branches: [ master ]
     paths:
       - '**/*.js'
-      - '**/*.coffee'
+      - '**/*.jsx'
+      - '**/*.ts'
+      - '**/*.tsx'
       - '**/*.mjs'
       - '.github/workflows/javascript-lint.yaml'
 
@@ -20,10 +24,10 @@ jobs:
   lint:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: 'npm'
@@ -32,4 +36,7 @@ jobs:
         run: npm ci
 
       - name: Run ESLint
-        run: npm run lint
+        run: npm run lint:check
+
+      - name: Run Prettier
+        run: npm run format:check

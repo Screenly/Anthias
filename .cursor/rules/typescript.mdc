@@ -1,0 +1,17 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+- Anthias uses TypeScript and React for the front-end framework.
+- We use Prettier for formatting and ESLint for linting. Check `README.md` for docs
+on how to run them.
+- Make sure that generated code conforms to the project's coding standards.
+- Reorganize imports to follow the project's coding standards. Order imports
+  alphabetically and group imports by type. Imports must be declared in the
+  following order:
+  - Built-in imports
+  - Third-party imports
+  - Imports from other files in the project
+- Separate import groups with blank lines.
+- Do not use `any` or `unknown` for types.

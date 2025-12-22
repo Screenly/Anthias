@@ -1,0 +1,13 @@
+{% if board in ['pi1', 'pi2'] %}
+RUN apt-get update && \
+    apt-get -y install \
+        nodejs \
+        npm
+{% else %}
+RUN apt-get update && \
+    apt-get -y install \
+        curl \
+        ca-certificates && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get -y install nodejs
+{% endif %}

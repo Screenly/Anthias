@@ -1,5 +1,5 @@
 # vim: ft=requirements
 
 click==8.1.7
-requests==2.32.3
+requests==2.32.5
 tenacity==8.4.1

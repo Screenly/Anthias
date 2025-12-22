@@ -52,6 +52,7 @@ def fake_settings(raw):
 
     try:
         import settings
+
         yield (settings, settings.settings)
         del sys.modules['settings']
     finally:
@@ -79,29 +80,34 @@ class SettingsTest(TestCase):
 
     def test_parse_settings(self):
         with fake_settings(settings1) as (mod_settings, settings):
-            self.assertEquals(settings['player_name'], 'new player')
-            self.assertEquals(settings['show_splash'], False)
-            self.assertEquals(settings['shuffle_playlist'], True)
-            self.assertEquals(settings['debug_logging'], True)
-            self.assertEquals(settings['default_duration'], 45)
+            self.assertEqual(settings['player_name'], 'new player')
+            self.assertEqual(settings['show_splash'], False)
+            self.assertEqual(settings['shuffle_playlist'], True)
+            self.assertEqual(settings['debug_logging'], True)
+            self.assertEqual(settings['default_duration'], 45)
 
     def test_default_settings(self):
         with fake_settings(empty_settings) as (mod_settings, settings):
-            self.assertEquals(
+            self.assertEqual(
                 settings['player_name'],
-                mod_settings.DEFAULTS['viewer']['player_name'])
-            self.assertEquals(
+                mod_settings.DEFAULTS['viewer']['player_name'],
+            )
+            self.assertEqual(
                 settings['show_splash'],
-                mod_settings.DEFAULTS['viewer']['show_splash'])
-            self.assertEquals(
+                mod_settings.DEFAULTS['viewer']['show_splash'],
+            )
+            self.assertEqual(
                 settings['shuffle_playlist'],
-                mod_settings.DEFAULTS['viewer']['shuffle_playlist'])
-            self.assertEquals(
+                mod_settings.DEFAULTS['viewer']['shuffle_playlist'],
+            )
+            self.assertEqual(
                 settings['debug_logging'],
-                mod_settings.DEFAULTS['viewer']['debug_logging'])
-            self.assertEquals(
+                mod_settings.DEFAULTS['viewer']['debug_logging'],
+            )
+            self.assertEqual(
                 settings['default_duration'],
-                mod_settings.DEFAULTS['viewer']['default_duration'])
+                mod_settings.DEFAULTS['viewer']['default_duration'],
+            )
 
     def broken_settings_should_raise_value_error(self):
         with self.assertRaises(ValueError):

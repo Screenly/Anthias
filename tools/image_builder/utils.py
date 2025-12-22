@@ -24,6 +24,12 @@ def get_build_parameters(build_target: str) -> dict:
             'base_image': 'balenalib/raspberrypi3-debian',
             'target_platform': 'linux/arm/v8',
         }
+    elif build_target == 'pi4-64':
+        return {
+            'board': 'pi4',
+            'base_image': 'balenalib/raspberrypi3-debian',
+            'target_platform': 'linux/arm64/v8',
+        }
     elif build_target == 'pi3':
         return {
             'board': 'pi3',
@@ -90,8 +96,6 @@ def get_test_context() -> dict:
             'libcups2',
             'libxcomposite1',
             'libxdamage1',
-            'nodejs',
-            'npm',
         ],
         'chrome_dl_url': chrome_dl_url,
         'chromedriver_dl_url': chromedriver_dl_url,
@@ -99,21 +103,14 @@ def get_test_context() -> dict:
 
 
 def get_viewer_context(board: str) -> dict:
-    webview_git_hash = (
-        '389f1ccc' if board == 'pi5'
-        else '5e556681738a1fa918dc9f0bf5879ace2e603e12'
-    )
     releases_url = f'{GITHUB_REPO_URL}/releases/download'
-    webview_base_url = (
-        f'{releases_url}/WebView-v0.3.4' if board == 'pi5'
-        else f'{releases_url}/WebView-v0.3.3'
-    )
+
+    webview_git_hash = 'd7a7e2c'
+    webview_base_url = f'{releases_url}/WebView-v0.3.12'
 
     qt_version = '5.15.14'
 
-    if board == 'x86':
-        qt_version = '6.6.3'
-    elif board == 'pi5':
+    if board in ['pi5', 'x86']:
         qt_version = '6.4.2'
     else:
         qt_version = '5.15.14'
@@ -229,19 +226,25 @@ def get_viewer_context(board: str) -> dict:
         'libswscale-dev',
     ]
 
-    if board == 'pi5':
-        apt_dependencies.extend([
-            'qt6-base-dev',
-            'qt6-webengine-dev',
-        ])
+    if board in ['pi5', 'x86']:
+        apt_dependencies.extend(
+            [
+                'qt6-base-dev',
+                'qt6-webengine-dev',
+                'qt6-image-formats-plugins',
+            ]
+        )
 
     if board not in ['x86', 'pi5']:
-        apt_dependencies.extend([
-            'libraspberrypi0',
-            'libgst-dev',
-            'libsqlite0-dev',
-            'libsrtp0-dev',
-        ])
+        apt_dependencies.extend(
+            [
+                'libraspberrypi0',
+                'libgst-dev',
+                'libsqlite0-dev',
+                'libsrtp0-dev',
+                'qt5-image-formats-plugins',
+            ]
+        )
 
         if board != 'pi1':
             apt_dependencies.extend(['libssl1.1'])
@@ -272,29 +275,25 @@ def get_wifi_connect_context(target_platform: str) -> dict:
         return {}
 
     wc_download_url = (
-        'https://api.github.com/repos/balena-os/wifi-connect/'
-        'releases/93025295'
+        'https://api.github.com/repos/balena-os/wifi-connect/releases/93025295'
     )
 
     try:
         response = requests.get(wc_download_url)
         response.raise_for_status()
         data = response.json()
-        assets = [
-            asset['browser_download_url'] for asset in data['assets']
-        ]
+        assets = [asset['browser_download_url'] for asset in data['assets']]
 
         try:
             archive_url = next(
-                asset for asset in assets
-                if f'linux-{architecture}' in asset
+                asset for asset in assets if f'linux-{architecture}' in asset
             )
         except StopIteration:
             click.secho(
                 'No wifi-connect release found for this architecture.',
                 fg='red',
             )
-            archive_url = ""
+            archive_url = ''
 
     except requests.exceptions.RequestException as e:
         click.secho(f'Failed to get wifi-connect release: {e}', fg='red')

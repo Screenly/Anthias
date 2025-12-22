@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+
 import click
 import pygit2
 from python_on_whales import docker
@@ -32,7 +35,23 @@ def build_image(
     push: bool,
     dockerfiles_only: bool,
 ) -> None:
+    # Enable BuildKit
+    os.environ['DOCKER_BUILDKIT'] = '1'
+
     context = {}
+
+    # Create board-specific cache directory
+    cache_dir = Path('/tmp/.buildx-cache') / (
+        f'{board}-64'
+        if board == 'pi4' and target_platform == 'linux/arm64/v8'
+        else board
+    )
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        click.secho(
+            f'Warning: Failed to create cache directory: {e}', fg='yellow'
+        )
 
     base_apt_dependencies = [
         'build-essential',
@@ -73,23 +92,23 @@ def build_image(
         context.update(get_test_context())
     elif service == 'wifi-connect':
         context.update(get_wifi_connect_context(target_platform))
-    elif service == 'server':
-        if environment == 'development':
-            base_apt_dependencies.extend(['nodejs', 'npm'])
 
-    generate_dockerfile(service, {
-        'base_image': base_image,
-        'base_image_tag': 'bookworm',
-        'base_apt_dependencies': base_apt_dependencies,
-        'board': board,
-        'debian_version': 'bookworm',
-        'disable_cache_mounts': disable_cache_mounts,
-        'environment': environment,
-        'git_branch': git_branch,
-        'git_hash': git_hash,
-        'git_short_hash': git_short_hash,
-        **context,
-    })
+    generate_dockerfile(
+        service,
+        {
+            'base_image': base_image,
+            'base_image_tag': 'bookworm',
+            'base_apt_dependencies': base_apt_dependencies,
+            'board': board,
+            'debian_version': 'bookworm',
+            'disable_cache_mounts': disable_cache_mounts,
+            'environment': environment,
+            'git_branch': git_branch,
+            'git_hash': git_hash,
+            'git_short_hash': git_short_hash,
+            **context,
+        },
+    )
 
     if service == 'test':
         click.secho(f'Skipping test service for {board}...', fg='yellow')
@@ -98,22 +117,35 @@ def build_image(
     if dockerfiles_only:
         return
 
+    # Ensure we're using the correct builder
+    try:
+        docker.buildx.inspect('multiarch-builder', bootstrap=True)
+    except:  # noqa: E722
+        docker.buildx.create(name='multiarch-builder', use=True)
+
     docker.buildx.build(
         context_path='.',
         cache=(not clean_build),
         cache_from={
             'type': 'local',
-            'src': '/tmp/.buildx-cache',
-        },
+            'src': str(cache_dir),
+        }
+        if not clean_build
+        else None,
         cache_to={
             'type': 'local',
-            'dest': '/tmp/.buildx-cache',
-        },
+            'dest': str(cache_dir),
+            'mode': 'max',
+        }
+        if not clean_build
+        else None,
+        builder='multiarch-builder',
         file=f'docker/Dockerfile.{service}',
         load=True,
         platforms=[target_platform],
         tags=docker_tags,
         push=push,
+        progress='plain',
     )
 
 
@@ -134,10 +166,12 @@ def build_image(
 @click.option(
     '--service',
     default=['all'],
-    type=click.Choice((
-        'all',
-        *SERVICES,
-    )),
+    type=click.Choice(
+        (
+            'all',
+            *SERVICES,
+        )
+    ),
     multiple=True,
 )
 @click.option(
@@ -187,7 +221,8 @@ def main(
         # Define tag components
         namespaces = ['screenly/anthias', 'screenly/srly-ose']
         version_suffix = (
-            f'{board}-64' if board == 'pi4' and platform == 'linux/arm64/v8'
+            f'{board}-64'
+            if board == 'pi4' and platform == 'linux/arm64/v8'
             else f'{board}'
         )
 
@@ -218,5 +253,5 @@ def main(
         )
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

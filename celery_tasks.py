@@ -22,13 +22,14 @@ except Exception:
     pass
 
 
-__author__ = "Screenly, Inc"
-__copyright__ = "Copyright 2012-2024, Screenly, Inc"
-__license__ = "Dual License: GPLv2 and Commercial License"
+__author__ = 'Screenly, Inc'
+__copyright__ = 'Copyright 2012-2024, Screenly, Inc'
+__license__ = 'Dual License: GPLv2 and Commercial License'
 
 
 CELERY_RESULT_BACKEND = getenv(
-    'CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+    'CELERY_RESULT_BACKEND', 'redis://localhost:6379/0'
+)
 CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_TASK_RESULT_EXPIRES = timedelta(hours=6)
 
@@ -37,7 +38,7 @@ celery = Celery(
     'Anthias Celery Worker',
     backend=CELERY_RESULT_BACKEND,
     broker=CELERY_BROKER_URL,
-    result_expires=CELERY_TASK_RESULT_EXPIRES
+    result_expires=CELERY_TASK_RESULT_EXPIRES,
 )
 
 
@@ -45,7 +46,9 @@ celery = Celery(
 def setup_periodic_tasks(sender, **kwargs):
     # Calls cleanup() every hour.
     sender.add_periodic_task(3600, cleanup.s(), name='cleanup')
-    sender.add_periodic_task(60*5, get_display_power.s(), name='display_power')
+    sender.add_periodic_task(
+        60 * 5, get_display_power.s(), name='display_power'
+    )
 
 
 @celery.task(time_limit=30)
@@ -58,7 +61,10 @@ def get_display_power():
 def cleanup():
     sh.find(
         path.join(getenv('HOME'), 'screenly_assets'),
-        '-name', '*.tmp', '-delete')
+        '-name',
+        '*.tmp',
+        '-delete',
+    )
 
 
 @celery.task

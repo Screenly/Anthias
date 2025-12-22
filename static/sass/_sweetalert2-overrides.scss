@@ -1,0 +1,123 @@
+// SweetAlert2 Override Variables
+$swal2-font-size-base: 0.875rem;
+$swal2-font-size-title: 1.25rem;
+$swal2-border-radius: 0.5rem;
+$swal2-border-radius-small: 0.375rem;
+$swal2-padding-base: 1.5rem;
+$swal2-padding-button: 0.5rem 1.5rem;
+$swal2-gap-actions: 0.1rem;
+$swal2-icon-size: 2.5rem;
+$swal2-icon-line-height: 0.25rem;
+$swal2-icon-line-radius: 0.125rem;
+
+// Color variables
+$swal2-title-color: #2c3e50;
+$swal2-text-color: #6c757d;
+$swal2-error-color: #dc3545;
+$swal2-cancel-color: #6c757d;
+$swal2-cancel-hover-color: #5a6268;
+
+@mixin swal2-overrides {
+  // Body overflow fix
+  html.swal2-shown body.swal2-shown {
+    overflow-y: auto;
+    padding-right: 0;
+  }
+
+  // Main popup styling
+  .swal2-popup {
+    &.swal2-modal {
+      font-size: $swal2-font-size-base;
+      border-radius: $swal2-border-radius;
+      padding: $swal2-padding-base;
+    }
+
+    // Title styling
+    .swal2-title {
+      font-size: $swal2-font-size-title;
+      font-weight: 600;
+      color: $swal2-title-color;
+    }
+
+    // Content styling
+    .swal2-html-container {
+      font-size: $swal2-font-size-base;
+      color: $swal2-text-color;
+    }
+
+    // Button styling
+    .swal2-confirm {
+      color: $anthias-purple-1;
+      background-color: $anthias-yellow-3;
+      font-size: $swal2-font-size-base;
+      font-weight: 500;
+      padding: $swal2-padding-button;
+      border-radius: $swal2-border-radius-small;
+      box-shadow: none;
+
+      &:hover {
+        background-color: $anthias-yellow-3;
+      }
+    }
+
+    .swal2-cancel {
+      background-color: $swal2-cancel-color;
+      font-size: $swal2-font-size-base;
+      font-weight: 500;
+      padding: $swal2-padding-button;
+      border-radius: $swal2-border-radius-small;
+
+      &:hover {
+        background-color: $swal2-cancel-hover-color;
+      }
+    }
+
+    // Actions container
+    .swal2-actions {
+      gap: $swal2-gap-actions;
+    }
+
+    // Icon styling
+    .swal2-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: $swal2-padding-base auto;
+
+      .swal2-icon-content {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      // Error icon specific styling
+      &.swal2-error {
+        border-color: $swal2-error-color;
+
+        .swal2-x-mark {
+          position: relative;
+          display: block;
+
+          .swal2-x-mark-line-left,
+          .swal2-x-mark-line-right {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: $swal2-icon-size;
+            height: $swal2-icon-line-height;
+            background-color: $swal2-error-color;
+            border-radius: $swal2-icon-line-radius;
+          }
+
+          .swal2-x-mark-line-left {
+            transform: translate(-50%, -50%) rotate(45deg);
+          }
+
+          .swal2-x-mark-line-right {
+            transform: translate(-50%, -50%) rotate(-45deg);
+          }
+        }
+      }
+    }
+  }
+}

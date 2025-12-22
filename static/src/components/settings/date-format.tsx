@@ -1,0 +1,33 @@
+import { RootState } from '@/types'
+
+export const DateFormat = ({
+  settings,
+  handleInputChange,
+}: {
+  settings: RootState['settings']['settings']
+  handleInputChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
+}) => {
+  return (
+    <div className="mb-3">
+      <label className="small text-secondary">
+        <small>Date format</small>
+      </label>
+      <select
+        className="form-control shadow-none form-select"
+        name="dateFormat"
+        value={settings.dateFormat}
+        onChange={handleInputChange}
+      >
+        <option value="mm/dd/yyyy">month/day/year</option>
+        <option value="dd/mm/yyyy">day/month/year</option>
+        <option value="yyyy/mm/dd">year/month/day</option>
+        <option value="mm-dd-yyyy">month-day-year</option>
+        <option value="dd-mm-yyyy">day-month-year</option>
+        <option value="yyyy-mm-dd">year-month-day</option>
+        <option value="mm.dd.yyyy">month.day.year</option>
+        <option value="dd.mm.yyyy">day.month.year</option>
+        <option value="yyyy.mm.dd">year.month.day</option>
+      </select>
+    </div>
+  )
+}

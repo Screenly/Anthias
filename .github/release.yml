@@ -1,0 +1,27 @@
+changelog:
+  exclude:
+    labels:
+      - webview
+      - chore
+      - tests
+  categories:
+    - title: Bug Fixes 🐞
+      labels:
+        - bug
+    - title: Features ✨
+      labels:
+        - enhancement
+    - title: Docs 📚
+      labels:
+        - documentation
+    - title: API 🧩
+      labels:
+        - api
+    - title: Other Changes 🔧
+      labels:
+        - "*"
+      exclude:
+        labels:
+          - webview
+          - chore
+          - tests

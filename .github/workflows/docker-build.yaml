@@ -6,13 +6,19 @@ on:
       - master
     paths:
       - '**'
+      - '!.editorconfig'
       - '!webview/**'
       - '!website/**'
       - '!.github/workflows/deploy-website.yaml'
       - '!.github/workflows/build-webview.yaml'
       - '!.github/workflows/build-balena-disk-image.yaml'
       - '!.github/workflows/python-lint.yaml'
+      - '!.github/workflows/generate-openapi-schema.yml'
+      - '!.github/workflows/docker-test.yml'
       - '!.github/pull_request_template.md'
+      - '!.github/dependabot.yml'
+      - '!.github/release.yml'
+      - '!CONTRIBUTING.md'
       - '!README.md'
       - '!docs/**'
       - '!bin/install.sh'
@@ -20,6 +26,7 @@ on:
       - '!bin/start_development_server.sh'
       - '!tests/**'
       - '!docker/Dockerfile.dev'
+      - '!.cursor/**'
 
 jobs:
   run-tests:
@@ -30,30 +37,28 @@ jobs:
     strategy:
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
+        service: ['server', 'celery', 'redis', 'websocket', 'nginx', 'viewer', 'wifi-connect']
         python-version: ["3.11"]
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install and configure Poetry
-        uses: snok/install-poetry@v1
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
         with:
-          version: 1.8.3
-          virtualenvs-create: true
-          virtualenvs-in-project: false
-          virtualenvs-path: ~/.venv
-          installer-parallel: true
+          version: '0.9.17'
 
       - name: Install dependencies
         run: |
-          poetry install --only=docker-image-builder
+          uv venv
+          uv pip install --group docker-image-builder
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -61,15 +66,27 @@ jobs:
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+
+      - name: Create and use dedicated builder
+        run: |
+          docker buildx create --use --name multiarch-builder
+          docker buildx inspect --bootstrap
 
       - name: Cache Docker layers
         uses: actions/cache@v4
         id: cache
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-${{ matrix.board }}
+          path: /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }}
+          key: buildx-${{ matrix.board }}-${{ matrix.service }}-${{ hashFiles('docker/**/*') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.board }}
+            buildx-${{ matrix.board }}-${{ matrix.service }}-
+
+      - name: Inspect cache before build
+        run: |
+          ls -la /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }} || true
 
       - name: Login to Docker Hub
         if: success() && github.event_name != 'pull_request'
@@ -78,23 +95,19 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build Containers
+      - name: Build Container
+        env:
+          DOCKER_BUILDKIT: 1
+          BUILDKIT_PROGRESS: plain
         run: |
-          if [ "${{ matrix.board }}" == "pi4" ]; then
-            poetry run python -m tools.image_builder \
-              --build-target=pi4 \
-              --target-platform=linux/arm/v8 \
-              --push
-          elif [ "${{ matrix.board }}" == "pi4-64" ]; then
-            poetry run python -m tools.image_builder \
-              --build-target=pi4 \
-              --target-platform=linux/arm64/v8 \
-              --push
-          else
-            poetry run python -m tools.image_builder \
-              --build-target=${{ matrix.board }} \
-              --push
-          fi
+          uv run python -m tools.image_builder \
+            --build-target=${{ matrix.board }} \
+            --service=${{ matrix.service }} \
+            --push
+
+      - name: Inspect cache after build
+        run: |
+          ls -la /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }} || true
 
   balena:
     if: ${{ github.ref == 'refs/heads/master' }}
@@ -105,7 +118,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set Docker tag
         run: |

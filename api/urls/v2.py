@@ -6,7 +6,10 @@ from api.views.v2 import (
     AssetsControlViewV2,
     AssetViewV2,
     BackupViewV2,
+    DeviceSettingsViewV2,
     FileAssetViewV2,
+    InfoViewV2,
+    IntegrationsViewV2,
     PlaylistOrderViewV2,
     RebootViewV2,
     RecoverViewV2,
@@ -30,7 +33,7 @@ def get_url_patterns():
         path(
             'v2/assets/<str:asset_id>',
             AssetViewV2.as_view(),
-            name='asset_detail_v2'
+            name='asset_detail_v2',
         ),
         path('v2/backup', BackupViewV2.as_view(), name='backup_v2'),
         path('v2/recover', RecoverViewV2.as_view(), name='recover_v2'),
@@ -41,5 +44,20 @@ def get_url_patterns():
             'v2/assets/<str:asset_id>/content',
             AssetContentViewV2.as_view(),
             name='asset_content_v2',
+        ),
+        path(
+            'v2/device_settings',
+            DeviceSettingsViewV2.as_view(),
+            name='device_settings_v2',
+        ),
+        path(
+            'v2/info',
+            InfoViewV2.as_view(),
+            name='info_v2',
+        ),
+        path(
+            'v2/integrations',
+            IntegrationsViewV2.as_view(),
+            name='integrations_v2',
         ),
     ]

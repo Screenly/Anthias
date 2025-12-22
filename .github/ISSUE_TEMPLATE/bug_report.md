@@ -6,11 +6,11 @@ labels: bug
 assignees: ''
 ---
 
-**Describe the bug**
+### Description
 
 A clear and concise description of what the bug is.
 
-**To Reproduce**
+### Steps to Reproduce
 
 Steps to reproduce the behavior:
 1. Go to '...'
@@ -18,21 +18,18 @@ Steps to reproduce the behavior:
 3. Scroll down to '....'
 4. See error
 
-**Expected behavior**
+### Expected Behavior
 
 A clear and concise description of what you expected to happen.
 
-**Screenshots**
+### Screenshots
 
 If applicable, add screenshots to help explain your problem.
 
-**Environment (please complete the following information):**
+### Environment
 
 - Device: [e.g., Raspberry Pi 5, Raspberry Pi 4, PC]
-- OS: [e.g., balenaOS, Raspberry Pi OS 64-bit Bookworm]
+- OS: [e.g., balenaOS, Raspberry Pi OS 64-bit Bookworm, Trixie (not supported)]
 - Anthias Version: [e.g., v0.19.0]
 - Installation Method: [e.g., balenaHub, Release Image, Manual Installation]
 
-**Additional context**
-
-Add any other context about the problem here.

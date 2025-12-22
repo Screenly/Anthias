@@ -28,7 +28,7 @@ DEFAULTS = {
         'use_ssl': False,
         'auth_backend': '',
         'websocket_port': '9999',
-        'django_secret_key': ''
+        'django_secret_key': '',
     },
     'viewer': {
         'audio_output': 'hdmi',
@@ -40,28 +40,29 @@ DEFAULTS = {
         'show_splash': True,
         'shuffle_playlist': False,
         'verify_ssl': True,
-        'default_assets': False
-    }
+        'default_assets': False,
+    },
 }
 CONFIGURABLE_SETTINGS = DEFAULTS['viewer'].copy()
-CONFIGURABLE_SETTINGS['use_24_hour_clock'] = (
-    DEFAULTS['main']['use_24_hour_clock'])
+CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main'][
+    'use_24_hour_clock'
+]
 CONFIGURABLE_SETTINGS['date_format'] = DEFAULTS['main']['date_format']
 
 PORT = int(getenv('PORT', 8080))
 LISTEN = getenv('LISTEN', '127.0.0.1')
 
 # Initiate logging
-logging.basicConfig(level=logging.INFO,
-                    format='%(message)s',
-                    datefmt='%a, %d %b %Y %H:%M:%S')
+logging.basicConfig(
+    level=logging.INFO, format='%(message)s', datefmt='%a, %d %b %Y %H:%M:%S'
+)
 
 # Silence urllib info messages ('Starting new HTTP connection')
 # that are triggered by the remote url availability check in view_web
-requests_log = logging.getLogger("requests")
+requests_log = logging.getLogger('requests')
 requests_log.setLevel(logging.WARNING)
 
-logging.debug('Starting viewer.py')
+logging.debug('Starting viewer')
 
 
 class AnthiasSettings(UserDict):
@@ -79,7 +80,8 @@ class AnthiasSettings(UserDict):
 
         if not path.isfile(self.conf_file):
             logging.error(
-                'Config-file %s missing. Using defaults.', self.conf_file)
+                'Config-file %s missing. Using defaults.', self.conf_file
+            )
             self.use_defaults()
             self.save()
         else:
@@ -95,9 +97,9 @@ class AnthiasSettings(UserDict):
                 self[field] = config.get(section, field)
                 # Likely not a hashed password
                 if (
-                    field == 'password' and
-                    self[field] != '' and
-                    len(self[field]) != 64
+                    field == 'password'
+                    and self[field] != ''
+                    and len(self[field]) != 64
                 ):
                     # Hash the original password.
                     self[field] = hashlib.sha256(self[field]).hexdigest()
@@ -105,7 +107,10 @@ class AnthiasSettings(UserDict):
             logging.debug(
                 "Could not parse setting '%s.%s': %s. "
                 "Using default value: '%s'.",
-                section, field, str(e), default
+                section,
+                field,
+                str(e),
+                default,
             )
             self[field] = default
         if field in ['database', 'assetdir']:
@@ -114,7 +119,8 @@ class AnthiasSettings(UserDict):
     def _set(self, config, section, field, default):
         if isinstance(default, bool):
             config.set(
-                section, field, self.get(field, default) and 'on' or 'off')
+                section, field, self.get(field, default) and 'on' or 'off'
+            )
         else:
             config.set(section, field, str(self.get(field, default)))
 
@@ -140,7 +146,7 @@ class AnthiasSettings(UserDict):
             config.add_section(section)
             for field, default in list(defaults.items()):
                 self._set(config, section, field, default)
-        with open(self.conf_file, "w") as f:
+        with open(self.conf_file, 'w') as f:
             config.write(f)
         self.load()
 
@@ -165,7 +171,7 @@ class ZmqPublisher(object):
 
     def __init__(self):
         if self.INSTANCE is not None:
-            raise ValueError("An instance already exists!")
+            raise ValueError('An instance already exists!')
 
         self.context = zmq.Context()
 
@@ -180,10 +186,10 @@ class ZmqPublisher(object):
         return cls.INSTANCE
 
     def send_to_ws_server(self, msg):
-        self.socket.send("ws_server {}".format(msg).encode('utf-8'))
+        self.socket.send('ws_server {}'.format(msg).encode('utf-8'))
 
     def send_to_viewer(self, msg):
-        self.socket.send_string("viewer {}".format(msg))
+        self.socket.send_string('viewer {}'.format(msg))
 
 
 class ZmqConsumer(object):
@@ -205,7 +211,7 @@ class ZmqCollector(object):
 
     def __init__(self):
         if self.INSTANCE is not None:
-            raise ValueError("An instance already exists!")
+            raise ValueError('An instance already exists!')
 
         self.context = zmq.Context()
 

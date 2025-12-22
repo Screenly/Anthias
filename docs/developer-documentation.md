@@ -43,7 +43,7 @@ $ ./bin/start_development_server.sh
 
 > [!NOTE]
 > Running the script will install Python 3.11, [pyenv](https://github.com/pyenv/pyenv),
-> and [Poetry](https://python-poetry.org/) inside a Docker container on your machine.
+> and [uv](https://docs.astral.sh/uv/) inside a Docker container on your machine.
 > This is to ensure that the development environment is consistent across different
 > machines.
 >
@@ -70,13 +70,28 @@ $ MODE=build \
     ./bin/upgrade_containers.sh
 ```
 
+## Django admin site
+
+Create a superuser account:
+
+```bash
+$ export COMPOSE_FILE=docker-compose.dev.yml
+$ docker compose exec anthias-server \
+    python manage.py createsuperuser
+# You will be prompted to enter a username, an email address, and a password.
+```
+
+Once you have created a superuser account, you can open the Django admin site at `http://localhost:8000/admin/` (with a trailing slash)
+and login with the credentials you just created.
+
+
 ## Testing
 ### Running the unit tests
 
 Build and start the containers.
 
 ```bash
-$ poetry run python -m tools.image_builder \
+$ uv run python -m tools.image_builder \
   --dockerfiles-only \
   --disable-cache-mounts \
   --service celery \
@@ -123,8 +138,28 @@ $ docker compose -f docker-compose.dev.yml exec anthias-server \
     npm run dev
 ```
 
-Making changes to the CoffeeScript or SCSS files will automatically trigger a recompilation,
-generating the corresponding JavaScript and CSS files.
+Making changes to the TypeScript, TSX, or SCSS files will automatically trigger a recompilation,
+generating the corresponding TypeScript and CSS files.
+
+### Formatting and linting TypeScript code
+
+To run the linting and formatting checks on the TypeScript code, run the following command:
+
+```bash
+$ docker compose -f docker-compose.dev.yml exec anthias-server \
+    npm run lint:check
+$ docker compose -f docker-compose.dev.yml exec anthias-server \
+    npm run format:check
+```
+
+If you want to fix the linting errors and formatting issues, run the following command:
+
+```bash
+$ docker compose -f docker-compose.dev.yml exec anthias-server \
+    npm run lint:fix
+$ docker compose -f docker-compose.dev.yml exec anthias-server \
+    npm run format:fix
+```
 
 ### Closing the transpiler
 
@@ -149,23 +184,24 @@ $ act -W .github/workflows/python-lint.yaml
 The command above will run the linter on the all the Python files in the repository. If you want to run the linter
 on a specific file, you can try the commands in the next section.
 
-### Running the linter using Poetry
+### Running the linter using `uv`
 
-You have to install Poetry first. You can find the installation instructions
-[here](https://python-poetry.org/docs/#installing-with-the-official-installer).
+You have to install `uv` first. You can find the installation instructions
+[here](https://docs.astral.sh/uv/getting-started/installation/).
 
-After installing Poetry, run the following commands:
+After installing uv, run the following commands:
 
 ```bash
 # Install the dependencies
-$ poetry install --only=dev-host
-$ poetry run ruff check .
+$ uv venv
+$ uv pip install --group dev-host
+$ uv run ruff check .
 ```
 
 To run the linter on a specific file, run the following command:
 
 ```bash
-$ poetry run ruff check /path/to/file.py
+$ uv run ruff check /path/to/file.py
 ```
 
 

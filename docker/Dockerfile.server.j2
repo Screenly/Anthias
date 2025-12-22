@@ -1,10 +1,7 @@
 {% if environment == 'production' %}
 FROM debian:bookworm AS node-builder
 
-RUN apt-get update && \
-    apt-get -y install \
-        nodejs \
-        npm
+{% include 'nodejs-install.j2' %}
 
 RUN mkdir -p /app
 WORKDIR /app
@@ -13,11 +10,12 @@ COPY package.json \
     package-lock.json \
     webpack.prod.js \
     webpack.common.js \
+    tsconfig.json \
     /app/
 RUN npm install
 
-COPY ./static/js/*.coffee /app/static/js/
 COPY ./static/sass/*.scss /app/static/sass/
+COPY ./static/src/ /app/static/src/
 RUN npm run build
 
 {% endif %}
@@ -39,6 +37,8 @@ WORKDIR /usr/src/app
 COPY --from=node-builder \
     /app/static/dist/ \
     /usr/src/app/static/dist/
+{% else %}
+{% include 'nodejs-install.j2' %}
 {% endif %}
 
 ENV GIT_HASH={{ git_hash }}
