@@ -40,7 +40,7 @@ services:
       dockerfile: docker/Dockerfile.pi4-64
     environment:
       - GIT_HASH=${GIT_HASH}
-      - PLATFORM=pi4-64
+      - BOARD=pi4-64
     tty: true
     stdin_open: true
     volumes:
