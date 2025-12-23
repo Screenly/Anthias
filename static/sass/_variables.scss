@@ -1,11 +1,32 @@
-$anthias-purple-1: #270035;
-$anthias-purple-2: #492955;
-$anthias-purple-3: #52335D;
-$anthias-purple-4: #D4CCD7;
-$anthias-purple-5: #8819C7;
-$anthias-yellow-1: #FFF963;
-$anthias-yellow-2: #FFD800;
-$anthias-yellow-3: #FFE11A;
-$anthias-yellow-4: #FFF3A3;
+// Checkin Cast Brand Colors
+// Primary: Dark Purple and Pink palette from Checkin brand
 
-$anthias-yellow-gradient: linear-gradient(133.73deg, $anthias-yellow-1, $anthias-yellow-2);
+// Dark purple tones (based on Checkin's #4C042D)
+$checkin-purple-1: #4C042D;  // Primary dark purple
+$checkin-purple-2: #6B1548;  // Lighter purple
+$checkin-purple-3: #3A0322;  // Darker purple
+$checkin-purple-4: #E8D4DE;  // Light purple tint
+$checkin-purple-5: #8A2A5E;  // Mid-tone purple
+
+// Pink accent tones (based on Checkin's #FE8E9F)
+$checkin-pink-1: #FE8E9F;    // Primary pink accent
+$checkin-pink-2: #FEB0BC;    // Soft pink
+$checkin-pink-3: #FF6B82;    // Vibrant pink
+$checkin-pink-4: #FFF5F6;    // Light pink background
+
+// Gradients
+$checkin-pink-gradient: linear-gradient(133.73deg, $checkin-pink-1, $checkin-pink-2);
+$checkin-purple-gradient: linear-gradient(133.73deg, $checkin-purple-1, $checkin-purple-2);
+
+// Legacy aliases for compatibility
+$anthias-purple-1: $checkin-purple-1;
+$anthias-purple-2: $checkin-purple-2;
+$anthias-purple-3: $checkin-purple-3;
+$anthias-purple-4: $checkin-purple-4;
+$anthias-purple-5: $checkin-purple-5;
+$anthias-yellow-1: $checkin-pink-1;
+$anthias-yellow-2: $checkin-pink-2;
+$anthias-yellow-3: $checkin-pink-3;
+$anthias-yellow-4: $checkin-pink-4;
+
+$anthias-yellow-gradient: $checkin-pink-gradient;

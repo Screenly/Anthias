@@ -148,6 +148,28 @@ services:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
+  anthias-airplay:
+    image: screenly/anthias-airplay:${DOCKER_TAG}-${DEVICE_TYPE}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.airplay
+    depends_on:
+      - anthias-server
+      - redis
+    environment:
+      - AIRPLAY_NAME=${AIRPLAY_NAME:-Checkin Cast}
+      - AIRPLAY_RESOLUTION=1920x1080
+      - AIRPLAY_FRAMERATE=30
+      - AUDIO_OUTPUT=${AUDIO_OUTPUT:-hdmi}
+      - ZMQ_SERVER_URL=tcp://anthias-server:10001
+    network_mode: host
+    privileged: true
+    restart: always
+    volumes:
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+
 volumes:
   resin-data:
   redis-data:

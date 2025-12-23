@@ -19,6 +19,7 @@ import { AudioOutput } from '@/components/settings/audio-output'
 import { DateFormat } from '@/components/settings/date-format'
 import { ToggleableSetting } from '@/components/settings/toggleable-setting'
 import { Update } from '@/components/settings/update'
+import { AirPlay } from '@/components/settings/airplay'
 
 export const Settings = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -203,6 +204,7 @@ export const Settings = () => {
 
       {!upToDate && !isBalena && <Update />}
 
+      <AirPlay />
       <Backup />
       <SystemControls />
     </div>

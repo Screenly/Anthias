@@ -36,6 +36,11 @@ from viewer.utils import (
     wait_for_server,
     watchdog,
 )
+from viewer.airplay import (
+    AirPlaySubscriber,
+    get_airplay_state_manager,
+    is_airplay_active,
+)
 
 try:
     django.setup()
@@ -72,6 +77,8 @@ r = connect_to_redis()
 HOME = None
 
 scheduler = None
+airplay_subscriber = None
+airplay_paused = False
 
 
 def send_current_asset_id_to_server():
@@ -130,6 +137,24 @@ def show_splash(data):
     view_webpage(SPLASH_PAGE_URL)
     sleep(SPLASH_DELAY)
     loop_is_stopped = play_loop()
+
+
+def handle_airplay_state_change(state, client_name):
+    """Handle AirPlay state changes to pause/resume the playlist."""
+    global airplay_paused, loop_is_stopped
+
+    if state in ('connected', 'streaming'):
+        if not airplay_paused:
+            logging.info(
+                f'AirPlay session started with {client_name}, pausing playlist'
+            )
+            airplay_paused = True
+            # Show a blank screen to let AirPlay take over the framebuffer
+            view_image('null')
+    else:  # idle
+        if airplay_paused:
+            logging.info('AirPlay session ended, resuming playlist')
+            airplay_paused = False
 
 
 commands = {
@@ -223,6 +248,13 @@ def load_settings():
 
 
 def asset_loop(scheduler):
+    # Check if AirPlay is active - if so, skip asset display
+    if airplay_paused or is_airplay_active():
+        skip_event = get_skip_event()
+        skip_event.clear()
+        skip_event.wait(timeout=0.5)
+        return
+
     asset = scheduler.get_next_asset()
 
     if asset is None:
@@ -330,7 +362,7 @@ def start_loop():
 
 
 def main():
-    global scheduler
+    global scheduler, airplay_subscriber
     global load_screen_displayed, mq_data
 
     load_screen_displayed = False
@@ -345,6 +377,16 @@ def main():
     subscriber_2 = ZmqSubscriber(r, commands, ZMQ_HOST_PUB_URL)
     subscriber_2.daemon = True
     subscriber_2.start()
+
+    # Start AirPlay subscriber if AirPlay is enabled
+    if settings.get('airplay_enabled', True):
+        airplay_subscriber = AirPlaySubscriber(r)
+        airplay_subscriber.start()
+
+        # Register callback for state changes
+        airplay_manager = get_airplay_state_manager()
+        airplay_manager.register_callback(handle_airplay_state_change)
+        logging.info('AirPlay integration enabled')
 
     # This will prevent white screen from happening before showing the
     # splash screen with IP addresses.

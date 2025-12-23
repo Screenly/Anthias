@@ -54,7 +54,7 @@ export const Navbar = () => {
       <nav className="navbar navbar-dark navbar-expand-lg fixed-top bg-dark">
         <div className="container">
           <NavLink to="/" className="navbar-brand py-3">
-            <img src="/static/img/logo-full.svg" alt="Anthias" />
+            <img src="/static/img/logo-full.svg" alt="Checkin Cast" />
           </NavLink>
 
           <button

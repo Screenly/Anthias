@@ -1,6 +1,7 @@
 from django.urls import path
 
 from api.views.v2 import (
+    AirPlayViewV2,
     AssetContentViewV2,
     AssetListViewV2,
     AssetsControlViewV2,
@@ -59,5 +60,10 @@ def get_url_patterns():
             'v2/integrations',
             IntegrationsViewV2.as_view(),
             name='integrations_v2',
+        ),
+        path(
+            'v2/airplay',
+            AirPlayViewV2.as_view(),
+            name='airplay_v2',
         ),
     ]

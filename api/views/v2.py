@@ -522,3 +522,68 @@ class IntegrationsViewV2(APIView):
         serializer = self.serializer_class(data=data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.data)
+
+
+class AirPlayViewV2(APIView):
+    """AirPlay status and control endpoint."""
+
+    @extend_schema(
+        summary='Get AirPlay status',
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'enabled': {'type': 'boolean'},
+                    'name': {'type': 'string'},
+                    'state': {'type': 'string'},
+                    'client_name': {'type': 'string', 'nullable': True},
+                },
+            }
+        },
+    )
+    @authorized
+    def get(self, request):
+        airplay_state = r.get('airplay_state')
+        airplay_client = r.get('airplay_client')
+
+        return Response({
+            'enabled': settings.get('airplay_enabled', True),
+            'name': settings.get('airplay_name', 'Checkin Cast'),
+            'state': airplay_state.decode() if airplay_state else 'unknown',
+            'client_name': (
+                airplay_client.decode() if airplay_client else None
+            ),
+        })
+
+    @extend_schema(
+        summary='Update AirPlay settings',
+        request={
+            'type': 'object',
+            'properties': {
+                'enabled': {'type': 'boolean'},
+                'name': {'type': 'string'},
+            },
+        },
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {'message': {'type': 'string'}},
+            },
+        },
+    )
+    @authorized
+    def patch(self, request):
+        data = request.data
+
+        if 'enabled' in data:
+            settings['airplay_enabled'] = data['enabled']
+        if 'name' in data:
+            settings['airplay_name'] = data['name']
+
+        settings.save()
+
+        # Notify viewer to reload settings
+        publisher = ZmqPublisher.get_instance()
+        publisher.send_to_viewer('reload')
+
+        return Response({'message': 'AirPlay settings updated successfully.'})

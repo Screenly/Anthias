@@ -1,0 +1,75 @@
+# syntax=docker/dockerfile:1.4
+# vim: ft=dockerfile
+
+FROM {{ base_image }}:{{ base_image_tag }}
+
+# Install uxplay dependencies for AirPlay receiver
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/var/cache/apt \
+{% endif %}
+    apt-get update && \
+    apt-get -y install --no-install-recommends \
+        avahi-daemon \
+        avahi-utils \
+        libavahi-compat-libdnssd-dev \
+        libgstreamer1.0-dev \
+        libgstreamer-plugins-base1.0-dev \
+        libgstreamer-plugins-bad1.0-dev \
+        gstreamer1.0-plugins-base \
+        gstreamer1.0-plugins-good \
+        gstreamer1.0-plugins-bad \
+        gstreamer1.0-plugins-ugly \
+        gstreamer1.0-libav \
+        gstreamer1.0-tools \
+        gstreamer1.0-alsa \
+        gstreamer1.0-gl \
+        libssl-dev \
+        libplist-dev \
+        libx11-dev \
+        cmake \
+        build-essential \
+        git \
+        python3 \
+        python3-pip \
+        python3-zmq \
+        dbus
+
+# Build and install uxplay from Checkin's fork
+RUN git clone --depth 1 https://github.com/storbukas/CheckinCast.git /tmp/uxplay && \
+    cd /tmp/uxplay && \
+    mkdir build && \
+    cd build && \
+    cmake .. && \
+    make -j$(nproc) && \
+    make install && \
+    rm -rf /tmp/uxplay
+
+# Install Python requirements for ZMQ communication
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/root/.cache/pip \
+{% endif %}
+    pip3 install pyzmq --break-system-packages
+
+ENV GIT_HASH={{ git_hash }}
+ENV GIT_SHORT_HASH={{ git_short_hash }}
+ENV GIT_BRANCH={{ git_branch }}
+ENV DEVICE_TYPE={{ board }}
+
+RUN rm -f /etc/localtime
+
+WORKDIR /usr/src/app
+RUN mkdir -p /usr/src/app
+COPY airplay/ /usr/src/app/airplay/
+COPY bin/start_airplay.sh /usr/src/app/bin/
+
+# Expose AirPlay ports
+# 7000 = AirPlay video
+# 7100 = AirPlay timing
+# 5353 = mDNS (Bonjour)
+EXPOSE 7000 7100 5353/udp
+
+CMD ["bash", "./bin/start_airplay.sh"]

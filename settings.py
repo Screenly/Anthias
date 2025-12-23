@@ -42,12 +42,18 @@ DEFAULTS = {
         'verify_ssl': True,
         'default_assets': False,
     },
+    'airplay': {
+        'airplay_enabled': True,
+        'airplay_name': 'Checkin Cast',
+    },
 }
 CONFIGURABLE_SETTINGS = DEFAULTS['viewer'].copy()
 CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main'][
     'use_24_hour_clock'
 ]
 CONFIGURABLE_SETTINGS['date_format'] = DEFAULTS['main']['date_format']
+CONFIGURABLE_SETTINGS['airplay_enabled'] = DEFAULTS['airplay']['airplay_enabled']
+CONFIGURABLE_SETTINGS['airplay_name'] = DEFAULTS['airplay']['airplay_name']
 
 PORT = int(getenv('PORT', 8080))
 LISTEN = getenv('LISTEN', '127.0.0.1')
