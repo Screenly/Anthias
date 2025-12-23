@@ -1,25 +1,77 @@
 :root {
+  /* Checkin Core Brand Palette (HSL) */
+  --checkin-pink: 351 98% 78%;
+  --checkin-pink-soft: 351 98% 84%;
+  --checkin-pink-subtle: 351 100% 93%;
+
+  --checkin-purple: 326 90% 16%;
+
+  --checkin-sand: 42 100% 91%;
+  --checkin-sand-soft: 41 100% 94%;
+  --checkin-sand-subtle: 43 100% 97%;
+
+  --checkin-white: 0 0% 100%;
+
+  /* Semantic tokens */
+  --background: var(--checkin-sand-subtle);
+  --foreground: var(--checkin-purple);
+
+  --card: var(--checkin-sand-soft);
+  --card-foreground: var(--checkin-purple);
+
+  --popover: var(--checkin-white);
+  --popover-foreground: var(--checkin-purple);
+
+  /* Primary = Purple */
+  --primary: var(--checkin-purple);
+  --primary-foreground: var(--checkin-white);
+
+  /* Secondary = Pink soft */
+  --secondary: var(--checkin-pink-soft);
+  --secondary-foreground: var(--checkin-purple);
+
+  /* Muted surfaces */
+  --muted: var(--checkin-sand-soft);
+  --muted-foreground: 326 29% 36%;
+
+  /* Accent = Pink */
+  --accent: var(--checkin-pink);
+  --accent-foreground: var(--checkin-purple);
+
+  /* Destructive */
+  --destructive: 326 90% 10%;
+  --destructive-foreground: var(--checkin-white);
+
+  /* Borders & inputs */
+  --border: 326 36% 32%;
+  --input: 326 36% 32%;
+  --ring: var(--checkin-purple);
+
+  /* Radius */
+  --radius: 0.5rem;
+
+  /* Legacy Bootstrap-compatible tokens */
   --blue: #007bff;
   --indigo: #6610f2;
-  --purple: #6f42c1;
-  --pink: #e83e8c;
+  --purple: #4C042D;
+  --pink: #FE8E9F;
   --red: #dc3545;
   --orange: #fd7e14;
-  --yellow: #ffc107;
+  --yellow: #FFF1D1;
   --green: #28a745;
   --teal: #20c997;
   --cyan: #17a2b8;
-  --white: white;
+  --white: #FFFFFF;
   --gray: #868e96;
-  --gray-dark: #343a40;
-  --primary: #007bff;
-  --secondary: #868e96;
+  --gray-dark: #4C042D;
+  --primary: #4C042D;
+  --secondary: #FEBCC6;
   --success: #28a745;
   --info: #17a2b8;
-  --warning: #ffc107;
+  --warning: #FFF1D1;
   --danger: #dc3545;
-  --light: #f8f9fa;
-  --dark: #343a40;
+  --light: #FFFBF5;
+  --dark: #4C042D;
   --breakpoint-xs: 0;
   --breakpoint-sm: 576px;
   --breakpoint-md: 768px;
@@ -27,4 +79,35 @@
   --breakpoint-xl: 1200px;
   --font-family-sans-serif: "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-family-monospace: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* Dark mode */
+.dark {
+  --background: 326 90% 7%;
+  --foreground: var(--checkin-white);
+
+  --card: 326 90% 10%;
+  --card-foreground: var(--checkin-white);
+
+  --popover: 326 90% 12%;
+  --popover-foreground: var(--checkin-white);
+
+  --primary: var(--checkin-pink);
+  --primary-foreground: var(--checkin-purple);
+
+  --secondary: 326 44% 20%;
+  --secondary-foreground: var(--checkin-white);
+
+  --muted: 326 44% 18%;
+  --muted-foreground: 43 100% 97%;
+
+  --accent: var(--checkin-pink);
+  --accent-foreground: var(--checkin-purple);
+
+  --destructive: 0 72% 45%;
+  --destructive-foreground: var(--checkin-white);
+
+  --border: 326 40% 32%;
+  --input: 326 40% 32%;
+  --ring: var(--checkin-pink);
 }
