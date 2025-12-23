@@ -1,12 +1,15 @@
 FROM python:3.11-bookworm
 
 RUN apt-get update -y && \
-    curl --proto "=https" -sSL https://install.python-poetry.org | python3 - && \
-    ln -s /root/.local/bin/poetry /usr/local/bin/poetry
+    pip install uv
 
 WORKDIR /app
 
-COPY pyproject.toml poetry.lock /app/
+COPY pyproject.toml uv.lock /app/
 
-RUN poetry install --only=docker-image-builder
+RUN uv sync --group docker-image-builder
+
 RUN git config --global --add safe.directory /app
+
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="${VIRTUAL_ENV}/bin:$PATH"

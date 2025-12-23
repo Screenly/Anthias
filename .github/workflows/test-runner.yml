@@ -28,22 +28,19 @@ jobs:
         with:
           python-version: ${{ inputs.python-version }}
 
-      - name: Install and configure Poetry
-        uses: snok/install-poetry@v1
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
         with:
-          version: 1.8.3
-          virtualenvs-create: true
-          virtualenvs-in-project: false
-          virtualenvs-path: ~/.venv
-          installer-parallel: true
+          version: '0.9.17'
 
       - name: Install dependencies
         run: |
-          poetry install --only=docker-image-builder
+          uv venv
+          uv pip install --group docker-image-builder
 
       - name: Build Containers
         run: |
-          poetry run python -m tools.image_builder \
+          uv run python -m tools.image_builder \
             --dockerfiles-only \
             --disable-cache-mounts \
             --service celery \

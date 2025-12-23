@@ -1,23 +1,19 @@
-[tool.poetry]
+[project]
 name = "anthias"
-version = "0.18.8"
+version = "0.20.4"
 description = "The world's most popular open source digital signage project."
 readme = "README.md"
-package-mode = false
+requires-python = ">=3.11"
+dependencies = []
 
-[tool.poetry.dependencies]
-python = ">=3.9,<3.12"
-
-[tool.poetry.group.dev-host.dependencies]
-ruff = "^0.14.3"
-
-[tool.poetry.group.docker-image-builder.dependencies]
-click = '^8.1.7'
-jinja2 = '^3.1.6'
-pygit2 = '^1.15.1'
-requests = '^2.32.5'
-python-on-whales = '^0.79.0'
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[dependency-groups]
+dev-host = [
+    "ruff==0.14.3",
+]
+docker-image-builder = [
+    "click==8.1.7",
+    "jinja2==3.1.6",
+    "pygit2==1.15.1",
+    "requests==2.32.5",
+    "python-on-whales==0.79.0",
+]
