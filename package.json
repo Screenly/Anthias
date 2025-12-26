@@ -23,7 +23,7 @@
     "react-redux": "^9.1.0",
     "react-router": "^7.11.0",
     "react-router-dom": "^7.11.0",
-    "sweetalert2": "^11.26.16"
+    "sweetalert2": "^11.26.17"
   },
   "devDependencies": {
     "@babel/core": "^7.28.5",
@@ -39,7 +39,7 @@
     "@types/jquery": "^3.5.33",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "@typescript-eslint/eslint-plugin": "^8.50.0",
+    "@typescript-eslint/eslint-plugin": "^8.50.1",
     "@typescript-eslint/parser": "^8.39.0",
     "babel-loader": "^10.0.0",
     "classnames": "^2.5.1",
