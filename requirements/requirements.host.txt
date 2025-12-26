@@ -3,6 +3,6 @@
 ansible-core==2.18.3
 getmac==0.9.5
 netifaces2==0.0.22
-redis==4.3.4
+redis==7.1.0
 requests[security]==2.32.3
 tenacity==9.1.2
