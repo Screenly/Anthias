@@ -18,7 +18,7 @@ python-dateutil==2.9.0.post0
 python-vlc==3.0.20123
 pytz==2025.2
 pyzmq==23.2.1
-redis==3.5.3
+redis==7.1.0
 requests[security]==2.32.3
 tenacity==9.1.2
 sh==1.8
