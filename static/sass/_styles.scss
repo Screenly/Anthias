@@ -1,6 +1,8 @@
-@import "tooltip";
-@import "sweetalert2-overrides";
-@import "form-overrides";
+@use "variables" as *;
+@use "custom-bootstrap";
+@use "tooltip" as *;
+@use "sweetalert2-overrides" as *;
+@use "form-overrides" as *;
 
 // Transformations
 @mixin rotate($degrees) {
