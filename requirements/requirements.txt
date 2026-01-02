@@ -20,7 +20,7 @@ jsonschema==4.25.1
 kombu==5.5.4
 Mako==1.2.2
 netifaces==0.11.0
-psutil==7.1.2
+psutil==7.2.1
 pyasn1==0.6.1
 pydbus==0.6.0
 pyOpenSSL==19.1.0
