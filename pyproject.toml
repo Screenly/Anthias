@@ -8,12 +8,12 @@ dependencies = []
 
 [dependency-groups]
 dev-host = [
-    "ruff==0.14.3",
+    "ruff==0.14.10",
 ]
 docker-image-builder = [
     "click==8.1.7",
     "jinja2==3.1.6",
-    "pygit2==1.15.1",
+    "pygit2==1.19.1",
     "requests==2.32.5",
     "python-on-whales==0.79.0",
 ]
