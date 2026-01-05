@@ -49,7 +49,7 @@ server = [
     "PyYAML==6.0.2",
     "pyzmq==23.2.1",
     "redis==7.1.0",
-    "requests[security]==2.32.3",
+    "requests[security]==2.32.5",
     "tenacity==9.1.2",
     "sh==1.8",
     "six==1.17.0",
