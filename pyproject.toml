@@ -8,7 +8,7 @@ dependencies = []
 
 [dependency-groups]
 dev-host = [
-    "ruff==0.14.3",
+    "ruff==0.14.10",
 ]
 docker-image-builder = [
     "click==8.1.7",
