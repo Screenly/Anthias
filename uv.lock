@@ -89,7 +89,7 @@ docker-image-builder = [
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "pygit2", specifier = "==1.19.1" },
     { name = "python-on-whales", specifier = "==0.79.0" },
-    { name = "requests", specifier = "==2.32.3" },
+    { name = "requests", specifier = "==2.32.5" },
 ]
 server = [
     { name = "cec", specifier = "==0.2.8" },
@@ -123,7 +123,7 @@ server = [
     { name = "pyyaml", specifier = "==6.0.2" },
     { name = "pyzmq", specifier = "==23.2.1" },
     { name = "redis", specifier = "==7.1.0" },
-    { name = "requests", extras = ["security"], specifier = "==2.32.3" },
+    { name = "requests", extras = ["security"], specifier = "==2.32.5" },
     { name = "sh", specifier = "==1.8" },
     { name = "six", specifier = "==1.17.0" },
     { name = "tenacity", specifier = "==9.1.2" },
@@ -1224,7 +1224,7 @@ wheels = [
 
 [[package]]
 name = "requests"
-version = "2.32.3"
+version = "2.32.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -1232,9 +1232,9 @@ dependencies = [
     { name = "idna" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/63/70/2bf7780ad2d390a8d301ad0b550f1581eadbd9a20f896afe06353c2a2913/requests-2.32.3.tar.gz", hash = "sha256:55365417734eb18255590a9ff9eb97e9e1da868d4ccd6402399eaf68af20a760", size = 131218, upload-time = "2024-05-29T15:37:49.536Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c9/74/b3ff8e6c8446842c3f5c837e9c3dfcfe2018ea6ecef224c710c85ef728f4/requests-2.32.5.tar.gz", hash = "sha256:dbba0bac56e100853db0ea71b82b4dfd5fe2bf6d3754a8893c3af500cec7d7cf", size = 134517, upload-time = "2025-08-18T20:46:02.573Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl", hash = "sha256:70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6", size = 64928, upload-time = "2024-05-29T15:37:47.027Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/db/4254e3eabe8020b458f1a747140d32277ec7a271daf1d235b70dc0b4e6e3/requests-2.32.5-py3-none-any.whl", hash = "sha256:2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6", size = 64738, upload-time = "2025-08-18T20:46:00.542Z" },
 ]
 
 [[package]]
