@@ -5,12 +5,16 @@ on:
     branches:
       - 'master'
     paths:
+      - pyproject.toml
+      - uv.lock
       - '**/*.py'
       - '.github/workflows/python-lint.yaml'
   pull_request:
     branches:
       - master
     paths:
+      - pyproject.toml
+      - uv.lock
       - '**/*.py'
       - '.github/workflows/python-lint.yaml'
 
