@@ -1,0 +1,86 @@
+/* globals.css */
+
+:root {
+  /* Core brand palette (HSL) */
+  --checkin-pink: 351 98% 78%; /* #FE8E9F */
+  --checkin-pink-soft: 351 98% 84%; /* ~70% tint */
+  --checkin-pink-subtle: 351 100% 93%; /* ~30% tint */
+
+  --checkin-purple: 326 90% 16%; /* #4C042D */
+
+  --checkin-sand: 42 100% 91%; /* #FFF1D1 */
+  --checkin-sand-soft: 41 100% 94%; /* ~70% tint */
+  --checkin-sand-subtle: 43 100% 97%; /* ~30% tint */
+
+  --checkin-white: 0 0% 100%;
+
+  /* Semantic tokens wired to shadcn */
+
+  --background: var(--checkin-sand-subtle);
+  --foreground: var(--checkin-purple);
+
+  --card: var(--checkin-sand-soft);
+  --card-foreground: var(--checkin-purple);
+
+  --popover: var(--checkin-white);
+  --popover-foreground: var(--checkin-purple);
+
+  /* Primary = Purple (for key actions, KPIs, CTAs) */
+  --primary: var(--checkin-purple);
+  --primary-foreground: var(--checkin-white);
+
+  /* Secondary = Pink soft (for pills, secondary buttons, chips) */
+  --secondary: var(--checkin-pink-soft);
+  --secondary-foreground: var(--checkin-purple);
+
+  /* Muted surfaces (filters, side rails) */
+  --muted: var(--checkin-sand-soft);
+  --muted-foreground: 326 29% 36%; /* desaturated purple */
+
+  /* Accent = Pink (highlights, positive emphasis) */
+  --accent: var(--checkin-pink);
+  --accent-foreground: var(--checkin-purple);
+
+  /* Destructive – keep simple for now (deep purple variant) */
+  --destructive: 326 90% 10%;
+  --destructive-foreground: var(--checkin-white);
+
+  /* Borders & inputs */
+  --border: 326 36% 32%; /* soft purple border */
+  --input: 326 36% 32%;
+  --ring: var(--checkin-purple);
+
+  /* Radii (dashboard: slightly rounded, not pill-y) */
+  --radius: 0.5rem;
+}
+
+/* Optional dark mode – still on-brand but low emphasis on Pink */
+.dark {
+  --background: 326 90% 7%; /* deep purple */
+  --foreground: var(--checkin-white);
+
+  --card: 326 90% 10%;
+  --card-foreground: var(--checkin-white);
+
+  --popover: 326 90% 12%;
+  --popover-foreground: var(--checkin-white);
+
+  --primary: var(--checkin-pink);
+  --primary-foreground: var(--checkin-purple);
+
+  --secondary: 326 44% 20%;
+  --secondary-foreground: var(--checkin-white);
+
+  --muted: 326 44% 18%;
+  --muted-foreground: 43 100% 97%;
+
+  --accent: var(--checkin-pink);
+  --accent-foreground: var(--checkin-purple);
+
+  --destructive: 0 72% 45%;
+  --destructive-foreground: var(--checkin-white);
+
+  --border: 326 40% 32%;
+  --input: 326 40% 32%;
+  --ring: var(--checkin-pink);
+}

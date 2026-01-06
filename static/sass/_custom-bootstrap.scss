@@ -1,8 +1,27 @@
 @import "variables";
 
-$primary: #FFE11A;
-$dark: #270035;
-$info: $anthias-purple-5;
+// Checkin brand primary colors
+$primary: $checkin-pink;
+$secondary: $checkin-pink-soft;
+$dark: $checkin-purple;
+$info: $checkin-pink-soft;
+$light: $checkin-sand-subtle;
+$warning: $checkin-sand;
+
+// Override Bootstrap theme colors
+$theme-colors: (
+  "primary": $checkin-purple,
+  "secondary": $checkin-pink-soft,
+  "success": #28a745,
+  "info": $checkin-pink,
+  "warning": $checkin-sand,
+  "danger": #dc3545,
+  "light": $checkin-sand-subtle,
+  "dark": $checkin-purple
+);
+
+// Enable CSS variables
+$enable-cssgrid: true;
 
 @import "root";
 @import "bootstrap";

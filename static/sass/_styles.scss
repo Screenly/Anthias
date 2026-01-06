@@ -25,8 +25,8 @@
 }
 
 @include selection {
-  color: #000000;
-  background: $anthias-yellow-3;
+  color: $checkin-purple;
+  background: $checkin-pink-soft;
 }
 
 $footer-height: 250px;
@@ -39,10 +39,11 @@ html {
 }
 
 body {
-  background-color: $anthias-purple-1;
+  background-color: $checkin-sand-subtle;
   margin-top: 95px;
   margin-bottom: $footer-height + $base-line-height;
   font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
+  color: $checkin-purple;
 }
 
 @include tooltip;
@@ -53,39 +54,69 @@ body {
 }
 
 .content {
-  background-color: white;
-  border-left: 6px solid $anthias-yellow-3;
-  border-radius: 4px;
+  background-color: $checkin-white;
+  border-left: 6px solid $checkin-pink;
+  border-radius: 0.75rem;
   padding: 15px 0;
   margin: 0;
+  box-shadow: 0 4px 6px -1px rgba(76, 4, 45, 0.05), 0 2px 4px -1px rgba(76, 4, 45, 0.03);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  
+  &:hover {
+    box-shadow: 0 10px 15px -3px rgba(76, 4, 45, 0.08), 0 4px 6px -2px rgba(76, 4, 45, 0.04);
+  }
 }
 
 .active-content {
-  background-color: $anthias-purple-2;
-  color: #FFFFFF;
+  background-color: $checkin-white;
+  border-left: 6px solid $checkin-purple;
+  color: $checkin-purple;
+
+  h5 {
+    color: $checkin-purple;
+  }
 
   table {
-    color: #FFFFFF;
+    color: $checkin-purple;
+
+    thead > tr > th {
+      background-color: $checkin-purple !important;
+      color: $checkin-white !important;
+      font-weight: 600;
+    }
 
     tbody > tr {
-      background-color: $anthias-purple-2;
-      color: rgba(255, 255, 255, 0.8);
+      background-color: $checkin-white;
+      color: $checkin-purple;
+      transition: background-color 0.15s ease;
+      
+      &:hover {
+        background-color: $checkin-sand-soft;
+      }
+      
+      td {
+        background-color: transparent !important;
+        color: $checkin-purple !important;
+      }
     }
   }
 
   .btn {
-    color: #FFFFFF;
-    border-color: #FFFFFF;
+    color: $checkin-purple;
+    border-color: $checkin-purple;
+    transition: all 0.2s ease;
 
     &:hover {
-      background-color: #FFFFFF;
-      color: $anthias-purple-1;
+      background-color: $checkin-purple;
+      color: $checkin-white;
+      transform: translateY(-1px);
     }
   }
 }
 
 .inactive-content {
-  border-left: 6px solid $anthias-yellow-3;
+  border-left: 6px solid $checkin-pink-soft;
+  background-color: $checkin-white;
 }
 
 
@@ -106,9 +137,16 @@ label {
 
 .btn {
   padding: 12px 24px 12px 24px;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
 
   &:focus {
     box-shadow: none !important;
+  }
+
+  &:hover {
+    transform: translateY(-1px);
   }
 }
 
@@ -118,19 +156,53 @@ label {
 }
 
 .btn-primary {
-  background-color: $primary;
-  color: $dark;
+  background-color: $checkin-purple;
+  border-color: $checkin-purple;
+  color: $checkin-white;
   font-weight: 600;
+
+  &:hover {
+    background-color: darken($checkin-purple, 5%);
+    border-color: darken($checkin-purple, 5%);
+    color: $checkin-white;
+  }
+}
+
+.btn-secondary {
+  background-color: $checkin-pink;
+  border-color: $checkin-pink;
+  color: $checkin-purple;
+  font-weight: 600;
+
+  &:hover {
+    background-color: $checkin-pink-soft;
+    border-color: $checkin-pink-soft;
+    color: $checkin-purple;
+  }
 }
 
 .btn-outline-primary {
-  color: #000000;
-  background-color: #FFFFFF;
-  border-color: #FFFFFF;
-  transition: none;
+  color: $checkin-purple;
+  background-color: $checkin-white;
+  border-color: $checkin-purple;
+  transition: all 0.2s ease;
 
   &:hover {
-    background-image: $anthias-yellow-gradient;
+    background-color: $checkin-purple;
+    border-color: $checkin-purple;
+    color: $checkin-white;
+  }
+}
+
+.btn-outline-secondary {
+  color: $checkin-purple;
+  background-color: transparent;
+  border-color: $checkin-pink;
+
+  &:hover {
+    background-color: $checkin-pink;
+    border-color: $checkin-pink;
+    color: $checkin-purple;
   }
 }
 
@@ -150,9 +222,10 @@ label {
     thead {
       tr {
         th {
-          background-color: $anthias-purple-2;
-          color: #FFFFFF;
-          border-bottom: 0.15rem solid #FFFFFF;
+          background-color: $checkin-purple;
+          color: $checkin-white;
+          border-bottom: 0.15rem solid $checkin-pink;
+          font-weight: 600;
         }
       }
     }
@@ -160,8 +233,12 @@ label {
     tbody {
       tr {
         td {
-          background-color: $anthias-purple-2;
-          color: #FFFFFF;
+          background-color: $checkin-white;
+          color: $checkin-purple;
+        }
+        
+        &:hover td {
+          background-color: $checkin-sand-soft;
         }
       }
     }
@@ -172,7 +249,16 @@ label {
       tr {
         th {
           border-bottom-width: 0.15rem;
-          color: $secondary-color;
+          color: $checkin-purple;
+          font-weight: 600;
+        }
+      }
+    }
+    
+    tbody {
+      tr {
+        &:hover td {
+          background-color: $checkin-sand-soft;
         }
       }
     }
@@ -181,22 +267,25 @@ label {
   .EmptyAssetMessage, #footer {
     a {
       text-decoration: none;
+      color: $checkin-pink;
+      font-weight: 600;
 
       &:hover {
         text-decoration: underline;
+        color: $checkin-purple;
       }
     }
   }
 }
 
 .splash {
-  background-color: $anthias-purple-1;
+  background: linear-gradient(180deg, $checkin-purple 0%, darken($checkin-purple, 5%) 100%);
   background-size: 100% 100%;
   margin-top: 0;
   font-size: calc((1.5vw + 1.5vh) / 2);
 
   .splash-body {
-    background-color: $anthias-purple-3;
+    background-color: rgba(0, 0, 0, 0.2);
     color: white;
   }
 
@@ -240,20 +329,33 @@ label {
 
 .navbar {
   padding: 5px 0px;
+  background-color: $checkin-purple !important;
+  box-shadow: 0 2px 4px rgba(76, 4, 45, 0.1);
+  
   &.navbar-header {
     height: 85px;
+  }
+
+  .navbar-brand {
+    img {
+      height: 38px;
+      width: auto;
+    }
   }
 
   .container {
     ul.nav li {
       a {
         padding: 10px 15px 10px;
-        color: #fff;
-        opacity: 0.5;
+        color: $checkin-white;
+        opacity: 0.8;
+        font-weight: 500;
+        transition: opacity 0.2s ease;
 
         &.active, &:hover {
           opacity: 1;
           text-decoration: none;
+          color: $checkin-pink;
         }
       }
       &:last-child {
@@ -265,7 +367,7 @@ label {
 
     a {
       &.brand {
-        text-shadow: 0 1px 0 #000;
+        text-shadow: none;
         padding: 4px 0px;
 
         img {
@@ -281,6 +383,8 @@ label {
     li.update-available {
       a {
         font-weight: bold;
+        color: $checkin-pink;
+        opacity: 1;
       }
     }
   }
@@ -291,6 +395,7 @@ label {
   height: $footer-height;
   position: absolute;
   width: 100%;
+  background-color: $checkin-purple !important;
 
   .logo {
     img {
@@ -300,40 +405,51 @@ label {
 
   .links {
     a {
-      color: rgba(255, 255, 255, 0.70);
-      font-weight: bold;
+      color: rgba(255, 255, 255, 0.80);
+      font-weight: 600;
       text-transform: uppercase;
+      transition: color 0.2s ease;
 
       &:hover {
         text-decoration: none;
-        color: rgba(255, 255, 255, 0.90);
+        color: $checkin-pink;
       }
     }
   }
 
   .copy {
-    border-top: 1px solid rgba(0, 0, 0, .1);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.70);
     font-size: 0.7em;
+  }
+  
+  .brand {
+    color: $checkin-pink !important;
+    transition: color 0.2s ease;
+    
+    &:hover {
+      color: $checkin-pink-soft !important;
+    }
   }
 }
 
 h1.page-header {
   padding-bottom: 9px;
   margin: 20px 0 30px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 2px solid $checkin-pink-soft;
   font-weight: bold;
+  color: $checkin-purple;
 }
 
 section {
   .header {
-    color: #fff;
+    color: $checkin-purple;
     padding: 6px 9px;
     margin-bottom: 9px;
-    border-top-right-radius: 4px;
-    border-top-left-radius: 4px;
-    font-weight: bold;
-    text-shadow: #555 0px 1px 1px !important;
+    border-top-right-radius: 0.5rem;
+    border-top-left-radius: 0.5rem;
+    font-weight: 600;
+    text-shadow: none;
     text-transform: uppercase;
   }
 }
@@ -355,11 +471,19 @@ a.nav-link:not(.active) {
 
   .nav-link {
     border: 0px;
+    color: $checkin-purple;
+    font-weight: 500;
+    transition: color 0.2s ease;
+    
+    &:hover {
+      color: $checkin-purple;
+    }
   }
 
   .active {
-    border-bottom: 3px solid $anthias-yellow-3;
+    border-bottom: 3px solid $checkin-pink;
     font-weight: 600;
+    color: $checkin-purple;
   }
 }
 
@@ -457,10 +581,11 @@ input[name="file_upload"] {
   padding: 20px 20px;
   margin-top: 20px;
   margin-bottom: 20px;
-  background-color: $anthias-purple-4;
+  background-color: $checkin-sand-soft;
+  border-radius: 0.5rem;
 
   a, span {
-    color: #1F002A;
+    color: $checkin-purple;
   }
 }
 

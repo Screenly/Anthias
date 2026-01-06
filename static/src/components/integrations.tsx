@@ -40,9 +40,9 @@ export const Integrations = () => {
 
   return (
     <div className="container">
-      <div className="row py-2">
+      <div className="row py-3">
         <div className="col-12">
-          <h4 className="page-header text-white">
+          <h4 className="page-header" style={{ color: '#4C042D', borderBottomColor: '#FEBCC6' }}>
             <b>Integrations</b>
           </h4>
         </div>
@@ -50,19 +50,19 @@ export const Integrations = () => {
       <div className="row content" style={{ minHeight: '60vh' }}>
         {data.is_balena && (
           <div id="balena-section" className="col-12">
-            <h4 className="page-header">
+            <h4 className="page-header" style={{ color: '#4C042D' }}>
               <b>Balena</b>
             </h4>
             <table className="table">
               <thead className="table-borderless">
                 <tr>
-                  <th className="text-secondary font-weight-normal" scope="col">
+                  <th className="font-weight-normal" scope="col" style={{ color: '#4C042D' }}>
                     Option
                   </th>
-                  <th className="text-secondary font-weight-normal" scope="col">
+                  <th className="font-weight-normal" scope="col" style={{ color: '#4C042D' }}>
                     Value
                   </th>
-                  <th className="text-secondary font-weight-normal" scope="col">
+                  <th className="font-weight-normal" scope="col" style={{ color: '#4C042D' }}>
                     Description
                   </th>
                 </tr>

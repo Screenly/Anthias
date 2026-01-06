@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { FaApple, FaWifi } from 'react-icons/fa'
 
 interface AirPlayStatus {
@@ -14,6 +14,7 @@ export const AirPlay = () => {
   const [isSaving, setIsSaving] = useState(false)
   const [airplayName, setAirplayName] = useState('')
   const [airplayEnabled, setAirplayEnabled] = useState(true)
+  const isEditingRef = useRef(false)
 
   useEffect(() => {
     fetchStatus()
@@ -26,8 +27,11 @@ export const AirPlay = () => {
       const response = await fetch('/api/v2/airplay')
       const data = await response.json()
       setStatus(data)
-      setAirplayName(data.name)
-      setAirplayEnabled(data.enabled)
+      // Only update local state if not currently editing
+      if (!isEditingRef.current) {
+        setAirplayName(data.name)
+        setAirplayEnabled(data.enabled)
+      }
     } catch (error) {
       console.error('Failed to fetch AirPlay status:', error)
     } finally {
@@ -46,6 +50,7 @@ export const AirPlay = () => {
           name: airplayName,
         }),
       })
+      isEditingRef.current = false
       await fetchStatus()
     } catch (error) {
       console.error('Failed to update AirPlay settings:', error)
@@ -112,7 +117,11 @@ export const AirPlay = () => {
                 type="text"
                 className="form-control"
                 value={airplayName}
-                onChange={(e) => setAirplayName(e.target.value)}
+                onChange={(e) => {
+                  isEditingRef.current = true
+                  setAirplayName(e.target.value)
+                }}
+                onFocus={() => { isEditingRef.current = true }}
                 placeholder="Checkin Cast"
               />
               <small className="text-muted">
@@ -126,7 +135,10 @@ export const AirPlay = () => {
                 type="checkbox"
                 id="airplayEnabled"
                 checked={airplayEnabled}
-                onChange={(e) => setAirplayEnabled(e.target.checked)}
+                onChange={(e) => {
+                  isEditingRef.current = true
+                  setAirplayEnabled(e.target.checked)
+                }}
               />
               <label className="form-check-label" htmlFor="airplayEnabled">
                 Enable AirPlay receiver

@@ -106,9 +106,9 @@ export const Settings = () => {
 
   return (
     <div className="container">
-      <div className="row py-2">
+      <div className="row py-3">
         <div className="col-12">
-          <h4 className="page-header text-white">
+          <h4 className="page-header" style={{ color: '#4C042D', borderBottomColor: '#FEBCC6' }}>
             <b>Settings</b>
           </h4>
         </div>

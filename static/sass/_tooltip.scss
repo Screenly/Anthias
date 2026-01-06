@@ -13,31 +13,31 @@
   }
 
   .tooltip-inner {
-    background-color: $anthias-yellow-3;
-    color: $anthias-purple-1;
+    background-color: $checkin-purple;
+    color: $checkin-white;
     padding: 0.5rem 0.75rem;
-    border-radius: 0.375rem;
+    border-radius: 0.5rem;
     font-size: 0.875rem;
     font-weight: 500;
     max-width: 300px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 6px rgba(76, 4, 45, 0.15);
   }
 
   .tooltip {
     &.bs-tooltip-top .tooltip-arrow::before {
-      border-top-color: $anthias-yellow-3;
+      border-top-color: $checkin-purple;
     }
 
     &.bs-tooltip-bottom .tooltip-arrow::before {
-      border-bottom-color: $anthias-yellow-3;
+      border-bottom-color: $checkin-purple;
     }
 
     &.bs-tooltip-start .tooltip-arrow::before {
-      border-left-color: $anthias-yellow-3;
+      border-left-color: $checkin-purple;
     }
 
     &.bs-tooltip-end .tooltip-arrow::before {
-      border-right-color: $anthias-yellow-3;
+      border-right-color: $checkin-purple;
     }
   }
 }

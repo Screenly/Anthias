@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 
-{% block title %}Login to Anthias{% endblock %}
+{% block title %}Login to Checkin Cast{% endblock %}
 
 {% block content %}
 <div class="container mt-5">
   <div class="row justify-content-center">
-    <div class="col-md-6">
-      <div class="card">
-        <div class="card-header">
-          <h4 class="mb-0">Login to Anthias</h4>
+    <div class="col-md-5">
+      <div class="card shadow-sm" style="border-radius: 0.75rem; border: none;">
+        <div class="card-header text-center py-4" style="background-color: #4C042D; border-radius: 0.75rem 0.75rem 0 0;">
+          <h4 class="mb-0" style="color: #FFFFFF;">Login to Checkin Cast</h4>
         </div>
-        <div class="card-body">
+        <div class="card-body p-4" style="background-color: #FFFBF5;">
           {% if messages %}
-          <div class="alert alert-danger">
+          <div class="alert" style="background-color: #FFEBEE; color: #4C042D; border: 1px solid #FE8E9F; border-radius: 0.5rem;">
             {% for message in messages %}
             {{ message }}
             {% endfor %}
@@ -24,16 +24,16 @@
             <input type="hidden" name="next" value="{{ next }}">
 
             <div class="form-group mb-3">
-              <label for="username">Username</label>
-              <input type="text" class="form-control shadow-none" id="username" name="username" required>
+              <label for="username" class="form-label" style="color: #4C042D; font-weight: 500;">Username</label>
+              <input type="text" class="form-control shadow-none" id="username" name="username" required style="border-radius: 0.5rem;">
             </div>
 
-            <div class="form-group mb-3">
-              <label for="password">Password</label>
-              <input type="password" class="form-control shadow-none" id="password" name="password" required>
+            <div class="form-group mb-4">
+              <label for="password" class="form-label" style="color: #4C042D; font-weight: 500;">Password</label>
+              <input type="password" class="form-control shadow-none" id="password" name="password" required style="border-radius: 0.5rem;">
             </div>
 
-            <button type="submit" class="btn btn-primary">Login</button>
+            <button type="submit" class="btn btn-primary w-100" style="background-color: #4C042D; border-color: #4C042D; border-radius: 2rem; padding: 0.75rem;">Login</button>
           </form>
         </div>
       </div>

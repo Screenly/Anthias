@@ -19,9 +19,8 @@ export const ScheduleActionButtons = ({
         className={classNames(
           'btn',
           'btn-long',
-          'btn-light',
+          'btn-outline-primary',
           'fw-bold',
-          'text-dark',
         )}
         onClick={onPreviousAsset}
       >
@@ -35,9 +34,8 @@ export const ScheduleActionButtons = ({
         className={classNames(
           'btn',
           'btn-long',
-          'btn-light',
+          'btn-outline-primary',
           'fw-bold',
-          'text-dark',
         )}
         onClick={onNextAsset}
       >

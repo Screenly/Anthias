@@ -5,33 +5,33 @@
 
 set -euo pipefail
 
-BRANCH="master"
+BRANCH="feature/checkin-cast-airplay"
 ANSIBLE_PLAYBOOK_ARGS=()
-REPOSITORY="https://github.com/Screenly/Anthias.git"
-ANTHIAS_REPO_DIR="/home/${USER}/screenly"
-GITHUB_API_REPO_URL="https://api.github.com/repos/Screenly/Anthias"
-GITHUB_RELEASES_URL="https://github.com/Screenly/Anthias/releases"
-GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
+REPOSITORY="https://github.com/storbukas/CheckinSignage.git"
+ANTHIAS_REPO_DIR="/home/${USER}/CheckinSignage"
+GITHUB_API_REPO_URL="https://api.github.com/repos/storbukas/CheckinSignage"
+GITHUB_RELEASES_URL="https://github.com/storbukas/CheckinSignage/releases"
+GITHUB_RAW_URL="https://raw.githubusercontent.com/storbukas/CheckinSignage"
 DOCKER_TAG="latest"
 UPGRADE_SCRIPT_PATH="${ANTHIAS_REPO_DIR}/bin/upgrade_containers.sh"
 ARCHITECTURE=$(uname -m)
 DISTRO_VERSION=$(lsb_release -rs)
 
 INTRO_MESSAGE=(
-    "Anthias requires a dedicated Raspberry Pi and an SD card."
+    "Checkin Signage requires a dedicated Raspberry Pi and an SD card."
     "You will not be able to use the regular desktop environment once installed."
     ""
     "When prompted for the version, you can choose between the following:"
-    "  - **latest:** Installs the latest version from the \`master\` branch."
+    "  - **latest:** Installs the latest version from the \`feature/checkin-cast-airplay\` branch."
     "  - **tag:** Installs a pinned version based on the tag name."
     ""
     "Take note that \`latest\` is a rolling release."
 )
 MANAGE_NETWORK_PROMPT=(
-    "Would you like Anthias to manage the network for you?"
+    "Would you like Checkin Signage to manage the network for you?"
 )
 VERSION_PROMPT=(
-    "Which version of Anthias would you like to install?"
+    "Which version of Checkin Signage would you like to install?"
 )
 VERSION_PROMPT_CHOICES=(
     "latest"
@@ -43,16 +43,14 @@ SYSTEM_UPGRADE_PROMPT=(
 SUDO_ARGS=()
 
 TITLE_TEXT=$(cat <<EOF
-     @@@@@@@@@
-  @@@@@@@@@@@@                 d8888          888    888      d8b
- @@@@@@@  @@@    @@           d88888          888    888      Y8P
-@@@@@@@@@@@@@    @@@         d88P888          888    888
-@@@@@@@@@@ @@   @@@@        d88P 888 88888b.  888888 88888b.  888  8888b.  .d8888b
-@@@@@       @@@@@@@@       d88P  888 888 "88b 888    888 "88b 888     "88b 88K
-@@@%:      :@@@@@@@@      d88P   888 888  888 888    888  888 888 .d888888 "Y8888b.
- @@-:::::::%@@@@@@@      d8888888888 888  888 Y88b.  888  888 888 888  888      X88
-  @=::::=%@@@@@@@@      d88P     888 888  888  "Y888 888  888 888 "Y888888  88888P'
-     @@@@@@@@@@
+   _____ _               _    _         _____ _
+  / ____| |             | |  (_)       / ____(_)
+ | |    | |__   ___  ___| | ___ _ __  | (___  _  __ _ _ __   __ _  __ _  ___
+ | |    | '_ \ / _ \/ __| |/ / | '_ \  \___ \| |/ _\` | '_ \ / _\` |/ _\` |/ _ \\
+ | |____| | | |  __/ (__|   <| | | | | ____) | | (_| | | | | (_| | (_| |  __/
+  \_____|_| |_|\___|\___|_|\_\_|_| |_||_____/|_|\__, |_| |_|\__,_|\__, |\___|
+                                                __/ |             __/ |
+                                               |___/             |___/
 EOF
 )
 
@@ -202,7 +200,7 @@ function set_device_type() {
 }
 
 function run_ansible_playbook() {
-    display_section "Run the Anthias Ansible Playbook"
+    display_section "Run the Checkin Signage Ansible Playbook"
     set_device_type
 
     sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
@@ -295,7 +293,7 @@ function modify_permissions() {
 function write_anthias_version() {
     local GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
     local GIT_SHORT_HASH=$(git rev-parse --short HEAD)
-    local ANTHIAS_VERSION="Anthias Version: ${GIT_BRANCH}@${GIT_SHORT_HASH}"
+    local ANTHIAS_VERSION="Checkin Signage Version: ${GIT_BRANCH}@${GIT_SHORT_HASH}"
 
     echo "${ANTHIAS_VERSION}" > ~/version.md
     echo "$(lsb_release -a 2> /dev/null)" >> ~/version.md
@@ -377,7 +375,7 @@ function main() {
     )
 
     if [ "$VERSION" == "latest" ]; then
-        BRANCH="master"
+        BRANCH="feature/checkin-cast-airplay"
     else
         set_custom_version
     fi

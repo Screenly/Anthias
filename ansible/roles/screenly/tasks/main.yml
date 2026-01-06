@@ -38,7 +38,7 @@
 - name: Install pip dependencies
   ansible.builtin.pip:
     executable: "/home/{{ lookup('env', 'USER') }}/installer_venv/bin/pip"
-    requirements: "/home/{{ lookup('env', 'USER') }}/screenly/requirements/requirements.host.txt"
+    requirements: "/home/{{ lookup('env', 'USER') }}/CheckinSignage/requirements/requirements.host.txt"
     extra_args: "--no-cache-dir --upgrade"
   when: ansible_distribution_major_version | int >= 12
 
@@ -69,8 +69,8 @@
 
 - name: Download upgrade script from github repository
   ansible.builtin.get_url:
-    url: https://raw.githubusercontent.com/Screenly/Anthias/master/bin/install.sh
-    dest: /usr/local/sbin/upgrade_anthias.sh
+    url: https://raw.githubusercontent.com/storbukas/CheckinSignage/feature/checkin-cast-airplay/bin/install.sh
+    dest: /usr/local/sbin/upgrade_checkinsignage.sh
     mode: "0700"
     owner: root
     group: root

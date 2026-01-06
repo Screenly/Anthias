@@ -15,11 +15,11 @@ export const ScheduleHeader = ({
   onAddAsset,
 }: ScheduleHeaderProps) => {
   return (
-    <div className="container pt-3 pb-3">
+    <div className="container pt-4 pb-4">
       <div className="row">
         <div className="col-12">
           <h4 className="mb-3">
-            <b className="text-white">Schedule Overview</b>
+            <b style={{ color: '#4C042D' }}>Schedule Overview</b>
           </h4>
 
           <PlayerNameBadge playerName={playerName} />

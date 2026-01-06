@@ -100,9 +100,9 @@ export const SystemInfo = () => {
 
   return (
     <div className="container">
-      <div className="row py-2">
+      <div className="row py-3">
         <div className="col-12">
-          <h4 className="page-header text-white">
+          <h4 className="page-header" style={{ color: '#4C042D', borderBottomColor: '#FEBCC6' }}>
             <b>System Info</b>
           </h4>
         </div>
@@ -113,13 +113,13 @@ export const SystemInfo = () => {
             <thead className="table-borderless">
               <tr>
                 <th
-                  className="text-secondary font-weight-normal"
+                  className="font-weight-normal"
                   scope="col"
-                  style={{ width: '20%' }}
+                  style={{ width: '20%', color: '#4C042D' }}
                 >
                   Option
                 </th>
-                <th className="text-secondary font-weight-normal" scope="col">
+                <th className="font-weight-normal" scope="col" style={{ color: '#4C042D' }}>
                   Value
                 </th>
               </tr>

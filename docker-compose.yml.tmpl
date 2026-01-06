@@ -2,7 +2,7 @@
 
 services:
   anthias-wifi-connect:
-    image: screenly/anthias-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: checkinsignage/wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.wifi-connect
@@ -11,7 +11,7 @@ services:
     environment:
       PORTAL_LISTENING_PORT: 8000
       CHECK_CONN_FREQ: 10
-      PORTAL_SSID: 'Anthias WiFi Connect'
+      PORTAL_SSID: 'Checkin Signage WiFi'
       DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=/run/dbus/system_bus_socket'
     network_mode: host
     privileged: true
@@ -21,7 +21,7 @@ services:
         target: /run/dbus/system_bus_socket
 
   anthias-server:
-    image: screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: checkinsignage/server:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.server
@@ -40,14 +40,14 @@ services:
       - resin-data:/data
       - /home/${USER}/.screenly:/data/.screenly
       - /home/${USER}/screenly_assets:/data/screenly_assets
-      - /home/${USER}/screenly/staticfiles:/data/screenly/staticfiles
+      - /home/${USER}/CheckinSignage/staticfiles:/data/screenly/staticfiles
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     labels:
       io.balena.features.supervisor-api: '1'
 
   anthias-viewer:
-    image: screenly/anthias-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: checkinsignage/viewer:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
@@ -75,7 +75,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   anthias-websocket:
-    image: screenly/anthias-websocket:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: checkinsignage/websocket:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.websocket
@@ -93,7 +93,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
   anthias-celery:
-    image: screenly/anthias-celery:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: checkinsignage/celery:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.celery
@@ -117,7 +117,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   redis:
-    image: screenly/anthias-redis:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: checkinsignage/redis:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.redis
@@ -128,7 +128,7 @@ services:
       - redis-data:/var/lib/redis
 
   anthias-nginx:
-    image: screenly/anthias-nginx:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: checkinsignage/nginx:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.nginx
@@ -144,12 +144,12 @@ services:
       - resin-data:/data:ro
       - /home/${USER}/.screenly:/data/.screenly:ro
       - /home/${USER}/screenly_assets:/data/screenly_assets:ro
-      - /home/${USER}/screenly/staticfiles:/data/screenly/staticfiles:ro
+      - /home/${USER}/CheckinSignage/staticfiles:/data/screenly/staticfiles:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
   anthias-airplay:
-    image: screenly/anthias-airplay:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: checkinsignage/airplay:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.airplay

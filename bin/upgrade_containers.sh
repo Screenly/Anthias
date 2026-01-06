@@ -68,17 +68,17 @@ if [[ -n $(docker ps | grep srly-ose) ]]; then
     set -e
 fi
 
-cat /home/${USER}/screenly/docker-compose.yml.tmpl \
+cat /home/${USER}/CheckinSignage/docker-compose.yml.tmpl \
     | envsubst \
-    > /home/${USER}/screenly/docker-compose.yml
+    > /home/${USER}/CheckinSignage/docker-compose.yml
 
 if [[ "$DEVICE_TYPE" =~ ^(x86|pi5)$ ]]; then
     sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
-        /home/${USER}/screenly/docker-compose.yml
+        /home/${USER}/CheckinSignage/docker-compose.yml
 fi
 
 sudo -E docker compose \
-    -f /home/${USER}/screenly/docker-compose.yml \
+    -f /home/${USER}/CheckinSignage/docker-compose.yml \
     ${MODE}
 
 if [ -f /var/run/reboot-required ]; then
@@ -86,5 +86,5 @@ if [ -f /var/run/reboot-required ]; then
 fi
 
 sudo -E docker compose \
-    -f /home/${USER}/screenly/docker-compose.yml \
+    -f /home/${USER}/CheckinSignage/docker-compose.yml \
     up -d

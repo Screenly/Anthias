@@ -1,20 +1,49 @@
 .form-switch-info {
   .form-check-input {
     &:checked {
-      background-color: $anthias-purple-5;
-      border-color: $anthias-purple-5;
+      background-color: $checkin-purple;
+      border-color: $checkin-purple;
     }
 
     &:focus {
-      border-color: rgba(0, 0, 0, 0.25);
-      box-shadow: 0 0 0 0.25rem rgba(136, 25, 199, 0.25);
-      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba(0, 0, 0, 0.25)'/%3e%3c/svg%3e");
+      border-color: $checkin-pink-soft;
+      box-shadow: 0 0 0 0.25rem rgba(76, 4, 45, 0.15);
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba(76, 4, 45, 0.25)'/%3e%3c/svg%3e");
     }
 
     &:checked:focus {
-      background-color: $anthias-purple-5;
-      border-color: $anthias-purple-5;
+      background-color: $checkin-purple;
+      border-color: $checkin-purple;
+      box-shadow: 0 0 0 0.25rem rgba(76, 4, 45, 0.15);
       background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e");
     }
   }
+}
+
+// Form control focus states
+.form-control {
+  border-radius: 0.5rem;
+  border-color: rgba(76, 4, 45, 0.2);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  
+  &:focus {
+    border-color: $checkin-pink;
+    box-shadow: 0 0 0 0.2rem rgba(254, 142, 159, 0.25);
+  }
+}
+
+.form-select {
+  border-radius: 0.5rem;
+  border-color: rgba(76, 4, 45, 0.2);
+  
+  &:focus {
+    border-color: $checkin-pink;
+    box-shadow: 0 0 0 0.2rem rgba(254, 142, 159, 0.25);
+  }
+}
+
+// Form labels
+.form-label {
+  color: $checkin-purple;
+  font-weight: 500;
 }
