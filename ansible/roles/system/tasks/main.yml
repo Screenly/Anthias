@@ -257,16 +257,24 @@
       - docker-compose
     state: absent
 
+- name: Ensure keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
 - name: Add Docker apt key (x86)
-  ansible.builtin.apt_key:
+  ansible.builtin.get_url:
     url: https://download.docker.com/linux/debian/gpg
-    state: present
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
   when: ansible_architecture == "x86_64"
 
 - name: Add Docker apt key (Raspberry Pi)
-  ansible.builtin.apt_key:
+  ansible.builtin.get_url:
     url: https://download.docker.com/linux/raspbian/gpg
-    state: present
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
   when: |
     ansible_architecture == "aarch64" or
     ansible_architecture == "armv7l" or
@@ -306,7 +314,7 @@
   ansible.builtin.lineinfile:
     path: /etc/apt/sources.list.d/docker.list
     create: true
-    line: "deb [arch={{ architecture }}] https://download.docker.com/linux/debian {{ debian_name.stdout }} stable"
+    line: "deb [arch={{ architecture }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian {{ debian_name.stdout }} stable"
     state: present
     owner: root
     group: root
