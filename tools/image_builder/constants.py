@@ -8,6 +8,7 @@ SERVICES = (
     'nginx',
     'viewer',
     'wifi-connect',
+    'airplay',
     'test',
 )
-GITHUB_REPO_URL = 'https://github.com/Screenly/Anthias'
+GITHUB_REPO_URL = 'https://github.com/storbukas/CheckinSignage'
