@@ -1,14 +1,14 @@
-name: "Anthias"
+name: "Checkin Signage"
 type: "sw.application"
 description: >-
-  The world's most popular open source digital signage project
+  Digital signage solution with AirPlay support
 post-provisioning: >-
 
   ## Introduction
 
-  Anthias (formerly known as Screenly OSE) is free digital signage software that is backed by our community and maintained by Screenly, Inc.
+  Checkin Signage is digital signage software based on Anthias, with added AirPlay support via Checkin Cast.
 
-  With Anthias, a monitor/TV and a Raspberry Pi, you can create a remotely managed screen that can display:
+  With Checkin Signage, a monitor/TV and a Raspberry Pi, you can create a remotely managed screen that can display:
 
   * Images
 
@@ -18,14 +18,14 @@ post-provisioning: >-
 
   * Video feeds (RTSP)
 
-  Thanks to Balena [OpenFleets](https://hub.balena.io/organizations/screenly_ose/fleets), you benefit from having automatic updates. As soon as updates are shipped, they will be deployed to your device.
+  * AirPlay streams (via Checkin Cast)
 
 assets:
   repository:
     type: "blob.asset"
     data:
-      url: "https://github.com/Screenly/Anthias/"
+      url: "https://github.com/storbukas/CheckinSignage/"
   logo:
     type: "blob.asset"
     data:
-      url: "https://raw.githubusercontent.com/Screenly/Anthias/master/static/img/square-dark.svg"
+      url: "https://raw.githubusercontent.com/storbukas/CheckinSignage/feature/checkin-cast-airplay/static/img/checkin-logo-purple.svg"
