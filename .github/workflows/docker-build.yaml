@@ -27,6 +27,7 @@ on:
       - '!tests/**'
       - '!docker/Dockerfile.dev'
       - '!.cursor/**'
+      - '!host_agent.py'
 
 jobs:
   run-tests:

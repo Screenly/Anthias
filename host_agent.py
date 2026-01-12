@@ -30,6 +30,7 @@ SUPPORTED_INTERFACES = (
     'eth',
     'wlp',
     'enp',
+    'eno',
 )
 
 
