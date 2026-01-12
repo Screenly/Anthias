@@ -21,13 +21,13 @@ RUN npm run build
 {% endif %}
 {% include 'Dockerfile.base.j2' %}
 
-COPY requirements/requirements.txt /tmp/requirements.txt
+COPY pyproject.toml uv.lock /tmp/
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
-RUN --mount=type=cache,target=/root/.cache/pip \
+RUN --mount=type=cache,target=/root/.cache/uv \
 {% endif %}
-    pip3 install -r /tmp/requirements.txt --break-system-packages
+    cd /tmp && uv sync --frozen --no-dev --group server
 
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/
