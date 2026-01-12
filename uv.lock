@@ -79,6 +79,32 @@ server = [
     { name = "wheel" },
     { name = "yt-dlp" },
 ]
+viewer = [
+    { name = "cec" },
+    { name = "certifi" },
+    { name = "configparser" },
+    { name = "cryptography" },
+    { name = "cython" },
+    { name = "django" },
+    { name = "django-dbbackup" },
+    { name = "drf-spectacular" },
+    { name = "future" },
+    { name = "idna" },
+    { name = "jinja2" },
+    { name = "jsonschema" },
+    { name = "netifaces" },
+    { name = "pydbus" },
+    { name = "python-dateutil" },
+    { name = "python-vlc" },
+    { name = "pytz" },
+    { name = "pyzmq" },
+    { name = "redis" },
+    { name = "requests" },
+    { name = "sh" },
+    { name = "tenacity" },
+    { name = "uptime" },
+    { name = "urllib3" },
+]
 
 [package.metadata]
 
@@ -130,6 +156,32 @@ server = [
     { name = "urllib3", specifier = "==2.6.0" },
     { name = "wheel", specifier = "==0.38.1" },
     { name = "yt-dlp", specifier = "==2025.10.22" },
+]
+viewer = [
+    { name = "cec", specifier = "==0.2.8" },
+    { name = "certifi", specifier = "==2025.10.5" },
+    { name = "configparser", specifier = "==7.2.0" },
+    { name = "cryptography", specifier = "==3.3.2" },
+    { name = "cython", specifier = "==3.2.3" },
+    { name = "django", specifier = "==4.2.27" },
+    { name = "django-dbbackup", specifier = "==4.2.1" },
+    { name = "drf-spectacular", specifier = "==0.29.0" },
+    { name = "future", specifier = "==1.0.0" },
+    { name = "idna", specifier = "==3.11" },
+    { name = "jinja2", specifier = "==3.1.6" },
+    { name = "jsonschema", specifier = "==4.25.1" },
+    { name = "netifaces", specifier = "==0.11.0" },
+    { name = "pydbus", specifier = "==0.6.0" },
+    { name = "python-dateutil", specifier = "==2.9.0.post0" },
+    { name = "python-vlc", specifier = "==3.0.20123" },
+    { name = "pytz", specifier = "==2025.2" },
+    { name = "pyzmq", specifier = "==23.2.1" },
+    { name = "redis", specifier = "==7.1.0" },
+    { name = "requests", extras = ["security"], specifier = "==2.32.5" },
+    { name = "sh", specifier = "==1.8" },
+    { name = "tenacity", specifier = "==9.1.2" },
+    { name = "uptime", specifier = "==3.0.1" },
+    { name = "urllib3", specifier = "==2.6.0" },
 ]
 
 [[package]]
@@ -1131,6 +1183,15 @@ wheels = [
 ]
 
 [[package]]
+name = "python-vlc"
+version = "3.0.20123"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f5/fc/6e4f1dd5ee3a86db172d7100f5a28cd9d8a57ad65cfda09eb114d3b9aaaa/python-vlc-3.0.20123.tar.gz", hash = "sha256:244fbb9e392a0326841fca926d6d12a2a36c546982191f493f148fa19e66b1d4", size = 159444, upload-time = "2023-11-04T16:12:30.938Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/31/c0/00eb4c1ac241835224e34b7005143a0788353b8b56286660317cb82cdf94/python_vlc-3.0.20123-py3-none-any.whl", hash = "sha256:903b3dc3602804958837c69907f3d3485921ef8424c254c7314db3d6037f8d62", size = 79876, upload-time = "2023-11-04T16:12:26.758Z" },
+]
+
+[[package]]
 name = "pytz"
 version = "2025.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1442,6 +1503,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/5e/a7/c202b344c5ca7daf3
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/b0/003792df09decd6849a5e39c28b513c06e84436a54440380862b5aeff25d/tzdata-2025.3-py2.py3-none-any.whl", hash = "sha256:06a47e5700f3081aab02b2e513160914ff0694bce9947d6b76ebd6bf57cfc5d1", size = 348521, upload-time = "2025-12-13T17:45:33.889Z" },
 ]
+
+[[package]]
+name = "uptime"
+version = "3.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ad/53/6c420ddf6949097d6f9406358951c9322505849bea9cb79efe3acc0bb55d/uptime-3.0.1.tar.gz", hash = "sha256:7c300254775b807ce46e3dcbcda30aa3b9a204b9c57a7ac1e79ee6dbe3942973", size = 6630, upload-time = "2013-10-07T14:19:58.456Z" }
 
 [[package]]
 name = "uritemplate"

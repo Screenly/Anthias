@@ -12,10 +12,12 @@ chown -f viewer /data/.screenly/latest_anthias_sha
 mkdir -p /data/.local/share/ScreenlyWebview/QtWebEngine \
     /data/hotspot \
     /data/.cache/ScreenlyWebview \
+    /data/.cache/uv \
     /data/.pki
 
 chown -Rf viewer /data/.local/share/ScreenlyWebview
 chown -Rf viewer /data/.cache/ScreenlyWebview/
+chown -Rf viewer /data/.cache/uv
 chown -Rf viewer /data/.pki
 chown -Rf viewer /data/hotspot
 
@@ -39,7 +41,7 @@ trap '' 16
 echo 0 >  /sys/fs/cgroup/memory/memory.swappiness
 
 # Start viewer
-sudo -E -u viewer dbus-run-session python -m viewer &
+sudo -E -u viewer dbus-run-session uv run python -m viewer &
 
 # Wait for the viewer
 while true; do

@@ -60,6 +60,7 @@ services:
       - PORT=80
       - NOREFRESH=1
       - LISTEN=anthias-nginx
+      - UV_PROJECT_ENVIRONMENT=/tmp/.venv
     extra_hosts:
       - "host.docker.internal:host-gateway"
     privileged: true

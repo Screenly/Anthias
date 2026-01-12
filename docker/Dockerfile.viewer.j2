@@ -3,7 +3,8 @@
 
 FROM {{ base_image }}:{{ base_image_tag }}
 
-# This list needs to be trimmed back later
+{% include 'Dockerfile.base.j2' %}
+
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
@@ -19,25 +20,15 @@ RUN --mount=type=cache,target=/var/cache/apt \
         {% endif %}
     {% endfor %}
 
-# We need this to ensure that the wheels can be built.
-# Otherwise we get "invalid command 'bdist_wheel'"
+COPY pyproject.toml uv.lock /tmp/
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
-RUN --mount=type=cache,target=/root/.cache/pip \
+RUN --mount=type=cache,target=/root/.cache/uv \
 {% endif %}
-    pip3 install --upgrade pip --break-system-packages && \
-    pip3 install wheel --break-system-packages
-
-# Install Python requirements
-COPY requirements/requirements.viewer.txt /tmp/requirements.txt
-
-{% if disable_cache_mounts %}
-RUN \
-{% else %}
-RUN --mount=type=cache,target=/root/.cache/pip \
-{% endif %}
-    pip3 install -r /tmp/requirements.txt --break-system-packages
+    cd /tmp && \
+    uv venv --system-site-packages && \
+    uv sync --frozen --no-dev --group viewer
 
 # Works around issue with `curl`
 # https://github.com/balena-io-library/base-images/issues/562
