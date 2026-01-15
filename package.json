@@ -26,8 +26,8 @@
     "sweetalert2": "^11.26.17"
   },
   "devDependencies": {
-    "@babel/core": "^7.28.5",
-    "@babel/preset-env": "^7.28.5",
+    "@babel/core": "^7.28.6",
+    "@babel/preset-env": "^7.28.6",
     "@babel/preset-react": "^7.28.5",
     "@babel/preset-typescript": "^7.28.5",
     "@testing-library/dom": "^10.4.1",
@@ -39,7 +39,7 @@
     "@types/jquery": "^3.5.33",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
-    "@typescript-eslint/eslint-plugin": "^8.52.0",
+    "@typescript-eslint/eslint-plugin": "^8.53.0",
     "@typescript-eslint/parser": "^8.39.0",
     "babel-loader": "^10.0.0",
     "classnames": "^2.5.1",
