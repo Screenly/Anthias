@@ -51,7 +51,7 @@
     "jest-fixed-jsdom": "^0.0.11",
     "mini-css-extract-plugin": "^2.9.4",
     "msw": "^2.12.7",
-    "prettier": "3.7.4",
+    "prettier": "3.8.0",
     "sass": "^1.97.2",
     "sass-loader": "^16.0.6",
     "ts-jest": "^29.4.6",
