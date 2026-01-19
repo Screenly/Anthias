@@ -33,6 +33,6 @@ requests[security]==2.32.3
 tenacity==9.1.2
 sh==1.8
 six==1.17.0
-urllib3==2.6.2
+urllib3==2.6.3
 wheel==0.38.1
 yt-dlp==2025.10.22
