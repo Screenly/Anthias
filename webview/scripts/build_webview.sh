@@ -10,8 +10,8 @@ QT_VERSION="${QT_MAJOR}.${QT_MINOR}.${QT_PATCH}"
 CORE_COUNT="$(expr $(nproc) - 2)"
 
 BOARD=${BOARD:-"x86"}
-if [[ ! "${BOARD}" =~ ^(x86|pi5)$ ]]; then
-    echo "Error: Invalid board specified. Must be either 'x86' or 'pi5'."
+if [[ ! "${BOARD}" =~ ^(x86|pi5|pi4-64)$ ]]; then
+    echo "Error: Invalid board specified. Must be either 'x86', 'pi5', or 'pi4-64'."
     exit 1
 fi
 

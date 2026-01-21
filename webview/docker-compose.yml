@@ -31,3 +31,20 @@ services:
       - "./examples:/src/examples"
       - "./:/webview:ro"
       - "./scripts/build_webview.sh:/scripts/build_webview.sh"
+
+  builder-pi4-64:
+    profiles:
+      - pi4-64
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.pi4-64
+    environment:
+      - GIT_HASH=${GIT_HASH}
+      - BOARD=pi4-64
+    tty: true
+    stdin_open: true
+    volumes:
+      - "~/tmp/pi4-64/build:/build:Z"
+      - "./examples:/src/examples"
+      - "./:/webview:ro"
+      - "./scripts/build_webview.sh:/scripts/build_webview.sh"

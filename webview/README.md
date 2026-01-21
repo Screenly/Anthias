@@ -71,27 +71,9 @@ When you're done, you can stop and remove the container with the following comma
 $ docker compose down
 ```
 
-### Building for Raspberry Pi 5
+### Building for Raspberry Pi 4 and Raspberry Pi 5 Devices Running 64-Bit OS
 
-> [!NOTE]
-> At this time, you can only build the WebView for Raspberry Pi 5 devices
-> from a Raspberry Pi 5 device.
-> You need to have the following installed and set up on your Raspberry Pi 5:
-> - Docker (arm64)
-> - Code editor of your choice (e.g., Visual Studio Code, Neovim, etc.)
-
-The steps are similar to that of [building for x86](#building-for-x86),
-but you need to specify the set the Docker Compose profile to `pi5`:
-
-```bash
-$ cd webview/
-$ export GIT_HASH=$(git rev-parse --short HEAD)
-$ export COMPOSE_PROFILES=pi5
-$ docker compose up -d --build
-$ docker compose exec builder-pi5 /scripts/build_webview.sh
-```
-
-The resulting files will be placed in `~/tmp-pi5/build/release`.
+See this [documentation](/webview/docs/build_webview_using_prebuilt_qt.md) for details
 
 ## Usage
 
