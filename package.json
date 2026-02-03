@@ -23,7 +23,7 @@
     "react-redux": "^9.1.0",
     "react-router": "^7.13.0",
     "react-router-dom": "^7.13.0",
-    "sweetalert2": "^11.26.17"
+    "sweetalert2": "^11.26.18"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
