@@ -33,6 +33,7 @@ services:
       - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - UV_PROJECT_ENVIRONMENT=/tmp/.venv
     devices:
       - "/dev/vchiq:/dev/vchiq"
     restart: always
@@ -59,6 +60,7 @@ services:
       - PORT=80
       - NOREFRESH=1
       - LISTEN=anthias-nginx
+      - UV_PROJECT_ENVIRONMENT=/tmp/.venv
     extra_hosts:
       - "host.docker.internal:host-gateway"
     privileged: true

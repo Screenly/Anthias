@@ -17,21 +17,21 @@ echo "Running migration..."
 # database is not left in an inconsistent state if the migration fails.
 
 if [ -f /data/.screenly/screenly.db ]; then
-    ./manage.py dbbackup --noinput --clean && \
-        ./manage.py migrate --fake-initial --noinput || \
-        ./manage.py dbrestore --noinput
+    uv run python manage.py dbbackup --noinput --clean && \
+        uv run python manage.py migrate --fake-initial --noinput || \
+        uv run python manage.py dbrestore --noinput
 else
-    ./manage.py migrate && \
-        ./manage.py dbbackup --noinput --clean
+    uv run python manage.py migrate && \
+        uv run python manage.py dbbackup --noinput --clean
 fi
 
 if [[ "$ENVIRONMENT" == "development" ]]; then
     echo "Starting Django development server..."
     npm install && npm run build
-    ./manage.py runserver 0.0.0.0:8080
+    uv run python manage.py runserver 0.0.0.0:8080
 else
     echo "Generating Django static files..."
-    ./manage.py collectstatic --clear --noinput
+    uv run python manage.py collectstatic --clear --noinput
     echo "Starting Gunicorn..."
-    python run_gunicorn.py
+    uv run python run_gunicorn.py
 fi

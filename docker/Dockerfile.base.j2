@@ -22,13 +22,6 @@ RUN --mount=type=cache,target=/var/cache/apt \
 # https://github.com/balena-io-library/base-images/issues/562
 RUN c_rehash
 
-# We need this to ensure that the wheels can be built.
-# Otherwise we get "invalid command 'bdist_wheel'"
-{% if disable_cache_mounts %}
-RUN \
-{% else %}
-RUN --mount=type=cache,target=/root/.cache/pip \
-{% endif %}
-    pip3 install --upgrade pip --break-system-packages && \
-    pip3 install wheel --break-system-packages
+# Install uv for fast Python package management
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
