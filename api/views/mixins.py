@@ -1,8 +1,10 @@
+import logging
+import sqlite3
 import uuid
 from base64 import b64encode
 from inspect import cleandoc
 from mimetypes import guess_extension, guess_type
-from os import path, remove, statvfs
+from os import getenv, path, remove, statvfs
 
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from hurry.filesize import size
@@ -284,20 +286,72 @@ class AssetsControlViewMixin(APIView):
 
 
 class InfoViewMixin(APIView):
+    @staticmethod
+    def _get_viewlog():
+        """Read the last played asset from viewlog.db.
+
+        Returns a dict with the last entry or 'No data' if empty.
+        """
+        home = getenv('HOME', '')
+        db_path = path.join(home, '.screenly', 'viewlog.db')
+
+        if not path.exists(db_path):
+            return 'No data'
+
+        try:
+            conn = sqlite3.connect(db_path, timeout=3)
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                'SELECT asset_id, asset_name, mimetype, started_at '
+                'FROM viewlog ORDER BY id DESC LIMIT 1'
+            ).fetchone()
+            conn.close()
+        except Exception as e:
+            logging.warning('Failed to read viewlog: %s', e)
+            return 'No data'
+
+        if not row:
+            return 'No data'
+
+        return {
+            'asset_id': row['asset_id'],
+            'asset_name': row['asset_name'],
+            'mimetype': row['mimetype'],
+            'started_at': row['started_at'],
+        }
+
     @extend_schema(
         summary='Get system information',
         responses={
             200: {
                 'type': 'object',
                 'properties': {
-                    'viewlog': {'type': 'string'},
+                    'viewlog': {
+                        'oneOf': [
+                            {
+                                'type': 'object',
+                                'properties': {
+                                    'asset_id': {'type': 'string'},
+                                    'asset_name': {'type': 'string'},
+                                    'mimetype': {'type': 'string'},
+                                    'started_at': {'type': 'string'},
+                                },
+                            },
+                            {'type': 'string'},
+                        ],
+                    },
                     'loadavg': {'type': 'number'},
                     'free_space': {'type': 'string'},
                     'display_power': {'type': 'string'},
                     'up_to_date': {'type': 'boolean'},
                 },
                 'example': {
-                    'viewlog': 'Not yet implemented',
+                    'viewlog': {
+                        'asset_id': 'abc123',
+                        'asset_name': 'My Video',
+                        'mimetype': 'video',
+                        'started_at': '2024-01-01T12:00:00+00:00',
+                    },
                     'loadavg': 0.1,
                     'free_space': '10G',
                     'display_power': 'on',
@@ -308,7 +362,7 @@ class InfoViewMixin(APIView):
     )
     @authorized
     def get(self, request):
-        viewlog = 'Not yet implemented'
+        viewlog = self._get_viewlog()
 
         # Calculate disk space
         slash = statvfs('/')
