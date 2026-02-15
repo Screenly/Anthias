@@ -13,6 +13,7 @@ from api.views.v2 import (
     PlaylistOrderViewV2,
     RebootViewV2,
     RecoverViewV2,
+    ScreenshotViewV2,
     ShutdownViewV2,
 )
 
@@ -59,5 +60,10 @@ def get_url_patterns():
             'v2/integrations',
             IntegrationsViewV2.as_view(),
             name='integrations_v2',
+        ),
+        path(
+            'v2/screenshot',
+            ScreenshotViewV2.as_view(),
+            name='screenshot_v2',
         ),
     ]
