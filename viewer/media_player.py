@@ -9,19 +9,55 @@ from settings import settings
 VIDEO_TIMEOUT = 20  # secs
 
 
+def _detect_hdmi_audio_device() -> str:
+    """Auto-detect connected HDMI audio device on Pi4/Pi5.
+
+    Pi4 has two HDMI ports:
+      - HDMI-A-1 = card 1 = vc4hdmi0
+      - HDMI-A-2 = card 2 = vc4hdmi1
+
+    Checks /sys/class/drm/cardN-HDMI-A-N/status to find which port
+    is connected and returns the matching ALSA device. Uses
+    sysdefault instead of default to bypass PulseAudio/dmix.
+    """
+    for port, card_name in [
+        ('card1-HDMI-A-1', 'vc4hdmi0'),
+        ('card1-HDMI-A-2', 'vc4hdmi1'),
+    ]:
+        status_path = f'/sys/class/drm/{port}/status'
+        try:
+            if os.path.exists(status_path):
+                with open(status_path) as f:
+                    if f.read().strip() == 'connected':
+                        logging.info(
+                            'Detected connected HDMI: %s -> '
+                            'sysdefault:CARD=%s',
+                            port,
+                            card_name,
+                        )
+                        return f'sysdefault:CARD={card_name}'
+        except OSError:
+            pass
+
+    logging.warning(
+        'No connected HDMI detected, falling back to sysdefault:CARD=vc4hdmi0',
+    )
+    return 'sysdefault:CARD=vc4hdmi0'
+
+
 def get_alsa_audio_device() -> str:
     if settings['audio_output'] == 'local':
         if get_device_type() == 'pi5':
-            return 'default:CARD=vc4hdmi0'
+            return 'sysdefault:CARD=vc4hdmi0'
 
         return 'plughw:CARD=Headphones'
     else:
         if get_device_type() in ['pi4', 'pi5']:
-            return 'default:CARD=vc4hdmi0'
+            return _detect_hdmi_audio_device()
         elif get_device_type() in ['pi1', 'pi2', 'pi3']:
-            return 'default:CARD=vc4hdmi'
+            return 'sysdefault:CARD=vc4hdmi'
         else:
-            return 'default:CARD=HID'
+            return 'sysdefault:CARD=HID'
 
 
 class MediaPlayer:
