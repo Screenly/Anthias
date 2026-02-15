@@ -47,7 +47,7 @@ class InfoEndpointsTest(TestCase):
 
         # Assert response data
         expected_data = {
-            'viewlog': 'Not yet implemented',
+            'viewlog': 'No data',
             'loadavg': 0.11,
             'free_space': '15G',
             'display_power': 'off',
@@ -128,7 +128,7 @@ class InfoEndpointsTest(TestCase):
 
         # Assert response data
         expected_data = {
-            'viewlog': 'Not yet implemented',
+            'viewlog': 'No data',
             'loadavg': 0.25,
             'free_space': '20G',
             'display_power': 'on',

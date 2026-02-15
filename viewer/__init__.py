@@ -4,8 +4,10 @@ from __future__ import unicode_literals
 
 import json
 import logging
+import sqlite3
 import sys
 from builtins import range
+from datetime import datetime, timezone
 from os import getenv, path
 from signal import SIGALRM, signal
 from time import sleep
@@ -222,6 +224,62 @@ def load_settings():
     )
 
 
+def _get_viewlog_db_path():
+    """Return the path to the viewlog database."""
+    return path.join(HOME or getenv('HOME', ''), '.screenly', 'viewlog.db')
+
+
+def _init_viewlog_db():
+    """Create the viewlog database and table if they don't exist."""
+    db_path = _get_viewlog_db_path()
+    try:
+        conn = sqlite3.connect(db_path, timeout=5)
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS viewlog (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                asset_id TEXT NOT NULL,
+                asset_name TEXT NOT NULL,
+                mimetype TEXT NOT NULL,
+                uri TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                duration INTEGER DEFAULT 0
+            )
+        ''')
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.warning('Failed to init viewlog DB: %s', e)
+
+
+def _log_playback(asset):
+    """Log an asset playback event to viewlog.db.
+
+    Records what asset started playing and when. This data is used by
+    the /api/v2/info endpoint and the screenshot endpoint to know
+    what is currently displayed.
+    """
+    db_path = _get_viewlog_db_path()
+    try:
+        conn = sqlite3.connect(db_path, timeout=5)
+        conn.execute(
+            'INSERT INTO viewlog '
+            '(asset_id, asset_name, mimetype, uri, started_at, duration) '
+            'VALUES (?, ?, ?, ?, ?, ?)',
+            (
+                asset.get('asset_id', ''),
+                asset.get('name', ''),
+                asset.get('mimetype', ''),
+                asset.get('uri', ''),
+                datetime.now(timezone.utc).isoformat(),
+                int(asset.get('duration', 0)),
+            ),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.warning('Failed to log playback: %s', e)
+
+
 def asset_loop(scheduler):
     asset = scheduler.get_next_asset()
 
@@ -248,6 +306,7 @@ def asset_loop(scheduler):
         logging.info('Showing asset %s (%s)', name, mime)
         logging.debug('Asset URI %s', uri)
         watchdog()
+        _log_playback(asset)
 
         if 'image' in mime:
             view_image(uri)
@@ -302,6 +361,7 @@ def setup():
     signal(SIGALRM, sigalrm)
 
     load_settings()
+    _init_viewlog_db()
     load_browser()
 
     bus = pydbus.SessionBus()
