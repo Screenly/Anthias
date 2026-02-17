@@ -513,9 +513,7 @@ class ScreenshotViewV2(APIView):
         import sqlite3
         from datetime import datetime, timezone as tz
 
-        db_path = path.join(
-            path.expanduser('~'), '.screenly', 'viewlog.db'
-        )
+        db_path = path.join(path.expanduser('~'), '.screenly', 'viewlog.db')
         if not path.exists(db_path):
             return None, None
 
@@ -556,6 +554,7 @@ class ScreenshotViewV2(APIView):
         file_path = asset.uri
         if not path.isfile(file_path):
             from settings import settings as app_settings
+
             assets_dir = path.join(
                 path.expanduser('~'), app_settings['assetdir']
             )
@@ -577,10 +576,15 @@ class ScreenshotViewV2(APIView):
 
         seek = max(0, int(seek_seconds))
         cmd = [
-            'ffmpeg', '-ss', str(seek),
-            '-i', video_path,
-            '-frames:v', '1',
-            '-q:v', str(max(1, min(31, (100 - quality) * 31 // 100))),
+            'ffmpeg',
+            '-ss',
+            str(seek),
+            '-i',
+            video_path,
+            '-frames:v',
+            '1',
+            '-q:v',
+            str(max(1, min(31, (100 - quality) * 31 // 100))),
         ]
         if width:
             cmd += ['-vf', f'scale={int(width)}:-1']
@@ -588,7 +592,9 @@ class ScreenshotViewV2(APIView):
 
         try:
             result = subprocess.run(
-                cmd, capture_output=True, timeout=10,
+                cmd,
+                capture_output=True,
+                timeout=10,
             )
             if result.returncode == 0 and len(result.stdout) > 100:
                 return result.stdout
@@ -636,9 +642,7 @@ class ScreenshotViewV2(APIView):
                 if width is None:
                     ScreenshotViewV2._cache = jpeg_bytes
                     ScreenshotViewV2._cache_time = now
-                return HttpResponse(
-                    jpeg_bytes, content_type='image/jpeg'
-                )
+                return HttpResponse(jpeg_bytes, content_type='image/jpeg')
 
         # Fallback: framebuffer capture (works for images and web pages)
         try:
@@ -670,15 +674,27 @@ class ScreenshotViewV2(APIView):
 
             if bytes_per_pixel == 4:
                 img = Image.frombytes(
-                    'RGBA', (fb_w, fb_h), raw, 'raw', 'BGRA',
+                    'RGBA',
+                    (fb_w, fb_h),
+                    raw,
+                    'raw',
+                    'BGRA',
                 )
             elif bytes_per_pixel == 3:
                 img = Image.frombytes(
-                    'RGB', (fb_w, fb_h), raw, 'raw', 'BGR',
+                    'RGB',
+                    (fb_w, fb_h),
+                    raw,
+                    'raw',
+                    'BGR',
                 )
             elif bytes_per_pixel == 2:
                 img = Image.frombytes(
-                    'RGB', (fb_w, fb_h), raw, 'raw', 'BGR;16',
+                    'RGB',
+                    (fb_w, fb_h),
+                    raw,
+                    'raw',
+                    'BGR;16',
                 )
             else:
                 return Response(
