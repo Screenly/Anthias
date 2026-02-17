@@ -20,7 +20,10 @@ def _secure_shuffle(lst):
 def _set_time(dt, t, second=0):
     """Replace time components on a datetime, zeroing microseconds."""
     return dt.replace(
-        hour=t.hour, minute=t.minute, second=second, microsecond=0,
+        hour=t.hour,
+        minute=t.minute,
+        second=second,
+        microsecond=0,
     )
 
 

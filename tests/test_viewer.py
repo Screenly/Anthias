@@ -57,7 +57,7 @@ class TestEmptyPl(ViewerTestCase):
     @mock.patch('viewer.constants.SERVER_WAIT_TIMEOUT', 0)
     def test_empty(self):
         m_asset_list = mock.Mock()
-        m_asset_list.return_value = ([], None)
+        m_asset_list.return_value = ([], None, False, None)
 
         with mock.patch('viewer.scheduling.generate_asset_list', m_asset_list):
             self.u.scheduler = Scheduler()
