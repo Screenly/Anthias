@@ -2,12 +2,26 @@ import logging
 import threading
 from datetime import timedelta
 from os import path
-from random import shuffle
+import secrets
 
 from django.utils import timezone
 
 from anthias_app.models import Asset, ScheduleSlot, ScheduleSlotItem
 from settings import settings
+
+_sysrandom = secrets.SystemRandom()
+
+
+def _secure_shuffle(lst):
+    """Shuffle list in-place using a cryptographically secure RNG."""
+    _sysrandom.shuffle(lst)
+
+
+def _set_time(dt, t, second=0):
+    """Replace time components on a datetime, zeroing microseconds."""
+    return dt.replace(
+        hour=t.hour, minute=t.minute, second=second, microsecond=0,
+    )
 
 
 def get_specific_asset(asset_id):
@@ -74,7 +88,7 @@ def _generate_legacy_playlist():
     )
 
     if settings['shuffle_playlist']:
-        shuffle(playlist)
+        _secure_shuffle(playlist)
 
     return playlist, deadline
 
@@ -151,7 +165,7 @@ def _generate_schedule_playlist(slots, skip_event_id=None):
         )
 
     if not no_loop and settings['shuffle_playlist']:
-        shuffle(playlist)
+        _secure_shuffle(playlist)
 
     deadline = _calc_slot_deadline(active_slot, slots)
     logging.debug(
@@ -176,35 +190,13 @@ def _calc_slot_deadline(active_slot, all_slots):
         )
 
     if getattr(active_slot, 'slot_type', 'time') == 'event':
-        return now.replace(
-            hour=active_slot.time_to.hour,
-            minute=active_slot.time_to.minute,
-            second=active_slot.time_to.second,
-            microsecond=0,
-        )
+        return _set_time(now, active_slot.time_to, active_slot.time_to.second)
 
-    if not active_slot.is_overnight:
-        slot_end = now.replace(
-            hour=active_slot.time_to.hour,
-            minute=active_slot.time_to.minute,
-            second=0,
-            microsecond=0,
-        )
-    elif current_time >= active_slot.time_from:
-        tomorrow = now + timedelta(days=1)
-        slot_end = tomorrow.replace(
-            hour=active_slot.time_to.hour,
-            minute=active_slot.time_to.minute,
-            second=0,
-            microsecond=0,
-        )
+    if active_slot.is_overnight and current_time >= active_slot.time_from:
+        base = now + timedelta(days=1)
     else:
-        slot_end = now.replace(
-            hour=active_slot.time_to.hour,
-            minute=active_slot.time_to.minute,
-            second=0,
-            microsecond=0,
-        )
+        base = now
+    slot_end = _set_time(base, active_slot.time_to)
 
     event_slots = [
         s
@@ -228,15 +220,12 @@ def _calc_next_slot_start(non_default_slots):
         days = slot.get_days_of_week()
 
         if not days and getattr(slot, 'start_date', None):
-            candidate = now.replace(
+            base = now.replace(
                 year=slot.start_date.year,
                 month=slot.start_date.month,
                 day=slot.start_date.day,
-                hour=slot.time_from.hour,
-                minute=slot.time_from.minute,
-                second=0,
-                microsecond=0,
             )
+            candidate = _set_time(base, slot.time_from)
             if candidate > now:
                 candidates.append(candidate)
             continue
@@ -246,12 +235,7 @@ def _calc_next_slot_start(non_default_slots):
             check_weekday = check_date.isoweekday()
             if days and check_weekday not in days:
                 continue
-            candidate = check_date.replace(
-                hour=slot.time_from.hour,
-                minute=slot.time_from.minute,
-                second=0,
-                microsecond=0,
-            )
+            candidate = _set_time(check_date, slot.time_from)
             if candidate > now:
                 candidates.append(candidate)
                 break
