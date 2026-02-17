@@ -1,5 +1,13 @@
 from django.urls import path
 
+from api.views.schedule import (
+    ScheduleSlotDetailView,
+    ScheduleSlotItemDetailView,
+    ScheduleSlotItemListView,
+    ScheduleSlotItemOrderView,
+    ScheduleSlotListView,
+    ScheduleStatusView,
+)
 from api.views.v2 import (
     AssetContentViewV2,
     AssetListViewV2,
@@ -19,7 +27,11 @@ from api.views.v2 import (
 
 def get_url_patterns():
     return [
-        path('v2/assets', AssetListViewV2.as_view(), name='asset_list_v2'),
+        path(
+            'v2/assets',
+            AssetListViewV2.as_view(),
+            name='asset_list_v2',
+        ),
         path(
             'v2/assets/order',
             PlaylistOrderViewV2.as_view(),
@@ -35,11 +47,31 @@ def get_url_patterns():
             AssetViewV2.as_view(),
             name='asset_detail_v2',
         ),
-        path('v2/backup', BackupViewV2.as_view(), name='backup_v2'),
-        path('v2/recover', RecoverViewV2.as_view(), name='recover_v2'),
-        path('v2/reboot', RebootViewV2.as_view(), name='reboot_v2'),
-        path('v2/shutdown', ShutdownViewV2.as_view(), name='shutdown_v2'),
-        path('v2/file_asset', FileAssetViewV2.as_view(), name='file_asset_v2'),
+        path(
+            'v2/backup',
+            BackupViewV2.as_view(),
+            name='backup_v2',
+        ),
+        path(
+            'v2/recover',
+            RecoverViewV2.as_view(),
+            name='recover_v2',
+        ),
+        path(
+            'v2/reboot',
+            RebootViewV2.as_view(),
+            name='reboot_v2',
+        ),
+        path(
+            'v2/shutdown',
+            ShutdownViewV2.as_view(),
+            name='shutdown_v2',
+        ),
+        path(
+            'v2/file_asset',
+            FileAssetViewV2.as_view(),
+            name='file_asset_v2',
+        ),
         path(
             'v2/assets/<str:asset_id>/content',
             AssetContentViewV2.as_view(),
@@ -59,5 +91,36 @@ def get_url_patterns():
             'v2/integrations',
             IntegrationsViewV2.as_view(),
             name='integrations_v2',
+        ),
+        # -- Schedule slots --
+        path(
+            'v2/schedule/slots',
+            ScheduleSlotListView.as_view(),
+            name='schedule_slot_list',
+        ),
+        path(
+            'v2/schedule/slots/<str:slot_id>',
+            ScheduleSlotDetailView.as_view(),
+            name='schedule_slot_detail',
+        ),
+        path(
+            'v2/schedule/slots/<str:slot_id>/items',
+            ScheduleSlotItemListView.as_view(),
+            name='schedule_slot_items',
+        ),
+        path(
+            'v2/schedule/slots/<str:slot_id>/items/order',
+            ScheduleSlotItemOrderView.as_view(),
+            name='schedule_slot_items_order',
+        ),
+        path(
+            'v2/schedule/slots/<str:slot_id>/items/<str:item_id>',
+            ScheduleSlotItemDetailView.as_view(),
+            name='schedule_slot_item_detail',
+        ),
+        path(
+            'v2/schedule/status',
+            ScheduleStatusView.as_view(),
+            name='schedule_status',
         ),
     ]
