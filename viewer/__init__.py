@@ -234,7 +234,7 @@ def _init_viewlog_db():
     db_path = _get_viewlog_db_path()
     try:
         conn = sqlite3.connect(db_path, timeout=5)
-        conn.execute('''
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS viewlog (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 asset_id TEXT NOT NULL,
@@ -244,7 +244,7 @@ def _init_viewlog_db():
                 started_at TEXT NOT NULL,
                 duration INTEGER DEFAULT 0
             )
-        ''')
+        """)
         conn.commit()
         conn.close()
     except Exception as e:
