@@ -69,6 +69,7 @@ def _detect_hdmi_audio_device():
     Uses sysdefault instead of default for reliable audio output.
     """
     import os
+
     for port, card_name in [
         ('card1-HDMI-A-1', 'vc4hdmi0'),
         ('card1-HDMI-A-2', 'vc4hdmi1'),
@@ -80,15 +81,16 @@ def _detect_hdmi_audio_device():
                     if f.read().strip() == 'connected':
                         logging.info(
                             'Detected connected HDMI: %s -> '
-                            'sysdefault:CARD=%s', port, card_name,
+                            'sysdefault:CARD=%s',
+                            port,
+                            card_name,
                         )
                         return f'sysdefault:CARD={card_name}'
         except OSError:
             pass
 
     logging.warning(
-        'No connected HDMI detected, '
-        'falling back to sysdefault:CARD=vc4hdmi0',
+        'No connected HDMI detected, falling back to sysdefault:CARD=vc4hdmi0',
     )
     return 'sysdefault:CARD=vc4hdmi0'
 
