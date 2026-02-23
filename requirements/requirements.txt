@@ -34,5 +34,5 @@ tenacity==9.1.2
 sh==1.8
 six==1.17.0
 urllib3==2.6.2
-wheel==0.38.1
+wheel==0.46.2
 yt-dlp==2025.10.22
