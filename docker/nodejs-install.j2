@@ -1,4 +1,4 @@
-{% if board in ['pi1', 'pi2'] %}
+{% if board in ['pi1', 'pi2', 'pi3', 'pi4'] %}
 RUN apt-get update && \
     apt-get -y install \
         nodejs \
@@ -8,6 +8,6 @@ RUN apt-get update && \
     apt-get -y install \
         curl \
         ca-certificates && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get -y install nodejs
 {% endif %}
