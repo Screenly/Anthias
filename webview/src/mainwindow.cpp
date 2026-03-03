@@ -6,6 +6,8 @@
 #include "mainwindow.h"
 #include "view.h"
 
+#include <QGuiApplication>
+#include <QScreen>
 
 MainWindow::MainWindow() : QMainWindow()
 {
