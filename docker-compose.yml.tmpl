@@ -71,6 +71,7 @@ services:
       - /home/${USER}/screenly_assets:/data/screenly_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+      - /usr/share/fonts:/usr/share/fonts:ro
     labels:
       io.balena.features.supervisor-api: '1'
 
