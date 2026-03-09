@@ -94,21 +94,18 @@ def get_test_context(target_platform: str) -> dict:
     ]
 
     if is_arm64:
-        apt_dependencies.extend([
-            'chromium',
-            'chromium-driver',
-        ])
+        apt_dependencies.extend(
+            [
+                'chromium',
+                'chromium-driver',
+            ]
+        )
 
     chrome_version = '123.0.6312.86'
-    base_url = (
-        'https://storage.googleapis.com/chrome-for-testing-public'
-    )
-    chrome_dl_url = (
-        f'{base_url}/{chrome_version}/linux64/chrome-linux64.zip'
-    )
+    base_url = 'https://storage.googleapis.com/chrome-for-testing-public'
+    chrome_dl_url = f'{base_url}/{chrome_version}/linux64/chrome-linux64.zip'
     chromedriver_dl_url = (
-        f'{base_url}/{chrome_version}/'
-        f'linux64/chromedriver-linux64.zip'
+        f'{base_url}/{chrome_version}/linux64/chromedriver-linux64.zip'
     )
 
     return {

@@ -35,6 +35,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/
+WORKDIR /usr/src/app
 
 {% if environment == 'production' %}
 COPY --from=node-builder \
