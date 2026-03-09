@@ -159,11 +159,11 @@ function install_packages() {
 function install_ansible() {
     display_section "Install Ansible"
 
-    REQUIREMENTS_URL="$GITHUB_RAW_URL/$BRANCH/requirements/requirements.host.txt"
+    PYPROJECT_URL="$GITHUB_RAW_URL/$BRANCH/pyproject.toml"
     if [ "$DISTRO_VERSION" -le 11 ]; then
         ANSIBLE_VERSION="ansible-core==2.15.9"
     else
-        ANSIBLE_VERSION=$(curl -s $REQUIREMENTS_URL | grep ansible)
+        ANSIBLE_VERSION=$(curl -s "$PYPROJECT_URL" | grep ansible-core | sed 's/.*"\(ansible-core==[^"]*\)".*/\1/')
     fi
 
     SUDO_ARGS=()

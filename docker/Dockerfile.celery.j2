@@ -1,15 +1,18 @@
 {% include 'Dockerfile.base.j2' %}
 
-COPY requirements/requirements.txt /tmp/requirements.txt
+COPY pyproject.toml uv.lock /tmp/uv-deps/
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
-RUN --mount=type=cache,target=/root/.cache/pip \
+RUN --mount=type=cache,target=/root/.cache/uv \
 {% endif %}
-  pip3 install -r /tmp/requirements.txt --break-system-packages
+    uv venv --system-site-packages /opt/venv && \
+    cd /tmp/uv-deps && \
+    VIRTUAL_ENV=/opt/venv uv sync --active --only-group celery --no-install-project --frozen
+
+ENV PATH="/opt/venv/bin:$PATH"
 
 RUN mkdir -p /usr/src/app
-WORKDIR /usr/src/app
 COPY . /usr/src/app/
 
 ENV GIT_HASH={{ git_hash }}

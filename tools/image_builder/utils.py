@@ -76,29 +76,46 @@ def generate_dockerfile(service: str, context: dict) -> None:
         f.write(dockerfile)
 
 
-def get_test_context() -> dict:
+def get_test_context(target_platform: str) -> dict:
+    is_arm64 = target_platform in [
+        'linux/arm64/v8',
+        'linux/arm64',
+    ]
+
+    apt_dependencies = [
+        'wget',
+        'unzip',
+        'libnss3',
+        'libatk1.0-0',
+        'libatk-bridge2.0.0',
+        'libcups2',
+        'libxcomposite1',
+        'libxdamage1',
+    ]
+
+    if is_arm64:
+        apt_dependencies.extend([
+            'chromium',
+            'chromium-driver',
+        ])
+
+    chrome_version = '123.0.6312.86'
+    base_url = (
+        'https://storage.googleapis.com/chrome-for-testing-public'
+    )
     chrome_dl_url = (
-        'https://storage.googleapis.com/chrome-for-testing-public/'
-        '123.0.6312.86/linux64/chrome-linux64.zip'
+        f'{base_url}/{chrome_version}/linux64/chrome-linux64.zip'
     )
     chromedriver_dl_url = (
-        'https://storage.googleapis.com/chrome-for-testing-public/'
-        '123.0.6312.86/linux64/chromedriver-linux64.zip'
+        f'{base_url}/{chrome_version}/'
+        f'linux64/chromedriver-linux64.zip'
     )
 
     return {
-        'apt_dependencies': [
-            'wget',
-            'unzip',
-            'libnss3',
-            'libatk1.0-0',
-            'libatk-bridge2.0.0',
-            'libcups2',
-            'libxcomposite1',
-            'libxdamage1',
-        ],
+        'apt_dependencies': apt_dependencies,
         'chrome_dl_url': chrome_dl_url,
         'chromedriver_dl_url': chromedriver_dl_url,
+        'is_arm64': is_arm64,
     }
 
 
