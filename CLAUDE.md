@@ -62,6 +62,27 @@ Inside Docker:
 docker compose -f docker-compose.dev.yml exec anthias-server npm run dev
 ```
 
+### Python Dependencies
+
+All Python dependencies are managed via `pyproject.toml` dependency groups, with `uv.lock` for reproducible installs. Each Docker service has its own group:
+
+- `server` — Django web app (anthias-server)
+- `celery` — Celery worker (includes server group)
+- `websocket` — WebSocket service
+- `viewer` — Viewer service (standalone Dockerfile)
+- `wifi-connect` — WiFi Connect service
+- `dev` — Test utilities (mock, selenium, etc.)
+- `test` — Combined group (includes server + dev + viewer)
+- `host` — Host machine (Ansible, etc.)
+- `local` — Local CLI tools
+- `dev-host` — Ruff linter
+- `docker-image-builder` — Docker image build tooling
+
+```bash
+uv lock                                # Regenerate lockfile after changing deps
+uv sync --only-group <name>            # Install a specific group
+```
+
 ### Python Linting
 
 ```bash
