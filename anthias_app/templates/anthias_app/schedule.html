@@ -198,10 +198,10 @@ document.getElementById('addAssetForm')?.addEventListener('submit', function(e) 
 function createAssetFromUri(uri, skipCheck) {
   var name = document.getElementById('add-name').value || uri;
   var mimetype = 'webpage';
-  if (/\.(jpg|jpeg|png|gif|bmp|svg|webp)(\?|$)/i.test(uri)) mimetype = 'image';
+  if (/^rtsp:|^rtmp:/i.test(uri)) mimetype = 'streaming';
+  else if (/\.(jpg|jpeg|png|gif|bmp|svg|webp)(\?|$)/i.test(uri)) mimetype = 'image';
   else if (/\.(mp4|webm|ogg|avi|mov|mkv)(\?|$)/i.test(uri)) mimetype = 'video';
   else if (/youtu(be\.com|\.be)/i.test(uri)) mimetype = 'youtube_asset';
-  else if (/^rtsp:|^rtmp:/i.test(uri)) mimetype = 'streaming';
 
   var now = new Date();
   var end = new Date(now);

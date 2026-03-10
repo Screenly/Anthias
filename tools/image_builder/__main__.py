@@ -1,5 +1,4 @@
 import os
-import platform
 from pathlib import Path
 
 import click
@@ -15,7 +14,6 @@ from tools.image_builder.utils import (
     generate_dockerfile,
     get_build_parameters,
     get_docker_tag,
-    get_test_context,
     get_viewer_context,
     get_wifi_connect_context,
 )
@@ -54,33 +52,40 @@ def build_image(
             f'Warning: Failed to create cache directory: {e}', fg='yellow'
         )
 
-    base_apt_dependencies = [
+    # Build-stage dependencies (deps stage in multi-stage build)
+    base_build_dependencies = [
         'build-essential',
+        'ca-certificates',
+        'curl',
+        'libffi-dev',
+        'libssl-dev',
+    ]
+
+    if board in ['pi1', 'pi2']:
+        base_build_dependencies.extend([
+            'python3-dev',
+            'python3-pip',
+            'python3-setuptools',
+            'python-is-python3',
+        ])
+
+    # Runtime dependencies for server/test
+    base_apt_dependencies = [
+        'ca-certificates',
         'cec-utils',
         'curl',
         'ffmpeg',
         'git',
-        'git-core',
         'ifupdown',
-        'libcec-dev ',
+        'libcec-dev',
         'libffi-dev',
         'libssl-dev',
-        'libzmq3-dev',
-        'libzmq5-dev',
-        'libzmq5',
         'lsb-release',
         'mplayer',
         'net-tools',
+        'openssl',
         'procps',
         'psmisc',
-        'python3-dev',
-        'python3-gi',
-        'python3-pil',
-        'python3-pip',
-        'python3-setuptools',
-        'python3-simplejson',
-        'python-is-python3',
-        'sudo',
         'sqlite3',
     ]
 
@@ -89,13 +94,6 @@ def build_image(
 
     if service == 'viewer':
         context.update(get_viewer_context(board))
-    elif service == 'test':
-        machine = platform.machine()
-        if machine == 'aarch64':
-            test_platform = 'linux/arm64/v8'
-        else:
-            test_platform = target_platform
-        context.update(get_test_context(test_platform))
     elif service == 'wifi-connect':
         context.update(get_wifi_connect_context(target_platform))
 
@@ -104,6 +102,7 @@ def build_image(
         {
             'base_image': base_image,
             'base_image_tag': 'bookworm',
+            'base_build_dependencies': base_build_dependencies,
             'base_apt_dependencies': base_apt_dependencies,
             'board': board,
             'debian_version': 'bookworm',

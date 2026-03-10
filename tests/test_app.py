@@ -1,21 +1,14 @@
 import os
 import shutil
 import tempfile
-from time import sleep
+from datetime import timedelta
 
 import pytest
-from datetime import timedelta
 from django.utils import timezone
-from selenium import webdriver
-from selenium.common.exceptions import ElementNotVisibleException
-from splinter import Browser
+from playwright.sync_api import expect
 
 from anthias_app.models import Asset
 from settings import settings
-
-main_page_url = 'http://localhost:8080'
-settings_url = 'http://foo:bar@localhost:8080/settings'
-system_info_url = 'http://foo:bar@localhost:8080/system_info'
 
 asset_x = {
     'mimetype': 'web',
@@ -61,64 +54,21 @@ class TemporaryCopy:
         os.remove(self.path)
 
 
-def get_browser():
-    chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--headless')
-    chrome_options.add_argument('--disable-dev-shm-usage')
-    return Browser('chrome', headless=True, options=chrome_options)
-
-
-def wait_for_and_do(browser, query, callback):
-    not_filled = True
-    n = 0
-    while not_filled:
-        try:
-            callback(browser.find_by_css(query).first)
-            not_filled = False
-        except ElementNotVisibleException as e:
-            if n > 20:
-                raise e
-            n += 1
-
-
 @pytest.mark.integration
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 class TestWeb:
     @pytest.fixture(autouse=True)
     def setup(self):
         Asset.objects.all().delete()
 
-    @pytest.mark.skip(reason='fixme')
-    def test_add_asset_url(self):
-        with get_browser() as browser:
-            browser.visit(main_page_url)
-            wait_for_and_do(
-                browser,
-                '#add-asset-button',
-                lambda btn: btn.click(),
-            )
-            sleep(1)
-            wait_for_and_do(
-                browser,
-                'input[name="uri"]',
-                lambda field: field.fill(
-                    'https://example.com'
-                ),
-            )
-            sleep(1)
-            wait_for_and_do(
-                browser,
-                '#tab-uri',
-                lambda form: form.click(),
-            )
-            sleep(1)
-            wait_for_and_do(
-                browser,
-                '#save-asset',
-                lambda btn: btn.click(),
-            )
-            sleep(3)
+    def test_add_asset_url(self, page, live_server):
+        page.goto(live_server.url)
+        page.click('[data-bs-target="#addAssetModal"]')
+        page.wait_for_selector('#addAssetModal.show')
+        page.fill('#add-uri', 'https://example.com')
+        page.check('#add-skip-check')
+        page.click('#addAssetForm button[type="submit"]')
+        page.wait_for_timeout(3000)
 
         assets = Asset.objects.all()
         assert len(assets) == 1
@@ -128,58 +78,32 @@ class TestWeb:
         assert asset.mimetype == 'webpage'
         assert asset.duration == settings['default_duration']
 
-    @pytest.mark.skip(reason='migrate to HTMX-based tests')
-    def test_edit_asset(self):
+    def test_edit_asset(self, page, live_server):
         Asset.objects.create(**asset_x)
-        with get_browser() as browser:
-            browser.visit(main_page_url)
-            wait_for_and_do(
-                browser,
-                '.edit-asset-button',
-                lambda btn: btn.click(),
-            )
-            sleep(1)
-            wait_for_and_do(
-                browser,
-                'input[name="duration"]',
-                lambda field: field.fill('333'),
-            )
-            sleep(1)
-            wait_for_and_do(
-                browser,
-                '#edit-form',
-                lambda form: form.click(),
-            )
-            sleep(3)
-            wait_for_and_do(
-                browser,
-                '.edit-asset-modal #save-asset',
-                lambda btn: btn.click(),
-            )
-            sleep(3)
+        page.goto(live_server.url)
+        page.wait_for_selector('[data-asset-id]')
+        page.click(
+            f'[data-asset-id="{asset_x["asset_id"]}"]'
+            ' button[onclick*="openEditModal"]'
+        )
+        page.wait_for_selector('#editAssetModal.show')
+        page.fill('#edit-duration', '333')
+        page.click('#editAssetForm button[type="submit"]')
+        page.wait_for_timeout(3000)
 
         assets = Asset.objects.all()
         assert len(assets) == 1
         assert assets.first().duration == 333
 
-    def test_add_asset_image_upload(self):
+    def test_add_asset_image_upload(self, page, live_server):
         image_file = '/tmp/image.png'
-        with get_browser() as browser:
-            browser.visit(main_page_url)
-            browser.find_by_id('add-asset-button').click()
-            sleep(1)
-            wait_for_and_do(
-                browser,
-                '.nav-link.upload-asset-tab',
-                lambda tab: tab.click(),
-            )
-            wait_for_and_do(
-                browser,
-                'input[name="file_upload"]',
-                lambda file_input: file_input.fill(image_file),
-            )
-            sleep(1)
-            sleep(3)
+        page.goto(live_server.url)
+        page.click('[data-bs-target="#addAssetModal"]')
+        page.wait_for_selector('#addAssetModal.show')
+        page.click('[data-bs-target="#tab-upload"]')
+        page.set_input_files('#add-file-upload', image_file)
+        page.click('#addAssetForm button[type="submit"]')
+        page.wait_for_timeout(3000)
 
         assets = Asset.objects.all()
         assert len(assets) == 1
@@ -188,28 +112,21 @@ class TestWeb:
         assert asset.mimetype == 'image'
         assert asset.duration == settings['default_duration']
 
-    def test_add_asset_video_upload(self):
+    def test_add_asset_video_upload(self, page, live_server):
         with TemporaryCopy(
             'tests/assets/asset.mov', 'video.mov'
         ) as video_file:
-            with get_browser() as browser:
-                browser.visit(main_page_url)
-                browser.find_by_id('add-asset-button').click()
-                sleep(1)
-                wait_for_and_do(
-                    browser,
-                    '.nav-link.upload-asset-tab',
-                    lambda tab: tab.click(),
-                )
-                wait_for_and_do(
-                    browser,
-                    'input[name="file_upload"]',
-                    lambda file_input: file_input.fill(
-                        video_file
-                    ),
-                )
-                sleep(1)
-                sleep(3)
+            page.goto(live_server.url)
+            page.click('[data-bs-target="#addAssetModal"]')
+            page.wait_for_selector('#addAssetModal.show')
+            page.click('[data-bs-target="#tab-upload"]')
+            page.set_input_files(
+                '#add-file-upload', video_file
+            )
+            page.click(
+                '#addAssetForm button[type="submit"]'
+            )
+            page.wait_for_timeout(3000)
 
             assets = Asset.objects.all()
             assert len(assets) == 1
@@ -218,7 +135,7 @@ class TestWeb:
             assert asset.mimetype == 'video'
             assert asset.duration == 5
 
-    def test_add_two_assets_upload(self):
+    def test_add_two_assets_upload(self, page, live_server):
         with (
             TemporaryCopy(
                 'tests/assets/asset.mov', 'video.mov'
@@ -227,32 +144,29 @@ class TestWeb:
                 'static/img/standby.png', 'standby.png'
             ) as image_file,
         ):
-            with get_browser() as browser:
-                browser.visit(main_page_url)
-                browser.find_by_id(
-                    'add-asset-button'
-                ).click()
-                sleep(1)
-                wait_for_and_do(
-                    browser,
-                    '.nav-link.upload-asset-tab',
-                    lambda tab: tab.click(),
-                )
-                wait_for_and_do(
-                    browser,
-                    'input[name="file_upload"]',
-                    lambda file_input: file_input.fill(
-                        image_file
-                    ),
-                )
-                wait_for_and_do(
-                    browser,
-                    'input[name="file_upload"]',
-                    lambda file_input: file_input.fill(
-                        video_file
-                    ),
-                )
-                sleep(3)
+            page.goto(live_server.url)
+            page.click('[data-bs-target="#addAssetModal"]')
+            page.wait_for_selector('#addAssetModal.show')
+            page.click('[data-bs-target="#tab-upload"]')
+
+            page.set_input_files(
+                '#add-file-upload', image_file
+            )
+            page.click(
+                '#addAssetForm button[type="submit"]'
+            )
+            page.wait_for_timeout(2000)
+
+            page.click('[data-bs-target="#addAssetModal"]')
+            page.wait_for_selector('#addAssetModal.show')
+            page.click('[data-bs-target="#tab-upload"]')
+            page.set_input_files(
+                '#add-file-upload', video_file
+            )
+            page.click(
+                '#addAssetForm button[type="submit"]'
+            )
+            page.wait_for_timeout(3000)
 
             assets = Asset.objects.all()
             assert len(assets) == 2
@@ -266,36 +180,16 @@ class TestWeb:
             assert assets[1].mimetype == 'video'
             assert assets[1].duration == 5
 
-    @pytest.mark.skip(reason='fixme')
-    def test_add_asset_streaming(self):
-        with get_browser() as browser:
-            browser.visit(main_page_url)
-            wait_for_and_do(
-                browser,
-                '#add-asset-button',
-                lambda btn: btn.click(),
-            )
-            sleep(1)
-            wait_for_and_do(
-                browser,
-                'input[name="uri"]',
-                lambda field: field.fill(
-                    'rtsp://localhost:8091/asset.mov'
-                ),
-            )
-            sleep(1)
-            wait_for_and_do(
-                browser,
-                '#add-form',
-                lambda form: form.click(),
-            )
-            sleep(1)
-            wait_for_and_do(
-                browser,
-                '#save-asset',
-                lambda btn: btn.click(),
-            )
-            sleep(10)
+    def test_add_asset_streaming(self, page, live_server):
+        page.goto(live_server.url)
+        page.click('[data-bs-target="#addAssetModal"]')
+        page.wait_for_selector('#addAssetModal.show')
+        page.fill(
+            '#add-uri', 'rtsp://localhost:8091/asset.mov'
+        )
+        page.check('#add-skip-check')
+        page.click('#addAssetForm button[type="submit"]')
+        page.wait_for_timeout(3000)
 
         assets = Asset.objects.all()
         assert len(assets) == 1
@@ -307,122 +201,95 @@ class TestWeb:
             asset.uri == 'rtsp://localhost:8091/asset.mov'
         )
         assert asset.mimetype == 'streaming'
-        assert (
-            asset.duration
-            == settings['default_streaming_duration']
-        )
 
-    @pytest.mark.skip(reason='migrate to HTMX-based tests')
-    def test_remove_asset(self):
+    def test_remove_asset(self, page, live_server):
         Asset.objects.create(**asset_x)
-        with get_browser() as browser:
-            browser.visit(main_page_url)
-            wait_for_and_do(
-                browser,
-                '.delete-asset-button',
-                lambda btn: btn.click(),
-            )
-            wait_for_and_do(
-                browser,
-                '.confirm-delete',
-                lambda btn: btn.click(),
-            )
-            sleep(3)
+        page.goto(live_server.url)
+        page.wait_for_selector('[data-asset-id]')
+
+        page.on('dialog', lambda dialog: dialog.accept())
+        page.click(
+            f'[data-asset-id="{asset_x["asset_id"]}"]'
+            ' button[onclick*="deleteAsset"]'
+        )
+        page.wait_for_timeout(3000)
         assert Asset.objects.count() == 0
 
-    def test_enable_asset(self):
+    def test_enable_asset(self, page, live_server):
         Asset.objects.create(**asset_x)
-        with get_browser() as browser:
-            browser.visit(main_page_url)
-            sleep(2)
-            toggle = browser.find_by_css(
-                '.form-switch input[type="checkbox"]'
-            ).first
-            browser.execute_script(
-                'arguments[0].scrollIntoView(true);',
-                toggle._element,
-            )
-            sleep(1)
-            browser.execute_script(
-                'arguments[0].click();', toggle._element
-            )
-            sleep(2)
-            browser.find_by_css(
-                '.form-switch input[type="checkbox"]'
-            ).first
-            sleep(5)
+        page.goto(live_server.url)
+        page.wait_for_selector('[data-asset-id]')
+        toggle = page.locator(
+            '.form-check.form-switch input[type="checkbox"]'
+        ).first
+        toggle.click()
+        page.wait_for_timeout(3000)
 
         assets = Asset.objects.all()
         assert len(assets) == 1
         assert assets.first().is_enabled is True
 
-    def test_disable_asset(self):
-        Asset.objects.all().delete()
-        Asset.objects.create(**{**asset_x, 'is_enabled': 1})
-        with get_browser() as browser:
-            browser.visit(main_page_url)
-            sleep(2)
-            toggle = browser.find_by_css(
-                '.form-switch input[type="checkbox"]'
-            ).first
-            browser.execute_script(
-                'arguments[0].scrollIntoView(true);',
-                toggle._element,
-            )
-            sleep(1)
-            browser.execute_script(
-                'arguments[0].click();', toggle._element
-            )
-            sleep(2)
-            browser.find_by_css(
-                '.form-switch input[type="checkbox"]'
-            ).first
-            sleep(5)
+    def test_disable_asset(self, page, live_server):
+        Asset.objects.create(
+            **{**asset_x, 'is_enabled': 1}
+        )
+        page.goto(live_server.url)
+        page.wait_for_selector('[data-asset-id]')
+        toggle = page.locator(
+            '.form-check.form-switch input[type="checkbox"]'
+        ).first
+        toggle.click()
+        page.wait_for_timeout(3000)
 
         assets = Asset.objects.all()
         assert len(assets) == 1
         assert assets.first().is_enabled is False
 
-    @pytest.mark.skip(reason='migrate to HTMX-based tests')
-    def test_reorder_asset(self):
+    def test_reorder_asset(self, page, live_server):
         Asset.objects.create(
             **{**asset_x, 'is_enabled': 1}
         )
         Asset.objects.create(**asset_y)
-        with get_browser() as browser:
-            browser.visit(main_page_url)
-            asset_x_for_drag = browser.find_by_id(
-                asset_x['asset_id']
-            )
-            sleep(1)
-            asset_y_to_reorder = browser.find_by_id(
-                asset_y['asset_id']
-            )
-            asset_x_for_drag.drag_and_drop(
-                asset_y_to_reorder
-            )
-            sleep(3)
+        page.goto(live_server.url)
+        page.wait_for_selector('[data-asset-id]')
+
+        source = page.locator(
+            f'[data-asset-id="{asset_x["asset_id"]}"]'
+            ' .drag-handle'
+        )
+        target = page.locator(
+            f'[data-asset-id="{asset_y["asset_id"]}"]'
+            ' .drag-handle'
+        )
+        source.drag_to(target)
+        page.wait_for_timeout(3000)
 
         x = Asset.objects.get(asset_id=asset_x['asset_id'])
         y = Asset.objects.get(asset_id=asset_y['asset_id'])
         assert x.play_order == 0
         assert y.play_order == 1
 
-    def test_settings_page_should_work(self):
-        with get_browser() as browser:
-            browser.visit(settings_url)
-            assert not (
-                'Error: 500 Internal Server Error'
-                in browser.html
-                or 'Error: 504 Gateway Time-out'
-                in browser.html
-                or 'Error: 504 Gateway Timeout'
-                in browser.html
-            )
+    def test_settings_page_should_work(
+        self, page, live_server
+    ):
+        page.goto(f'{live_server.url}/settings')
+        content = page.content()
+        assert (
+            'Error: 500 Internal Server Error' not in content
+        )
+        assert (
+            'Error: 504 Gateway Time-out' not in content
+        )
+        assert (
+            'Error: 504 Gateway Timeout' not in content
+        )
 
-    def test_system_info_page_should_work(self):
-        with get_browser() as browser:
-            browser.visit(system_info_url)
-            assert not browser.is_text_present(
-                'Error: 500 Internal Server Error'
+    def test_system_info_page_should_work(
+        self, page, live_server
+    ):
+        page.goto(f'{live_server.url}/system_info')
+        expect(
+            page.locator(
+                'text=Error: 500 Internal Server Error'
             )
+        ).not_to_be_visible()

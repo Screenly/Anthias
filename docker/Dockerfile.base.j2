@@ -1,29 +1,24 @@
 # syntax=docker/dockerfile:1.4
 # vim: ft=dockerfile
 
-FROM {{ base_image }}:{{ base_image_tag }}
+FROM {{ base_image }}:{{ base_image_tag }} AS deps
 
-{% if disable_cache_mounts %}
-RUN \
-{% else %}
-RUN --mount=type=cache,target=/var/cache/apt \
-{% endif %}
-    apt-get update && \
+RUN apt-get update && \
     apt-get -y install --no-install-recommends \
-    {% for dependency in base_apt_dependencies %}
+    {% for dependency in base_build_dependencies %}
         {% if not loop.last %}
         {{ dependency }} \
         {% else %}
         {{ dependency }}
         {% endif %}
-    {% endfor %}
-
-# Works around issue with `curl`
-# https://github.com/balena-io-library/base-images/issues/562
-RUN c_rehash
+    {% endfor %} && \
+    rm -rf /var/lib/apt/lists/*
 
 {% if board in ['pi1', 'pi2'] %}
 RUN pip3 install uv --break-system-packages
 {% else %}
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 {% endif %}
+
+ENV UV_PYTHON_INSTALL_DIR=/opt/python
+RUN uv python install 3.13

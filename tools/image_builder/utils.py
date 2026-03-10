@@ -76,53 +76,11 @@ def generate_dockerfile(service: str, context: dict) -> None:
         f.write(dockerfile)
 
 
-def get_test_context(target_platform: str) -> dict:
-    is_arm64 = target_platform in [
-        'linux/arm64/v8',
-        'linux/arm64',
-    ]
-
-    apt_dependencies = [
-        'wget',
-        'unzip',
-        'libnss3',
-        'libatk1.0-0',
-        'libatk-bridge2.0.0',
-        'libcups2',
-        'libxcomposite1',
-        'libxdamage1',
-    ]
-
-    if is_arm64:
-        apt_dependencies.extend(
-            [
-                'chromium',
-                'chromium-driver',
-            ]
-        )
-
-    chrome_version = '123.0.6312.86'
-    base_url = 'https://storage.googleapis.com/chrome-for-testing-public'
-    chrome_dl_url = f'{base_url}/{chrome_version}/linux64/chrome-linux64.zip'
-    chromedriver_dl_url = (
-        f'{base_url}/{chrome_version}/linux64/chromedriver-linux64.zip'
-    )
-
-    return {
-        'apt_dependencies': apt_dependencies,
-        'chrome_dl_url': chrome_dl_url,
-        'chromedriver_dl_url': chromedriver_dl_url,
-        'is_arm64': is_arm64,
-    }
-
-
 def get_viewer_context(board: str) -> dict:
     releases_url = f'{GITHUB_REPO_URL}/releases/download'
 
     webview_git_hash = 'd7a7e2c'
     webview_base_url = f'{releases_url}/WebView-v0.3.12'
-
-    qt_version = '5.15.14'
 
     if board in ['pi5', 'x86']:
         qt_version = '6.4.2'
@@ -132,18 +90,17 @@ def get_viewer_context(board: str) -> dict:
     qt_major_version = qt_version.split('.')[0]
 
     apt_dependencies = [
-        'build-essential',
         'ca-certificates',
         'curl',
         'dbus-daemon',
+        'ffmpeg',
         'fonts-arphic-uming',
-        'git-core',
         'libasound2-dev',
         'libavcodec-dev',
         'libavformat-dev',
         'libavutil-dev',
         'libbz2-dev',
-        'libcec-dev ',
+        'libcec-dev',
         'libdbus-1-dev',
         'libdbus-glib-1-dev',
         'libdrm-dev',
@@ -178,7 +135,6 @@ def get_viewer_context(board: str) -> dict:
         'libsqlite3-dev',
         'libsrtp2-dev',
         'libssl-dev',
-        'libzmq3-dev',
         'libswscale-dev',
         'libsystemd-dev',
         'libts-dev',
@@ -215,29 +171,18 @@ def get_viewer_context(board: str) -> dict:
         'libxslt1-dev',
         'libxss-dev',
         'libxtst-dev',
-        'libzmq5-dev',
-        'libzmq5',
         'net-tools',
+        'openssl',
         'procps',
         'psmisc',
-        'python3-dev',
-        'python3-gi',
         'python3-netifaces',
-        'python3-pip',
-        'python3-setuptools',
-        'python-is-python3',
-        'ttf-wqy-zenhei',
-        'vlc',
         'sudo',
         'sqlite3',
-        'ffmpeg',
-        'libavcodec-dev',
+        'ttf-wqy-zenhei',
+        'vlc',
         'libavdevice-dev',
         'libavfilter-dev',
-        'libavformat-dev',
-        'libavutil-dev',
         'libswresample-dev',
-        'libswscale-dev',
     ]
 
     if board in ['pi5', 'x86']:
