@@ -22,7 +22,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
 # https://github.com/balena-io-library/base-images/issues/562
 RUN c_rehash
 
-{% if board in ['pi1', 'pi2'] %}
+{% if target_platform in ['linux/arm/v6', 'linux/arm/v7', 'linux/arm/v8'] %}
 RUN pip3 install uv --break-system-packages
 {% else %}
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/

@@ -1,6 +1,10 @@
 name: Docker Image Build
 
 on:
+  pull_request:
+    branches:
+      - master
+      - uv-migration
   push:
     branches:
       - master
@@ -103,8 +107,7 @@ jobs:
         run: |
           uv run python -m tools.image_builder \
             --build-target=${{ matrix.board }} \
-            --service=${{ matrix.service }} \
-            --push
+            --service=${{ matrix.service }}
 
       - name: Inspect cache after build
         run: |

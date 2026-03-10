@@ -112,6 +112,7 @@ def build_image(
             'git_branch': git_branch,
             'git_hash': git_hash,
             'git_short_hash': git_short_hash,
+            'target_platform': target_platform,
             **context,
         },
     )
