@@ -52,10 +52,12 @@ CSRF_TRUSTED_ORIGINS = ['http://anthias']
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'anthias_app.apps.AnthiasAppConfig',
     'drf_spectacular',
     'rest_framework',
     'api.apps.ApiConfig',
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -67,6 +69,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -96,6 +99,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'anthias_django.wsgi.application'
+ASGI_APPLICATION = 'anthias_django.asgi.application'
 
 
 # Database
@@ -184,3 +188,17 @@ SPECTACULAR_SETTINGS = {
 DBBACKUP_STORAGE = 'django.core.files.storage.FileSystemStorage'
 DBBACKUP_STORAGE_OPTIONS = {'location': '/data/.screenly/backups'}
 DBBACKUP_HOSTNAME = 'anthias'
+
+# Django Channels
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
+
+# WhiteNoise
+STORAGES = {
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}

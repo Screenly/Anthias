@@ -1,0 +1,53 @@
+{% if inactive_assets %}
+<table class="table table-borderless InactiveAssets mb-0">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th class="d-none d-lg-table-cell">Start</th>
+      <th class="d-none d-lg-table-cell">End</th>
+      <th class="d-none d-lg-table-cell">Duration</th>
+      <th>Activity</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for asset in inactive_assets %}
+    <tr>
+      <td class="asset_row_name">
+        {% if 'image' in asset.mimetype %}
+        <i class="fa-regular fa-image me-1"></i>
+        {% elif 'video' in asset.mimetype %}
+        <i class="fa-solid fa-film me-1"></i>
+        {% else %}
+        <i class="fa-solid fa-globe me-1"></i>
+        {% endif %}
+        <span title="{{ asset.name }}">{{ asset.name }}</span>
+      </td>
+      <td class="d-none d-lg-table-cell text-center text-truncate" style="max-width: 120px;">{{ asset.start_date|date:"Y-m-d H:i" }}</td>
+      <td class="d-none d-lg-table-cell text-center text-truncate" style="max-width: 120px;">{{ asset.end_date|date:"Y-m-d H:i" }}</td>
+      <td class="d-none d-lg-table-cell text-center">{{ asset.duration }}s</td>
+      <td class="text-center">
+        {% if asset.is_processing %}
+        <span class="badge bg-warning text-dark">Processing</span>
+        {% else %}
+        <div class="form-check form-switch d-flex justify-content-center">
+          <input class="form-check-input" type="checkbox" {% if asset.is_enabled %}checked{% endif %}
+                 onchange="toggleAsset('{{ asset.asset_id }}', this.checked)">
+        </div>
+        {% endif %}
+      </td>
+      <td class="asset_row_btns text-center">
+        <button class="btn btn-outline-secondary btn-sm" onclick="openEditModal('{{ asset.asset_id }}')" title="Edit">
+          <i class="fa-solid fa-pen-to-square"></i>
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="deleteAsset('{{ asset.asset_id }}')" title="Delete">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="text-muted text-center mb-0">No inactive assets.</p>
+{% endif %}

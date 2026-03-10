@@ -26,12 +26,11 @@ else
 fi
 
 if [[ "$ENVIRONMENT" == "development" ]]; then
-    echo "Starting Django development server..."
-    npm install && npm run build
-    ./manage.py runserver 0.0.0.0:8080
+    echo "Starting Django development server (Daphne)..."
+    daphne -b 0.0.0.0 -p 8000 anthias_django.asgi:application
 else
     echo "Generating Django static files..."
     ./manage.py collectstatic --clear --noinput
-    echo "Starting Gunicorn..."
-    python run_gunicorn.py
+    echo "Starting Daphne ASGI server..."
+    daphne -b 0.0.0.0 -p 8000 anthias_django.asgi:application
 fi

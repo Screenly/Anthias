@@ -18,14 +18,14 @@ from api.serializers.mixins import (
     RebootViewSerializerMixin,
     ShutdownViewSerializerMixin,
 )
-from celery_tasks import reboot_anthias, shutdown_anthias
+import threading
+
+from anthias_app.messaging import send_to_viewer
+from anthias_app.tasks import get_display_power_value, reboot_anthias, shutdown_anthias
 from lib import backup_helper, diagnostics
 from lib.auth import authorized
 from lib.github import is_up_to_date
-from lib.utils import connect_to_redis
-from settings import ZmqPublisher, settings
-
-r = connect_to_redis()
+from settings import settings
 
 
 class DeleteAssetViewMixin:
@@ -95,14 +95,13 @@ class RecoverViewMixin(APIView):
     )
     @authorized
     def post(self, request):
-        publisher = ZmqPublisher.get_instance()
         file_upload = request.data.get('backup_upload')
         filename = file_upload.name
 
         if guess_type(filename)[0] != 'application/x-tar':
             raise Exception('Incorrect file extension.')
         try:
-            publisher.send_to_viewer('stop')
+            send_to_viewer('stop')
             location = path.join('static', filename)
 
             with open(location, 'wb') as f:
@@ -112,7 +111,7 @@ class RecoverViewMixin(APIView):
 
             return Response('Recovery successful.')
         finally:
-            publisher.send_to_viewer('play')
+            send_to_viewer('play')
 
 
 class RebootViewMixin(APIView):
@@ -121,7 +120,9 @@ class RebootViewMixin(APIView):
     @extend_schema(summary='Reboot system')
     @authorized
     def post(self, request):
-        reboot_anthias.apply_async()
+        threading.Thread(
+            target=reboot_anthias, daemon=True
+        ).start()
         return Response(status=status.HTTP_200_OK)
 
 
@@ -131,7 +132,9 @@ class ShutdownViewMixin(APIView):
     @extend_schema(summary='Shut down system')
     @authorized
     def post(self, request):
-        shutdown_anthias.apply_async()
+        threading.Thread(
+            target=shutdown_anthias, daemon=True
+        ).start()
         return Response(status=status.HTTP_200_OK)
 
 
@@ -278,8 +281,7 @@ class AssetsControlViewMixin(APIView):
     )
     @authorized
     def get(self, request, command):
-        publisher = ZmqPublisher.get_instance()
-        publisher.send_to_viewer(command)
+        send_to_viewer(command)
         return Response('Asset switched')
 
 
@@ -313,7 +315,7 @@ class InfoViewMixin(APIView):
         # Calculate disk space
         slash = statvfs('/')
         free_space = size(slash.f_bavail * slash.f_frsize)
-        display_power = r.get('display_power')
+        display_power = get_display_power_value()
 
         return Response(
             {

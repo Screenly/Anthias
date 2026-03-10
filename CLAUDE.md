@@ -8,27 +8,21 @@ Anthias is an open-source digital signage platform for Raspberry Pi and x86 PCs 
 
 ## Architecture
 
-Anthias runs as a set of Docker containers:
+Anthias runs as 2 Docker containers:
 
-- **anthias-nginx** (port 80) — Reverse proxy, static file serving
-- **anthias-server** (port 8000) — Django web app serving the React frontend and REST API
-- **anthias-celery** — Async task queue (asset downloads, cleanup)
-- **anthias-websocket** (port 9999) — Real-time updates
-- **anthias-viewer** — Drives the display, receives instructions via ZMQ
-- **redis** (port 6379) — Message broker, cache, database
-- **webview** — Qt-based browser for rendering content on the display
+- **anthias-server** (port 8000) — Django ASGI app (Daphne) serving the HTMX UI, REST API, WebSocket endpoints, and static files (WhiteNoise)
+- **anthias-viewer** — Drives the display via Qt WebView, receives commands via WebSocket
 
-Inter-service communication uses ZMQ (port 10001 publisher, 5558 collector). The primary database is SQLite stored at `~/.screenly/screenly.db`, with configuration in `~/.screenly/screenly.conf`.
+Inter-service communication uses Django Channels WebSocket (`/ws/viewer/` for viewer commands, `/ws/ui/` for UI updates). The primary database is SQLite stored at `~/.screenly/screenly.db`, with configuration in `~/.screenly/screenly.conf`.
 
 ### Key Directories
 
-- `anthias_app/` — Django app (models, views, migrations, management commands)
-- `anthias_django/` — Django project settings, URLs, ASGI/WSGI
-- `api/` — REST API (views, serializers, URLs for v1, v1.1, v1.2, v2)
-- `static/src/` — TypeScript/React frontend (components, Redux store, hooks, tests)
-- `viewer/` — Viewer service (scheduling, media player, ZMQ communication)
+- `anthias_app/` — Django app (models, views, templates, migrations, tasks, consumers)
+- `anthias_django/` — Django project settings, URLs, ASGI routing
+- `api/` — REST API v2 (views, serializers, URLs)
+- `viewer/` — Viewer service (scheduling, media player, WebSocket client)
 - `webview/` — C++ Qt-based WebView (Qt5 for Pi 1-4, Qt6 for Pi 5/x86)
-- `lib/` — Shared Python utilities (auth, device helpers, diagnostics, ZMQ)
+- `lib/` — Shared Python utilities (auth, device helpers, diagnostics)
 - `docker/` — Dockerfile Jinja2 templates for each service
 - `tests/` — Python unit/integration tests
 - `bin/` — Shell scripts for install, dev setup, testing, upgrades
@@ -39,37 +33,17 @@ Inter-service communication uses ZMQ (port 10001 publisher, 5558 collector). The
 ### Dev Environment
 
 ```bash
-./bin/start_development_server.sh                    # Start full dev environment (Docker)
-docker compose -f docker-compose.dev.yml down        # Stop dev server
+docker compose -f docker-compose.dev.yml up --build    # Start dev environment
+docker compose -f docker-compose.dev.yml down           # Stop dev server
 # Web UI at http://localhost:8000
-```
-
-### Frontend (TypeScript/React)
-
-```bash
-npm install
-npm run dev              # Webpack watch mode
-npm run build            # Production build
-npm run lint:check       # ESLint check
-npm run lint:fix         # ESLint fix
-npm run format:check     # Prettier check
-npm run format:fix       # Prettier fix
-npm run test             # Jest tests
-```
-
-Inside Docker:
-```bash
-docker compose -f docker-compose.dev.yml exec anthias-server npm run dev
 ```
 
 ### Python Dependencies
 
-All Python dependencies are managed via `pyproject.toml` dependency groups, with `uv.lock` for reproducible installs. Each Docker service has its own group:
+All Python dependencies are managed via `pyproject.toml` dependency groups, with `uv.lock` for reproducible installs:
 
 - `server` — Django web app (anthias-server)
-- `celery` — Celery worker (includes server group)
-- `websocket` — WebSocket service
-- `viewer` — Viewer service (standalone Dockerfile)
+- `viewer` — Viewer service
 - `wifi-connect` — WiFi Connect service
 - `dev` — Test utilities (mock, selenium, etc.)
 - `test` — Combined group (includes server + dev + viewer)
@@ -95,10 +69,10 @@ uv run ruff check /path/to/file.py     # Lint specific file
 
 ```bash
 # Build and start test containers
-uv run python -m tools.image_builder --dockerfiles-only --disable-cache-mounts --service celery --service redis --service test
+uv run python -m tools.image_builder --dockerfiles-only --disable-cache-mounts --service test
 docker compose -f docker-compose.test.yml up -d --build
 
-# Prepare and run tests (integration and non-integration must be run separately)
+# Prepare and run tests
 docker compose -f docker-compose.test.yml exec anthias-test bash ./bin/prepare_test_environment.sh -s
 docker compose -f docker-compose.test.yml exec anthias-test ./manage.py test --exclude-tag=integration
 docker compose -f docker-compose.test.yml exec anthias-test ./manage.py test --tag=integration
@@ -120,17 +94,16 @@ docker compose exec anthias-server python manage.py createsuperuser
 - Use type hints
 - Exclude comments in generated code
 
-### TypeScript/React
-- Functional components only (no class components)
-- Redux Toolkit (`createSlice`, `createAsyncThunk`) for state management
-- No `any` or `unknown` types
-- Don't explicitly import React (handled by webpack ProvidePlugin)
-- Import order: built-in → third-party → local (alphabetically sorted, blank line between groups)
-- Use `rem` instead of `px` in SCSS
+### Frontend (Django Templates + HTMX)
+- Django templates with HTMX for dynamic interactions
+- Bootstrap 5 via CDN for styling
+- SortableJS via CDN for drag-and-drop
+- Font Awesome via CDN for icons
+- Templates located in `anthias_app/templates/anthias_app/`
 
 ### Qt/C++ (WebView)
 - Use macros for Qt5/Qt6 cross-version compatibility
 
-## API Versions
+## API
 
-The REST API has multiple versions at `/api/v1/`, `/api/v1.1/`, `/api/v1.2/`, and `/api/v2/`. The v2 API (in `api/views/v2.py`) is the current primary API using DRF with drf-spectacular for OpenAPI schema generation.
+The REST API is at `/api/v2/`. The v2 API (in `api/views/v2.py`) uses DRF with drf-spectacular for OpenAPI schema generation. API docs at `/api/docs/`.

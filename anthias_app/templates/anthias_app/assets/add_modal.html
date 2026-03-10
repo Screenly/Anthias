@@ -1,0 +1,64 @@
+<input type="hidden" id="default_duration" value="{{ default_duration }}">
+
+<div class="modal fade" id="addAssetModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Asset</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="addAssetForm">
+        <div class="modal-body">
+          <ul class="nav nav-tabs mb-3" id="add-asset-nav-tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-uri" type="button">URL</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-upload" type="button">Upload</button>
+            </li>
+          </ul>
+
+          <div class="tab-content">
+            <div class="tab-pane fade show active" id="tab-uri">
+              <div class="mb-3">
+                <label for="add-name" class="form-label text-start w-100">Name (optional)</label>
+                <input type="text" class="form-control" id="add-name" placeholder="Asset name">
+              </div>
+              <div class="mb-3">
+                <label for="add-uri" class="form-label text-start w-100">URL</label>
+                <input type="url" class="form-control" id="add-uri" placeholder="https://example.com">
+              </div>
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="add-skip-check">
+                <label class="form-check-label text-start" for="add-skip-check">Skip asset check</label>
+              </div>
+            </div>
+            <div class="tab-pane fade" id="tab-upload">
+              <div class="filedrop mb-3">
+                <i class="fa-solid fa-cloud-arrow-up fa-2x mb-2 d-block"></i>
+                <span>Drag and drop or click to upload</span>
+                <input type="file" id="add-file-upload" name="file_upload" accept="image/*,video/*"
+                       style="position: absolute; width: 100%; height: 100%; opacity: 0; top: 0; left: 0; cursor: pointer;">
+              </div>
+              <div id="upload-progress" class="progress mb-3" style="display: none;">
+                <div class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+              </div>
+              <div id="upload-filename" class="text-muted small"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('add-file-upload')?.addEventListener('change', function() {
+  var name = this.files.length ? this.files[0].name : '';
+  document.getElementById('upload-filename').textContent = name;
+});
+</script>

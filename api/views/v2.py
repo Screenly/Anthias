@@ -42,15 +42,14 @@ from api.views.mixins import (
 from lib import device_helper, diagnostics
 from lib.auth import authorized
 from lib.github import is_up_to_date
+from anthias_app.messaging import send_to_viewer
+from anthias_app.tasks import get_display_power_value
 from lib.utils import (
-    connect_to_redis,
     get_node_ip,
     get_node_mac_address,
     is_balena_app,
 )
-from settings import ZmqPublisher, settings
-
-r = connect_to_redis()
+from settings import settings
 
 
 class AssetListViewV2(APIView):
@@ -356,8 +355,7 @@ class DeviceSettingsViewV2(APIView):
                 settings['debug_logging'] = data['debug_logging']
 
             settings.save()
-            publisher = ZmqPublisher.get_instance()
-            publisher.send_to_viewer('reload')
+            send_to_viewer('reload')
 
             return Response({'message': 'Settings were successfully saved.'})
         except Exception as e:
@@ -468,7 +466,7 @@ class InfoViewV2(InfoViewMixin):
         # Calculate disk space
         slash = statvfs('/')
         free_space = size(slash.f_bavail * slash.f_frsize)
-        display_power = r.get('display_power')
+        display_power = get_display_power_value()
 
         return Response(
             {

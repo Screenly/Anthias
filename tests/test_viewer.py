@@ -3,10 +3,10 @@
 
 import logging
 import os
-import unittest
 from time import sleep
+from unittest.mock import Mock, patch
 
-import mock
+import pytest
 
 import viewer
 from viewer.scheduling import Scheduler
@@ -14,91 +14,62 @@ from viewer.scheduling import Scheduler
 logging.disable(logging.CRITICAL)
 
 
-class ViewerTestCase(unittest.TestCase):
-    def setUp(self):
-        self.original_splash_delay = viewer.SPLASH_DELAY
-        viewer.SPLASH_DELAY = 0
-
-        self.u = viewer
-
-        self.m_scheduler = mock.Mock(name='m_scheduler')
-        self.p_scheduler = mock.patch.object(
-            self.u, 'Scheduler', self.m_scheduler
-        )
-
-        self.m_cmd = mock.Mock(name='m_cmd')
-        self.p_cmd = mock.patch.object(self.u.sh, 'Command', self.m_cmd)
-
-        self.m_killall = mock.Mock(name='killall')
-        self.p_killall = mock.patch.object(
-            self.u.sh, 'killall', self.m_killall
-        )
-
-        self.m_reload = mock.Mock(name='reload')
-        self.p_reload = mock.patch.object(
-            self.u, 'load_settings', self.m_reload
-        )
-
-        self.m_sleep = mock.Mock(name='sleep')
-        self.p_sleep = mock.patch.object(self.u, 'sleep', self.m_sleep)
-
-        self.m_loadb = mock.Mock(name='load_browser')
-        self.p_loadb = mock.patch.object(self.u, 'load_browser', self.m_loadb)
-
-    def tearDown(self):
-        self.u.SPLASH_DELAY = self.original_splash_delay
+@pytest.fixture
+def viewer_setup():
+    original_splash_delay = viewer.SPLASH_DELAY
+    viewer.SPLASH_DELAY = 0
+    yield viewer
+    viewer.SPLASH_DELAY = original_splash_delay
 
 
-def noop(*a, **k):
-    return None
-
-
-class TestEmptyPl(ViewerTestCase):
-    @mock.patch('viewer.constants.SERVER_WAIT_TIMEOUT', 0)
-    def test_empty(self):
-        m_asset_list = mock.Mock()
+class TestEmptyPlaylist:
+    @patch('viewer.constants.SERVER_WAIT_TIMEOUT', 0)
+    def test_empty(self, viewer_setup):
+        m_asset_list = Mock()
         m_asset_list.return_value = ([], None)
-
-        with mock.patch('viewer.scheduling.generate_asset_list', m_asset_list):
-            self.u.scheduler = Scheduler()
-
+        with patch(
+            'viewer.scheduling.generate_asset_list',
+            m_asset_list,
+        ):
+            viewer_setup.scheduler = Scheduler()
             m_asset_list.assert_called_once()
 
 
-class TestLoadBrowser(ViewerTestCase):
-    @mock.patch('pydbus.SessionBus', mock.MagicMock())
-    def test_setup(self):
-        self.p_loadb.start()
-        self.u.setup()
-        self.p_loadb.stop()
+class TestLoadBrowser:
+    @patch('pydbus.SessionBus', Mock())
+    def test_setup(self, viewer_setup):
+        with patch.object(viewer_setup, 'load_browser'):
+            viewer_setup.setup()
 
-    def test_load_browser(self):
-        self.m_cmd.return_value.return_value.process.stdout = (
+    def test_load_browser(self, viewer_setup):
+        m_cmd = Mock(name='m_cmd')
+        m_cmd.return_value.return_value.process.stdout = (
             b'Screenly service start'
         )
-        self.p_cmd.start()
-        self.u.load_browser()
-        self.p_cmd.stop()
-        self.m_cmd.assert_called_once_with('ScreenlyWebview')
+        with patch.object(viewer_setup.sh, 'Command', m_cmd):
+            viewer_setup.load_browser()
+        m_cmd.assert_called_once_with('ScreenlyWebview')
 
 
-class TestWatchdog(ViewerTestCase):
-    def test_watchdog_should_create_file_if_not_exists(self):
+class TestWatchdog:
+    def test_creates_file_if_not_exists(self, viewer_setup):
         try:
-            os.remove(self.u.utils.WATCHDOG_PATH)
+            os.remove(viewer_setup.utils.WATCHDOG_PATH)
         except OSError:
             pass
-        self.u.watchdog()
-        self.assertEqual(os.path.exists(self.u.utils.WATCHDOG_PATH), True)
+        viewer_setup.watchdog()
+        assert os.path.exists(
+            viewer_setup.utils.WATCHDOG_PATH
+        )
 
-    def test_watchdog_should_update_mtime(self):
-        # for watchdog file creation
-        self.u.watchdog()
-        mtime = os.path.getmtime(self.u.utils.WATCHDOG_PATH)
-
-        # Python is too fast?
+    def test_updates_mtime(self, viewer_setup):
+        viewer_setup.watchdog()
+        mtime = os.path.getmtime(
+            viewer_setup.utils.WATCHDOG_PATH
+        )
         sleep(0.01)
-
-        self.u.watchdog()
-        mtime2 = os.path.getmtime(self.u.utils.WATCHDOG_PATH)
-        self.assertGreater(mtime2, mtime)
+        viewer_setup.watchdog()
+        mtime2 = os.path.getmtime(
+            viewer_setup.utils.WATCHDOG_PATH
+        )
+        assert mtime2 > mtime

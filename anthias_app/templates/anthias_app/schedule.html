@@ -1,0 +1,313 @@
+{% extends "anthias_app/base.html" %}
+
+{% block title %}Schedule Overview - Anthias{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="d-flex align-items-center">
+    <h4 class="text-white mb-0 me-3">Schedule Overview</h4>
+    {% if player_name %}
+    <span class="badge" style="background-color: var(--anthias-yellow-3); color: #000;">{{ player_name }}</span>
+    {% endif %}
+  </div>
+  <div>
+    <button class="btn btn-outline-light btn-sm me-1"
+            hx-get="{% url 'api:assets_control_v2' command='previous' %}"
+            hx-swap="none"
+            title="Previous Asset">
+      <i class="fa-solid fa-backward"></i>
+    </button>
+    <button class="btn btn-outline-light btn-sm me-1"
+            hx-get="{% url 'api:assets_control_v2' command='next' %}"
+            hx-swap="none"
+            title="Next Asset">
+      <i class="fa-solid fa-forward"></i>
+    </button>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAssetModal">
+      <i class="fa-solid fa-plus me-1"></i> Add Asset
+    </button>
+  </div>
+</div>
+
+<div id="schedule-content">
+<!-- Active Assets -->
+<div class="content active-content p-3 mb-4 rounded">
+  <h6 class="text-white mb-3">Active assets</h6>
+  <div id="active-assets-table">
+    {% include "anthias_app/assets/active_table.html" %}
+  </div>
+</div>
+
+<!-- Inactive Assets -->
+<div class="content inactive-content p-3 mb-4 rounded" style="background-color: #fff;">
+  <h6 class="text-dark mb-3" style="color: #6c757d !important;">Inactive assets</h6>
+  <div id="inactive-assets-table">
+    {% include "anthias_app/assets/inactive_table.html" %}
+  </div>
+</div>
+</div>
+
+{% include "anthias_app/assets/add_modal.html" %}
+{% include "anthias_app/assets/edit_modal.html" %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  initSortable();
+});
+
+document.body.addEventListener('htmx:afterSwap', function(event) {
+  if (event.detail.target.id === 'active-assets-table' ||
+      event.detail.target.id === 'inactive-assets-table' ||
+      event.detail.target.id === 'schedule-content') {
+    initSortable();
+  }
+});
+
+function initSortable() {
+  var el = document.getElementById('sortable-assets');
+  if (el && !el.sortableInstance) {
+    el.sortableInstance = new Sortable(el, {
+      handle: '.drag-handle',
+      animation: 150,
+      onEnd: function() {
+        var ids = [];
+        el.querySelectorAll('tr[data-asset-id]').forEach(function(row) {
+          ids.push(row.dataset.assetId);
+        });
+        fetch('{% url "api:playlist_order_v2" %}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+          },
+          body: JSON.stringify({ids: ids.join(',')})
+        }).then(function() {
+          htmx.ajax('GET', '{% url "anthias_app:asset_tables" %}', {target: '#schedule-content', swap: 'innerHTML'});
+        });
+      }
+    });
+  }
+}
+
+function openEditModal(assetId) {
+  fetch('/api/v2/assets/' + assetId)
+    .then(r => r.json())
+    .then(function(asset) {
+      document.getElementById('edit-asset-id').value = asset.asset_id;
+      document.getElementById('edit-name').value = asset.name || '';
+      document.getElementById('edit-uri-display').textContent = asset.uri || '';
+      document.getElementById('edit-mimetype').value = asset.mimetype || '';
+      document.getElementById('edit-duration').value = asset.duration || '';
+      document.getElementById('edit-is-enabled').checked = asset.is_enabled;
+      document.getElementById('edit-nocache').checked = asset.nocache;
+      document.getElementById('edit-skip-asset-check').checked = asset.skip_asset_check;
+
+      if (asset.start_date) {
+        var sd = new Date(asset.start_date);
+        document.getElementById('edit-start-date').value = sd.toISOString().split('T')[0];
+        document.getElementById('edit-start-time').value = sd.toISOString().split('T')[1].substring(0,5);
+      }
+      if (asset.end_date) {
+        var ed = new Date(asset.end_date);
+        document.getElementById('edit-end-date').value = ed.toISOString().split('T')[0];
+        document.getElementById('edit-end-time').value = ed.toISOString().split('T')[1].substring(0,5);
+      }
+
+      var modal = new bootstrap.Modal(document.getElementById('editAssetModal'));
+      modal.show();
+    });
+}
+
+function deleteAsset(assetId) {
+  if (!confirm('Are you sure you want to delete this asset?')) return;
+  fetch('/api/v2/assets/' + assetId, {
+    method: 'DELETE',
+    headers: {'X-CSRFToken': '{{ csrf_token }}'}
+  }).then(function() {
+    refreshAssetTables();
+  });
+}
+
+function toggleAsset(assetId, enabled) {
+  fetch('/api/v2/assets/' + assetId, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token }}'
+    },
+    body: JSON.stringify({is_enabled: enabled})
+  }).then(function() {
+    refreshAssetTables();
+  });
+}
+
+function refreshAssetTables() {
+  htmx.ajax('GET', '{% url "anthias_app:asset_tables" %}', {target: '#schedule-content', swap: 'innerHTML'});
+}
+
+document.getElementById('addAssetForm')?.addEventListener('submit', function(e) {
+  e.preventDefault();
+  var form = e.target;
+  var activeTab = document.querySelector('#add-asset-nav-tabs .nav-link.active').dataset.bsTarget;
+
+  if (activeTab === '#tab-upload') {
+    var fileInput = document.getElementById('add-file-upload');
+    if (!fileInput.files.length) {
+      alert('Please select a file.');
+      return;
+    }
+    var file = fileInput.files[0];
+    var formData = new FormData();
+    formData.append('file_upload', file);
+
+    var progressBar = document.getElementById('upload-progress');
+    var progressBarInner = progressBar.querySelector('.progress-bar');
+    progressBar.style.display = 'block';
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '{% url "api:file_asset_v2" %}');
+    xhr.setRequestHeader('X-CSRFToken', '{{ csrf_token }}');
+    xhr.upload.onprogress = function(e) {
+      if (e.lengthComputable) {
+        var pct = Math.round((e.loaded / e.total) * 100);
+        progressBarInner.style.width = pct + '%';
+        progressBarInner.textContent = pct + '%';
+      }
+    };
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        var resp = JSON.parse(xhr.responseText);
+        createAssetFromUpload(file.name, resp.uri, resp.ext);
+      } else {
+        alert('Upload failed.');
+      }
+      progressBar.style.display = 'none';
+    };
+    xhr.send(formData);
+  } else {
+    var uri = document.getElementById('add-uri').value;
+    if (!uri) { alert('Please enter a URI.'); return; }
+    var skipCheck = document.getElementById('add-skip-check').checked;
+    createAssetFromUri(uri, skipCheck);
+  }
+});
+
+function createAssetFromUri(uri, skipCheck) {
+  var name = document.getElementById('add-name').value || uri;
+  var mimetype = 'webpage';
+  if (/\.(jpg|jpeg|png|gif|bmp|svg|webp)(\?|$)/i.test(uri)) mimetype = 'image';
+  else if (/\.(mp4|webm|ogg|avi|mov|mkv)(\?|$)/i.test(uri)) mimetype = 'video';
+  else if (/youtu(be\.com|\.be)/i.test(uri)) mimetype = 'youtube_asset';
+  else if (/^rtsp:|^rtmp:/i.test(uri)) mimetype = 'streaming';
+
+  var now = new Date();
+  var end = new Date(now);
+  end.setFullYear(end.getFullYear() + 1);
+
+  var data = {
+    name: name,
+    uri: uri,
+    mimetype: mimetype,
+    is_enabled: true,
+    start_date: now.toISOString(),
+    end_date: end.toISOString(),
+    duration: parseInt(document.getElementById('default_duration').value) || 10,
+    skip_asset_check: skipCheck
+  };
+
+  fetch('{% url "api:asset_list_v2" %}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token }}'
+    },
+    body: JSON.stringify(data)
+  }).then(function(r) {
+    if (r.ok) {
+      bootstrap.Modal.getInstance(document.getElementById('addAssetModal')).hide();
+      document.getElementById('addAssetForm').reset();
+      refreshAssetTables();
+    } else {
+      r.json().then(function(err) { alert(JSON.stringify(err)); });
+    }
+  });
+}
+
+function createAssetFromUpload(filename, uri, ext) {
+  var mimetype = 'image';
+  if (/\.(mp4|webm|ogg|avi|mov|mkv)$/i.test(filename)) mimetype = 'video';
+
+  var now = new Date();
+  var end = new Date(now);
+  end.setFullYear(end.getFullYear() + 1);
+
+  var data = {
+    name: filename,
+    uri: uri,
+    ext: ext,
+    mimetype: mimetype,
+    is_enabled: true,
+    start_date: now.toISOString(),
+    end_date: end.toISOString(),
+    duration: mimetype === 'video' ? 0 : (parseInt(document.getElementById('default_duration').value) || 10),
+    skip_asset_check: false
+  };
+
+  fetch('{% url "api:asset_list_v2" %}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token }}'
+    },
+    body: JSON.stringify(data)
+  }).then(function(r) {
+    if (r.ok) {
+      bootstrap.Modal.getInstance(document.getElementById('addAssetModal')).hide();
+      document.getElementById('addAssetForm').reset();
+      refreshAssetTables();
+    } else {
+      r.json().then(function(err) { alert(JSON.stringify(err)); });
+    }
+  });
+}
+
+document.getElementById('editAssetForm')?.addEventListener('submit', function(e) {
+  e.preventDefault();
+  var assetId = document.getElementById('edit-asset-id').value;
+  var startDate = document.getElementById('edit-start-date').value;
+  var startTime = document.getElementById('edit-start-time').value || '00:00';
+  var endDate = document.getElementById('edit-end-date').value;
+  var endTime = document.getElementById('edit-end-time').value || '00:00';
+
+  var data = {
+    name: document.getElementById('edit-name').value,
+    duration: parseInt(document.getElementById('edit-duration').value),
+    mimetype: document.getElementById('edit-mimetype').value,
+    is_enabled: document.getElementById('edit-is-enabled').checked,
+    nocache: document.getElementById('edit-nocache').checked,
+    skip_asset_check: document.getElementById('edit-skip-asset-check').checked,
+    start_date: startDate + 'T' + startTime + ':00Z',
+    end_date: endDate + 'T' + endTime + ':00Z',
+  };
+
+  fetch('/api/v2/assets/' + assetId, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token }}'
+    },
+    body: JSON.stringify(data)
+  }).then(function(r) {
+    if (r.ok) {
+      bootstrap.Modal.getInstance(document.getElementById('editAssetModal')).hide();
+      refreshAssetTables();
+    } else {
+      r.json().then(function(err) { alert(JSON.stringify(err)); });
+    }
+  });
+});
+</script>
+{% endblock %}

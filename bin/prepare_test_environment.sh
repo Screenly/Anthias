@@ -48,11 +48,10 @@ EOF
 if [ "$START_SERVER" = true ]; then
     cd /usr/src/app
 
-    npm install && npm run build
-
     ./manage.py makemigrations
     ./manage.py migrate --fake-initial
-    ./manage.py runserver 127.0.0.1:8080 &
+    ./manage.py collectstatic --noinput --clear
+    daphne -b 127.0.0.1 -p 8000 anthias_django.asgi:application &
 
     sleep 3
 fi

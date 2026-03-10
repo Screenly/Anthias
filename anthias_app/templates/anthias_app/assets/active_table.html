@@ -1,0 +1,56 @@
+{% if active_assets %}
+<table class="table table-borderless ActiveAssets mb-0">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th class="d-none d-lg-table-cell">Start</th>
+      <th class="d-none d-lg-table-cell">End</th>
+      <th class="d-none d-lg-table-cell">Duration</th>
+      <th>Activity</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody id="sortable-assets">
+    {% for asset in active_assets %}
+    <tr data-asset-id="{{ asset.asset_id }}">
+      <td class="asset_row_name">
+        <i class="fa-solid fa-grip-vertical drag-handle me-2" style="opacity: 0.5;"></i>
+        {% if 'image' in asset.mimetype %}
+        <i class="fa-regular fa-image me-1"></i>
+        {% elif 'video' in asset.mimetype %}
+        <i class="fa-solid fa-film me-1"></i>
+        {% else %}
+        <i class="fa-solid fa-globe me-1"></i>
+        {% endif %}
+        <span title="{{ asset.name }}">{{ asset.name }}</span>
+      </td>
+      <td class="d-none d-lg-table-cell text-center text-truncate" style="max-width: 120px;" title="{{ asset.start_date|date:'Y-m-d H:i' }}">{{ asset.start_date|date:"Y-m-d H:i" }}</td>
+      <td class="d-none d-lg-table-cell text-center text-truncate" style="max-width: 120px;" title="{{ asset.end_date|date:'Y-m-d H:i' }}">{{ asset.end_date|date:"Y-m-d H:i" }}</td>
+      <td class="d-none d-lg-table-cell text-center">{{ asset.duration }}s</td>
+      <td class="text-center">
+        {% if asset.is_processing %}
+        <span class="badge bg-warning text-dark">Processing</span>
+        {% else %}
+        <div class="form-check form-switch d-flex justify-content-center">
+          <input class="form-check-input" type="checkbox" {% if asset.is_enabled %}checked{% endif %}
+                 onchange="toggleAsset('{{ asset.asset_id }}', this.checked)">
+        </div>
+        {% endif %}
+      </td>
+      <td class="asset_row_btns text-center">
+        <button class="btn btn-outline-light btn-sm" onclick="openEditModal('{{ asset.asset_id }}')" title="Edit">
+          <i class="fa-solid fa-pen-to-square"></i>
+        </button>
+        <button class="btn btn-outline-light btn-sm" onclick="deleteAsset('{{ asset.asset_id }}')" title="Delete">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="text-white-50 text-center mb-0">
+  No active assets. Click "Add Asset" to get started.
+</p>
+{% endif %}

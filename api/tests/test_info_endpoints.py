@@ -1,133 +1,104 @@
 """
-Tests for Info API endpoints (v1 and v2).
+Tests for Info API endpoints (v2).
 """
 
-from unittest import mock
+from unittest.mock import MagicMock, patch
 
-from django.test import TestCase
+import pytest
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
 
-class InfoEndpointsTest(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.info_url_v1 = reverse('api:info_v1')
-        self.info_url_v2 = reverse('api:info_v2')
-
-    def _assert_mock_calls(self, mocks):
-        """Assert that all mocks were called exactly once."""
-        for mock_obj in mocks:
-            self.assertEqual(mock_obj.call_count, 1)
-
-    def _assert_response_data(self, data, expected_data):
-        """Assert that the response data matches the expected data."""
-        for key, expected_value in expected_data.items():
-            self.assertEqual(data[key], expected_value)
-
-    @mock.patch('api.views.mixins.is_up_to_date', return_value=False)
-    @mock.patch('lib.diagnostics.get_load_avg', return_value={'15 min': 0.11})
-    @mock.patch('api.views.mixins.size', return_value='15G')
-    @mock.patch('api.views.mixins.statvfs', mock.MagicMock())
-    @mock.patch('api.views.mixins.r.get', return_value='off')
-    def test_info_v1_endpoint(
-        self, redis_get_mock, size_mock, get_load_avg_mock, is_up_to_date_mock
-    ):
-        response = self.client.get(self.info_url_v1)
-        data = response.data
-
-        # Assert response status
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-        # Assert mock calls
-        self._assert_mock_calls(
-            [redis_get_mock, size_mock, get_load_avg_mock, is_up_to_date_mock]
-        )
-
-        # Assert response data
-        expected_data = {
-            'viewlog': 'Not yet implemented',
-            'loadavg': 0.11,
-            'free_space': '15G',
-            'display_power': 'off',
-            'up_to_date': False,
-        }
-        self._assert_response_data(data, expected_data)
-
-    @mock.patch('api.views.v2.is_up_to_date', return_value=True)
-    @mock.patch('lib.diagnostics.get_load_avg', return_value={'15 min': 0.25})
-    @mock.patch('api.views.v2.size', return_value='20G')
-    @mock.patch('api.views.v2.statvfs', mock.MagicMock())
-    @mock.patch('api.views.v2.r.get', return_value='on')
-    @mock.patch('api.views.v2.diagnostics.get_git_branch', return_value='main')
-    @mock.patch(
-        'api.views.v2.diagnostics.get_git_short_hash', return_value='a1b2c3d'
+@pytest.mark.django_db
+class TestInfoEndpoints:
+    @patch('api.views.v2.getenv', return_value='testuser')
+    @patch(
+        'api.views.v2.get_node_ip',
+        return_value='192.168.1.100 10.0.0.50',
     )
-    @mock.patch(
+    @patch(
+        'api.views.v2.get_node_mac_address',
+        return_value='00:11:22:33:44:55',
+    )
+    @patch(
+        'api.views.v2.psutil.virtual_memory',
+        return_value=MagicMock(
+            total=8192 << 20,
+            used=4096 << 20,
+            free=4096 << 20,
+            shared=0,
+            buffers=1024 << 20,
+            available=7168 << 20,
+        ),
+    )
+    @patch(
+        'api.views.v2.diagnostics.get_uptime',
+        return_value=86400,
+    )
+    @patch(
         'api.views.v2.device_helper.parse_cpu_info',
         return_value={'model': 'Raspberry Pi 4'},
     )
-    @mock.patch('api.views.v2.diagnostics.get_uptime', return_value=86400)
-    @mock.patch(
-        'api.views.v2.psutil.virtual_memory',
-        return_value=mock.MagicMock(
-            total=8192 << 20,  # 8GB
-            used=4096 << 20,  # 4GB
-            free=4096 << 20,  # 4GB
-            shared=0,
-            buffers=1024 << 20,  # 1GB
-            available=7168 << 20,  # 7GB
-        ),
+    @patch(
+        'api.views.v2.diagnostics.get_git_short_hash',
+        return_value='a1b2c3d',
     )
-    @mock.patch(
-        'api.views.v2.get_node_mac_address', return_value='00:11:22:33:44:55'
+    @patch(
+        'api.views.v2.diagnostics.get_git_branch',
+        return_value='main',
     )
-    @mock.patch(
-        'api.views.v2.get_node_ip', return_value='192.168.1.100 10.0.0.50'
+    @patch(
+        'api.views.v2.get_display_power_value',
+        return_value='on',
     )
-    @mock.patch('api.views.v2.getenv', return_value='testuser')
-    def test_info_v2_endpoint(
-        self,
-        getenv_mock,
-        get_node_ip_mock,
-        mac_address_mock,
-        virtual_memory_mock,
-        get_uptime_mock,
-        parse_cpu_info_mock,
-        get_git_short_hash_mock,
-        get_git_branch_mock,
-        redis_get_mock,
-        size_mock,
-        get_load_avg_mock,
-        is_up_to_date_mock,
-    ):
-        response = self.client.get(self.info_url_v2)
+    @patch('api.views.v2.statvfs', MagicMock())
+    @patch('api.views.v2.size', return_value='20G')
+    @patch(
+        'lib.diagnostics.get_load_avg',
+        return_value={'15 min': 0.25},
+    )
+    @patch('api.views.v2.is_up_to_date', return_value=True)
+    def test_info_v2_endpoint(self, *mocks):
+        (
+            is_up_to_date_mock,
+            get_load_avg_mock,
+            size_mock,
+            display_power_mock,
+            get_git_branch_mock,
+            get_git_short_hash_mock,
+            parse_cpu_info_mock,
+            get_uptime_mock,
+            virtual_memory_mock,
+            mac_address_mock,
+            get_node_ip_mock,
+            getenv_mock,
+        ) = mocks
+
+        client = APIClient()
+        info_url = reverse('api:info_v2')
+        response = client.get(info_url)
         data = response.data
 
-        # Assert response status
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        assert response.status_code == status.HTTP_200_OK
 
-        # Assert mock calls
-        self._assert_mock_calls(
-            [
-                redis_get_mock,
-                size_mock,
-                get_load_avg_mock,
-                is_up_to_date_mock,
-                get_git_branch_mock,
-                get_git_short_hash_mock,
-                parse_cpu_info_mock,
-                get_uptime_mock,
-                virtual_memory_mock,
-                mac_address_mock,
-                get_node_ip_mock,
-                getenv_mock,
-            ]
-        )
+        for mock_obj in [
+            display_power_mock,
+            size_mock,
+            get_load_avg_mock,
+            is_up_to_date_mock,
+            get_git_branch_mock,
+            get_git_short_hash_mock,
+            parse_cpu_info_mock,
+            get_uptime_mock,
+            virtual_memory_mock,
+            mac_address_mock,
+            get_node_ip_mock,
+            getenv_mock,
+        ]:
+            assert mock_obj.call_count == 1
 
-        # Assert response data
-        expected_data = {
+        expected = {
             'viewlog': 'Not yet implemented',
             'loadavg': 0.25,
             'free_space': '20G',
@@ -144,8 +115,12 @@ class InfoEndpointsTest(TestCase):
                 'buff': 1024,
                 'available': 7168,
             },
-            'ip_addresses': ['http://192.168.1.100', 'http://10.0.0.50'],
+            'ip_addresses': [
+                'http://192.168.1.100',
+                'http://10.0.0.50',
+            ],
             'mac_address': '00:11:22:33:44:55',
             'host_user': 'testuser',
         }
-        self._assert_response_data(data, expected_data)
+        for key, expected_value in expected.items():
+            assert data[key] == expected_value

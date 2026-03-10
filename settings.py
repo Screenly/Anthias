@@ -4,17 +4,12 @@ from __future__ import unicode_literals
 
 import configparser
 import hashlib
-import json
 import logging
-from builtins import object, str
+from builtins import str
 from collections import UserDict
 from os import getenv, path
-from time import sleep
-
-import zmq
 
 from lib.auth import BasicAuth, NoAuth
-from lib.errors import ZmqCollectorTimeoutError
 
 CONFIG_DIR = '.screenly/'
 CONFIG_FILE = 'screenly.conf'
@@ -49,12 +44,14 @@ CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main'][
 ]
 CONFIGURABLE_SETTINGS['date_format'] = DEFAULTS['main']['date_format']
 
-PORT = int(getenv('PORT', 8080))
+PORT = int(getenv('PORT', 8000))
 LISTEN = getenv('LISTEN', '127.0.0.1')
 
 # Initiate logging
 logging.basicConfig(
-    level=logging.INFO, format='%(message)s', datefmt='%a, %d %b %Y %H:%M:%S'
+    level=logging.INFO,
+    format='%(message)s',
+    datefmt='%a, %d %b %Y %H:%M:%S',
 )
 
 # Silence urllib info messages ('Starting new HTTP connection')
@@ -164,73 +161,3 @@ class AnthiasSettings(UserDict):
 
 
 settings = AnthiasSettings()
-
-
-class ZmqPublisher(object):
-    INSTANCE = None
-
-    def __init__(self):
-        if self.INSTANCE is not None:
-            raise ValueError('An instance already exists!')
-
-        self.context = zmq.Context()
-
-        self.socket = self.context.socket(zmq.PUB)
-        self.socket.bind('tcp://0.0.0.0:10001')
-        sleep(1)
-
-    @classmethod
-    def get_instance(cls):
-        if cls.INSTANCE is None:
-            cls.INSTANCE = ZmqPublisher()
-        return cls.INSTANCE
-
-    def send_to_ws_server(self, msg):
-        self.socket.send('ws_server {}'.format(msg).encode('utf-8'))
-
-    def send_to_viewer(self, msg):
-        self.socket.send_string('viewer {}'.format(msg))
-
-
-class ZmqConsumer(object):
-    def __init__(self):
-        self.context = zmq.Context()
-
-        self.socket = self.context.socket(zmq.PUSH)
-        self.socket.setsockopt(zmq.LINGER, 0)
-        self.socket.connect('tcp://anthias-server:5558')
-
-        sleep(1)
-
-    def send(self, msg):
-        self.socket.send_json(msg, flags=zmq.NOBLOCK)
-
-
-class ZmqCollector(object):
-    INSTANCE = None
-
-    def __init__(self):
-        if self.INSTANCE is not None:
-            raise ValueError('An instance already exists!')
-
-        self.context = zmq.Context()
-
-        self.socket = self.context.socket(zmq.PULL)
-        self.socket.bind('tcp://0.0.0.0:5558')
-
-        self.poller = zmq.Poller()
-        self.poller.register(self.socket, zmq.POLLIN)
-
-        sleep(1)
-
-    @classmethod
-    def get_instance(cls):
-        if cls.INSTANCE is None:
-            cls.INSTANCE = ZmqCollector()
-        return cls.INSTANCE
-
-    def recv_json(self, timeout):
-        if self.poller.poll(timeout):
-            return json.loads(self.socket.recv(zmq.NOBLOCK))
-
-        raise ZmqCollectorTimeoutError

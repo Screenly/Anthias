@@ -1,0 +1,237 @@
+{% extends "anthias_app/base.html" %}
+
+{% block title %}Settings - Anthias{% endblock %}
+
+{% block content %}
+<h4 class="text-white mb-4">Settings</h4>
+
+<div class="content p-4 mb-4 rounded">
+  <form id="settingsForm">
+    <div class="row">
+      <div class="col-lg-6">
+        <div class="mb-3">
+          <label for="player_name" class="form-label text-start w-100">Player Name</label>
+          <input type="text" class="form-control" id="player_name" name="player_name" value="{{ settings.player_name }}">
+        </div>
+        <div class="mb-3">
+          <label for="default_duration" class="form-label text-start w-100">Default Duration (seconds)</label>
+          <input type="number" class="form-control" id="default_duration" name="default_duration" value="{{ settings.default_duration }}" min="1">
+        </div>
+        <div class="mb-3">
+          <label for="default_streaming_duration" class="form-label text-start w-100">Default Streaming Duration (seconds)</label>
+          <input type="number" class="form-control" id="default_streaming_duration" name="default_streaming_duration" value="{{ settings.default_streaming_duration }}" min="1">
+        </div>
+        <div class="mb-3">
+          <label for="audio_output" class="form-label text-start w-100">Audio Output</label>
+          <select class="form-select" id="audio_output" name="audio_output">
+            <option value="hdmi" {% if settings.audio_output == 'hdmi' %}selected{% endif %}>HDMI</option>
+            <option value="local" {% if settings.audio_output == 'local' %}selected{% endif %}>Local (3.5mm)</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label for="date_format" class="form-label text-start w-100">Date Format</label>
+          <select class="form-select" id="date_format" name="date_format">
+            <option value="mm/dd/yyyy" {% if settings.date_format == 'mm/dd/yyyy' %}selected{% endif %}>mm/dd/yyyy</option>
+            <option value="dd/mm/yyyy" {% if settings.date_format == 'dd/mm/yyyy' %}selected{% endif %}>dd/mm/yyyy</option>
+            <option value="yyyy-mm-dd" {% if settings.date_format == 'yyyy-mm-dd' %}selected{% endif %}>yyyy-mm-dd</option>
+          </select>
+        </div>
+        <hr>
+        <h6>Authentication</h6>
+        <div class="mb-3">
+          <label for="auth_backend" class="form-label text-start w-100">Authentication Method</label>
+          <select class="form-select" id="auth_backend" name="auth_backend">
+            <option value="" {% if not settings.auth_backend %}selected{% endif %}>No authentication</option>
+            <option value="auth_basic" {% if settings.auth_backend == 'auth_basic' %}selected{% endif %}>Basic authentication</option>
+          </select>
+        </div>
+        <div id="auth-fields" style="{% if settings.auth_backend != 'auth_basic' %}display:none{% endif %}">
+          <div class="mb-3">
+            <label for="username" class="form-label text-start w-100">Username</label>
+            <input type="text" class="form-control" id="username" name="username" value="{{ settings.username }}">
+          </div>
+          <div class="mb-3">
+            <label for="current_password" class="form-label text-start w-100">Current Password</label>
+            <input type="password" class="form-control" id="current_password" name="current_password">
+          </div>
+          <div class="mb-3">
+            <label for="password" class="form-label text-start w-100">New Password</label>
+            <input type="password" class="form-control" id="password" name="password">
+          </div>
+          <div class="mb-3">
+            <label for="password_2" class="form-label text-start w-100">Confirm New Password</label>
+            <input type="password" class="form-control" id="password_2" name="password_2">
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="show_splash" name="show_splash" {% if settings.show_splash %}checked{% endif %}>
+          <label class="form-check-label text-start" for="show_splash">Show splash screen</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="default_assets" name="default_assets" {% if settings.default_assets %}checked{% endif %}>
+          <label class="form-check-label text-start" for="default_assets">Default assets</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="shuffle_playlist" name="shuffle_playlist" {% if settings.shuffle_playlist %}checked{% endif %}>
+          <label class="form-check-label text-start" for="shuffle_playlist">Shuffle playlist</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="use_24_hour_clock" name="use_24_hour_clock" {% if settings.use_24_hour_clock %}checked{% endif %}>
+          <label class="form-check-label text-start" for="use_24_hour_clock">Use 24-hour clock</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="debug_logging" name="debug_logging" {% if settings.debug_logging %}checked{% endif %}>
+          <label class="form-check-label text-start" for="debug_logging">Debug logging</label>
+        </div>
+      </div>
+    </div>
+    <div class="text-end mt-3">
+      <button type="submit" class="btn btn-primary btn-long" id="save-settings-btn">
+        Save Settings
+      </button>
+    </div>
+    <div id="settings-message" class="mt-2"></div>
+  </form>
+
+  <hr class="my-4">
+
+  <h6>Backup &amp; Restore</h6>
+  <div class="row mb-3">
+    <div class="col-auto">
+      <button class="btn btn-outline-dark btn-sm" id="backup-btn">
+        <i class="fa-solid fa-download me-1"></i> Create Backup
+      </button>
+    </div>
+    <div class="col-auto">
+      <label class="btn btn-outline-dark btn-sm">
+        <i class="fa-solid fa-upload me-1"></i> Restore Backup
+        <input type="file" id="restore-file" accept=".tar.gz" style="display: none;">
+      </label>
+    </div>
+  </div>
+
+  <hr class="my-4">
+
+  <h6>System Controls</h6>
+  <div class="row">
+    <div class="col-auto">
+      <button class="btn btn-outline-danger btn-sm" id="reboot-btn">
+        <i class="fa-solid fa-rotate-right me-1"></i> Reboot
+      </button>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-outline-danger btn-sm" id="shutdown-btn">
+        <i class="fa-solid fa-power-off me-1"></i> Shutdown
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('auth_backend').addEventListener('change', function() {
+  document.getElementById('auth-fields').style.display = this.value === 'auth_basic' ? '' : 'none';
+});
+
+document.getElementById('settingsForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var btn = document.getElementById('save-settings-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+
+  var data = {
+    player_name: document.getElementById('player_name').value,
+    default_duration: parseInt(document.getElementById('default_duration').value),
+    default_streaming_duration: parseInt(document.getElementById('default_streaming_duration').value),
+    audio_output: document.getElementById('audio_output').value,
+    date_format: document.getElementById('date_format').value,
+    auth_backend: document.getElementById('auth_backend').value,
+    show_splash: document.getElementById('show_splash').checked,
+    default_assets: document.getElementById('default_assets').checked,
+    shuffle_playlist: document.getElementById('shuffle_playlist').checked,
+    use_24_hour_clock: document.getElementById('use_24_hour_clock').checked,
+    debug_logging: document.getElementById('debug_logging').checked,
+  };
+
+  if (data.auth_backend === 'auth_basic') {
+    data.username = document.getElementById('username').value;
+    var cp = document.getElementById('current_password').value;
+    var np = document.getElementById('password').value;
+    var np2 = document.getElementById('password_2').value;
+    if (cp) data.current_password = cp;
+    if (np) data.password = np;
+    if (np2) data.password_2 = np2;
+  }
+
+  fetch('{% url "api:device_settings_v2" %}', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token }}'
+    },
+    body: JSON.stringify(data)
+  }).then(function(r) { return r.json(); })
+    .then(function(resp) {
+      var msgEl = document.getElementById('settings-message');
+      if (resp.error) {
+        msgEl.innerHTML = '<div class="alert alert-danger">' + resp.error + '</div>';
+      } else {
+        msgEl.innerHTML = '<div class="alert alert-success">' + (resp.message || 'Settings saved.') + '</div>';
+      }
+      btn.disabled = false;
+      btn.textContent = 'Save Settings';
+    })
+    .catch(function() {
+      btn.disabled = false;
+      btn.textContent = 'Save Settings';
+    });
+});
+
+document.getElementById('backup-btn').addEventListener('click', function() {
+  this.disabled = true;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Creating...';
+  var btn = this;
+  fetch('{% url "api:backup_v2" %}', {
+    method: 'POST',
+    headers: {'X-CSRFToken': '{{ csrf_token }}'}
+  }).then(function(r) { return r.text(); })
+    .then(function(filename) {
+      alert('Backup created: ' + filename);
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-download me-1"></i> Create Backup';
+    });
+});
+
+document.getElementById('restore-file').addEventListener('change', function() {
+  if (!this.files.length) return;
+  if (!confirm('Are you sure you want to restore from this backup?')) return;
+  var formData = new FormData();
+  formData.append('backup_upload', this.files[0]);
+  fetch('{% url "api:recover_v2" %}', {
+    method: 'POST',
+    headers: {'X-CSRFToken': '{{ csrf_token }}'},
+    body: formData
+  }).then(function(r) { return r.text(); })
+    .then(function(msg) { alert(msg); location.reload(); });
+});
+
+document.getElementById('reboot-btn').addEventListener('click', function() {
+  if (!confirm('Are you sure you want to reboot?')) return;
+  fetch('{% url "api:reboot_v2" %}', {
+    method: 'POST',
+    headers: {'X-CSRFToken': '{{ csrf_token }}'}
+  }).then(function() { alert('Reboot initiated.'); });
+});
+
+document.getElementById('shutdown-btn').addEventListener('click', function() {
+  if (!confirm('Are you sure you want to shut down?')) return;
+  fetch('{% url "api:shutdown_v2" %}', {
+    method: 'POST',
+    headers: {'X-CSRFToken': '{{ csrf_token }}'}
+  }).then(function() { alert('Shutdown initiated.'); });
+});
+</script>
+{% endblock %}

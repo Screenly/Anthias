@@ -17,7 +17,7 @@ from future import standard_library
 from jinja2 import Template
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
-from settings import LISTEN, ZmqConsumer, settings
+from settings import LISTEN, settings
 from viewer.constants import (
     BALENA_IP_RETRY_DELAY,
     EMPTY_PL_DELAY,
@@ -51,7 +51,7 @@ try:
         url_fails,
     )
     from viewer.scheduling import Scheduler
-    from viewer.zmq import ZMQ_HOST_PUB_URL, ZmqSubscriber
+    from viewer.ws_client import WebSocketSubscriber
 except Exception:
     pass
 
@@ -75,8 +75,9 @@ scheduler = None
 
 
 def send_current_asset_id_to_server():
-    consumer = ZmqConsumer()
-    consumer.send({'current_asset_id': scheduler.current_asset_id})
+    logging.debug(
+        'Current asset id: %s', scheduler.current_asset_id
+    )
 
 
 def show_hotspot_page(data):
@@ -338,13 +339,11 @@ def main():
 
     setup()
 
-    subscriber_1 = ZmqSubscriber(r, commands, 'tcp://anthias-server:10001')
-    subscriber_1.daemon = True
-    subscriber_1.start()
-
-    subscriber_2 = ZmqSubscriber(r, commands, ZMQ_HOST_PUB_URL)
-    subscriber_2.daemon = True
-    subscriber_2.start()
+    subscriber = WebSocketSubscriber(
+        commands, 'ws://anthias-server:8000/ws/viewer/'
+    )
+    subscriber.daemon = True
+    subscriber.start()
 
     # This will prevent white screen from happening before showing the
     # splash screen with IP addresses.

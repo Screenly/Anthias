@@ -7,8 +7,6 @@ services:
       dockerfile: docker/Dockerfile.test
     environment:
       - HOME=/data
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - ENVIRONMENT=test
     stdin_open: true
     tty: true
@@ -16,24 +14,5 @@ services:
       - .:/usr/src/app
       - anthias-data:/data
 
-  anthias-celery:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.celery
-    depends_on:
-      - anthias-test
-      - redis
-    environment:
-      - HOME=/data
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    restart: always
-    volumes:
-      - anthias-data:/data
-
-  redis:
-    image: redis:alpine
-
 volumes:
   anthias-data:
-  redis-data:

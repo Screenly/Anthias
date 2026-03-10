@@ -30,7 +30,7 @@ from tenacity import (
 )
 
 from anthias_app.models import Asset
-from settings import ZmqPublisher, settings
+from settings import settings
 
 standard_library.install_aliases()
 
@@ -420,7 +420,6 @@ class YoutubeDownloadThread(Thread):
         self.asset_id = asset_id
 
     def run(self):
-        publisher = ZmqPublisher.get_instance()
         call(
             [
                 'yt-dlp',
@@ -440,7 +439,9 @@ class YoutubeDownloadThread(Thread):
             logging.warning('Asset %s not found', self.asset_id)
             return
 
-        publisher.send_to_ws_server(self.asset_id)
+        from anthias_app.messaging import send_to_ui
+
+        send_to_ui({'asset_updated': self.asset_id})
 
 
 def template_handle_unicode(value):
@@ -475,7 +476,33 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
 
 
 def connect_to_redis():
-    return redis.Redis(host='redis', decode_responses=True, port=6379, db=0)
+    try:
+        r = redis.Redis(
+            host='redis', decode_responses=True, port=6379, db=0
+        )
+        r.ping()
+        return r
+    except Exception:
+        return _NullRedis()
+
+
+class _NullRedis:
+    """Stub that silently ignores Redis operations when unavailable."""
+
+    def get(self, *args, **kwargs):
+        return None
+
+    def set(self, *args, **kwargs):
+        pass
+
+    def publish(self, *args, **kwargs):
+        pass
+
+    def expire(self, *args, **kwargs):
+        pass
+
+    def ping(self):
+        raise ConnectionError('Redis not available')
 
 
 def is_docker():

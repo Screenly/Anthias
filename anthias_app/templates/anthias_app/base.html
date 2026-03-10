@@ -1,0 +1,152 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Plus+Jakarta+Sans" rel="stylesheet">
+  <link rel="icon" href="{% static 'favicons/favicon.ico' %}">
+  <title>{% block title %}Anthias{% endblock %}</title>
+  <style>
+    :root {
+      --anthias-purple-1: #270035;
+      --anthias-purple-2: #492955;
+      --anthias-purple-3: #52335D;
+      --anthias-purple-4: #D4CCD7;
+      --anthias-purple-5: #8819C7;
+      --anthias-yellow-1: #FFF963;
+      --anthias-yellow-2: #FFD800;
+      --anthias-yellow-3: #FFE11A;
+    }
+    html { position: relative; min-height: 100%; }
+    body {
+      background-color: var(--anthias-purple-1);
+      margin-top: 95px;
+      margin-bottom: 300px;
+      font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
+    }
+    .navbar { padding: 5px 0; }
+    .navbar .brand img { height: 38px; }
+    .navbar .nav-link { color: rgba(255,255,255,0.5) !important; }
+    .navbar .nav-link:hover, .navbar .nav-link.active { color: #fff !important; opacity: 1; }
+    .content {
+      background-color: white;
+      border-left: 6px solid var(--anthias-yellow-3);
+      border-radius: 4px;
+      padding: 15px 0;
+      margin: 0;
+    }
+    .active-content {
+      background-color: var(--anthias-purple-2);
+      color: #fff;
+    }
+    .active-content table { color: #fff; }
+    .active-content tbody > tr { background-color: var(--anthias-purple-2); color: rgba(255,255,255,0.8); }
+    .active-content .btn { color: #fff; border-color: #fff; }
+    .active-content .btn:hover { background-color: #fff; color: var(--anthias-purple-1); }
+    .inactive-content { border-left: 6px solid var(--anthias-yellow-3); }
+    .btn { padding: 12px 24px; }
+    .btn:focus { box-shadow: none !important; }
+    .btn-long { min-width: 13.125rem; border-radius: 50rem; }
+    .btn-primary { background-color: var(--anthias-yellow-3); color: #000; font-weight: 600; border-color: var(--anthias-yellow-3); }
+    .btn-primary:hover { background-color: var(--anthias-yellow-2); border-color: var(--anthias-yellow-2); color: #000; }
+    .modal-dialog { max-width: 580px; margin-top: 70px; }
+    .modal-body { max-height: 600px !important; }
+    label { text-align: right; }
+    .asset_row_name { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; max-width: 290px; min-width: 290px; }
+    .asset_row_btns { padding: 12px 8px 10px 8px !important; white-space: nowrap; }
+    .asset_row_btns button { padding: 7px 10px; }
+    .table td { vertical-align: middle !important; }
+    .filedrop { position: relative; border: 3px dashed #ccc; padding: 50px; text-align: center; color: #888; border-radius: 7px; }
+    #footer {
+      bottom: 0; height: 250px; position: absolute; width: 100%;
+    }
+    #footer .links a { color: rgba(255,255,255,0.7); font-weight: bold; text-transform: uppercase; text-decoration: none; }
+    #footer .links a:hover { color: rgba(255,255,255,0.9); }
+    #footer .copy { border-top: 1px solid rgba(0,0,0,.1); color: rgba(255,255,255,0.7); font-size: 0.7em; }
+    .form-actions { padding: 20px; margin-top: 20px; margin-bottom: 20px; background-color: var(--anthias-purple-4); }
+    .form-actions a, .form-actions span { color: #1F002A; }
+    @media (max-width: 1199px) { .container { max-width: 100%; } }
+    .ActiveAssets thead th { background-color: var(--anthias-purple-2); color: #fff; border-bottom: 0.15rem solid #fff; text-align: center; }
+    .ActiveAssets tbody td { background-color: var(--anthias-purple-2); color: #fff; }
+    .InactiveAssets thead th { border-bottom-width: 0.15rem; color: #6c757d; text-align: center; }
+    .drag-handle { cursor: grab; }
+    .drag-handle:active { cursor: grabbing; }
+    .form-switch .form-check-input:checked { background-color: var(--anthias-yellow-3); border-color: var(--anthias-yellow-3); }
+    .htmx-indicator { display: none; }
+    .htmx-request .htmx-indicator { display: inline-block; }
+    .htmx-request.htmx-indicator { display: inline-block; }
+    #add-asset-nav-tabs { border: 0; }
+    #add-asset-nav-tabs .nav-link { border: 0; color: #a0a0a0; }
+    #add-asset-nav-tabs .nav-link.active { border-bottom: 3px solid var(--anthias-yellow-3); font-weight: 600; color: #000; }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark fixed-top" style="background-color: var(--anthias-purple-1);">
+    <div class="container">
+      <a class="navbar-brand brand" href="/">
+        <img src="{% static 'img/logo-full.svg' %}" alt="Anthias" onerror="this.outerHTML='<span class=\'text-white fw-bold\'>Anthias</span>'">
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link {% if active_page == 'schedule' %}active{% endif %}" href="{% url 'anthias_app:schedule' %}">
+              <i class="fa-regular fa-clock me-1"></i>
+              <span class="d-none d-lg-inline">Schedule Overview</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if active_page == 'settings' %}active{% endif %}" href="{% url 'anthias_app:settings' %}">
+              <i class="fa-solid fa-cog me-1"></i>
+              <span class="d-none d-lg-inline">Settings</span>
+            </a>
+          </li>
+          <li class="nav-item d-none d-lg-block">
+            <span class="nav-link" style="opacity: 0.3;">|</span>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if active_page == 'system_info' %}active{% endif %}" href="{% url 'anthias_app:system_info' %}">
+              <i class="fa-solid fa-list-check me-1"></i>
+              <span class="d-none d-lg-inline">System Info</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mt-4">
+    {% block content %}{% endblock %}
+  </div>
+
+  <footer id="footer" class="text-white" style="background-color: var(--anthias-purple-2);">
+    <div class="container py-4">
+      <div class="row">
+        <div class="col-12 text-center mb-3 logo">
+          <img src="{% static 'img/logo-full.svg' %}" alt="Anthias" style="max-height: 50px;" onerror="this.outerHTML='<span class=\'fw-bold\'>Anthias</span>'">
+        </div>
+        <div class="col-12 text-center links mb-3">
+          <a href="/api/docs/" class="mx-2">API</a>
+          <a href="https://github.com/Screenly/Anthias/wiki/Frequently-Asked-Questions" class="mx-2" target="_blank" rel="noopener">FAQ</a>
+          <a href="https://www.screenly.io" class="mx-2" target="_blank" rel="noopener">Screenly.io</a>
+          <a href="https://github.com/Screenly/Anthias/issues" class="mx-2" target="_blank" rel="noopener">Support</a>
+        </div>
+        <div class="col-12 text-center copy pt-3">
+          Anthias is a free and open-source digital signage platform.
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

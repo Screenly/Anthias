@@ -1,0 +1,19 @@
+{% extends "anthias_app/base.html" %}
+
+{% block title %}System Info - Anthias{% endblock %}
+
+{% block content %}
+<h4 class="text-white mb-4">System Info</h4>
+
+<div class="content p-4 mb-4 rounded">
+  <div id="system-info-content"
+       hx-get="{% url 'anthias_app:system_info_data' %}"
+       hx-trigger="load"
+       hx-swap="innerHTML">
+    <div class="text-center py-4">
+      <div class="spinner-border text-secondary" role="status"></div>
+      <p class="text-muted mt-2">Loading system info...</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

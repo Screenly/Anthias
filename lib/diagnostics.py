@@ -6,7 +6,10 @@ import os
 from builtins import str
 from datetime import datetime
 
-import cec
+try:
+    import cec
+except ImportError:
+    cec = None
 
 from lib import device_helper
 
@@ -17,6 +20,9 @@ def get_display_power():
     """
     Queries the TV using CEC
     """
+    if cec is None:
+        return 'CEC not available'
+
     tv_status = None
 
     try:

@@ -1,0 +1,81 @@
+<table class="table">
+  <tbody>
+    <tr>
+      <th class="text-muted" style="width: 200px;">Load Average</th>
+      <td>{{ info.loadavg }}</td>
+    </tr>
+    <tr>
+      <th class="text-muted">Free Space</th>
+      <td>{{ info.free_space }}</td>
+    </tr>
+    {% if info.memory %}
+    <tr>
+      <th class="text-muted">Memory</th>
+      <td>
+        Total: {{ info.memory.total }}MB |
+        Used: {{ info.memory.used }}MB |
+        Free: {{ info.memory.free }}MB |
+        Available: {{ info.memory.available }}MB
+      </td>
+    </tr>
+    {% endif %}
+    {% if info.uptime %}
+    <tr>
+      <th class="text-muted">Uptime</th>
+      <td>{{ info.uptime.days }} days, {{ info.uptime.hours }} hours</td>
+    </tr>
+    {% endif %}
+    <tr>
+      <th class="text-muted">Display Power</th>
+      <td>
+        {% if info.display_power is None %}
+        <span class="text-muted">N/A</span>
+        {% elif info.display_power == True %}
+        <span class="text-success">On</span>
+        {% elif info.display_power == False %}
+        <span class="text-danger">Off</span>
+        {% else %}
+        {{ info.display_power }}
+        {% endif %}
+      </td>
+    </tr>
+    {% if info.device_model %}
+    <tr>
+      <th class="text-muted">Device Model</th>
+      <td>{{ info.device_model }}</td>
+    </tr>
+    {% endif %}
+    {% if info.anthias_version %}
+    <tr>
+      <th class="text-muted">Anthias Version</th>
+      <td>{{ info.anthias_version }}</td>
+    </tr>
+    {% endif %}
+    {% if info.mac_address %}
+    <tr>
+      <th class="text-muted">MAC Address</th>
+      <td>{{ info.mac_address }}</td>
+    </tr>
+    {% endif %}
+    {% if info.ip_addresses %}
+    <tr>
+      <th class="text-muted">IP Addresses</th>
+      <td>
+        {% for ip in info.ip_addresses %}
+        <a href="{{ ip }}" target="_blank">{{ ip }}</a>{% if not forloop.last %}, {% endif %}
+        {% endfor %}
+      </td>
+    </tr>
+    {% endif %}
+    <tr>
+      <th class="text-muted">Up To Date</th>
+      <td>
+        {% if info.up_to_date %}
+        <span class="text-success">Yes</span>
+        {% else %}
+        <span class="text-warning">Update Available</span>
+        {% endif %}
+      </td>
+    </tr>
+  </tbody>
+</table>
