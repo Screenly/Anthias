@@ -1,12 +1,12 @@
 import json
 import logging
 
-from channels.generic.websocket import WebSocketConsumer
+from channels.generic.websocket import WebsocketConsumer
 
 logger = logging.getLogger(__name__)
 
 
-class ViewerConsumer(WebSocketConsumer):
+class ViewerConsumer(WebsocketConsumer):
     def connect(self) -> None:
         from channels.layers import get_channel_layer
 
@@ -39,7 +39,7 @@ class ViewerConsumer(WebSocketConsumer):
         }))
 
 
-class UIConsumer(WebSocketConsumer):
+class UIConsumer(WebsocketConsumer):
     def connect(self) -> None:
         from channels.layers import get_channel_layer
 

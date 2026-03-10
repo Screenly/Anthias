@@ -5,6 +5,11 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.server
+      args:
+        GIT_HASH: ${GIT_HASH:-dev}
+        GIT_SHORT_HASH: ${GIT_SHORT_HASH:-dev}
+        GIT_BRANCH: ${GIT_BRANCH:-dev}
+        DEVICE_TYPE: ${DEVICE_TYPE:-x86}
     ports:
       - 8000:8000
     environment:
@@ -20,6 +25,11 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
+      args:
+        GIT_HASH: ${GIT_HASH:-dev}
+        GIT_SHORT_HASH: ${GIT_SHORT_HASH:-dev}
+        GIT_BRANCH: ${GIT_BRANCH:-dev}
+        DEVICE_TYPE: ${DEVICE_TYPE:-x86}
     depends_on:
       - anthias-server
     environment:
