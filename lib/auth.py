@@ -1,30 +1,22 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-from __future__ import unicode_literals
-
 import hashlib
-import os.path
+import os
 from abc import ABCMeta, abstractmethod
 from base64 import b64decode
-from builtins import object, str
 from functools import wraps
-
-from future.utils import with_metaclass
 
 LINUX_USER = os.getenv('USER', 'pi')
 
 
-class Auth(with_metaclass(ABCMeta, object)):
+class Auth(metaclass=ABCMeta):
     @abstractmethod
-    def authenticate(self):
+    def authenticate(self) -> object | None:
         """
         Let the user authenticate himself.
         :return: a Response which initiates authentication.
         """
         pass
 
-    def is_authenticated(self, request):
+    def is_authenticated(self, request) -> bool:
         """
         See if the user is authenticated for the request.
         :return: bool
@@ -49,27 +41,29 @@ class Auth(with_metaclass(ABCMeta, object)):
                 'Authorization backend is unavailable: ' + str(e), status=503
             )
 
-    def update_settings(self, request, current_pass_correct):
+    def update_settings(
+        self, request, current_pass_correct: bool | None,
+    ) -> None:
         """
         Submit updated values from Settings page.
-        :param current_pass_correct: the value of "Current Password" field
-        or None if empty.
+        :param current_pass_correct: the value of "Current Password"
+        field or None if empty.
 
         :return:
         """
         pass
 
     @property
-    def template(self):
+    def template(self) -> tuple[str, dict] | None:
         """
-        Get HTML template and its context object to be displayed in
-        the vettings page.
+        Get HTML template and its context object to be displayed
+        in the settings page.
 
         :return: (template, context)
         """
         pass
 
-    def check_password(self, password):
+    def check_password(self, password: str) -> bool:
         """
         Checks if password correct.
         :param password: str
@@ -83,13 +77,13 @@ class NoAuth(Auth):
     name = ''
     config = {}
 
-    def is_authenticated(self, request):
+    def is_authenticated(self, request) -> bool:
         return True
 
-    def authenticate(self):
+    def authenticate(self) -> None:
         pass
 
-    def check_password(self, password):
+    def check_password(self, password: str) -> bool:
         return True
 
 
@@ -98,10 +92,10 @@ class BasicAuth(Auth):
     name = 'auth_basic'
     config = {'auth_basic': {'user': '', 'password': ''}}
 
-    def __init__(self, settings):
+    def __init__(self, settings) -> None:
         self.settings = settings
 
-    def _check(self, username, password):
+    def _check(self, username: str, password: str) -> bool:
         """
         Check username/password combo against database.
         :param username: str
@@ -112,11 +106,13 @@ class BasicAuth(Auth):
             password
         )
 
-    def check_password(self, password):
-        hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
+    def check_password(self, password: str) -> bool:
+        hashed_password = hashlib.sha256(
+            password.encode('utf-8')
+        ).hexdigest()
         return self.settings['password'] == hashed_password
 
-    def is_authenticated(self, request):
+    def is_authenticated(self, request) -> bool:
         # First check Authorization header for API requests
         authorization = request.headers.get('Authorization')
         if authorization:

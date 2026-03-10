@@ -1,9 +1,4 @@
-#!/usr/bin/env python
-
-from __future__ import absolute_import, unicode_literals
-
 import os
-from builtins import str
 from datetime import datetime
 
 try:
@@ -16,7 +11,7 @@ from lib import device_helper
 from . import utils
 
 
-def get_display_power():
+def get_display_power() -> str | bool:
     """
     Queries the TV using CEC
     """
@@ -39,14 +34,14 @@ def get_display_power():
     return tv_status
 
 
-def get_uptime():
-    with open('/proc/uptime', 'r') as f:
+def get_uptime() -> float:
+    with open('/proc/uptime') as f:
         uptime_seconds = float(f.readline().split()[0])
 
     return uptime_seconds
 
 
-def get_load_avg():
+def get_load_avg() -> dict[str, float]:
     """
     Returns load average rounded to two digits.
     """
@@ -61,19 +56,19 @@ def get_load_avg():
     return load_avg
 
 
-def get_git_branch():
+def get_git_branch() -> str | None:
     return os.getenv('GIT_BRANCH')
 
 
-def get_git_short_hash():
+def get_git_short_hash() -> str | None:
     return os.getenv('GIT_SHORT_HASH')
 
 
-def get_git_hash():
+def get_git_hash() -> str | None:
     return os.getenv('GIT_HASH')
 
 
-def try_connectivity():
+def try_connectivity() -> list[str]:
     urls = [
         'http://www.google.com',
         'http://www.bbc.co.uk',
@@ -83,29 +78,29 @@ def try_connectivity():
     result = []
     for url in urls:
         if utils.url_fails(url):
-            result.append('{}: Error'.format(url))
+            result.append(f'{url}: Error')
         else:
-            result.append('{}: OK'.format(url))
+            result.append(f'{url}: OK')
     return result
 
 
-def get_utc_isodate():
+def get_utc_isodate() -> str:
     return datetime.isoformat(datetime.utcnow())
 
 
-def get_debian_version():
+def get_debian_version() -> str:
     debian_version = '/etc/debian_version'
     if os.path.isfile(debian_version):
-        with open(debian_version, 'r') as f:
+        with open(debian_version) as f:
             for line in f:
                 return str(line).strip()
     else:
         return 'Unable to get Debian version.'
 
 
-def get_raspberry_code():
+def get_raspberry_code() -> str:
     return device_helper.parse_cpu_info().get('hardware', 'Unknown')
 
 
-def get_raspberry_model():
+def get_raspberry_model() -> str:
     return device_helper.parse_cpu_info().get('model', 'Unknown')

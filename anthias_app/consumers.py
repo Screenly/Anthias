@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class ViewerConsumer(WebSocketConsumer):
-    def connect(self):
+    def connect(self) -> None:
         from channels.layers import get_channel_layer
 
         self.accept()
@@ -20,7 +20,7 @@ class ViewerConsumer(WebSocketConsumer):
             )
         logger.info('Viewer WebSocket connected')
 
-    def disconnect(self, close_code):
+    def disconnect(self, close_code: int) -> None:
         from channels.layers import get_channel_layer
 
         channel_layer = get_channel_layer()
@@ -32,7 +32,7 @@ class ViewerConsumer(WebSocketConsumer):
             )
         logger.info('Viewer WebSocket disconnected')
 
-    def viewer_command(self, event):
+    def viewer_command(self, event: dict) -> None:
         self.send(text_data=json.dumps({
             'command': event['command'],
             'data': event.get('data'),
@@ -40,7 +40,7 @@ class ViewerConsumer(WebSocketConsumer):
 
 
 class UIConsumer(WebSocketConsumer):
-    def connect(self):
+    def connect(self) -> None:
         from channels.layers import get_channel_layer
 
         self.accept()
@@ -52,7 +52,7 @@ class UIConsumer(WebSocketConsumer):
                 'ui', self.channel_name
             )
 
-    def disconnect(self, close_code):
+    def disconnect(self, close_code: int) -> None:
         from channels.layers import get_channel_layer
 
         channel_layer = get_channel_layer()
@@ -63,5 +63,5 @@ class UIConsumer(WebSocketConsumer):
                 'ui', self.channel_name
             )
 
-    def ui_update(self, event):
+    def ui_update(self, event: dict) -> None:
         self.send(text_data=json.dumps(event.get('data', {})))

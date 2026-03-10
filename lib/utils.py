@@ -1,14 +1,10 @@
-from __future__ import absolute_import, unicode_literals
-
 import json
 import logging
 import os
 import random
 import re
 import string
-from builtins import range, str
-from datetime import datetime, timedelta
-from distutils.util import strtobool
+from datetime import datetime, timedelta, timezone as dt_timezone
 from os import getenv, path, utime
 from platform import machine
 from subprocess import call, check_output
@@ -17,11 +13,9 @@ from time import sleep
 from urllib.parse import urlparse
 
 import certifi
-import pytz
 import redis
 import requests
 import sh
-from future import standard_library
 from tenacity import (
     RetryError,
     Retrying,
@@ -31,8 +25,6 @@ from tenacity import (
 
 from anthias_app.models import Asset
 from settings import settings
-
-standard_library.install_aliases()
 
 
 arch = machine()
@@ -46,23 +38,23 @@ except ImportError:
     pass
 
 
-def string_to_bool(string):
-    return bool(strtobool(str(string)))
+def string_to_bool(value) -> bool:
+    return str(value).lower() in ('1', 'true', 'yes', 'on')
 
 
-def touch(path):
+def touch(path: str) -> None:
     with open(path, 'a'):
         utime(path, None)
 
 
-def is_ci():
+def is_ci() -> bool:
     """
     Returns True when run on CI.
     """
     return string_to_bool(os.getenv('CI', False))
 
 
-def validate_url(string):
+def validate_url(string: str) -> bool:
     """Simple URL verification.
     >>> validate_url("hello")
     False
@@ -82,15 +74,14 @@ def validate_url(string):
     )
 
 
-def get_balena_supervisor_api_response(method, action, **kwargs):
+def get_balena_supervisor_api_response(
+    method: str, action: str, **kwargs,
+):
     version = kwargs.get('version', 'v1')
+    address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
+    api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
     return getattr(requests, method)(
-        '{}/{}/{}?apikey={}'.format(
-            os.getenv('BALENA_SUPERVISOR_ADDRESS'),
-            version,
-            action,
-            os.getenv('BALENA_SUPERVISOR_API_KEY'),
-        ),
+        f'{address}/{version}/{action}?apikey={api_key}',
         headers={'Content-Type': 'application/json'},
     )
 
@@ -117,13 +108,13 @@ def get_balena_supervisor_version():
         return 'Error getting the Supervisor version'
 
 
-def get_node_ip():
+def get_node_ip() -> str:
     """
     Returns the node's IP address.
     We're using an API call to the supervisor for this on Balena
-    and an environment variable set by `install.sh` for other environments.
-    The reason for this is because we can't retrieve the host IP from
-    within Docker.
+    and an environment variable set by `install.sh` for other
+    environments. The reason for this is because we can't retrieve
+    the host IP from within Docker.
     """
 
     if is_balena_app():
@@ -188,19 +179,17 @@ def get_node_ip():
     return 'Unable to retrieve IP.'
 
 
-def get_node_mac_address():
+def get_node_mac_address() -> str:
     """
     Returns the MAC address.
     """
     if is_balena_app():
-        balena_supervisor_address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
-        balena_supervisor_api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
+        address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
+        api_key = os.getenv('BALENA_SUPERVISOR_API_KEY')
         headers = {'Content-Type': 'application/json'}
 
         r = requests.get(
-            '{}/v1/device?apikey={}'.format(
-                balena_supervisor_address, balena_supervisor_api_key
-            ),
+            f'{address}/v1/device?apikey={api_key}',
             headers=headers,
         )
 
@@ -221,7 +210,7 @@ def get_active_connections(bus, fields=None):
     if not fields:
         fields = ['Id', 'Uuid', 'Type', 'Devices']
 
-    connections = list()
+    connections = []
 
     try:
         nm_proxy = bus.get(
@@ -243,14 +232,14 @@ def get_active_connections(bus, fields=None):
             'org.freedesktop.DBus.Properties'
         ]
 
-        connection = dict()
+        connection = {}
         for field in fields:
             field_value = active_connection_properties.Get(
                 'org.freedesktop.NetworkManager.Connection.Active', field
             )
 
             if field == 'Devices':
-                devices = list()
+                devices = []
                 for device_path in field_value:
                     device_proxy = bus.get(
                         'org.freedesktop.NetworkManager', device_path
@@ -301,7 +290,7 @@ def remove_connection(bus, uuid):
     return True
 
 
-def get_video_duration(file):
+def get_video_duration(file: str) -> timedelta | None:
     """
     Returns the duration of a video file in timedelta.
     """
@@ -330,7 +319,7 @@ def get_video_duration(file):
 def handler(obj):
     # Set timezone as UTC if it's datetime and format as ISO
     if isinstance(obj, datetime):
-        with_tz = obj.replace(tzinfo=pytz.utc)
+        with_tz = obj.replace(tzinfo=dt_timezone.utc)
         return with_tz.isoformat()
     else:
         raise TypeError(
@@ -339,11 +328,11 @@ def handler(obj):
         )
 
 
-def json_dump(obj):
+def json_dump(obj) -> str:
     return json.dumps(obj, default=handler)
 
 
-def url_fails(url):
+def url_fails(url: str) -> bool:
     """
     If it is streaming
     """
@@ -398,7 +387,9 @@ def url_fails(url):
     return True
 
 
-def download_video_from_youtube(uri, asset_id):
+def download_video_from_youtube(
+    uri: str, asset_id: str,
+) -> tuple[str, str, int]:
     home = getenv('HOME')
     name = check_output(['yt-dlp', '-O', 'title', uri])
     info = json.loads(check_output(['yt-dlp', '-j', uri]))
@@ -413,13 +404,13 @@ def download_video_from_youtube(uri, asset_id):
 
 
 class YoutubeDownloadThread(Thread):
-    def __init__(self, location, uri, asset_id):
-        Thread.__init__(self)
+    def __init__(self, location: str, uri: str, asset_id: str):
+        super().__init__()
         self.location = location
         self.uri = uri
         self.asset_id = asset_id
 
-    def run(self):
+    def run(self) -> None:
         call(
             [
                 'yt-dlp',
@@ -444,11 +435,11 @@ class YoutubeDownloadThread(Thread):
         send_to_ui({'asset_updated': self.asset_id})
 
 
-def template_handle_unicode(value):
+def template_handle_unicode(value) -> str:
     return str(value)
 
 
-def is_demo_node():
+def is_demo_node() -> bool:
     """
     Check if the environment variable IS_DEMO_NODE is set to 1
     :return: bool
@@ -456,7 +447,9 @@ def is_demo_node():
     return string_to_bool(os.getenv('IS_DEMO_NODE', False))
 
 
-def generate_perfect_paper_password(pw_length=10, has_symbols=True):
+def generate_perfect_paper_password(
+    pw_length: int = 10, has_symbols: bool = True,
+) -> str:
     """
     Generates a password using 64 characters from
     "Perfect Paper Password" system by Steve Gibson
@@ -475,7 +468,7 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
     )
 
 
-def connect_to_redis():
+def connect_to_redis() -> '_NullRedis | redis.Redis':
     try:
         r = redis.Redis(
             host='redis', decode_responses=True, port=6379, db=0
@@ -505,11 +498,11 @@ class _NullRedis:
         raise ConnectionError('Redis not available')
 
 
-def is_docker():
+def is_docker() -> bool:
     return os.path.isfile('/.dockerenv')
 
 
-def is_balena_app():
+def is_balena_app() -> bool:
     """
     Checks the application is running on Balena Cloud
     :return: bool

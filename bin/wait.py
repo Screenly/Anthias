@@ -1,7 +1,4 @@
-from __future__ import print_function, unicode_literals
-
 import time
-from builtins import range
 
 import sh
 

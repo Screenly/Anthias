@@ -8,12 +8,12 @@ logger = logging.getLogger(__name__)
 
 
 class WebSocketSubscriber(Thread):
-    def __init__(self, commands, server_url):
-        Thread.__init__(self)
+    def __init__(self, commands: dict, server_url: str) -> None:
+        super().__init__()
         self.commands = commands
         self.server_url = server_url
 
-    def run(self):
+    def run(self) -> None:
         while True:
             try:
                 self._connect_and_listen()
@@ -25,7 +25,7 @@ class WebSocketSubscriber(Thread):
 
                 time.sleep(5)
 
-    def _connect_and_listen(self):
+    def _connect_and_listen(self) -> None:
         with websockets.sync.client.connect(
             self.server_url,
             close_timeout=5,

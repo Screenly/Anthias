@@ -3,7 +3,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def send_to_viewer(command, data=None):
+def send_to_viewer(
+    command: str, data: str | None = None,
+) -> None:
     try:
         from asgiref.sync import async_to_sync
         from channels.layers import get_channel_layer
@@ -22,7 +24,7 @@ def send_to_viewer(command, data=None):
         logger.exception('Failed to send to viewer')
 
 
-def send_to_ui(data):
+def send_to_ui(data: dict) -> None:
     try:
         from asgiref.sync import async_to_sync
         from channels.layers import get_channel_layer

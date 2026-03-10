@@ -1,13 +1,9 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
-
 import configparser
 import hashlib
 import logging
-from builtins import str
 from collections import UserDict
 from os import getenv, path
+from typing import Any
 
 from lib.auth import BasicAuth, NoAuth
 
@@ -65,8 +61,8 @@ logging.debug('Starting viewer')
 class AnthiasSettings(UserDict):
     """Anthias' Settings."""
 
-    def __init__(self, *args, **kwargs):
-        UserDict.__init__(self, *args, **kwargs)
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
         self.home = getenv('HOME')
         self.conf_file = self.get_configfile()
         self.auth_backends_list = [NoAuth(), BasicAuth(self)]
@@ -84,7 +80,13 @@ class AnthiasSettings(UserDict):
         else:
             self.load()
 
-    def _get(self, config, section, field, default):
+    def _get(
+        self,
+        config: configparser.ConfigParser,
+        section: str,
+        field: str,
+        default: Any,
+    ) -> None:
         try:
             if isinstance(default, bool):
                 self[field] = config.getboolean(section, field)
@@ -111,9 +113,15 @@ class AnthiasSettings(UserDict):
             )
             self[field] = default
         if field in ['database', 'assetdir']:
-            self[field] = str(path.join(self.home, self[field]))
+            self[field] = path.join(self.home, self[field])
 
-    def _set(self, config, section, field, default):
+    def _set(
+        self,
+        config: configparser.ConfigParser,
+        section: str,
+        field: str,
+        default: Any,
+    ) -> None:
         if isinstance(default, bool):
             config.set(
                 section, field, self.get(field, default) and 'on' or 'off'
@@ -121,36 +129,36 @@ class AnthiasSettings(UserDict):
         else:
             config.set(section, field, str(self.get(field, default)))
 
-    def load(self):
+    def load(self) -> None:
         """Loads the latest settings from screenly.conf into memory."""
         logging.debug('Reading config-file...')
         config = configparser.ConfigParser()
         config.read(self.conf_file)
 
-        for section, defaults in list(DEFAULTS.items()):
-            for field, default in list(defaults.items()):
+        for section, defaults in DEFAULTS.items():
+            for field, default in defaults.items():
                 self._get(config, section, field, default)
 
-    def use_defaults(self):
-        for defaults in list(DEFAULTS.items()):
-            for field, default in list(defaults[1].items()):
+    def use_defaults(self) -> None:
+        for defaults in DEFAULTS.items():
+            for field, default in defaults[1].items():
                 self[field] = default
 
-    def save(self):
+    def save(self) -> None:
         # Write new settings to disk.
         config = configparser.ConfigParser()
-        for section, defaults in list(DEFAULTS.items()):
+        for section, defaults in DEFAULTS.items():
             config.add_section(section)
-            for field, default in list(defaults.items()):
+            for field, default in defaults.items():
                 self._set(config, section, field, default)
         with open(self.conf_file, 'w') as f:
             config.write(f)
         self.load()
 
-    def get_configdir(self):
+    def get_configdir(self) -> str:
         return path.join(self.home, CONFIG_DIR)
 
-    def get_configfile(self):
+    def get_configfile(self) -> str:
         return path.join(self.home, CONFIG_DIR, CONFIG_FILE)
 
     @property

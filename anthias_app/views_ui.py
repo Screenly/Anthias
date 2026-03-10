@@ -93,7 +93,7 @@ def system_info_data(request):
 
     git_branch = diagnostics.get_git_branch()
     git_short_hash = diagnostics.get_git_short_hash()
-    anthias_version = '{}@{}'.format(git_branch, git_short_hash)
+    anthias_version = f'{git_branch}@{git_short_hash}'
 
     ip_addresses = []
     import ipaddress
@@ -103,9 +103,9 @@ def system_info_data(request):
         for ip in node_ip.split():
             ip_obj = ipaddress.ip_address(ip)
             if isinstance(ip_obj, ipaddress.IPv6Address):
-                ip_addresses.append('http://[{}]'.format(ip))
+                ip_addresses.append(f'http://[{ip}]')
             else:
-                ip_addresses.append('http://{}'.format(ip))
+                ip_addresses.append(f'http://{ip}')
 
     info = {
         'loadavg': diagnostics.get_load_avg()['15 min'],

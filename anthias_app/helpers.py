@@ -11,7 +11,7 @@ from lib.utils import get_video_duration
 from settings import settings
 
 
-def template(request, template_name, context):
+def template(request, template_name: str, context: dict):
     """
     This is a helper function that is used to render a template
     with some global context. This is used to avoid having to
@@ -33,11 +33,11 @@ def template(request, template_name, context):
     return render(request, template_name, context)
 
 
-def prepare_default_asset(**kwargs):
+def prepare_default_asset(**kwargs) -> dict | None:
     if kwargs['mimetype'] not in ['image', 'video', 'webpage']:
         return
 
-    asset_id = 'default_{}'.format(uuid.uuid4().hex)
+    asset_id = f'default_{uuid.uuid4().hex}'
     duration = (
         int(get_video_duration(kwargs['uri']).total_seconds())
         if 'video' == kwargs['mimetype']
@@ -60,7 +60,7 @@ def prepare_default_asset(**kwargs):
     }
 
 
-def add_default_assets():
+def add_default_assets() -> None:
     settings.load()
 
     datetime_now = timezone.now()
@@ -75,7 +75,7 @@ def add_default_assets():
         '.screenly/default_assets.yml',
     )
 
-    with open(default_assets_yaml, 'r') as yaml_file:
+    with open(default_assets_yaml) as yaml_file:
         default_assets = yaml.safe_load(yaml_file).get('assets')
 
         for default_asset in default_assets:
@@ -92,7 +92,7 @@ def add_default_assets():
                 Asset.objects.create(**asset)
 
 
-def remove_default_assets():
+def remove_default_assets() -> None:
     settings.load()
 
     for asset in Asset.objects.all():

@@ -1,5 +1,3 @@
-from __future__ import unicode_literals
-
 import logging
 import subprocess
 
@@ -12,38 +10,35 @@ VIDEO_TIMEOUT = 20  # secs
 
 
 class MediaPlayer:
-    def __init__(self):
-        pass
-
-    def set_asset(self, uri, duration):
+    def set_asset(self, uri: str, duration) -> None:
         raise NotImplementedError
 
-    def play(self):
+    def play(self) -> None:
         raise NotImplementedError
 
-    def stop(self):
+    def stop(self) -> None:
         raise NotImplementedError
 
-    def is_playing(self):
+    def is_playing(self) -> bool:
         raise NotImplementedError
 
 
 class FFMPEGMediaPlayer(MediaPlayer):
-    def __init__(self):
-        MediaPlayer.__init__(self)
+    def __init__(self) -> None:
+        super().__init__()
         self.process = None
 
-    def set_asset(self, uri, duration):
+    def set_asset(self, uri: str, duration) -> None:
         self.uri = uri
 
-    def play(self):
+    def play(self) -> None:
         self.process = subprocess.Popen(
             ['ffplay', '-autoexit', self.uri],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
 
-    def stop(self):
+    def stop(self) -> None:
         try:
             if self.process:
                 self.process.terminate()
@@ -51,15 +46,15 @@ class FFMPEGMediaPlayer(MediaPlayer):
         except Exception as e:
             logging.error(f'Exception in stop(): {e}')
 
-    def is_playing(self):
+    def is_playing(self) -> bool:
         if self.process:
             return self.process.poll() is None
         return False
 
 
 class VLCMediaPlayer(MediaPlayer):
-    def __init__(self):
-        MediaPlayer.__init__(self)
+    def __init__(self) -> None:
+        super().__init__()
 
         options = self.__get_options()
         self.instance = vlc.Instance(options)
@@ -67,7 +62,7 @@ class VLCMediaPlayer(MediaPlayer):
 
         self.player.audio_output_set('alsa')
 
-    def get_alsa_audio_device(self):
+    def get_alsa_audio_device(self) -> str:
         if settings['audio_output'] == 'local':
             if get_device_type() == 'pi5':
                 return 'default:CARD=vc4hdmi0'
@@ -86,20 +81,20 @@ class VLCMediaPlayer(MediaPlayer):
             f'--alsa-audio-device={self.get_alsa_audio_device()}',
         ]
 
-    def set_asset(self, uri, duration):
+    def set_asset(self, uri: str, duration) -> None:
         self.player.set_mrl(uri)
         settings.load()
         self.player.audio_output_device_set(
             'alsa', self.get_alsa_audio_device()
         )
 
-    def play(self):
+    def play(self) -> None:
         self.player.play()
 
-    def stop(self):
+    def stop(self) -> None:
         self.player.stop()
 
-    def is_playing(self):
+    def is_playing(self) -> bool:
         return self.player.get_state() in [
             vlc.State.Playing,
             vlc.State.Buffering,

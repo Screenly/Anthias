@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-
-from __future__ import unicode_literals
-
 import json
 import logging
 import sys
-from builtins import range
 from os import getenv, path
 from signal import SIGALRM, signal
 from time import sleep
@@ -13,7 +8,6 @@ from time import sleep
 import django
 import pydbus
 import sh
-from future import standard_library
 from jinja2 import Template
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
@@ -55,8 +49,6 @@ try:
 except Exception:
     pass
 
-standard_library.install_aliases()
-
 
 __author__ = 'Screenly, Inc'
 __copyright__ = 'Copyright 2012-2024, Screenly, Inc'
@@ -74,16 +66,16 @@ HOME = None
 scheduler = None
 
 
-def send_current_asset_id_to_server():
+def send_current_asset_id_to_server() -> None:
     logging.debug(
         'Current asset id: %s', scheduler.current_asset_id
     )
 
 
-def show_hotspot_page(data):
+def show_hotspot_page(data: str) -> None:
     global loop_is_stopped
 
-    uri = 'http://{0}/hotspot'.format(LISTEN)
+    uri = f'http://{LISTEN}/hotspot'
     decoded = json.loads(data)
 
     base_dir = path.abspath(path.dirname(__file__))
@@ -105,7 +97,7 @@ def show_hotspot_page(data):
     view_webpage(uri)
 
 
-def setup_wifi(data):
+def setup_wifi(data: str) -> None:
     global load_screen_displayed, mq_data
     if not load_screen_displayed:
         mq_data = data
@@ -114,7 +106,7 @@ def setup_wifi(data):
     show_hotspot_page(data)
 
 
-def show_splash(data):
+def show_splash(data: str) -> None:
     global loop_is_stopped
 
     if is_balena_app():
@@ -151,7 +143,7 @@ commands = {
 }
 
 
-def load_browser():
+def load_browser() -> None:
     global browser
     logging.info('Loading browser...')
 
@@ -162,7 +154,7 @@ def load_browser():
         sleep(1)
 
 
-def view_webpage(uri):
+def view_webpage(uri: str) -> None:
     global current_browser_url
 
     if browser is None or not browser.process.alive:
@@ -170,10 +162,10 @@ def view_webpage(uri):
     if current_browser_url is not uri:
         browser_bus.loadPage(uri)
         current_browser_url = uri
-    logging.info('Current url is {0}'.format(current_browser_url))
+    logging.info(f'Current url is {current_browser_url}')
 
 
-def view_image(uri):
+def view_image(uri: str) -> None:
     global current_browser_url
 
     if browser is None or not browser.process.alive:
@@ -181,13 +173,13 @@ def view_image(uri):
     if current_browser_url is not uri:
         browser_bus.loadImage(uri)
         current_browser_url = uri
-    logging.info('Current url is {0}'.format(current_browser_url))
+    logging.info(f'Current url is {current_browser_url}')
 
     if string_to_bool(getenv('WEBVIEW_DEBUG', '0')):
         logging.info(browser.process.stdout)
 
 
-def view_video(uri, duration):
+def view_video(uri: str, duration) -> None:
     logging.debug('Displaying video %s for %s ', uri, duration)
     media_player = MediaPlayerProxy.get_instance()
 
@@ -213,7 +205,7 @@ def view_video(uri, duration):
     media_player.stop()
 
 
-def load_settings():
+def load_settings() -> None:
     """
     Load settings and set the log level.
     """
@@ -223,7 +215,7 @@ def load_settings():
     )
 
 
-def asset_loop(scheduler):
+def asset_loop(scheduler) -> None:
     asset = scheduler.get_next_asset()
 
     if asset is None:
@@ -289,7 +281,7 @@ def asset_loop(scheduler):
             pass
 
 
-def setup():
+def setup() -> None:
     global HOME, browser_bus
     HOME = getenv('HOME')
     if not HOME:
@@ -309,7 +301,7 @@ def setup():
     browser_bus = bus.get('screenly.webview', '/Screenly')
 
 
-def wait_for_node_ip(seconds):
+def wait_for_node_ip(seconds: int) -> None:
     for _ in range(seconds):
         try:
             get_node_ip()
@@ -318,7 +310,7 @@ def wait_for_node_ip(seconds):
             sleep(1)
 
 
-def start_loop():
+def start_loop() -> None:
     global loop_is_stopped
 
     logging.debug('Entering infinite loop.')
@@ -330,7 +322,7 @@ def start_loop():
         asset_loop(scheduler)
 
 
-def main():
+def main() -> None:
     global scheduler
     global load_screen_displayed, mq_data
 

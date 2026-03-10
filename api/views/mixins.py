@@ -1,3 +1,4 @@
+import threading
 import uuid
 from base64 import b64encode
 from inspect import cleandoc
@@ -18,7 +19,6 @@ from api.serializers.mixins import (
     RebootViewSerializerMixin,
     ShutdownViewSerializerMixin,
 )
-import threading
 
 from anthias_app.messaging import send_to_viewer
 from anthias_app.tasks import get_display_power_value, reboot_anthias, shutdown_anthias

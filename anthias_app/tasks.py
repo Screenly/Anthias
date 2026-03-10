@@ -19,11 +19,11 @@ _scheduler_started = False
 _scheduler_lock = threading.Lock()
 
 
-def get_display_power_value():
+def get_display_power_value() -> str | bool | None:
     return _display_power
 
 
-def _update_display_power():
+def _update_display_power() -> None:
     global _display_power
     try:
         _display_power = diagnostics.get_display_power()
@@ -31,7 +31,7 @@ def _update_display_power():
         logger.exception('Failed to get display power')
 
 
-def cleanup():
+def cleanup() -> None:
     try:
         asset_dir = path.join(getenv('HOME', ''), 'screenly_assets')
         if path.isdir(asset_dir):
@@ -40,7 +40,7 @@ def cleanup():
         logger.exception('Cleanup failed')
 
 
-def reboot_anthias():
+def reboot_anthias() -> None:
     if is_balena_app():
         for attempt in Retrying(
             stop=stop_after_attempt(5),
@@ -54,7 +54,7 @@ def reboot_anthias():
         call(['reboot'])
 
 
-def shutdown_anthias():
+def shutdown_anthias() -> None:
     if is_balena_app():
         for attempt in Retrying(
             stop=stop_after_attempt(5),
@@ -68,7 +68,9 @@ def shutdown_anthias():
         call(['shutdown', '-h', 'now'])
 
 
-def _run_periodic(func, interval_seconds, name):
+def _run_periodic(
+    func, interval_seconds: int, name: str,
+) -> threading.Thread:
     def loop():
         while True:
             try:
@@ -82,7 +84,7 @@ def _run_periodic(func, interval_seconds, name):
     return t
 
 
-def start_background_scheduler():
+def start_background_scheduler() -> None:
     global _scheduler_started
     with _scheduler_lock:
         if _scheduler_started:

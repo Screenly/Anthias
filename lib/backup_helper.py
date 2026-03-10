@@ -1,5 +1,3 @@
-from __future__ import unicode_literals
-
 import logging
 import sys
 import tarfile
@@ -11,12 +9,11 @@ default_archive_name = 'anthias-backup'
 static_dir = 'screenly/staticfiles'
 
 
-def create_backup(name=default_archive_name):
+def create_backup(name: str = default_archive_name) -> str:
     home = getenv('HOME')
-    archive_name = '{}-{}.tar.gz'.format(
-        name if name else default_archive_name,
-        datetime.now().strftime('%Y-%m-%dT%H-%M-%S'),
-    )
+    effective_name = name if name else default_archive_name
+    timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
+    archive_name = f'{effective_name}-{timestamp}.tar.gz'
     file_path = path.join(home, static_dir, archive_name)
 
     if not path.exists(path.join(home, static_dir)):
@@ -37,7 +34,7 @@ def create_backup(name=default_archive_name):
     return archive_name
 
 
-def recover(file_path):
+def recover(file_path: str) -> None:
     home = getenv('HOME')
     if not home:
         logging.error('No HOME variable')
