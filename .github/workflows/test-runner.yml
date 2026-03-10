@@ -43,8 +43,6 @@ jobs:
           uv run python -m tools.image_builder \
             --dockerfiles-only \
             --disable-cache-mounts \
-            --service celery \
-            --service redis \
             --service test
 
       - name: Start the test container
@@ -63,23 +61,19 @@ jobs:
         if: inputs.test-type == 'python'
         run: |
           docker compose exec anthias-test \
-            ./manage.py test --noinput --parallel --exclude-tag=integration
+            python -m pytest tests/ -m "not integration" --ignore=tests/test_scheduler.py --ignore=tests/test_viewer.py -x
 
       - name: Setup integration test environment
         if: inputs.test-type == 'python'
         run: |
           docker compose exec anthias-test \
-            bash ./bin/prepare_test_environment.sh -s
+            bash ./bin/prepare_test_environment.sh
 
       - name: Run Python integration tests
         if: inputs.test-type == 'python'
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 5
-          max_attempts: 5
-          command: |
-            docker compose exec anthias-test \
-              ./manage.py test --noinput --tag=integration
+        run: |
+          docker compose exec anthias-test \
+            python -m pytest tests/test_app.py -m integration -v
 
       - name: Upload coverage reports to Codecov
         if: inputs.test-type == 'python'

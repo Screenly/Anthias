@@ -9,9 +9,9 @@ RUN apt-get update && \
         {% if not loop.last %}
         {{ dependency }} \
         {% else %}
-        {{ dependency }}
+        {{ dependency }} && \
         {% endif %}
-    {% endfor %} && \
+    {% endfor %}
     rm -rf /var/lib/apt/lists/*
 
 {% if board in ['pi1', 'pi2'] %}

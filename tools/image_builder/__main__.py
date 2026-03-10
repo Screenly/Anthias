@@ -62,12 +62,14 @@ def build_image(
     ]
 
     if board in ['pi1', 'pi2']:
-        base_build_dependencies.extend([
-            'python3-dev',
-            'python3-pip',
-            'python3-setuptools',
-            'python-is-python3',
-        ])
+        base_build_dependencies.extend(
+            [
+                'python3-dev',
+                'python3-pip',
+                'python3-setuptools',
+                'python-is-python3',
+            ]
+        )
 
     # Runtime dependencies for server/test
     base_apt_dependencies = [

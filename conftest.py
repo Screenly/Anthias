@@ -2,9 +2,7 @@ import os
 
 import pytest
 
-os.environ.setdefault(
-    'DJANGO_SETTINGS_MODULE', 'anthias_django.settings'
-)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'anthias_django.settings')
 os.environ.setdefault('ENVIRONMENT', 'test')
 os.environ.setdefault('DJANGO_ALLOW_ASYNC_UNSAFE', 'true')
 

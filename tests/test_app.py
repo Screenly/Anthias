@@ -120,12 +120,8 @@ class TestWeb:
             page.click('[data-bs-target="#addAssetModal"]')
             page.wait_for_selector('#addAssetModal.show')
             page.click('[data-bs-target="#tab-upload"]')
-            page.set_input_files(
-                '#add-file-upload', video_file
-            )
-            page.click(
-                '#addAssetForm button[type="submit"]'
-            )
+            page.set_input_files('#add-file-upload', video_file)
+            page.click('#addAssetForm button[type="submit"]')
             page.wait_for_timeout(3000)
 
             assets = Asset.objects.all()
@@ -137,9 +133,7 @@ class TestWeb:
 
     def test_add_two_assets_upload(self, page, live_server):
         with (
-            TemporaryCopy(
-                'tests/assets/asset.mov', 'video.mov'
-            ) as video_file,
+            TemporaryCopy('tests/assets/asset.mov', 'video.mov') as video_file,
             TemporaryCopy(
                 'static/img/standby.png', 'standby.png'
             ) as image_file,
@@ -149,33 +143,22 @@ class TestWeb:
             page.wait_for_selector('#addAssetModal.show')
             page.click('[data-bs-target="#tab-upload"]')
 
-            page.set_input_files(
-                '#add-file-upload', image_file
-            )
-            page.click(
-                '#addAssetForm button[type="submit"]'
-            )
+            page.set_input_files('#add-file-upload', image_file)
+            page.click('#addAssetForm button[type="submit"]')
             page.wait_for_timeout(2000)
 
             page.click('[data-bs-target="#addAssetModal"]')
             page.wait_for_selector('#addAssetModal.show')
             page.click('[data-bs-target="#tab-upload"]')
-            page.set_input_files(
-                '#add-file-upload', video_file
-            )
-            page.click(
-                '#addAssetForm button[type="submit"]'
-            )
+            page.set_input_files('#add-file-upload', video_file)
+            page.click('#addAssetForm button[type="submit"]')
             page.wait_for_timeout(3000)
 
             assets = Asset.objects.all()
             assert len(assets) == 2
             assert assets[0].name == 'standby.png'
             assert assets[0].mimetype == 'image'
-            assert (
-                assets[0].duration
-                == settings['default_duration']
-            )
+            assert assets[0].duration == settings['default_duration']
             assert assets[1].name == 'video.mov'
             assert assets[1].mimetype == 'video'
             assert assets[1].duration == 5
@@ -184,9 +167,7 @@ class TestWeb:
         page.goto(live_server.url)
         page.click('[data-bs-target="#addAssetModal"]')
         page.wait_for_selector('#addAssetModal.show')
-        page.fill(
-            '#add-uri', 'rtsp://localhost:8091/asset.mov'
-        )
+        page.fill('#add-uri', 'rtsp://localhost:8091/asset.mov')
         page.check('#add-skip-check')
         page.click('#addAssetForm button[type="submit"]')
         page.wait_for_timeout(3000)
@@ -194,12 +175,8 @@ class TestWeb:
         assets = Asset.objects.all()
         assert len(assets) == 1
         asset = assets.first()
-        assert (
-            asset.name == 'rtsp://localhost:8091/asset.mov'
-        )
-        assert (
-            asset.uri == 'rtsp://localhost:8091/asset.mov'
-        )
+        assert asset.name == 'rtsp://localhost:8091/asset.mov'
+        assert asset.uri == 'rtsp://localhost:8091/asset.mov'
         assert asset.mimetype == 'streaming'
 
     def test_remove_asset(self, page, live_server):
@@ -230,9 +207,7 @@ class TestWeb:
         assert assets.first().is_enabled is True
 
     def test_disable_asset(self, page, live_server):
-        Asset.objects.create(
-            **{**asset_x, 'is_enabled': 1}
-        )
+        Asset.objects.create(**{**asset_x, 'is_enabled': 1})
         page.goto(live_server.url)
         page.wait_for_selector('[data-asset-id]')
         toggle = page.locator(
@@ -246,20 +221,16 @@ class TestWeb:
         assert assets.first().is_enabled is False
 
     def test_reorder_asset(self, page, live_server):
-        Asset.objects.create(
-            **{**asset_x, 'is_enabled': 1}
-        )
+        Asset.objects.create(**{**asset_x, 'is_enabled': 1})
         Asset.objects.create(**asset_y)
         page.goto(live_server.url)
         page.wait_for_selector('[data-asset-id]')
 
         source = page.locator(
-            f'[data-asset-id="{asset_x["asset_id"]}"]'
-            ' .drag-handle'
+            f'[data-asset-id="{asset_x["asset_id"]}"] .drag-handle'
         )
         target = page.locator(
-            f'[data-asset-id="{asset_y["asset_id"]}"]'
-            ' .drag-handle'
+            f'[data-asset-id="{asset_y["asset_id"]}"] .drag-handle'
         )
         source.drag_to(target)
         page.wait_for_timeout(3000)
@@ -269,27 +240,15 @@ class TestWeb:
         assert x.play_order == 0
         assert y.play_order == 1
 
-    def test_settings_page_should_work(
-        self, page, live_server
-    ):
+    def test_settings_page_should_work(self, page, live_server):
         page.goto(f'{live_server.url}/settings')
         content = page.content()
-        assert (
-            'Error: 500 Internal Server Error' not in content
-        )
-        assert (
-            'Error: 504 Gateway Time-out' not in content
-        )
-        assert (
-            'Error: 504 Gateway Timeout' not in content
-        )
+        assert 'Error: 500 Internal Server Error' not in content
+        assert 'Error: 504 Gateway Time-out' not in content
+        assert 'Error: 504 Gateway Timeout' not in content
 
-    def test_system_info_page_should_work(
-        self, page, live_server
-    ):
+    def test_system_info_page_should_work(self, page, live_server):
         page.goto(f'{live_server.url}/system_info')
         expect(
-            page.locator(
-                'text=Error: 500 Internal Server Error'
-            )
+            page.locator('text=Error: 500 Internal Server Error')
         ).not_to_be_visible()
