@@ -69,7 +69,9 @@ def shutdown_anthias() -> None:
 
 
 def _run_periodic(
-    func, interval_seconds: int, name: str,
+    func,
+    interval_seconds: int,
+    name: str,
 ) -> threading.Thread:
     def loop():
         while True:

@@ -55,18 +55,12 @@ class TestWatchdog:
         except OSError:
             pass
         viewer_setup.watchdog()
-        assert os.path.exists(
-            viewer_setup.utils.WATCHDOG_PATH
-        )
+        assert os.path.exists(viewer_setup.utils.WATCHDOG_PATH)
 
     def test_updates_mtime(self, viewer_setup):
         viewer_setup.watchdog()
-        mtime = os.path.getmtime(
-            viewer_setup.utils.WATCHDOG_PATH
-        )
+        mtime = os.path.getmtime(viewer_setup.utils.WATCHDOG_PATH)
         sleep(0.01)
         viewer_setup.watchdog()
-        mtime2 = os.path.getmtime(
-            viewer_setup.utils.WATCHDOG_PATH
-        )
+        mtime2 = os.path.getmtime(viewer_setup.utils.WATCHDOG_PATH)
         assert mtime2 > mtime

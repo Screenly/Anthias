@@ -3,10 +3,6 @@ name: Test Runner
 on:
   workflow_call:
     inputs:
-      test-type:
-        description: 'Type of tests to run (typescript or python)'
-        required: true
-        type: string
       python-version:
         description: 'Python version to use'
         required: false
@@ -15,7 +11,7 @@ on:
 
 jobs:
   run-tests:
-    name: Run ${{ inputs.test-type }} tests
+    name: Run python tests
     runs-on: ubuntu-24.04
     env:
       COMPOSE_FILE: docker-compose.test.yml
@@ -49,34 +45,26 @@ jobs:
         run: |
           docker compose up -d --build
 
-      - name: Run TypeScript tests
-        if: inputs.test-type == 'typescript'
-        run: |
-          docker compose exec anthias-test \
-            npm install
-          docker compose exec anthias-test \
-            npm run test
-
       - name: Run Python unit tests
-        if: inputs.test-type == 'python'
         run: |
           docker compose exec anthias-test \
             python -m pytest tests/ -m "not integration" --ignore=tests/test_scheduler.py --ignore=tests/test_viewer.py -x
 
       - name: Setup integration test environment
-        if: inputs.test-type == 'python'
         run: |
           docker compose exec anthias-test \
             bash ./bin/prepare_test_environment.sh
+          docker compose exec anthias-test \
+            python -m django migrate --run-syncdb
+          docker compose exec anthias-test \
+            python -m django collectstatic --noinput --clear
 
       - name: Run Python integration tests
-        if: inputs.test-type == 'python'
         run: |
           docker compose exec anthias-test \
             python -m pytest tests/test_app.py -m integration -v
 
       - name: Upload coverage reports to Codecov
-        if: inputs.test-type == 'python'
         uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

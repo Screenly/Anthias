@@ -30,9 +30,7 @@ class TestUpdates:
                     'latest_remote_hash': GIT_HASH_1,
                     'git_hash': GIT_HASH_1,
                     'git_short_hash': GIT_SHORT_HASH_1,
-                    'latest_docker_hub_hash': (
-                        GIT_SHORT_HASH_1
-                    ),
+                    'latest_docker_hub_hash': (GIT_SHORT_HASH_1),
                 },
                 True,
             ),
@@ -41,9 +39,7 @@ class TestUpdates:
                     'latest_remote_hash': GIT_HASH_2,
                     'git_hash': GIT_HASH_1,
                     'git_short_hash': GIT_SHORT_HASH_1,
-                    'latest_docker_hub_hash': (
-                        GIT_SHORT_HASH_1
-                    ),
+                    'latest_docker_hub_hash': (GIT_SHORT_HASH_1),
                 },
                 True,
             ),
@@ -52,9 +48,7 @@ class TestUpdates:
                     'latest_remote_hash': GIT_HASH_1,
                     'git_hash': GIT_HASH_1,
                     'git_short_hash': GIT_SHORT_HASH_1,
-                    'latest_docker_hub_hash': (
-                        GIT_SHORT_HASH_2
-                    ),
+                    'latest_docker_hub_hash': (GIT_SHORT_HASH_2),
                 },
                 True,
             ),
@@ -63,9 +57,7 @@ class TestUpdates:
                     'latest_remote_hash': GIT_HASH_2,
                     'git_hash': GIT_HASH_1,
                     'git_short_hash': GIT_SHORT_HASH_1,
-                    'latest_docker_hub_hash': (
-                        GIT_SHORT_HASH_2
-                    ),
+                    'latest_docker_hub_hash': (GIT_SHORT_HASH_2),
                 },
                 False,
             ),
@@ -75,9 +67,7 @@ class TestUpdates:
         'lib.github.get_git_branch',
         MagicMock(return_value='master'),
     )
-    def test_is_up_to_date_depends_on_git_hashes(
-        self, hashes, expected
-    ):
+    def test_is_up_to_date_depends_on_git_hashes(self, hashes, expected):
         os.environ['GIT_BRANCH'] = 'master'
         os.environ['DEVICE_TYPE'] = 'pi4'
 
@@ -97,17 +87,11 @@ class TestUpdates:
             ),
             patch(
                 'lib.github.get_git_short_hash',
-                MagicMock(
-                    return_value=hashes['git_short_hash']
-                ),
+                MagicMock(return_value=hashes['git_short_hash']),
             ),
             patch(
                 'lib.github.get_latest_docker_hub_hash',
-                MagicMock(
-                    return_value=hashes[
-                        'latest_docker_hub_hash'
-                    ]
-                ),
+                MagicMock(return_value=hashes['latest_docker_hub_hash']),
             ),
         ):
             assert is_up_to_date() is expected

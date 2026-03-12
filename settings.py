@@ -2,7 +2,7 @@ import configparser
 import hashlib
 import logging
 from collections import UserDict
-from os import getenv, path
+from os import getenv, makedirs, path
 from typing import Any
 
 from lib.auth import BasicAuth, NoAuth
@@ -146,6 +146,7 @@ class AnthiasSettings(UserDict):
 
     def save(self) -> None:
         # Write new settings to disk.
+        makedirs(path.dirname(self.conf_file), exist_ok=True)
         config = configparser.ConfigParser()
         for section, defaults in DEFAULTS.items():
             config.add_section(section)

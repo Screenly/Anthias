@@ -96,21 +96,15 @@ class TestSettings:
             )
             assert (
                 settings['shuffle_playlist']
-                == mod_settings.DEFAULTS['viewer'][
-                    'shuffle_playlist'
-                ]
+                == mod_settings.DEFAULTS['viewer']['shuffle_playlist']
             )
             assert (
                 settings['debug_logging']
-                == mod_settings.DEFAULTS['viewer'][
-                    'debug_logging'
-                ]
+                == mod_settings.DEFAULTS['viewer']['debug_logging']
             )
             assert (
                 settings['default_duration']
-                == mod_settings.DEFAULTS['viewer'][
-                    'default_duration'
-                ]
+                == mod_settings.DEFAULTS['viewer']['default_duration']
             )
 
     def test_save_settings(self):

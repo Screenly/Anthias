@@ -36,14 +36,7 @@ on:
   workflow_call:
 
 jobs:
-  run-typescript-tests:
-    uses: ./.github/workflows/test-runner.yml
-    with:
-      test-type: 'typescript'
-      python-version: '3.11'
-
   run-python-tests:
     uses: ./.github/workflows/test-runner.yml
     with:
-      test-type: 'python'
       python-version: '3.11'

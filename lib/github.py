@@ -120,9 +120,7 @@ def fetch_remote_hash() -> tuple[str | None, bool]:
             handle_github_error(exc, 'remote branch HEAD')
             return None, False
 
-        logging.debug(
-            f'Got response from GitHub: {resp.status_code}'
-        )
+        logging.debug(f'Got response from GitHub: {resp.status_code}')
         latest_sha = resp.json()['object']['sha']
         r.set('latest-remote-hash', latest_sha)
 

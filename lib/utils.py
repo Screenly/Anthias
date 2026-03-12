@@ -75,7 +75,9 @@ def validate_url(string: str) -> bool:
 
 
 def get_balena_supervisor_api_response(
-    method: str, action: str, **kwargs,
+    method: str,
+    action: str,
+    **kwargs,
 ):
     version = kwargs.get('version', 'v1')
     address = os.getenv('BALENA_SUPERVISOR_ADDRESS')
@@ -388,7 +390,8 @@ def url_fails(url: str) -> bool:
 
 
 def download_video_from_youtube(
-    uri: str, asset_id: str,
+    uri: str,
+    asset_id: str,
 ) -> tuple[str, str, int]:
     home = getenv('HOME')
     name = check_output(['yt-dlp', '-O', 'title', uri])
@@ -448,7 +451,8 @@ def is_demo_node() -> bool:
 
 
 def generate_perfect_paper_password(
-    pw_length: int = 10, has_symbols: bool = True,
+    pw_length: int = 10,
+    has_symbols: bool = True,
 ) -> str:
     """
     Generates a password using 64 characters from
@@ -470,9 +474,7 @@ def generate_perfect_paper_password(
 
 def connect_to_redis() -> '_NullRedis | redis.Redis':
     try:
-        r = redis.Redis(
-            host='redis', decode_responses=True, port=6379, db=0
-        )
+        r = redis.Redis(host='redis', decode_responses=True, port=6379, db=0)
         r.ping()
         return r
     except Exception:

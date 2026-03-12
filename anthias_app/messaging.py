@@ -4,7 +4,8 @@ logger = logging.getLogger(__name__)
 
 
 def send_to_viewer(
-    command: str, data: str | None = None,
+    command: str,
+    data: str | None = None,
 ) -> None:
     try:
         from asgiref.sync import async_to_sync

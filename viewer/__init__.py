@@ -67,9 +67,7 @@ scheduler = None
 
 
 def send_current_asset_id_to_server() -> None:
-    logging.debug(
-        'Current asset id: %s', scheduler.current_asset_id
-    )
+    logging.debug('Current asset id: %s', scheduler.current_asset_id)
 
 
 def show_hotspot_page(data: str) -> None:

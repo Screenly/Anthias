@@ -42,7 +42,9 @@ class Auth(metaclass=ABCMeta):
             )
 
     def update_settings(
-        self, request, current_pass_correct: bool | None,
+        self,
+        request,
+        current_pass_correct: bool | None,
     ) -> None:
         """
         Submit updated values from Settings page.
@@ -107,9 +109,7 @@ class BasicAuth(Auth):
         )
 
     def check_password(self, password: str) -> bool:
-        hashed_password = hashlib.sha256(
-            password.encode('utf-8')
-        ).hexdigest()
+        hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
         return self.settings['password'] == hashed_password
 
     def is_authenticated(self, request) -> bool:

@@ -22,9 +22,7 @@ def api_client():
 
 
 def _create_asset(api_client, data):
-    return api_client.post(
-        ASSET_LIST_V2_URL, data=data, format='json'
-    ).data
+    return api_client.post(ASSET_LIST_V2_URL, data=data, format='json').data
 
 
 @pytest.mark.django_db
@@ -69,14 +67,8 @@ class TestCRUDAssetEndpoints:
         response = api_client.post(
             ASSET_LIST_V2_URL, data=test_data, format='json'
         )
-        assert (
-            response.status_code
-            == status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-        assert (
-            'Duration must be zero for video assets'
-            in str(response.data)
-        )
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert 'Duration must be zero for video assets' in str(response.data)
         assert mock_rename.call_count == 1
         assert mock_validate_uri.call_count == 1
 

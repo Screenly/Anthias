@@ -30,9 +30,7 @@ class WebSocketSubscriber(Thread):
             self.server_url,
             close_timeout=5,
         ) as ws:
-            logger.info(
-                'Connected to WebSocket server: %s', self.server_url
-            )
+            logger.info('Connected to WebSocket server: %s', self.server_url)
             while True:
                 msg = ws.recv()
                 try:

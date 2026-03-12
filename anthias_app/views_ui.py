@@ -24,9 +24,7 @@ def schedule(request):
 @authorized
 def asset_tables(request):
     context = _get_asset_context()
-    return render(
-        request, 'anthias_app/assets/tables.html', context
-    )
+    return render(request, 'anthias_app/assets/tables.html', context)
 
 
 @authorized

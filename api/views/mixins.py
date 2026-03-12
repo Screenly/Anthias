@@ -21,7 +21,11 @@ from api.serializers.mixins import (
 )
 
 from anthias_app.messaging import send_to_viewer
-from anthias_app.tasks import get_display_power_value, reboot_anthias, shutdown_anthias
+from anthias_app.tasks import (
+    get_display_power_value,
+    reboot_anthias,
+    shutdown_anthias,
+)
 from lib import backup_helper, diagnostics
 from lib.auth import authorized
 from lib.github import is_up_to_date
@@ -120,9 +124,7 @@ class RebootViewMixin(APIView):
     @extend_schema(summary='Reboot system')
     @authorized
     def post(self, request):
-        threading.Thread(
-            target=reboot_anthias, daemon=True
-        ).start()
+        threading.Thread(target=reboot_anthias, daemon=True).start()
         return Response(status=status.HTTP_200_OK)
 
 
@@ -132,9 +134,7 @@ class ShutdownViewMixin(APIView):
     @extend_schema(summary='Shut down system')
     @authorized
     def post(self, request):
-        threading.Thread(
-            target=shutdown_anthias, daemon=True
-        ).start()
+        threading.Thread(target=shutdown_anthias, daemon=True).start()
         return Response(status=status.HTTP_200_OK)
 
 

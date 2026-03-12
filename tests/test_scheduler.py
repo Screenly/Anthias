@@ -136,9 +136,7 @@ class TestScheduler:
     def test_playlist_updated_after_deadline(self):
         create_assets([ASSET_X, ASSET_Y])
         _, deadline = generate_asset_list()
-        traveller = time_machine.travel(
-            deadline + timedelta(seconds=1)
-        )
+        traveller = time_machine.travel(deadline + timedelta(seconds=1))
         traveller.start()
         scheduler = Scheduler()
         scheduler.refresh_playlist()

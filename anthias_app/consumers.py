@@ -15,9 +15,7 @@ class ViewerConsumer(WebsocketConsumer):
         if channel_layer is not None:
             from asgiref.sync import async_to_sync
 
-            async_to_sync(channel_layer.group_add)(
-                'viewer', self.channel_name
-            )
+            async_to_sync(channel_layer.group_add)('viewer', self.channel_name)
         logger.info('Viewer WebSocket connected')
 
     def disconnect(self, close_code: int) -> None:
@@ -33,10 +31,14 @@ class ViewerConsumer(WebsocketConsumer):
         logger.info('Viewer WebSocket disconnected')
 
     def viewer_command(self, event: dict) -> None:
-        self.send(text_data=json.dumps({
-            'command': event['command'],
-            'data': event.get('data'),
-        }))
+        self.send(
+            text_data=json.dumps(
+                {
+                    'command': event['command'],
+                    'data': event.get('data'),
+                }
+            )
+        )
 
 
 class UIConsumer(WebsocketConsumer):
@@ -48,9 +50,7 @@ class UIConsumer(WebsocketConsumer):
         if channel_layer is not None:
             from asgiref.sync import async_to_sync
 
-            async_to_sync(channel_layer.group_add)(
-                'ui', self.channel_name
-            )
+            async_to_sync(channel_layer.group_add)('ui', self.channel_name)
 
     def disconnect(self, close_code: int) -> None:
         from channels.layers import get_channel_layer
@@ -59,9 +59,7 @@ class UIConsumer(WebsocketConsumer):
         if channel_layer is not None:
             from asgiref.sync import async_to_sync
 
-            async_to_sync(channel_layer.group_discard)(
-                'ui', self.channel_name
-            )
+            async_to_sync(channel_layer.group_discard)('ui', self.channel_name)
 
     def ui_update(self, event: dict) -> None:
         self.send(text_data=json.dumps(event.get('data', {})))

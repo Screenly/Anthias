@@ -89,9 +89,7 @@ class TestDeviceSettingsViewV2:
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'auth_backend' in response.data
-        assert 'is not a valid choice' in str(
-            response.data['auth_backend']
-        )
+        assert 'is not a valid choice' in str(response.data['auth_backend'])
         settings_mock.load.assert_not_called()
         settings_mock.save.assert_not_called()
 
@@ -133,10 +131,7 @@ class TestDeviceSettingsViewV2:
             device_settings_url, data=data, format='json'
         )
         assert response.status_code == status.HTTP_200_OK
-        assert (
-            response.data['message']
-            == 'Settings were successfully saved.'
-        )
+        assert response.data['message'] == 'Settings were successfully saved.'
         settings_mock.load.assert_called_once()
         settings_mock.save.assert_called_once()
         assert settings_mock.__setitem__.call_count == 5
@@ -214,21 +209,12 @@ class TestDeviceSettingsViewV2:
             device_settings_url, data=data, format='json'
         )
         assert response.status_code == status.HTTP_200_OK
-        assert (
-            response.data['message']
-            == 'Settings were successfully saved.'
-        )
+        assert response.data['message'] == 'Settings were successfully saved.'
         settings_mock.load.assert_called_once()
         settings_mock.save.assert_called_once()
-        settings_mock.__setitem__.assert_any_call(
-            'auth_backend', 'auth_basic'
-        )
-        settings_mock.__setitem__.assert_any_call(
-            'user', 'testuser'
-        )
-        settings_mock.__setitem__.assert_any_call(
-            'password', expected_hashed
-        )
+        settings_mock.__setitem__.assert_any_call('auth_backend', 'auth_basic')
+        settings_mock.__setitem__.assert_any_call('user', 'testuser')
+        settings_mock.__setitem__.assert_any_call('password', expected_hashed)
         send_to_viewer_mock.assert_called_once_with('reload')
 
     @patch('api.views.v2.settings')
@@ -273,15 +259,10 @@ class TestDeviceSettingsViewV2:
             device_settings_url, data=data, format='json'
         )
         assert response.status_code == status.HTTP_200_OK
-        assert (
-            response.data['message']
-            == 'Settings were successfully saved.'
-        )
+        assert response.data['message'] == 'Settings were successfully saved.'
         settings_mock.load.assert_called_once()
         settings_mock.save.assert_called_once()
-        settings_mock.__setitem__.assert_any_call(
-            'auth_backend', ''
-        )
+        settings_mock.__setitem__.assert_any_call('auth_backend', '')
         send_to_viewer_mock.assert_called_once_with('reload')
 
         response = api_client.get(device_settings_url)
@@ -324,15 +305,10 @@ class TestDeviceSettingsViewV2:
             format='json',
         )
         assert response.status_code == status.HTTP_200_OK
-        assert (
-            response.data['message']
-            == 'Settings were successfully saved.'
-        )
+        assert response.data['message'] == 'Settings were successfully saved.'
         settings_mock.load.assert_called_once()
         settings_mock.save.assert_called_once()
-        settings_mock.__setitem__.assert_any_call(
-            'default_assets', True
-        )
+        settings_mock.__setitem__.assert_any_call('default_assets', True)
         add_default_assets_mock.assert_called_once()
         remove_default_assets_mock.assert_not_called()
         send_to_viewer_mock.assert_called_once_with('reload')
@@ -367,15 +343,10 @@ class TestDeviceSettingsViewV2:
             format='json',
         )
         assert response.status_code == status.HTTP_200_OK
-        assert (
-            response.data['message']
-            == 'Settings were successfully saved.'
-        )
+        assert response.data['message'] == 'Settings were successfully saved.'
         settings_mock.load.assert_called_once()
         settings_mock.save.assert_called_once()
-        settings_mock.__setitem__.assert_any_call(
-            'default_assets', False
-        )
+        settings_mock.__setitem__.assert_any_call('default_assets', False)
         remove_default_assets_mock.assert_called_once()
         add_default_assets_mock.assert_not_called()
         send_to_viewer_mock.assert_called_once_with('reload')
@@ -390,20 +361,14 @@ class TestIntegrationsViewV2:
 
     @patch('api.views.v2.is_balena_app')
     @patch('api.views.v2.getenv')
-    def test_balena_environment(
-        self, mock_getenv, mock_is_balena
-    ):
+    def test_balena_environment(self, mock_getenv, mock_is_balena):
         mock_is_balena.side_effect = lambda: True
         mock_getenv.side_effect = lambda x: {
             'BALENA_DEVICE_UUID': 'test-device-uuid',
             'BALENA_APP_ID': 'test-app-id',
             'BALENA_APP_NAME': 'test-app-name',
-            'BALENA_SUPERVISOR_VERSION': (
-                'test-supervisor-version'
-            ),
-            'BALENA_HOST_OS_VERSION': (
-                'test-host-os-version'
-            ),
+            'BALENA_SUPERVISOR_VERSION': ('test-supervisor-version'),
+            'BALENA_HOST_OS_VERSION': ('test-host-os-version'),
             'BALENA_DEVICE_NAME_AT_INIT': 'test-device-name',
         }.get(x)
 
@@ -414,12 +379,8 @@ class TestIntegrationsViewV2:
             'balena_device_id': 'test-device-uuid',
             'balena_app_id': 'test-app-id',
             'balena_app_name': 'test-app-name',
-            'balena_supervisor_version': (
-                'test-supervisor-version'
-            ),
-            'balena_host_os_version': (
-                'test-host-os-version'
-            ),
+            'balena_supervisor_version': ('test-supervisor-version'),
+            'balena_host_os_version': ('test-host-os-version'),
             'balena_device_name_at_init': 'test-device-name',
         }
 
