@@ -55,9 +55,9 @@ jobs:
           docker compose exec anthias-test \
             bash ./bin/prepare_test_environment.sh
           docker compose exec anthias-test \
-            python -m django migrate --run-syncdb
+            ./manage.py migrate --run-syncdb
           docker compose exec anthias-test \
-            python -m django collectstatic --noinput --clear
+            ./manage.py collectstatic --noinput --clear
 
       - name: Run Python integration tests
         run: |
