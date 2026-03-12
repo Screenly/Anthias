@@ -164,3 +164,7 @@ a while for the device to appear online.
 
 Once done, the display should show the Anthias splash screen. You can now
 add assets via the web interface.
+
+## Deploying x86 devices
+
+Some preliminary code has been enabled to deploy to x86 fleets. However, at this time, it only works in Proxmox VM using the Intel NUC device type. 
