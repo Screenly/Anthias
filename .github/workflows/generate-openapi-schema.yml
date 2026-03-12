@@ -94,12 +94,12 @@ jobs:
 
       - name: Wait for server to be ready
         run: |
-          for i in $(seq 1 30); do
-            if docker compose exec anthias-server python -c "import django" 2>/dev/null; then
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/ > /dev/null 2>&1; then
               echo "Server is ready"
               break
             fi
-            echo "Waiting for server... ($i/30)"
+            echo "Waiting for server... ($i/60)"
             sleep 2
           done
 

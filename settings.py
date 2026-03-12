@@ -76,7 +76,14 @@ class AnthiasSettings(UserDict):
                 'Config-file %s missing. Using defaults.', self.conf_file
             )
             self.use_defaults()
-            self.save()
+            try:
+                self.save()
+            except OSError as e:
+                logging.warning(
+                    'Could not save config file %s: %s',
+                    self.conf_file,
+                    e,
+                )
         else:
             self.load()
 
