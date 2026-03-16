@@ -44,7 +44,7 @@
     "babel-loader": "^10.1.1",
     "classnames": "^2.5.1",
     "css-loader": "^7.1.4",
-    "eslint": "^10.0.3",
+    "eslint": "^9.39.4",
     "eslint-plugin-react": "^7.37.5",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
