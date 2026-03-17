@@ -23,11 +23,11 @@
     "react-redux": "^9.1.0",
     "react-router": "^7.13.1",
     "react-router-dom": "^7.13.1",
-    "sweetalert2": "^11.26.22"
+    "sweetalert2": "^11.26.23"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
-    "@babel/preset-env": "^7.29.0",
+    "@babel/preset-env": "^7.29.2",
     "@babel/preset-react": "^7.28.5",
     "@babel/preset-typescript": "^7.28.5",
     "@testing-library/dom": "^10.4.1",
@@ -39,18 +39,18 @@
     "@types/jquery": "^4.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@typescript-eslint/eslint-plugin": "^8.57.0",
+    "@typescript-eslint/eslint-plugin": "^8.57.1",
     "@typescript-eslint/parser": "^8.39.0",
     "babel-loader": "^10.1.1",
     "classnames": "^2.5.1",
     "css-loader": "^7.1.4",
-    "eslint": "^9.39.4",
+    "eslint": "^10.0.3",
     "eslint-plugin-react": "^7.37.5",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
     "jest-fixed-jsdom": "^0.0.11",
     "mini-css-extract-plugin": "^2.10.1",
-    "msw": "^2.12.11",
+    "msw": "^2.12.12",
     "prettier": "3.8.1",
     "sass": "^1.98.0",
     "sass-loader": "^16.0.7",
@@ -59,7 +59,7 @@
     "tsconfig-paths-webpack-plugin": "^4.2.0",
     "typescript": "^5.9.3",
     "webpack": "^5.105.4",
-    "webpack-cli": "^7.0.0",
+    "webpack-cli": "^7.0.1",
     "webpack-merge": "^6.0.1"
   }
 }
