@@ -24,7 +24,7 @@ jobs:
         run: |
           echo ${{ inputs.docker-tag }} > docker-tag
       - name: Upload docker tag file
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docker-tag
           path: docker-tag
@@ -45,7 +45,7 @@ jobs:
       attestations: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install zstd
         run: |
@@ -53,7 +53,7 @@ jobs:
           sudo apt-get install -y zstd
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22.21.0'
 
@@ -136,7 +136,7 @@ jobs:
           ls -la ./*raspberry*
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: balena-images-${{ matrix.board }}
           path: |
@@ -145,7 +145,7 @@ jobs:
             ./*raspberry*.json
 
       - name: Attest
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: '${{ github.workspace }}/*raspberry*.img.zst'
 
@@ -156,26 +156,26 @@ jobs:
       contents: write
     steps:
       - name: Download docker tag
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: docker-tag
           path: .
 
       - name: Download OpenAPI schema
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: anthias-api-schema
           path: .
 
       - name: Download balena images
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: balena-images-*
           path: .
           merge-multiple: true
 
       - name: Create release
-        uses: ncipollo/release-action@v1.20.0
+        uses: ncipollo/release-action@v1.21.0
         with:
           allowUpdates: true
           generateReleaseNotes: true

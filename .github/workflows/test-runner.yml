@@ -21,7 +21,7 @@ jobs:
       COMPOSE_FILE: docker-compose.test.yml
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Python ${{ inputs.python-version }}
         uses: actions/setup-python@v6
@@ -73,7 +73,7 @@ jobs:
 
       - name: Run Python integration tests
         if: inputs.test-type == 'python'
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 5
           max_attempts: 5
