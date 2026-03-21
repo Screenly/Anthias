@@ -27,6 +27,7 @@ on:
       - '!tests/**'
       - '!docker/Dockerfile.dev'
       - '!.cursor/**'
+      - '!.claude/**'
       - '!host_agent.py'
 
 jobs:

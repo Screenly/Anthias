@@ -17,6 +17,7 @@ on:
       - '!.github/dependabot.yml'
       - '!docs/**'
       - '!.cursor/**'
+      - '!.claude/**'
   pull_request:
     branches:
       - master
@@ -33,6 +34,7 @@ on:
       - '!.github/dependabot.yml'
       - '!docs/**'
       - '!.cursor/**'
+      - '!.claude/**'
   workflow_call:
 
 jobs:

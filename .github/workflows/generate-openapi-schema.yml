@@ -22,6 +22,7 @@ on:
       - '!bin/upgrade_containers.sh'
       - '!tests/**'
       - '!.cursor/**'
+      - '!.claude/**'
   pull_request:
     branches:
       - master
@@ -43,6 +44,7 @@ on:
       - '!bin/upgrade_containers.sh'
       - '!tests/**'
       - '!.cursor/**'
+      - '!.claude/**'
   workflow_call:
 
 jobs:
