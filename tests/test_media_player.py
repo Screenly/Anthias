@@ -22,7 +22,13 @@ class TestMPVMediaPlayer(unittest.TestCase):
         self.player.play()
 
         mock_popen.assert_called_once_with(
-            ['mpv', '--no-terminal', '--vo=drm', '--', 'file:///test/video.mp4'],
+            [
+                'mpv',
+                '--no-terminal',
+                '--vo=drm',
+                '--',
+                'file:///test/video.mp4',
+            ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
