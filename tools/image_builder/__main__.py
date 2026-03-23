@@ -86,6 +86,9 @@ def build_image(
     if board in ['pi1', 'pi2', 'pi3', 'pi4']:
         base_apt_dependencies.extend(['libraspberrypi0'])
 
+    if board in ['pi5', 'x86']:
+        base_apt_dependencies.extend(['mpv'])
+
     if service == 'viewer':
         context.update(get_viewer_context(board))
     elif service == 'test':
