@@ -38,7 +38,7 @@ class MPVMediaPlayer(MediaPlayer):
 
     def play(self):
         self.process = subprocess.Popen(
-            ['mpv', '--no-terminal', '--vo=drm', self.uri],
+            ['mpv', '--no-terminal', '--vo=drm', '--', self.uri],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
