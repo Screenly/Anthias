@@ -28,7 +28,7 @@ class MediaPlayer:
         raise NotImplementedError
 
 
-class FFMPEGMediaPlayer(MediaPlayer):
+class MPVMediaPlayer(MediaPlayer):
     def __init__(self):
         MediaPlayer.__init__(self)
         self.process = None
@@ -38,7 +38,7 @@ class FFMPEGMediaPlayer(MediaPlayer):
 
     def play(self):
         self.process = subprocess.Popen(
-            ['ffplay', '-autoexit', self.uri],
+            ['mpv', '--no-terminal', '--vo=drm', '--', self.uri],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -116,6 +116,6 @@ class MediaPlayerProxy:
             if get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']:
                 cls.INSTANCE = VLCMediaPlayer()
             else:
-                cls.INSTANCE = FFMPEGMediaPlayer()
+                cls.INSTANCE = MPVMediaPlayer()
 
         return cls.INSTANCE

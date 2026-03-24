@@ -229,6 +229,7 @@ def get_viewer_context(board: str) -> dict:
     if board in ['pi5', 'x86']:
         apt_dependencies.extend(
             [
+                'mpv',
                 'qt6-base-dev',
                 'qt6-webengine-dev',
                 'qt6-image-formats-plugins',
