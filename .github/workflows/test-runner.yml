@@ -73,7 +73,7 @@ jobs:
 
       - name: Run Python integration tests
         if: inputs.test-type == 'python'
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 5
           max_attempts: 5
