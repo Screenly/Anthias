@@ -426,7 +426,20 @@ class InfoViewV2(InfoViewMixin):
             200: {
                 'type': 'object',
                 'properties': {
-                    'viewlog': {'type': 'string'},
+                    'viewlog': {
+                        'oneOf': [
+                            {
+                                'type': 'object',
+                                'properties': {
+                                    'asset_id': {'type': 'string'},
+                                    'asset_name': {'type': 'string'},
+                                    'mimetype': {'type': 'string'},
+                                    'started_at': {'type': 'string'},
+                                },
+                            },
+                            {'type': 'string'},
+                        ],
+                    },
                     'loadavg': {'type': 'number'},
                     'free_space': {'type': 'string'},
                     'display_power': {'type': ['string', 'null']},
@@ -463,7 +476,7 @@ class InfoViewV2(InfoViewMixin):
     )
     @authorized
     def get(self, request):
-        viewlog = 'Not yet implemented'
+        viewlog = self._get_viewlog()
 
         # Calculate disk space
         slash = statvfs('/')
