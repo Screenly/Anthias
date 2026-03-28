@@ -24,13 +24,17 @@ RUN if [[ ! -z "{{ archive_url }}" ]]; then \
     unzip -o /tmp/wifi_connect.zip -d /usr/src/app && \
     rm /tmp/wifi_connect.zip; fi
 
-COPY requirements/requirements.wifi-connect.txt /tmp/requirements.txt
+COPY pyproject.toml uv.lock /tmp/uv-deps/
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
-RUN --mount=type=cache,target=/root/.cache/pip \
+RUN --mount=type=cache,target=/root/.cache/uv \
 {% endif %}
-    pip3 install -r /tmp/requirements.txt --break-system-packages
+    uv venv --system-site-packages /opt/venv && \
+    cd /tmp/uv-deps && \
+    VIRTUAL_ENV=/opt/venv uv sync --active --only-group wifi-connect --no-install-project --frozen
+
+ENV PATH="/opt/venv/bin:$PATH"
 
 COPY send_zmq_message.py ./
 

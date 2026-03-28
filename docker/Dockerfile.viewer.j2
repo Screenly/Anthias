@@ -19,29 +19,28 @@ RUN --mount=type=cache,target=/var/cache/apt \
         {% endif %}
     {% endfor %}
 
-# We need this to ensure that the wheels can be built.
-# Otherwise we get "invalid command 'bdist_wheel'"
-{% if disable_cache_mounts %}
-RUN \
-{% else %}
-RUN --mount=type=cache,target=/root/.cache/pip \
-{% endif %}
-    pip3 install --upgrade pip --break-system-packages && \
-    pip3 install wheel --break-system-packages
-
-# Install Python requirements
-COPY requirements/requirements.viewer.txt /tmp/requirements.txt
-
-{% if disable_cache_mounts %}
-RUN \
-{% else %}
-RUN --mount=type=cache,target=/root/.cache/pip \
-{% endif %}
-    pip3 install -r /tmp/requirements.txt --break-system-packages
-
 # Works around issue with `curl`
 # https://github.com/balena-io-library/base-images/issues/562
 RUN c_rehash
+
+{% if board in ['pi1', 'pi2'] %}
+RUN pip3 install uv --break-system-packages
+{% else %}
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+{% endif %}
+
+# Install Python requirements
+COPY pyproject.toml uv.lock /tmp/uv-deps/
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/root/.cache/uv \
+{% endif %}
+    uv venv --system-site-packages /opt/venv && \
+    cd /tmp/uv-deps && \
+    VIRTUAL_ENV=/opt/venv uv sync --active --only-group viewer --no-install-project --frozen
+
+ENV PATH="/opt/venv/bin:$PATH"
 
 # QT Base from packages does not support eglfs
 
@@ -83,7 +82,6 @@ RUN useradd -g video viewer
 
 RUN rm -f /etc/localtime
 
-WORKDIR /usr/src/app
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/
 
