@@ -67,7 +67,7 @@ class Scheduler(object):
 
         if self.extra_asset is not None:
             asset = get_specific_asset(self.extra_asset)
-            if asset and asset['is_processing'] == 0:
+            if asset and !asset['is_processing']:
                 self.current_asset_id = self.extra_asset
                 self.extra_asset = None
                 return asset
