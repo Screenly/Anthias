@@ -1,4 +1,4 @@
-import reactPlugin from 'eslint-plugin-react';
+import eslintReact from '@eslint-react/eslint-plugin';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
 
@@ -23,7 +23,7 @@ export default [
       }
     },
     plugins: {
-      react: reactPlugin,
+      '@eslint-react': eslintReact,
       '@typescript-eslint': tseslint
     },
     settings: {
@@ -39,19 +39,8 @@ export default [
       'no-console': 'error',
       'no-debugger': 'warn',
       'no-unexpected-multiline': 'error',
-      'react/jsx-uses-react': 'error',
-      'react/jsx-uses-vars': 'error',
-      'react/jsx-no-duplicate-props': 'error',
-      'react/jsx-key': 'warn',
-      'react/jsx-max-props-per-line': ['warn', { maximum: 1, when: 'multiline' }],
-      'react/jsx-first-prop-new-line': ['warn', 'multiline'],
-      'react/jsx-closing-bracket-location': ['warn', 'line-aligned'],
-      'react/jsx-tag-spacing': ['warn', {
-        closingSlash: 'never',
-        beforeSelfClosing: 'always',
-        afterOpening: 'never',
-        beforeClosing: 'never'
-      }],
+      '@eslint-react/no-duplicate-key': 'error',
+      '@eslint-react/no-missing-key': 'warn',
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
