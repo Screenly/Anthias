@@ -1,4 +1,5 @@
 import os
+import platform
 from pathlib import Path
 
 import click
@@ -89,7 +90,12 @@ def build_image(
     if service == 'viewer':
         context.update(get_viewer_context(board))
     elif service == 'test':
-        context.update(get_test_context())
+        machine = platform.machine()
+        if machine == 'aarch64':
+            test_platform = 'linux/arm64/v8'
+        else:
+            test_platform = target_platform
+        context.update(get_test_context(test_platform))
     elif service == 'wifi-connect':
         context.update(get_wifi_connect_context(target_platform))
 
