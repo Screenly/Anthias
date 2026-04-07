@@ -5,13 +5,13 @@
 
 set -euo pipefail
 
-BRANCH="feat/trixie-support"
+BRANCH="master"
 ANSIBLE_PLAYBOOK_ARGS=()
-REPOSITORY="https://github.com/nicomiguelino/Anthias.git"
+REPOSITORY="https://github.com/Screenly/Anthias.git"
 ANTHIAS_REPO_DIR="/home/${USER}/screenly"
 GITHUB_API_REPO_URL="https://api.github.com/repos/Screenly/Anthias"
 GITHUB_RELEASES_URL="https://github.com/Screenly/Anthias/releases"
-GITHUB_RAW_URL="https://raw.githubusercontent.com/nicomiguelino/Anthias"
+GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
 DOCKER_TAG="latest"
 UPGRADE_SCRIPT_PATH="${ANTHIAS_REPO_DIR}/bin/upgrade_containers.sh"
 ARCHITECTURE=$(uname -m)
@@ -363,8 +363,31 @@ function main() {
 
     display_banner "${TITLE_TEXT}"
 
-    export MANAGE_NETWORK="Yes"
-    SYSTEM_UPGRADE="Yes"
+    gum format "${INTRO_MESSAGE[@]}"
+    echo
+    gum confirm "Do you still want to continue?" || exit 0
+    gum confirm "${MANAGE_NETWORK_PROMPT[@]}" && \
+        export MANAGE_NETWORK="Yes" || \
+        export MANAGE_NETWORK="No"
+
+    VERSION=$(
+        gum choose \
+            --header "${VERSION_PROMPT}" \
+            -- "${VERSION_PROMPT_CHOICES[@]}"
+    )
+
+    if [ "$VERSION" == "latest" ]; then
+        BRANCH="master"
+    else
+        set_custom_version
+    fi
+
+    gum confirm "${SYSTEM_UPGRADE_PROMPT[@]}" && {
+        SYSTEM_UPGRADE="Yes"
+    } || {
+        SYSTEM_UPGRADE="No"
+        ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "system-upgrade")
+    }
 
     display_section "User Input Summary"
     gum format "**Manage Network:**     ${MANAGE_NETWORK}"
