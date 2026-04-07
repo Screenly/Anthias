@@ -68,14 +68,18 @@
     regexp: '^Identity=.*'
     replace: "Identity=unix-group:netdev;unix-group:sudo:{{ lookup('env', 'USER') }}"
     dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
-  when: manage_network|bool
+  when:
+    - manage_network|bool
+    - ansible_distribution_major_version|int <= 12
 
 - name: Set ResultAny to yes
   ansible.builtin.replace:
     regexp: '^ResultAny=.*'
     replace: 'ResultAny=yes'
     dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
-  when: manage_network|bool
+  when:
+    - manage_network|bool
+    - ansible_distribution_major_version|int <= 12
 
 - name: Get stat of org.freedesktop.NetworkManager.pkla
   ansible.builtin.stat:
@@ -87,8 +91,28 @@
     mkdir -p /etc/polkit-1/localauthority/50-local.d
     cp -f /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla \
       /etc/polkit-1/localauthority/50-local.d
-  when: manage_network|bool
+  when:
+    - manage_network|bool
+    - ansible_distribution_major_version|int <= 12
   changed_when: not nm_pkla_path.stat.exists
+
+- name: Create polkit rules for NetworkManager (Trixie+)
+  ansible.builtin.copy:
+    dest: /etc/polkit-1/rules.d/50-network-manager.rules
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      polkit.addRule(function(action, subject) {
+          if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0 &&
+              (subject.isInGroup("netdev") || subject.isInGroup("sudo") ||
+               subject.user === "{{ lookup('env', 'USER') }}")) {
+              return polkit.Result.YES;
+          }
+      });
+  when:
+    - manage_network|bool
+    - ansible_distribution_major_version|int >= 13
 
 - name: Disable dhcpcd
   ansible.builtin.systemd:
