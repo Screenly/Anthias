@@ -22,7 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Install ansible-lint
+        run: pip install ansible-lint
+
       - name: Run ansible-lint
-        uses: ansible-community/ansible-lint-action@main
-        with:
-          path: "ansible/"
+        run: ansible-lint ansible/
