@@ -54,4 +54,3 @@ to flash the disk image to a USB drive.
 ## References
 
 * [The Official Debian Installation Guide](https://www.debian.org/releases/trixie/amd64)
-* [Step By Step Debian 12 Installation (with Screenshots) &middot; Sangoma](https://sangomakb.atlassian.net/wiki/spaces/FP/pages/295403538/Step+By+Step+Debian+12+Installation)
