@@ -322,6 +322,17 @@
     update_cache: true
     install_recommends: false
 
+- name: Check if /etc/timezone exists
+  ansible.builtin.stat:
+    path: /etc/timezone
+  register: etc_timezone
+
+- name: Create /etc/timezone from /etc/localtime if missing
+  ansible.builtin.shell: |
+    readlink -f /etc/localtime | sed 's|.*/zoneinfo/||' > /etc/timezone
+  when: not etc_timezone.stat.exists
+  changed_when: not etc_timezone.stat.exists
+
 - name: Add user to Docker group (all platforms)
   ansible.builtin.user:
     name: "{{ lookup('env', 'USER') }}"
