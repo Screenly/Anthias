@@ -23,8 +23,6 @@
 
 Anthias is a digital signage platform for Raspberry Pi devices and PCs. Formerly known as Screenly OSE, it was rebranded to clear up the confusion between Screenly (the paid version) and Anthias. More details can be found in [this blog post](https://www.screenly.io/blog/2022/12/06/screenly-ose-now-called-anthias/).
 
-:tada: **NEW: Now with Raspberry Pi 5 Support!** :tada:
-
 Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.com/sponsors/Screenly).
 
 ## :rocket: Getting Started
@@ -32,10 +30,6 @@ Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.co
 See [this](/docs/installation-options.md) page for options on how to install Anthias.
 
 ## :white_check_mark: Compatibility
-
-> [!WARNING]
-> Anthias does not currently support devices running Debian Trixie.
-> Please use Debian Bookworm or Raspberry Pi OS Bookworm for the best experience.
 
 ### balenaOS
 
@@ -46,12 +40,12 @@ See [this](/docs/installation-options.md) page for options on how to install Ant
 
 ### Raspberry Pi OS
 
-* Raspberry Pi 5 Model B - 64-bit Bookworm **(NEW!)**
-* Raspberry Pi 4 Model B - 32-bit and 64-bit Bullseye, 64-bit Bookworm
-* Raspberry Pi 3 Model B+ - 32-bit and 64-bit Bullseye, 64-bit Bookworm
-* Raspberry Pi 3 Model B - 64-bit Bookworm and Bullseye
-* Raspberry Pi 2 Model B - 32-bit Bookworm and Bullseye
-* PC (x86 Devices) - 64-bit Bookworm
+* Raspberry Pi 5 Model B - 64-bit Trixie, 64-bit Bookworm
+* Raspberry Pi 4 Model B - 64-bit Trixie, 64-bit Bookworm
+* Raspberry Pi 3 Model B+ - 64-bit Trixie, 64-bit Bookworm
+* Raspberry Pi 3 Model B - 64-bit Trixie, 64-bit Bookworm
+* Raspberry Pi 2 Model B - 32-bit Trixie, 32-bit Bookworm
+* PC (x86 Devices) - 64-bit Trixie, 64-bit Bookworm
   * These devices can be something similar to a NUC.
   * See [this](/docs/x86-installation.md) page for instructions on how to install Debian in a specific way
     before running the [installation script](/docs/installation-options.md#installing-on-raspberry-pi-os-lite-or-debian).

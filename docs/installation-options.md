@@ -61,17 +61,13 @@ Starting with [v0.19.0](https://github.com/Screenly/Anthias/releases/tag/v0.19.0
 
 If you'd like more control over your digital signage instance, try installing it on Raspberry Pi OS Lite or Debian.
 
-> [!WARNING]
-> Anthias does not currently support devices running Debian Trixie.
-> Please use Debian Bookworm or Raspberry Pi OS Bookworm for the best experience.
-
 > [!IMPORTANT]
 > When installing on PC (x86) devices, make sure do follow the steps in the [x86 installation guide](/docs/x86-installation.md)
 > so that the installation script will work.
 
 > [!NOTE]
 > For Raspberry Pi 5:
-> * We recommend using the 64-bit version of Raspberry Pi OS Lite (Bookworm)
+> * We recommend using the 64-bit version of Raspberry Pi OS Lite (Trixie or Bookworm)
 > * 32-bit Raspberry Pi OS is not supported on Pi 5
 > * If you experience any issues, please report them either:
 >   * On our [forums](https://forums.screenly.io)
