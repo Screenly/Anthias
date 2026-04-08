@@ -1,25 +1,25 @@
 # Installing on x86
 
-Anthias currently supports installing on x86 devices running Debian 12 (Bookworm) via the installation script,
-which means that pre-built BalenaOS disk images are not yet available.
-To make sure that the script will work, you need to install Debian 12 in a specific way.
+Anthias supports installing on x86 devices running Debian 13 (Trixie) or Debian 12 (Bookworm) via the
+installation script, which means that pre-built BalenaOS disk images are not yet available.
+To make sure that the script will work, you need to install Debian in a specific way.
 
 ## Preparing the Disk Image
 
-You can download the disk image [here](https://cdimage.debian.org/mirror/cdimage/archive/12.11.0/amd64/iso-cd/).
-The file name should look something like `debian-12.x.x-amd64-netinst.iso`.
+You can download the disk image from the [official Debian website](https://www.debian.org/download).
+The file name should look something like `debian-13.x.x-amd64-netinst.iso`.
 
 ## Flashing the Disk Image to a USB Drive
 
 You can use [Balena Etcher](https://www.balena.io/etcher/) or Raspberry Pi Imager (via the `Use custom` option)
 to flash the disk image to a USB drive.
 
-## Installing Debian 12
+## Installing Debian
 
 * Make sure that the USB drive is plugged into the x86 device.
 * Make sure that the boot order is set to prioritize the USB drive.
 * Boot up the x86 device.
-* Follow the on-screen instructions to install Debian 12, while making sure to select the following options:
+* Follow the on-screen instructions to install Debian, while making sure to select the following options:
   * Do not set the root password so that the the non-root user will have `sudo` privileges.
   * Use the entire disk.
   * For **Software selection**, only leave the **SSH server** and **standard system utilities** selected.
@@ -53,5 +53,5 @@ to flash the disk image to a USB drive.
 
 ## References
 
-* [The Official Debian 12 Installation Guide](https://www.debian.org/releases/bookworm/amd64)
+* [The Official Debian Installation Guide](https://www.debian.org/releases/trixie/amd64)
 * [Step By Step Debian 12 Installation (with Screenshots) &middot; Sangoma](https://sangomakb.atlassian.net/wiki/spaces/FP/pages/295403538/Step+By+Step+Debian+12+Installation)

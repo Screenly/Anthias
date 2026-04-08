@@ -1,9 +1,5 @@
 # How to install on a Raspberry Pi 5 with PCI-e SSD
 
-> [!WARNING]
-> Anthias does not currently support devices running Debian Trixie.
-> Please use Raspberry Pi OS Bookworm for the best experience.
-
 ## Hardware
 
 The following guide has been tested using a Raspberry Pi 5 with 8GB RAM and a [GeeekPi P33 PoE+PCI-e HAT](https://pipci.jeffgeerling.com/hats/geeekpi-p33-m2-nvme-poe-hat.html).
@@ -18,7 +14,7 @@ Early Pi 5's do not support PCIe boot as part of the factory bootloader configur
 
 ## Installation
 
-Using the Raspberry Pi Imager and appropriate USB adapters, write the 64-bit version of **Raspberry Pi OS Lite (Bookworm)** to the microSD card. Depending on your deployment preference, you can either write the same OS or you can deploy the **BalenaOS** image to the SSD.
+Using the Raspberry Pi Imager and appropriate USB adapters, write the 64-bit version of **Raspberry Pi OS Lite (Trixie or Bookworm)** to the microSD card. Depending on your deployment preference, you can either write the same OS or you can deploy the **BalenaOS** image to the SSD.
 
 There are a few alternative ways to install:
 - Network boot (if enabled on the Pi)
