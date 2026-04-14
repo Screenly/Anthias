@@ -92,6 +92,7 @@ class VLCMediaPlayer(MediaPlayer):
         self.player.audio_output_device_set(
             'alsa', self.get_alsa_audio_device()
         )
+        self.player.get_media().parse()
 
     def play(self):
         self.player.play()
