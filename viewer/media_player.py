@@ -92,6 +92,11 @@ class VLCMediaPlayer(MediaPlayer):
         self.player.audio_output_device_set(
             'alsa', self.get_alsa_audio_device()
         )
+        # Use synchronous parse() to pre-load file metadata before play() is
+        # called. parse_with_options() is async and returns before metadata is
+        # ready, which negates the pre-loading benefit and causes the same
+        # startup gap we're trying to reduce.
+        self.player.get_media().parse()
 
     def play(self):
         self.player.play()

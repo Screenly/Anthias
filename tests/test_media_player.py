@@ -71,6 +71,36 @@ class TestMPVMediaPlayer(unittest.TestCase):
         self.assertIsNone(self.player.process)
 
 
+class TestVLCMediaPlayer(unittest.TestCase):
+    def setUp(self):
+        with patch.object(VLCMediaPlayer, '__init__', return_value=None):
+            self.player = VLCMediaPlayer()
+
+        self.mock_media = MagicMock()
+        self.mock_vlc_player = MagicMock()
+        self.mock_vlc_player.get_media.return_value = self.mock_media
+        self.player.player = self.mock_vlc_player
+
+        self.patch_settings = patch('viewer.media_player.settings')
+        self.patch_device_type = patch(
+            'viewer.media_player.get_device_type', return_value='pi4'
+        )
+
+        self.mock_settings = self.patch_settings.start()
+        self.mock_settings.__getitem__.return_value = 'hdmi'
+        self.patch_device_type.start()
+
+    def tearDown(self):
+        self.patch_settings.stop()
+        self.patch_device_type.stop()
+
+    def test_set_asset_invokes_parse(self):
+        self.player.set_asset('file:///test/video.mp4', 30)
+
+        self.mock_vlc_player.get_media.assert_called_once()
+        self.mock_media.parse.assert_called_once()
+
+
 class TestMediaPlayerProxy(unittest.TestCase):
     def setUp(self):
         MediaPlayerProxy.INSTANCE = None
