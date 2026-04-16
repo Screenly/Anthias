@@ -200,7 +200,7 @@ jobs:
           name: webview-${{ matrix.board }}
           path: ./build
       - name: Create a release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           prerelease: true
           files: |
