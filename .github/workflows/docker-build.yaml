@@ -1,9 +1,7 @@
 name: Docker Image Build
 
 on:
-  push:
-    branches:
-      - master
+  pull_request:
     paths:
       - '**'
       - '!.editorconfig'
@@ -104,8 +102,7 @@ jobs:
         run: |
           uv run python -m tools.image_builder \
             --build-target=${{ matrix.board }} \
-            --service=${{ matrix.service }} \
-            --push
+            --service=${{ matrix.service }}
 
       - name: Inspect cache after build
         run: |
