@@ -18,7 +18,6 @@ importlib-metadata==4.13.0
 Jinja2==3.1.6
 jsonschema==4.25.1
 kombu==5.5.4
-Mako==1.2.2
 netifaces==0.11.0
 psutil==7.2.1
 pyasn1==0.6.2
