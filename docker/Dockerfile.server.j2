@@ -6,12 +6,11 @@ WORKDIR /app
 
 COPY package.json \
     bun.lock \
-    bunfig.toml \
     tsconfig.json \
     /app/
 RUN bun install --frozen-lockfile
 
-COPY ./static/sass/ /app/static/sass/
+COPY ./static/sass/*.scss /app/static/sass/
 COPY ./static/src/ /app/static/src/
 RUN bun run build
 
