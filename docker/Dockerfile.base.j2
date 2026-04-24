@@ -3,7 +3,7 @@ FROM {{ base_image }}:{{ base_image_tag }}
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
-RUN --mount=type=cache,target=/var/cache/apt \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 {% endif %}
     apt-get update && \
     apt-get -y install --no-install-recommends \

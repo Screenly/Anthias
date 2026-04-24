@@ -7,7 +7,7 @@ FROM {{ base_image }}:{{ base_image_tag }} AS uv-builder
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
-RUN --mount=type=cache,target=/var/cache/apt \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 {% endif %}
     apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -28,7 +28,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.9.17 /uv /uvx /usr/local/bin/
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
-RUN --mount=type=cache,target=/var/cache/apt \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 {% endif %}
     apt-get update && \
     apt-get install -y --no-install-recommends \
