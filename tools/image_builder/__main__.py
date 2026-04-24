@@ -15,6 +15,7 @@ from tools.image_builder.utils import (
     get_build_parameters,
     get_docker_tag,
     get_test_context,
+    get_uv_builder_context,
     get_viewer_context,
     get_wifi_connect_context,
 )
@@ -92,6 +93,8 @@ def build_image(
         context.update(get_test_context())
     elif service == 'wifi-connect':
         context.update(get_wifi_connect_context(target_platform))
+
+    context.update(get_uv_builder_context(service))
 
     generate_dockerfile(
         service,

@@ -1,3 +1,5 @@
+{% include 'uv-builder.j2' %}
+
 {% include 'Dockerfile.base.j2' %}
 
 # vim: ft=dockerfile
@@ -40,25 +42,14 @@ RUN --mount=type=cache,target=/var/cache/apt \
 # WORKDIR /opt/ffmpeg
 # COPY --from=builder /opt/ffmpeg/ffserver ./
 
-ADD requirements/requirements.txt /tmp/requirements.txt
-ADD requirements/requirements.dev.txt /tmp/requirements.dev.txt
-ADD requirements/requirements.viewer.txt /tmp/requirements.viewer.txt
-
 RUN wget {{ chromedriver_dl_url }} -O /tmp/chromedriver.zip && \
     unzip -o /tmp/chromedriver.zip -d /opt
 RUN wget {{ chrome_dl_url }} -O /tmp/chrome.zip && \
     unzip -o /tmp/chrome.zip -d /opt
 
-{% if disable_cache_mounts %}
-RUN \
-{% else %}
-RUN --mount=type=cache,target=/root/.cache/pip \
-{% endif %}
-    pip3 install \
-        -r /tmp/requirements.txt \
-        -r /tmp/requirements.dev.txt \
-        -r /tmp/requirements.viewer.txt \
-        --break-system-packages
+COPY --from=uv-builder /venv /venv
+ENV PATH="/venv/bin:$PATH"
+ENV VIRTUAL_ENV="/venv"
 
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app
