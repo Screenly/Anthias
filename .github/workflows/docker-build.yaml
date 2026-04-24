@@ -46,15 +46,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           version: '0.9.17'
 
@@ -64,11 +64,11 @@ jobs:
           uv pip install --group docker-image-builder
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4
 
       - name: Set up Docker Buildx
         id: buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
         with:
           driver-opts: |
             image=moby/buildkit:latest
@@ -79,7 +79,7 @@ jobs:
           docker buildx inspect --bootstrap
 
       - name: Cache Docker layers
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         id: cache
         with:
           path: /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }}
@@ -93,7 +93,7 @@ jobs:
 
       - name: Login to Docker Hub
         if: success() && github.event_name == 'push'
-        uses: docker/login-action@v4
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
@@ -121,7 +121,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Set Docker tag
         run: |
@@ -152,7 +152,7 @@ jobs:
               balena-deploy/docker-compose.yml
           fi
 
-      - uses: balena-io/deploy-to-balena-action@master
+      - uses: balena-io/deploy-to-balena-action@638e3085dfe40b8c3cef2a34fe9d0874e572de4e # master
         id: build
         continue-on-error: true
         with:
@@ -167,7 +167,7 @@ jobs:
 
       # Balena deploy often fails with 'ESOCKETTIMEDOUT'.
       # This adds some retry logic.
-      - uses: balena-io/deploy-to-balena-action@master
+      - uses: balena-io/deploy-to-balena-action@638e3085dfe40b8c3cef2a34fe9d0874e572de4e # master
         id: build-retry
         if: ${{ failure() && steps.build.conclusion == 'failure' }}
         with:
