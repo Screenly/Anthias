@@ -8,6 +8,7 @@ dependencies = []
 
 [dependency-groups]
 dev-host = [
+    "ansible-lint==26.4.0",
     "ruff==0.14.10",
 ]
 docker-image-builder = [
