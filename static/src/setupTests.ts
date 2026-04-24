@@ -1,19 +1,15 @@
-import '@testing-library/jest-dom'
+import { afterEach } from 'bun:test'
+import { GlobalRegistrator } from '@happy-dom/global-registrator'
 
-Object.defineProperties(globalThis, {
-  WritableStream: {
-    value:
-      globalThis.WritableStream || require('node:stream/web').WritableStream,
-    writable: true,
-  },
-  ReadableStream: {
-    value:
-      globalThis.ReadableStream || require('node:stream/web').ReadableStream,
-    writable: true,
-  },
-  TransformStream: {
-    value:
-      globalThis.TransformStream || require('node:stream/web').TransformStream,
-    writable: true,
-  },
+const bunFetch = globalThis.fetch
+
+GlobalRegistrator.register({ url: 'http://localhost/' })
+
+globalThis.fetch = bunFetch
+
+const { cleanup } = await import('@testing-library/react')
+await import('@testing-library/jest-dom')
+
+afterEach(() => {
+  cleanup()
 })

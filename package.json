@@ -2,13 +2,17 @@
   "name": "anthias",
   "version": "1.0.0",
   "scripts": {
-    "dev": "webpack --watch --config webpack.dev.js",
-    "build": "webpack --config webpack.prod.js",
+    "build:js": "bun build ./static/src/index.tsx --outfile=./static/dist/js/anthias.js --target=browser --minify --define process.env.NODE_ENV='\"production\"' --define process.env.ENVIRONMENT='\"production\"'",
+    "build:css": "bunx sass static/sass/anthias.scss static/dist/css/anthias.css --style=compressed --quiet-deps --silence-deprecation=import,global-builtin,color-functions,if-function",
+    "build": "bun run build:js && bun run build:css",
+    "dev:js": "bun build ./static/src/index.tsx --outfile=./static/dist/js/anthias.js --target=browser --sourcemap=linked --watch --define process.env.NODE_ENV='\"development\"' --define process.env.ENVIRONMENT='\"development\"'",
+    "dev:css": "bunx sass static/sass/anthias.scss static/dist/css/anthias.css --watch --quiet-deps --silence-deprecation=import,global-builtin,color-functions,if-function",
+    "dev": "bun run dev:js & bun run dev:css & wait",
     "lint:check": "eslint static/src",
     "lint:fix": "eslint static/src --fix",
     "format:check": "prettier --check static/src",
     "format:fix": "prettier --write static/src",
-    "test": "jest --silent"
+    "test": "bun test"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",
@@ -26,40 +30,23 @@
     "sweetalert2": "^11.26.23"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.0",
-    "@babel/preset-env": "^7.29.2",
-    "@babel/preset-react": "^7.28.5",
-    "@babel/preset-typescript": "^7.28.5",
     "@eslint-react/eslint-plugin": "^4.2.1",
+    "@happy-dom/global-registrator": "^15.11.7",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/bootstrap": "^5.2.10",
-    "@types/jest": "^30.0.0",
     "@types/jquery": "^4.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@typescript-eslint/eslint-plugin": "^8.58.0",
     "@typescript-eslint/parser": "^8.58.0",
-    "babel-loader": "^10.1.1",
     "classnames": "^2.5.1",
-    "css-loader": "^7.1.4",
     "eslint": "^10.1.0",
-    "jest": "^30.3.0",
-    "jest-environment-jsdom": "^30.3.0",
-    "jest-fixed-jsdom": "^0.0.11",
-    "mini-css-extract-plugin": "^2.10.1",
     "msw": "^2.12.12",
     "prettier": "3.8.1",
     "sass": "^1.98.0",
-    "sass-loader": "^16.0.7",
-    "ts-jest": "^29.4.6",
-    "ts-loader": "^9.5.4",
-    "tsconfig-paths-webpack-plugin": "^4.2.0",
-    "typescript": "^5.9.3",
-    "webpack": "^5.105.4",
-    "webpack-cli": "^7.0.1",
-    "webpack-merge": "^6.0.1"
+    "typescript": "^5.9.3"
   }
 }

@@ -1,6 +1,6 @@
 import React from 'react'
 import classNames from 'classnames'
-import { FormData } from '@/types'
+import type { FormData } from '@/types'
 
 interface UriTabProps {
   formData: FormData
