@@ -24,7 +24,7 @@ jobs:
         run: |
           echo ${{ inputs.docker-tag }} > docker-tag
       - name: Upload docker tag file
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: docker-tag
           path: docker-tag
@@ -45,7 +45,7 @@ jobs:
       attestations: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install zstd
         run: |
@@ -53,7 +53,7 @@ jobs:
           sudo apt-get install -y zstd
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '22.21.0'
 
@@ -136,7 +136,7 @@ jobs:
           ls -la ./*raspberry*
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: balena-images-${{ matrix.board }}
           path: |
@@ -145,7 +145,7 @@ jobs:
             ./*raspberry*.json
 
       - name: Attest
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
         with:
           subject-path: '${{ github.workspace }}/*raspberry*.img.zst'
 
@@ -156,26 +156,26 @@ jobs:
       contents: write
     steps:
       - name: Download docker tag
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: docker-tag
           path: .
 
       - name: Download OpenAPI schema
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: anthias-api-schema
           path: .
 
       - name: Download balena images
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: balena-images-*
           path: .
           merge-multiple: true
 
       - name: Create release
-        uses: ncipollo/release-action@v1.21.0
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
         with:
           allowUpdates: true
           generateReleaseNotes: true
