@@ -57,5 +57,5 @@ jobs:
         uv export --group host --no-hashes --no-annotate \
           --no-emit-project --no-default-groups \
           -o /tmp/requirements.host.txt
-        diff <(grep -v '^#' /tmp/requirements.host.txt) \
-             <(grep -v '^#' requirements/requirements.host.txt)
+        diff -u <(grep -v '^#' requirements/requirements.host.txt) \
+                <(grep -v '^#' /tmp/requirements.host.txt)

@@ -9,7 +9,7 @@ import sh
 # wait for default route
 def is_routing_up():
     try:
-        sh.grep(sh.route(), 'default')
+        sh.grep('default', _in=sh.route())
         return True
     except sh.ErrorReturnCode_1:
         return False
