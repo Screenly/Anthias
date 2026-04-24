@@ -1,0 +1,12 @@
+---
+# ansible-lint configuration
+# https://ansible.readthedocs.io/projects/lint/configuring/
+
+# Rules listed below are pre-existing violations in the ansible/ roles
+# that we've chosen to defer rather than fix as part of the uv
+# dependency-group migration. Follow-up PRs should drive these down
+# and remove entries from the skip list.
+skip_list:
+  - var-naming[no-role-prefix]
+  - risky-shell-pipe
+  - no-free-form

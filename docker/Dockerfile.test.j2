@@ -25,7 +25,7 @@ ENV DEBIAN_FRONTEND noninteractive
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
-RUN --mount=type=cache,target=/var/cache/apt \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 {% endif %}
     apt-get -y install \
     {% for dependency in apt_dependencies %}
