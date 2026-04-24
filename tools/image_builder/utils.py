@@ -76,6 +76,36 @@ def generate_dockerfile(service: str, context: dict) -> None:
         f.write(dockerfile)
 
 
+def get_uv_builder_context(service: str) -> dict:
+    service_to_group = {
+        'server': 'server',
+        'celery': 'server',
+        'websocket': 'websocket',
+        'wifi-connect': 'wifi-connect',
+        'viewer': 'viewer',
+        'test': 'test',
+    }
+
+    uv_group = service_to_group.get(service)
+    if uv_group is None:
+        return {}
+
+    groups_needing_native_build_libs = {'server', 'viewer', 'test'}
+    builder_extra_apt = []
+    if uv_group in groups_needing_native_build_libs:
+        builder_extra_apt = [
+            'libcec-dev',
+            'libdbus-1-dev',
+            'libdbus-glib-1-dev',
+        ]
+
+    return {
+        'uv_group': uv_group,
+        'builder_extra_apt': builder_extra_apt,
+        'uv_system_site_packages': service in {'viewer', 'test'},
+    }
+
+
 def get_test_context() -> dict:
     chrome_dl_url = (
         'https://storage.googleapis.com/chrome-for-testing-public/'

@@ -1,0 +1,64 @@
+# syntax=docker/dockerfile:1.4
+# vim: ft=dockerfile
+
+FROM {{ base_image }}:{{ base_image_tag }} AS uv-builder
+
+{% if board in ['pi1', 'pi2'] %}
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/var/cache/apt \
+{% endif %}
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        libffi-dev \
+        libssl-dev \
+        libzmq3-dev \
+        python3 \
+        python3-dev \
+        python3-pip \
+{% for dep in builder_extra_apt | default([]) %}
+        {{ dep }} \
+{% endfor %}
+        ca-certificates && \
+    pip3 install uv --break-system-packages
+{% else %}
+COPY --from=ghcr.io/astral-sh/uv:0.9.17 /uv /uvx /usr/local/bin/
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/var/cache/apt \
+{% endif %}
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        libffi-dev \
+        libssl-dev \
+        libzmq3-dev \
+        python3 \
+        python3-dev \
+{% for dep in builder_extra_apt | default([]) %}
+        {{ dep }} \
+{% endfor %}
+        ca-certificates
+{% endif %}
+
+ENV UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    UV_PYTHON=/usr/bin/python3.11 \
+    UV_PROJECT_ENVIRONMENT=/venv
+
+WORKDIR /app
+COPY pyproject.toml uv.lock /app/
+
+{% if uv_system_site_packages %}
+RUN uv venv --system-site-packages --python /usr/bin/python3.11 /venv
+{% endif %}
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/root/.cache/uv \
+{% endif %}
+    uv sync --frozen --no-install-project --no-default-groups \
+        --group {{ uv_group }}

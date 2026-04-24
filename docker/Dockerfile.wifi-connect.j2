@@ -1,3 +1,5 @@
+{% include 'uv-builder.j2' %}
+
 {% include 'Dockerfile.base.j2' %}
 
 {% if disable_cache_mounts %}
@@ -24,13 +26,9 @@ RUN if [[ ! -z "{{ archive_url }}" ]]; then \
     unzip -o /tmp/wifi_connect.zip -d /usr/src/app && \
     rm /tmp/wifi_connect.zip; fi
 
-COPY requirements/requirements.wifi-connect.txt /tmp/requirements.txt
-{% if disable_cache_mounts %}
-RUN \
-{% else %}
-RUN --mount=type=cache,target=/root/.cache/pip \
-{% endif %}
-    pip3 install -r /tmp/requirements.txt --break-system-packages
+COPY --from=uv-builder /venv /venv
+ENV PATH="/venv/bin:$PATH"
+ENV VIRTUAL_ENV="/venv"
 
 COPY send_zmq_message.py ./
 

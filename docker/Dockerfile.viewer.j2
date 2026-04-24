@@ -1,5 +1,4 @@
-# syntax=docker/dockerfile:1.4
-# vim: ft=dockerfile
+{% include 'uv-builder.j2' %}
 
 FROM {{ base_image }}:{{ base_image_tag }}
 
@@ -19,25 +18,9 @@ RUN --mount=type=cache,target=/var/cache/apt \
         {% endif %}
     {% endfor %}
 
-# We need this to ensure that the wheels can be built.
-# Otherwise we get "invalid command 'bdist_wheel'"
-{% if disable_cache_mounts %}
-RUN \
-{% else %}
-RUN --mount=type=cache,target=/root/.cache/pip \
-{% endif %}
-    pip3 install --upgrade pip --break-system-packages && \
-    pip3 install wheel --break-system-packages
-
-# Install Python requirements
-COPY requirements/requirements.viewer.txt /tmp/requirements.txt
-
-{% if disable_cache_mounts %}
-RUN \
-{% else %}
-RUN --mount=type=cache,target=/root/.cache/pip \
-{% endif %}
-    pip3 install -r /tmp/requirements.txt --break-system-packages
+COPY --from=uv-builder /venv /venv
+ENV PATH="/venv/bin:$PATH"
+ENV VIRTUAL_ENV="/venv"
 
 # Works around issue with `curl`
 # https://github.com/balena-io-library/base-images/issues/562
