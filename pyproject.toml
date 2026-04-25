@@ -110,7 +110,7 @@ dev = [
     "unittest-parametrize==1.8.0",
 ]
 host = [
-    "ansible-core==2.18.3",
+    "ansible-core==2.19.9",
     "getmac==0.9.5",
     "netifaces2==0.0.22",
     "redis==7.4.0",
