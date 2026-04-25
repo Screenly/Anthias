@@ -15,7 +15,6 @@ GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
 DOCKER_TAG="latest"
 UPGRADE_SCRIPT_PATH="${ANTHIAS_REPO_DIR}/bin/upgrade_containers.sh"
 ARCHITECTURE=$(uname -m)
-DISTRO_VERSION=$(lsb_release -rs)
 
 INTRO_MESSAGE=(
     "Anthias requires a dedicated Raspberry Pi and an SD card."
@@ -40,7 +39,6 @@ VERSION_PROMPT_CHOICES=(
 SYSTEM_UPGRADE_PROMPT=(
     "Would you like to perform a full system upgrade as well?"
 )
-SUDO_ARGS=()
 
 TITLE_TEXT=$(cat <<EOF
      @@@@@@@@@
@@ -123,25 +121,13 @@ function install_packages() {
     display_section "Install Packages via APT"
 
     local APT_INSTALL_ARGS=(
+        "ca-certificates"
+        "curl"
         "git"
         "libffi-dev"
         "libssl-dev"
         "whois"
     )
-
-    if [ "$DISTRO_VERSION" -ge 12 ]; then
-        APT_INSTALL_ARGS+=(
-            "python3-dev"
-            "python3-full"
-        )
-    else
-        APT_INSTALL_ARGS+=(
-            "python3"
-            "python3-dev"
-            "python3-pip"
-            "python3-venv"
-        )
-    fi
 
     if [ "$MANAGE_NETWORK" = "Yes" ]; then
         APT_INSTALL_ARGS+=("network-manager")
@@ -156,33 +142,35 @@ function install_packages() {
     sudo apt-get install -y "${APT_INSTALL_ARGS[@]}"
 }
 
+function clone_repo() {
+    display_section "Clone Anthias Repository"
+
+    if [ ! -d "${ANTHIAS_REPO_DIR}/.git" ]; then
+        git clone "${REPOSITORY}" "${ANTHIAS_REPO_DIR}"
+    fi
+    git -C "${ANTHIAS_REPO_DIR}" fetch --tags origin
+    git -C "${ANTHIAS_REPO_DIR}" checkout "${BRANCH}"
+    git -C "${ANTHIAS_REPO_DIR}" reset --hard "origin/${BRANCH}"
+}
+
 function install_ansible() {
-    display_section "Install Ansible"
+    display_section "Install uv and host Python dependencies"
 
-    REQUIREMENTS_URL="$GITHUB_RAW_URL/$BRANCH/requirements/requirements.host.txt"
-    if [ "$DISTRO_VERSION" -le 11 ]; then
-        ANSIBLE_VERSION="ansible-core==2.15.9"
-    else
-        ANSIBLE_VERSION=$(curl -s $REQUIREMENTS_URL | grep ansible)
+    # uv manages its own Python and packages — no system pip/venv needed.
+    if ! command -v uv &> /dev/null; then
+        curl -LsSf https://astral.sh/uv/install.sh | sh
     fi
+    export PATH="$HOME/.local/bin:$PATH"
 
-    SUDO_ARGS=()
-
-    if python3 -c "import venv" &> /dev/null; then
-        gum format 'Module `venv` is detected. Activating virtual environment...'
-
-        echo
-
-        python3 -m venv /home/${USER}/installer_venv
-        source /home/${USER}/installer_venv/bin/activate
-
-        SUDO_ARGS+=("--preserve-env" "env" "PATH=$PATH")
-    fi
-
-    # @TODO: Remove me later. Cryptography 38.0.3 won't build at the moment.
-    # See https://github.com/Screenly/Anthias/issues/1654 for details.
-    sudo ${SUDO_ARGS[@]} pip install cryptography==38.0.1
-    sudo ${SUDO_ARGS[@]} pip install "$ANSIBLE_VERSION"
+    # Resolve and install the `host` dependency group from pyproject.toml
+    # into installer_venv. uv will fetch a compatible Python automatically
+    # (the project requires >=3.11), so this works on Debian 11 too.
+    UV_PROJECT_ENVIRONMENT="/home/${USER}/installer_venv" \
+        uv sync \
+            --project "${ANTHIAS_REPO_DIR}" \
+            --no-default-groups \
+            --group host \
+            --no-install-project
 }
 
 function set_device_type() {
@@ -205,13 +193,10 @@ function run_ansible_playbook() {
     display_section "Run the Anthias Ansible Playbook"
     set_device_type
 
-    sudo -u ${USER} ${SUDO_ARGS[@]} ansible localhost \
-        -m git \
-        -a "repo=$REPOSITORY dest=${ANTHIAS_REPO_DIR} version=${BRANCH} force=yes"
-    cd ${ANTHIAS_REPO_DIR}/ansible
+    cd "${ANTHIAS_REPO_DIR}/ansible"
 
     if [ "$ARCHITECTURE" == "x86_64" ]; then
-        if [ ! -f /etc/sudoers.d/010_${USER}-nopasswd ]; then
+        if [ ! -f "/etc/sudoers.d/010_${USER}-nopasswd" ]; then
             ANSIBLE_PLAYBOOK_ARGS+=("--ask-become-pass")
         fi
 
@@ -220,8 +205,9 @@ function run_ansible_playbook() {
         )
     fi
 
-    sudo -E -u ${USER} ${SUDO_ARGS[@]} \
-        ansible-playbook site.yml "${ANSIBLE_PLAYBOOK_ARGS[@]}"
+    sudo -E -u "${USER}" \
+        "/home/${USER}/installer_venv/bin/ansible-playbook" \
+        site.yml "${ANSIBLE_PLAYBOOK_ARGS[@]}"
 }
 
 function upgrade_docker_containers() {
@@ -395,13 +381,10 @@ function main() {
     gum format "**System Upgrade:**     ${SYSTEM_UPGRADE}"
     gum format "**Docker Tag Prefix:**  \`${DOCKER_TAG}\`"
 
-    if [ ! -d "${ANTHIAS_REPO_DIR}" ]; then
-        mkdir "${ANTHIAS_REPO_DIR}"
-    fi
-
     initialize_ansible
     initialize_locales
     install_packages
+    clone_repo
     install_ansible
     run_ansible_playbook
 

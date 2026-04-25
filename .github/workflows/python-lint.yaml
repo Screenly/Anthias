@@ -7,7 +7,6 @@ on:
     paths:
       - pyproject.toml
       - uv.lock
-      - 'requirements/requirements.host.txt'
       - '**/*.py'
       - '.github/workflows/python-lint.yaml'
   pull_request:
@@ -16,7 +15,6 @@ on:
     paths:
       - pyproject.toml
       - uv.lock
-      - 'requirements/requirements.host.txt'
       - '**/*.py'
       - '.github/workflows/python-lint.yaml'
 
@@ -51,11 +49,3 @@ jobs:
     - name: Run Ruff formatting checks
       run: |
         uv run ruff format --check .
-
-    - name: Verify requirements/requirements.host.txt is in sync
-      run: |
-        uv export --group host --no-hashes --no-annotate \
-          --no-emit-project --no-default-groups \
-          -o /tmp/requirements.host.txt
-        diff -u <(grep -v '^#' requirements/requirements.host.txt) \
-                <(grep -v '^#' /tmp/requirements.host.txt)

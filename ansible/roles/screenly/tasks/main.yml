@@ -35,28 +35,19 @@
     state: absent
     dest: "/home/{{ anthias_user }}/.screenly/screenly.conf"
 
-- name: Install pip dependencies
-  ansible.builtin.pip:
-    executable: "/home/{{ anthias_user }}/installer_venv/bin/pip"
-    requirements: "/home/{{ anthias_user }}/screenly/requirements/requirements.host.txt"
-    extra_args: "--no-cache-dir --upgrade"
-  when: ansible_distribution_major_version | int >= 12
-
-# Debian 11 ships Python 3.9. ansible-core 2.16+ requires Python 3.10+
-# on the controller, so we pin to the last 2.15.x release for that
-# branch only. Other deps track the host group where Py3.9 supports it.
-- name: Install pip dependencies (Debian 11)
-  ansible.builtin.pip:
-    executable: "/home/{{ anthias_user }}/installer_venv/bin/pip"
-    name:
-      - ansible-core==2.15.13
-      - getmac==0.9.5
-      - netifaces2==0.0.22
-      - redis==7.4.0
-      - "requests[security]==2.33.1"
-      - tenacity==9.1.2
-    extra_args: "--no-cache-dir --upgrade"
-  when: ansible_distribution_major_version | int <= 11
+- name: Sync host pip dependencies via uv
+  ansible.builtin.command:
+    cmd: >-
+      /home/{{ anthias_user }}/.local/bin/uv sync
+        --no-default-groups
+        --group host
+        --no-install-project
+    chdir: "/home/{{ anthias_user }}/screenly"
+  environment:
+    UV_PROJECT_ENVIRONMENT: "/home/{{ anthias_user }}/installer_venv"
+  become: false
+  register: screenly_uv_sync
+  changed_when: "'Installed' in screenly_uv_sync.stderr or 'Updated' in screenly_uv_sync.stderr"
 
 - name: Remove screenly_utils.sh
   ansible.builtin.file:
