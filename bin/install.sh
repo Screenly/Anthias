@@ -162,10 +162,18 @@ function install_ansible() {
     fi
     export PATH="$HOME/.local/bin:$PATH"
 
-    # Resolve and install the `host` dependency group from pyproject.toml
-    # into installer_venv. uv will fetch a compatible Python automatically
-    # (the project requires >=3.11), so this works on Debian 11 too.
-    UV_PROJECT_ENVIRONMENT="/home/${USER}/installer_venv" \
+    # On upgrade from a pre-uv install, replace any installer_venv that
+    # was built by `python3 -m venv` so uv can take it over cleanly.
+    local INSTALLER_VENV="/home/${USER}/installer_venv"
+    if [ -d "${INSTALLER_VENV}" ] && \
+        ! grep -q '^uv = ' "${INSTALLER_VENV}/pyvenv.cfg" 2>/dev/null; then
+        rm -rf "${INSTALLER_VENV}"
+    fi
+
+    # Resolve and install the `host` dependency group from pyproject.toml.
+    # uv will fetch a compatible Python automatically (the project requires
+    # >=3.11), so this works on Debian 11 too.
+    UV_PROJECT_ENVIRONMENT="${INSTALLER_VENV}" \
         uv sync \
             --project "${ANTHIAS_REPO_DIR}" \
             --no-default-groups \
