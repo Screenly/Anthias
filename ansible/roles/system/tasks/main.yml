@@ -194,20 +194,20 @@
 
 - name: Set fact for cdefs
   ansible.builtin.set_fact:
-    system_cdefs_exist: "{{ system_cdefs.stat.exists }}"
+    system_cdefs_exists: "{{ system_cdefs.stat.exists }}"
 
 - name: Remove libc6-dev
   ansible.builtin.apt:
     name: libc6-dev
     state: absent
-  when: not system_cdefs_exist
+  when: not system_cdefs_exists
 
 - name: Install libc6-dev
   ansible.builtin.apt:
     name: libc6-dev
     state: present
     update_cache: true
-  when: not system_cdefs_exist
+  when: not system_cdefs_exists
 
 - name: Install Anthias dependencies (all platforms)
   ansible.builtin.apt:
