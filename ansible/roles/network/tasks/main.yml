@@ -1,14 +1,5 @@
 ---
-- name: Check if screenly-network-manager files exist
-  ansible.builtin.stat:
-    path: /usr/sbin/screenly_net_mgr.py
-  register: network_manager_stat
-
-- name: Check if screenly-network-manager is set
-  ansible.builtin.set_fact:
-    network_manager_exists: "{{ network_manager_stat.stat.exists }}"
-
-- name: Copy network systemd units
+- name: Install network systemd units
   ansible.builtin.template:
     src: "{{ item }}"
     dest: "/etc/systemd/system/{{ item }}"
@@ -22,42 +13,8 @@
     name: "{{ item }}"
     state: started
     enabled: true
+    daemon_reload: true
   with_items: "{{ network_systemd_units }}"
-
-- name: Disable network manager
-  ansible.builtin.systemd:
-    state: stopped
-    name: screenly-net-manager.service
-    enabled: false
-  when: network_manager_exists
-
-- name: Disable network watchdog
-  ansible.builtin.systemd:
-    state: stopped
-    name: screenly-net-watchdog.timer
-    enabled: false
-  when: network_manager_exists
-
-- name: Remove network manager and watchdog
-  ansible.builtin.file:
-    state: absent
-    path: "/usr/sbin/{{ item }}"
-  with_items:
-    - screenly_net_mgr.py
-    - screenly_net_watchdog.py
-
-- name: Remove network manager and watchdog unit files
-  ansible.builtin.file:
-    state: absent
-    path: "/etc/systemd/system/{{ item }}"
-  with_items:
-    - screenly-net-manager.service
-    - screenly-net-watchdog.service
-
-- name: Remove network watchdog timer file
-  ansible.builtin.file:
-    state: absent
-    path: /etc/systemd/system/screenly-net-watchdog.timer
 
 - name: Debug msg for manage network
   ansible.builtin.debug:

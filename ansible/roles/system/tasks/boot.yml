@@ -1,0 +1,123 @@
+---
+- name: Resolve boot config and cmdline paths
+  ansible.builtin.set_fact:
+    system_config_path: "{{ '/boot/config.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/config.txt' }}"
+    system_cmdline_path: "{{ '/boot/cmdline.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/cmdline.txt' }}"
+
+- name: Check NOOBS
+  ansible.builtin.command: cat {{ system_config_path }}
+  register: system_config_txt
+  changed_when: false
+
+- name: Make sure we have proper framebuffer depth
+  ansible.builtin.lineinfile:
+    dest: "{{ system_config_path }}"
+    regexp: ^framebuffer_depth=
+    line: framebuffer_depth=32
+
+- name: Fix framebuffer bug
+  ansible.builtin.lineinfile:
+    dest: "{{ system_config_path }}"
+    regexp: ^framebuffer_ignore_alpha=
+    line: framebuffer_ignore_alpha=1
+
+- name: Add gpu_mem_256 in config.txt if it doesn't exist
+  ansible.builtin.lineinfile:
+    path: "{{ system_config_path }}"
+    line: gpu_mem_256=96
+  when: system_config_txt.stdout.find('gpu_mem_256') == -1
+
+- name: Add gpu_mem_512 in config.txt if it doesn't exist
+  ansible.builtin.lineinfile:
+    path: "{{ system_config_path }}"
+    line: gpu_mem_512=128
+  when: system_config_txt.stdout.find('gpu_mem_512') == -1
+
+- name: Add gpu_mem_1024 in config.txt if it doesn't exist
+  ansible.builtin.lineinfile:
+    path: "{{ system_config_path }}"
+    line: gpu_mem_1024=196
+  when: system_config_txt.stdout.find('gpu_mem_1024') == -1
+
+- name: Add pi4 section in config.txt if it doesn't exist
+  ansible.builtin.lineinfile:
+    path: "{{ system_config_path }}"
+    line: "\n[pi4]"
+  when: system_config_txt.stdout.find('[pi4]') == -1
+
+- name: Uncomment out the original dtoverlay config.
+  ansible.builtin.replace:
+    dest: "{{ system_config_path }}"
+    regexp: '^#\s*(dtoverlay=vc4-kms-v3d)'
+    replace: '\1'
+
+- name: Remove the FKMS config for all devices.
+  ansible.builtin.lineinfile:
+    path: "{{ system_config_path }}"
+    state: absent
+    regexp: "^dtoverlay=vc4-fkms-v3d$"
+
+- name: Backup kernel boot args
+  ansible.builtin.copy:
+    src: "{{ system_cmdline_path }}"
+    dest: "{{ system_cmdline_path }}.orig"
+    owner: root
+    group: root
+    mode: "0755"
+    force: false
+
+- name: Notice for cmdline.txt.orig file
+  ansible.builtin.debug:
+    msg: "Use cmdline.txt.orig for boot parameters (don't remove this file)"
+
+- name: Copy cmdline.txt.orig to cmdline.txt
+  ansible.builtin.copy:
+    src: "{{ system_cmdline_path }}.orig"
+    dest: "{{ system_cmdline_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    force: true
+  when: system_config_txt.stdout.find('NOOBS') == -1
+
+- name: For splash screen using Plymouth
+  ansible.builtin.replace:
+    dest: "{{ system_cmdline_path }}"
+    regexp: (^(?!$)((?!splash).)*$)
+    replace: \1 splash
+
+- name: Remove blinking cursor
+  ansible.builtin.replace:
+    dest: "{{ system_cmdline_path }}"
+    regexp: (^(?!$)((?!vt.global_cursor_default=0).)*$)
+    replace: \1 vt.global_cursor_default=0
+
+- name: Plymouth ignore serial consoles
+  ansible.builtin.replace:
+    dest: "{{ system_cmdline_path }}"
+    regexp: (^(?!$)((?!plymouth.ignore-serial-consoles).)*$)
+    replace: \1 plymouth.ignore-serial-consoles
+
+- name: Use Systemd as init and quiet boot process
+  ansible.builtin.replace:
+    dest: "{{ system_cmdline_path }}"
+    regexp: (^(?!$)((?!quiet init=/lib/systemd/systemd).)*$)
+    replace: \1 quiet init=/lib/systemd/systemd
+
+- name: Set ethN/wlanN names for interfaces
+  ansible.builtin.replace:
+    dest: "{{ system_cmdline_path }}"
+    regexp: (^(?!$)((?!net\.ifnames=0).)*$)
+    replace: \1 net.ifnames=0
+
+- name: Set cgroup_enable required by containerd for OOM
+  ansible.builtin.replace:
+    dest: "{{ system_cmdline_path }}"
+    regexp: (^(?!$)((?!cgroup_enable=memory).)*$)
+    replace: \1 cgroup_enable=memory
+
+- name: Set cgroup_memory required by containerd for OOM
+  ansible.builtin.replace:
+    dest: "{{ system_cmdline_path }}"
+    regexp: (^(?!$)((?!cgroup_memory=1).)*$)
+    replace: \1 cgroup_memory=1

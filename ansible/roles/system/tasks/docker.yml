@@ -1,0 +1,70 @@
+---
+- name: Create keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Add Docker apt key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/debian/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Set system_architecture
+  ansible.builtin.set_fact:
+    system_architecture: >-
+      {{
+        'amd64' if ansible_architecture == 'x86_64'
+        else ('arm64' if device_type in ['pi4', 'pi5']
+                          and ansible_userspace_bits == '64'
+        else 'armhf')
+      }}
+
+- name: Add Docker repo
+  ansible.builtin.lineinfile:
+    path: /etc/apt/sources.list.d/docker.list
+    create: true
+    line: >-
+      deb [arch={{ system_architecture }}
+      signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/debian
+      {{ ansible_distribution_release }} stable
+    state: present
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Docker
+  ansible.builtin.apt:
+    name:
+      - docker-ce:{{ system_architecture }}
+      - docker-ce-cli:{{ system_architecture }}
+      - docker-compose-plugin:{{ system_architecture }}
+    update_cache: true
+    install_recommends: false
+
+- name: Ensure Anthias user is in required groups
+  ansible.builtin.user:
+    name: "{{ anthias_user }}"
+    group: "{{ anthias_user }}"
+    append: true
+    groups: "{{ anthias_base_groups + (anthias_pi_groups if is_raspberry_pi else []) }}"
+  vars:
+    anthias_base_groups:
+      - docker
+      - adm
+      - sudo
+      - video
+      - plugdev
+      - users
+      - input
+      - netdev
+      - dialout
+    anthias_pi_groups:
+      - gpio
+    is_raspberry_pi: "{{ ansible_architecture in ['aarch64', 'armv7l', 'armv6l'] }}"

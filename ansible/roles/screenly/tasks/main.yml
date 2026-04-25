@@ -49,32 +49,20 @@
   register: screenly_uv_sync
   changed_when: "'Installed' in screenly_uv_sync.stderr or 'Updated' in screenly_uv_sync.stderr"
 
-- name: Remove screenly_utils.sh
-  ansible.builtin.file:
-    state: absent
-    path: /usr/local/bin/screenly_utils.sh
-
-- name: Cron job to cleanup screenly_assets
-  ansible.builtin.cron:
-    name: Cleanup screenly_assets
-    state: absent
-    user: "{{ anthias_user }}"
-
-- name: Download upgrade script from github repository
+# install.sh is the single source of truth for both fresh installs and
+# upgrades. We re-download it from the same ref each run so users can
+# pull in fixes without re-installing. No checksum is pinned because
+# the URL itself moves; integrity is bounded by HTTPS to githubusercontent
+# and by the pre-install user prompt that runs the script. If we ever
+# adopt signed releases, switch to fetching the signed asset by tag.
+- name: Install upgrade_anthias.sh from the current branch
   ansible.builtin.get_url:
-    url: https://raw.githubusercontent.com/Screenly/Anthias/master/bin/install.sh
+    url: "https://raw.githubusercontent.com/Screenly/Anthias/master/bin/install.sh"
     dest: /usr/local/sbin/upgrade_anthias.sh
     mode: "0700"
     owner: root
     group: root
     force: true
-
-- name: Remove the old upgrade script
-  ansible.builtin.file:
-    state: absent
-    path: /usr/local/sbin/upgrade_screenly.sh
-    owner: root
-    group: root
 
 - name: Install sudoers rule for Anthias user
   ansible.builtin.template:
@@ -85,19 +73,7 @@
     group: root
     validate: /usr/sbin/visudo -cf %s
 
-- name: Remove /usr/local/bin/screenly_usb_assets.sh (deprecated)
-  ansible.builtin.file:
-    state: absent
-    path: /usr/local/bin/screenly_usb_assets.sh
-    owner: root
-    group: root
-
-- name: Cleans up autoplay udev rule
-  ansible.builtin.file:
-    state: absent
-    path: /etc/udev/rules.d/50-autoplay.rules
-
-- name: Copy screenly systemd units
+- name: Install Anthias systemd units
   ansible.builtin.template:
     src: "{{ item }}"
     dest: "/etc/systemd/system/{{ item }}"
@@ -106,49 +82,10 @@
     group: root
   with_items: "{{ screenly_systemd_units }}"
 
-- name: Remove plymouth-quit-wait.service
-  ansible.builtin.file:
-    state: absent
-    dest: /lib/systemd/system/plymouth-quit-wait.service
-
-- name: Remove plymouth-quit.service
-  ansible.builtin.file:
-    state: absent
-    dest: /lib/systemd/system/plymouth-quit.service
-
-- name: Enable screenly systemd services
+- name: Enable Anthias systemd services
   ansible.builtin.systemd:
     name: "{{ item }}"
     state: started
     enabled: true
+    daemon_reload: true
   with_items: "{{ screenly_systemd_units }}"
-
-- name: Check if deprecated systemd services exists
-  ansible.builtin.stat:
-    path: /etc/systemd/system/X.service
-  register: screenly_x_service
-
-- name: Set screenly_x_service_exists fact
-  ansible.builtin.set_fact:
-    screenly_x_service_exists: "{{ screenly_x_service.stat.exists }}"
-
-- name: Disable deprecated systemd services
-  ansible.builtin.systemd:
-    name: "{{ item }}"
-    state: stopped
-    enabled: false
-  with_items: "{{ screenly_deprecated_systemd_units }}"
-  when: screenly_x_service_exists
-
-- name: Remove deprecated systemd units
-  ansible.builtin.file:
-    path: "/etc/systemd/system/{{ item }}"
-    state: absent
-  with_items: "{{ screenly_deprecated_systemd_units }}"
-
-- name: Remove the ngrok binary
-  ansible.builtin.file:
-    path: "/usr/local/bin/ngrok"
-    state: absent
-    owner: root
-    group: root
