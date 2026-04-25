@@ -164,7 +164,7 @@ def load_browser():
 def view_webpage(uri):
     global current_browser_url
 
-    if browser is None or not browser.process.is_alive()[0]:
+    if browser is None or not browser.is_alive():
         load_browser()
     if current_browser_url is not uri:
         browser_bus.loadPage(uri)
@@ -175,7 +175,7 @@ def view_webpage(uri):
 def view_image(uri):
     global current_browser_url
 
-    if browser is None or not browser.process.is_alive()[0]:
+    if browser is None or not browser.is_alive():
         load_browser()
     if current_browser_url is not uri:
         browser_bus.loadImage(uri)
