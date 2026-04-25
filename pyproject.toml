@@ -140,6 +140,20 @@ test = [
     { include-group = "viewer" },
     { include-group = "dev" },
 ]
+# Used by the python-mypy CI job. The django-stubs plugin imports
+# anthias_django.settings to introspect the app registry, so we need the
+# runtime deps that settings touches — but not the heavy native-extension
+# deps from the server group (cec, netifaces, etc.).
+mypy = [
+    { include-group = "dev-host" },
+    "Django==4.2.30",
+    "django-dbbackup==4.2.1",
+    "django-stubs-ext==6.0.3",
+    "djangorestframework==3.16.1",
+    "drf-spectacular==0.29.0",
+    "pytz==2025.2",
+    "pyzmq==23.2.1",
+]
 
 [tool.mypy]
 python_version = "3.11"

@@ -224,7 +224,7 @@ class BasicAuth(Auth):
 def authorized(
     orig: Callable[P, R],
 ) -> 'Callable[P, R | HttpResponse]':
-    from django.http import HttpRequest, HttpResponse
+    from django.http import HttpRequest
     from rest_framework.request import Request
 
     from settings import settings
