@@ -229,8 +229,10 @@ class DeviceSettingsViewV2Test(TestCase):
         settings_mock.__setitem__.assert_any_call('user', 'testuser')
 
         # PBKDF2 uses a random salt, so we can't compare the stored hash
-        # against a fixed expected value — verify it matches the input via
-        # the same verifier the auth path uses.
+        # against a fixed expected value. Pin the algorithm via the prefix
+        # AND verify round-trip via verify_password — the prefix check
+        # guards against a regression to a weaker hasher even if
+        # verify_password() were broken.
         password_calls = [
             call
             for call in settings_mock.__setitem__.call_args_list
@@ -238,6 +240,7 @@ class DeviceSettingsViewV2Test(TestCase):
         ]
         self.assertEqual(len(password_calls), 1)
         stored_hash = password_calls[0].args[1]
+        self.assertTrue(stored_hash.startswith('pbkdf2_sha256$'))
         self.assertTrue(verify_password('testpass', stored_hash))
 
         publisher_instance.send_to_viewer.assert_called_once_with('reload')

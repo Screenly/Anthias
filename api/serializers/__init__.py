@@ -66,6 +66,13 @@ class AssetSerializer(ModelSerializer[Asset]):
 
 
 class UpdateAssetSerializer(Serializer[Asset]):
+    # The fields below use `Field[Any, Any, Any, Any]` (instead of the
+    # narrower IntegerField/CharField) so that v2's UpdateAssetSerializerV2
+    # can override them with BooleanField/IntegerField. djangorestframework-
+    # stubs treats Field subclasses as invariant on their type parameters,
+    # so a narrower base type makes the override a [assignment] error. Do
+    # NOT widen any other field "for consistency" — only widen those that
+    # are actually overridden in subclasses.
     name = CharField()
     start_date = DateTimeField(default_timezone=timezone.utc)
     end_date = DateTimeField(default_timezone=timezone.utc)

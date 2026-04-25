@@ -238,6 +238,13 @@ class BasicAuth(Auth):
 def authorized(
     orig: Callable[P, R],
 ) -> 'Callable[P, R | HttpResponse]':
+    # Note on the return type: when `R` is DRF's `Response` (which is itself
+    # an `HttpResponse` subclass), mypy collapses `Response | HttpResponse`
+    # to just `HttpResponse`, losing the `Response`-specific attributes
+    # from the static type. This mirrors Django's own `@login_required`
+    # decorator and is intentional — at runtime the wrapped view still
+    # returns its concrete type. Callers that need the narrower type
+    # should cast at the call site.
     from django.http import HttpRequest
     from rest_framework.request import Request
 

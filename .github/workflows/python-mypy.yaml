@@ -44,9 +44,16 @@ jobs:
 
     - name: Prepare config directory
       run: |
-        # settings.py writes a default config on first import.
+        # The django-stubs plugin imports anthias_django.settings, which
+        # transitively instantiates AnthiasSettings(). On first run that
+        # tries to read ~/.screenly/screenly.conf — write a minimal valid
+        # one with the section headers AnthiasSettings expects.
         mkdir -p ~/.screenly
-        touch ~/.screenly/screenly.conf
+        cat > ~/.screenly/screenly.conf <<'CONF'
+        [main]
+        [viewer]
+        [auth_basic]
+        CONF
 
     - name: Run mypy
       run: |

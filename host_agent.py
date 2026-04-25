@@ -25,7 +25,7 @@ REDIS_HOST = '127.0.0.1'
 REDIS_PORT = 6379
 REDIS_DB = 0
 # Name of redis channel to listen to
-CHANNEL_NAME = b'hostcmd'
+CHANNEL_NAME = 'hostcmd'
 SUPPORTED_INTERFACES = (
     'wlan',
     'eth',
@@ -49,7 +49,9 @@ def get_ip_addresses() -> list[str]:
 
 
 def set_ip_addresses() -> None:
-    rdb = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
+    rdb = redis.Redis(
+        host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
+    )
 
     rdb.set('ip_addresses_ready', 'false')
 
@@ -73,15 +75,15 @@ def set_ip_addresses() -> None:
     rdb.set('ip_addresses', json.dumps(ip_addresses))
 
 
-# Explicit command whitelist for security reasons, keys as bytes objects
-CMD_TO_ARGV: dict[bytes, list[str] | Callable[[], None]] = {
-    b'reboot': ['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'reboot'],
-    b'shutdown': ['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'poweroff'],
-    b'set_ip_addresses': set_ip_addresses,
+# Explicit command whitelist for security reasons.
+CMD_TO_ARGV: dict[str, list[str] | Callable[[], None]] = {
+    'reboot': ['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'reboot'],
+    'shutdown': ['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'poweroff'],
+    'set_ip_addresses': set_ip_addresses,
 }
 
 
-def execute_host_command(cmd_name: bytes) -> None:
+def execute_host_command(cmd_name: str) -> None:
     cmd = CMD_TO_ARGV.get(cmd_name, None)
     if cmd is None:
         logging.warning(
@@ -92,9 +94,10 @@ def execute_host_command(cmd_name: bytes) -> None:
             'Would have executed %s but not doing so as TESTING is defined',
             cmd,
         )
-    elif cmd_name in [b'reboot', b'shutdown']:
+    elif cmd_name in ['reboot', 'shutdown']:
         logging.info('Executing host command %s', cmd_name)
-        assert isinstance(cmd, list)
+        if not isinstance(cmd, list):
+            raise TypeError(f'Expected list for {cmd_name}, got {type(cmd)}')
         phandle = subprocess.run(cmd)
         logging.info(
             'Host command %s (%s) returned %s',
@@ -104,16 +107,19 @@ def execute_host_command(cmd_name: bytes) -> None:
         )
     else:
         logging.info('Calling function %s', cmd)
-        assert callable(cmd)
+        if not callable(cmd):
+            raise TypeError(
+                f'Expected callable for {cmd_name}, got {type(cmd)}'
+            )
         cmd()
 
 
 def process_message(message: dict[str, Any]) -> None:
     if (
         message.get('type', '') == 'message'
-        and message.get('channel', b'') == CHANNEL_NAME
+        and message.get('channel', '') == CHANNEL_NAME
     ):
-        execute_host_command(message.get('data', b''))
+        execute_host_command(message.get('data', ''))
     else:
         logging.info('Received unsolicited message: %s', message)
 
@@ -121,7 +127,9 @@ def process_message(message: dict[str, Any]) -> None:
 def subscriber_loop() -> None:
     # Connect to redis on localhost and wait for messages
     logging.info('Connecting to redis...')
-    rdb = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
+    rdb = redis.Redis(
+        host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
+    )
     pubsub = rdb.pubsub(ignore_subscribe_messages=True)
     pubsub.subscribe(CHANNEL_NAME)
     rdb.set('host_agent_ready', 'true')

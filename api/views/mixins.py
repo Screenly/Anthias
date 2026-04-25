@@ -9,6 +9,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from hurry.filesize import size
 from rest_framework import status
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -101,11 +102,15 @@ class RecoverViewMixin(APIView):
         publisher = ZmqPublisher.get_instance()
         file_upload = request.data.get('backup_upload')
         if file_upload is None:
-            raise Exception('No backup file uploaded.')
+            raise ValidationError(
+                {'backup_upload': 'No backup file uploaded.'}
+            )
         filename = file_upload.name
 
         if guess_type(filename)[0] != 'application/x-tar':
-            raise Exception('Incorrect file extension.')
+            raise ValidationError(
+                {'backup_upload': 'Incorrect file extension.'}
+            )
         try:
             publisher.send_to_viewer('stop')
             location = path.join('static', filename)
@@ -165,15 +170,14 @@ class FileAssetViewMixin(APIView):
     def post(self, request: Request) -> Response:
         file_upload = request.data.get('file_upload')
         if file_upload is None:
-            raise Exception('No file uploaded.')
+            raise ValidationError({'file_upload': 'No file uploaded.'})
         filename = file_upload.name
         file_type = guess_type(filename)[0]
 
-        if not file_type:
-            raise Exception('Invalid file type.')
-
-        if file_type.split('/')[0] not in ['image', 'video']:
-            raise Exception('Invalid file type.')
+        if not file_type or file_type.split('/')[0] not in ['image', 'video']:
+            raise ValidationError(
+                {'file_upload': 'Invalid file type. Expected image or video.'}
+            )
 
         file_path = (
             path.join(
@@ -228,7 +232,7 @@ class AssetContentViewMixin(APIView):
     ) -> Response:
         asset = Asset.objects.get(asset_id=asset_id)
         if asset.uri is None:
-            raise Exception('Asset has no URI.')
+            raise NotFound('Asset has no content URI.')
 
         result: dict[str, Any]
         if path.isfile(asset.uri):

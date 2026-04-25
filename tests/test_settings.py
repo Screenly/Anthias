@@ -110,7 +110,7 @@ class SettingsTest(TestCase):
                 mod_settings.DEFAULTS['viewer']['default_duration'],
             )
 
-    def broken_settings_should_raise_value_error(self) -> None:
+    def test_broken_settings_should_raise_value_error(self) -> None:
         with self.assertRaises(ValueError):
             with fake_settings(broken_settings) as (mod_settings, settings):
                 pass

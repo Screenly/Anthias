@@ -45,7 +45,11 @@ def update_asset(asset: dict[str, Any], data: dict[str, Any]) -> None:
 def custom_exception_handler(
     exc: Exception, context: dict[str, Any]
 ) -> Response:
-    exception_handler(exc, context)
+    response = exception_handler(exc, context)
+    if response is not None:
+        # Use DRF's default response (correct 4xx status, structured body)
+        # for known exception types like ValidationError / NotFound / etc.
+        return response
 
     return Response(
         {'error': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR

@@ -46,7 +46,10 @@ def prepare_default_asset(**kwargs: Any) -> dict[str, Any] | None:
     asset_id = 'default_{}'.format(uuid.uuid4().hex)
     if 'video' == kwargs['mimetype']:
         video_duration = get_video_duration(kwargs['uri'])
-        assert video_duration is not None
+        if video_duration is None:
+            raise ValueError(
+                f'Could not determine duration of video {kwargs["uri"]!r}'
+            )
         duration = int(video_duration.total_seconds())
     else:
         duration = kwargs['duration']

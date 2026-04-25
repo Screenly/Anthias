@@ -84,7 +84,10 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
             duration_raw = data.get('duration')
             if duration_raw is not None and int(duration_raw) == 0:
                 video_duration = get_video_duration(uri)
-                assert video_duration is not None
+                if video_duration is None:
+                    raise ValueError(
+                        f'Could not determine duration of video {uri!r}'
+                    )
                 asset['duration'] = int(video_duration.total_seconds())
         else:
             # Crashes if it's not an int. We want that.

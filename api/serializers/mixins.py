@@ -80,7 +80,10 @@ class CreateAssetSerializerMixin:
 
                 if original_mimetype != 'youtube_asset':
                     video_duration = get_video_duration(uri)
-                    assert video_duration is not None
+                    if video_duration is None:
+                        raise AssetCreationError(
+                            f'Could not determine duration of video {uri!r}'
+                        )
                     duration = video_duration.total_seconds()
                     asset['duration'] = (
                         duration if version == 'v2' else int(duration)
