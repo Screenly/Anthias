@@ -19,31 +19,20 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=anthias-host-agent
 
-# Sandboxing
-# NoNewPrivileges, CapabilityBoundingSet and SystemCallFilter are
-# *not* tightened here: host_agent invokes `sudo systemctl reboot`
-# / `poweroff`, which requires setuid escalation, CAP_SYS_BOOT in
-# the bounding set, and the reboot() syscall.
+# Sandboxing — host_agent.py shells out to `sudo systemctl reboot|poweroff`,
+# so this profile must NOT set NoNewPrivileges. On systemd <= 252 (Debian
+# 11/12), most Protect*/Restrict* directives implicitly enable NNP and
+# would block sudo's setuid escalation, so we keep only the directives
+# verified safe under that systemd version. CapabilityBoundingSet is
+# narrowed to the minimum sudo + reboot path needs.
 PrivateTmp=true
-PrivateDevices=true
 ProtectSystem=full
 ProtectHome=read-only
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectKernelLogs=true
 ProtectControlGroups=true
-ProtectClock=true
-ProtectHostname=true
 ProtectProc=invisible
-RestrictRealtime=true
-RestrictSUIDSGID=true
-RestrictNamespaces=true
-# AF_NETLINK is needed by the `netifaces` C extension to enumerate
-# interfaces (NETLINK_ROUTE) when the agent is asked to publish IPs.
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
-LockPersonality=true
-SystemCallArchitectures=native
 UMask=0027
+CapabilityBoundingSet=CAP_AUDIT_WRITE CAP_DAC_READ_SEARCH CAP_NET_BIND_SERVICE CAP_SETGID CAP_SETUID CAP_SYS_BOOT CAP_SYS_RESOURCE
+AmbientCapabilities=
 
 [Install]
 WantedBy=multi-user.target

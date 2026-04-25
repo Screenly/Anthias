@@ -35,6 +35,26 @@
     state: absent
     dest: "/home/{{ anthias_user }}/.screenly/screenly.conf"
 
+# bin/install.sh installs uv into ~anthias/.local/bin/ before invoking
+# ansible-playbook. If someone runs the playbook standalone, uv won't
+# be there yet — fail with a clear message instead of an opaque
+# "command not found" deeper in the task.
+- name: Verify uv is installed for {{ anthias_user }}
+  ansible.builtin.stat:
+    path: "/home/{{ anthias_user }}/.local/bin/uv"
+  register: screenly_uv_bin
+
+- name: Assert uv is present
+  ansible.builtin.assert:
+    that:
+      - screenly_uv_bin.stat.exists
+      - screenly_uv_bin.stat.executable
+    fail_msg: >-
+      uv was not found at /home/{{ anthias_user }}/.local/bin/uv.
+      Run bin/install.sh, or install uv first via:
+      `curl -LsSf https://astral.sh/uv/install.sh | sh`
+      as the {{ anthias_user }} user.
+
 - name: Sync host pip dependencies via uv
   ansible.builtin.command:
     cmd: >-

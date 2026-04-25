@@ -1,28 +1,30 @@
 ---
-# Some Pi base images ship libc6-dev with the cdefs.h header missing,
-# which breaks compilation of any wheel that pulls in <sys/cdefs.h>.
-# Reinstalling libc6-dev pulls in the missing files.
-- name: Check if cdefs.h exists
-  ansible.builtin.stat:
-    path: /usr/include/arm-linux-gnueabihf/sys/cdefs.h
-  register: system_cdefs
+# Some Pi armhf base images ship libc6-dev with the cdefs.h header
+# missing, which breaks compilation of any wheel that pulls in
+# <sys/cdefs.h>. Reinstalling libc6-dev pulls in the missing files.
+# This workaround is armhf-only — on aarch64/x86 the header lives at
+# a different path and the original bug doesn't apply, so we'd just
+# be doing pointless reinstalls every run.
+- name: Reinstall libc6-dev if cdefs.h is missing (armhf only)
+  when: ansible_architecture == 'armv7l'
+  block:
+    - name: Check if cdefs.h exists
+      ansible.builtin.stat:
+        path: /usr/include/arm-linux-gnueabihf/sys/cdefs.h
+      register: system_cdefs
 
-- name: Set fact for cdefs
-  ansible.builtin.set_fact:
-    system_cdefs_exists: "{{ system_cdefs.stat.exists }}"
+    - name: Remove libc6-dev
+      ansible.builtin.apt:
+        name: libc6-dev
+        state: absent
+      when: not system_cdefs.stat.exists
 
-- name: Remove libc6-dev
-  ansible.builtin.apt:
-    name: libc6-dev
-    state: absent
-  when: not system_cdefs_exists
-
-- name: Install libc6-dev
-  ansible.builtin.apt:
-    name: libc6-dev
-    state: present
-    update_cache: true
-  when: not system_cdefs_exists
+    - name: Install libc6-dev
+      ansible.builtin.apt:
+        name: libc6-dev
+        state: present
+        update_cache: true
+      when: not system_cdefs.stat.exists
 
 - name: Install Anthias dependencies
   ansible.builtin.apt:
