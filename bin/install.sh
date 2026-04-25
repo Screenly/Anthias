@@ -204,6 +204,10 @@ function run_ansible_playbook() {
     display_section "Run the Anthias Ansible Playbook"
     set_device_type
 
+    # Forwarded to the playbook so the screenly role can pin
+    # /usr/local/sbin/upgrade_anthias.sh to the same ref the user picked.
+    export ANTHIAS_BRANCH="${BRANCH}"
+
     cd "${ANTHIAS_REPO_DIR}/ansible"
 
     # If the user doesn't have NOPASSWD sudo yet (first install), Ansible

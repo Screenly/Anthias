@@ -4,6 +4,7 @@
   become: true
   vars:
     anthias_user: "{{ lookup('env', 'USER') }}"
+    anthias_branch: "{{ lookup('env', 'ANTHIAS_BRANCH') | default('master', true) }}"
     manage_network: "{{ lookup('env', 'MANAGE_NETWORK') }}"
     docker_tag: "{{ lookup('env', 'DOCKER_TAG') }}"
     device_type: "{{ lookup('env', 'DEVICE_TYPE') }}"
@@ -13,6 +14,7 @@
       ansible.builtin.assert:
         that:
           - anthias_user | length > 0
+          - anthias_branch | length > 0
           - device_type | length > 0
           - device_type in ['pi1', 'pi2', 'pi3', 'pi4', 'pi5', 'x86']
         fail_msg: >-

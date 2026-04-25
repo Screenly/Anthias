@@ -50,14 +50,15 @@
   changed_when: "'Installed' in screenly_uv_sync.stderr or 'Updated' in screenly_uv_sync.stderr"
 
 # install.sh is the single source of truth for both fresh installs and
-# upgrades. We re-download it from the same ref each run so users can
-# pull in fixes without re-installing. No checksum is pinned because
-# the URL itself moves; integrity is bounded by HTTPS to githubusercontent
-# and by the pre-install user prompt that runs the script. If we ever
-# adopt signed releases, switch to fetching the signed asset by tag.
-- name: Install upgrade_anthias.sh from the current branch
+# upgrades. We re-download it from the same ref the user is installing
+# (anthias_branch) so a tag-pinned install gets the matching upgrade
+# script, not master's. No checksum is pinned because the URL is
+# expected to move with the ref; integrity is bounded by HTTPS to
+# githubusercontent. If we ever ship signed release assets, switch
+# to fetching the signed asset by tag.
+- name: Install upgrade_anthias.sh from the configured branch
   ansible.builtin.get_url:
-    url: "https://raw.githubusercontent.com/Screenly/Anthias/master/bin/install.sh"
+    url: "https://raw.githubusercontent.com/Screenly/Anthias/{{ anthias_branch }}/bin/install.sh"
     dest: /usr/local/sbin/upgrade_anthias.sh
     mode: "0700"
     owner: root
