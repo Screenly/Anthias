@@ -123,6 +123,7 @@ function install_packages() {
     local APT_INSTALL_ARGS=(
         "ca-certificates"
         "curl"
+        "gettext-base"
         "git"
         "libffi-dev"
         "libssl-dev"
@@ -238,9 +239,9 @@ function upgrade_docker_containers() {
 
     # Pull upgrade_containers.sh from the same ref the user picked,
     # not master, so a tagged install gets the matching upgrade script.
-    wget -q \
+    curl -fsSL \
         "${GITHUB_RAW_URL}/${BRANCH}/bin/upgrade_containers.sh" \
-        -O "${UPGRADE_SCRIPT_PATH}"
+        -o "${UPGRADE_SCRIPT_PATH}"
 
     sudo -u "${USER}" \
         DOCKER_TAG="${DOCKER_TAG}" \
