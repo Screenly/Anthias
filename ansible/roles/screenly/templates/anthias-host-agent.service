@@ -38,7 +38,9 @@ ProtectProc=invisible
 RestrictRealtime=true
 RestrictSUIDSGID=true
 RestrictNamespaces=true
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# AF_NETLINK is needed by the `netifaces` C extension to enumerate
+# interfaces (NETLINK_ROUTE) when the agent is asked to publish IPs.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 LockPersonality=true
 SystemCallArchitectures=native
 UMask=0027
