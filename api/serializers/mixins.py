@@ -100,6 +100,10 @@ class CreateAssetSerializerMixin:
         asset['start_date'] = data.get('start_date').replace(tzinfo=None)
         asset['end_date'] = data.get('end_date').replace(tzinfo=None)
 
+        for field in ('play_days', 'play_time_from', 'play_time_to'):
+            if field in data:
+                asset[field] = data[field]
+
         if not asset['skip_asset_check'] and url_fails(asset['uri']):
             raise AssetCreationError(
                 'Could not retrieve file. Check the asset URL.'

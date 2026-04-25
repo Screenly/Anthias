@@ -164,3 +164,54 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(len(assets), 0)
+
+
+class V2ScheduleFieldValidationTest(TestCase):
+    """Reject empty play_days and partial time windows at the v2 API."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.asset = self.client.post(
+            reverse('api:asset_list_v2'),
+            data=ASSET_CREATION_DATA,
+        ).data
+        self.detail_url = reverse(
+            'api:asset_detail_v2',
+            args=[self.asset['asset_id']],
+        )
+
+    def test_update_with_empty_play_days_rejected(self):
+        response = self.client.put(
+            self.detail_url,
+            data={**ASSET_UPDATE_DATA_V2, 'play_days': []},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('play_days', response.data)
+
+    def test_update_with_partial_time_window_rejected(self):
+        response = self.client.put(
+            self.detail_url,
+            data={
+                **ASSET_UPDATE_DATA_V2,
+                'play_time_from': '09:00:00',
+                'play_time_to': None,
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('play_time_to', response.data)
+
+    def test_update_with_full_time_window_accepted(self):
+        response = self.client.put(
+            self.detail_url,
+            data={
+                **ASSET_UPDATE_DATA_V2,
+                'play_time_from': '09:00:00',
+                'play_time_to': '17:00:00',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['play_time_from'], '09:00:00')
+        self.assertEqual(response.data['play_time_to'], '17:00:00')

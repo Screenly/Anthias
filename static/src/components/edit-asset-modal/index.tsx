@@ -10,6 +10,7 @@ import { AssetTypeField } from '@/components/edit-asset-modal/asset-type-field'
 import { PlayForField } from '@/components/edit-asset-modal/play-for-field'
 import { DateFields } from '@/components/edit-asset-modal/date-fields'
 import { DurationField } from '@/components/edit-asset-modal/duration-field'
+import { ScheduleFields } from '@/components/edit-asset-modal/schedule-fields'
 import { ModalFooter } from '@/components/edit-asset-modal/modal-footer'
 import { AdvancedFields } from '@/components/edit-asset-modal/advanced'
 
@@ -35,6 +36,9 @@ export const EditAssetModal = ({
     mimetype: 'webpage',
     nocache: false,
     skip_asset_check: false,
+    play_days: [1, 2, 3, 4, 5, 6, 7],
+    play_time_from: null,
+    play_time_to: null,
   })
   const [loopTimes, setLoopTimes] = useState('manual')
   const [startDateDate, setStartDateDate] = useState('')
@@ -71,6 +75,9 @@ export const EditAssetModal = ({
         mimetype: asset.mimetype || 'webpage',
         nocache: asset.nocache || false,
         skip_asset_check: asset.skip_asset_check || false,
+        play_days: asset.play_days ?? [1, 2, 3, 4, 5, 6, 7],
+        play_time_from: asset.play_time_from ?? null,
+        play_time_to: asset.play_time_to ?? null,
       })
 
       setStartDateDate(formatDatePart(startDate))
@@ -221,6 +228,7 @@ export const EditAssetModal = ({
                   endDateTime={endDateTime}
                   handleDateChange={handleDateChange}
                 />
+                <ScheduleFields formData={formData} setFormData={setFormData} />
                 <DurationField
                   formData={formData}
                   handleInputChange={handleInputChange}

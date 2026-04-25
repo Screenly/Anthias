@@ -1,11 +1,19 @@
 import logging
+import secrets
+from datetime import timedelta
 from os import path
-from random import shuffle
 
 from django.utils import timezone
 
 from anthias_app.models import Asset
 from settings import settings
+
+# Re-evaluate windowed playlists at most this often. Day-of-week and
+# time-of-day boundaries don't show up in start_date/end_date, so we
+# need a polling cap to ensure transitions are picked up.
+WINDOWED_DEADLINE_CAP_SECONDS = 60
+
+_sysrandom = secrets.SystemRandom()
 
 
 def get_specific_asset(asset_id):
@@ -17,37 +25,75 @@ def get_specific_asset(asset_id):
         return None
 
 
+def _asset_to_dict(asset):
+    return {
+        k: v for k, v in asset.__dict__.items() if k not in ['_state', 'md5']
+    }
+
+
 def generate_asset_list():
-    """Choose deadline via:
-    1. Map assets to deadlines with rule: if asset is active then
-       'end_date' else 'start_date'
-    2. Get nearest deadline
+    """Build the playlist plus a deadline for the next re-evaluation.
+
+    Active assets are filtered by Asset.is_active() (which now applies
+    day-of-week and time-of-day windows on top of the existing date
+    range and is_enabled checks).
+
+    Deadline is the soonest of:
+      - any inactive asset's start_date,
+      - any active asset's end_date,
+      - now + WINDOWED_DEADLINE_CAP_SECONDS, if any asset has a window
+        filter (those transitions don't show up in date columns).
     """
     logging.info('Generating asset-list...')
-    assets = Asset.objects.all()
-    deadlines = [
-        asset.end_date if asset.is_active() else asset.start_date
-        for asset in assets
-    ]
 
-    enabled_assets = Asset.objects.filter(
-        is_enabled=True,
-        start_date__isnull=False,
-        end_date__isnull=False,
-    ).order_by('play_order')
-    playlist = [
-        {k: v for k, v in asset.__dict__.items() if k not in ['_state', 'md5']}
-        for asset in enabled_assets
-        if asset.is_active()
-    ]
+    candidates = list(
+        Asset.objects.filter(
+            is_enabled=True,
+            start_date__isnull=False,
+            end_date__isnull=False,
+        ).order_by('play_order')
+    )
 
-    deadline = sorted(deadlines)[0] if len(deadlines) > 0 else None
-    logging.debug('generate_asset_list deadline: %s', deadline)
+    active = [a for a in candidates if a.is_active()]
+    playlist = [_asset_to_dict(a) for a in active]
 
     if settings['shuffle_playlist']:
-        shuffle(playlist)
+        _sysrandom.shuffle(playlist)
 
+    deadline = _compute_deadline(candidates)
+    logging.debug(
+        'generate_asset_list: %d assets, deadline %s',
+        len(playlist),
+        deadline,
+    )
     return playlist, deadline
+
+
+def _compute_deadline(assets):
+    """Soonest future moment when the playlist might need re-evaluating.
+
+    Past boundaries are dropped so a long-ago start_date on an asset
+    that's currently inactive (e.g. blocked by its play_days filter)
+    doesn't pin the deadline to "always overdue" and cause
+    refresh_playlist() to fire on every tick.
+    """
+    now = timezone.now()
+    candidates = []
+    has_windowed = False
+
+    for asset in assets:
+        boundary = asset.end_date if asset.is_active() else asset.start_date
+        if boundary and boundary > now:
+            candidates.append(boundary)
+        if asset.has_window_filter():
+            has_windowed = True
+
+    if has_windowed:
+        candidates.append(
+            now + timedelta(seconds=WINDOWED_DEADLINE_CAP_SECONDS)
+        )
+
+    return min(candidates) if candidates else None
 
 
 class Scheduler(object):
