@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import hashlib
-import hmac
 import os.path
 import re
 from abc import ABCMeta, abstractmethod
@@ -36,18 +34,9 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, stored: str) -> bool:
-    """Verify a password against a stored hash.
-
-    Accepts both Django-format hashes (algorithm-prefixed) and legacy bare
-    SHA256 hex digests stored by older versions, so a config file written
-    before the migration still authenticates.
-    """
+    """Verify a password against a Django-format stored hash."""
     if not stored:
         return False
-    if _is_legacy_sha256(stored):
-        candidate = hashlib.sha256(password.encode('utf-8')).hexdigest()
-        return hmac.compare_digest(stored, candidate)
-
     from django.contrib.auth.hashers import check_password
 
     return bool(check_password(password, stored))
@@ -163,15 +152,7 @@ class BasicAuth(Auth):
         )
 
     def check_password(self, password: str) -> bool:
-        stored = self.settings['password']
-        if not verify_password(password, stored):
-            return False
-        # Opportunistically upgrade legacy SHA256 hashes to PBKDF2 on a
-        # successful login so the weak format is phased out over time.
-        if _is_legacy_sha256(stored):
-            self.settings['password'] = hash_password(password)
-            self.settings.save()
-        return True
+        return verify_password(password, self.settings['password'])
 
     def is_authenticated(self, request: 'HttpRequest') -> bool:
         # First check Authorization header for API requests
