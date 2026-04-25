@@ -49,7 +49,7 @@
   register: splashscreen_plymouth_theme
   changed_when: false
 
-- name: Set plymouth default theme to anthias
+- name: Set Plymouth default theme to Anthias
   ansible.builtin.command: plymouth-set-default-theme -R anthias
   changed_when: splashscreen_plymouth_theme.stdout != "anthias"
 
