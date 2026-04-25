@@ -1,0 +1,7 @@
+{{ anthias_user }} ALL=NOPASSWD: /usr/local/sbin/upgrade_anthias.sh
+
+#SystemCommands
+{{ anthias_user }} ALL=NOPASSWD: /sbin/shutdown, /bin/systemctl
+
+#External
+{{ anthias_user }} ALL=NOPASSWD: /usr/local/sbin/wifi-connect

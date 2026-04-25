@@ -1,5 +1,5 @@
 ---
-- name: Create a system_config_path variable
+- name: Resolve boot config and cmdline paths
   ansible.builtin.set_fact:
     system_config_path: "{{ '/boot/config.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/config.txt' }}"
     system_cmdline_path: "{{ '/boot/cmdline.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/cmdline.txt' }}"
@@ -217,17 +217,6 @@
       - python3-redis
     state: present
 
-- name: Install Anthias dependencies (Raspberry Pi)
-  ansible.builtin.apt:
-    name:
-      - rpi-update
-    state: present
-  when: |
-    ansible_architecture == "aarch64" or
-    ansible_architecture == "armv7l" or
-    ansible_architecture == "armv6l"
-
-
 - name: Remove deprecated apt dependencies
   ansible.builtin.apt:
     name:
@@ -273,35 +262,15 @@
     group: root
     mode: "0644"
 
-- name: Get Debian name
-  ansible.builtin.command: lsb_release -cs
-  register: system_debian_name
-  changed_when: false
-
-- name: Check system bit width
-  ansible.builtin.command: getconf LONG_BIT
-  register: system_bits
-  changed_when: false
-
 - name: Set system_architecture
   ansible.builtin.set_fact:
     system_architecture: >-
       {{
         'amd64' if ansible_architecture == 'x86_64'
-        else ('arm64' if device_type == 'pi4' and system_bits.stdout == '64'
+        else ('arm64' if device_type in ['pi4', 'pi5']
+                          and ansible_userspace_bits == '64'
         else 'armhf')
       }}
-  when: |
-    device_type == "pi1" or
-    device_type == "pi2" or
-    device_type == "pi3" or
-    device_type == "pi4" or
-    device_type == "x86"
-
-- name: Set system_architecture for Pi 5
-  ansible.builtin.set_fact:
-    system_architecture: "arm64"
-  when: device_type == "pi5"
 
 - name: Add Docker repo
   ansible.builtin.lineinfile:
@@ -311,7 +280,7 @@
       deb [arch={{ system_architecture }}
       signed-by=/etc/apt/keyrings/docker.asc]
       https://download.docker.com/linux/debian
-      {{ system_debian_name.stdout }} stable
+      {{ ansible_distribution_release }} stable
     state: present
     owner: root
     group: root
@@ -331,20 +300,29 @@
     path: /etc/timezone
   register: system_etc_timezone
 
-- name: Create /etc/timezone from /etc/localtime if missing
-  ansible.builtin.shell: |
-    set -o pipefail
-    readlink -f /etc/localtime | sed 's|.*/zoneinfo/||' > /etc/timezone
-  args:
-    executable: /bin/bash
+- name: Resolve /etc/localtime symlink
+  ansible.builtin.command: readlink -f /etc/localtime
+  register: system_localtime_link
+  changed_when: false
   when: not system_etc_timezone.stat.exists
-  changed_when: not system_etc_timezone.stat.exists
 
-- name: Add user to Docker group (all platforms)
+- name: Create /etc/timezone from /etc/localtime
+  ansible.builtin.copy:
+    content: "{{ system_localtime_link.stdout | regex_replace('.*/zoneinfo/', '') }}\n"
+    dest: /etc/timezone
+    owner: root
+    group: root
+    mode: "0644"
+  when: not system_etc_timezone.stat.exists
+
+- name: Ensure Anthias user is in required groups
   ansible.builtin.user:
-    name: "{{ lookup('env', 'USER') }}"
-    group: "{{ lookup('env', 'USER') }}"
-    groups:
+    name: "{{ anthias_user }}"
+    group: "{{ anthias_user }}"
+    append: true
+    groups: "{{ anthias_base_groups + (anthias_pi_groups if is_raspberry_pi else []) }}"
+  vars:
+    anthias_base_groups:
       - docker
       - adm
       - sudo
@@ -354,26 +332,9 @@
       - input
       - netdev
       - dialout
-
-- name: Add user to Docker group (Raspberry Pi)
-  ansible.builtin.user:
-    name: "{{ lookup('env', 'USER') }}"
-    group: "{{ lookup('env', 'USER') }}"
-    groups:
-      - docker
-      - adm
-      - sudo
-      - video
-      - plugdev
-      - users
-      - input
-      - netdev
+    anthias_pi_groups:
       - gpio
-      - dialout
-  when: |
-    ansible_architecture == "aarch64" or
-    ansible_architecture == "armv7l" or
-    ansible_architecture == "armv6l"
+    is_raspberry_pi: "{{ ansible_architecture in ['aarch64', 'armv7l', 'armv6l'] }}"
 
 - name: Perform system upgrade
   ansible.builtin.apt:
@@ -397,7 +358,7 @@
 - name: Remove deprecated pip dependencies (>= Debian 12)
   ansible.builtin.pip:
     name: supervisor
-    executable: /home/{{ lookup('env', 'USER') }}/installer_venv/bin/pip
+    executable: /home/{{ anthias_user }}/installer_venv/bin/pip
     state: absent
   when:
     - ansible_distribution_major_version | int >= 12

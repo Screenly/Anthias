@@ -3,10 +3,10 @@ Description=Anthias WiFi Connect
 After=docker.service
 
 [Service]
-WorkingDirectory=/home/{{ lookup('env', 'USER') }}/screenly
-User={{ lookup('env', 'USER') }}
+WorkingDirectory=/home/{{ anthias_user }}/screenly
+User={{ anthias_user }}
 
-ExecStart=bash /home/{{ lookup('env', 'USER') }}/screenly/start_wifi_connect_service.sh
+ExecStart=bash /home/{{ anthias_user }}/screenly/start_wifi_connect_service.sh
 
 [Install]
 WantedBy=multi-user.target

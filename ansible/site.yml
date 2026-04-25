@@ -3,9 +3,22 @@
   user: "{{ lookup('env', 'USER') }}"
   become: true
   vars:
+    anthias_user: "{{ lookup('env', 'USER') }}"
     manage_network: "{{ lookup('env', 'MANAGE_NETWORK') }}"
     docker_tag: "{{ lookup('env', 'DOCKER_TAG') }}"
     device_type: "{{ lookup('env', 'DEVICE_TYPE') }}"
+
+  pre_tasks:
+    - name: Validate required environment variables
+      ansible.builtin.assert:
+        that:
+          - anthias_user | length > 0
+          - device_type | length > 0
+          - device_type in ['pi1', 'pi2', 'pi3', 'pi4', 'pi5', 'x86']
+        fail_msg: >-
+          Required environment variables missing or invalid.
+          USER must be set; DEVICE_TYPE must be one of
+          pi1, pi2, pi3, pi4, pi5, x86.
 
   roles:
     - system
