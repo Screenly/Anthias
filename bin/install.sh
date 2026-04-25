@@ -17,8 +17,10 @@ ARCHITECTURE=$(uname -m)
 UV_PIN_VERSION="0.9.17"
 
 INTRO_MESSAGE=(
-    "Anthias requires a dedicated Raspberry Pi and an SD card."
-    "You will not be able to use the regular desktop environment once installed."
+    "Anthias runs on a dedicated Raspberry Pi (1-5) or x86 device."
+    "The host will be repurposed for digital signage — on a Pi you lose the"
+    "regular desktop environment, and on x86 the machine should not be used"
+    "for anything else."
     ""
     "When prompted for the version, you can choose between the following:"
     "  - **latest:** Installs the latest version from the \`master\` branch."
