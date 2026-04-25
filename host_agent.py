@@ -125,9 +125,7 @@ def subscriber_loop():
         retry=retry_if_exception_type(redis.exceptions.ConnectionError),
         wait=wait_fixed(5),
         stop=stop_after_attempt(60),
-        before_sleep=before_sleep_log(
-            logging.getLogger(), logging.WARNING
-        ),
+        before_sleep=before_sleep_log(logging.getLogger(), logging.WARNING),
         reraise=True,
     ):
         with attempt:
