@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import { addAsset } from './assets-list-slice'
-import {
+import type {
   UploadFileParams,
   SaveAssetParams,
   RootState,

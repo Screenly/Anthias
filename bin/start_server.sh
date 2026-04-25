@@ -27,7 +27,7 @@ fi
 
 if [[ "$ENVIRONMENT" == "development" ]]; then
     echo "Starting Django development server..."
-    npm install && npm run build
+    bun install && bun run build
     ./manage.py runserver 0.0.0.0:8080
 else
     echo "Generating Django static files..."

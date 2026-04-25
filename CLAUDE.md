@@ -47,19 +47,19 @@ docker compose -f docker-compose.dev.yml down        # Stop dev server
 ### Frontend (TypeScript/React)
 
 ```bash
-npm install
-npm run dev              # Webpack watch mode
-npm run build            # Production build
-npm run lint:check       # ESLint check
-npm run lint:fix         # ESLint fix
-npm run format:check     # Prettier check
-npm run format:fix       # Prettier fix
-npm run test             # Jest tests
+bun install
+bun run dev              # bun build + sass, both in watch mode
+bun run build            # Production build
+bun run lint:check       # ESLint check
+bun run lint:fix         # ESLint fix
+bun run format:check     # Prettier check
+bun run format:fix       # Prettier fix
+bun test                 # Run tests
 ```
 
 Inside Docker:
 ```bash
-docker compose -f docker-compose.dev.yml exec anthias-server npm run dev
+docker compose -f docker-compose.dev.yml exec anthias-server bun run dev
 ```
 
 ### Python Linting
@@ -103,7 +103,7 @@ docker compose exec anthias-server python manage.py createsuperuser
 - Functional components only (no class components)
 - Redux Toolkit (`createSlice`, `createAsyncThunk`) for state management
 - No `any` or `unknown` types
-- Don't explicitly import React (handled by webpack ProvidePlugin)
+- Don't explicitly import React (handled by `jsx: react-jsx` automatic runtime)
 - Import order: built-in → third-party → local (alphabetically sorted, blank line between groups)
 - Use `rem` instead of `px` in SCSS
 

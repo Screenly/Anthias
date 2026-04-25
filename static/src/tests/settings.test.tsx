@@ -8,7 +8,9 @@ import { RootState } from '@/types'
 import { createMockServer } from '@/tests/utils'
 
 // Mock SweetAlert2
-jest.mock('sweetalert2')
+jest.mock('sweetalert2', () => ({
+  default: { fire: jest.fn().mockResolvedValue({ isConfirmed: true }) },
+}))
 
 // Mock document.title
 Object.defineProperty(document, 'title', {

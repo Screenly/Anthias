@@ -5,12 +5,12 @@
 
 version: 2
 updates:
-  - package-ecosystem: "npm"
+  - package-ecosystem: "bun"
     directory: "/"
     schedule:
       interval: "weekly"
     groups:
-      npm:
+      bun:
         patterns:
           - "*"
   - package-ecosystem: "pip"

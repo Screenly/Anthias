@@ -129,17 +129,18 @@ We've also provided a [checklist](/docs/qa-checklist.md) that can serve as a gui
 To get started, you need to start the development server first. See this [section](#dockerized-development-environment)
 for details.
 
-### Starting Webpack in development mode
+### Starting the bundler in development mode
 
-To start [Webpack](https://webpack.js.org/) in development mode, run the following command:
+To start [Bun](https://bun.sh/) in development (watch) mode, run the following command:
 
 ```bash
 $ docker compose -f docker-compose.dev.yml exec anthias-server \
-    npm run dev
+    bun run dev
 ```
 
+This runs `bun build --watch` for JS/TS and `sass --watch` for SCSS in parallel.
 Making changes to the TypeScript, TSX, or SCSS files will automatically trigger a recompilation,
-generating the corresponding TypeScript and CSS files.
+generating the corresponding bundle and CSS files.
 
 ### Formatting and linting TypeScript code
 
@@ -147,23 +148,23 @@ To run the linting and formatting checks on the TypeScript code, run the followi
 
 ```bash
 $ docker compose -f docker-compose.dev.yml exec anthias-server \
-    npm run lint:check
+    bun run lint:check
 $ docker compose -f docker-compose.dev.yml exec anthias-server \
-    npm run format:check
+    bun run format:check
 ```
 
 If you want to fix the linting errors and formatting issues, run the following command:
 
 ```bash
 $ docker compose -f docker-compose.dev.yml exec anthias-server \
-    npm run lint:fix
+    bun run lint:fix
 $ docker compose -f docker-compose.dev.yml exec anthias-server \
-    npm run format:fix
+    bun run format:fix
 ```
 
 ### Closing the transpiler
 
-Just press `Ctrl-C` to close Webpack in development mode.
+Just press `Ctrl-C` to close the bundler watch.
 
 ## Linting Python code locally
 
