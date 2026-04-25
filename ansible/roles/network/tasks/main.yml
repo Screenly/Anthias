@@ -71,6 +71,13 @@
     - manage_network|bool
     - ansible_distribution_major_version|int >= 13
 
+- name: Gather service facts
+  ansible.builtin.service_facts:
+  when:
+    - ansible_distribution_major_version|int >= 9
+    - ansible_distribution_major_version|int <= 11
+    - manage_network|bool
+
 - name: Disable dhcpcd
   ansible.builtin.systemd:
     state: stopped
@@ -80,6 +87,7 @@
     - ansible_distribution_major_version|int >= 9
     - ansible_distribution_major_version|int <= 11
     - manage_network|bool
+    - "'dhcpcd.service' in ansible_facts.services"
 
 - name: Activate NetworkManager
   ansible.builtin.systemd:
