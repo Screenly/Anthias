@@ -2,38 +2,39 @@ import shutil
 import unittest
 from datetime import datetime
 from os import getenv, path
+from typing import Any
 
 import mock
 
 from lib.backup_helper import create_backup, recover, static_dir
 
-home = getenv('HOME')
+home = getenv('HOME') or ''
 
 
 class BackupHelperTest(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.dt = datetime(2016, 7, 19, 12, 42, 12)
         self.expected_archive_name = (
             'anthias-backup-2016-07-19T12-42-12.tar.gz'
         )
         self.assertFalse(path.isdir(path.join(home, static_dir)))
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         shutil.rmtree(
             path.join(home, 'screenly'),
             ignore_errors=True,
         )
 
-    def get_patched_datetime(self):
+    def get_patched_datetime(self) -> Any:
         return mock.patch('lib.backup_helper.datetime')
 
-    def test_get_backup_name(self):
+    def test_get_backup_name(self) -> None:
         with self.get_patched_datetime() as mock_datetime:
             mock_datetime.now.return_value = self.dt
             archive_name = create_backup()
             self.assertEqual(archive_name, self.expected_archive_name)
 
-    def test_recover(self):
+    def test_recover(self) -> None:
         # TODO: Make the tests more specific.
         #    For example, we can check if the individual files are present.
         archive_name = create_backup()

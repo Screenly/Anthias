@@ -2,6 +2,8 @@
 Tests for asset-related API endpoints.
 """
 
+from typing import Any
+
 import mock
 from django.test import TestCase
 from django.urls import reverse
@@ -23,10 +25,10 @@ parametrize_version = parametrize(
 
 
 class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
-    def setUp(self):
-        self.client = APIClient()
+    client_class = APIClient
+    client: APIClient
 
-    def get_assets(self, version):
+    def get_assets(self, version: str) -> Any:
         asset_list_url = reverse(f'api:asset_list_{version}')
         response = self.client.get(asset_list_url)
 
@@ -34,30 +36,35 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
 
         return response.data
 
-    def create_asset(self, data, version):
+    def create_asset(self, data: dict[str, Any], version: str) -> Any:
         asset_list_url = reverse(f'api:asset_list_{version}')
         return self.client.post(
             asset_list_url, data=get_request_data(data, version)
         ).data
 
-    def update_asset(self, asset_id, data, version):
+    def update_asset(
+        self,
+        asset_id: str,
+        data: dict[str, Any],
+        version: str,
+    ) -> Any:
         return self.client.put(
             reverse(f'api:asset_detail_{version}', args=[asset_id]),
             data=get_request_data(data, version),
         ).data
 
-    def get_asset(self, asset_id, version):
+    def get_asset(self, asset_id: str, version: str) -> Any:
         url = reverse(f'api:asset_detail_{version}', args=[asset_id])
         return self.client.get(url).data
 
-    def delete_asset(self, asset_id, version):
+    def delete_asset(self, asset_id: str, version: str) -> Any:
         url = reverse(f'api:asset_detail_{version}', args=[asset_id])
         return self.client.delete(url)
 
     @parametrize_version
     def test_get_assets_when_first_time_setup_should_initially_return_empty(
-        self, version
-    ):  # noqa: E501
+        self, version: str
+    ) -> None:  # noqa: E501
         asset_list_url = reverse(f'api:asset_list_{version}')
         response = self.client.get(asset_list_url)
         assets = response.data
@@ -66,7 +73,7 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(len(assets), 0)
 
     @parametrize_version
-    def test_create_asset_should_return_201(self, version):
+    def test_create_asset_should_return_201(self, version: str) -> None:
         asset_list_url = reverse(f'api:asset_list_{version}')
         response = self.client.post(
             asset_list_url, data=get_request_data(ASSET_CREATION_DATA, version)
@@ -84,8 +91,8 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
     @mock.patch('api.serializers.mixins.rename')
     @mock.patch('api.serializers.mixins.validate_uri')
     def test_create_video_asset_v2_with_non_zero_duration_should_fail(
-        self, mock_validate_uri, mock_rename
-    ):
+        self, mock_validate_uri: Any, mock_rename: Any
+    ) -> None:
         """Test that v2 rejects video assets with non-zero duration."""
         mock_validate_uri.return_value = True
         asset_list_url = reverse('api:asset_list_v2')
@@ -118,14 +125,16 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(mock_validate_uri.call_count, 1)
 
     @parametrize_version
-    def test_get_assets_after_create_should_return_1_asset(self, version):
+    def test_get_assets_after_create_should_return_1_asset(
+        self, version: str
+    ) -> None:
         self.create_asset(ASSET_CREATION_DATA, version)
 
         assets = self.get_assets(version)
         self.assertEqual(len(assets), 1)
 
     @parametrize_version
-    def test_get_asset_by_id_should_return_asset(self, version):
+    def test_get_asset_by_id_should_return_asset(self, version: str) -> None:
         expected_asset = self.create_asset(ASSET_CREATION_DATA, version)
         asset_id = expected_asset['asset_id']
         actual_asset = self.get_asset(asset_id, version)
@@ -133,7 +142,9 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(expected_asset, actual_asset)
 
     @parametrize_version
-    def test_update_asset_should_return_updated_asset(self, version):
+    def test_update_asset_should_return_updated_asset(
+        self, version: str
+    ) -> None:
         expected_asset = self.create_asset(ASSET_CREATION_DATA, version)
         asset_id = expected_asset['asset_id']
 
@@ -155,7 +166,7 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(updated_asset['play_order'], data['play_order'])
 
     @parametrize_version
-    def test_delete_asset_should_return_204(self, version):
+    def test_delete_asset_should_return_204(self, version: str) -> None:
         asset = self.create_asset(ASSET_CREATION_DATA, version)
         asset_id = asset['asset_id']
 

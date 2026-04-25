@@ -1,7 +1,5 @@
-from __future__ import unicode_literals
-
-from builtins import object
 from threading import Thread
+from typing import Any, Callable, Iterable
 
 import zmq.green as zmq
 from gevent import pywsgi
@@ -11,11 +9,15 @@ from geventwebsocket.handler import WebSocketHandler
 from settings import settings
 
 
-class WebSocketTranslator(object):
-    def __init__(self, context):
+class WebSocketTranslator:
+    def __init__(self, context: Any) -> None:
         self.context = context
 
-    def __call__(self, environ, start_response):
+    def __call__(
+        self,
+        environ: dict[str, Any],
+        start_response: Callable[..., Any],
+    ) -> Iterable[bytes]:
         ws = environ['wsgi.websocket']
         socket = self.context.socket(zmq.SUB)
         socket.setsockopt(zmq.SUBSCRIBE, b'ws_server')
@@ -27,14 +29,15 @@ class WebSocketTranslator(object):
                 ws.send(message)
         except WebSocketError:
             ws.close()
+        return []
 
 
 class AnthiasServerListener(Thread):
-    def __init__(self, context):
+    def __init__(self, context: Any) -> None:
         Thread.__init__(self)
         self.context = context
 
-    def run(self):
+    def run(self) -> None:
         socket_incoming = self.context.socket(zmq.SUB)
         socket_outgoing = self.context.socket(zmq.PUB)
 

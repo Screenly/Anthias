@@ -1,19 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 
 import configparser
 import hashlib
 import json
 import logging
-from builtins import object, str
 from collections import UserDict
 from os import getenv, path
 from time import sleep
+from typing import Any, ClassVar
 
 import zmq
 
-from lib.auth import BasicAuth, NoAuth
+from lib.auth import Auth, BasicAuth, NoAuth
 from lib.errors import ZmqCollectorTimeoutError
 
 CONFIG_DIR = '.screenly/'
@@ -65,15 +64,15 @@ requests_log.setLevel(logging.WARNING)
 logging.debug('Starting viewer')
 
 
-class AnthiasSettings(UserDict):
+class AnthiasSettings(UserDict[str, Any]):
     """Anthias' Settings."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         UserDict.__init__(self, *args, **kwargs)
-        self.home = getenv('HOME')
+        self.home = getenv('HOME') or ''
         self.conf_file = self.get_configfile()
-        self.auth_backends_list = [NoAuth(), BasicAuth(self)]
-        self.auth_backends = {}
+        self.auth_backends_list: list[Auth] = [NoAuth(), BasicAuth(self)]
+        self.auth_backends: dict[str, Auth] = {}
         for backend in self.auth_backends_list:
             DEFAULTS.update(backend.config)
             self.auth_backends[backend.name] = backend
@@ -87,7 +86,13 @@ class AnthiasSettings(UserDict):
         else:
             self.load()
 
-    def _get(self, config, section, field, default):
+    def _get(
+        self,
+        config: configparser.ConfigParser,
+        section: str,
+        field: str,
+        default: Any,
+    ) -> None:
         try:
             if isinstance(default, bool):
                 self[field] = config.getboolean(section, field)
@@ -116,7 +121,13 @@ class AnthiasSettings(UserDict):
         if field in ['database', 'assetdir']:
             self[field] = str(path.join(self.home, self[field]))
 
-    def _set(self, config, section, field, default):
+    def _set(
+        self,
+        config: configparser.ConfigParser,
+        section: str,
+        field: str,
+        default: Any,
+    ) -> None:
         if isinstance(default, bool):
             config.set(
                 section, field, self.get(field, default) and 'on' or 'off'
@@ -124,7 +135,7 @@ class AnthiasSettings(UserDict):
         else:
             config.set(section, field, str(self.get(field, default)))
 
-    def load(self):
+    def load(self) -> None:
         """Loads the latest settings from screenly.conf into memory."""
         logging.debug('Reading config-file...')
         config = configparser.ConfigParser()
@@ -134,12 +145,12 @@ class AnthiasSettings(UserDict):
             for field, default in list(defaults.items()):
                 self._get(config, section, field, default)
 
-    def use_defaults(self):
+    def use_defaults(self) -> None:
         for defaults in list(DEFAULTS.items()):
             for field, default in list(defaults[1].items()):
                 self[field] = default
 
-    def save(self):
+    def save(self) -> None:
         # Write new settings to disk.
         config = configparser.ConfigParser()
         for section, defaults in list(DEFAULTS.items()):
@@ -150,26 +161,27 @@ class AnthiasSettings(UserDict):
             config.write(f)
         self.load()
 
-    def get_configdir(self):
+    def get_configdir(self) -> str:
         return path.join(self.home, CONFIG_DIR)
 
-    def get_configfile(self):
+    def get_configfile(self) -> str:
         return path.join(self.home, CONFIG_DIR, CONFIG_FILE)
 
     @property
-    def auth(self):
+    def auth(self) -> Auth | None:
         backend_name = self['auth_backend']
         if backend_name in self.auth_backends:
             return self.auth_backends[self['auth_backend']]
+        return None
 
 
 settings = AnthiasSettings()
 
 
-class ZmqPublisher(object):
-    INSTANCE = None
+class ZmqPublisher:
+    INSTANCE: ClassVar['ZmqPublisher | None'] = None
 
-    def __init__(self):
+    def __init__(self) -> None:
         if self.INSTANCE is not None:
             raise ValueError('An instance already exists!')
 
@@ -180,20 +192,20 @@ class ZmqPublisher(object):
         sleep(1)
 
     @classmethod
-    def get_instance(cls):
+    def get_instance(cls) -> 'ZmqPublisher':
         if cls.INSTANCE is None:
             cls.INSTANCE = ZmqPublisher()
         return cls.INSTANCE
 
-    def send_to_ws_server(self, msg):
+    def send_to_ws_server(self, msg: str) -> None:
         self.socket.send('ws_server {}'.format(msg).encode('utf-8'))
 
-    def send_to_viewer(self, msg):
+    def send_to_viewer(self, msg: str) -> None:
         self.socket.send_string('viewer {}'.format(msg))
 
 
-class ZmqConsumer(object):
-    def __init__(self):
+class ZmqConsumer:
+    def __init__(self) -> None:
         self.context = zmq.Context()
 
         self.socket = self.context.socket(zmq.PUSH)
@@ -202,14 +214,14 @@ class ZmqConsumer(object):
 
         sleep(1)
 
-    def send(self, msg):
+    def send(self, msg: Any) -> None:
         self.socket.send_json(msg, flags=zmq.NOBLOCK)
 
 
-class ZmqCollector(object):
-    INSTANCE = None
+class ZmqCollector:
+    INSTANCE: ClassVar['ZmqCollector | None'] = None
 
-    def __init__(self):
+    def __init__(self) -> None:
         if self.INSTANCE is not None:
             raise ValueError('An instance already exists!')
 
@@ -224,12 +236,12 @@ class ZmqCollector(object):
         sleep(1)
 
     @classmethod
-    def get_instance(cls):
+    def get_instance(cls) -> 'ZmqCollector':
         if cls.INSTANCE is None:
             cls.INSTANCE = ZmqCollector()
         return cls.INSTANCE
 
-    def recv_json(self, timeout):
+    def recv_json(self, timeout: int) -> Any:
         if self.poller.poll(timeout):
             return json.loads(self.socket.recv(zmq.NOBLOCK))
 

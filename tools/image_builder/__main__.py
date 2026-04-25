@@ -198,7 +198,7 @@ def main(
     clean_build: bool,
     build_target: str,
     target_platform: str,
-    service,
+    service: tuple[str, ...],
     disable_cache_mounts: bool,
     environment: str,
     push: bool,

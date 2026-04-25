@@ -5,6 +5,7 @@ import logging
 import os
 import unittest
 from time import sleep
+from typing import Any
 
 import mock
 
@@ -15,7 +16,7 @@ logging.disable(logging.CRITICAL)
 
 
 class ViewerTestCase(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.original_splash_delay = viewer.SPLASH_DELAY
         viewer.SPLASH_DELAY = 0
 
@@ -45,34 +46,34 @@ class ViewerTestCase(unittest.TestCase):
         self.m_loadb = mock.Mock(name='load_browser')
         self.p_loadb = mock.patch.object(self.u, 'load_browser', self.m_loadb)
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.u.SPLASH_DELAY = self.original_splash_delay
 
 
-def noop(*a, **k):
+def noop(*a: Any, **k: Any) -> None:
     return None
 
 
 class TestEmptyPl(ViewerTestCase):
     @mock.patch('viewer.constants.SERVER_WAIT_TIMEOUT', 0)
-    def test_empty(self):
+    def test_empty(self) -> None:
         m_asset_list = mock.Mock()
         m_asset_list.return_value = ([], None)
 
         with mock.patch('viewer.scheduling.generate_asset_list', m_asset_list):
-            self.u.scheduler = Scheduler()
+            setattr(self.u, 'scheduler', Scheduler())
 
             m_asset_list.assert_called_once()
 
 
 class TestLoadBrowser(ViewerTestCase):
     @mock.patch('pydbus.SessionBus', mock.MagicMock())
-    def test_setup(self):
+    def test_setup(self) -> None:
         self.p_loadb.start()
         self.u.setup()
         self.p_loadb.stop()
 
-    def test_load_browser(self):
+    def test_load_browser(self) -> None:
         self.m_cmd.return_value.return_value.process.stdout = (
             b'Screenly service start'
         )
@@ -83,7 +84,7 @@ class TestLoadBrowser(ViewerTestCase):
 
 
 class TestWatchdog(ViewerTestCase):
-    def test_watchdog_should_create_file_if_not_exists(self):
+    def test_watchdog_should_create_file_if_not_exists(self) -> None:
         try:
             os.remove(self.u.utils.WATCHDOG_PATH)
         except OSError:
@@ -91,7 +92,7 @@ class TestWatchdog(ViewerTestCase):
         self.u.watchdog()
         self.assertEqual(os.path.exists(self.u.utils.WATCHDOG_PATH), True)
 
-    def test_watchdog_should_update_mtime(self):
+    def test_watchdog_should_update_mtime(self) -> None:
         # for watchdog file creation
         self.u.watchdog()
         mtime = os.path.getmtime(self.u.utils.WATCHDOG_PATH)

@@ -3,6 +3,7 @@ Tests for V2 API endpoints.
 """
 
 import hashlib
+from typing import Any
 from unittest import mock
 from unittest.mock import patch
 
@@ -13,12 +14,14 @@ from rest_framework.test import APIClient
 
 
 class DeviceSettingsViewV2Test(TestCase):
-    def setUp(self):
-        self.client = APIClient()
+    client_class = APIClient
+    client: APIClient
+
+    def setUp(self) -> None:
         self.device_settings_url = reverse('api:device_settings_v2')
 
     @mock.patch('api.views.v2.settings')
-    def test_get_device_settings(self, settings_mock):
+    def test_get_device_settings(self, settings_mock: Any) -> None:
         settings_mock.__getitem__.side_effect = lambda key: {
             'player_name': 'Test Player',
             'audio_output': 'hdmi',
@@ -57,7 +60,9 @@ class DeviceSettingsViewV2Test(TestCase):
             self.assertEqual(response.data[key], expected_value)
 
     @mock.patch('api.views.v2.settings')
-    def test_patch_device_settings_invalid_auth_backend(self, settings_mock):
+    def test_patch_device_settings_invalid_auth_backend(
+        self, settings_mock: Any
+    ) -> None:
         settings_mock.load = mock.MagicMock()
         settings_mock.save = mock.MagicMock()
         settings_mock.__getitem__.side_effect = lambda key: {
@@ -94,8 +99,8 @@ class DeviceSettingsViewV2Test(TestCase):
     @mock.patch('api.views.v2.settings')
     @mock.patch('api.views.v2.ZmqPublisher')
     def test_patch_device_settings_success(
-        self, publisher_mock, settings_mock
-    ):
+        self, publisher_mock: Any, settings_mock: Any
+    ) -> None:
         settings_mock.load = mock.MagicMock()
         settings_mock.save = mock.MagicMock()
         settings_mock.__getitem__.side_effect = lambda key: {
@@ -141,7 +146,9 @@ class DeviceSettingsViewV2Test(TestCase):
         publisher_instance.send_to_viewer.assert_called_once_with('reload')
 
     @mock.patch('api.views.v2.settings')
-    def test_patch_device_settings_validation_error(self, settings_mock):
+    def test_patch_device_settings_validation_error(
+        self, settings_mock: Any
+    ) -> None:
         data = {
             'default_duration': 'not_an_integer',
             'show_splash': 'not_a_boolean',
@@ -160,7 +167,9 @@ class DeviceSettingsViewV2Test(TestCase):
 
     @mock.patch('api.views.v2.settings')
     @mock.patch('api.views.v2.ZmqPublisher')
-    def test_enable_basic_auth(self, publisher_mock, settings_mock):
+    def test_enable_basic_auth(
+        self, publisher_mock: Any, settings_mock: Any
+    ) -> None:
         settings_mock.load = mock.MagicMock()
         settings_mock.save = mock.MagicMock()
         settings_mock.__getitem__.side_effect = lambda key: {
@@ -229,7 +238,9 @@ class DeviceSettingsViewV2Test(TestCase):
 
     @mock.patch('api.views.v2.settings')
     @mock.patch('api.views.v2.ZmqPublisher')
-    def test_disable_basic_auth(self, publisher_mock, settings_mock):
+    def test_disable_basic_auth(
+        self, publisher_mock: Any, settings_mock: Any
+    ) -> None:
         settings_mock.load = mock.MagicMock()
         settings_mock.save = mock.MagicMock()
         settings_mock.__getitem__.side_effect = lambda key: {
@@ -287,11 +298,11 @@ class DeviceSettingsViewV2Test(TestCase):
     @mock.patch('api.views.v2.remove_default_assets')
     def test_patch_device_settings_default_assets(
         self,
-        remove_default_assets_mock,
-        add_default_assets_mock,
-        publisher_mock,
-        settings_mock,
-    ):
+        remove_default_assets_mock: Any,
+        add_default_assets_mock: Any,
+        publisher_mock: Any,
+        settings_mock: Any,
+    ) -> None:
         settings_mock.load = mock.MagicMock()
         settings_mock.save = mock.MagicMock()
         settings_mock.__getitem__.side_effect = lambda key: {
@@ -379,15 +390,17 @@ class DeviceSettingsViewV2Test(TestCase):
 
 
 class TestIntegrationsViewV2(TestCase):
-    def setUp(self):
-        self.client = APIClient()
+    client_class = APIClient
+    client: APIClient
+
+    def setUp(self) -> None:
         self.integrations_url = reverse('api:integrations_v2')
 
     @patch('api.views.v2.is_balena_app')
     @patch('api.views.v2.getenv')
     def test_integrations_balena_environment(
-        self, mock_getenv, mock_is_balena
-    ):
+        self, mock_getenv: Any, mock_is_balena: Any
+    ) -> None:
         # Mock Balena environment
         mock_is_balena.side_effect = lambda: True
         mock_getenv.side_effect = lambda x: {
@@ -415,7 +428,9 @@ class TestIntegrationsViewV2(TestCase):
         )
 
     @patch('api.views.v2.is_balena_app')
-    def test_integrations_non_balena_environment(self, mock_is_balena):
+    def test_integrations_non_balena_environment(
+        self, mock_is_balena: Any
+    ) -> None:
         # Mock non-Balena environment
         mock_is_balena.side_effect = lambda: False
 

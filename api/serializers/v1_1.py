@@ -1,7 +1,8 @@
 import uuid
+from datetime import timezone
 from os import path, rename
+from typing import Any
 
-from django.utils import timezone
 from rest_framework.serializers import (
     BooleanField,
     CharField,
@@ -23,8 +24,13 @@ from . import (
 )
 
 
-class CreateAssetSerializerV1_1(Serializer):
-    def __init__(self, *args, unique_name=False, **kwargs):
+class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
+    def __init__(
+        self,
+        *args: Any,
+        unique_name: bool = False,
+        **kwargs: Any,
+    ) -> None:
         self.unique_name = unique_name
         super().__init__(*args, **kwargs)
 
@@ -40,7 +46,7 @@ class CreateAssetSerializerV1_1(Serializer):
     play_order = IntegerField(required=False)
     skip_asset_check = IntegerField(min_value=0, max_value=1, required=False)
 
-    def prepare_asset(self, data):
+    def prepare_asset(self, data: dict[str, Any]) -> dict[str, Any]:
         name = data['name']
 
         if self.unique_name:
@@ -55,7 +61,7 @@ class CreateAssetSerializerV1_1(Serializer):
             'nocache': data.get('nocache', 0),
         }
 
-        uri = data.get('uri')
+        uri: str = data['uri']
 
         validate_uri(uri)
 
@@ -75,23 +81,26 @@ class CreateAssetSerializerV1_1(Serializer):
         asset['uri'] = uri
 
         if 'video' in asset['mimetype']:
-            if int(data.get('duration')) == 0:
-                asset['duration'] = int(
-                    get_video_duration(uri).total_seconds()
-                )
+            duration_raw = data.get('duration')
+            if duration_raw is not None and int(duration_raw) == 0:
+                video_duration = get_video_duration(uri)
+                assert video_duration is not None
+                asset['duration'] = int(video_duration.total_seconds())
         else:
             # Crashes if it's not an int. We want that.
-            asset['duration'] = int(data.get('duration'))
+            asset['duration'] = int(data['duration'])
 
         asset['skip_asset_check'] = int(data.get('skip_asset_check', 0))
 
-        if data.get('start_date'):
-            asset['start_date'] = data.get('start_date').replace(tzinfo=None)
+        start_date = data.get('start_date')
+        if start_date:
+            asset['start_date'] = start_date.replace(tzinfo=None)
         else:
             asset['start_date'] = ''
 
-        if data.get('end_date'):
-            asset['end_date'] = data.get('end_date').replace(tzinfo=None)
+        end_date = data.get('end_date')
+        if end_date:
+            asset['end_date'] = end_date.replace(tzinfo=None)
         else:
             asset['end_date'] = ''
 
@@ -100,5 +109,5 @@ class CreateAssetSerializerV1_1(Serializer):
 
         return asset
 
-    def validate(self, data):
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         return self.prepare_asset(data)

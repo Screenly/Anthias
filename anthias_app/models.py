@@ -4,7 +4,7 @@ from django.db import models
 from django.utils import timezone
 
 
-def generate_asset_id():
+def generate_asset_id() -> str:
     return uuid.uuid4().hex
 
 
@@ -28,12 +28,12 @@ class Asset(models.Model):
     class Meta:
         db_table = 'assets'
 
-    def __str__(self):
-        return self.name
+    def __str__(self) -> str:
+        return str(self.name)
 
-    def is_active(self):
+    def is_active(self) -> bool:
         if self.is_enabled and self.start_date and self.end_date:
             current_time = timezone.now()
-            return self.start_date < current_time < self.end_date
+            return bool(self.start_date < current_time < self.end_date)
 
         return False

@@ -1,6 +1,8 @@
 import logging
+from datetime import datetime
 from os import path
 from random import shuffle
+from typing import Any
 
 from django.utils import timezone
 
@@ -8,16 +10,17 @@ from anthias_app.models import Asset
 from settings import settings
 
 
-def get_specific_asset(asset_id):
+def get_specific_asset(asset_id: str) -> dict[str, Any] | None:
     logging.info('Getting specific asset')
     try:
-        return Asset.objects.get(asset_id=asset_id).__dict__
+        result: dict[str, Any] = Asset.objects.get(asset_id=asset_id).__dict__
+        return result
     except Asset.DoesNotExist:
         logging.debug('Asset %s not found in database', asset_id)
         return None
 
 
-def generate_asset_list():
+def generate_asset_list() -> tuple[list[dict[str, Any]], datetime | None]:
     """Choose deadline via:
     1. Map assets to deadlines with rule: if asset is active then
        'end_date' else 'start_date'
@@ -26,8 +29,10 @@ def generate_asset_list():
     logging.info('Generating asset-list...')
     assets = Asset.objects.all()
     deadlines = [
-        asset.end_date if asset.is_active() else asset.start_date
+        d
         for asset in assets
+        if (d := asset.end_date if asset.is_active() else asset.start_date)
+        is not None
     ]
 
     enabled_assets = Asset.objects.filter(
@@ -50,19 +55,20 @@ def generate_asset_list():
     return playlist, deadline
 
 
-class Scheduler(object):
-    def __init__(self, *args, **kwargs):
+class Scheduler:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         logging.debug('Scheduler init')
-        self.assets = []
-        self.counter = 0
-        self.current_asset_id = None
-        self.deadline = None
-        self.extra_asset = None
-        self.index = 0
-        self.reverse = 0
+        self.assets: list[dict[str, Any]] = []
+        self.counter: int = 0
+        self.current_asset_id: str | None = None
+        self.deadline: datetime | None = None
+        self.extra_asset: str | None = None
+        self.index: int = 0
+        self.reverse: bool = False
+        self.last_update_db_mtime: float = 0
         self.update_playlist()
 
-    def get_next_asset(self):
+    def get_next_asset(self) -> dict[str, Any] | None:
         logging.debug('get_next_asset')
 
         if self.extra_asset is not None:
@@ -101,7 +107,7 @@ class Scheduler(object):
         self.current_asset_id = current_asset.get('asset_id')
         return current_asset
 
-    def refresh_playlist(self):
+    def refresh_playlist(self) -> None:
         logging.debug('refresh_playlist')
         time_cur = timezone.now()
 
@@ -120,7 +126,7 @@ class Scheduler(object):
         elif self.deadline and self.deadline <= time_cur:
             self.update_playlist()
 
-    def update_playlist(self):
+    def update_playlist(self) -> None:
         logging.debug('update_playlist')
         self.last_update_db_mtime = self.get_db_mtime()
         (new_assets, new_deadline) = generate_asset_list()
@@ -142,7 +148,7 @@ class Scheduler(object):
             self.deadline,
         )
 
-    def get_db_mtime(self):
+    def get_db_mtime(self) -> float:
         # get database file last modification time
         try:
             return path.getmtime(settings['database'])

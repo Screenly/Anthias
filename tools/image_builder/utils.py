@@ -1,3 +1,5 @@
+from typing import Any
+
 import click
 import requests
 from jinja2 import Environment, FileSystemLoader
@@ -5,7 +7,7 @@ from jinja2 import Environment, FileSystemLoader
 from tools.image_builder.constants import GITHUB_REPO_URL
 
 
-def get_build_parameters(build_target: str) -> dict:
+def get_build_parameters(build_target: str) -> dict[str, Any]:
     default_build_parameters = {
         'board': 'x86',
         'base_image': 'debian',
@@ -64,7 +66,7 @@ def get_docker_tag(git_branch: str, board: str, platform: str) -> str:
         return f'{git_branch}-{result_board}'
 
 
-def generate_dockerfile(service: str, context: dict) -> None:
+def generate_dockerfile(service: str, context: dict[str, Any]) -> None:
     templating_environment = Environment(loader=FileSystemLoader('docker/'))
     templating_environment.lstrip_blocks = True
     templating_environment.trim_blocks = True
@@ -76,7 +78,7 @@ def generate_dockerfile(service: str, context: dict) -> None:
         f.write(dockerfile)
 
 
-def get_uv_builder_context(service: str) -> dict:
+def get_uv_builder_context(service: str) -> dict[str, Any]:
     service_to_group = {
         'server': 'server',
         'celery': 'server',
@@ -106,7 +108,7 @@ def get_uv_builder_context(service: str) -> dict:
     }
 
 
-def get_test_context() -> dict:
+def get_test_context() -> dict[str, Any]:
     chrome_dl_url = (
         'https://storage.googleapis.com/chrome-for-testing-public/'
         '123.0.6312.86/linux64/chrome-linux64.zip'
@@ -132,7 +134,7 @@ def get_test_context() -> dict:
     }
 
 
-def get_viewer_context(board: str) -> dict:
+def get_viewer_context(board: str) -> dict[str, Any]:
     releases_url = f'{GITHUB_REPO_URL}/releases/download'
 
     webview_git_hash = 'd7a7e2c'
@@ -289,7 +291,7 @@ def get_viewer_context(board: str) -> dict:
     }
 
 
-def get_wifi_connect_context(target_platform: str) -> dict:
+def get_wifi_connect_context(target_platform: str) -> dict[str, Any]:
     if target_platform == 'linux/arm/v6':
         architecture = 'rpi'
     elif target_platform in ['linux/arm/v7', 'linux/arm/v8']:

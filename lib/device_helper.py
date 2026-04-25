@@ -1,12 +1,9 @@
-from __future__ import unicode_literals
-
-
-def parse_cpu_info():
+def parse_cpu_info() -> dict[str, int | str]:
     """
     Extracts the various Raspberry Pi related data
     from the CPU.
     """
-    cpu_info = {'cpu_count': 0}
+    cpu_info: dict[str, int | str] = {'cpu_count': 0}
 
     with open('/proc/cpuinfo', 'r') as cpuinfo:
         for line in cpuinfo:
@@ -17,14 +14,16 @@ def parse_cpu_info():
                 pass
 
             if key == 'processor':
-                cpu_info['cpu_count'] += 1
+                cpu_info['cpu_count'] = (
+                    int(cpu_info.get('cpu_count', 0) or 0) + 1
+                )
 
             if key in ['Serial', 'Hardware', 'Revision', 'Model']:
                 cpu_info[key.lower()] = value
     return cpu_info
 
 
-def get_device_type():
+def get_device_type() -> str:
     try:
         with open('/proc/device-tree/model') as file:
             content = file.read()

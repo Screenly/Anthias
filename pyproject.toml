@@ -9,7 +9,19 @@ dependencies = []
 [dependency-groups]
 dev-host = [
     "ansible-lint==26.4.0",
+    "celery-types==0.26.0",
+    "django-stubs==6.0.3",
+    "djangorestframework-stubs==3.16.9",
+    "mypy==1.18.2",
     "ruff==0.14.10",
+    "tenacity==9.1.2",
+    "types-gunicorn==25.3.0.20260408",
+    "types-mock==5.2.0.20260408",
+    "types-netifaces==0.11.0.20260408",
+    "types-python-dateutil==2.9.0.20260408",
+    "types-pytz==2026.1.1.20260408",
+    "types-PyYAML==6.0.12.20260408",
+    "types-requests==2.33.0.20260408",
 ]
 docker-image-builder = [
     "click==8.1.7",
@@ -29,6 +41,7 @@ server = [
     "Django==4.2.30",
     "djangorestframework==3.16.1",
     "django-dbbackup==4.2.1",
+    "django-stubs-ext==6.0.3",
     "drf-spectacular==0.29.0",
     "future==1.0.0",
     "gevent-websocket==0.10.1",
@@ -127,3 +140,35 @@ test = [
     { include-group = "viewer" },
     { include-group = "dev" },
 ]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+follow_imports = "normal"
+mypy_path = "stubs"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+exclude = [
+    "^\\.venv/",
+    "^node_modules/",
+    "/migrations/",
+    "^static/",
+    "^build/",
+    "^dist/",
+]
+
+[[tool.mypy.overrides]]
+# Third-party libs without type stubs. Listed explicitly so a future stub
+# release is noticed (and the override removed) instead of silently ignored.
+module = [
+    "cec",
+    "geventwebsocket.*",
+    "hurry.filesize",
+    "pydbus",
+    "sh",
+    "splinter",
+    "vlc",
+]
+ignore_missing_imports = true
+
+[tool.django-stubs]
+django_settings_module = "anthias_django.settings"

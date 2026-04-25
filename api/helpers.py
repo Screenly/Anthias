@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 from dateutil import parser as date_parser
 from rest_framework import status
@@ -9,11 +10,11 @@ from anthias_app.models import Asset
 
 
 class AssetCreationError(Exception):
-    def __init__(self, errors):
+    def __init__(self, errors: Any) -> None:
         self.errors = errors
 
 
-def update_asset(asset, data):
+def update_asset(asset: dict[str, Any], data: dict[str, Any]) -> None:
     for key, value in list(data.items()):
         if (
             key in ['asset_id', 'is_processing', 'mimetype', 'uri']
@@ -41,7 +42,9 @@ def update_asset(asset, data):
         asset.update({key: value})
 
 
-def custom_exception_handler(exc, context):
+def custom_exception_handler(
+    exc: Exception, context: dict[str, Any]
+) -> Response:
     exception_handler(exc, context)
 
     return Response(
@@ -49,21 +52,21 @@ def custom_exception_handler(exc, context):
     )
 
 
-def get_active_asset_ids():
+def get_active_asset_ids() -> list[str]:
     enabled_assets = Asset.objects.filter(
-        is_enabled=1,
+        is_enabled=True,
         start_date__isnull=False,
         end_date__isnull=False,
     )
     return [asset.asset_id for asset in enabled_assets if asset.is_active()]
 
 
-def save_active_assets_ordering(active_asset_ids):
+def save_active_assets_ordering(active_asset_ids: list[str]) -> None:
     for i, asset_id in enumerate(active_asset_ids):
         Asset.objects.filter(asset_id=asset_id).update(play_order=i)
 
 
-def parse_request(request):
+def parse_request(request: Any) -> Any:
     data = None
 
     # For backward compatibility

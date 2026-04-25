@@ -3,6 +3,7 @@ Common test utilities and constants for the Anthias API tests.
 """
 
 import json
+from typing import Any
 
 from django.urls import reverse
 
@@ -40,7 +41,10 @@ ASSET_UPDATE_DATA_V2 = {
 }
 
 
-def get_request_data(data, version):
+def get_request_data(
+    data: dict[str, Any],
+    version: str,
+) -> dict[str, Any]:
     """Helper function to format request data based on API version."""
     if version in ['v1', 'v1_1']:
         return {'model': json.dumps(data)}

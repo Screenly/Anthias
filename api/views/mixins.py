@@ -3,10 +3,13 @@ from base64 import b64encode
 from inspect import cleandoc
 from mimetypes import guess_extension, guess_type
 from os import path, remove, statvfs
+from typing import Any
 
-from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from hurry.filesize import size
 from rest_framework import status
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -31,11 +34,11 @@ r = connect_to_redis()
 class DeleteAssetViewMixin:
     @extend_schema(summary='Delete asset')
     @authorized
-    def delete(self, request, asset_id):
+    def delete(self, request: Request, asset_id: str) -> Response:
         asset = Asset.objects.get(asset_id=asset_id)
 
         try:
-            if asset.uri.startswith(settings['assetdir']):
+            if asset.uri and asset.uri.startswith(settings['assetdir']):
                 remove(asset.uri)
         except OSError:
             pass
@@ -66,7 +69,7 @@ class BackupViewMixin(APIView):
         },
     )
     @authorized
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         filename = backup_helper.create_backup(name=settings['player_name'])
         return Response(filename, status=status.HTTP_201_CREATED)
 
@@ -94,9 +97,11 @@ class RecoverViewMixin(APIView):
         },
     )
     @authorized
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         publisher = ZmqPublisher.get_instance()
         file_upload = request.data.get('backup_upload')
+        if file_upload is None:
+            raise Exception('No backup file uploaded.')
         filename = file_upload.name
 
         if guess_type(filename)[0] != 'application/x-tar':
@@ -120,7 +125,7 @@ class RebootViewMixin(APIView):
 
     @extend_schema(summary='Reboot system')
     @authorized
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         reboot_anthias.apply_async()
         return Response(status=status.HTTP_200_OK)
 
@@ -130,7 +135,7 @@ class ShutdownViewMixin(APIView):
 
     @extend_schema(summary='Shut down system')
     @authorized
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         shutdown_anthias.apply_async()
         return Response(status=status.HTTP_200_OK)
 
@@ -157,8 +162,10 @@ class FileAssetViewMixin(APIView):
         },
     )
     @authorized
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         file_upload = request.data.get('file_upload')
+        if file_upload is None:
+            raise Exception('No file uploaded.')
         filename = file_upload.name
         file_type = guess_type(filename)[0]
 
@@ -213,11 +220,19 @@ class AssetContentViewMixin(APIView):
         },
     )
     @authorized
-    def get(self, request, asset_id, format=None):
+    def get(
+        self,
+        request: Request,
+        asset_id: str,
+        format: str | None = None,
+    ) -> Response:
         asset = Asset.objects.get(asset_id=asset_id)
+        if asset.uri is None:
+            raise Exception('Asset has no URI.')
 
+        result: dict[str, Any]
         if path.isfile(asset.uri):
-            filename = asset.name
+            filename = asset.name or ''
 
             with open(asset.uri, 'rb') as f:
                 content = f.read()
@@ -245,7 +260,7 @@ class PlaylistOrderViewMixin(APIView):
         responses={204: None},
     )
     @authorized
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         asset_ids = request.data.get('ids', '').split(',')
         save_active_assets_ordering(asset_ids)
 
@@ -277,7 +292,7 @@ class AssetsControlViewMixin(APIView):
         ],
     )
     @authorized
-    def get(self, request, command):
+    def get(self, request: Request, command: str) -> Response:
         publisher = ZmqPublisher.get_instance()
         publisher.send_to_viewer(command)
         return Response('Asset switched')
@@ -307,7 +322,7 @@ class InfoViewMixin(APIView):
         },
     )
     @authorized
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         viewlog = 'Not yet implemented'
 
         # Calculate disk space

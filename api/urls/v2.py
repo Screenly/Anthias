@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import URLPattern, URLResolver, path
 
 from api.views.v2 import (
     AssetContentViewV2,
@@ -17,7 +17,7 @@ from api.views.v2 import (
 )
 
 
-def get_url_patterns():
+def get_url_patterns() -> list[URLPattern | URLResolver]:
     return [
         path('v2/assets', AssetListViewV2.as_view(), name='asset_list_v2'),
         path(

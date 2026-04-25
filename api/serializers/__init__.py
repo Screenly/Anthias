@@ -1,9 +1,11 @@
+from datetime import timezone
 from os import path
+from typing import Any
 
-from django.utils import timezone
 from rest_framework.serializers import (
     CharField,
     DateTimeField,
+    Field,
     IntegerField,
     ModelSerializer,
     Serializer,
@@ -13,7 +15,7 @@ from anthias_app.models import Asset
 from lib.utils import validate_url
 
 
-def get_unique_name(name):
+def get_unique_name(name: str) -> str:
     names = Asset.objects.values_list('name', flat=True)
     if name in names:
         i = 1
@@ -27,7 +29,7 @@ def get_unique_name(name):
     return name
 
 
-def validate_uri(uri):
+def validate_uri(uri: str) -> None:
     if uri.startswith('/'):
         if not path.isfile(uri):
             raise Exception('Invalid file path. Failed to add asset.')
@@ -36,7 +38,7 @@ def validate_uri(uri):
             raise Exception('Invalid URL. Failed to add asset.')
 
 
-class AssetSerializer(ModelSerializer):
+class AssetSerializer(ModelSerializer[Asset]):
     duration = CharField()
     is_enabled = IntegerField(min_value=0, max_value=1)
     is_active = IntegerField(min_value=0, max_value=1)
@@ -63,18 +65,30 @@ class AssetSerializer(ModelSerializer):
         ]
 
 
-class UpdateAssetSerializer(Serializer):
+class UpdateAssetSerializer(Serializer[Asset]):
     name = CharField()
     start_date = DateTimeField(default_timezone=timezone.utc)
     end_date = DateTimeField(default_timezone=timezone.utc)
-    duration = CharField()
-    is_enabled = IntegerField(min_value=0, max_value=1)
-    is_processing = IntegerField(min_value=0, max_value=1, required=False)
-    nocache = IntegerField(min_value=0, max_value=1, required=False)
+    duration: Field[Any, Any, Any, Any] = CharField()
+    is_enabled: Field[Any, Any, Any, Any] = IntegerField(
+        min_value=0, max_value=1
+    )
+    is_processing: Field[Any, Any, Any, Any] = IntegerField(
+        min_value=0, max_value=1, required=False
+    )
+    nocache: Field[Any, Any, Any, Any] = IntegerField(
+        min_value=0, max_value=1, required=False
+    )
     play_order = IntegerField(required=False)
-    skip_asset_check = IntegerField(min_value=0, max_value=1, required=False)
+    skip_asset_check: Field[Any, Any, Any, Any] = IntegerField(
+        min_value=0, max_value=1, required=False
+    )
 
-    def update(self, instance, validated_data):
+    def update(
+        self,
+        instance: Asset,
+        validated_data: dict[str, Any],
+    ) -> Asset:
         instance.name = validated_data.get('name', instance.name)
         instance.start_date = validated_data.get(
             'start_date', instance.start_date
@@ -94,7 +108,7 @@ class UpdateAssetSerializer(Serializer):
             'skip_asset_check', instance.skip_asset_check
         )
 
-        if 'video' not in instance.mimetype:
+        if 'video' not in (instance.mimetype or ''):
             instance.duration = validated_data.get(
                 'duration', instance.duration
             )
