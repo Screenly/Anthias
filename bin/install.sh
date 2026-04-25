@@ -224,6 +224,10 @@ function run_ansible_playbook() {
         ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "raspberry-pi")
     fi
 
+    # Point Ansible at the venv's Python — we no longer install
+    # python3 system-wide in the bootstrap step.
+    export ANSIBLE_PYTHON_INTERPRETER="/home/${USER}/installer_venv/bin/python"
+
     sudo -E -u "${USER}" \
         "/home/${USER}/installer_venv/bin/ansible-playbook" \
         site.yml "${ANSIBLE_PLAYBOOK_ARGS[@]}"

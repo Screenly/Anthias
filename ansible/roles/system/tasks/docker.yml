@@ -51,6 +51,15 @@
     update_cache: true
     install_recommends: false
 
+# `netdev` is created by network-manager on most distros, but Anthias
+# can be installed without it (MANAGE_NETWORK=No). Make sure the group
+# exists so the user-membership task below works in either case.
+- name: Ensure netdev group exists
+  ansible.builtin.group:
+    name: netdev
+    state: present
+    system: true
+
 - name: Ensure Anthias user is in required groups
   ansible.builtin.user:
     name: "{{ anthias_user }}"
