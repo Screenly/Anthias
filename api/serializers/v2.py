@@ -45,7 +45,9 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
         ]
 
 
-class CreateAssetSerializerV2(Serializer[dict[str, Any]], CreateAssetSerializerMixin):
+class CreateAssetSerializerV2(
+    Serializer[dict[str, Any]], CreateAssetSerializerMixin
+):
     def __init__(
         self,
         *args: Any,

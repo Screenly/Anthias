@@ -70,7 +70,9 @@ class SettingsTest(TestCase):
     def setUp(self) -> None:
         if not os.path.exists(CONFIG_DIR):
             os.mkdir(CONFIG_DIR)
-        self._getenv_patcher = mock.patch.object(os, 'getenv', side_effect=getenv)
+        self._getenv_patcher = mock.patch.object(
+            os, 'getenv', side_effect=getenv
+        )
         self._getenv_patcher.start()
 
     def tearDown(self) -> None:

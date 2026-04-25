@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import configparser
-import hashlib
 import json
 import logging
 from collections import UserDict
@@ -12,7 +11,13 @@ from typing import Any, ClassVar
 
 import zmq
 
-from lib.auth import Auth, BasicAuth, NoAuth
+from lib.auth import (
+    Auth,
+    BasicAuth,
+    NoAuth,
+    _is_legacy_sha256,
+    hash_password,
+)
 from lib.errors import ZmqCollectorTimeoutError
 
 CONFIG_DIR = '.screenly/'
@@ -100,14 +105,16 @@ class AnthiasSettings(UserDict[str, Any]):
                 self[field] = config.getint(section, field)
             else:
                 self[field] = config.get(section, field)
-                # Likely not a hashed password
                 if (
                     field == 'password'
                     and self[field] != ''
-                    and len(self[field]) != 64
+                    and not _is_legacy_sha256(self[field])
+                    and '$' not in self[field]
                 ):
-                    # Hash the original password.
-                    self[field] = hashlib.sha256(self[field]).hexdigest()
+                    # Looks like plaintext — hash it before storing.
+                    # `$` covers Django's algorithm-prefixed hash format
+                    # (e.g. pbkdf2_sha256$...).
+                    self[field] = hash_password(self[field])
         except configparser.Error as e:
             logging.debug(
                 "Could not parse setting '%s.%s': %s. "

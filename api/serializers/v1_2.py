@@ -11,7 +11,9 @@ from rest_framework.serializers import (
 from api.serializers.mixins import CreateAssetSerializerMixin
 
 
-class CreateAssetSerializerV1_2(Serializer[dict[str, Any]], CreateAssetSerializerMixin):
+class CreateAssetSerializerV1_2(
+    Serializer[dict[str, Any]], CreateAssetSerializerMixin
+):
     def __init__(
         self,
         *args: Any,

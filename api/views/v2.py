@@ -1,4 +1,3 @@
-import hashlib
 import ipaddress
 import logging
 from datetime import timedelta
@@ -21,6 +20,7 @@ from api.helpers import (
     get_active_asset_ids,
     save_active_assets_ordering,
 )
+from lib.auth import hash_password
 from api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
@@ -246,18 +246,8 @@ class DeviceSettingsViewV2(APIView):
             return
 
         new_user = data.get('username', '')
-        new_pass_bytes = data.get('password', '').encode('utf-8')
-        new_pass2_bytes = data.get('password_2', '').encode('utf-8')
-        new_pass = (
-            hashlib.sha256(new_pass_bytes).hexdigest()
-            if new_pass_bytes
-            else None
-        )
-        new_pass2 = (
-            hashlib.sha256(new_pass2_bytes).hexdigest()
-            if new_pass_bytes
-            else None
-        )
+        new_pass = data.get('password', '')
+        new_pass2 = data.get('password_2', '')
 
         if settings['password']:
             if new_user != settings['user']:
@@ -281,7 +271,7 @@ class DeviceSettingsViewV2(APIView):
                 if new_pass2 != new_pass:
                     raise ValueError('New passwords do not match!')
 
-                settings['password'] = new_pass
+                settings['password'] = hash_password(new_pass)
 
         else:
             if new_user:
@@ -290,7 +280,7 @@ class DeviceSettingsViewV2(APIView):
                 if not new_pass:
                     raise ValueError('Must provide password')
                 settings['user'] = new_user
-                settings['password'] = new_pass
+                settings['password'] = hash_password(new_pass)
             else:
                 raise ValueError('Must provide username')
 

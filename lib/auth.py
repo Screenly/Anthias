@@ -2,7 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import hashlib
+import hmac
 import os.path
+import re
 from abc import ABCMeta, abstractmethod
 from base64 import b64decode
 from functools import wraps
@@ -15,6 +17,40 @@ P = ParamSpec('P')
 R = TypeVar('R')
 
 LINUX_USER = os.getenv('USER', 'pi')
+
+# Legacy hashes are bare 64-char hex SHA256 digests (no algorithm prefix).
+# Django's make_password() output is always prefixed (e.g. "pbkdf2_sha256$...")
+# so the two formats are unambiguously distinguishable.
+_LEGACY_SHA256_HEX = re.compile(r'^[0-9a-f]{64}$')
+
+
+def _is_legacy_sha256(stored: str) -> bool:
+    return bool(_LEGACY_SHA256_HEX.match(stored))
+
+
+def hash_password(password: str) -> str:
+    """Hash a password using Django's default (PBKDF2-SHA256)."""
+    from django.contrib.auth.hashers import make_password
+
+    return str(make_password(password))
+
+
+def verify_password(password: str, stored: str) -> bool:
+    """Verify a password against a stored hash.
+
+    Accepts both Django-format hashes (algorithm-prefixed) and legacy bare
+    SHA256 hex digests stored by older versions, so a config file written
+    before the migration still authenticates.
+    """
+    if not stored:
+        return False
+    if _is_legacy_sha256(stored):
+        candidate = hashlib.sha256(password.encode('utf-8')).hexdigest()
+        return hmac.compare_digest(stored, candidate)
+
+    from django.contrib.auth.hashers import check_password
+
+    return bool(check_password(password, stored))
 
 
 class Auth(metaclass=ABCMeta):
@@ -127,8 +163,15 @@ class BasicAuth(Auth):
         )
 
     def check_password(self, password: str) -> bool:
-        hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
-        return bool(self.settings['password'] == hashed_password)
+        stored = self.settings['password']
+        if not verify_password(password, stored):
+            return False
+        # Opportunistically upgrade legacy SHA256 hashes to PBKDF2 on a
+        # successful login so the weak format is phased out over time.
+        if _is_legacy_sha256(stored):
+            self.settings['password'] = hash_password(password)
+            self.settings.save()
+        return True
 
     def is_authenticated(self, request: 'HttpRequest') -> bool:
         # First check Authorization header for API requests
@@ -170,18 +213,8 @@ class BasicAuth(Auth):
         current_pass_correct: bool | None,
     ) -> None:
         new_user = request.POST.get('user', '')
-        new_pass_bytes = request.POST.get('password', '').encode('utf-8')
-        new_pass2_bytes = request.POST.get('password2', '').encode('utf-8')
-        new_pass = (
-            hashlib.sha256(new_pass_bytes).hexdigest()
-            if new_pass_bytes
-            else None
-        )
-        new_pass2 = (
-            hashlib.sha256(new_pass2_bytes).hexdigest()
-            if new_pass_bytes
-            else None
-        )
+        new_pass = request.POST.get('password', '')
+        new_pass2 = request.POST.get('password2', '')
         # Handle auth components
         if self.settings['password']:  # if password currently set,
             if new_user != self.settings['user']:  # trying to change user
@@ -207,7 +240,7 @@ class BasicAuth(Auth):
                 if new_pass2 != new_pass:  # changing password
                     raise ValueError('New passwords do not match!')
 
-                self.settings['password'] = new_pass
+                self.settings['password'] = hash_password(new_pass)
 
         else:  # no current password
             if new_user:  # setting username and password
@@ -216,7 +249,7 @@ class BasicAuth(Auth):
                 if not new_pass:
                     raise ValueError('Must provide password')
                 self.settings['user'] = new_user
-                self.settings['password'] = new_pass
+                self.settings['password'] = hash_password(new_pass)
             else:
                 raise ValueError('Must provide username')
 

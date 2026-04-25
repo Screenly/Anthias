@@ -2,7 +2,6 @@
 Tests for V2 API endpoints.
 """
 
-import hashlib
 from typing import Any
 from unittest import mock
 from unittest.mock import patch
@@ -11,6 +10,8 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
+
+from lib.auth import verify_password
 
 
 class DeviceSettingsViewV2Test(TestCase):
@@ -213,10 +214,6 @@ class DeviceSettingsViewV2Test(TestCase):
             'password_2': 'testpass',
         }
 
-        expected_hashed_password = hashlib.sha256(
-            'testpass'.encode('utf-8')
-        ).hexdigest()
-
         response = self.client.patch(
             self.device_settings_url, data=data, format='json'
         )
@@ -230,9 +227,18 @@ class DeviceSettingsViewV2Test(TestCase):
         settings_mock.save.assert_called_once()
         settings_mock.__setitem__.assert_any_call('auth_backend', 'auth_basic')
         settings_mock.__setitem__.assert_any_call('user', 'testuser')
-        settings_mock.__setitem__.assert_any_call(
-            'password', expected_hashed_password
-        )
+
+        # PBKDF2 uses a random salt, so we can't compare the stored hash
+        # against a fixed expected value — verify it matches the input via
+        # the same verifier the auth path uses.
+        password_calls = [
+            call
+            for call in settings_mock.__setitem__.call_args_list
+            if call.args[0] == 'password'
+        ]
+        self.assertEqual(len(password_calls), 1)
+        stored_hash = password_calls[0].args[1]
+        self.assertTrue(verify_password('testpass', stored_hash))
 
         publisher_instance.send_to_viewer.assert_called_once_with('reload')
 
