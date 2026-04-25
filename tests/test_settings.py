@@ -50,12 +50,18 @@ def fake_settings(raw: str) -> Iterator[tuple[Any, Any]]:
     with open(CONFIG_FILE, mode='w+') as f:
         f.write(raw)
 
+    # Force a re-import so AnthiasSettings() is instantiated against the
+    # CONFIG_FILE we just wrote. Without this, a prior test that imported
+    # `settings` cleanly would leave the module cached, and `import
+    # settings` here would skip __init__ entirely — silently accepting
+    # any config (including the broken-by-design fixture).
+    sys.modules.pop('settings', None)
     try:
         import settings
 
         yield (settings, settings.settings)
-        del sys.modules['settings']
     finally:
+        sys.modules.pop('settings', None)
         os.remove(CONFIG_FILE)
 
 
