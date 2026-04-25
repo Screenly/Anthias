@@ -1,7 +1,4 @@
-#!/bin/bash -e
-
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-# -*- sh-basic-offset: 4 -*-
+#!/bin/bash
 
 set -euo pipefail
 
@@ -15,6 +12,9 @@ GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
 DOCKER_TAG="latest"
 UPGRADE_SCRIPT_PATH="${ANTHIAS_REPO_DIR}/bin/upgrade_containers.sh"
 ARCHITECTURE=$(uname -m)
+
+# Pin uv to match docker/uv-builder.j2 so host and image use the same binary.
+UV_PIN_VERSION="0.9.17"
 
 INTRO_MESSAGE=(
     "Anthias requires a dedicated Raspberry Pi and an SD card."
@@ -138,7 +138,7 @@ function install_packages() {
             /etc/apt/sources.list
     fi
 
-    sudo apt update -y
+    sudo apt-get update
     sudo apt-get install -y "${APT_INSTALL_ARGS[@]}"
 }
 
@@ -157,8 +157,11 @@ function install_ansible() {
     display_section "Install uv and host Python dependencies"
 
     # uv manages its own Python and packages — no system pip/venv needed.
-    if ! command -v uv &> /dev/null; then
-        curl -LsSf https://astral.sh/uv/install.sh | sh
+    # Pinned via UV_PIN_VERSION so the host and the docker uv-builder
+    # stage stay in lockstep (see docker/uv-builder.j2).
+    if ! command -v uv &> /dev/null || \
+        [ "$(uv --version 2>/dev/null | awk '{print $2}')" != "${UV_PIN_VERSION}" ]; then
+        curl -LsSf "https://astral.sh/uv/${UV_PIN_VERSION}/install.sh" | sh
     fi
     export PATH="$HOME/.local/bin:$PATH"
 
@@ -203,14 +206,18 @@ function run_ansible_playbook() {
 
     cd "${ANTHIAS_REPO_DIR}/ansible"
 
-    if [ "$ARCHITECTURE" == "x86_64" ]; then
-        if [ ! -f "/etc/sudoers.d/010_${USER}-nopasswd" ]; then
-            ANSIBLE_PLAYBOOK_ARGS+=("--ask-become-pass")
-        fi
+    # If the user doesn't have NOPASSWD sudo yet (first install), Ansible
+    # needs --ask-become-pass to elevate. The blanket NOPASSWD rule is
+    # written by modify_permissions later in this script.
+    if [ ! -f "/etc/sudoers.d/010_${USER}-nopasswd" ]; then
+        ANSIBLE_PLAYBOOK_ARGS+=("--ask-become-pass")
+        gum format \
+            "**Note:** Ansible may prompt for your sudo password below."
+        echo
+    fi
 
-        ANSIBLE_PLAYBOOK_ARGS+=(
-            "--skip-tags" "raspberry-pi"
-        )
+    if [ "$ARCHITECTURE" == "x86_64" ]; then
+        ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "raspberry-pi")
     fi
 
     sudo -E -u "${USER}" \
@@ -221,11 +228,13 @@ function run_ansible_playbook() {
 function upgrade_docker_containers() {
     display_section "Initialize/Upgrade Docker Containers"
 
+    # Pull upgrade_containers.sh from the same ref the user picked,
+    # not master, so a tagged install gets the matching upgrade script.
     wget -q \
-        "$GITHUB_RAW_URL/master/bin/upgrade_containers.sh" \
-        -O "$UPGRADE_SCRIPT_PATH"
+        "${GITHUB_RAW_URL}/${BRANCH}/bin/upgrade_containers.sh" \
+        -O "${UPGRADE_SCRIPT_PATH}"
 
-    sudo -u ${USER} \
+    sudo -u "${USER}" \
         DOCKER_TAG="${DOCKER_TAG}" \
         GIT_BRANCH="${BRANCH}" \
         "${UPGRADE_SCRIPT_PATH}"
@@ -276,44 +285,44 @@ function cleanup() {
 }
 
 function modify_permissions() {
-    sudo chown -R ${USER}:${USER} /home/${USER}
+    sudo chown -R "${USER}:${USER}" "/home/${USER}"
 
     # Run `sudo` without entering a password.
-    if [ ! -f /etc/sudoers.d/010_${USER}-nopasswd ]; then
+    local SUDOERS_FILE="/etc/sudoers.d/010_${USER}-nopasswd"
+    if [ ! -f "${SUDOERS_FILE}" ]; then
         echo "${USER} ALL=(ALL) NOPASSWD: ALL" | \
-            sudo tee /etc/sudoers.d/010_${USER}-nopasswd > /dev/null
-        sudo chmod 0440 /etc/sudoers.d/010_${USER}-nopasswd
+            sudo tee "${SUDOERS_FILE}" > /dev/null
+        sudo chmod 0440 "${SUDOERS_FILE}"
     fi
 }
 
 function write_anthias_version() {
-    local GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-    local GIT_SHORT_HASH=$(git rev-parse --short HEAD)
-    local ANTHIAS_VERSION="Anthias Version: ${GIT_BRANCH}@${GIT_SHORT_HASH}"
+    local GIT_BRANCH GIT_SHORT_HASH ANTHIAS_VERSION
+    GIT_BRANCH=$(git -C "${ANTHIAS_REPO_DIR}" rev-parse --abbrev-ref HEAD)
+    GIT_SHORT_HASH=$(git -C "${ANTHIAS_REPO_DIR}" rev-parse --short HEAD)
+    ANTHIAS_VERSION="Anthias Version: ${GIT_BRANCH}@${GIT_SHORT_HASH}"
 
-    echo "${ANTHIAS_VERSION}" > ~/version.md
-    echo "$(lsb_release -a 2> /dev/null)" >> ~/version.md
+    {
+        echo "${ANTHIAS_VERSION}"
+        lsb_release -a 2> /dev/null
+    } > ~/version.md
 }
 
 function post_installation() {
-    local POST_INSTALL_MESSAGE=()
-
     display_section "Installation Complete"
-
-    if [ -f /var/run/reboot-required ]; then
-        POST_INSTALL_MESSAGE+=(
-            "Please reboot and run \`${UPGRADE_SCRIPT_PATH}\` "
-            "to complete the installation."
-        )
-    else
-        POST_INSTALL_MESSAGE+=(
-            "You need to reboot the system for the installation to complete."
-        )
-    fi
 
     echo
 
-    gum style --foreground "#00FFFF" "${POST_INSTALL_MESSAGE[@]}" | gum format
+    gum style --foreground "#00FFFF" \
+        "A reboot is required to complete the installation." \
+        | gum format
+
+    if [ -n "${SSH_CONNECTION:-}" ]; then
+        echo
+        gum style --foreground "#FFAA00" \
+            "**Heads up:** you appear to be connected over SSH; rebooting will drop your session." \
+            | gum format
+    fi
 
     echo
 
@@ -328,8 +337,9 @@ function set_custom_version() {
             --header "Enter the tag name you want to install" \
     )
 
-    local STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-        "${GITHUB_API_REPO_URL}/git/refs/tags/$BRANCH")
+    local STATUS_CODE
+    STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+        "${GITHUB_API_REPO_URL}/git/refs/tags/${BRANCH}")
 
     if [ "$STATUS_CODE" -ne 200 ]; then
         gum style "Invalid tag name." \
@@ -360,28 +370,31 @@ function main() {
     gum format "${INTRO_MESSAGE[@]}"
     echo
     gum confirm "Do you still want to continue?" || exit 0
-    gum confirm "${MANAGE_NETWORK_PROMPT[@]}" && \
-        export MANAGE_NETWORK="Yes" || \
+
+    if gum confirm "${MANAGE_NETWORK_PROMPT[@]}"; then
+        export MANAGE_NETWORK="Yes"
+    else
         export MANAGE_NETWORK="No"
+    fi
 
     VERSION=$(
         gum choose \
-            --header "${VERSION_PROMPT}" \
+            --header "${VERSION_PROMPT[*]}" \
             -- "${VERSION_PROMPT_CHOICES[@]}"
     )
 
-    if [ "$VERSION" == "latest" ]; then
+    if [ "${VERSION}" == "latest" ]; then
         BRANCH="master"
     else
         set_custom_version
     fi
 
-    gum confirm "${SYSTEM_UPGRADE_PROMPT[@]}" && {
+    if gum confirm "${SYSTEM_UPGRADE_PROMPT[@]}"; then
         SYSTEM_UPGRADE="Yes"
-    } || {
+    else
         SYSTEM_UPGRADE="No"
         ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "system-upgrade")
-    }
+    fi
 
     display_section "User Input Summary"
     gum format "**Manage Network:**     ${MANAGE_NETWORK}"
