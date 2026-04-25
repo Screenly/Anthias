@@ -1,12 +1,10 @@
+{% include 'uv-builder.j2' %}
+
 {% include 'Dockerfile.base.j2' %}
 
-COPY requirements/requirements.txt /tmp/requirements.txt
-{% if disable_cache_mounts %}
-RUN \
-{% else %}
-RUN --mount=type=cache,target=/root/.cache/pip \
-{% endif %}
-  pip3 install -r /tmp/requirements.txt --break-system-packages
+COPY --from=uv-builder /venv /venv
+ENV PATH="/venv/bin:$PATH"
+ENV VIRTUAL_ENV="/venv"
 
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app

@@ -8,21 +8,42 @@ on:
       - production
     paths:
       - 'ansible/**'
+      - '.ansible-lint'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/ansible-lint.yaml'
   pull_request:
     branches:
       - master
       - production
     paths:
       - 'ansible/**'
+      - '.ansible-lint'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/ansible-lint.yaml'
 
 jobs:
   build:
     runs-on: ubuntu-24.04
-
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: '0.9.17'
+
+      - name: Install dependencies
+        run: |
+          uv venv
+          uv pip install --group dev-host
 
       - name: Run ansible-lint
-        uses: ansible-community/ansible-lint-action@main
-        with:
-          path: "ansible/"
+        run: |
+          uv run ansible-lint ansible/
