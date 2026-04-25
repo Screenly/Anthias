@@ -7,7 +7,7 @@
     "build": "bun run build:js && bun run build:css",
     "dev:js": "bun build ./static/src/index.tsx --outfile=./static/dist/js/anthias.js --target=browser --sourcemap=linked --watch --define process.env.NODE_ENV='\"development\"' --define process.env.ENVIRONMENT='\"development\"'",
     "dev:css": "bunx sass static/sass/anthias.scss static/dist/css/anthias.css --watch --quiet-deps --silence-deprecation=import,global-builtin,color-functions,if-function",
-    "dev": "bun run dev:js & bun run dev:css & wait",
+    "dev": "bash -c 'bun run dev:js & js=$!; bun run dev:css & css=$!; trap \"kill $js $css 2>/dev/null\" EXIT INT TERM; wait -n; exit $?'",
     "lint:check": "eslint static/src",
     "lint:fix": "eslint static/src --fix",
     "format:check": "prettier --check static/src",
