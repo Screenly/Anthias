@@ -63,7 +63,9 @@
     dest: "{{ system_cmdline_path }}.orig"
     owner: root
     group: root
-    mode: "0755"
+    # cmdline.txt is 0755 on Raspberry Pi by default; the .orig backup
+    # mirrors that so raspberry-pi-config tools don't trip on it.
+    mode: "0755"  # NOSONAR
     force: false
 
 - name: Notice for cmdline.txt.orig file
@@ -76,7 +78,8 @@
     dest: "{{ system_cmdline_path }}"
     owner: root
     group: root
-    mode: "0755"
+    # cmdline.txt is 0755 on Raspberry Pi by default — match that.
+    mode: "0755"  # NOSONAR
     force: true
   when: system_config_txt.stdout.find('NOOBS') == -1
 

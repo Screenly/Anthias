@@ -5,7 +5,9 @@
     state: directory
     owner: root
     group: root
-    mode: "0755"
+    # /etc/apt/keyrings is the convention from the Debian docs and must
+    # be world-traversable so the unprivileged `_apt` user can read keys.
+    mode: "0755"  # NOSONAR
 
 - name: Add Docker apt key
   ansible.builtin.get_url:
@@ -13,7 +15,8 @@
     dest: /etc/apt/keyrings/docker.asc
     owner: root
     group: root
-    mode: "0644"
+    # World-readable required so the `_apt` user can verify packages.
+    mode: "0644"  # NOSONAR
 
 - name: Set system_architecture
   ansible.builtin.set_fact:
