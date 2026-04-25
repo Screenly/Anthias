@@ -41,13 +41,13 @@
 - name: Get stat of asplashscreen
   ansible.builtin.stat:
     path: /etc/rcS.d/S01asplashscreen
-  register: asplashscreen_path
+  register: splashscreen_asplashscreen_stat
   when: ansible_distribution_major_version|int > 7
 
 - name: Disable asplashscreen
   ansible.builtin.command: update-rc.d asplashscreen remove
   when: ansible_distribution_major_version|int > 7
-  changed_when: asplashscreen_path.stat.exists
+  changed_when: splashscreen_asplashscreen_stat.stat.exists
 
 - name: Installs dependencies (not Jessie)
   ansible.builtin.apt:
@@ -79,14 +79,14 @@
 
 - name: Get current plymouth theme
   ansible.builtin.command: plymouth-set-default-theme
-  register: plymouth_theme
+  register: splashscreen_plymouth_theme
   changed_when: false
   when: ansible_distribution_major_version|int > 7
 
 - name: Set splashscreen
   ansible.builtin.command: plymouth-set-default-theme -R anthias
   when: ansible_distribution_major_version|int > 7
-  changed_when: plymouth_theme.stdout != "anthias"
+  changed_when: splashscreen_plymouth_theme.stdout != "anthias"
 
 - name: Set plymouthd.default
   ansible.builtin.copy:

@@ -1,12 +1,12 @@
 ---
-- name: Create a config_path variable
+- name: Create a system_config_path variable
   ansible.builtin.set_fact:
-    config_path: "{{ '/boot/config.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/config.txt' }}"
-    cmdline_path: "{{ '/boot/cmdline.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/cmdline.txt' }}"
+    system_config_path: "{{ '/boot/config.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/config.txt' }}"
+    system_cmdline_path: "{{ '/boot/cmdline.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/cmdline.txt' }}"
 
 - name: Check NOOBS
-  ansible.builtin.command: cat {{ config_path }}
-  register: config_txt
+  ansible.builtin.command: cat {{ system_config_path }}
+  register: system_config_txt
   changed_when: false
   tags:
     - touches-boot-partition
@@ -14,7 +14,7 @@
 
 - name: Make sure we have proper framebuffer depth
   ansible.builtin.lineinfile:
-    dest: "{{ config_path }}"
+    dest: "{{ system_config_path }}"
     regexp: ^framebuffer_depth=
     line: framebuffer_depth=32
   tags:
@@ -23,7 +23,7 @@
 
 - name: Fix framebuffer bug
   ansible.builtin.lineinfile:
-    dest: "{{ config_path }}"
+    dest: "{{ system_config_path }}"
     regexp: ^framebuffer_ignore_alpha=
     line: framebuffer_ignore_alpha=1
   tags:
@@ -32,43 +32,43 @@
 
 - name: Add gpu_mem_256 in config.txt if it doesn't exist
   ansible.builtin.lineinfile:
-    path: "{{ config_path }}"
+    path: "{{ system_config_path }}"
     line: gpu_mem_256=96
-  when: config_txt.stdout.find('gpu_mem_256') == -1
+  when: system_config_txt.stdout.find('gpu_mem_256') == -1
   tags:
     - touches-boot-partition
     - raspberry-pi
 
 - name: Add gpu_mem_512 in config.txt if it doesn't exist
   ansible.builtin.lineinfile:
-    path: "{{ config_path }}"
+    path: "{{ system_config_path }}"
     line: gpu_mem_512=128
-  when: config_txt.stdout.find('gpu_mem_512') == -1
+  when: system_config_txt.stdout.find('gpu_mem_512') == -1
   tags:
     - touches-boot-partition
     - raspberry-pi
 
 - name: Add gpu_mem_1024 in config.txt if it doesn't exist
   ansible.builtin.lineinfile:
-    path: "{{ config_path }}"
+    path: "{{ system_config_path }}"
     line: gpu_mem_1024=196
-  when: config_txt.stdout.find('gpu_mem_1024') == -1
+  when: system_config_txt.stdout.find('gpu_mem_1024') == -1
   tags:
     - touches-boot-partition
     - raspberry-pi
 
 - name: Add pi4 section in config.txt if it doesn't exist
   ansible.builtin.lineinfile:
-    path: "{{ config_path }}"
+    path: "{{ system_config_path }}"
     line: "\n[pi4]"
-  when: config_txt.stdout.find('[pi4]') == -1
+  when: system_config_txt.stdout.find('[pi4]') == -1
   tags:
     - touches-boot-partition
     - raspberry-pi
 
 - name: Uncomment out the original dtoverlay config.
   ansible.builtin.replace:
-    dest: "{{ config_path }}"
+    dest: "{{ system_config_path }}"
     regexp: '^#\s*(dtoverlay=vc4-kms-v3d)'
     replace: '\1'
   tags:
@@ -77,7 +77,7 @@
 
 - name: Remove the FKMS config for all devices.
   ansible.builtin.lineinfile:
-    path: "{{ config_path }}"
+    path: "{{ system_config_path }}"
     state: absent
     regexp: "^dtoverlay=vc4-fkms-v3d$"
   tags:
@@ -86,8 +86,8 @@
 
 - name: Backup kernel boot args
   ansible.builtin.copy:
-    src: "{{ cmdline_path }}"
-    dest: "{{ cmdline_path }}.orig"
+    src: "{{ system_cmdline_path }}"
+    dest: "{{ system_cmdline_path }}.orig"
     owner: root
     group: root
     mode: "0755"
@@ -105,20 +105,20 @@
 
 - name: Copy cmdline.txt.orig to cmdline.txt
   ansible.builtin.copy:
-    src: "{{ cmdline_path }}.orig"
-    dest: "{{ cmdline_path }}"
+    src: "{{ system_cmdline_path }}.orig"
+    dest: "{{ system_cmdline_path }}"
     owner: root
     group: root
     mode: "0755"
     force: true
-  when: config_txt.stdout.find('NOOBS') == -1
+  when: system_config_txt.stdout.find('NOOBS') == -1
   tags:
     - touches-boot-partition
     - raspberry-pi
 
 - name: For splash screen using Plymouth
   ansible.builtin.replace:
-    dest: "{{ cmdline_path }}"
+    dest: "{{ system_cmdline_path }}"
     regexp: (^(?!$)((?!splash).)*$)
     replace: \1 splash
   when: ansible_distribution_major_version | int >= 7
@@ -128,7 +128,7 @@
 
 - name: Remove blinking cursor
   ansible.builtin.replace:
-    dest: "{{ cmdline_path }}"
+    dest: "{{ system_cmdline_path }}"
     regexp: (^(?!$)((?!vt.global_cursor_default=0).)*$)
     replace: \1 vt.global_cursor_default=0
   when: ansible_distribution_major_version | int >= 7
@@ -138,7 +138,7 @@
 
 - name: Plymouth ignore serial consoles
   ansible.builtin.replace:
-    dest: "{{ cmdline_path }}"
+    dest: "{{ system_cmdline_path }}"
     regexp: (^(?!$)((?!plymouth.ignore-serial-consoles).)*$)
     replace: \1 plymouth.ignore-serial-consoles
   when: ansible_distribution_major_version | int >= 7
@@ -148,7 +148,7 @@
 
 - name: Use Systemd as init and quiet boot process
   ansible.builtin.replace:
-    dest: "{{ cmdline_path }}"
+    dest: "{{ system_cmdline_path }}"
     regexp: (^(?!$)((?!quiet init=/lib/systemd/systemd).)*$)
     replace: \1 quiet init=/lib/systemd/systemd
   tags:
@@ -157,7 +157,7 @@
 
 - name: Set ethN/wlanN names for interfaces
   ansible.builtin.replace:
-    dest: "{{ cmdline_path }}"
+    dest: "{{ system_cmdline_path }}"
     regexp: (^(?!$)((?!net\.ifnames=0).)*$)
     replace: \1 net.ifnames=0
   tags:
@@ -166,7 +166,7 @@
 
 - name: Set cgroup_enable required by containerd for OOM
   ansible.builtin.replace:
-    dest: "{{ cmdline_path }}"
+    dest: "{{ system_cmdline_path }}"
     regexp: (^(?!$)((?!cgroup_enable=memory).)*$)
     replace: \1 cgroup_enable=memory
   when: ansible_distribution_major_version | int >= 7
@@ -176,7 +176,7 @@
 
 - name: Set cgroup_memory required by containerd for OOM
   ansible.builtin.replace:
-    dest: "{{ cmdline_path }}"
+    dest: "{{ system_cmdline_path }}"
     regexp: (^(?!$)((?!cgroup_memory=1).)*$)
     replace: \1 cgroup_memory=1
   when: ansible_distribution_major_version | int >= 7
@@ -190,24 +190,24 @@
 - name: Check if cdefs.h exists
   ansible.builtin.stat:
     path: /usr/include/arm-linux-gnueabihf/sys/cdefs.h
-  register: cdefs
+  register: system_cdefs
 
 - name: Set fact for cdefs
   ansible.builtin.set_fact:
-    cdefs_exist: "{{ cdefs.stat.exists }}"
+    system_cdefs_exist: "{{ system_cdefs.stat.exists }}"
 
 - name: Remove libc6-dev
   ansible.builtin.apt:
     name: libc6-dev
     state: absent
-  when: not cdefs_exist
+  when: not system_cdefs_exist
 
 - name: Install libc6-dev
   ansible.builtin.apt:
     name: libc6-dev
     state: present
     update_cache: true
-  when: not cdefs_exist
+  when: not system_cdefs_exist
 
 - name: Install Anthias dependencies (all platforms)
   ansible.builtin.apt:
@@ -275,7 +275,7 @@
 
 - name: Get Debian name
   ansible.builtin.command: lsb_release -cs
-  register: debian_name
+  register: system_debian_name
   changed_when: false
 
 - name: Check system bit width
@@ -283,9 +283,9 @@
   register: system_bits
   changed_when: false
 
-- name: Set architecture
+- name: Set system_architecture
   ansible.builtin.set_fact:
-    architecture: >-
+    system_architecture: >-
       {{
         'amd64' if ansible_architecture == 'x86_64'
         else ('arm64' if device_type == 'pi4' and system_bits.stdout == '64'
@@ -298,16 +298,20 @@
     device_type == "pi4" or
     device_type == "x86"
 
-- name: Set architecture
+- name: Set system_architecture for Pi 5
   ansible.builtin.set_fact:
-    architecture: "arm64"
+    system_architecture: "arm64"
   when: device_type == "pi5"
 
 - name: Add Docker repo
   ansible.builtin.lineinfile:
     path: /etc/apt/sources.list.d/docker.list
     create: true
-    line: "deb [arch={{ architecture }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian {{ debian_name.stdout }} stable"
+    line: >-
+      deb [arch={{ system_architecture }}
+      signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/debian
+      {{ system_debian_name.stdout }} stable
     state: present
     owner: root
     group: root
@@ -316,22 +320,25 @@
 - name: Install Docker
   ansible.builtin.apt:
     name:
-      - docker-ce:{{ architecture }}
-      - docker-ce-cli:{{ architecture }}
-      - docker-compose-plugin:{{ architecture }}
+      - docker-ce:{{ system_architecture }}
+      - docker-ce-cli:{{ system_architecture }}
+      - docker-compose-plugin:{{ system_architecture }}
     update_cache: true
     install_recommends: false
 
 - name: Check if /etc/timezone exists
   ansible.builtin.stat:
     path: /etc/timezone
-  register: etc_timezone
+  register: system_etc_timezone
 
 - name: Create /etc/timezone from /etc/localtime if missing
   ansible.builtin.shell: |
+    set -o pipefail
     readlink -f /etc/localtime | sed 's|.*/zoneinfo/||' > /etc/timezone
-  when: not etc_timezone.stat.exists
-  changed_when: not etc_timezone.stat.exists
+  args:
+    executable: /bin/bash
+  when: not system_etc_timezone.stat.exists
+  changed_when: not system_etc_timezone.stat.exists
 
 - name: Add user to Docker group (all platforms)
   ansible.builtin.user:
@@ -412,7 +419,9 @@
     group: root
 
 - name: Disable swap
-  ansible.builtin.command: /sbin/swapoff --all removes=/var/swap
+  ansible.builtin.command:
+    cmd: /sbin/swapoff --all
+    removes: /var/swap
 
 - name: Remove swapfile from disk
   ansible.builtin.file:

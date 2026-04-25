@@ -132,25 +132,25 @@
 - name: Check if deprecated systemd services exists
   ansible.builtin.stat:
     path: /etc/systemd/system/X.service
-  register: x_service
+  register: screenly_x_service
 
-- name: Set the x_service fact
+- name: Set the screenly_x_service fact
   ansible.builtin.set_fact:
-    x_service_exist: "{{ x_service.stat.exists }}"
+    screenly_screenly_x_service_exists: "{{ screenly_x_service.stat.exists }}"
 
 - name: Disable deprecated systemd services
   ansible.builtin.systemd:
     name: "{{ item }}"
     state: stopped
     enabled: false
-  with_items: "{{ deprecated_screenly_systemd_units }}"
-  when: x_service_exist
+  with_items: "{{ screenly_deprecated_systemd_units }}"
+  when: screenly_screenly_x_service_exists
 
 - name: Remove deprecated systemd units
   ansible.builtin.file:
     path: "/etc/systemd/system/{{ item }}"
     state: absent
-  with_items: "{{ deprecated_screenly_systemd_units }}"
+  with_items: "{{ screenly_deprecated_systemd_units }}"
 
 - name: Remove the ngrok binary
   ansible.builtin.file:

@@ -2,11 +2,11 @@
 - name: Check if screenly-network-manager files exist
   ansible.builtin.stat:
     path: /usr/sbin/screenly_net_mgr.py
-  register: screenly_network_manager
+  register: network_manager_stat
 
 - name: Check if screenly-network-manager is set
   ansible.builtin.set_fact:
-    screenly_network_manager_exist: "{{ screenly_network_manager.stat.exists }}"
+    network_manager_exists: "{{ network_manager_stat.stat.exists }}"
 
 - name: Copy network systemd units
   ansible.builtin.template:
@@ -29,14 +29,14 @@
     state: stopped
     name: screenly-net-manager.service
     enabled: false
-  when: screenly_network_manager_exist
+  when: network_manager_exists
 
 - name: Disable network watchdog
   ansible.builtin.systemd:
     state: stopped
     name: screenly-net-watchdog.timer
     enabled: false
-  when: screenly_network_manager_exist
+  when: network_manager_exists
 
 - name: Remove network manager and watchdog
   ansible.builtin.file:
@@ -84,7 +84,7 @@
 - name: Get stat of org.freedesktop.NetworkManager.pkla
   ansible.builtin.stat:
     path: /etc/polkit-1/localauthority/50-local.d/org.freedesktop.NetworkManager.pkla
-  register: nm_pkla_path
+  register: network_pkla_stat
 
 - name: Copy org.freedesktop.NetworkManager.pkla to 50-local.d
   ansible.builtin.shell: |
@@ -94,7 +94,7 @@
   when:
     - manage_network|bool
     - ansible_distribution_major_version|int <= 12
-  changed_when: not nm_pkla_path.stat.exists
+  changed_when: not network_pkla_stat.stat.exists
 
 - name: Create polkit rules for NetworkManager (Trixie+)
   ansible.builtin.copy:
