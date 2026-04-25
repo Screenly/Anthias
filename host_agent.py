@@ -16,6 +16,8 @@ import netifaces
 import redis
 import requests
 from tenacity import (
+    before_sleep_log,
+    retry_if_exception_type,
     RetryError,
     Retrying,
     stop_after_attempt,
@@ -116,11 +118,22 @@ def process_message(message):
 
 
 def subscriber_loop():
-    # Connect to redis on localhost and wait for messages
+    # On first boot the redis container may not yet accept connections;
+    # retry quietly instead of crashing the unit on every attempt.
     logging.info('Connecting to redis...')
-    rdb = redis.Redis(**REDIS_ARGS)
-    pubsub = rdb.pubsub(ignore_subscribe_messages=True)
-    pubsub.subscribe(CHANNEL_NAME)
+    for attempt in Retrying(
+        retry=retry_if_exception_type(redis.exceptions.ConnectionError),
+        wait=wait_fixed(5),
+        stop=stop_after_attempt(60),
+        before_sleep=before_sleep_log(
+            logging.getLogger(), logging.WARNING
+        ),
+        reraise=True,
+    ):
+        with attempt:
+            rdb = redis.Redis(**REDIS_ARGS)
+            pubsub = rdb.pubsub(ignore_subscribe_messages=True)
+            pubsub.subscribe(CHANNEL_NAME)
     rdb.set('host_agent_ready', 'true')
     logging.info(
         'Subscribed to channel %s, ready to process messages', CHANNEL_NAME
