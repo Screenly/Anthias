@@ -15,6 +15,8 @@ import netifaces
 import redis
 import requests
 from tenacity import (
+    before_sleep_log,
+    retry_if_exception_type,
     RetryError,
     Retrying,
     stop_after_attempt,
@@ -32,7 +34,13 @@ SUPPORTED_INTERFACES = (
     'wlp',
     'enp',
     'eno',
+    'ens',
 )
+
+# Cloudflare's 1.1.1.1 public DNS anycast, used purely as an Internet
+# reachability probe before reading the host's interface addresses.
+# Public anycast, not a private/internal address.
+INTERNET_PROBE_URL = 'https://1.1.1.1'  # NOSONAR
 
 
 def get_ip_addresses() -> list[str]:
@@ -59,9 +67,12 @@ def set_ip_addresses() -> None:
         for attempt in Retrying(
             stop=stop_after_attempt(10),
             wait=wait_fixed(1),
+            before_sleep=before_sleep_log(
+                logging.getLogger(), logging.WARNING, exc_info=True
+            ),
         ):
             with attempt:
-                response = requests.get('https://1.1.1.1')
+                response = requests.get(INTERNET_PROBE_URL, timeout=5)
                 response.raise_for_status()
     except RetryError:
         logging.warning(
@@ -125,13 +136,25 @@ def process_message(message: dict[str, Any]) -> None:
 
 
 def subscriber_loop() -> None:
-    # Connect to redis on localhost and wait for messages
+    # On first boot the redis container may not yet accept connections;
+    # retry quietly instead of crashing the unit on every attempt.
     logging.info('Connecting to redis...')
-    rdb = redis.Redis(
-        host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
-    )
-    pubsub = rdb.pubsub(ignore_subscribe_messages=True)
-    pubsub.subscribe(CHANNEL_NAME)
+    for attempt in Retrying(
+        retry=retry_if_exception_type(redis.exceptions.ConnectionError),
+        wait=wait_fixed(5),
+        stop=stop_after_attempt(60),
+        before_sleep=before_sleep_log(logging.getLogger(), logging.WARNING),
+        reraise=True,
+    ):
+        with attempt:
+            rdb = redis.Redis(
+                host=REDIS_HOST,
+                port=REDIS_PORT,
+                db=REDIS_DB,
+                decode_responses=True,
+            )
+            pubsub = rdb.pubsub(ignore_subscribe_messages=True)
+            pubsub.subscribe(CHANNEL_NAME)
     rdb.set('host_agent_ready', 'true')
     logging.info(
         'Subscribed to channel %s, ready to process messages', CHANNEL_NAME

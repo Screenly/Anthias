@@ -1,0 +1,29 @@
+---
+- name: Install rc.local
+  ansible.builtin.template:
+    src: rc.local
+    dest: /etc/rc.local
+    # systemd-rc-local-generator expects /etc/rc.local to be executable.
+    mode: "0755"  # NOSONAR
+    owner: root
+    group: root
+
+- name: Install dpkg 01_nodoc filter
+  ansible.builtin.copy:
+    src: 01_nodoc
+    dest: /etc/dpkg/dpkg.cfg.d/01_nodoc
+    # Standard /etc/dpkg/dpkg.cfg.d mode; world-readable so dpkg can
+    # honour the filter under any caller.
+    mode: "0644"  # NOSONAR
+    owner: root
+    group: root
+
+- name: Disable swap
+  ansible.builtin.command:
+    cmd: /sbin/swapoff --all
+    removes: /var/swap
+
+- name: Remove swapfile from disk
+  ansible.builtin.file:
+    path: /var/swap
+    state: absent

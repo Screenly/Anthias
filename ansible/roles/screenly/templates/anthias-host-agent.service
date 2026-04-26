@@ -1,0 +1,38 @@
+[Unit]
+Description=Anthias Host Agent
+Documentation=https://github.com/Screenly/Anthias
+Requires=docker.service
+After=docker.service
+StartLimitIntervalSec=10
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User={{ anthias_user }}
+WorkingDirectory=/home/{{ anthias_user }}/screenly
+ExecStart=/home/{{ anthias_user }}/installer_venv/bin/python /home/{{ anthias_user }}/screenly/host_agent.py
+Restart=on-failure
+RestartSec=10s
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=anthias-host-agent
+
+# Sandboxing — host_agent.py shells out to `sudo systemctl reboot|poweroff`,
+# so this profile must NOT set NoNewPrivileges. On systemd <= 252 (Debian
+# 11/12), most Protect*/Restrict* directives implicitly enable NNP and
+# would block sudo's setuid escalation, so we keep only the directives
+# verified safe under that systemd version. CapabilityBoundingSet is
+# narrowed to the minimum sudo + reboot path needs.
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ProtectControlGroups=true
+ProtectProc=invisible
+UMask=0027
+CapabilityBoundingSet=CAP_AUDIT_WRITE CAP_DAC_READ_SEARCH CAP_NET_BIND_SERVICE CAP_SETGID CAP_SETUID CAP_SYS_BOOT CAP_SYS_RESOURCE
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
