@@ -246,10 +246,10 @@ $ git push --delete origin v0.18.5           [±master ✓]
 In this section, we'll explain the different directories and files that are
 present in a Raspberry Pi with Anthias installed.
 
-### `home/${USER}/anthias/`
+### `/home/${USER}/anthias/`
 
 * All of the files and folders from the Github repo should be cloned into this directory.
-* On installations created before the rename, this directory is `home/${USER}/screenly/` &mdash; the installer migrates it to `anthias/` on upgrade and leaves a back-compat symlink at the old path for one release.
+* On installations created before the rename, this directory is `/home/${USER}/screenly/` &mdash; the installer migrates it to `anthias/` on upgrade and leaves a back-compat symlink at the old path for one release.
 
 ### `/home/${USER}/.anthias/`
 
