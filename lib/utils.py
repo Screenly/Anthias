@@ -298,11 +298,17 @@ def remove_connection(bus: Any, uuid: str) -> bool:
 def get_video_duration(file: str) -> timedelta | None:
     """
     Returns the duration of a video file in timedelta.
+
+    Returns None if ffprobe is not available on the host so callers can
+    surface a clean validation error instead of a 500.
     """
     time = None
 
     try:
         run_player = sh.Command('ffprobe')('-i', file, _err_to_out=True)
+    except sh.CommandNotFound:
+        logging.warning('ffprobe is not installed; cannot determine duration')
+        return None
     except sh.ErrorReturnCode_1 as err:
         raise Exception('Bad video format') from err
 
@@ -342,9 +348,15 @@ def url_fails(url: str) -> bool:
     If it is streaming
     """
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
-        run_mplayer = sh.Command('mplayer')(
-            '-identify', '-frames', '0', '-nosound', url
-        )
+        try:
+            run_mplayer = sh.Command('mplayer')(
+                '-identify', '-frames', '0', '-nosound', url
+            )
+        except sh.CommandNotFound:
+            logging.warning(
+                'mplayer is not installed; skipping streaming URL probe'
+            )
+            return False
         for line in run_mplayer.split('\n'):
             if 'Clip info:' in line:
                 return False

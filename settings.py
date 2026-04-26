@@ -73,7 +73,15 @@ class AnthiasSettings(UserDict[str, Any]):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         UserDict.__init__(self, *args, **kwargs)
-        self.home = getenv('HOME') or ''
+        home = getenv('HOME')
+        if not home:
+            # Without HOME, all config/state paths (config file, DB,
+            # asset dir) would silently resolve relative to the cwd.
+            # Fail loudly instead of writing to unexpected locations.
+            raise EnvironmentError(
+                'HOME environment variable must be set for AnthiasSettings.'
+            )
+        self.home = home
         self.conf_file = self.get_configfile()
         self.auth_backends_list: list[Auth] = [NoAuth(), BasicAuth(self)]
         self.auth_backends: dict[str, Auth] = {}

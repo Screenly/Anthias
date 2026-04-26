@@ -3,6 +3,7 @@ from datetime import timezone
 from os import path, rename
 from typing import Any
 
+from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import (
     BooleanField,
     CharField,
@@ -90,8 +91,19 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
                     )
                 asset['duration'] = int(video_duration.total_seconds())
         else:
-            # Crashes if it's not an int. We want that.
-            asset['duration'] = int(data['duration'])
+            duration_raw = data.get('duration')
+            if duration_raw is None:
+                raise ValidationError(
+                    {
+                        'duration': 'This field is required for non-video assets.'
+                    }
+                )
+            try:
+                asset['duration'] = int(duration_raw)
+            except (TypeError, ValueError):
+                raise ValidationError(
+                    {'duration': 'A valid integer is required.'}
+                )
 
         asset['skip_asset_check'] = int(data.get('skip_asset_check', 0))
 

@@ -164,10 +164,10 @@ class BasicAuth(Auth):
                 auth_data = content[1]
                 if auth_type == 'Basic':
                     decoded = b64decode(auth_data).decode('utf-8')
-                    parts = decoded.split(':')
-                    if len(parts) == 2:
-                        username = parts[0]
-                        password = parts[1]
+                    # RFC 7617 allows ':' in the password portion; split
+                    # only on the first ':' so passwords with colons work.
+                    username, sep, password = decoded.partition(':')
+                    if sep:
                         return self._check(username, password)
 
         # Then check session for form-based login

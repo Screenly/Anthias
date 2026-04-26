@@ -46,28 +46,32 @@ def _is_within_directory(directory: str, target: str) -> bool:
 
 
 def _safe_extract(tar: tarfile.TarFile, dest: str) -> None:
-    """Extract a tar archive guarding against path-traversal members.
+    """Extract a tar archive guarding against unsafe members.
 
-    `tarfile.extractall` will happily follow `../` segments and absolute
-    paths in archive members, allowing a malicious backup file uploaded via
-    the recovery endpoint to overwrite arbitrary files. Validate each
-    member's resolved path stays inside `dest` before extracting.
+    `tarfile.extractall` will happily follow `../` segments, absolute
+    paths, and special members (symlinks, device nodes, FIFOs) in archive
+    members, allowing a malicious backup file uploaded via the recovery
+    endpoint to overwrite arbitrary files or create special files on
+    disk. Only allow regular files and directories whose resolved path
+    stays inside `dest`, and extract each member individually after
+    validation.
     """
+    safe_members: list[tarfile.TarInfo] = []
     for member in tar.getmembers():
+        if not (member.isfile() or member.isdir()):
+            raise BackupRecoverError(
+                'Refusing to extract non-regular member in archive: '
+                f'{member.name} (type={member.type!r})'
+            )
         member_path = path.join(dest, member.name)
         if not _is_within_directory(dest, member_path):
             raise BackupRecoverError(
                 f'Refusing to extract unsafe path in archive: {member.name}'
             )
-        # Reject symlinks/hardlinks whose targets escape the destination.
-        if member.issym() or member.islnk():
-            link_target = path.join(path.dirname(member_path), member.linkname)
-            if not _is_within_directory(dest, link_target):
-                raise BackupRecoverError(
-                    'Refusing to extract unsafe link in archive: '
-                    f'{member.name} -> {member.linkname}'
-                )
-    tar.extractall(path=dest)
+        safe_members.append(member)
+
+    for member in safe_members:
+        tar.extract(member, path=dest)
 
 
 def recover(file_path: str) -> None:
