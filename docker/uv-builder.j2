@@ -3,7 +3,10 @@
 
 FROM {{ base_image }}:{{ base_image_tag }} AS uv-builder
 
-{% if board in ['pi1', 'pi2'] %}
+{# ghcr.io/astral-sh/uv only publishes linux/amd64 and linux/arm64/v8
+   manifests, so 32-bit ARM targets (pi1/pi2/pi3/pi4-32) have to install
+   uv from PyPI instead of COPY-ing it from the prebuilt image. #}
+{% if target_platform in ['linux/arm/v6', 'linux/arm/v7', 'linux/arm/v8'] %}
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
