@@ -122,19 +122,23 @@ jobs:
 
   # Mirror the immutable <short-hash>-<board> tags pushed by the buildx
   # matrix onto the floating latest-<board> tag. Runs only after every
-  # buildx job has succeeded, so latest-* is always updated as a single
-  # coherent set or not at all. `imagetools create` re-points the
-  # registry tag to the existing manifest without re-uploading any
-  # layers, so this job is fast (seconds per image).
+  # buildx job has succeeded, so latest-* is never advanced from a
+  # half-pushed build matrix.
+  #
+  # Deliberately a single sequential job (no matrix): retags run inside
+  # one `set -euo pipefail` block, so a transient registry error stops
+  # further retags rather than racing other parallel runners that would
+  # blindly continue to advance latest-* on their slice. A preflight
+  # checks every <short-hash>-<board> tag is resolvable before any
+  # retag fires, so a missing source tag fails the job before it
+  # mutates the registry. `imagetools create` re-points the registry
+  # tag to the existing manifest without re-uploading layers, so the
+  # full ~98 retags (7 boards × 7 services × 2 namespaces) finish in
+  # under two minutes.
   publish-latest:
     needs: buildx
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
-        service: ['server', 'celery', 'redis', 'websocket', 'nginx', 'viewer', 'wifi-connect']
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -148,18 +152,38 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Mirror short-hash tag to latest-${{ matrix.board }}
-        env:
-          BOARD: ${{ matrix.board }}
-          SERVICE: ${{ matrix.service }}
+      - name: Mirror short-hash tags to latest-<board>
         run: |
+          set -euo pipefail
           GIT_SHORT_HASH=$(git rev-parse --short=7 HEAD)
-          for namespace in screenly/anthias screenly/srly-ose; do
-            src="${namespace}-${SERVICE}:${GIT_SHORT_HASH}-${BOARD}"
-            dst="${namespace}-${SERVICE}:latest-${BOARD}"
-            echo "Mirroring ${src} -> ${dst}"
-            docker buildx imagetools create -t "${dst}" "${src}"
+          BOARDS=(pi1 pi2 pi3 pi4 pi4-64 pi5 x86)
+          SERVICES=(server celery redis websocket nginx viewer wifi-connect)
+          NAMESPACES=(screenly/anthias screenly/srly-ose)
+
+          echo "::group::Preflight: verify every <short-hash>-<board> source tag exists"
+          for namespace in "${NAMESPACES[@]}"; do
+            for service in "${SERVICES[@]}"; do
+              for board in "${BOARDS[@]}"; do
+                src="${namespace}-${service}:${GIT_SHORT_HASH}-${board}"
+                echo "Verifying ${src}"
+                docker buildx imagetools inspect --raw "${src}" >/dev/null
+              done
+            done
           done
+          echo "::endgroup::"
+
+          echo "::group::Mirror <short-hash>-<board> -> latest-<board>"
+          for namespace in "${NAMESPACES[@]}"; do
+            for service in "${SERVICES[@]}"; do
+              for board in "${BOARDS[@]}"; do
+                src="${namespace}-${service}:${GIT_SHORT_HASH}-${board}"
+                dst="${namespace}-${service}:latest-${board}"
+                echo "Mirroring ${src} -> ${dst}"
+                docker buildx imagetools create -t "${dst}" "${src}"
+              done
+            done
+          done
+          echo "::endgroup::"
 
   balena:
     if: ${{ github.ref == 'refs/heads/master' }}

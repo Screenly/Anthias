@@ -1,6 +1,10 @@
 # syntax=docker/dockerfile:1.4
 # vim: ft=dockerfile
 
+{# Single source of truth for the uv version — used both by the
+   prebuilt-image COPY (amd64/arm64) and the PyPI fallback
+   (32-bit ARM), so both paths stay byte-pinned and reproducible. #}
+{% set uv_version = '0.9.17' %}
 FROM {{ base_image }}:{{ base_image_tag }} AS uv-builder
 
 {# ghcr.io/astral-sh/uv only publishes linux/amd64 and linux/arm64/v8
@@ -25,9 +29,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         {{ dep }} \
 {% endfor %}
         ca-certificates && \
-    pip3 install uv --break-system-packages
+    pip3 install uv=={{ uv_version }} --break-system-packages
 {% else %}
-COPY --from=ghcr.io/astral-sh/uv:0.9.17 /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:{{ uv_version }} /uv /uvx /usr/local/bin/
 {% if disable_cache_mounts %}
 RUN \
 {% else %}

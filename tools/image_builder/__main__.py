@@ -196,11 +196,15 @@ def build_image(
     is_flag=True,
     help=(
         'Build/push only the immutable <short-hash>-<board> tag, omitting '
-        'the floating latest-<board> / <branch>-<board> tag. Used by CI '
-        'to keep the latest-* tag update atomic across the build matrix '
-        '(applied in a separate job after every per-platform build '
-        'succeeds), so a partial failure can no longer leave latest-* '
-        'pointing at a half-pushed set of images.'
+        'the floating latest-<board> / <branch>-<board> tag. Used by CI: '
+        'the latest-<board> retag is deferred to a follow-up job that '
+        'runs only after every per-platform build in the matrix has '
+        'succeeded, so a partial build failure can no longer leave '
+        'latest-* pointing at a half-pushed set of images. The retag '
+        'step itself is still a sequence of registry calls, not a '
+        'single atomic transaction, so a transient registry error '
+        'mid-retag can still leave a small subset of latest-* tags '
+        'temporarily out of sync until the workflow is re-run.'
     ),
 )
 @click.option(
