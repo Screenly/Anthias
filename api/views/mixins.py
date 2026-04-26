@@ -1,3 +1,4 @@
+import tarfile
 import uuid
 from base64 import b64encode
 from inspect import cleandoc
@@ -118,7 +119,15 @@ class RecoverViewMixin(APIView):
             with open(location, 'wb') as f:
                 f.write(file_upload.read())
 
-            backup_helper.recover(location)
+            try:
+                backup_helper.recover(location)
+            except (
+                backup_helper.BackupRecoverError,
+                tarfile.TarError,
+            ) as exc:
+                raise ValidationError(
+                    {'backup_upload': str(exc) or 'Invalid backup archive.'}
+                )
 
             return Response('Recovery successful.')
         finally:

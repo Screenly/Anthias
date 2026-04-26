@@ -14,6 +14,7 @@ from typing import Any, Callable
 import netifaces
 import redis
 import requests
+from redis.exceptions import ConnectionError as RedisConnectionError
 from tenacity import (
     before_sleep_log,
     retry_if_exception_type,
@@ -140,7 +141,7 @@ def subscriber_loop() -> None:
     # retry quietly instead of crashing the unit on every attempt.
     logging.info('Connecting to redis...')
     for attempt in Retrying(
-        retry=retry_if_exception_type(redis.exceptions.ConnectionError),
+        retry=retry_if_exception_type(RedisConnectionError),
         wait=wait_fixed(5),
         stop=stop_after_attempt(60),
         before_sleep=before_sleep_log(logging.getLogger(), logging.WARNING),

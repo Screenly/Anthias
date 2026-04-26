@@ -31,14 +31,6 @@ from settings import ZmqPublisher, settings
 
 arch = machine()
 
-# This will only work on the Raspberry Pi,
-# so let's wrap it in a try/except so that
-# Travis can run.
-try:
-    from sh import ffprobe, mplayer
-except ImportError:
-    pass
-
 
 def string_to_bool(string: Any) -> bool:
     return bool(strtobool(str(string)))
@@ -310,7 +302,9 @@ def get_video_duration(file: str) -> timedelta | None:
     time = None
 
     try:
-        run_player = ffprobe('-i', file, _err_to_out=True)
+        run_player = sh.Command('ffprobe')(
+            '-i', file, _err_to_out=True
+        )
     except sh.ErrorReturnCode_1 as err:
         raise Exception('Bad video format') from err
 
@@ -350,7 +344,9 @@ def url_fails(url: str) -> bool:
     If it is streaming
     """
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
-        run_mplayer = mplayer('-identify', '-frames', '0', '-nosound', url)
+        run_mplayer = sh.Command('mplayer')(
+            '-identify', '-frames', '0', '-nosound', url
+        )
         for line in run_mplayer.split('\n'):
             if 'Clip info:' in line:
                 return False

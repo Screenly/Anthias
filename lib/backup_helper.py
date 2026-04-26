@@ -9,6 +9,10 @@ default_archive_name = 'anthias-backup'
 static_dir = 'screenly/staticfiles'
 
 
+class BackupRecoverError(Exception):
+    """Raised when a backup archive cannot be safely recovered."""
+
+
 def create_backup(name: str = default_archive_name) -> str:
     home = getenv('HOME') or ''
     archive_name = '{}-{}.tar.gz'.format(
@@ -52,14 +56,14 @@ def _safe_extract(tar: tarfile.TarFile, dest: str) -> None:
     for member in tar.getmembers():
         member_path = path.join(dest, member.name)
         if not _is_within_directory(dest, member_path):
-            raise Exception(
+            raise BackupRecoverError(
                 f'Refusing to extract unsafe path in archive: {member.name}'
             )
         # Reject symlinks/hardlinks whose targets escape the destination.
         if member.issym() or member.islnk():
             link_target = path.join(path.dirname(member_path), member.linkname)
             if not _is_within_directory(dest, link_target):
-                raise Exception(
+                raise BackupRecoverError(
                     'Refusing to extract unsafe link in archive: '
                     f'{member.name} -> {member.linkname}'
                 )
@@ -77,7 +81,7 @@ def recover(file_path: str) -> None:
     with tarfile.open(file_path, 'r:gz') as tar:
         for directory in directories:
             if directory not in tar.getnames():
-                raise Exception('Archive is wrong.')
+                raise BackupRecoverError('Archive is wrong.')
 
         _safe_extract(tar, home)
 
