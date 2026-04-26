@@ -63,21 +63,15 @@ class MigrateLegacyPathsTest(unittest.TestCase):
         run_migrate(self.home)
 
         # New paths exist.
-        self.assertTrue(
-            os.path.isdir(os.path.join(self.home, 'anthias'))
-        )
+        self.assertTrue(os.path.isdir(os.path.join(self.home, 'anthias')))
         self.assertTrue(
             os.path.isdir(os.path.join(self.home, 'anthias_assets'))
         )
-        self.assertTrue(
-            os.path.isdir(os.path.join(self.home, '.anthias'))
-        )
+        self.assertTrue(os.path.isdir(os.path.join(self.home, '.anthias')))
 
         # Files renamed.
         self.assertTrue(
-            os.path.isfile(
-                os.path.join(self.home, '.anthias', 'anthias.db')
-            )
+            os.path.isfile(os.path.join(self.home, '.anthias', 'anthias.db'))
         )
         anthias_conf = os.path.join(self.home, '.anthias', 'anthias.conf')
         self.assertTrue(os.path.isfile(anthias_conf))
@@ -89,9 +83,7 @@ class MigrateLegacyPathsTest(unittest.TestCase):
 
         # Backups subdir survived the rename.
         self.assertTrue(
-            os.path.isdir(
-                os.path.join(self.home, '.anthias', 'backups')
-            )
+            os.path.isdir(os.path.join(self.home, '.anthias', 'backups'))
         )
 
         # Asset content preserved.
@@ -138,14 +130,10 @@ class MigrateLegacyPathsTest(unittest.TestCase):
 
         run_migrate(self.home)
 
-        with open(
-            os.path.join(self.home, '.anthias', 'anthias.conf')
-        ) as f:
+        with open(os.path.join(self.home, '.anthias', 'anthias.conf')) as f:
             body = f.read()
         self.assertIn(f'configdir = {self.home}/.anthias', body)
-        self.assertIn(
-            f'database = {self.home}/.anthias/anthias.db', body
-        )
+        self.assertIn(f'database = {self.home}/.anthias/anthias.db', body)
         self.assertNotIn('.screenly', body)
 
     def test_idempotent_rerun(self):
@@ -155,21 +143,15 @@ class MigrateLegacyPathsTest(unittest.TestCase):
         run_migrate(self.home)
 
         self.assertTrue(
-            os.path.isfile(
-                os.path.join(self.home, '.anthias', 'anthias.db')
-            )
+            os.path.isfile(os.path.join(self.home, '.anthias', 'anthias.db'))
         )
         self.assertTrue(os.path.islink(os.path.join(self.home, 'screenly')))
 
     def test_fresh_install_noop(self):
         # No legacy paths and no new paths → script should still succeed.
         run_migrate(self.home)
-        self.assertFalse(
-            os.path.exists(os.path.join(self.home, 'anthias'))
-        )
-        self.assertFalse(
-            os.path.exists(os.path.join(self.home, 'screenly'))
-        )
+        self.assertFalse(os.path.exists(os.path.join(self.home, 'anthias')))
+        self.assertFalse(os.path.exists(os.path.join(self.home, 'screenly')))
 
 
 if __name__ == '__main__':

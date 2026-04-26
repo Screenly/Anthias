@@ -51,9 +51,7 @@ class RecoverLegacyTarballTest(unittest.TestCase):
     accepting them so users can still restore those backups."""
 
     def setUp(self):
-        self.tmp_home = tempfile.mkdtemp(
-            prefix='anthias-backup-legacy-test-'
-        )
+        self.tmp_home = tempfile.mkdtemp(prefix='anthias-backup-legacy-test-')
 
     def tearDown(self):
         shutil.rmtree(self.tmp_home, ignore_errors=True)
@@ -98,18 +96,10 @@ class RecoverLegacyTarballTest(unittest.TestCase):
         self.assertFalse(path.isfile(archive))
         # Legacy entries restored under the patched HOME.
         self.assertTrue(
-            path.isfile(
-                path.join(
-                    self.tmp_home, '.screenly', 'screenly.conf'
-                )
-            )
+            path.isfile(path.join(self.tmp_home, '.screenly', 'screenly.conf'))
         )
         self.assertTrue(
-            path.isfile(
-                path.join(
-                    self.tmp_home, 'screenly_assets', 'a.mp4'
-                )
-            )
+            path.isfile(path.join(self.tmp_home, 'screenly_assets', 'a.mp4'))
         )
 
     def test_recover_rejects_unrelated_archive(self):
