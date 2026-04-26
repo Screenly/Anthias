@@ -117,7 +117,10 @@ class RecoverViewMixin(APIView):
             )
         try:
             publisher.send_to_viewer('stop')
-            location = path.join('static', filename)
+            # Don't trust the client-supplied filename — generate a
+            # server-side name to avoid path traversal via crafted names
+            # (e.g. '../etc/passwd', absolute paths).
+            location = path.join('static', f'{uuid.uuid4().hex}.tar.gz')
 
             with open(location, 'wb') as f:
                 f.write(file_upload.read())
