@@ -115,12 +115,12 @@ class RecoverViewMixin(APIView):
             raise ValidationError(
                 {'backup_upload': 'Incorrect file extension.'}
             )
+        # Don't trust the client-supplied filename — generate a
+        # server-side name to avoid path traversal via crafted names
+        # (e.g. '../etc/passwd', absolute paths).
+        location = path.join('static', f'{uuid.uuid4().hex}.tar.gz')
         try:
             publisher.send_to_viewer('stop')
-            # Don't trust the client-supplied filename — generate a
-            # server-side name to avoid path traversal via crafted names
-            # (e.g. '../etc/passwd', absolute paths).
-            location = path.join('static', f'{uuid.uuid4().hex}.tar.gz')
 
             with open(location, 'wb') as f:
                 f.write(file_upload.read())
@@ -138,6 +138,17 @@ class RecoverViewMixin(APIView):
 
             return Response('Recovery successful.')
         finally:
+            # recover() removes `location` on success; clean up here for
+            # every failure path so partial uploads / rejected archives
+            # don't accumulate under static/.
+            if path.isfile(location):
+                try:
+                    remove(location)
+                except OSError:
+                    logger.exception(
+                        'Failed to remove leftover backup upload at %s',
+                        location,
+                    )
             publisher.send_to_viewer('play')
 
 
