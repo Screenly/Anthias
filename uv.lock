@@ -46,7 +46,7 @@ wheels = [
 
 [[package]]
 name = "ansible-core"
-version = "2.18.3"
+version = "2.19.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
@@ -55,9 +55,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "resolvelib" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/39/26/409259cf95b0ef3471f45837cfda01ae87bcced66dfef7691715184550cf/ansible_core-2.18.3.tar.gz", hash = "sha256:8c4eaca40845238e2601b9bc9dbfbd4f6ed3502cb8b2632789f75ce478abfdee", size = 3077314, upload-time = "2025-02-24T19:36:32.051Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/26/5b/161275ff5fa673dfc1329ed19a44331a4f491166a9f0cb907b44037ad72e/ansible_core-2.19.9.tar.gz", hash = "sha256:74107de13d188ff579fb215bc3eb875c9198803215d6378ed588c7f35aba12f5", size = 3431475, upload-time = "2026-04-21T00:47:09.194Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/69/df/8f1d7ec589ceba8c34ebdf7abc083b99ab8c9112bda5f3bfb88b223f75bb/ansible_core-2.18.3-py3-none-any.whl", hash = "sha256:4d5120916b6d36881185c0c7231cdb7b1675f7dddd1a7a833a7d67d56bcdfcc8", size = 2216727, upload-time = "2025-02-24T19:36:29.65Z" },
+    { url = "https://files.pythonhosted.org/packages/3d/b9/f2c07e6cdba6a5882342d666ceea4eeeb6fea20ec325fac68c27bfcea722/ansible_core-2.19.9-py3-none-any.whl", hash = "sha256:18de80e3ea5a89d2ea84e4d4a3c6d7c121ea62fc3af2877ba083784e3d90b419", size = 2416269, upload-time = "2026-04-21T00:47:06.777Z" },
 ]
 
 [[package]]
@@ -283,7 +283,7 @@ docker-image-builder = [
     { name = "requests", specifier = "==2.33.1" },
 ]
 host = [
-    { name = "ansible-core", specifier = "==2.18.3" },
+    { name = "ansible-core", specifier = "==2.19.9" },
     { name = "getmac", specifier = "==0.9.5" },
     { name = "netifaces2", specifier = "==0.0.22" },
     { name = "redis", specifier = "==7.4.0" },

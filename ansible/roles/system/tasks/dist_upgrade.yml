@@ -1,0 +1,8 @@
+---
+- name: Perform system upgrade
+  ansible.builtin.apt:
+    upgrade: dist
+
+- name: Clean up unused packages
+  ansible.builtin.apt:
+    autoremove: true

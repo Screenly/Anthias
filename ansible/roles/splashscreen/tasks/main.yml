@@ -1,61 +1,29 @@
 ---
-
-# If Jessie
-- name: Installs dependencies (Jessie)
-  ansible.builtin.apt:
-    name: fbi
-  when: ansible_distribution_major_version|int <= 7
-
-- name: Copies in splash screen
-  ansible.builtin.copy:
-    src: splashscreen.png
-    dest: /etc/splashscreen.png
-    mode: "0644"
-    owner: root
-    group: root
-  when: ansible_distribution_major_version|int <= 7
-
-- name: Copies in rc script
-  ansible.builtin.copy:
-    src: asplashscreen
-    dest: /etc/init.d/asplashscreen
-    mode: "0755"
-  when: ansible_distribution_major_version|int <= 7
-
-- name: Enables asplashscreen
-  ansible.builtin.command: update-rc.d asplashscreen defaults
-  args:
-    creates: /etc/rcS.d/S01asplashscreen
-  when: ansible_distribution_major_version|int <= 7
-
-# If not Jessie
-- name: Remove older versions
+- name: Remove deprecated splash assets
   ansible.builtin.file:
     state: absent
     path: "{{ item }}"
   with_items:
     - /etc/splashscreen.jpg
+    - /etc/splashscreen.png
     - /etc/init.d/asplashscreen
-  when: ansible_distribution_major_version|int > 7
 
-- name: Get stat of asplashscreen
+- name: Check if asplashscreen rc script is registered
   ansible.builtin.stat:
     path: /etc/rcS.d/S01asplashscreen
-  register: asplashscreen_path
-  when: ansible_distribution_major_version|int > 7
+  register: splashscreen_asplashscreen_stat
 
 - name: Disable asplashscreen
   ansible.builtin.command: update-rc.d asplashscreen remove
-  when: ansible_distribution_major_version|int > 7
-  changed_when: asplashscreen_path.stat.exists
+  when: splashscreen_asplashscreen_stat.stat.exists
+  changed_when: splashscreen_asplashscreen_stat.stat.exists
 
-- name: Installs dependencies (not Jessie)
+- name: Install Plymouth packages
   ansible.builtin.apt:
     name:
       - plymouth
       - plymouth-themes
       - plymouth-label
-  when: ansible_distribution_major_version|int > 7
 
 - name: Remove the old Plymouth scripts
   ansible.builtin.file:
@@ -64,7 +32,7 @@
     owner: root
     group: root
 
-- name: Copies plymouth theme
+- name: Install plymouth theme files
   ansible.builtin.copy:
     src: "{{ item }}"
     dest: /usr/share/plymouth/themes/anthias/
@@ -75,33 +43,28 @@
     - anthias.plymouth
     - anthias.script
     - splashscreen.png
-  when: ansible_distribution_major_version|int > 7
 
 - name: Get current plymouth theme
   ansible.builtin.command: plymouth-set-default-theme
-  register: plymouth_theme
+  register: splashscreen_plymouth_theme
   changed_when: false
-  when: ansible_distribution_major_version|int > 7
 
-- name: Set splashscreen
+- name: Set Plymouth default theme to Anthias
   ansible.builtin.command: plymouth-set-default-theme -R anthias
-  when: ansible_distribution_major_version|int > 7
-  changed_when: plymouth_theme.stdout != "anthias"
+  changed_when: splashscreen_plymouth_theme.stdout != "anthias"
 
-- name: Set plymouthd.default
+- name: Install plymouthd defaults
   ansible.builtin.copy:
     src: plymouthd.default
     dest: /usr/share/plymouth/plymouthd.defaults
     mode: "0644"
     owner: root
     group: root
-  when: ansible_distribution_major_version|int > 7
 
-- name: Copy to plymouthd.conf
+- name: Install plymouthd.conf
   ansible.builtin.copy:
     src: plymouthd.default
     dest: /etc/plymouth/plymouthd.conf
     mode: "0644"
     owner: root
     group: root
-  when: ansible_distribution_major_version|int > 7

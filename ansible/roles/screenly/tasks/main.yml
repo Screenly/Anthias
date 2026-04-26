@@ -1,10 +1,10 @@
 ---
 - name: Ensure folders exist
   ansible.builtin.file:
-    path: "/home/{{ lookup('env', 'USER') }}/{{ item }}"
+    path: "/home/{{ anthias_user }}/{{ item }}"
     state: directory
-    owner: "{{ lookup('env', 'USER') }}"
-    group: "{{ lookup('env', 'USER') }}"
+    owner: "{{ anthias_user }}"
+    group: "{{ anthias_user }}"
     mode: "0755"
   with_items:
     - .screenly
@@ -13,97 +13,88 @@
 
 - name: Create empty .asoundrc
   ansible.builtin.file:
-    path: "/home/{{ lookup('env', 'USER') }}/.asoundrc"
+    path: "/home/{{ anthias_user }}/.asoundrc"
     state: touch
     force: false
-    group: "{{ lookup('env', 'USER') }}"
-    owner: "{{ lookup('env', 'USER') }}"
+    group: "{{ anthias_user }}"
+    owner: "{{ anthias_user }}"
     mode: "0644"
 
 - name: Copy Screenly default assets file
   ansible.builtin.copy:
-    owner: "{{ lookup('env', 'USER') }}"
-    group: "{{ lookup('env', 'USER') }}"
+    owner: "{{ anthias_user }}"
+    group: "{{ anthias_user }}"
     mode: "0644"
     src: default_assets.yml
-    dest: "/home/{{ lookup('env', 'USER') }}/.screenly/default_assets.yml"
+    dest: "/home/{{ anthias_user }}/.screenly/default_assets.yml"
     force: true
 
 - name: Remove deprecated parameter "listen"
   ansible.builtin.lineinfile:
     regexp: '^.*listen.*'
     state: absent
-    dest: "/home/{{ lookup('env', 'USER') }}/.screenly/screenly.conf"
+    dest: "/home/{{ anthias_user }}/.screenly/screenly.conf"
 
-- name: Install pip dependencies
-  ansible.builtin.pip:
-    executable: "/home/{{ lookup('env', 'USER') }}/installer_venv/bin/pip"
-    requirements: "/home/{{ lookup('env', 'USER') }}/screenly/requirements/requirements.host.txt"
-    extra_args: "--no-cache-dir --upgrade"
-  when: ansible_distribution_major_version | int >= 12
+# bin/install.sh installs uv into ~anthias/.local/bin/ before invoking
+# ansible-playbook. If someone runs the playbook standalone, uv won't
+# be there yet — fail with a clear message instead of an opaque
+# "command not found" deeper in the task.
+- name: Verify uv is installed for {{ anthias_user }}
+  ansible.builtin.stat:
+    path: "/home/{{ anthias_user }}/.local/bin/uv"
+  register: screenly_uv_bin
 
-- name: Install pip dependencies (Debian 11 and older)
-  ansible.builtin.pip:
-    executable: "/home/{{ lookup('env', 'USER') }}/installer_venv/bin/pip"
-    name:
-      - ansible-core==2.15.9
-      - docker==6.0.0
-      - getmac==0.9.4
-      - netifaces2==0.0.22
-      - redis==4.3.4
-      - "requests[security]==2.32.3"
-      - tenacity==9.0.0
-    extra_args: "--no-cache-dir --upgrade"
-  when: ansible_distribution_major_version | int <= 11
+- name: Assert uv is present
+  ansible.builtin.assert:
+    that:
+      - screenly_uv_bin.stat.exists
+      - screenly_uv_bin.stat.executable
+    fail_msg: >-
+      uv was not found at /home/{{ anthias_user }}/.local/bin/uv.
+      Run bin/install.sh, or install uv first via:
+      `curl -LsSf https://astral.sh/uv/install.sh | sh`
+      as the {{ anthias_user }} user.
 
-- name: Remove screenly_utils.sh
-  ansible.builtin.file:
-    state: absent
-    path: /usr/local/bin/screenly_utils.sh
+- name: Sync host pip dependencies via uv
+  ansible.builtin.command:
+    cmd: >-
+      /home/{{ anthias_user }}/.local/bin/uv sync
+        --no-default-groups
+        --group host
+        --no-install-project
+    chdir: "/home/{{ anthias_user }}/screenly"
+  environment:
+    UV_PROJECT_ENVIRONMENT: "/home/{{ anthias_user }}/installer_venv"
+  become: false
+  register: screenly_uv_sync
+  changed_when: "'Installed' in screenly_uv_sync.stderr or 'Updated' in screenly_uv_sync.stderr"
 
-- name: Cron job to cleanup screenly_assets
-  ansible.builtin.cron:
-    name: Cleanup screenly_assets
-    state: absent
-    user: "{{ lookup('env', 'USER') }}"
-
-- name: Download upgrade script from github repository
+# install.sh is the single source of truth for both fresh installs and
+# upgrades. We re-download it from the same ref the user is installing
+# (anthias_branch) so a tag-pinned install gets the matching upgrade
+# script, not master's. No checksum is pinned because the URL is
+# expected to move with the ref; integrity is bounded by HTTPS to
+# githubusercontent. If we ever ship signed release assets, switch
+# to fetching the signed asset by tag.
+- name: Install upgrade_anthias.sh from the configured branch
   ansible.builtin.get_url:
-    url: https://raw.githubusercontent.com/Screenly/Anthias/master/bin/install.sh
+    url: "https://raw.githubusercontent.com/Screenly/Anthias/{{ anthias_branch }}/bin/install.sh"
     dest: /usr/local/sbin/upgrade_anthias.sh
     mode: "0700"
     owner: root
     group: root
     force: true
 
-- name: Remove the old upgrade script
-  ansible.builtin.file:
-    state: absent
-    path: /usr/local/sbin/upgrade_screenly.sh
-    owner: root
-    group: root
-
-- name: Copy screenly_overrides
-  ansible.builtin.copy:
-    src: screenly_overrides
+- name: Install sudoers rule for Anthias user
+  ansible.builtin.template:
+    src: screenly_overrides.j2
     dest: /etc/sudoers.d/screenly_overrides
     mode: "0440"
     owner: root
     group: root
+    validate: /usr/sbin/visudo -cf %s
 
-- name: Remove /usr/local/bin/screenly_usb_assets.sh (deprecated)
-  ansible.builtin.file:
-    state: absent
-    path: /usr/local/bin/screenly_usb_assets.sh
-    owner: root
-    group: root
-
-- name: Cleans up autoplay udev rule
-  ansible.builtin.file:
-    state: absent
-    path: /etc/udev/rules.d/50-autoplay.rules
-
-- name: Copy screenly systemd units
+- name: Install Anthias systemd units
   ansible.builtin.template:
     src: "{{ item }}"
     dest: "/etc/systemd/system/{{ item }}"
@@ -112,49 +103,10 @@
     group: root
   with_items: "{{ screenly_systemd_units }}"
 
-- name: Remove plymouth-quit-wait.service
-  ansible.builtin.file:
-    state: absent
-    dest: /lib/systemd/system/plymouth-quit-wait.service
-
-- name: Remove plymouth-quit.service
-  ansible.builtin.file:
-    state: absent
-    dest: /lib/systemd/system/plymouth-quit.service
-
-- name: Enable screenly systemd services
+- name: Enable Anthias systemd services
   ansible.builtin.systemd:
     name: "{{ item }}"
     state: started
     enabled: true
+    daemon_reload: true
   with_items: "{{ screenly_systemd_units }}"
-
-- name: Check if deprecated systemd services exists
-  ansible.builtin.stat:
-    path: /etc/systemd/system/X.service
-  register: x_service
-
-- name: Set the x_service fact
-  ansible.builtin.set_fact:
-    x_service_exist: "{{ x_service.stat.exists }}"
-
-- name: Disable deprecated systemd services
-  ansible.builtin.systemd:
-    name: "{{ item }}"
-    state: stopped
-    enabled: false
-  with_items: "{{ deprecated_screenly_systemd_units }}"
-  when: x_service_exist
-
-- name: Remove deprecated systemd units
-  ansible.builtin.file:
-    path: "/etc/systemd/system/{{ item }}"
-    state: absent
-  with_items: "{{ deprecated_screenly_systemd_units }}"
-
-- name: Remove the ngrok binary
-  ansible.builtin.file:
-    path: "/usr/local/bin/ngrok"
-    state: absent
-    owner: root
-    group: root
