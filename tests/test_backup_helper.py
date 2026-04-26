@@ -73,7 +73,10 @@ class RecoverLegacyTarballTest(unittest.TestCase):
                 f.write(b'video-stub')
 
             archive = path.join(self.tmp_home, 'legacy-backup.tar.gz')
-            with tarfile.open(archive, 'w:gz') as tar:
+            # Write mode: building a fixture tarball, not extracting it.
+            # arcnames are hardcoded test inputs, so no path-traversal
+            # surface. NOSONAR(python:S5042)
+            with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
                 tar.add(
                     path.join(scratch, '.screenly'),
                     arcname='.screenly',
@@ -107,7 +110,9 @@ class RecoverLegacyTarballTest(unittest.TestCase):
         scratch = tempfile.mkdtemp(prefix='anthias-backup-bogus-')
         try:
             os.makedirs(path.join(scratch, 'unrelated'))
-            with tarfile.open(archive, 'w:gz') as tar:
+            # Write mode: building a fixture tarball, not extracting it.
+            # NOSONAR(python:S5042)
+            with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
                 tar.add(
                     path.join(scratch, 'unrelated'),
                     arcname='unrelated',
