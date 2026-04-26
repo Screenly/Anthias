@@ -5,7 +5,7 @@ set -euo pipefail
 BRANCH="master"
 ANSIBLE_PLAYBOOK_ARGS=()
 REPOSITORY="https://github.com/Screenly/Anthias.git"
-ANTHIAS_REPO_DIR="/home/${USER}/screenly"
+ANTHIAS_REPO_DIR="/home/${USER}/anthias"
 GITHUB_API_REPO_URL="https://api.github.com/repos/Screenly/Anthias"
 GITHUB_RELEASES_URL="https://github.com/Screenly/Anthias/releases"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/Screenly/Anthias"
@@ -143,6 +143,30 @@ function install_packages() {
 
     sudo apt-get update
     sudo apt-get install -y "${APT_INSTALL_ARGS[@]}"
+}
+
+function migrate_repo_dir() {
+    # Rename ~/screenly -> ~/anthias before clone_repo runs so the user's
+    # existing checkout state, hooks, and any local changes are preserved
+    # rather than starting fresh in a new directory. Config and asset
+    # dirs are migrated separately by bin/migrate_legacy_paths.sh inside
+    # the cloned repo (see post_clone_migrate_legacy_paths).
+    local OLD_REPO_DIR="/home/${USER}/screenly"
+    if [ -d "${OLD_REPO_DIR}/.git" ] && [ ! -e "${ANTHIAS_REPO_DIR}" ]; then
+        display_section "Rename ${OLD_REPO_DIR} -> ${ANTHIAS_REPO_DIR}"
+        mv "${OLD_REPO_DIR}" "${ANTHIAS_REPO_DIR}"
+        # Back-compat symlink for one release.
+        ln -s "${ANTHIAS_REPO_DIR}" "${OLD_REPO_DIR}"
+    fi
+}
+
+function post_clone_migrate_legacy_paths() {
+    # Run the in-repo migration helper once the repo is on disk. Handles
+    # ~/.screenly -> ~/.anthias, ~/screenly_assets -> ~/anthias_assets,
+    # the screenly.{db,conf} -> anthias.{db,conf} renames, and the
+    # back-compat symlinks. Idempotent / no-op on fresh installs.
+    display_section "Migrate Legacy 'screenly' Data Paths"
+    "${ANTHIAS_REPO_DIR}/bin/migrate_legacy_paths.sh"
 }
 
 function clone_repo() {
@@ -416,7 +440,9 @@ function main() {
     initialize_ansible
     initialize_locales
     install_packages
+    migrate_repo_dir
     clone_repo
+    post_clone_migrate_legacy_paths
     install_ansible
     run_ansible_playbook
 

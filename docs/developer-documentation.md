@@ -246,16 +246,18 @@ $ git push --delete origin v0.18.5           [±master ✓]
 In this section, we'll explain the different directories and files that are
 present in a Raspberry Pi with Anthias installed.
 
-### `home/${USER}/screenly/`
+### `home/${USER}/anthias/`
 
 * All of the files and folders from the Github repo should be cloned into this directory.
+* On installations created before the rename, this directory is `home/${USER}/screenly/` &mdash; the installer migrates it to `anthias/` on upgrade and leaves a back-compat symlink at the old path for one release.
 
-### `/home/${USER}/.screenly/`
+### `/home/${USER}/.anthias/`
 
 * `default_assets.yml` &mdash; configuration file which contains the default assets that get added to the assets list if enabled
 * `initialized` &mdash; tells whether access point service (for Wi-Fi connectivity) runs or not
-* `screenly.conf` &mdash; configuration file for web interface settings
-* `screenly.db` &ndash; database file containing current assets information.
+* `anthias.conf` &mdash; configuration file for web interface settings
+* `anthias.db` &ndash; database file containing current assets information.
+* On pre-rename installations this directory is `~/.screenly/` containing `screenly.conf` / `screenly.db`; the installer migrates them.
 
 
 ### `/etc/systemd/system/`
@@ -263,7 +265,7 @@ present in a Raspberry Pi with Anthias installed.
 * `wifi-connect.service` &mdash; starts the Balena `wifi-connect` program to dynamically set the Wi-Fi config on the device via the captive portal
 * `anthias-host-agent.service` &mdash; starts the Python script `host_agent.py`, which subscribes from the Redis component and performs a system call to shutdown or reboot the device when the message is received.
 
-### `/etc/sudoers.d/screenly_overrides`
+### `/etc/sudoers.d/anthias_overrides`
 
 * `sudoers` configuration file that allows pi user to execute certain `sudo` commands without being a superuser (i.e., `root`)
 

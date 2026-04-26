@@ -112,7 +112,7 @@ void View::loadImage(const QString &preUri)
         QUrl url;
         url.setScheme("http");
         url.setHost("anthias-nginx");
-        url.setPath("/screenly_assets/" + fileInfo.fileName());
+        url.setPath("/anthias_assets/" + fileInfo.fileName());
 
         src = url.toString();
         qDebug() << "Generated URL:" << src;

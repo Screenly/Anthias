@@ -1,6 +1,6 @@
 #!/bin/bash -ex
 
-cd ~/screenly/ansible
+cd ~/anthias/ansible
 sudo -E ansible-playbook -t enable-ssl site.yml
 
 set +x

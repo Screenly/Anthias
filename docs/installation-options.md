@@ -129,7 +129,7 @@ If you've selected **Yes** when prompted for an upgrade &ndash; i.e., "Would you
 &ndash; you'll get the following message when the installer is almost done executing:
 
 ```
-Please reboot and run `/home/$USER/screenly/bin/upgrade_containers.sh` to complete the installation.
+Please reboot and run `/home/$USER/anthias/bin/upgrade_containers.sh` to complete the installation.
 
 Would you like to reboot now?
 ```
