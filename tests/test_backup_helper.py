@@ -4,27 +4,37 @@ import tarfile
 import tempfile
 import unittest
 from datetime import datetime
-from os import getenv, path
+from os import path
 from unittest import mock
 
 from lib.backup_helper import create_backup, recover, static_dir
 
-home = getenv('HOME')
-
 
 class BackupHelperTest(unittest.TestCase):
+    """Exercises create_backup() / recover() under a temporary $HOME so a
+    developer running the test on a real workstation never has their
+    ~/anthias checkout or ~/.anthias config wiped by tearDown's
+    rmtree."""
+
     def setUp(self):
+        self.tmp_home = tempfile.mkdtemp(prefix='anthias-backup-test-')
+        # Populate the layout create_backup() expects to tar up so the
+        # call has something to read.
+        os.makedirs(path.join(self.tmp_home, '.anthias'))
+        os.makedirs(path.join(self.tmp_home, 'anthias_assets'))
+
+        self._home_patch = mock.patch.dict(os.environ, {'HOME': self.tmp_home})
+        self._home_patch.start()
+
         self.dt = datetime(2016, 7, 19, 12, 42, 12)
         self.expected_archive_name = (
             'anthias-backup-2016-07-19T12-42-12.tar.gz'
         )
-        self.assertFalse(path.isdir(path.join(home, static_dir)))
+        self.assertFalse(path.isdir(path.join(self.tmp_home, static_dir)))
 
     def tearDown(self):
-        shutil.rmtree(
-            path.join(home, 'anthias'),
-            ignore_errors=True,
-        )
+        self._home_patch.stop()
+        shutil.rmtree(self.tmp_home, ignore_errors=True)
 
     def get_patched_datetime(self):
         return mock.patch('lib.backup_helper.datetime')
@@ -36,10 +46,8 @@ class BackupHelperTest(unittest.TestCase):
             self.assertEqual(archive_name, self.expected_archive_name)
 
     def test_recover(self):
-        # TODO: Make the tests more specific.
-        #    For example, we can check if the individual files are present.
         archive_name = create_backup()
-        file_path = path.join(home, static_dir, archive_name)
+        file_path = path.join(self.tmp_home, static_dir, archive_name)
         self.assertTrue(path.isfile(file_path))
         recover(file_path)
         self.assertFalse(path.isfile(file_path))
@@ -123,3 +131,43 @@ class RecoverLegacyTarballTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {'HOME': self.tmp_home}):
             with self.assertRaises(Exception):
                 recover(archive)
+
+    def test_recover_skips_path_traversal_member(self):
+        """A malicious tarball with a `..` member must not write outside
+        $HOME. The required top-level entries are still present, so
+        recover() proceeds, but the unsafe member should be skipped."""
+        archive = path.join(self.tmp_home, 'malicious.tar.gz')
+        scratch = tempfile.mkdtemp(prefix='anthias-backup-mal-')
+        try:
+            os.makedirs(path.join(scratch, '.anthias'))
+            os.makedirs(path.join(scratch, 'anthias_assets'))
+            with open(
+                path.join(scratch, '.anthias', 'anthias.conf'), 'w'
+            ) as f:
+                f.write('[main]\n')
+            payload = path.join(scratch, 'evil.txt')
+            with open(payload, 'wb') as f:
+                f.write(b'pwned')
+
+            # NOSONAR(python:S5042) — fixture builder, write mode.
+            with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
+                tar.add(path.join(scratch, '.anthias'), arcname='.anthias')
+                tar.add(
+                    path.join(scratch, 'anthias_assets'),
+                    arcname='anthias_assets',
+                )
+                # The hostile member: a relative escape attempt that
+                # would land at $HOME/../evil.txt under naive extraction.
+                tar.add(payload, arcname='../evil.txt')
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+
+        with mock.patch.dict(os.environ, {'HOME': self.tmp_home}):
+            recover(archive)
+
+        # Legit member extracted; hostile one skipped.
+        self.assertTrue(
+            path.isfile(path.join(self.tmp_home, '.anthias', 'anthias.conf'))
+        )
+        parent_of_home = path.dirname(self.tmp_home)
+        self.assertFalse(path.exists(path.join(parent_of_home, 'evil.txt')))
