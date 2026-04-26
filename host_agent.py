@@ -33,6 +33,7 @@ SUPPORTED_INTERFACES = (
     'wlp',
     'enp',
     'eno',
+    'ens',
 )
 
 
@@ -58,9 +59,12 @@ def set_ip_addresses():
         for attempt in Retrying(
             stop=stop_after_attempt(10),
             wait=wait_fixed(1),
+            before_sleep=before_sleep_log(
+                logging.getLogger(), logging.WARNING, exc_info=True
+            ),
         ):
             with attempt:
-                response = requests.get('https://1.1.1.1')
+                response = requests.get('https://1.1.1.1', timeout=5)
                 response.raise_for_status()
     except RetryError:
         logging.warning(
