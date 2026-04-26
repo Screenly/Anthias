@@ -302,9 +302,7 @@ def get_video_duration(file: str) -> timedelta | None:
     time = None
 
     try:
-        run_player = sh.Command('ffprobe')(
-            '-i', file, _err_to_out=True
-        )
+        run_player = sh.Command('ffprobe')('-i', file, _err_to_out=True)
     except sh.ErrorReturnCode_1 as err:
         raise Exception('Bad video format') from err
 

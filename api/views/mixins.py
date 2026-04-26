@@ -1,3 +1,4 @@
+import logging
 import tarfile
 import uuid
 from base64 import b64encode
@@ -29,6 +30,8 @@ from lib.auth import authorized
 from lib.github import is_up_to_date
 from lib.utils import connect_to_redis
 from settings import ZmqPublisher, settings
+
+logger = logging.getLogger(__name__)
 
 r = connect_to_redis()
 
@@ -124,9 +127,10 @@ class RecoverViewMixin(APIView):
             except (
                 backup_helper.BackupRecoverError,
                 tarfile.TarError,
-            ) as exc:
+            ):
+                logger.exception('Backup recovery failed')
                 raise ValidationError(
-                    {'backup_upload': str(exc) or 'Invalid backup archive.'}
+                    {'backup_upload': 'Invalid backup archive.'}
                 )
 
             return Response('Recovery successful.')
