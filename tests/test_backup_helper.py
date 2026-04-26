@@ -59,7 +59,8 @@ def _build_archive_with(member: tarfile.TarInfo, data: bytes = b'') -> str:
     import os
 
     os.close(fd)
-    with tarfile.open(archive_path, 'w:gz') as tar:
+    # Test fixture: building a tar archive for the safe-extract tests.
+    with tarfile.open(archive_path, 'w:gz') as tar:  # NOSONAR
         if data:
             tar.addfile(member, io.BytesIO(data))
         else:
@@ -76,7 +77,8 @@ class SafeExtractTest(unittest.TestCase):
 
     def _open_and_extract(self, archive_path: str) -> None:
         try:
-            with tarfile.open(archive_path, 'r:gz') as tar:
+            # Test exercises the safe-extract helper directly.
+            with tarfile.open(archive_path, 'r:gz') as tar:  # NOSONAR
                 _safe_extract(tar, self.dest)
         finally:
             import os
