@@ -3,6 +3,14 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 # -*- sh-basic-offset: 4 -*-
 
+# Rename legacy ~/screenly, ~/.screenly, ~/screenly_assets paths to
+# their anthias equivalents. The helper self-relocates and re-execs
+# from /tmp if it lives inside the dir being renamed, so this also
+# handles the case where the running script's path was ~/screenly/...
+# Idempotent / no-op on fresh installs and post-migration runs.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+"${SCRIPT_DIR}/migrate_legacy_paths.sh"
+
 # Export various environment variables
 export MY_IP=$(ip -4 route get 8.8.8.8 | awk {'print $7'} | tr -d '\n')
 TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk {'print $2'})
@@ -68,17 +76,17 @@ if [[ -n $(docker ps | grep srly-ose) ]]; then
     set -e
 fi
 
-cat /home/${USER}/screenly/docker-compose.yml.tmpl \
+cat /home/${USER}/anthias/docker-compose.yml.tmpl \
     | envsubst \
-    > /home/${USER}/screenly/docker-compose.yml
+    > /home/${USER}/anthias/docker-compose.yml
 
 if [[ "$DEVICE_TYPE" =~ ^(x86|pi5)$ ]]; then
     sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
-        /home/${USER}/screenly/docker-compose.yml
+        /home/${USER}/anthias/docker-compose.yml
 fi
 
 sudo -E docker compose \
-    -f /home/${USER}/screenly/docker-compose.yml \
+    -f /home/${USER}/anthias/docker-compose.yml \
     ${MODE}
 
 if [ -f /var/run/reboot-required ]; then
@@ -86,5 +94,5 @@ if [ -f /var/run/reboot-required ]; then
 fi
 
 sudo -E docker compose \
-    -f /home/${USER}/screenly/docker-compose.yml \
+    -f /home/${USER}/anthias/docker-compose.yml \
     up -d

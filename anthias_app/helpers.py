@@ -72,7 +72,7 @@ def add_default_assets():
 
     default_assets_yaml = path.join(
         getenv('HOME'),
-        '.screenly/default_assets.yml',
+        '.anthias/default_assets.yml',
     )
 
     with open(default_assets_yaml, 'r') as yaml_file:

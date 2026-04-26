@@ -1,12 +1,17 @@
 #!/bin/bash
 
+# Defensively expose legacy /data/.screenly and /data/screenly_assets
+# paths as symlinks if a running setup still has them in DB rows or in
+# an older docker-compose file. No-op on clean installs.
+/usr/src/app/bin/migrate_in_container_paths.sh
+
 # Fixes permission on /dev/vchiq
 chgrp -f video /dev/vchiq
 chmod -f g+rwX /dev/vchiq
 
 # Set permission for sha file
 chown -f viewer /dev/snd/*
-chown -f viewer /data/.screenly/latest_anthias_sha
+chown -f viewer /data/.anthias/latest_anthias_sha
 
 # Fixes caching in QTWebEngine
 mkdir -p /data/.local/share/ScreenlyWebview/QtWebEngine \
@@ -20,8 +25,8 @@ chown -Rf viewer /data/.pki
 chown -Rf viewer /data/hotspot
 
 # Temporary workaround for watchdog
-touch /tmp/screenly.watchdog
-chown viewer /tmp/screenly.watchdog
+touch /tmp/anthias.watchdog
+chown viewer /tmp/anthias.watchdog
 
 # For whatever reason Raspbian messes up the sudo permissions
 chown -f root:root /usr/bin/sudo

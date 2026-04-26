@@ -9,8 +9,8 @@ StartLimitBurst=3
 [Service]
 Type=simple
 User={{ anthias_user }}
-WorkingDirectory=/home/{{ anthias_user }}/screenly
-ExecStart=/home/{{ anthias_user }}/installer_venv/bin/python /home/{{ anthias_user }}/screenly/host_agent.py
+WorkingDirectory=/home/{{ anthias_user }}/anthias
+ExecStart=/home/{{ anthias_user }}/installer_venv/bin/python /home/{{ anthias_user }}/anthias/host_agent.py
 Restart=on-failure
 RestartSec=10s
 

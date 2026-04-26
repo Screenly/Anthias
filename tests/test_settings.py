@@ -20,8 +20,8 @@ resolution = 1920x1080
 default_duration = 45
 
 [main]
-assetdir = "{}/screenly_assets".format(user_home_dir)
-database = "{}/.screenly/screenly.db".format(user_home_dir)
+assetdir = "{}/anthias_assets".format(user_home_dir)
+database = "{}/.anthias/anthias.db".format(user_home_dir)
 use_ssl = False
 
 """
@@ -41,8 +41,8 @@ show_splash = offf
 
 """
 
-CONFIG_DIR = '/tmp/.screenly/'
-CONFIG_FILE = CONFIG_DIR + 'screenly.conf'
+CONFIG_DIR = '/tmp/.anthias/'
+CONFIG_FILE = CONFIG_DIR + 'anthias.conf'
 
 
 @contextmanager

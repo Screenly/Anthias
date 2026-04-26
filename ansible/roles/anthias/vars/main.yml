@@ -1,2 +1,2 @@
-screenly_systemd_units:
+anthias_systemd_units:
   - anthias-host-agent.service

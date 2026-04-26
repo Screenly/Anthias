@@ -39,10 +39,10 @@ of the container in the command above. Here's a table of the available container
 
 > [!IMPORTANT]
 > Before running the succeeding commands, make sure that you're in the
-> `/home/${USER}/screenly` directory:
+> `/home/${USER}/anthias` directory:
 > 
 > ```bash
-> $ cd /home/${USER}/screenly # e.g., /home/pi/screenly if the user is `pi`
+> $ cd /home/${USER}/anthias # e.g., /home/pi/anthias if the user is `pi`
 > ```
 
 If you'd like to see the logs of a specific container or service via Docker Compose,
@@ -70,7 +70,7 @@ $ bash <(curl -sL https://install-anthias.srly.io)
 Alternatively, you can also run the following command:
 
 ```bash
-$ $HOME/screenly/bin/run_upgrade.sh
+$ $HOME/anthias/bin/run_upgrade.sh
 ```
 
 ## Accessing the REST API
@@ -85,7 +85,7 @@ if you're in development mode). You should see the API docs for the endpoints.
 > With running the following script, you can install self-signed certificates:
 > 
 > ```bash
-> $ cd $HOME/screenly
+> $ cd $HOME/anthias
 > $ ./bin/add_certificate.sh /path/to/certificate.crt
 > ```
 

@@ -18,7 +18,7 @@ Anthias runs as a set of Docker containers:
 - **redis** (port 6379) — Message broker, cache, database
 - **webview** — Qt-based browser for rendering content on the display
 
-Inter-service communication uses ZMQ (port 10001 publisher, 5558 collector). The primary database is SQLite stored at `~/.screenly/screenly.db`, with configuration in `~/.screenly/screenly.conf`.
+Inter-service communication uses ZMQ (port 10001 publisher, 5558 collector). The primary database is SQLite stored at `~/.anthias/anthias.db`, with configuration in `~/.anthias/anthias.conf`. (Pre-rebrand installations have these at `~/.screenly/screenly.db` and `~/.screenly/screenly.conf`; `bin/migrate_legacy_paths.sh` migrates them on upgrade and leaves back-compat symlinks.)
 
 ### Key Directories
 

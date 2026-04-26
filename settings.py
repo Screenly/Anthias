@@ -16,13 +16,13 @@ import zmq
 from lib.auth import BasicAuth, NoAuth
 from lib.errors import ZmqCollectorTimeoutError
 
-CONFIG_DIR = '.screenly/'
-CONFIG_FILE = 'screenly.conf'
+CONFIG_DIR = '.anthias/'
+CONFIG_FILE = 'anthias.conf'
 DEFAULTS = {
     'main': {
         'analytics_opt_out': False,
-        'assetdir': 'screenly_assets',
-        'database': CONFIG_DIR + 'screenly.db',
+        'assetdir': 'anthias_assets',
+        'database': CONFIG_DIR + 'anthias.db',
         'date_format': 'mm/dd/yyyy',
         'use_24_hour_clock': False,
         'use_ssl': False,
@@ -125,7 +125,7 @@ class AnthiasSettings(UserDict):
             config.set(section, field, str(self.get(field, default)))
 
     def load(self):
-        """Loads the latest settings from screenly.conf into memory."""
+        """Loads the latest settings from anthias.conf into memory."""
         logging.debug('Reading config-file...')
         config = configparser.ConfigParser()
         config.read(self.conf_file)

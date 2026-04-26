@@ -104,9 +104,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': (
-            '/data/.screenly/test.db'
+            '/data/.anthias/test.db'
             if getenv('ENVIRONMENT') == 'test'
-            else '/data/.screenly/screenly.db'
+            else '/data/.anthias/anthias.db'
         ),
     },
 }
@@ -157,7 +157,7 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
-STATIC_ROOT = '/data/screenly/staticfiles'
+STATIC_ROOT = '/data/anthias/staticfiles'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
@@ -182,5 +182,5 @@ SPECTACULAR_SETTINGS = {
 
 # `django-dbbackup` settings
 DBBACKUP_STORAGE = 'django.core.files.storage.FileSystemStorage'
-DBBACKUP_STORAGE_OPTIONS = {'location': '/data/.screenly/backups'}
+DBBACKUP_STORAGE_OPTIONS = {'location': '/data/.anthias/backups'}
 DBBACKUP_HOSTNAME = 'anthias'
