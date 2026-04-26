@@ -36,6 +36,11 @@ SUPPORTED_INTERFACES = (
     'ens',
 )
 
+# Cloudflare's 1.1.1.1 public DNS anycast, used purely as an Internet
+# reachability probe before reading the host's interface addresses.
+# Public anycast, not a private/internal address.
+INTERNET_PROBE_URL = 'https://1.1.1.1'  # NOSONAR
+
 
 def get_ip_addresses():
     return [
@@ -64,7 +69,7 @@ def set_ip_addresses():
             ),
         ):
             with attempt:
-                response = requests.get('https://1.1.1.1', timeout=5)
+                response = requests.get(INTERNET_PROBE_URL, timeout=5)
                 response.raise_for_status()
     except RetryError:
         logging.warning(
