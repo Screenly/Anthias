@@ -181,9 +181,7 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
     def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         return _validate_time_window(data, instance=self.instance)
 
-    def update(
-        self, instance: Asset, validated_data: dict[str, Any]
-    ) -> Asset:
+    def update(self, instance: Asset, validated_data: dict[str, Any]) -> Asset:
         instance = super().update(instance, validated_data)
         for field in ('play_days', 'play_time_from', 'play_time_to'):
             if field in validated_data:
