@@ -1,0 +1,40 @@
+---
+name: Setup Python + uv
+description: >
+  Install Python and uv, create a virtualenv, and install a dependency
+  group. Used by every workflow that needs the project's Python toolchain
+  so version bumps for setup-python, setup-uv, and the uv release happen
+  in one place instead of being copy-pasted across the matrix.
+
+inputs:
+  group:
+    description: uv dependency group to install (see pyproject.toml)
+    required: false
+    default: dev-host
+  python-version:
+    description: Python version to install
+    required: false
+    default: '3.11'
+  uv-version:
+    description: uv version to install
+    required: false
+    default: '0.9.17'
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install uv ${{ inputs.uv-version }}
+      uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      with:
+        version: ${{ inputs.uv-version }}
+
+    - name: Install dependencies (group=${{ inputs.group }})
+      shell: bash
+      run: |
+        uv venv
+        uv pip install --group ${{ inputs.group }}

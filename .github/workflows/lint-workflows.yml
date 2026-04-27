@@ -5,20 +5,22 @@ on:
     branches:
       - master
     paths:
-      - '**/*.yml'
-      - '**/*.yaml'
-      - '.github/workflows/lint-workflows.yml'
+      - '.github/workflows/**'
+      - '.github/actions/**'
   push:
     branches:
       - master
     paths:
-      - '**/*.yml'
-      - '**/*.yaml'
-      - '.github/workflows/lint-workflows.yml'
+      - '.github/workflows/**'
+      - '.github/actions/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   actionlint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Run Linter
     strategy:
       matrix:

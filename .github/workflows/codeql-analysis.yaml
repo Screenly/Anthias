@@ -14,11 +14,33 @@ name: "CodeQL"
 on:
   push:
     branches: [ master, production ]
+    paths:
+      - '**/*.py'
+      - '**/*.js'
+      - '**/*.jsx'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.mjs'
+      - '.github/workflows/codeql-analysis.yaml'
   pull_request:
     # The branches below must be a subset of the branches above
     branches: [ master, production ]
+    paths:
+      - '**/*.py'
+      - '**/*.js'
+      - '**/*.jsx'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.mjs'
+      - '.github/workflows/codeql-analysis.yaml'
+  # Schedule is the catch-all so CodeQL still runs even on weeks with
+  # only documentation changes that the path filter excludes.
   schedule:
     - cron: '30 20 * * 0'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   analyze:

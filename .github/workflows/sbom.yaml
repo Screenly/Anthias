@@ -7,13 +7,15 @@ on:
     paths:
       - 'bun.lock'
       - 'uv.lock'
+      - '.github/workflows/sbom.yaml'
+
+# Don't cancel master runs (each one publishes attestations).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  run-tests:
-    uses: ./.github/workflows/docker-test.yaml
-
   js-sbom:
-    needs: run-tests
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
@@ -40,7 +42,6 @@ jobs:
           subject-path: '${{ github.workspace }}/*.cdx.json'
 
   python-sbom:
-    needs: run-tests
     runs-on: ubuntu-24.04
     permissions:
       id-token: write

@@ -12,6 +12,7 @@ on:
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/ansible-lint.yaml'
+      - '.github/actions/setup-python-uv/**'
   pull_request:
     branches:
       - master
@@ -22,6 +23,11 @@ on:
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/ansible-lint.yaml'
+      - '.github/actions/setup-python-uv/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -29,20 +35,10 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      - name: Set up Python + uv (dev-host)
+        uses: ./.github/actions/setup-python-uv
         with:
-          python-version: '3.11'
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
-        with:
-          version: '0.9.17'
-
-      - name: Install dependencies
-        run: |
-          uv venv
-          uv pip install --group dev-host
+          group: dev-host
 
       - name: Run ansible-lint
         run: |
