@@ -157,7 +157,6 @@ mypy = [
     { name = "pygit2" },
     { name = "python-on-whales" },
     { name = "pytz" },
-    { name = "pyzmq" },
     { name = "requests" },
     { name = "ruff" },
     { name = "tenacity" },
@@ -199,7 +198,6 @@ server = [
     { name = "python-dateutil" },
     { name = "pytz" },
     { name = "pyyaml" },
-    { name = "pyzmq" },
     { name = "redis" },
     { name = "requests" },
     { name = "setuptools" },
@@ -245,7 +243,6 @@ test = [
     { name = "python-vlc" },
     { name = "pytz" },
     { name = "pyyaml" },
-    { name = "pyzmq" },
     { name = "redis" },
     { name = "requests" },
     { name = "selenium" },
@@ -281,7 +278,6 @@ viewer = [
     { name = "python-dateutil" },
     { name = "python-vlc" },
     { name = "pytz" },
-    { name = "pyzmq" },
     { name = "redis" },
     { name = "requests" },
     { name = "sh" },
@@ -293,7 +289,6 @@ wifi-connect = [
     { name = "cython" },
     { name = "future" },
     { name = "netifaces" },
-    { name = "pyzmq" },
     { name = "redis" },
 ]
 
@@ -363,7 +358,6 @@ mypy = [
     { name = "pygit2", specifier = "==1.19.1" },
     { name = "python-on-whales", specifier = "==0.79.0" },
     { name = "pytz", specifier = "==2025.2" },
-    { name = "pyzmq", specifier = "==23.2.1" },
     { name = "requests", specifier = "==2.33.1" },
     { name = "ruff", specifier = "==0.14.10" },
     { name = "tenacity", specifier = "==9.1.2" },
@@ -405,7 +399,6 @@ server = [
     { name = "python-dateutil", specifier = "==2.9.0.post0" },
     { name = "pytz", specifier = "==2025.2" },
     { name = "pyyaml", specifier = "==6.0.2" },
-    { name = "pyzmq", specifier = "==23.2.1" },
     { name = "redis", specifier = "==7.4.0" },
     { name = "requests", extras = ["security"], specifier = "==2.33.1" },
     { name = "setuptools", specifier = "==79.0.1" },
@@ -451,7 +444,6 @@ test = [
     { name = "python-vlc", specifier = "==3.0.21203" },
     { name = "pytz", specifier = "==2025.2" },
     { name = "pyyaml", specifier = "==6.0.2" },
-    { name = "pyzmq", specifier = "==23.2.1" },
     { name = "redis", specifier = "==7.4.0" },
     { name = "requests", extras = ["security"], specifier = "==2.33.1" },
     { name = "selenium", specifier = "==4.36.0" },
@@ -487,7 +479,6 @@ viewer = [
     { name = "python-dateutil", specifier = "==2.9.0.post0" },
     { name = "python-vlc", specifier = "==3.0.21203" },
     { name = "pytz", specifier = "==2025.2" },
-    { name = "pyzmq", specifier = "==23.2.1" },
     { name = "redis", specifier = "==7.4.0" },
     { name = "requests", extras = ["security"], specifier = "==2.33.1" },
     { name = "sh", specifier = "==2.2.2" },
@@ -499,7 +490,6 @@ wifi-connect = [
     { name = "cython", specifier = "==3.2.4" },
     { name = "future", specifier = "==1.0.0" },
     { name = "netifaces", specifier = "==0.11.0" },
-    { name = "pyzmq", specifier = "==23.2.1" },
     { name = "redis", specifier = "==7.4.0" },
 ]
 
@@ -1547,15 +1537,6 @@ wheels = [
 ]
 
 [[package]]
-name = "py"
-version = "1.11.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/98/ff/fec109ceb715d2a6b4c4a85a61af3b40c723a961e8828319fbcb15b868dc/py-1.11.0.tar.gz", hash = "sha256:51c75c4126074b472f746a24399ad32f6053d1b34b68d2fa41e558e6f4a98719", size = 207796, upload-time = "2021-11-04T17:17:01.377Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f6/f0/10642828a8dfb741e5f3fbaac830550a518a775c7fff6f04a007259b0548/py-1.11.0-py2.py3-none-any.whl", hash = "sha256:607c53218732647dff4acdfcd50cb62615cedf612e72d1724fb1a0cc6405b378", size = 98708, upload-time = "2021-11-04T17:17:00.152Z" },
-]
-
-[[package]]
 name = "pyasn1"
 version = "0.6.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1901,28 +1882,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fe/0f/25911a9f080464c59fab9027482f822b86bf0608957a5fcc6eaac85aa515/PyYAML-6.0.2-cp313-cp313-musllinux_1_1_x86_64.whl", hash = "sha256:68ccc6023a3400877818152ad9a1033e3db8625d899c72eacb5a668902e4d652", size = 751597, upload-time = "2024-08-06T20:32:56.985Z" },
     { url = "https://files.pythonhosted.org/packages/14/0d/e2c3b43bbce3cf6bd97c840b46088a3031085179e596d4929729d8d68270/PyYAML-6.0.2-cp313-cp313-win32.whl", hash = "sha256:bc2fa7c6b47d6bc618dd7fb02ef6fdedb1090ec036abab80d4681424b84c1183", size = 140527, upload-time = "2024-08-06T20:33:03.001Z" },
     { url = "https://files.pythonhosted.org/packages/fa/de/02b54f42487e3d3c6efb3f89428677074ca7bf43aae402517bc7cca949f3/PyYAML-6.0.2-cp313-cp313-win_amd64.whl", hash = "sha256:8388ee1976c416731879ac16da0aff3f63b286ffdd57cdeb95f3f2e085687563", size = 156446, upload-time = "2024-08-06T20:33:04.33Z" },
-]
-
-[[package]]
-name = "pyzmq"
-version = "23.2.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cffi", marker = "implementation_name == 'pypy'" },
-    { name = "py", marker = "implementation_name == 'pypy'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/72/37/d5603f352522e249e44ee767a8a59b3fe7cf7f708a94fd40a637c6890add/pyzmq-23.2.1.tar.gz", hash = "sha256:2b381aa867ece7d0a82f30a0c7f3d4387b7cf2e0697e33efaa5bed6c5784abcd", size = 1218264, upload-time = "2022-08-12T09:01:12.157Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b4/e3/081b1a02af85b60e19191ea5d41b422ea7a0126043b7c54b5f3c2ce8e065/pyzmq-23.2.1-cp311-cp311-macosx_10_15_universal2.whl", hash = "sha256:e753eee6d3b93c5354e8ba0a1d62956ee49355f0a36e00570823ef64e66183f5", size = 1829830, upload-time = "2022-08-12T09:17:58.12Z" },
-    { url = "https://files.pythonhosted.org/packages/38/e7/3ff3068074316da9990e889382b7a5f08728ebca893a2b8e018c1531633f/pyzmq-23.2.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:f07016e3cf088dbfc6e7c5a7b3f540db5c23b0190d539e4fd3e2b5e6beffa4b5", size = 1244536, upload-time = "2022-08-12T09:18:12.296Z" },
-    { url = "https://files.pythonhosted.org/packages/dc/24/3ac8d73b09a6db9d26d4c6fb454101dbc9e1ea1e6df50cd50041decbd895/pyzmq-23.2.1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:4805af9614b0b41b7e57d17673459facf85604dac502a5a9244f6e8c9a4de658", size = 880172, upload-time = "2022-08-12T09:12:29.324Z" },
-    { url = "https://files.pythonhosted.org/packages/a7/bb/54986ab979a4f964c6b76817b6fdd7403a9cf76f368a0c67ec6bb65a783d/pyzmq-23.2.1-cp311-cp311-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:39dd252b683816935702825e5bf775df16090619ced9bb4ba68c2d0b6f0c9b18", size = 1130741, upload-time = "2022-08-12T09:11:08.068Z" },
-    { url = "https://files.pythonhosted.org/packages/4d/b4/804256cc2a3668b152c5ddf65bf319ae8d922ef6bfadee24e0ef23f096d6/pyzmq-23.2.1-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:84678153432241bcdca2210cf4ff83560b200556867aea913ffbb960f5d5f340", size = 1075742, upload-time = "2022-08-12T09:18:41.418Z" },
-    { url = "https://files.pythonhosted.org/packages/6b/36/0546d92a57ca60a456f801f4e1a55932c8c6e324e1b77f6faca660728b4e/pyzmq-23.2.1-cp311-cp311-musllinux_1_1_aarch64.whl", hash = "sha256:90d88f9d9a2ae6cfb1dc4ea2d1710cdf6456bc1b9a06dd1bb485c5d298f2517e", size = 1407475, upload-time = "2022-08-12T09:12:32.562Z" },
-    { url = "https://files.pythonhosted.org/packages/a7/2c/9ff05957a40dc87889a584457a6c700e77ad3f623e4f5e33a29dfcc2ea59/pyzmq-23.2.1-cp311-cp311-musllinux_1_1_i686.whl", hash = "sha256:794871988c34727c7f79bdfe2546e6854ae1fa2e1feb382784f23a9c6c63ecb3", size = 1737821, upload-time = "2022-08-12T09:13:42.82Z" },
-    { url = "https://files.pythonhosted.org/packages/b6/a0/79ae7abdc28eecc261806a9ebbfb03f05709a501350009c5925e0ed73a29/pyzmq-23.2.1-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:c56b1a62a1fb87565343c57b6743fd5da6e138b8c6562361d7d9b5ce4acf399a", size = 1626767, upload-time = "2022-08-12T09:13:44.173Z" },
-    { url = "https://files.pythonhosted.org/packages/cd/88/dcbe0bfc6b744badda43322e2538ab269451e0f298d3e4616da92a25dfa3/pyzmq-23.2.1-cp311-cp311-win32.whl", hash = "sha256:c3ebf1668664d20c8f7d468955f18379b7d1f7bc8946b13243d050fa3888c7ff", size = 887707, upload-time = "2022-08-12T09:09:56.207Z" },
-    { url = "https://files.pythonhosted.org/packages/b7/90/da3761e269f7d5a7916e98364f55745ca1a979a6316a265fc4b4ac26e144/pyzmq-23.2.1-cp311-cp311-win_amd64.whl", hash = "sha256:ec9803aca9491fd6f0d853d2a6147f19f8deaaa23b1b713d05c5d09e56ea7142", size = 1139705, upload-time = "2022-08-12T09:08:42.647Z" },
 ]
 
 [[package]]

@@ -30,7 +30,7 @@ COPY --from=uv-builder /venv /venv
 ENV PATH="/venv/bin:$PATH"
 ENV VIRTUAL_ENV="/venv"
 
-COPY send_zmq_message.py ./
+COPY send_viewer_message.py ./
 
 RUN touch /var/lib/misc/dnsmasq.leases
 
