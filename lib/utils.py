@@ -29,9 +29,6 @@ from tenacity import (
     wait_fixed,
 )
 
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
-
 from anthias_app.models import Asset
 from settings import settings
 
@@ -441,6 +438,11 @@ class YoutubeDownloadThread(Thread):
         except Asset.DoesNotExist:
             logging.warning('Asset %s not found', self.asset_id)
             return
+
+        # Imported lazily so the viewer container (which does not
+        # ship channels/channels-redis) can still import lib.utils.
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
 
         async_to_sync(get_channel_layer().group_send)(
             'ws_server',

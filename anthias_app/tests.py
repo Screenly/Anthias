@@ -17,34 +17,6 @@ LAN_IP_192_BLOCKED = '192.168.1.50'  # NOSONAR
 PUBLIC_IP = '8.8.8.8'  # NOSONAR
 
 
-class SafeJoinTest(TestCase):
-    def test_resolves_simple_relative(self):
-        with TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / 'a.txt').write_text('hi')
-            self.assertEqual(
-                views_files._safe_join(root, 'a.txt'),
-                (root / 'a.txt').resolve(),
-            )
-
-    def test_rejects_parent_traversal(self):
-        with TemporaryDirectory() as tmp:
-            root = Path(tmp) / 'sub'
-            root.mkdir()
-            with self.assertRaises(Http404):
-                views_files._safe_join(root, '../../../etc/passwd')
-
-    def test_rejects_symlink_escape(self):
-        with TemporaryDirectory() as tmp:
-            root = Path(tmp) / 'sub'
-            root.mkdir()
-            outside = Path(tmp) / 'outside.txt'
-            outside.write_text('x')
-            (root / 'link').symlink_to(outside)
-            with self.assertRaises(Http404):
-                views_files._safe_join(root, 'link')
-
-
 class AnthiasAssetsViewTest(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
@@ -92,6 +64,17 @@ class AnthiasAssetsViewTest(TestCase):
         )
         with self.assertRaises(Http404):
             views_files.anthias_assets(request, filename='../../../etc/passwd')
+
+    def test_symlink_escape_404(self):
+        with TemporaryDirectory() as outside_dir:
+            outside = Path(outside_dir) / 'outside.txt'
+            outside.write_text('secret')
+            (self.root / 'link.txt').symlink_to(outside)
+            request = self.factory.get(
+                '/anthias_assets/link.txt', REMOTE_ADDR=DOCKER_BRIDGE_IP
+            )
+            with self.assertRaises(Http404):
+                views_files.anthias_assets(request, filename='link.txt')
 
     def test_malformed_remote_addr_403(self):
         response = self._get('/anthias_assets/hello.txt', 'not-an-ip')

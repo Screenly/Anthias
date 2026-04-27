@@ -46,20 +46,6 @@ def require_client_in(*cidrs):
     return decorator
 
 
-def _safe_join(root: Path, relative: str) -> Path:
-    """Resolve ``relative`` under ``root``, rejecting traversal."""
-    # CodeQL recognises os.path.commonpath as a path-injection sanitiser
-    # only when it is in the *same* function as the file-system sink, so
-    # call sites must repeat the check (or call this helper and pay the
-    # extra `# nosec`/dismissal noise). Tested directly in
-    # anthias_app/tests.py::SafeJoinTest.
-    root_real = os.path.realpath(root)
-    candidate_real = os.path.realpath(os.path.join(root_real, relative))
-    if os.path.commonpath([candidate_real, root_real]) != root_real:
-        raise Http404
-    return Path(candidate_real)
-
-
 @require_GET
 @require_client_in(DOCKER_BRIDGE_CIDR)
 def anthias_assets(request, filename):
