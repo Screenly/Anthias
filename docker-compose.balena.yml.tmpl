@@ -3,7 +3,7 @@
 version: "2"
 services:
   anthias-wifi-connect:
-    image: screenly/anthias-wifi-connect:${GIT_SHORT_HASH}-${BOARD}
+    image: ghcr.io/screenly/anthias-wifi-connect:${GIT_SHORT_HASH}-${BOARD}
     depends_on:
       - anthias-viewer
     environment:
@@ -18,7 +18,7 @@ services:
       io.balena.features.firmware: "1"
 
   anthias-server:
-    image: screenly/anthias-server:${GIT_SHORT_HASH}-${BOARD}
+    image: ghcr.io/screenly/anthias-server:${GIT_SHORT_HASH}-${BOARD}
     ports:
       - 80:8080
     environment:
@@ -37,7 +37,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   anthias-viewer:
-    image: screenly/anthias-viewer:${GIT_SHORT_HASH}-${BOARD}
+    image: ghcr.io/screenly/anthias-viewer:${GIT_SHORT_HASH}-${BOARD}
     depends_on:
       - anthias-server
     environment:
@@ -56,7 +56,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   anthias-celery:
-    image: screenly/anthias-celery:${GIT_SHORT_HASH}-${BOARD}
+    image: ghcr.io/screenly/anthias-celery:${GIT_SHORT_HASH}-${BOARD}
     depends_on:
       - anthias-server
       - redis
@@ -73,7 +73,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   redis:
-    image: screenly/anthias-redis:${GIT_SHORT_HASH}-${BOARD}
+    image: ghcr.io/screenly/anthias-redis:${GIT_SHORT_HASH}-${BOARD}
     ports:
       - 127.0.0.1:6379:6379
     restart: always

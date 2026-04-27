@@ -109,6 +109,7 @@ def build_image(
             'git_branch': git_branch,
             'git_hash': git_hash,
             'git_short_hash': git_short_hash,
+            'service': service,
             'target_platform': target_platform,
             **context,
         },
@@ -239,8 +240,22 @@ def main(
 
     # Build Docker images
     for service_name in services_to_build:
-        # Define tag components
-        namespaces = ['screenly/anthias', 'screenly/srly-ose']
+        # Define tag components.
+        #
+        # GHCR is listed first because it is the primary, canonical source
+        # for Anthias images going forward — `bin/upgrade_containers.sh`
+        # regenerates compose from `docker-compose.yml.tmpl`, so flipping
+        # the template (separate change) flips every device on next
+        # upgrade. Docker Hub stays in the list as a parallel push during
+        # the migration window so devices that haven't yet picked up the
+        # template flip keep getting `latest-*` advanced.
+        #
+        # The legacy `screenly/srly-ose-*` namespace was dropped: every
+        # device that has run `upgrade_containers.sh` since 2023-02
+        # (b9998438) is on `screenly/anthias-*`, and stale `srly-ose-*`
+        # `latest-*` mirroring (one of two reasons d568602 hit Docker
+        # Hub's 429) gives no real back-compat in exchange.
+        namespaces = ['ghcr.io/screenly/anthias', 'screenly/anthias']
         version_suffix = (
             f'{board}-64'
             if board == 'pi4' and platform == 'linux/arm64/v8'
