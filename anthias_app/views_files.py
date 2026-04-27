@@ -48,9 +48,11 @@ def require_client_in(*cidrs):
 
 def _safe_join(root: Path, relative: str) -> Path:
     """Resolve ``relative`` under ``root``, rejecting traversal."""
-    # os.path.commonpath is CodeQL's recognised path-injection sanitiser;
-    # equivalent to Path.is_relative_to but the static analyser can prove
-    # the post-check path stays under `root`.
+    # CodeQL recognises os.path.commonpath as a path-injection sanitiser
+    # only when it is in the *same* function as the file-system sink, so
+    # call sites must repeat the check (or call this helper and pay the
+    # extra `# nosec`/dismissal noise). Tested directly in
+    # anthias_app/tests.py::SafeJoinTest.
     root_real = os.path.realpath(root)
     candidate_real = os.path.realpath(os.path.join(root_real, relative))
     if os.path.commonpath([candidate_real, root_real]) != root_real:
@@ -61,22 +63,28 @@ def _safe_join(root: Path, relative: str) -> Path:
 @require_GET
 @require_client_in(DOCKER_BRIDGE_CIDR)
 def anthias_assets(request, filename):
-    target = _safe_join(ANTHIAS_ASSETS_ROOT, filename)
-    if not target.is_file():
+    root_real = os.path.realpath(ANTHIAS_ASSETS_ROOT)
+    target = os.path.realpath(os.path.join(root_real, filename))
+    if os.path.commonpath([target, root_real]) != root_real:
         raise Http404
-    return FileResponse(target.open('rb'))
+    if not os.path.isfile(target):
+        raise Http404
+    return FileResponse(open(target, 'rb'))
 
 
 @require_GET
 @require_client_in(*RFC1918_CIDRS)
 def static_with_mime(request, filename):
-    target = _safe_join(STATIC_FILES_ROOT, filename)
-    if not target.is_file():
+    root_real = os.path.realpath(STATIC_FILES_ROOT)
+    target = os.path.realpath(os.path.join(root_real, filename))
+    if os.path.commonpath([target, root_real]) != root_real:
+        raise Http404
+    if not os.path.isfile(target):
         raise Http404
     content_type = request.GET.get('mime') or (
-        mimetypes.guess_type(str(target))[0] or 'application/octet-stream'
+        mimetypes.guess_type(target)[0] or 'application/octet-stream'
     )
-    return FileResponse(target.open('rb'), content_type=content_type)
+    return FileResponse(open(target, 'rb'), content_type=content_type)
 
 
 @require_GET
