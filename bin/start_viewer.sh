@@ -43,8 +43,11 @@ trap '' 16
 # Disable swapping
 echo 0 >  /sys/fs/cgroup/memory/memory.swappiness
 
-# Start viewer
-sudo -E -u viewer dbus-run-session python -m viewer &
+# Start viewer.
+# sudo resets PATH to its secure_path, so resolve python via the
+# absolute venv path instead — `python` on PATH would otherwise hit
+# the system interpreter, which has no Anthias deps installed.
+sudo -E -u viewer dbus-run-session /venv/bin/python -m viewer &
 
 # Wait for the viewer
 while true; do

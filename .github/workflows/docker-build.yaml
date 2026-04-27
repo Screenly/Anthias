@@ -48,7 +48,7 @@ jobs:
       fail-fast: false
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
-        service: ['server', 'celery', 'redis', 'websocket', 'nginx', 'viewer', 'wifi-connect']
+        service: ['server', 'celery', 'redis', 'viewer', 'wifi-connect']
         python-version: ["3.11"]
     runs-on: ubuntu-24.04
 
@@ -157,7 +157,7 @@ jobs:
           set -euo pipefail
           GIT_SHORT_HASH=$(git rev-parse --short=7 HEAD)
           BOARDS=(pi1 pi2 pi3 pi4 pi4-64 pi5 x86)
-          SERVICES=(server celery redis websocket nginx viewer wifi-connect)
+          SERVICES=(server celery redis viewer wifi-connect)
           NAMESPACES=(screenly/anthias screenly/srly-ose)
 
           echo "::group::Preflight: verify every <short-hash>-<board> source tag exists"
