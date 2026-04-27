@@ -7,6 +7,15 @@ from django.test import RequestFactory, TestCase
 
 from anthias_app import views_files
 
+# Standard private/public IP literals reused across the IP-allowlist
+# tests below. Centralised so Sonar's S1313 ("don't hardcode IPs") is
+# only suppressed in one place.
+DOCKER_BRIDGE_IP = '172.18.0.1'  # NOSONAR
+LAN_IP_10 = '10.0.0.5'  # NOSONAR
+LAN_IP_192_ALLOWED = '192.168.1.10'  # NOSONAR
+LAN_IP_192_BLOCKED = '192.168.1.50'  # NOSONAR
+PUBLIC_IP = '8.8.8.8'  # NOSONAR
+
 
 class SafeJoinTest(TestCase):
     def test_resolves_simple_relative(self):
@@ -58,33 +67,31 @@ class AnthiasAssetsViewTest(TestCase):
         return views_files.anthias_assets(request, filename=filename)
 
     def test_allows_docker_bridge_client(self):
-        response = self._get('/anthias_assets/hello.txt', '172.18.0.1')
+        response = self._get('/anthias_assets/hello.txt', DOCKER_BRIDGE_IP)
         self.assertEqual(response.status_code, 200)
 
     def test_blocks_public_ip(self):
-        response = self._get('/anthias_assets/hello.txt', '8.8.8.8')
+        response = self._get('/anthias_assets/hello.txt', PUBLIC_IP)
         self.assertEqual(response.status_code, 403)
 
     def test_blocks_lan_ip(self):
         # 192.168/16 is intentionally excluded from the asset allowlist.
-        response = self._get('/anthias_assets/hello.txt', '192.168.1.50')
+        response = self._get('/anthias_assets/hello.txt', LAN_IP_192_BLOCKED)
         self.assertEqual(response.status_code, 403)
 
     def test_missing_file_404(self):
         request = self.factory.get(
-            '/anthias_assets/missing.txt', REMOTE_ADDR='172.18.0.1'
+            '/anthias_assets/missing.txt', REMOTE_ADDR=DOCKER_BRIDGE_IP
         )
         with self.assertRaises(Http404):
             views_files.anthias_assets(request, filename='missing.txt')
 
     def test_traversal_404(self):
         request = self.factory.get(
-            '/anthias_assets/whatever', REMOTE_ADDR='172.18.0.1'
+            '/anthias_assets/whatever', REMOTE_ADDR=DOCKER_BRIDGE_IP
         )
         with self.assertRaises(Http404):
-            views_files.anthias_assets(
-                request, filename='../../../etc/passwd'
-            )
+            views_files.anthias_assets(request, filename='../../../etc/passwd')
 
     def test_malformed_remote_addr_403(self):
         response = self._get('/anthias_assets/hello.txt', 'not-an-ip')
@@ -113,7 +120,7 @@ class StaticWithMimeViewTest(TestCase):
         return views_files.static_with_mime(request, filename=filename)
 
     def test_allows_rfc1918_clients(self):
-        for ip in ('10.0.0.5', '172.18.0.1', '192.168.1.10'):
+        for ip in (LAN_IP_10, DOCKER_BRIDGE_IP, LAN_IP_192_ALLOWED):
             self.assertEqual(
                 self._call('app.css', ip).status_code,
                 200,
@@ -121,20 +128,20 @@ class StaticWithMimeViewTest(TestCase):
             )
 
     def test_blocks_public_ip(self):
-        self.assertEqual(self._call('app.css', '8.8.8.8').status_code, 403)
+        self.assertEqual(self._call('app.css', PUBLIC_IP).status_code, 403)
 
     def test_mime_override_via_query(self):
         request = self.factory.get(
             '/static_with_mime/app.css',
             data={'mime': 'application/x-tgz'},
-            REMOTE_ADDR='10.0.0.5',
+            REMOTE_ADDR=LAN_IP_10,
         )
         response = views_files.static_with_mime(request, filename='app.css')
         self.assertEqual(response['Content-Type'], 'application/x-tgz')
 
     def test_default_mime_from_extension(self):
         request = self.factory.get(
-            '/static_with_mime/app.css', REMOTE_ADDR='10.0.0.5'
+            '/static_with_mime/app.css', REMOTE_ADDR=LAN_IP_10
         )
         response = views_files.static_with_mime(request, filename='app.css')
         self.assertEqual(response['Content-Type'], 'text/css')
@@ -149,9 +156,7 @@ class HotspotViewTest(TestCase):
         self.initialized_flag = base / 'initialized'
         self.hotspot_file.write_text('<html>hotspot</html>')
         self.patches = [
-            mock.patch.object(
-                views_files, 'HOTSPOT_FILE', self.hotspot_file
-            ),
+            mock.patch.object(views_files, 'HOTSPOT_FILE', self.hotspot_file),
             mock.patch.object(
                 views_files, 'INITIALIZED_FLAG', self.initialized_flag
             ),
@@ -164,7 +169,7 @@ class HotspotViewTest(TestCase):
             p.stop()
         self.tmp.cleanup()
 
-    def _get(self, remote_addr='172.18.0.1'):
+    def _get(self, remote_addr=DOCKER_BRIDGE_IP):
         request = self.factory.get('/hotspot', REMOTE_ADDR=remote_addr)
         return views_files.hotspot(request, path='')
 
@@ -174,16 +179,16 @@ class HotspotViewTest(TestCase):
         self.assertEqual(response['Content-Type'], 'text/html')
 
     def test_blocks_public_ip(self):
-        self.assertEqual(self._get('8.8.8.8').status_code, 403)
+        self.assertEqual(self._get(PUBLIC_IP).status_code, 403)
 
     def test_404_after_initialization(self):
         self.initialized_flag.touch()
-        request = self.factory.get('/hotspot', REMOTE_ADDR='172.18.0.1')
+        request = self.factory.get('/hotspot', REMOTE_ADDR=DOCKER_BRIDGE_IP)
         with self.assertRaises(Http404):
             views_files.hotspot(request, path='')
 
     def test_404_when_file_missing(self):
         self.hotspot_file.unlink()
-        request = self.factory.get('/hotspot', REMOTE_ADDR='172.18.0.1')
+        request = self.factory.get('/hotspot', REMOTE_ADDR=DOCKER_BRIDGE_IP)
         with self.assertRaises(Http404):
             views_files.hotspot(request, path='')

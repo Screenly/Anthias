@@ -53,7 +53,7 @@ ALLOWED_HOSTS = ['*']
 # (Sonar S5332 false positive) — devices ship without TLS by default and
 # operators opt into HTTPS via bin/enable_ssl.sh.
 CSRF_TRUSTED_ORIGINS = [
-    'http://*',  # NOSONAR S5332
+    'http://*',  # NOSONAR
     'https://*',
 ]
 

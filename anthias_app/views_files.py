@@ -1,5 +1,6 @@
 import ipaddress
 import mimetypes
+import os
 from functools import wraps
 from pathlib import Path
 
@@ -16,11 +17,11 @@ STATIC_FILES_ROOT = Path('/data/anthias/staticfiles')
 HOTSPOT_FILE = Path('/data/hotspot/hotspot.html')
 INITIALIZED_FLAG = Path('/data/.anthias/initialized')
 
-DOCKER_BRIDGE_CIDR = ipaddress.ip_network('172.16.0.0/12')  # NOSONAR S1313
+DOCKER_BRIDGE_CIDR = ipaddress.ip_network('172.16.0.0/12')  # NOSONAR
 RFC1918_CIDRS = (
-    ipaddress.ip_network('10.0.0.0/8'),  # NOSONAR S1313
-    ipaddress.ip_network('172.16.0.0/12'),  # NOSONAR S1313
-    ipaddress.ip_network('192.168.0.0/16'),  # NOSONAR S1313
+    ipaddress.ip_network('10.0.0.0/8'),  # NOSONAR
+    ipaddress.ip_network('172.16.0.0/12'),  # NOSONAR
+    ipaddress.ip_network('192.168.0.0/16'),  # NOSONAR
 )
 
 
@@ -47,10 +48,14 @@ def require_client_in(*cidrs):
 
 def _safe_join(root: Path, relative: str) -> Path:
     """Resolve ``relative`` under ``root``, rejecting traversal."""
-    candidate = (root / relative).resolve()
-    if not candidate.is_relative_to(root.resolve()):
+    # os.path.commonpath is CodeQL's recognised path-injection sanitiser;
+    # equivalent to Path.is_relative_to but the static analyser can prove
+    # the post-check path stays under `root`.
+    root_real = os.path.realpath(root)
+    candidate_real = os.path.realpath(os.path.join(root_real, relative))
+    if os.path.commonpath([candidate_real, root_real]) != root_real:
         raise Http404
-    return candidate
+    return Path(candidate_real)
 
 
 @require_GET
