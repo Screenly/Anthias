@@ -31,9 +31,7 @@ class BackupHelperTest(unittest.TestCase):
         os.makedirs(path.join(self.tmp_home, '.anthias'))
         os.makedirs(path.join(self.tmp_home, 'anthias_assets'))
 
-        self._home_patch = mock.patch.dict(
-            os.environ, {'HOME': self.tmp_home}
-        )
+        self._home_patch = mock.patch.dict(os.environ, {'HOME': self.tmp_home})
         self._home_patch.start()
 
         self.dt = datetime(2016, 7, 19, 12, 42, 12)
