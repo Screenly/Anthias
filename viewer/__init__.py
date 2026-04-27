@@ -14,7 +14,7 @@ import sh as sh
 from jinja2 import Template
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
-from settings import LISTEN, PORT, ZmqConsumer, settings
+from settings import LISTEN, PORT, ReplySender, settings
 from viewer.constants import BALENA_IP_RETRY_DELAY as BALENA_IP_RETRY_DELAY
 from viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
 from viewer.constants import MAX_BALENA_IP_RETRIES as MAX_BALENA_IP_RETRIES
@@ -69,9 +69,18 @@ load_screen_displayed: bool = False
 mq_data: Any = None
 
 
-def send_current_asset_id_to_server() -> None:
-    consumer = ZmqConsumer()
-    consumer.send({'current_asset_id': scheduler.current_asset_id})
+def send_current_asset_id_to_server(correlation_id: str | None) -> None:
+    if not correlation_id:
+        logging.warning(
+            'current_asset_id command received without a correlation ID; '
+            'dropping reply.'
+        )
+        return
+
+    sender = ReplySender()
+    sender.send(
+        correlation_id, {'current_asset_id': scheduler.current_asset_id}
+    )
 
 
 def show_hotspot_page(data: str) -> None:
@@ -141,7 +150,7 @@ commands = {
     'setup_wifi': lambda data: setup_wifi(data),
     'show_splash': lambda data: show_splash(data),
     'unknown': lambda _: command_not_found(),
-    'current_asset_id': lambda _: send_current_asset_id_to_server(),
+    'current_asset_id': lambda corr: send_current_asset_id_to_server(corr),
 }
 
 

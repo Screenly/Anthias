@@ -147,8 +147,8 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
         asset_id = asset.asset_id
 
         with mock.patch(
-            'api.views.v1.ZmqCollector.recv_json',
-            side_effect=(lambda _: {'current_asset_id': asset_id}),
+            'api.views.v1.ReplyCollector.recv_json',
+            side_effect=(lambda *_: {'current_asset_id': asset_id}),
         ):
             viewer_current_asset_url = reverse('api:viewer_current_asset_v1')
             response = self.client.get(viewer_current_asset_url)

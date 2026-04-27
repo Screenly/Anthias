@@ -1,3 +1,5 @@
+import uuid
+
 from drf_spectacular.utils import (
     OpenApiExample,
     OpenApiRequest,
@@ -32,7 +34,7 @@ from api.views.mixins import (
     ShutdownViewMixin,
 )
 from lib.auth import authorized
-from settings import ViewerPublisher, ZmqCollector
+from settings import ReplyCollector, ViewerPublisher
 
 MODEL_STRING_EXAMPLE = """
 Yes, that is just a string of JSON not JSON itself it will be parsed on the
@@ -195,12 +197,13 @@ class ViewerCurrentAssetViewV1(APIView):
     )
     @authorized
     def get(self, request: Request) -> Response:
-        collector = ZmqCollector.get_instance()
+        correlation_id = uuid.uuid4().hex
+        collector = ReplyCollector.get_instance()
 
         publisher = ViewerPublisher.get_instance()
-        publisher.send_to_viewer('current_asset_id')
+        publisher.send_to_viewer(f'current_asset_id&{correlation_id}')
 
-        collector_result = collector.recv_json(2000)
+        collector_result = collector.recv_json(correlation_id, 2000)
         current_asset_id = collector_result.get('current_asset_id')
 
         if not current_asset_id:
