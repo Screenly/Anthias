@@ -4,8 +4,9 @@ from os import getenv
 from time import sleep
 
 import redis
-import zmq
 from netifaces import AF_INET, ifaddresses, interfaces
+
+VIEWER_CHANNEL = 'anthias.viewer'
 
 
 def get_portal_url() -> str:
@@ -61,18 +62,13 @@ def main() -> None:
     args = argument_parser.parse_args()
     r = redis.Redis(host='127.0.0.1', decode_responses=True, port=6379, db=0)
 
-    context = zmq.Context()
-    socket = context.socket(zmq.PUB)
-    socket.bind('tcp://0.0.0.0:10001')
-    sleep(1)
-
     message = get_message(args.action)
 
     while not is_viewer_subscriber_ready(r):
         sleep(1)
         continue
 
-    socket.send_string(f'viewer {message}')
+    r.publish(VIEWER_CHANNEL, f'viewer {message}')
 
 
 if __name__ == '__main__':
