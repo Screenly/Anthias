@@ -32,6 +32,24 @@ RFC1918_CIDRS = (
     ipaddress.ip_network('192.168.0.0/16'),  # NOSONAR
 )
 
+# Allowlisted Content-Types for the ?mime= query parameter on
+# /static_with_mime/. Letting the caller set an arbitrary value would
+# turn a stored static file into XSS the moment anything else (e.g. a
+# future feature) writes user-controllable content under STATIC_ROOT.
+# The frontend's only legitimate use is forcing a tarball download for
+# DB backups (`application/x-tgz`); the rest are conservative aliases
+# in case a future caller needs them.
+STATIC_WITH_MIME_ALLOWED_TYPES = frozenset(
+    {
+        'application/gzip',
+        'application/octet-stream',
+        'application/x-gzip',
+        'application/x-tar',
+        'application/x-tgz',
+        'application/zip',
+    }
+)
+
 
 def _client_ip(request):
     return ipaddress.ip_address(request.META.get('REMOTE_ADDR', ''))
@@ -76,9 +94,13 @@ def static_with_mime(request, filename):
     target = os.path.realpath(os.path.join(base, filename))
     if not target.startswith(base):
         raise Http404
-    content_type = request.GET.get('mime') or (
-        mimetypes.guess_type(target)[0] or 'application/octet-stream'
-    )
+    requested_mime = request.GET.get('mime')
+    if requested_mime in STATIC_WITH_MIME_ALLOWED_TYPES:
+        content_type = requested_mime
+    else:
+        content_type = (
+            mimetypes.guess_type(target)[0] or 'application/octet-stream'
+        )
     try:
         return FileResponse(open(target, 'rb'), content_type=content_type)
     except (FileNotFoundError, IsADirectoryError):

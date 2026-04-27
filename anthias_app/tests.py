@@ -122,6 +122,17 @@ class StaticWithMimeViewTest(TestCase):
         response = views_files.static_with_mime(request, filename='app.css')
         self.assertEqual(response['Content-Type'], 'application/x-tgz')
 
+    def test_mime_override_rejects_html(self):
+        # text/html would let an attacker turn a stored file into XSS;
+        # ?mime= is allowlisted to safe download types only.
+        request = self.factory.get(
+            '/static_with_mime/app.css',
+            data={'mime': 'text/html'},
+            REMOTE_ADDR=LAN_IP_10,
+        )
+        response = views_files.static_with_mime(request, filename='app.css')
+        self.assertEqual(response['Content-Type'], 'text/css')
+
     def test_default_mime_from_extension(self):
         request = self.factory.get(
             '/static_with_mime/app.css', REMOTE_ADDR=LAN_IP_10

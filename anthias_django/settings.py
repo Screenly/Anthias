@@ -42,9 +42,17 @@ else:
         'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j'  # noqa: E501
     )
 
-# Anthias is a local-network signage device — there is no fixed public
-# hostname, so accept whatever Host header the browser/webview sends.
-ALLOWED_HOSTS = ['*']
+# Anthias is a local-network signage device with no fixed public
+# hostname — the device is reached by LAN IP, mDNS name, or the
+# operator's chosen DNS entry. The default of '*' preserves that
+# flexibility but is permissive against DNS-rebinding attacks where a
+# malicious page rebinds an attacker-controlled hostname to the
+# device's IP. Operators on hardened LANs can opt into a strict
+# allowlist by setting the ALLOWED_HOSTS env var (comma-separated;
+# include the LAN IP / mDNS name / etc.).
+ALLOWED_HOSTS = [
+    h.strip() for h in getenv('ALLOWED_HOSTS', '*').split(',') if h.strip()
+]
 
 # CSRF_TRUSTED_ORIGINS is intentionally not set. Django only honours
 # subdomain wildcards there (e.g. https://*.example.com), so a leading
