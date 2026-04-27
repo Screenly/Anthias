@@ -24,3 +24,10 @@ sudo -E docker compose \
 
 echo
 echo "SSL disabled. Anthias is now reachable at http://<your IP> (port 80)."
+echo
+echo "Caddy's local CA + issued certs are kept in the docker volume"
+echo "  anthias_anthias-caddy-data"
+echo "so re-enabling SSL with bin/enable_ssl.sh reuses the same CA"
+echo "(browsers that already trusted it stay trusted). To wipe the CA"
+echo "and start over, run:"
+echo "  docker volume rm anthias_anthias-caddy-data anthias_anthias-caddy-config"

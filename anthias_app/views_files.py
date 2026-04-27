@@ -57,13 +57,16 @@ def require_client_in(*cidrs):
 @require_GET
 @require_client_in(DOCKER_BRIDGE_CIDR)
 def anthias_assets(request, filename):
+    # Trailing os.sep on `base` is required so e.g.
+    # '/data/anthias_assets_evil/...' doesn't slip past startswith().
     base = os.path.realpath(ANTHIAS_ASSETS_ROOT) + os.sep
     target = os.path.realpath(os.path.join(base, filename))
     if not target.startswith(base):
         raise Http404
-    if not os.path.isfile(target):
+    try:
+        return FileResponse(open(target, 'rb'))
+    except (FileNotFoundError, IsADirectoryError):
         raise Http404
-    return FileResponse(open(target, 'rb'))
 
 
 @require_GET
@@ -73,12 +76,13 @@ def static_with_mime(request, filename):
     target = os.path.realpath(os.path.join(base, filename))
     if not target.startswith(base):
         raise Http404
-    if not os.path.isfile(target):
-        raise Http404
     content_type = request.GET.get('mime') or (
         mimetypes.guess_type(target)[0] or 'application/octet-stream'
     )
-    return FileResponse(open(target, 'rb'), content_type=content_type)
+    try:
+        return FileResponse(open(target, 'rb'), content_type=content_type)
+    except (FileNotFoundError, IsADirectoryError):
+        raise Http404
 
 
 @require_GET

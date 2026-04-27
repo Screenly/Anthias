@@ -186,10 +186,14 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = None
 FILE_UPLOAD_MAX_MEMORY_SIZE = 26_214_400
 
 # Trust X-Forwarded-Proto from a TLS-terminating proxy (the Caddy
-# sidecar that bin/enable_ssl.sh installs). uvicorn enforces who is
-# allowed to set the header via FORWARDED_ALLOW_IPS — without that env
-# var a malicious client cannot make request.is_secure() lie.
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# sidecar that bin/enable_ssl.sh installs) only when uvicorn has been
+# told to honour proxy headers via FORWARDED_ALLOW_IPS. Without the
+# gate, any client could set X-Forwarded-Proto: https on a plain-HTTP
+# deploy and flip request.is_secure() — secure-cookied sessions would
+# then drop on the next plain-HTTP request, and redirects would point
+# at https:// URLs that don't exist.
+if getenv('FORWARDED_ALLOW_IPS'):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
