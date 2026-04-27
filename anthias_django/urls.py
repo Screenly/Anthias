@@ -15,9 +15,10 @@ Including another URLconf
 """
 
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView
 
+from anthias_app import views_files
 from lib.auth import authorized
 
 
@@ -29,10 +30,25 @@ class APIDocView(SpectacularRedocView):
 
 urlpatterns = [
     path('admin', admin.site.urls),
-    path('', include('anthias_app.urls')),
     path('api/', include('api.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', APIDocView.as_view(url_name='schema'), name='redoc'),
+    re_path(
+        r'^anthias_assets/(?P<filename>.+)$',
+        views_files.anthias_assets,
+        name='anthias_assets',
+    ),
+    re_path(
+        r'^static_with_mime/(?P<filename>.+)$',
+        views_files.static_with_mime,
+        name='static_with_mime',
+    ),
+    re_path(
+        r'^hotspot(?:/(?P<path>.*))?$',
+        views_files.hotspot,
+        name='hotspot',
+    ),
+    path('', include('anthias_app.urls')),
 ]
 
 # @TODO: Write custom 403 and 404 pages.

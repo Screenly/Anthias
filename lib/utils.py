@@ -29,8 +29,11 @@ from tenacity import (
     wait_fixed,
 )
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+
 from anthias_app.models import Asset
-from settings import ZmqPublisher, settings
+from settings import settings
 
 standard_library.install_aliases()
 
@@ -420,7 +423,6 @@ class YoutubeDownloadThread(Thread):
         self.asset_id = asset_id
 
     def run(self):
-        publisher = ZmqPublisher.get_instance()
         call(
             [
                 'yt-dlp',
@@ -440,7 +442,10 @@ class YoutubeDownloadThread(Thread):
             logging.warning('Asset %s not found', self.asset_id)
             return
 
-        publisher.send_to_ws_server(self.asset_id)
+        async_to_sync(get_channel_layer().group_send)(
+            'ws_server',
+            {'type': 'asset.update', 'asset_id': self.asset_id},
+        )
 
 
 def template_handle_unicode(value):

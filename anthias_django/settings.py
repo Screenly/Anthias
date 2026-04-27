@@ -44,14 +44,22 @@ else:
         'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j'  # noqa: E501
     )
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'anthias', 'anthias-server']
+# Anthias is a local-network signage device — there is no fixed public
+# hostname, so accept whatever Host header the browser/webview sends.
+ALLOWED_HOSTS = ['*']
 
-CSRF_TRUSTED_ORIGINS = ['http://anthias']
+# Wildcards are required because the device is reached by IP on a LAN; the
+# specific origin is unknown at build time.
+CSRF_TRUSTED_ORIGINS = ['http://*', 'https://*']
+
+USE_X_FORWARDED_HOST = True
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
+    'channels',
     'anthias_app.apps.AnthiasAppConfig',
     'drf_spectacular',
     'rest_framework',
@@ -67,6 +75,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -95,7 +104,16 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'anthias_django.wsgi.application'
+ASGI_APPLICATION = 'anthias_django.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [(getenv('REDIS_HOST', 'redis'), 6379)],
+        },
+    },
+}
 
 
 # Database
@@ -158,6 +176,17 @@ STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
 STATIC_ROOT = '/data/anthias/staticfiles'
+
+# Dev runs uvicorn (not runserver) and skips collectstatic, so files
+# only exist in STATICFILES_DIRS — let WhiteNoise fall back to the
+# finders and re-stat on each request so live-reloaded JS/CSS shows up.
+if DEBUG:
+    WHITENOISE_USE_FINDERS = True
+    WHITENOISE_AUTOREFRESH = True
+
+# Backups can be multi-GB; preserve the 4 GB body capacity nginx provided.
+DATA_UPLOAD_MAX_MEMORY_SIZE = None
+FILE_UPLOAD_MAX_MEMORY_SIZE = 26_214_400
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
