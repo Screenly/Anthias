@@ -63,9 +63,9 @@ def _safe_join(root: Path, relative: str) -> Path:
 @require_GET
 @require_client_in(DOCKER_BRIDGE_CIDR)
 def anthias_assets(request, filename):
-    root_real = os.path.realpath(ANTHIAS_ASSETS_ROOT)
-    target = os.path.realpath(os.path.join(root_real, filename))
-    if os.path.commonpath([target, root_real]) != root_real:
+    base = os.path.realpath(ANTHIAS_ASSETS_ROOT) + os.sep
+    target = os.path.realpath(os.path.join(base, filename))
+    if not target.startswith(base):
         raise Http404
     if not os.path.isfile(target):
         raise Http404
@@ -75,9 +75,9 @@ def anthias_assets(request, filename):
 @require_GET
 @require_client_in(*RFC1918_CIDRS)
 def static_with_mime(request, filename):
-    root_real = os.path.realpath(STATIC_FILES_ROOT)
-    target = os.path.realpath(os.path.join(root_real, filename))
-    if os.path.commonpath([target, root_real]) != root_real:
+    base = os.path.realpath(STATIC_FILES_ROOT) + os.sep
+    target = os.path.realpath(os.path.join(base, filename))
+    if not target.startswith(base):
         raise Http404
     if not os.path.isfile(target):
         raise Http404
