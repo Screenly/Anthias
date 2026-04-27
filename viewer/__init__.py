@@ -45,8 +45,8 @@ try:
         string_to_bool,
         url_fails,
     )
+    from viewer.messaging import ViewerSubscriber
     from viewer.scheduling import Scheduler
-    from viewer.zmq import ZMQ_HOST_PUB_URL, ZmqSubscriber
 except Exception:
     pass
 
@@ -333,13 +333,9 @@ def main() -> None:
 
     setup()
 
-    subscriber_1 = ZmqSubscriber(r, commands, 'tcp://anthias-server:10001')
-    subscriber_1.daemon = True
-    subscriber_1.start()
-
-    subscriber_2 = ZmqSubscriber(r, commands, ZMQ_HOST_PUB_URL)
-    subscriber_2.daemon = True
-    subscriber_2.start()
+    subscriber = ViewerSubscriber(r, commands)
+    subscriber.daemon = True
+    subscriber.start()
 
     # This will prevent white screen from happening before showing the
     # splash screen with IP addresses.

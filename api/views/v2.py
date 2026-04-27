@@ -50,7 +50,7 @@ from lib.utils import (
     get_node_mac_address,
     is_balena_app,
 )
-from settings import ZmqPublisher, settings
+from settings import ViewerPublisher, settings
 
 r = connect_to_redis()
 
@@ -368,7 +368,7 @@ class DeviceSettingsViewV2(APIView):
                 settings['debug_logging'] = data['debug_logging']
 
             settings.save()
-            publisher = ZmqPublisher.get_instance()
+            publisher = ViewerPublisher.get_instance()
             publisher.send_to_viewer('reload')
 
             return Response({'message': 'Settings were successfully saved.'})

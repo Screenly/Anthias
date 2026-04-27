@@ -7,7 +7,7 @@ import logging
 from collections import UserDict
 from os import getenv, path
 from time import sleep
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import zmq
 
@@ -18,6 +18,11 @@ from lib.auth import (
     _is_legacy_sha256,
 )
 from lib.errors import ZmqCollectorTimeoutError
+
+if TYPE_CHECKING:
+    import redis
+
+VIEWER_CHANNEL = 'anthias.viewer'
 
 CONFIG_DIR = '.anthias/'
 CONFIG_FILE = 'anthias.conf'
@@ -221,27 +226,25 @@ class AnthiasSettings(UserDict[str, Any]):
 settings = AnthiasSettings()
 
 
-class ZmqPublisher:
-    INSTANCE: ClassVar['ZmqPublisher | None'] = None
+class ViewerPublisher:
+    INSTANCE: ClassVar['ViewerPublisher | None'] = None
 
     def __init__(self) -> None:
         if self.INSTANCE is not None:
             raise ValueError('An instance already exists!')
 
-        self.context = zmq.Context()
+        from lib.utils import connect_to_redis
 
-        self.socket = self.context.socket(zmq.PUB)
-        self.socket.bind('tcp://0.0.0.0:10001')
-        sleep(1)
+        self._redis: 'redis.Redis' = connect_to_redis()
 
     @classmethod
-    def get_instance(cls) -> 'ZmqPublisher':
+    def get_instance(cls) -> 'ViewerPublisher':
         if cls.INSTANCE is None:
-            cls.INSTANCE = ZmqPublisher()
+            cls.INSTANCE = ViewerPublisher()
         return cls.INSTANCE
 
     def send_to_viewer(self, msg: str) -> None:
-        self.socket.send_string('viewer {}'.format(msg))
+        self._redis.publish(VIEWER_CHANNEL, 'viewer {}'.format(msg))
 
 
 class ZmqConsumer:

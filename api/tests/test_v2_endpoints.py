@@ -98,7 +98,7 @@ class DeviceSettingsViewV2Test(TestCase):
         settings_mock.save.assert_not_called()
 
     @mock.patch('api.views.v2.settings')
-    @mock.patch('api.views.v2.ZmqPublisher')
+    @mock.patch('api.views.v2.ViewerPublisher')
     def test_patch_device_settings_success(
         self, publisher_mock: Any, settings_mock: Any
     ) -> None:
@@ -167,7 +167,7 @@ class DeviceSettingsViewV2Test(TestCase):
         settings_mock.save.assert_not_called()
 
     @mock.patch('api.views.v2.settings')
-    @mock.patch('api.views.v2.ZmqPublisher')
+    @mock.patch('api.views.v2.ViewerPublisher')
     def test_enable_basic_auth(
         self, publisher_mock: Any, settings_mock: Any
     ) -> None:
@@ -246,7 +246,7 @@ class DeviceSettingsViewV2Test(TestCase):
         publisher_instance.send_to_viewer.assert_called_once_with('reload')
 
     @mock.patch('api.views.v2.settings')
-    @mock.patch('api.views.v2.ZmqPublisher')
+    @mock.patch('api.views.v2.ViewerPublisher')
     def test_disable_basic_auth(
         self, publisher_mock: Any, settings_mock: Any
     ) -> None:
@@ -302,7 +302,7 @@ class DeviceSettingsViewV2Test(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     @mock.patch('api.views.v2.settings')
-    @mock.patch('api.views.v2.ZmqPublisher')
+    @mock.patch('api.views.v2.ViewerPublisher')
     @mock.patch('api.views.v2.add_default_assets')
     @mock.patch('api.views.v2.remove_default_assets')
     def test_patch_device_settings_default_assets(

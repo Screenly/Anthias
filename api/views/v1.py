@@ -32,7 +32,7 @@ from api.views.mixins import (
     ShutdownViewMixin,
 )
 from lib.auth import authorized
-from settings import ZmqCollector, ZmqPublisher
+from settings import ViewerPublisher, ZmqCollector
 
 MODEL_STRING_EXAMPLE = """
 Yes, that is just a string of JSON not JSON itself it will be parsed on the
@@ -197,7 +197,7 @@ class ViewerCurrentAssetViewV1(APIView):
     def get(self, request: Request) -> Response:
         collector = ZmqCollector.get_instance()
 
-        publisher = ZmqPublisher.get_instance()
+        publisher = ViewerPublisher.get_instance()
         publisher.send_to_viewer('current_asset_id')
 
         collector_result = collector.recv_json(2000)
