@@ -1,5 +1,3 @@
-from __future__ import unicode_literals
-
 import json
 from argparse import ArgumentParser
 from os import getenv
@@ -10,7 +8,7 @@ import zmq
 from netifaces import AF_INET, ifaddresses, interfaces
 
 
-def get_portal_url():
+def get_portal_url() -> str:
     gateway = getenv('PORTAL_GATEWAY', '192.168.42.1')
     port = getenv('PORTAL_LISTENING_PORT', None)
 
@@ -20,7 +18,7 @@ def get_portal_url():
         return f'{gateway}:{port}'
 
 
-def get_message(action):
+def get_message(action: str) -> str | None:
     if action == 'setup_wifi':
         data = {
             'network': getenv('PORTAL_SSID'),
@@ -31,21 +29,20 @@ def get_message(action):
     elif action == 'show_splash':
         ip_addresses = get_ip_addresses()
         return f'{action}&{json.dumps(ip_addresses)}'
+    return None
 
 
-def get_ip_addresses():
+def get_ip_addresses() -> list[str]:
     return [
         i['addr']
         for interface_name in interfaces()
-        for i in ifaddresses(interface_name).setdefault(
-            AF_INET, [{'addr': None}]
-        )
+        for i in ifaddresses(interface_name).get(AF_INET, [])
         if interface_name in ['eth0', 'wlan0']
-        if i['addr'] is not None
+        if i.get('addr') is not None
     ]
 
 
-def is_viewer_subscriber_ready(r):
+def is_viewer_subscriber_ready(r: 'redis.Redis') -> bool:
     is_ready = r.get('viewer-subscriber-ready')
     if is_ready is None:
         return False
@@ -53,7 +50,7 @@ def is_viewer_subscriber_ready(r):
         return bool(int(is_ready))
 
 
-def main():
+def main() -> None:
     argument_parser = ArgumentParser()
     argument_parser.add_argument(
         '--action',

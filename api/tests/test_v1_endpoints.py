@@ -4,6 +4,7 @@ Tests for V1 API endpoints.
 
 import os
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 from django.conf import settings as django_settings
@@ -19,21 +20,21 @@ from settings import settings as anthias_settings
 
 
 class V1EndpointsTest(TestCase, ParametrizedTestCase):
-    def setUp(self):
-        self.client = APIClient()
+    client_class = APIClient
+    client: APIClient
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.remove_all_asset_files()
 
-    def remove_all_asset_files(self):
+    def remove_all_asset_files(self) -> None:
         asset_directory_path = Path(anthias_settings['assetdir'])
         for file in asset_directory_path.iterdir():
             file.unlink()
 
-    def get_asset_content_url(self, asset_id):
-        return reverse('api:asset_content_v1', args=[asset_id])
+    def get_asset_content_url(self, asset_id: str) -> str:
+        return str(reverse('api:asset_content_v1', args=[asset_id]))
 
-    def test_asset_content(self):
+    def test_asset_content(self) -> None:
         asset = Asset.objects.create(**ASSET_CREATION_DATA)
         asset_id = asset.asset_id
 
@@ -44,7 +45,7 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(data['type'], 'url')
         self.assertEqual(data['url'], 'https://anthias.screenly.io')
 
-    def test_file_asset(self):
+    def test_file_asset(self) -> None:
         project_base_path = django_settings.BASE_DIR
         image_path = os.path.join(
             project_base_path,
@@ -63,7 +64,7 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
         self.assertTrue(os.path.exists(data['uri']))
         self.assertEqual(data['ext'], '.png')
 
-    def test_playlist_order(self):
+    def test_playlist_order(self) -> None:
         playlist_order_url = reverse('api:playlist_order_v1')
 
         for asset_name in ['Asset #1', 'Asset #2', 'Asset #3']:
@@ -102,7 +103,9 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
         ],
     )
     @mock.patch('api.views.v1.ZmqPublisher.send_to_viewer', return_value=None)
-    def test_assets_control(self, send_to_viewer_mock, command):
+    def test_assets_control(
+        self, send_to_viewer_mock: Any, command: str
+    ) -> None:
         assets_control_url = reverse('api:assets_control_v1', args=[command])
         response = self.client.get(assets_control_url)
 
@@ -115,7 +118,7 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
         'api.views.mixins.reboot_anthias.apply_async',
         side_effect=(lambda: None),
     )
-    def test_reboot(self, reboot_anthias_mock):
+    def test_reboot(self, reboot_anthias_mock: Any) -> None:
         reboot_url = reverse('api:reboot_v1')
         response = self.client.post(reboot_url)
 
@@ -126,7 +129,7 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
         'api.views.mixins.shutdown_anthias.apply_async',
         side_effect=(lambda: None),
     )
-    def test_shutdown(self, shutdown_anthias_mock):
+    def test_shutdown(self, shutdown_anthias_mock: Any) -> None:
         shutdown_url = reverse('api:shutdown_v1')
         response = self.client.post(shutdown_url)
 
@@ -134,7 +137,7 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(shutdown_anthias_mock.call_count, 1)
 
     @mock.patch('api.views.v1.ZmqPublisher.send_to_viewer', return_value=None)
-    def test_viewer_current_asset(self, send_to_viewer_mock):
+    def test_viewer_current_asset(self, send_to_viewer_mock: Any) -> None:
         asset = Asset.objects.create(
             **{
                 **ASSET_CREATION_DATA,

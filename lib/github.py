@@ -1,11 +1,8 @@
-from __future__ import unicode_literals
-
 import json
 import logging
 import os
 import random
 import string
-from builtins import range, str
 
 from requests import exceptions
 from requests import get as requests_get
@@ -36,7 +33,10 @@ ANALYTICS_API_SECRET = 'G8NcBpRIS9qBsOj3ODK8gw'
 DEFAULT_REQUESTS_TIMEOUT = 1  # in seconds
 
 
-def handle_github_error(exc, action):
+def handle_github_error(
+    exc: exceptions.RequestException,
+    action: str,
+) -> None:
     # After failing, dont retry until backoff timer expires
     r.set('github-api-error', action)
     r.expire('github-api-error', ERROR_BACKOFF_TTL)
@@ -52,7 +52,7 @@ def handle_github_error(exc, action):
     )
 
 
-def remote_branch_available(branch):
+def remote_branch_available(branch: str | None) -> bool | None:
     if not branch:
         logging.error('No branch specified. Exiting.')
         return None
@@ -65,7 +65,7 @@ def remote_branch_available(branch):
     # Check for cached remote branch status
     remote_branch_cache = r.get('remote-branch-available')
     if remote_branch_cache is not None:
-        return remote_branch_cache == '1'
+        return bool(remote_branch_cache == '1')
 
     try:
         resp = requests_get(
@@ -95,7 +95,7 @@ def remote_branch_available(branch):
     return found
 
 
-def fetch_remote_hash():
+def fetch_remote_hash() -> tuple[str | None, bool]:
     """
     Returns both the hash and if the status was updated
     or not.
@@ -133,7 +133,7 @@ def fetch_remote_hash():
     return get_cache, False
 
 
-def get_latest_docker_hub_hash(device_type):
+def get_latest_docker_hub_hash(device_type: str | None) -> str | None:
     """
     This function is useful for cases where latest changes pushed does not
     trigger Docker image builds.
@@ -173,12 +173,12 @@ def get_latest_docker_hub_hash(device_type):
 
         # Results are sorted by date in descending order,
         # so we can just return the first one.
-        return reduced[0]
+        return str(reduced[0])
 
-    return cached_docker_hub_hash
+    return str(cached_docker_hub_hash) if cached_docker_hub_hash else None
 
 
-def is_up_to_date():
+def is_up_to_date() -> bool:
     """
     Primitive update check. Checks local hash against GitHub hash for branch.
     Returns True if the player is up to date.

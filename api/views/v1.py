@@ -5,6 +5,7 @@ from drf_spectacular.utils import (
     inline_serializer,
 )
 from rest_framework import serializers, status
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -78,7 +79,12 @@ class AssetViewV1(APIView, DeleteAssetViewMixin):
 
     @extend_schema(summary='Get asset')
     @authorized
-    def get(self, request, asset_id, format=None):
+    def get(
+        self,
+        request: Request,
+        asset_id: str,
+        format: str | None = None,
+    ) -> Response:
         asset = Asset.objects.get(asset_id=asset_id)
         return Response(AssetSerializer(asset).data)
 
@@ -88,7 +94,12 @@ class AssetViewV1(APIView, DeleteAssetViewMixin):
         responses={201: AssetSerializer},
     )
     @authorized
-    def put(self, request, asset_id, format=None):
+    def put(
+        self,
+        request: Request,
+        asset_id: str,
+        format: str | None = None,
+    ) -> Response:
         asset = Asset.objects.get(asset_id=asset_id)
 
         data = parse_request(request)
@@ -116,7 +127,7 @@ class AssetListViewV1(APIView):
         summary='List assets', responses={200: AssetSerializer(many=True)}
     )
     @authorized
-    def get(self, request, format=None):
+    def get(self, request: Request, format: str | None = None) -> Response:
         queryset = Asset.objects.all()
         serializer = AssetSerializer(queryset, many=True)
         return Response(serializer.data)
@@ -127,7 +138,7 @@ class AssetListViewV1(APIView):
         responses={201: AssetSerializer},
     )
     @authorized
-    def post(self, request, format=None):
+    def post(self, request: Request, format: str | None = None) -> Response:
         data = parse_request(request)
 
         try:
@@ -183,7 +194,7 @@ class ViewerCurrentAssetViewV1(APIView):
         responses={200: AssetSerializer},
     )
     @authorized
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         collector = ZmqCollector.get_instance()
 
         publisher = ZmqPublisher.get_instance()

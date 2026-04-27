@@ -1,5 +1,7 @@
+import logging
 from datetime import timedelta
 from os import getenv, path
+from typing import Any
 
 import django
 import sh
@@ -23,7 +25,7 @@ except Exception:
 
 
 __author__ = 'Screenly, Inc'
-__copyright__ = 'Copyright 2012-2024, Screenly, Inc'
+__copyright__ = 'Copyright 2012-2026, Screenly, Inc'
 __license__ = 'Dual License: GPLv2 and Commercial License'
 
 
@@ -43,7 +45,7 @@ celery = Celery(
 
 
 @celery.on_after_configure.connect
-def setup_periodic_tasks(sender, **kwargs):
+def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
     # Calls cleanup() every hour.
     sender.add_periodic_task(3600, cleanup.s(), name='cleanup')
     sender.add_periodic_task(
@@ -52,15 +54,22 @@ def setup_periodic_tasks(sender, **kwargs):
 
 
 @celery.task(time_limit=30)
-def get_display_power():
+def get_display_power() -> None:
     r.set('display_power', diagnostics.get_display_power())
     r.expire('display_power', 3600)
 
 
 @celery.task
-def cleanup():
+def cleanup() -> None:
+    # Without HOME, `path.join(..., 'anthias_assets')` would be a
+    # relative path and `find -delete` could chew through whatever
+    # directory celery happens to be running in. Bail out instead.
+    home = getenv('HOME')
+    if not home:
+        logging.error('cleanup() skipped: HOME is not set')
+        return
     sh.find(
-        path.join(getenv('HOME'), 'anthias_assets'),
+        path.join(home, 'anthias_assets'),
         '-name',
         '*.tmp',
         '-delete',
@@ -68,7 +77,7 @@ def cleanup():
 
 
 @celery.task
-def reboot_anthias():
+def reboot_anthias() -> None:
     """
     Background task to reboot Anthias
     """
@@ -84,7 +93,7 @@ def reboot_anthias():
 
 
 @celery.task
-def shutdown_anthias():
+def shutdown_anthias() -> None:
     """
     Background task to shutdown Anthias
     """

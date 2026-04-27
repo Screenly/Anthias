@@ -14,7 +14,10 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
+from typing import Any
+
 from django.contrib import admin
+from django.http import HttpRequest, HttpResponse
 from django.urls import include, path, re_path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView
 
@@ -24,7 +27,12 @@ from lib.auth import authorized
 
 class APIDocView(SpectacularRedocView):
     @authorized
-    def get(self, request, *args, **kwargs):
+    def get(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
         return super().get(request, *args, **kwargs)
 
 

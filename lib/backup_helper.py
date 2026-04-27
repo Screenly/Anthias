@@ -1,11 +1,10 @@
-from __future__ import unicode_literals
-
 import logging
 import os
 import sys
 import tarfile
 from datetime import datetime
 from os import getenv, makedirs, path, remove
+from typing import Any
 
 directories = ['.anthias', 'anthias_assets']
 # Tarballs created by older releases used these top-level entry names.
@@ -16,7 +15,7 @@ default_archive_name = 'anthias-backup'
 static_dir = 'anthias/staticfiles'
 
 
-def _safe_tar_member(member, dest_root):
+def _safe_tar_member(member: tarfile.TarInfo, dest_root: str) -> bool:
     """Validate a TarInfo for safe extraction under dest_root.
 
     Reject:
@@ -50,8 +49,12 @@ def _safe_tar_member(member, dest_root):
     return True
 
 
-def create_backup(name=default_archive_name):
-    home = getenv('HOME')
+class BackupRecoverError(Exception):
+    """Raised when a backup archive cannot be safely recovered."""
+
+
+def create_backup(name: str = default_archive_name) -> str:
+    home = getenv('HOME') or ''
     archive_name = '{}-{}.tar.gz'.format(
         name if name else default_archive_name,
         datetime.now().strftime('%Y-%m-%dT%H-%M-%S'),
@@ -76,7 +79,7 @@ def create_backup(name=default_archive_name):
     return archive_name
 
 
-def recover(file_path):
+def recover(file_path: str) -> None:
     home = getenv('HOME')
     if not home:
         logging.error('No HOME variable')
@@ -89,7 +92,7 @@ def recover(file_path):
         new_present = all(d in names for d in directories)
         legacy_present = all(d in names for d in legacy_directories)
         if not new_present and not legacy_present:
-            raise Exception('Archive is wrong.')
+            raise BackupRecoverError('Archive is wrong.')
 
         # Manually iterate so each member is validated before any
         # filesystem write. Avoids tarfile.extractall's older
@@ -98,7 +101,7 @@ def recover(file_path):
         # (3.11.4+/3.12+), pass `filter='data'` for belt-and-suspenders
         # protection; older interpreters fall back to our own
         # validation only.
-        extract_kwargs = {'path': home}
+        extract_kwargs: dict[str, Any] = {'path': home}
         if hasattr(tarfile, 'data_filter'):
             extract_kwargs['filter'] = 'data'
         for member in tar.getmembers():

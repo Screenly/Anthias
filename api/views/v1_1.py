@@ -1,5 +1,6 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -20,7 +21,7 @@ class AssetListViewV1_1(APIView):
         summary='List assets', responses={200: AssetSerializer(many=True)}
     )
     @authorized
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         queryset = Asset.objects.all()
         serializer = AssetSerializer(queryset, many=True)
         return Response(serializer.data)
@@ -31,7 +32,7 @@ class AssetListViewV1_1(APIView):
         responses={201: AssetSerializer},
     )
     @authorized
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         data = parse_request(request)
 
         try:
@@ -56,7 +57,7 @@ class AssetViewV1_1(APIView, DeleteAssetViewMixin):
         },
     )
     @authorized
-    def get(self, request, asset_id):
+    def get(self, request: Request, asset_id: str) -> Response:
         asset = Asset.objects.get(asset_id=asset_id)
         return Response(AssetSerializer(asset).data)
 
@@ -66,7 +67,7 @@ class AssetViewV1_1(APIView, DeleteAssetViewMixin):
         responses={200: AssetSerializer},
     )
     @authorized
-    def put(self, request, asset_id):
+    def put(self, request: Request, asset_id: str) -> Response:
         asset = Asset.objects.get(asset_id=asset_id)
 
         data = parse_request(request)

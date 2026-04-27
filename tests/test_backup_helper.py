@@ -5,9 +5,14 @@ import tempfile
 import unittest
 from datetime import datetime
 from os import path
+from typing import Any
 from unittest import mock
 
-from lib.backup_helper import create_backup, recover, static_dir
+from lib.backup_helper import (
+    create_backup,
+    recover,
+    static_dir,
+)
 
 
 class BackupHelperTest(unittest.TestCase):
@@ -16,7 +21,7 @@ class BackupHelperTest(unittest.TestCase):
     ~/anthias checkout or ~/.anthias config wiped by tearDown's
     rmtree."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.tmp_home = tempfile.mkdtemp(prefix='anthias-backup-test-')
         # Populate the layout create_backup() expects to tar up so the
         # call has something to read.
@@ -32,20 +37,20 @@ class BackupHelperTest(unittest.TestCase):
         )
         self.assertFalse(path.isdir(path.join(self.tmp_home, static_dir)))
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self._home_patch.stop()
         shutil.rmtree(self.tmp_home, ignore_errors=True)
 
-    def get_patched_datetime(self):
+    def get_patched_datetime(self) -> Any:
         return mock.patch('lib.backup_helper.datetime')
 
-    def test_get_backup_name(self):
+    def test_get_backup_name(self) -> None:
         with self.get_patched_datetime() as mock_datetime:
             mock_datetime.now.return_value = self.dt
             archive_name = create_backup()
             self.assertEqual(archive_name, self.expected_archive_name)
 
-    def test_recover(self):
+    def test_recover(self) -> None:
         archive_name = create_backup()
         file_path = path.join(self.tmp_home, static_dir, archive_name)
         self.assertTrue(path.isfile(file_path))
@@ -58,13 +63,13 @@ class RecoverLegacyTarballTest(unittest.TestCase):
     `screenly_assets` as top-level archive entries. recover() must keep
     accepting them so users can still restore those backups."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.tmp_home = tempfile.mkdtemp(prefix='anthias-backup-legacy-test-')
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         shutil.rmtree(self.tmp_home, ignore_errors=True)
 
-    def _build_legacy_tarball(self):
+    def _build_legacy_tarball(self) -> str:
         # Stage the legacy layout in a scratch dir, then tar it up with
         # top-level `.screenly/` and `screenly_assets/` arcnames.
         scratch = tempfile.mkdtemp(prefix='anthias-backup-stage-')
@@ -97,7 +102,7 @@ class RecoverLegacyTarballTest(unittest.TestCase):
             shutil.rmtree(scratch, ignore_errors=True)
         return archive
 
-    def test_recover_accepts_legacy_archive(self):
+    def test_recover_accepts_legacy_archive(self) -> None:
         archive = self._build_legacy_tarball()
 
         with mock.patch.dict(os.environ, {'HOME': self.tmp_home}):
@@ -113,7 +118,7 @@ class RecoverLegacyTarballTest(unittest.TestCase):
             path.isfile(path.join(self.tmp_home, 'screenly_assets', 'a.mp4'))
         )
 
-    def test_recover_rejects_unrelated_archive(self):
+    def test_recover_rejects_unrelated_archive(self) -> None:
         archive = path.join(self.tmp_home, 'random.tar.gz')
         scratch = tempfile.mkdtemp(prefix='anthias-backup-bogus-')
         try:
@@ -132,7 +137,7 @@ class RecoverLegacyTarballTest(unittest.TestCase):
             with self.assertRaises(Exception):
                 recover(archive)
 
-    def test_recover_skips_path_traversal_member(self):
+    def test_recover_skips_path_traversal_member(self) -> None:
         """A malicious tarball with a `..` member must not write outside
         $HOME. The required top-level entries are still present, so
         recover() proceeds, but the unsafe member should be skipped."""

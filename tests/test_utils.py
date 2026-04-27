@@ -13,24 +13,24 @@ uri_ = '/home/user/file'
 
 
 class UtilsTest(unittest.TestCase):
-    def test_unicode_correctness_in_bottle_templates(self):
+    def test_unicode_correctness_in_bottle_templates(self) -> None:
         self.assertEqual(template_handle_unicode('hello'), 'hello')
         self.assertEqual(
             template_handle_unicode('Привет'),
-            '\u041f\u0440\u0438\u0432\u0435\u0442',
+            'Привет',
         )
 
-    def test_json_tz(self):
+    def test_json_tz(self) -> None:
         json_str = handler(datetime(2016, 7, 19, 12, 42))
         self.assertEqual(json_str, '2016-07-19T12:42:00+00:00')
 
 
 class URLHelperTest(TestCase):
-    def test_url_1(self):
+    def test_url_1(self) -> None:
         self.assertTrue(url_fails(url_fail))
 
-    def test_url_2(self):
+    def test_url_2(self) -> None:
         self.assertFalse(url_fails(url_redir))
 
-    def test_url_3(self):
+    def test_url_3(self) -> None:
         self.assertFalse(url_fails(uri_))

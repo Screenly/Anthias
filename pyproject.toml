@@ -9,7 +9,19 @@ dependencies = []
 [dependency-groups]
 dev-host = [
     "ansible-lint==26.4.0",
+    "celery-types==0.26.0",
+    "django-stubs==6.0.3",
+    "djangorestframework-stubs==3.16.9",
+    "mypy==1.18.2",
     "ruff==0.14.10",
+    "tenacity==9.1.2",
+    "types-gunicorn==25.3.0.20260408",
+    "types-mock==5.2.0.20260408",
+    "types-netifaces==0.11.0.20260408",
+    "types-python-dateutil==2.9.0.20260408",
+    "types-pytz==2026.1.1.20260408",
+    "types-PyYAML==6.0.12.20260408",
+    "types-requests==2.33.0.20260408",
 ]
 docker-image-builder = [
     "click==8.1.7",
@@ -31,6 +43,7 @@ server = [
     "Django==4.2.30",
     "djangorestframework==3.16.1",
     "django-dbbackup==4.2.1",
+    "django-stubs-ext==6.0.3",
     "drf-spectacular==0.29.0",
     "future==1.0.0",
     "hurry.filesize==0.9",
@@ -119,3 +132,56 @@ test = [
     { include-group = "viewer" },
     { include-group = "dev" },
 ]
+# Used by the python-mypy CI job. The django-stubs plugin imports
+# anthias_django.settings to introspect the app registry, so we need the
+# runtime deps that settings touches — but not the heavy native-extension
+# deps from the server group (cec, netifaces, etc.). We also include
+# docker-image-builder so its tools (pygit2, python_on_whales) resolve.
+mypy = [
+    { include-group = "dev-host" },
+    { include-group = "docker-image-builder" },
+    "channels==4.3.1",
+    "channels-redis==4.3.0",
+    "Django==4.2.30",
+    "django-dbbackup==4.2.1",
+    "django-stubs-ext==6.0.3",
+    "djangorestframework==3.16.1",
+    "drf-spectacular==0.29.0",
+    "pytz==2025.2",
+    "pyzmq==23.2.1",
+    "whitenoise==6.8.2",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+follow_imports = "normal"
+mypy_path = "stubs"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+exclude = [
+    "^\\.venv/",
+    "^node_modules/",
+    "/migrations/",
+    "^static/",
+    "^build/",
+    "^dist/",
+]
+
+[[tool.mypy.overrides]]
+# Third-party libs without type stubs. Listed explicitly so a future stub
+# release is noticed (and the override removed) instead of silently ignored.
+# `channels` itself is covered by partial PEP 561 stubs in stubs/channels-stubs/;
+# only the helpers we actually call are typed there.
+module = [
+    "cec",
+    "channels_redis.*",
+    "hurry.filesize",
+    "pydbus",
+    "sh",
+    "splinter",
+    "vlc",
+]
+ignore_missing_imports = true
+
+[tool.django-stubs]
+django_settings_module = "anthias_django.settings"

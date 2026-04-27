@@ -1,4 +1,6 @@
-from django.utils import timezone
+from datetime import timezone
+from typing import Any
+
 from rest_framework.serializers import (
     CharField,
     DateTimeField,
@@ -9,8 +11,15 @@ from rest_framework.serializers import (
 from api.serializers.mixins import CreateAssetSerializerMixin
 
 
-class CreateAssetSerializerV1_2(Serializer, CreateAssetSerializerMixin):
-    def __init__(self, *args, unique_name=False, **kwargs):
+class CreateAssetSerializerV1_2(
+    Serializer[dict[str, Any]], CreateAssetSerializerMixin
+):
+    def __init__(
+        self,
+        *args: Any,
+        unique_name: bool = False,
+        **kwargs: Any,
+    ) -> None:
         self.unique_name = unique_name
         super().__init__(*args, **kwargs)
 
@@ -28,5 +37,5 @@ class CreateAssetSerializerV1_2(Serializer, CreateAssetSerializerMixin):
     play_order = IntegerField(required=False)
     skip_asset_check = IntegerField(min_value=0, max_value=1, required=False)
 
-    def validate(self, data):
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         return self.prepare_asset(data, version='v1_2')

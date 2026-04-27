@@ -1,6 +1,7 @@
 import uuid
 from inspect import cleandoc
 from os import path, rename
+from typing import Any
 
 from rest_framework.serializers import CharField, Serializer
 
@@ -19,7 +20,14 @@ from . import (
 
 
 class CreateAssetSerializerMixin:
-    def prepare_asset(self, data, asset_id=None, version='v2'):
+    unique_name: bool = False
+
+    def prepare_asset(
+        self,
+        data: dict[str, Any],
+        asset_id: str | None = None,
+        version: str = 'v2',
+    ) -> dict[str, Any]:
         ampersand_fix = '&amp;'
         name = data['name'].replace(ampersand_fix, '&')
 
@@ -66,11 +74,17 @@ class CreateAssetSerializerMixin:
         asset['uri'] = uri
 
         if 'video' in asset['mimetype']:
-            if int(data.get('duration')) == 0:
+            duration_raw = data.get('duration')
+            if duration_raw is not None and int(duration_raw) == 0:
                 original_mimetype = data.get('mimetype')
 
                 if original_mimetype != 'youtube_asset':
-                    duration = get_video_duration(uri).total_seconds()
+                    video_duration = get_video_duration(uri)
+                    if video_duration is None:
+                        raise AssetCreationError(
+                            f'Could not determine duration of video {uri!r}'
+                        )
+                    duration = video_duration.total_seconds()
                     asset['duration'] = (
                         duration if version == 'v2' else int(duration)
                     )
@@ -91,14 +105,17 @@ class CreateAssetSerializerMixin:
             data.get('play_order') if data.get('play_order') else 0
         )
 
+        skip_check_raw = data.get('skip_asset_check')
         asset['skip_asset_check'] = (
-            int(data.get('skip_asset_check'))
-            if int(data.get('skip_asset_check'))
+            int(skip_check_raw)
+            if skip_check_raw is not None and int(skip_check_raw)
             else 0
         )
 
-        asset['start_date'] = data.get('start_date').replace(tzinfo=None)
-        asset['end_date'] = data.get('end_date').replace(tzinfo=None)
+        start_date = data['start_date']
+        end_date = data['end_date']
+        asset['start_date'] = start_date.replace(tzinfo=None)
+        asset['end_date'] = end_date.replace(tzinfo=None)
 
         if not asset['skip_asset_check'] and url_fails(asset['uri']):
             raise AssetCreationError(
@@ -108,7 +125,7 @@ class CreateAssetSerializerMixin:
         return asset
 
 
-class PlaylistOrderSerializerMixin(Serializer):
+class PlaylistOrderSerializerMixin(Serializer[Any]):
     ids = CharField(
         write_only=True,
         help_text=cleandoc(
@@ -122,13 +139,13 @@ class PlaylistOrderSerializerMixin(Serializer):
     )
 
 
-class BackupViewSerializerMixin(Serializer):
+class BackupViewSerializerMixin(Serializer[Any]):
     pass
 
 
-class RebootViewSerializerMixin(Serializer):
+class RebootViewSerializerMixin(Serializer[Any]):
     pass
 
 
-class ShutdownViewSerializerMixin(Serializer):
+class ShutdownViewSerializerMixin(Serializer[Any]):
     pass

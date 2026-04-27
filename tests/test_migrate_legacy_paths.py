@@ -11,7 +11,7 @@ REPO_ROOT = os.path.abspath(
 SCRIPT = os.path.join(REPO_ROOT, 'bin', 'migrate_legacy_paths.sh')
 
 
-def run_migrate(user_home):
+def run_migrate(user_home: str) -> 'subprocess.CompletedProcess[str]':
     env = os.environ.copy()
     env['USER_HOME'] = user_home
     # Slim PATH so the helper resolves only standard binaries. The
@@ -30,13 +30,13 @@ def run_migrate(user_home):
 
 
 class MigrateLegacyPathsTest(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.home = tempfile.mkdtemp(prefix='anthias-migrate-test-')
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         shutil.rmtree(self.home, ignore_errors=True)
 
-    def _populate_legacy_layout(self):
+    def _populate_legacy_layout(self) -> None:
         os.makedirs(os.path.join(self.home, 'screenly', '.git'))
         os.makedirs(os.path.join(self.home, 'screenly_assets'))
         os.makedirs(os.path.join(self.home, '.screenly', 'backups'))
@@ -57,7 +57,7 @@ class MigrateLegacyPathsTest(unittest.TestCase):
         ) as f:
             f.write(b'video-stub')
 
-    def test_full_migration(self):
+    def test_full_migration(self) -> None:
         self._populate_legacy_layout()
 
         run_migrate(self.home)
@@ -116,7 +116,7 @@ class MigrateLegacyPathsTest(unittest.TestCase):
             # Relative target so the link is portable across mounts.
             self.assertEqual(os.readlink(link), expected_target)
 
-    def test_conf_rewrite_handles_absolute_paths(self):
+    def test_conf_rewrite_handles_absolute_paths(self) -> None:
         os.makedirs(os.path.join(self.home, '.screenly'))
         # User customised their conf with absolute paths.
         with open(
@@ -136,7 +136,7 @@ class MigrateLegacyPathsTest(unittest.TestCase):
         self.assertIn(f'database = {self.home}/.anthias/anthias.db', body)
         self.assertNotIn('.screenly', body)
 
-    def test_idempotent_rerun(self):
+    def test_idempotent_rerun(self) -> None:
         self._populate_legacy_layout()
         run_migrate(self.home)
         # Second run must not raise and must leave the layout intact.
@@ -147,7 +147,7 @@ class MigrateLegacyPathsTest(unittest.TestCase):
         )
         self.assertTrue(os.path.islink(os.path.join(self.home, 'screenly')))
 
-    def test_fresh_install_noop(self):
+    def test_fresh_install_noop(self) -> None:
         # No legacy paths and no new paths → script should still succeed.
         run_migrate(self.home)
         self.assertFalse(os.path.exists(os.path.join(self.home, 'anthias')))

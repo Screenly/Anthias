@@ -1,8 +1,10 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 from unittest import mock
 
 from django.http import Http404
+from django.http.response import HttpResponseBase
 from django.test import RequestFactory, TestCase
 
 from anthias_app import views_files
@@ -18,7 +20,7 @@ PUBLIC_IP = '8.8.8.8'  # NOSONAR
 
 
 class AnthiasAssetsViewTest(TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.factory = RequestFactory()
         self.tmp = TemporaryDirectory()
         self.root = Path(self.tmp.name)
@@ -28,44 +30,44 @@ class AnthiasAssetsViewTest(TestCase):
         )
         self.root_patch.start()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.root_patch.stop()
         self.tmp.cleanup()
 
-    def _get(self, path, remote_addr):
+    def _get(self, path: str, remote_addr: str) -> HttpResponseBase:
         request = self.factory.get(path, REMOTE_ADDR=remote_addr)
         # views_files.anthias_assets is wrapped by require_client_in.
         filename = path.removeprefix('/anthias_assets/')
         return views_files.anthias_assets(request, filename=filename)
 
-    def test_allows_docker_bridge_client(self):
+    def test_allows_docker_bridge_client(self) -> None:
         response = self._get('/anthias_assets/hello.txt', DOCKER_BRIDGE_IP)
         self.assertEqual(response.status_code, 200)
 
-    def test_blocks_public_ip(self):
+    def test_blocks_public_ip(self) -> None:
         response = self._get('/anthias_assets/hello.txt', PUBLIC_IP)
         self.assertEqual(response.status_code, 403)
 
-    def test_blocks_lan_ip(self):
+    def test_blocks_lan_ip(self) -> None:
         # 192.168/16 is intentionally excluded from the asset allowlist.
         response = self._get('/anthias_assets/hello.txt', LAN_IP_192_BLOCKED)
         self.assertEqual(response.status_code, 403)
 
-    def test_missing_file_404(self):
+    def test_missing_file_404(self) -> None:
         request = self.factory.get(
             '/anthias_assets/missing.txt', REMOTE_ADDR=DOCKER_BRIDGE_IP
         )
         with self.assertRaises(Http404):
             views_files.anthias_assets(request, filename='missing.txt')
 
-    def test_traversal_404(self):
+    def test_traversal_404(self) -> None:
         request = self.factory.get(
             '/anthias_assets/whatever', REMOTE_ADDR=DOCKER_BRIDGE_IP
         )
         with self.assertRaises(Http404):
             views_files.anthias_assets(request, filename='../../../etc/passwd')
 
-    def test_symlink_escape_404(self):
+    def test_symlink_escape_404(self) -> None:
         with TemporaryDirectory() as outside_dir:
             outside = Path(outside_dir) / 'outside.txt'
             outside.write_text('secret')
@@ -76,13 +78,13 @@ class AnthiasAssetsViewTest(TestCase):
             with self.assertRaises(Http404):
                 views_files.anthias_assets(request, filename='link.txt')
 
-    def test_malformed_remote_addr_403(self):
+    def test_malformed_remote_addr_403(self) -> None:
         response = self._get('/anthias_assets/hello.txt', 'not-an-ip')
         self.assertEqual(response.status_code, 403)
 
 
 class StaticWithMimeViewTest(TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.factory = RequestFactory()
         self.tmp = TemporaryDirectory()
         self.root = Path(self.tmp.name)
@@ -92,17 +94,19 @@ class StaticWithMimeViewTest(TestCase):
         )
         self.root_patch.start()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.root_patch.stop()
         self.tmp.cleanup()
 
-    def _call(self, filename, remote_addr, **extra):
+    def _call(
+        self, filename: str, remote_addr: str, **extra: Any
+    ) -> HttpResponseBase:
         request = self.factory.get(
             f'/static_with_mime/{filename}', REMOTE_ADDR=remote_addr, **extra
         )
         return views_files.static_with_mime(request, filename=filename)
 
-    def test_allows_rfc1918_clients(self):
+    def test_allows_rfc1918_clients(self) -> None:
         for ip in (LAN_IP_10, DOCKER_BRIDGE_IP, LAN_IP_192_ALLOWED):
             self.assertEqual(
                 self._call('app.css', ip).status_code,
@@ -110,10 +114,10 @@ class StaticWithMimeViewTest(TestCase):
                 msg=f'expected 200 for {ip}',
             )
 
-    def test_blocks_public_ip(self):
+    def test_blocks_public_ip(self) -> None:
         self.assertEqual(self._call('app.css', PUBLIC_IP).status_code, 403)
 
-    def test_mime_override_via_query(self):
+    def test_mime_override_via_query(self) -> None:
         request = self.factory.get(
             '/static_with_mime/app.css',
             data={'mime': 'application/x-tgz'},
@@ -122,7 +126,7 @@ class StaticWithMimeViewTest(TestCase):
         response = views_files.static_with_mime(request, filename='app.css')
         self.assertEqual(response['Content-Type'], 'application/x-tgz')
 
-    def test_mime_override_rejects_html(self):
+    def test_mime_override_rejects_html(self) -> None:
         # text/html would let an attacker turn a stored file into XSS;
         # ?mime= is allowlisted to safe download types only.
         request = self.factory.get(
@@ -133,7 +137,7 @@ class StaticWithMimeViewTest(TestCase):
         response = views_files.static_with_mime(request, filename='app.css')
         self.assertEqual(response['Content-Type'], 'text/css')
 
-    def test_default_mime_from_extension(self):
+    def test_default_mime_from_extension(self) -> None:
         request = self.factory.get(
             '/static_with_mime/app.css', REMOTE_ADDR=LAN_IP_10
         )
@@ -142,7 +146,7 @@ class StaticWithMimeViewTest(TestCase):
 
 
 class HotspotViewTest(TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.factory = RequestFactory()
         self.tmp = TemporaryDirectory()
         base = Path(self.tmp.name)
@@ -158,30 +162,30 @@ class HotspotViewTest(TestCase):
         for p in self.patches:
             p.start()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         for p in self.patches:
             p.stop()
         self.tmp.cleanup()
 
-    def _get(self, remote_addr=DOCKER_BRIDGE_IP):
+    def _get(self, remote_addr: str = DOCKER_BRIDGE_IP) -> HttpResponseBase:
         request = self.factory.get('/hotspot', REMOTE_ADDR=remote_addr)
         return views_files.hotspot(request, path='')
 
-    def test_serves_when_uninitialized(self):
+    def test_serves_when_uninitialized(self) -> None:
         response = self._get()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'text/html')
 
-    def test_blocks_public_ip(self):
+    def test_blocks_public_ip(self) -> None:
         self.assertEqual(self._get(PUBLIC_IP).status_code, 403)
 
-    def test_404_after_initialization(self):
+    def test_404_after_initialization(self) -> None:
         self.initialized_flag.touch()
         request = self.factory.get('/hotspot', REMOTE_ADDR=DOCKER_BRIDGE_IP)
         with self.assertRaises(Http404):
             views_files.hotspot(request, path='')
 
-    def test_404_when_file_missing(self):
+    def test_404_when_file_missing(self) -> None:
         self.hotspot_file.unlink()
         request = self.factory.get('/hotspot', REMOTE_ADDR=DOCKER_BRIDGE_IP)
         with self.assertRaises(Http404):

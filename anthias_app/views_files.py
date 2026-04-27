@@ -3,8 +3,15 @@ import mimetypes
 import os
 from functools import wraps
 from pathlib import Path
+from typing import Any, Callable
 
-from django.http import FileResponse, Http404, HttpResponseForbidden
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpRequest,
+    HttpResponseForbidden,
+)
+from django.http.response import HttpResponseBase
 from django.views.decorators.http import require_GET
 
 # Defense-in-depth, not the real perimeter:
@@ -51,14 +58,23 @@ STATIC_WITH_MIME_ALLOWED_TYPES = frozenset(
 )
 
 
-def _client_ip(request):
+ViewFunc = Callable[..., HttpResponseBase]
+
+
+def _client_ip(
+    request: HttpRequest,
+) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
     return ipaddress.ip_address(request.META.get('REMOTE_ADDR', ''))
 
 
-def require_client_in(*cidrs):
-    def decorator(view):
+def require_client_in(
+    *cidrs: ipaddress.IPv4Network | ipaddress.IPv6Network,
+) -> Callable[[ViewFunc], ViewFunc]:
+    def decorator(view: ViewFunc) -> ViewFunc:
         @wraps(view)
-        def wrapper(request, *args, **kwargs):
+        def wrapper(
+            request: HttpRequest, *args: Any, **kwargs: Any
+        ) -> HttpResponseBase:
             try:
                 addr = _client_ip(request)
             except ValueError:
@@ -74,7 +90,7 @@ def require_client_in(*cidrs):
 
 @require_GET
 @require_client_in(DOCKER_BRIDGE_CIDR)
-def anthias_assets(request, filename):
+def anthias_assets(request: HttpRequest, filename: str) -> HttpResponseBase:
     # Trailing os.sep on `base` is required so e.g.
     # '/data/anthias_assets_evil/...' doesn't slip past startswith().
     base = os.path.realpath(ANTHIAS_ASSETS_ROOT) + os.sep
@@ -89,7 +105,7 @@ def anthias_assets(request, filename):
 
 @require_GET
 @require_client_in(*RFC1918_CIDRS)
-def static_with_mime(request, filename):
+def static_with_mime(request: HttpRequest, filename: str) -> HttpResponseBase:
     base = os.path.realpath(STATIC_FILES_ROOT) + os.sep
     target = os.path.realpath(os.path.join(base, filename))
     if not target.startswith(base):
@@ -109,7 +125,7 @@ def static_with_mime(request, filename):
 
 @require_GET
 @require_client_in(DOCKER_BRIDGE_CIDR)
-def hotspot(request, path=''):
+def hotspot(request: HttpRequest, path: str = '') -> HttpResponseBase:
     if INITIALIZED_FLAG.exists() or not HOTSPOT_FILE.is_file():
         raise Http404
     return FileResponse(HOTSPOT_FILE.open('rb'), content_type='text/html')

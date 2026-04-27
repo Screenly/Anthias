@@ -1,5 +1,8 @@
-from django.utils import timezone
-from drf_spectacular.utils import OpenApiTypes, extend_schema_field
+from datetime import timezone
+from typing import Any
+
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework.serializers import (
     BooleanField,
     CharField,
@@ -16,11 +19,11 @@ from api.serializers import UpdateAssetSerializer
 from api.serializers.mixins import CreateAssetSerializerMixin
 
 
-class AssetSerializerV2(ModelSerializer, CreateAssetSerializerMixin):
+class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
     is_active = SerializerMethodField()
 
     @extend_schema_field(OpenApiTypes.BOOL)
-    def get_is_active(self, obj):
+    def get_is_active(self, obj: Asset) -> bool:
         return obj.is_active()
 
     class Meta:
@@ -42,8 +45,15 @@ class AssetSerializerV2(ModelSerializer, CreateAssetSerializerMixin):
         ]
 
 
-class CreateAssetSerializerV2(Serializer, CreateAssetSerializerMixin):
-    def __init__(self, *args, unique_name=False, **kwargs):
+class CreateAssetSerializerV2(
+    Serializer[dict[str, Any]], CreateAssetSerializerMixin
+):
+    def __init__(
+        self,
+        *args: Any,
+        unique_name: bool = False,
+        **kwargs: Any,
+    ) -> None:
         self.unique_name = unique_name
         super().__init__(*args, **kwargs)
 
@@ -61,7 +71,7 @@ class CreateAssetSerializerV2(Serializer, CreateAssetSerializerMixin):
     play_order = IntegerField(required=False)
     skip_asset_check = BooleanField(required=False)
 
-    def validate(self, data):
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         return self.prepare_asset(data, version='v2')
 
 
@@ -73,7 +83,7 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
     duration = IntegerField()
 
 
-class DeviceSettingsSerializerV2(Serializer):
+class DeviceSettingsSerializerV2(Serializer[Any]):
     player_name = CharField()
     audio_output = CharField()
     default_duration = IntegerField()
@@ -88,7 +98,7 @@ class DeviceSettingsSerializerV2(Serializer):
     username = CharField()
 
 
-class UpdateDeviceSettingsSerializerV2(Serializer):
+class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
     player_name = CharField(required=False, allow_blank=True)
     audio_output = CharField(required=False)
     default_duration = IntegerField(required=False)
@@ -113,7 +123,7 @@ class UpdateDeviceSettingsSerializerV2(Serializer):
     current_password = CharField(required=False, allow_blank=True)
 
 
-class IntegrationsSerializerV2(Serializer):
+class IntegrationsSerializerV2(Serializer[Any]):
     is_balena = BooleanField()
     balena_device_id = CharField(required=False, allow_null=True)
     balena_app_id = CharField(required=False, allow_null=True)

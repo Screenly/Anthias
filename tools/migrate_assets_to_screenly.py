@@ -5,6 +5,7 @@ import sys
 import traceback
 from inspect import cleandoc
 from textwrap import shorten
+from typing import Any
 
 import click
 import requests
@@ -12,13 +13,13 @@ from requests.auth import HTTPBasicAuth
 from requests.exceptions import RequestException
 from tenacity import retry
 
-HOME = os.getenv('HOME')
+HOME = os.getenv('HOME') or ''
 BASE_API_SCREENLY_URL = 'https://api.screenlyapp.com'
 ASSETS_ANTHIAS_API = 'http://127.0.0.1/api/v1.1/assets'
 MAX_ASSET_NAME_LENGTH = 40
 PORT = 80
 
-token = None
+token: str | None = None
 
 
 #############
@@ -26,7 +27,12 @@ token = None
 #############
 
 
-def progress_bar(count, total, asset_name='', previous_asset_name=''):
+def progress_bar(
+    count: int,
+    total: int,
+    asset_name: str = '',
+    previous_asset_name: str = '',
+) -> None:
     """
     This simple console progress bar
     For display progress asset uploads
@@ -44,7 +50,7 @@ def progress_bar(count, total, asset_name='', previous_asset_name=''):
     sys.stdout.flush()
 
 
-def set_token(value):
+def set_token(value: str) -> None:
     global token
     token = f'Token {value}'
 
@@ -54,7 +60,8 @@ def set_token(value):
 ############
 
 
-def get_assets_by_anthias_api():
+def get_assets_by_anthias_api() -> list[dict[str, Any]]:
+    auth: HTTPBasicAuth | None
     if click.confirm('Do you need authentication to access Anthias API?'):
         login = click.prompt('Login')
         password = click.prompt('Password', hide_input=True)
@@ -64,7 +71,8 @@ def get_assets_by_anthias_api():
     response = requests.get(ASSETS_ANTHIAS_API, timeout=10, auth=auth)
 
     response.raise_for_status()
-    return response.json()
+    result: list[dict[str, Any]] = response.json()
+    return result
 
 
 ############
@@ -73,11 +81,11 @@ def get_assets_by_anthias_api():
 
 
 @retry
-def get_post_response(endpoint_url, **kwargs):
+def get_post_response(endpoint_url: str, **kwargs: Any) -> requests.Response:
     return requests.post(endpoint_url, **kwargs)
 
 
-def send_asset(asset):
+def send_asset(asset: dict[str, Any]) -> bool:
     endpoint_url = f'{BASE_API_SCREENLY_URL}/api/v4/assets'
     asset_uri = asset['uri']
     post_kwargs = {
@@ -109,7 +117,7 @@ def send_asset(asset):
     return True
 
 
-def check_validate_token(api_key):
+def check_validate_token(api_key: str) -> str | None:
     endpoint_url = f'{BASE_API_SCREENLY_URL}/api/v4/assets'
     headers = {'Authorization': f'Token {api_key}'}
     response = requests.get(endpoint_url, headers=headers)
@@ -124,12 +132,12 @@ def check_validate_token(api_key):
 ########
 
 
-def start_migration():
+def start_migration() -> None:
     if click.confirm('Do you want to start assets migration?'):
         assets_migration()
 
 
-def assets_migration():
+def assets_migration() -> None:
     try:
         assets = get_assets_by_anthias_api()
     except RequestException as error:
@@ -182,7 +190,7 @@ def assets_migration():
     ),
     type=click.Choice(['1', '2']),
 )
-def main(method):
+def main(method: str) -> None:
     try:
         valid_token = None
 

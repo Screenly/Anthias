@@ -1,4 +1,7 @@
-def preprocessing_filter_spec(endpoints):
+from typing import Any
+
+
+def preprocessing_filter_spec(endpoints: list[Any]) -> list[Any]:
     filtered = []
     for path, path_regex, method, callback in endpoints:
         if path.startswith('/api/v2'):

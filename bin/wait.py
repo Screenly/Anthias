@@ -1,13 +1,10 @@
-from __future__ import print_function, unicode_literals
-
 import time
-from builtins import range
 
 import sh
 
 
 # wait for default route
-def is_routing_up():
+def is_routing_up() -> bool:
     try:
         sh.grep('default', _in=sh.route())
         return True

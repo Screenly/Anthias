@@ -1,7 +1,6 @@
-from __future__ import unicode_literals
-
 import logging
 import os
+from typing import Any
 
 import mock
 from unittest_parametrize import ParametrizedTestCase, parametrize
@@ -24,7 +23,7 @@ class UpdateTest(ParametrizedTestCase):
     )
     def test__if_git_branch_env_does_not_exist__is_up_to_date_should_return_true(
         self,
-    ):  # noqa: E501
+    ) -> None:  # noqa: E501
         self.assertEqual(is_up_to_date(), True)
 
     @parametrize(
@@ -73,8 +72,8 @@ class UpdateTest(ParametrizedTestCase):
         mock.MagicMock(return_value='master'),
     )
     def test_is_up_to_date_should_return_value_depending_on_git_hashes(
-        self, hashes, expected
-    ):
+        self, hashes: dict[str, Any], expected: bool
+    ) -> None:
         os.environ['GIT_BRANCH'] = 'master'
         os.environ['DEVICE_TYPE'] = 'pi4'
 

@@ -1,7 +1,9 @@
 import uuid
 from os import getenv, path
+from typing import Any
 
 import yaml
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 
@@ -11,7 +13,11 @@ from lib.utils import get_video_duration
 from settings import settings
 
 
-def template(request, template_name, context):
+def template(
+    request: HttpRequest,
+    template_name: str,
+    context: dict[str, Any],
+) -> HttpResponse:
     """
     This is a helper function that is used to render a template
     with some global context. This is used to avoid having to
@@ -33,16 +39,20 @@ def template(request, template_name, context):
     return render(request, template_name, context)
 
 
-def prepare_default_asset(**kwargs):
+def prepare_default_asset(**kwargs: Any) -> dict[str, Any] | None:
     if kwargs['mimetype'] not in ['image', 'video', 'webpage']:
-        return
+        return None
 
     asset_id = 'default_{}'.format(uuid.uuid4().hex)
-    duration = (
-        int(get_video_duration(kwargs['uri']).total_seconds())
-        if 'video' == kwargs['mimetype']
-        else kwargs['duration']
-    )
+    if 'video' == kwargs['mimetype']:
+        video_duration = get_video_duration(kwargs['uri'])
+        if video_duration is None:
+            raise ValueError(
+                f'Could not determine duration of video {kwargs["uri"]!r}'
+            )
+        duration = int(video_duration.total_seconds())
+    else:
+        duration = kwargs['duration']
 
     return {
         'asset_id': asset_id,
@@ -60,7 +70,7 @@ def prepare_default_asset(**kwargs):
     }
 
 
-def add_default_assets():
+def add_default_assets() -> None:
     settings.load()
 
     datetime_now = timezone.now()
@@ -71,7 +81,7 @@ def add_default_assets():
     }
 
     default_assets_yaml = path.join(
-        getenv('HOME'),
+        getenv('HOME') or '',
         '.anthias/default_assets.yml',
     )
 
@@ -92,7 +102,7 @@ def add_default_assets():
                 Asset.objects.create(**asset)
 
 
-def remove_default_assets():
+def remove_default_assets() -> None:
     settings.load()
 
     for asset in Asset.objects.all():

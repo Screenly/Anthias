@@ -1,32 +1,27 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import unicode_literals
-
 import json
 import logging
 import sys
-from builtins import range
 from os import getenv, path
 from signal import SIGALRM, signal
 from time import sleep
+from typing import Any
 
 import django
 import pydbus
-import sh
-from future import standard_library
+import sh as sh
 from jinja2 import Template
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
 from settings import LISTEN, PORT, ZmqConsumer, settings
-from viewer.constants import (
-    BALENA_IP_RETRY_DELAY,
-    EMPTY_PL_DELAY,
-    MAX_BALENA_IP_RETRIES,
-    SERVER_WAIT_TIMEOUT,
-    SPLASH_DELAY,
-    SPLASH_PAGE_URL,
-    STANDBY_SCREEN,
-)
+from viewer.constants import BALENA_IP_RETRY_DELAY as BALENA_IP_RETRY_DELAY
+from viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
+from viewer.constants import MAX_BALENA_IP_RETRIES as MAX_BALENA_IP_RETRIES
+from viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
+from viewer.constants import SPLASH_DELAY as SPLASH_DELAY
+from viewer.constants import SPLASH_PAGE_URL as SPLASH_PAGE_URL
+from viewer.constants import STANDBY_SCREEN as STANDBY_SCREEN
 from viewer.media_player import MediaPlayerProxy
 from viewer.playback import navigate_to_asset, play_loop, skip_asset, stop_loop
 from viewer.utils import (
@@ -55,31 +50,31 @@ try:
 except Exception:
     pass
 
-standard_library.install_aliases()
-
 
 __author__ = 'Screenly, Inc'
-__copyright__ = 'Copyright 2012-2024, Screenly, Inc'
+__copyright__ = 'Copyright 2012-2026, Screenly, Inc'
 __license__ = 'Dual License: GPLv2 and Commercial License'
 
 
-current_browser_url = None
-browser = None
-loop_is_stopped = False
-browser_bus = None
+current_browser_url: str | None = None
+browser: Any = None
+loop_is_stopped: bool = False
+browser_bus: Any = None
 r = connect_to_redis()
 
-HOME = None
+HOME: str | None = None
 
-scheduler = None
+scheduler: Any = None
+load_screen_displayed: bool = False
+mq_data: Any = None
 
 
-def send_current_asset_id_to_server():
+def send_current_asset_id_to_server() -> None:
     consumer = ZmqConsumer()
     consumer.send({'current_asset_id': scheduler.current_asset_id})
 
 
-def show_hotspot_page(data):
+def show_hotspot_page(data: str) -> None:
     global loop_is_stopped
 
     uri = 'http://{0}:{1}/hotspot'.format(LISTEN, PORT)
@@ -104,7 +99,7 @@ def show_hotspot_page(data):
     view_webpage(uri)
 
 
-def setup_wifi(data):
+def setup_wifi(data: str) -> None:
     global load_screen_displayed, mq_data
     if not load_screen_displayed:
         mq_data = data
@@ -113,7 +108,7 @@ def setup_wifi(data):
     show_hotspot_page(data)
 
 
-def show_splash(data):
+def show_splash(data: str) -> None:
     global loop_is_stopped
 
     if is_balena_app():
@@ -150,7 +145,7 @@ commands = {
 }
 
 
-def load_browser():
+def load_browser() -> None:
     global browser
     logging.info('Loading browser...')
 
@@ -161,7 +156,7 @@ def load_browser():
         sleep(1)
 
 
-def view_webpage(uri):
+def view_webpage(uri: str) -> None:
     global current_browser_url
 
     if browser is None or not browser.is_alive():
@@ -172,7 +167,7 @@ def view_webpage(uri):
     logging.info('Current url is {0}'.format(current_browser_url))
 
 
-def view_image(uri):
+def view_image(uri: str) -> None:
     global current_browser_url
 
     if browser is None or not browser.is_alive():
@@ -186,7 +181,7 @@ def view_image(uri):
         logging.info(browser.process.stdout)
 
 
-def view_video(uri, duration):
+def view_video(uri: str, duration: int | str) -> None:
     logging.debug('Displaying video %s for %s ', uri, duration)
     media_player = MediaPlayerProxy.get_instance()
 
@@ -212,7 +207,7 @@ def view_video(uri, duration):
     media_player.stop()
 
 
-def load_settings():
+def load_settings() -> None:
     """
     Load settings and set the log level.
     """
@@ -222,7 +217,7 @@ def load_settings():
     )
 
 
-def asset_loop(scheduler):
+def asset_loop(scheduler: Any) -> None:
     asset = scheduler.get_next_asset()
 
     if asset is None:
@@ -288,7 +283,7 @@ def asset_loop(scheduler):
             pass
 
 
-def setup():
+def setup() -> None:
     global HOME, browser_bus
     HOME = getenv('HOME')
     if not HOME:
@@ -308,7 +303,7 @@ def setup():
     browser_bus = bus.get('screenly.webview', '/Screenly')
 
 
-def wait_for_node_ip(seconds):
+def wait_for_node_ip(seconds: int) -> None:
     for _ in range(seconds):
         try:
             get_node_ip()
@@ -317,7 +312,7 @@ def wait_for_node_ip(seconds):
             sleep(1)
 
 
-def start_loop():
+def start_loop() -> None:
     global loop_is_stopped
 
     logging.debug('Entering infinite loop.')
@@ -329,7 +324,7 @@ def start_loop():
         asset_loop(scheduler)
 
 
-def main():
+def main() -> None:
     global scheduler
     global load_screen_displayed, mq_data
 

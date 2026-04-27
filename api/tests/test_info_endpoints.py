@@ -2,6 +2,7 @@
 Tests for Info API endpoints (v1 and v2).
 """
 
+from typing import Any
 from unittest import mock
 
 from django.test import TestCase
@@ -11,17 +12,23 @@ from rest_framework.test import APIClient
 
 
 class InfoEndpointsTest(TestCase):
-    def setUp(self):
-        self.client = APIClient()
+    client_class = APIClient
+    client: APIClient
+
+    def setUp(self) -> None:
         self.info_url_v1 = reverse('api:info_v1')
         self.info_url_v2 = reverse('api:info_v2')
 
-    def _assert_mock_calls(self, mocks):
+    def _assert_mock_calls(self, mocks: list[Any]) -> None:
         """Assert that all mocks were called exactly once."""
         for mock_obj in mocks:
             self.assertEqual(mock_obj.call_count, 1)
 
-    def _assert_response_data(self, data, expected_data):
+    def _assert_response_data(
+        self,
+        data: Any,
+        expected_data: dict[str, Any],
+    ) -> None:
         """Assert that the response data matches the expected data."""
         for key, expected_value in expected_data.items():
             self.assertEqual(data[key], expected_value)
@@ -32,8 +39,12 @@ class InfoEndpointsTest(TestCase):
     @mock.patch('api.views.mixins.statvfs', mock.MagicMock())
     @mock.patch('api.views.mixins.r.get', return_value='off')
     def test_info_v1_endpoint(
-        self, redis_get_mock, size_mock, get_load_avg_mock, is_up_to_date_mock
-    ):
+        self,
+        redis_get_mock: Any,
+        size_mock: Any,
+        get_load_avg_mock: Any,
+        is_up_to_date_mock: Any,
+    ) -> None:
         response = self.client.get(self.info_url_v1)
         data = response.data
 
@@ -89,19 +100,19 @@ class InfoEndpointsTest(TestCase):
     @mock.patch('api.views.v2.getenv', return_value='testuser')
     def test_info_v2_endpoint(
         self,
-        getenv_mock,
-        get_node_ip_mock,
-        mac_address_mock,
-        virtual_memory_mock,
-        get_uptime_mock,
-        parse_cpu_info_mock,
-        get_git_short_hash_mock,
-        get_git_branch_mock,
-        redis_get_mock,
-        size_mock,
-        get_load_avg_mock,
-        is_up_to_date_mock,
-    ):
+        getenv_mock: Any,
+        get_node_ip_mock: Any,
+        mac_address_mock: Any,
+        virtual_memory_mock: Any,
+        get_uptime_mock: Any,
+        parse_cpu_info_mock: Any,
+        get_git_short_hash_mock: Any,
+        get_git_branch_mock: Any,
+        redis_get_mock: Any,
+        size_mock: Any,
+        get_load_avg_mock: Any,
+        is_up_to_date_mock: Any,
+    ) -> None:
         response = self.client.get(self.info_url_v2)
         data = response.data
 
