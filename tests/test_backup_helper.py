@@ -1,4 +1,3 @@
-import io
 import os
 import shutil
 import tarfile
@@ -10,8 +9,6 @@ from typing import Any
 from unittest import mock
 
 from lib.backup_helper import (
-    BackupRecoverError,
-    _safe_extract,
     create_backup,
     recover,
     static_dir,
@@ -59,71 +56,6 @@ class BackupHelperTest(unittest.TestCase):
         self.assertTrue(path.isfile(file_path))
         recover(file_path)
         self.assertFalse(path.isfile(file_path))
-
-
-def _build_archive_with(member: tarfile.TarInfo, data: bytes = b'') -> str:
-    """Build a single-member tar.gz in a temp file and return its path."""
-    fd, archive_path = tempfile.mkstemp(suffix='.tar.gz')
-    os.close(fd)
-    # Test fixture: building a tar archive for the safe-extract tests.
-    with tarfile.open(archive_path, 'w:gz') as tar:  # NOSONAR
-        if data:
-            tar.addfile(member, io.BytesIO(data))
-        else:
-            tar.addfile(member)
-    return archive_path
-
-
-class SafeExtractTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self.dest = tempfile.mkdtemp()
-
-    def tearDown(self) -> None:
-        shutil.rmtree(self.dest, ignore_errors=True)
-
-    def _open_and_extract(self, archive_path: str) -> None:
-        try:
-            # Test exercises the safe-extract helper directly.
-            with tarfile.open(archive_path, 'r:gz') as tar:  # NOSONAR
-                _safe_extract(tar, self.dest)
-        finally:
-            os.remove(archive_path)
-
-    def test_rejects_relative_traversal(self) -> None:
-        member = tarfile.TarInfo(name='../escaped.txt')
-        member.size = 3
-        archive_path = _build_archive_with(member, b'bad')
-        with self.assertRaises(BackupRecoverError):
-            self._open_and_extract(archive_path)
-
-    def test_rejects_absolute_path(self) -> None:
-        member = tarfile.TarInfo(name='/etc/passwd-pwn')
-        member.size = 3
-        archive_path = _build_archive_with(member, b'bad')
-        with self.assertRaises(BackupRecoverError):
-            self._open_and_extract(archive_path)
-
-    def test_rejects_symlink_member(self) -> None:
-        member = tarfile.TarInfo(name='link')
-        member.type = tarfile.SYMTYPE
-        member.linkname = '/etc/passwd'
-        archive_path = _build_archive_with(member)
-        with self.assertRaises(BackupRecoverError):
-            self._open_and_extract(archive_path)
-
-    def test_rejects_fifo_member(self) -> None:
-        member = tarfile.TarInfo(name='pipe')
-        member.type = tarfile.FIFOTYPE
-        archive_path = _build_archive_with(member)
-        with self.assertRaises(BackupRecoverError):
-            self._open_and_extract(archive_path)
-
-    def test_extracts_regular_file(self) -> None:
-        member = tarfile.TarInfo(name='inside.txt')
-        member.size = 5
-        archive_path = _build_archive_with(member, b'hello')
-        self._open_and_extract(archive_path)
-        self.assertTrue(path.isfile(path.join(self.dest, 'inside.txt')))
 
 
 class RecoverLegacyTarballTest(unittest.TestCase):

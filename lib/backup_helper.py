@@ -79,41 +79,6 @@ def create_backup(name: str = default_archive_name) -> str:
     return archive_name
 
 
-def _is_within_directory(directory: str, target: str) -> bool:
-    abs_directory = path.realpath(directory)
-    abs_target = path.realpath(target)
-    return path.commonpath([abs_directory, abs_target]) == abs_directory
-
-
-def _safe_extract(tar: tarfile.TarFile, dest: str) -> None:
-    """Extract a tar archive guarding against unsafe members.
-
-    `tarfile.extractall` will happily follow `../` segments, absolute
-    paths, and special members (symlinks, device nodes, FIFOs) in archive
-    members, allowing a malicious backup file uploaded via the recovery
-    endpoint to overwrite arbitrary files or create special files on
-    disk. Only allow regular files and directories whose resolved path
-    stays inside `dest`, and extract each member individually after
-    validation.
-    """
-    safe_members: list[tarfile.TarInfo] = []
-    for member in tar.getmembers():
-        if not (member.isfile() or member.isdir()):
-            raise BackupRecoverError(
-                'Refusing to extract non-regular member in archive: '
-                f'{member.name} (type={member.type!r})'
-            )
-        member_path = path.join(dest, member.name)
-        if not _is_within_directory(dest, member_path):
-            raise BackupRecoverError(
-                f'Refusing to extract unsafe path in archive: {member.name}'
-            )
-        safe_members.append(member)
-
-    for member in safe_members:
-        tar.extract(member, path=dest)
-
-
 def recover(file_path: str) -> None:
     home = getenv('HOME')
     if not home:

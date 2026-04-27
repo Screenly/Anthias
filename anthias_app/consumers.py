@@ -5,7 +5,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 WS_GROUP = 'ws_server'
 
 
-class AssetConsumer(AsyncWebsocketConsumer):  # type: ignore[misc]
+class AssetConsumer(AsyncWebsocketConsumer):
     async def connect(self) -> None:
         await self.channel_layer.group_add(WS_GROUP, self.channel_name)
         await self.accept()
