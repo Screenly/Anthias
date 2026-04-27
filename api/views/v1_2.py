@@ -1,5 +1,6 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -25,7 +26,7 @@ class AssetListViewV1_2(APIView):
         summary='List assets', responses={200: AssetSerializer(many=True)}
     )
     @authorized
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         queryset = Asset.objects.all()
         serializer = self.serializer_class(queryset, many=True)
         return Response(serializer.data)
@@ -36,7 +37,7 @@ class AssetListViewV1_2(APIView):
         responses={201: AssetSerializer},
     )
     @authorized
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         try:
             serializer = CreateAssetSerializerV1_2(
                 data=request.data, unique_name=True
@@ -67,12 +68,17 @@ class AssetViewV1_2(APIView, DeleteAssetViewMixin):
 
     @extend_schema(summary='Get asset')
     @authorized
-    def get(self, request, asset_id):
+    def get(self, request: Request, asset_id: str) -> Response:
         asset = Asset.objects.get(asset_id=asset_id)
         serializer = self.serializer_class(asset)
         return Response(serializer.data)
 
-    def update(self, request, asset_id, partial=False):
+    def update(
+        self,
+        request: Request,
+        asset_id: str,
+        partial: bool = False,
+    ) -> Response:
         asset = Asset.objects.get(asset_id=asset_id)
         serializer = UpdateAssetSerializer(
             asset, data=request.data, partial=partial
@@ -108,7 +114,7 @@ class AssetViewV1_2(APIView, DeleteAssetViewMixin):
         responses={200: AssetSerializer},
     )
     @authorized
-    def patch(self, request, asset_id):
+    def patch(self, request: Request, asset_id: str) -> Response:
         return self.update(request, asset_id, partial=True)
 
     @extend_schema(
@@ -117,5 +123,5 @@ class AssetViewV1_2(APIView, DeleteAssetViewMixin):
         responses={200: AssetSerializer},
     )
     @authorized
-    def put(self, request, asset_id):
+    def put(self, request: Request, asset_id: str) -> Response:
         return self.update(request, asset_id, partial=False)

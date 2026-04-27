@@ -1,10 +1,10 @@
-from __future__ import unicode_literals
-
 import os
 import shutil
 import sys
+from collections.abc import Iterator
 from contextlib import contextmanager
-from unittest import TestCase
+from typing import Any
+from unittest import TestCase, mock
 
 user_home_dir = os.getenv('HOME')
 
@@ -20,8 +20,8 @@ resolution = 1920x1080
 default_duration = 45
 
 [main]
-assetdir = "{}/screenly_assets".format(user_home_dir)
-database = "{}/.screenly/screenly.db".format(user_home_dir)
+assetdir = "{}/anthias_assets".format(user_home_dir)
+database = "{}/.anthias/anthias.db".format(user_home_dir)
 use_ssl = False
 
 """
@@ -41,25 +41,31 @@ show_splash = offf
 
 """
 
-CONFIG_DIR = '/tmp/.screenly/'
-CONFIG_FILE = CONFIG_DIR + 'screenly.conf'
+CONFIG_DIR = '/tmp/.anthias/'
+CONFIG_FILE = CONFIG_DIR + 'anthias.conf'
 
 
 @contextmanager
-def fake_settings(raw):
+def fake_settings(raw: str) -> Iterator[tuple[Any, Any]]:
     with open(CONFIG_FILE, mode='w+') as f:
         f.write(raw)
 
+    # Force a re-import so AnthiasSettings() is instantiated against the
+    # CONFIG_FILE we just wrote. Without this, a prior test that imported
+    # `settings` cleanly would leave the module cached, and `import
+    # settings` here would skip __init__ entirely — silently accepting
+    # any config (including the broken-by-design fixture).
+    sys.modules.pop('settings', None)
     try:
         import settings
 
         yield (settings, settings.settings)
-        del sys.modules['settings']
     finally:
+        sys.modules.pop('settings', None)
         os.remove(CONFIG_FILE)
 
 
-def getenv(k, default=None):
+def getenv(k: str, default: Any = None) -> Any:
     try:
         return '/tmp' if k == 'HOME' else os.environ[k]
     except KeyError:
@@ -67,18 +73,19 @@ def getenv(k, default=None):
 
 
 class SettingsTest(TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         if not os.path.exists(CONFIG_DIR):
             os.mkdir(CONFIG_DIR)
-        self.orig_getenv = os.getenv
+        self._getenv_patcher = mock.patch.object(
+            os, 'getenv', side_effect=getenv
+        )
+        self._getenv_patcher.start()
 
-        os.getenv = getenv
-
-    def tearDown(self):
+    def tearDown(self) -> None:
         shutil.rmtree(CONFIG_DIR)
-        os.getenv = self.orig_getenv
+        self._getenv_patcher.stop()
 
-    def test_parse_settings(self):
+    def test_parse_settings(self) -> None:
         with fake_settings(settings1) as (mod_settings, settings):
             self.assertEqual(settings['player_name'], 'new player')
             self.assertEqual(settings['show_splash'], False)
@@ -86,7 +93,7 @@ class SettingsTest(TestCase):
             self.assertEqual(settings['debug_logging'], True)
             self.assertEqual(settings['default_duration'], 45)
 
-    def test_default_settings(self):
+    def test_default_settings(self) -> None:
         with fake_settings(empty_settings) as (mod_settings, settings):
             self.assertEqual(
                 settings['player_name'],
@@ -109,12 +116,12 @@ class SettingsTest(TestCase):
                 mod_settings.DEFAULTS['viewer']['default_duration'],
             )
 
-    def broken_settings_should_raise_value_error(self):
+    def test_broken_settings_should_raise_value_error(self) -> None:
         with self.assertRaises(ValueError):
             with fake_settings(broken_settings) as (mod_settings, settings):
                 pass
 
-    def test_save_settings(self):
+    def test_save_settings(self) -> None:
         with fake_settings(settings1) as (mod_settings, settings):
             settings.conf_file = CONFIG_DIR + '/new.conf'
             settings['default_duration'] = 35

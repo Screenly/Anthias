@@ -1,6 +1,7 @@
 import logging
 import subprocess
 import unittest
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from viewer.media_player import (
@@ -13,11 +14,13 @@ logging.disable(logging.CRITICAL)
 
 
 class TestMPVMediaPlayer(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.player = MPVMediaPlayer()
 
     @patch('viewer.media_player.subprocess.Popen')
-    def test_play_invokes_popen_with_expected_args(self, mock_popen):
+    def test_play_invokes_popen_with_expected_args(
+        self, mock_popen: Any
+    ) -> None:
         self.player.set_asset('file:///test/video.mp4', 30)
         self.player.play()
 
@@ -34,7 +37,9 @@ class TestMPVMediaPlayer(unittest.TestCase):
         )
 
     @patch('viewer.media_player.subprocess.Popen')
-    def test_is_playing_returns_true_when_process_running(self, mock_popen):
+    def test_is_playing_returns_true_when_process_running(
+        self, mock_popen: Any
+    ) -> None:
         mock_process = MagicMock()
         mock_process.poll.return_value = None
         mock_popen.return_value = mock_process
@@ -45,7 +50,9 @@ class TestMPVMediaPlayer(unittest.TestCase):
         self.assertTrue(self.player.is_playing())
 
     @patch('viewer.media_player.subprocess.Popen')
-    def test_is_playing_returns_false_when_process_finished(self, mock_popen):
+    def test_is_playing_returns_false_when_process_finished(
+        self, mock_popen: Any
+    ) -> None:
         mock_process = MagicMock()
         mock_process.poll.return_value = 0
         mock_popen.return_value = mock_process
@@ -55,11 +62,11 @@ class TestMPVMediaPlayer(unittest.TestCase):
 
         self.assertFalse(self.player.is_playing())
 
-    def test_is_playing_returns_false_when_no_process(self):
+    def test_is_playing_returns_false_when_no_process(self) -> None:
         self.assertFalse(self.player.is_playing())
 
     @patch('viewer.media_player.subprocess.Popen')
-    def test_stop_terminates_process(self, mock_popen):
+    def test_stop_terminates_process(self, mock_popen: Any) -> None:
         mock_process = MagicMock()
         mock_popen.return_value = mock_process
 
@@ -72,7 +79,7 @@ class TestMPVMediaPlayer(unittest.TestCase):
 
 
 class TestVLCMediaPlayer(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         with patch.object(VLCMediaPlayer, '__init__', return_value=None):
             self.player = VLCMediaPlayer()
 
@@ -90,11 +97,11 @@ class TestVLCMediaPlayer(unittest.TestCase):
         self.mock_settings.__getitem__.return_value = 'hdmi'
         self.patch_device_type.start()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.patch_settings.stop()
         self.patch_device_type.stop()
 
-    def test_set_asset_invokes_parse(self):
+    def test_set_asset_invokes_parse(self) -> None:
         self.player.set_asset('file:///test/video.mp4', 30)
 
         self.mock_vlc_player.get_media.assert_called_once()
@@ -102,13 +109,13 @@ class TestVLCMediaPlayer(unittest.TestCase):
 
 
 class TestMediaPlayerProxy(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         MediaPlayerProxy.INSTANCE = None
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         MediaPlayerProxy.INSTANCE = None
 
-    def test_get_instance_returns_vlc_for_pi_devices(self):
+    def test_get_instance_returns_vlc_for_pi_devices(self) -> None:
         for device_type in ['pi1', 'pi2', 'pi3', 'pi4']:
             with self.subTest(device_type=device_type):
                 MediaPlayerProxy.INSTANCE = None
@@ -122,7 +129,7 @@ class TestMediaPlayerProxy(unittest.TestCase):
                         instance = MediaPlayerProxy.get_instance()
                 self.assertIsInstance(instance, VLCMediaPlayer)
 
-    def test_get_instance_returns_mpv_for_pi5_and_x86(self):
+    def test_get_instance_returns_mpv_for_pi5_and_x86(self) -> None:
         for device_type in ['pi5', 'x86']:
             with self.subTest(device_type=device_type):
                 MediaPlayerProxy.INSTANCE = None
@@ -134,7 +141,7 @@ class TestMediaPlayerProxy(unittest.TestCase):
                 self.assertIsInstance(instance, MPVMediaPlayer)
 
     @patch('viewer.media_player.get_device_type', return_value='pi5')
-    def test_get_instance_returns_same_instance(self, _):
+    def test_get_instance_returns_same_instance(self, _: Any) -> None:
         instance1 = MediaPlayerProxy.get_instance()
         instance2 = MediaPlayerProxy.get_instance()
         self.assertIs(instance1, instance2)

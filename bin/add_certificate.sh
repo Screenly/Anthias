@@ -23,7 +23,7 @@ function main() {
     CONTAINERS=(anthias-server anthias-viewer)
     CERTIFICATE_FILENAME=$(basename $CERTIFICATE_PATH)
 
-    cd $HOME/screenly
+    cd $HOME/anthias
 
     for CONTAINER in "${CONTAINERS[@]}"; do
         docker compose exec -it $CONTAINER mkdir -p $CERTIFICATE_DIR

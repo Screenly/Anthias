@@ -1,0 +1,22 @@
+---
+- name: Check if /etc/timezone exists
+  ansible.builtin.stat:
+    path: /etc/timezone
+  register: system_etc_timezone
+
+- name: Resolve /etc/localtime symlink
+  ansible.builtin.command: readlink -f /etc/localtime
+  register: system_localtime_link
+  changed_when: false
+  when: not system_etc_timezone.stat.exists
+
+- name: Create /etc/timezone from /etc/localtime
+  ansible.builtin.copy:
+    content: "{{ system_localtime_link.stdout | regex_replace('.*/zoneinfo/', '') }}\n"
+    dest: /etc/timezone
+    owner: root
+    group: root
+    # /etc/timezone ships 0644 on Debian; many libc/locale paths expect
+    # it to be world-readable.
+    mode: "0644"  # NOSONAR
+  when: not system_etc_timezone.stat.exists

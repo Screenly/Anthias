@@ -1,0 +1,117 @@
+---
+- name: Ensure folders exist
+  ansible.builtin.file:
+    path: "/home/{{ anthias_user }}/{{ item }}"
+    state: directory
+    owner: "{{ anthias_user }}"
+    group: "{{ anthias_user }}"
+    mode: "0755"
+  with_items:
+    - .anthias
+    - .config
+    - anthias_assets
+
+- name: Create empty .asoundrc
+  ansible.builtin.file:
+    path: "/home/{{ anthias_user }}/.asoundrc"
+    state: touch
+    force: false
+    group: "{{ anthias_user }}"
+    owner: "{{ anthias_user }}"
+    mode: "0644"
+
+- name: Copy Anthias default assets file
+  ansible.builtin.copy:
+    owner: "{{ anthias_user }}"
+    group: "{{ anthias_user }}"
+    mode: "0644"
+    src: default_assets.yml
+    dest: "/home/{{ anthias_user }}/.anthias/default_assets.yml"
+    force: true
+
+- name: Remove deprecated parameter "listen"
+  ansible.builtin.lineinfile:
+    regexp: '^.*listen.*'
+    state: absent
+    dest: "/home/{{ anthias_user }}/.anthias/anthias.conf"
+
+# bin/install.sh installs uv into ~anthias/.local/bin/ before invoking
+# ansible-playbook. If someone runs the playbook standalone, uv won't
+# be there yet — fail with a clear message instead of an opaque
+# "command not found" deeper in the task.
+- name: Verify uv is installed for {{ anthias_user }}
+  ansible.builtin.stat:
+    path: "/home/{{ anthias_user }}/.local/bin/uv"
+  register: anthias_uv_bin
+
+- name: Assert uv is present
+  ansible.builtin.assert:
+    that:
+      - anthias_uv_bin.stat.exists
+      - anthias_uv_bin.stat.executable
+    fail_msg: >-
+      uv was not found at /home/{{ anthias_user }}/.local/bin/uv.
+      Run bin/install.sh, or install uv first via:
+      `curl -LsSf https://astral.sh/uv/install.sh | sh`
+      as the {{ anthias_user }} user.
+
+- name: Sync host pip dependencies via uv
+  ansible.builtin.command:
+    cmd: >-
+      /home/{{ anthias_user }}/.local/bin/uv sync
+        --no-default-groups
+        --group host
+        --no-install-project
+    chdir: "/home/{{ anthias_user }}/anthias"
+  environment:
+    UV_PROJECT_ENVIRONMENT: "/home/{{ anthias_user }}/installer_venv"
+  become: false
+  register: anthias_uv_sync
+  changed_when: "'Installed' in anthias_uv_sync.stderr or 'Updated' in anthias_uv_sync.stderr"
+
+# install.sh is the single source of truth for both fresh installs and
+# upgrades. We re-download it from the same ref the user is installing
+# (anthias_branch) so a tag-pinned install gets the matching upgrade
+# script, not master's. No checksum is pinned because the URL is
+# expected to move with the ref; integrity is bounded by HTTPS to
+# githubusercontent. If we ever ship signed release assets, switch
+# to fetching the signed asset by tag.
+- name: Install upgrade_anthias.sh from the configured branch
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/Screenly/Anthias/{{ anthias_branch }}/bin/install.sh"
+    dest: /usr/local/sbin/upgrade_anthias.sh
+    mode: "0700"
+    owner: root
+    group: root
+    force: true
+
+- name: Remove legacy sudoers file
+  ansible.builtin.file:
+    path: /etc/sudoers.d/screenly_overrides
+    state: absent
+
+- name: Install sudoers rule for Anthias user
+  ansible.builtin.template:
+    src: anthias_overrides.j2
+    dest: /etc/sudoers.d/anthias_overrides
+    mode: "0440"
+    owner: root
+    group: root
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Install Anthias systemd units
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+    owner: root
+    group: root
+  with_items: "{{ anthias_systemd_units }}"
+
+- name: Enable Anthias systemd services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  with_items: "{{ anthias_systemd_units }}"

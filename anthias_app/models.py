@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import datetime
 
 from django.db import models
 from django.utils import timezone
@@ -8,11 +9,11 @@ from django.utils import timezone
 ALL_DAYS = [1, 2, 3, 4, 5, 6, 7]
 
 
-def generate_asset_id():
+def generate_asset_id() -> str:
     return uuid.uuid4().hex
 
 
-def _default_play_days():
+def _default_play_days() -> str:
     return json.dumps(ALL_DAYS)
 
 
@@ -39,10 +40,10 @@ class Asset(models.Model):
     class Meta:
         db_table = 'assets'
 
-    def __str__(self):
-        return self.name
+    def __str__(self) -> str:
+        return str(self.name)
 
-    def get_play_days(self):
+    def get_play_days(self) -> list[int]:
         """Parse play_days into a list of ints 1-7.
 
         Falls back to all days if the value is missing, malformed JSON,
@@ -64,13 +65,13 @@ class Asset(models.Model):
             return list(ALL_DAYS)
         return value
 
-    def has_window_filter(self):
+    def has_window_filter(self) -> bool:
         """True if this asset has any day-of-week or time-of-day filter set."""
         if self.play_time_from is not None or self.play_time_to is not None:
             return True
         return self.get_play_days() != ALL_DAYS
 
-    def is_active(self):
+    def is_active(self) -> bool:
         if not (self.is_enabled and self.start_date and self.end_date):
             return False
         now = timezone.now()
@@ -78,7 +79,7 @@ class Asset(models.Model):
             return False
         return self._matches_play_window(timezone.localtime(now))
 
-    def _matches_play_window(self, now_local):
+    def _matches_play_window(self, now_local: datetime) -> bool:
         """Day-of-week and time-of-day filter, evaluated in local time.
 
         Overnight windows (play_time_from > play_time_to) wrap past

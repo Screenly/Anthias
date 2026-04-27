@@ -1,7 +1,9 @@
 import json
+from datetime import timezone
+from typing import Any
 
-from django.utils import timezone
-from drf_spectacular.utils import OpenApiTypes, extend_schema_field
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework.serializers import (
     BooleanField,
@@ -21,7 +23,7 @@ from api.serializers import UpdateAssetSerializer
 from api.serializers.mixins import CreateAssetSerializerMixin
 
 
-def _normalise_play_days(value):
+def _normalise_play_days(value: Any) -> str:
     """Coerce a list-or-JSON-string of weekdays into a sorted, deduped
     JSON string ready for the TextField column. Raises ValidationError
     for shapes outside [1..7] or for an empty selection.
@@ -54,7 +56,10 @@ def _normalise_play_days(value):
     return json.dumps(deduped)
 
 
-def _validate_time_window(attrs, instance=None):
+def _validate_time_window(
+    attrs: dict[str, Any],
+    instance: Asset | None = None,
+) -> dict[str, Any]:
     """Both play_time_from and play_time_to must be set, or neither.
 
     The model treats either side being null as "no time-of-day filter",
@@ -63,7 +68,7 @@ def _validate_time_window(attrs, instance=None):
     PATCHes that touch only one field still see the merged result.
     """
 
-    def resolve(field):
+    def resolve(field: str) -> Any:
         if field in attrs:
             return attrs[field]
         if instance is not None:
@@ -83,16 +88,16 @@ def _validate_time_window(attrs, instance=None):
     return attrs
 
 
-class AssetSerializerV2(ModelSerializer, CreateAssetSerializerMixin):
+class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
     is_active = SerializerMethodField()
     play_days = SerializerMethodField()
 
     @extend_schema_field(OpenApiTypes.BOOL)
-    def get_is_active(self, obj):
+    def get_is_active(self, obj: Asset) -> bool:
         return obj.is_active()
 
     @extend_schema_field({'type': 'array', 'items': {'type': 'integer'}})
-    def get_play_days(self, obj):
+    def get_play_days(self, obj: Asset) -> list[int]:
         return obj.get_play_days()
 
     class Meta:
@@ -117,8 +122,15 @@ class AssetSerializerV2(ModelSerializer, CreateAssetSerializerMixin):
         ]
 
 
-class CreateAssetSerializerV2(Serializer, CreateAssetSerializerMixin):
-    def __init__(self, *args, unique_name=False, **kwargs):
+class CreateAssetSerializerV2(
+    Serializer[dict[str, Any]], CreateAssetSerializerMixin
+):
+    def __init__(
+        self,
+        *args: Any,
+        unique_name: bool = False,
+        **kwargs: Any,
+    ) -> None:
         self.unique_name = unique_name
         super().__init__(*args, **kwargs)
 
@@ -142,10 +154,10 @@ class CreateAssetSerializerV2(Serializer, CreateAssetSerializerMixin):
     play_time_from = TimeField(required=False, allow_null=True)
     play_time_to = TimeField(required=False, allow_null=True)
 
-    def validate_play_days(self, value):
+    def validate_play_days(self, value: Any) -> str:
         return _normalise_play_days(value)
 
-    def validate(self, data):
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         _validate_time_window(data)
         return self.prepare_asset(data, version='v2')
 
@@ -163,13 +175,15 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
     play_time_from = TimeField(required=False, allow_null=True)
     play_time_to = TimeField(required=False, allow_null=True)
 
-    def validate_play_days(self, value):
+    def validate_play_days(self, value: Any) -> str:
         return _normalise_play_days(value)
 
-    def validate(self, data):
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         return _validate_time_window(data, instance=self.instance)
 
-    def update(self, instance, validated_data):
+    def update(
+        self, instance: Asset, validated_data: dict[str, Any]
+    ) -> Asset:
         instance = super().update(instance, validated_data)
         for field in ('play_days', 'play_time_from', 'play_time_to'):
             if field in validated_data:
@@ -178,7 +192,7 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
         return instance
 
 
-class DeviceSettingsSerializerV2(Serializer):
+class DeviceSettingsSerializerV2(Serializer[Any]):
     player_name = CharField()
     audio_output = CharField()
     default_duration = IntegerField()
@@ -193,7 +207,7 @@ class DeviceSettingsSerializerV2(Serializer):
     username = CharField()
 
 
-class UpdateDeviceSettingsSerializerV2(Serializer):
+class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
     player_name = CharField(required=False, allow_blank=True)
     audio_output = CharField(required=False)
     default_duration = IntegerField(required=False)
@@ -218,7 +232,7 @@ class UpdateDeviceSettingsSerializerV2(Serializer):
     current_password = CharField(required=False, allow_blank=True)
 
 
-class IntegrationsSerializerV2(Serializer):
+class IntegrationsSerializerV2(Serializer[Any]):
     is_balena = BooleanField()
     balena_device_id = CharField(required=False, allow_null=True)
     balena_app_id = CharField(required=False, allow_null=True)

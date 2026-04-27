@@ -3,6 +3,14 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 # -*- sh-basic-offset: 4 -*-
 
+# Rename legacy ~/screenly, ~/.screenly, ~/screenly_assets paths to
+# their anthias equivalents. The helper self-relocates and re-execs
+# from /tmp if it lives inside the dir being renamed, so this also
+# handles the case where the running script's path was ~/screenly/...
+# Idempotent / no-op on fresh installs and post-migration runs.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+"${SCRIPT_DIR}/migrate_legacy_paths.sh"
+
 # Export various environment variables
 export MY_IP=$(ip -4 route get 8.8.8.8 | awk {'print $7'} | tr -d '\n')
 TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk {'print $2'})
@@ -63,28 +71,38 @@ if [[ -n $(docker ps | grep srly-ose) ]]; then
     docker container rename srly-ose-server anthias-server
     docker container rename srly-ose-viewer anthias-viewer
     docker container rename srly-ose-celery anthias-celery
-    docker container rename srly-ose-websocket anthias-websocket
-    docker container rename srly-ose-nginx anthias-nginx
     set -e
 fi
 
-cat /home/${USER}/screenly/docker-compose.yml.tmpl \
+# Drop legacy nginx + websocket containers — they were folded into
+# anthias-server (uvicorn) and are no longer in the compose file. Volumes
+# are shared across services, so removing the containers is safe.
+set +e
+docker rm -f \
+    anthias-nginx anthias-websocket \
+    srly-ose-nginx srly-ose-websocket \
+    >/dev/null 2>&1
+set -e
+
+cat /home/${USER}/anthias/docker-compose.yml.tmpl \
     | envsubst \
-    > /home/${USER}/screenly/docker-compose.yml
+    > /home/${USER}/anthias/docker-compose.yml
 
 if [[ "$DEVICE_TYPE" =~ ^(x86|pi5)$ ]]; then
     sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
-        /home/${USER}/screenly/docker-compose.yml
+        /home/${USER}/anthias/docker-compose.yml
 fi
 
-sudo -E docker compose \
-    -f /home/${USER}/screenly/docker-compose.yml \
-    ${MODE}
+COMPOSE_FILES=(-f /home/${USER}/anthias/docker-compose.yml)
+SSL_OVERRIDE=/home/${USER}/anthias/docker-compose.ssl.override.yml
+if [[ -f "$SSL_OVERRIDE" ]]; then
+    COMPOSE_FILES+=(-f "$SSL_OVERRIDE")
+fi
+
+sudo -E docker compose "${COMPOSE_FILES[@]}" ${MODE}
 
 if [ -f /var/run/reboot-required ]; then
     exit 0
 fi
 
-sudo -E docker compose \
-    -f /home/${USER}/screenly/docker-compose.yml \
-    up -d
+sudo -E docker compose "${COMPOSE_FILES[@]}" up -d

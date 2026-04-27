@@ -1,5 +1,23 @@
 {% if environment == 'production' %}
-FROM oven/bun:1.3.13-slim AS bun-builder
+{# bun ships no 32-bit binaries at all — its release artifacts cover
+   only {linux,darwin,windows}-{x64,aarch64}, so a target-platform
+   build (linux/arm/v6/v7/v8 for pi1/2/3 and pi4-32) can't pull this
+   image when bun-builder inherits the target platform. Pin the stage
+   to $BUILDPLATFORM so it always runs on the build host instead: bun
+   is only used here to compile JS/CSS into the platform-independent
+   /app/static/dist/ that the next stage COPYs in, so the host
+   architecture doesn't matter. This also avoids a slow QEMU-emulated
+   `bun run build` on arm64 hosts.
+
+   Implication: building production images for 32-bit ARM requires an
+   amd64 or arm64 builder, which is what CI uses. The constraint is
+   bun itself, not Docker — there's no 32-bit bun binary to fall back
+   to even outside of Docker, so building this image on a pi3 was
+   never going to work. If device-local builds ever become a hard
+   requirement we'd need to either drop bun (e.g. back to Node, which
+   still ships armv7 binaries) or check `static/dist/` into the
+   image / a cache and skip this stage entirely. #}
+FROM --platform=$BUILDPLATFORM oven/bun:1.3.13-slim AS bun-builder
 
 RUN mkdir -p /app
 WORKDIR /app

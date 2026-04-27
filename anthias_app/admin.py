@@ -4,7 +4,7 @@ from anthias_app.models import Asset
 
 
 @admin.register(Asset)
-class AssetAdmin(admin.ModelAdmin):
+class AssetAdmin(admin.ModelAdmin[Asset]):
     list_display = (
         'asset_id',
         'name',

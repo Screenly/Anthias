@@ -1,14 +1,15 @@
-import hashlib
 import ipaddress
 import logging
 from datetime import timedelta
 from os import getenv, statvfs
 from platform import machine
+from typing import Any
 
 import psutil
 from drf_spectacular.utils import extend_schema
 from hurry.filesize import size
 from rest_framework import status
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -19,6 +20,7 @@ from api.helpers import (
     get_active_asset_ids,
     save_active_assets_ordering,
 )
+from lib.auth import hash_password
 from api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
@@ -60,7 +62,7 @@ class AssetListViewV2(APIView):
         summary='List assets', responses={200: AssetSerializerV2(many=True)}
     )
     @authorized
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         queryset = Asset.objects.all()
         serializer = AssetSerializerV2(queryset, many=True)
         return Response(serializer.data)
@@ -71,7 +73,7 @@ class AssetListViewV2(APIView):
         responses={201: AssetSerializerV2},
     )
     @authorized
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         try:
             serializer = CreateAssetSerializerV2(
                 data=request.data, unique_name=True
@@ -103,12 +105,17 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
 
     @extend_schema(summary='Get asset')
     @authorized
-    def get(self, request, asset_id):
+    def get(self, request: Request, asset_id: str) -> Response:
         asset = Asset.objects.get(asset_id=asset_id)
         serializer = self.serializer_class(asset)
         return Response(serializer.data)
 
-    def update(self, request, asset_id, partial=False):
+    def update(
+        self,
+        request: Request,
+        asset_id: str,
+        partial: bool = False,
+    ) -> Response:
         asset = Asset.objects.get(asset_id=asset_id)
         serializer = UpdateAssetSerializerV2(
             asset, data=request.data, partial=partial
@@ -144,7 +151,7 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
         responses={200: AssetSerializerV2},
     )
     @authorized
-    def patch(self, request, asset_id):
+    def patch(self, request: Request, asset_id: str) -> Response:
         return self.update(request, asset_id, partial=True)
 
     @extend_schema(
@@ -153,7 +160,7 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
         responses={200: AssetSerializerV2},
     )
     @authorized
-    def put(self, request, asset_id):
+    def put(self, request: Request, asset_id: str) -> Response:
         return self.update(request, asset_id, partial=False)
 
 
@@ -195,7 +202,7 @@ class DeviceSettingsViewV2(APIView):
         responses={200: DeviceSettingsSerializerV2},
     )
     @authorized
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         try:
             # Force reload of settings
             settings.load()
@@ -226,7 +233,12 @@ class DeviceSettingsViewV2(APIView):
             }
         )
 
-    def update_auth_settings(self, data, auth_backend, current_pass_correct):
+    def update_auth_settings(
+        self,
+        data: dict[str, Any],
+        auth_backend: str,
+        current_pass_correct: bool | None,
+    ) -> None:
         if auth_backend == '':
             return
 
@@ -234,10 +246,8 @@ class DeviceSettingsViewV2(APIView):
             return
 
         new_user = data.get('username', '')
-        new_pass = data.get('password', '').encode('utf-8')
-        new_pass2 = data.get('password_2', '').encode('utf-8')
-        new_pass = hashlib.sha256(new_pass).hexdigest() if new_pass else None
-        new_pass2 = hashlib.sha256(new_pass2).hexdigest() if new_pass else None
+        new_pass = data.get('password', '')
+        new_pass2 = data.get('password_2', '')
 
         if settings['password']:
             if new_user != settings['user']:
@@ -261,7 +271,7 @@ class DeviceSettingsViewV2(APIView):
                 if new_pass2 != new_pass:
                     raise ValueError('New passwords do not match!')
 
-                settings['password'] = new_pass
+                settings['password'] = hash_password(new_pass)
 
         else:
             if new_user:
@@ -270,7 +280,7 @@ class DeviceSettingsViewV2(APIView):
                 if not new_pass:
                     raise ValueError('Must provide password')
                 settings['user'] = new_user
-                settings['password'] = new_pass
+                settings['password'] = hash_password(new_pass)
             else:
                 raise ValueError('Must provide username')
 
@@ -289,7 +299,7 @@ class DeviceSettingsViewV2(APIView):
         },
     )
     @authorized
-    def patch(self, request):
+    def patch(self, request: Request) -> Response:
         try:
             serializer = UpdateDeviceSettingsSerializerV2(data=request.data)
             if not serializer.is_valid():
@@ -310,7 +320,9 @@ class DeviceSettingsViewV2(APIView):
                         'Must supply current password to change '
                         'authentication method'
                     )
-                if not settings.auth.check_password(current_password):
+                if settings.auth is None or not settings.auth.check_password(
+                    current_password
+                ):
                     raise ValueError('Incorrect current password.')
 
             prev_auth_backend = settings['auth_backend']
@@ -368,7 +380,7 @@ class DeviceSettingsViewV2(APIView):
 
 
 class InfoViewV2(InfoViewMixin):
-    def get_anthias_version(self):
+    def get_anthias_version(self) -> str:
         git_branch = diagnostics.get_git_branch()
         git_short_hash = diagnostics.get_git_short_hash()
 
@@ -377,7 +389,7 @@ class InfoViewV2(InfoViewMixin):
             git_short_hash,
         )
 
-    def get_device_model(self):
+    def get_device_model(self) -> str | int | None:
         device_model = device_helper.parse_cpu_info().get('model')
 
         if device_model is None and machine() == 'x86_64':
@@ -385,14 +397,14 @@ class InfoViewV2(InfoViewMixin):
 
         return device_model
 
-    def get_uptime(self):
+    def get_uptime(self) -> dict[str, int | float]:
         system_uptime = timedelta(seconds=diagnostics.get_uptime())
         return {
             'days': system_uptime.days,
             'hours': round(system_uptime.seconds / 3600, 2),
         }
 
-    def get_memory(self):
+    def get_memory(self) -> dict[str, int]:
         virtual_memory = psutil.virtual_memory()
         return {
             'total': virtual_memory.total >> 20,
@@ -403,7 +415,7 @@ class InfoViewV2(InfoViewMixin):
             'available': virtual_memory.available >> 20,
         }
 
-    def get_ip_addresses(self):
+    def get_ip_addresses(self) -> list[str]:
         ip_addresses = []
         node_ip = get_node_ip()
 
@@ -462,7 +474,7 @@ class InfoViewV2(InfoViewMixin):
         },
     )
     @authorized
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         viewlog = 'Not yet implemented'
 
         # Calculate disk space
@@ -496,8 +508,8 @@ class IntegrationsViewV2(APIView):
         responses={200: IntegrationsSerializerV2},
     )
     @authorized
-    def get(self, request):
-        data = {
+    def get(self, request: Request) -> Response:
+        data: dict[str, Any] = {
             'is_balena': is_balena_app(),
         }
 

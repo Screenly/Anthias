@@ -1,18 +1,60 @@
-from __future__ import unicode_literals
-
 import logging
+import os
 import sys
 import tarfile
 from datetime import datetime
 from os import getenv, makedirs, path, remove
+from typing import Any
 
-directories = ['.screenly', 'screenly_assets']
+directories = ['.anthias', 'anthias_assets']
+# Tarballs created by older releases used these top-level entry names.
+# Recognise them so users can still restore pre-rename backups.
+legacy_directories = ['.screenly', 'screenly_assets']
+allowed_top_level = set(directories) | set(legacy_directories)
 default_archive_name = 'anthias-backup'
-static_dir = 'screenly/staticfiles'
+static_dir = 'anthias/staticfiles'
 
 
-def create_backup(name=default_archive_name):
-    home = getenv('HOME')
+def _safe_tar_member(member: tarfile.TarInfo, dest_root: str) -> bool:
+    """Validate a TarInfo for safe extraction under dest_root.
+
+    Reject:
+      - absolute paths (drive-letter or starts-with-/)
+      - any '..' path component (parent traversal)
+      - links and special files (symlinks, hardlinks, devices, FIFOs)
+      - members that resolve outside dest_root after normalisation
+      - members not under one of our expected top-level directories
+
+    Returning False from here causes the extractor to skip the member
+    rather than raise — partial recovery is preferable to bailing out
+    on the first weird entry, but the calling code logs a warning so
+    silent skips are visible.
+    """
+    name = member.name
+    if not name or name.startswith('/') or os.path.isabs(name):
+        return False
+    parts = name.replace('\\', '/').split('/')
+    if any(p in ('', '..') for p in parts):
+        return False
+    if parts[0] not in allowed_top_level:
+        return False
+    if not (member.isfile() or member.isdir()):
+        return False
+    # Final defence: resolve the destination path and confirm it stays
+    # under dest_root. Catches any normalisation gap above.
+    target = path.realpath(path.join(dest_root, name))
+    root = path.realpath(dest_root)
+    if not (target == root or target.startswith(root + os.sep)):
+        return False
+    return True
+
+
+class BackupRecoverError(Exception):
+    """Raised when a backup archive cannot be safely recovered."""
+
+
+def create_backup(name: str = default_archive_name) -> str:
+    home = getenv('HOME') or ''
     archive_name = '{}-{}.tar.gz'.format(
         name if name else default_archive_name,
         datetime.now().strftime('%Y-%m-%dT%H-%M-%S'),
@@ -37,7 +79,7 @@ def create_backup(name=default_archive_name):
     return archive_name
 
 
-def recover(file_path):
+def recover(file_path: str) -> None:
     home = getenv('HOME')
     if not home:
         logging.error('No HOME variable')
@@ -46,10 +88,29 @@ def recover(file_path):
         sys.exit(1)
 
     with tarfile.open(file_path, 'r:gz') as tar:
-        for directory in directories:
-            if directory not in tar.getnames():
-                raise Exception('Archive is wrong.')
+        names = tar.getnames()
+        new_present = all(d in names for d in directories)
+        legacy_present = all(d in names for d in legacy_directories)
+        if not new_present and not legacy_present:
+            raise BackupRecoverError('Archive is wrong.')
 
-        tar.extractall(path=getenv('HOME'))
+        # Manually iterate so each member is validated before any
+        # filesystem write. Avoids tarfile.extractall's older
+        # path-traversal vulnerabilities (Zip Slip / CVE-2007-4559).
+        # If running on Python with PEP-706 extraction filters
+        # (3.11.4+/3.12+), pass `filter='data'` for belt-and-suspenders
+        # protection; older interpreters fall back to our own
+        # validation only.
+        extract_kwargs: dict[str, Any] = {'path': home}
+        if hasattr(tarfile, 'data_filter'):
+            extract_kwargs['filter'] = 'data'
+        for member in tar.getmembers():
+            if not _safe_tar_member(member, home):
+                logging.warning(
+                    'Skipping unsafe tar member during recover: %r',
+                    member.name,
+                )
+                continue
+            tar.extract(member, **extract_kwargs)
 
     remove(file_path)

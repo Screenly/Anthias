@@ -1,14 +1,5 @@
 ---
-- name: Check if screenly-network-manager files exist
-  ansible.builtin.stat:
-    path: /usr/sbin/screenly_net_mgr.py
-  register: screenly_network_manager
-
-- name: Check if screenly-network-manager is set
-  ansible.builtin.set_fact:
-    screenly_network_manager_exist: "{{ screenly_network_manager.stat.exists }}"
-
-- name: Copy network systemd units
+- name: Install network systemd units
   ansible.builtin.template:
     src: "{{ item }}"
     dest: "/etc/systemd/system/{{ item }}"
@@ -22,42 +13,8 @@
     name: "{{ item }}"
     state: started
     enabled: true
+    daemon_reload: true
   with_items: "{{ network_systemd_units }}"
-
-- name: Disable network manager
-  ansible.builtin.systemd:
-    state: stopped
-    name: screenly-net-manager.service
-    enabled: false
-  when: screenly_network_manager_exist
-
-- name: Disable network watchdog
-  ansible.builtin.systemd:
-    state: stopped
-    name: screenly-net-watchdog.timer
-    enabled: false
-  when: screenly_network_manager_exist
-
-- name: Remove network manager and watchdog
-  ansible.builtin.file:
-    state: absent
-    path: "/usr/sbin/{{ item }}"
-  with_items:
-    - screenly_net_mgr.py
-    - screenly_net_watchdog.py
-
-- name: Remove network manager and watchdog unit files
-  ansible.builtin.file:
-    state: absent
-    path: "/etc/systemd/system/{{ item }}"
-  with_items:
-    - screenly-net-manager.service
-    - screenly-net-watchdog.service
-
-- name: Remove network watchdog timer file
-  ansible.builtin.file:
-    state: absent
-    path: /etc/systemd/system/screenly-net-watchdog.timer
 
 - name: Debug msg for manage network
   ansible.builtin.debug:
@@ -66,7 +23,7 @@
 - name: Add current user to Identity
   ansible.builtin.replace:
     regexp: '^Identity=.*'
-    replace: "Identity=unix-group:netdev;unix-group:sudo:{{ lookup('env', 'USER') }}"
+    replace: "Identity=unix-group:netdev;unix-group:sudo:{{ anthias_user }}"
     dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
   when:
     - manage_network|bool
@@ -84,7 +41,7 @@
 - name: Get stat of org.freedesktop.NetworkManager.pkla
   ansible.builtin.stat:
     path: /etc/polkit-1/localauthority/50-local.d/org.freedesktop.NetworkManager.pkla
-  register: nm_pkla_path
+  register: network_pkla_stat
 
 - name: Copy org.freedesktop.NetworkManager.pkla to 50-local.d
   ansible.builtin.shell: |
@@ -94,7 +51,7 @@
   when:
     - manage_network|bool
     - ansible_distribution_major_version|int <= 12
-  changed_when: not nm_pkla_path.stat.exists
+  changed_when: not network_pkla_stat.stat.exists
 
 - name: Create polkit rules for NetworkManager (Trixie+)
   ansible.builtin.copy:
@@ -106,13 +63,20 @@
       polkit.addRule(function(action, subject) {
           if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0 &&
               (subject.isInGroup("netdev") || subject.isInGroup("sudo") ||
-               subject.user === "{{ lookup('env', 'USER') }}")) {
+               subject.user === "{{ anthias_user }}")) {
               return polkit.Result.YES;
           }
       });
   when:
     - manage_network|bool
     - ansible_distribution_major_version|int >= 13
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+  when:
+    - ansible_distribution_major_version|int >= 9
+    - ansible_distribution_major_version|int <= 11
+    - manage_network|bool
 
 - name: Disable dhcpcd
   ansible.builtin.systemd:
@@ -123,6 +87,7 @@
     - ansible_distribution_major_version|int >= 9
     - ansible_distribution_major_version|int <= 11
     - manage_network|bool
+    - "'dhcpcd.service' in ansible_facts.services"
 
 - name: Activate NetworkManager
   ansible.builtin.systemd:

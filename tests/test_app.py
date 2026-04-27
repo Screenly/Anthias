@@ -3,6 +3,8 @@ import shutil
 import tempfile
 from datetime import timedelta
 from time import sleep
+from types import TracebackType
+from typing import Any, Callable
 from unittest import TestCase, skip
 
 from django.test import tag
@@ -47,22 +49,27 @@ asset_y = {
 }
 
 
-class TemporaryCopy(object):
-    def __init__(self, original_path, base_path):
+class TemporaryCopy:
+    def __init__(self, original_path: str, base_path: str) -> None:
         self.original_path = original_path
         self.base_path = base_path
 
-    def __enter__(self):
+    def __enter__(self) -> str:
         temp_dir = tempfile.gettempdir()
         self.path = os.path.join(temp_dir, self.base_path)
         shutil.copy2(self.original_path, self.path)
         return self.path
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         os.remove(self.path)
 
 
-def get_browser():
+def get_browser() -> Any:
     chrome_options = webdriver.ChromeOptions()
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--headless')
@@ -71,7 +78,11 @@ def get_browser():
     return Browser('chrome', headless=True, options=chrome_options)
 
 
-def wait_for_and_do(browser, query, callback):
+def wait_for_and_do(
+    browser: Any,
+    query: str,
+    callback: Callable[[Any], Any],
+) -> None:
     not_filled = True
     n = 0
 
@@ -87,11 +98,11 @@ def wait_for_and_do(browser, query, callback):
 
 @tag('integration')
 class WebTest(TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         Asset.objects.all().delete()
 
     @skip('fixme')
-    def test_add_asset_url(self):
+    def test_add_asset_url(self) -> None:
         with get_browser() as browser:
             browser.visit(main_page_url)
 
@@ -116,6 +127,7 @@ class WebTest(TestCase):
         assets = Asset.objects.all()
         self.assertEqual(len(assets), 1)
         asset = assets.first()
+        assert asset is not None
 
         self.assertEqual(asset.name, 'https://example.com')
         self.assertEqual(asset.uri, 'https://example.com')
@@ -123,8 +135,8 @@ class WebTest(TestCase):
         self.assertEqual(asset.duration, settings['default_duration'])
 
     @skip('migrate to React-based tests')
-    def test_edit_asset(self):
-        asset = Asset.objects.create(**asset_x)
+    def test_edit_asset(self) -> None:
+        Asset.objects.create(**asset_x)
 
         with get_browser() as browser:
             browser.visit(main_page_url)
@@ -153,10 +165,11 @@ class WebTest(TestCase):
         assets = Asset.objects.all()
         self.assertEqual(len(assets), 1)
         asset = assets.first()
+        assert asset is not None
 
         self.assertEqual(asset.duration, 333)
 
-    def test_add_asset_image_upload(self):
+    def test_add_asset_image_upload(self) -> None:
         image_file = '/tmp/image.png'
 
         with get_browser() as browser:
@@ -180,12 +193,13 @@ class WebTest(TestCase):
         assets = Asset.objects.all()
         self.assertEqual(len(assets), 1)
         asset = assets.first()
+        assert asset is not None
 
         self.assertEqual(asset.name, 'image.png')
         self.assertEqual(asset.mimetype, 'image')
         self.assertEqual(asset.duration, settings['default_duration'])
 
-    def test_add_asset_video_upload(self):
+    def test_add_asset_video_upload(self) -> None:
         with TemporaryCopy(
             'tests/assets/asset.mov', 'video.mov'
         ) as video_file:
@@ -212,12 +226,13 @@ class WebTest(TestCase):
             assets = Asset.objects.all()
             self.assertEqual(len(assets), 1)
             asset = assets.first()
+            assert asset is not None
 
             self.assertEqual(asset.name, 'video.mov')
             self.assertEqual(asset.mimetype, 'video')
             self.assertEqual(asset.duration, 5)
 
-    def test_add_two_assets_upload(self):
+    def test_add_two_assets_upload(self) -> None:
         with (
             TemporaryCopy('tests/assets/asset.mov', 'video.mov') as video_file,
             TemporaryCopy(
@@ -261,7 +276,7 @@ class WebTest(TestCase):
             self.assertEqual(assets[1].duration, 5)
 
     @skip('fixme')
-    def test_add_asset_streaming(self):
+    def test_add_asset_streaming(self) -> None:
         with get_browser() as browser:
             browser.visit(main_page_url)
 
@@ -286,6 +301,7 @@ class WebTest(TestCase):
         assets = Asset.objects.all()
         self.assertEqual(len(assets), 1)
         asset = assets.first()
+        assert asset is not None
 
         self.assertEqual(asset.name, 'rtsp://localhost:8091/asset.mov')
         self.assertEqual(asset.uri, 'rtsp://localhost:8091/asset.mov')
@@ -295,7 +311,7 @@ class WebTest(TestCase):
         )
 
     @skip('migrate to React-based tests')
-    def test_remove_asset(self):
+    def test_remove_asset(self) -> None:
         Asset.objects.create(**asset_x)
 
         with get_browser() as browser:
@@ -311,7 +327,7 @@ class WebTest(TestCase):
 
         self.assertEqual(Asset.objects.count(), 0)
 
-    def test_enable_asset(self):
+    def test_enable_asset(self) -> None:
         Asset.objects.create(**asset_x)
 
         with get_browser() as browser:
@@ -348,9 +364,10 @@ class WebTest(TestCase):
         self.assertEqual(len(assets), 1)
 
         asset = assets.first()
+        assert asset is not None
         self.assertEqual(asset.is_enabled, True)
 
-    def test_disable_asset(self):
+    def test_disable_asset(self) -> None:
         # Clear any existing assets first
         Asset.objects.all().delete()
 
@@ -390,10 +407,11 @@ class WebTest(TestCase):
         self.assertEqual(len(assets), 1)
 
         asset = assets.first()
+        assert asset is not None
         self.assertEqual(asset.is_enabled, False)
 
     @skip('migrate to React-based tests')
-    def test_reorder_asset(self):
+    def test_reorder_asset(self) -> None:
         Asset.objects.create(**{**asset_x, 'is_enabled': 1})
         Asset.objects.create(**asset_y)
 
@@ -413,7 +431,7 @@ class WebTest(TestCase):
         self.assertEqual(x.play_order, 0)
         self.assertEqual(y.play_order, 1)
 
-    def test_settings_page_should_work(self):
+    def test_settings_page_should_work(self) -> None:
         with get_browser() as browser:
             browser.visit(settings_url)
 
@@ -427,7 +445,7 @@ class WebTest(TestCase):
                 '5xx: not expected',
             )
 
-    def test_system_info_page_should_work(self):
+    def test_system_info_page_should_work(self) -> None:
         with get_browser() as browser:
             browser.visit(system_info_url)
             self.assertEqual(

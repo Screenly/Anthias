@@ -1,12 +1,9 @@
-from __future__ import absolute_import, unicode_literals
-
 import json
 import logging
 import os
 import random
 import re
 import string
-from builtins import range, str
 from datetime import datetime, timedelta
 from distutils.util import strtobool
 from os import getenv, path, utime
@@ -14,6 +11,7 @@ from platform import machine
 from subprocess import call, check_output
 from threading import Thread
 from time import sleep
+from typing import Any
 from urllib.parse import urlparse
 
 import certifi
@@ -21,7 +19,6 @@ import pytz
 import redis
 import requests
 import sh
-from future import standard_library
 from tenacity import (
     RetryError,
     Retrying,
@@ -30,39 +27,28 @@ from tenacity import (
 )
 
 from anthias_app.models import Asset
-from settings import ZmqPublisher, settings
-
-standard_library.install_aliases()
-
+from settings import settings
 
 arch = machine()
 
-# This will only work on the Raspberry Pi,
-# so let's wrap it in a try/except so that
-# Travis can run.
-try:
-    from sh import ffprobe
-except ImportError:
-    pass
 
-
-def string_to_bool(string):
+def string_to_bool(string: Any) -> bool:
     return bool(strtobool(str(string)))
 
 
-def touch(path):
+def touch(path: str) -> None:
     with open(path, 'a'):
         utime(path, None)
 
 
-def is_ci():
+def is_ci() -> bool:
     """
     Returns True when run on CI.
     """
     return string_to_bool(os.getenv('CI', False))
 
 
-def validate_url(string):
+def validate_url(string: str) -> bool:
     """Simple URL verification.
     >>> validate_url("hello")
     False
@@ -82,9 +68,13 @@ def validate_url(string):
     )
 
 
-def get_balena_supervisor_api_response(method, action, **kwargs):
+def get_balena_supervisor_api_response(
+    method: str,
+    action: str,
+    **kwargs: Any,
+) -> requests.Response:
     version = kwargs.get('version', 'v1')
-    return getattr(requests, method)(
+    response: requests.Response = getattr(requests, method)(
         '{}/{}/{}?apikey={}'.format(
             os.getenv('BALENA_SUPERVISOR_ADDRESS'),
             version,
@@ -93,31 +83,32 @@ def get_balena_supervisor_api_response(method, action, **kwargs):
         ),
         headers={'Content-Type': 'application/json'},
     )
+    return response
 
 
-def get_balena_device_info():
+def get_balena_device_info() -> requests.Response:
     return get_balena_supervisor_api_response(method='get', action='device')
 
 
-def shutdown_via_balena_supervisor():
+def shutdown_via_balena_supervisor() -> requests.Response:
     return get_balena_supervisor_api_response(method='post', action='shutdown')
 
 
-def reboot_via_balena_supervisor():
+def reboot_via_balena_supervisor() -> requests.Response:
     return get_balena_supervisor_api_response(method='post', action='reboot')
 
 
-def get_balena_supervisor_version():
+def get_balena_supervisor_version() -> str:
     response = get_balena_supervisor_api_response(
         method='get', action='version', version='v2'
     )
     if response.ok:
-        return response.json()['version']
+        return str(response.json()['version'])
     else:
         return 'Error getting the Supervisor version'
 
 
-def get_node_ip():
+def get_node_ip() -> str:
     """
     Returns the node's IP address.
     We're using an API call to the supervisor for this on Balena
@@ -129,7 +120,7 @@ def get_node_ip():
     if is_balena_app():
         response = get_balena_device_info()
         if response.ok:
-            return response.json()['ip_address']
+            return str(response.json()['ip_address'])
         return 'Unknown'
     else:
         r = connect_to_redis()
@@ -183,12 +174,12 @@ def get_node_ip():
         if ip_addresses:
             return ' '.join(json.loads(ip_addresses))
         elif os.getenv('MY_IP'):
-            return os.getenv('MY_IP')
+            return os.getenv('MY_IP') or 'Unable to retrieve IP.'
 
     return 'Unable to retrieve IP.'
 
 
-def get_node_mac_address():
+def get_node_mac_address() -> str:
     """
     Returns the MAC address.
     """
@@ -205,13 +196,16 @@ def get_node_mac_address():
         )
 
         if r.ok:
-            return r.json()['mac_address']
+            return str(r.json()['mac_address'])
         return 'Unknown'
 
     return os.getenv('MAC_ADDRESS', 'Unable to retrieve MAC address.')
 
 
-def get_active_connections(bus, fields=None):
+def get_active_connections(
+    bus: Any,
+    fields: list[str] | None = None,
+) -> list[dict[str, Any]] | None:
     """
 
     :param bus: pydbus.bus.Bus
@@ -272,7 +266,7 @@ def get_active_connections(bus, fields=None):
     return connections
 
 
-def remove_connection(bus, uuid):
+def remove_connection(bus: Any, uuid: str) -> bool:
     """
 
     :param bus: pydbus.bus.Bus
@@ -301,14 +295,20 @@ def remove_connection(bus, uuid):
     return True
 
 
-def get_video_duration(file):
+def get_video_duration(file: str) -> timedelta | None:
     """
     Returns the duration of a video file in timedelta.
+
+    Returns None if ffprobe is not available on the host so callers can
+    surface a clean validation error instead of a 500.
     """
     time = None
 
     try:
-        run_player = ffprobe('-i', file, _err_to_out=True)
+        run_player = sh.Command('ffprobe')('-i', file, _err_to_out=True)
+    except sh.CommandNotFound:
+        logging.warning('ffprobe is not installed; cannot determine duration')
+        return None
     except sh.ErrorReturnCode_1 as err:
         raise Exception('Bad video format') from err
 
@@ -327,7 +327,7 @@ def get_video_duration(file):
     return time
 
 
-def handler(obj):
+def handler(obj: Any) -> str:
     # Set timezone as UTC if it's datetime and format as ISO
     if isinstance(obj, datetime):
         with_tz = obj.replace(tzinfo=pytz.utc)
@@ -339,18 +339,24 @@ def handler(obj):
         )
 
 
-def json_dump(obj):
+def json_dump(obj: Any) -> str:
     return json.dumps(obj, default=handler)
 
 
-def url_fails(url):
+def url_fails(url: str) -> bool:
     """
     If it is streaming
     """
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
-        run_mplayer = mplayer(  # noqa: F821
-            '-identify', '-frames', '0', '-nosound', url
-        )
+        try:
+            run_mplayer = sh.Command('mplayer')(
+                '-identify', '-frames', '0', '-nosound', url
+            )
+        except sh.CommandNotFound:
+            logging.warning(
+                'mplayer is not installed; skipping streaming URL probe'
+            )
+            return False
         for line in run_mplayer.split('\n'):
             if 'Clip info:' in line:
                 return False
@@ -362,6 +368,7 @@ def url_fails(url):
 
     # Use Certifi module and set to True as default so users stop
     # seeing InsecureRequestWarning in logs.
+    verify: str | bool
     if settings['verify_ssl']:
         verify = certifi.where()
     else:
@@ -398,13 +405,16 @@ def url_fails(url):
     return True
 
 
-def download_video_from_youtube(uri, asset_id):
-    home = getenv('HOME')
+def download_video_from_youtube(
+    uri: str,
+    asset_id: str,
+) -> tuple[str, str, int]:
+    home = getenv('HOME') or ''
     name = check_output(['yt-dlp', '-O', 'title', uri])
     info = json.loads(check_output(['yt-dlp', '-j', uri]))
     duration = info['duration']
 
-    location = path.join(home, 'screenly_assets', f'{asset_id}.mp4')
+    location = path.join(home, 'anthias_assets', f'{asset_id}.mp4')
     thread = YoutubeDownloadThread(location, uri, asset_id)
     thread.daemon = True
     thread.start()
@@ -413,14 +423,18 @@ def download_video_from_youtube(uri, asset_id):
 
 
 class YoutubeDownloadThread(Thread):
-    def __init__(self, location, uri, asset_id):
+    def __init__(
+        self,
+        location: str,
+        uri: str,
+        asset_id: str,
+    ) -> None:
         Thread.__init__(self)
         self.location = location
         self.uri = uri
         self.asset_id = asset_id
 
-    def run(self):
-        publisher = ZmqPublisher.get_instance()
+    def run(self) -> None:
         call(
             [
                 'yt-dlp',
@@ -434,20 +448,28 @@ class YoutubeDownloadThread(Thread):
 
         try:
             asset = Asset.objects.get(asset_id=self.asset_id)
-            asset.is_processing = 0
+            asset.is_processing = False
             asset.save()
         except Asset.DoesNotExist:
             logging.warning('Asset %s not found', self.asset_id)
             return
 
-        publisher.send_to_ws_server(self.asset_id)
+        # Imported lazily so the viewer container (which does not
+        # ship channels/channels-redis) can still import lib.utils.
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+
+        async_to_sync(get_channel_layer().group_send)(
+            'ws_server',
+            {'type': 'asset.update', 'asset_id': self.asset_id},
+        )
 
 
-def template_handle_unicode(value):
+def template_handle_unicode(value: Any) -> str:
     return str(value)
 
 
-def is_demo_node():
+def is_demo_node() -> bool:
     """
     Check if the environment variable IS_DEMO_NODE is set to 1
     :return: bool
@@ -455,7 +477,10 @@ def is_demo_node():
     return string_to_bool(os.getenv('IS_DEMO_NODE', False))
 
 
-def generate_perfect_paper_password(pw_length=10, has_symbols=True):
+def generate_perfect_paper_password(
+    pw_length: int = 10,
+    has_symbols: bool = True,
+) -> str:
     """
     Generates a password using 64 characters from
     "Perfect Paper Password" system by Steve Gibson
@@ -474,15 +499,15 @@ def generate_perfect_paper_password(pw_length=10, has_symbols=True):
     )
 
 
-def connect_to_redis():
+def connect_to_redis() -> 'redis.Redis':
     return redis.Redis(host='redis', decode_responses=True, port=6379, db=0)
 
 
-def is_docker():
+def is_docker() -> bool:
     return os.path.isfile('/.dockerenv')
 
 
-def is_balena_app():
+def is_balena_app() -> bool:
     """
     Checks the application is running on Balena Cloud
     :return: bool

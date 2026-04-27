@@ -1,7 +1,8 @@
 import logging
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta
 from os import path
+from typing import Any
 
 from django.utils import timezone
 
@@ -16,22 +17,23 @@ WINDOWED_DEADLINE_CAP_SECONDS = 60
 _sysrandom = secrets.SystemRandom()
 
 
-def get_specific_asset(asset_id):
+def get_specific_asset(asset_id: str) -> dict[str, Any] | None:
     logging.info('Getting specific asset')
     try:
-        return Asset.objects.get(asset_id=asset_id).__dict__
+        result: dict[str, Any] = Asset.objects.get(asset_id=asset_id).__dict__
+        return result
     except Asset.DoesNotExist:
         logging.debug('Asset %s not found in database', asset_id)
         return None
 
 
-def _asset_to_dict(asset):
+def _asset_to_dict(asset: Asset) -> dict[str, Any]:
     return {
         k: v for k, v in asset.__dict__.items() if k not in ['_state', 'md5']
     }
 
 
-def generate_asset_list():
+def generate_asset_list() -> tuple[list[dict[str, Any]], datetime | None]:
     """Build the playlist plus a deadline for the next re-evaluation.
 
     Active assets are filtered by Asset.is_active() (which now applies
@@ -69,7 +71,7 @@ def generate_asset_list():
     return playlist, deadline
 
 
-def _compute_deadline(assets):
+def _compute_deadline(assets: list[Asset]) -> datetime | None:
     """Soonest future moment when the playlist might need re-evaluating.
 
     Past boundaries are dropped so a long-ago start_date on an asset
@@ -78,7 +80,7 @@ def _compute_deadline(assets):
     refresh_playlist() to fire on every tick.
     """
     now = timezone.now()
-    candidates = []
+    candidates: list[datetime] = []
     has_windowed = False
 
     for asset in assets:
@@ -96,19 +98,20 @@ def _compute_deadline(assets):
     return min(candidates) if candidates else None
 
 
-class Scheduler(object):
-    def __init__(self, *args, **kwargs):
+class Scheduler:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         logging.debug('Scheduler init')
-        self.assets = []
-        self.counter = 0
-        self.current_asset_id = None
-        self.deadline = None
-        self.extra_asset = None
-        self.index = 0
-        self.reverse = 0
+        self.assets: list[dict[str, Any]] = []
+        self.counter: int = 0
+        self.current_asset_id: str | None = None
+        self.deadline: datetime | None = None
+        self.extra_asset: str | None = None
+        self.index: int = 0
+        self.reverse: bool = False
+        self.last_update_db_mtime: float = 0
         self.update_playlist()
 
-    def get_next_asset(self):
+    def get_next_asset(self) -> dict[str, Any] | None:
         logging.debug('get_next_asset')
 
         if self.extra_asset is not None:
@@ -147,7 +150,7 @@ class Scheduler(object):
         self.current_asset_id = current_asset.get('asset_id')
         return current_asset
 
-    def refresh_playlist(self):
+    def refresh_playlist(self) -> None:
         logging.debug('refresh_playlist')
         time_cur = timezone.now()
 
@@ -166,7 +169,7 @@ class Scheduler(object):
         elif self.deadline and self.deadline <= time_cur:
             self.update_playlist()
 
-    def update_playlist(self):
+    def update_playlist(self) -> None:
         logging.debug('update_playlist')
         self.last_update_db_mtime = self.get_db_mtime()
         (new_assets, new_deadline) = generate_asset_list()
@@ -188,7 +191,7 @@ class Scheduler(object):
             self.deadline,
         )
 
-    def get_db_mtime(self):
+    def get_db_mtime(self) -> float:
         # get database file last modification time
         try:
             return path.getmtime(settings['database'])

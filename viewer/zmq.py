@@ -1,5 +1,5 @@
-from builtins import bytes
 from threading import Thread
+from typing import Any, Callable
 
 import zmq
 
@@ -9,11 +9,11 @@ ZMQ_HOST_PUB_URL = 'tcp://host.docker.internal:10001'
 class ZmqSubscriber(Thread):
     def __init__(
         self,
-        redis_connection,
-        commands,
-        publisher_url,
-        topic='viewer',
-    ):
+        redis_connection: Any,
+        commands: dict[str, Callable[[str | None], Any]],
+        publisher_url: str,
+        topic: str = 'viewer',
+    ) -> None:
         Thread.__init__(self)
         self.context = zmq.Context()
         self.publisher_url = publisher_url
@@ -21,7 +21,7 @@ class ZmqSubscriber(Thread):
         self.commands = commands
         self.redis_connection = redis_connection
 
-    def run(self):
+    def run(self) -> None:
         socket = self.context.socket(zmq.SUB)
         socket.connect(self.publisher_url)
         socket.setsockopt(zmq.SUBSCRIBE, bytes(self.topic, encoding='utf-8'))
@@ -39,4 +39,6 @@ class ZmqSubscriber(Thread):
             command = parts[0]
             parameter = parts[1] if len(parts) > 1 else None
 
-            self.commands.get(command, self.commands.get('unknown'))(parameter)
+            handler = self.commands.get(command, self.commands.get('unknown'))
+            if handler is not None:
+                handler(parameter)

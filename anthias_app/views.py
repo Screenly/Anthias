@@ -1,6 +1,7 @@
 import ipaddress
 
 from django.contrib import messages
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
@@ -20,17 +21,22 @@ r = connect_to_redis()
 
 
 @authorized
-def react(request):
+def react(request: HttpRequest) -> HttpResponse:
     return template(request, 'react.html', {})
 
 
 @require_http_methods(['GET', 'POST'])
-def login(request):
+def login(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
-        username = request.POST.get('username')
-        password = request.POST.get('password')
+        username = request.POST.get('username') or ''
+        password = request.POST.get('password') or ''
 
-        if settings.auth._check(username, password):
+        auth = settings.auth
+        if (
+            auth is not None
+            and hasattr(auth, '_check')
+            and auth._check(username, password)
+        ):
             # Store credentials in session
             request.session['auth_username'] = username
             request.session['auth_password'] = password
@@ -48,7 +54,7 @@ def login(request):
 
 
 @require_http_methods(['GET'])
-def splash_page(request):
+def splash_page(request: HttpRequest) -> HttpResponse:
     ip_addresses = []
 
     for ip_address in get_node_ip().split():
