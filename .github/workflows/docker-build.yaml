@@ -38,6 +38,14 @@ jobs:
   buildx:
     needs: run-tests
     strategy:
+      # Don't cancel sibling jobs on the first failure: any platform that
+      # has already finished building its image will have pushed the
+      # immutable <short-hash>-<board> tag, which is harmless on its own.
+      # Only the publish-latest job below — gated on the entire matrix
+      # succeeding — moves the floating latest-* tag, so a partial failure
+      # leaves users on the previous coherent latest-* set instead of a
+      # half-pushed mix of old + new images.
+      fail-fast: false
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
         service: ['server', 'celery', 'redis', 'websocket', 'nginx', 'viewer', 'wifi-connect']
@@ -106,11 +114,76 @@ jobs:
           uv run python -m tools.image_builder \
             --build-target=${{ matrix.board }} \
             --service=${{ matrix.service }} \
-            ${{ github.event_name == 'push' && '--push' || '' }}
+            ${{ github.event_name == 'push' && '--push --skip-latest-tag' || '' }}
 
       - name: Inspect cache after build
         run: |
           ls -la /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }} || true
+
+  # Mirror the immutable <short-hash>-<board> tags pushed by the buildx
+  # matrix onto the floating latest-<board> tag. Runs only after every
+  # buildx job has succeeded, so latest-* is never advanced from a
+  # half-pushed build matrix.
+  #
+  # Deliberately a single sequential job (no matrix): retags run inside
+  # one `set -euo pipefail` block, so a transient registry error stops
+  # further retags rather than racing other parallel runners that would
+  # blindly continue to advance latest-* on their slice. A preflight
+  # checks every <short-hash>-<board> tag is resolvable before any
+  # retag fires, so a missing source tag fails the job before it
+  # mutates the registry. `imagetools create` re-points the registry
+  # tag to the existing manifest without re-uploading layers, so the
+  # full ~98 retags (7 boards × 7 services × 2 namespaces) finish in
+  # under two minutes.
+  publish-latest:
+    needs: buildx
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Mirror short-hash tags to latest-<board>
+        run: |
+          set -euo pipefail
+          GIT_SHORT_HASH=$(git rev-parse --short=7 HEAD)
+          BOARDS=(pi1 pi2 pi3 pi4 pi4-64 pi5 x86)
+          SERVICES=(server celery redis websocket nginx viewer wifi-connect)
+          NAMESPACES=(screenly/anthias screenly/srly-ose)
+
+          echo "::group::Preflight: verify every <short-hash>-<board> source tag exists"
+          for namespace in "${NAMESPACES[@]}"; do
+            for service in "${SERVICES[@]}"; do
+              for board in "${BOARDS[@]}"; do
+                src="${namespace}-${service}:${GIT_SHORT_HASH}-${board}"
+                echo "Verifying ${src}"
+                docker buildx imagetools inspect --raw "${src}" >/dev/null
+              done
+            done
+          done
+          echo "::endgroup::"
+
+          echo "::group::Mirror <short-hash>-<board> -> latest-<board>"
+          for namespace in "${NAMESPACES[@]}"; do
+            for service in "${SERVICES[@]}"; do
+              for board in "${BOARDS[@]}"; do
+                src="${namespace}-${service}:${GIT_SHORT_HASH}-${board}"
+                dst="${namespace}-${service}:latest-${board}"
+                echo "Mirroring ${src} -> ${dst}"
+                docker buildx imagetools create -t "${dst}" "${src}"
+              done
+            done
+          done
+          echo "::endgroup::"
 
   balena:
     if: ${{ github.ref == 'refs/heads/master' }}

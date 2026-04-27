@@ -46,10 +46,10 @@ jobs:
         run: |
           # The django-stubs plugin imports anthias_django.settings, which
           # transitively instantiates AnthiasSettings(). On first run that
-          # tries to read ~/.screenly/screenly.conf — write a minimal valid
+          # tries to read ~/.anthias/anthias.conf — write a minimal valid
           # one with the section headers AnthiasSettings expects.
-          mkdir -p ~/.screenly
-          cat > ~/.screenly/screenly.conf <<'CONF'
+          mkdir -p ~/.anthias
+          cat > ~/.anthias/anthias.conf <<'CONF'
           [main]
           [viewer]
           [auth_basic]

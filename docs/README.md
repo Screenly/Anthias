@@ -27,22 +27,20 @@ of the container in the command above. Here's a table of the available container
 <!-- create a two-column table -->
 | Container Name | Description |
 | -------------- | ----------- |
-| `screenly-anthias-nginx-1` | NGINX service |
+| `screenly-anthias-server-1` | uvicorn (HTTP, WebSocket at `/ws`, static + media file serving) |
+| `screenly-anthias-celery-1` | Celery service (async tasks) |
 | `screenly-anthias-viewer-1` | Viewer service |
-| `screenly-anthias-celery-1` | Celery service |
-| `screenly-anthias-websocket-1` | WebSocket service |
-| `screenly-anthias-server-1` | web UI (front-end and back-end) |
-| `screenly-anthias-redis-1` | Redis (database, cache, message broker) |
+| `screenly-anthias-redis-1` | Redis (Celery broker + Channels layer) |
 | `screenly-anthias-wifi-connect-1` | Wi-Fi connectivity |
 
 ### Using `docker-compose logs`
 
 > [!IMPORTANT]
 > Before running the succeeding commands, make sure that you're in the
-> `/home/${USER}/screenly` directory:
+> `/home/${USER}/anthias` directory:
 > 
 > ```bash
-> $ cd /home/${USER}/screenly # e.g., /home/pi/screenly if the user is `pi`
+> $ cd /home/${USER}/anthias # e.g., /home/pi/anthias if the user is `pi`
 > ```
 
 If you'd like to see the logs of a specific container or service via Docker Compose,
@@ -70,7 +68,7 @@ $ bash <(curl -sL https://install-anthias.srly.io)
 Alternatively, you can also run the following command:
 
 ```bash
-$ $HOME/screenly/bin/run_upgrade.sh
+$ $HOME/anthias/bin/run_upgrade.sh
 ```
 
 ## Accessing the REST API
@@ -78,14 +76,49 @@ $ $HOME/screenly/bin/run_upgrade.sh
 To get started, open your browser and go to `http://<ip-address>/api/docs/` (or `http://localhost:8000/api/docs/`
 if you're in development mode). You should see the API docs for the endpoints.
 
-## Installing (trusted) self-signed certificates
+## TLS / SSL
+
+Anthias supports two independent SSL features:
+
+### 1. Serving HTTPS (Caddy sidecar)
+
+`bin/enable_ssl.sh` writes a `docker-compose.ssl.override.yml` that
+adds a `caddy:2-alpine` sidecar in front of `anthias-server`. Caddy
+terminates TLS on host ports 80 (redirected to HTTPS) and 443, and
+reverse-proxies plain HTTP to `anthias-server:8080`. There are three
+modes:
+
+```bash
+# Default — Caddy issues a cert from its built-in local CA. Good for
+# IP-based LAN access; browsers will warn that the CA is untrusted.
+$ ./bin/enable_ssl.sh
+
+# Auto Let's Encrypt — needs the domain to resolve to this host and
+# port 80 to be reachable from the internet for the HTTP-01 challenge.
+$ ./bin/enable_ssl.sh --domain example.com --email you@example.com
+$ ./bin/enable_ssl.sh --domain example.com --staging   # ACME staging
+
+# Bring your own certificate.
+$ ./bin/enable_ssl.sh --cert /path/to/cert.pem --key /path/to/key.pem
+
+# Turn it back off (Caddy + override removed; cert files are kept).
+$ ./bin/disable_ssl.sh
+```
+
+When SSL is *not* enabled, no Caddy container is pulled or run — the
+default install is unchanged.
+
+### 2. Trusting a custom CA for outbound requests
+
+If Anthias needs to fetch assets from an internal HTTPS server signed by
+a private CA, install the CA into the `anthias-server` and
+`anthias-viewer` trust stores:
 
 > [!WARNING]
 > This section only works for devices running Raspberry Pi OS Lite.
-> With running the following script, you can install self-signed certificates:
 > 
 > ```bash
-> $ cd $HOME/screenly
+> $ cd $HOME/anthias
 > $ ./bin/add_certificate.sh /path/to/certificate.crt
 > ```
 

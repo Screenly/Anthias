@@ -14,7 +14,7 @@ import sh as sh
 from jinja2 import Template
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
-from settings import LISTEN, ZmqConsumer, settings
+from settings import LISTEN, PORT, ZmqConsumer, settings
 from viewer.constants import BALENA_IP_RETRY_DELAY as BALENA_IP_RETRY_DELAY
 from viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
 from viewer.constants import MAX_BALENA_IP_RETRIES as MAX_BALENA_IP_RETRIES
@@ -77,7 +77,7 @@ def send_current_asset_id_to_server() -> None:
 def show_hotspot_page(data: str) -> None:
     global loop_is_stopped
 
-    uri = 'http://{0}/hotspot'.format(LISTEN)
+    uri = 'http://{0}:{1}/hotspot'.format(LISTEN, PORT)
     decoded = json.loads(data)
 
     base_dir = path.abspath(path.dirname(__file__))

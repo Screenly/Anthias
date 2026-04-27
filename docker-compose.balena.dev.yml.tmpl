@@ -25,11 +25,15 @@ services:
     build:
       context: .
       dockerfile: ./docker/Dockerfile.server
+    ports:
+      - 80:8080
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
     devices:
       - "/dev/vchiq:/dev/vchiq"
     restart: always
@@ -47,9 +51,9 @@ services:
       - anthias-server
     environment:
       - HOME=/data
-      - PORT=80
+      - PORT=8080
       - NOREFRESH=1
-      - LISTEN=anthias-nginx
+      - LISTEN=anthias-server
     extra_hosts:
       - "host.docker.internal:host-gateway"
     privileged: true
@@ -59,20 +63,6 @@ services:
       - resin-data:/data
     labels:
       io.balena.features.supervisor-api: '1'
-
-  anthias-websocket:
-    image: screenly/anthias-websocket:${GIT_SHORT_HASH}-${BOARD}
-    build:
-      context: .
-      dockerfile: ./docker/Dockerfile.websocket
-    depends_on:
-      - anthias-server
-    environment:
-      - HOME=/data
-      - LISTEN=0.0.0.0
-    restart: always
-    volumes:
-      - resin-data:/data
 
   anthias-celery:
     image: screenly/anthias-celery:${GIT_SHORT_HASH}-${BOARD}
@@ -104,22 +94,6 @@ services:
     restart: always
     volumes:
       - redis-data:/var/lib/redis
-
-  anthias-nginx:
-    image: screenly/anthias-nginx:${GIT_SHORT_HASH}-${BOARD}
-    build:
-      context: .
-      dockerfile: ./docker/Dockerfile.nginx
-    ports:
-      - 80:80
-    environment:
-      - HOME=/data
-    depends_on:
-      - anthias-server
-      - anthias-websocket
-    restart: always
-    volumes:
-      - resin-data:/data:ro
 
 volumes:
   resin-data:

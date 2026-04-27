@@ -23,7 +23,7 @@ class CeleryTasksTestCase(unittest.TestCase):
 class TestCleanup(CeleryTasksTestCase):
     def setUp(self) -> None:
         super(TestCleanup, self).setUp()
-        self.assets_path = path.join(getenv('HOME') or '', 'screenly_assets')
+        self.assets_path = path.join(getenv('HOME') or '', 'anthias_assets')
         self.image_path = path.join(self.assets_path, 'image.tmp')
 
     def test_cleanup(self) -> None:

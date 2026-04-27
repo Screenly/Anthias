@@ -27,7 +27,7 @@ from tenacity import (
 )
 
 from anthias_app.models import Asset
-from settings import ZmqPublisher, settings
+from settings import settings
 
 arch = machine()
 
@@ -414,7 +414,7 @@ def download_video_from_youtube(
     info = json.loads(check_output(['yt-dlp', '-j', uri]))
     duration = info['duration']
 
-    location = path.join(home, 'screenly_assets', f'{asset_id}.mp4')
+    location = path.join(home, 'anthias_assets', f'{asset_id}.mp4')
     thread = YoutubeDownloadThread(location, uri, asset_id)
     thread.daemon = True
     thread.start()
@@ -435,7 +435,6 @@ class YoutubeDownloadThread(Thread):
         self.asset_id = asset_id
 
     def run(self) -> None:
-        publisher = ZmqPublisher.get_instance()
         call(
             [
                 'yt-dlp',
@@ -455,7 +454,15 @@ class YoutubeDownloadThread(Thread):
             logging.warning('Asset %s not found', self.asset_id)
             return
 
-        publisher.send_to_ws_server(self.asset_id)
+        # Imported lazily so the viewer container (which does not
+        # ship channels/channels-redis) can still import lib.utils.
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+
+        async_to_sync(get_channel_layer().group_send)(
+            'ws_server',
+            {'type': 'asset.update', 'asset_id': self.asset_id},
+        )
 
 
 def template_handle_unicode(value: Any) -> str:

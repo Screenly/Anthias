@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import binascii
 import os.path
 import re
 from abc import ABCMeta, abstractmethod
@@ -163,7 +164,13 @@ class BasicAuth(Auth):
                 auth_type = content[0]
                 auth_data = content[1]
                 if auth_type == 'Basic':
-                    decoded = b64decode(auth_data).decode('utf-8')
+                    try:
+                        decoded = b64decode(auth_data).decode('utf-8')
+                    except (binascii.Error, UnicodeDecodeError, ValueError):
+                        # Malformed Authorization header — treat as
+                        # unauthenticated rather than letting the decode
+                        # error bubble up and degrade availability.
+                        return False
                     # RFC 7617 allows ':' in the password portion; split
                     # only on the first ':' so passwords with colons work.
                     username, sep, password = decoded.partition(':')

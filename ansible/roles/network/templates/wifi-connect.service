@@ -8,8 +8,8 @@ After=docker.service
 Type=oneshot
 RemainAfterExit=true
 User={{ anthias_user }}
-WorkingDirectory=/home/{{ anthias_user }}/screenly
-ExecStart=/home/{{ anthias_user }}/screenly/start_wifi_connect_service.sh
+WorkingDirectory=/home/{{ anthias_user }}/anthias
+ExecStart=/home/{{ anthias_user }}/anthias/start_wifi_connect_service.sh
 
 # Logging
 StandardOutput=journal

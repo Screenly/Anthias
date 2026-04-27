@@ -99,7 +99,7 @@ class CRUDAssetEndpointsTest(TestCase, ParametrizedTestCase):
 
         test_data = {
             'name': 'Test Video',
-            'uri': '/data/screenly_assets/video.mp4',
+            'uri': '/data/anthias_assets/video.mp4',
             'start_date': '2019-08-24T14:15:22Z',
             'end_date': '2029-08-24T14:15:22Z',
             'duration': 30,

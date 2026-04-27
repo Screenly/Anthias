@@ -10,7 +10,7 @@ import requests
 from lib.errors import SigalrmError
 from settings import LISTEN, PORT
 
-WATCHDOG_PATH = '/tmp/screenly.watchdog'
+WATCHDOG_PATH = '/tmp/anthias.watchdog'
 
 
 def sigalrm(signum: int, frame: FrameType | None) -> None:

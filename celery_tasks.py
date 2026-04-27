@@ -61,7 +61,7 @@ def get_display_power() -> None:
 @celery.task
 def cleanup() -> None:
     sh.find(
-        path.join(getenv('HOME') or '', 'screenly_assets'),
+        path.join(getenv('HOME') or '', 'anthias_assets'),
         '-name',
         '*.tmp',
         '-delete',

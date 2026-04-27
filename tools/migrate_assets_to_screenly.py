@@ -97,7 +97,7 @@ def send_asset(asset: dict[str, Any]) -> bool:
         if asset['mimetype'] in ['image', 'video']:
             if asset_uri.startswith('/data'):
                 asset_uri = os.path.join(
-                    HOME, 'screenly_assets', os.path.basename(asset_uri)
+                    HOME, 'anthias_assets', os.path.basename(asset_uri)
                 )
 
             post_kwargs.update({'files': {'file': open(asset_uri, 'rb')}})

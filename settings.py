@@ -19,18 +19,17 @@ from lib.auth import (
 )
 from lib.errors import ZmqCollectorTimeoutError
 
-CONFIG_DIR = '.screenly/'
-CONFIG_FILE = 'screenly.conf'
+CONFIG_DIR = '.anthias/'
+CONFIG_FILE = 'anthias.conf'
 DEFAULTS = {
     'main': {
         'analytics_opt_out': False,
-        'assetdir': 'screenly_assets',
-        'database': CONFIG_DIR + 'screenly.db',
+        'assetdir': 'anthias_assets',
+        'database': CONFIG_DIR + 'anthias.db',
         'date_format': 'mm/dd/yyyy',
         'use_24_hour_clock': False,
         'use_ssl': False,
         'auth_backend': '',
-        'websocket_port': '9999',
         'django_secret_key': '',
     },
     'viewer': {
@@ -180,7 +179,7 @@ class AnthiasSettings(UserDict[str, Any]):
             config.set(section, field, str(self.get(field, default)))
 
     def load(self) -> None:
-        """Loads the latest settings from screenly.conf into memory."""
+        """Loads the latest settings from anthias.conf into memory."""
         logging.debug('Reading config-file...')
         config = configparser.ConfigParser()
         config.read(self.conf_file)
@@ -240,9 +239,6 @@ class ZmqPublisher:
         if cls.INSTANCE is None:
             cls.INSTANCE = ZmqPublisher()
         return cls.INSTANCE
-
-    def send_to_ws_server(self, msg: str) -> None:
-        self.socket.send('ws_server {}'.format(msg).encode('utf-8'))
 
     def send_to_viewer(self, msg: str) -> None:
         self.socket.send_string('viewer {}'.format(msg))

@@ -109,6 +109,7 @@ def build_image(
             'git_branch': git_branch,
             'git_hash': git_hash,
             'git_short_hash': git_short_hash,
+            'target_platform': target_platform,
             **context,
         },
     )
@@ -191,6 +192,22 @@ def build_image(
     is_flag=True,
 )
 @click.option(
+    '--skip-latest-tag',
+    is_flag=True,
+    help=(
+        'Build/push only the immutable <short-hash>-<board> tag, omitting '
+        'the floating latest-<board> / <branch>-<board> tag. Used by CI: '
+        'the latest-<board> retag is deferred to a follow-up job that '
+        'runs only after every per-platform build in the matrix has '
+        'succeeded, so a partial build failure can no longer leave '
+        'latest-* pointing at a half-pushed set of images. The retag '
+        'step itself is still a sequence of registry calls, not a '
+        'single atomic transaction, so a transient registry error '
+        'mid-retag can still leave a small subset of latest-* tags '
+        'temporarily out of sync until the workflow is re-run.'
+    ),
+)
+@click.option(
     '--dockerfiles-only',
     is_flag=True,
 )
@@ -202,6 +219,7 @@ def main(
     disable_cache_mounts: bool,
     environment: str,
     push: bool,
+    skip_latest_tag: bool,
     dockerfiles_only: bool,
 ) -> None:
     git_branch = pygit2.Repository('.').head.shorthand
@@ -232,9 +250,10 @@ def main(
         # Generate all tags
         docker_tags = []
         for namespace in namespaces:
-            # Add latest/branch tags
-            docker_tags.append(f'{namespace}-{service_name}:{docker_tag}')
-            # Add version tags
+            if not skip_latest_tag:
+                # Floating latest-<board> / <branch>-<board> tag.
+                docker_tags.append(f'{namespace}-{service_name}:{docker_tag}')
+            # Immutable short-hash tag.
             docker_tags.append(
                 f'{namespace}-{service_name}:{git_short_hash}-{version_suffix}'
             )
