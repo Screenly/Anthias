@@ -19,3 +19,4 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # https://github.com/balena-io-library/base-images/issues/562
 RUN c_rehash
 
+{% include 'labels.j2' %}

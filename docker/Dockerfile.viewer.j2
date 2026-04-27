@@ -70,4 +70,6 @@ WORKDIR /usr/src/app
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/
 
+{% include 'labels.j2' %}
+
 CMD ["bash", "./bin/start_viewer.sh"]
