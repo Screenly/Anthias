@@ -8,12 +8,10 @@ Here is a high-level overview of the different components that make Anthias:
 
 These components and their dependencies are mostly installed and handled with Ansible and Docker.
 
-* The **NGINX** component (`anthias-nginx`) forwards requests to the backend and serves static files. It also acts as a reverse proxy.
-* The **viewer** (`anthias-viewer`) is what drives the screen (e.g., shows web page, image or video).
-* The **web app** component (`anthias-server`) &mdash; which consists of the front-end and back-end code &ndash; is what the user interacts with via browser.
-* The **Celery** (`anthias-celery`) component is for aynschronouslt queueing and executing tasks outside the HTTP request-response cycle (e.g., doing assets cleanup).
-* The **WebSocket** (`anthias-websocket`) component is used for forwarding requests from NGINX to the backend.
-* **Redis** (`redis`) is used as a database, cache and message broker.
+* The **web app** component (`anthias-server`) is the single HTTP entrypoint, served by uvicorn (ASGI). It runs the Django front-end + REST API, serves static assets via WhiteNoise, streams uploaded media at `/anthias_assets/`, and exposes the WebSocket endpoint at `/ws` via Django Channels. Always plain HTTP — TLS is opt-in via the **anthias-caddy** sidecar that `bin/enable_ssl.sh` installs (Caddy local CA by default, or Let's Encrypt with `--domain`).
+* The **viewer** (`anthias-viewer`) is what drives the screen (e.g., shows web page, image or video). It fetches media from `anthias-server` over HTTP.
+* The **Celery** (`anthias-celery`) component is for asynchronously queueing and executing tasks outside the HTTP request-response cycle (e.g., yt-dlp downloads, asset cleanup). It pushes asset-update events to connected WebSocket clients via the Redis-backed Channels layer.
+* **Redis** (`redis`) is used as the Celery broker/result backend and as the Channels channel layer.
 * The **database** component uses **SQLite** for storing the assets information.
 
 ## Dockerized development environment
@@ -32,13 +30,11 @@ $ ./bin/start_development_server.sh
 # The console output was truncated for brevity.
 # ...
 
-[+] Running 6/6
+[+] Running 4/4
  ✔ Network anthias_default                Created                            0.1s
  ✔ Container anthias-redis-1              Started                            0.2s
- ✔ Container anthias-anthias-server-1     Started                            0.2s
- ✔ Container anthias-anthias-celery-1     Started                            0.3s
- ✔ Container anthias-anthias-websocket-1  Started                            0.4s
- ✔ Container anthias-anthias-nginx-1      Started                            0.5s
+ ✔ Container anthias-anthias-server-1     Started                            0.3s
+ ✔ Container anthias-anthias-celery-1     Started                            0.4s
 ```
 
 > [!NOTE]

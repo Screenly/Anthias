@@ -111,7 +111,8 @@ void View::loadImage(const QString &preUri)
 
         QUrl url;
         url.setScheme("http");
-        url.setHost("anthias-nginx");
+        url.setHost("anthias-server");
+        url.setPort(8080);
         url.setPath("/anthias_assets/" + fileInfo.fileName());
 
         src = url.toString();

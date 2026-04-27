@@ -5,29 +5,20 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.server
+    ports:
+      - 8000:8080
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - ENVIRONMENT=development
+    depends_on:
+      - redis
     restart: always
     volumes:
       - anthias-data:/data
       - ./:/usr/src/app/
-
-  anthias-websocket:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.websocket
-    depends_on:
-      - anthias-server
-    environment:
-      - HOME=/data
-      - LISTEN=0.0.0.0
-    restart: always
-    volumes:
-      - anthias-data:/data
 
   anthias-celery:
     build:
@@ -47,21 +38,6 @@ services:
   redis:
     platform: "linux/amd64"
     image: redis:alpine
-
-  anthias-nginx:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.nginx
-    ports:
-      - 8000:80
-    environment:
-      - HOME=/data
-    depends_on:
-      - anthias-server
-      - anthias-websocket
-    restart: always
-    volumes:
-      - anthias-data:/data:ro
 
 volumes:
     anthias-data:

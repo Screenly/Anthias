@@ -4,8 +4,6 @@ SERVICES = (
     'server',
     'celery',
     'redis',
-    'websocket',
-    'nginx',
     'viewer',
     'wifi-connect',
     'test',

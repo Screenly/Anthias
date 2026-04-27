@@ -80,7 +80,6 @@ def get_uv_builder_context(service: str) -> dict:
     service_to_group = {
         'server': 'server',
         'celery': 'server',
-        'websocket': 'websocket',
         'wifi-connect': 'wifi-connect',
         'viewer': 'viewer',
         'test': 'test',

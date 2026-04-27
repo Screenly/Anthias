@@ -52,7 +52,8 @@ if [ "$START_SERVER" = true ]; then
 
     ./manage.py makemigrations
     ./manage.py migrate --fake-initial
-    ./manage.py runserver 127.0.0.1:8080 &
+    uvicorn anthias_django.asgi:application \
+        --host 127.0.0.1 --port 8080 &
 
     sleep 3
 fi

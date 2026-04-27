@@ -23,6 +23,8 @@ server = [
     "celery==5.2.2",
     "certifi==2025.10.5",
     "cffi==2.0.0",
+    "channels==4.3.1",
+    "channels-redis==4.3.0",
     "configparser==7.2.0",
     "cryptography==46.0.7",
     "Cython==3.2.4",
@@ -31,9 +33,6 @@ server = [
     "django-dbbackup==4.2.1",
     "drf-spectacular==0.29.0",
     "future==1.0.0",
-    "gevent-websocket==0.10.1",
-    "gevent==25.9.1",
-    "gunicorn==23.0.0",
     "hurry.filesize==0.9",
     "importlib-metadata==4.13.0",
     "Jinja2==3.1.6",
@@ -55,7 +54,9 @@ server = [
     "sh==2.2.2",
     "six==1.17.0",
     "urllib3==2.6.3",
+    "uvicorn[standard]==0.32.1",
     "wheel==0.46.2",
+    "whitenoise==6.8.2",
     "yt-dlp==2026.2.21",
 ]
 viewer = [
@@ -83,15 +84,6 @@ viewer = [
     "sh==2.2.2",
     "uptime==3.0.1",
     "urllib3==2.6.3",
-]
-websocket = [
-    "Cython==3.2.4",
-    "future==1.0.0",
-    "gevent-websocket==0.10.1",
-    "gevent==25.9.1",
-    "Jinja2==3.1.6",
-    "pytz==2025.2",
-    "pyzmq==23.2.1",
 ]
 wifi-connect = [
     "Cython==3.2.4",

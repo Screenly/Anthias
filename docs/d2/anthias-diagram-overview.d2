@@ -30,26 +30,19 @@ b.display: "Display (Monitor or TV)" {
   style.3d: true
 }
 
-anthias-nginx.class: containers
-b.anthias-viewer.class: containers
 a.anthias-server.class: containers
-a.anthias-websocket.class: containers
 a.anthias-celery.class: containers
 a.redis.class: containers
+b.anthias-viewer.class: containers
 
-user -> anthias-nginx
-anthias-nginx <-> a.anthias-server
-anthias-nginx -> a.anthias-websocket
+user -> a.anthias-server: "HTTP + WebSocket (/ws)"
 
-a.anthias-server <-> a.anthias-celery
-a.anthias-websocket <-> a.anthias-server
-a.anthias-celery -> a.redis: "in-memory data"
-a.redis <-> a.anthias-server
+a.anthias-server <-> a.redis: "Channels layer"
+a.anthias-celery <-> a.redis: "broker + Channels"
 
-b.anthias-viewer <-> database: "assets data"
-
-a.anthias-server <-> b.anthias-viewer: "assets data"
+a.anthias-server <-> b.anthias-viewer: "ZMQ + asset fetches"
 a.anthias-server <-> database
 a.anthias-celery <-> database
+b.anthias-viewer <-> database: "assets data"
 
 b.anthias-viewer -> b.display: "current asset"
