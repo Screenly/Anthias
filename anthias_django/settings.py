@@ -46,14 +46,11 @@ else:
 # hostname, so accept whatever Host header the browser/webview sends.
 ALLOWED_HOSTS = ['*']
 
-# Wildcards are required because the device is reached by IP on a LAN; the
-# specific origin is unknown at build time. Plain http:// is intentional
-# (Sonar S5332 false positive) — devices ship without TLS by default and
-# operators opt into HTTPS via bin/enable_ssl.sh.
-CSRF_TRUSTED_ORIGINS = [
-    'http://*',  # NOSONAR
-    'https://*',
-]
+# CSRF_TRUSTED_ORIGINS is intentionally not set. Django only honours
+# subdomain wildcards there (e.g. https://*.example.com), so a leading
+# 'http://*' / 'https://*' would be a no-op rather than the broad
+# allowlist it appears to be. Same-origin POSTs pass without it via
+# Django's built-in Host/Origin equality check.
 
 
 # Application definition

@@ -35,16 +35,14 @@ fi
 # workers. Hoist the publisher into a sidecar (or move it to the
 # Channels layer) before adding `--workers N` here.
 UVICORN_BIND_HOST="${LISTEN:-0.0.0.0}"
-UVICORN_BIND_PORT="${PORT:-8080}"
+HTTP_PORT="${PORT:-8080}"
+HTTPS_PORT="${HTTPS_PORT:-8443}"
 
-UVICORN_SSL_ARGS=()
+SSL_ENABLED=0
 if [[ -n "$SSL_CERTFILE" && -n "$SSL_KEYFILE" \
       && -f "$SSL_CERTFILE" && -f "$SSL_KEYFILE" ]]; then
+    SSL_ENABLED=1
     echo "SSL enabled: cert=$SSL_CERTFILE key=$SSL_KEYFILE"
-    UVICORN_SSL_ARGS=(
-        --ssl-certfile "$SSL_CERTFILE"
-        --ssl-keyfile "$SSL_KEYFILE"
-    )
 fi
 
 # Trust X-Forwarded-* only from explicitly listed proxies. We deliberately
@@ -52,34 +50,58 @@ fi
 # the TCP peer address, and a wildcard would let any client spoof
 # REMOTE_ADDR via X-Forwarded-For. Operators who terminate TLS at a
 # reverse proxy can opt in by setting FORWARDED_ALLOW_IPS.
-UVICORN_PROXY_ARGS=()
+COMMON_ARGS=(
+    --host "$UVICORN_BIND_HOST"
+    --timeout-keep-alive 30
+)
 if [[ -n "${FORWARDED_ALLOW_IPS:-}" ]]; then
-    UVICORN_PROXY_ARGS=(
+    COMMON_ARGS+=(
         --proxy-headers
         --forwarded-allow-ips "$FORWARDED_ALLOW_IPS"
     )
+fi
+if [[ "$ENVIRONMENT" == "development" ]]; then
+    COMMON_ARGS+=(--reload --reload-dir /usr/src/app)
 fi
 
 if [[ "$ENVIRONMENT" == "development" ]]; then
     echo "Building frontend assets..."
     bun install && bun run build
-    echo "Starting uvicorn (development, --reload)..."
-    exec uvicorn anthias_django.asgi:application \
-        --host "$UVICORN_BIND_HOST" \
-        --port "$UVICORN_BIND_PORT" \
-        --timeout-keep-alive 30 \
-        --reload \
-        --reload-dir /usr/src/app \
-        "${UVICORN_PROXY_ARGS[@]}" \
-        "${UVICORN_SSL_ARGS[@]}"
 else
     echo "Generating Django static files..."
     ./manage.py collectstatic --clear --noinput
-    echo "Starting uvicorn..."
+fi
+
+if [[ "$SSL_ENABLED" == "1" ]]; then
+    # Two listeners: plain HTTP on $HTTP_PORT for inter-container traffic
+    # (viewer/webview/celery hit anthias-server:8080 over HTTP), and TLS
+    # on $HTTPS_PORT for external clients. Without this, enabling SSL
+    # would break the webview and viewer because they cannot validate a
+    # self-signed cert presented by uvicorn.
+    echo "Starting uvicorn HTTP on :$HTTP_PORT (intra-container)..."
+    uvicorn anthias_django.asgi:application \
+        --port "$HTTP_PORT" \
+        "${COMMON_ARGS[@]}" &
+    HTTP_PID=$!
+
+    echo "Starting uvicorn HTTPS on :$HTTPS_PORT (external)..."
+    uvicorn anthias_django.asgi:application \
+        --port "$HTTPS_PORT" \
+        --ssl-certfile "$SSL_CERTFILE" \
+        --ssl-keyfile "$SSL_KEYFILE" \
+        "${COMMON_ARGS[@]}" &
+    HTTPS_PID=$!
+
+    trap 'kill "$HTTP_PID" "$HTTPS_PID" 2>/dev/null || true' TERM INT
+    # Exit when either listener dies so Docker's restart policy kicks in.
+    wait -n "$HTTP_PID" "$HTTPS_PID"
+    EXIT_CODE=$?
+    kill "$HTTP_PID" "$HTTPS_PID" 2>/dev/null || true
+    wait
+    exit "$EXIT_CODE"
+else
+    echo "Starting uvicorn on :$HTTP_PORT..."
     exec uvicorn anthias_django.asgi:application \
-        --host "$UVICORN_BIND_HOST" \
-        --port "$UVICORN_BIND_PORT" \
-        --timeout-keep-alive 30 \
-        "${UVICORN_PROXY_ARGS[@]}" \
-        "${UVICORN_SSL_ARGS[@]}"
+        --port "$HTTP_PORT" \
+        "${COMMON_ARGS[@]}"
 fi
