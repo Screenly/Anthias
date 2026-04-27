@@ -49,8 +49,13 @@ else:
 ALLOWED_HOSTS = ['*']
 
 # Wildcards are required because the device is reached by IP on a LAN; the
-# specific origin is unknown at build time.
-CSRF_TRUSTED_ORIGINS = ['http://*', 'https://*']
+# specific origin is unknown at build time. Plain http:// is intentional
+# (Sonar S5332 false positive) — devices ship without TLS by default and
+# operators opt into HTTPS via bin/enable_ssl.sh.
+CSRF_TRUSTED_ORIGINS = [
+    'http://*',  # NOSONAR S5332
+    'https://*',
+]
 
 
 # Application definition
