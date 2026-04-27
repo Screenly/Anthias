@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from os import getenv, path
 from typing import Any
@@ -60,8 +61,15 @@ def get_display_power() -> None:
 
 @celery.task
 def cleanup() -> None:
+    # Without HOME, `path.join(..., 'anthias_assets')` would be a
+    # relative path and `find -delete` could chew through whatever
+    # directory celery happens to be running in. Bail out instead.
+    home = getenv('HOME')
+    if not home:
+        logging.error('cleanup() skipped: HOME is not set')
+        return
     sh.find(
-        path.join(getenv('HOME') or '', 'anthias_assets'),
+        path.join(home, 'anthias_assets'),
         '-name',
         '*.tmp',
         '-delete',

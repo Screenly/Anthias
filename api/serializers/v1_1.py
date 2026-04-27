@@ -83,7 +83,19 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
 
         if 'video' in asset['mimetype']:
             duration_raw = data.get('duration')
-            if duration_raw is not None and int(duration_raw) == 0:
+            try:
+                duration_int = (
+                    None if duration_raw is None else int(duration_raw)
+                )
+            except (TypeError, ValueError):
+                raise ValidationError(
+                    {'duration': 'A valid integer is required.'}
+                )
+
+            # `duration_int is None` (omitted) and `0` both mean
+            # "infer the duration from the file"; any other value is
+            # taken as an explicit override the caller wants persisted.
+            if duration_int is None or duration_int == 0:
                 video_duration = get_video_duration(uri)
                 if video_duration is None:
                     raise ValidationError(
@@ -95,6 +107,8 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
                         }
                     )
                 asset['duration'] = int(video_duration.total_seconds())
+            else:
+                asset['duration'] = duration_int
         else:
             duration_raw = data.get('duration')
             if duration_raw is None:
