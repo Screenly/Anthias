@@ -10,7 +10,10 @@ STATIC_FILES_ROOT = Path('/data/anthias/staticfiles')
 HOTSPOT_FILE = Path('/data/hotspot/hotspot.html')
 INITIALIZED_FLAG = Path('/data/.anthias/initialized')
 
-DOCKER_CIDR = ipaddress.ip_network('172.16.0.0/12')
+# Defense-in-depth, not a real perimeter: with `ports: 80:8080` the host's
+# docker-bridge IP is also in 172.16/12, so LAN clients hitting the
+# published port aren't excluded. Mirrors the original nginx allowlist.
+DOCKER_BRIDGE_CIDR = ipaddress.ip_network('172.16.0.0/12')
 RFC1918_CIDRS = (
     ipaddress.ip_network('10.0.0.0/8'),
     ipaddress.ip_network('172.16.0.0/12'),
@@ -42,13 +45,12 @@ def require_client_in(*cidrs):
 def _safe_join(root: Path, relative: str) -> Path:
     """Resolve ``relative`` under ``root``, rejecting traversal."""
     candidate = (root / relative).resolve()
-    root_resolved = root.resolve()
-    if root_resolved not in candidate.parents and candidate != root_resolved:
+    if not candidate.is_relative_to(root.resolve()):
         raise Http404
     return candidate
 
 
-@require_client_in(DOCKER_CIDR)
+@require_client_in(DOCKER_BRIDGE_CIDR)
 def anthias_assets(request, filename):
     target = _safe_join(ANTHIAS_ASSETS_ROOT, filename)
     if not target.is_file():
@@ -67,7 +69,7 @@ def static_with_mime(request, filename):
     return FileResponse(target.open('rb'), content_type=content_type)
 
 
-@require_client_in(DOCKER_CIDR)
+@require_client_in(DOCKER_BRIDGE_CIDR)
 def hotspot(request, path=''):
     if INITIALIZED_FLAG.exists() or not HOTSPOT_FILE.is_file():
         raise Http404

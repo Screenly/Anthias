@@ -52,13 +52,10 @@ ALLOWED_HOSTS = ['*']
 # specific origin is unknown at build time.
 CSRF_TRUSTED_ORIGINS = ['http://*', 'https://*']
 
-USE_X_FORWARDED_HOST = True
-
 
 # Application definition
 
 INSTALLED_APPS = [
-    'daphne',
     'channels',
     'anthias_app.apps.AnthiasAppConfig',
     'drf_spectacular',

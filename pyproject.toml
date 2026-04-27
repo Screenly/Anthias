@@ -28,7 +28,6 @@ server = [
     "configparser==7.2.0",
     "cryptography==46.0.7",
     "Cython==3.2.4",
-    "daphne==4.2.1",
     "Django==4.2.30",
     "djangorestframework==3.16.1",
     "django-dbbackup==4.2.1",

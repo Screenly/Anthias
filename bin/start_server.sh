@@ -30,6 +30,10 @@ else
         ./manage.py dbbackup --noinput --clean
 fi
 
+# Single-worker on purpose: ZmqPublisher.get_instance() in api/views/*
+# binds tcp://0.0.0.0:10001, which would EADDRINUSE across multiple
+# workers. Hoist the publisher into a sidecar (or move it to the
+# Channels layer) before adding `--workers N` here.
 UVICORN_BIND_HOST="${LISTEN:-0.0.0.0}"
 UVICORN_BIND_PORT="${PORT:-8080}"
 
