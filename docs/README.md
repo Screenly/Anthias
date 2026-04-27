@@ -80,21 +80,33 @@ if you're in development mode). You should see the API docs for the endpoints.
 
 Anthias supports two independent SSL features:
 
-### 1. Serving HTTPS (uvicorn TLS termination)
+### 1. Serving HTTPS (Caddy sidecar)
+
+`bin/enable_ssl.sh` writes a `docker-compose.ssl.override.yml` that
+adds a `caddy:2-alpine` sidecar in front of `anthias-server`. Caddy
+terminates TLS on host ports 80 (redirected to HTTPS) and 443, and
+reverse-proxies plain HTTP to `anthias-server:8080`. There are three
+modes:
 
 ```bash
-# self-signed (cert generated under ~/.anthias/ssl/)
+# Default — Caddy issues a cert from its built-in local CA. Good for
+# IP-based LAN access; browsers will warn that the CA is untrusted.
 $ ./bin/enable_ssl.sh
 
-# user-supplied cert
+# Auto Let's Encrypt — needs the domain to resolve to this host and
+# port 80 to be reachable from the internet for the HTTP-01 challenge.
+$ ./bin/enable_ssl.sh --domain example.com --email you@example.com
+$ ./bin/enable_ssl.sh --domain example.com --staging   # ACME staging
+
+# Bring your own certificate.
 $ ./bin/enable_ssl.sh --cert /path/to/cert.pem --key /path/to/key.pem
 
-# turn it back off
+# Turn it back off (Caddy + override removed; cert files are kept).
 $ ./bin/disable_ssl.sh
 ```
 
-`enable_ssl.sh` writes a `docker-compose.ssl.override.yml` that switches
-the published port to 443 and points `anthias-server` at the cert.
+When SSL is *not* enabled, no Caddy container is pulled or run — the
+default install is unchanged.
 
 ### 2. Trusting a custom CA for outbound requests
 
