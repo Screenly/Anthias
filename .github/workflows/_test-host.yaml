@@ -38,6 +38,13 @@ jobs:
   python-unit-tests:
     name: Python unit tests (host)
     runs-on: ubuntu-24.04
+    # Lift CODECOV_TOKEN to the job env so the codecov-upload step's
+    # `if: env.CODECOV_TOKEN != ''` guard can actually see it. Step
+    # `env:` is invisible to step `if:`, and the `secrets` context
+    # isn't usable in `if:` either, so the job-level env is the
+    # cleanest way to gate gracefully on fork PRs without secrets.
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -72,12 +79,13 @@ jobs:
             --noinput --parallel --exclude-tag=integration
 
       # Forks on PR don't get secrets — skip codecov when the token
-      # isn't available rather than uploading an empty report.
+      # isn't available rather than uploading an empty report. The
+      # token is set at job-level env above so this `if:` can see it
+      # (step `env:` and the `secrets` context are both invisible to
+      # step `if:` evaluation).
       - name: Upload coverage reports to Codecov
         if: env.CODECOV_TOKEN != ''
         uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   python-integration-tests:
     name: Python integration tests (Docker)

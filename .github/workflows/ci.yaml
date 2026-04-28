@@ -1,12 +1,13 @@
 name: CI
 
-# Single entry point for lint + test + build + deploy. Replaces
-# docker-build.yaml, python-checks.yaml, javascript-lint.yaml,
-# ansible-lint.yaml, and lint-workflows.yml. The five reusable
-# workflows it calls (`_lint.yaml`, `_test-host.yaml`,
+# Single entry point for lint + test + build + deploy. The four
+# reusable workflows it calls (`_lint.yaml`, `_test-host.yaml`,
 # `_build-board.yaml`, `_balena-board.yaml`) own the actual job
 # bodies; this file owns triggers, the path filter, concurrency, and
-# the PR-vs-push fan-out shape.
+# the PR-vs-push fan-out shape. (Replaced docker-build.yaml,
+# python-checks.yaml, javascript-lint.yaml, ansible-lint.yaml, and
+# lint-workflows.yml; all five were deleted in the same PR that
+# introduced this file.)
 #
 # Whitelist trigger paths: every entry below is something whose
 # change affects any of the three CI pillars (lint, test, build).

@@ -42,6 +42,13 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      # `packages: write` is needed by the GHCR login step on master
+      # push. On PR smoke builds (`inputs.push: false`) no login fires
+      # and no push happens, so the broader scope is unused — and on
+      # forked PRs, GHA strips write down to read regardless of what
+      # we declare here. GHA's permissions block doesn't accept
+      # expressions for the value, so we can't downgrade to `read`
+      # conditionally on inputs.push without an actionlint failure.
       packages: write
     strategy:
       # Don't cancel sibling services on first failure: any service
@@ -92,9 +99,15 @@ jobs:
             buildx-${{ inputs.board }}-${{ matrix.service }}-${{ hashFiles('docker/**/*') }}-
             buildx-${{ inputs.board }}-${{ matrix.service }}-
 
+      # Inputs to a reusable workflow are user-controllable, so they
+      # never get interpolated directly into a `run:` block — they go
+      # through `env:` instead (sonarqube rule githubactions:S7630).
       - name: Inspect cache before build
+        env:
+          INPUT_BOARD: ${{ inputs.board }}
+          MATRIX_SERVICE: ${{ matrix.service }}
         run: |
-          ls -la /tmp/.buildx-cache/${{ inputs.board }}-${{ matrix.service }} || true
+          ls -la "/tmp/.buildx-cache/${INPUT_BOARD}-${MATRIX_SERVICE}" || true
 
       - name: Login to Docker Hub
         if: inputs.push
@@ -115,19 +128,25 @@ jobs:
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
+          INPUT_BOARD: ${{ inputs.board }}
+          MATRIX_SERVICE: ${{ matrix.service }}
+          INPUT_PUSH: ${{ inputs.push }}
         run: |
           args=(
-            --build-target=${{ inputs.board }}
-            --service=${{ matrix.service }}
+            "--build-target=$INPUT_BOARD"
+            "--service=$MATRIX_SERVICE"
           )
-          if [ "${{ inputs.push }}" = "true" ]; then
+          if [ "$INPUT_PUSH" = "true" ]; then
             args+=(--push --skip-latest-tag)
           fi
           uv run python -m tools.image_builder "${args[@]}"
 
       - name: Inspect cache after build
+        env:
+          INPUT_BOARD: ${{ inputs.board }}
+          MATRIX_SERVICE: ${{ matrix.service }}
         run: |
-          ls -la /tmp/.buildx-cache/${{ inputs.board }}-${{ matrix.service }} || true
+          ls -la "/tmp/.buildx-cache/${INPUT_BOARD}-${MATRIX_SERVICE}" || true
 
   # Mirror this board's <short-hash>-<board> tags onto the floating
   # latest-<board> tag. Runs only after every service in the buildx
