@@ -27,12 +27,13 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Build and upload SBOM
-        uses: sbomify/github-action@ac8b0d423c90447f3011ef8ab5f9ff2e854c6931 # master
+        uses: sbomify/sbomify-action@ac8b0d423c90447f3011ef8ab5f9ff2e854c6931 # v26.2.0
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 'LCkvzm8qaL'
           LOCK_FILE: 'bun.lock'
           AUGMENT: true
+          ENRICH: true
           UPLOAD: true
           OUTPUT_FILE: js.cdx.json
 
@@ -53,12 +54,13 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Build and upload SBOM
-        uses: sbomify/github-action@ac8b0d423c90447f3011ef8ab5f9ff2e854c6931 # master
+        uses: sbomify/sbomify-action@ac8b0d423c90447f3011ef8ab5f9ff2e854c6931 # v26.2.0
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 'Vhc4zm8pdV'
           LOCK_FILE: 'uv.lock'
           AUGMENT: true
+          ENRICH: true
           UPLOAD: true
           OUTPUT_FILE: python.cdx.json
 
