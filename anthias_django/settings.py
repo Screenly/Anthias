@@ -16,17 +16,20 @@ import pytz
 
 from settings import settings as device_settings
 
-# django-stubs-ext is a dev/typing dep (shipped in the server image but
-# not in viewer/wifi-connect). monkeypatch() makes Django generic
-# classes subscriptable at runtime — only needed if we ever evaluate
-# `QuerySet[Asset]`-style annotations at import time. No runtime code
-# does today, so import optionally and skip the patch when absent.
+# django_stubs_ext.monkeypatch() makes Django generic classes
+# subscriptable at runtime, and the server side of this repo relies on
+# that — anthias_app/admin.py defines `class AssetAdmin(admin.ModelAdmin
+# [Asset])` at import time, which raises TypeError without the patch.
+# Keep the import optional so the viewer image (and any future service
+# that doesn't ship django-stubs-ext) can still load this settings
+# module; do not remove the patch as a no-op.
 try:
     import django_stubs_ext
 
     django_stubs_ext.monkeypatch()
-except ImportError:
-    pass
+except ModuleNotFoundError as exc:
+    if exc.name != 'django_stubs_ext':
+        raise
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -87,10 +90,9 @@ INSTALLED_APPS = [
 
 # Apps only the HTTP-serving services need (REST API, OpenAPI schema,
 # Channels for WebSockets, the admin UI, sessions/messages, static
-# files, DB backups). The viewer never serves HTTP and doesn't ship
-# the packages these apps live in (channels, djangorestframework,
-# drf_spectacular, whitenoise, dbbackup), so it skips them. Server,
-# celery, and test images are unaffected.
+# files, DB backups). The viewer never serves HTTP, so it skips these
+# at django.setup() time and the viewer image doesn't have to ship
+# the packages they live in. Server/celery/test images are unaffected.
 if getenv('ANTHIAS_SERVICE') != 'viewer':
     INSTALLED_APPS += [
         'channels',
