@@ -287,13 +287,6 @@ viewer = [
     { name = "uptime" },
     { name = "urllib3" },
 ]
-wifi-connect = [
-    { name = "cython" },
-    { name = "future" },
-    { name = "netifaces" },
-    { name = "pyzmq" },
-    { name = "redis" },
-]
 
 [package.metadata]
 
@@ -490,13 +483,6 @@ viewer = [
     { name = "tenacity", specifier = "==9.1.2" },
     { name = "uptime", specifier = "==3.0.1" },
     { name = "urllib3", specifier = "==2.6.3" },
-]
-wifi-connect = [
-    { name = "cython", specifier = "==3.2.4" },
-    { name = "future", specifier = "==1.0.0" },
-    { name = "netifaces", specifier = "==0.11.0" },
-    { name = "pyzmq", specifier = "==23.2.1" },
-    { name = "redis", specifier = "==7.4.0" },
 ]
 
 [[package]]

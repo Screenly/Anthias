@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import json
 import logging
 import sys
 from os import getenv, path
@@ -11,10 +10,9 @@ from typing import Any
 import django
 import pydbus
 import sh as sh
-from jinja2 import Template
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
-from settings import LISTEN, PORT, ZmqConsumer, settings
+from settings import ZmqConsumer, settings
 from viewer.constants import BALENA_IP_RETRY_DELAY as BALENA_IP_RETRY_DELAY
 from viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
 from viewer.constants import MAX_BALENA_IP_RETRIES as MAX_BALENA_IP_RETRIES
@@ -37,7 +35,6 @@ django.setup()
 # Place imports that uses Django in this block.
 
 from lib.utils import (  # noqa: E402
-    connect_to_redis,
     get_balena_device_info,
     get_node_ip,
     is_balena_app,
@@ -45,7 +42,7 @@ from lib.utils import (  # noqa: E402
     url_fails,
 )
 from viewer.scheduling import Scheduler  # noqa: E402
-from viewer.zmq import ZMQ_HOST_PUB_URL, ZmqSubscriber  # noqa: E402
+from viewer.zmq import ZmqSubscriber  # noqa: E402
 
 
 __author__ = 'Screenly, Inc'
@@ -57,71 +54,15 @@ current_browser_url: str | None = None
 browser: Any = None
 loop_is_stopped: bool = False
 browser_bus: Any = None
-r = connect_to_redis()
 
 HOME: str | None = None
 
 scheduler: Any = None
-load_screen_displayed: bool = False
-mq_data: Any = None
 
 
 def send_current_asset_id_to_server() -> None:
     consumer = ZmqConsumer()
     consumer.send({'current_asset_id': scheduler.current_asset_id})
-
-
-def show_hotspot_page(data: str) -> None:
-    global loop_is_stopped
-
-    uri = 'http://{0}:{1}/hotspot'.format(LISTEN, PORT)
-    decoded = json.loads(data)
-
-    base_dir = path.abspath(path.dirname(__file__))
-    template_path = path.join(base_dir, 'templates/hotspot.html')
-
-    with open(template_path) as f:
-        template = Template(f.read())
-
-    context = {
-        'network': decoded.get('network', None),
-        'ssid_pswd': decoded.get('ssid_pswd', None),
-        'address': decoded.get('address', None),
-    }
-
-    with open('/data/hotspot/hotspot.html', 'w') as out_file:
-        out_file.write(template.render(context=context))
-
-    loop_is_stopped = stop_loop(scheduler)
-    view_webpage(uri)
-
-
-def setup_wifi(data: str) -> None:
-    global load_screen_displayed, mq_data
-    if not load_screen_displayed:
-        mq_data = data
-        return
-
-    show_hotspot_page(data)
-
-
-def show_splash(data: str) -> None:
-    global loop_is_stopped
-
-    if is_balena_app():
-        while True:
-            try:
-                ip_address = get_balena_device_info().json()['ip_address']
-                if ip_address != '':
-                    break
-            except Exception:
-                break
-    else:
-        r.set('ip_addresses', data)
-
-    view_webpage(SPLASH_PAGE_URL)
-    sleep(SPLASH_DELAY)
-    loop_is_stopped = play_loop()
 
 
 commands = {
@@ -135,8 +76,6 @@ commands = {
     'play': lambda _: setattr(
         __import__('__main__'), 'loop_is_stopped', play_loop()
     ),
-    'setup_wifi': lambda data: setup_wifi(data),
-    'show_splash': lambda data: show_splash(data),
     'unknown': lambda _: command_not_found(),
     'current_asset_id': lambda _: send_current_asset_id_to_server(),
 }
@@ -323,20 +262,12 @@ def start_loop() -> None:
 
 def main() -> None:
     global scheduler
-    global load_screen_displayed, mq_data
-
-    load_screen_displayed = False
-    mq_data = None
 
     setup()
 
-    subscriber_1 = ZmqSubscriber(r, commands, 'tcp://anthias-server:10001')
-    subscriber_1.daemon = True
-    subscriber_1.start()
-
-    subscriber_2 = ZmqSubscriber(r, commands, ZMQ_HOST_PUB_URL)
-    subscriber_2.daemon = True
-    subscriber_2.start()
+    subscriber = ZmqSubscriber(commands, 'tcp://anthias-server:10001')
+    subscriber.daemon = True
+    subscriber.start()
 
     # This will prevent white screen from happening before showing the
     # splash screen with IP addresses.
@@ -361,12 +292,6 @@ def main() -> None:
     # We don't want to show splash page if there are active assets but all of
     # them are not available.
     view_image(STANDBY_SCREEN)
-
-    load_screen_displayed = True
-
-    if mq_data is not None:
-        show_hotspot_page(mq_data)
-        mq_data = None
 
     sleep(0.5)
 

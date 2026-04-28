@@ -57,7 +57,7 @@ jobs:
       fail-fast: false
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
-        service: ['server', 'celery', 'redis', 'viewer', 'wifi-connect']
+        service: ['server', 'celery', 'redis', 'viewer']
         python-version: ["3.11"]
     runs-on: ubuntu-24.04
 
@@ -199,7 +199,7 @@ jobs:
           set -euo pipefail
           GIT_SHORT_HASH=$(git rev-parse --short=7 HEAD)
           BOARDS=(pi1 pi2 pi3 pi4 pi4-64 pi5 x86)
-          SERVICES=(server celery redis viewer wifi-connect)
+          SERVICES=(server celery redis viewer)
           # GHCR first so the canonical primary is current even if the
           # Docker Hub mirror later in the loop flakes.
           NAMESPACES=(ghcr.io/screenly/anthias screenly/anthias)
