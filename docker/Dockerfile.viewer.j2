@@ -61,6 +61,7 @@ ENV GIT_SHORT_HASH={{ git_short_hash }}
 ENV GIT_BRANCH={{ git_branch }}
 ENV DEVICE_TYPE={{ board }}
 ENV DJANGO_SETTINGS_MODULE="anthias_django.settings"
+ENV ANTHIAS_SERVICE="viewer"
 
 RUN useradd -g video viewer
 

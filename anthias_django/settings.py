@@ -12,12 +12,24 @@ import secrets
 from os import getenv
 from pathlib import Path
 
-import django_stubs_ext
 import pytz
 
 from settings import settings as device_settings
 
-django_stubs_ext.monkeypatch()
+# django_stubs_ext.monkeypatch() makes Django generic classes
+# subscriptable at runtime, and the server side of this repo relies on
+# that — anthias_app/admin.py defines `class AssetAdmin(admin.ModelAdmin
+# [Asset])` at import time, which raises TypeError without the patch.
+# Keep the import optional so the viewer image (and any future service
+# that doesn't ship django-stubs-ext) can still load this settings
+# module; do not remove the patch as a no-op.
+try:
+    import django_stubs_ext
+
+    django_stubs_ext.monkeypatch()
+except ModuleNotFoundError as exc:
+    if exc.name != 'django_stubs_ext':
+        raise
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -66,20 +78,33 @@ ALLOWED_HOSTS = [
 
 # Application definition
 
+# Apps every Django consumer needs: ORM access to the Asset model,
+# plus the contenttypes + auth tables those models implicitly depend
+# on. Loaded by every service that calls django.setup() — server,
+# celery, viewer, test.
 INSTALLED_APPS = [
-    'channels',
     'anthias_app.apps.AnthiasAppConfig',
-    'drf_spectacular',
-    'rest_framework',
-    'api.apps.ApiConfig',
-    'django.contrib.admin',
-    'django.contrib.auth',
     'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'dbbackup',
+    'django.contrib.auth',
 ]
+
+# Apps only the HTTP-serving services need (REST API, OpenAPI schema,
+# Channels for WebSockets, the admin UI, sessions/messages, static
+# files, DB backups). The viewer never serves HTTP, so it skips these
+# at django.setup() time and the viewer image doesn't have to ship
+# the packages they live in. Server/celery/test images are unaffected.
+if getenv('ANTHIAS_SERVICE') != 'viewer':
+    INSTALLED_APPS += [
+        'channels',
+        'drf_spectacular',
+        'rest_framework',
+        'api.apps.ApiConfig',
+        'django.contrib.admin',
+        'django.contrib.sessions',
+        'django.contrib.messages',
+        'django.contrib.staticfiles',
+        'dbbackup',
+    ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
