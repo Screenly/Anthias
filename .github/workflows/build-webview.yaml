@@ -176,6 +176,17 @@ jobs:
           cd webview
           docker compose build
 
+      - name: Prepare bind-mount target for non-root builder user
+        run: |
+          # The Qt 6 builder containers run as a non-root `builder` user
+          # (UID 1000); the bind-mounted ~/tmp-${board}/build is created
+          # by dockerd as root on first use, which the container UID
+          # cannot write to. Pre-create it with permissive mode so the
+          # container can mkdir /build/release and friends regardless
+          # of the runner's host UID.
+          mkdir -p ~/tmp-${{ matrix.board }}/build
+          chmod 777 ~/tmp-${{ matrix.board }}/build
+
       - name: Compile WebView
         run: |
           cd webview
