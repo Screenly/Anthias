@@ -4,6 +4,3 @@
 # Path must match what host_agent.py actually calls (/usr/bin/systemctl).
 # Unrestricted systemctl would let the user start/stop/mask any unit.
 {{ anthias_user }} ALL=NOPASSWD: /usr/bin/systemctl reboot, /usr/bin/systemctl poweroff
-
-#External
-{{ anthias_user }} ALL=NOPASSWD: /usr/local/sbin/wifi-connect

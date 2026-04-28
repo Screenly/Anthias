@@ -198,6 +198,15 @@ jobs:
       - python-unit-tests
       - python-integration-tests
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    # Scoped per-job (not at workflow level) so the host-side test jobs
+    # and any future read-only job don't inherit `packages: write`.
+    # `buildx` needs it so `docker login ghcr.io` with GITHUB_TOKEN can
+    # push ghcr.io/screenly/anthias-*. `contents: read` is the implicit
+    # default but pinned explicitly so a future workflow edit can't
+    # silently lose checkout access.
+    permissions:
+      contents: read
+      packages: write
     strategy:
       # Don't cancel sibling jobs on the first failure: any platform that
       # has already finished building its image will have pushed the
@@ -209,7 +218,7 @@ jobs:
       fail-fast: false
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
-        service: ['server', 'celery', 'redis', 'viewer', 'wifi-connect']
+        service: ['server', 'celery', 'redis', 'viewer']
     runs-on: ubuntu-24.04
 
     steps:
@@ -255,6 +264,14 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Login to GitHub Container Registry
+        if: success() && github.event_name == 'push'
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build Container
         env:
           DOCKER_BUILDKIT: 1
@@ -281,13 +298,31 @@ jobs:
   # checks every <short-hash>-<board> tag is resolvable before any
   # retag fires, so a missing source tag fails the job before it
   # mutates the registry. `imagetools create` re-points the registry
-  # tag to the existing manifest without re-uploading layers, so the
-  # full ~98 retags (7 boards × 7 services × 2 namespaces) finish in
-  # under two minutes.
+  # tag to the existing manifest without re-uploading layers, and each
+  # call is wrapped in 5-attempt exponential backoff so a transient
+  # 429 / 5xx doesn't strand latest-* half-mirrored.
+  #
+  # Two registries: `ghcr.io/screenly/anthias-*` is the new primary
+  # (rate-limit-friendly, free unlimited storage for public packages,
+  # auth via the workflow-issued GITHUB_TOKEN with `packages: write`).
+  # `screenly/anthias-*` on Docker Hub stays in the loop as a parallel
+  # mirror during the migration window so devices that haven't yet
+  # picked up the compose-template flip keep getting `latest-*`
+  # advanced. GHCR is mirrored first so the canonical source is up to
+  # date even if Docker Hub flakes on a later retag. The legacy
+  # `screenly/srly-ose-*` namespace was dropped: every device that
+  # has run `upgrade_containers.sh` since 2023-02 (b9998438) is on
+  # `screenly/anthias-*` already, so the parallel `srly-ose-*` push
+  # was buying no real back-compat in exchange for half the manifest
+  # GETs (one of two reasons d568602's publish hit Docker Hub's 429).
   publish-latest:
     needs: buildx
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-24.04
+    # See `buildx.permissions` above for rationale; same scoping reason.
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -301,13 +336,44 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Mirror short-hash tags to latest-<board>
         run: |
           set -euo pipefail
           GIT_SHORT_HASH=$(git rev-parse --short=7 HEAD)
           BOARDS=(pi1 pi2 pi3 pi4 pi4-64 pi5 x86)
-          SERVICES=(server celery redis viewer wifi-connect)
-          NAMESPACES=(screenly/anthias screenly/srly-ose)
+          SERVICES=(server celery redis viewer)
+          # GHCR first so the canonical primary is current even if the
+          # Docker Hub mirror later in the loop flakes.
+          NAMESPACES=(ghcr.io/screenly/anthias screenly/anthias)
+
+          # Wrap a registry op in 5 attempts of exponential backoff
+          # (2s, 4s, 8s, 16s) so a transient 429 / 5xx doesn't strand
+          # `latest-*` half-mirrored. Both `imagetools inspect` and
+          # `imagetools create` are idempotent: inspect is read-only,
+          # and create overwrites the tag with the same manifest
+          # digest on retry.
+          retry() {
+            local attempt
+            for attempt in 1 2 3 4 5; do
+              if "$@"; then
+                return 0
+              fi
+              if [ "${attempt}" -lt 5 ]; then
+                local delay=$((2 ** attempt))
+                echo "Attempt ${attempt} failed; retrying in ${delay}s..." >&2
+                sleep "${delay}"
+              fi
+            done
+            echo "Giving up after 5 attempts: $*" >&2
+            return 1
+          }
 
           echo "::group::Preflight: verify every <short-hash>-<board> source tag exists"
           for namespace in "${NAMESPACES[@]}"; do
@@ -315,7 +381,7 @@ jobs:
               for board in "${BOARDS[@]}"; do
                 src="${namespace}-${service}:${GIT_SHORT_HASH}-${board}"
                 echo "Verifying ${src}"
-                docker buildx imagetools inspect --raw "${src}" >/dev/null
+                retry docker buildx imagetools inspect --raw "${src}" >/dev/null
               done
             done
           done
@@ -328,7 +394,7 @@ jobs:
                 src="${namespace}-${service}:${GIT_SHORT_HASH}-${board}"
                 dst="${namespace}-${service}:latest-${board}"
                 echo "Mirroring ${src} -> ${dst}"
-                docker buildx imagetools create -t "${dst}" "${src}"
+                retry docker buildx imagetools create -t "${dst}" "${src}"
               done
             done
           done

@@ -51,11 +51,6 @@ urlpatterns = [
         views_files.static_with_mime,
         name='static_with_mime',
     ),
-    re_path(
-        r'^hotspot(?:/(?P<path>.*))?$',
-        views_files.hotspot,
-        name='hotspot',
-    ),
     path('', include('anthias_app.urls')),
 ]
 

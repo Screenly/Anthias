@@ -31,7 +31,6 @@ of the container in the command above. Here's a table of the available container
 | `screenly-anthias-celery-1` | Celery service (async tasks) |
 | `screenly-anthias-viewer-1` | Viewer service |
 | `screenly-anthias-redis-1` | Redis (Celery broker + Channels layer) |
-| `screenly-anthias-wifi-connect-1` | Wi-Fi connectivity |
 
 ### Using `docker-compose logs`
 
@@ -123,7 +122,3 @@ a private CA, install the CA into the `anthias-server` and
 > ```
 
 More details about generating self-signed certificates can be found [here](https://devopscube.com/create-self-signed-certificates-openssl/).
-
-## Wi-Fi Setup
-
-- Read the [Wi-Fi Setup](wifi-setup.md) page for more details on how to set up Wi-Fi on the Raspberry Pi.

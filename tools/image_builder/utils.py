@@ -1,7 +1,5 @@
 from typing import Any
 
-import click
-import requests
 from jinja2 import Environment, FileSystemLoader
 
 from tools.image_builder.constants import GITHUB_REPO_URL
@@ -82,7 +80,6 @@ def get_uv_builder_context(service: str) -> dict[str, Any]:
     service_to_group = {
         'server': 'server',
         'celery': 'server',
-        'wifi-connect': 'wifi-connect',
         'viewer': 'viewer',
         'test': 'test',
     }
@@ -195,7 +192,6 @@ def get_viewer_context(board: str) -> dict[str, Any]:
         'libsqlite3-dev',
         'libsrtp2-dev',
         'libssl-dev',
-        'libzmq3-dev',
         'libswscale-dev',
         'libsystemd-dev',
         'libts-dev',
@@ -232,8 +228,6 @@ def get_viewer_context(board: str) -> dict[str, Any]:
         'libxslt1-dev',
         'libxss-dev',
         'libxtst-dev',
-        'libzmq5-dev',
-        'libzmq5',
         'net-tools',
         'procps',
         'psmisc',
@@ -287,58 +281,4 @@ def get_viewer_context(board: str) -> dict[str, Any]:
         'qt_major_version': qt_major_version,
         'webview_git_hash': webview_git_hash,
         'webview_base_url': webview_base_url,
-    }
-
-
-def get_wifi_connect_context(target_platform: str) -> dict[str, Any]:
-    if target_platform == 'linux/arm/v6':
-        architecture = 'rpi'
-    elif target_platform in ['linux/arm/v7', 'linux/arm/v8']:
-        architecture = 'armv7hf'
-    elif target_platform == 'linux/arm64/v8':
-        architecture = 'aarch64'
-    elif target_platform == 'linux/amd64':
-        architecture = 'amd64'
-    else:
-        click.secho(
-            f'Unsupported target platform: {target_platform}',
-            fg='red',
-        )
-        return {}
-
-    wc_download_url = (
-        'https://api.github.com/repos/balena-os/wifi-connect/releases/93025295'
-    )
-
-    try:
-        response = requests.get(wc_download_url)
-        response.raise_for_status()
-        data = response.json()
-        assets = [asset['browser_download_url'] for asset in data['assets']]
-
-        try:
-            archive_url = next(
-                asset for asset in assets if f'linux-{architecture}' in asset
-            )
-        except StopIteration:
-            click.secho(
-                'No wifi-connect release found for this architecture.',
-                fg='red',
-            )
-            archive_url = ''
-
-    except requests.exceptions.RequestException as e:
-        click.secho(f'Failed to get wifi-connect release: {e}', fg='red')
-        return {}
-
-    return {
-        'apt_dependencies': [
-            'dnsmasq',
-            'iw',
-            'network-manager',
-            'unzip',
-            'wget',
-            'wireless-tools',
-        ],
-        'archive_url': archive_url,
     }

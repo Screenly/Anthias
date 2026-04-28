@@ -29,7 +29,7 @@ from lib import backup_helper, diagnostics
 from lib.auth import authorized
 from lib.github import is_up_to_date
 from lib.utils import connect_to_redis
-from settings import ZmqPublisher, settings
+from settings import ViewerPublisher, settings
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ class RecoverViewMixin(APIView):
     )
     @authorized
     def post(self, request: Request) -> Response:
-        publisher = ZmqPublisher.get_instance()
+        publisher = ViewerPublisher.get_instance()
         file_upload = request.data.get('backup_upload')
         if file_upload is None:
             raise ValidationError(
@@ -324,7 +324,7 @@ class AssetsControlViewMixin(APIView):
     )
     @authorized
     def get(self, request: Request, command: str) -> Response:
-        publisher = ZmqPublisher.get_instance()
+        publisher = ViewerPublisher.get_instance()
         publisher.send_to_viewer(command)
         return Response('Asset switched')
 
