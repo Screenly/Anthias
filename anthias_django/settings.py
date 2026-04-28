@@ -12,12 +12,21 @@ import secrets
 from os import getenv
 from pathlib import Path
 
-import django_stubs_ext
 import pytz
 
 from settings import settings as device_settings
 
-django_stubs_ext.monkeypatch()
+# django-stubs-ext is a dev/typing dep (shipped in the server image but
+# not in viewer/wifi-connect). monkeypatch() makes Django generic
+# classes subscriptable at runtime — only needed if we ever evaluate
+# `QuerySet[Asset]`-style annotations at import time. No runtime code
+# does today, so import optionally and skip the patch when absent.
+try:
+    import django_stubs_ext
+
+    django_stubs_ext.monkeypatch()
+except ImportError:
+    pass
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -66,20 +75,32 @@ ALLOWED_HOSTS = [
 
 # Application definition
 
-INSTALLED_APPS = [
-    'channels',
-    'anthias_app.apps.AnthiasAppConfig',
-    'drf_spectacular',
-    'rest_framework',
-    'api.apps.ApiConfig',
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'dbbackup',
-]
+# The viewer process only needs Django for ORM access to the Asset
+# model — it never serves HTTP, runs migrations, or handles WebSocket
+# traffic. Skip the apps that exist purely for the web UI/REST API so
+# the viewer image doesn't have to ship channels, DRF, drf-spectacular,
+# whitenoise, dbbackup, etc. Server/celery/test still get the full set.
+if getenv('ANTHIAS_SERVICE') == 'viewer':
+    INSTALLED_APPS = [
+        'anthias_app.apps.AnthiasAppConfig',
+        'django.contrib.contenttypes',
+        'django.contrib.auth',
+    ]
+else:
+    INSTALLED_APPS = [
+        'channels',
+        'anthias_app.apps.AnthiasAppConfig',
+        'drf_spectacular',
+        'rest_framework',
+        'api.apps.ApiConfig',
+        'django.contrib.admin',
+        'django.contrib.auth',
+        'django.contrib.contenttypes',
+        'django.contrib.sessions',
+        'django.contrib.messages',
+        'django.contrib.staticfiles',
+        'dbbackup',
+    ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

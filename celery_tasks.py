@@ -8,20 +8,17 @@ import sh
 from celery import Celery
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
-try:
-    django.setup()
+django.setup()
 
-    # Place imports that uses Django in this block.
+# Place imports that uses Django in this block.
 
-    from lib import diagnostics
-    from lib.utils import (
-        connect_to_redis,
-        is_balena_app,
-        reboot_via_balena_supervisor,
-        shutdown_via_balena_supervisor,
-    )
-except Exception:
-    pass
+from lib import diagnostics  # noqa: E402
+from lib.utils import (  # noqa: E402
+    connect_to_redis,
+    is_balena_app,
+    reboot_via_balena_supervisor,
+    shutdown_via_balena_supervisor,
+)
 
 
 __author__ = 'Screenly, Inc'
