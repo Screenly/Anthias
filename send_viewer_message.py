@@ -10,7 +10,11 @@ VIEWER_CHANNEL = 'anthias.viewer'
 
 
 def get_portal_url() -> str:
-    gateway = getenv('PORTAL_GATEWAY', '192.168.42.1')
+    # 192.168.42.1 is the conventional captive-portal gateway IP that
+    # wifi-connect serves its setup AP on; it's only ever reached over a
+    # local link to the device, never routed. Hardcoded as a default
+    # because PORTAL_GATEWAY is what every Anthias install configures.
+    gateway = getenv('PORTAL_GATEWAY', '192.168.42.1')  # NOSONAR
     port = getenv('PORTAL_LISTENING_PORT', None)
 
     if port is None:
@@ -66,7 +70,6 @@ def main() -> None:
 
     while not is_viewer_subscriber_ready(r):
         sleep(1)
-        continue
 
     r.publish(VIEWER_CHANNEL, f'viewer {message}')
 

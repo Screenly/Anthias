@@ -251,12 +251,14 @@ class ReplySender:
 
     The list expires after 30s so unread replies (e.g. server timed out
     before the viewer answered) don't accumulate in Redis.
+
+    Takes the caller's redis connection so we don't open a fresh
+    connection (and connection pool) per reply — the viewer reuses its
+    process-wide ``r`` here.
     """
 
-    def __init__(self) -> None:
-        from lib.utils import connect_to_redis
-
-        self._redis: 'redis.Redis' = connect_to_redis()
+    def __init__(self, redis_connection: 'redis.Redis') -> None:
+        self._redis = redis_connection
 
     def send(self, correlation_id: str, msg: Any) -> None:
         key = f'{REPLY_KEY_PREFIX}{correlation_id}'
@@ -282,11 +284,22 @@ class ReplyCollector:
         return cls.INSTANCE
 
     def recv_json(self, correlation_id: str, timeout_ms: int) -> Any:
-        # BLPOP takes whole seconds; round up so the caller never waits
-        # less than requested. Floor at 1 — timeout=0 would block forever.
-        timeout_seconds = max(1, (timeout_ms + 999) // 1000)
         key = f'{REPLY_KEY_PREFIX}{correlation_id}'
-        result = self._redis.blpop(key, timeout=timeout_seconds)
-        if result is None:
+
+        # ``timeout_ms <= 0`` is a non-blocking poll — match the old ZMQ
+        # collector's contract (zmq.poll(0) returns immediately) instead
+        # of blocking BLPOP for a full second. Use LPOP and raise the
+        # same timeout error if nothing's queued.
+        if timeout_ms <= 0:
+            result = self._redis.lpop(key)
+            if result is None:
+                raise ReplyTimeoutError
+            return json.loads(result)
+
+        # BLPOP takes whole seconds; round up so the caller never waits
+        # less than the requested ms.
+        timeout_seconds = (timeout_ms + 999) // 1000
+        blpop_result = self._redis.blpop(key, timeout=timeout_seconds)
+        if blpop_result is None:
             raise ReplyTimeoutError
-        return json.loads(result[1])
+        return json.loads(blpop_result[1])

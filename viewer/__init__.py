@@ -58,6 +58,7 @@ browser: Any = None
 loop_is_stopped: bool = False
 browser_bus: Any = None
 r = connect_to_redis()
+reply_sender = ReplySender(r)
 
 HOME: str | None = None
 
@@ -74,8 +75,7 @@ def send_current_asset_id_to_server(correlation_id: str | None) -> None:
         )
         return
 
-    sender = ReplySender()
-    sender.send(
+    reply_sender.send(
         correlation_id, {'current_asset_id': scheduler.current_asset_id}
     )
 
@@ -83,7 +83,12 @@ def send_current_asset_id_to_server(correlation_id: str | None) -> None:
 def show_hotspot_page(data: str) -> None:
     global loop_is_stopped
 
-    uri = 'http://{0}:{1}/hotspot'.format(LISTEN, PORT)
+    # The viewer renders this captive-portal page from anthias-server on
+    # the same host (LISTEN is the loopback address); HTTPS isn't an
+    # option without provisioning a cert for an internal-only loopback
+    # listener, and there's no network attacker model on a single
+    # device's localhost interface.
+    uri = 'http://{0}:{1}/hotspot'.format(LISTEN, PORT)  # NOSONAR
     decoded = json.loads(data)
 
     base_dir = path.abspath(path.dirname(__file__))
