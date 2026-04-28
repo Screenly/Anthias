@@ -83,42 +83,20 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4
 
+      # `name: multiarch-builder` so the Python builder
+      # (`tools.image_builder`) finds an already-bootstrapped builder
+      # under the name it expects. The setup-buildx-action injects
+      # ACTIONS_CACHE_URL and ACTIONS_RUNTIME_TOKEN into this builder,
+      # which is what the buildkit `type=gha` cache backend authenticates
+      # against — so all subsequent buildx invocations in this job get
+      # GHA cache for free.
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
         with:
+          name: multiarch-builder
           driver-opts: |
             image=moby/buildkit:latest
-
-      - name: Create and use dedicated builder
-        run: |
-          docker buildx create --use --name multiarch-builder
-          docker buildx inspect --bootstrap
-
-      # PR (smoke) and master (push) caches are kept disjoint so a PR
-      # cache populated from a non-pushed build can't be restored on a
-      # later master run and skip layers it should have rebuilt and
-      # pushed. Cost: cold cache for the very first master run after
-      # this layout lands.
-      - name: Cache Docker layers
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        id: cache
-        with:
-          path: /tmp/.buildx-cache/${{ inputs.board }}-${{ matrix.service }}
-          key: buildx-${{ inputs.board }}-${{ matrix.service }}-${{ hashFiles('docker/**/*') }}-${{ inputs.push == 'true' && 'push' || 'pr' }}
-          restore-keys: |
-            buildx-${{ inputs.board }}-${{ matrix.service }}-${{ hashFiles('docker/**/*') }}-
-            buildx-${{ inputs.board }}-${{ matrix.service }}-
-
-      # Inputs to a reusable workflow are user-controllable, so they
-      # never get interpolated directly into a `run:` block — they go
-      # through `env:` instead (sonarqube rule githubactions:S7630).
-      - name: Inspect cache before build
-        env:
-          INPUT_BOARD: ${{ inputs.board }}
-          MATRIX_SERVICE: ${{ matrix.service }}
-        run: |
-          ls -la "/tmp/.buildx-cache/${INPUT_BOARD}-${MATRIX_SERVICE}" || true
 
       - name: Login to Docker Hub
         if: inputs.push == 'true'
@@ -151,13 +129,6 @@ jobs:
             args+=(--push --skip-latest-tag)
           fi
           uv run python -m tools.image_builder "${args[@]}"
-
-      - name: Inspect cache after build
-        env:
-          INPUT_BOARD: ${{ inputs.board }}
-          MATRIX_SERVICE: ${{ matrix.service }}
-        run: |
-          ls -la "/tmp/.buildx-cache/${INPUT_BOARD}-${MATRIX_SERVICE}" || true
 
   # Mirror this board's <short-hash>-<board> tags onto the floating
   # latest-<board> tag. Runs only after every service in the buildx
