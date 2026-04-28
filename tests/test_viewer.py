@@ -82,6 +82,42 @@ class TestLoadBrowser(ViewerTestCase):
         self.p_cmd.stop()
         self.m_cmd.assert_called_once_with('AnthiasWebview')
 
+    def test_load_browser_raises_when_process_exits_before_handshake(
+        self,
+    ) -> None:
+        browser_proc = self.m_cmd.return_value.return_value
+        browser_proc.process.stdout = b''
+        browser_proc.is_alive.return_value = False
+        self.p_cmd.start()
+        try:
+            with self.assertRaises(RuntimeError):
+                self.u.load_browser()
+        finally:
+            self.p_cmd.stop()
+
+    def test_load_browser_times_out_when_handshake_never_arrives(
+        self,
+    ) -> None:
+        browser_proc = self.m_cmd.return_value.return_value
+        browser_proc.process.stdout = b'irrelevant noise'
+        browser_proc.is_alive.return_value = True
+        # Three monotonic() reads: deadline init, one loop iteration
+        # below the deadline, one above it.
+        monotonic_values = iter([0.0, 0.0, 100.0])
+        self.p_cmd.start()
+        self.p_sleep.start()
+        try:
+            with mock.patch.object(
+                self.u,
+                'monotonic',
+                side_effect=lambda: next(monotonic_values),
+            ):
+                with self.assertRaises(TimeoutError):
+                    self.u.load_browser()
+        finally:
+            self.p_sleep.stop()
+            self.p_cmd.stop()
+
 
 class TestWatchdog(ViewerTestCase):
     def test_watchdog_should_create_file_if_not_exists(self) -> None:

@@ -6,7 +6,6 @@ services:
       context: .
       dockerfile: docker/Dockerfile.x86
     environment:
-      - GIT_HASH=${GIT_HASH}
       - BOARD=x86
     tty: true
     stdin_open: true
@@ -22,7 +21,6 @@ services:
       context: .
       dockerfile: docker/Dockerfile.pi5
     environment:
-      - GIT_HASH=${GIT_HASH}
       - BOARD=pi5
     tty: true
     stdin_open: true
@@ -39,7 +37,6 @@ services:
       context: .
       dockerfile: docker/Dockerfile.pi4
     environment:
-      - GIT_HASH=${GIT_HASH}
       - BOARD=pi4-64
     tty: true
     stdin_open: true

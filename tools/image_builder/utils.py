@@ -1,3 +1,4 @@
+import os
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
@@ -133,9 +134,14 @@ def get_test_context() -> dict[str, Any]:
 def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     releases_url = f'{GITHUB_REPO_URL}/releases/download'
 
-    # CalVer release of the WebView (YYYY.MM.PATCH). Bump this together
-    # with the corresponding WebView-v* tag in the release.
-    webview_version = '2026.04.0'
+    # CalVer release of the WebView (YYYY.MM.PATCH). Bump this default
+    # together with the corresponding WebView-v* tag in the release.
+    # Override via WEBVIEW_VERSION env when building the viewer image
+    # ahead of (or against a fork of) the canonical release — useful
+    # while the new WebView-v* tag is still being cut, since
+    # Dockerfile.viewer.j2 will otherwise 404 when fetching the
+    # not-yet-published artifact.
+    webview_version = os.environ.get('WEBVIEW_VERSION', '2026.04.0')
     webview_base_url = f'{releases_url}/WebView-v{webview_version}'
 
     is_pi4_64 = board == 'pi4' and target_platform == 'linux/arm64/v8'
