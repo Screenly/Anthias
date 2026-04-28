@@ -17,5 +17,5 @@ class MainWindow : public QMainWindow
         void loadImage(const QString &uri);
 
     private:
-        View *view;
+        View *view = nullptr;
 };

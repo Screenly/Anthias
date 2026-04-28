@@ -14,6 +14,12 @@ QT_VERSION="$QT_MAJOR.$QT_MINOR.$QT_BUG_FIX"
 DEBIAN_VERSION=$(lsb_release -cs)
 MAKE_CORES="$(expr $(nproc) + 2)"
 
+# WEBVIEW_VERSION is the CalVer release identifier (YYYY.MM.PATCH).
+# CI extracts it from the WebView-v* tag; for local builds the caller
+# can set it explicitly, otherwise we fall back to a date-stamped dev
+# version so the artifact filename is still well-formed.
+WEBVIEW_VERSION="${WEBVIEW_VERSION:-$(date -u +%Y.%m).0-dev}"
+
 mkdir -p "$BUILD_TARGET"
 mkdir -p "$SRC"
 
@@ -259,16 +265,18 @@ function build_qt () {
         make -j"$MAKE_CORES"
         make install
 
-        mkdir -p fakeroot/bin fakeroot/share/ScreenlyWebview
-        mv ScreenlyWebview fakeroot/bin/
-        cp -rf /webview/res fakeroot/share/ScreenlyWebview/
+        mkdir -p fakeroot/bin fakeroot/share/AnthiasWebview
+        mv AnthiasWebview fakeroot/bin/
+        cp -rf /webview/res fakeroot/share/AnthiasWebview/
+
+        local ARCHIVE="webview-$WEBVIEW_VERSION-$DEBIAN_VERSION-$1.tar.gz"
 
         pushd fakeroot
-        tar cfz "$BUILD_TARGET/webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" .
+        tar cfz "$BUILD_TARGET/$ARCHIVE" .
         popd
 
         pushd "$BUILD_TARGET"
-        sha256sum "webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" > "webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz.sha256"
+        sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
         popd
     fi
 }

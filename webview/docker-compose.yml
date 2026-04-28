@@ -6,7 +6,6 @@ services:
       context: .
       dockerfile: docker/Dockerfile.x86
     environment:
-      - GIT_HASH=${GIT_HASH}
       - BOARD=x86
     tty: true
     stdin_open: true
@@ -22,12 +21,26 @@ services:
       context: .
       dockerfile: docker/Dockerfile.pi5
     environment:
-      - GIT_HASH=${GIT_HASH}
       - BOARD=pi5
     tty: true
     stdin_open: true
     volumes:
       - "~/tmp-pi5/build:/build:Z"
       - "./examples:/src/examples"
+      - "./:/webview:ro"
+      - "./scripts/build_webview.sh:/scripts/build_webview.sh"
+
+  builder-pi4-64:
+    profiles:
+      - pi4-64
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.pi4
+    environment:
+      - BOARD=pi4-64
+    tty: true
+    stdin_open: true
+    volumes:
+      - "~/tmp-pi4-64/build:/build:Z"
       - "./:/webview:ro"
       - "./scripts/build_webview.sh:/scripts/build_webview.sh"

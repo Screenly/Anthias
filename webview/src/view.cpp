@@ -2,83 +2,142 @@
 #include <QFileInfo>
 #include <QUrl>
 #include <QStandardPaths>
-#include <QEventLoop>
-#include <QTimer>
+#include <QWebEnginePage>
+#include <QWebEngineSettings>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QImage>
+#include <QImageReader>
 #include <QPainter>
 #include <QMovie>
 #include <QBuffer>
+#include <QByteArray>
+#include <QtGlobal>
 
 #include "view.h"
+
+namespace {
+QString getServerHost()
+{
+    const QByteArray value = qgetenv("LISTEN");
+
+    if (value.isEmpty()) {
+        return QStringLiteral("anthias-server");
+    }
+
+    return QString::fromUtf8(value);
+}
+
+int getServerPort()
+{
+    bool ok = false;
+    const int value = qgetenv("PORT").toInt(&ok);
+
+    if (!ok || value <= 0 || value > 65535) {
+        return 8080;
+    }
+
+    return value;
+}
+}
 
 
 View::View(QWidget* parent) : QWidget(parent)
 {
-    // Initialize dual web view system
     webView1 = new QWebEngineView(this);
     webView2 = new QWebEngineView(this);
+    configureWebView(webView1);
+    configureWebView(webView2);
 
-    // Set up initial state
     currentWebView = webView1;
     nextWebView = webView2;
     nextWebViewReady = false;
 
-    // Make webView1 the main webView for compatibility
-    webView = webView1;
-    webView->setVisible(false);
+    connect(webView1->page(), &QWebEnginePage::authenticationRequired,
+            this, &View::handleAuthRequest);
+    connect(webView2->page(), &QWebEnginePage::authenticationRequired,
+            this, &View::handleAuthRequest);
 
-    // Connect authentication for both web views
-    connect(webView1->page(), SIGNAL(authenticationRequired(QNetworkReply*,QAuthenticator*)),
-            this, SLOT(handleAuthRequest(QNetworkReply*,QAuthenticator*)));
-    connect(webView2->page(), SIGNAL(authenticationRequired(QNetworkReply*,QAuthenticator*)),
-            this, SLOT(handleAuthRequest(QNetworkReply*,QAuthenticator*)));
-
-    pre_loader = new QWebEnginePage;
     networkManager = new QNetworkAccessManager(this);
-    currentImage = QImage();
-    nextImage = QImage();
     movie = nullptr;
-    animationTimer = new QTimer(this);
     isAnimatedImage = false;
-
-    connect(animationTimer, &QTimer::timeout, this, &View::updateMovieFrame);
+    loadGenerationId = 0;
 }
 
 View::~View()
 {
+    if (pageLoadConnection) {
+        QObject::disconnect(pageLoadConnection);
+    }
+    stopAnimation();
+}
+
+void View::configureWebView(QWebEngineView* view)
+{
+    view->settings()->setAttribute(QWebEngineSettings::LocalStorageEnabled, true);
+    view->settings()->setAttribute(QWebEngineSettings::ShowScrollBars, false);
+    view->setVisible(false);
+}
+
+void View::stopAnimation()
+{
     if (movie) {
         movie->stop();
         delete movie;
+        movie = nullptr;
     }
+    isAnimatedImage = false;
 }
 
 void View::loadPage(const QString &uri)
 {
     qDebug() << "Type: Webpage";
 
-    // Clear current image if any
+    const quint64 requestId = ++loadGenerationId;
     currentImage = QImage();
+    stopAnimation();
+    nextWebViewReady = false;
 
-    // Stop any existing animation
-    if (movie) {
-        movie->stop();
-        delete movie;
-        movie = nullptr;
+    // Drop any prior loadFinished handler before stop() — a synchronous
+    // loadFinished(false) emission from the previous in-flight load
+    // would otherwise reach the (still-attached) handler and run with
+    // ok=false, before the new load() takes effect. With the lambda
+    // detached, stop() can fire whatever it likes harmlessly.
+    if (pageLoadConnection) {
+        QObject::disconnect(pageLoadConnection);
     }
-    animationTimer->stop();
-    isAnimatedImage = false;
 
-    // Reset web view states
-    resetWebViewStates();
-
-    // Connect to load progress and finished signals for the next web view
-    connect(nextWebView->page(), &QWebEnginePage::loadProgress, this, &View::onWebPageLoadProgress);
-    connect(nextWebView->page(), &QWebEnginePage::loadFinished, this, &View::onWebPageLoadFinished);
-
-    // Load the page in the next web view while keeping current one visible
     nextWebView->stop();
+
+    pageLoadConnection = connect(
+        nextWebView->page(),
+        &QWebEnginePage::loadFinished,
+        this,
+        [this, requestId](bool ok) {
+            // One-shot: detach unconditionally on first fire so neither
+            // a stale completion (superseded by a later load) nor a
+            // re-emission (e.g., JS-driven redirect after the swap)
+            // can run this lambda again.
+            QObject::disconnect(pageLoadConnection);
+            pageLoadConnection = QMetaObject::Connection{};
+
+            if (requestId != loadGenerationId) {
+                qDebug() << "Ignoring stale page load result";
+                return;
+            }
+
+            if (ok) {
+                qDebug() << "Background web page loaded successfully";
+                nextWebViewReady = true;
+                switchToNextWebView();
+            } else {
+                qDebug() << "Background web page failed to load";
+                nextWebViewReady = false;
+            }
+        }
+    );
+
     nextWebView->load(QUrl(uri));
 
     qDebug() << "Loading web page in background web view:" << uri;
@@ -87,19 +146,24 @@ void View::loadPage(const QString &uri)
 void View::loadImage(const QString &preUri)
 {
     qDebug() << "Type: Image";
+    const quint64 requestId = ++loadGenerationId;
 
-    // Hide both web views when switching to image
+    // Cancel any pending page load so we don't keep streaming a web
+    // page in the background after the user has switched to image
+    // playback. Without this the QWebEngineView would continue fetching
+    // and rendering until completion, even though the result would be
+    // ignored by the (now stale) loadFinished handler.
+    if (pageLoadConnection) {
+        QObject::disconnect(pageLoadConnection);
+        pageLoadConnection = QMetaObject::Connection{};
+    }
+    webView1->stop();
+    webView2->stop();
+
     webView1->setVisible(false);
     webView2->setVisible(false);
 
-    // Stop any existing animation
-    if (movie) {
-        movie->stop();
-        delete movie;
-        movie = nullptr;
-    }
-    animationTimer->stop();
-    isAnimatedImage = false;
+    stopAnimation();
 
     QFileInfo fileInfo = QFileInfo(preUri);
     QString src;
@@ -111,8 +175,8 @@ void View::loadImage(const QString &preUri)
 
         QUrl url;
         url.setScheme("http");
-        url.setHost("anthias-server");
-        url.setPort(8080);
+        url.setHost(getServerHost());
+        url.setPort(getServerPort());
         url.setPath("/anthias_assets/" + fileInfo.fileName());
 
         src = url.toString();
@@ -122,7 +186,6 @@ void View::loadImage(const QString &preUri)
     {
         qDebug() << "Black page";
         currentImage = QImage();
-        webView->setVisible(false);
         update();
         return;
     }
@@ -134,78 +197,67 @@ void View::loadImage(const QString &preUri)
 
     qDebug() << "Loading image from:" << src;
 
-    // Start loading the next image
     QNetworkRequest request(src);
     QNetworkReply* reply = networkManager->get(request);
 
-    connect(reply, &QNetworkReply::finished, this, [=]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, requestId]() {
+        reply->deleteLater();
+
+        if (requestId != loadGenerationId) {
+            qDebug() << "Ignoring stale image response";
+            return;
+        }
+
         if (reply->error() == QNetworkReply::NoError) {
             QByteArray data = reply->readAll();
             qDebug() << "Received image data size:" << data.size();
 
-            if (tryLoadAsAnimatedGif(data)) {
-                // Successfully loaded as animated GIF
-                return;
-            } else {
-                // Load as static image
+            if (!tryLoadAsAnimatedGif(data)) {
                 loadAsStaticImage(data);
             }
         } else {
             qDebug() << "Network error:" << reply->errorString();
         }
-        reply->deleteLater();
     });
 
-    connect(reply, &QNetworkReply::errorOccurred, this, [=](QNetworkReply::NetworkError error) {
-        qDebug() << "Network error occurred:" << error;
-        qDebug() << "Error string:" << reply->errorString();
-    });
+    connect(reply, &QNetworkReply::errorOccurred, this,
+        [this, reply, requestId](QNetworkReply::NetworkError error) {
+            if (requestId != loadGenerationId) {
+                return;
+            }
+            qDebug() << "Network error occurred:" << error;
+            qDebug() << "Error string:" << reply->errorString();
+        });
 }
 
 bool View::tryLoadAsAnimatedGif(const QByteArray& data)
 {
-    // Try to load as QMovie first to check if it's an animated GIF
-    QBuffer* testBuffer = new QBuffer();
-    testBuffer->setData(data);
-    testBuffer->open(QIODevice::ReadOnly);
+    QBuffer testBuffer;
+    testBuffer.setData(data);
+    testBuffer.open(QIODevice::ReadOnly);
 
-    // Create QMovie to test if it's animated
-    QMovie testMovie(testBuffer, QByteArray(), this);
-
-    if (testMovie.isValid() && testMovie.frameCount() > 1) {
-        // This is an animated GIF
-        qDebug() << "Detected animated GIF with" << testMovie.frameCount() << "frames";
-        delete testBuffer; // Clean up test buffer
-
-        // Create a new buffer for the actual movie
-        QBuffer* buffer = new QBuffer();
-        buffer->setData(data);
-        buffer->open(QIODevice::ReadOnly);
-
-        // Create the actual movie for animation
-        movie = new QMovie(buffer, QByteArray(), this);
-
-        if (movie->isValid()) {
-            qDebug() << "GIF animation loaded successfully. Frame count:" << movie->frameCount();
-            qDebug() << "Animation speed:" << movie->speed() << "ms per frame";
-
-            setupAnimation();
-            return true;
-        } else {
-            qDebug() << "Failed to load GIF as animation, falling back to static image";
-            delete movie;
-            movie = nullptr;
-            delete buffer;
-
-            // Fall back to static image loading - this preserves original behavior
-            loadAsStaticImage(data);
-            return true; // Return true to prevent double loading
-        }
-    } else {
-        // This is a static image (including single-frame GIFs)
-        delete testBuffer;
+    QImageReader reader(&testBuffer);
+    if (!reader.supportsAnimation() && reader.imageCount() <= 1) {
         return false;
     }
+
+    QMovie* nextMovie = new QMovie(this);
+    QBuffer* buffer = new QBuffer(nextMovie);
+    buffer->setData(data);
+    buffer->open(QIODevice::ReadOnly);
+    nextMovie->setDevice(buffer);
+
+    if (!nextMovie->isValid()) {
+        qDebug() << "Failed to load animated image, falling back to static image";
+        delete nextMovie;
+        loadAsStaticImage(data);
+        return true;
+    }
+
+    qDebug() << "Animated image loaded successfully. Frame count:" << nextMovie->frameCount();
+    movie = nextMovie;
+    setupAnimation();
+    return true;
 }
 
 void View::loadAsStaticImage(const QByteArray& data)
@@ -214,7 +266,8 @@ void View::loadAsStaticImage(const QByteArray& data)
     if (newImage.loadFromData(data)) {
         qDebug() << "Successfully loaded static image. Size:" << newImage.size();
         nextImage = newImage;
-        webView->setVisible(false);
+        webView1->setVisible(false);
+        webView2->setVisible(false);
         currentImage = nextImage;
         update();
     } else {
@@ -222,53 +275,16 @@ void View::loadAsStaticImage(const QByteArray& data)
     }
 }
 
-void View::updateMovieFrame()
-{
-    if (movie && isAnimatedImage && movie->state() == QMovie::Running) {
-        // Try to advance to the next frame
-        if (movie->jumpToNextFrame()) {
-            QImage newFrame = movie->currentImage();
-            if (!newFrame.isNull()) {
-                currentImage = newFrame;
-                update();
-            }
-        }
-
-        // Schedule next frame update
-        scheduleNextFrame();
-    }
-}
-
-void View::scheduleNextFrame()
-{
-    int frameDelay = movie->nextFrameDelay();
-    if (frameDelay > 0) {
-        animationTimer->start(frameDelay);
-    } else {
-        // If no delay specified, try to get it from the movie speed
-        frameDelay = movie->speed();
-        if (frameDelay > 0) {
-            animationTimer->start(frameDelay);
-        } else {
-            animationTimer->start(100); // Default delay
-        }
-    }
-}
-
 void View::paintEvent(QPaintEvent*)
 {
     QPainter painter(this);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
     painter.fillRect(rect(), Qt::black);
 
     if (!currentImage.isNull()) {
-        // Only log for static images to avoid spam during animation
-        if (!isAnimatedImage) {
-            qDebug() << "Painting image. Size:" << currentImage.size();
-        }
         QSize scaledSize = currentImage.size();
         scaledSize.scale(size(), Qt::KeepAspectRatio);
-        QRect targetRect = QRect(QPoint(0, 0), size());
-        targetRect = QRect(
+        QRect targetRect(
             (width() - scaledSize.width()) / 2,
             (height() - scaledSize.height()) / 2,
             scaledSize.width(),
@@ -281,66 +297,47 @@ void View::paintEvent(QPaintEvent*)
 void View::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
-    // Both web views should have the same geometry
     webView1->setGeometry(rect());
     webView2->setGeometry(rect());
 }
 
-void View::handleAuthRequest(QNetworkReply* reply, QAuthenticator* auth)
+void View::handleAuthRequest(const QUrl& requestUrl, QAuthenticator*)
 {
-    Q_UNUSED(reply)
-    Q_UNUSED(auth)
-    webView->load(QUrl::fromLocalFile(QStandardPaths::locate(QStandardPaths::AppDataLocation, "res/access_denied.html")));
+    qDebug() << "Authentication required for:" << requestUrl;
+
+    const QUrl accessDeniedUrl = QUrl::fromLocalFile(
+        QStandardPaths::locate(QStandardPaths::AppDataLocation, "res/access_denied.html")
+    );
+    QWebEnginePage* page = qobject_cast<QWebEnginePage*>(sender());
+    if (page) {
+        page->load(accessDeniedUrl);
+    } else {
+        currentWebView->load(accessDeniedUrl);
+    }
 }
 
 void View::setupAnimation()
 {
     isAnimatedImage = true;
-    webView->setVisible(false);
+    webView1->setVisible(false);
+    webView2->setVisible(false);
 
-    // Start the animation
+    connect(movie, &QMovie::frameChanged, this, [this](int) {
+        if (!movie || !isAnimatedImage) {
+            return;
+        }
+
+        const QImage newFrame = movie->currentImage();
+        if (!newFrame.isNull()) {
+            currentImage = newFrame;
+            update();
+        }
+    });
+
     movie->start();
-
-    // Set up timer for frame updates
-    int frameDelay = movie->nextFrameDelay();
-    if (frameDelay > 0) {
-        animationTimer->start(frameDelay);
-    } else {
-        // Default to 100ms if no delay specified
-        animationTimer->start(100);
-    }
-
-    // Get the first frame
+    movie->jumpToFrame(0);
     currentImage = movie->currentImage();
     update();
-}
-
-void View::onWebPageLoadFinished(bool ok)
-{
-    if (ok) {
-        qDebug() << "Background web page loaded successfully";
-        nextWebViewReady = true;
-
-        // Switch to the new web view since it's ready
-        switchToNextWebView();
-    } else {
-        qDebug() << "Background web page failed to load";
-        nextWebViewReady = false;
-    }
-
-    // Disconnect signals to prevent memory leaks
-    disconnect(nextWebView->page(), &QWebEnginePage::loadProgress, this, &View::onWebPageLoadProgress);
-    disconnect(nextWebView->page(), &QWebEnginePage::loadFinished, this, &View::onWebPageLoadFinished);
-}
-
-void View::onWebPageLoadProgress(int progress)
-{
-    qDebug() << "Background web page load progress:" << progress << "%";
-
-    // If progress reaches 100%, mark as ready
-    if (progress >= 100) {
-        nextWebViewReady = true;
-    }
 }
 
 void View::switchToNextWebView()
@@ -352,32 +349,15 @@ void View::switchToNextWebView()
 
     qDebug() << "Switching to next web view";
 
-    // Hide current web view
     currentWebView->setVisible(false);
-
-    // Show next web view
     nextWebView->setVisible(true);
     nextWebView->clearFocus();
 
-    // Swap the web views
     QWebEngineView* temp = currentWebView;
     currentWebView = nextWebView;
     nextWebView = temp;
 
-    // Update the main webView reference for compatibility
-    webView = currentWebView;
-
-    // Reset states for next load
     nextWebViewReady = false;
 
     qDebug() << "Successfully switched to next web view";
-}
-
-void View::resetWebViewStates()
-{
-    nextWebViewReady = false;
-
-    // Disconnect any existing signals to prevent duplicates
-    disconnect(nextWebView->page(), &QWebEnginePage::loadProgress, this, &View::onWebPageLoadProgress);
-    disconnect(nextWebView->page(), &QWebEnginePage::loadFinished, this, &View::onWebPageLoadFinished);
 }
