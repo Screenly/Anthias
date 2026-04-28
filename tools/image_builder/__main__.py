@@ -69,7 +69,6 @@ def build_image(
     # own isolated cache namespace.
     is_gha_runner = os.environ.get('GITHUB_ACTIONS') == 'true'
     cache_scope = f'{board_label}-{service}'
-    cache_dir = Path('/tmp/.buildx-cache') / board_label
 
     if clean_build:
         cache_from = None
@@ -88,6 +87,10 @@ def build_image(
             'ignore-error': 'true',
         }
     else:
+        # Per-user cache dir (XDG-style) instead of /tmp so we don't
+        # share a world-writable path with other users on multi-user
+        # systems.
+        cache_dir = Path.home() / '.cache' / 'anthias-buildx' / board_label
         try:
             cache_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
