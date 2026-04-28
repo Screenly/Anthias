@@ -2,5 +2,5 @@ class SigalrmError(Exception):
     pass
 
 
-class ZmqCollectorTimeoutError(Exception):
+class ReplyTimeoutError(Exception):
     pass

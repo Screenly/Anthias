@@ -12,7 +12,7 @@ import pydbus
 import sh as sh
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
-from settings import ZmqConsumer, settings
+from settings import ReplySender, settings
 from viewer.constants import BALENA_IP_RETRY_DELAY as BALENA_IP_RETRY_DELAY
 from viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
 from viewer.constants import MAX_BALENA_IP_RETRIES as MAX_BALENA_IP_RETRIES
@@ -35,14 +35,15 @@ django.setup()
 # Place imports that uses Django in this block.
 
 from lib.utils import (  # noqa: E402
+    connect_to_redis,
     get_balena_device_info,
     get_node_ip,
     is_balena_app,
     string_to_bool,
     url_fails,
 )
+from viewer.messaging import ViewerSubscriber  # noqa: E402
 from viewer.scheduling import Scheduler  # noqa: E402
-from viewer.zmq import ZmqSubscriber  # noqa: E402
 
 
 __author__ = 'Screenly, Inc'
@@ -54,15 +55,39 @@ current_browser_url: str | None = None
 browser: Any = None
 loop_is_stopped: bool = False
 browser_bus: Any = None
+r = connect_to_redis()
+reply_sender = ReplySender(r)
 
 HOME: str | None = None
 
 scheduler: Any = None
 
 
-def send_current_asset_id_to_server() -> None:
-    consumer = ZmqConsumer()
-    consumer.send({'current_asset_id': scheduler.current_asset_id})
+def send_current_asset_id_to_server(correlation_id: str | None) -> None:
+    if not correlation_id:
+        logging.warning(
+            'current_asset_id command received without a correlation ID; '
+            'dropping reply.'
+        )
+        return
+
+    # `subscriber.start()` runs before `scheduler = Scheduler()` in
+    # main(), so a `current_asset_id` command arriving during the
+    # `wait_for_server` window would `AttributeError` on
+    # `scheduler.current_asset_id`. Reply with `None` instead — the v1
+    # endpoint already treats a falsy id as "no current asset" and
+    # returns `[]`, which is the correct answer pre-scheduler-init.
+    if scheduler is None:
+        logging.info(
+            'current_asset_id requested before scheduler was ready; '
+            'replying with no current asset.'
+        )
+        reply_sender.send(correlation_id, {'current_asset_id': None})
+        return
+
+    reply_sender.send(
+        correlation_id, {'current_asset_id': scheduler.current_asset_id}
+    )
 
 
 commands = {
@@ -77,7 +102,7 @@ commands = {
         __import__('__main__'), 'loop_is_stopped', play_loop()
     ),
     'unknown': lambda _: command_not_found(),
-    'current_asset_id': lambda _: send_current_asset_id_to_server(),
+    'current_asset_id': lambda corr: send_current_asset_id_to_server(corr),
 }
 
 
@@ -265,7 +290,7 @@ def main() -> None:
 
     setup()
 
-    subscriber = ZmqSubscriber(commands, 'tcp://anthias-server:10001')
+    subscriber = ViewerSubscriber(r, commands)
     subscriber.daemon = True
     subscriber.start()
 

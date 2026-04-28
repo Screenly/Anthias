@@ -59,7 +59,6 @@ server = [
     "python-dateutil==2.9.0.post0",
     "pytz==2025.2",
     "PyYAML==6.0.2",
-    "pyzmq==23.2.1",
     "redis==7.4.0",
     "requests[security]==2.33.1",
     "setuptools==79.0.1",
@@ -88,7 +87,6 @@ viewer = [
     "python-dateutil==2.9.0.post0",
     "python-vlc==3.0.21203",
     "pytz==2025.2",
-    "pyzmq==23.2.1",
     "redis==7.4.0",
     "requests[security]==2.33.1",
     "tenacity==9.1.2",
@@ -139,7 +137,6 @@ mypy = [
     "djangorestframework==3.16.1",
     "drf-spectacular==0.29.0",
     "pytz==2025.2",
-    "pyzmq==23.2.1",
     "whitenoise==6.8.2",
 ]
 

@@ -40,7 +40,7 @@ user -> a.anthias-server: "HTTP + WebSocket (/ws)"
 a.anthias-server <-> a.redis: "Channels layer"
 a.anthias-celery <-> a.redis: "broker + Channels"
 
-a.anthias-server <-> b.anthias-viewer: "ZMQ + asset fetches"
+a.anthias-server <-> b.anthias-viewer: "Redis pub/sub + asset fetches"
 a.anthias-server <-> database
 a.anthias-celery <-> database
 b.anthias-viewer <-> database: "assets data"
