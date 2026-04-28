@@ -1,20 +1,27 @@
 ---
-- name: Install network systemd units
-  ansible.builtin.template:
-    src: "{{ item }}"
-    dest: "/etc/systemd/system/{{ item }}"
-    mode: "0644"
-    owner: root
-    group: root
-  with_items: "{{ network_systemd_units }}"
+# Disable + remove the legacy wifi-connect.service unit on hosts
+# upgraded from a release that shipped it. The service launched the
+# anthias-wifi-connect container, which has been removed; the unit is
+# now a dangling reference that systemd would log on every boot.
+# Idempotent: skipped on fresh installs where the unit file is absent.
+- name: Check for legacy wifi-connect.service
+  ansible.builtin.stat:
+    path: /etc/systemd/system/wifi-connect.service
+  register: network_legacy_wifi_connect_unit
 
-- name: Enable network systemd services
+- name: Disable legacy wifi-connect.service
   ansible.builtin.systemd:
-    name: "{{ item }}"
-    state: started
-    enabled: true
-    daemon_reload: true
-  with_items: "{{ network_systemd_units }}"
+    name: wifi-connect.service
+    state: stopped
+    enabled: false
+  when: network_legacy_wifi_connect_unit.stat.exists
+  failed_when: false
+
+- name: Remove legacy wifi-connect.service unit file
+  ansible.builtin.file:
+    path: /etc/systemd/system/wifi-connect.service
+    state: absent
+  notify: Reload systemd daemon
 
 - name: Debug msg for manage network
   ansible.builtin.debug:

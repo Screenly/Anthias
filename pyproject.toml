@@ -94,12 +94,6 @@ viewer = [
     "uptime==3.0.1",
     "urllib3==2.6.3",
 ]
-wifi-connect = [
-    "Cython==3.2.4",
-    "future==1.0.0",
-    "netifaces==0.11.0",
-    "redis==7.4.0",
-]
 dev = [
     "future==1.0.0",
     "mock==5.2.0",

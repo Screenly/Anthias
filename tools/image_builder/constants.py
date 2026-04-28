@@ -5,7 +5,6 @@ SERVICES = (
     'celery',
     'redis',
     'viewer',
-    'wifi-connect',
     'test',
 )
 GITHUB_REPO_URL = 'https://github.com/Screenly/Anthias'

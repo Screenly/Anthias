@@ -67,20 +67,21 @@ fi
 if [[ -n $(docker ps | grep srly-ose) ]]; then
     # @TODO: Rename later
     set +e
-    docker container rename srly-ose-wifi-connect anthias-wifi-connect
     docker container rename srly-ose-server anthias-server
     docker container rename srly-ose-viewer anthias-viewer
     docker container rename srly-ose-celery anthias-celery
     set -e
 fi
 
-# Drop legacy nginx + websocket containers — they were folded into
-# anthias-server (uvicorn) and are no longer in the compose file. Volumes
-# are shared across services, so removing the containers is safe.
+# Drop legacy containers no longer in the compose file:
+#   * nginx / websocket — folded into anthias-server (uvicorn).
+#   * wifi-connect      — service removed; nmcli/nmtui is the supported
+#                          path now.
+# Volumes are shared across services, so removing the containers is safe.
 set +e
 docker rm -f \
-    anthias-nginx anthias-websocket \
-    srly-ose-nginx srly-ose-websocket \
+    anthias-nginx anthias-websocket anthias-wifi-connect \
+    srly-ose-nginx srly-ose-websocket srly-ose-wifi-connect \
     >/dev/null 2>&1
 set -e
 

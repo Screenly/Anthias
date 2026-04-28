@@ -250,7 +250,6 @@ present in a Raspberry Pi with Anthias installed.
 ### `/home/${USER}/.anthias/`
 
 * `default_assets.yml` &mdash; configuration file which contains the default assets that get added to the assets list if enabled
-* `initialized` &mdash; tells whether access point service (for Wi-Fi connectivity) runs or not
 * `anthias.conf` &mdash; configuration file for web interface settings
 * `anthias.db` &ndash; database file containing current assets information.
 * On pre-rename installations this directory is `~/.screenly/` containing `screenly.conf` / `screenly.db`; the installer migrates them.
@@ -258,7 +257,6 @@ present in a Raspberry Pi with Anthias installed.
 
 ### `/etc/systemd/system/`
 
-* `wifi-connect.service` &mdash; starts the Balena `wifi-connect` program to dynamically set the Wi-Fi config on the device via the captive portal
 * `anthias-host-agent.service` &mdash; starts the Python script `host_agent.py`, which subscribes from the Redis component and performs a system call to shutdown or reboot the device when the message is received.
 
 ### `/etc/sudoers.d/anthias_overrides`
