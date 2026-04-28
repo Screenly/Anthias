@@ -71,6 +71,20 @@ def send_current_asset_id_to_server(correlation_id: str | None) -> None:
         )
         return
 
+    # `subscriber.start()` runs before `scheduler = Scheduler()` in
+    # main(), so a `current_asset_id` command arriving during the
+    # `wait_for_server` window would `AttributeError` on
+    # `scheduler.current_asset_id`. Reply with `None` instead — the v1
+    # endpoint already treats a falsy id as "no current asset" and
+    # returns `[]`, which is the correct answer pre-scheduler-init.
+    if scheduler is None:
+        logging.info(
+            'current_asset_id requested before scheduler was ready; '
+            'replying with no current asset.'
+        )
+        reply_sender.send(correlation_id, {'current_asset_id': None})
+        return
+
     reply_sender.send(
         correlation_id, {'current_asset_id': scheduler.current_asset_id}
     )

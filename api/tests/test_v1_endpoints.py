@@ -150,9 +150,11 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
         )
         asset_id = asset.asset_id
 
+        recv_json_mock = mock.MagicMock(
+            return_value={'current_asset_id': asset_id}
+        )
         with mock.patch(
-            'api.views.v1.ReplyCollector.recv_json',
-            side_effect=(lambda *_: {'current_asset_id': asset_id}),
+            'api.views.v1.ReplyCollector.recv_json', recv_json_mock
         ):
             viewer_current_asset_url = reverse('api:viewer_current_asset_v1')
             response = self.client.get(viewer_current_asset_url)
@@ -160,6 +162,20 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
 
             self.assertEqual(response.status_code, status.HTTP_200_OK)
             self.assertEqual(send_to_viewer_mock.call_count, 1)
+
+            # The view generates a UUID, embeds it in the command as
+            # ``current_asset_id&<uuid>`` and waits on the reply keyed
+            # by the same UUID. Pin that round-trip down so a future
+            # refactor can't silently desync the two halves of the
+            # request/reply pair (which would deadlock the request
+            # until the 2s recv timeout fires).
+            (sent_command,) = send_to_viewer_mock.call_args[0]
+            self.assertTrue(sent_command.startswith('current_asset_id&'))
+            sent_corr_id = sent_command.split('&', 1)[1]
+
+            self.assertEqual(recv_json_mock.call_count, 1)
+            recv_corr_id = recv_json_mock.call_args[0][0]
+            self.assertEqual(recv_corr_id, sent_corr_id)
 
             self.assertEqual(data['asset_id'], asset_id)
             self.assertEqual(data['is_active'], 1)
