@@ -74,9 +74,11 @@ def build_image(
     if clean_build:
         cache_from = None
         cache_to = None
+        click.secho('[cache] disabled (--clean-build)', fg='cyan')
     elif is_gha_runner:
         cache_from = {'type': 'gha', 'scope': cache_scope}
         cache_to = {'type': 'gha', 'mode': 'max', 'scope': cache_scope}
+        click.secho(f'[cache] type=gha scope={cache_scope}', fg='cyan')
     else:
         try:
             cache_dir.mkdir(parents=True, exist_ok=True)
@@ -91,6 +93,7 @@ def build_image(
             'dest': str(cache_dir),
             'mode': 'max',
         }
+        click.secho(f'[cache] type=local dir={cache_dir}', fg='cyan')
 
     base_apt_dependencies = [
         'build-essential',
