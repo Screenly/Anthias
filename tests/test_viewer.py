@@ -73,28 +73,40 @@ class TestLoadBrowser(ViewerTestCase):
         self.u.setup()
         self.p_loadb.stop()
 
-    def _stub_browser_stdout(
+    def _stub_browser_stdout_static(
         self,
         browser_proc: mock.Mock,
-        chunks: list[bytes],
-    ) -> mock.PropertyMock:
+        value: bytes,
+    ) -> None:
         """
         sh.RunningCommand.process.stdout is a @property that returns the
         latest accumulated buffer on each access. Use PropertyMock so
-        the test exercises the same poll-and-decode pattern the
-        production loop relies on, instead of pinning a single bytes
-        value that would stay identical across iterations.
+        the test exercises the same poll-and-decode pattern as the
+        production loop. Static variant: every read returns the same
+        bytes value, suitable for cases where the loop doesn't depend
+        on stdout changing across iterations (early-exit, timeout).
         """
-        prop = mock.PropertyMock(side_effect=chunks)
-        type(browser_proc.process).stdout = prop
-        return prop
+        type(browser_proc.process).stdout = mock.PropertyMock(
+            return_value=value
+        )
+
+    def _stub_browser_stdout_chunks(
+        self,
+        browser_proc: mock.Mock,
+        chunks: list[bytes],
+    ) -> None:
+        """As above, but advance through `chunks` across reads — for
+        the success case where the handshake appears in a later poll."""
+        type(browser_proc.process).stdout = mock.PropertyMock(
+            side_effect=chunks
+        )
 
     def test_load_browser(self) -> None:
         browser_proc = self.m_cmd.return_value.return_value
         # Two stdout reads: an empty buffer on the first poll, then the
         # handshake line appended on the second. Verifies that the
         # polling loop actually re-reads stdout each iteration.
-        self._stub_browser_stdout(
+        self._stub_browser_stdout_chunks(
             browser_proc,
             [b'starting up\n', b'starting up\nAnthias service start\n'],
         )
@@ -112,7 +124,10 @@ class TestLoadBrowser(ViewerTestCase):
         self,
     ) -> None:
         browser_proc = self.m_cmd.return_value.return_value
-        self._stub_browser_stdout(browser_proc, [b''])
+        # The error message also reads stdout, so use the static stub
+        # that returns the same value on every access rather than a
+        # one-shot side_effect.
+        self._stub_browser_stdout_static(browser_proc, b'')
         browser_proc.is_alive.return_value = False
         self.p_cmd.start()
         try:
@@ -125,9 +140,7 @@ class TestLoadBrowser(ViewerTestCase):
         self,
     ) -> None:
         browser_proc = self.m_cmd.return_value.return_value
-        # Two polled reads of the same non-handshake buffer before the
-        # deadline elapses.
-        self._stub_browser_stdout(browser_proc, [b'noise', b'still noise'])
+        self._stub_browser_stdout_static(browser_proc, b'irrelevant noise')
         browser_proc.is_alive.return_value = True
         # Three monotonic() reads: deadline init, one loop iteration
         # below the deadline, one above it.
