@@ -43,5 +43,4 @@ Running unit tests is a good way to make sure that the code is working as expect
 15. Try to reboot or shutdown the device by clickin on the **Reboot** or **Shutdown** buttons, respectively. Make sure that the device does the corresponding action.
 16. Go to the **System Info** page and make sure that all information are correct.
 17. Make sure that all the footer links are being displayed correctly.
-18. Go to the **Settings** page. Click on the **Reset Wi-Fi** and reboot your device. Make sure that the hotspot page displays.
-19. Connect to the device by ssh. Run `./bin/enable_ssl.sh` script. Make sure the site URL uses SSL.
+18. Connect to the device by ssh. Run `./bin/enable_ssl.sh` script. Make sure the site URL uses SSL.

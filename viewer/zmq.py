@@ -3,13 +3,10 @@ from typing import Any, Callable
 
 import zmq
 
-ZMQ_HOST_PUB_URL = 'tcp://host.docker.internal:10001'
-
 
 class ZmqSubscriber(Thread):
     def __init__(
         self,
-        redis_connection: Any,
         commands: dict[str, Callable[[str | None], Any]],
         publisher_url: str,
         topic: str = 'viewer',
@@ -19,15 +16,11 @@ class ZmqSubscriber(Thread):
         self.publisher_url = publisher_url
         self.topic = topic
         self.commands = commands
-        self.redis_connection = redis_connection
 
     def run(self) -> None:
         socket = self.context.socket(zmq.SUB)
         socket.connect(self.publisher_url)
         socket.setsockopt(zmq.SUBSCRIBE, bytes(self.topic, encoding='utf-8'))
-
-        if self.publisher_url == ZMQ_HOST_PUB_URL:
-            self.redis_connection.set('viewer-subscriber-ready', int(True))
 
         while True:
             msg = socket.recv()
