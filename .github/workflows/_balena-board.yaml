@@ -1,13 +1,10 @@
 name: Balena (per-board)
 
-# Reusable workflow that deploys one board's balena fleet. With
-# per-board independence, each balena leg should fire only after its
-# matching board's build/mirror succeeded — but GHA can't natively
-# gate a downstream matrix leg on a single upstream matrix leg, so
-# this workflow does its own preflight: it inspects the board's
-# <short-hash>-<board> tag in GHCR (the source of truth used by
-# mirror-latest). If the tag is missing, every subsequent step in
-# this job is skipped cleanly. The registry is the source of truth.
+# Reusable workflow that deploys one board's balena fleet. Called
+# from `_build-board.yaml` with `needs: build`, so the matching
+# board's docker push is a structural prerequisite — if any of the
+# four services failed to build/push, this workflow is skipped by
+# GHA's needs chain and never runs.
 #
 # Note the `pi4 → pi4-64` remap: balena's "pi4" fleet runs the 64-bit
 # variant, which we tag as `pi4-64` internally. Other boards pass
@@ -52,32 +49,7 @@ jobs:
 
           echo "SHM_SIZE=256mb" >> "$GITHUB_ENV"
 
-      # `imagetools inspect` works against a plain Docker daemon, but
-      # the rest of the suite assumes Buildx is available — set it up
-      # explicitly so the preflight doesn't depend on whatever buildx
-      # is preinstalled on the runner image.
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
-
-      # Per-board independence gate: GHA can't make a downstream matrix
-      # leg depend on a single upstream matrix leg, so we check the
-      # registry directly. If our board's short-hash tag isn't there,
-      # the matching build job didn't push (or was skipped), so we
-      # skip the balena deploy cleanly. The registry is the same
-      # source of truth that mirror-latest already trusts.
-      - name: Preflight - check this board's short-hash tag exists
-        id: preflight
-        run: |
-          src="ghcr.io/screenly/anthias-server:${GIT_SHORT_HASH}-${BOARD}"
-          if docker buildx imagetools inspect --raw "${src}" >/dev/null 2>&1; then
-            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Tag ${src} not found; skipping balena deploy for ${BOARD}"
-          fi
-
       - name: Prepare Balena file
-        if: steps.preflight.outputs.tag_exists == 'true'
         env:
           INPUT_BOARD: ${{ inputs.board }}
         run: |
@@ -97,7 +69,6 @@ jobs:
           fi
 
       - uses: balena-io/deploy-to-balena-action@638e3085dfe40b8c3cef2a34fe9d0874e572de4e # master
-        if: steps.preflight.outputs.tag_exists == 'true'
         id: build
         continue-on-error: true
         with:

@@ -139,6 +139,11 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  # Build → mirror-latest → balena are all per-board jobs *inside*
+  # `_build-board.yaml`. Each board's balena deploy structurally
+  # depends on that board's docker push (`needs: build` inside the
+  # reusable), so a pi3 build failure cleanly skips pi3's balena
+  # deploy without touching pi5's.
   build:
     name: Build
     needs: [plan, lint, test]
@@ -156,30 +161,4 @@ jobs:
     secrets:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-
-  # Per-board balena fan-out. GHA can't natively gate a downstream
-  # matrix leg on a single upstream matrix leg, so this job
-  # `needs: build` (waits for the entire build matrix to finish) and
-  # each leg then preflights its own board's <short-hash> tag in GHCR
-  # inside `_balena-board.yaml`. If the build for that board didn't
-  # push, the balena leg skips itself cleanly.
-  #
-  # `if: !cancelled()` (instead of `success()`) lets each balena leg
-  # run even if a *different* board's build failed — the whole point
-  # of per-board independence. fail-fast: false for the same reason.
-  #
-  # Only pi1-pi5 deploy to balena (no pi4-64, no x86); pi4 here maps
-  # to the pi4-64 image inside `_balena-board.yaml`.
-  balena:
-    name: Balena
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !cancelled()
-    strategy:
-      fail-fast: false
-      matrix:
-        board: [pi1, pi2, pi3, pi4, pi5]
-    uses: ./.github/workflows/_balena-board.yaml
-    with:
-      board: ${{ matrix.board }}
-    secrets:
       BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}

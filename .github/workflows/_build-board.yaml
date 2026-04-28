@@ -41,6 +41,11 @@ on:
         required: false
       DOCKER_PASSWORD:
         required: false
+      # Required only for pi1-pi5 boards on master push (the per-board
+      # `balena` job below). x86 / pi4-64 / PR builds never call the
+      # balena step so the secret can be absent.
+      BALENA_TOKEN:
+        required: false
 
 jobs:
   build:
@@ -176,7 +181,11 @@ jobs:
   mirror-latest:
     name: Mirror latest-${{ inputs.board }}
     needs: build
-    if: inputs.push
+    # `inputs.push` is `type: string`; in GHA expressions a non-empty
+    # string is truthy, so `if: inputs.push` would fire even when
+    # push='false'. The explicit `== 'true'` matches the gating used
+    # elsewhere in this file.
+    if: inputs.push == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -251,3 +260,31 @@ jobs:
             done
           done
           echo "::endgroup::"
+
+  # Per-board balena deploy. `needs: build` is the structural
+  # dependency on this board's docker push: if any of the four
+  # services in the build matrix above failed, GHA skips this job
+  # automatically. That replaces the registry-preflight workaround
+  # the old top-level `balena:` matrix used to bridge the cross-job
+  # matrix-leg gap.
+  #
+  # Gating:
+  #   - `inputs.push == 'true'` — never deploy from PR smoke builds.
+  #   - `github.event_name == 'push' && github.ref == ...` — never
+  #     deploy from `workflow_dispatch` even though it builds with
+  #     push=true. Matches the prior top-level balena gate.
+  #   - board ∈ {pi1..pi5} — pi4-64 and x86 don't have balena fleets;
+  #     pi4 here maps to the pi4-64 image inside `_balena-board.yaml`.
+  balena:
+    name: Balena ${{ inputs.board }}
+    needs: build
+    if: |
+      inputs.push == 'true'
+      && github.event_name == 'push'
+      && github.ref == 'refs/heads/master'
+      && contains(fromJSON('["pi1","pi2","pi3","pi4","pi5"]'), inputs.board)
+    uses: ./.github/workflows/_balena-board.yaml
+    with:
+      board: ${{ inputs.board }}
+    secrets:
+      BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
