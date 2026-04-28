@@ -74,11 +74,19 @@ def build_image(
     if clean_build:
         cache_from = None
         cache_to = None
-        click.secho('[cache] disabled (--clean-build)', fg='cyan')
     elif is_gha_runner:
+        # `ignore-error=true` so a transient GHA cache outage (the
+        # service returns a 400 with an HTML "Our services aren't
+        # available right now" page from time to time) doesn't fail
+        # the build. Cache is an optimization; missing it costs us
+        # rebuild time but never correctness.
         cache_from = {'type': 'gha', 'scope': cache_scope}
-        cache_to = {'type': 'gha', 'mode': 'max', 'scope': cache_scope}
-        click.secho(f'[cache] type=gha scope={cache_scope}', fg='cyan')
+        cache_to = {
+            'type': 'gha',
+            'mode': 'max',
+            'scope': cache_scope,
+            'ignore-error': 'true',
+        }
     else:
         try:
             cache_dir.mkdir(parents=True, exist_ok=True)
@@ -93,7 +101,6 @@ def build_image(
             'dest': str(cache_dir),
             'mode': 'max',
         }
-        click.secho(f'[cache] type=local dir={cache_dir}', fg='cyan')
 
     base_apt_dependencies = [
         'build-essential',
