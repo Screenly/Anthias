@@ -67,6 +67,9 @@ View::View(QWidget* parent) : QWidget(parent)
 
 View::~View()
 {
+    if (pageLoadConnection) {
+        QObject::disconnect(pageLoadConnection);
+    }
     stopAnimation();
 }
 
@@ -112,16 +115,17 @@ void View::loadPage(const QString &uri)
         &QWebEnginePage::loadFinished,
         this,
         [this, requestId](bool ok) {
-            // Stale completion from a load that was superseded by a
-            // subsequent loadPage / loadImage call.
+            // One-shot: detach unconditionally on first fire so neither
+            // a stale completion (superseded by a later load) nor a
+            // re-emission (e.g., JS-driven redirect after the swap)
+            // can run this lambda again.
+            QObject::disconnect(pageLoadConnection);
+            pageLoadConnection = QMetaObject::Connection{};
+
             if (requestId != loadGenerationId) {
                 qDebug() << "Ignoring stale page load result";
                 return;
             }
-            // One-shot: detach so any later loadFinished re-emissions
-            // (e.g., from a JS-driven redirect) don't re-trigger the
-            // swap.
-            QObject::disconnect(pageLoadConnection);
 
             if (ok) {
                 qDebug() << "Background web page loaded successfully";
@@ -143,6 +147,18 @@ void View::loadImage(const QString &preUri)
 {
     qDebug() << "Type: Image";
     const quint64 requestId = ++loadGenerationId;
+
+    // Cancel any pending page load so we don't keep streaming a web
+    // page in the background after the user has switched to image
+    // playback. Without this the QWebEngineView would continue fetching
+    // and rendering until completion, even though the result would be
+    // ignored by the (now stale) loadFinished handler.
+    if (pageLoadConnection) {
+        QObject::disconnect(pageLoadConnection);
+        pageLoadConnection = QMetaObject::Connection{};
+    }
+    webView1->stop();
+    webView2->stop();
 
     webView1->setVisible(false);
     webView2->setVisible(false);

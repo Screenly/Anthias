@@ -4,7 +4,7 @@ import logging
 import sys
 from os import getenv, path
 from signal import SIGALRM, signal
-from time import sleep
+from time import monotonic, sleep
 from typing import Any
 
 import django
@@ -106,15 +106,36 @@ commands = {
 }
 
 
+BROWSER_STARTUP_TIMEOUT_SECONDS = 30
+BROWSER_HANDSHAKE_LINE = 'Anthias service start'
+
+
 def load_browser() -> None:
     global browser
     logging.info('Loading browser...')
 
     browser = sh.Command('AnthiasWebview')(_bg=True, _err_to_out=True)
-    while 'Anthias service start' not in browser.process.stdout.decode(
-        'utf-8'
-    ):
+
+    # Bound the wait so we don't hang the viewer indefinitely if
+    # AnthiasWebview fails to register on D-Bus (missing binary, broken
+    # library link, handshake-line drift, etc.). The string here must
+    # match `qInfo() << "Anthias service start"` in webview/src/main.cpp.
+    deadline = monotonic() + BROWSER_STARTUP_TIMEOUT_SECONDS
+    while monotonic() < deadline:
+        if BROWSER_HANDSHAKE_LINE in browser.process.stdout.decode('utf-8'):
+            return
+        if not browser.is_alive():
+            raise RuntimeError(
+                'AnthiasWebview exited before emitting D-Bus handshake; '
+                'stdout: '
+                + browser.process.stdout.decode('utf-8', errors='replace')
+            )
         sleep(1)
+
+    raise TimeoutError(
+        f'AnthiasWebview did not emit "{BROWSER_HANDSHAKE_LINE}" within '
+        f'{BROWSER_STARTUP_TIMEOUT_SECONDS}s'
+    )
 
 
 def view_webpage(uri: str) -> None:
