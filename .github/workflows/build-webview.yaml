@@ -64,7 +64,7 @@ jobs:
             -t screenly/ose-qt-builder:latest .
 
   compile-webview-part-1:
-    name: Compile Webview (Pi 1-4)
+    name: Compile Webview (Pi 1-4 / Qt 5)
     needs: build-docker-image
     strategy:
       matrix:
@@ -99,6 +99,16 @@ jobs:
           tar xfz cache.tgz -C /tmp/.cache
           ls -lah /tmp/.cache
 
+      - name: Derive WEBVIEW_VERSION
+        run: |
+          # WebView-v2026.04.0 → 2026.04.0 on tag pushes; date-stamped
+          # dev version otherwise so artifact names are still well-formed.
+          if [[ "$GITHUB_REF" == refs/tags/WebView-v* ]]; then
+            echo "WEBVIEW_VERSION=${GITHUB_REF#refs/tags/WebView-v}" >> "$GITHUB_ENV"
+          else
+            echo "WEBVIEW_VERSION=$(date -u +%Y.%m).0-dev" >> "$GITHUB_ENV"
+          fi
+
       - name: Start compilation
         shell: 'script -q -e -c "bash {0}"'
         run: |
@@ -110,6 +120,7 @@ jobs:
             -v ~/tmp/qt-build:/build:Z \
             -v $(pwd):/webview:ro \
             -e TARGET=${{ matrix.board }} \
+            -e WEBVIEW_VERSION="$WEBVIEW_VERSION" \
             screenly/ose-qt-builder:latest
           docker exec -it qt-builder /webview/build_webview_with_qt5.sh
           docker rm -f qt-builder
@@ -129,11 +140,11 @@ jobs:
           path: ~/tmp/qt-build/
 
   compile-webview-part-2:
-    name: Compile Webview (pi5, x86)
+    name: Compile Webview (Qt 6 / aqt)
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        board: ['pi5', 'x86']
+        board: ['pi5', 'pi4-64', 'x86']
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -146,15 +157,17 @@ jobs:
 
       - name: Set environment variables
         run: |
-          GIT_HASH=""
-          COMPOSE_PROFILES=""
-
-          GIT_HASH="$(git rev-parse --short HEAD)"
-          COMPOSE_PROFILES="${{ matrix.board }}"
+          # WebView-v2026.04.0 → 2026.04.0 on tag pushes; date-stamped
+          # dev version otherwise so artifact names are still well-formed.
+          if [[ "$GITHUB_REF" == refs/tags/WebView-v* ]]; then
+            WEBVIEW_VERSION="${GITHUB_REF#refs/tags/WebView-v}"
+          else
+            WEBVIEW_VERSION="$(date -u +%Y.%m).0-dev"
+          fi
 
           {
-            echo "GIT_HASH=$GIT_HASH"
-            echo "COMPOSE_PROFILES=$COMPOSE_PROFILES"
+            echo "WEBVIEW_VERSION=$WEBVIEW_VERSION"
+            echo "COMPOSE_PROFILES=${{ matrix.board }}"
             echo "COMPOSE_BAKE=true"
           } >> "$GITHUB_ENV"
 
@@ -166,7 +179,9 @@ jobs:
       - name: Compile WebView
         run: |
           cd webview
-          docker compose run builder-${{ matrix.board }} /scripts/build_webview.sh
+          docker compose run \
+            -e WEBVIEW_VERSION="$WEBVIEW_VERSION" \
+            builder-${{ matrix.board }} /scripts/build_webview.sh
 
       - name: Copy build artifacts
         run: |
@@ -188,7 +203,7 @@ jobs:
       - compile-webview-part-2
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi5', 'x86']
+        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
     runs-on: ubuntu-24.04
     permissions:
       contents: write

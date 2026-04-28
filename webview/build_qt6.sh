@@ -240,9 +240,9 @@ function build_qt () {
             make -j"$MAKE_CORES"
             make install
 
-            mkdir -p fakeroot/bin fakeroot/share/ScreenlyWebview
-            mv ScreenlyWebview fakeroot/bin/
-            cp -rf /webview/res fakeroot/share/ScreenlyWebview/
+            mkdir -p fakeroot/bin fakeroot/share/AnthiasWebview
+            mv AnthiasWebview fakeroot/bin/
+            cp -rf /webview/res fakeroot/share/AnthiasWebview/
 
             cd fakeroot
             tar cfz "$BUILD_TARGET/webview-$QT_BRANCH-$DEBIAN_VERSION-$1.tar.gz" .

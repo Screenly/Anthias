@@ -84,7 +84,7 @@ def build_image(
         base_apt_dependencies.extend(['libraspberrypi0'])
 
     if service == 'viewer':
-        context.update(get_viewer_context(board))
+        context.update(get_viewer_context(board, target_platform))
     elif service == 'test':
         context.update(get_test_context())
 

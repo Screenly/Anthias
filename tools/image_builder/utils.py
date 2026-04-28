@@ -130,15 +130,22 @@ def get_test_context() -> dict[str, Any]:
     }
 
 
-def get_viewer_context(board: str) -> dict[str, Any]:
+def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     releases_url = f'{GITHUB_REPO_URL}/releases/download'
 
-    webview_git_hash = 'd7a7e2c'
-    webview_base_url = f'{releases_url}/WebView-v0.3.12'
+    # CalVer release of the WebView (YYYY.MM.PATCH). Bump this together
+    # with the corresponding WebView-v* tag in the release.
+    webview_version = '2026.04.0'
+    webview_base_url = f'{releases_url}/WebView-v{webview_version}'
 
-    qt_version = '5.15.14'
+    is_pi4_64 = board == 'pi4' and target_platform == 'linux/arm64/v8'
+    is_qt6 = board in ['pi5', 'x86'] or is_pi4_64
+    artifact_board = 'pi4-64' if is_pi4_64 else board
 
-    if board in ['pi5', 'x86']:
+    # Qt version is only used to pull the cross-built Qt 5 toolchain
+    # archive on legacy 32-bit Pi boards; Qt 6 boards consume Qt from
+    # apt and don't need this in the artifact name.
+    if is_qt6:
         qt_version = '6.4.2'
     else:
         qt_version = '5.15.14'
@@ -251,7 +258,7 @@ def get_viewer_context(board: str) -> dict[str, Any]:
         'libswscale-dev',
     ]
 
-    if board in ['pi5', 'x86']:
+    if is_qt6:
         apt_dependencies.extend(
             [
                 'mpv',
@@ -260,8 +267,7 @@ def get_viewer_context(board: str) -> dict[str, Any]:
                 'qt6-image-formats-plugins',
             ]
         )
-
-    if board not in ['x86', 'pi5']:
+    else:
         apt_dependencies.extend(
             [
                 'libraspberrypi0',
@@ -279,6 +285,8 @@ def get_viewer_context(board: str) -> dict[str, Any]:
         'apt_dependencies': apt_dependencies,
         'qt_version': qt_version,
         'qt_major_version': qt_major_version,
-        'webview_git_hash': webview_git_hash,
+        'webview_version': webview_version,
         'webview_base_url': webview_base_url,
+        'is_qt6': is_qt6,
+        'artifact_board': artifact_board,
     }

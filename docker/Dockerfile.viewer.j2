@@ -26,27 +26,30 @@ ENV VIRTUAL_ENV="/venv"
 # https://github.com/balena-io-library/base-images/issues/562
 RUN c_rehash
 
-# QT Base from packages does not support eglfs
+# QT Base from packages does not support eglfs.
+# Qt 5 boards (Pi 1-4 32-bit) get a custom cross-built Qt runtime via the
+# qt5-* archive below; Qt 6 boards use Debian's apt qt6-* packages and so
+# only need the WebView binary archive.
 
-{% if board != 'pi5' and board != 'x86' %}
-RUN curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" \
-        -sL -o "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" && \
-    curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz.sha256" \
-        -sL -o "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz.sha256" && \
+{% if not is_qt6 %}
+RUN curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz" \
+        -sL -o "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz" && \
+    curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz.sha256" \
+        -sL -o "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz.sha256" && \
     cd /tmp && \
-    sha256sum -c "qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz.sha256" && \
-    tar -xzf "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz" -C /usr/local && \
-    rm "qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{board}}.tar.gz"
+    sha256sum -c "qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz.sha256" && \
+    tar -xzf "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz" -C /usr/local && \
+    rm "qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz"
 {% endif %}
 
-RUN curl "{{webview_base_url}}/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz" \
-        -sL -o "/tmp/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz" && \
-    curl "{{webview_base_url}}/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz.sha256" \
-        -sL -o "/tmp/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz.sha256" && \
+RUN curl "{{webview_base_url}}/webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz" \
+        -sL -o "/tmp/webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz" && \
+    curl "{{webview_base_url}}/webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz.sha256" \
+        -sL -o "/tmp/webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz.sha256" && \
     cd /tmp && \
-    sha256sum -c "webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz.sha256" && \
-    tar -xzf "/tmp/webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz" -C /usr/local && \
-    rm "webview-{{qt_version}}-{{debian_version}}-{{board}}-{{webview_git_hash}}.tar.gz"
+    sha256sum -c "webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz.sha256" && \
+    tar -xzf "/tmp/webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz" -C /usr/local && \
+    rm "webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz"
 
 ENV QT_QPA_EGLFS_FORCE888=1
 ENV QT_QPA_PLATFORM=linuxfb

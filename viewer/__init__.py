@@ -110,8 +110,8 @@ def load_browser() -> None:
     global browser
     logging.info('Loading browser...')
 
-    browser = sh.Command('ScreenlyWebview')(_bg=True, _err_to_out=True)
-    while 'Screenly service start' not in browser.process.stdout.decode(
+    browser = sh.Command('AnthiasWebview')(_bg=True, _err_to_out=True)
+    while 'Anthias service start' not in browser.process.stdout.decode(
         'utf-8'
     ):
         sleep(1)
@@ -261,7 +261,7 @@ def setup() -> None:
     load_browser()
 
     bus = pydbus.SessionBus()
-    browser_bus = bus.get('screenly.webview', '/Screenly')
+    browser_bus = bus.get('anthias.webview', '/Anthias')
 
 
 def wait_for_node_ip(seconds: int) -> None:
