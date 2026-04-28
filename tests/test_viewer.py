@@ -74,13 +74,13 @@ class TestLoadBrowser(ViewerTestCase):
         self.p_loadb.stop()
 
     def test_load_browser(self) -> None:
-        self.m_cmd.return_value.return_value.process.stdout = (
-            b'Screenly service start'
-        )
+        browser_proc = self.m_cmd.return_value.return_value
+        browser_proc.process.stdout = b'Anthias service start'
+        browser_proc.is_alive.return_value = True
         self.p_cmd.start()
         self.u.load_browser()
         self.p_cmd.stop()
-        self.m_cmd.assert_called_once_with('ScreenlyWebview')
+        self.m_cmd.assert_called_once_with('AnthiasWebview')
 
 
 class TestWatchdog(ViewerTestCase):
