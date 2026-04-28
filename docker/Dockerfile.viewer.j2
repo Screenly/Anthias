@@ -61,6 +61,7 @@ ENV GIT_SHORT_HASH={{ git_short_hash }}
 ENV GIT_BRANCH={{ git_branch }}
 ENV DEVICE_TYPE={{ board }}
 ENV DJANGO_SETTINGS_MODULE="anthias_django.settings"
+ENV ANTHIAS_SERVICE="viewer"
 
 RUN useradd -g video viewer
 
@@ -69,5 +70,7 @@ RUN rm -f /etc/localtime
 WORKDIR /usr/src/app
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/
+
+{% include 'labels.j2' %}
 
 CMD ["bash", "./bin/start_viewer.sh"]

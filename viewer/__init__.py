@@ -32,23 +32,20 @@ from viewer.utils import (
     watchdog,
 )
 
-try:
-    django.setup()
+django.setup()
 
-    # Place imports that uses Django in this block.
+# Place imports that uses Django in this block.
 
-    from lib.utils import (
-        connect_to_redis,
-        get_balena_device_info,
-        get_node_ip,
-        is_balena_app,
-        string_to_bool,
-        url_fails,
-    )
-    from viewer.messaging import ViewerSubscriber
-    from viewer.scheduling import Scheduler
-except Exception:
-    pass
+from lib.utils import (  # noqa: E402
+    connect_to_redis,
+    get_balena_device_info,
+    get_node_ip,
+    is_balena_app,
+    string_to_bool,
+    url_fails,
+)
+from viewer.messaging import ViewerSubscriber  # noqa: E402
+from viewer.scheduling import Scheduler  # noqa: E402
 
 
 __author__ = 'Screenly, Inc'

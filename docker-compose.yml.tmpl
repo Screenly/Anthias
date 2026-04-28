@@ -2,7 +2,7 @@
 
 services:
   anthias-wifi-connect:
-    image: screenly/anthias-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: ghcr.io/screenly/anthias-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.wifi-connect
@@ -21,7 +21,7 @@ services:
         target: /run/dbus/system_bus_socket
 
   anthias-server:
-    image: screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: ghcr.io/screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.server
@@ -51,7 +51,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   anthias-viewer:
-    image: screenly/anthias-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: ghcr.io/screenly/anthias-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
@@ -79,7 +79,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   anthias-celery:
-    image: screenly/anthias-celery:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: ghcr.io/screenly/anthias-celery:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.celery
@@ -103,7 +103,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   redis:
-    image: screenly/anthias-redis:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: ghcr.io/screenly/anthias-redis:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.redis
