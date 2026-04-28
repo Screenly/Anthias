@@ -154,6 +154,18 @@ jobs:
   build:
     name: Build
     needs: [plan, lint, test]
+    # `packages: write` is needed by the GHCR login + push in the
+    # reusable's `build` and `mirror-latest` jobs. A reusable workflow
+    # can only narrow, never widen, the permissions granted by its
+    # caller — the workflow-level `permissions: contents: read` above
+    # would otherwise force the nested jobs to `packages: none` and
+    # GHA rejects the whole workflow at startup ("nested job 'build'
+    # is requesting 'packages: write', but is only allowed
+    # 'packages: none'"). Scoping the elevation to this one job keeps
+    # plan/lint/test on the tighter default.
+    permissions:
+      contents: read
+      packages: write
     strategy:
       # Don't cancel sibling boards on first failure: each board is
       # an independent build-and-publish unit. A flaky pi3 doesn't
