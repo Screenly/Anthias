@@ -75,27 +75,29 @@ ALLOWED_HOSTS = [
 
 # Application definition
 
-# The viewer process only needs Django for ORM access to the Asset
-# model — it never serves HTTP, runs migrations, or handles WebSocket
-# traffic. Skip the apps that exist purely for the web UI/REST API so
-# the viewer image doesn't have to ship channels, DRF, drf-spectacular,
-# whitenoise, dbbackup, etc. Server/celery/test still get the full set.
-if getenv('ANTHIAS_SERVICE') == 'viewer':
-    INSTALLED_APPS = [
-        'anthias_app.apps.AnthiasAppConfig',
-        'django.contrib.contenttypes',
-        'django.contrib.auth',
-    ]
-else:
-    INSTALLED_APPS = [
+# Apps every Django consumer needs: ORM access to the Asset model,
+# plus the contenttypes + auth tables those models implicitly depend
+# on. Loaded by every service that calls django.setup() — server,
+# celery, viewer, test.
+INSTALLED_APPS = [
+    'anthias_app.apps.AnthiasAppConfig',
+    'django.contrib.contenttypes',
+    'django.contrib.auth',
+]
+
+# Apps only the HTTP-serving services need (REST API, OpenAPI schema,
+# Channels for WebSockets, the admin UI, sessions/messages, static
+# files, DB backups). The viewer never serves HTTP and doesn't ship
+# the packages these apps live in (channels, djangorestframework,
+# drf_spectacular, whitenoise, dbbackup), so it skips them. Server,
+# celery, and test images are unaffected.
+if getenv('ANTHIAS_SERVICE') != 'viewer':
+    INSTALLED_APPS += [
         'channels',
-        'anthias_app.apps.AnthiasAppConfig',
         'drf_spectacular',
         'rest_framework',
         'api.apps.ApiConfig',
         'django.contrib.admin',
-        'django.contrib.auth',
-        'django.contrib.contenttypes',
         'django.contrib.sessions',
         'django.contrib.messages',
         'django.contrib.staticfiles',
