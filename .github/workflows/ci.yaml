@@ -158,64 +158,28 @@ jobs:
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
   # Per-board balena fan-out. GHA can't natively gate a downstream
-  # matrix leg on a single upstream matrix leg, so each balena leg
-  # below `needs: build` (waits for the entire build matrix to
-  # finish) and then preflights its own board's <short-hash> tag in
-  # GHCR inside `_balena-board.yaml`. If the build for that board
-  # didn't push, the balena leg skips itself cleanly.
+  # matrix leg on a single upstream matrix leg, so this job
+  # `needs: build` (waits for the entire build matrix to finish) and
+  # each leg then preflights its own board's <short-hash> tag in GHCR
+  # inside `_balena-board.yaml`. If the build for that board didn't
+  # push, the balena leg skips itself cleanly.
   #
   # `if: !cancelled()` (instead of `success()`) lets each balena leg
   # run even if a *different* board's build failed — the whole point
-  # of per-board independence.
+  # of per-board independence. fail-fast: false for the same reason.
   #
   # Only pi1-pi5 deploy to balena (no pi4-64, no x86); pi4 here maps
   # to the pi4-64 image inside `_balena-board.yaml`.
-  balena-pi1:
-    name: Balena pi1
+  balena:
+    name: Balena
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !cancelled()
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [pi1, pi2, pi3, pi4, pi5]
     uses: ./.github/workflows/_balena-board.yaml
     with:
-      board: pi1
-    secrets:
-      BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
-
-  balena-pi2:
-    name: Balena pi2
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !cancelled()
-    uses: ./.github/workflows/_balena-board.yaml
-    with:
-      board: pi2
-    secrets:
-      BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
-
-  balena-pi3:
-    name: Balena pi3
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !cancelled()
-    uses: ./.github/workflows/_balena-board.yaml
-    with:
-      board: pi3
-    secrets:
-      BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
-
-  balena-pi4:
-    name: Balena pi4
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !cancelled()
-    uses: ./.github/workflows/_balena-board.yaml
-    with:
-      board: pi4
-    secrets:
-      BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
-
-  balena-pi5:
-    name: Balena pi5
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !cancelled()
-    uses: ./.github/workflows/_balena-board.yaml
-    with:
-      board: pi5
+      board: ${{ matrix.board }}
     secrets:
       BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
