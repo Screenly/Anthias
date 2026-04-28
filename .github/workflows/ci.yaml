@@ -118,14 +118,21 @@ jobs:
       # type-coercion failure when matrix-of-uses passes a JSON
       # boolean through `${{ matrix.push }}` to a boolean-typed input
       # (manifests as a 1-second startup_failure with no logs).
+      # The emitted matrix is a JSON *object* with an `include` key —
+      # not a bare list — to match the canonical shape from GitHub's
+      # dynamic-matrix docs. The `build` job below uses
+      # `matrix: ${{ fromJSON(...) }}` (replacing the whole strategy
+      # matrix) rather than `matrix.include: ${{ fromJSON(...) }}`,
+      # because matrix-of-uses + dynamic-matrix has only ever been
+      # documented to work in the whole-matrix-replacement form.
       - id: set
         env:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            matrix='[{"board":"x86","push":"false"}]'
+            matrix='{"include":[{"board":"x86","push":"false"}]}'
           else
-            matrix='[{"board":"pi1","push":"true"},{"board":"pi2","push":"true"},{"board":"pi3","push":"true"},{"board":"pi4","push":"true"},{"board":"pi4-64","push":"true"},{"board":"pi5","push":"true"},{"board":"x86","push":"true"}]'
+            matrix='{"include":[{"board":"pi1","push":"true"},{"board":"pi2","push":"true"},{"board":"pi3","push":"true"},{"board":"pi4","push":"true"},{"board":"pi4-64","push":"true"},{"board":"pi5","push":"true"},{"board":"x86","push":"true"}]}'
           fi
           echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
 
@@ -152,8 +159,9 @@ jobs:
       # an independent build-and-publish unit. A flaky pi3 doesn't
       # stop pi5 from advancing its latest-pi5 tag.
       fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+      # Whole-matrix replacement (not `matrix.include: ${{ ... }}`)
+      # — see comment on the `plan` job above.
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     uses: ./.github/workflows/_build-board.yaml
     with:
       board: ${{ matrix.board }}
