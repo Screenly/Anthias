@@ -50,7 +50,7 @@ You can learn more about this process in the blog post [Compiling Qt with Docker
 You can append the following environment variables to configure the build process:
 
 * `CLEAN_BUILD`: Set to `1` to ensure a clean build (not including the `ccache` cache).
-* `BUILD_WEBVIEW`:  Set to `0` to disable the build of ScreenlyWebView.
+* `BUILD_WEBVIEW`:  Set to `0` to disable the build of AnthiasWebView.
 * `TARGET`: Specify a particular target (such as `pi3` or `pi4`) instead of all existing boards.
 
 ### Building for x86
@@ -96,7 +96,7 @@ The resulting files will be placed in `~/tmp-pi5/build/release`.
 ## Usage
 
 DBus is used for communication.
-Webview registers `screenly.webview` object at `/Screenly` address on the session bus.
+Webview registers `anthias.webview` object at `/Anthias` address on the session bus.
 
 Webview provides 2 methods:`loadPage` and `loadImage`.
 
@@ -106,7 +106,7 @@ Example of interaction (python):
 from pydbus import SessionBus
 
 bus = SessionBus()
-browser_bus = bus.get('screenly.webview', '/Screenly')
+browser_bus = bus.get('anthias.webview', '/Anthias')
 
 browser_bus.loadPage("www.example.com")
 ```
@@ -129,25 +129,32 @@ Make sure that you are current in the `master` branch.
 git checkout master
 ```
 
-Create a new tag for the release.
+Create a new tag for the release. The WebView uses CalVer in
+`YYYY.MM.PATCH` form, where `PATCH` is sequential within the month
+(start at `0` for the first release of the month, bump to `1`, `2`, ...
+for subsequent ones).
 
 ```bash
-git tag -a WebView-vX.Y.Z -m "[tag message]"
+git tag -a WebView-v$(date -u +%Y.%m).0 -m "[tag message]"
 ```
 
 > [!IMPORTANT]
-> The tag name must start with `WebView-v` and the version must follow the semantic versioning format.
+> The tag name must start with `WebView-v` and the version must follow
+> the `YYYY.MM.PATCH` CalVer format. The CI workflow strips the
+> `WebView-v` prefix and passes the remaining `YYYY.MM.PATCH` to the
+> build as `WEBVIEW_VERSION`, which ends up in the artifact filename
+> (`webview-2026.04.0-bookworm-x86.tar.gz`).
 
 Push the tag to the remote repository.
 
 ```bash
-git push origin WebView-vX.Y.Z
+git push origin WebView-v2026.04.0
 ```
 
 If you're using a forked repository, you need to push the tag to the upstream repository.
 
 ```bash
-git push upstream WebView-vX.Y.Z
+git push upstream WebView-v2026.04.0
 ```
 
 Pushing this tag will trigger the [build-webview](https://github.com/Screenly/Anthias/actions/workflows/build-webview.yaml) workflow.

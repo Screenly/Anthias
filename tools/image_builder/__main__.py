@@ -135,8 +135,20 @@ def build_image(
     if board in ['pi1', 'pi2', 'pi3', 'pi4']:
         base_apt_dependencies.extend(['libraspberrypi0'])
 
+    # DEVICE_TYPE inside the container needs to be 'pi4-64' for the 64-bit
+    # Pi 4 build, not 'pi4', because lib/github.py:get_latest_docker_hub_hash
+    # filters Hub tags by `-{device_type}` suffix and the published tags use
+    # `-pi4-64`. Hardware-level checks in viewer/media_player.py go through
+    # lib/device_helper.get_device_type() which reads /proc/device-tree/model
+    # at runtime and is unaffected.
+    device_type = (
+        'pi4-64'
+        if board == 'pi4' and target_platform == 'linux/arm64/v8'
+        else board
+    )
+
     if service == 'viewer':
-        context.update(get_viewer_context(board))
+        context.update(get_viewer_context(board, target_platform))
     elif service == 'test':
         context.update(get_test_context())
 
@@ -149,6 +161,7 @@ def build_image(
             'base_image_tag': 'bookworm',
             'base_apt_dependencies': base_apt_dependencies,
             'board': board,
+            'device_type': device_type,
             'debian_version': 'bookworm',
             'disable_cache_mounts': disable_cache_mounts,
             'environment': environment,

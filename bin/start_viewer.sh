@@ -14,12 +14,12 @@ chown -f viewer /dev/snd/*
 chown -f viewer /data/.anthias/latest_anthias_sha
 
 # Fixes caching in QTWebEngine
-mkdir -p /data/.local/share/ScreenlyWebview/QtWebEngine \
-    /data/.cache/ScreenlyWebview \
+mkdir -p /data/.local/share/AnthiasWebview/QtWebEngine \
+    /data/.cache/AnthiasWebview \
     /data/.pki
 
-chown -Rf viewer /data/.local/share/ScreenlyWebview
-chown -Rf viewer /data/.cache/ScreenlyWebview/
+chown -Rf viewer /data/.local/share/AnthiasWebview
+chown -Rf viewer /data/.cache/AnthiasWebview/
 chown -Rf viewer /data/.pki
 
 # Temporary workaround for watchdog

@@ -73,14 +73,91 @@ class TestLoadBrowser(ViewerTestCase):
         self.u.setup()
         self.p_loadb.stop()
 
-    def test_load_browser(self) -> None:
-        self.m_cmd.return_value.return_value.process.stdout = (
-            b'Screenly service start'
+    def _stub_browser_stdout_static(
+        self,
+        browser_proc: mock.Mock,
+        value: bytes,
+    ) -> None:
+        """
+        sh.RunningCommand.process.stdout is a @property that returns the
+        latest accumulated buffer on each access. Use PropertyMock so
+        the test exercises the same poll-and-decode pattern as the
+        production loop. Static variant: every read returns the same
+        bytes value, suitable for cases where the loop doesn't depend
+        on stdout changing across iterations (early-exit, timeout).
+        """
+        type(browser_proc.process).stdout = mock.PropertyMock(
+            return_value=value
         )
+
+    def _stub_browser_stdout_chunks(
+        self,
+        browser_proc: mock.Mock,
+        chunks: list[bytes],
+    ) -> None:
+        """As above, but advance through `chunks` across reads — for
+        the success case where the handshake appears in a later poll."""
+        type(browser_proc.process).stdout = mock.PropertyMock(
+            side_effect=chunks
+        )
+
+    def test_load_browser(self) -> None:
+        browser_proc = self.m_cmd.return_value.return_value
+        # Two stdout reads: an empty buffer on the first poll, then the
+        # handshake line appended on the second. Verifies that the
+        # polling loop actually re-reads stdout each iteration.
+        self._stub_browser_stdout_chunks(
+            browser_proc,
+            [b'starting up\n', b'starting up\nAnthias service start\n'],
+        )
+        browser_proc.is_alive.return_value = True
         self.p_cmd.start()
-        self.u.load_browser()
-        self.p_cmd.stop()
-        self.m_cmd.assert_called_once_with('ScreenlyWebview')
+        self.p_sleep.start()
+        try:
+            self.u.load_browser()
+        finally:
+            self.p_sleep.stop()
+            self.p_cmd.stop()
+        self.m_cmd.assert_called_once_with('AnthiasWebview')
+
+    def test_load_browser_raises_when_process_exits_before_handshake(
+        self,
+    ) -> None:
+        browser_proc = self.m_cmd.return_value.return_value
+        # The error message also reads stdout, so use the static stub
+        # that returns the same value on every access rather than a
+        # one-shot side_effect.
+        self._stub_browser_stdout_static(browser_proc, b'')
+        browser_proc.is_alive.return_value = False
+        self.p_cmd.start()
+        try:
+            with self.assertRaises(RuntimeError):
+                self.u.load_browser()
+        finally:
+            self.p_cmd.stop()
+
+    def test_load_browser_times_out_when_handshake_never_arrives(
+        self,
+    ) -> None:
+        browser_proc = self.m_cmd.return_value.return_value
+        self._stub_browser_stdout_static(browser_proc, b'irrelevant noise')
+        browser_proc.is_alive.return_value = True
+        # Three monotonic() reads: deadline init, one loop iteration
+        # below the deadline, one above it.
+        monotonic_values = iter([0.0, 0.0, 100.0])
+        self.p_cmd.start()
+        self.p_sleep.start()
+        try:
+            with mock.patch.object(
+                self.u,
+                'monotonic',
+                side_effect=lambda: next(monotonic_values),
+            ):
+                with self.assertRaises(TimeoutError):
+                    self.u.load_browser()
+        finally:
+            self.p_sleep.stop()
+            self.p_cmd.stop()
 
 
 class TestWatchdog(ViewerTestCase):

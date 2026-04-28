@@ -1,7 +1,6 @@
 #include <QApplication>
 #include <QDebug>
 #include <QtDBus>
-#include <QWebEngineView>
 
 #include "mainwindow.h"
 
@@ -9,28 +8,28 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
 
-    QCursor cursor(Qt::BlankCursor);
-    QApplication::setOverrideCursor(cursor);
-    QApplication::changeOverrideCursor(cursor);
+    QApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
 
     MainWindow *window = new MainWindow();
-    window -> show();
+    window->show();
 
     QDBusConnection connection = QDBusConnection::sessionBus();
 
-    if (!connection.registerObject("/Screenly", window,  QDBusConnection::ExportAllSlots))
+    if (!connection.registerObject("/Anthias", window, QDBusConnection::ExportAllSlots))
     {
-        qWarning() << "Can't register object";
+        qWarning() << "Can't register object:" << connection.lastError().message();
         return 1;
     }
     qDebug() << "WebView connected to D-bus";
 
-    if (!connection.registerService("screenly.webview")) {
-        qWarning() << qPrintable(QDBusConnection::sessionBus().lastError().message());
+    if (!connection.registerService("anthias.webview")) {
+        qWarning() << qPrintable(connection.lastError().message());
         return 1;
     }
-    qDebug() << "Screenly service start";
-
+    // NOTE: viewer/__init__.py waits for this exact line on stdout to
+    // know the WebView has finished registering D-Bus and is ready for
+    // loadPage/loadImage calls. Don't change the wording.
+    qInfo() << "Anthias service start";
 
     return app.exec();
 }
