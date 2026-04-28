@@ -15,7 +15,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Resolve the version once so both SBOMs ship with the same string.
+  # Tag if HEAD is exactly on one (e.g. v0.20.5), else short SHA. The
+  # checkout below fetches tags so `git describe --tags` can see them
+  # without paying for full history.
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-tags: true
+
+      - id: compute
+        run: |
+          v=$(git describe --tags --exact-match HEAD 2>/dev/null \
+              || git rev-parse --short HEAD)
+          echo "version=${v}" >> "$GITHUB_OUTPUT"
+          echo "Resolved SBOM version: ${v}"
+
   js-sbom:
+    needs: version
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
@@ -31,6 +52,7 @@ jobs:
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 'LCkvzm8qaL'
+          COMPONENT_VERSION: ${{ needs.version.outputs.version }}
           LOCK_FILE: 'bun.lock'
           AUGMENT: true
           ENRICH: true
@@ -43,6 +65,7 @@ jobs:
           subject-path: '${{ github.workspace }}/*.cdx.json'
 
   python-sbom:
+    needs: version
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
@@ -58,6 +81,7 @@ jobs:
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 'Vhc4zm8pdV'
+          COMPONENT_VERSION: ${{ needs.version.outputs.version }}
           LOCK_FILE: 'uv.lock'
           AUGMENT: true
           ENRICH: true
