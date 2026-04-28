@@ -50,6 +50,12 @@ jobs:
 
       # Native deps required to build cec / netifaces from source —
       # mirrors the apt set in tools/image_builder/__main__.py.
+      # `redis-server` is here because `lib.utils.connect_to_redis()`
+      # hardcodes `host='redis'` and is called at module load by
+      # `lib.github` (which `tests.test_updates` imports). Inside the
+      # container images redis is a separate compose service and
+      # resolves via Docker DNS; the host runner has no such DNS, so
+      # we install a local redis and alias `redis` → 127.0.0.1.
       - name: Install native build deps
         run: |
           sudo apt-get update
@@ -58,7 +64,10 @@ jobs:
             cec-utils \
             libcec-dev \
             libffi-dev \
-            libsystemd-dev
+            libsystemd-dev \
+            redis-server
+          sudo systemctl start redis-server
+          echo "127.0.0.1 redis" | sudo tee -a /etc/hosts
 
       - name: Set up Python + uv (test deps)
         uses: ./.github/actions/setup-python-uv
