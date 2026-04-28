@@ -102,7 +102,9 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
             ('asset&6ee2394e760643748b9353f06f405424',),
         ],
     )
-    @mock.patch('api.views.v1.ViewerPublisher.send_to_viewer', return_value=None)
+    @mock.patch(
+        'api.views.v1.ViewerPublisher.send_to_viewer', return_value=None
+    )
     def test_assets_control(
         self, send_to_viewer_mock: Any, command: str
     ) -> None:
@@ -136,7 +138,9 @@ class V1EndpointsTest(TestCase, ParametrizedTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(shutdown_anthias_mock.call_count, 1)
 
-    @mock.patch('api.views.v1.ViewerPublisher.send_to_viewer', return_value=None)
+    @mock.patch(
+        'api.views.v1.ViewerPublisher.send_to_viewer', return_value=None
+    )
     def test_viewer_current_asset(self, send_to_viewer_mock: Any) -> None:
         asset = Asset.objects.create(
             **{

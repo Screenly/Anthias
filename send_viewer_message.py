@@ -57,7 +57,7 @@ def main() -> None:
         '--action',
         required=True,
         choices=('setup_wifi', 'show_splash'),
-        help='Specify the ZeroMQ message to be sent.',
+        help='Specify the message to be sent to the viewer.',
     )
     args = argument_parser.parse_args()
     r = redis.Redis(host='127.0.0.1', decode_responses=True, port=6379, db=0)
