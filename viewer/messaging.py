@@ -16,12 +16,14 @@ class ViewerSubscriber(Thread):
     accepting connections, especially on first boot. After that, if the
     connection drops mid-stream, re-subscribe with backoff instead of
     letting the thread die silently (which would leave the viewer unable
-    to receive ``next``/``previous``/``stop``/``setup_wifi``/etc commands
-    for the rest of the process lifetime).
+    to receive ``next``/``previous``/``stop``/``reload``/``current_asset_id``
+    commands for the rest of the process lifetime).
 
-    ``viewer-subscriber-ready`` is only set once subscribe() returns
-    successfully — the host-side wifi-connect script polls that flag
-    before publishing, so flipping it pre-subscribe would race messages.
+    ``viewer-subscriber-ready`` is set once subscribe() returns and
+    cleared on disconnect. No live consumer reads it today (the
+    host-side wifi-connect publisher that used to gate on it has been
+    removed); kept as a generic readiness signal for any future
+    publisher that needs to wait before sending.
     """
 
     INITIAL_RETRY_DELAY_S = 1
@@ -41,6 +43,7 @@ class ViewerSubscriber(Thread):
     def run(self) -> None:
         delay = self.INITIAL_RETRY_DELAY_S
         while True:
+            pubsub: Any = None
             try:
                 pubsub = self.redis_connection.pubsub(
                     ignore_subscribe_messages=True
@@ -72,6 +75,16 @@ class ViewerSubscriber(Thread):
                     pass
                 sleep(delay)
                 delay = min(delay * 2, self.MAX_RETRY_DELAY_S)
+            finally:
+                # Release the underlying socket on every iteration —
+                # otherwise repeated reconnects (e.g. a flapping redis
+                # container) accumulate dead PubSub objects, each
+                # holding a connection from the pool until GC.
+                if pubsub is not None:
+                    try:
+                        pubsub.close()
+                    except redis.ConnectionError:
+                        pass
 
     def _consume(self, pubsub: Any) -> None:
         for raw in pubsub.listen():
