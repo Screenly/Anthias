@@ -127,7 +127,8 @@ jobs:
   test:
     name: Test
     uses: ./.github/workflows/_test-host.yaml
-    secrets: inherit
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   build:
     name: Build
@@ -143,7 +144,9 @@ jobs:
     with:
       board: ${{ matrix.board }}
       push: ${{ matrix.push }}
-    secrets: inherit
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
   # Per-board balena fan-out. GHA can't natively gate a downstream
   # matrix leg on a single upstream matrix leg, so each balena leg
@@ -165,7 +168,8 @@ jobs:
     uses: ./.github/workflows/_balena-board.yaml
     with:
       board: pi1
-    secrets: inherit
+    secrets:
+      BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
 
   balena-pi2:
     name: Balena pi2
@@ -174,7 +178,8 @@ jobs:
     uses: ./.github/workflows/_balena-board.yaml
     with:
       board: pi2
-    secrets: inherit
+    secrets:
+      BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
 
   balena-pi3:
     name: Balena pi3
@@ -183,7 +188,8 @@ jobs:
     uses: ./.github/workflows/_balena-board.yaml
     with:
       board: pi3
-    secrets: inherit
+    secrets:
+      BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
 
   balena-pi4:
     name: Balena pi4
@@ -192,7 +198,8 @@ jobs:
     uses: ./.github/workflows/_balena-board.yaml
     with:
       board: pi4
-    secrets: inherit
+    secrets:
+      BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
 
   balena-pi5:
     name: Balena pi5
@@ -201,4 +208,5 @@ jobs:
     uses: ./.github/workflows/_balena-board.yaml
     with:
       board: pi5
-    secrets: inherit
+    secrets:
+      BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
