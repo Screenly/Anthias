@@ -9,10 +9,13 @@ RUN apt-get -y update && apt-get install -y \
     build-essential \
     cmake \
     qt6-base-dev \
-    qt6-webengine-dev
+    qt6-webengine-dev && \
+    useradd -m -u 1000 -s /bin/bash builder
 
-RUN mkdir -p /scripts /src
+RUN mkdir -p /scripts /src /build && \
+    chown -R builder:builder /scripts /src /build
 
+USER builder
 WORKDIR /build
 
 CMD ["bash"]
