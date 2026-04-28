@@ -68,9 +68,13 @@ jobs:
       # AnthiasSettings reads ~/.anthias/anthias.conf at import time;
       # use the canonical file so unit tests see realistic defaults
       # rather than the three-empty-section minimal that mypy gets.
-      - name: Seed ~/.anthias/anthias.conf
+      # `~/anthias_assets/` is the default `assetdir` resolved from
+      # $HOME — tearDown in api/tests/test_v1_endpoints.py iterates it
+      # and FileNotFoundErrors if missing. Container images get this
+      # path for free; the host runner has to materialize it.
+      - name: Seed ~/.anthias/anthias.conf and ~/anthias_assets/
         run: |
-          mkdir -p ~/.anthias
+          mkdir -p ~/.anthias ~/anthias_assets
           cp ansible/roles/anthias/files/anthias.conf ~/.anthias/anthias.conf
 
       - name: Run Django unit tests

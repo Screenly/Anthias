@@ -163,6 +163,8 @@ exclude = [
 module = [
     "cec",
     "channels_redis.*",
+    "gi",
+    "gi.repository",
     "hurry.filesize",
     "pydbus",
     "sh",
