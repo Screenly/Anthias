@@ -25,7 +25,6 @@ protected:
 
 private slots:
     void handleAuthRequest(const QUrl& requestUrl, QAuthenticator* authenticator);
-    void onWebPageLoadFinished(bool ok);
 
 private:
     void configureWebView(QWebEngineView* view);
@@ -34,7 +33,6 @@ private:
     void loadAsStaticImage(const QByteArray& data);
     void setupAnimation();
     void switchToNextWebView();
-    void resetWebViewStates();
 
     QNetworkAccessManager* networkManager;
     QImage currentImage;
@@ -49,4 +47,9 @@ private:
     QWebEngineView* currentWebView;
     QWebEngineView* nextWebView;
     bool nextWebViewReady;
+
+    // Connection handle for the currently-pending loadFinished slot, so
+    // we can drop it before issuing stop() on the next loadPage and
+    // avoid a synchronous loadFinished(false) racing into a stale slot.
+    QMetaObject::Connection pageLoadConnection;
 };

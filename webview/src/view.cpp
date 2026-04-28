@@ -91,20 +91,49 @@ void View::loadPage(const QString &uri)
 {
     qDebug() << "Type: Webpage";
 
-    ++loadGenerationId;
+    const quint64 requestId = ++loadGenerationId;
     currentImage = QImage();
     stopAnimation();
-    resetWebViewStates();
+    nextWebViewReady = false;
 
-    connect(
+    // Drop any prior loadFinished handler before stop() — a synchronous
+    // loadFinished(false) emission from the previous in-flight load
+    // would otherwise reach the (still-attached) handler and run with
+    // ok=false, before the new load() takes effect. With the lambda
+    // detached, stop() can fire whatever it likes harmlessly.
+    if (pageLoadConnection) {
+        QObject::disconnect(pageLoadConnection);
+    }
+
+    nextWebView->stop();
+
+    pageLoadConnection = connect(
         nextWebView->page(),
         &QWebEnginePage::loadFinished,
         this,
-        &View::onWebPageLoadFinished,
-        Qt::UniqueConnection
+        [this, requestId](bool ok) {
+            // Stale completion from a load that was superseded by a
+            // subsequent loadPage / loadImage call.
+            if (requestId != loadGenerationId) {
+                qDebug() << "Ignoring stale page load result";
+                return;
+            }
+            // One-shot: detach so any later loadFinished re-emissions
+            // (e.g., from a JS-driven redirect) don't re-trigger the
+            // swap.
+            QObject::disconnect(pageLoadConnection);
+
+            if (ok) {
+                qDebug() << "Background web page loaded successfully";
+                nextWebViewReady = true;
+                switchToNextWebView();
+            } else {
+                qDebug() << "Background web page failed to load";
+                nextWebViewReady = false;
+            }
+        }
     );
 
-    nextWebView->stop();
     nextWebView->load(QUrl(uri));
 
     qDebug() << "Loading web page in background web view:" << uri;
@@ -295,28 +324,6 @@ void View::setupAnimation()
     update();
 }
 
-void View::onWebPageLoadFinished(bool ok)
-{
-    QWebEnginePage* page = qobject_cast<QWebEnginePage*>(sender());
-    if (page) {
-        disconnect(page, &QWebEnginePage::loadFinished, this, &View::onWebPageLoadFinished);
-    }
-
-    if (page != nextWebView->page()) {
-        qDebug() << "Ignoring stale web page load result";
-        return;
-    }
-
-    if (ok) {
-        qDebug() << "Background web page loaded successfully";
-        nextWebViewReady = true;
-        switchToNextWebView();
-    } else {
-        qDebug() << "Background web page failed to load";
-        nextWebViewReady = false;
-    }
-}
-
 void View::switchToNextWebView()
 {
     if (!nextWebViewReady) {
@@ -337,12 +344,4 @@ void View::switchToNextWebView()
     nextWebViewReady = false;
 
     qDebug() << "Successfully switched to next web view";
-}
-
-void View::resetWebViewStates()
-{
-    nextWebViewReady = false;
-
-    disconnect(webView1->page(), &QWebEnginePage::loadFinished, this, &View::onWebPageLoadFinished);
-    disconnect(webView2->page(), &QWebEnginePage::loadFinished, this, &View::onWebPageLoadFinished);
 }
