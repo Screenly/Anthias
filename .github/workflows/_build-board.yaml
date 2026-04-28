@@ -26,10 +26,16 @@ on:
         description: Build target board (pi1|pi2|pi3|pi4|pi4-64|pi5|x86)
         required: true
         type: string
+      # `push` is intentionally a string ('true'|'false') rather than a
+      # boolean. When the caller fans out via matrix-of-uses with the
+      # matrix come from `fromJSON(...)`, type coercion of a JSON
+      # boolean through the matrix → with: input chain rejects the
+      # workflow at startup ("startup_failure" with no logs). Strings
+      # round-trip cleanly. All comparisons below use `== 'true'`.
       push:
-        description: Push images and mirror latest-<board>
+        description: Push images and mirror latest-<board> ('true'|'false')
         required: true
-        type: boolean
+        type: string
     secrets:
       DOCKER_USERNAME:
         required: false
@@ -94,7 +100,7 @@ jobs:
         id: cache
         with:
           path: /tmp/.buildx-cache/${{ inputs.board }}-${{ matrix.service }}
-          key: buildx-${{ inputs.board }}-${{ matrix.service }}-${{ hashFiles('docker/**/*') }}-${{ inputs.push && 'push' || 'pr' }}
+          key: buildx-${{ inputs.board }}-${{ matrix.service }}-${{ hashFiles('docker/**/*') }}-${{ inputs.push == 'true' && 'push' || 'pr' }}
           restore-keys: |
             buildx-${{ inputs.board }}-${{ matrix.service }}-${{ hashFiles('docker/**/*') }}-
             buildx-${{ inputs.board }}-${{ matrix.service }}-
@@ -110,14 +116,14 @@ jobs:
           ls -la "/tmp/.buildx-cache/${INPUT_BOARD}-${MATRIX_SERVICE}" || true
 
       - name: Login to Docker Hub
-        if: inputs.push
+        if: inputs.push == 'true'
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Login to GitHub Container Registry
-        if: inputs.push
+        if: inputs.push == 'true'
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
         with:
           registry: ghcr.io

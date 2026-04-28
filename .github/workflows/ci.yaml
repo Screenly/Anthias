@@ -112,12 +112,20 @@ jobs:
     outputs:
       matrix: ${{ steps.set.outputs.matrix }}
     steps:
+      # Note: `push` is emitted as a string ('true'/'false') rather
+      # than a JSON boolean. The reusable `_build-board.yaml`'s
+      # `inputs.push` is declared as `type: string` to avoid a known
+      # type-coercion failure when matrix-of-uses passes a JSON
+      # boolean through `${{ matrix.push }}` to a boolean-typed input
+      # (manifests as a 1-second startup_failure with no logs).
       - id: set
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            matrix='[{"board":"x86","push":false}]'
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            matrix='[{"board":"x86","push":"false"}]'
           else
-            matrix='[{"board":"pi1","push":true},{"board":"pi2","push":true},{"board":"pi3","push":true},{"board":"pi4","push":true},{"board":"pi4-64","push":true},{"board":"pi5","push":true},{"board":"x86","push":true}]'
+            matrix='[{"board":"pi1","push":"true"},{"board":"pi2","push":"true"},{"board":"pi3","push":"true"},{"board":"pi4","push":"true"},{"board":"pi4-64","push":"true"},{"board":"pi5","push":"true"},{"board":"x86","push":"true"}]'
           fi
           echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
 
