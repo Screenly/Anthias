@@ -1,0 +1,228 @@
+name: Build (per-board)
+
+# Reusable workflow that builds and (optionally) publishes all four
+# service images for a single board. The "per-board" shape means each
+# board's `latest-<board>` advances independently: if pi3 fails to
+# build, pi3's latest tag stays put while pi5 still ships. This trades
+# the old global all-or-nothing publish-latest gate for blast-radius
+# isolation — devices on a mixed-board fleet may briefly run different
+# SHAs across boards. Within a single board, the four services
+# (server/celery/redis/viewer) still advance coherently because the
+# board's `mirror-latest` job needs the entire 4-service build matrix
+# to pass before any of its `latest-*` tags get retagged.
+#
+# Inputs:
+#   board: one of pi1, pi2, pi3, pi4, pi4-64, pi5, x86
+#   push:  false → smoke build only (PRs); true → push and retag.
+#
+# When push=false the build still runs full buildx (with cache) so
+# Dockerfile and dependency regressions get caught on PRs, but no
+# registry login or `--push` flag fires.
+
+on:
+  workflow_call:
+    inputs:
+      board:
+        description: Build target board (pi1|pi2|pi3|pi4|pi4-64|pi5|x86)
+        required: true
+        type: string
+      push:
+        description: Push images and mirror latest-<board>
+        required: true
+        type: boolean
+    secrets:
+      DOCKER_USERNAME:
+        required: false
+      DOCKER_PASSWORD:
+        required: false
+
+jobs:
+  build:
+    name: Build ${{ inputs.board }} ${{ matrix.service }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # Don't cancel sibling services on first failure: any service
+      # that has already pushed its <short-hash>-<board> tag is
+      # harmless on its own. The mirror-latest job below — gated on
+      # the entire 4-service matrix succeeding — is the only step
+      # that advances the floating latest-<board> tag.
+      fail-fast: false
+      matrix:
+        service: ['server', 'celery', 'redis', 'viewer']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Python + uv (image builder)
+        uses: ./.github/actions/setup-python-uv
+        with:
+          group: docker-image-builder
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+
+      - name: Create and use dedicated builder
+        run: |
+          docker buildx create --use --name multiarch-builder
+          docker buildx inspect --bootstrap
+
+      # PR (smoke) and master (push) caches are kept disjoint so a PR
+      # cache populated from a non-pushed build can't be restored on a
+      # later master run and skip layers it should have rebuilt and
+      # pushed. Cost: cold cache for the very first master run after
+      # this layout lands.
+      - name: Cache Docker layers
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        id: cache
+        with:
+          path: /tmp/.buildx-cache/${{ inputs.board }}-${{ matrix.service }}
+          key: buildx-${{ inputs.board }}-${{ matrix.service }}-${{ hashFiles('docker/**/*') }}-${{ inputs.push && 'push' || 'pr' }}
+          restore-keys: |
+            buildx-${{ inputs.board }}-${{ matrix.service }}-${{ hashFiles('docker/**/*') }}-
+            buildx-${{ inputs.board }}-${{ matrix.service }}-
+
+      - name: Inspect cache before build
+        run: |
+          ls -la /tmp/.buildx-cache/${{ inputs.board }}-${{ matrix.service }} || true
+
+      - name: Login to Docker Hub
+        if: inputs.push
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login to GitHub Container Registry
+        if: inputs.push
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build container
+        env:
+          DOCKER_BUILDKIT: 1
+          BUILDKIT_PROGRESS: plain
+        run: |
+          args=(
+            --build-target=${{ inputs.board }}
+            --service=${{ matrix.service }}
+          )
+          if [ "${{ inputs.push }}" = "true" ]; then
+            args+=(--push --skip-latest-tag)
+          fi
+          uv run python -m tools.image_builder "${args[@]}"
+
+      - name: Inspect cache after build
+        run: |
+          ls -la /tmp/.buildx-cache/${{ inputs.board }}-${{ matrix.service }} || true
+
+  # Mirror this board's <short-hash>-<board> tags onto the floating
+  # latest-<board> tag. Runs only after every service in the buildx
+  # matrix above has succeeded, so within a board the four services
+  # always advance their latest tag together (or not at all).
+  #
+  # The retry() helper wraps each registry op in 5 attempts of
+  # exponential backoff (2/4/8/16s) plus a small randomized jitter.
+  # Jitter matters now that up to 7 boards retag in parallel: an
+  # uncoordinated jitter prevents 7 retrying runners from
+  # synchronizing into a coordinated 429 storm against Docker Hub.
+  # Both `imagetools inspect` and `imagetools create` are idempotent.
+  #
+  # Dual-registry mirror: ghcr.io/screenly/anthias-* (canonical
+  # primary, free for public packages, auth via GITHUB_TOKEN with
+  # `packages: write`) goes first so the canonical source is current
+  # even if Docker Hub flakes on a later retag. screenly/anthias-* on
+  # Docker Hub stays in the loop as a parallel mirror during the
+  # migration window so devices that haven't yet picked up the
+  # compose-template flip keep getting latest-* advanced.
+  mirror-latest:
+    name: Mirror latest-${{ inputs.board }}
+    needs: build
+    if: inputs.push
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mirror short-hash tags to latest-${{ inputs.board }}
+        env:
+          BOARD: ${{ inputs.board }}
+        run: |
+          set -euo pipefail
+          GIT_SHORT_HASH=$(git rev-parse --short=7 HEAD)
+          SERVICES=(server celery redis viewer)
+          # GHCR first so the canonical primary is current even if the
+          # Docker Hub mirror later in the loop flakes.
+          NAMESPACES=(ghcr.io/screenly/anthias screenly/anthias)
+
+          # 5 attempts of exponential backoff (2/4/8/16s) plus a small
+          # randomized jitter so up to 7 boards retagging in parallel
+          # don't synchronize their retries into a coordinated 429.
+          retry() {
+            local attempt
+            for attempt in 1 2 3 4 5; do
+              if "$@"; then
+                return 0
+              fi
+              if [ "${attempt}" -lt 5 ]; then
+                local delay=$(((2 ** attempt) + (RANDOM % 3)))
+                echo "Attempt ${attempt} failed; retrying in ${delay}s..." >&2
+                sleep "${delay}"
+              fi
+            done
+            echo "Giving up after 5 attempts: $*" >&2
+            return 1
+          }
+
+          echo "::group::Preflight: verify <short-hash>-${BOARD} source tags exist"
+          for namespace in "${NAMESPACES[@]}"; do
+            for service in "${SERVICES[@]}"; do
+              src="${namespace}-${service}:${GIT_SHORT_HASH}-${BOARD}"
+              echo "Verifying ${src}"
+              retry docker buildx imagetools inspect --raw "${src}" >/dev/null
+            done
+          done
+          echo "::endgroup::"
+
+          echo "::group::Mirror <short-hash>-${BOARD} -> latest-${BOARD}"
+          for namespace in "${NAMESPACES[@]}"; do
+            for service in "${SERVICES[@]}"; do
+              src="${namespace}-${service}:${GIT_SHORT_HASH}-${BOARD}"
+              dst="${namespace}-${service}:latest-${BOARD}"
+              echo "Mirroring ${src} -> ${dst}"
+              retry docker buildx imagetools create -t "${dst}" "${src}"
+            done
+          done
+          echo "::endgroup::"

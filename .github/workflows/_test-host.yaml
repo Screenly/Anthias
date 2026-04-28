@@ -1,0 +1,123 @@
+name: Test (host)
+
+# Reusable workflow that runs the host-side test pillar — bun tests,
+# Django unit tests on the host runner, and Docker-based integration
+# tests. Kept separate from the build pillar so devs see red within
+# ~1-2 min instead of waiting for a Docker image build.
+
+on:
+  workflow_call:
+    secrets:
+      CODECOV_TOKEN:
+        # Forks on PR don't inherit secrets; the codecov upload is
+        # guarded by a presence check below, so this is `required:
+        # false` for the workflow_call contract.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  typescript-tests:
+    name: TypeScript tests (host)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.13
+
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run bun test
+        run: bun test
+
+  python-unit-tests:
+    name: Python unit tests (host)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      # Native deps required to build cec / netifaces from source —
+      # mirrors the apt set in tools/image_builder/__main__.py.
+      - name: Install native build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cec-utils \
+            libcec-dev \
+            libffi-dev \
+            libsystemd-dev
+
+      - name: Set up Python + uv (test deps)
+        uses: ./.github/actions/setup-python-uv
+        with:
+          group: test
+
+      # AnthiasSettings reads ~/.anthias/anthias.conf at import time;
+      # use the canonical file so unit tests see realistic defaults
+      # rather than the three-empty-section minimal that mypy gets.
+      - name: Seed ~/.anthias/anthias.conf
+        run: |
+          mkdir -p ~/.anthias
+          cp ansible/roles/anthias/files/anthias.conf ~/.anthias/anthias.conf
+
+      - name: Run Django unit tests
+        run: |
+          uv run ./manage.py test \
+            --noinput --parallel --exclude-tag=integration
+
+      # Forks on PR don't get secrets — skip codecov when the token
+      # isn't available rather than uploading an empty report.
+      - name: Upload coverage reports to Codecov
+        if: env.CODECOV_TOKEN != ''
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  python-integration-tests:
+    name: Python integration tests (Docker)
+    runs-on: ubuntu-24.04
+    env:
+      COMPOSE_FILE: docker-compose.test.yml
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Python + uv (image builder)
+        uses: ./.github/actions/setup-python-uv
+        with:
+          group: docker-image-builder
+
+      - name: Render test Dockerfiles
+        run: |
+          uv run python -m tools.image_builder \
+            --dockerfiles-only \
+            --disable-cache-mounts \
+            --service celery \
+            --service redis \
+            --service test
+
+      - name: Start the test stack
+        run: docker compose up -d --build
+
+      - name: Prepare integration test environment
+        run: |
+          docker compose exec anthias-test \
+            bash ./bin/prepare_test_environment.sh -s
+
+      - name: Run Django integration tests
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4
+        with:
+          timeout_minutes: 5
+          max_attempts: 5
+          command: |
+            docker compose exec anthias-test \
+              ./manage.py test --noinput --tag=integration
+
+      - name: Stop the test stack
+        if: always()
+        run: docker compose down

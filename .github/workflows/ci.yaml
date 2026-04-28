@@ -1,0 +1,204 @@
+name: CI
+
+# Single entry point for lint + test + build + deploy. Replaces
+# docker-build.yaml, python-checks.yaml, javascript-lint.yaml,
+# ansible-lint.yaml, and lint-workflows.yml. The five reusable
+# workflows it calls (`_lint.yaml`, `_test-host.yaml`,
+# `_build-board.yaml`, `_balena-board.yaml`) own the actual job
+# bodies; this file owns triggers, the path filter, concurrency, and
+# the PR-vs-push fan-out shape.
+#
+# Whitelist trigger paths: every entry below is something whose
+# change affects any of the three CI pillars (lint, test, build).
+# We deliberately avoid the `**` + long !exclusion pattern that
+# drifted across docker-build / generate-openapi-schema before this
+# refactor. The `pull_request:` block intentionally duplicates the
+# `push:` list — actionlint doesn't follow YAML anchors, and a
+# one-line mismatch is cheaper than losing CI lint coverage. The
+# upside vs. the old layout: this duplication exists in *one* file
+# instead of five.
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'anthias_app/**'
+      - 'anthias_django/**'
+      - 'api/**'
+      - 'lib/**'
+      - 'viewer/**'
+      - 'static/**'
+      - 'templates/**'
+      - 'ansible/**'
+      - 'celery_tasks.py'
+      - 'host_agent.py'
+      - 'manage.py'
+      - 'settings.py'
+      - 'tools/**'
+      - 'docker/**'
+      - 'docker-compose*.yml*'
+      - 'balena.yml'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'package.json'
+      - 'bun.lock'
+      - 'bunfig.toml'
+      - 'eslint.config.mjs'
+      - 'tsconfig.json'
+      - 'ruff.toml'
+      - '.ansible-lint'
+      - 'tests/**'
+      - 'bin/prepare_test_environment.sh'
+      - '.github/workflows/ci.yaml'
+      - '.github/workflows/_*.yaml'
+      - '.github/actions/setup-python-uv/**'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'anthias_app/**'
+      - 'anthias_django/**'
+      - 'api/**'
+      - 'lib/**'
+      - 'viewer/**'
+      - 'static/**'
+      - 'templates/**'
+      - 'ansible/**'
+      - 'celery_tasks.py'
+      - 'host_agent.py'
+      - 'manage.py'
+      - 'settings.py'
+      - 'tools/**'
+      - 'docker/**'
+      - 'docker-compose*.yml*'
+      - 'balena.yml'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'package.json'
+      - 'bun.lock'
+      - 'bunfig.toml'
+      - 'eslint.config.mjs'
+      - 'tsconfig.json'
+      - 'ruff.toml'
+      - '.ansible-lint'
+      - 'tests/**'
+      - 'bin/prepare_test_environment.sh'
+      - '.github/workflows/ci.yaml'
+      - '.github/workflows/_*.yaml'
+      - '.github/actions/setup-python-uv/**'
+  workflow_dispatch:
+
+# Cancel in-flight runs on PR re-pushes (the buildx matrix is the
+# costliest thing in CI). Never cancel master runs — each one is a
+# deploy that needs to complete.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Decides which boards to build. PRs get an x86-only smoke build
+  # (no push) so Dockerfile and dependency regressions are caught
+  # before merge without paying the full 7-board build cost.
+  # Master push gets all 7 boards with push=true. Emitting the matrix
+  # as JSON lets us add or remove boards in one place rather than
+  # duplicated `if:` conditions on every job.
+  plan:
+    name: Plan build matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            matrix='[{"board":"x86","push":false}]'
+          else
+            matrix='[{"board":"pi1","push":true},{"board":"pi2","push":true},{"board":"pi3","push":true},{"board":"pi4","push":true},{"board":"pi4-64","push":true},{"board":"pi5","push":true},{"board":"x86","push":true}]'
+          fi
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
+  lint:
+    name: Lint
+    uses: ./.github/workflows/_lint.yaml
+
+  test:
+    name: Test
+    uses: ./.github/workflows/_test-host.yaml
+    secrets: inherit
+
+  build:
+    name: Build
+    needs: [plan, lint, test]
+    strategy:
+      # Don't cancel sibling boards on first failure: each board is
+      # an independent build-and-publish unit. A flaky pi3 doesn't
+      # stop pi5 from advancing its latest-pi5 tag.
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    uses: ./.github/workflows/_build-board.yaml
+    with:
+      board: ${{ matrix.board }}
+      push: ${{ matrix.push }}
+    secrets: inherit
+
+  # Per-board balena fan-out. GHA can't natively gate a downstream
+  # matrix leg on a single upstream matrix leg, so each balena leg
+  # below `needs: build` (waits for the entire build matrix to
+  # finish) and then preflights its own board's <short-hash> tag in
+  # GHCR inside `_balena-board.yaml`. If the build for that board
+  # didn't push, the balena leg skips itself cleanly.
+  #
+  # `if: !cancelled()` (instead of `success()`) lets each balena leg
+  # run even if a *different* board's build failed — the whole point
+  # of per-board independence.
+  #
+  # Only pi1-pi5 deploy to balena (no pi4-64, no x86); pi4 here maps
+  # to the pi4-64 image inside `_balena-board.yaml`.
+  balena-pi1:
+    name: Balena pi1
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !cancelled()
+    uses: ./.github/workflows/_balena-board.yaml
+    with:
+      board: pi1
+    secrets: inherit
+
+  balena-pi2:
+    name: Balena pi2
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !cancelled()
+    uses: ./.github/workflows/_balena-board.yaml
+    with:
+      board: pi2
+    secrets: inherit
+
+  balena-pi3:
+    name: Balena pi3
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !cancelled()
+    uses: ./.github/workflows/_balena-board.yaml
+    with:
+      board: pi3
+    secrets: inherit
+
+  balena-pi4:
+    name: Balena pi4
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !cancelled()
+    uses: ./.github/workflows/_balena-board.yaml
+    with:
+      board: pi4
+    secrets: inherit
+
+  balena-pi5:
+    name: Balena pi5
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && !cancelled()
+    uses: ./.github/workflows/_balena-board.yaml
+    with:
+      board: pi5
+    secrets: inherit

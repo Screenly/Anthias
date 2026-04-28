@@ -1,0 +1,109 @@
+name: Lint
+
+# Reusable workflow consolidating every lint pass — Python (ruff +
+# mypy), JavaScript (ESLint + Prettier), Ansible, and the workflow
+# files themselves (actionlint). Triggering and concurrency are owned
+# by the calling workflow (ci.yaml); this file only declares jobs.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Python + uv (dev-host)
+        uses: ./.github/actions/setup-python-uv
+        with:
+          group: dev-host
+
+      - name: Run Ruff linting checks
+        run: uv run ruff check .
+
+      - name: Run Ruff formatting checks
+        run: uv run ruff format --check .
+
+  mypy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Python + uv (mypy)
+        uses: ./.github/actions/setup-python-uv
+        with:
+          group: mypy
+
+      # The django-stubs plugin imports anthias_django.settings, which
+      # transitively instantiates AnthiasSettings(). On first run that
+      # tries to read ~/.anthias/anthias.conf — write a minimal valid
+      # one with the section headers AnthiasSettings expects.
+      - name: Prepare config directory
+        run: |
+          mkdir -p ~/.anthias
+          cat > ~/.anthias/anthias.conf <<'CONF'
+          [main]
+          [viewer]
+          [auth_basic]
+          CONF
+
+      - name: Run mypy
+        run: uv run mypy .
+
+  js-lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.13
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run ESLint
+        run: bun run lint:check
+
+      - name: Run Prettier
+        run: bun run format:check
+
+  ansible-lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Python + uv (dev-host)
+        uses: ./.github/actions/setup-python-uv
+        with:
+          group: dev-host
+
+      - name: Run ansible-lint
+        run: uv run ansible-lint ansible/
+
+  actionlint:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        actionlint-version: ['1.7.7']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Download actionlint
+        run: |
+          ACTIONLINT_FILE="actionlint_${{ matrix.actionlint-version }}_linux_amd64.tar.gz"
+          ACTIONLINT_URL="https://github.com/rhysd/actionlint/releases/download"
+          ACTIONLINT_DOWNLOAD_URL="$ACTIONLINT_URL/v${{ matrix.actionlint-version }}/$ACTIONLINT_FILE"
+          curl -L -o actionlint.tar.gz "$ACTIONLINT_DOWNLOAD_URL"
+          tar xzf actionlint.tar.gz
+        shell: bash
+
+      - name: Run actionlint
+        run: ./actionlint -color
+        shell: bash
