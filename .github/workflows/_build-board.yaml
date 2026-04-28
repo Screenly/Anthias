@@ -83,13 +83,28 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4
 
+      # Re-export `ACTIONS_CACHE_URL`, `ACTIONS_RUNTIME_TOKEN`, and
+      # `ACTIONS_RESULTS_URL` to subsequent steps. GHA passes these
+      # to actions but strips them from shell-step env, so the
+      # buildkit daemon container that setup-buildx-action launches
+      # below has no GHA cache credentials by default — the symptom
+      # we hit on the first audit-ci CI run after switching to
+      # type=gha was a successful build with no cache export step
+      # at all. With these vars re-exported via `core.exportVariable`,
+      # setup-buildx-action forwards them via
+      # `--driver-opt env.ACTIONS_*` to the buildkit container and
+      # the GHA cache transport authenticates.
+      - name: Expose GitHub Actions runtime env vars
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            for (const v of ['ACTIONS_CACHE_URL', 'ACTIONS_RUNTIME_TOKEN', 'ACTIONS_RESULTS_URL']) {
+              if (process.env[v]) core.exportVariable(v, process.env[v]);
+            }
+
       # `name: multiarch-builder` so the Python builder
       # (`tools.image_builder`) finds an already-bootstrapped builder
-      # under the name it expects. The setup-buildx-action injects
-      # ACTIONS_CACHE_URL and ACTIONS_RUNTIME_TOKEN into this builder,
-      # which is what the buildkit `type=gha` cache backend authenticates
-      # against — so all subsequent buildx invocations in this job get
-      # GHA cache for free.
+      # under the name it expects.
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
