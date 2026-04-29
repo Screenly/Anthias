@@ -36,7 +36,8 @@ class TestMPVMediaPlayer(unittest.TestCase):
         self, mock_popen: Any
     ) -> None:
         self.player.set_asset('file:///test/video.mp4', 30)
-        self.player.play()
+        with patch.dict('os.environ', {'DEVICE_TYPE': 'pi5'}):
+            self.player.play()
 
         mock_popen.assert_called_once_with(
             [
@@ -44,6 +45,7 @@ class TestMPVMediaPlayer(unittest.TestCase):
                 '--no-terminal',
                 '--vo=drm',
                 '--hwdec=auto-safe',
+                '--log-file=/tmp/anthias-mpv.log',
                 '--audio-device=alsa/default:CARD=vc4hdmi0',
                 '--',
                 'file:///test/video.mp4',
@@ -51,6 +53,15 @@ class TestMPVMediaPlayer(unittest.TestCase):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
+
+    @patch('viewer.media_player.subprocess.Popen')
+    def test_play_uses_drm_copy_hwdec_on_pi4_64(self, mock_popen: Any) -> None:
+        self.player.set_asset('file:///test/video.mp4', 30)
+        with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
+            self.player.play()
+
+        args, _ = mock_popen.call_args
+        self.assertIn('--hwdec=drm-copy,auto-safe', args[0])
 
     @patch('viewer.media_player.subprocess.Popen')
     def test_play_uses_local_audio_device_when_configured(

@@ -56,12 +56,23 @@ class MPVMediaPlayer(MediaPlayer):
         # Re-read settings each play so the audio_output dropdown takes
         # effect without a viewer restart, matching VLCMediaPlayer.
         settings.load()
+
+        # mpv's `auto-safe` whitelist is essentially {vaapi,vdpau,nvdec,
+        # videotoolbox,mediacodec,dxva2,d3d11va}-copy — none of which
+        # exist on a Pi 4. The Pi 4's H.264 block is exposed via
+        # DRM-PRIME / h264_v4l2m2m, which auto-safe excludes, so on
+        # pi4-64 mpv silently falls back to CPU decode and drops frames
+        # at 1080p. Prefer drm-copy there and fall back to auto-safe.
+        is_pi4_64 = os.environ.get('DEVICE_TYPE') == 'pi4-64'
+        hwdec = 'drm-copy,auto-safe' if is_pi4_64 else 'auto-safe'
+
         self.process = subprocess.Popen(
             [
                 'mpv',
                 '--no-terminal',
                 '--vo=drm',
-                '--hwdec=auto-safe',
+                f'--hwdec={hwdec}',
+                '--log-file=/tmp/anthias-mpv.log',
                 f'--audio-device=alsa/{get_alsa_audio_device()}',
                 '--',
                 self.uri,
