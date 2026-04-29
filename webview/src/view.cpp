@@ -3,6 +3,7 @@
 #include <QUrl>
 #include <QStandardPaths>
 #include <QWebEnginePage>
+#include <QWebEngineProfile>
 #include <QWebEngineSettings>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -77,6 +78,19 @@ void View::configureWebView(QWebEngineView* view)
 {
     view->settings()->setAttribute(QWebEngineSettings::LocalStorageEnabled, true);
     view->settings()->setAttribute(QWebEngineSettings::ShowScrollBars, false);
+    // Match the widget's black backdrop so dark-themed URL assets don't
+    // flash white between the page-load start and the first paint.
+    view->page()->setBackgroundColor(Qt::black);
+    // Use in-memory HTTP cache only. The default on-disk cache caused
+    // URL assets to linger stale for days across viewer restarts because
+    // QtWebEngine kept serving the old response from /data/.cache/...
+    // (forum 983 — most-viewed bug). Memory-only matches what users
+    // expect from a signage device: URL assets refresh on each loop.
+    QWebEngineProfile* profile = view->page()->profile();
+    profile->setHttpCacheType(QWebEngineProfile::MemoryHttpCache);
+    // Drop any disk cache left behind by older builds so users upgrading
+    // from a stale-cache version see fresh content on their next load.
+    profile->clearHttpCache();
     view->setVisible(false);
 }
 

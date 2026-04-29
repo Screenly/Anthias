@@ -1,4 +1,6 @@
 import logging
+import os
+import time
 from datetime import timedelta
 from os import getenv, path
 from typing import Any
@@ -12,6 +14,7 @@ django.setup()
 
 # Place imports that uses Django in this block.
 
+from anthias_app.models import Asset  # noqa: E402
 from lib import diagnostics  # noqa: E402
 from lib.utils import (  # noqa: E402
     connect_to_redis,
@@ -19,6 +22,7 @@ from lib.utils import (  # noqa: E402
     reboot_via_balena_supervisor,
     shutdown_via_balena_supervisor,
 )
+from settings import settings  # noqa: E402
 
 
 __author__ = 'Screenly, Inc'
@@ -65,12 +69,51 @@ def cleanup() -> None:
     if not home:
         logging.error('cleanup() skipped: HOME is not set')
         return
+
+    asset_dir = settings['assetdir']
+    if not path.isdir(asset_dir):
+        return
+
+    # Stale upload remnants: in-progress uploads write to <uuid>.tmp and
+    # rename on commit. The 1h mtime guard avoids killing an upload that
+    # is still streaming when celery beat fires.
     sh.find(
-        path.join(home, 'anthias_assets'),
+        asset_dir,
         '-name',
         '*.tmp',
+        '-type',
+        'f',
+        '-mmin',
+        '+60',
         '-delete',
     )
+
+    # Orphaned asset files: forum 6636 / GH #2657. Asset rows can be
+    # deleted while their file lingers (e.g. URI didn't match assetdir
+    # exactly, or the file was renamed by an upgrade). Sweep anything
+    # in assetdir that no live Asset row references, with the same 1h
+    # guard so a freshly-renamed file isn't removed before its row is
+    # written.
+    referenced = {
+        path.basename(uri)
+        for uri in Asset.objects.exclude(uri__isnull=True)
+        .exclude(uri__exact='')
+        .values_list('uri', flat=True)
+        if uri.startswith(asset_dir)
+    }
+    cutoff = 60 * 60  # match the .tmp guard above
+    now = time.time()
+    for entry in os.scandir(asset_dir):
+        if not entry.is_file():
+            continue
+        if entry.name in referenced or entry.name.endswith('.tmp'):
+            continue
+        try:
+            if now - entry.stat().st_mtime < cutoff:
+                continue
+            os.remove(entry.path)
+        except OSError as e:
+            logging.warning('cleanup: could not remove %s: %s', entry.path, e)
 
 
 @celery.task

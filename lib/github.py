@@ -135,47 +135,47 @@ def fetch_remote_hash() -> tuple[str | None, bool]:
 
 def get_latest_docker_hub_hash(device_type: str | None) -> str | None:
     """
-    This function is useful for cases where latest changes pushed does not
-    trigger Docker image builds.
+    Return the most recent Docker Hub tag short-hash for this device type,
+    or None if the lookup fails. This is the OR clause that clears the
+    "Update Available" banner once a new Docker image has been published
+    even when master HEAD has moved past it (forum 6079, 6144, 6537).
     """
 
     url = 'https://hub.docker.com/v2/namespaces/screenly/repositories/anthias-server/tags'  # noqa: E501
 
     cached_docker_hub_hash = r.get('latest-docker-hub-hash')
-
     if cached_docker_hub_hash:
-        try:
-            response = requests_get(url, timeout=DEFAULT_REQUESTS_TIMEOUT)
-            response.raise_for_status()
-        except exceptions.RequestException as exc:
-            logging.debug('Failed to fetch latest Docker Hub tags: %s', exc)
-            return None
+        return str(cached_docker_hub_hash)
 
-        data = response.json()
-        results = data['results']
+    try:
+        response = requests_get(url, timeout=DEFAULT_REQUESTS_TIMEOUT)
+        response.raise_for_status()
+    except exceptions.RequestException as exc:
+        logging.debug('Failed to fetch latest Docker Hub tags: %s', exc)
+        return None
 
-        reduced = [
-            result['name'].split('-')[0]
-            for result in results
-            if not result['name'].startswith('latest-')
-            and result['name'].endswith(f'-{device_type}')
-        ]
+    results = response.json().get('results', [])
 
-        if len(reduced) == 0:
-            logging.warning(
-                'No commit hash found for device type: %s', device_type
-            )
-            return None
+    # Tags are formatted '<short_hash>-<device_type>'. Drop floating tags
+    # like 'latest-*' and pick the newest matching device tag (Docker Hub
+    # returns results sorted by last_updated desc).
+    reduced = [
+        result['name'].split('-')[0]
+        for result in results
+        if not result['name'].startswith('latest-')
+        and result['name'].endswith(f'-{device_type}')
+    ]
 
-        docker_hub_hash = reduced[0]
-        r.set('latest-docker-hub-hash', docker_hub_hash)
-        r.expire('latest-docker-hub-hash', DOCKER_HUB_HASH_TTL)
+    if not reduced:
+        logging.warning(
+            'No commit hash found for device type: %s', device_type
+        )
+        return None
 
-        # Results are sorted by date in descending order,
-        # so we can just return the first one.
-        return str(reduced[0])
-
-    return str(cached_docker_hub_hash) if cached_docker_hub_hash else None
+    docker_hub_hash = reduced[0]
+    r.set('latest-docker-hub-hash', docker_hub_hash)
+    r.expire('latest-docker-hub-hash', DOCKER_HUB_HASH_TTL)
+    return docker_hub_hash
 
 
 def is_up_to_date() -> bool:

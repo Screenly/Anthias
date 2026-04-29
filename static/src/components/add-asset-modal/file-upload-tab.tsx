@@ -52,6 +52,7 @@ export const FileUploadTab = ({
               ref={fileInputRef}
               name="file_upload"
               type="file"
+              multiple
               style={{ display: 'none' }}
               onChange={handleFileSelect}
               disabled={isSubmitting}

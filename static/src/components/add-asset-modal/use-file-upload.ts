@@ -18,9 +18,9 @@ export const useFileUpload = () => {
   const dropZoneRef = useRef<HTMLDivElement>(null)
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      handleFileUpload(file)
+    const files = e.target.files
+    if (files && files.length > 0) {
+      handleFileUploads(Array.from(files))
     }
   }
 
@@ -28,9 +28,21 @@ export const useFileUpload = () => {
     e.preventDefault()
     e.stopPropagation()
 
-    const file = e.dataTransfer.files[0]
-    if (file) {
-      handleFileUpload(file)
+    const files = e.dataTransfer.files
+    if (files && files.length > 0) {
+      handleFileUploads(Array.from(files))
+    }
+  }
+
+  const handleFileUploads = async (files: File[]) => {
+    for (let i = 0; i < files.length; i++) {
+      const labelPrefix =
+        files.length > 1 ? `Uploading ${i + 1} of ${files.length}: ` : ''
+      dispatch(setStatusMessage(`${labelPrefix}${files[i].name}`))
+      const ok = await handleFileUpload(files[i])
+      if (!ok) {
+        return
+      }
     }
   }
 
@@ -49,7 +61,7 @@ export const useFileUpload = () => {
     e.stopPropagation()
   }
 
-  const handleFileUpload = async (file: File) => {
+  const handleFileUpload = async (file: File): Promise<boolean> => {
     try {
       // Upload the file
       const result = await dispatch(
@@ -88,6 +100,8 @@ export const useFileUpload = () => {
       setTimeout(() => {
         dispatch(setStatusMessage(''))
       }, 5000)
+
+      return true
     } catch (error) {
       dispatch(setErrorMessage(`Upload failed: ${(error as Error).message}`))
       dispatch(setUploadProgress(0))
@@ -99,6 +113,8 @@ export const useFileUpload = () => {
       if (progressBar) {
         progressBar.style.width = '0%'
       }
+
+      return false
     }
   }
 
