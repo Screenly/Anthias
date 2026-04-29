@@ -40,18 +40,70 @@ def build_image(
 
     context = {}
 
-    # Create board-specific cache directory
-    cache_dir = Path('/tmp/.buildx-cache') / (
+    # The board label used everywhere a tag/scope is built. For pi4
+    # we have two variants — 32-bit (linux/arm/v8, label "pi4") and
+    # 64-bit (linux/arm64/v8, label "pi4-64") — that share the same
+    # `board` value but must not share cache.
+    board_label = (
         f'{board}-64'
         if board == 'pi4' and target_platform == 'linux/arm64/v8'
         else board
     )
-    try:
-        cache_dir.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        click.secho(
-            f'Warning: Failed to create cache directory: {e}', fg='yellow'
-        )
+
+    # Cache backend selection.
+    #
+    # In GitHub Actions we use the buildkit `type=gha` backend, which
+    # talks to GHA's cache service directly via env vars that
+    # setup-buildx-action injects into the builder daemon. This
+    # replaces the prior `type=local` + `actions/cache` setup, where
+    # the on-disk cache path the workflow watched
+    # (`/tmp/.buildx-cache/<board>-<service>`) never matched the path
+    # the builder wrote to (`/tmp/.buildx-cache/<board>`), so every
+    # CI build was a 100% cache miss.
+    #
+    # Outside CI (dev builds, manual runs) we keep `type=local` so a
+    # second invocation on the same machine reuses layers — the path
+    # mismatch above only ever mattered for the GHA bridge.
+    #
+    # Scope is per-(board_label, service) so each matrix leg has its
+    # own isolated cache namespace.
+    is_gha_runner = os.environ.get('GITHUB_ACTIONS') == 'true'
+    cache_scope = f'{board_label}-{service}'
+
+    if clean_build:
+        cache_from = None
+        cache_to = None
+    elif is_gha_runner:
+        # `ignore-error=true` so a transient GHA cache outage (the
+        # service returns a 400 with an HTML "Our services aren't
+        # available right now" page from time to time) doesn't fail
+        # the build. Cache is an optimization; missing it costs us
+        # rebuild time but never correctness.
+        cache_from = {'type': 'gha', 'scope': cache_scope}
+        cache_to = {
+            'type': 'gha',
+            'mode': 'max',
+            'scope': cache_scope,
+            'ignore-error': 'true',
+        }
+    else:
+        # Per-user cache dir (XDG-style) instead of /tmp so we don't
+        # share a world-writable path with other users on multi-user
+        # systems.
+        cache_dir = Path.home() / '.cache' / 'anthias-buildx' / board_label
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            click.secho(
+                f'Warning: Failed to create cache directory: {e}',
+                fg='yellow',
+            )
+        cache_from = {'type': 'local', 'src': str(cache_dir)}
+        cache_to = {
+            'type': 'local',
+            'dest': str(cache_dir),
+            'mode': 'max',
+        }
 
     base_apt_dependencies = [
         'build-essential',
@@ -144,19 +196,8 @@ def build_image(
     docker.buildx.build(
         context_path='.',
         cache=(not clean_build),
-        cache_from={
-            'type': 'local',
-            'src': str(cache_dir),
-        }
-        if not clean_build
-        else None,
-        cache_to={
-            'type': 'local',
-            'dest': str(cache_dir),
-            'mode': 'max',
-        }
-        if not clean_build
-        else None,
+        cache_from=cache_from,
+        cache_to=cache_to,
         builder='multiarch-builder',
         file=f'docker/Dockerfile.{service}',
         load=True,

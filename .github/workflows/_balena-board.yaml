@@ -1,0 +1,92 @@
+name: Balena (per-board)
+
+# Reusable workflow that deploys one board's balena fleet. Called
+# from `_build-board.yaml` with `needs: build`, so the matching
+# board's docker push is a structural prerequisite — if any of the
+# four services failed to build/push, this workflow is skipped by
+# GHA's needs chain and never runs.
+#
+# Note the `pi4 → pi4-64` remap: balena's "pi4" fleet runs the 64-bit
+# variant, which we tag as `pi4-64` internally. Other boards pass
+# through 1:1.
+
+on:
+  workflow_call:
+    inputs:
+      board:
+        description: Balena board (pi1|pi2|pi3|pi4|pi5)
+        required: true
+        type: string
+    secrets:
+      BALENA_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Balena ${{ inputs.board }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      # Inputs to a reusable workflow are user-controllable, so they
+      # never get interpolated directly into a `run:` block — they go
+      # through `env:` instead (sonarqube rule githubactions:S7630).
+      - name: Set Docker tag
+        env:
+          INPUT_BOARD: ${{ inputs.board }}
+        run: |
+          echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+          if [ "$INPUT_BOARD" = "pi4" ]; then
+            echo "BOARD=${INPUT_BOARD}-64" >> "$GITHUB_ENV"
+          else
+            echo "BOARD=$INPUT_BOARD" >> "$GITHUB_ENV"
+          fi
+
+          echo "SHM_SIZE=256mb" >> "$GITHUB_ENV"
+
+      - name: Prepare Balena file
+        env:
+          INPUT_BOARD: ${{ inputs.board }}
+        run: |
+          # Generate a docker-compose file for Balena with the correct board
+          mkdir -p balena-deploy
+
+          # Copy in the Balena yaml file
+          cp balena.yml balena-deploy/
+
+          # Generate the docker-compose file
+          envsubst < docker-compose.balena.yml.tmpl > balena-deploy/docker-compose.yml
+
+          # Remove bind mounts to `/dev/vchiq` for Raspberry Pi 5
+          if [ "$INPUT_BOARD" = "pi5" ]; then
+            sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
+              balena-deploy/docker-compose.yml
+          fi
+
+      - uses: balena-io/deploy-to-balena-action@638e3085dfe40b8c3cef2a34fe9d0874e572de4e # master
+        id: build
+        continue-on-error: true
+        with:
+          balena_token: ${{ secrets.BALENA_TOKEN }}
+          fleet: screenly_ose/anthias-${{ inputs.board }}
+          source: balena-deploy
+
+      - name: Sleep random sleep before retry
+        if: ${{ failure() && steps.build.conclusion == 'failure' }}
+        run: |
+          sleep $((120 + RANDOM % 900));
+
+      # Balena deploy often fails with 'ESOCKETTIMEDOUT'.
+      # This adds some retry logic.
+      - uses: balena-io/deploy-to-balena-action@638e3085dfe40b8c3cef2a34fe9d0874e572de4e # master
+        id: build-retry
+        if: ${{ failure() && steps.build.conclusion == 'failure' }}
+        with:
+          balena_token: ${{ secrets.BALENA_TOKEN }}
+          fleet: screenly_ose/anthias-${{ inputs.board }}
+          source: balena-deploy

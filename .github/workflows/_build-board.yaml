@@ -1,0 +1,276 @@
+name: Build (per-board)
+
+# Reusable workflow that builds and (optionally) publishes all four
+# service images for a single board. The "per-board" shape means each
+# board's `latest-<board>` advances independently: if pi3 fails to
+# build, pi3's latest tag stays put while pi5 still ships. This trades
+# the old global all-or-nothing publish-latest gate for blast-radius
+# isolation — devices on a mixed-board fleet may briefly run different
+# SHAs across boards. Within a single board, the four services
+# (server/celery/redis/viewer) still advance coherently because the
+# board's `mirror-latest` job needs the entire 4-service build matrix
+# to pass before any of its `latest-*` tags get retagged.
+#
+# Inputs:
+#   board: one of pi1, pi2, pi3, pi4, pi4-64, pi5, x86
+#   push:  false → smoke build only (PRs); true → push and retag.
+#
+# When push=false the build still runs full buildx (with cache) so
+# Dockerfile and dependency regressions get caught on PRs, but no
+# registry login or `--push` flag fires.
+
+on:
+  workflow_call:
+    inputs:
+      board:
+        description: Build target board (pi1|pi2|pi3|pi4|pi4-64|pi5|x86)
+        required: true
+        type: string
+      # `push` is intentionally a string ('true'|'false') rather than a
+      # boolean. When the caller fans out via matrix-of-uses with the
+      # matrix come from `fromJSON(...)`, type coercion of a JSON
+      # boolean through the matrix → with: input chain rejects the
+      # workflow at startup ("startup_failure" with no logs). Strings
+      # round-trip cleanly. All comparisons below use `== 'true'`.
+      push:
+        description: Push images and mirror latest-<board> ('true'|'false')
+        required: true
+        type: string
+    secrets:
+      DOCKER_USERNAME:
+        required: false
+      DOCKER_PASSWORD:
+        required: false
+      # Required only for pi1-pi5 boards on master push (the per-board
+      # `balena` job below). x86 / pi4-64 / PR builds never call the
+      # balena step so the secret can be absent.
+      BALENA_TOKEN:
+        required: false
+
+jobs:
+  build:
+    name: Build ${{ inputs.board }} ${{ matrix.service }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # `packages: write` is needed by the GHCR login step on master
+      # push. On PR smoke builds (`inputs.push: false`) no login fires
+      # and no push happens, so the broader scope is unused — and on
+      # forked PRs, GHA strips write down to read regardless of what
+      # we declare here. GHA's permissions block doesn't accept
+      # expressions for the value, so we can't downgrade to `read`
+      # conditionally on inputs.push without an actionlint failure.
+      packages: write
+    strategy:
+      # Don't cancel sibling services on first failure: any service
+      # that has already pushed its <short-hash>-<board> tag is
+      # harmless on its own. The mirror-latest job below — gated on
+      # the entire 4-service matrix succeeding — is the only step
+      # that advances the floating latest-<board> tag.
+      fail-fast: false
+      matrix:
+        service: ['server', 'celery', 'redis', 'viewer']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Python + uv (image builder)
+        uses: ./.github/actions/setup-python-uv
+        with:
+          group: docker-image-builder
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4
+
+      # Re-export `ACTIONS_CACHE_URL`, `ACTIONS_RUNTIME_TOKEN`, and
+      # `ACTIONS_RESULTS_URL` to subsequent steps. GHA passes these
+      # to actions but strips them from shell-step env, so the
+      # buildkit daemon container that setup-buildx-action launches
+      # below has no GHA cache credentials by default — the symptom
+      # we hit on the first audit-ci CI run after switching to
+      # type=gha was a successful build with no cache export step
+      # at all. With these vars re-exported via `core.exportVariable`,
+      # setup-buildx-action forwards them via
+      # `--driver-opt env.ACTIONS_*` to the buildkit container and
+      # the GHA cache transport authenticates.
+      - name: Expose GitHub Actions runtime env vars
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            for (const v of ['ACTIONS_CACHE_URL', 'ACTIONS_RUNTIME_TOKEN', 'ACTIONS_RESULTS_URL']) {
+              if (process.env[v]) core.exportVariable(v, process.env[v]);
+            }
+
+      # `name: multiarch-builder` so the Python builder
+      # (`tools.image_builder`) finds an already-bootstrapped builder
+      # under the name it expects.
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+        with:
+          name: multiarch-builder
+          driver-opts: |
+            image=moby/buildkit:latest
+
+      - name: Login to Docker Hub
+        if: inputs.push == 'true'
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login to GitHub Container Registry
+        if: inputs.push == 'true'
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build container
+        env:
+          DOCKER_BUILDKIT: 1
+          BUILDKIT_PROGRESS: plain
+          INPUT_BOARD: ${{ inputs.board }}
+          MATRIX_SERVICE: ${{ matrix.service }}
+          INPUT_PUSH: ${{ inputs.push }}
+        run: |
+          args=(
+            "--build-target=$INPUT_BOARD"
+            "--service=$MATRIX_SERVICE"
+          )
+          if [ "$INPUT_PUSH" = "true" ]; then
+            args+=(--push --skip-latest-tag)
+          fi
+          uv run python -m tools.image_builder "${args[@]}"
+
+  # Mirror this board's <short-hash>-<board> tags onto the floating
+  # latest-<board> tag. Runs only after every service in the buildx
+  # matrix above has succeeded, so within a board the four services
+  # always advance their latest tag together (or not at all).
+  #
+  # The retry() helper wraps each registry op in 5 attempts of
+  # exponential backoff (2/4/8/16s) plus a small randomized jitter.
+  # Jitter matters now that up to 7 boards retag in parallel: an
+  # uncoordinated jitter prevents 7 retrying runners from
+  # synchronizing into a coordinated 429 storm against Docker Hub.
+  # Both `imagetools inspect` and `imagetools create` are idempotent.
+  #
+  # Dual-registry mirror: ghcr.io/screenly/anthias-* (canonical
+  # primary, free for public packages, auth via GITHUB_TOKEN with
+  # `packages: write`) goes first so the canonical source is current
+  # even if Docker Hub flakes on a later retag. screenly/anthias-* on
+  # Docker Hub stays in the loop as a parallel mirror during the
+  # migration window so devices that haven't yet picked up the
+  # compose-template flip keep getting latest-* advanced.
+  mirror-latest:
+    name: Mirror latest-${{ inputs.board }}
+    needs: build
+    # `inputs.push` is `type: string`; in GHA expressions a non-empty
+    # string is truthy, so `if: inputs.push` would fire even when
+    # push='false'. The explicit `== 'true'` matches the gating used
+    # elsewhere in this file.
+    if: inputs.push == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mirror short-hash tags to latest-${{ inputs.board }}
+        env:
+          BOARD: ${{ inputs.board }}
+        run: |
+          set -euo pipefail
+          GIT_SHORT_HASH=$(git rev-parse --short=7 HEAD)
+          SERVICES=(server celery redis viewer)
+          # GHCR first so the canonical primary is current even if the
+          # Docker Hub mirror later in the loop flakes.
+          NAMESPACES=(ghcr.io/screenly/anthias screenly/anthias)
+
+          # 5 attempts of exponential backoff (2/4/8/16s) plus a small
+          # randomized jitter so up to 7 boards retagging in parallel
+          # don't synchronize their retries into a coordinated 429.
+          retry() {
+            local attempt
+            for attempt in 1 2 3 4 5; do
+              if "$@"; then
+                return 0
+              fi
+              if [ "${attempt}" -lt 5 ]; then
+                local delay=$(((2 ** attempt) + (RANDOM % 3)))
+                echo "Attempt ${attempt} failed; retrying in ${delay}s..." >&2
+                sleep "${delay}"
+              fi
+            done
+            echo "Giving up after 5 attempts: $*" >&2
+            return 1
+          }
+
+          echo "::group::Preflight: verify <short-hash>-${BOARD} source tags exist"
+          for namespace in "${NAMESPACES[@]}"; do
+            for service in "${SERVICES[@]}"; do
+              src="${namespace}-${service}:${GIT_SHORT_HASH}-${BOARD}"
+              echo "Verifying ${src}"
+              retry docker buildx imagetools inspect --raw "${src}" >/dev/null
+            done
+          done
+          echo "::endgroup::"
+
+          echo "::group::Mirror <short-hash>-${BOARD} -> latest-${BOARD}"
+          for namespace in "${NAMESPACES[@]}"; do
+            for service in "${SERVICES[@]}"; do
+              src="${namespace}-${service}:${GIT_SHORT_HASH}-${BOARD}"
+              dst="${namespace}-${service}:latest-${BOARD}"
+              echo "Mirroring ${src} -> ${dst}"
+              retry docker buildx imagetools create -t "${dst}" "${src}"
+            done
+          done
+          echo "::endgroup::"
+
+  # Per-board balena deploy. `needs: build` is the structural
+  # dependency on this board's docker push: if any of the four
+  # services in the build matrix above failed, GHA skips this job
+  # automatically. That replaces the registry-preflight workaround
+  # the old top-level `balena:` matrix used to bridge the cross-job
+  # matrix-leg gap.
+  #
+  # Gating:
+  #   - `inputs.push == 'true'` — never deploy from PR smoke builds.
+  #   - `github.event_name == 'push' && github.ref == ...` — never
+  #     deploy from `workflow_dispatch` even though it builds with
+  #     push=true. Matches the prior top-level balena gate.
+  #   - board ∈ {pi1..pi5} — pi4-64 and x86 don't have balena fleets;
+  #     pi4 here maps to the pi4-64 image inside `_balena-board.yaml`.
+  balena:
+    name: Balena ${{ inputs.board }}
+    needs: build
+    if: |
+      inputs.push == 'true'
+      && github.event_name == 'push'
+      && github.ref == 'refs/heads/master'
+      && contains(fromJSON('["pi1","pi2","pi3","pi4","pi5"]'), inputs.board)
+    uses: ./.github/workflows/_balena-board.yaml
+    with:
+      board: ${{ inputs.board }}
+    secrets:
+      BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}

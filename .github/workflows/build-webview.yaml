@@ -1,13 +1,14 @@
 name: Build Webview
 
+# Webview is versioned independently via `WebView-v*` tags. PRs run
+# the full build for validation; tag pushes run it again to attach
+# artifacts to the release. Master pushes don't trigger a build —
+# the same commits already validated on the PR would otherwise
+# compile a second time, producing only ephemeral GHA artifacts that
+# nobody downloads (the durable deliverables are the tag-push
+# release assets).
 on:
   push:
-    branches:
-      - master
-    paths:
-      - '.github/workflows/build-webview.yaml'
-      - 'webview/**'
-      - '!webview/README.md'
     tags:
       - 'WebView-v*'
   pull_request:
@@ -17,6 +18,10 @@ on:
       - '.github/workflows/build-webview.yaml'
       - 'webview/**'
       - '!webview/README.md'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-docker-image:

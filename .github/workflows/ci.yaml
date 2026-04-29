@@ -1,0 +1,184 @@
+name: CI
+
+# Single entry point for lint + test + build + deploy. The four
+# reusable workflows it calls (`_lint.yaml`, `_test-host.yaml`,
+# `_build-board.yaml`, `_balena-board.yaml`) own the actual job
+# bodies; this file owns triggers, the path filter, concurrency, and
+# the PR-vs-push fan-out shape. (Replaced docker-build.yaml,
+# python-checks.yaml, javascript-lint.yaml, ansible-lint.yaml, and
+# lint-workflows.yml; all five were deleted in the same PR that
+# introduced this file.)
+#
+# Whitelist trigger paths: every entry below is something whose
+# change affects any of the three CI pillars (lint, test, build).
+# We deliberately avoid the `**` + long !exclusion pattern that
+# drifted across docker-build / generate-openapi-schema before this
+# refactor. The `pull_request:` block intentionally duplicates the
+# `push:` list — actionlint doesn't follow YAML anchors, and a
+# one-line mismatch is cheaper than losing CI lint coverage. The
+# upside vs. the old layout: this duplication exists in *one* file
+# instead of five.
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'anthias_app/**'
+      - 'anthias_django/**'
+      - 'api/**'
+      - 'lib/**'
+      - 'viewer/**'
+      - 'static/**'
+      - 'templates/**'
+      - 'ansible/**'
+      - 'celery_tasks.py'
+      - 'host_agent.py'
+      - 'manage.py'
+      - 'settings.py'
+      - 'tools/**'
+      - 'docker/**'
+      - 'docker-compose*.yml*'
+      - 'balena.yml'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'package.json'
+      - 'bun.lock'
+      - 'bunfig.toml'
+      - 'eslint.config.mjs'
+      - 'tsconfig.json'
+      - 'ruff.toml'
+      - '.ansible-lint'
+      - 'tests/**'
+      - 'bin/prepare_test_environment.sh'
+      - '.github/workflows/ci.yaml'
+      - '.github/workflows/_*.yaml'
+      - '.github/actions/setup-python-uv/**'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'anthias_app/**'
+      - 'anthias_django/**'
+      - 'api/**'
+      - 'lib/**'
+      - 'viewer/**'
+      - 'static/**'
+      - 'templates/**'
+      - 'ansible/**'
+      - 'celery_tasks.py'
+      - 'host_agent.py'
+      - 'manage.py'
+      - 'settings.py'
+      - 'tools/**'
+      - 'docker/**'
+      - 'docker-compose*.yml*'
+      - 'balena.yml'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'package.json'
+      - 'bun.lock'
+      - 'bunfig.toml'
+      - 'eslint.config.mjs'
+      - 'tsconfig.json'
+      - 'ruff.toml'
+      - '.ansible-lint'
+      - 'tests/**'
+      - 'bin/prepare_test_environment.sh'
+      - '.github/workflows/ci.yaml'
+      - '.github/workflows/_*.yaml'
+      - '.github/actions/setup-python-uv/**'
+  workflow_dispatch:
+
+# Cancel in-flight runs on PR re-pushes (the buildx matrix is the
+# costliest thing in CI). Never cancel master runs — each one is a
+# deploy that needs to complete.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Decides which boards to build. PRs get an x86-only smoke build
+  # (no push) so Dockerfile and dependency regressions are caught
+  # before merge without paying the full 7-board build cost.
+  # Master push gets all 7 boards with push=true. Emitting the matrix
+  # as JSON lets us add or remove boards in one place rather than
+  # duplicated `if:` conditions on every job.
+  plan:
+    name: Plan build matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      # Note: `push` is emitted as a string ('true'/'false') rather
+      # than a JSON boolean. The reusable `_build-board.yaml`'s
+      # `inputs.push` is declared as `type: string` to avoid a known
+      # type-coercion failure when matrix-of-uses passes a JSON
+      # boolean through `${{ matrix.push }}` to a boolean-typed input
+      # (manifests as a 1-second startup_failure with no logs).
+      # The emitted matrix is a JSON *object* with an `include` key —
+      # not a bare list — to match the canonical shape from GitHub's
+      # dynamic-matrix docs. The `build` job below uses
+      # `matrix: ${{ fromJSON(...) }}` (replacing the whole strategy
+      # matrix) rather than `matrix.include: ${{ fromJSON(...) }}`,
+      # because matrix-of-uses + dynamic-matrix has only ever been
+      # documented to work in the whole-matrix-replacement form.
+      - id: set
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            matrix='{"include":[{"board":"x86","push":"false"}]}'
+          else
+            matrix='{"include":[{"board":"pi1","push":"true"},{"board":"pi2","push":"true"},{"board":"pi3","push":"true"},{"board":"pi4","push":"true"},{"board":"pi4-64","push":"true"},{"board":"pi5","push":"true"},{"board":"x86","push":"true"}]}'
+          fi
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
+  lint:
+    name: Lint
+    uses: ./.github/workflows/_lint.yaml
+
+  test:
+    name: Test
+    uses: ./.github/workflows/_test-host.yaml
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # Build → mirror-latest → balena are all per-board jobs *inside*
+  # `_build-board.yaml`. Each board's balena deploy structurally
+  # depends on that board's docker push (`needs: build` inside the
+  # reusable), so a pi3 build failure cleanly skips pi3's balena
+  # deploy without touching pi5's.
+  build:
+    name: Build
+    needs: [plan, lint, test]
+    # `packages: write` is needed by the GHCR login + push in the
+    # reusable's `build` and `mirror-latest` jobs. A reusable workflow
+    # can only narrow, never widen, the permissions granted by its
+    # caller — the workflow-level `permissions: contents: read` above
+    # would otherwise force the nested jobs to `packages: none` and
+    # GHA rejects the whole workflow at startup ("nested job 'build'
+    # is requesting 'packages: write', but is only allowed
+    # 'packages: none'"). Scoping the elevation to this one job keeps
+    # plan/lint/test on the tighter default.
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # Don't cancel sibling boards on first failure: each board is
+      # an independent build-and-publish unit. A flaky pi3 doesn't
+      # stop pi5 from advancing its latest-pi5 tag.
+      fail-fast: false
+      # Whole-matrix replacement (not `matrix.include: ${{ ... }}`)
+      # — see comment on the `plan` job above.
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    uses: ./.github/workflows/_build-board.yaml
+    with:
+      board: ${{ matrix.board }}
+      push: ${{ matrix.push }}
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
