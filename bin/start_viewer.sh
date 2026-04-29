@@ -16,11 +16,22 @@ chown -f viewer /data/.anthias/latest_anthias_sha
 # Fixes caching in QTWebEngine
 mkdir -p /data/.local/share/AnthiasWebview/QtWebEngine \
     /data/.cache/AnthiasWebview \
+    /data/.cache/fontconfig \
     /data/.pki
 
 chown -Rf viewer /data/.local/share/AnthiasWebview
 chown -Rf viewer /data/.cache/AnthiasWebview/
+chown -Rf viewer /data/.cache/fontconfig
 chown -Rf viewer /data/.pki
+
+# Qt + dbus + various Linux apps look up XDG_RUNTIME_DIR; without it they
+# log warnings and fall back to ad-hoc paths. Provide a per-uid runtime
+# dir owned by the viewer user.
+VIEWER_UID=$(id -u viewer)
+export XDG_RUNTIME_DIR="/run/user/${VIEWER_UID}"
+mkdir -p "${XDG_RUNTIME_DIR}"
+chown viewer:video "${XDG_RUNTIME_DIR}"
+chmod 700 "${XDG_RUNTIME_DIR}"
 
 # Temporary workaround for watchdog
 touch /tmp/anthias.watchdog
@@ -38,14 +49,22 @@ chmod -f 4755 /usr/bin/sudo
 # Prevent it so that the container does not fail
 trap '' 16
 
-# Disable swapping
-echo 0 >  /sys/fs/cgroup/memory/memory.swappiness
+# Disable swapping. Path is cgroup v1 only; cgroup v2 hosts (modern
+# Debian / Ubuntu / Raspberry Pi OS Bookworm) don't expose it, so guard
+# the write to avoid a noisy "No such file or directory" on every boot.
+if [ -w /sys/fs/cgroup/memory/memory.swappiness ]; then
+    echo 0 > /sys/fs/cgroup/memory/memory.swappiness
+fi
 
 # Start viewer.
 # sudo resets PATH to its secure_path, so resolve python via the
 # absolute venv path instead — `python` on PATH would otherwise hit
 # the system interpreter, which has no Anthias deps installed.
-sudo -E -u viewer dbus-run-session /venv/bin/python -m viewer &
+# --preserve-env=XDG_RUNTIME_DIR forces sudo to forward the runtime dir
+# we just set; -E alone is subject to env_check / env_delete and is not
+# guaranteed for XDG_* on Debian's default sudoers.
+sudo --preserve-env=XDG_RUNTIME_DIR -E -u viewer \
+    dbus-run-session /venv/bin/python -m viewer &
 
 # Wait for the viewer
 while true; do

@@ -11,6 +11,21 @@ from settings import settings
 VIDEO_TIMEOUT = 20  # secs
 
 
+def get_alsa_audio_device() -> str:
+    if settings['audio_output'] == 'local':
+        if get_device_type() == 'pi5':
+            return 'default:CARD=vc4hdmi0'
+
+        return 'plughw:CARD=Headphones'
+    else:
+        if get_device_type() in ['pi4', 'pi5']:
+            return 'default:CARD=vc4hdmi0'
+        elif get_device_type() in ['pi1', 'pi2', 'pi3']:
+            return 'default:CARD=vc4hdmi'
+        else:
+            return 'default:CARD=HID'
+
+
 class MediaPlayer:
     def __init__(self) -> None:
         pass
@@ -38,12 +53,16 @@ class MPVMediaPlayer(MediaPlayer):
         self.uri = uri
 
     def play(self) -> None:
+        # Re-read settings each play so the audio_output dropdown takes
+        # effect without a viewer restart, matching VLCMediaPlayer.
+        settings.load()
         self.process = subprocess.Popen(
             [
                 'mpv',
                 '--no-terminal',
                 '--vo=drm',
                 '--hwdec=auto-safe',
+                f'--audio-device=alsa/{get_alsa_audio_device()}',
                 '--',
                 self.uri,
             ],
@@ -69,37 +88,16 @@ class VLCMediaPlayer(MediaPlayer):
     def __init__(self) -> None:
         MediaPlayer.__init__(self)
 
-        options = self.__get_options()
+        options = [f'--alsa-audio-device={get_alsa_audio_device()}']
         self.instance = vlc.Instance(options)
         self.player = self.instance.media_player_new()
 
         self.player.audio_output_set('alsa')
 
-    def get_alsa_audio_device(self) -> str:
-        if settings['audio_output'] == 'local':
-            if get_device_type() == 'pi5':
-                return 'default:CARD=vc4hdmi0'
-
-            return 'plughw:CARD=Headphones'
-        else:
-            if get_device_type() in ['pi4', 'pi5']:
-                return 'default:CARD=vc4hdmi0'
-            elif get_device_type() in ['pi1', 'pi2', 'pi3']:
-                return 'default:CARD=vc4hdmi'
-            else:
-                return 'default:CARD=HID'
-
-    def __get_options(self) -> list[str]:
-        return [
-            f'--alsa-audio-device={self.get_alsa_audio_device()}',
-        ]
-
     def set_asset(self, uri: str, duration: int | str) -> None:
         self.player.set_mrl(uri)
         settings.load()
-        self.player.audio_output_device_set(
-            'alsa', self.get_alsa_audio_device()
-        )
+        self.player.audio_output_device_set('alsa', get_alsa_audio_device())
         # Use synchronous parse() to pre-load file metadata before play() is
         # called. parse_with_options() is async and returns before metadata is
         # ready, which negates the pre-loading benefit and causes the same
