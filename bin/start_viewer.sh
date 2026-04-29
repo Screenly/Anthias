@@ -56,6 +56,43 @@ if [ -w /sys/fs/cgroup/memory/memory.swappiness ]; then
     echo 0 > /sys/fs/cgroup/memory/memory.swappiness
 fi
 
+# QtWebEngine renders web content at 1 CSS px = 1 physical px by default,
+# which makes pages look ~half-size on a 4K TV (forum 6538). Pick a Qt
+# scale factor based on the active framebuffer width so the page is laid
+# out as if the screen were 1920px wide and then upscaled. Pi/x86 viewer
+# images both expose connector state under /sys/class/drm — the first
+# line of `modes` is the active/preferred mode. Skip if the user already
+# set QT_SCALE_FACTOR explicitly, so a manual override always wins.
+if [ -z "${QT_SCALE_FACTOR:-}" ]; then
+    SCREEN_WIDTH=""
+    for connector in /sys/class/drm/card*-*; do
+        [ -d "$connector" ] || continue
+        [ "$(cat "$connector/status" 2>/dev/null)" = "connected" ] || continue
+        first_mode=$(head -n1 "$connector/modes" 2>/dev/null)
+        case "$first_mode" in
+            *x*)
+                SCREEN_WIDTH="${first_mode%%x*}"
+                break
+                ;;
+        esac
+    done
+    if [ -n "$SCREEN_WIDTH" ]; then
+        # Round to the nearest integer ratio of 1920 (1, 2, 3...) and
+        # cap at 4 so a freak EDID can't request 8x.
+        SCALE=$(awk -v w="$SCREEN_WIDTH" 'BEGIN {
+            s = w / 1920
+            if (s < 1.5) print 1
+            else if (s < 2.5) print 2
+            else if (s < 3.5) print 3
+            else print 4
+        }')
+        if [ "${SCALE:-1}" -gt 1 ]; then
+            export QT_SCALE_FACTOR="$SCALE"
+            echo "start_viewer: detected ${SCREEN_WIDTH}px screen, QT_SCALE_FACTOR=${SCALE}"
+        fi
+    fi
+fi
+
 # Start viewer.
 # sudo resets PATH to its secure_path, so resolve python via the
 # absolute venv path instead — `python` on PATH would otherwise hit
@@ -63,7 +100,7 @@ fi
 # --preserve-env=XDG_RUNTIME_DIR forces sudo to forward the runtime dir
 # we just set; -E alone is subject to env_check / env_delete and is not
 # guaranteed for XDG_* on Debian's default sudoers.
-sudo --preserve-env=XDG_RUNTIME_DIR -E -u viewer \
+sudo --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR -E -u viewer \
     dbus-run-session /venv/bin/python -m viewer &
 
 # Wait for the viewer
