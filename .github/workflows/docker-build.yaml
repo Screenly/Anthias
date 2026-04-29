@@ -68,8 +68,8 @@ jobs:
       # dedup at the registry level. See refactor: drop celery image.
       fail-fast: false
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
-        python-version: ["3.11"]
+        board: ['pi2', 'pi3', 'pi4-64', 'pi5', 'x86']
+        python-version: ["3.13"]
     runs-on: ubuntu-24.04
 
     steps:
@@ -208,7 +208,7 @@ jobs:
         run: |
           set -euo pipefail
           GIT_SHORT_HASH=$(git rev-parse --short=7 HEAD)
-          BOARDS=(pi1 pi2 pi3 pi4 pi4-64 pi5 x86)
+          BOARDS=(pi2 pi3 pi4-64 pi5 x86)
           SERVICES=(server redis viewer)
           # GHCR first so the canonical primary is current even if the
           # Docker Hub mirror later in the loop flakes.
@@ -266,7 +266,7 @@ jobs:
     needs: buildx
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi5']
+        board: ['pi2', 'pi3', 'pi4-64', 'pi5']
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -275,13 +275,7 @@ jobs:
       - name: Set Docker tag
         run: |
           echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-
-          if [ "${{ matrix.board }}" == "pi4" ]; then
-            echo "BOARD=${{ matrix.board }}-64" >> "$GITHUB_ENV"
-          else
-            echo "BOARD=${{ matrix.board }}" >> "$GITHUB_ENV"
-          fi
-
+          echo "BOARD=${{ matrix.board }}" >> "$GITHUB_ENV"
           echo "SHM_SIZE=256mb" >> "$GITHUB_ENV"
 
       - name: Prepare Balena file

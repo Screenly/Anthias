@@ -17,7 +17,7 @@ ARCHITECTURE=$(uname -m)
 UV_PIN_VERSION="0.9.17"
 
 INTRO_MESSAGE=(
-    "Anthias runs on a dedicated Raspberry Pi (1-5) or x86 device."
+    "Anthias runs on a dedicated Raspberry Pi (2/3/4-64-bit/5) or x86 device."
     "The host will be repurposed for digital signage — on a Pi you lose the"
     "regular desktop environment, and on x86 the machine should not be used"
     "for anything else."
@@ -201,15 +201,14 @@ function install_ansible() {
     fi
 
     # Resolve and install the `host` dependency group from pyproject.toml.
-    # `--python ">=3.11"` overrides the repo's .python-version (3.11) so the
-    # installer accepts whatever interpreter the host already ships — Bookworm
-    # has 3.11, Trixie has 3.13. Without this, uv would insist on 3.11 and
-    # fail on Trixie/Pi 2 (armv7l), where there's no system 3.11 and uv has
-    # no managed download for that arch.
+    # `--python ">=3.13"` matches pyproject.toml's requires-python pin —
+    # Trixie ships 3.13 by default, so the installer just picks up the
+    # system interpreter on supported hosts. Older Debian releases
+    # (Bookworm = 3.11) are no longer supported on the host.
     UV_PROJECT_ENVIRONMENT="${INSTALLER_VENV}" \
         uv sync \
             --project "${ANTHIAS_REPO_DIR}" \
-            --python ">=3.11" \
+            --python ">=3.13" \
             --no-default-groups \
             --group host \
             --no-install-project
@@ -221,13 +220,14 @@ function set_device_type() {
     elif grep -qF "Raspberry Pi 5" /proc/device-tree/model || grep -qF "Compute Module 5" /proc/device-tree/model; then
         export DEVICE_TYPE="pi5"
     elif grep -qF "Raspberry Pi 4" /proc/device-tree/model || grep -qF "Compute Module 4" /proc/device-tree/model; then
-        export DEVICE_TYPE="pi4"
+        export DEVICE_TYPE="pi4-64"
     elif grep -qF "Raspberry Pi 3" /proc/device-tree/model || grep -qF "Compute Module 3" /proc/device-tree/model; then
         export DEVICE_TYPE="pi3"
     elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
         export DEVICE_TYPE="pi2"
     else
-        export DEVICE_TYPE="pi1"
+        echo "Unsupported Raspberry Pi model. Anthias supports Pi 2/3/4 (64-bit)/5 and x86." >&2
+        exit 1
     fi
 }
 

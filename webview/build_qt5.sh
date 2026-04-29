@@ -43,7 +43,10 @@ function fetch_cross_compile_tool () {
 }
 
 function fetch_rpi_firmware () {
-    # Check Debian version. Return early if newer than Debian 10, as they don't have /opt/vc anymore.
+    # Skip the /opt/vc fetch on Debian >10. The packaged libraspberrypi0
+    # from archive.raspbian.org now provides /opt/vc/lib at install time
+    # (verified on trixie/armhf), so the GitHub-firmware checkout is
+    # only needed on legacy bullseye/buster builders.
     _DEBIAN_VERSION=$(lsb_release -rs)
     if [ "${_DEBIAN_VERSION}" -gt "10" ]; then
         echo "Debian version is newer than 10. Skipping firmware fetch."
@@ -140,13 +143,7 @@ function build_qt () {
         mkdir -p "$SRC_DIR"
         pushd "$SRC_DIR"
 
-        if [ "$1" = "pi1" ]; then
-            local BUILD_ARGS=(
-                "-device" "linux-rasp-pi-g++"
-            )
-            patch_qt "linux-rasp-pi-g++"
-            patch_qtwebengine
-        elif [ "$1" = "pi2" ]; then
+        if [ "$1" = "pi2" ]; then
             local BUILD_ARGS=(
                 "-device" "linux-rasp-pi2-g++"
             )
@@ -156,14 +153,6 @@ function build_qt () {
                 "-device" "linux-rasp-pi3-g++"
             )
             patch_qt "linux-rasp-pi3-g++"
-
-        # The opengl flag only works on Pi 4. It breaks the QTWebEngine build
-        # process on any other model.
-        elif [ "$1" = "pi4" ]; then
-            local BUILD_ARGS=(
-                "-device" "linux-rasp-pi4-v3d-g++"
-                "-opengl" "es2"
-            )
         else
             echo "Unknown device. Exiting."
             exit 1
@@ -288,8 +277,10 @@ fetch_cross_compile_tool
 fetch_rpi_firmware
 
 if [ ! "${TARGET-}" ]; then
-    # Let's work our way through all Pis in order of relevance
-    for device in pi4 pi3 pi2 pi1; do
+    # Iterate the surviving Qt 5 boards. Pi 1 and the 32-bit Pi 4 path
+    # were retired with the Trixie / drop-Balena upgrade; Pi 4 64-bit
+    # and Pi 5 use Qt 6 from Debian apt instead (see webview/docker/).
+    for device in pi3 pi2; do
         build_qt "$device"
     done
 else

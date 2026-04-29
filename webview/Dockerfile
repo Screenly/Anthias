@@ -1,5 +1,26 @@
 ARG BUILDER_BASE_PLATFORM=linux/arm/v7
-FROM --platform=${BUILDER_BASE_PLATFORM} balenalib/raspberrypi3:bookworm AS builder
+FROM --platform=${BUILDER_BASE_PLATFORM} debian:trixie AS builder
+
+# Bootstrap the Raspberry Pi Foundation + Raspbian apt sources so the
+# Qt 5 cross-build sysroot can pull libraspberrypi0 / libraspberrypi-bin
+# (legacy Broadcom userland headers + libs that Qt 5 webview links
+# against). Same approach as docker/Dockerfile.base.j2 — the .deb
+# keyring packages bundle trixie-policy-compliant key bindings, so we
+# extract them with dpkg-deb -x to avoid pulling in gnupg.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl && \
+    mkdir -p /tmp/keyrings && \
+    curl -fsSL -o /tmp/keyrings/raspberrypi-archive-keyring.deb \
+        http://archive.raspberrypi.org/debian/pool/main/r/raspberrypi-archive-keyring/raspberrypi-archive-keyring_2025.1+rpt1_all.deb && \
+    curl -fsSL -o /tmp/keyrings/raspbian-archive-keyring.deb \
+        http://archive.raspbian.org/raspbian/pool/main/r/raspbian-archive-keyring/raspbian-archive-keyring_20120528.4_all.deb && \
+    dpkg-deb -x /tmp/keyrings/raspberrypi-archive-keyring.deb / && \
+    dpkg-deb -x /tmp/keyrings/raspbian-archive-keyring.deb / && \
+    rm -rf /tmp/keyrings && \
+    printf 'Types: deb\nURIs: http://archive.raspberrypi.org/debian\nSuites: trixie\nComponents: main\nArchitectures: armhf\nSigned-By: /usr/share/keyrings/raspberrypi-archive-keyring.gpg\n' \
+        > /etc/apt/sources.list.d/raspi.sources && \
+    printf 'Types: deb\nURIs: http://archive.raspbian.org/raspbian\nSuites: trixie\nComponents: firmware\nArchitectures: armhf\nSigned-By: /usr/share/keyrings/raspbian-archive-keyring.gpg\n' \
+        > /etc/apt/sources.list.d/raspbian-firmware.sources
 
 # There are likely a large number of dependencies that can be stripped out here
 # depending on your needs (and probably in general). My primary objective was just
@@ -56,7 +77,6 @@ RUN apt-get update && \
         libsrtp0-dev \
         libsrtp2-dev \
         libssl-dev \
-        libssl1.1 \
         libswscale-dev \
         libsystemd-dev \
         libts-dev \
@@ -104,7 +124,7 @@ RUN apt-get update && \
 # https://www.enricozini.org/blog/2020/qt5/build-qt5-cross-builder-with-raspbian-sysroot-compiling-with-the-sysroot-continued/
 RUN dpkg --purge libraspberrypi-dev
 
-FROM debian:bookworm
+FROM debian:trixie
 
 # This list can most likely be slimmed down *a lot* but that's for another day.
 RUN apt-get update && \

@@ -7,62 +7,47 @@ from tools.image_builder.constants import GITHUB_REPO_URL
 
 
 def get_build_parameters(build_target: str) -> dict[str, Any]:
-    default_build_parameters = {
+    # Every surviving board now lands on vanilla `debian:trixie`. The
+    # `pi2`/`pi3` armhf builds add the Raspberry Pi / Raspbian apt
+    # sources at image-build time (see Dockerfile.base.j2); 64-bit and
+    # x86 builds need nothing Pi-specific at all.
+    if build_target == 'pi5':
+        return {
+            'board': 'pi5',
+            'base_image': 'debian',
+            'target_platform': 'linux/arm64/v8',
+        }
+    if build_target == 'pi4-64':
+        return {
+            'board': 'pi4-64',
+            'base_image': 'debian',
+            'target_platform': 'linux/arm64/v8',
+        }
+    if build_target == 'pi3':
+        return {
+            'board': 'pi3',
+            'base_image': 'debian',
+            'target_platform': 'linux/arm/v7',
+        }
+    if build_target == 'pi2':
+        return {
+            'board': 'pi2',
+            'base_image': 'debian',
+            'target_platform': 'linux/arm/v7',
+        }
+
+    return {
         'board': 'x86',
         'base_image': 'debian',
         'target_platform': 'linux/amd64',
     }
 
-    if build_target == 'pi5':
-        return {
-            'board': 'pi5',
-            'base_image': 'balenalib/raspberrypi5-debian',
-            'target_platform': 'linux/arm64/v8',
-        }
-    if build_target == 'pi4':
-        return {
-            'board': 'pi4',
-            'base_image': 'balenalib/raspberrypi3-debian',
-            'target_platform': 'linux/arm/v8',
-        }
-    elif build_target == 'pi4-64':
-        return {
-            'board': 'pi4',
-            'base_image': 'balenalib/raspberrypi3-64-debian',
-            'target_platform': 'linux/arm64/v8',
-        }
-    elif build_target == 'pi3':
-        return {
-            'board': 'pi3',
-            'base_image': 'balenalib/raspberrypi3-debian',
-            'target_platform': 'linux/arm/v7',
-        }
-    elif build_target == 'pi2':
-        return {
-            'board': 'pi2',
-            'base_image': 'balenalib/raspberry-pi2',
-            'target_platform': 'linux/arm/v6',
-        }
-    elif build_target == 'pi1':
-        return {
-            'board': 'pi1',
-            'base_image': 'balenalib/raspberry-pi',
-            'target_platform': 'linux/arm/v6',
-        }
-
-    return default_build_parameters
-
 
 def get_docker_tag(git_branch: str, board: str, platform: str) -> str:
-    result_board = board
-
-    if platform == 'linux/arm64/v8' and board == 'pi4':
-        result_board = f'{board}-64'
-
     if git_branch == 'master':
-        return f'latest-{result_board}'
+        return f'latest-{board}'
     else:
-        return f'{git_branch}-{result_board}'
+        return f'{git_branch}-{board}'
 
 
 def generate_dockerfile(service: str, context: dict[str, Any]) -> None:
@@ -143,9 +128,7 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     webview_version = os.environ.get('WEBVIEW_VERSION', '2026.04.0')
     webview_base_url = f'{releases_url}/WebView-v{webview_version}'
 
-    is_pi4_64 = board == 'pi4' and target_platform == 'linux/arm64/v8'
-    is_qt6 = board in ['pi5', 'x86'] or is_pi4_64
-    artifact_board = 'pi4-64' if is_pi4_64 else board
+    is_qt6 = board in ['pi5', 'pi4-64', 'x86']
 
     # Qt version is only used to pull the cross-built Qt 5 toolchain
     # archive on legacy 32-bit Pi boards; Qt 6 boards consume Qt from
@@ -158,7 +141,7 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     qt_major_version = qt_version.split('.')[0]
 
     # Viewer-only apt deps. The shared set (build-essential, curl, ffmpeg,
-    # git-core, libcec-dev, libffi-dev, libssl-dev, net-tools, procps,
+    # git, libcec-dev, libffi-dev, libssl-dev, net-tools, procps,
     # psmisc, python-is-python3, python3-dev, python3-gi, python3-pip,
     # python3-setuptools, sqlite3, sudo, plus libraspberrypi0 on 32-bit
     # Pi boards) is installed by Dockerfile.base.j2 in a layer that
@@ -184,7 +167,7 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         'libfreetype6-dev',
         'libgbm-dev',
         'libgcrypt20-dev',
-        'libgles2-mesa',
+        'libgles2',
         'libgles2-mesa-dev',
         'libglib2.0-dev',
         'libicu-dev',
@@ -199,7 +182,7 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         'libopus-dev',
         'libpci-dev',
         'libpng-dev',
-        'libpng16-16',
+        'libpng16-16t64',
         'libpq-dev',
         'libpulse-dev',
         'librsvg2-common',
@@ -245,7 +228,7 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         'libxss-dev',
         'libxtst-dev',
         'python3-netifaces',
-        'ttf-wqy-zenhei',
+        'fonts-wqy-zenhei',
         'vlc',
     ]
 
@@ -261,18 +244,18 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     else:
         # libraspberrypi0 already comes in via base_apt_dependencies on
         # 32-bit Pi boards (see __main__.py), so it's deliberately not
-        # repeated here.
+        # repeated here. libssl1.1 is gone in trixie; the rebuilt Qt 5
+        # webview archive links against libssl3 from the base image.
+        # libgst-dev / libsqlite0-dev / libsrtp0-dev were dropped in
+        # trixie — modern equivalents (libgstreamer1.0-dev,
+        # libsqlite3-dev, libsrtp2-dev) are pulled by the main viewer
+        # apt list above.
         viewer_extra_apt_dependencies.extend(
             [
-                'libgst-dev',
-                'libsqlite0-dev',
-                'libsrtp0-dev',
+                'libgstreamer1.0-dev',
                 'qt5-image-formats-plugins',
             ]
         )
-
-        if board != 'pi1':
-            viewer_extra_apt_dependencies.extend(['libssl1.1'])
 
     return {
         'viewer_extra_apt_dependencies': viewer_extra_apt_dependencies,
@@ -281,5 +264,5 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         'webview_version': webview_version,
         'webview_base_url': webview_base_url,
         'is_qt6': is_qt6,
-        'artifact_board': artifact_board,
+        'artifact_board': board,
     }
