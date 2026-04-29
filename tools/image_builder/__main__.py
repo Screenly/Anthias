@@ -185,19 +185,35 @@ def build_image(
         cache_ref = (
             f'ghcr.io/screenly/anthias-{service}:buildcache-{cache_scope}'
         )
+        # Reads are always safe — anthias-* GHCR packages are public,
+        # so cache_from works without auth (matters for someone
+        # invoking this locally with --cache-backend=registry to
+        # warm-start off CI's cache).
         cache_from = {'type': 'registry', 'ref': cache_ref}
-        cache_to = {
-            'type': 'registry',
-            'ref': cache_ref,
-            'mode': 'max',
-            # `image-manifest=true` writes the cache as an OCI image
-            # manifest rather than the legacy index-only form, which
-            # is the only thing GHCR will accept under the
-            # ghcr.io/screenly/anthias-* repos (it rejects standalone
-            # cache manifests). Cheap, just affects how the cache
-            # blob is wrapped.
-            'image-manifest': 'true',
-        }
+        if push:
+            cache_to = {
+                'type': 'registry',
+                'ref': cache_ref,
+                'mode': 'max',
+                # `image-manifest=true` writes the cache as an OCI
+                # image manifest rather than the legacy index-only
+                # form, which is the only thing GHCR will accept
+                # under the ghcr.io/screenly/anthias-* repos (it
+                # rejects standalone cache manifests). Cheap, just
+                # affects how the cache blob is wrapped.
+                'image-manifest': 'true',
+            }
+        else:
+            # Without --push the build hasn't authenticated to GHCR,
+            # so trying to write cache there would fail mid-build.
+            # Read-only: pull layers from the published cache, don't
+            # update it.
+            cache_to = None
+            click.secho(
+                f'cache-backend=registry without --push: reading from '
+                f'{cache_ref} but not writing back.',
+                fg='yellow',
+            )
     else:
         cache_from = {'type': 'local', 'src': str(cache_dir)}
         cache_to = {
