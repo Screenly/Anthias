@@ -29,6 +29,7 @@ class TestMPVMediaPlayer(unittest.TestCase):
                 'mpv',
                 '--no-terminal',
                 '--vo=drm',
+                '--hwdec=auto-safe',
                 '--',
                 'file:///test/video.mp4',
             ],
@@ -119,9 +120,12 @@ class TestMediaPlayerProxy(unittest.TestCase):
         for device_type in ['pi1', 'pi2', 'pi3', 'pi4']:
             with self.subTest(device_type=device_type):
                 MediaPlayerProxy.INSTANCE = None
-                with patch(
-                    'viewer.media_player.get_device_type',
-                    return_value=device_type,
+                with (
+                    patch(
+                        'viewer.media_player.get_device_type',
+                        return_value=device_type,
+                    ),
+                    patch.dict('os.environ', {'DEVICE_TYPE': device_type}),
                 ):
                     with patch.object(
                         VLCMediaPlayer, '__init__', return_value=None
@@ -139,6 +143,15 @@ class TestMediaPlayerProxy(unittest.TestCase):
                 ):
                     instance = MediaPlayerProxy.get_instance()
                 self.assertIsInstance(instance, MPVMediaPlayer)
+
+    def test_get_instance_returns_mpv_for_pi4_64(self) -> None:
+        MediaPlayerProxy.INSTANCE = None
+        with (
+            patch('viewer.media_player.get_device_type', return_value='pi4'),
+            patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}),
+        ):
+            instance = MediaPlayerProxy.get_instance()
+        self.assertIsInstance(instance, MPVMediaPlayer)
 
     @patch('viewer.media_player.get_device_type', return_value='pi5')
     def test_get_instance_returns_same_instance(self, _: Any) -> None:
