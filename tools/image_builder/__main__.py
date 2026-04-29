@@ -176,9 +176,12 @@ def build_image(
         cache_from = None
         cache_to = None
     elif cache_backend == 'registry':
-        # Pick the canonical (GHCR-primary) namespace from the build's
-        # tag list so the cache lives in the same registry that already
-        # holds the published images.
+        # Hardcode the GHCR-primary namespace so the cache lives next to
+        # the published images for this service. Doesn't read from
+        # `namespaces` below: cache only needs one canonical home, and
+        # GHCR's free unlimited storage for public packages makes it the
+        # right one. If the namespaces list changes in the future, this
+        # ref needs to move with it.
         cache_ref = (
             f'ghcr.io/screenly/anthias-{service}:buildcache-{cache_scope}'
         )
