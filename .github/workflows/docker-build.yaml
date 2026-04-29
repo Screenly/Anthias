@@ -40,9 +40,11 @@ jobs:
     # Scoped per-job (not at workflow level) so `run-tests` and any
     # future read-only job don't inherit `packages: write`. `buildx`
     # needs it so `docker login ghcr.io` with GITHUB_TOKEN can push
-    # ghcr.io/screenly/anthias-*. `contents: read` is the implicit
-    # default but pinned explicitly so a future workflow edit can't
-    # silently lose checkout access.
+    # both ghcr.io/screenly/anthias-* image tags and the
+    # `buildcache-*` registry cache tags written by --cache-backend=
+    # registry. `contents: read` is the implicit default but pinned
+    # explicitly so a future workflow edit can't silently lose
+    # checkout access.
     permissions:
       contents: read
       packages: write
@@ -104,19 +106,6 @@ jobs:
           docker buildx create --use --name multiarch-builder
           docker buildx inspect --bootstrap
 
-      - name: Cache Docker layers
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        id: cache
-        with:
-          path: /tmp/.buildx-cache/${{ matrix.board }}
-          key: buildx-${{ matrix.board }}-${{ hashFiles('docker/**/*') }}
-          restore-keys: |
-            buildx-${{ matrix.board }}-
-
-      - name: Inspect cache before build
-        run: |
-          ls -la /tmp/.buildx-cache/${{ matrix.board }} || true
-
       - name: Login to Docker Hub
         if: success() && github.event_name == 'push'
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
@@ -136,6 +125,14 @@ jobs:
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
+          # Push BuildKit cache to ghcr.io/screenly/anthias-<service>:
+          # buildcache-<board> so subsequent CI runs of the same
+          # board can pull cached layers without re-installing
+          # ~825 MB of apt packages from scratch each time. Only
+          # writes on push events (i.e. master) — pull-request CI
+          # builds read from the cache but don't update it, so
+          # untrusted PR code can't poison subsequent runs.
+          BUILDX_CACHE_BACKEND: ${{ github.event_name == 'push' && 'registry' || 'local' }}
         run: |
           uv run python -m tools.image_builder \
             --build-target=${{ matrix.board }} \
@@ -143,10 +140,6 @@ jobs:
             --service=viewer \
             --service=redis \
             ${{ github.event_name == 'push' && '--push --skip-latest-tag' || '' }}
-
-      - name: Inspect cache after build
-        run: |
-          ls -la /tmp/.buildx-cache/${{ matrix.board }} || true
 
   # Mirror the immutable <short-hash>-<board> tags pushed by the buildx
   # matrix onto the floating latest-<board> tag. Runs only after every
