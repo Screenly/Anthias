@@ -6,20 +6,24 @@ FROM --platform=${BUILDER_BASE_PLATFORM} debian:trixie AS builder
 # (legacy Broadcom userland headers + libs that Qt 5 webview links
 # against). Same approach as docker/Dockerfile.base.j2 — the .deb
 # keyring packages bundle trixie-policy-compliant key bindings, so we
-# extract them with dpkg-deb -x to avoid pulling in gnupg.
+# extract them with dpkg-deb -x to avoid pulling in gnupg. Downloads
+# are HTTPS-only and SHA256-pinned because the keyrings are the trust
+# anchor for everything fetched after them.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates curl && \
     mkdir -p /tmp/keyrings && \
-    curl -fsSL -o /tmp/keyrings/raspberrypi-archive-keyring.deb \
-        http://archive.raspberrypi.org/debian/pool/main/r/raspberrypi-archive-keyring/raspberrypi-archive-keyring_2025.1+rpt1_all.deb && \
-    curl -fsSL -o /tmp/keyrings/raspbian-archive-keyring.deb \
-        http://archive.raspbian.org/raspbian/pool/main/r/raspbian-archive-keyring/raspbian-archive-keyring_20120528.4_all.deb && \
+    curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/keyrings/raspberrypi-archive-keyring.deb \
+        https://archive.raspberrypi.org/debian/pool/main/r/raspberrypi-archive-keyring/raspberrypi-archive-keyring_2025.1+rpt1_all.deb && \
+    curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/keyrings/raspbian-archive-keyring.deb \
+        https://archive.raspbian.org/raspbian/pool/main/r/raspbian-archive-keyring/raspbian-archive-keyring_20120528.4_all.deb && \
+    echo '2e727149d7acb8cc7f604e66d0049161039c8aa1eaf1175e54f9e69d963d60e4  /tmp/keyrings/raspberrypi-archive-keyring.deb' | sha256sum -c - && \
+    echo 'eb2bc175ecfad128ece8222b42eefabd0a2846afd14f3af04364f4a047cbc88f  /tmp/keyrings/raspbian-archive-keyring.deb' | sha256sum -c - && \
     dpkg-deb -x /tmp/keyrings/raspberrypi-archive-keyring.deb / && \
     dpkg-deb -x /tmp/keyrings/raspbian-archive-keyring.deb / && \
     rm -rf /tmp/keyrings && \
-    printf 'Types: deb\nURIs: http://archive.raspberrypi.org/debian\nSuites: trixie\nComponents: main\nArchitectures: armhf\nSigned-By: /usr/share/keyrings/raspberrypi-archive-keyring.gpg\n' \
+    printf 'Types: deb\nURIs: https://archive.raspberrypi.org/debian\nSuites: trixie\nComponents: main\nArchitectures: armhf\nSigned-By: /usr/share/keyrings/raspberrypi-archive-keyring.gpg\n' \
         > /etc/apt/sources.list.d/raspi.sources && \
-    printf 'Types: deb\nURIs: http://archive.raspbian.org/raspbian\nSuites: trixie\nComponents: firmware\nArchitectures: armhf\nSigned-By: /usr/share/keyrings/raspbian-archive-keyring.gpg\n' \
+    printf 'Types: deb\nURIs: https://archive.raspbian.org/raspbian\nSuites: trixie\nComponents: firmware\nArchitectures: armhf\nSigned-By: /usr/share/keyrings/raspbian-archive-keyring.gpg\n' \
         > /etc/apt/sources.list.d/raspbian-firmware.sources
 
 # There are likely a large number of dependencies that can be stripped out here

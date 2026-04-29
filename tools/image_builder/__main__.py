@@ -69,7 +69,7 @@ def build_image(
         'ffmpeg',
         'git',
         'ifupdown',
-        'libcec-dev ',
+        'libcec-dev',
         'libffi-dev',
         'libssl-dev',
         'lsb-release',
