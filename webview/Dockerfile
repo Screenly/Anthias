@@ -1,6 +1,12 @@
 ARG BUILDER_BASE_PLATFORM=linux/arm/v7
 FROM --platform=${BUILDER_BASE_PLATFORM} debian:trixie AS builder
 
+# Sysroot stage: extracts headers + libs that the runtime stage's
+# COPY --from=builder pulls in. apt-get install + dpkg-deb -x + the
+# downstream `dpkg --purge libraspberrypi-dev` all need root. Declared
+# explicitly so this is a choice, not the default-image fallback.
+USER root
+
 # Bootstrap the Raspberry Pi Foundation + Raspbian apt sources so the
 # Qt 5 cross-build sysroot can pull libraspberrypi0 / libraspberrypi-bin
 # (legacy Broadcom userland headers + libs that Qt 5 webview links
@@ -129,6 +135,14 @@ RUN apt-get update && \
 RUN dpkg --purge libraspberrypi-dev
 
 FROM debian:trixie
+
+# Cross-compile builder image — runs locally inside CI to produce the
+# WebView tarball, never deployed. Root is intentional: the build flow
+# writes to /sysroot, /opt/vc, /root/.pyenv, /usr/local/bin, and runs
+# `dpkg --purge` on Pi-userland packages, none of which work as a
+# non-root user. Declared explicitly so this is a choice, not the
+# default-image fallback.
+USER root
 
 # This list can most likely be slimmed down *a lot* but that's for another day.
 RUN apt-get update && \
