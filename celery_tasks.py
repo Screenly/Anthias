@@ -62,14 +62,6 @@ def get_display_power() -> None:
 
 @celery.task
 def cleanup() -> None:
-    # Without HOME, `path.join(..., 'anthias_assets')` would be a
-    # relative path and `find -delete` could chew through whatever
-    # directory celery happens to be running in. Bail out instead.
-    home = getenv('HOME')
-    if not home:
-        logging.error('cleanup() skipped: HOME is not set')
-        return
-
     asset_dir = settings['assetdir']
     if not path.isdir(asset_dir):
         return
@@ -99,7 +91,7 @@ def cleanup() -> None:
         for uri in Asset.objects.exclude(uri__isnull=True)
         .exclude(uri__exact='')
         .values_list('uri', flat=True)
-        if uri.startswith(asset_dir)
+        if uri and uri.startswith(asset_dir)
     }
     cutoff = 60 * 60  # match the .tmp guard above
     now = time.time()

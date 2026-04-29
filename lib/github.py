@@ -158,9 +158,10 @@ def _get_ghcr_anonymous_token() -> str | None:
         logging.debug('Failed to fetch GHCR anonymous token: %s', exc)
         return None
     try:
-        return resp.json().get('token')
+        token = resp.json().get('token')
     except ValueError:
         return None
+    return token if isinstance(token, str) else None
 
 
 def _get_ghcr_manifest_digest(tag: str, token: str) -> str | None:
@@ -182,7 +183,7 @@ def _get_ghcr_manifest_digest(tag: str, token: str) -> str | None:
 
 
 def is_running_latest_published_image(
-    short_hash: str, device_type: str | None
+    short_hash: str | None, device_type: str | None
 ) -> bool | None:
     """
     Return True if the device's installed `<short_hash>-<device_type>`
@@ -287,4 +288,6 @@ def is_up_to_date() -> bool:
         return True
 
     device_type = os.getenv('DEVICE_TYPE')
-    return is_running_latest_published_image(git_short_hash, device_type) is True
+    return (
+        is_running_latest_published_image(git_short_hash, device_type) is True
+    )

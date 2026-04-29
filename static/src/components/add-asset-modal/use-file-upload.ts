@@ -16,6 +16,12 @@ export const useFileUpload = () => {
   const { formData } = useSelector(selectAssetModalState)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
+  // The "Upload completed." message clears 5s after the last file lands.
+  // For multi-file uploads, hold the timeout here so a stale clear from
+  // an earlier file can't wipe the in-flight "Uploading X of N" label.
+  const clearStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
@@ -35,6 +41,11 @@ export const useFileUpload = () => {
   }
 
   const handleFileUploads = async (files: File[]) => {
+    if (clearStatusTimeoutRef.current) {
+      clearTimeout(clearStatusTimeoutRef.current)
+      clearStatusTimeoutRef.current = null
+    }
+    let succeeded = 0
     for (let i = 0; i < files.length; i++) {
       const labelPrefix =
         files.length > 1 ? `Uploading ${i + 1} of ${files.length}: ` : ''
@@ -43,6 +54,18 @@ export const useFileUpload = () => {
       if (!ok) {
         return
       }
+      succeeded += 1
+    }
+    if (succeeded > 0) {
+      dispatch(
+        setStatusMessage(
+          succeeded > 1 ? `Uploaded ${succeeded} files.` : 'Upload completed.',
+        ),
+      )
+      clearStatusTimeoutRef.current = setTimeout(() => {
+        dispatch(setStatusMessage(''))
+        clearStatusTimeoutRef.current = null
+      }, 5000)
     }
   }
 
@@ -87,19 +110,15 @@ export const useFileUpload = () => {
       // Save the asset
       await dispatch(saveAsset({ assetData })).unwrap()
 
-      // Reset form and show success message
+      // Reset form for the next file in the batch (the caller in
+      // handleFileUploads sets the final "Upload completed." status
+      // after the last successful file).
       dispatch(resetForm())
-      dispatch(setStatusMessage('Upload completed.'))
 
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
-
-      // Hide status message after 5 seconds
-      setTimeout(() => {
-        dispatch(setStatusMessage(''))
-      }, 5000)
 
       return true
     } catch (error) {
