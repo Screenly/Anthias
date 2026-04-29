@@ -201,11 +201,15 @@ function install_ansible() {
     fi
 
     # Resolve and install the `host` dependency group from pyproject.toml.
-    # uv will fetch a compatible Python automatically (the project requires
-    # >=3.11), so this works on Debian 11 too.
+    # `--python ">=3.11"` overrides the repo's .python-version (3.11) so the
+    # installer accepts whatever interpreter the host already ships — Bookworm
+    # has 3.11, Trixie has 3.13. Without this, uv would insist on 3.11 and
+    # fail on Trixie/Pi 2 (armv7l), where there's no system 3.11 and uv has
+    # no managed download for that arch.
     UV_PROJECT_ENVIRONMENT="${INSTALLER_VENV}" \
         uv sync \
             --project "${ANTHIAS_REPO_DIR}" \
+            --python ">=3.11" \
             --no-default-groups \
             --group host \
             --no-install-project
