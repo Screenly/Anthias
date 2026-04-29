@@ -8,6 +8,7 @@ from viewer.media_player import (
     MPVMediaPlayer,
     MediaPlayerProxy,
     VLCMediaPlayer,
+    get_alsa_audio_device,
 )
 
 logging.disable(logging.CRITICAL)
@@ -16,6 +17,19 @@ logging.disable(logging.CRITICAL)
 class TestMPVMediaPlayer(unittest.TestCase):
     def setUp(self) -> None:
         self.player = MPVMediaPlayer()
+
+        self.patch_settings = patch('viewer.media_player.settings')
+        self.patch_device_type = patch(
+            'viewer.media_player.get_device_type', return_value='pi4'
+        )
+
+        self.mock_settings = self.patch_settings.start()
+        self.mock_settings.__getitem__.return_value = 'hdmi'
+        self.patch_device_type.start()
+
+    def tearDown(self) -> None:
+        self.patch_settings.stop()
+        self.patch_device_type.stop()
 
     @patch('viewer.media_player.subprocess.Popen')
     def test_play_invokes_popen_with_expected_args(
@@ -30,12 +44,30 @@ class TestMPVMediaPlayer(unittest.TestCase):
                 '--no-terminal',
                 '--vo=drm',
                 '--hwdec=auto-safe',
+                '--audio-device=alsa/default:CARD=vc4hdmi0',
                 '--',
                 'file:///test/video.mp4',
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
+
+    @patch('viewer.media_player.subprocess.Popen')
+    def test_play_uses_local_audio_device_when_configured(
+        self, mock_popen: Any
+    ) -> None:
+        self.mock_settings.__getitem__.return_value = 'local'
+        self.player.set_asset('file:///test/video.mp4', 30)
+        self.player.play()
+
+        args, _ = mock_popen.call_args
+        self.assertIn('--audio-device=alsa/plughw:CARD=Headphones', args[0])
+
+    @patch('viewer.media_player.subprocess.Popen')
+    def test_play_reloads_settings_each_call(self, mock_popen: Any) -> None:
+        self.player.set_asset('file:///test/video.mp4', 30)
+        self.player.play()
+        self.mock_settings.load.assert_called_once()
 
     @patch('viewer.media_player.subprocess.Popen')
     def test_is_playing_returns_true_when_process_running(
@@ -77,6 +109,63 @@ class TestMPVMediaPlayer(unittest.TestCase):
 
         mock_process.terminate.assert_called_once()
         self.assertIsNone(self.player.process)
+
+
+class TestGetAlsaAudioDevice(unittest.TestCase):
+    def setUp(self) -> None:
+        self.patch_settings = patch('viewer.media_player.settings')
+        self.mock_settings = self.patch_settings.start()
+
+    def tearDown(self) -> None:
+        self.patch_settings.stop()
+
+    def test_local_on_pi5_uses_hdmi_card(self) -> None:
+        self.mock_settings.__getitem__.return_value = 'local'
+        with patch('viewer.media_player.get_device_type', return_value='pi5'):
+            self.assertEqual(get_alsa_audio_device(), 'default:CARD=vc4hdmi0')
+
+    def test_local_on_other_pi_uses_headphones(self) -> None:
+        self.mock_settings.__getitem__.return_value = 'local'
+        for device_type in ['pi1', 'pi2', 'pi3', 'pi4']:
+            with self.subTest(device_type=device_type):
+                with patch(
+                    'viewer.media_player.get_device_type',
+                    return_value=device_type,
+                ):
+                    self.assertEqual(
+                        get_alsa_audio_device(),
+                        'plughw:CARD=Headphones',
+                    )
+
+    def test_hdmi_on_pi4_pi5_uses_vc4hdmi0(self) -> None:
+        self.mock_settings.__getitem__.return_value = 'hdmi'
+        for device_type in ['pi4', 'pi5']:
+            with self.subTest(device_type=device_type):
+                with patch(
+                    'viewer.media_player.get_device_type',
+                    return_value=device_type,
+                ):
+                    self.assertEqual(
+                        get_alsa_audio_device(),
+                        'default:CARD=vc4hdmi0',
+                    )
+
+    def test_hdmi_on_pi1_pi2_pi3_uses_vc4hdmi(self) -> None:
+        self.mock_settings.__getitem__.return_value = 'hdmi'
+        for device_type in ['pi1', 'pi2', 'pi3']:
+            with self.subTest(device_type=device_type):
+                with patch(
+                    'viewer.media_player.get_device_type',
+                    return_value=device_type,
+                ):
+                    self.assertEqual(
+                        get_alsa_audio_device(), 'default:CARD=vc4hdmi'
+                    )
+
+    def test_hdmi_on_x86_falls_back_to_hid(self) -> None:
+        self.mock_settings.__getitem__.return_value = 'hdmi'
+        with patch('viewer.media_player.get_device_type', return_value='x86'):
+            self.assertEqual(get_alsa_audio_device(), 'default:CARD=HID')
 
 
 class TestVLCMediaPlayer(unittest.TestCase):
