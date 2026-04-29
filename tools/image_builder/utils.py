@@ -28,7 +28,7 @@ def get_build_parameters(build_target: str) -> dict[str, Any]:
     elif build_target == 'pi4-64':
         return {
             'board': 'pi4',
-            'base_image': 'balenalib/raspberrypi3-debian',
+            'base_image': 'balenalib/raspberrypi3-64-debian',
             'target_platform': 'linux/arm64/v8',
         }
     elif build_target == 'pi3':
