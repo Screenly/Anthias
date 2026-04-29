@@ -125,13 +125,19 @@ jobs:
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
-          # Push BuildKit cache to ghcr.io/screenly/anthias-<service>:
-          # buildcache-<board> so subsequent CI runs of the same
-          # board can pull cached layers without re-installing
-          # ~825 MB of apt packages from scratch each time. Only
-          # writes on push events (i.e. master) — pull-request CI
-          # builds read from the cache but don't update it, so
-          # untrusted PR code can't poison subsequent runs.
+          # On push events (master): use BuildKit's registry cache
+          # backend — pushes cache to ghcr.io/screenly/anthias-
+          # <service>:buildcache-<board> so subsequent push runs of
+          # the same board can pull cached layers without
+          # re-installing ~825 MB of apt packages from scratch.
+          #
+          # On workflow_dispatch (manual runs on any branch): fall
+          # through to `local` mode — a per-runner ephemeral
+          # directory, so effectively no-cache. workflow_dispatch
+          # also skips the `docker login ghcr.io` step above (it's
+          # gated on `event_name == 'push'`), so registry cache
+          # would have no auth to write with anyway. This workflow
+          # has no `pull_request` trigger; PRs never run this job.
           BUILDX_CACHE_BACKEND: ${{ github.event_name == 'push' && 'registry' || 'local' }}
         run: |
           uv run python -m tools.image_builder \

@@ -158,9 +158,10 @@ def build_image(
     # to None for a true cold rebuild. Otherwise we pick a backend:
     #
     #   * local    — board-scoped on-disk directory at
-    #     /tmp/.buildx-cache/<board>. Used for local dev so cache
-    #     state survives across `tools.image_builder` invocations on
-    #     the same machine.
+    #     $XDG_CACHE_HOME/anthias-buildx/<board> (typically
+    #     ~/.cache/anthias-buildx/<board>). Used for local dev so
+    #     cache state survives across `tools.image_builder`
+    #     invocations on the same machine.
     #   * registry — BuildKit's registry cache backend
     #     (https://docs.docker.com/build/cache/backends/registry/).
     #     Pushes cache to a tagged image at
