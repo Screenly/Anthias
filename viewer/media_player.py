@@ -72,7 +72,6 @@ class MPVMediaPlayer(MediaPlayer):
                 '--no-terminal',
                 '--vo=drm',
                 f'--hwdec={hwdec}',
-                '--log-file=/tmp/anthias-mpv.log',
                 f'--audio-device=alsa/{get_alsa_audio_device()}',
                 '--',
                 self.uri,

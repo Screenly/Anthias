@@ -36,7 +36,7 @@ class TestMPVMediaPlayer(unittest.TestCase):
         self, mock_popen: Any
     ) -> None:
         self.player.set_asset('file:///test/video.mp4', 30)
-        with patch.dict('os.environ', {'DEVICE_TYPE': 'pi5'}):
+        with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4'}):
             self.player.play()
 
         mock_popen.assert_called_once_with(
@@ -45,7 +45,6 @@ class TestMPVMediaPlayer(unittest.TestCase):
                 '--no-terminal',
                 '--vo=drm',
                 '--hwdec=auto-safe',
-                '--log-file=/tmp/anthias-mpv.log',
                 '--audio-device=alsa/default:CARD=vc4hdmi0',
                 '--',
                 'file:///test/video.mp4',
