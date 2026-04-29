@@ -80,7 +80,13 @@ def build_image(
         'sqlite3',
     ]
 
-    if board in ['pi1', 'pi2', 'pi3', 'pi4']:
+    # libraspberrypi0 ships only in the armhf raspberrypi3-debian apt repo;
+    # the arm64 sibling used by pi4-64 doesn't carry it, so exclude it
+    # there (matches how get_viewer_context already gates the package).
+    if (
+        board in ['pi1', 'pi2', 'pi3', 'pi4']
+        and target_platform != 'linux/arm64/v8'
+    ):
         base_apt_dependencies.extend(['libraspberrypi0'])
 
     # DEVICE_TYPE inside the container needs to be 'pi4-64' for the 64-bit
