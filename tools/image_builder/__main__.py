@@ -41,14 +41,22 @@ def build_image(
 
     context = {}
 
-    # Local cache: per-board on-disk directory. Unused by the GHA backend
-    # (which keys via scope on GitHub's Actions Cache API instead).
+    # Local cache: per-board on-disk directory under the user's
+    # XDG-style cache home (override via $XDG_CACHE_HOME). Per-user
+    # rather than under /tmp so a multi-user host doesn't share
+    # buildkit cache state across accounts. Unused by the registry
+    # backend, which pushes to GHCR instead.
     cache_scope = (
         f'{board}-64'
         if board == 'pi4' and target_platform == 'linux/arm64/v8'
         else board
     )
-    cache_dir = Path('/tmp/.buildx-cache') / cache_scope
+    xdg_cache_home = (
+        Path(os.environ['XDG_CACHE_HOME'])
+        if os.environ.get('XDG_CACHE_HOME')
+        else Path.home() / '.cache'
+    )
+    cache_dir = xdg_cache_home / 'anthias-buildx' / cache_scope
     if cache_backend == 'local':
         try:
             cache_dir.mkdir(parents=True, exist_ok=True)
@@ -274,7 +282,8 @@ def build_image(
     envvar='BUILDX_CACHE_BACKEND',
     help=(
         'BuildKit cache backend. `local` (default) writes to '
-        '/tmp/.buildx-cache/<board>/ and is right for local dev. '
+        '$XDG_CACHE_HOME/anthias-buildx/<board>/ (typically '
+        '~/.cache/anthias-buildx/) and is right for local dev. '
         '`registry` pushes the cache to '
         'ghcr.io/screenly/anthias-<service>:buildcache-<board> for '
         'CI — reuses the GHCR login already done by the workflow, '
