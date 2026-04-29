@@ -1,4 +1,5 @@
 import logging
+import os
 import subprocess
 from typing import ClassVar
 
@@ -38,7 +39,14 @@ class MPVMediaPlayer(MediaPlayer):
 
     def play(self) -> None:
         self.process = subprocess.Popen(
-            ['mpv', '--no-terminal', '--vo=drm', '--', self.uri],
+            [
+                'mpv',
+                '--no-terminal',
+                '--vo=drm',
+                '--hwdec=auto-safe',
+                '--',
+                self.uri,
+            ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -118,7 +126,14 @@ class MediaPlayerProxy:
     @classmethod
     def get_instance(cls) -> MediaPlayer:
         if cls.INSTANCE is None:
-            if get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']:
+            # pi4-64 runs Qt6 + linuxfb like pi5/x86, so VLC's GL/GLES2/XCB
+            # outputs have no parent window to draw into. Route it to mpv,
+            # which renders straight to KMS via --vo=drm.
+            is_pi4_64 = os.environ.get('DEVICE_TYPE') == 'pi4-64'
+            if (
+                get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']
+                and not is_pi4_64
+            ):
                 cls.INSTANCE = VLCMediaPlayer()
             else:
                 cls.INSTANCE = MPVMediaPlayer()
