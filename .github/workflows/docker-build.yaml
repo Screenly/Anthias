@@ -40,24 +40,35 @@ jobs:
     # Scoped per-job (not at workflow level) so `run-tests` and any
     # future read-only job don't inherit `packages: write`. `buildx`
     # needs it so `docker login ghcr.io` with GITHUB_TOKEN can push
-    # ghcr.io/screenly/anthias-*. `contents: read` is the implicit
-    # default but pinned explicitly so a future workflow edit can't
-    # silently lose checkout access.
+    # both ghcr.io/screenly/anthias-* image tags and the
+    # `buildcache-*` registry cache tags written by --cache-backend=
+    # registry. `contents: read` is the implicit default but pinned
+    # explicitly so a future workflow edit can't silently lose
+    # checkout access.
     permissions:
       contents: read
       packages: write
     strategy:
       # Don't cancel sibling jobs on the first failure: any platform that
-      # has already finished building its image will have pushed the
-      # immutable <short-hash>-<board> tag, which is harmless on its own.
-      # Only the publish-latest job below — gated on the entire matrix
-      # succeeding — moves the floating latest-* tag, so a partial failure
-      # leaves users on the previous coherent latest-* set instead of a
-      # half-pushed mix of old + new images.
+      # has already finished building its images will have pushed the
+      # immutable <short-hash>-<board> tags, which are harmless on their
+      # own. Only the publish-latest job below — gated on the entire
+      # matrix succeeding — moves the floating latest-* tag, so a partial
+      # failure leaves users on the previous coherent latest-* set
+      # instead of a half-pushed mix of old + new images.
+      #
+      # The matrix is intentionally only on `board`, not `(board, service)`:
+      # buildkit's per-runner cache hashes apt-get-update output (timestamps
+      # in /var/lib/apt/lists/*, mirror selection) into the layer digest,
+      # so the same package list installed on two different runners
+      # produces two different layer hashes. Building all services for
+      # one board on a single runner means the base apt layer is hashed
+      # once and shared across server / viewer / test / etc. — which is
+      # what makes Dockerfile.base.j2's include-shared layer actually
+      # dedup at the registry level. See refactor: drop celery image.
       fail-fast: false
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
-        service: ['server', 'celery', 'redis', 'viewer']
         python-version: ["3.11"]
     runs-on: ubuntu-24.04
 
@@ -95,19 +106,6 @@ jobs:
           docker buildx create --use --name multiarch-builder
           docker buildx inspect --bootstrap
 
-      - name: Cache Docker layers
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        id: cache
-        with:
-          path: /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }}
-          key: buildx-${{ matrix.board }}-${{ matrix.service }}-${{ hashFiles('docker/**/*') }}
-          restore-keys: |
-            buildx-${{ matrix.board }}-${{ matrix.service }}-
-
-      - name: Inspect cache before build
-        run: |
-          ls -la /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }} || true
-
       - name: Login to Docker Hub
         if: success() && github.event_name == 'push'
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
@@ -123,19 +121,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Container
+      - name: Build Containers
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
+          # On push events (master): use BuildKit's registry cache
+          # backend — pushes cache to ghcr.io/screenly/anthias-
+          # <service>:buildcache-<board> so subsequent push runs of
+          # the same board can pull cached layers without
+          # re-installing ~825 MB of apt packages from scratch.
+          #
+          # On workflow_dispatch (manual runs on any branch): fall
+          # through to `local` mode — a per-runner ephemeral
+          # directory, so effectively no-cache. workflow_dispatch
+          # also skips the `docker login ghcr.io` step above (it's
+          # gated on `event_name == 'push'`), so registry cache
+          # would have no auth to write with anyway. This workflow
+          # has no `pull_request` trigger; PRs never run this job.
+          BUILDX_CACHE_BACKEND: ${{ github.event_name == 'push' && 'registry' || 'local' }}
         run: |
           uv run python -m tools.image_builder \
             --build-target=${{ matrix.board }} \
-            --service=${{ matrix.service }} \
+            --service=server \
+            --service=viewer \
+            --service=redis \
             ${{ github.event_name == 'push' && '--push --skip-latest-tag' || '' }}
-
-      - name: Inspect cache after build
-        run: |
-          ls -la /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }} || true
 
   # Mirror the immutable <short-hash>-<board> tags pushed by the buildx
   # matrix onto the floating latest-<board> tag. Runs only after every
@@ -199,7 +209,7 @@ jobs:
           set -euo pipefail
           GIT_SHORT_HASH=$(git rev-parse --short=7 HEAD)
           BOARDS=(pi1 pi2 pi3 pi4 pi4-64 pi5 x86)
-          SERVICES=(server celery redis viewer)
+          SERVICES=(server redis viewer)
           # GHCR first so the canonical primary is current even if the
           # Docker Hub mirror later in the loop flakes.
           NAMESPACES=(ghcr.io/screenly/anthias screenly/anthias)

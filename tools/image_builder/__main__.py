@@ -34,24 +34,37 @@ def build_image(
     clean_build: bool,
     push: bool,
     dockerfiles_only: bool,
+    cache_backend: str,
 ) -> None:
     # Enable BuildKit
     os.environ['DOCKER_BUILDKIT'] = '1'
 
     context = {}
 
-    # Create board-specific cache directory
-    cache_dir = Path('/tmp/.buildx-cache') / (
+    # Local cache: per-board on-disk directory under the user's
+    # XDG-style cache home (override via $XDG_CACHE_HOME). Per-user
+    # rather than under /tmp so a multi-user host doesn't share
+    # buildkit cache state across accounts. Unused by the registry
+    # backend, which pushes to GHCR instead.
+    cache_scope = (
         f'{board}-64'
         if board == 'pi4' and target_platform == 'linux/arm64/v8'
         else board
     )
-    try:
-        cache_dir.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        click.secho(
-            f'Warning: Failed to create cache directory: {e}', fg='yellow'
-        )
+    xdg_cache_home = (
+        Path(os.environ['XDG_CACHE_HOME'])
+        if os.environ.get('XDG_CACHE_HOME')
+        else Path.home() / '.cache'
+    )
+    cache_dir = xdg_cache_home / 'anthias-buildx' / cache_scope
+    if cache_backend == 'local':
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            click.secho(
+                f'Warning: Failed to create cache directory: {e}',
+                fg='yellow',
+            )
 
     base_apt_dependencies = [
         'build-essential',
@@ -141,22 +154,79 @@ def build_image(
     except:  # noqa: E722
         docker.buildx.create(name='multiarch-builder', use=True)
 
-    docker.buildx.build(
-        context_path='.',
-        cache=(not clean_build),
-        cache_from={
-            'type': 'local',
-            'src': str(cache_dir),
-        }
-        if not clean_build
-        else None,
-        cache_to={
+    # Resolve cache_from / cache_to. `--clean-build` short-circuits both
+    # to None for a true cold rebuild. Otherwise we pick a backend:
+    #
+    #   * local    — board-scoped on-disk directory at
+    #     $XDG_CACHE_HOME/anthias-buildx/<board> (typically
+    #     ~/.cache/anthias-buildx/<board>). Used for local dev so
+    #     cache state survives across `tools.image_builder`
+    #     invocations on the same machine.
+    #   * registry — BuildKit's registry cache backend
+    #     (https://docs.docker.com/build/cache/backends/registry/).
+    #     Pushes cache to a tagged image at
+    #     <namespace>-<service>:buildcache-<board>. Reuses the GHCR
+    #     login already done by CI — no extra tokens or third-party
+    #     actions needed — and inherits GHCR's free unlimited
+    #     storage for public packages. Cache lives next to the real
+    #     image tags but with a `buildcache-*` prefix so it can't
+    #     collide with the immutable <short-hash>-<board> or
+    #     floating latest-<board> tags.
+    if clean_build:
+        cache_from = None
+        cache_to = None
+    elif cache_backend == 'registry':
+        # Hardcode the GHCR-primary namespace so the cache lives next to
+        # the published images for this service. Doesn't read from
+        # `namespaces` below: cache only needs one canonical home, and
+        # GHCR's free unlimited storage for public packages makes it the
+        # right one. If the namespaces list changes in the future, this
+        # ref needs to move with it.
+        cache_ref = (
+            f'ghcr.io/screenly/anthias-{service}:buildcache-{cache_scope}'
+        )
+        # Reads are always safe — anthias-* GHCR packages are public,
+        # so cache_from works without auth (matters for someone
+        # invoking this locally with --cache-backend=registry to
+        # warm-start off CI's cache).
+        cache_from = {'type': 'registry', 'ref': cache_ref}
+        if push:
+            cache_to = {
+                'type': 'registry',
+                'ref': cache_ref,
+                'mode': 'max',
+                # `image-manifest=true` writes the cache as an OCI
+                # image manifest rather than the legacy index-only
+                # form, which is the only thing GHCR will accept
+                # under the ghcr.io/screenly/anthias-* repos (it
+                # rejects standalone cache manifests). Cheap, just
+                # affects how the cache blob is wrapped.
+                'image-manifest': 'true',
+            }
+        else:
+            # Without --push the build hasn't authenticated to GHCR,
+            # so trying to write cache there would fail mid-build.
+            # Read-only: pull layers from the published cache, don't
+            # update it.
+            cache_to = None
+            click.secho(
+                f'cache-backend=registry without --push: reading from '
+                f'{cache_ref} but not writing back.',
+                fg='yellow',
+            )
+    else:
+        cache_from = {'type': 'local', 'src': str(cache_dir)}
+        cache_to = {
             'type': 'local',
             'dest': str(cache_dir),
             'mode': 'max',
         }
-        if not clean_build
-        else None,
+
+    docker.buildx.build(
+        context_path='.',
+        cache=(not clean_build),
+        cache_from=cache_from,
+        cache_to=cache_to,
         builder='multiarch-builder',
         file=f'docker/Dockerfile.{service}',
         load=True,
@@ -225,6 +295,21 @@ def build_image(
     '--dockerfiles-only',
     is_flag=True,
 )
+@click.option(
+    '--cache-backend',
+    type=click.Choice(['local', 'registry']),
+    default='local',
+    envvar='BUILDX_CACHE_BACKEND',
+    help=(
+        'BuildKit cache backend. `local` (default) writes to '
+        '$XDG_CACHE_HOME/anthias-buildx/<board>/ (typically '
+        '~/.cache/anthias-buildx/) and is right for local dev. '
+        '`registry` pushes the cache to '
+        'ghcr.io/screenly/anthias-<service>:buildcache-<board> for '
+        'CI — reuses the GHCR login already done by the workflow, '
+        'no extra tokens needed. Override via $BUILDX_CACHE_BACKEND.'
+    ),
+)
 def main(
     clean_build: bool,
     build_target: str,
@@ -235,6 +320,7 @@ def main(
     push: bool,
     skip_latest_tag: bool,
     dockerfiles_only: bool,
+    cache_backend: str,
 ) -> None:
     git_branch = pygit2.Repository('.').head.shorthand
     git_hash = str(pygit2.Repository('.').head.target)
@@ -300,6 +386,7 @@ def main(
             clean_build,
             push,
             dockerfiles_only,
+            cache_backend,
         )
 
 

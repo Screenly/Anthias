@@ -1,8 +1,9 @@
+# syntax=docker/dockerfile:1.4
+# vim: ft=dockerfile
 {% include 'uv-builder.j2' %}
 
-FROM {{ base_image }}:{{ base_image_tag }}
+{% include 'Dockerfile.base.j2' %}
 
-# This list needs to be trimmed back later
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
@@ -10,7 +11,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 {% endif %}
     apt-get update && \
     apt-get -y install --no-install-recommends \
-    {% for dependency in apt_dependencies -%}
+    {% for dependency in viewer_extra_apt_dependencies -%}
         {% if not loop.last %}
         {{ dependency }} \
         {% else %}
@@ -21,10 +22,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 COPY --from=uv-builder /venv /venv
 ENV PATH="/venv/bin:$PATH"
 ENV VIRTUAL_ENV="/venv"
-
-# Works around issue with `curl`
-# https://github.com/balena-io-library/base-images/issues/562
-RUN c_rehash
 
 # QT Base from packages does not support eglfs.
 # Qt 5 boards (Pi 1-4 32-bit) get a custom cross-built Qt runtime via the
@@ -73,7 +70,5 @@ RUN rm -f /etc/localtime
 WORKDIR /usr/src/app
 RUN mkdir -p /usr/src/app
 COPY . /usr/src/app/
-
-{% include 'labels.j2' %}
 
 CMD ["bash", "./bin/start_viewer.sh"]

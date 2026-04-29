@@ -69,7 +69,6 @@ if [[ -n $(docker ps | grep srly-ose) ]]; then
     set +e
     docker container rename srly-ose-server anthias-server
     docker container rename srly-ose-viewer anthias-viewer
-    docker container rename srly-ose-celery anthias-celery
     set -e
 fi
 
@@ -77,11 +76,18 @@ fi
 #   * nginx / websocket — folded into anthias-server (uvicorn).
 #   * wifi-connect      — service removed; nmcli/nmtui is the supported
 #                          path now.
+#   * anthias-celery / srly-ose-celery containers from the era when
+#     celery had its own image. The new compose file recreates the
+#     anthias-celery container against ghcr.io/screenly/anthias-server,
+#     so the old container (still pointing at the deleted celery image)
+#     must be removed first or the server-image-backed replacement
+#     can't take its name.
 # Volumes are shared across services, so removing the containers is safe.
 set +e
 docker rm -f \
     anthias-nginx anthias-websocket anthias-wifi-connect \
     srly-ose-nginx srly-ose-websocket srly-ose-wifi-connect \
+    anthias-celery srly-ose-celery \
     >/dev/null 2>&1
 set -e
 

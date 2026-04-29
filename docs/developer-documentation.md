@@ -90,7 +90,6 @@ Build and start the containers.
 $ uv run python -m tools.image_builder \
   --dockerfiles-only \
   --disable-cache-mounts \
-  --service celery \
   --service redis \
   --service test
 $ docker compose \

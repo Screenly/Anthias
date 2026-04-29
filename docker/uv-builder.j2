@@ -1,6 +1,3 @@
-# syntax=docker/dockerfile:1.4
-# vim: ft=dockerfile
-
 {# Single source of truth for the uv version — used both by the
    prebuilt-image COPY (amd64/arm64) and the PyPI fallback
    (32-bit ARM), so both paths stay byte-pinned and reproducible. #}

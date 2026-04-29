@@ -80,7 +80,6 @@ def generate_dockerfile(service: str, context: dict[str, Any]) -> None:
 def get_uv_builder_context(service: str) -> dict[str, Any]:
     service_to_group = {
         'server': 'server',
-        'celery': 'server',
         'viewer': 'viewer',
         'test': 'test',
     }
@@ -158,25 +157,29 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
 
     qt_major_version = qt_version.split('.')[0]
 
-    apt_dependencies = [
-        'build-essential',
+    # Viewer-only apt deps. The shared set (build-essential, curl, ffmpeg,
+    # git-core, libcec-dev, libffi-dev, libssl-dev, net-tools, procps,
+    # psmisc, python-is-python3, python3-dev, python3-gi, python3-pip,
+    # python3-setuptools, sqlite3, sudo, plus libraspberrypi0 on 32-bit
+    # Pi boards) is installed by Dockerfile.base.j2 in a layer that
+    # server (and test) also use, so it dedups across images. Anything
+    # listed here is unique to the viewer image.
+    viewer_extra_apt_dependencies = [
         'ca-certificates',
-        'curl',
         'dbus-daemon',
         'fonts-arphic-uming',
-        'git-core',
         'libasound2-dev',
         'libavcodec-dev',
+        'libavdevice-dev',
+        'libavfilter-dev',
         'libavformat-dev',
         'libavutil-dev',
         'libbz2-dev',
-        'libcec-dev ',
         'libdbus-1-dev',
         'libdbus-glib-1-dev',
         'libdrm-dev',
         'libegl1-mesa-dev',
         'libevent-dev',
-        'libffi-dev',
         'libfontconfig1-dev',
         'libfreetype6-dev',
         'libgbm-dev',
@@ -204,7 +207,7 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         'libsnappy-dev',
         'libsqlite3-dev',
         'libsrtp2-dev',
-        'libssl-dev',
+        'libswresample-dev',
         'libswscale-dev',
         'libsystemd-dev',
         'libts-dev',
@@ -241,31 +244,13 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         'libxslt1-dev',
         'libxss-dev',
         'libxtst-dev',
-        'net-tools',
-        'procps',
-        'psmisc',
-        'python3-dev',
-        'python3-gi',
         'python3-netifaces',
-        'python3-pip',
-        'python3-setuptools',
-        'python-is-python3',
         'ttf-wqy-zenhei',
         'vlc',
-        'sudo',
-        'sqlite3',
-        'ffmpeg',
-        'libavcodec-dev',
-        'libavdevice-dev',
-        'libavfilter-dev',
-        'libavformat-dev',
-        'libavutil-dev',
-        'libswresample-dev',
-        'libswscale-dev',
     ]
 
     if is_qt6:
-        apt_dependencies.extend(
+        viewer_extra_apt_dependencies.extend(
             [
                 'mpv',
                 'qt6-base-dev',
@@ -274,9 +259,11 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
             ]
         )
     else:
-        apt_dependencies.extend(
+        # libraspberrypi0 already comes in via base_apt_dependencies on
+        # 32-bit Pi boards (see __main__.py), so it's deliberately not
+        # repeated here.
+        viewer_extra_apt_dependencies.extend(
             [
-                'libraspberrypi0',
                 'libgst-dev',
                 'libsqlite0-dev',
                 'libsrtp0-dev',
@@ -285,10 +272,10 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         )
 
         if board != 'pi1':
-            apt_dependencies.extend(['libssl1.1'])
+            viewer_extra_apt_dependencies.extend(['libssl1.1'])
 
     return {
-        'apt_dependencies': apt_dependencies,
+        'viewer_extra_apt_dependencies': viewer_extra_apt_dependencies,
         'qt_version': qt_version,
         'qt_major_version': qt_major_version,
         'webview_version': webview_version,

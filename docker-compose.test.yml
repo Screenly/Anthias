@@ -2,6 +2,10 @@
 
 services:
   anthias-test:
+    # Explicit image tag so anthias-celery below can reference the same
+    # built image without a duplicate `build:` block (which would
+    # produce a separate, byte-identical-but-distinct image tag).
+    image: anthias-test:dev
     build:
       context: .
       dockerfile: docker/Dockerfile.test
@@ -17,18 +21,27 @@ services:
       - anthias-data:/data
 
   anthias-celery:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.celery
+    # Reuses anthias-test:dev via the explicit image tag above — the
+    # test image is a superset of server (same base apt + venv +
+    # bun + chrome for selenium). Compose builds anthias-test first
+    # (it owns the build:) and this service inherits the same image,
+    # only overriding CMD.
+    image: anthias-test:dev
+    command: >
+      celery -A celery_tasks.celery worker -B -n worker@anthias
+      --loglevel=info --schedule /tmp/celerybeat-schedule
     depends_on:
-      - anthias-test
-      - redis
+      anthias-test:
+        condition: service_started
+      redis:
+        condition: service_started
     environment:
       - HOME=/data
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     restart: always
     volumes:
+      - .:/usr/src/app
       - anthias-data:/data
 
   redis:

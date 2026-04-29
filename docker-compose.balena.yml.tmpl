@@ -39,7 +39,12 @@ services:
       io.balena.features.supervisor-api: '1'
 
   anthias-celery:
-    image: ghcr.io/screenly/anthias-celery:${GIT_SHORT_HASH}-${BOARD}
+    # Runs on the same image as anthias-server with a CMD override.
+    # See docker-compose.yml.tmpl for context on the merge.
+    image: ghcr.io/screenly/anthias-server:${GIT_SHORT_HASH}-${BOARD}
+    command: >
+      celery -A celery_tasks.celery worker -B -n worker@anthias
+      --loglevel=info --schedule /tmp/celerybeat-schedule
     depends_on:
       - anthias-server
       - redis
