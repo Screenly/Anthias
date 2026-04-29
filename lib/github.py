@@ -23,8 +23,18 @@ REMOTE_BRANCH_STATUS_TTL = 60 * 60 * 24
 # a ConnectionError for 5 minutes.
 ERROR_BACKOFF_TTL = 60 * 5
 
-# Availability of the cached Docker Hub hash
-DOCKER_HUB_HASH_TTL = 10 * 60
+# Availability of the cached published-image-match check.
+PUBLISHED_IMAGE_MATCH_TTL = 10 * 60
+
+GHCR_IMAGE_REPO = 'screenly/anthias-server'
+GHCR_MANIFEST_ACCEPT = ','.join(
+    [
+        'application/vnd.docker.distribution.manifest.v2+json',
+        'application/vnd.docker.distribution.manifest.list.v2+json',
+        'application/vnd.oci.image.manifest.v1+json',
+        'application/vnd.oci.image.index.v1+json',
+    ]
+)
 
 # Google Analytics data
 ANALYTICS_MEASURE_ID = 'G-S3VX8HTPK7'
@@ -133,49 +143,87 @@ def fetch_remote_hash() -> tuple[str | None, bool]:
     return get_cache, False
 
 
-def get_latest_docker_hub_hash(device_type: str | None) -> str | None:
-    """
-    Return the most recent Docker Hub tag short-hash for this device type,
-    or None if the lookup fails. This is the OR clause that clears the
-    "Update Available" banner once a new Docker image has been published
-    even when master HEAD has moved past it (forum 6079, 6144, 6537).
-    """
-
-    url = 'https://hub.docker.com/v2/namespaces/screenly/repositories/anthias-server/tags'  # noqa: E501
-
-    cached_docker_hub_hash = r.get('latest-docker-hub-hash')
-    if cached_docker_hub_hash:
-        return str(cached_docker_hub_hash)
-
+def _get_ghcr_anonymous_token() -> str | None:
     try:
-        response = requests_get(url, timeout=DEFAULT_REQUESTS_TIMEOUT)
-        response.raise_for_status()
-    except exceptions.RequestException as exc:
-        logging.debug('Failed to fetch latest Docker Hub tags: %s', exc)
-        return None
-
-    results = response.json().get('results', [])
-
-    # Tags are formatted '<short_hash>-<device_type>'. Drop floating tags
-    # like 'latest-*' and pick the newest matching device tag (Docker Hub
-    # returns results sorted by last_updated desc).
-    reduced = [
-        result['name'].split('-')[0]
-        for result in results
-        if not result['name'].startswith('latest-')
-        and result['name'].endswith(f'-{device_type}')
-    ]
-
-    if not reduced:
-        logging.warning(
-            'No commit hash found for device type: %s', device_type
+        resp = requests_get(
+            'https://ghcr.io/token',
+            params={
+                'service': 'ghcr.io',
+                'scope': f'repository:{GHCR_IMAGE_REPO}:pull',
+            },
+            timeout=DEFAULT_REQUESTS_TIMEOUT,
         )
+        resp.raise_for_status()
+    except exceptions.RequestException as exc:
+        logging.debug('Failed to fetch GHCR anonymous token: %s', exc)
+        return None
+    try:
+        return resp.json().get('token')
+    except ValueError:
         return None
 
-    docker_hub_hash = reduced[0]
-    r.set('latest-docker-hub-hash', docker_hub_hash)
-    r.expire('latest-docker-hub-hash', DOCKER_HUB_HASH_TTL)
-    return docker_hub_hash
+
+def _get_ghcr_manifest_digest(tag: str, token: str) -> str | None:
+    try:
+        resp = requests_get(
+            f'https://ghcr.io/v2/{GHCR_IMAGE_REPO}/manifests/{tag}',
+            headers={
+                'Authorization': f'Bearer {token}',
+                'Accept': GHCR_MANIFEST_ACCEPT,
+            },
+            timeout=DEFAULT_REQUESTS_TIMEOUT,
+        )
+    except exceptions.RequestException as exc:
+        logging.debug('Failed to fetch GHCR manifest for %s: %s', tag, exc)
+        return None
+    if resp.status_code != 200:
+        return None
+    return resp.headers.get('Docker-Content-Digest')
+
+
+def is_running_latest_published_image(
+    short_hash: str, device_type: str | None
+) -> bool | None:
+    """
+    Return True if the device's installed `<short_hash>-<device_type>`
+    image manifest matches the floating `latest-<device_type>` manifest
+    on GHCR, False if it differs, or None if the lookup fails.
+
+    This is the OR clause that clears the "Update Available" banner
+    once a new image has been published even when GitHub master HEAD
+    has moved past the published Docker tag (forum 6079, 6144, 6537).
+    Anthias publishes to ghcr.io now; the previous Docker Hub tag-list
+    path was retired with the registry move.
+    """
+    if not device_type or not short_hash:
+        return None
+
+    cached = r.get('latest-published-image-match')
+    if cached is not None:
+        return cached == '1'
+
+    token = _get_ghcr_anonymous_token()
+    if not token:
+        return None
+
+    latest_digest = _get_ghcr_manifest_digest(f'latest-{device_type}', token)
+    if not latest_digest:
+        return None
+
+    current_digest = _get_ghcr_manifest_digest(
+        f'{short_hash}-{device_type}', token
+    )
+    # Tag missing means this device's commit was never published (local
+    # build, ahead of CI, or registry retention dropped it). Treat as
+    # "no info available" so we don't toggle the banner on/off based on
+    # a missing tag.
+    if not current_digest:
+        return None
+
+    matches = latest_digest == current_digest
+    r.set('latest-published-image-match', '1' if matches else '0')
+    r.expire('latest-published-image-match', PUBLISHED_IMAGE_MATCH_TTL)
+    return matches
 
 
 def is_up_to_date() -> bool:
@@ -235,9 +283,8 @@ def is_up_to_date() -> bool:
             except exceptions.ConnectionError:
                 pass
 
-    device_type = os.getenv('DEVICE_TYPE')
-    latest_docker_hub_hash = get_latest_docker_hub_hash(device_type)
+    if latest_sha == git_hash:
+        return True
 
-    return (latest_sha == git_hash) or (
-        latest_docker_hub_hash == git_short_hash
-    )
+    device_type = os.getenv('DEVICE_TYPE')
+    return is_running_latest_published_image(git_short_hash, device_type) is True

@@ -103,11 +103,11 @@ def build_image(
         base_apt_dependencies.extend(['libraspberrypi0'])
 
     # DEVICE_TYPE inside the container needs to be 'pi4-64' for the 64-bit
-    # Pi 4 build, not 'pi4', because lib/github.py:get_latest_docker_hub_hash
-    # filters Hub tags by `-{device_type}` suffix and the published tags use
-    # `-pi4-64`. Hardware-level checks in viewer/media_player.py go through
-    # lib/device_helper.get_device_type() which reads /proc/device-tree/model
-    # at runtime and is unaffected.
+    # Pi 4 build, not 'pi4', because lib/github.is_running_latest_published_image
+    # builds the GHCR tag as `<short_hash>-{device_type}` and the published
+    # tags use `-pi4-64`. Hardware-level checks in viewer/media_player.py go
+    # through lib/device_helper.get_device_type() which reads /proc/device-tree/
+    # model at runtime and is unaffected.
     device_type = (
         'pi4-64'
         if board == 'pi4' and target_platform == 'linux/arm64/v8'
