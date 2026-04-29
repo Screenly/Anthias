@@ -17,9 +17,16 @@ services:
       - anthias-data:/data
 
   anthias-celery:
+    # Reuses the test image — server and celery share their entire root
+    # filesystem, and the test image inherits from the same base apt
+    # layer + venv. The compose-level override below runs the celery
+    # worker against that image instead of building a separate one.
     build:
       context: .
-      dockerfile: docker/Dockerfile.celery
+      dockerfile: docker/Dockerfile.test
+    command: >
+      celery -A celery_tasks.celery worker -B -n worker@anthias
+      --loglevel=info --schedule /tmp/celerybeat-schedule
     depends_on:
       - anthias-test
       - redis

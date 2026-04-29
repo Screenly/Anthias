@@ -48,16 +48,25 @@ jobs:
       packages: write
     strategy:
       # Don't cancel sibling jobs on the first failure: any platform that
-      # has already finished building its image will have pushed the
-      # immutable <short-hash>-<board> tag, which is harmless on its own.
-      # Only the publish-latest job below — gated on the entire matrix
-      # succeeding — moves the floating latest-* tag, so a partial failure
-      # leaves users on the previous coherent latest-* set instead of a
-      # half-pushed mix of old + new images.
+      # has already finished building its images will have pushed the
+      # immutable <short-hash>-<board> tags, which are harmless on their
+      # own. Only the publish-latest job below — gated on the entire
+      # matrix succeeding — moves the floating latest-* tag, so a partial
+      # failure leaves users on the previous coherent latest-* set
+      # instead of a half-pushed mix of old + new images.
+      #
+      # The matrix is intentionally only on `board`, not `(board, service)`:
+      # buildkit's per-runner cache hashes apt-get-update output (timestamps
+      # in /var/lib/apt/lists/*, mirror selection) into the layer digest,
+      # so the same package list installed on two different runners
+      # produces two different layer hashes. Building all services for
+      # one board on a single runner means the base apt layer is hashed
+      # once and shared across server / viewer / test / etc. — which is
+      # what makes Dockerfile.base.j2's include-shared layer actually
+      # dedup at the registry level. See refactor: drop celery image.
       fail-fast: false
       matrix:
         board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
-        service: ['server', 'celery', 'redis', 'viewer']
         python-version: ["3.11"]
     runs-on: ubuntu-24.04
 
@@ -99,14 +108,14 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         id: cache
         with:
-          path: /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }}
-          key: buildx-${{ matrix.board }}-${{ matrix.service }}-${{ hashFiles('docker/**/*') }}
+          path: /tmp/.buildx-cache/${{ matrix.board }}
+          key: buildx-${{ matrix.board }}-${{ hashFiles('docker/**/*') }}
           restore-keys: |
-            buildx-${{ matrix.board }}-${{ matrix.service }}-
+            buildx-${{ matrix.board }}-
 
       - name: Inspect cache before build
         run: |
-          ls -la /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }} || true
+          ls -la /tmp/.buildx-cache/${{ matrix.board }} || true
 
       - name: Login to Docker Hub
         if: success() && github.event_name == 'push'
@@ -123,19 +132,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Container
+      - name: Build Containers
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
         run: |
           uv run python -m tools.image_builder \
             --build-target=${{ matrix.board }} \
-            --service=${{ matrix.service }} \
+            --service=server \
+            --service=viewer \
+            --service=redis \
             ${{ github.event_name == 'push' && '--push --skip-latest-tag' || '' }}
 
       - name: Inspect cache after build
         run: |
-          ls -la /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }} || true
+          ls -la /tmp/.buildx-cache/${{ matrix.board }} || true
 
   # Mirror the immutable <short-hash>-<board> tags pushed by the buildx
   # matrix onto the floating latest-<board> tag. Runs only after every
@@ -199,7 +210,7 @@ jobs:
           set -euo pipefail
           GIT_SHORT_HASH=$(git rev-parse --short=7 HEAD)
           BOARDS=(pi1 pi2 pi3 pi4 pi4-64 pi5 x86)
-          SERVICES=(server celery redis viewer)
+          SERVICES=(server redis viewer)
           # GHCR first so the canonical primary is current even if the
           # Docker Hub mirror later in the loop flakes.
           NAMESPACES=(ghcr.io/screenly/anthias screenly/anthias)

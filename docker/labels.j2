@@ -5,8 +5,7 @@
    push/delete access. Without it, packages stay private even when the
    repo is public, and the package page on GitHub has no link back. #}
 {% set service_descriptions = {
-    'server': 'Anthias web server (uvicorn + Django + Channels)',
-    'celery': 'Anthias background task worker (asset downloads, cleanup, display power)',
+    'server': 'Anthias web server (uvicorn + Django + Channels); also runs the Celery worker via a CMD override',
     'redis': 'Redis broker for Anthias Celery and Channels',
     'viewer': 'Anthias display/viewer service',
     'test': 'Anthias test runner',

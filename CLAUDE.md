@@ -11,7 +11,7 @@ Anthias is an open-source digital signage platform for Raspberry Pi and x86 PCs 
 Anthias runs as a set of Docker containers:
 
 - **anthias-server** (port 80 in prod, 8000 in dev) — uvicorn (ASGI) serving the Django web app, REST API, the React frontend's static assets (via WhiteNoise), uploaded media at `/anthias_assets/`, and the WebSocket endpoint at `/ws` (Django Channels with a Redis-backed channel layer). Always plain HTTP — TLS is opt-in and handled by the **anthias-caddy** sidecar that `bin/enable_ssl.sh` installs as a compose override (Caddy local CA by default, or auto Let's Encrypt with `--domain`, or BYO cert with `--cert`/`--key`).
-- **anthias-celery** — Async task queue (asset downloads, cleanup). Publishes asset-update events back to the WebSocket consumers via the Channels Redis layer.
+- **anthias-celery** — Async task queue (asset downloads, cleanup). Runs the same image as `anthias-server` with a CMD override that starts the Celery worker; the two services share the entire root filesystem to avoid duplicating ~825 MB of identical apt content per device. Publishes asset-update events back to the WebSocket consumers via the Channels Redis layer.
 - **anthias-viewer** — Drives the display, receives instructions over the Redis pub/sub `anthias.viewer` channel, talks to anthias-server over HTTP.
 - **redis** (port 6379) — Celery broker + result backend, Channels channel layer, and the viewer signalling bus (pub/sub channel + per-correlation-ID reply lists).
 - **webview** — Qt-based browser for rendering content on the display; fetches `/anthias_assets/` from anthias-server.
@@ -72,7 +72,7 @@ uv run ruff check /path/to/file.py     # Lint specific file
 
 ```bash
 # Build and start test containers
-uv run python -m tools.image_builder --dockerfiles-only --disable-cache-mounts --service celery --service redis --service test
+uv run python -m tools.image_builder --dockerfiles-only --disable-cache-mounts --service redis --service test
 docker compose -f docker-compose.test.yml up -d --build
 
 # Prepare and run tests (integration and non-integration must be run separately)
