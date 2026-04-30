@@ -144,6 +144,11 @@ def fetch_remote_hash() -> tuple[str | None, bool]:
     return get_cache, False
 
 
+def _set_ghcr_error_backoff() -> None:
+    r.set('ghcr-api-error', '1')
+    r.expire('ghcr-api-error', ERROR_BACKOFF_TTL)
+
+
 def _get_ghcr_anonymous_token() -> str | None:
     try:
         resp = requests_get(
@@ -211,12 +216,20 @@ def is_running_latest_published_image(
     if cached is not None:
         return cached == '1'
 
+    # Backoff after a transient GHCR failure so is_up_to_date() (called on
+    # most UI/API requests) doesn't hammer ghcr.io with token + manifest
+    # fetches on every page load while the registry is unreachable.
+    if r.get('ghcr-api-error') is not None:
+        return None
+
     token = _get_ghcr_anonymous_token()
     if not token:
+        _set_ghcr_error_backoff()
         return None
 
     latest_digest = _get_ghcr_manifest_digest(f'latest-{device_type}', token)
     if not latest_digest:
+        _set_ghcr_error_backoff()
         return None
 
     current_digest = _get_ghcr_manifest_digest(

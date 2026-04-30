@@ -5,6 +5,7 @@ import {
   saveAsset,
   setErrorMessage,
   setStatusMessage,
+  setIsSubmitting,
   setUploadProgress,
   resetForm,
   selectAssetModalState,
@@ -45,6 +46,12 @@ export const useFileUpload = () => {
       clearTimeout(clearStatusTimeoutRef.current)
       clearStatusTimeoutRef.current = null
     }
+    // For batches, the hook drives isSubmitting and statusMessage from
+    // start to finish. The per-file thunks run with silent=true so the
+    // slice's pending/fulfilled handlers don't toggle isSubmitting between
+    // files (which would briefly re-enable the file input/dropzone) or
+    // overwrite the "Uploading X of N" label mid-batch.
+    dispatch(setIsSubmitting(true))
     let succeeded = 0
     for (let i = 0; i < files.length; i++) {
       const labelPrefix =
@@ -52,9 +59,14 @@ export const useFileUpload = () => {
       dispatch(setStatusMessage(`${labelPrefix}${files[i].name}`))
       const ok = await handleFileUpload(files[i])
       if (!ok) {
+        dispatch(setIsSubmitting(false))
         return
       }
       succeeded += 1
+    }
+    dispatch(resetForm())
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
     }
     if (succeeded > 0) {
       dispatch(
@@ -86,9 +98,16 @@ export const useFileUpload = () => {
 
   const handleFileUpload = async (file: File): Promise<boolean> => {
     try {
-      // Upload the file
+      // Upload the file. silent=true so the per-file thunks don't toggle
+      // statusMessage / isSubmitting — handleFileUploads owns those for
+      // the entire batch (single-file uploads still go through this path
+      // and the hook sets the same lifecycle around it).
       const result = await dispatch(
-        uploadFile({ file, skipAssetCheck: formData.skipAssetCheck }),
+        uploadFile({
+          file,
+          skipAssetCheck: formData.skipAssetCheck,
+          silent: true,
+        }),
       ).unwrap()
 
       // Create asset data
@@ -107,18 +126,8 @@ export const useFileUpload = () => {
         ...result.dates,
       }
 
-      // Save the asset
-      await dispatch(saveAsset({ assetData })).unwrap()
-
-      // Reset form for the next file in the batch (the caller in
-      // handleFileUploads sets the final "Upload completed." status
-      // after the last successful file).
-      dispatch(resetForm())
-
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
+      // Save the asset (silent for the same reason as uploadFile).
+      await dispatch(saveAsset({ assetData, silent: true })).unwrap()
 
       return true
     } catch (error) {
