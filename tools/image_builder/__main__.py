@@ -46,11 +46,7 @@ def build_image(
     # rather than under /tmp so a multi-user host doesn't share
     # buildkit cache state across accounts. Unused by the registry
     # backend, which pushes to GHCR instead.
-    cache_scope = (
-        f'{board}-64'
-        if board == 'pi4' and target_platform == 'linux/arm64/v8'
-        else board
-    )
+    cache_scope = board
     xdg_cache_home = (
         Path(os.environ['XDG_CACHE_HOME'])
         if os.environ.get('XDG_CACHE_HOME')
@@ -72,9 +68,8 @@ def build_image(
         'curl',
         'ffmpeg',
         'git',
-        'git-core',
         'ifupdown',
-        'libcec-dev ',
+        'libcec-dev',
         'libffi-dev',
         'libssl-dev',
         'lsb-release',
@@ -93,26 +88,18 @@ def build_image(
         'sqlite3',
     ]
 
-    # libraspberrypi0 ships only in the armhf raspberrypi3-debian apt repo;
-    # the arm64 sibling used by pi4-64 doesn't carry it, so exclude it
-    # there (matches how get_viewer_context already gates the package).
-    if (
-        board in ['pi1', 'pi2', 'pi3', 'pi4']
-        and target_platform != 'linux/arm64/v8'
-    ):
+    # The 32-bit Pi boards (pi2, pi3) link against Broadcom's legacy
+    # userland (libbcm_host, libmmal, libvchiq_arm) at runtime via
+    # libraspberrypi0. Pull it from archive.raspbian.org's `firmware`
+    # component — Trixie's archive.raspberrypi.org/main no longer
+    # ships it (replaced by raspi-utils, which doesn't cover the
+    # Qt 5 webview link path), and on archive.raspbian.org's trixie
+    # tree it's `firmware` not `rpi` that ships libraspberrypi0
+    # (verified via Packages.gz). 64-bit boards don't need it: their
+    # Qt 6 viewer uses KMS/DRM directly.
+    is_legacy_pi_armhf = board in ['pi2', 'pi3']
+    if is_legacy_pi_armhf:
         base_apt_dependencies.extend(['libraspberrypi0'])
-
-    # DEVICE_TYPE inside the container needs to be 'pi4-64' for the 64-bit
-    # Pi 4 build, not 'pi4', because lib/github.is_running_latest_published_image
-    # builds the GHCR tag as `<short_hash>-{device_type}` and the published
-    # tags use `-pi4-64`. Hardware-level checks in viewer/media_player.py go
-    # through lib/device_helper.get_device_type() which reads /proc/device-tree/
-    # model at runtime and is unaffected.
-    device_type = (
-        'pi4-64'
-        if board == 'pi4' and target_platform == 'linux/arm64/v8'
-        else board
-    )
 
     if service == 'viewer':
         context.update(get_viewer_context(board, target_platform))
@@ -125,16 +112,17 @@ def build_image(
         service,
         {
             'base_image': base_image,
-            'base_image_tag': 'bookworm',
+            'base_image_tag': 'trixie',
             'base_apt_dependencies': base_apt_dependencies,
             'board': board,
-            'device_type': device_type,
-            'debian_version': 'bookworm',
+            'device_type': board,
+            'debian_version': 'trixie',
             'disable_cache_mounts': disable_cache_mounts,
             'environment': environment,
             'git_branch': git_branch,
             'git_hash': git_hash,
             'git_short_hash': git_short_hash,
+            'is_legacy_pi_armhf': is_legacy_pi_armhf,
             'service': service,
             'target_platform': target_platform,
             **context,
@@ -355,11 +343,6 @@ def main(
         # `latest-*` mirroring (one of two reasons d568602 hit Docker
         # Hub's 429) gives no real back-compat in exchange.
         namespaces = ['ghcr.io/screenly/anthias', 'screenly/anthias']
-        version_suffix = (
-            f'{board}-64'
-            if board == 'pi4' and platform == 'linux/arm64/v8'
-            else f'{board}'
-        )
 
         # Generate all tags
         docker_tags = []
@@ -369,7 +352,7 @@ def main(
                 docker_tags.append(f'{namespace}-{service_name}:{docker_tag}')
             # Immutable short-hash tag.
             docker_tags.append(
-                f'{namespace}-{service_name}:{git_short_hash}-{version_suffix}'
+                f'{namespace}-{service_name}:{git_short_hash}-{board}'
             )
 
         build_image(

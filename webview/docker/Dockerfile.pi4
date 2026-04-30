@@ -1,6 +1,6 @@
 # vim:ft=dockerfile
 
-FROM balenalib/raspberrypi3-64-debian:bookworm
+FROM debian:trixie
 
 ENV DEBIAN_FRONTEND=noninteractive
 

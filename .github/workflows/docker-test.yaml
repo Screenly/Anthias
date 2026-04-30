@@ -42,10 +42,10 @@ jobs:
     uses: ./.github/workflows/test-runner.yml
     with:
       test-type: 'typescript'
-      python-version: '3.11'
+      python-version: '3.13'
 
   run-python-tests:
     uses: ./.github/workflows/test-runner.yml
     with:
       test-type: 'python'
-      python-version: '3.11'
+      python-version: '3.13'

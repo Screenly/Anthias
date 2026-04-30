@@ -12,7 +12,11 @@ QT_MINOR="15"
 QT_BUG_FIX="14"
 QT_VERSION="$QT_MAJOR.$QT_MINOR.$QT_BUG_FIX"
 DEBIAN_VERSION=$(lsb_release -cs)
-MAKE_CORES="$(expr $(nproc) + 2)"
+# MAKE_CORES caps parallelism. Overridable via env so the wrapper can
+# tune for available memory: each cc1plus under qemu-arm peaks at
+# ~3-4 GB during the chromium compile, so the default `nproc + 2`
+# happily OOMs anything <40 GB RAM on a 16-core box.
+MAKE_CORES="${MAKE_CORES:-$(expr $(nproc) + 2)}"
 
 # WEBVIEW_VERSION is the CalVer release identifier (YYYY.MM.PATCH).
 # CI extracts it from the WebView-v* tag; for local builds the caller
@@ -43,7 +47,10 @@ function fetch_cross_compile_tool () {
 }
 
 function fetch_rpi_firmware () {
-    # Check Debian version. Return early if newer than Debian 10, as they don't have /opt/vc anymore.
+    # Skip the /opt/vc fetch on Debian >10. The packaged libraspberrypi0
+    # from archive.raspbian.org now provides /opt/vc/lib at install time
+    # (verified on trixie/armhf), so the GitHub-firmware checkout is
+    # only needed on legacy bullseye/buster builders.
     _DEBIAN_VERSION=$(lsb_release -rs)
     if [ "${_DEBIAN_VERSION}" -gt "10" ]; then
         echo "Debian version is newer than 10. Skipping firmware fetch."
@@ -140,13 +147,7 @@ function build_qt () {
         mkdir -p "$SRC_DIR"
         pushd "$SRC_DIR"
 
-        if [ "$1" = "pi1" ]; then
-            local BUILD_ARGS=(
-                "-device" "linux-rasp-pi-g++"
-            )
-            patch_qt "linux-rasp-pi-g++"
-            patch_qtwebengine
-        elif [ "$1" = "pi2" ]; then
+        if [ "$1" = "pi2" ]; then
             local BUILD_ARGS=(
                 "-device" "linux-rasp-pi2-g++"
             )
@@ -156,14 +157,6 @@ function build_qt () {
                 "-device" "linux-rasp-pi3-g++"
             )
             patch_qt "linux-rasp-pi3-g++"
-
-        # The opengl flag only works on Pi 4. It breaks the QTWebEngine build
-        # process on any other model.
-        elif [ "$1" = "pi4" ]; then
-            local BUILD_ARGS=(
-                "-device" "linux-rasp-pi4-v3d-g++"
-                "-opengl" "es2"
-            )
         else
             echo "Unknown device. Exiting."
             exit 1
@@ -234,7 +227,8 @@ function build_qt () {
             -system-libjpeg \
             -system-libpng \
             -system-zlib \
-            -sysroot /sysroot
+            -sysroot /sysroot \
+            -webengine-proprietary-codecs
 
         # The RAM consumption is proportional to the amount of cores.
         # On an 8 core box, the build process will require ~16GB of RAM.
@@ -288,8 +282,10 @@ fetch_cross_compile_tool
 fetch_rpi_firmware
 
 if [ ! "${TARGET-}" ]; then
-    # Let's work our way through all Pis in order of relevance
-    for device in pi4 pi3 pi2 pi1; do
+    # Iterate the surviving Qt 5 boards. Pi 1 and the 32-bit Pi 4 path
+    # were retired with the Trixie / drop-Balena upgrade; Pi 4 64-bit
+    # and Pi 5 use Qt 6 from Debian apt instead (see webview/docker/).
+    for device in pi3 pi2; do
         build_qt "$device"
     done
 else

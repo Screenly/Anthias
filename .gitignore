@@ -1,5 +1,6 @@
 *.py[co]
 .idea/
+.qt5-toolchain-build/
 
 # Packages
 *.egg

@@ -5,7 +5,6 @@ import random
 import re
 import string
 from datetime import datetime, timedelta
-from distutils.util import strtobool
 from os import getenv, path, utime
 from platform import machine
 from subprocess import call, check_output
@@ -33,7 +32,14 @@ arch = machine()
 
 
 def string_to_bool(string: Any) -> bool:
-    return bool(strtobool(str(string)))
+    # Direct port of distutils.util.strtobool (removed in Python 3.12)
+    # so existing callers keep accepting the same y/yes/t/true/on/1 set.
+    value = str(string).strip().lower()
+    if value in ('y', 'yes', 't', 'true', 'on', '1'):
+        return True
+    if value in ('n', 'no', 'f', 'false', 'off', '0'):
+        return False
+    raise ValueError(f'invalid truth value {string!r}')
 
 
 def touch(path: str) -> None:

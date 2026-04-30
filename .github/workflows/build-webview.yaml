@@ -19,9 +19,18 @@ on:
       - '!webview/README.md'
 
 jobs:
-  build-docker-image:
-    name: Build Docker Images (Pi 1-4)
+  compile-webview-part-1:
+    name: Compile Webview (Pi 2-3 / Qt 5)
+    strategy:
+      matrix:
+        board: ['pi2', 'pi3']
     runs-on: ubuntu-24.04
+    # `packages: write` so the build step's --cache-to can push the
+    # buildcache tag to GHCR on push events. Fork PRs auto-downgrade
+    # to read-only regardless of declared permissions.
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -33,53 +42,43 @@ jobs:
         id: buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
-      - name: Login to Docker Hub
+      - name: Login to GitHub Container Registry
         if: success() && github.event_name != 'pull_request'
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set buildx arguments
-        if: github.event_name != 'pull_request'
-        id: prepare
-        run: |
-          GIT_SHORT_HASH=$(git rev-parse --short HEAD)
-
-          {
-            echo "buildx_args=--cache-from \"screenly/ose-qt-builder:latest\" \
-            --output \"type=image,push=true\" \
-            --build-arg \"BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')\" \
-            --build-arg \"GIT_HASH=$GIT_SHORT_HASH\" \
-            --build-arg \"GIT_SHORT_HASH=$GIT_SHORT_HASH\" \
-            --build-arg \"GIT_BRANCH=$GITHUB_REF_NAME\""
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Building container
-        if: github.event_name != 'pull_request'
+      - name: Build Qt 5 builder image
+        env:
+          # Build the Qt 5 cross-compile builder inline rather than as a
+          # separate publish job. The image is a CI-internal artifact —
+          # only ever consumed by the next step in this same job — so
+          # there is no need to push it anywhere. Cache layers are still
+          # registry-backed (mirrors docker-build.yaml): `cache-from`
+          # always reads, `cache-to` writes only on push events because
+          # fork-PR GITHUB_TOKENs are read-only and would 401 on cache
+          # write. --load makes the resulting image available to the
+          # local Docker daemon for the `docker run` step below.
+          CACHE_REF: ghcr.io/screenly/anthias-webview-qt5-builder:buildcache
         run: |
           cd webview
+          set_args=( --cache-from "type=registry,ref=${CACHE_REF}" )
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            set_args+=( --cache-to "type=registry,ref=${CACHE_REF},mode=max,image-manifest=true" )
+          fi
+          GIT_HASH=$(git rev-parse HEAD)
+          GIT_SHORT_HASH=$(git rev-parse --short HEAD)
           docker buildx build \
-            ${{ steps.prepare.outputs.buildx_args }} \
-            -t screenly/ose-qt-builder:latest .
-
-  compile-webview-part-1:
-    name: Compile Webview (Pi 1-4 / Qt 5)
-    needs: build-docker-image
-    strategy:
-      matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4']
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4
-
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+            "${set_args[@]}" \
+            --load \
+            --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --build-arg "GIT_HASH=${GIT_HASH}" \
+            --build-arg "GIT_SHORT_HASH=${GIT_SHORT_HASH}" \
+            --build-arg "GIT_BRANCH=${GITHUB_REF_NAME}" \
+            -t webview-qt5-builder:latest \
+            .
 
       - name: Cache build layers
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
@@ -121,7 +120,7 @@ jobs:
             -v $(pwd):/webview:ro \
             -e TARGET=${{ matrix.board }} \
             -e WEBVIEW_VERSION="$WEBVIEW_VERSION" \
-            screenly/ose-qt-builder:latest
+            webview-qt5-builder:latest
           docker exec -it qt-builder /webview/build_webview_with_qt5.sh
           docker rm -f qt-builder
 
@@ -145,6 +144,14 @@ jobs:
     strategy:
       matrix:
         board: ['pi5', 'pi4-64', 'x86']
+    # `packages: write` so the build step below can push the buildcache
+    # tag to GHCR on push events. PRs from forks won't have this scope
+    # in practice (GITHUB_TOKEN is read-only on fork PRs), which is why
+    # `cache-to` is gated to non-PR events; cache-from still works
+    # because the published cache package is public.
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -154,6 +161,14 @@ jobs:
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Login to GitHub Container Registry
+        if: success() && github.event_name != 'pull_request'
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set environment variables
         run: |
@@ -172,9 +187,31 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Build Docker Image
+        env:
+          # Mirrors docker-build.yaml's registry-cache pattern, scoped per
+          # board because each Qt 6 board uses a distinct Dockerfile
+          # (Dockerfile.{pi4,pi5,x86}) and shares almost nothing across
+          # boards. cache-to is push-only: PRs from forks have a read-only
+          # GITHUB_TOKEN and would auth-fail on the registry write.
+          CACHE_REF: ghcr.io/screenly/anthias-webview-qt6-builder:buildcache-${{ matrix.board }}
+          BAKE_TARGET: builder-${{ matrix.board }}
         run: |
           cd webview
-          docker compose build
+          # `docker buildx bake` reads the compose file, then --set lets us
+          # inject cache-from / cache-to per target without modifying the
+          # YAML (which has to stay PR-fork-safe). --load makes the
+          # resulting image available to the local Docker daemon so the
+          # subsequent `docker compose run` step finds it via the
+          # explicit `image:` tag in docker-compose.yml.
+          set_args=( --set "${BAKE_TARGET}.cache-from=type=registry,ref=${CACHE_REF}" )
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            set_args+=( --set "${BAKE_TARGET}.cache-to=type=registry,ref=${CACHE_REF},mode=max,image-manifest=true" )
+          fi
+          docker buildx bake \
+            -f docker-compose.yml \
+            --load \
+            "${set_args[@]}" \
+            "${BAKE_TARGET}"
 
       - name: Prepare bind-mount target for non-root builder user
         run: |
@@ -214,7 +251,7 @@ jobs:
       - compile-webview-part-2
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
+        board: ['pi2', 'pi3', 'pi4-64', 'pi5', 'x86']
     runs-on: ubuntu-24.04
     permissions:
       contents: write

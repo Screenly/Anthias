@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-DEBIAN_VERSION='bookworm'
+DEBIAN_VERSION='trixie'
 CORE_COUNT="$(expr "$(nproc)" - 2)"
 if [[ "$CORE_COUNT" -lt 1 ]]; then
     CORE_COUNT=1

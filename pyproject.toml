@@ -3,7 +3,7 @@ name = "anthias"
 version = "0.20.4"
 description = "The world's most popular open source digital signage project."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = []
 
 [dependency-groups]
@@ -141,7 +141,7 @@ mypy = [
 ]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 strict = true
 follow_imports = "normal"
 mypy_path = "stubs"

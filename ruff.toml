@@ -1,6 +1,6 @@
 line-length = 79
 exclude = ["anthias_app/migrations/*.py"]
-target-version = "py311"
+target-version = "py313"
 
 [format]
 quote-style = "single"

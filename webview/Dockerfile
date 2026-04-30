@@ -1,5 +1,36 @@
 ARG BUILDER_BASE_PLATFORM=linux/arm/v7
-FROM --platform=${BUILDER_BASE_PLATFORM} balenalib/raspberrypi3:bookworm AS builder
+FROM --platform=${BUILDER_BASE_PLATFORM} debian:trixie AS builder
+
+# Sysroot stage: extracts headers + libs that the runtime stage's
+# COPY --from=builder pulls in. apt-get install + dpkg-deb -x + the
+# downstream `dpkg --purge libraspberrypi-dev` all need root. Declared
+# explicitly so this is a choice, not the default-image fallback.
+USER root
+
+# Bootstrap the Raspberry Pi Foundation + Raspbian apt sources so the
+# Qt 5 cross-build sysroot can pull libraspberrypi0 / libraspberrypi-bin
+# (legacy Broadcom userland headers + libs that Qt 5 webview links
+# against). Same approach as docker/Dockerfile.base.j2 — the .deb
+# keyring packages bundle trixie-policy-compliant key bindings, so we
+# extract them with dpkg-deb -x to avoid pulling in gnupg. Downloads
+# are HTTPS-only and SHA256-pinned because the keyrings are the trust
+# anchor for everything fetched after them.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl && \
+    mkdir -p /tmp/keyrings && \
+    curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/keyrings/raspberrypi-archive-keyring.deb \
+        https://archive.raspberrypi.org/debian/pool/main/r/raspberrypi-archive-keyring/raspberrypi-archive-keyring_2025.1+rpt1_all.deb && \
+    curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/keyrings/raspbian-archive-keyring.deb \
+        https://archive.raspbian.org/raspbian/pool/main/r/raspbian-archive-keyring/raspbian-archive-keyring_20120528.4_all.deb && \
+    echo '2e727149d7acb8cc7f604e66d0049161039c8aa1eaf1175e54f9e69d963d60e4  /tmp/keyrings/raspberrypi-archive-keyring.deb' | sha256sum -c - && \
+    echo 'eb2bc175ecfad128ece8222b42eefabd0a2846afd14f3af04364f4a047cbc88f  /tmp/keyrings/raspbian-archive-keyring.deb' | sha256sum -c - && \
+    dpkg-deb -x /tmp/keyrings/raspberrypi-archive-keyring.deb / && \
+    dpkg-deb -x /tmp/keyrings/raspbian-archive-keyring.deb / && \
+    rm -rf /tmp/keyrings && \
+    printf 'Types: deb\nURIs: https://archive.raspberrypi.org/debian\nSuites: trixie\nComponents: main\nArchitectures: armhf\nSigned-By: /usr/share/keyrings/raspberrypi-archive-keyring.gpg\n' \
+        > /etc/apt/sources.list.d/raspi.sources && \
+    printf 'Types: deb\nURIs: https://archive.raspbian.org/raspbian\nSuites: trixie\nComponents: firmware\nArchitectures: armhf\nSigned-By: /usr/share/keyrings/raspbian-archive-keyring.gpg\n' \
+        > /etc/apt/sources.list.d/raspbian-firmware.sources
 
 # There are likely a large number of dependencies that can be stripped out here
 # depending on your needs (and probably in general). My primary objective was just
@@ -31,32 +62,31 @@ RUN apt-get update && \
         libgcrypt20-dev \
         libgles2-mesa-dev \
         libglib2.0-dev \
-        libgst-dev \
         libgstreamer-plugins-base1.0-dev \
         libgstreamer1.0-dev \
+        libharfbuzz-dev \
         libicu-dev \
         libinput-dev \
         libiodbc2-dev \
         libjpeg62-turbo-dev \
         libjsoncpp-dev \
+        liblcms2-dev \
         libminizip-dev \
         libnss3-dev \
         libopus-dev \
         libpci-dev \
         libpng-dev \
-        libpng16-16 \
+        libpng16-16t64 \
         libpq-dev \
         libpulse-dev \
         libraspberrypi-bin \
         libraspberrypi0 \
+        libre2-dev \
         librsvg2-common \
         libsnappy-dev \
-        libsqlite0-dev \
         libsqlite3-dev \
-        libsrtp0-dev \
         libsrtp2-dev \
         libssl-dev \
-        libssl1.1 \
         libswscale-dev \
         libsystemd-dev \
         libts-dev \
@@ -90,6 +120,7 @@ RUN apt-get update && \
         libxext-dev \
         libxi-dev \
         libxkbcommon-dev \
+        libxml2-dev \
         libxrender-dev \
         libxslt1-dev \
         libxss-dev \
@@ -104,7 +135,15 @@ RUN apt-get update && \
 # https://www.enricozini.org/blog/2020/qt5/build-qt5-cross-builder-with-raspbian-sysroot-compiling-with-the-sysroot-continued/
 RUN dpkg --purge libraspberrypi-dev
 
-FROM debian:bookworm
+FROM debian:trixie
+
+# Cross-compile builder image — runs locally inside CI to produce the
+# WebView tarball, never deployed. Root is intentional: the build flow
+# writes to /sysroot, /opt/vc, /usr/local/bin, and runs `dpkg --purge`
+# on Pi-userland packages, none of which work as a non-root user.
+# Declared explicitly so this is a choice, not the default-image
+# fallback.
+USER root
 
 # This list can most likely be slimmed down *a lot* but that's for another day.
 RUN apt-get update && \
@@ -137,20 +176,24 @@ RUN apt-get update && \
         libevent-dev \
         libfontconfig1 \
         libfontconfig1-dev \
+        libfreetype-dev \
         libfreetype6 \
         libgbm-dev \
         libgcrypt20-dev \
         libgles2-mesa-dev \
+        libharfbuzz-dev \
         libinput-dev \
         libjpeg62-turbo-dev \
         libjsoncpp-dev \
+        liblcms2-dev \
         libminizip-dev \
         libnss3 \
         libnss3-dev \
         libopus-dev \
         libpci-dev \
-        libpng16-16 \
+        libpng16-16t64 \
         libpulse-dev \
+        libre2-dev \
         libsecret-1-0 \
         libsnappy-dev \
         libsrtp2-dev \
@@ -160,12 +203,14 @@ RUN apt-get update && \
         libudev-dev \
         libvpx-dev \
         libwebp-dev \
+        libxml2-dev \
         libxss-dev \
         libxss1 \
         libxtst-dev \
         lsb-release \
         ninja-build \
         nodejs \
+        python3 \
         rsync \
         ruby \
         subversion \
@@ -173,15 +218,26 @@ RUN apt-get update && \
         make && \
     apt-get clean
 
-# Install pyenv
-RUN curl https://pyenv.run | bash && \
-    echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc && \
-    echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc && \
-    echo 'eval "$(pyenv init -)"' >> ~/.bashrc
-
-# Install Python 2.7.18. This is needed to compile hthe QTWebEngine.
-RUN /root/.pyenv/bin/pyenv install 2.7.18 && \
-    /root/.pyenv/bin/pyenv global 2.7.18
+# Qt 5.15.14's QtWebEngine `configure` hard-rejects Python 3 (the
+# bundled chromium gn/gyp scripts predate py3 support); it needs a
+# Python 2.7 interpreter to produce QtWebEngineCore at all. Trixie
+# dropped py2 from main, but bullseye still ships 2.7.18 — pull it
+# from archive.debian.org via apt-pinning. trixie remains the source
+# for everything else (Pin-Priority 100 on `*` keeps the bullseye
+# archive at lowest priority; the explicit 990 only lets python2.7
+# and its required old runtime libs through). py2 is contained to
+# this Qt 5 builder image only — Qt 6 builders, viewer, and server
+# all stay on system python3. /usr/local/bin/python -> python2.7
+# lets QtWebEngine's `/usr/bin/env python` resolve in non-interactive
+# `docker run /webview/build_qt5.sh` shells.
+RUN printf 'Types: deb\nURIs: http://archive.debian.org/debian\nSuites: bullseye\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\n' \
+        > /etc/apt/sources.list.d/bullseye.sources && \
+    printf 'Package: *\nPin: release n=bullseye\nPin-Priority: 100\n\nPackage: python2.7 python2.7-minimal libpython2.7 libpython2.7-stdlib libpython2.7-minimal\nPin: release n=bullseye\nPin-Priority: 990\n' \
+        > /etc/apt/preferences.d/bullseye-py2 && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends python2.7 && \
+    apt-get clean && \
+    ln -s /usr/bin/python2.7 /usr/local/bin/python
 
 WORKDIR /build
 
@@ -193,6 +249,12 @@ RUN mkdir -p /sysroot/usr /sysroot/opt /sysroot/lib
 COPY --from=builder /lib/ /sysroot/lib/
 COPY --from=builder /usr/include/ /sysroot/usr/include/
 COPY --from=builder /usr/lib/ /sysroot/usr/lib/
+# /usr/share/pkgconfig holds arch-independent .pc files (notably
+# bzip2.pc on trixie's libbz2-dev). Without it, freetype2.pc's
+# `Requires.private: bzip2` fails to resolve, which cascades into
+# Qt's QtWebEngine configure rejecting `fontconfig: no` and silently
+# skipping the entire webengine build.
+COPY --from=builder /usr/share/pkgconfig/ /sysroot/usr/share/pkgconfig/
 
 ENV BUILD_WEBVIEW=1
 ENV CCACHE_MAXSIZE=10G

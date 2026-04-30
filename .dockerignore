@@ -1,6 +1,6 @@
 **/*.py[co]
-*.git
-*.github
+.git
+.github
 docs/*
 
 # Packages
@@ -40,3 +40,18 @@ venv
 .venv
 website/
 docker-compose.*
+
+# Linter / type-checker caches — host-side only, regenerate in CI.
+.mypy_cache
+.ruff_cache
+.cache
+
+# IDE / agent metadata
+.idea
+.cursor
+.claude
+
+# Local Qt 5 cross-build output. Produced by bin/rebuild_qt5_toolchain.sh
+# (~1.5 GB of source + tarballs); without this entry, COPY . into the
+# viewer image bloats by the same amount and yields a multi-GB image.
+.qt5-toolchain-build
