@@ -177,7 +177,23 @@ function clone_repo() {
     fi
     git -C "${ANTHIAS_REPO_DIR}" fetch --tags origin
     git -C "${ANTHIAS_REPO_DIR}" checkout "${BRANCH}"
-    git -C "${ANTHIAS_REPO_DIR}" reset --hard "origin/${BRANCH}"
+
+    # Releases are pinned via tags (e.g. v0.20.5), which fetch into
+    # refs/tags/ — `origin/v0.20.5` is not a valid ref. Resolve tags
+    # explicitly via refs/tags/${BRANCH} and fall through to
+    # origin/${BRANCH} only for actual branches.
+    local RESET_REF
+    if git -C "${ANTHIAS_REPO_DIR}" show-ref --verify --quiet \
+        "refs/tags/${BRANCH}"; then
+        RESET_REF="refs/tags/${BRANCH}"
+    elif git -C "${ANTHIAS_REPO_DIR}" show-ref --verify --quiet \
+        "refs/remotes/origin/${BRANCH}"; then
+        RESET_REF="origin/${BRANCH}"
+    else
+        echo "error: '${BRANCH}' is neither a tag nor a remote branch" >&2
+        exit 1
+    fi
+    git -C "${ANTHIAS_REPO_DIR}" reset --hard "${RESET_REF}"
 }
 
 function install_ansible() {
