@@ -247,9 +247,9 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         # repeated here. libssl1.1 is gone in trixie; the rebuilt Qt 5
         # webview archive links against libssl3 from the base image.
         # libgst-dev / libsqlite0-dev / libsrtp0-dev were dropped in
-        # trixie — modern equivalents (libgstreamer1.0-dev,
-        # libsqlite3-dev, libsrtp2-dev) are pulled by the main viewer
-        # apt list above.
+        # trixie — libsqlite3-dev and libsrtp2-dev are already in the
+        # main viewer apt list above; libgstreamer1.0-dev is Qt 5-only
+        # and is added in the extend() below.
         viewer_extra_apt_dependencies.extend(
             [
                 'libgstreamer1.0-dev',
