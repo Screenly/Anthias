@@ -208,7 +208,19 @@ def _get_ghcr_manifest_digest(tag: str, token: str) -> str | None:
     if resp.status_code != 200:
         _set_ghcr_error_backoff()
         return None
-    return resp.headers.get('Docker-Content-Digest')
+    # GHCR normally returns Docker-Content-Digest on 200. A missing or
+    # empty header is unexpected (header-name change, edge proxy, etc.) —
+    # treat it like the other non-404 failures so callers back off
+    # instead of caching it as a clean miss.
+    digest = resp.headers.get('Docker-Content-Digest')
+    if not isinstance(digest, str) or not digest:
+        logging.debug(
+            'GHCR manifest response for %s missing Docker-Content-Digest',
+            tag,
+        )
+        _set_ghcr_error_backoff()
+        return None
+    return digest
 
 
 def is_running_latest_published_image(
