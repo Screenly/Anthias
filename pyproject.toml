@@ -55,7 +55,7 @@ server = [
     "psutil==7.2.1",
     "pyasn1==0.6.3",
     "pydbus==0.6.0",
-    "pyOpenSSL==26.0.0",
+    "pyOpenSSL==26.1.0",
     "python-dateutil==2.9.0.post0",
     "pytz==2025.2",
     "PyYAML==6.0.2",
