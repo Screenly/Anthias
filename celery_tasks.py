@@ -86,6 +86,11 @@ def cleanup() -> None:
     # in assetdir that no live Asset row references, with the same 1h
     # guard so a freshly-renamed file isn't removed before its row is
     # written.
+    #
+    # Skip suffixes that belong to in-flight uploads (.tmp) and yt-dlp's
+    # active download bookkeeping (.part, .ytdl, .info.json) so a slow
+    # YouTube fetch isn't reaped mid-transfer.
+    skip_suffixes = ('.tmp', '.part', '.ytdl', '.info.json')
     referenced = {
         path.basename(uri)
         for uri in Asset.objects.exclude(uri__isnull=True)
@@ -98,7 +103,7 @@ def cleanup() -> None:
     for entry in os.scandir(asset_dir):
         if not entry.is_file():
             continue
-        if entry.name in referenced or entry.name.endswith('.tmp'):
+        if entry.name in referenced or entry.name.endswith(skip_suffixes):
             continue
         try:
             if now - entry.stat().st_mtime < cutoff:

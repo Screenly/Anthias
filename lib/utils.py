@@ -409,12 +409,14 @@ def download_video_from_youtube(
     uri: str,
     asset_id: str,
 ) -> tuple[str, str, int]:
-    home = getenv('HOME') or ''
     name = check_output(['yt-dlp', '-O', 'title', uri])
     info = json.loads(check_output(['yt-dlp', '-j', uri]))
     duration = info['duration']
 
-    location = path.join(home, 'anthias_assets', f'{asset_id}.mp4')
+    # Write into settings['assetdir'] so cleanup() (which sweeps the same
+    # path) sees these files; otherwise a custom assetdir would leak
+    # orphaned YouTube downloads in $HOME/anthias_assets.
+    location = path.join(settings['assetdir'], f'{asset_id}.mp4')
     thread = YoutubeDownloadThread(location, uri, asset_id)
     thread.daemon = True
     thread.start()
