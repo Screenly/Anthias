@@ -3,6 +3,7 @@
 #include <QUrl>
 #include <QStandardPaths>
 #include <QWebEnginePage>
+#include <QWebEngineProfile>
 #include <QWebEngineSettings>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -50,6 +51,20 @@ View::View(QWidget* parent) : QWidget(parent)
     configureWebView(webView1);
     configureWebView(webView2);
 
+    // Both webViews share the default profile, so the HTTP-cache setup
+    // is per-process, not per-view. Use in-memory only — the default
+    // on-disk cache caused URL assets to linger stale for days across
+    // viewer restarts because QtWebEngine kept serving the old response
+    // from /data/.cache/... (forum 983 — most-viewed bug). Memory-only
+    // means the cache is dropped on every viewer restart; within a
+    // single session QtWebEngine still honors the response's
+    // cache-control headers. Clear once at startup to drop any disk
+    // cache left behind by older builds so users upgrading from a
+    // stale-cache version see fresh content on their next load.
+    QWebEngineProfile* profile = QWebEngineProfile::defaultProfile();
+    profile->setHttpCacheType(QWebEngineProfile::MemoryHttpCache);
+    profile->clearHttpCache();
+
     currentWebView = webView1;
     nextWebView = webView2;
     nextWebViewReady = false;
@@ -77,6 +92,9 @@ void View::configureWebView(QWebEngineView* view)
 {
     view->settings()->setAttribute(QWebEngineSettings::LocalStorageEnabled, true);
     view->settings()->setAttribute(QWebEngineSettings::ShowScrollBars, false);
+    // Match the widget's black backdrop so dark-themed URL assets don't
+    // flash white between the page-load start and the first paint.
+    view->page()->setBackgroundColor(Qt::black);
     view->setVisible(false);
 }
 

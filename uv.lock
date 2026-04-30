@@ -401,7 +401,7 @@ server = [
     { name = "uvicorn", extras = ["standard"], specifier = "==0.32.1" },
     { name = "wheel", specifier = "==0.46.2" },
     { name = "whitenoise", specifier = "==6.12.0" },
-    { name = "yt-dlp", specifier = "==2026.2.21" },
+    { name = "yt-dlp", specifier = ">=2026.3.17" },
 ]
 test = [
     { name = "cec", specifier = "==0.2.8" },
@@ -451,7 +451,7 @@ test = [
     { name = "uvicorn", extras = ["standard"], specifier = "==0.32.1" },
     { name = "wheel", specifier = "==0.46.2" },
     { name = "whitenoise", specifier = "==6.12.0" },
-    { name = "yt-dlp", specifier = "==2026.2.21" },
+    { name = "yt-dlp", specifier = ">=2026.3.17" },
 ]
 viewer = [
     { name = "cec", specifier = "==0.2.8" },
@@ -2760,11 +2760,11 @@ wheels = [
 
 [[package]]
 name = "yt-dlp"
-version = "2026.2.21"
+version = "2026.3.17"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/58/d9/55ffff25204733e94a507552ad984d5a8a8e4f9d1f0d91763e6b1a41c79b/yt_dlp-2026.2.21.tar.gz", hash = "sha256:4407dfc1a71fec0dee5ef916a8d4b66057812939b509ae45451fa8fb4376b539", size = 3116630, upload-time = "2026-02-21T20:40:53.522Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8b/34/7c6b4e3f89cb6416d2cd7ab6dab141a1df97ab0fb22d15816db2c92148c9/yt_dlp-2026.3.17.tar.gz", hash = "sha256:ba7aa31d533f1ffccfe70e421596d7ca8ff0bf1398dc6bb658b7d9dec057d2c9", size = 3119221, upload-time = "2026-03-17T23:43:00.244Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5a/40/664c99ee36d80d84ce7a96cd98aebcb3d16c19e6c3ad3461d2cf5424040e/yt_dlp-2026.2.21-py3-none-any.whl", hash = "sha256:0d8408f5b6d20487f5caeb946dfd04f9bcd2f1a3a125b744a0a982b590e449f7", size = 3313392, upload-time = "2026-02-21T20:40:51.514Z" },
+    { url = "https://files.pythonhosted.org/packages/cd/13/5093bcb954878e50f7217fd2ab94282b53934022e4e4a03265582da83bf5/yt_dlp-2026.3.17-py3-none-any.whl", hash = "sha256:32992db94303a8a5d211a183f2174834fe7f8c29d83ed2e7a324eae97a8f26d8", size = 3315134, upload-time = "2026-03-17T23:42:57.863Z" },
 ]
 
 [[package]]
