@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import {
   uploadFile,
@@ -23,6 +23,19 @@ export const useFileUpload = () => {
   const clearStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   )
+
+  // Cancel a pending status-clear timeout when the hook unmounts (modal
+  // closed). Otherwise the captured dispatch keeps a live reference to the
+  // store and can fire after a remount, wiping the new in-flight
+  // "Uploading X of N" label if the user reopens the modal within 5s.
+  useEffect(() => {
+    return () => {
+      if (clearStatusTimeoutRef.current) {
+        clearTimeout(clearStatusTimeoutRef.current)
+        clearStatusTimeoutRef.current = null
+      }
+    }
+  }, [])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
