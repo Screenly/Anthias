@@ -114,7 +114,7 @@ echo "Verify checksums:"
 echo "  (cd '${OUT_DIR}' && sha256sum -c qt5-5.15.14-trixie-*.tar.gz.sha256)"
 echo
 echo "Upload to a WebView-v* release. If you re-use the tag pinned at"
-echo "webview/build_webview_with_qt5.sh:21 (currently WebView-v0.3.5),"
+echo "webview/build_webview_with_qt5.sh:21 (currently WebView-v2026.04.1),"
 echo "no source change is needed; otherwise bump QT5_TOOLCHAIN_TAG to"
 echo "the new tag in the same commit."
 echo "  gh release upload <WebView-vX.Y.Z> \\"
