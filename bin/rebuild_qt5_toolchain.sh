@@ -86,6 +86,12 @@ for board in "${BOARDS[@]}"; do
     fi
 
     echo "==> Building Qt 5 toolchain for ${board} (this will take hours)"
+    # Cap parallelism to keep peak RAM inside what swap can absorb:
+    # cc1plus under qemu-arm peaks at ~3-4 GB while compiling chromium,
+    # so on 16+ core hosts the default `nproc + 2` blows past 40 GB.
+    # MAKE_CORES is overridable: respect a caller-supplied value, else
+    # cap at min(nproc, 8). Any host can lift the cap explicitly.
+    : "${MAKE_CORES:=$(( $(nproc) < 8 ? $(nproc) : 8 ))}"
     docker run --rm \
         --name "qt5-toolchain-${board}" \
         -v "${SRC_DIR}:/src:Z" \
@@ -95,6 +101,7 @@ for board in "${BOARDS[@]}"; do
         -e "TARGET=${board}" \
         -e "WEBVIEW_VERSION=${WEBVIEW_VERSION}" \
         -e "BUILD_WEBVIEW=${BUILD_WEBVIEW:-1}" \
+        -e "MAKE_CORES=${MAKE_CORES}" \
         "${IMAGE_TAG}" \
         /webview/build_qt5.sh
 done

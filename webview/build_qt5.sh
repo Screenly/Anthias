@@ -12,7 +12,11 @@ QT_MINOR="15"
 QT_BUG_FIX="14"
 QT_VERSION="$QT_MAJOR.$QT_MINOR.$QT_BUG_FIX"
 DEBIAN_VERSION=$(lsb_release -cs)
-MAKE_CORES="$(expr $(nproc) + 2)"
+# MAKE_CORES caps parallelism. Overridable via env so the wrapper can
+# tune for available memory: each cc1plus under qemu-arm peaks at
+# ~3-4 GB during the chromium compile, so the default `nproc + 2`
+# happily OOMs anything <40 GB RAM on a 16-core box.
+MAKE_CORES="${MAKE_CORES:-$(expr $(nproc) + 2)}"
 
 # WEBVIEW_VERSION is the CalVer release identifier (YYYY.MM.PATCH).
 # CI extracts it from the WebView-v* tag; for local builds the caller
@@ -223,7 +227,8 @@ function build_qt () {
             -system-libjpeg \
             -system-libpng \
             -system-zlib \
-            -sysroot /sysroot
+            -sysroot /sysroot \
+            -webengine-proprietary-codecs
 
         # The RAM consumption is proportional to the amount of cores.
         # On an 8 core box, the build process will require ~16GB of RAM.
