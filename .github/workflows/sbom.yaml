@@ -7,6 +7,8 @@ on:
     paths:
       - 'bun.lock'
       - 'uv.lock'
+    tags:
+      - 'v*'
 
 jobs:
   run-tests:
@@ -29,6 +31,7 @@ jobs:
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 'LCkvzm8qaL'
+          COMPONENT_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
           LOCK_FILE: 'bun.lock'
           AUGMENT: true
           UPLOAD: true
@@ -56,6 +59,7 @@ jobs:
         env:
           TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
           COMPONENT_ID: 'Vhc4zm8pdV'
+          COMPONENT_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
           LOCK_FILE: 'uv.lock'
           AUGMENT: true
           UPLOAD: true
