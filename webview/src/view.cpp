@@ -56,10 +56,11 @@ View::View(QWidget* parent) : QWidget(parent)
     // on-disk cache caused URL assets to linger stale for days across
     // viewer restarts because QtWebEngine kept serving the old response
     // from /data/.cache/... (forum 983 — most-viewed bug). Memory-only
-    // matches what users expect from a signage device: URL assets
-    // refresh on each loop. Drop any disk cache left behind by older
-    // builds so users upgrading from a stale-cache version see fresh
-    // content on their next load.
+    // means the cache is dropped on every viewer restart; within a
+    // single session QtWebEngine still honors the response's
+    // cache-control headers. Clear once at startup to drop any disk
+    // cache left behind by older builds so users upgrading from a
+    // stale-cache version see fresh content on their next load.
     QWebEngineProfile* profile = QWebEngineProfile::defaultProfile();
     profile->setHttpCacheType(QWebEngineProfile::MemoryHttpCache);
     profile->clearHttpCache();

@@ -14,7 +14,7 @@ import { AppDispatch } from '@/types'
 
 export const useFileUpload = () => {
   const dispatch = useDispatch<AppDispatch>()
-  const { formData } = useSelector(selectAssetModalState)
+  const { formData, isSubmitting } = useSelector(selectAssetModalState)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
   // The "Upload completed." message clears 5s after the last file lands.
@@ -55,6 +55,13 @@ export const useFileUpload = () => {
   }
 
   const handleFileUploads = async (files: File[]) => {
+    // The button/input are visually disabled via isSubmitting, but the
+    // drop zone listens unconditionally — bail here so a drag/drop
+    // during an in-flight batch can't kick off an overlapping upload
+    // run that clobbers status/progress/form-reset state.
+    if (isSubmitting) {
+      return
+    }
     if (clearStatusTimeoutRef.current) {
       clearTimeout(clearStatusTimeoutRef.current)
       clearStatusTimeoutRef.current = null
