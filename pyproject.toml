@@ -28,7 +28,7 @@ docker-image-builder = [
     "jinja2==3.1.6",
     "pygit2==1.19.1",
     "requests==2.33.1",
-    "python-on-whales==0.79.0",
+    "python-on-whales==0.81.0",
 ]
 server = [
     "cec==0.2.8",
