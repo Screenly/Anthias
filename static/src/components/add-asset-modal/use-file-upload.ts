@@ -133,15 +133,6 @@ export const useFileUpload = () => {
     } catch (error) {
       dispatch(setErrorMessage(`Upload failed: ${(error as Error).message}`))
       dispatch(setUploadProgress(0))
-
-      // Reset the progress bar width directly
-      const progressBar = document.querySelector(
-        '.progress .bar',
-      ) as HTMLElement | null
-      if (progressBar) {
-        progressBar.style.width = '0%'
-      }
-
       return false
     }
   }

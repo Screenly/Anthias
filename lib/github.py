@@ -162,17 +162,28 @@ def _get_ghcr_anonymous_token() -> str | None:
         resp.raise_for_status()
     except exceptions.RequestException as exc:
         logging.debug('Failed to fetch GHCR anonymous token: %s', exc)
+        _set_ghcr_error_backoff()
         return None
     try:
         token = resp.json().get('token')
     except ValueError:
+        _set_ghcr_error_backoff()
         return None
-    return token if isinstance(token, str) else None
+    if not isinstance(token, str):
+        _set_ghcr_error_backoff()
+        return None
+    return token
 
 
 def _get_ghcr_manifest_digest(tag: str, token: str) -> str | None:
     # HEAD: GHCR returns Docker-Content-Digest in the response headers, so
     # there's no reason to download the manifest body for the match check.
+    #
+    # 404 is a clean "tag missing" miss — for the per-commit tag this just
+    # means the build hasn't been published yet (or registry retention
+    # dropped it), so we don't trigger the backoff. Any other failure
+    # (network error, 5xx, 429) is transient and *does* trigger the
+    # backoff so is_up_to_date() doesn't keep retrying every page load.
     try:
         resp = requests_head(
             f'https://ghcr.io/v2/{GHCR_IMAGE_REPO}/manifests/{tag}',
@@ -184,8 +195,12 @@ def _get_ghcr_manifest_digest(tag: str, token: str) -> str | None:
         )
     except exceptions.RequestException as exc:
         logging.debug('Failed to fetch GHCR manifest for %s: %s', tag, exc)
+        _set_ghcr_error_backoff()
+        return None
+    if resp.status_code == 404:
         return None
     if resp.status_code != 200:
+        _set_ghcr_error_backoff()
         return None
     return resp.headers.get('Docker-Content-Digest')
 
@@ -218,27 +233,30 @@ def is_running_latest_published_image(
 
     # Backoff after a transient GHCR failure so is_up_to_date() (called on
     # most UI/API requests) doesn't hammer ghcr.io with token + manifest
-    # fetches on every page load while the registry is unreachable.
+    # fetches on every page load while the registry is unreachable. The
+    # helpers below set this themselves on non-404 failures, so all three
+    # call sites share the same throttling — including the per-commit
+    # HEAD, which previously fell through without any backoff and could
+    # be retried every request on a 5xx/429.
     if r.get('ghcr-api-error') is not None:
         return None
 
     token = _get_ghcr_anonymous_token()
     if not token:
-        _set_ghcr_error_backoff()
         return None
 
     latest_digest = _get_ghcr_manifest_digest(f'latest-{device_type}', token)
     if not latest_digest:
-        _set_ghcr_error_backoff()
         return None
 
     current_digest = _get_ghcr_manifest_digest(
         f'{short_hash}-{device_type}', token
     )
-    # Tag missing means this device's commit was never published (local
-    # build, ahead of CI, or registry retention dropped it). Treat as
-    # "no info available" so we don't toggle the banner on/off based on
-    # a missing tag.
+    # Tag missing (404) means this device's commit was never published
+    # (local build, ahead of CI, or registry retention dropped it). The
+    # helper distinguishes 404 from real failures and only the latter
+    # triggers the backoff, so falling through here on None is the
+    # expected "no info available" path.
     if not current_digest:
         return None
 
