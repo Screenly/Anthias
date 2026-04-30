@@ -6,6 +6,7 @@ import string
 
 from requests import exceptions
 from requests import get as requests_get
+from requests import head as requests_head
 from requests import post as requests_post
 
 from lib.device_helper import parse_cpu_info
@@ -165,8 +166,10 @@ def _get_ghcr_anonymous_token() -> str | None:
 
 
 def _get_ghcr_manifest_digest(tag: str, token: str) -> str | None:
+    # HEAD: GHCR returns Docker-Content-Digest in the response headers, so
+    # there's no reason to download the manifest body for the match check.
     try:
-        resp = requests_get(
+        resp = requests_head(
             f'https://ghcr.io/v2/{GHCR_IMAGE_REPO}/manifests/{tag}',
             headers={
                 'Authorization': f'Bearer {token}',
@@ -199,7 +202,12 @@ def is_running_latest_published_image(
     if not device_type or not short_hash:
         return None
 
-    cached = r.get('latest-published-image-match')
+    # Scope the cache key by device_type + short_hash so a verdict cached
+    # for a previous build can't be served for up to PUBLISHED_IMAGE_MATCH_TTL
+    # after an upgrade/downgrade. Without this scoping, the banner state can
+    # be wrong for ~10 minutes after a deploy.
+    cache_key = f'latest-published-image-match:{device_type}:{short_hash}'
+    cached = r.get(cache_key)
     if cached is not None:
         return cached == '1'
 
@@ -222,8 +230,8 @@ def is_running_latest_published_image(
         return None
 
     matches = latest_digest == current_digest
-    r.set('latest-published-image-match', '1' if matches else '0')
-    r.expire('latest-published-image-match', PUBLISHED_IMAGE_MATCH_TTL)
+    r.set(cache_key, '1' if matches else '0')
+    r.expire(cache_key, PUBLISHED_IMAGE_MATCH_TTL)
     return matches
 
 
