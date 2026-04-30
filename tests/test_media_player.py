@@ -54,13 +54,15 @@ class TestMPVMediaPlayer(unittest.TestCase):
         )
 
     @patch('viewer.media_player.subprocess.Popen')
-    def test_play_uses_drm_copy_hwdec_on_pi4_64(self, mock_popen: Any) -> None:
+    def test_play_uses_v4l2m2m_copy_hwdec_on_pi4_64(
+        self, mock_popen: Any
+    ) -> None:
         self.player.set_asset('file:///test/video.mp4', 30)
         with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
             self.player.play()
 
         args, _ = mock_popen.call_args
-        self.assertIn('--hwdec=drm-copy,auto-safe', args[0])
+        self.assertIn('--hwdec=v4l2m2m-copy', args[0])
 
     @patch('viewer.media_player.subprocess.Popen')
     def test_play_uses_local_audio_device_when_configured(
