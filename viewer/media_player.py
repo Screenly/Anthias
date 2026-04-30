@@ -57,14 +57,17 @@ class MPVMediaPlayer(MediaPlayer):
         # effect without a viewer restart, matching VLCMediaPlayer.
         settings.load()
 
-        # mpv's `auto-safe` whitelist is essentially {vaapi,vdpau,nvdec,
-        # videotoolbox,mediacodec,dxva2,d3d11va}-copy — none of which
-        # exist on a Pi 4. The Pi 4's H.264 block is exposed via
-        # DRM-PRIME / h264_v4l2m2m, which auto-safe excludes, so on
-        # pi4-64 mpv silently falls back to CPU decode and drops frames
-        # at 1080p. Prefer drm-copy there and fall back to auto-safe.
+        # The Pi 4's H.264/HEVC block is reached through libavcodec's
+        # `h264_v4l2m2m` (and siblings) wrapper decoders, exposed in mpv
+        # as `--hwdec=v4l2m2m-copy`. It is *not* a hwaccel attached to
+        # the standard `h264` decoder, so it is not in mpv's auto-safe
+        # whitelist (see vd_lavc.c hwdec_autoprobe_info) — `auto-safe`
+        # silently falls through to the software h264 decoder, which
+        # the Cortex-A72 can't keep up with at 1080p. Name it
+        # explicitly on pi4-64; mpv falls back to software on its own
+        # if v4l2m2m-copy fails to init.
         is_pi4_64 = os.environ.get('DEVICE_TYPE') == 'pi4-64'
-        hwdec = 'drm-copy,auto-safe' if is_pi4_64 else 'auto-safe'
+        hwdec = 'v4l2m2m-copy' if is_pi4_64 else 'auto-safe'
 
         self.process = subprocess.Popen(
             [
