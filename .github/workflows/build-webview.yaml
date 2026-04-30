@@ -38,13 +38,6 @@ jobs:
         id: buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
-      - name: Login to Docker Hub
-        if: success() && github.event_name != 'pull_request'
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Login to GitHub Container Registry
         if: success() && github.event_name != 'pull_request'
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
@@ -56,12 +49,14 @@ jobs:
       - name: Building container
         if: github.event_name != 'pull_request'
         env:
-          # Mirrors docker-build.yaml's registry-cache pattern. Cache lives
-          # at ghcr.io/screenly/anthias-webview-qt5-builder:buildcache and
-          # is reused across runs of this job. mode=max writes every layer
-          # (not just the final manifest) so apt + Qt cross-build state
-          # survives. image-manifest=true is what GHCR requires; legacy
-          # standalone-cache manifests are rejected on ghcr.io/screenly/*.
+          # Image and cache live at the same GHCR repo:
+          #   ghcr.io/screenly/anthias-webview-qt5-builder:latest      (image)
+          #   ghcr.io/screenly/anthias-webview-qt5-builder:buildcache  (cache)
+          # Replaces the old screenly/ose-qt-builder:latest on Docker Hub
+          # — same image, new home. Mirrors the anthias-* GHCR namespace
+          # so auth, public-flip, and registry-cache mode=max all share
+          # the same operational pattern as docker-build.yaml.
+          IMAGE_REF: ghcr.io/screenly/anthias-webview-qt5-builder:latest
           CACHE_REF: ghcr.io/screenly/anthias-webview-qt5-builder:buildcache
         run: |
           cd webview
@@ -74,7 +69,7 @@ jobs:
             --build-arg "GIT_HASH=${GIT_SHORT_HASH}" \
             --build-arg "GIT_SHORT_HASH=${GIT_SHORT_HASH}" \
             --build-arg "GIT_BRANCH=${GITHUB_REF_NAME}" \
-            -t screenly/ose-qt-builder:latest .
+            -t "${IMAGE_REF}" .
 
   compile-webview-part-1:
     name: Compile Webview (Pi 2-3 / Qt 5)
@@ -83,6 +78,12 @@ jobs:
       matrix:
         board: ['pi2', 'pi3']
     runs-on: ubuntu-24.04
+    # `packages: read` so the GHCR login below can pull the Qt 5 builder
+    # image. Read is the GITHUB_TOKEN default; declared explicitly to
+    # match the per-job permission scoping convention.
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -93,6 +94,14 @@ jobs:
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Login to GitHub Container Registry
+        if: success() && github.event_name != 'pull_request'
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache build layers
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
@@ -134,7 +143,7 @@ jobs:
             -v $(pwd):/webview:ro \
             -e TARGET=${{ matrix.board }} \
             -e WEBVIEW_VERSION="$WEBVIEW_VERSION" \
-            screenly/ose-qt-builder:latest
+            ghcr.io/screenly/anthias-webview-qt5-builder:latest
           docker exec -it qt-builder /webview/build_webview_with_qt5.sh
           docker rm -f qt-builder
 

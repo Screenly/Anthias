@@ -62,7 +62,6 @@ RUN apt-get update && \
         libgcrypt20-dev \
         libgles2-mesa-dev \
         libglib2.0-dev \
-        libgst-dev \
         libgstreamer-plugins-base1.0-dev \
         libgstreamer1.0-dev \
         libicu-dev \
@@ -75,16 +74,14 @@ RUN apt-get update && \
         libopus-dev \
         libpci-dev \
         libpng-dev \
-        libpng16-16 \
+        libpng16-16t64 \
         libpq-dev \
         libpulse-dev \
         libraspberrypi-bin \
         libraspberrypi0 \
         librsvg2-common \
         libsnappy-dev \
-        libsqlite0-dev \
         libsqlite3-dev \
-        libsrtp0-dev \
         libsrtp2-dev \
         libssl-dev \
         libswscale-dev \
@@ -187,7 +184,7 @@ RUN apt-get update && \
         libnss3-dev \
         libopus-dev \
         libpci-dev \
-        libpng16-16 \
+        libpng16-16t64 \
         libpulse-dev \
         libsecret-1-0 \
         libsnappy-dev \
