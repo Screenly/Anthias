@@ -212,6 +212,13 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         'libvpx-dev',
         'libwebp-dev',
         'libxkbcommon0',
+        # The prebuilt WebView binary dlopens libharfbuzz-subset.so.0
+        # (Chromium's font-subsetting path). It's pulled in
+        # transitively by qt6-webengine-dev on Qt6 boards but nothing
+        # on Qt5 brings it, so the lib was simply missing on pi2/pi3
+        # in production (pre-existing bug, not a regression here).
+        # 200 KB, easier to just install everywhere than gate on board.
+        'libharfbuzz-subset0',
         'python3-netifaces',
         'fonts-wqy-zenhei',
     ]
