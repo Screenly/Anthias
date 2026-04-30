@@ -64,12 +64,13 @@ fi
 mkdir -p "${SRC_DIR}" "${OUT_DIR}" "${CCACHE_DIR}"
 
 echo "==> Building ${IMAGE_TAG} (BuildKit layer cache will short-circuit if unchanged)"
+GIT_HASH=$(git -C "${REPO_ROOT}" rev-parse HEAD)
 GIT_SHORT_HASH=$(git -C "${REPO_ROOT}" rev-parse --short HEAD)
 GIT_BRANCH=$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD)
 docker buildx build \
     --load \
     --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-    --build-arg "GIT_HASH=${GIT_SHORT_HASH}" \
+    --build-arg "GIT_HASH=${GIT_HASH}" \
     --build-arg "GIT_SHORT_HASH=${GIT_SHORT_HASH}" \
     --build-arg "GIT_BRANCH=${GIT_BRANCH}" \
     -t "${IMAGE_TAG}" \

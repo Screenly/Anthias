@@ -68,12 +68,13 @@ jobs:
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             set_args+=( --cache-to "type=registry,ref=${CACHE_REF},mode=max,image-manifest=true" )
           fi
+          GIT_HASH=$(git rev-parse HEAD)
           GIT_SHORT_HASH=$(git rev-parse --short HEAD)
           docker buildx build \
             "${set_args[@]}" \
             --load \
             --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-            --build-arg "GIT_HASH=${GIT_SHORT_HASH}" \
+            --build-arg "GIT_HASH=${GIT_HASH}" \
             --build-arg "GIT_SHORT_HASH=${GIT_SHORT_HASH}" \
             --build-arg "GIT_BRANCH=${GITHUB_REF_NAME}" \
             -t webview-qt5-builder:latest \
