@@ -354,19 +354,30 @@ def url_fails(url: str) -> bool:
     If it is streaming
     """
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
+        # ffprobe ships with ffmpeg, which is already in the base
+        # image. Exit code 0 means libavformat could open the stream
+        # and read its header; non-zero means it could not. The
+        # 15s wall-clock cap mirrors the implicit cap mplayer gave us
+        # via `-frames 0` (it would tear down once it had probed the
+        # stream) and prevents a stuck RTSP handshake from hanging
+        # the API request that called us.
         try:
-            run_mplayer = sh.Command('mplayer')(
-                '-identify', '-frames', '0', '-nosound', url
+            sh.Command('ffprobe')(
+                '-v',
+                'quiet',
+                '-show_streams',
+                '-i',
+                url,
+                _timeout=15,
             )
         except sh.CommandNotFound:
             logging.warning(
-                'mplayer is not installed; skipping streaming URL probe'
+                'ffprobe is not installed; skipping streaming URL probe'
             )
             return False
-        for line in run_mplayer.split('\n'):
-            if 'Clip info:' in line:
-                return False
-        return True
+        except (sh.TimeoutException, sh.ErrorReturnCode):
+            return True
+        return False
 
     """
     Try HEAD and GET for URL availability check.

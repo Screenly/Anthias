@@ -62,27 +62,26 @@ def build_image(
                 fg='yellow',
             )
 
+    # Runtime-only base set. Compilers and *-dev headers live in the
+    # uv-builder stage (docker/uv-builder.j2); the runtime image gets
+    # the venv COPY'd in pre-built, so anything builder-only would just
+    # be dead weight here. `libcec6` is the runtime SONAME the cec
+    # Python wheel (built in uv-builder) dlopens at import time.
+    # `python3-gi` stays because pydbus does `from gi.repository import
+    # GLib, Gio` at import — viewer's `--system-site-packages` venv
+    # picks it up from the system site-packages.
     base_apt_dependencies = [
-        'build-essential',
         'cec-utils',
         'curl',
         'ffmpeg',
         'git',
-        'ifupdown',
-        'libcec-dev',
-        'libffi-dev',
-        'libssl-dev',
+        'libcec6',
         'lsb-release',
-        'mplayer',
-        'net-tools',
         'procps',
         'psmisc',
-        'python3-dev',
         'python3-gi',
-        'python3-pil',
         'python3-pip',
         'python3-setuptools',
-        'python3-simplejson',
         'python-is-python3',
         'sudo',
         'sqlite3',
