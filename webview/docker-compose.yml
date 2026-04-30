@@ -1,11 +1,20 @@
+# Each builder declares its own `platform:` so that `docker buildx bake`
+# honors it as the target platform — without this pin the bake builds
+# whatever the runner's native arch is, and `qmake6 && make` inside
+# build_webview.sh then produces a binary of the wrong architecture for
+# the ARM64 boards. The Build Webview workflow registers QEMU before
+# baking, so the non-native targets cross-build via emulation.
 services:
   builder-x86:
     profiles:
       - x86
     image: webview-builder-x86
+    platform: linux/amd64
     build:
       context: .
       dockerfile: docker/Dockerfile.x86
+      platforms:
+        - linux/amd64
     environment:
       - BOARD=x86
     tty: true
@@ -19,9 +28,12 @@ services:
     profiles:
       - pi5
     image: webview-builder-pi5
+    platform: linux/arm64
     build:
       context: .
       dockerfile: docker/Dockerfile.pi5
+      platforms:
+        - linux/arm64
     environment:
       - BOARD=pi5
     tty: true
@@ -36,9 +48,12 @@ services:
     profiles:
       - pi4-64
     image: webview-builder-pi4-64
+    platform: linux/arm64
     build:
       context: .
       dockerfile: docker/Dockerfile.pi4
+      platforms:
+        - linux/arm64
     environment:
       - BOARD=pi4-64
     tty: true
