@@ -32,7 +32,7 @@ docker-image-builder = [
 ]
 server = [
     "cec==0.2.8",
-    "celery==5.2.2",
+    "celery==5.6.3",
     "certifi==2025.10.5",
     "cffi==2.0.0",
     "channels==4.3.1",
