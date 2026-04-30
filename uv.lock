@@ -401,7 +401,7 @@ server = [
     { name = "uvicorn", extras = ["standard"], specifier = "==0.32.1" },
     { name = "wheel", specifier = "==0.46.2" },
     { name = "whitenoise", specifier = "==6.12.0" },
-    { name = "yt-dlp", specifier = "==2026.3.17" },
+    { name = "yt-dlp", specifier = ">=2026.3.17" },
 ]
 test = [
     { name = "cec", specifier = "==0.2.8" },
@@ -451,7 +451,7 @@ test = [
     { name = "uvicorn", extras = ["standard"], specifier = "==0.32.1" },
     { name = "wheel", specifier = "==0.46.2" },
     { name = "whitenoise", specifier = "==6.12.0" },
-    { name = "yt-dlp", specifier = "==2026.3.17" },
+    { name = "yt-dlp", specifier = ">=2026.3.17" },
 ]
 viewer = [
     { name = "cec", specifier = "==0.2.8" },
