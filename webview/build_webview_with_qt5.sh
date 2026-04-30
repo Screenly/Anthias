@@ -18,7 +18,7 @@ ANTHIAS_RELEASE_URL="https://github.com/Screenly/Anthias/releases"
 # Pre-built Qt 5 cross-compile toolchain published under this WebView
 # release tag. Pinned independently of the current WEBVIEW_VERSION since
 # the toolchain itself doesn't change between WebView releases.
-QT5_TOOLCHAIN_TAG="WebView-v0.3.5"
+QT5_TOOLCHAIN_TAG="WebView-v2026.04.1"
 
 # WEBVIEW_VERSION is the CalVer release identifier (YYYY.MM.PATCH).
 # CI extracts it from the WebView-v* tag; for local builds the caller
