@@ -84,26 +84,36 @@ def cleanup() -> None:
     # deleted while their file lingers (e.g. URI didn't match assetdir
     # exactly, or the file was renamed by an upgrade). Sweep anything
     # in assetdir that no live Asset row references, with the same 1h
-    # guard so a freshly-renamed file isn't removed before its row is
-    # written.
+    # guard so a freshly-renamed file (or in-flight yt-dlp sidecar:
+    # .part/.ytdl/.info.json) isn't removed before its row is written
+    # or its download finishes. Stale sidecars from abandoned downloads
+    # fall outside the freshness window and get swept like any other
+    # orphan.
     #
-    # Skip suffixes that belong to in-flight uploads (.tmp) and yt-dlp's
-    # active download bookkeeping (.part, .ytdl, .info.json) so a slow
-    # YouTube fetch isn't reaped mid-transfer.
-    skip_suffixes = ('.tmp', '.part', '.ytdl', '.info.json')
-    referenced = {
-        path.basename(uri)
-        for uri in Asset.objects.exclude(uri__isnull=True)
+    # Resolve URIs through realpath so legacy rows that still reference
+    # the pre-rebrand prefix (~/screenly_assets/..., now a symlink to
+    # ~/anthias_assets) are recognized as live and their files aren't
+    # mistaken for orphans on upgraded installs.
+    asset_dir_real = path.realpath(asset_dir)
+    referenced = set()
+    for uri in (
+        Asset.objects.exclude(uri__isnull=True)
         .exclude(uri__exact='')
         .values_list('uri', flat=True)
-        if uri and uri.startswith(asset_dir)
-    }
+    ):
+        if not uri:
+            continue
+        try:
+            if path.realpath(path.dirname(uri)) == asset_dir_real:
+                referenced.add(path.basename(uri))
+        except OSError:
+            continue
     cutoff = 60 * 60  # match the .tmp guard above
     now = time.time()
     for entry in os.scandir(asset_dir):
         if not entry.is_file():
             continue
-        if entry.name in referenced or entry.name.endswith(skip_suffixes):
+        if entry.name in referenced:
             continue
         try:
             if now - entry.stat().st_mtime < cutoff:

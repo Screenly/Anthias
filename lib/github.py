@@ -27,6 +27,12 @@ ERROR_BACKOFF_TTL = 60 * 5
 # Availability of the cached published-image-match check.
 PUBLISHED_IMAGE_MATCH_TTL = 10 * 60
 
+# Shorter TTL for the "unknown" verdict (per-commit tag missing on
+# GHCR). Devices on a not-yet-published commit shouldn't hammer GHCR
+# with token + 2xHEAD on every is_up_to_date() call, but we also want
+# to pick up a fresh publish quickly once CI finishes.
+PUBLISHED_IMAGE_UNKNOWN_TTL = 60
+
 GHCR_IMAGE_REPO = 'screenly/anthias-server'
 GHCR_MANIFEST_ACCEPT = ','.join(
     [
@@ -229,7 +235,14 @@ def is_running_latest_published_image(
     cache_key = f'latest-published-image-match:{device_type}:{short_hash}'
     cached = r.get(cache_key)
     if cached is not None:
-        return cached == '1'
+        if cached == '1':
+            return True
+        if cached == '0':
+            return False
+        # '?' (or anything else) is the cached "unknown" sentinel —
+        # the per-commit tag was 404 last time we asked. Fall through
+        # to None without re-fetching until the short TTL expires.
+        return None
 
     # Backoff after a transient GHCR failure so is_up_to_date() (called on
     # most UI/API requests) doesn't hammer ghcr.io with token + manifest
@@ -255,9 +268,13 @@ def is_running_latest_published_image(
     # Tag missing (404) means this device's commit was never published
     # (local build, ahead of CI, or registry retention dropped it). The
     # helper distinguishes 404 from real failures and only the latter
-    # triggers the backoff, so falling through here on None is the
-    # expected "no info available" path.
+    # triggers the backoff. Cache the "unknown" verdict with a short
+    # TTL so the next is_up_to_date() call doesn't redo token + 2xHEAD
+    # for a tag we just confirmed is missing — without overshooting so
+    # far that a fresh publish takes 10 min to surface.
     if not current_digest:
+        r.set(cache_key, '?')
+        r.expire(cache_key, PUBLISHED_IMAGE_UNKNOWN_TTL)
         return None
 
     matches = latest_digest == current_digest

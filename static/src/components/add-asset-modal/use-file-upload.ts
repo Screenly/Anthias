@@ -151,7 +151,17 @@ export const useFileUpload = () => {
 
       return true
     } catch (error) {
-      dispatch(setErrorMessage(`Upload failed: ${(error as Error).message}`))
+      // unwrap() throws the rejectWithValue payload — the upload/save
+      // thunks reject with a plain string, so casting to Error gives
+      // ".message = undefined" and the user sees "Upload failed:
+      // undefined". Handle string and Error shapes explicitly.
+      const message =
+        typeof error === 'string'
+          ? error
+          : error instanceof Error
+            ? error.message
+            : 'unknown error'
+      dispatch(setErrorMessage(`Upload failed: ${message}`))
       dispatch(setUploadProgress(0))
       return false
     }
