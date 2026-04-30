@@ -125,7 +125,7 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     # while the new WebView-v* tag is still being cut, since
     # Dockerfile.viewer.j2 will otherwise 404 when fetching the
     # not-yet-published artifact.
-    webview_version = os.environ.get('WEBVIEW_VERSION', '2026.04.0')
+    webview_version = os.environ.get('WEBVIEW_VERSION', '2026.04.1')
     webview_base_url = f'{releases_url}/WebView-v{webview_version}'
 
     is_qt6 = board in ['pi5', 'pi4-64', 'x86']
