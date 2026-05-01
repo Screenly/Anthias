@@ -1,6 +1,6 @@
 services:
   nginx:
-    image: nginx:stable-alpine
+    image: mirror.gcr.io/library/nginx:stable-alpine
     volumes:
       - .:/usr/share/nginx/html:ro
     ports:

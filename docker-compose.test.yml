@@ -45,7 +45,7 @@ services:
       - anthias-data:/data
 
   redis:
-    image: redis:alpine
+    image: mirror.gcr.io/library/redis:alpine
 
 volumes:
   anthias-data:

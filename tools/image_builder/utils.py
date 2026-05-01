@@ -14,31 +14,31 @@ def get_build_parameters(build_target: str) -> dict[str, Any]:
     if build_target == 'pi5':
         return {
             'board': 'pi5',
-            'base_image': 'debian',
+            'base_image': 'mirror.gcr.io/library/debian',
             'target_platform': 'linux/arm64/v8',
         }
     if build_target == 'pi4-64':
         return {
             'board': 'pi4-64',
-            'base_image': 'debian',
+            'base_image': 'mirror.gcr.io/library/debian',
             'target_platform': 'linux/arm64/v8',
         }
     if build_target == 'pi3':
         return {
             'board': 'pi3',
-            'base_image': 'debian',
+            'base_image': 'mirror.gcr.io/library/debian',
             'target_platform': 'linux/arm/v7',
         }
     if build_target == 'pi2':
         return {
             'board': 'pi2',
-            'base_image': 'debian',
+            'base_image': 'mirror.gcr.io/library/debian',
             'target_platform': 'linux/arm/v7',
         }
 
     return {
         'board': 'x86',
-        'base_image': 'debian',
+        'base_image': 'mirror.gcr.io/library/debian',
         'target_platform': 'linux/amd64',
     }
 
