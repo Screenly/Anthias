@@ -86,10 +86,6 @@ def test__if_git_branch_env_does_not_exist__is_up_to_date_should_return_true() -
         ),
     ],
 )
-@mock.patch(
-    'lib.github.get_git_branch',
-    mock.MagicMock(return_value='master'),
-)
 def test_is_up_to_date_should_return_value_depending_on_git_hashes(
     hashes: dict[str, Any], expected: bool
 ) -> None:

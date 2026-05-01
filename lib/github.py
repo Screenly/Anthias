@@ -1,18 +1,12 @@
-import json
 import logging
 import os
-import random
-import string
 
 from requests import exceptions
 from requests import get as requests_get
 from requests import head as requests_head
-from requests import post as requests_post
 
-from lib.device_helper import parse_cpu_info
-from lib.diagnostics import get_git_branch, get_git_hash, get_git_short_hash
-from lib.utils import connect_to_redis, is_balena_app, is_ci, is_docker
-from settings import settings
+from lib.diagnostics import get_git_hash, get_git_short_hash
+from lib.utils import connect_to_redis
 
 r = connect_to_redis()
 
@@ -42,10 +36,6 @@ GHCR_MANIFEST_ACCEPT = ','.join(
         'application/vnd.oci.image.index.v1+json',
     ]
 )
-
-# Google Analytics data
-ANALYTICS_MEASURE_ID = 'G-S3VX8HTPK7'
-ANALYTICS_API_SECRET = 'G8NcBpRIS9qBsOj3ODK8gw'
 
 DEFAULT_REQUESTS_TIMEOUT = 1  # in seconds
 
@@ -84,32 +74,33 @@ def remote_branch_available(branch: str | None) -> bool | None:
     if remote_branch_cache is not None:
         return bool(remote_branch_cache == '1')
 
+    # Use the direct branch endpoint (200 = exists, 404 = missing) so we
+    # don't silently fail once the repo passes 30 branches: GitHub's
+    # /branches list is alphabetically paginated and dropped `master` off
+    # the first page once auto-generated branches piled up.
     try:
         resp = requests_get(
-            'https://api.github.com/repos/screenly/anthias/branches',
-            headers={
-                'Accept': 'application/vnd.github.loki-preview+json',
-            },
+            f'https://api.github.com/repos/screenly/anthias/branches/{branch}',
             timeout=DEFAULT_REQUESTS_TIMEOUT,
         )
+    except exceptions.RequestException as exc:
+        handle_github_error(exc, 'remote branch availability')
+        return None
+
+    if resp.status_code == 404:
+        r.set('remote-branch-available', '0')
+        r.expire('remote-branch-available', REMOTE_BRANCH_STATUS_TTL)
+        return False
+
+    try:
         resp.raise_for_status()
     except exceptions.RequestException as exc:
         handle_github_error(exc, 'remote branch availability')
         return None
 
-    found = False
-    for github_branch in resp.json():
-        if github_branch['name'] == branch:
-            found = True
-            break
-
-    # Cache and return the result
-    if found:
-        r.set('remote-branch-available', '1')
-    else:
-        r.set('remote-branch-available', '0')
+    r.set('remote-branch-available', '1')
     r.expire('remote-branch-available', REMOTE_BRANCH_STATUS_TTL)
-    return found
+    return True
 
 
 def fetch_remote_hash() -> tuple[str | None, bool]:
@@ -301,56 +292,13 @@ def is_up_to_date() -> bool:
     Returns True if the player is up to date.
     """
 
-    latest_sha, retrieved_update = fetch_remote_hash()
-    git_branch = get_git_branch()
+    latest_sha, _ = fetch_remote_hash()
     git_hash = get_git_hash()
     git_short_hash = get_git_short_hash()
-    get_device_id = r.get('device_id')
 
     if not latest_sha:
         logging.error('Unable to get latest version from GitHub')
         return True
-
-    if not get_device_id:
-        device_id = ''.join(
-            random.choice(string.ascii_lowercase + string.digits)
-            for _ in range(15)
-        )
-        r.set('device_id', device_id)
-    else:
-        device_id = get_device_id
-
-    if retrieved_update:
-        if not settings['analytics_opt_out'] and not is_ci():
-            ga_base_url = 'https://www.google-analytics.com/mp/collect'
-            ga_query_params = f'measurement_id={ANALYTICS_MEASURE_ID}&api_secret={ANALYTICS_API_SECRET}'  # noqa: E501
-            ga_url = f'{ga_base_url}?{ga_query_params}'
-            payload = {
-                'client_id': device_id,
-                'events': [
-                    {
-                        'name': 'version',
-                        'params': {
-                            'Branch': str(git_branch),
-                            'Hash': str(git_short_hash),
-                            'NOOBS': os.path.isfile('/boot/os_config.json'),
-                            'Balena': is_balena_app(),
-                            'Docker': is_docker(),
-                            'Pi_Version': parse_cpu_info().get(
-                                'model', 'Unknown'
-                            ),
-                        },
-                    }
-                ],
-            }
-            headers = {'content-type': 'application/json'}
-
-            try:
-                requests_post(
-                    ga_url, data=json.dumps(payload), headers=headers
-                )
-            except exceptions.ConnectionError:
-                pass
 
     if latest_sha == git_hash:
         return True

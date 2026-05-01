@@ -16,6 +16,7 @@ django.setup()
 
 from anthias_app.models import Asset  # noqa: E402
 from lib import diagnostics  # noqa: E402
+from lib.telemetry import send_telemetry  # noqa: E402
 from lib.utils import (  # noqa: E402
     connect_to_redis,
     is_balena_app,
@@ -52,12 +53,20 @@ def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
     sender.add_periodic_task(
         60 * 5, get_display_power.s(), name='display_power'
     )
+    # Hourly tick; send_telemetry_task itself enforces a 24h cooldown
+    # via Redis, so each device emits at most one GA event per day.
+    sender.add_periodic_task(3600, send_telemetry_task.s(), name='telemetry')
 
 
 @celery.task(time_limit=30)
 def get_display_power() -> None:
     r.set('display_power', diagnostics.get_display_power())
     r.expire('display_power', 3600)
+
+
+@celery.task(time_limit=30)
+def send_telemetry_task() -> None:
+    send_telemetry()
 
 
 @celery.task
