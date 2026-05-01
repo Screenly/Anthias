@@ -3,12 +3,20 @@ import tempfile
 import time
 from collections.abc import Iterator
 from os import path
+from unittest import mock
 
 import pytest
 
+import celery_tasks as celery_tasks_module
 from anthias_app.models import Asset
 from celery_tasks import celery as celeryapp
-from celery_tasks import cleanup
+from celery_tasks import (
+    cleanup,
+    get_display_power,
+    reboot_anthias,
+    send_telemetry_task,
+    shutdown_anthias,
+)
 from settings import settings
 
 
@@ -132,3 +140,93 @@ def test_stale_ytdl_sidecar_is_removed(asset_dir: str) -> None:
     cleanup.apply()
     assert not path.exists(stale_part)
     assert not path.exists(stale_info)
+
+
+def test_cleanup_returns_when_assetdir_missing(tmp_path: str) -> None:
+    """cleanup() bails early if settings['assetdir'] doesn't exist."""
+    nonexistent = '/tmp/nonexistent-anthias-cleanup-dir-xyz'
+    if path.isdir(nonexistent):
+        os.rmdir(nonexistent)
+    original = settings['assetdir']
+    settings['assetdir'] = nonexistent
+    try:
+        with mock.patch.object(celery_tasks_module, 'sh') as mock_sh:
+            cleanup.apply()
+        # `sh.find` should never have been invoked on a missing dir.
+        mock_sh.find.assert_not_called()
+    finally:
+        settings['assetdir'] = original
+
+
+def test_get_display_power_writes_redis() -> None:
+    """The Celery task wraps diagnostics.get_display_power and persists."""
+    fake_redis = mock.MagicMock()
+    with (
+        mock.patch.object(celery_tasks_module, 'r', fake_redis),
+        mock.patch.object(
+            celery_tasks_module.diagnostics,
+            'get_display_power',
+            return_value=True,
+        ),
+    ):
+        get_display_power.apply()
+
+    fake_redis.set.assert_called_once_with('display_power', True)
+    fake_redis.expire.assert_called_once_with('display_power', 3600)
+
+
+def test_send_telemetry_task_dispatches() -> None:
+    """The hourly Celery task is a thin wrapper over lib.telemetry."""
+    with mock.patch.object(celery_tasks_module, 'send_telemetry') as mock_send:
+        send_telemetry_task.apply()
+    mock_send.assert_called_once_with()
+
+
+def test_reboot_anthias_publishes_hostcmd_off_balena() -> None:
+    fake_redis = mock.MagicMock()
+    with (
+        mock.patch.object(celery_tasks_module, 'r', fake_redis),
+        mock.patch.object(
+            celery_tasks_module, 'is_balena_app', return_value=False
+        ),
+    ):
+        reboot_anthias.apply()
+    fake_redis.publish.assert_called_once_with('hostcmd', 'reboot')
+
+
+def test_reboot_anthias_uses_balena_supervisor_on_balena() -> None:
+    with (
+        mock.patch.object(
+            celery_tasks_module, 'is_balena_app', return_value=True
+        ),
+        mock.patch.object(
+            celery_tasks_module, 'reboot_via_balena_supervisor'
+        ) as mock_reboot,
+    ):
+        reboot_anthias.apply()
+    mock_reboot.assert_called_once()
+
+
+def test_shutdown_anthias_publishes_hostcmd_off_balena() -> None:
+    fake_redis = mock.MagicMock()
+    with (
+        mock.patch.object(celery_tasks_module, 'r', fake_redis),
+        mock.patch.object(
+            celery_tasks_module, 'is_balena_app', return_value=False
+        ),
+    ):
+        shutdown_anthias.apply()
+    fake_redis.publish.assert_called_once_with('hostcmd', 'shutdown')
+
+
+def test_shutdown_anthias_uses_balena_supervisor_on_balena() -> None:
+    with (
+        mock.patch.object(
+            celery_tasks_module, 'is_balena_app', return_value=True
+        ),
+        mock.patch.object(
+            celery_tasks_module, 'shutdown_via_balena_supervisor'
+        ) as mock_shutdown,
+    ):
+        shutdown_anthias.apply()
+    mock_shutdown.assert_called_once()
