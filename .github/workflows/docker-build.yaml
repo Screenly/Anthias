@@ -245,6 +245,18 @@ jobs:
             echo "SHM_SIZE=256mb"
           } >> "$GITHUB_ENV"
 
+      - name: Get fleet slug
+        run: |
+          if [ "${{ matrix.board }}" == 'pi2' ]; then
+            echo "FLEET_SLUG=anthias-pi2" >> "$GITHUB_ENV"
+          elif [ "${{ matrix.board }}" == 'pi3' ]; then
+            echo "FLEET_SLUG=anthias-pi3" >> "$GITHUB_ENV"
+          elif [ "${{ matrix.board }}" == 'pi4-64' ]; then
+            echo "FLEET_SLUG=anthias-pi4" >> "$GITHUB_ENV"
+          elif [ "${{ matrix.board }}" == 'pi5' ]; then
+            echo "FLEET_SLUG=anthias-pi5" >> "$GITHUB_ENV"
+          fi
+
       - name: Prepare Balena file
         run: |
           # Generate a docker-compose file for Balena with the correct board
@@ -267,7 +279,7 @@ jobs:
         continue-on-error: true
         with:
           balena_token: ${{ secrets.BALENA_TOKEN }}
-          fleet: screenly_ose/anthias-${{ matrix.board }}
+          fleet: screenly_ose/${{ env.FLEET_SLUG }}
           source: balena-deploy
 
       - name: Sleep random sleep before retry
@@ -282,5 +294,5 @@ jobs:
         if: ${{ failure() && steps.build.conclusion == 'failure' }}
         with:
           balena_token: ${{ secrets.BALENA_TOKEN }}
-          fleet: screenly_ose/anthias-${{ matrix.board }}
+          fleet: screenly_ose/${{ env.FLEET_SLUG }}
           source: balena-deploy
