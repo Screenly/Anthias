@@ -70,6 +70,29 @@ uv run ruff check /path/to/file.py     # Lint specific file
 
 ### Python Tests
 
+#### Local development (no Docker, no Redis required)
+
+The unit suite runs on the host via uv. The root `conftest.py` sets
+`ENVIRONMENT=test`, force-mocks `lib.utils.connect_to_redis` for every
+test, and stubs `gi`/`pydbus` so viewer modules import without the
+distro PyGObject stack. The SQLite test DB lands at
+`<repo>/.anthias-test.db` (gitignored); CI overrides via
+`ANTHIAS_TEST_DB_PATH` in `docker-compose.test.yml`.
+
+```bash
+# One-time host prep: libcec headers (cec wheel build dep). Skip if
+# the cec system package is already installed.
+sudo apt-get install -y libcec-dev
+
+uv sync --group test
+uv run pytest -m "not integration"
+```
+
+Integration tests (`-m integration`) drive Selenium/Chrome and still
+require the Docker stack; use the recipe below.
+
+#### Docker-based runs (CI parity, integration suite)
+
 ```bash
 # Build and start test containers
 uv run python -m tools.image_builder --dockerfiles-only --disable-cache-mounts --service redis --service test

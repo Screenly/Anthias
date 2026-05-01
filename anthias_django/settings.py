@@ -151,14 +151,23 @@ CHANNEL_LAYERS = {
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+#
+# In test mode the DB path defaults to a repo-local file so the suite
+# runs without Docker / without writable `/data`. CI containers can
+# preserve their existing layout by exporting
+# `ANTHIAS_TEST_DB_PATH=/data/.anthias/test.db` (see
+# docker-compose.test.yml).
+if getenv('ENVIRONMENT') == 'test':
+    db_path = getenv('ANTHIAS_TEST_DB_PATH') or str(
+        BASE_DIR / '.anthias-test.db'
+    )
+else:
+    db_path = '/data/.anthias/anthias.db'
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': (
-            '/data/.anthias/test.db'
-            if getenv('ENVIRONMENT') == 'test'
-            else '/data/.anthias/anthias.db'
-        ),
+        'NAME': db_path,
     },
 }
 
