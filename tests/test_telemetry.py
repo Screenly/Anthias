@@ -31,7 +31,6 @@ class TestSendTelemetry(unittest.TestCase):
             patch.object(telemetry, 'r', self.fake_redis),
             patch.object(telemetry, 'is_ci', return_value=False),
             patch.object(telemetry, 'is_balena_app', return_value=False),
-            patch.object(telemetry, 'is_docker', return_value=True),
             patch.object(telemetry, 'get_git_branch', return_value='master'),
             patch.object(
                 telemetry, 'get_git_short_hash', return_value='abc1234'

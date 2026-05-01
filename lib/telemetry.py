@@ -11,7 +11,7 @@ from requests import post as requests_post
 from anthias_app.models import Asset
 from lib.device_helper import parse_cpu_info
 from lib.diagnostics import get_git_branch, get_git_short_hash
-from lib.utils import connect_to_redis, is_balena_app, is_ci, is_docker
+from lib.utils import connect_to_redis, is_balena_app, is_ci
 from settings import settings
 
 ANALYTICS_MEASURE_ID = 'G-S3VX8HTPK7'
@@ -79,7 +79,6 @@ def _build_payload() -> dict[str, object]:
         'device_type': os.getenv('DEVICE_TYPE', 'unknown'),
         'hardware_model': parse_cpu_info().get('model', 'unknown'),
         'is_balena': is_balena_app(),
-        'is_docker': is_docker(),
         'resolution': str(settings['resolution']),
         'audio_output': str(settings['audio_output']),
         'tls_enabled': bool(settings['use_ssl']),
