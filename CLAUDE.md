@@ -77,8 +77,8 @@ docker compose -f docker-compose.test.yml up -d --build
 
 # Prepare and run tests (integration and non-integration must be run separately)
 docker compose -f docker-compose.test.yml exec anthias-test bash ./bin/prepare_test_environment.sh -s
-docker compose -f docker-compose.test.yml exec anthias-test ./manage.py test --exclude-tag=integration
-docker compose -f docker-compose.test.yml exec anthias-test ./manage.py test --tag=integration
+docker compose -f docker-compose.test.yml exec anthias-test pytest -n auto -m "not integration"
+docker compose -f docker-compose.test.yml exec anthias-test pytest -m integration
 ```
 
 ### Django Admin

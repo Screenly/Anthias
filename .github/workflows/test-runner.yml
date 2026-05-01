@@ -62,7 +62,7 @@ jobs:
         if: inputs.test-type == 'python'
         run: |
           docker compose exec anthias-test \
-            ./manage.py test --noinput --parallel --exclude-tag=integration
+            pytest -n auto -m "not integration"
 
       - name: Setup integration test environment
         if: inputs.test-type == 'python'
@@ -78,7 +78,7 @@ jobs:
           max_attempts: 5
           command: |
             docker compose exec anthias-test \
-              ./manage.py test --noinput --tag=integration
+              pytest -m integration
 
       - name: Upload coverage reports to Codecov
         if: inputs.test-type == 'python'

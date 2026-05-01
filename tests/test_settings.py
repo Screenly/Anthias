@@ -4,7 +4,9 @@ import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
-from unittest import TestCase, mock
+from unittest import mock
+
+import pytest
 
 user_home_dir = os.getenv('HOME')
 
@@ -72,67 +74,70 @@ def getenv(k: str, default: Any = None) -> Any:
         return default
 
 
-class SettingsTest(TestCase):
-    def setUp(self) -> None:
-        if not os.path.exists(CONFIG_DIR):
-            os.mkdir(CONFIG_DIR)
-        self._getenv_patcher = mock.patch.object(
-            os, 'getenv', side_effect=getenv
-        )
-        self._getenv_patcher.start()
-
-    def tearDown(self) -> None:
+@pytest.fixture
+def settings_env() -> Iterator[None]:
+    if not os.path.exists(CONFIG_DIR):
+        os.mkdir(CONFIG_DIR)
+    getenv_patcher = mock.patch.object(os, 'getenv', side_effect=getenv)
+    getenv_patcher.start()
+    try:
+        yield
+    finally:
         shutil.rmtree(CONFIG_DIR)
-        self._getenv_patcher.stop()
+        getenv_patcher.stop()
 
-    def test_parse_settings(self) -> None:
-        with fake_settings(settings1) as (mod_settings, settings):
-            self.assertEqual(settings['player_name'], 'new player')
-            self.assertEqual(settings['show_splash'], False)
-            self.assertEqual(settings['shuffle_playlist'], True)
-            self.assertEqual(settings['debug_logging'], True)
-            self.assertEqual(settings['default_duration'], 45)
 
-    def test_default_settings(self) -> None:
-        with fake_settings(empty_settings) as (mod_settings, settings):
-            self.assertEqual(
-                settings['player_name'],
-                mod_settings.DEFAULTS['viewer']['player_name'],
-            )
-            self.assertEqual(
-                settings['show_splash'],
-                mod_settings.DEFAULTS['viewer']['show_splash'],
-            )
-            self.assertEqual(
-                settings['shuffle_playlist'],
-                mod_settings.DEFAULTS['viewer']['shuffle_playlist'],
-            )
-            self.assertEqual(
-                settings['debug_logging'],
-                mod_settings.DEFAULTS['viewer']['debug_logging'],
-            )
-            self.assertEqual(
-                settings['default_duration'],
-                mod_settings.DEFAULTS['viewer']['default_duration'],
-            )
+def test_parse_settings(settings_env: None) -> None:
+    with fake_settings(settings1) as (mod_settings, settings):
+        assert settings['player_name'] == 'new player'
+        assert settings['show_splash'] is False
+        assert settings['shuffle_playlist'] is True
+        assert settings['debug_logging'] is True
+        assert settings['default_duration'] == 45
 
-    def test_broken_settings_should_raise_value_error(self) -> None:
-        with self.assertRaises(ValueError):
-            with fake_settings(broken_settings) as (mod_settings, settings):
-                pass
 
-    def test_save_settings(self) -> None:
-        with fake_settings(settings1) as (mod_settings, settings):
-            settings.conf_file = CONFIG_DIR + '/new.conf'
-            settings['default_duration'] = 35
-            settings['verify_ssl'] = True
-            settings.save()
+def test_default_settings(settings_env: None) -> None:
+    with fake_settings(empty_settings) as (mod_settings, settings):
+        assert (
+            settings['player_name']
+            == mod_settings.DEFAULTS['viewer']['player_name']
+        )
+        assert (
+            settings['show_splash']
+            == mod_settings.DEFAULTS['viewer']['show_splash']
+        )
+        assert (
+            settings['shuffle_playlist']
+            == mod_settings.DEFAULTS['viewer']['shuffle_playlist']
+        )
+        assert (
+            settings['debug_logging']
+            == mod_settings.DEFAULTS['viewer']['debug_logging']
+        )
+        assert (
+            settings['default_duration']
+            == mod_settings.DEFAULTS['viewer']['default_duration']
+        )
 
-        with open(CONFIG_DIR + '/new.conf') as f:
-            saved = f.read()
-            with fake_settings(saved) as (mod_settings, settings):
-                # changes saved?
-                self.assertEqual(settings['default_duration'], 35)
-                self.assertEqual(settings['verify_ssl'], True)
-                # no out of thin air changes?
-                self.assertEqual(settings['audio_output'], 'hdmi')
+
+def test_broken_settings_should_raise_value_error(settings_env: None) -> None:
+    with pytest.raises(ValueError):
+        with fake_settings(broken_settings) as (mod_settings, settings):
+            pass
+
+
+def test_save_settings(settings_env: None) -> None:
+    with fake_settings(settings1) as (mod_settings, settings):
+        settings.conf_file = CONFIG_DIR + '/new.conf'
+        settings['default_duration'] = 35
+        settings['verify_ssl'] = True
+        settings.save()
+
+    with open(CONFIG_DIR + '/new.conf') as f:
+        saved = f.read()
+        with fake_settings(saved) as (mod_settings, settings):
+            # changes saved?
+            assert settings['default_duration'] == 35
+            assert settings['verify_ssl'] is True
+            # no out of thin air changes?
+            assert settings['audio_output'] == 'hdmi'
