@@ -29,6 +29,7 @@ Three concerns are handled here, in order:
    the factory once at conftest load time means the module-level ``r``
    bindings hold a fake, not a client pointed at host ``redis``.
 """
+
 import os
 import sys
 import types
