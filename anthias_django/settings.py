@@ -250,7 +250,18 @@ SPECTACULAR_SETTINGS = {
     ],
 }
 
-# `django-dbbackup` settings
-DBBACKUP_STORAGE = 'django.core.files.storage.FileSystemStorage'
-DBBACKUP_STORAGE_OPTIONS = {'location': '/data/.anthias/backups'}
+# django-dbbackup v5 moved storage config under Django 5's STORAGES
+# dict; defining STORAGES replaces the framework defaults entirely.
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+    'dbbackup': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'OPTIONS': {'location': '/data/.anthias/backups'},
+    },
+}
 DBBACKUP_HOSTNAME = 'anthias'
