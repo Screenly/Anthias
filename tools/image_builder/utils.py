@@ -141,7 +141,7 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     qt_major_version = qt_version.split('.')[0]
 
     # Viewer-only apt deps. The shared runtime set (cec-utils, curl,
-    # ffmpeg, git, libcec6, procps, psmisc, python-is-python3,
+    # ffmpeg, git, libcec7, procps, psmisc, python-is-python3,
     # python3-gi, python3-pip, python3-setuptools, sqlite3, sudo,
     # plus libraspberrypi0 on 32-bit Pi boards) is installed by
     # Dockerfile.base.j2 in a layer that server (and test) also use,

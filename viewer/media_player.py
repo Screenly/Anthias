@@ -3,8 +3,6 @@ import os
 import subprocess
 from typing import ClassVar
 
-import vlc
-
 from lib.device_helper import get_device_type
 from settings import settings
 
@@ -101,6 +99,12 @@ class VLCMediaPlayer(MediaPlayer):
     def __init__(self) -> None:
         MediaPlayer.__init__(self)
 
+        # Imported here so Qt6 boards (which route to MPVMediaPlayer
+        # via MediaPlayerProxy) don't need libvlc available just to
+        # load this module.
+        import vlc
+
+        self._vlc = vlc
         options = [f'--alsa-audio-device={get_alsa_audio_device()}']
         self.instance = vlc.Instance(options)
         self.player = self.instance.media_player_new()
@@ -125,9 +129,9 @@ class VLCMediaPlayer(MediaPlayer):
 
     def is_playing(self) -> bool:
         return self.player.get_state() in [
-            vlc.State.Playing,
-            vlc.State.Buffering,
-            vlc.State.Opening,
+            self._vlc.State.Playing,
+            self._vlc.State.Buffering,
+            self._vlc.State.Opening,
         ]
 
 
