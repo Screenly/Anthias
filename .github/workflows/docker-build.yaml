@@ -163,19 +163,24 @@ jobs:
   # call is wrapped in 5-attempt exponential backoff so a transient
   # 429 / 5xx doesn't strand latest-* half-mirrored.
   #
-  # Two registries: `ghcr.io/screenly/anthias-*` is the new primary
-  # (rate-limit-friendly, free unlimited storage for public packages,
-  # auth via the workflow-issued GITHUB_TOKEN with `packages: write`).
-  # `screenly/anthias-*` on Docker Hub stays in the loop as a parallel
-  # mirror during the migration window so devices that haven't yet
-  # picked up the compose-template flip keep getting `latest-*`
-  # advanced. GHCR is mirrored first so the canonical source is up to
-  # date even if Docker Hub flakes on a later retag. The legacy
-  # `screenly/srly-ose-*` namespace was dropped: every device that
-  # has run `upgrade_containers.sh` since 2023-02 (b9998438) is on
-  # `screenly/anthias-*` already, so the parallel `srly-ose-*` push
-  # was buying no real back-compat in exchange for half the manifest
-  # GETs (one of two reasons d568602's publish hit Docker Hub's 429).
+  # Two registries, two steps: `ghcr.io/screenly/anthias-*` is the new
+  # primary (rate-limit-friendly, free unlimited storage for public
+  # packages, auth via the workflow-issued GITHUB_TOKEN with
+  # `packages: write`) and is the hard-fail step. `screenly/anthias-*`
+  # on Docker Hub stays as a parallel mirror during the migration
+  # window so devices that haven't yet picked up the compose-template
+  # flip keep getting `latest-*` advanced — but it runs in its own
+  # step with `continue-on-error: true` because Docker Hub's
+  # unauthenticated/free-tier pull rate limit periodically 429s the
+  # manifest GETs that `imagetools create` issues, and GHCR being
+  # current is what actually matters for new devices. GHCR runs first
+  # so the canonical primary is up to date even if Docker Hub flakes.
+  # The legacy `screenly/srly-ose-*` namespace was dropped: every
+  # device that has run `upgrade_containers.sh` since 2023-02
+  # (b9998438) is on `screenly/anthias-*` already, so the parallel
+  # `srly-ose-*` push was buying no real back-compat in exchange for
+  # half the manifest GETs (one of two reasons d568602's publish hit
+  # Docker Hub's 429).
   publish-latest:
     needs: buildx
     if: github.event_name == 'push'
@@ -204,62 +209,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Mirror short-hash tags to latest-<board>
-        run: |
-          set -euo pipefail
-          GIT_SHORT_HASH=$(git rev-parse --short=7 HEAD)
-          BOARDS=(pi2 pi3 pi4-64 pi5 x86)
-          SERVICES=(server redis viewer)
-          # GHCR first so the canonical primary is current even if the
-          # Docker Hub mirror later in the loop flakes.
-          NAMESPACES=(ghcr.io/screenly/anthias screenly/anthias)
+      - name: Mirror short-hash tags to latest-<board> (GHCR)
+        env:
+          NAMESPACE: ghcr.io/screenly/anthias
+        run: bash .github/workflows/scripts/mirror-latest-tags.sh
 
-          # Wrap a registry op in 5 attempts of exponential backoff
-          # (2s, 4s, 8s, 16s) so a transient 429 / 5xx doesn't strand
-          # `latest-*` half-mirrored. Both `imagetools inspect` and
-          # `imagetools create` are idempotent: inspect is read-only,
-          # and create overwrites the tag with the same manifest
-          # digest on retry.
-          retry() {
-            local attempt
-            for attempt in 1 2 3 4 5; do
-              if "$@"; then
-                return 0
-              fi
-              if [ "${attempt}" -lt 5 ]; then
-                local delay=$((2 ** attempt))
-                echo "Attempt ${attempt} failed; retrying in ${delay}s..." >&2
-                sleep "${delay}"
-              fi
-            done
-            echo "Giving up after 5 attempts: $*" >&2
-            return 1
-          }
-
-          echo "::group::Preflight: verify every <short-hash>-<board> source tag exists"
-          for namespace in "${NAMESPACES[@]}"; do
-            for service in "${SERVICES[@]}"; do
-              for board in "${BOARDS[@]}"; do
-                src="${namespace}-${service}:${GIT_SHORT_HASH}-${board}"
-                echo "Verifying ${src}"
-                retry docker buildx imagetools inspect --raw "${src}" >/dev/null
-              done
-            done
-          done
-          echo "::endgroup::"
-
-          echo "::group::Mirror <short-hash>-<board> -> latest-<board>"
-          for namespace in "${NAMESPACES[@]}"; do
-            for service in "${SERVICES[@]}"; do
-              for board in "${BOARDS[@]}"; do
-                src="${namespace}-${service}:${GIT_SHORT_HASH}-${board}"
-                dst="${namespace}-${service}:latest-${board}"
-                echo "Mirroring ${src} -> ${dst}"
-                retry docker buildx imagetools create -t "${dst}" "${src}"
-              done
-            done
-          done
-          echo "::endgroup::"
+      # Soft-fail: Docker Hub's free-tier pull rate limit regularly 429s
+      # the manifest GETs that `imagetools create` issues, and GHCR
+      # (mirrored above) is the canonical primary — failing the whole
+      # job because the mirror flaked would needlessly red-X otherwise
+      # green pushes. The step still runs to completion so partial
+      # mirrors get as far as they can.
+      - name: Mirror short-hash tags to latest-<board> (Docker Hub)
+        continue-on-error: true
+        env:
+          NAMESPACE: screenly/anthias
+        run: bash .github/workflows/scripts/mirror-latest-tags.sh
 
   balena:
     if: ${{ github.ref == 'refs/heads/master' }}
