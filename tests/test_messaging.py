@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 from unittest import mock
 from unittest.mock import MagicMock
 
@@ -37,10 +37,10 @@ def test_viewer_publisher_send_publishes_correct_payload() -> None:
 
 
 def test_viewer_publisher_singleton_rejects_second_init() -> None:
-    sentinel = object()
+    sentinel = cast(ViewerPublisher, object())
     original = ViewerPublisher.INSTANCE
     try:
-        ViewerPublisher.INSTANCE = sentinel  # type: ignore[assignment]
+        ViewerPublisher.INSTANCE = sentinel
         with pytest.raises(ValueError, match='instance already exists'):
             ViewerPublisher()
     finally:
@@ -149,10 +149,10 @@ def test_reply_collector_non_blocking_empty_raises_timeout() -> None:
 
 
 def test_reply_collector_singleton_rejects_second_init() -> None:
-    sentinel = object()
+    sentinel = cast(ReplyCollector, object())
     original = ReplyCollector.INSTANCE
     try:
-        ReplyCollector.INSTANCE = sentinel  # type: ignore[assignment]
+        ReplyCollector.INSTANCE = sentinel
         with pytest.raises(ValueError, match='instance already exists'):
             ReplyCollector()
     finally:

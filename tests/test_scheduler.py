@@ -96,7 +96,7 @@ def _create_assets(assets: list[dict[str, Any]]) -> None:
 @pytest.mark.django_db
 def test_generate_asset_list_assets_should_return_list_sorted_by_play_order(
     restore_shuffle_setting: None,
-) -> None:  # noqa: E501
+) -> None:
     _create_assets([ASSET_X, ASSET_Y])
     assets, _ = generate_asset_list()
     assert assets == [ASSET_Y, ASSET_X]

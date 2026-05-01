@@ -67,7 +67,7 @@ def _delete_asset(client: APIClient, asset_id: str, version: str) -> Any:
 @pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
 def test_get_assets_when_first_time_setup_should_initially_return_empty(
     api_client: APIClient, version: str
-) -> None:  # noqa: E501
+) -> None:
     asset_list_url = reverse(f'api:asset_list_{version}')
     response = api_client.get(asset_list_url)
     assets = response.data

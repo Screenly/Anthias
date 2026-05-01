@@ -18,9 +18,7 @@ logging.disable(logging.CRITICAL)
     'lib.github.fetch_remote_hash',
     mock.MagicMock(return_value=(None, False)),
 )
-def test__if_git_branch_env_does_not_exist__is_up_to_date_should_return_true() -> (
-    None
-):  # noqa: E501
+def test_returns_true_when_git_branch_env_missing() -> None:
     assert is_up_to_date() is True
 
 

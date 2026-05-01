@@ -30,6 +30,7 @@ Three concerns are handled here, in order:
    bindings hold a fake, not a client pointed at host ``redis``.
 """
 
+import importlib.util
 import os
 import sys
 import types
@@ -58,36 +59,30 @@ def _install_dbus_stubs() -> None:
     PyGObject. Skipped if ``gi`` is genuinely importable — we'd rather
     use the real binding when present.
     """
-    try:  # noqa: SIM105
-        import gi  # type: ignore[import-not-found]  # noqa: F401
-
+    if importlib.util.find_spec('gi') is not None:
         return
-    except ImportError:
-        pass
 
     gi_module = types.ModuleType('gi')
     gi_repository = types.ModuleType('gi.repository')
     # MagicMock for the GLib/Gio surface — pydbus only touches it when
     # a bus is actually constructed (e.g. ``pydbus.SessionBus()`` inside
     # a function body). Tests that hit those paths mock them.
-    gi_repository.Gio = MagicMock(name='gi.repository.Gio')  # type: ignore[attr-defined]
-    gi_repository.GLib = MagicMock(name='gi.repository.GLib')  # type: ignore[attr-defined]
-    gi_module.repository = gi_repository  # type: ignore[attr-defined]
+    setattr(gi_repository, 'Gio', MagicMock(name='gi.repository.Gio'))
+    setattr(gi_repository, 'GLib', MagicMock(name='gi.repository.GLib'))
+    setattr(gi_module, 'repository', gi_repository)
     sys.modules['gi'] = gi_module
     sys.modules['gi.repository'] = gi_repository
 
-    # pydbus's __init__ imports gi.repository at module-load time. With
-    # the gi stub in place, the real pydbus module would still load —
-    # but only on hosts where it's pip-installed. Provide a stub
-    # anyway so the import works regardless; SessionBus() / SystemBus()
-    # are MagicMocks that won't be exercised by the unit suite.
-    try:
-        import pydbus  # noqa: F401
-    except ImportError:
-        pydbus_module = types.ModuleType('pydbus')
-        pydbus_module.SessionBus = MagicMock(name='pydbus.SessionBus')  # type: ignore[attr-defined]
-        pydbus_module.SystemBus = MagicMock(name='pydbus.SystemBus')  # type: ignore[attr-defined]
-        sys.modules['pydbus'] = pydbus_module
+    # pydbus's __init__ does ``from gi.repository import GLib, GObject``,
+    # which our minimal gi stub doesn't (and shouldn't) satisfy. Since we
+    # only get here when gi is missing, real pydbus can't load either —
+    # always stub it. SessionBus()/SystemBus() are MagicMocks that won't
+    # be exercised by the unit suite (integration tests opt back into the
+    # real binding by overriding these fixtures).
+    pydbus_module = types.ModuleType('pydbus')
+    setattr(pydbus_module, 'SessionBus', MagicMock(name='pydbus.SessionBus'))
+    setattr(pydbus_module, 'SystemBus', MagicMock(name='pydbus.SystemBus'))
+    sys.modules['pydbus'] = pydbus_module
 
 
 _install_dbus_stubs()

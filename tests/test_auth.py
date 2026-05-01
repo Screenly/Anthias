@@ -3,6 +3,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from django.contrib.sessions.backends.signed_cookies import SessionStore
 from django.test import RequestFactory
 
 from lib import auth
@@ -105,13 +106,13 @@ def test_basic_auth_authorization_header(
     # Correct credentials.
     creds = b64encode(b'alice:s3cret').decode('ascii')
     request = factory.get('/', HTTP_AUTHORIZATION=f'Basic {creds}')
-    request.session = {}  # type: ignore[assignment]
+    request.session = SessionStore()
     assert basic_auth.is_authenticated(request) is True
 
     # Wrong password.
     creds_bad = b64encode(b'alice:wrong').decode('ascii')
     request = factory.get('/', HTTP_AUTHORIZATION=f'Basic {creds_bad}')
-    request.session = {}  # type: ignore[assignment]
+    request.session = SessionStore()
     assert basic_auth.is_authenticated(request) is False
 
 
@@ -124,7 +125,7 @@ def test_basic_auth_password_with_colon(
     factory = RequestFactory()
     creds = b64encode(b'alice:pa:ss:word').decode('ascii')
     request = factory.get('/', HTTP_AUTHORIZATION=f'Basic {creds}')
-    request.session = {}  # type: ignore[assignment]
+    request.session = SessionStore()
     assert basic_auth.is_authenticated(request) is True
 
 
@@ -134,7 +135,7 @@ def test_basic_auth_malformed_authorization_header_returns_false(
     factory = RequestFactory()
     # Not valid base64.
     request = factory.get('/', HTTP_AUTHORIZATION='Basic !!!notbase64!!!')
-    request.session = {}  # type: ignore[assignment]
+    request.session = SessionStore()
     assert basic_auth.is_authenticated(request) is False
 
 
@@ -145,21 +146,21 @@ def test_basic_auth_authorization_header_no_colon(
     # base64 of 'alice' (no colon at all → unauthenticated)
     creds = b64encode(b'alice').decode('ascii')
     request = factory.get('/', HTTP_AUTHORIZATION=f'Basic {creds}')
-    request.session = {}  # type: ignore[assignment]
+    request.session = SessionStore()
     assert basic_auth.is_authenticated(request) is False
 
 
 def test_basic_auth_unsupported_scheme(basic_auth: BasicAuth) -> None:
     factory = RequestFactory()
     request = factory.get('/', HTTP_AUTHORIZATION='Bearer abcdef')
-    request.session = {}  # type: ignore[assignment]
+    request.session = SessionStore()
     assert basic_auth.is_authenticated(request) is False
 
 
 def test_basic_auth_authorization_header_short(basic_auth: BasicAuth) -> None:
     factory = RequestFactory()
     request = factory.get('/', HTTP_AUTHORIZATION='Basic')
-    request.session = {}  # type: ignore[assignment]
+    request.session = SessionStore()
     # Single token doesn't split into [type, data] → falls through.
     assert basic_auth.is_authenticated(request) is False
 
@@ -171,17 +172,16 @@ def test_basic_auth_session_login(
     basic_auth_settings['password'] = hash_password('s3cret')
     factory = RequestFactory()
     request = factory.get('/')
-    request.session = {  # type: ignore[assignment]
-        'auth_username': 'alice',
-        'auth_password': 's3cret',
-    }
+    request.session = SessionStore()
+    request.session['auth_username'] = 'alice'
+    request.session['auth_password'] = 's3cret'
     assert basic_auth.is_authenticated(request) is True
 
 
 def test_basic_auth_no_credentials(basic_auth: BasicAuth) -> None:
     factory = RequestFactory()
     request = factory.get('/')
-    request.session = {}  # type: ignore[assignment]
+    request.session = SessionStore()
     assert basic_auth.is_authenticated(request) is False
 
 
@@ -359,7 +359,7 @@ def test_authenticate_if_needed_initiates_when_not_authenticated() -> None:
     backend = BasicAuth(settings)
     factory = RequestFactory()
     request = factory.get('/')
-    request.session = {}  # type: ignore[assignment]
+    request.session = SessionStore()
     response = backend.authenticate_if_needed(request)
     assert response is not None
     assert response.status_code == 302
