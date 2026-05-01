@@ -39,6 +39,9 @@ RUN curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_ve
     rm "qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz"
 {% endif %}
 
+# Cache bust 2026-05-01: re-fetch corrected pi4-64/pi5 webview tarballs
+# (per b9509609); revert this once the next viewer image rebuild ships.
+RUN : "webview-cache-bust-2026-05-01"
 RUN curl "{{webview_base_url}}/webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz" \
         -sL -o "/tmp/webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz" && \
     curl "{{webview_base_url}}/webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz.sha256" \
