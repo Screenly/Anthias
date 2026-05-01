@@ -78,7 +78,7 @@ def _get_asset_counts() -> dict[str, int]:
     return result
 
 
-def _build_payload() -> dict:
+def _build_payload() -> dict[str, object]:
     # GA4 conventions: lowercase snake_case event + param names, boolean
     # values for `is_*` flags. Names are device-neutral now that x86 is
     # a first-class device_type — `device_type` is the board variant
