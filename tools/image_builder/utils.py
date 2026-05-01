@@ -140,13 +140,27 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
 
     qt_major_version = qt_version.split('.')[0]
 
-    # Viewer-only apt deps. The shared set (build-essential, curl, ffmpeg,
-    # git, libcec-dev, libffi-dev, libssl-dev, net-tools, procps,
-    # psmisc, python-is-python3, python3-dev, python3-gi, python3-pip,
-    # python3-setuptools, sqlite3, sudo, plus libraspberrypi0 on 32-bit
-    # Pi boards) is installed by Dockerfile.base.j2 in a layer that
-    # server (and test) also use, so it dedups across images. Anything
-    # listed here is unique to the viewer image.
+    # Viewer-only apt deps. The shared runtime set (cec-utils, curl,
+    # ffmpeg, git, libcec7, procps, psmisc, python-is-python3,
+    # python3-gi, python3-pip, python3-setuptools, sqlite3, sudo,
+    # plus libraspberrypi0 on 32-bit Pi boards) is installed by
+    # Dockerfile.base.j2 in a layer that server (and test) also use,
+    # so it dedups across images. Anything listed here is unique to
+    # the viewer image.
+    #
+    # Most of the long *-dev list this file used to carry was needed
+    # to *build* Qt + the WebView. Now that both ship as prebuilt
+    # tarballs (downloaded in Dockerfile.viewer.j2) the runtime image
+    # only needs the .so files those binaries link against — i.e. the
+    # non -dev runtime libs. The list below is the still-being-trimmed
+    # remainder; expect more to fall off as ldd-driven cleanup
+    # continues.
+    #
+    # X11/XCB packages are intentionally absent: the WebView is
+    # configured with `-no-xcb -no-xcb-xlib -qpa eglfs` (see
+    # webview/build_qt{5,6}.sh) and runs under QT_QPA_PLATFORM=linuxfb
+    # straight on KMS/DRM, so Qt has no X code path to dlopen. mpv
+    # uses --vo=drm. Same reason there's nothing wayland-related here.
     viewer_extra_apt_dependencies = [
         'ca-certificates',
         'dbus-daemon',
@@ -197,42 +211,23 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         'libudev-dev',
         'libvpx-dev',
         'libwebp-dev',
-        'libx11-dev',
-        'libx11-xcb-dev',
-        'libx11-xcb1',
-        'libxcb-glx0-dev',
-        'libxcb-icccm4',
-        'libxcb-icccm4-dev',
-        'libxcb-image0',
-        'libxcb-image0-dev',
-        'libxcb-keysyms1',
-        'libxcb-keysyms1-dev',
-        'libxcb-randr0-dev',
-        'libxcb-render-util0',
-        'libxcb-render-util0-dev',
-        'libxcb-shape0-dev',
-        'libxcb-shm0',
-        'libxcb-shm0-dev',
-        'libxcb-sync-dev',
-        'libxcb-sync1',
-        'libxcb-xfixes0-dev',
-        'libxcb-xinerama0',
-        'libxcb-xinerama0-dev',
-        'libxcb1',
-        'libxcb1-dev',
-        'libxext-dev',
-        'libxi-dev',
-        'libxkbcommon-dev',
-        'libxrender-dev',
-        'libxslt1-dev',
-        'libxss-dev',
-        'libxtst-dev',
+        'libxkbcommon0',
+        # The prebuilt WebView binary dlopens libharfbuzz-subset.so.0
+        # (Chromium's font-subsetting path). It's pulled in
+        # transitively by qt6-webengine-dev on Qt6 boards but nothing
+        # on Qt5 brings it, so the lib was simply missing on pi2/pi3
+        # in production (pre-existing bug, not a regression here).
+        # 200 KB, easier to just install everywhere than gate on board.
+        'libharfbuzz-subset0',
         'python3-netifaces',
         'fonts-wqy-zenhei',
-        'vlc',
     ]
 
     if is_qt6:
+        # pi4-64/pi5/x86 use mpv (--vo=drm) for video. VLC is
+        # deliberately *not* installed: MediaPlayerProxy in
+        # viewer/media_player.py routes Qt6 boards to MPVMediaPlayer,
+        # so VLC would just be ~80–100 MB of dead weight here.
         viewer_extra_apt_dependencies.extend(
             [
                 'mpv',
@@ -249,11 +244,13 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         # libgst-dev / libsqlite0-dev / libsrtp0-dev were dropped in
         # trixie — libsqlite3-dev and libsrtp2-dev are already in the
         # main viewer apt list above; libgstreamer1.0-dev is Qt 5-only
-        # and is added in the extend() below.
+        # and is added in the extend() below. VLC is Qt5-only because
+        # MediaPlayerProxy only routes pi2/pi3 to VLCMediaPlayer.
         viewer_extra_apt_dependencies.extend(
             [
                 'libgstreamer1.0-dev',
                 'qt5-image-formats-plugins',
+                'vlc',
             ]
         )
 
