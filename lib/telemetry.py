@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-import random
+import secrets
 import string
 from collections import Counter
 
@@ -37,7 +37,7 @@ def _get_device_id() -> str:
     if cached:
         return cached
     device_id = ''.join(
-        random.choice(string.ascii_lowercase + string.digits)
+        secrets.choice(string.ascii_lowercase + string.digits)
         for _ in range(DEVICE_ID_LENGTH)
     )
     r.set(DEVICE_ID_KEY, device_id)
