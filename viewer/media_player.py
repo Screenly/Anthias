@@ -55,24 +55,25 @@ class MPVMediaPlayer(MediaPlayer):
         # effect without a viewer restart, matching VLCMediaPlayer.
         settings.load()
 
-        # The Pi 4's H.264/HEVC block is reached through libavcodec's
-        # `h264_v4l2m2m` (and siblings) wrapper decoders, exposed in mpv
-        # as `--hwdec=v4l2m2m-copy`. It is *not* a hwaccel attached to
-        # the standard `h264` decoder, so it is not in mpv's auto-safe
-        # whitelist (see vd_lavc.c hwdec_autoprobe_info) — `auto-safe`
-        # silently falls through to the software h264 decoder, which
-        # the Cortex-A72 can't keep up with at 1080p. Name it
-        # explicitly on pi4-64; mpv falls back to software on its own
-        # if v4l2m2m-copy fails to init.
-        is_pi4_64 = os.environ.get('DEVICE_TYPE') == 'pi4-64'
-        hwdec = 'v4l2m2m-copy' if is_pi4_64 else 'auto-safe'
+        # Pin to 1080p on Pi4-64/Pi5: mpv's default --drm-mode=preferred
+        # reads the connector's EDID-preferred mode (4K on most modern
+        # TVs) and runs CPU zimg upscale, which drops below real-time
+        # on the A72. Software decode of 1080p H.264 fits 4 cores fine.
+        device_type = os.environ.get('DEVICE_TYPE', '')
+        extra_args: list[str] = []
+        if device_type in ('pi4-64', 'pi5'):
+            extra_args = [
+                '--drm-mode=1920x1080@60',
+                '--vd-lavc-threads=4',
+            ]
 
         self.process = subprocess.Popen(
             [
                 'mpv',
                 '--no-terminal',
                 '--vo=drm',
-                f'--hwdec={hwdec}',
+                '--hwdec=auto-safe',
+                *extra_args,
                 f'--audio-device=alsa/{get_alsa_audio_device()}',
                 '--',
                 self.uri,

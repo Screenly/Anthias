@@ -54,15 +54,36 @@ class TestMPVMediaPlayer(unittest.TestCase):
         )
 
     @patch('viewer.media_player.subprocess.Popen')
-    def test_play_uses_v4l2m2m_copy_hwdec_on_pi4_64(
-        self, mock_popen: Any
-    ) -> None:
+    def test_play_pins_1080p_mode_on_pi4_64(self, mock_popen: Any) -> None:
         self.player.set_asset('file:///test/video.mp4', 30)
         with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
             self.player.play()
 
         args, _ = mock_popen.call_args
-        self.assertIn('--hwdec=v4l2m2m-copy', args[0])
+        self.assertIn('--drm-mode=1920x1080@60', args[0])
+        self.assertIn('--vd-lavc-threads=4', args[0])
+        self.assertIn('--hwdec=auto-safe', args[0])
+        self.assertNotIn('--hwdec=v4l2m2m-copy', args[0])
+
+    @patch('viewer.media_player.subprocess.Popen')
+    def test_play_pins_1080p_mode_on_pi5(self, mock_popen: Any) -> None:
+        self.player.set_asset('file:///test/video.mp4', 30)
+        with patch.dict('os.environ', {'DEVICE_TYPE': 'pi5'}):
+            self.player.play()
+
+        args, _ = mock_popen.call_args
+        self.assertIn('--drm-mode=1920x1080@60', args[0])
+        self.assertIn('--vd-lavc-threads=4', args[0])
+
+    @patch('viewer.media_player.subprocess.Popen')
+    def test_play_does_not_pin_mode_on_x86(self, mock_popen: Any) -> None:
+        self.player.set_asset('file:///test/video.mp4', 30)
+        with patch.dict('os.environ', {'DEVICE_TYPE': 'x86'}):
+            self.player.play()
+
+        args, _ = mock_popen.call_args
+        self.assertNotIn('--drm-mode=1920x1080@60', args[0])
+        self.assertNotIn('--vd-lavc-threads=4', args[0])
 
     @patch('viewer.media_player.subprocess.Popen')
     def test_play_uses_local_audio_device_when_configured(
