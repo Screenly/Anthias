@@ -7,3 +7,4 @@ SERVICES = (
     'test',
 )
 GITHUB_REPO_URL = 'https://github.com/Screenly/Anthias'
+BASE_IMAGE = 'mirror.gcr.io/library/debian'
