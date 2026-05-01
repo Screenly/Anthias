@@ -44,17 +44,6 @@ def _get_device_id() -> str:
     return device_id
 
 
-def _get_os_release() -> str:
-    try:
-        with open('/etc/os-release') as f:
-            for line in f:
-                if line.startswith('PRETTY_NAME='):
-                    return line.split('=', 1)[1].strip().strip('"')
-    except OSError:
-        pass
-    return 'unknown'
-
-
 # Asset mimetypes counted individually in the payload. Anything outside
 # this set still rolls into asset_count via the total.
 ASSET_MIMETYPES = ('image', 'video', 'webpage')
@@ -91,7 +80,6 @@ def _build_payload() -> dict[str, object]:
         'hardware_model': parse_cpu_info().get('model', 'unknown'),
         'is_balena': is_balena_app(),
         'is_docker': is_docker(),
-        'os_release': _get_os_release(),
         'resolution': str(settings['resolution']),
         'audio_output': str(settings['audio_output']),
         'tls_enabled': bool(settings['use_ssl']),
