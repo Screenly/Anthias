@@ -172,7 +172,6 @@ server = [
     { name = "certifi" },
     { name = "channels" },
     { name = "channels-redis" },
-    { name = "cryptography" },
     { name = "django" },
     { name = "django-dbbackup" },
     { name = "django-stubs-ext" },
@@ -183,7 +182,6 @@ server = [
     { name = "netifaces" },
     { name = "psutil" },
     { name = "pydbus" },
-    { name = "pyopenssl" },
     { name = "python-dateutil" },
     { name = "pytz" },
     { name = "pyyaml" },
@@ -202,7 +200,6 @@ test = [
     { name = "certifi" },
     { name = "channels" },
     { name = "channels-redis" },
-    { name = "cryptography" },
     { name = "django" },
     { name = "django-dbbackup" },
     { name = "django-stubs-ext" },
@@ -214,7 +211,6 @@ test = [
     { name = "netifaces" },
     { name = "psutil" },
     { name = "pydbus" },
-    { name = "pyopenssl" },
     { name = "python-dateutil" },
     { name = "python-vlc" },
     { name = "pytz" },
@@ -235,7 +231,6 @@ test = [
 viewer = [
     { name = "cec" },
     { name = "certifi" },
-    { name = "cryptography" },
     { name = "django" },
     { name = "jinja2" },
     { name = "netifaces" },
@@ -288,7 +283,7 @@ host = [
     { name = "getmac", specifier = "==0.9.5" },
     { name = "netifaces2", specifier = "==0.0.22" },
     { name = "redis", specifier = "==7.4.0" },
-    { name = "requests", extras = ["security"], specifier = "==2.33.1" },
+    { name = "requests", specifier = "==2.33.1" },
     { name = "tenacity", specifier = "==9.1.2" },
 ]
 local = [
@@ -332,7 +327,6 @@ server = [
     { name = "certifi", specifier = "==2025.10.5" },
     { name = "channels", specifier = "==4.3.1" },
     { name = "channels-redis", specifier = "==4.3.0" },
-    { name = "cryptography", specifier = "==46.0.7" },
     { name = "django", specifier = "==5.2.13" },
     { name = "django-dbbackup", specifier = "==5.3.0" },
     { name = "django-stubs-ext", specifier = "==6.0.3" },
@@ -343,12 +337,11 @@ server = [
     { name = "netifaces", specifier = "==0.11.0" },
     { name = "psutil", specifier = "==7.2.1" },
     { name = "pydbus", specifier = "==0.6.0" },
-    { name = "pyopenssl", specifier = "==26.1.0" },
     { name = "python-dateutil", specifier = "==2.9.0.post0" },
     { name = "pytz", specifier = "==2025.2" },
     { name = "pyyaml", specifier = "==6.0.2" },
     { name = "redis", specifier = "==7.4.0" },
-    { name = "requests", extras = ["security"], specifier = "==2.33.1" },
+    { name = "requests", specifier = "==2.33.1" },
     { name = "sh", specifier = "==2.2.2" },
     { name = "tenacity", specifier = "==9.1.2" },
     { name = "urllib3", specifier = "==2.6.3" },
@@ -362,7 +355,6 @@ test = [
     { name = "certifi", specifier = "==2025.10.5" },
     { name = "channels", specifier = "==4.3.1" },
     { name = "channels-redis", specifier = "==4.3.0" },
-    { name = "cryptography", specifier = "==46.0.7" },
     { name = "django", specifier = "==5.2.13" },
     { name = "django-dbbackup", specifier = "==5.3.0" },
     { name = "django-stubs-ext", specifier = "==6.0.3" },
@@ -374,13 +366,12 @@ test = [
     { name = "netifaces", specifier = "==0.11.0" },
     { name = "psutil", specifier = "==7.2.1" },
     { name = "pydbus", specifier = "==0.6.0" },
-    { name = "pyopenssl", specifier = "==26.1.0" },
     { name = "python-dateutil", specifier = "==2.9.0.post0" },
     { name = "python-vlc", specifier = "==3.0.21203" },
     { name = "pytz", specifier = "==2025.2" },
     { name = "pyyaml", specifier = "==6.0.2" },
     { name = "redis", specifier = "==7.4.0" },
-    { name = "requests", extras = ["security"], specifier = "==2.33.1" },
+    { name = "requests", specifier = "==2.33.1" },
     { name = "selenium", specifier = "==4.36.0" },
     { name = "sh", specifier = "==2.2.2" },
     { name = "splinter", specifier = "==0.21.0" },
@@ -395,7 +386,6 @@ test = [
 viewer = [
     { name = "cec", specifier = "==0.2.8" },
     { name = "certifi", specifier = "==2025.10.5" },
-    { name = "cryptography", specifier = "==46.0.7" },
     { name = "django", specifier = "==5.2.13" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "netifaces", specifier = "==0.11.0" },
@@ -404,7 +394,7 @@ viewer = [
     { name = "python-vlc", specifier = "==3.0.21203" },
     { name = "pytz", specifier = "==2025.2" },
     { name = "redis", specifier = "==7.4.0" },
-    { name = "requests", extras = ["security"], specifier = "==2.33.1" },
+    { name = "requests", specifier = "==2.33.1" },
     { name = "sh", specifier = "==2.2.2" },
     { name = "tenacity", specifier = "==9.1.2" },
     { name = "urllib3", specifier = "==2.6.3" },
@@ -1355,18 +1345,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/90/38/f1952af3f61b3a7a49c417ffb67a5140c1183e6b04ec714c8941937860bf/pygit2-1.19.1-cp314-cp314t-win32.whl", hash = "sha256:6621acaaf2670e8fd0727c15271e5209a99769b127300ef7fc56b49babc8b1c1", size = 969317, upload-time = "2025-12-29T11:47:38.01Z" },
     { url = "https://files.pythonhosted.org/packages/31/02/205a4d10cb1195f6abf0a509883ede90caddefca6d9c3b54ef96e79e8e8a/pygit2-1.19.1-cp314-cp314t-win_amd64.whl", hash = "sha256:4418dea6936fe3c1a9375d7cd31a69e72997e645e588ed31c40d785c71adde35", size = 1197068, upload-time = "2025-12-29T11:47:39.065Z" },
     { url = "https://files.pythonhosted.org/packages/00/20/4571edf9bebc9d60dcf5d5c3cd0a12e55a79b91b02ef960c44e4ffc24c70/pygit2-1.19.1-cp314-cp314t-win_arm64.whl", hash = "sha256:3cbb8ab952224c0b305aa56f8759bcad5d9a9de885b00fe0ff8bed9ac365472e", size = 995635, upload-time = "2025-12-29T11:47:40.327Z" },
-]
-
-[[package]]
-name = "pyopenssl"
-version = "26.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cryptography" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/8c/a8/26d36401e3ab8eed9030ad33f381da7856fcfad5691780fccd1b019718fc/pyopenssl-26.1.0.tar.gz", hash = "sha256:737f0a2275c5bc54f3b02137687e1a765931fb3949b9a92a825e4d33b9eec08b", size = 186181, upload-time = "2026-04-24T20:23:48.115Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a8/41/52f3a3e812b816a91e89aa504199d8bf989a1f873192b10762be66cf2009/pyopenssl-26.1.0-py3-none-any.whl", hash = "sha256:115563879b2c8ccb207975705d3e491434d8c9d7c79667c902ecbf5f3bbd2ece", size = 58109, upload-time = "2026-04-24T20:23:46.273Z" },
 ]
 
 [[package]]
