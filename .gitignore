@@ -56,6 +56,11 @@ db.sqlite3
 # Django
 staticfiles/
 
+# Hugo
+website/public/
+website/resources/
+website/.hugo_build.lock
+
 # ESLint
 .eslintcache
 

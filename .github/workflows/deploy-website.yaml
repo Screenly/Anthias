@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/deploy-website.yaml'
       - 'website/**'
+      - 'raspberry_pi_imager/**'
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -22,9 +23,28 @@ concurrency:
   group: "pages"
   cancel-in-progress: true
 
+env:
+  HUGO_VERSION: '0.157.0'
+  UV_VERSION: '0.7.12'
+
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Run rpi-imager tests
+        run: uv run --group website -m pytest raspberry_pi_imager/tests/ -v
+
   # Build job
   build:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -33,35 +53,53 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
-        with:
-          python-version: '3.9'
-          cache: 'pip'
+      - name: Install Hugo
+        run: |
+          wget -q "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb" -O hugo.deb
+          sudo dpkg -i hugo.deb
+          rm hugo.deb
+          hugo version
 
-      - run: pip install requests==2.32.3
+      - name: Install uv
+        uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5
+        with:
+          version: ${{ env.UV_VERSION }}
 
       - name: Build website
+        run: hugo --source website --minify
+
+      - name: Build Raspberry Pi Imager JSON
+        run: uv run --group website python -m raspberry_pi_imager.build_pi_imager_json > website/public/rpi-imager.json
+
+      - name: Validate rpi-imager.json
         run: |
-          cd website
-          mkdir -p _site
+          # Syntax check
+          jq . < website/public/rpi-imager.json > /dev/null
 
-          # Build Raspberry Pi Imager JSON
-          python ../raspberry_pi_imager/bin/build-pi-imager-json.py > _site/rpi-imager.json
+          # Must have os_list array
+          jq -e '.os_list | type == "array"' < website/public/rpi-imager.json > /dev/null
 
-          # Make sure it's valid
-          jq . < _site/rpi-imager.json
+          # Each entry must have required fields
+          jq -e '.os_list[] | has("name", "description", "url", "extract_size", "extract_sha256", "image_download_size", "image_download_sha256", "release_date")' < website/public/rpi-imager.json > /dev/null
 
-          # Copy in static files.
-          cp -rf assets _site/
-          cp index.html _site/
+          # Sizes must be numbers, not strings
+          jq -e '.os_list[] | (.extract_size | type == "number") and (.image_download_size | type == "number")' < website/public/rpi-imager.json > /dev/null
 
-          # Show all files for debug purposes
-          find _site
+          # No pi1 entries
+          jq -e '[.os_list[] | .name | test("pi1")] | any | not' < website/public/rpi-imager.json > /dev/null
+
+          # All URLs must be HTTPS
+          jq -e '[.os_list[] | .url | startswith("https://")] | all' < website/public/rpi-imager.json > /dev/null
+
+          echo "rpi-imager.json validation passed"
+
+      - name: Show build output
+        run: find website/public
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
-          path: website/_site
+          path: website/public
 
   # Deployment job
   deploy:

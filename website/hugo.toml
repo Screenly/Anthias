@@ -1,0 +1,19 @@
+baseURL = 'https://anthias.screenly.io/'
+languageCode = 'en-us'
+title = "Anthias - The world's most popular open source digital signage project"
+
+disableKinds = ['taxonomy']
+
+[module]
+  [[module.mounts]]
+    source = 'assets'
+    target = 'static/assets'
+  [[module.mounts]]
+    source = 'static'
+    target = 'static'
+  [[module.mounts]]
+    source = 'layouts'
+    target = 'layouts'
+  [[module.mounts]]
+    source = 'content'
+    target = 'content'

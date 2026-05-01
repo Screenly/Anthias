@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+
+import json
+import re
+from typing import Any
+
+import requests
+
+BASE_URL = 'https://api.github.com/repos/Screenly/Anthias'
+GITHUB_HEADERS = {
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+}
+SUPPORTED_BOARDS = {'pi2', 'pi3', 'pi4-64', 'pi5'}
+MAINTENANCE_BOARDS = {'pi2', 'pi3'}
+MAINTENANCE_SUFFIX = (
+    ' [Maintenance mode - consider upgrading to Pi 4 or later]'
+)
+
+REQUIRED_FIELDS = {
+    'name',
+    'description',
+    'icon',
+    'website',
+    'extract_size',
+    'extract_sha256',
+    'image_download_size',
+    'image_download_sha256',
+    'release_date',
+    'url',
+}
+
+
+def get_latest_tag() -> str:
+    response = requests.get(
+        '{}/releases/latest'.format(BASE_URL), headers=GITHUB_HEADERS
+    )
+
+    return str(response.json()['tag_name'])
+
+
+def get_board_from_url(url: str) -> str | None:
+    match = re.search(r'-(pi\d(?:-\d+)?)\.img\.zst$', url)
+    return match.group(1) if match else None
+
+
+def get_asset_list(release_tag: str) -> list[str]:
+    asset_urls = []
+    response = requests.get(
+        '{}/releases/tags/{}'.format(BASE_URL, release_tag),
+        headers=GITHUB_HEADERS,
+    )
+
+    for url in response.json()['assets']:
+        download_url = url['browser_download_url']
+        if not download_url.endswith('.zst'):
+            continue
+        board = get_board_from_url(download_url)
+        if board and board in SUPPORTED_BOARDS:
+            asset_urls.append(download_url)
+
+    return asset_urls
+
+
+def retrieve_and_patch_json(url: str) -> dict[str, Any]:
+    image_json: dict[str, Any] = requests.get(
+        url.replace('.img.zst', '.json'), headers=GITHUB_HEADERS
+    ).json()
+
+    image_json['url'] = url
+    image_json['extract_size'] = int(image_json['extract_size'])
+    image_json['image_download_size'] = int(image_json['image_download_size'])
+
+    board = get_board_from_url(url)
+    if board and board in MAINTENANCE_BOARDS:
+        image_json['description'] += MAINTENANCE_SUFFIX
+
+    return image_json
+
+
+def build_imager_json() -> dict[str, list[dict[str, Any]]]:
+    latest_release = get_latest_tag()
+    release_assets = get_asset_list(latest_release)
+    pi_imager_json: dict[str, list[dict[str, Any]]] = {'os_list': []}
+
+    for url in release_assets:
+        pi_imager_json['os_list'].append(retrieve_and_patch_json(url))
+
+    return pi_imager_json
+
+
+def main() -> None:
+    print(json.dumps(build_imager_json()))
+
+
+if __name__ == '__main__':
+    main()
