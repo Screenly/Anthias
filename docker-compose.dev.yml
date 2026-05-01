@@ -49,7 +49,7 @@ services:
 
   redis:
     platform: "linux/amd64"
-    image: redis:alpine
+    image: mirror.gcr.io/library/redis:alpine
 
 volumes:
     anthias-data:

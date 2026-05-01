@@ -1,5 +1,5 @@
 ARG BUILDER_BASE_PLATFORM=linux/arm/v7
-FROM --platform=${BUILDER_BASE_PLATFORM} debian:trixie AS builder
+FROM --platform=${BUILDER_BASE_PLATFORM} mirror.gcr.io/library/debian:trixie AS builder
 
 # Sysroot stage: extracts headers + libs that the runtime stage's
 # COPY --from=builder pulls in. apt-get install + dpkg-deb -x + the
@@ -135,7 +135,7 @@ RUN apt-get update && \
 # https://www.enricozini.org/blog/2020/qt5/build-qt5-cross-builder-with-raspbian-sysroot-compiling-with-the-sysroot-continued/
 RUN dpkg --purge libraspberrypi-dev
 
-FROM debian:trixie
+FROM mirror.gcr.io/library/debian:trixie
 
 # Cross-compile builder image — runs locally inside CI to produce the
 # WebView tarball, never deployed. Root is intentional: the build flow
