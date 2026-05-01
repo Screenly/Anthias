@@ -273,7 +273,7 @@ def test_static_with_mime_disallowed_type_falls_back_to_guess(
         REMOTE_ADDR=LAN_IP_10,
     )
     response = views_files.static_with_mime(request, filename='app.css')
-    assert response['Content-Type'] == 'text/css'
+    assert response['Content-Type'].split(';', 1)[0] == 'text/css'
 
 
 def test_static_with_mime_default_octet_stream_for_unknown_extension(

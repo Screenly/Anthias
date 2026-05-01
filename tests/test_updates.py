@@ -1,5 +1,4 @@
 import logging
-import os
 from typing import Any
 from unittest import mock
 
@@ -87,10 +86,12 @@ def test__if_git_branch_env_does_not_exist__is_up_to_date_should_return_true() -
     ],
 )
 def test_is_up_to_date_should_return_value_depending_on_git_hashes(
-    hashes: dict[str, Any], expected: bool
+    hashes: dict[str, Any],
+    expected: bool,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    os.environ['GIT_BRANCH'] = 'master'
-    os.environ['DEVICE_TYPE'] = 'pi4'
+    monkeypatch.setenv('GIT_BRANCH', 'master')
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4')
 
     latest_remote_hash = hashes['latest_remote_hash']
     git_hash = hashes['git_hash']

@@ -169,11 +169,15 @@ def test_counter_should_increment_after_full_asset_loop(
 
 @pytest.mark.django_db
 def test_check_get_db_mtime(restore_shuffle_setting: None) -> None:
-    settings['database'] = FAKE_DB_PATH
-    with open(FAKE_DB_PATH, 'a'):
-        os.utime(FAKE_DB_PATH, (0, 0))
+    original_database = settings['database']
+    try:
+        settings['database'] = FAKE_DB_PATH
+        with open(FAKE_DB_PATH, 'a'):
+            os.utime(FAKE_DB_PATH, (0, 0))
 
-    assert Scheduler().get_db_mtime() == 0
+        assert Scheduler().get_db_mtime() == 0
+    finally:
+        settings['database'] = original_database
 
 
 @pytest.mark.django_db

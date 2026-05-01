@@ -59,12 +59,11 @@ def test_file_asset(api_client: APIClient, cleanup_asset_dir: None) -> None:
         'static/img/standby.png',
     )
 
-    response = api_client.post(
-        reverse('api:file_asset_v1'),
-        data={
-            'file_upload': open(image_path, 'rb'),
-        },
-    )
+    with open(image_path, 'rb') as file_upload:
+        response = api_client.post(
+            reverse('api:file_asset_v1'),
+            data={'file_upload': file_upload},
+        )
     data = response.data
 
     assert response.status_code == status.HTTP_200_OK

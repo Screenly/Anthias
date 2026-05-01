@@ -92,8 +92,10 @@ def test_empty(viewer_fixtures: _ViewerFixtures) -> None:
 @mock.patch('pydbus.SessionBus', mock.MagicMock())
 def test_setup(viewer_fixtures: _ViewerFixtures) -> None:
     viewer_fixtures.p_loadb.start()
-    viewer_fixtures.u.setup()
-    viewer_fixtures.p_loadb.stop()
+    try:
+        viewer_fixtures.u.setup()
+    finally:
+        viewer_fixtures.p_loadb.stop()
 
 
 def _stub_browser_stdout_static(

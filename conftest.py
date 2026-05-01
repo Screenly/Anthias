@@ -82,7 +82,7 @@ def _install_dbus_stubs() -> None:
     # anyway so the import works regardless; SessionBus() / SystemBus()
     # are MagicMocks that won't be exercised by the unit suite.
     try:
-        import pydbus  # type: ignore[import-not-found]  # noqa: F401
+        import pydbus  # noqa: F401
     except ImportError:
         pydbus_module = types.ModuleType('pydbus')
         pydbus_module.SessionBus = MagicMock(name='pydbus.SessionBus')  # type: ignore[attr-defined]
@@ -132,7 +132,7 @@ _SESSION_FAKE_REDIS = _make_fake_redis()
 def _patch_connect_to_redis() -> None:
     import lib.utils as _lib_utils
 
-    _lib_utils.connect_to_redis = lambda: _SESSION_FAKE_REDIS  # type: ignore[assignment]
+    _lib_utils.connect_to_redis = lambda: _SESSION_FAKE_REDIS
 
 
 _patch_connect_to_redis()

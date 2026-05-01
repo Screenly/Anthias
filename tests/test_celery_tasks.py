@@ -142,7 +142,7 @@ def test_stale_ytdl_sidecar_is_removed(asset_dir: str) -> None:
     assert not path.exists(stale_info)
 
 
-def test_cleanup_returns_when_assetdir_missing(tmp_path: str) -> None:
+def test_cleanup_returns_when_assetdir_missing() -> None:
     """cleanup() bails early if settings['assetdir'] doesn't exist."""
     nonexistent = '/tmp/nonexistent-anthias-cleanup-dir-xyz'
     if path.isdir(nonexistent):
