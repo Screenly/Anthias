@@ -84,32 +84,33 @@ def remote_branch_available(branch: str | None) -> bool | None:
     if remote_branch_cache is not None:
         return bool(remote_branch_cache == '1')
 
+    # Use the direct branch endpoint (200 = exists, 404 = missing) so we
+    # don't silently fail once the repo passes 30 branches: GitHub's
+    # /branches list is alphabetically paginated and dropped `master` off
+    # the first page once auto-generated branches piled up.
     try:
         resp = requests_get(
-            'https://api.github.com/repos/screenly/anthias/branches',
-            headers={
-                'Accept': 'application/vnd.github.loki-preview+json',
-            },
+            f'https://api.github.com/repos/screenly/anthias/branches/{branch}',
             timeout=DEFAULT_REQUESTS_TIMEOUT,
         )
+    except exceptions.RequestException as exc:
+        handle_github_error(exc, 'remote branch availability')
+        return None
+
+    if resp.status_code == 404:
+        r.set('remote-branch-available', '0')
+        r.expire('remote-branch-available', REMOTE_BRANCH_STATUS_TTL)
+        return False
+
+    try:
         resp.raise_for_status()
     except exceptions.RequestException as exc:
         handle_github_error(exc, 'remote branch availability')
         return None
 
-    found = False
-    for github_branch in resp.json():
-        if github_branch['name'] == branch:
-            found = True
-            break
-
-    # Cache and return the result
-    if found:
-        r.set('remote-branch-available', '1')
-    else:
-        r.set('remote-branch-available', '0')
+    r.set('remote-branch-available', '1')
     r.expire('remote-branch-available', REMOTE_BRANCH_STATUS_TTL)
-    return found
+    return True
 
 
 def fetch_remote_hash() -> tuple[str | None, bool]:
