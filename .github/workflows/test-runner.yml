@@ -62,7 +62,8 @@ jobs:
         if: inputs.test-type == 'python'
         run: |
           docker compose exec anthias-test \
-            pytest -n auto -m "not integration"
+            pytest -n auto -m "not integration" \
+              --cov --cov-report=xml --cov-report=term
 
       - name: Setup integration test environment
         if: inputs.test-type == 'python'
@@ -78,11 +79,17 @@ jobs:
           max_attempts: 5
           command: |
             docker compose exec anthias-test \
-              pytest -m integration
+              pytest -m integration \
+                --cov --cov-append --cov-report=xml --cov-report=term
 
+      # The /usr/src/app bind-mount means coverage.xml lands directly on
+      # the runner workspace, so no docker cp is needed. Codecov picks it
+      # up via the explicit `files:` argument.
       - name: Upload coverage reports to Codecov
         if: inputs.test-type == 'python'
         uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
+        with:
+          files: ./coverage.xml
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 

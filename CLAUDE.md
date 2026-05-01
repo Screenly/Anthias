@@ -79,6 +79,12 @@ docker compose -f docker-compose.test.yml up -d --build
 docker compose -f docker-compose.test.yml exec anthias-test bash ./bin/prepare_test_environment.sh -s
 docker compose -f docker-compose.test.yml exec anthias-test pytest -n auto -m "not integration"
 docker compose -f docker-compose.test.yml exec anthias-test pytest -m integration
+
+# Coverage (CI uses these flags; --cov reads source/omit from pyproject.toml).
+# CI fails the build when total line+branch coverage drops below 80%
+# (`fail_under = 80` in [tool.coverage.report]).
+docker compose -f docker-compose.test.yml exec anthias-test \
+    pytest -n auto -m "not integration" --cov --cov-report=term
 ```
 
 ### Django Admin
