@@ -163,9 +163,8 @@ def test_get_display_power_writes_redis() -> None:
     fake_redis = mock.MagicMock()
     with (
         mock.patch.object(celery_tasks_module, 'r', fake_redis),
-        mock.patch.object(
-            celery_tasks_module.diagnostics,
-            'get_display_power',
+        mock.patch(
+            'celery_tasks.diagnostics.get_display_power',
             return_value=True,
         ),
     ):

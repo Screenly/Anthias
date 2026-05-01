@@ -28,7 +28,7 @@ logging.disable(logging.CRITICAL)
 def test_viewer_publisher_send_publishes_correct_payload() -> None:
     fake_redis = MagicMock()
     publisher = ViewerPublisher.__new__(ViewerPublisher)
-    publisher._redis = fake_redis  # type: ignore[attr-defined]
+    publisher._redis = fake_redis
 
     publisher.send_to_viewer('next')
     fake_redis.publish.assert_called_once_with(
@@ -85,7 +85,7 @@ def test_reply_collector_recv_blocking_returns_decoded_payload() -> None:
         json.dumps({'ok': True}),
     )
     collector = ReplyCollector.__new__(ReplyCollector)
-    collector._redis = fake_redis  # type: ignore[attr-defined]
+    collector._redis = fake_redis
 
     result = collector.recv_json('cid', timeout_ms=2000)
     assert result == {'ok': True}
@@ -98,7 +98,7 @@ def test_reply_collector_blocking_rounds_up_to_next_second() -> None:
     fake_redis = MagicMock()
     fake_redis.blpop.return_value = (b'k', json.dumps(1))
     collector = ReplyCollector.__new__(ReplyCollector)
-    collector._redis = fake_redis  # type: ignore[attr-defined]
+    collector._redis = fake_redis
 
     collector.recv_json('cid', timeout_ms=1500)
     # 1500ms → 2 seconds.
@@ -111,7 +111,7 @@ def test_reply_collector_blocking_timeout() -> None:
     fake_redis = MagicMock()
     fake_redis.blpop.return_value = None
     collector = ReplyCollector.__new__(ReplyCollector)
-    collector._redis = fake_redis  # type: ignore[attr-defined]
+    collector._redis = fake_redis
 
     with pytest.raises(ReplyTimeoutError):
         collector.recv_json('cid', timeout_ms=100)
@@ -121,7 +121,7 @@ def test_reply_collector_non_blocking_uses_lpop() -> None:
     fake_redis = MagicMock()
     fake_redis.lpop.return_value = json.dumps({'value': 42})
     collector = ReplyCollector.__new__(ReplyCollector)
-    collector._redis = fake_redis  # type: ignore[attr-defined]
+    collector._redis = fake_redis
 
     assert collector.recv_json('cid', timeout_ms=0) == {'value': 42}
     fake_redis.lpop.assert_called_once_with(f'{REPLY_KEY_PREFIX}cid')
@@ -132,7 +132,7 @@ def test_reply_collector_non_blocking_negative_timeout_uses_lpop() -> None:
     fake_redis = MagicMock()
     fake_redis.lpop.return_value = json.dumps([1, 2, 3])
     collector = ReplyCollector.__new__(ReplyCollector)
-    collector._redis = fake_redis  # type: ignore[attr-defined]
+    collector._redis = fake_redis
 
     assert collector.recv_json('cid', timeout_ms=-1) == [1, 2, 3]
     fake_redis.lpop.assert_called_once()
@@ -142,7 +142,7 @@ def test_reply_collector_non_blocking_empty_raises_timeout() -> None:
     fake_redis = MagicMock()
     fake_redis.lpop.return_value = None
     collector = ReplyCollector.__new__(ReplyCollector)
-    collector._redis = fake_redis  # type: ignore[attr-defined]
+    collector._redis = fake_redis
 
     with pytest.raises(ReplyTimeoutError):
         collector.recv_json('cid', timeout_ms=0)

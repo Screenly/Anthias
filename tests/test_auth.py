@@ -57,7 +57,8 @@ def test_no_auth_is_authenticated_always_true() -> None:
 
 def test_no_auth_authenticate_returns_none() -> None:
     backend = NoAuth()
-    assert backend.authenticate() is None
+    # NoAuth.authenticate returns None unconditionally (annotated -> None).
+    backend.authenticate()
 
 
 def test_no_auth_check_password_always_true() -> None:
@@ -104,13 +105,13 @@ def test_basic_auth_authorization_header(
     # Correct credentials.
     creds = b64encode(b'alice:s3cret').decode('ascii')
     request = factory.get('/', HTTP_AUTHORIZATION=f'Basic {creds}')
-    request.session = {}  # type: ignore[attr-defined]
+    request.session = {}  # type: ignore[assignment]
     assert basic_auth.is_authenticated(request) is True
 
     # Wrong password.
     creds_bad = b64encode(b'alice:wrong').decode('ascii')
     request = factory.get('/', HTTP_AUTHORIZATION=f'Basic {creds_bad}')
-    request.session = {}  # type: ignore[attr-defined]
+    request.session = {}  # type: ignore[assignment]
     assert basic_auth.is_authenticated(request) is False
 
 
@@ -123,7 +124,7 @@ def test_basic_auth_password_with_colon(
     factory = RequestFactory()
     creds = b64encode(b'alice:pa:ss:word').decode('ascii')
     request = factory.get('/', HTTP_AUTHORIZATION=f'Basic {creds}')
-    request.session = {}  # type: ignore[attr-defined]
+    request.session = {}  # type: ignore[assignment]
     assert basic_auth.is_authenticated(request) is True
 
 
@@ -133,7 +134,7 @@ def test_basic_auth_malformed_authorization_header_returns_false(
     factory = RequestFactory()
     # Not valid base64.
     request = factory.get('/', HTTP_AUTHORIZATION='Basic !!!notbase64!!!')
-    request.session = {}  # type: ignore[attr-defined]
+    request.session = {}  # type: ignore[assignment]
     assert basic_auth.is_authenticated(request) is False
 
 
@@ -144,21 +145,21 @@ def test_basic_auth_authorization_header_no_colon(
     # base64 of 'alice' (no colon at all → unauthenticated)
     creds = b64encode(b'alice').decode('ascii')
     request = factory.get('/', HTTP_AUTHORIZATION=f'Basic {creds}')
-    request.session = {}  # type: ignore[attr-defined]
+    request.session = {}  # type: ignore[assignment]
     assert basic_auth.is_authenticated(request) is False
 
 
 def test_basic_auth_unsupported_scheme(basic_auth: BasicAuth) -> None:
     factory = RequestFactory()
     request = factory.get('/', HTTP_AUTHORIZATION='Bearer abcdef')
-    request.session = {}  # type: ignore[attr-defined]
+    request.session = {}  # type: ignore[assignment]
     assert basic_auth.is_authenticated(request) is False
 
 
 def test_basic_auth_authorization_header_short(basic_auth: BasicAuth) -> None:
     factory = RequestFactory()
     request = factory.get('/', HTTP_AUTHORIZATION='Basic')
-    request.session = {}  # type: ignore[attr-defined]
+    request.session = {}  # type: ignore[assignment]
     # Single token doesn't split into [type, data] → falls through.
     assert basic_auth.is_authenticated(request) is False
 
@@ -170,7 +171,7 @@ def test_basic_auth_session_login(
     basic_auth_settings['password'] = hash_password('s3cret')
     factory = RequestFactory()
     request = factory.get('/')
-    request.session = {  # type: ignore[attr-defined]
+    request.session = {  # type: ignore[assignment]
         'auth_username': 'alice',
         'auth_password': 's3cret',
     }
@@ -180,7 +181,7 @@ def test_basic_auth_session_login(
 def test_basic_auth_no_credentials(basic_auth: BasicAuth) -> None:
     factory = RequestFactory()
     request = factory.get('/')
-    request.session = {}  # type: ignore[attr-defined]
+    request.session = {}  # type: ignore[assignment]
     assert basic_auth.is_authenticated(request) is False
 
 
@@ -358,7 +359,7 @@ def test_authenticate_if_needed_initiates_when_not_authenticated() -> None:
     backend = BasicAuth(settings)
     factory = RequestFactory()
     request = factory.get('/')
-    request.session = {}  # type: ignore[attr-defined]
+    request.session = {}  # type: ignore[assignment]
     response = backend.authenticate_if_needed(request)
     assert response is not None
     assert response.status_code == 302
@@ -436,11 +437,11 @@ def test_authorized_no_args_raises(monkeypatch: Any) -> None:
     monkeypatch.setattr('settings.settings', fake_settings)
 
     @authorized
-    def view() -> str:  # type: ignore[no-untyped-def]
+    def view() -> str:
         return 'ok'
 
     with pytest.raises(ValueError, match='No request object passed'):
-        view()  # type: ignore[call-arg]
+        view()
 
 
 def test_authorized_non_request_arg_raises(monkeypatch: Any) -> None:

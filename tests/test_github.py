@@ -492,6 +492,6 @@ def test_handle_github_error_without_response(
     github_env: None, redis_data: dict[str, str]
 ) -> None:
     exc = requests_exceptions.ConnectionError()
-    exc.response = None  # type: ignore[assignment]
+    exc.response = None
     github.handle_github_error(exc, 'no-resp-action')
     assert redis_data['github-api-error'] == 'no-resp-action'

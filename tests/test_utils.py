@@ -163,9 +163,9 @@ def test_is_demo_node_false(monkeypatch: Any) -> None:
 
 
 def test_is_docker_uses_dockerenv_marker() -> None:
-    with patch.object(utils.os.path, 'isfile', return_value=True):
+    with patch('lib.utils.os.path.isfile', return_value=True):
         assert is_docker() is True
-    with patch.object(utils.os.path, 'isfile', return_value=False):
+    with patch('lib.utils.os.path.isfile', return_value=False):
         assert is_docker() is False
 
 
@@ -199,7 +199,7 @@ def test_get_balena_supervisor_api_response_uses_env(
     monkeypatch.setenv('BALENA_SUPERVISOR_ADDRESS', 'http://supervisor:5000')
     monkeypatch.setenv('BALENA_SUPERVISOR_API_KEY', 'k')
     fake = MagicMock()
-    with patch.object(utils.requests, 'get', return_value=fake) as mock_get:
+    with patch('lib.utils.requests.get', return_value=fake) as mock_get:
         result = utils.get_balena_supervisor_api_response('get', 'device')
     assert result is fake
     url = mock_get.call_args.args[0]
@@ -210,7 +210,7 @@ def test_get_balena_device_info_calls_v1_device(monkeypatch: Any) -> None:
     monkeypatch.setenv('BALENA_SUPERVISOR_ADDRESS', 'http://x')
     monkeypatch.setenv('BALENA_SUPERVISOR_API_KEY', 'k')
     fake = MagicMock()
-    with patch.object(utils.requests, 'get', return_value=fake) as mock_get:
+    with patch('lib.utils.requests.get', return_value=fake) as mock_get:
         utils.get_balena_device_info()
     assert '/v1/device' in mock_get.call_args.args[0]
 
@@ -219,7 +219,7 @@ def test_reboot_via_balena_supervisor_uses_post(monkeypatch: Any) -> None:
     monkeypatch.setenv('BALENA_SUPERVISOR_ADDRESS', 'http://x')
     monkeypatch.setenv('BALENA_SUPERVISOR_API_KEY', 'k')
     fake = MagicMock()
-    with patch.object(utils.requests, 'post', return_value=fake) as mock_post:
+    with patch('lib.utils.requests.post', return_value=fake) as mock_post:
         utils.reboot_via_balena_supervisor()
     assert '/v1/reboot' in mock_post.call_args.args[0]
 
@@ -228,7 +228,7 @@ def test_shutdown_via_balena_supervisor_uses_post(monkeypatch: Any) -> None:
     monkeypatch.setenv('BALENA_SUPERVISOR_ADDRESS', 'http://x')
     monkeypatch.setenv('BALENA_SUPERVISOR_API_KEY', 'k')
     fake = MagicMock()
-    with patch.object(utils.requests, 'post', return_value=fake) as mock_post:
+    with patch('lib.utils.requests.post', return_value=fake) as mock_post:
         utils.shutdown_via_balena_supervisor()
     assert '/v1/shutdown' in mock_post.call_args.args[0]
 
@@ -239,7 +239,7 @@ def test_get_balena_supervisor_version_ok(monkeypatch: Any) -> None:
     fake = MagicMock()
     fake.ok = True
     fake.json.return_value = {'version': '14.2.3'}
-    with patch.object(utils.requests, 'get', return_value=fake):
+    with patch('lib.utils.requests.get', return_value=fake):
         assert utils.get_balena_supervisor_version() == '14.2.3'
 
 
@@ -248,7 +248,7 @@ def test_get_balena_supervisor_version_error(monkeypatch: Any) -> None:
     monkeypatch.setenv('BALENA_SUPERVISOR_API_KEY', 'k')
     fake = MagicMock()
     fake.ok = False
-    with patch.object(utils.requests, 'get', return_value=fake):
+    with patch('lib.utils.requests.get', return_value=fake):
         assert (
             utils.get_balena_supervisor_version()
             == 'Error getting the Supervisor version'
