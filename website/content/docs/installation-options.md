@@ -12,11 +12,11 @@ description: "Install Anthias on Raspberry Pi or Debian: imager, balenaHub, rele
 
 The quickest way to get started on supported devices is to use [Raspberry Pi Imager](https://www.screenly.io/blog/2022/12/13/anthias-and-screenly-now-in-rpi-imager/), where you can find Anthias under `Other specific-purpose OS`.
 
-![imager-01](/docs/images/imager-01.png)
+![Raspberry Pi Imager showing Other specific-purpose OS category](/docs/images/imager-01.png)
 
-![imager-02](/docs/images/imager-02.png)
+![Raspberry Pi Imager listing Anthias as a selectable image](/docs/images/imager-02.png)
 
-![imager-03](/docs/images/imager-03.png)
+![Raspberry Pi Imager confirming the SD card target before writing Anthias](/docs/images/imager-03.png)
 
 # Using the images from balenaHub
 
@@ -98,7 +98,7 @@ You can either use the arrow keys to select your choice and then press Enter or 
 (for yes-no questions). The installer will display your responses before proceeding with the
 installation.
 
-![install-anthias-gif](/docs/images/install-anthias.gif)
+![Animated walkthrough of the bash <(curl ...) Anthias installer prompts](/docs/images/install-anthias.gif)
 
 **This installation will take 15 minutes to several hours**, depending on variables such as:
 

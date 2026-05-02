@@ -1,23 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ default "en" site.LanguageCode }}">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ .Title }}</title>
-    <meta name="description" content="{{ with .Params.description }}{{ . }}{{ else }}Anthias is the world's most popular open source digital signage solution. Turn any Raspberry Pi or PC into a powerful digital sign displaying images, videos, and web pages.{{ end }}">
-    <link rel="canonical" href="{{ .Permalink }}">
+    {{- $brand := "Anthias" -}}
+    {{- $defaultDescription := "Anthias is the world's most popular open source digital signage solution. Turn any Raspberry Pi or PC into a powerful digital sign displaying images, videos, and web pages." -}}
+    {{- $description := default $defaultDescription .Params.description -}}
+    {{- $titleSuffix := "" -}}
+    {{- if and (not .IsHome) (not (in .Title $brand)) -}}
+      {{- $titleSuffix = printf " | %s" $brand -}}
+    {{- end -}}
+    {{- $pageTitle := printf "%s%s" .Title $titleSuffix -}}
+    {{- $pageImage := absURL "assets/images/overview.png" -}}
 
-    <meta property="og:title" content="{{ .Title }}">
-    <meta property="og:description" content="Turn any Raspberry Pi or PC into a powerful digital sign. Free, open-source digital signage software.">
-    <meta property="og:type" content="website">
+    <title>{{ $pageTitle }}</title>
+    <meta name="description" content="{{ $description }}">
+    <link rel="canonical" href="{{ .Permalink }}">
+    <meta name="theme-color" content="#270035">
+
+    <meta property="og:title" content="{{ $pageTitle }}">
+    <meta property="og:description" content="{{ $description }}">
+    <meta property="og:type" content="{{ if and .IsPage (in (string .Section) "docs") }}article{{ else }}website{{ end }}">
     <meta property="og:url" content="{{ .Permalink }}">
-    <meta property="og:image" content="{{ "assets/images/overview.png" | absURL }}">
-    <meta property="og:site_name" content="Anthias">
+    <meta property="og:image" content="{{ $pageImage }}">
+    <meta property="og:image:alt" content="Anthias dashboard showing scheduled content on a Raspberry Pi-driven display">
+    <meta property="og:site_name" content="{{ $brand }}">
 
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="{{ .Title }}">
-    <meta name="twitter:description" content="Turn any Raspberry Pi or PC into a powerful digital sign. Free, open-source digital signage software.">
-    <meta name="twitter:image" content="{{ "assets/images/overview.png" | absURL }}">
+    <meta name="twitter:title" content="{{ $pageTitle }}">
+    <meta name="twitter:description" content="{{ $description }}">
+    <meta name="twitter:image" content="{{ $pageImage }}">
+    <meta name="twitter:image:alt" content="Anthias dashboard showing scheduled content on a Raspberry Pi-driven display">
 
     <link rel="icon" href="/assets/images/favicon.ico">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -30,8 +43,8 @@
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       "name": "Anthias",
-      "description": "The world's most popular open source digital signage solution.",
-      "url": "https://anthias.screenly.io",
+      "description": {{ $defaultDescription | jsonify }},
+      "url": "{{ site.BaseURL }}",
       "applicationCategory": "MultimediaApplication",
       "operatingSystem": "Linux",
       "license": "https://github.com/Screenly/Anthias/blob/master/LICENSE",
@@ -41,6 +54,52 @@
         "priceCurrency": "USD"
       },
       "author": {
+        "@type": "Organization",
+        "name": "Screenly, Inc",
+        "url": "https://www.screenly.io"
+      }
+    }
+    </script>
+    {{ end }}
+
+    {{- /* FAQPage structured data — generated from data/faq.yaml */ -}}
+    {{ if eq .Layout "faq" }}
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {{- $first := true -}}
+        {{- range site.Data.faq -}}
+          {{- range .items -}}
+            {{- if not $first }},{{ end -}}
+            {{- $first = false }}
+        {
+          "@type": "Question",
+          "name": {{ .question | jsonify }},
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": {{ .answer | markdownify | plainify | jsonify }}
+          }
+        }
+          {{- end -}}
+        {{- end }}
+      ]
+    }
+    </script>
+    {{ end }}
+
+    {{- /* Article structured data on individual docs pages */ -}}
+    {{ if and .IsPage (eq (string .Section) "docs") }}
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      "headline": {{ .Title | jsonify }},
+      "description": {{ $description | jsonify }},
+      "url": "{{ .Permalink }}",
+      "image": "{{ $pageImage }}",
+      "publisher": {
         "@type": "Organization",
         "name": "Screenly, Inc",
         "url": "https://www.screenly.io"

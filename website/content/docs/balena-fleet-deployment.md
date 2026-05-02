@@ -31,15 +31,15 @@ Open your browser and go to https://dashboard.balena-cloud.com. Login to your
 balenaCloud account if you haven't already. You should be redirected to the
 dashboard.
 
-![balena-ss-01](/docs/images/balena-deployment-01-dashboard.png)
+![balenaCloud dashboard with empty fleet list](/docs/images/balena-deployment-01-dashboard.png)
 
 Click on the `Create fleet` button. Give your fleet a name and select the
 appropriate device type. Click on the `Create new fleet` button. You should be
 redirected to the fleet's summary page.
 
-![balena-ss-02](/docs/images/balena-deployment-02-create-fleet.png)
+![balena fleet creation dialog with device-type selector](/docs/images/balena-deployment-02-create-fleet.png)
 
-![balena-ss-03](/docs/images/balena-deployment-03-fleet-summary-page.png)
+![balena fleet summary page after creation](/docs/images/balena-deployment-03-fleet-summary-page.png)
 
 We'll be doing the initial fleet configuration via CLI. Open your terminal and
 run the following commands:
@@ -80,7 +80,7 @@ ID      NAME                           VALUE        FLEET
 > Alternatively, you can check the releases page of that fleet and look for the
 > `BALENA_HOST_CONFIG_gpu_mem` and `BALENA_HOST_CONFIG_dtoverlay` variables.
 
-![balena-ss-04](/docs/images/balena-deployment-04-fleet-config-page.png)
+![balena fleet configuration page showing GPU memory and dtoverlay variables](/docs/images/balena-deployment-04-fleet-config-page.png)
 
 ## Deploy changes to the fleet
 
@@ -134,9 +134,9 @@ It would take a while for the deployment to finish. Once it's done, you should
 see the new release in the fleet's summary page. You can now add your devices to
 the fleet and they should be able to download the new release.
 
-![balena-ss-05](/docs/images/balena-deployment-05-term-deployment-successful.png)
+![Terminal showing successful balena push deployment for the Anthias fleet](/docs/images/balena-deployment-05-term-deployment-successful.png)
 
-![balena-ss-06](/docs/images/balena-deployment-06-fleet-releases-page.png)
+![balena fleet releases page listing the new Anthias build](/docs/images/balena-deployment-06-fleet-releases-page.png)
 
 ## Add a new device to the fleet
 
@@ -148,13 +148,13 @@ redirected to your balenaCloud dashboard. Click on the fleet you created earlier
 Click "Add device" on the fleet's summary page. The "Add new device" page should
 appear. Leave the default values unchanged. Click "Flash" when ready.
 
-![balena-ss-07](/docs/images/balena-deployment-07-add-device.png)
+![balena Add Device dialog ready to flash an SD card](/docs/images/balena-deployment-07-add-device.png)
 
 A new browser tab will open prompting you to open balenaEtcher. Click "Open" to
 proceed. Select the microSD card you inserted earlier and click "Flash". Wait for
 the flashing process to finish.
 
-![balena-ss-08](/docs/images/balena-deployment-08-etcher.png)
+![balenaEtcher writing the Anthias balena image to a microSD card](/docs/images/balena-deployment-08-etcher.png)
 
 Remove the microSD card from your computer and insert it to your device. Power
 on the device and wait for it to appear on the fleet's summary page. Once it
@@ -162,9 +162,9 @@ appears, click on the device's name to go to its summary page. Be patient while
 balenaCloud downloads the Docker images and starts the containers. It might take
 a while for the device to appear online.
 
-![balena-ss-09](/docs/images/balena-deployment-09-device-list.png)
+![balena fleet device list with the newly added Pi listed](/docs/images/balena-deployment-09-device-list.png)
 
-![balena-ss-10](/docs/images/balena-deployment-10-downloading-images.png)
+![balenaCloud showing the device downloading Anthias container images](/docs/images/balena-deployment-10-downloading-images.png)
 
 Once done, the display should show the Anthias splash screen. You can now
 add assets via the web interface.

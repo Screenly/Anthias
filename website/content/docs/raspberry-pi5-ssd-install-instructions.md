@@ -38,7 +38,7 @@ Depending on the bootloader version of your Pi (confirmed that as of at least **
 > The author of this document would welcome feedback if once the above update is performed, whether you still need to run the command below. The author tested the below and found it successful, then updated the bootloader so your mileage may vary!
 > This looks a little bit like the following:
 
-![rpi-eeprom-update](/docs/images/rpi-eeprom-update.png)
+![Terminal output of sudo rpi-eeprom-update on a Raspberry Pi 5](/docs/images/rpi-eeprom-update.png)
 
 - Once booted, run the RPI EEPROM configurator: `sudo rpi-eeprom-config -edit`. This will open up the [Nano](https://www.nano-editor.org/) text editor.
 - Change the boot order to: `BOOT_ORDER=0xf614`
