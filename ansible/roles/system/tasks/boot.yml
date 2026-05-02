@@ -9,38 +9,17 @@
   register: system_config_txt
   changed_when: false
 
-# Render config.txt from a template that authoritatively owns the
-# Anthias-managed firmware directives. Strips any user-set value for a
-# key we own (so an existing `disable_splash=0` is replaced by our 1
-# rather than leaving both lines in conflicting order), then emits ours
-# in a single [all] block at the end. All other content is preserved.
-- name: Read current config.txt
-  ansible.builtin.slurp:
-    src: "{{ system_config_path }}"
-  register: system_config_current
-
-- name: Render config.txt from template
-  ansible.builtin.copy:
-    content: "{{ lookup('template', 'config.txt.j2') }}\n"
+# Render config.txt from a vanilla template that owns the whole file.
+# Pi firmware sections ([cm4], [cm5], etc.) handle per-model variants
+# at boot time, so the template stays mostly static; the only Jinja
+# conditional is arm_64bit=1 on aarch64.
+- name: Render config.txt
+  ansible.builtin.template:
+    src: config.txt.j2
     dest: "{{ system_config_path }}"
     owner: root
     group: root
     mode: "0755"  # NOSONAR
-
-# Legacy: pre-Bullseye Pi OS shipped vc4-fkms-v3d (or vc4-kms-v3d
-# commented). Bullseye+ already ships KMS active. Kept for back-compat
-# with old images.
-- name: Uncomment out the original dtoverlay config.
-  ansible.builtin.replace:
-    dest: "{{ system_config_path }}"
-    regexp: '^#\s*(dtoverlay=vc4-kms-v3d)'
-    replace: '\1'
-
-- name: Remove the FKMS config for all devices.
-  ansible.builtin.lineinfile:
-    path: "{{ system_config_path }}"
-    state: absent
-    regexp: "^dtoverlay=vc4-fkms-v3d$"
 
 - name: Backup kernel boot args
   ansible.builtin.copy:

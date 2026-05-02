@@ -1,53 +1,57 @@
-{#-
-  Anthias-managed config.txt. Slurps the current config.txt, strips
-  any user-set value for a key we own, then emits ours authoritatively
-  in a single [all] block at the end.
+# Anthias firmware configuration.
+#
+# Managed authoritatively by the Anthias installer. Manual edits to this
+# file will be overwritten on the next ansible run.
+#
+# Pi firmware reference:
+#   https://www.raspberrypi.com/documentation/computers/config_txt.html
+# Sections ([cm4], [cm5], etc.) are evaluated by the firmware against
+# the actual board at boot, so per-model overrides go in their own
+# section rather than behind a Jinja conditional.
 
-  The block is fenced by `# >>> anthias managed (do not edit) >>>`
-  and `# <<< anthias managed <<<`. Anything between those fences (from
-  a previous render) is dropped first so re-runs are idempotent and we
-  don't accumulate stale state. Anything outside the fences is kept
-  verbatim.
+# === Audio ===
+dtparam=audio=on
 
-  Pure string ops — no regex.
--#}
-{%- set anthias_managed = [
-      ('disable_splash',           '1'),
-      ('framebuffer_depth',        '32'),
-      ('framebuffer_ignore_alpha', '1'),
-      ('gpu_mem_256',              '96'),
-      ('gpu_mem_512',              '128'),
-      ('gpu_mem_1024',             '196'),
-    ] -%}
-{%- set begin_fence = '# >>> anthias managed (do not edit) >>>' -%}
-{%- set end_fence   = '# <<< anthias managed <<<' -%}
-{%- set managed_keys = anthias_managed | map('first') | list -%}
-{%- set existing = (system_config_current.content | b64decode).splitlines() -%}
-{%- set state = namespace(in_block=false) -%}
-{%- set kept = [] -%}
-{%- for line in existing -%}
-{%-   if line.strip() == begin_fence -%}
-{%-     set state.in_block = true -%}
-{%-   elif line.strip() == end_fence -%}
-{%-     set state.in_block = false -%}
-{%-   elif not state.in_block -%}
-{%-     set is_managed = namespace(value=false) -%}
-{%-     set stripped = line.lstrip() -%}
-{%-     for key in managed_keys -%}
-{%-       if stripped.startswith(key ~ '=') -%}
-{%-         set is_managed.value = true -%}
-{%-       endif -%}
-{%-     endfor -%}
-{%-     if not is_managed.value -%}
-{%-       set _ = kept.append(line) -%}
-{%-     endif -%}
-{%-   endif -%}
-{%- endfor -%}
-{{ kept | join('\n') | trim }}
+# === Display ===
+camera_auto_detect=1
+display_auto_detect=1
+auto_initramfs=1
+dtoverlay=vc4-kms-v3d
+max_framebuffers=2
 
-{{ begin_fence }}
+# Don't have the firmware add a video= line to cmdline.txt — let the
+# kernel pick its own default.
+disable_fw_kms_setup=1
+disable_overscan=1
+
+# === Performance ===
+arm_boost=1
+
+# === Anthias ===
+# Silent boot: suppress the firmware rainbow splash.
+disable_splash=1
+
+# 32-bit framebuffer is what video playback expects; ignore alpha.
+framebuffer_depth=32
+framebuffer_ignore_alpha=1
+
+# Larger GPU partitions improve hardware video decode headroom on
+# smaller models. The firmware only reads the line matching board RAM.
+gpu_mem_256=96
+gpu_mem_512=128
+gpu_mem_1024=196
+
+{% if ansible_architecture == 'aarch64' %}
+# 64-bit OS — boot kernel8.img.
+arm_64bit=1
+
+{% endif %}
+[cm4]
+# Compute Module 4: enable host mode on the built-in XHCI controller.
+otg_mode=1
+
+[cm5]
+# Compute Module 5: USB host mode via DWC2.
+dtoverlay=dwc2,dr_mode=host
+
 [all]
-{% for key, value in anthias_managed -%}
-{{ key }}={{ value }}
-{% endfor -%}
-{{ end_fence }}
