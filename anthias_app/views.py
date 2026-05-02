@@ -1,5 +1,3 @@
-import ipaddress
-
 from django.contrib import messages
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
@@ -9,7 +7,6 @@ from django.views.decorators.http import require_http_methods
 from lib.auth import authorized
 from lib.utils import (
     connect_to_redis,
-    get_node_ip,
 )
 from settings import settings
 
@@ -55,21 +52,16 @@ def login(request: HttpRequest) -> HttpResponse:
 
 @require_http_methods(['GET'])
 def splash_page(request: HttpRequest) -> HttpResponse:
-    ip_addresses = []
-
-    for ip_address in get_node_ip().split():
-        ip_address_object = ipaddress.ip_address(ip_address)
-
-        if isinstance(ip_address_object, ipaddress.IPv6Address):
-            ip_addresses.append(f'http://[{ip_address}]')
-        else:
-            ip_addresses.append(f'http://{ip_address}')
-
+    # IPs are populated client-side by polling /api/v2/network/ip-addresses
+    # so the page renders immediately even when the host bus is slow on
+    # first boot, and updates if IPs change during the splash's display
+    # window (e.g. a DHCP renewal mid-splash). This also avoids the
+    # historical `ipaddress.ip_address('Unknown')` crash that took the
+    # whole render down on a flaky Balena supervisor.
     return template(
         request,
         'splash-page.html',
         {
-            'ip_addresses': ip_addresses,
             'splash_logo_url': settings['splash_logo_url'],
         },
     )
