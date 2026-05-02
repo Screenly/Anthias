@@ -1,7 +1,6 @@
 /* Generated using: hugo gen chromastyles --style=github */
 
-/* Background */ .bg { ; }
-/* PreWrapper */ .chroma { ;-webkit-text-size-adjust:none; }
+/* PreWrapper */ .chroma { -webkit-text-size-adjust:none; }
 /* Error */ .chroma .err { color:#b91c1c }
 /* LineLink */ .chroma .lnlinks { outline:none;text-decoration:none;color:inherit }
 /* LineTableTD */ .chroma .lntd { vertical-align:top;padding:0;margin:0;border:0; }

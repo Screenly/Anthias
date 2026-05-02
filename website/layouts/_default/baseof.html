@@ -136,7 +136,7 @@
 
         document.querySelectorAll('[data-accordion]').forEach(function (btn) {
           btn.addEventListener('click', function () {
-            var targetId = this.getAttribute('data-accordion');
+            var targetId = this.dataset.accordion;
             var target = document.getElementById(targetId);
             var isOpen = !target.classList.contains('hidden');
 
@@ -161,7 +161,7 @@
     </script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-W6BH3H6SZ6"></script>
     <script>
-        window.dataLayer = window.dataLayer || [];
+        globalThis.dataLayer = globalThis.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
         gtag('config', 'G-W6BH3H6SZ6');

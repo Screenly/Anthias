@@ -16,8 +16,8 @@
  *
  * Run automatically before css:build / css:watch via package.json.
  */
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 const WEIGHTS = [400, 500, 600, 700, 800] as const
 const SUBSETS = new Set(['latin', 'latin-ext'])

@@ -29,9 +29,9 @@
                         <img class="icon-plus w-5 h-5 shrink-0" src="{{ $iconPlus.RelPermalink }}" alt="" aria-hidden="true" />
                         <img class="icon-minus w-5 h-5 shrink-0 hidden" src="{{ $iconMinus.RelPermalink }}" alt="" aria-hidden="true" />
                     </button>
-                    <div id="{{ $id }}" role="region" aria-labelledby="{{ $id }}-btn" class="hidden pb-6 docs-prose" data-accordion-content>
+                    <section id="{{ $id }}" aria-labelledby="{{ $id }}-btn" class="hidden pb-6 docs-prose" data-accordion-content>
                         {{ $item.answer | markdownify }}
-                    </div>
+                    </section>
                 </div>
                 {{- end -}}
             </div>
