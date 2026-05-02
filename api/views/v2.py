@@ -65,6 +65,14 @@ r = connect_to_redis()
 # answers in well under this; the timeout is the worst-case bound.
 _BALENA_SUPERVISOR_TIMEOUT_S = 1.5
 
+# Debounce key + window for the bare-metal cache-miss refresh. The
+# splash polls every 2s; host_agent.set_ip_addresses runs an internet
+# probe with a 10x1s tenacity retry, so worst-case it takes ~10s. The
+# TTL covers that window with a small margin so we don't queue
+# redundant refresh requests while the first one is in flight.
+_IP_REFRESH_PENDING_KEY = 'splash:ip_refresh_pending'
+_IP_REFRESH_DEBOUNCE_S = 12
+
 
 def _resolve_node_ip() -> str:
     """Non-blocking IP-string resolver for the splash polling endpoint.
@@ -108,7 +116,14 @@ def _resolve_node_ip() -> str:
         except ValueError:
             return ''
 
-    raw = r.get('ip_addresses')
+    try:
+        raw = r.get('ip_addresses')
+    except redis.RedisError:
+        # Redis is the cache backing this whole codepath; if it's
+        # flaking (early boot, transient broker hiccup), treat it
+        # as a cache miss instead of 500-ing the splash poll. The
+        # JS keeps polling and recovers as soon as Redis comes back.
+        return ''
     if raw:
         try:
             return ' '.join(json.loads(raw))
@@ -121,10 +136,29 @@ def _resolve_node_ip() -> str:
     # would swallow a programming error (e.g. ``r`` accidentally None
     # after a refactor) and turn "splash IPs never populate" into a
     # silent failure with no breadcrumb.
-    try:
-        r.publish('hostcmd', 'set_ip_addresses')
-    except redis.RedisError:
-        pass
+    #
+    # Debounce the publish: at a 2s poll cadence, host_agent's
+    # set_ip_addresses takes longer than one poll interval (it does
+    # an internet probe with a 10x1s tenacity retry). Without a
+    # debounce we'd queue many redundant refresh requests before the
+    # first one completes. SETNX with a short TTL ensures only one
+    # refresh fires per window; a future poll past the TTL retries
+    # naturally if the cache is still empty.
+    if r.set(
+        _IP_REFRESH_PENDING_KEY,
+        '1',
+        nx=True,
+        ex=_IP_REFRESH_DEBOUNCE_S,
+    ):
+        try:
+            r.publish('hostcmd', 'set_ip_addresses')
+        except redis.RedisError:
+            # Drop the debounce key so the next poll can retry —
+            # otherwise we'd wait out the TTL after a transient flake.
+            try:
+                r.delete(_IP_REFRESH_PENDING_KEY)
+            except redis.RedisError:
+                pass
     return ''
 
 

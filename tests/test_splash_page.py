@@ -29,6 +29,7 @@ and assertions inherit the suppression by referencing them.
 import json
 from unittest import mock
 
+import redis
 import requests
 from django.test import Client, TestCase
 
@@ -94,6 +95,15 @@ class ResolveNodeIpBareMetalTest(TestCase):
     a ~80s blocking readiness loop that would tail-back every poll.
     """
 
+    def setUp(self) -> None:
+        # Tests publish to Redis through the real connection (CI has
+        # one running). Clear the debounce key so a prior test's SETNX
+        # doesn't suppress this test's expected publish.
+        v2_views.r.delete(v2_views._IP_REFRESH_PENDING_KEY)
+
+    def tearDown(self) -> None:
+        v2_views.r.delete(v2_views._IP_REFRESH_PENDING_KEY)
+
     def test_reads_from_redis_cache(self) -> None:
         with (
             mock.patch('api.views.v2.is_balena_app', return_value=False),
@@ -136,6 +146,57 @@ class ResolveNodeIpBareMetalTest(TestCase):
             mock.patch.object(v2_views.r, 'publish'),
         ):
             self.assertEqual(v2_views._resolve_node_ip(), '')
+
+    def test_redis_get_failure_returns_empty(self) -> None:
+        """Redis flake during cache read must not 500 the splash poll.
+        The polling endpoint is on a 2s loop — degrading to '' lets
+        the JS keep polling until Redis recovers."""
+        with (
+            mock.patch('api.views.v2.is_balena_app', return_value=False),
+            mock.patch.object(
+                v2_views.r,
+                'get',
+                side_effect=redis.RedisError('synthetic'),
+            ),
+        ):
+            self.assertEqual(v2_views._resolve_node_ip(), '')
+
+    def test_debounces_repeat_cache_miss_publishes(self) -> None:
+        """At a 2s poll cadence, host_agent.set_ip_addresses can take
+        longer than one poll interval (its internal probe is a 10x1s
+        tenacity retry). Without debouncing, every cache-miss poll
+        would queue another refresh while the first is still running.
+        SETNX with TTL gates it: only the first call in the window
+        publishes, later calls within the window no-op."""
+        with (
+            mock.patch('api.views.v2.is_balena_app', return_value=False),
+            mock.patch.object(v2_views.r, 'get', return_value=None),
+            mock.patch.object(v2_views.r, 'publish') as m_publish,
+        ):
+            # Three cache-miss polls in rapid succession.
+            v2_views._resolve_node_ip()
+            v2_views._resolve_node_ip()
+            v2_views._resolve_node_ip()
+        # Only the first poll should have published.
+        self.assertEqual(m_publish.call_count, 1)
+
+    def test_publish_failure_releases_debounce(self) -> None:
+        """If the publish itself fails (Redis flake), the debounce
+        key would otherwise pin us out of refreshing for the whole
+        TTL — even though no refresh actually got requested. Clear
+        the key on publish failure so the next poll can retry."""
+        with (
+            mock.patch('api.views.v2.is_balena_app', return_value=False),
+            mock.patch.object(v2_views.r, 'get', return_value=None),
+            mock.patch.object(
+                v2_views.r,
+                'publish',
+                side_effect=redis.RedisError('synthetic'),
+            ),
+        ):
+            v2_views._resolve_node_ip()
+        # Debounce key must NOT be set after a failed publish.
+        self.assertIsNone(v2_views.r.get(v2_views._IP_REFRESH_PENDING_KEY))
 
 
 class ResolveNodeIpBalenaTest(TestCase):
@@ -187,6 +248,12 @@ class ResolveNodeIpBalenaTest(TestCase):
 class NetworkIpAddressesEndpointTest(TestCase):
     """End-to-end through the polling endpoint. Goes through the full
     chain: HTTP routing, view, resolver, formatter."""
+
+    def setUp(self) -> None:
+        v2_views.r.delete(v2_views._IP_REFRESH_PENDING_KEY)
+
+    def tearDown(self) -> None:
+        v2_views.r.delete(v2_views._IP_REFRESH_PENDING_KEY)
 
     def test_returns_200_with_ip_list(self) -> None:
         with (
