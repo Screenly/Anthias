@@ -86,11 +86,21 @@
                           {{- end -}}
 
                           {{- with $op.requestBody -}}
-                          <div>
-                            <h3 class="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-2">Request body</h3>
-                            {{- with index .content "application/json" -}}
-                            {{ partial "api-schema.html" (dict "schema" .schema "spec" $spec) }}
+                          {{- /* Pick the best content type to render. JSON first;
+                                 otherwise fall back to the first one in the spec
+                                 (e.g. multipart/form-data for upload endpoints). */ -}}
+                          {{- $body := index .content "application/json" -}}
+                          {{- $contentType := "application/json" -}}
+                          {{- if not $body -}}
+                            {{- range $ct, $entry := .content -}}
+                              {{- if not $body -}}{{- $body = $entry -}}{{- $contentType = $ct -}}{{- end -}}
                             {{- end -}}
+                          {{- end -}}
+                          <div>
+                            <h3 class="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-2">Request body
+                              <span class="ml-1 font-mono normal-case tracking-normal text-zinc-400">{{ $contentType }}</span>
+                            </h3>
+                            {{ partial "api-schema.html" (dict "schema" $body.schema "spec" $spec) }}
                           </div>
                           {{- end -}}
 

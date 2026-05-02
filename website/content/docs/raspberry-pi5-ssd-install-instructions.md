@@ -10,7 +10,7 @@ aliases:
 
 The following guide has been tested using a Raspberry Pi 5 with 8GB RAM and a [GeeekPi P33 PoE+PCI-e HAT](https://pipci.jeffgeerling.com/hats/geeekpi-p33-m2-nvme-poe-hat.html).
 
-Other HAT's should work just fine as long as they are supported by the Pi.
+Other HATs should work just fine as long as they are supported by the Pi.
 
 The author of this guide used a 256GB M.2 NVMe SSD as it came in the 2242 (22mm x 44mm) form factor. The original version of the P33 HAT only supported 2230 and 2242 SSDs, but a newer version extends further and supports 2260 and 2280 SSDs as well.
 

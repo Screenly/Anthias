@@ -11,6 +11,10 @@ GITHUB_HEADERS = {
     'Accept': 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
 }
+# Wide enough to absorb a slow GitHub response without hanging the
+# website-deploy job indefinitely. The job runs on every push to master
+# and CI's overall budget is in the minutes, not hours.
+HTTP_TIMEOUT = 30
 SUPPORTED_BOARDS = {'pi2', 'pi3', 'pi4-64', 'pi5'}
 MAINTENANCE_BOARDS = {'pi2', 'pi3'}
 MAINTENANCE_SUFFIX = (
@@ -33,8 +37,11 @@ REQUIRED_FIELDS = {
 
 def get_latest_tag() -> str:
     response = requests.get(
-        '{}/releases/latest'.format(BASE_URL), headers=GITHUB_HEADERS
+        '{}/releases/latest'.format(BASE_URL),
+        headers=GITHUB_HEADERS,
+        timeout=HTTP_TIMEOUT,
     )
+    response.raise_for_status()
 
     return str(response.json()['tag_name'])
 
@@ -49,7 +56,9 @@ def get_asset_list(release_tag: str) -> list[str]:
     response = requests.get(
         '{}/releases/tags/{}'.format(BASE_URL, release_tag),
         headers=GITHUB_HEADERS,
+        timeout=HTTP_TIMEOUT,
     )
+    response.raise_for_status()
 
     for url in response.json()['assets']:
         download_url = url['browser_download_url']
@@ -63,9 +72,13 @@ def get_asset_list(release_tag: str) -> list[str]:
 
 
 def retrieve_and_patch_json(url: str) -> dict[str, Any]:
-    image_json: dict[str, Any] = requests.get(
-        url.replace('.img.zst', '.json'), headers=GITHUB_HEADERS
-    ).json()
+    response = requests.get(
+        url.replace('.img.zst', '.json'),
+        headers=GITHUB_HEADERS,
+        timeout=HTTP_TIMEOUT,
+    )
+    response.raise_for_status()
+    image_json: dict[str, Any] = response.json()
 
     image_json['url'] = url
     image_json['extract_size'] = int(image_json['extract_size'])

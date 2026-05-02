@@ -9,6 +9,16 @@ on:
       - 'website/**'
       - 'raspberry_pi_imager/**'
 
+  # Re-deploy the marketing site whenever a release is published — the
+  # build-balena-disk-image workflow's final step creates the GitHub
+  # release with the new *.img.zst artefacts, so by the time this fires
+  # the assets are queryable from the GitHub API and rpi-imager.json
+  # picks them up. `prereleases` are included intentionally because
+  # build-balena-disk-image.yaml currently flags every release as
+  # prerelease=true.
+  release:
+    types: [published]
+
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -93,8 +103,13 @@ jobs:
           # Must have os_list array
           jq -e '.os_list | type == "array"' < website/public/rpi-imager.json > /dev/null
 
-          # Each entry must have required fields
-          jq -e '.os_list[] | has("name", "description", "url", "extract_size", "extract_sha256", "image_download_size", "image_download_sha256", "release_date")' < website/public/rpi-imager.json > /dev/null
+          # Each entry must have required fields. jq's has() takes one
+          # key at a time, so iterate the required-key list with `all`.
+          jq -e '
+            .os_list[] as $entry
+            | ["name","description","url","extract_size","extract_sha256","image_download_size","image_download_sha256","release_date"]
+            | all(. as $k | $entry | has($k))
+          ' < website/public/rpi-imager.json > /dev/null
 
           # Sizes must be numbers, not strings
           jq -e '.os_list[] | (.extract_size | type == "number") and (.image_download_size | type == "number")' < website/public/rpi-imager.json > /dev/null

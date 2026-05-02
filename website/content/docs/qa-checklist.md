@@ -25,7 +25,7 @@ Running unit tests is a good way to make sure that the code is working as expect
 2. Make sure that these assets are shown on the screen.
 3. Disable the assets and make sure that the screen in standby mode, which means that it displays the Anthias standby page.
 4. Change a duration for any asset and make sure that it is being displayed for the specified duration.
-5. Change a the start and end dates and make sure that the asset is being displayed only during the specified period.
+5. Change the start and end dates and make sure that the asset is being displayed only during the specified period.
 6. Turn on some assets and change their order (by dragging and dropping them). Make sure that the assets are being displayed in the correct order.
 7. Try to change a name of any asset.
 8. Turn on some assets. Click on Previous asset and on Next asset. Make sure that the screen displays the asset that comes before or after the current asset.
