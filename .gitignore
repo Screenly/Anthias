@@ -53,6 +53,14 @@ docker-compose.yml
 balena-deploy/
 db.sqlite3
 
+# Local pytest SQLite database (created by anthias_django/settings.py
+# when ENVIRONMENT=test and ANTHIAS_TEST_DB_PATH is not set). The
+# `-journal` / `-wal` / `-shm` siblings appear in WAL mode.
+.anthias-test.db
+.anthias-test.db-journal
+.anthias-test.db-wal
+.anthias-test.db-shm
+
 # Django
 staticfiles/
 

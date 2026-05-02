@@ -1,10 +1,11 @@
 import logging
 import os
+from collections.abc import Iterator
 from datetime import timedelta
 from typing import Any
 
+import pytest
 import time_machine
-from django.test import TestCase
 from django.utils import timezone
 
 from anthias_app.models import Asset
@@ -87,85 +88,119 @@ ASSET_TOMORROW = {
 FAKE_DB_PATH = '/tmp/fakedb'
 
 
-class SchedulerTest(TestCase):
-    def tearDown(self) -> None:
+@pytest.fixture
+def restore_shuffle_setting() -> Iterator[None]:
+    try:
+        yield
+    finally:
         settings['shuffle_playlist'] = False
 
-    def create_assets(self, assets: list[dict[str, Any]]) -> None:
-        for asset in assets:
-            Asset.objects.create(**asset)
 
-    def test_generate_asset_list_assets_should_return_list_sorted_by_play_order(
-        self,
-    ) -> None:  # noqa: E501
-        self.create_assets([ASSET_X, ASSET_Y])
-        assets, _ = generate_asset_list()
-        self.assertEqual(assets, [ASSET_Y, ASSET_X])
+def _create_assets(assets: list[dict[str, Any]]) -> None:
+    for asset in assets:
+        Asset.objects.create(**asset)
 
-    def test_generate_asset_list_check_deadline_if_both_active(self) -> None:
-        self.create_assets([ASSET_X, ASSET_Y])
-        _, deadline = generate_asset_list()
-        self.assertEqual(deadline, ASSET_Y['end_date'])
 
-    def test_generate_asset_list_check_deadline_if_asset_scheduled(
-        self,
-    ) -> None:
-        """If ASSET_X is active and ASSET_X[end_date] == (now + 3) and
-        ASSET_TOMORROW will be active tomorrow then deadline should be
-        ASSET_TOMORROW[start_date]
-        """
-        self.create_assets([ASSET_X, ASSET_TOMORROW])
-        _, deadline = generate_asset_list()
-        self.assertEqual(deadline, ASSET_TOMORROW['start_date'])
+@pytest.mark.django_db
+def test_generate_asset_list_assets_should_return_list_sorted_by_play_order(
+    restore_shuffle_setting: None,
+) -> None:
+    _create_assets([ASSET_X, ASSET_Y])
+    assets, _ = generate_asset_list()
+    assert assets == [ASSET_Y, ASSET_X]
 
-    def test_get_next_asset_should_be_y_and_x(self) -> None:
-        self.create_assets([ASSET_X, ASSET_Y])
-        scheduler = Scheduler()
 
-        expected_y = scheduler.get_next_asset()
-        expected_x = scheduler.get_next_asset()
+@pytest.mark.django_db
+def test_generate_asset_list_check_deadline_if_both_active(
+    restore_shuffle_setting: None,
+) -> None:
+    _create_assets([ASSET_X, ASSET_Y])
+    _, deadline = generate_asset_list()
+    assert deadline == ASSET_Y['end_date']
 
-        self.assertEqual([expected_y, expected_x], [ASSET_Y, ASSET_X])
 
-    def test_keep_same_position_on_playlist_update(self) -> None:
-        self.create_assets([ASSET_X, ASSET_Y])
-        scheduler = Scheduler()
-        scheduler.get_next_asset()
+@pytest.mark.django_db
+def test_generate_asset_list_check_deadline_if_asset_scheduled(
+    restore_shuffle_setting: None,
+) -> None:
+    """If ASSET_X is active and ASSET_X[end_date] == (now + 3) and
+    ASSET_TOMORROW will be active tomorrow then deadline should be
+    ASSET_TOMORROW[start_date]
+    """
+    _create_assets([ASSET_X, ASSET_TOMORROW])
+    _, deadline = generate_asset_list()
+    assert deadline == ASSET_TOMORROW['start_date']
 
-        self.create_assets([ASSET_Z])
-        scheduler.update_playlist()
 
-        self.assertEqual(scheduler.index, 1)
+@pytest.mark.django_db
+def test_get_next_asset_should_be_y_and_x(
+    restore_shuffle_setting: None,
+) -> None:
+    _create_assets([ASSET_X, ASSET_Y])
+    scheduler = Scheduler()
 
-    def test_counter_should_increment_after_full_asset_loop(self) -> None:
-        settings['shuffle_playlist'] = True
-        self.create_assets([ASSET_X, ASSET_Y])
-        scheduler = Scheduler()
+    expected_y = scheduler.get_next_asset()
+    expected_x = scheduler.get_next_asset()
 
-        self.assertEqual(scheduler.counter, 0)
+    assert [expected_y, expected_x] == [ASSET_Y, ASSET_X]
 
-        scheduler.get_next_asset()
-        scheduler.get_next_asset()
 
-        self.assertEqual(scheduler.counter, 1)
+@pytest.mark.django_db
+def test_keep_same_position_on_playlist_update(
+    restore_shuffle_setting: None,
+) -> None:
+    _create_assets([ASSET_X, ASSET_Y])
+    scheduler = Scheduler()
+    scheduler.get_next_asset()
 
-    def test_check_get_db_mtime(self) -> None:
+    _create_assets([ASSET_Z])
+    scheduler.update_playlist()
+
+    assert scheduler.index == 1
+
+
+@pytest.mark.django_db
+def test_counter_should_increment_after_full_asset_loop(
+    restore_shuffle_setting: None,
+) -> None:
+    settings['shuffle_playlist'] = True
+    _create_assets([ASSET_X, ASSET_Y])
+    scheduler = Scheduler()
+
+    assert scheduler.counter == 0
+
+    scheduler.get_next_asset()
+    scheduler.get_next_asset()
+
+    assert scheduler.counter == 1
+
+
+@pytest.mark.django_db
+def test_check_get_db_mtime(restore_shuffle_setting: None) -> None:
+    original_database = settings['database']
+    try:
         settings['database'] = FAKE_DB_PATH
         with open(FAKE_DB_PATH, 'a'):
             os.utime(FAKE_DB_PATH, (0, 0))
 
-        self.assertEqual(0, Scheduler().get_db_mtime())
+        assert Scheduler().get_db_mtime() == 0
+    finally:
+        settings['database'] = original_database
 
-    def test_playlist_should_be_updated_after_deadline_reached(self) -> None:
-        self.create_assets([ASSET_X, ASSET_Y])
-        _, deadline = generate_asset_list()
-        assert deadline is not None
 
-        traveller = time_machine.travel(deadline + timedelta(seconds=1))
-        traveller.start()
+@pytest.mark.django_db
+def test_playlist_should_be_updated_after_deadline_reached(
+    restore_shuffle_setting: None,
+) -> None:
+    _create_assets([ASSET_X, ASSET_Y])
+    _, deadline = generate_asset_list()
+    assert deadline is not None
 
-        scheduler = Scheduler()
-        scheduler.refresh_playlist()
+    traveller = time_machine.travel(deadline + timedelta(seconds=1))
+    traveller.start()
 
-        self.assertEqual([ASSET_X], scheduler.assets)
-        traveller.stop()
+    scheduler = Scheduler()
+    scheduler.refresh_playlist()
+
+    assert scheduler.assets == [ASSET_X]
+    traveller.stop()

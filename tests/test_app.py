@@ -5,9 +5,8 @@ from datetime import timedelta
 from time import sleep
 from types import TracebackType
 from typing import Any, Callable
-from unittest import TestCase, skip
 
-from django.test import tag
+import pytest
 from django.utils import timezone
 from selenium import webdriver
 from selenium.common.exceptions import ElementNotVisibleException
@@ -96,82 +95,118 @@ def wait_for_and_do(
             n += 1
 
 
-@tag('integration')
-class WebTest(TestCase):
-    def setUp(self) -> None:
-        Asset.objects.all().delete()
+@pytest.fixture
+def reset_assets() -> None:
+    Asset.objects.all().delete()
 
-    @skip('fixme')
-    def test_add_asset_url(self) -> None:
-        with get_browser() as browser:
-            browser.visit(main_page_url)
 
-            wait_for_and_do(
-                browser, '#add-asset-button', lambda btn: btn.click()
-            )
-            sleep(1)
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skip(reason='fixme')
+def test_add_asset_url(reset_assets: None) -> None:
+    with get_browser() as browser:
+        browser.visit(main_page_url)
 
-            wait_for_and_do(
-                browser,
-                'input[name="uri"]',
-                lambda field: field.fill('https://example.com'),
-            )
-            sleep(1)
+        wait_for_and_do(browser, '#add-asset-button', lambda btn: btn.click())
+        sleep(1)
 
-            wait_for_and_do(browser, '#tab-uri', lambda form: form.click())
-            sleep(1)  # Wait for the new-asset panel animation.
+        wait_for_and_do(
+            browser,
+            'input[name="uri"]',
+            lambda field: field.fill('https://example.com'),
+        )
+        sleep(1)
 
-            wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
-            sleep(3)  # The backend needs time to process the request.
+        wait_for_and_do(browser, '#tab-uri', lambda form: form.click())
+        sleep(1)  # Wait for the new-asset panel animation.
 
-        assets = Asset.objects.all()
-        self.assertEqual(len(assets), 1)
-        asset = assets.first()
-        assert asset is not None
+        wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
+        sleep(3)  # The backend needs time to process the request.
 
-        self.assertEqual(asset.name, 'https://example.com')
-        self.assertEqual(asset.uri, 'https://example.com')
-        self.assertEqual(asset.mimetype, 'webpage')
-        self.assertEqual(asset.duration, settings['default_duration'])
+    assets = Asset.objects.all()
+    assert len(assets) == 1
+    asset = assets.first()
+    assert asset is not None
 
-    @skip('migrate to React-based tests')
-    def test_edit_asset(self) -> None:
-        Asset.objects.create(**asset_x)
+    assert asset.name == 'https://example.com'
+    assert asset.uri == 'https://example.com'
+    assert asset.mimetype == 'webpage'
+    assert asset.duration == settings['default_duration']
 
-        with get_browser() as browser:
-            browser.visit(main_page_url)
-            wait_for_and_do(
-                browser, '.edit-asset-button', lambda btn: btn.click()
-            )
-            sleep(1)
 
-            wait_for_and_do(
-                browser,
-                'input[name="duration"]',
-                lambda field: field.fill('333'),
-            )
-            sleep(1)
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skip(reason='migrate to React-based tests')
+def test_edit_asset(reset_assets: None) -> None:
+    Asset.objects.create(**asset_x)
 
-            wait_for_and_do(browser, '#edit-form', lambda form: form.click())
-            sleep(3)
+    with get_browser() as browser:
+        browser.visit(main_page_url)
+        wait_for_and_do(browser, '.edit-asset-button', lambda btn: btn.click())
+        sleep(1)
 
-            wait_for_and_do(
-                browser,
-                '.edit-asset-modal #save-asset',
-                lambda btn: btn.click(),
-            )
-            sleep(3)
+        wait_for_and_do(
+            browser,
+            'input[name="duration"]',
+            lambda field: field.fill('333'),
+        )
+        sleep(1)
 
-        assets = Asset.objects.all()
-        self.assertEqual(len(assets), 1)
-        asset = assets.first()
-        assert asset is not None
+        wait_for_and_do(browser, '#edit-form', lambda form: form.click())
+        sleep(3)
 
-        self.assertEqual(asset.duration, 333)
+        wait_for_and_do(
+            browser,
+            '.edit-asset-modal #save-asset',
+            lambda btn: btn.click(),
+        )
+        sleep(3)
 
-    def test_add_asset_image_upload(self) -> None:
-        image_file = '/tmp/image.png'
+    assets = Asset.objects.all()
+    assert len(assets) == 1
+    asset = assets.first()
+    assert asset is not None
 
+    assert asset.duration == 333
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_add_asset_image_upload(reset_assets: None) -> None:
+    image_file = '/tmp/image.png'
+
+    with get_browser() as browser:
+        browser.visit(main_page_url)
+
+        browser.find_by_id('add-asset-button').click()
+        sleep(1)
+
+        wait_for_and_do(
+            browser, '.nav-link.upload-asset-tab', lambda tab: tab.click()
+        )
+        wait_for_and_do(
+            browser,
+            'input[name="file_upload"]',
+            lambda file_input: file_input.fill(image_file),
+        )
+        sleep(1)
+
+        sleep(3)
+
+    assets = Asset.objects.all()
+    assert len(assets) == 1
+    asset = assets.first()
+    assert asset is not None
+
+    assert asset.name == 'image.png'
+    assert asset.mimetype == 'image'
+    assert asset.duration == settings['default_duration']
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_add_asset_video_upload(reset_assets: None) -> None:
+    with TemporaryCopy('tests/assets/asset.mov', 'video.mov') as video_file:
         with get_browser() as browser:
             browser.visit(main_page_url)
 
@@ -179,277 +214,257 @@ class WebTest(TestCase):
             sleep(1)
 
             wait_for_and_do(
-                browser, '.nav-link.upload-asset-tab', lambda tab: tab.click()
+                browser,
+                '.nav-link.upload-asset-tab',
+                lambda tab: tab.click(),
+            )
+            wait_for_and_do(
+                browser,
+                'input[name="file_upload"]',
+                lambda file_input: file_input.fill(video_file),
+            )
+            sleep(1)  # Wait for the new-asset panel animation.
+
+            sleep(3)  # The backend needs time to process the request.
+
+        assets = Asset.objects.all()
+        assert len(assets) == 1
+        asset = assets.first()
+        assert asset is not None
+
+        assert asset.name == 'video.mov'
+        assert asset.mimetype == 'video'
+        assert asset.duration == 5
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_add_two_assets_upload(reset_assets: None) -> None:
+    with (
+        TemporaryCopy('tests/assets/asset.mov', 'video.mov') as video_file,
+        TemporaryCopy('static/img/standby.png', 'standby.png') as image_file,
+    ):
+        with get_browser() as browser:
+            browser.visit(main_page_url)
+
+            browser.find_by_id('add-asset-button').click()
+            sleep(1)
+
+            wait_for_and_do(
+                browser,
+                '.nav-link.upload-asset-tab',
+                lambda tab: tab.click(),
             )
             wait_for_and_do(
                 browser,
                 'input[name="file_upload"]',
                 lambda file_input: file_input.fill(image_file),
             )
-            sleep(1)
-
-            sleep(3)
-
-        assets = Asset.objects.all()
-        self.assertEqual(len(assets), 1)
-        asset = assets.first()
-        assert asset is not None
-
-        self.assertEqual(asset.name, 'image.png')
-        self.assertEqual(asset.mimetype, 'image')
-        self.assertEqual(asset.duration, settings['default_duration'])
-
-    def test_add_asset_video_upload(self) -> None:
-        with TemporaryCopy(
-            'tests/assets/asset.mov', 'video.mov'
-        ) as video_file:
-            with get_browser() as browser:
-                browser.visit(main_page_url)
-
-                browser.find_by_id('add-asset-button').click()
-                sleep(1)
-
-                wait_for_and_do(
-                    browser,
-                    '.nav-link.upload-asset-tab',
-                    lambda tab: tab.click(),
-                )
-                wait_for_and_do(
-                    browser,
-                    'input[name="file_upload"]',
-                    lambda file_input: file_input.fill(video_file),
-                )
-                sleep(1)  # Wait for the new-asset panel animation.
-
-                sleep(3)  # The backend needs time to process the request.
-
-            assets = Asset.objects.all()
-            self.assertEqual(len(assets), 1)
-            asset = assets.first()
-            assert asset is not None
-
-            self.assertEqual(asset.name, 'video.mov')
-            self.assertEqual(asset.mimetype, 'video')
-            self.assertEqual(asset.duration, 5)
-
-    def test_add_two_assets_upload(self) -> None:
-        with (
-            TemporaryCopy('tests/assets/asset.mov', 'video.mov') as video_file,
-            TemporaryCopy(
-                'static/img/standby.png', 'standby.png'
-            ) as image_file,
-        ):
-            with get_browser() as browser:
-                browser.visit(main_page_url)
-
-                browser.find_by_id('add-asset-button').click()
-                sleep(1)
-
-                wait_for_and_do(
-                    browser,
-                    '.nav-link.upload-asset-tab',
-                    lambda tab: tab.click(),
-                )
-                wait_for_and_do(
-                    browser,
-                    'input[name="file_upload"]',
-                    lambda file_input: file_input.fill(image_file),
-                )
-                wait_for_and_do(
-                    browser,
-                    'input[name="file_upload"]',
-                    lambda file_input: file_input.fill(video_file),
-                )
-
-                sleep(3)
-
-            assets = Asset.objects.all()
-
-            self.assertEqual(len(assets), 2)
-
-            self.assertEqual(assets[0].name, 'standby.png')
-            self.assertEqual(assets[0].mimetype, 'image')
-            self.assertEqual(assets[0].duration, settings['default_duration'])
-
-            self.assertEqual(assets[1].name, 'video.mov')
-            self.assertEqual(assets[1].mimetype, 'video')
-            self.assertEqual(assets[1].duration, 5)
-
-    @skip('fixme')
-    def test_add_asset_streaming(self) -> None:
-        with get_browser() as browser:
-            browser.visit(main_page_url)
-
-            wait_for_and_do(
-                browser, '#add-asset-button', lambda btn: btn.click()
-            )
-            sleep(1)
-
             wait_for_and_do(
                 browser,
-                'input[name="uri"]',
-                lambda field: field.fill('rtsp://localhost:8091/asset.mov'),
+                'input[name="file_upload"]',
+                lambda file_input: file_input.fill(video_file),
             )
-            sleep(1)
 
-            wait_for_and_do(browser, '#add-form', lambda form: form.click())
-            sleep(1)
-
-            wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
-            sleep(10)
+            sleep(3)
 
         assets = Asset.objects.all()
-        self.assertEqual(len(assets), 1)
-        asset = assets.first()
-        assert asset is not None
 
-        self.assertEqual(asset.name, 'rtsp://localhost:8091/asset.mov')
-        self.assertEqual(asset.uri, 'rtsp://localhost:8091/asset.mov')
-        self.assertEqual(asset.mimetype, 'streaming')
-        self.assertEqual(
-            asset.duration, settings['default_streaming_duration']
+        assert len(assets) == 2
+
+        assert assets[0].name == 'standby.png'
+        assert assets[0].mimetype == 'image'
+        assert assets[0].duration == settings['default_duration']
+
+        assert assets[1].name == 'video.mov'
+        assert assets[1].mimetype == 'video'
+        assert assets[1].duration == 5
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skip(reason='fixme')
+def test_add_asset_streaming(reset_assets: None) -> None:
+    with get_browser() as browser:
+        browser.visit(main_page_url)
+
+        wait_for_and_do(browser, '#add-asset-button', lambda btn: btn.click())
+        sleep(1)
+
+        wait_for_and_do(
+            browser,
+            'input[name="uri"]',
+            lambda field: field.fill('rtsp://localhost:8091/asset.mov'),
+        )
+        sleep(1)
+
+        wait_for_and_do(browser, '#add-form', lambda form: form.click())
+        sleep(1)
+
+        wait_for_and_do(browser, '#save-asset', lambda btn: btn.click())
+        sleep(10)
+
+    assets = Asset.objects.all()
+    assert len(assets) == 1
+    asset = assets.first()
+    assert asset is not None
+
+    assert asset.name == 'rtsp://localhost:8091/asset.mov'
+    assert asset.uri == 'rtsp://localhost:8091/asset.mov'
+    assert asset.mimetype == 'streaming'
+    assert asset.duration == settings['default_streaming_duration']
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skip(reason='migrate to React-based tests')
+def test_remove_asset(reset_assets: None) -> None:
+    Asset.objects.create(**asset_x)
+
+    with get_browser() as browser:
+        browser.visit(main_page_url)
+
+        wait_for_and_do(
+            browser, '.delete-asset-button', lambda btn: btn.click()
+        )
+        wait_for_and_do(browser, '.confirm-delete', lambda btn: btn.click())
+        sleep(3)
+
+    assert Asset.objects.count() == 0
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_enable_asset(reset_assets: None) -> None:
+    Asset.objects.create(**asset_x)
+
+    with get_browser() as browser:
+        browser.visit(main_page_url)
+        sleep(2)  # Wait for React to render
+
+        # Find the toggle element and scroll it into view
+        toggle_element = browser.find_by_css(
+            '.form-switch input[type="checkbox"]'
+        ).first
+        browser.execute_script(
+            'arguments[0].scrollIntoView(true);', toggle_element._element
+        )
+        sleep(1)
+
+        # Click the input to trigger the toggle
+        browser.execute_script(
+            'arguments[0].click();', toggle_element._element
+        )
+        sleep(2)
+
+        # Re-find the element after React re-renders it
+        toggle_element_after = browser.find_by_css(
+            '.form-switch input[type="checkbox"]'
+        ).first
+        browser.execute_script(
+            'return arguments[0].checked;', toggle_element_after._element
         )
 
-    @skip('migrate to React-based tests')
-    def test_remove_asset(self) -> None:
-        Asset.objects.create(**asset_x)
+        # Wait longer for API call to complete
+        sleep(5)
 
-        with get_browser() as browser:
-            browser.visit(main_page_url)
+    assets = Asset.objects.all()
+    assert len(assets) == 1
 
-            wait_for_and_do(
-                browser, '.delete-asset-button', lambda btn: btn.click()
-            )
-            wait_for_and_do(
-                browser, '.confirm-delete', lambda btn: btn.click()
-            )
-            sleep(3)
+    asset = assets.first()
+    assert asset is not None
+    assert asset.is_enabled is True
 
-        self.assertEqual(Asset.objects.count(), 0)
 
-    def test_enable_asset(self) -> None:
-        Asset.objects.create(**asset_x)
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_disable_asset(reset_assets: None) -> None:
+    # Clear any existing assets first
+    Asset.objects.all().delete()
 
-        with get_browser() as browser:
-            browser.visit(main_page_url)
-            sleep(2)  # Wait for React to render
+    Asset.objects.create(**{**asset_x, 'is_enabled': 1})
 
-            # Find the toggle element and scroll it into view
-            toggle_element = browser.find_by_css(
-                '.form-switch input[type="checkbox"]'
-            ).first
-            browser.execute_script(
-                'arguments[0].scrollIntoView(true);', toggle_element._element
-            )
-            sleep(1)
+    with get_browser() as browser:
+        browser.visit(main_page_url)
+        sleep(2)  # Wait for React to render
 
-            # Click the input to trigger the toggle
-            browser.execute_script(
-                'arguments[0].click();', toggle_element._element
-            )
-            sleep(2)
+        # Find the toggle element and scroll it into view
+        toggle_element = browser.find_by_css(
+            '.form-switch input[type="checkbox"]'
+        ).first
+        browser.execute_script(
+            'arguments[0].scrollIntoView(true);', toggle_element._element
+        )
+        sleep(1)
 
-            # Re-find the element after React re-renders it
-            toggle_element_after = browser.find_by_css(
-                '.form-switch input[type="checkbox"]'
-            ).first
-            browser.execute_script(
-                'return arguments[0].checked;', toggle_element_after._element
-            )
+        # Click the input to trigger the toggle
+        browser.execute_script(
+            'arguments[0].click();', toggle_element._element
+        )
+        sleep(2)
 
-            # Wait longer for API call to complete
-            sleep(5)
+        # Re-find the element after React re-renders it
+        toggle_element_after = browser.find_by_css(
+            '.form-switch input[type="checkbox"]'
+        ).first
+        browser.execute_script(
+            'return arguments[0].checked;', toggle_element_after._element
+        )
 
-        assets = Asset.objects.all()
-        self.assertEqual(len(assets), 1)
+        # Wait longer for API call to complete
+        sleep(5)
 
-        asset = assets.first()
-        assert asset is not None
-        self.assertEqual(asset.is_enabled, True)
+    assets = Asset.objects.all()
+    assert len(assets) == 1
 
-    def test_disable_asset(self) -> None:
-        # Clear any existing assets first
-        Asset.objects.all().delete()
+    asset = assets.first()
+    assert asset is not None
+    assert asset.is_enabled is False
 
-        Asset.objects.create(**{**asset_x, 'is_enabled': 1})
 
-        with get_browser() as browser:
-            browser.visit(main_page_url)
-            sleep(2)  # Wait for React to render
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skip(reason='migrate to React-based tests')
+def test_reorder_asset(reset_assets: None) -> None:
+    Asset.objects.create(**{**asset_x, 'is_enabled': 1})
+    Asset.objects.create(**asset_y)
 
-            # Find the toggle element and scroll it into view
-            toggle_element = browser.find_by_css(
-                '.form-switch input[type="checkbox"]'
-            ).first
-            browser.execute_script(
-                'arguments[0].scrollIntoView(true);', toggle_element._element
-            )
-            sleep(1)
+    with get_browser() as browser:
+        browser.visit(main_page_url)
 
-            # Click the input to trigger the toggle
-            browser.execute_script(
-                'arguments[0].click();', toggle_element._element
-            )
-            sleep(2)
+        asset_x_for_drag = browser.find_by_id(asset_x['asset_id'])
+        sleep(1)
 
-            # Re-find the element after React re-renders it
-            toggle_element_after = browser.find_by_css(
-                '.form-switch input[type="checkbox"]'
-            ).first
-            browser.execute_script(
-                'return arguments[0].checked;', toggle_element_after._element
-            )
+        asset_y_to_reorder = browser.find_by_id(asset_y['asset_id'])
+        asset_x_for_drag.drag_and_drop(asset_y_to_reorder)
+        sleep(3)
 
-            # Wait longer for API call to complete
-            sleep(5)
+    x = Asset.objects.get(asset_id=asset_x['asset_id'])
+    y = Asset.objects.get(asset_id=asset_y['asset_id'])
 
-        assets = Asset.objects.all()
-        self.assertEqual(len(assets), 1)
+    assert x.play_order == 0
+    assert y.play_order == 1
 
-        asset = assets.first()
-        assert asset is not None
-        self.assertEqual(asset.is_enabled, False)
 
-    @skip('migrate to React-based tests')
-    def test_reorder_asset(self) -> None:
-        Asset.objects.create(**{**asset_x, 'is_enabled': 1})
-        Asset.objects.create(**asset_y)
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_settings_page_should_work(reset_assets: None) -> None:
+    with get_browser() as browser:
+        browser.visit(settings_url)
 
-        with get_browser() as browser:
-            browser.visit(main_page_url)
+        assert (
+            'Error: 500 Internal Server Error' in browser.html
+            or 'Error: 504 Gateway Time-out' in browser.html
+            or 'Error: 504 Gateway Timeout' in browser.html
+        ) is False, '5xx: not expected'
 
-            asset_x_for_drag = browser.find_by_id(asset_x['asset_id'])
-            sleep(1)
 
-            asset_y_to_reorder = browser.find_by_id(asset_y['asset_id'])
-            asset_x_for_drag.drag_and_drop(asset_y_to_reorder)
-            sleep(3)
-
-        x = Asset.objects.get(asset_id=asset_x['asset_id'])
-        y = Asset.objects.get(asset_id=asset_y['asset_id'])
-
-        self.assertEqual(x.play_order, 0)
-        self.assertEqual(y.play_order, 1)
-
-    def test_settings_page_should_work(self) -> None:
-        with get_browser() as browser:
-            browser.visit(settings_url)
-
-            self.assertEqual(
-                (
-                    'Error: 500 Internal Server Error' in browser.html
-                    or 'Error: 504 Gateway Time-out' in browser.html
-                    or 'Error: 504 Gateway Timeout' in browser.html
-                ),
-                False,
-                '5xx: not expected',
-            )
-
-    def test_system_info_page_should_work(self) -> None:
-        with get_browser() as browser:
-            browser.visit(system_info_url)
-            self.assertEqual(
-                browser.is_text_present('Error: 500 Internal Server Error'),
-                False,
-                '500: internal server error not expected',
-            )
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_system_info_page_should_work(reset_assets: None) -> None:
+    with get_browser() as browser:
+        browser.visit(system_info_url)
+        assert (
+            browser.is_text_present('Error: 500 Internal Server Error')
+            is False
+        ), '500: internal server error not expected'
