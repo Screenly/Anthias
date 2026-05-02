@@ -1,8 +1,10 @@
+import type { Dispatch, SetStateAction } from 'react'
+
 import { EditFormData } from '@/types'
 
 interface ScheduleFieldsProps {
   formData: EditFormData
-  setFormData: React.Dispatch<React.SetStateAction<EditFormData>>
+  setFormData: Dispatch<SetStateAction<EditFormData>>
 }
 
 const DAYS: { value: number; label: string }[] = [
@@ -41,15 +43,17 @@ export const ScheduleFields = ({
     formData.play_time_from !== null || formData.play_time_to !== null
 
   const toggleRestrictTime = () => {
-    setFormData((prev) =>
-      restrictTimeEnabled
+    setFormData((prev) => {
+      const isRestrictTimeEnabled =
+        prev.play_time_from !== null || prev.play_time_to !== null
+      return isRestrictTimeEnabled
         ? { ...prev, play_time_from: null, play_time_to: null }
         : {
             ...prev,
             play_time_from: DEFAULT_TIME_FROM,
             play_time_to: DEFAULT_TIME_TO,
-          },
-    )
+          }
+    })
   }
 
   const handleTimeChange = (

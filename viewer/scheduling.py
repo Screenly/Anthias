@@ -38,7 +38,9 @@ def generate_asset_list() -> tuple[list[dict[str, Any]], datetime | None]:
 
     Active assets are filtered by Asset.is_active() (which now applies
     day-of-week and time-of-day windows on top of the existing date
-    range and is_enabled checks).
+    range and is_enabled checks). is_active() is evaluated once per
+    asset against a shared `now` so the playlist filter and deadline
+    computation always agree on activeness.
 
     Deadline is the soonest of:
       - any inactive asset's start_date,
@@ -47,6 +49,7 @@ def generate_asset_list() -> tuple[list[dict[str, Any]], datetime | None]:
         filter (those transitions don't show up in date columns).
     """
     logging.info('Generating asset-list...')
+    now = timezone.now()
 
     candidates = list(
         Asset.objects.filter(
@@ -56,13 +59,15 @@ def generate_asset_list() -> tuple[list[dict[str, Any]], datetime | None]:
         ).order_by('play_order')
     )
 
-    active = [a for a in candidates if a.is_active()]
-    playlist = [_asset_to_dict(a) for a in active]
+    active_flags = [a.is_active(now=now) for a in candidates]
+    playlist = [
+        _asset_to_dict(a) for a, ok in zip(candidates, active_flags) if ok
+    ]
 
     if settings['shuffle_playlist']:
         _sysrandom.shuffle(playlist)
 
-    deadline = _compute_deadline(candidates)
+    deadline = _compute_deadline(candidates, active_flags, now)
     logging.debug(
         'generate_asset_list: %d assets, deadline %s',
         len(playlist),
@@ -71,7 +76,11 @@ def generate_asset_list() -> tuple[list[dict[str, Any]], datetime | None]:
     return playlist, deadline
 
 
-def _compute_deadline(assets: list[Asset]) -> datetime | None:
+def _compute_deadline(
+    assets: list[Asset],
+    active_flags: list[bool],
+    now: datetime,
+) -> datetime | None:
     """Soonest future moment when the playlist might need re-evaluating.
 
     Past boundaries are dropped so a long-ago start_date on an asset
@@ -79,12 +88,11 @@ def _compute_deadline(assets: list[Asset]) -> datetime | None:
     doesn't pin the deadline to "always overdue" and cause
     refresh_playlist() to fire on every tick.
     """
-    now = timezone.now()
     candidates: list[datetime] = []
     has_windowed = False
 
-    for asset in assets:
-        boundary = asset.end_date if asset.is_active() else asset.start_date
+    for asset, is_active in zip(assets, active_flags):
+        boundary = asset.end_date if is_active else asset.start_date
         if boundary and boundary > now:
             candidates.append(boundary)
         if asset.has_window_filter():

@@ -66,15 +66,21 @@ class Asset(models.Model):
         return value
 
     def has_window_filter(self) -> bool:
-        """True if this asset has any day-of-week or time-of-day filter set."""
+        """True if this asset has any day-of-week or time-of-day filter set.
+
+        Compares play_days as a set so a stored value like [7,6,5,4,3,2,1]
+        or one with duplicates is correctly recognised as "all days" and
+        doesn't trigger the windowed-deadline cap unnecessarily.
+        """
         if self.play_time_from is not None or self.play_time_to is not None:
             return True
-        return self.get_play_days() != ALL_DAYS
+        return set(self.get_play_days()) != set(ALL_DAYS)
 
-    def is_active(self) -> bool:
+    def is_active(self, now: datetime | None = None) -> bool:
         if not (self.is_enabled and self.start_date and self.end_date):
             return False
-        now = timezone.now()
+        if now is None:
+            now = timezone.now()
         if not (self.start_date < now < self.end_date):
             return False
         return self._matches_play_window(timezone.localtime(now))
