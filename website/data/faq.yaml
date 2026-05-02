@@ -52,9 +52,17 @@
   items:
     - question: How do I rotate the screen for portrait orientation?
       answer: |
-        Rotation happens at the OS / firmware level, not inside Anthias. On Raspberry Pi OS, edit `/boot/firmware/config.txt` and add `display_rotate=1` (90°), `display_rotate=2` (180°), or `display_rotate=3` (270°), then reboot.
+        Rotation happens at the kernel / firmware level. The Anthias viewer renders straight to the Linux framebuffer (Qt `linuxfb`) and to KMS (mpv `--vo=drm`) — there's no Wayland compositor in the stack — so the standard Raspberry Pi config knobs apply directly.
 
-        Pi 5 with Wayland uses a different stack — see the [Raspberry Pi screen configuration docs](https://www.raspberrypi.com/documentation/computers/configuration.html#screen-configuration). As a workaround, many TVs and monitors offer rotation in their own settings menu.
+        Edit `/boot/firmware/config.txt` and add one of:
+
+        ```
+        display_rotate=1   # 90°
+        display_rotate=2   # 180°
+        display_rotate=3   # 270°
+        ```
+
+        Then reboot. If `display_rotate` doesn't take effect on a particular Pi 5 / KMS setup, set the rotation on the kernel cmdline instead — edit `/boot/firmware/cmdline.txt` and append `video=HDMI-A-1:1920x1080@60,rotate=90` (or 180/270) on the same line. Many displays also expose a rotation setting in their own OSD as a fallback.
 
     - question: How do I change the screen resolution? Does Anthias support 4K?
       answer: |
