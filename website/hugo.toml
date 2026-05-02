@@ -4,6 +4,15 @@ title = "Anthias - The world's most popular open source digital signage project"
 
 disableKinds = ['taxonomy']
 
+[markup]
+  [markup.highlight]
+    codeFences = true
+    guessSyntax = true
+    noClasses = false
+    lineNos = false
+    tabWidth = 4
+    style = "github"
+
 [menus]
   [[menus.main]]
     name = 'Features'

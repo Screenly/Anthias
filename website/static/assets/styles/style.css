@@ -1140,108 +1140,140 @@ html {
   outline-offset: 2px;
 }
 .docs-prose {
-  color: #1f1722;
+  color: #2a1f33;
   font-size: 1rem;
   line-height: 1.7;
-  & h1 {
-    font-size: 1.75rem;
-    font-weight: 800;
-    color: var(--color-brand-near-black);
-    margin: 2.5rem 0 1rem;
-    letter-spacing: -0.01em;
+  font-feature-settings: "ss01", "cv11";
+  & > :first-child {
+    margin-top: 0 !important;
   }
-  & h2 {
+  & > :last-child {
+    margin-bottom: 0 !important;
+  }
+  & h1, & h2 {
     font-size: 1.5rem;
     font-weight: 700;
     color: var(--color-brand-near-black);
-    margin: 2.25rem 0 0.75rem;
+    margin: 3rem 0 1rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #ece6f0;
     letter-spacing: -0.01em;
+    line-height: 1.3;
   }
   & h3 {
-    font-size: 1.25rem;
+    font-size: 1.15rem;
     font-weight: 700;
     color: var(--color-brand-near-black);
+    margin: 2rem 0 0.5rem;
+    line-height: 1.35;
+  }
+  & h4, & h5, & h6 {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--color-brand-purple);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
     margin: 1.75rem 0 0.5rem;
   }
-  & h4 {
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: var(--color-brand-near-black);
-    margin: 1.5rem 0 0.5rem;
-  }
-  & h1:first-child, & h2:first-child, & h3:first-child {
-    margin-top: 0;
-  }
-  & p, & ul, & ol {
-    margin: 0.85rem 0;
+  & p {
+    margin: 0.9rem 0;
   }
   & ul, & ol {
-    padding-left: 1.5rem;
+    margin: 0.9rem 0;
+    padding-left: 1.4rem;
   }
   & ul {
-    list-style: disc;
+    list-style: none;
+  }
+  & ul > li {
+    position: relative;
+  }
+  & ul > li::before {
+    content: "";
+    position: absolute;
+    left: -1rem;
+    top: 0.7rem;
+    width: 0.35rem;
+    height: 0.35rem;
+    border-radius: 50%;
+    background: var(--color-brand-purple);
+    opacity: 0.5;
   }
   & ol {
     list-style: decimal;
   }
+  & ol > li::marker {
+    color: var(--color-brand-purple);
+    font-weight: 600;
+  }
   & li {
-    margin: 0.25rem 0;
+    margin: 0.35rem 0;
   }
   & li > p {
-    margin: 0.25rem 0;
+    margin: 0.35rem 0;
+  }
+  & li > ul, & li > ol {
+    margin: 0.35rem 0;
   }
   & a {
     color: var(--color-brand-purple);
     text-decoration: underline;
+    text-decoration-color: rgb(126 43 208 / 0.3);
     text-decoration-thickness: 1px;
-    text-underline-offset: 2px;
+    text-underline-offset: 3px;
+    transition: text-decoration-color 0.15s;
   }
   & a:hover {
-    text-decoration-thickness: 2px;
+    text-decoration-color: var(--color-brand-purple);
   }
   & strong {
     font-weight: 700;
     color: var(--color-brand-near-black);
   }
   & code {
-    background: #f4f1f6;
-    color: var(--color-brand-dark);
-    padding: 0.15rem 0.4rem;
-    border-radius: 0.25rem;
-    font-size: 0.9em;
+    background: #f3eef7;
+    color: #4c2870;
+    padding: 0.1rem 0.4rem;
+    border-radius: 0.3rem;
+    font-size: 0.875em;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    border: 1px solid rgb(126 43 208 / 0.08);
   }
   & pre {
-    background: #1b0028;
-    color: #f8f6f9;
+    background: #faf8fb;
+    color: #1a0c24;
     padding: 1rem 1.25rem;
     border-radius: 0.5rem;
+    border: 1px solid #ece6f0;
     overflow-x: auto;
     margin: 1.25rem 0;
-    font-size: 0.875rem;
-    line-height: 1.55;
+    font-size: 0.85rem;
+    line-height: 1.6;
   }
   & pre code {
     background: transparent;
     color: inherit;
     padding: 0;
     border-radius: 0;
+    border: 0;
     font-size: inherit;
   }
   & img {
     max-width: 100%;
     height: auto;
     border-radius: 0.5rem;
-    margin: 1.5rem 0;
-    border: 1px solid rgb(0 0 0 / 0.08);
+    margin: 1.5rem auto;
+    display: block;
+    box-shadow: 0 1px 3px rgb(39 0 53 / 0.08), 0 4px 16px rgb(39 0 53 / 0.04);
+  }
+  & p > img, & img:only-child {
+    max-width: min(100%, 36rem);
   }
   & blockquote {
     border-left: 3px solid #d8d2dc;
     padding: 0.5rem 0 0.5rem 1rem;
     margin: 1.25rem 0;
     color: #4b3f55;
-    background: #faf8fb;
-    border-radius: 0 0.25rem 0.25rem 0;
   }
   & blockquote > p:first-child {
     margin-top: 0;
@@ -1249,56 +1281,105 @@ html {
   & blockquote > p:last-child {
     margin-bottom: 0;
   }
-  & blockquote.alert {
+  & .docs-alert {
+    border: 1px solid;
     border-left-width: 4px;
+    border-radius: 0.5rem;
     background: #faf8fb;
+    padding: 1rem 1.25rem;
+    margin: 1.5rem 0;
   }
-  & blockquote.alert-note {
-    border-left-color: #2563eb;
-  }
-  & blockquote.alert-tip {
-    border-left-color: #16a34a;
-  }
-  & blockquote.alert-important {
-    border-left-color: #7e2bd0;
-  }
-  & blockquote.alert-warning {
-    border-left-color: #ea580c;
-  }
-  & blockquote.alert-caution {
-    border-left-color: #dc2626;
-  }
-  & blockquote.alert .alert-heading {
+  & .docs-alert-label {
     font-weight: 700;
     text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.25rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.5rem;
+  }
+  & .docs-alert-note {
+    border-color: rgb(37 99 235 / 0.25);
+    border-left-color: #2563eb;
+    background: #f5f8ff;
+  }
+  & .docs-alert-note .docs-alert-label {
+    color: #1d4ed8;
+  }
+  & .docs-alert-tip {
+    border-color: rgb(22 163 74 / 0.25);
+    border-left-color: #16a34a;
+    background: #f3faf5;
+  }
+  & .docs-alert-tip .docs-alert-label {
+    color: #15803d;
+  }
+  & .docs-alert-important {
+    border-color: rgb(126 43 208 / 0.25);
+    border-left-color: var(--color-brand-purple);
+    background: #faf6fe;
+  }
+  & .docs-alert-important .docs-alert-label {
+    color: #6b21a8;
+  }
+  & .docs-alert-warning {
+    border-color: rgb(234 88 12 / 0.25);
+    border-left-color: #ea580c;
+    background: #fff7f0;
+  }
+  & .docs-alert-warning .docs-alert-label {
+    color: #c2410c;
+  }
+  & .docs-alert-caution {
+    border-color: rgb(220 38 38 / 0.25);
+    border-left-color: #dc2626;
+    background: #fff5f5;
+  }
+  & .docs-alert-caution .docs-alert-label {
+    color: #b91c1c;
+  }
+  & .docs-alert > p:first-of-type {
+    margin-top: 0;
+  }
+  & .docs-alert > p:last-of-type {
+    margin-bottom: 0;
+  }
+  & .docs-alert > pre {
+    margin: 0.75rem 0;
+    background: rgb(255 255 255 / 0.6);
   }
   & table {
     width: 100%;
     border-collapse: collapse;
-    margin: 1.25rem 0;
+    margin: 1.5rem 0;
     font-size: 0.9rem;
+    border: 1px solid #ece6f0;
+    border-radius: 0.5rem;
+    overflow: hidden;
   }
   & th, & td {
     text-align: left;
-    padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid #e5e1ea;
+    padding: 0.65rem 0.85rem;
+    border-bottom: 1px solid #ece6f0;
     vertical-align: top;
+  }
+  & tr:last-child td {
+    border-bottom: none;
   }
   & thead th {
     background: #faf8fb;
     font-weight: 700;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     color: #6b5d76;
+    border-bottom: 1px solid #ece6f0;
+  }
+  & tbody tr:hover {
+    background: #fbfafc;
   }
   & hr {
     border: none;
-    border-top: 1px solid #e5e1ea;
-    margin: 2rem 0;
+    border-top: 1px solid #ece6f0;
+    margin: 2.5rem 0;
   }
 }
 @property --tw-space-y-reverse {
