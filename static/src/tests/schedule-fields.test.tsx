@@ -130,4 +130,29 @@ describe('ScheduleFields', () => {
     })
     expect(latest!.play_time_from).toBe('08:30')
   })
+
+  it('collapses the whole window when one side is cleared', () => {
+    // The v2 API rejects partial windows, so the UI must never let
+    // play_time_from and play_time_to drift apart.
+    let latest: EditFormData | null = null
+    render(
+      <Harness
+        initial={{
+          ...baseForm,
+          play_time_from: '09:00',
+          play_time_to: '17:00',
+        }}
+        onState={(s) => (latest = s)}
+      />,
+    )
+
+    const fromInput = screen.getByLabelText(
+      'Play time from',
+    ) as HTMLInputElement
+    act(() => {
+      fireEvent.change(fromInput, { target: { value: '' } })
+    })
+    expect(latest!.play_time_from).toBeNull()
+    expect(latest!.play_time_to).toBeNull()
+  })
 })

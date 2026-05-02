@@ -47,7 +47,7 @@ Time-of-day and day-of-week checks use the device's local timezone.
 When `play_time_from > play_time_to`, the window wraps past midnight.
 `play_days` refers to the **start** day of the window.
 
-For example, a slot of `play_days=[1]` (Mon) with `22:00 → 06:00`:
+For example, an asset with `play_days=[1]` (Mon) and `22:00 → 06:00`:
 
 | Local time | Active? | Why |
 | ---------- | ------- | --- |

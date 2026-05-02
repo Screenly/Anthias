@@ -23,25 +23,20 @@ from api.serializers import UpdateAssetSerializer
 from api.serializers.mixins import CreateAssetSerializerMixin
 
 
-def _normalise_play_days(value: Any) -> str:
-    """Coerce a list-or-JSON-string of weekdays into a sorted, deduped
-    JSON string ready for the TextField column. Raises ValidationError
-    for shapes outside [1..7] or for an empty selection.
+def _normalise_play_days(value: list[int]) -> str:
+    """Coerce a list of weekday ints into a sorted, deduped JSON string
+    ready for the TextField column. Raises ValidationError for items
+    outside [1..7] or for an empty selection.
 
     Empty `play_days` is rejected explicitly: silently widening it to
     "all days" would surprise an operator who unchecked everything
     expecting "never play". Disabling the asset (is_enabled=false) is
     the right primitive for that intent.
+
+    The DRF `ListField(child=IntegerField(...))` upstream of this
+    function has already coerced the wire format into a list of ints,
+    so we don't need to re-parse JSON strings here.
     """
-    if isinstance(value, str):
-        try:
-            value = json.loads(value)
-        except json.JSONDecodeError:
-            raise serializers.ValidationError(
-                'play_days must be a JSON array of integers 1-7.'
-            )
-    if not isinstance(value, list):
-        raise serializers.ValidationError('play_days must be a list.')
     for d in value:
         if not isinstance(d, int) or d < 1 or d > 7:
             raise serializers.ValidationError(

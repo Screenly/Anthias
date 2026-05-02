@@ -46,12 +46,13 @@ class Asset(models.Model):
         return str(self.name)
 
     def get_play_days(self) -> list[int]:
-        """Parse play_days into a list of ints 1-7.
+        """Parse play_days into a sorted, deduped list of ints 1-7.
 
         Falls back to all days if the value is missing, malformed JSON,
-        not a list, or contains anything outside the 1-7 range. The API
-        validates on write but admin / direct DB edits could otherwise
-        leave a row with junk in this column.
+        not a list, empty, or contains anything outside the 1-7 range.
+        The API validates on write, but admin / direct DB edits could
+        otherwise leave a row with junk in this column. Normalising on
+        read also keeps API responses consistent (sorted, no dupes).
         """
         if isinstance(self.play_days, list):
             value = self.play_days
@@ -65,18 +66,17 @@ class Asset(models.Model):
             return list(ALL_DAYS)
         if not all(isinstance(d, int) and 1 <= d <= 7 for d in value):
             return list(ALL_DAYS)
-        return value
+
+        deduped = sorted(set(value))
+        if not deduped:
+            return list(ALL_DAYS)
+        return deduped
 
     def has_window_filter(self) -> bool:
-        """True if this asset has any day-of-week or time-of-day filter set.
-
-        Compares play_days as a set so a stored value like [7,6,5,4,3,2,1]
-        or one with duplicates is correctly recognised as "all days" and
-        doesn't trigger the windowed-deadline cap unnecessarily.
-        """
+        """True if this asset has any day-of-week or time-of-day filter set."""
         if self.play_time_from is not None or self.play_time_to is not None:
             return True
-        return set(self.get_play_days()) != set(ALL_DAYS)
+        return self.get_play_days() != list(ALL_DAYS)
 
     def is_active(self, now: datetime | None = None) -> bool:
         if not (self.is_enabled and self.start_date and self.end_date):

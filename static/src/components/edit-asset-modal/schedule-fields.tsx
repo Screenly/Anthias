@@ -60,7 +60,16 @@ export const ScheduleFields = ({
     field: 'play_time_from' | 'play_time_to',
     value: string,
   ) => {
-    setFormData((prev) => ({ ...prev, [field]: value || null }))
+    setFormData((prev) => {
+      // The v2 API rejects partial windows: clearing one side has to
+      // collapse the whole window so we never submit an unsaveable
+      // state. The restrict-time toggle reads play_time_from /
+      // play_time_to, so this also flips the toggle off.
+      if (!value) {
+        return { ...prev, play_time_from: null, play_time_to: null }
+      }
+      return { ...prev, [field]: value }
+    })
   }
 
   return (
