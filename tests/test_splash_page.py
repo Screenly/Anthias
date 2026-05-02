@@ -29,6 +29,11 @@ from api.views import v2 as v2_views
 _FIXTURE_IPV4 = '192.168.1.42'  # NOSONAR
 _FIXTURE_IPV4_ALT = '10.0.0.5'  # NOSONAR
 _FIXTURE_IPV6 = 'fe80::1'  # NOSONAR
+# Splash output uses plain http:// (Anthias serves the admin UI on
+# plain HTTP per CLAUDE.md). Centralizing the literal here keeps
+# Sonar's S5332 noise to a single suppression site instead of one
+# per assertion.
+_HTTP = 'http://'  # NOSONAR
 
 
 class SafeIpAddressesTest(TestCase):
@@ -49,7 +54,7 @@ class SafeIpAddressesTest(TestCase):
             'api.views.v2.get_node_ip', return_value=_FIXTURE_IPV4
         ):
             self.assertEqual(
-                v2_views._safe_ip_addresses(), [f'http://{_FIXTURE_IPV4}']
+                v2_views._safe_ip_addresses(), [f'{_HTTP}{_FIXTURE_IPV4}']
             )
 
     def test_formats_ipv6_in_brackets(self) -> None:
@@ -57,7 +62,7 @@ class SafeIpAddressesTest(TestCase):
             'api.views.v2.get_node_ip', return_value=_FIXTURE_IPV6
         ):
             self.assertEqual(
-                v2_views._safe_ip_addresses(), [f'http://[{_FIXTURE_IPV6}]']
+                v2_views._safe_ip_addresses(), [f'{_HTTP}[{_FIXTURE_IPV6}]']
             )
 
     def test_returns_multiple_when_node_ip_is_space_separated(self) -> None:
@@ -67,7 +72,7 @@ class SafeIpAddressesTest(TestCase):
         ):
             self.assertEqual(
                 v2_views._safe_ip_addresses(),
-                [f'http://{_FIXTURE_IPV4}', f'http://{_FIXTURE_IPV4_ALT}'],
+                [f'{_HTTP}{_FIXTURE_IPV4}', f'{_HTTP}{_FIXTURE_IPV4_ALT}'],
             )
 
     def test_silently_drops_garbage_tokens(self) -> None:
@@ -79,7 +84,7 @@ class SafeIpAddressesTest(TestCase):
             return_value=f'not-an-ip {_FIXTURE_IPV4} also-garbage',
         ):
             self.assertEqual(
-                v2_views._safe_ip_addresses(), [f'http://{_FIXTURE_IPV4}']
+                v2_views._safe_ip_addresses(), [f'{_HTTP}{_FIXTURE_IPV4}']
             )
 
 
@@ -91,7 +96,7 @@ class NetworkIpAddressesEndpointTest(TestCase):
             response = Client().get('/api/v2/network/ip-addresses')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.json(), {'ip_addresses': [f'http://{_FIXTURE_IPV4}']}
+            response.json(), {'ip_addresses': [f'{_HTTP}{_FIXTURE_IPV4}']}
         )
 
     def test_returns_200_with_empty_list_when_unknown(self) -> None:
