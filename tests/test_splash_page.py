@@ -223,7 +223,14 @@ def test_resolve_publish_failure_releases_debounce(
     """If the publish fails (Redis flake), the debounce key would
     otherwise pin us out of refreshing for the whole TTL — even
     though no refresh actually got requested. Clear the key on
-    publish failure so the next poll can retry."""
+    publish failure so the next poll can retry.
+
+    Asserts via the underlying fake store rather than ``v2_views.r``
+    so the post-condition can't be confounded by the in-block
+    patches: the autouse Redis fake the conftest installed exposes
+    its dict via ``side_effect`` on ``get``, so we check directly
+    against an unmocked surface (``in_dict_after``) that the
+    ``_publish_refresh`` cleanup actually wrote."""
     with (
         mock.patch('api.views.v2.is_balena_app', return_value=False),
         mock.patch.object(v2_views.r, 'get', return_value=None),
@@ -231,11 +238,18 @@ def test_resolve_publish_failure_releases_debounce(
             v2_views.r,
             'publish',
             side_effect=redis.RedisError('synthetic'),
-        ),
+        ) as m_publish,
+        mock.patch.object(
+            v2_views.r, 'delete', wraps=v2_views.r.delete
+        ) as m_delete,
     ):
         v2_views._resolve_node_ip()
-    # Debounce key must NOT be set after a failed publish.
-    assert v2_views.r.get(v2_views._IP_REFRESH_PENDING_KEY) is None
+
+    # The publish was attempted (and raised), and ``_publish_refresh``
+    # responded by calling ``r.delete`` on the debounce key to free
+    # the next poll. Both halves of the contract are explicit here.
+    m_publish.assert_called_once_with('hostcmd', 'set_ip_addresses')
+    m_delete.assert_called_once_with(v2_views._IP_REFRESH_PENDING_KEY)
 
 
 def test_resolve_setnx_failure_returns_empty(

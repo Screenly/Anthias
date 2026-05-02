@@ -130,14 +130,23 @@ def _resolve_node_ip() -> str:
             ips = json.loads(raw)
         except (ValueError, TypeError):
             ips = None
-        # Treat an empty list as a cache miss (fall through to the
-        # debounced refresh publish below). Otherwise host_agent's
-        # first run on a still-coming-up network would write '[]'
-        # into the cache, the splash would treat that as a hit, and
-        # IPs would never appear even after networking comes online
-        # — every subsequent poll would short-circuit on the empty
-        # cached value.
-        if ips:
+        # Validate the decoded payload is a list of strings — host_agent
+        # writes ``json.dumps([...])`` so that's the only shape we
+        # expect here. A different producer (or a corrupted write)
+        # could yield a string / int / dict; ``' '.join`` would either
+        # crash on non-iterable or quietly join characters of a string,
+        # both of which are wrong. Treat anything that doesn't match
+        # ``list[str]`` as a cache miss and fall through to refresh.
+        #
+        # Empty list also falls through: host_agent's first run on a
+        # still-coming-up network writes ``'[]'``, and we don't want
+        # the splash to freeze on that — every subsequent poll would
+        # short-circuit on the empty cached value otherwise.
+        if (
+            isinstance(ips, list)
+            and ips
+            and all(isinstance(ip, str) for ip in ips)
+        ):
             # Cache hit. Also kick off a debounced background refresh
             # so the splash stays current if the device's IPs change
             # during its display window (DHCP renewal, link flap,
@@ -240,6 +249,31 @@ class NetworkIpAddressesViewV2(APIView):
     heavier work (psutil, statvfs, version checks) that would compound
     on a 2-second poll. Don't bolt onto this; add a sibling endpoint
     if a different unauth'd value is ever needed.
+
+    **KNOWN LIMITATION (deferred to broader auth work).** This GET has
+    a side effect — ``_resolve_node_ip`` calls ``_publish_refresh()``
+    on cache miss / hit / empty-list, which publishes ``hostcmd:
+    set_ip_addresses`` to host_agent. ``host_agent.set_ip_addresses``
+    in turn does an internet probe (``requests.get`` to 1.1.1.1 with
+    a 10×1s tenacity retry). An unauthenticated LAN client can drive
+    that side effect at the debounce-bounded rate (one publish per
+    ``_IP_REFRESH_DEBOUNCE_S``).
+
+    The mitigations already in place keep blast radius bounded:
+
+      * SETNX-debounced publishes (only one refresh per 12s window
+        regardless of poll volume),
+      * the response body carries no data not already disclosed by
+        the splash page itself,
+      * host_agent's own retry/throttle behavior caps the
+        downstream cost.
+
+    The proper fix is a shared internal-auth gate (matching the one
+    on AssetRecheckViewV2) — but the splash polling endpoint is
+    consumed by the viewer's webview from the device's local
+    network with no way to attach BasicAuth, so internal-auth here
+    needs to be designed alongside the broader auth rework. Tracked
+    in the same followup as AssetRecheckViewV2's gating.
     """
 
     @extend_schema(
