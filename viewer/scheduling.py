@@ -95,7 +95,14 @@ def _compute_deadline(
         boundary = asset.end_date if is_active else asset.start_date
         if boundary and boundary > now:
             candidates.append(boundary)
-        if asset.has_window_filter():
+        # Cap only matters while the asset is in its date range — the
+        # day/time window can't change activeness before start_date or
+        # after end_date, so future/expired windowed assets should rely
+        # on their date boundary alone, not periodic polling.
+        if (
+            asset.has_window_filter()
+            and asset.start_date < now < asset.end_date
+        ):
             has_windowed = True
 
     if has_windowed:

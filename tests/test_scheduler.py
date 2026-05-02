@@ -353,6 +353,43 @@ def test_windowed_cap_does_not_apply_for_partial_time_window() -> None:
 
 
 @pytest.mark.django_db
+def test_windowed_cap_does_not_apply_before_start_date() -> None:
+    """A windowed asset whose start_date is in the future shouldn't
+    drag the cap into the picture — its activeness can't flip until
+    start_date arrives, so the deadline should track start_date, not
+    now+60s."""
+    Asset.objects.create(
+        **_scheduled_asset(
+            play_days='[1]',
+            start_date=_aware(2027, 1, 1, 0, 0),
+            end_date=_aware(2027, 12, 31, 0, 0),
+        )
+    )
+    with time_machine.travel(_aware(2026, 1, 5, 12, 0)):
+        now = timezone.now()
+        _, deadline = generate_asset_list()
+    assert deadline is not None
+    assert (deadline - now).total_seconds() > 60
+
+
+@pytest.mark.django_db
+def test_windowed_cap_does_not_apply_after_end_date() -> None:
+    """An expired windowed asset can never become active again, so it
+    must not keep the cap firing every 60s."""
+    Asset.objects.create(
+        **_scheduled_asset(
+            play_days='[1]',
+            start_date=_aware(2024, 1, 1, 0, 0),
+            end_date=_aware(2024, 12, 31, 0, 0),
+        )
+    )
+    with time_machine.travel(_aware(2026, 1, 5, 12, 0)):
+        _, deadline = generate_asset_list()
+    # No live deadlines at all: end_date is past, no cap, no other assets.
+    assert deadline is None
+
+
+@pytest.mark.django_db
 def test_deadline_never_lands_in_the_past() -> None:
     """A windowed-but-currently-inactive asset must not poison the
     deadline with its long-past start_date — that would cause
