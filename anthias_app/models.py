@@ -36,6 +36,8 @@ class Asset(models.Model):
     play_days = models.TextField(default=_default_play_days)
     play_time_from = models.TimeField(blank=True, null=True)
     play_time_to = models.TimeField(blank=True, null=True)
+    is_reachable = models.BooleanField(default=True)
+    last_reachability_check = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = 'assets'

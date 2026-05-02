@@ -37,6 +37,8 @@ ASSET_X = {
     'play_days': _DEFAULT_PLAY_DAYS,
     'play_time_from': None,
     'play_time_to': None,
+    'is_reachable': True,
+    'last_reachability_check': None,
 }
 
 ASSET_X_DIFF = {'duration': 10}
@@ -57,6 +59,8 @@ ASSET_Y = {
     'play_days': _DEFAULT_PLAY_DAYS,
     'play_time_from': None,
     'play_time_to': None,
+    'is_reachable': True,
+    'last_reachability_check': None,
 }
 
 ASSET_Z = {
@@ -75,6 +79,8 @@ ASSET_Z = {
     'play_days': _DEFAULT_PLAY_DAYS,
     'play_time_from': None,
     'play_time_to': None,
+    'is_reachable': True,
+    'last_reachability_check': None,
 }
 
 ASSET_TOMORROW = {
@@ -93,6 +99,8 @@ ASSET_TOMORROW = {
     'play_days': _DEFAULT_PLAY_DAYS,
     'play_time_from': None,
     'play_time_to': None,
+    'is_reachable': True,
+    'last_reachability_check': None,
 }
 
 FAKE_DB_PATH = '/tmp/fakedb'

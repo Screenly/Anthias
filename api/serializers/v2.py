@@ -119,6 +119,12 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
             'play_days',
             'play_time_from',
             'play_time_to',
+            'is_reachable',
+            'last_reachability_check',
+        ]
+        read_only_fields = [
+            'is_reachable',
+            'last_reachability_check',
         ]
 
 

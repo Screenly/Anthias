@@ -2,11 +2,16 @@
 
 services:
   anthias-test:
-    # Explicit image tag so anthias-celery below can reference the same
-    # built image without a duplicate `build:` block (which would
-    # produce a separate, byte-identical-but-distinct image tag).
+    # Both anthias-test and anthias-celery declare the same image tag
+    # AND the same build block. Compose deduplicates the build by
+    # image tag, so the image is produced once; ghcr layer cache
+    # (configured by ``tools.image_builder`` via the Dockerfile's
+    # ``# syntax`` line + ``--mount=type=cache`` and the buildx
+    # invocation in ci) is hit by both service builds. Sharing the
+    # ``build:`` block also keeps either service from triggering a
+    # registry pull for the local-only ``anthias-test:dev`` tag.
     image: anthias-test:dev
-    build:
+    build: &test_build
       context: .
       dockerfile: docker/Dockerfile.test
     environment:
@@ -26,12 +31,13 @@ services:
       - anthias-data:/data
 
   anthias-celery:
-    # Reuses anthias-test:dev via the explicit image tag above — the
-    # test image is a superset of server (same base apt + venv +
-    # bun + chrome for selenium). Compose builds anthias-test first
-    # (it owns the build:) and this service inherits the same image,
-    # only overriding CMD.
+    # Same image as anthias-test (test image is a superset of server:
+    # same base apt + venv + bun + chrome for selenium); only the CMD
+    # differs. Sharing the ``build:`` anchor lets compose route this
+    # service through the ghcr layer cache too instead of attempting
+    # a Docker Hub pull on the local-only ``anthias-test:dev`` tag.
     image: anthias-test:dev
+    build: *test_build
     command: >
       celery -A celery_tasks.celery worker -B -n worker@anthias
       --loglevel=info --schedule /tmp/celerybeat-schedule
