@@ -58,6 +58,7 @@
     --font-weight-bold: 700;
     --font-weight-extrabold: 800;
     --tracking-tight: -0.025em;
+    --tracking-normal: 0em;
     --tracking-wide: 0.025em;
     --tracking-wider: 0.05em;
     --leading-tight: 1.25;
@@ -814,6 +815,10 @@
     --tw-tracking: 0.12em;
     letter-spacing: 0.12em;
   }
+  .tracking-normal {
+    --tw-tracking: var(--tracking-normal);
+    letter-spacing: var(--tracking-normal);
+  }
   .tracking-tight {
     --tw-tracking: var(--tracking-tight);
     letter-spacing: var(--tracking-tight);
@@ -909,6 +914,9 @@
   }
   .capitalize {
     text-transform: capitalize;
+  }
+  .normal-case {
+    text-transform: none;
   }
   .uppercase {
     text-transform: uppercase;
@@ -1224,6 +1232,11 @@
 }
 html {
   scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 :focus-visible {
   outline: 2px solid var(--color-brand-purple);

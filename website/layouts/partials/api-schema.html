@@ -34,7 +34,7 @@
     </thead>
     <tbody>
       {{- $required := default (slice) $schema.required -}}
-      {{- range $name, $prop := $schema.properties -}}
+      {{- range $name, $prop := sort $schema.properties -}}
       {{- $propRef := index $prop "$ref" -}}
       <tr class="border-b border-zinc-100 align-top">
         <td class="py-2 pr-4 font-mono text-brand-purple">

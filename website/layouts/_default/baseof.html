@@ -20,7 +20,7 @@
 
     <meta property="og:title" content="{{ $pageTitle }}">
     <meta property="og:description" content="{{ $description }}">
-    <meta property="og:type" content="{{ if and .IsPage (in (string .Section) "docs") }}article{{ else }}website{{ end }}">
+    <meta property="og:type" content="{{ if and .IsPage (eq (string .Section) "docs") }}article{{ else }}website{{ end }}">
     <meta property="og:url" content="{{ .Permalink }}">
     <meta property="og:image" content="{{ $pageImage }}">
     <meta property="og:image:alt" content="Anthias dashboard showing scheduled content on a Raspberry Pi-driven display">

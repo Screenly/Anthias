@@ -4,9 +4,10 @@
 
 {{- /* Build sorted list of unique tags */ -}}
 {{- $allTags := slice -}}
-{{- range $path, $ops := $spec.paths -}}
-  {{- range $method, $op := $ops -}}
-    {{- if in $methods $method -}}
+{{- range $path, $ops := sort $spec.paths -}}
+  {{- range $method := $methods -}}
+    {{- with index $ops $method -}}
+      {{- $op := . -}}
       {{- with $op.tags -}}
         {{- range . -}}{{- $allTags = $allTags | append . -}}{{- end -}}
       {{- else -}}
@@ -35,9 +36,10 @@
         <div id="tag-{{ $tag | urlize }}" class="scroll-mt-24">
             <h2 class="text-2xl font-bold text-brand-near-black capitalize">{{ replace $tag "_" " " }}</h2>
             <div class="mt-6 space-y-6">
-                {{- range $path, $ops := $spec.paths -}}
-                  {{- range $method, $op := $ops -}}
-                    {{- if in $methods $method -}}
+                {{- range $path, $ops := sort $spec.paths -}}
+                  {{- range $method := $methods -}}
+                    {{- with index $ops $method -}}
+                      {{- $op := . -}}
                       {{- $opTags := default (slice "default") $op.tags -}}
                       {{- if in $opTags $tag -}}
                       <article class="border border-zinc-200 rounded-lg overflow-hidden">
@@ -92,7 +94,8 @@
                           {{- $body := index .content "application/json" -}}
                           {{- $contentType := "application/json" -}}
                           {{- if not $body -}}
-                            {{- range $ct, $entry := .content -}}
+                            {{- $content := .content -}}
+                            {{- range $ct, $entry := sort $content -}}
                               {{- if not $body -}}{{- $body = $entry -}}{{- $contentType = $ct -}}{{- end -}}
                             {{- end -}}
                           {{- end -}}
@@ -105,10 +108,11 @@
                           {{- end -}}
 
                           {{- with $op.responses -}}
+                          {{- $responses := . -}}
                           <div>
                             <h3 class="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-2">Responses</h3>
                             <div class="space-y-3">
-                              {{- range $status, $resp := . -}}
+                              {{- range $status, $resp := sort $responses -}}
                               <details class="border border-zinc-200 rounded">
                                 <summary class="cursor-pointer px-3 py-2 text-sm font-mono flex items-center gap-3 hover:bg-zinc-50">
                                   {{- $statusColor := "bg-zinc-100 text-zinc-700" -}}

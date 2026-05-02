@@ -97,7 +97,7 @@ local = [
     "tenacity==9.1.2",
 ]
 website = [
-    "pytest==8.3.5",
+    "pytest==9.0.3",
     "requests==2.33.1",
 ]
 test = [

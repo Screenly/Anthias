@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import os
 import re
 from typing import Any
 
@@ -35,10 +36,18 @@ REQUIRED_FIELDS = {
 }
 
 
+def get_github_headers() -> dict[str, str]:
+    headers = dict(GITHUB_HEADERS)
+    token = os.environ.get('GITHUB_TOKEN')
+    if token:
+        headers['Authorization'] = f'Bearer {token}'
+    return headers
+
+
 def get_latest_tag() -> str:
     response = requests.get(
         '{}/releases/latest'.format(BASE_URL),
-        headers=GITHUB_HEADERS,
+        headers=get_github_headers(),
         timeout=HTTP_TIMEOUT,
     )
     response.raise_for_status()
@@ -55,7 +64,7 @@ def get_asset_list(release_tag: str) -> list[str]:
     asset_urls = []
     response = requests.get(
         '{}/releases/tags/{}'.format(BASE_URL, release_tag),
-        headers=GITHUB_HEADERS,
+        headers=get_github_headers(),
         timeout=HTTP_TIMEOUT,
     )
     response.raise_for_status()
@@ -74,7 +83,7 @@ def get_asset_list(release_tag: str) -> list[str]:
 def retrieve_and_patch_json(url: str) -> dict[str, Any]:
     response = requests.get(
         url.replace('.img.zst', '.json'),
-        headers=GITHUB_HEADERS,
+        headers=get_github_headers(),
         timeout=HTTP_TIMEOUT,
     )
     response.raise_for_status()

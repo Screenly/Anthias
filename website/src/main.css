@@ -17,6 +17,12 @@ html {
   scroll-behavior: smooth;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
 :focus-visible {
   outline: 2px solid var(--color-brand-purple);
   outline-offset: 2px;
