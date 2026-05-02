@@ -1,4 +1,3 @@
-import json
 from datetime import timezone
 from typing import Any
 
@@ -23,19 +22,19 @@ from api.serializers import UpdateAssetSerializer
 from api.serializers.mixins import CreateAssetSerializerMixin
 
 
-def _normalise_play_days(value: list[int]) -> str:
-    """Coerce a list of weekday ints into a sorted, deduped JSON string
-    ready for the TextField column. Raises ValidationError for items
-    outside [1..7] or for an empty selection.
+def _normalise_play_days(value: list[int]) -> list[int]:
+    """Return a sorted, deduped list of weekday ints. Raises
+    ValidationError for items outside [1..7] or for an empty selection.
 
     Empty `play_days` is rejected explicitly: silently widening it to
     "all days" would surprise an operator who unchecked everything
     expecting "never play". Disabling the asset (is_enabled=false) is
     the right primitive for that intent.
 
-    The DRF `ListField(child=IntegerField(...))` upstream of this
-    function has already coerced the wire format into a list of ints,
-    so we don't need to re-parse JSON strings here.
+    Stays a list so DRF's ListField.to_representation can round-trip
+    through serializer.data (the create view passes that dict straight
+    into Asset.objects.create()). The TextField column stringifies the
+    list at save time.
     """
     for d in value:
         if not isinstance(d, int) or d < 1 or d > 7:
@@ -48,7 +47,7 @@ def _normalise_play_days(value: list[int]) -> str:
             'play_days must contain at least one day. To stop playback '
             'entirely, disable the asset (is_enabled=false).'
         )
-    return json.dumps(deduped)
+    return deduped
 
 
 def _validate_time_window(
@@ -183,12 +182,12 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
         return _validate_time_window(data, instance=self.instance)
 
     def update(self, instance: Asset, validated_data: dict[str, Any]) -> Asset:
-        instance = super().update(instance, validated_data)
+        # Apply schedule fields before delegating: super().update() calls
+        # instance.save() at the end, so this lands in a single write.
         for field in ('play_days', 'play_time_from', 'play_time_to'):
             if field in validated_data:
                 setattr(instance, field, validated_data[field])
-        instance.save()
-        return instance
+        return super().update(instance, validated_data)
 
 
 class DeviceSettingsSerializerV2(Serializer[Any]):

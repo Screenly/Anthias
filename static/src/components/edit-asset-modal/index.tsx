@@ -74,6 +74,15 @@ export const EditAssetModal = ({
       const toHourMinute = (value: string | null) =>
         value ? value.slice(0, 5) : null
 
+      // The v2 API rejects partial windows. Legacy / admin-edited rows
+      // could still arrive here with one side null, so collapse to both
+      // null on load — otherwise the restrict-time toggle would read
+      // "enabled" but the form would be unsaveable.
+      const fromValue = toHourMinute(asset.play_time_from ?? null)
+      const toValue = toHourMinute(asset.play_time_to ?? null)
+      const [normalizedFrom, normalizedTo] =
+        fromValue && toValue ? [fromValue, toValue] : [null, null]
+
       setFormData({
         name: asset.name || '',
         start_date: asset.start_date || '',
@@ -83,8 +92,8 @@ export const EditAssetModal = ({
         nocache: asset.nocache || false,
         skip_asset_check: asset.skip_asset_check || false,
         play_days: asset.play_days ?? [1, 2, 3, 4, 5, 6, 7],
-        play_time_from: toHourMinute(asset.play_time_from ?? null),
-        play_time_to: toHourMinute(asset.play_time_to ?? null),
+        play_time_from: normalizedFrom,
+        play_time_to: normalizedTo,
       })
 
       setStartDateDate(formatDatePart(startDate))

@@ -248,3 +248,27 @@ def test_v2_update_with_full_time_window_accepted(
     assert response.status_code == status.HTTP_200_OK
     assert response.data['play_time_from'] == '09:00:00'
     assert response.data['play_time_to'] == '17:00:00'
+
+
+@pytest.mark.django_db
+def test_v2_create_with_play_days_round_trips(
+    api_client: APIClient,
+) -> None:
+    # Regression: serializer.data must round-trip play_days through
+    # AssetListViewV2.post -> Asset.objects.create(**serializer.data).
+    # Previously _normalise_play_days returned a JSON string, which
+    # ListField.to_representation could not iterate as ints.
+    response = api_client.post(
+        reverse('api:asset_list_v2'),
+        data={
+            **ASSET_CREATION_DATA,
+            'play_days': [3, 1, 1, 5],
+            'play_time_from': '09:00:00',
+            'play_time_to': '17:00:00',
+        },
+        format='json',
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data['play_days'] == [1, 3, 5]
+    assert response.data['play_time_from'] == '09:00:00'
+    assert response.data['play_time_to'] == '17:00:00'

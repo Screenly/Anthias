@@ -68,8 +68,10 @@ For example, an asset with `play_days=[1]` (Mon) and `22:00 → 06:00`:
 ## Notes
 
 - `play_time_to` is **exclusive**: `09:00:00 → 17:00:00` covers up to but
-  not including 17:00:00. Use `17:00:01` or similar if you need to
-  include the boundary minute.
+  not including 17:00:00. To include the boundary minute, set
+  `play_time_to` one second past it (e.g. `17:00:01`) via the v2 REST
+  API. The web UI's `<input type="time">` is minute-precision, so
+  second-level boundaries can only be set through the API.
 - The viewer re-evaluates the playlist when an asset's window opens or
   closes; transitions are picked up within ~60 seconds.
 - DST and other clock changes use wall-clock semantics: a window
