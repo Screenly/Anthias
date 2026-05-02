@@ -127,9 +127,18 @@ def _resolve_node_ip() -> str:
         return ''
     if raw:
         try:
-            return ' '.join(json.loads(raw))
+            ips = json.loads(raw)
         except (ValueError, TypeError):
-            return ''
+            ips = None
+        # Treat an empty list as a cache miss (fall through to the
+        # debounced refresh publish below). Otherwise host_agent's
+        # first run on a still-coming-up network would write '[]'
+        # into the cache, the splash would treat that as a hit, and
+        # IPs would never appear even after networking comes online
+        # — every subsequent poll would short-circuit on the empty
+        # cached value.
+        if ips:
+            return ' '.join(ips)
 
     # Cache miss. Best-effort: ask host_agent to populate. The next
     # poll picks it up — we don't block waiting for completion.

@@ -147,6 +147,22 @@ class ResolveNodeIpBareMetalTest(TestCase):
         ):
             self.assertEqual(v2_views._resolve_node_ip(), '')
 
+    def test_empty_list_in_cache_triggers_refresh(self) -> None:
+        """host_agent's first run on a still-coming-up network can
+        write ``'[]'`` into the cache. If we treated that as a hit and
+        returned '' without publishing, the splash would never
+        recover when networking comes online during the splash window
+        — every subsequent poll would short-circuit on the empty
+        cached value. Treat empty-list as a cache miss so the debounced
+        refresh publish fires."""
+        with (
+            mock.patch('api.views.v2.is_balena_app', return_value=False),
+            mock.patch.object(v2_views.r, 'get', return_value='[]'),
+            mock.patch.object(v2_views.r, 'publish') as m_publish,
+        ):
+            self.assertEqual(v2_views._resolve_node_ip(), '')
+        m_publish.assert_called_once_with('hostcmd', 'set_ip_addresses')
+
     def test_redis_get_failure_returns_empty(self) -> None:
         """Redis flake during cache read must not 500 the splash poll.
         The polling endpoint is on a 2s loop — degrading to '' lets

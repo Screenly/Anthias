@@ -89,8 +89,14 @@
         });
     }
 
+    // Resolve the IP-list endpoint via Django's URL reverser so the
+    // template doesn't break if the API mount path or version prefix
+    // ever changes. The `{% url %}` tag emits the resolved path
+    // server-side and the JS just consumes it as a string.
+    var ipsUrl = '{% url "api:network_ip_addresses_v2" %}';
+
     function poll() {
-        fetch('/api/v2/network/ip-addresses', { cache: 'no-store' })
+        fetch(ipsUrl, { cache: 'no-store' })
             .then(function(r) { return r.ok ? r.json() : { ip_addresses: [] }; })
             .then(function(data) { render(data.ip_addresses || []); })
             .catch(function() { /* keep polling on transient errors */ })
