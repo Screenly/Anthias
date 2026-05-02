@@ -1,11 +1,14 @@
 import ipaddress
+import json
 import logging
+import os
 from datetime import timedelta
 from os import getenv, statvfs
 from platform import machine
 from typing import Any
 
 import psutil
+import requests
 from drf_spectacular.utils import extend_schema
 from hurry.filesize import size
 from rest_framework import status
@@ -55,18 +58,80 @@ from settings import ViewerPublisher, settings
 r = connect_to_redis()
 
 
-def _safe_ip_addresses() -> list[str]:
-    """Best-effort IP-list resolver, tolerant of host-bus flakiness.
+# Bounded HTTP timeout for the Balena supervisor lookup below. Hit by
+# every poll on Balena devices, so it must stay well under the JS
+# poll cadence (2s) to keep request workers free. A real supervisor
+# answers in well under this; the timeout is the worst-case bound.
+_BALENA_SUPERVISOR_TIMEOUT_S = 1.5
 
-    ``get_node_ip()`` returns 'Unknown' on a fresh Balena boot when the
-    supervisor isn't responsive yet, and 'Unable to retrieve IP.' on
-    bare metal when host_agent hasn't populated Redis. Either string
-    fails ``ipaddress.ip_address()`` with ValueError if naively passed
-    on, which is how a slow first boot used to 500 the splash page.
-    Filter both out and skip any other token that isn't a valid IP, so
-    a malformed return value can't crash a consumer.
+
+def _resolve_node_ip() -> str:
+    """Non-blocking IP-string resolver for the splash polling endpoint.
+
+    ``lib.utils.get_node_ip()`` is the right primitive for one-shot
+    server-rendered surfaces like ``/api/v2/info``: it publishes
+    ``set_ip_addresses`` to host_agent and waits up to ~80s
+    (60s host_agent_ready + 20s ip_addresses_ready) for the result.
+    That's catastrophic from inside a 2-second polling endpoint —
+    request workers would queue behind a single slow first call and
+    the splash would never populate.
+
+    This resolver is the fast-path version. On bare metal it reads
+    the cached ``ip_addresses`` key directly (host_agent populates it
+    on demand) and fires a fire-and-forget ``hostcmd`` publish on a
+    cache miss so the next poll (~2s later) finds something to read.
+    On Balena it calls the supervisor directly with a tight HTTP
+    timeout, since the supervisor is the only source of truth there
+    and there's no host_agent cache to fall back on.
+
+    Returns the raw whitespace-separated IP string (or empty), shaped
+    to match what ``get_node_ip()`` would have returned, so the
+    formatter below can stay shared with ``InfoViewV2``.
     """
-    node_ip = get_node_ip()
+    if is_balena_app():
+        try:
+            response = requests.get(
+                '{}/v1/device?apikey={}'.format(
+                    os.getenv('BALENA_SUPERVISOR_ADDRESS'),
+                    os.getenv('BALENA_SUPERVISOR_API_KEY'),
+                ),
+                headers={'Content-Type': 'application/json'},
+                timeout=_BALENA_SUPERVISOR_TIMEOUT_S,
+            )
+        except requests.RequestException:
+            return ''
+        if not response.ok:
+            return ''
+        try:
+            return str(response.json().get('ip_address') or '')
+        except ValueError:
+            return ''
+
+    raw = r.get('ip_addresses')
+    if raw:
+        try:
+            return ' '.join(json.loads(raw))
+        except (ValueError, TypeError):
+            return ''
+
+    # Cache miss. Best-effort: ask host_agent to populate. The next
+    # poll picks it up — we don't block waiting for completion.
+    try:
+        r.publish('hostcmd', 'set_ip_addresses')
+    except Exception:
+        pass
+    return ''
+
+
+def _format_ip_urls(node_ip: str) -> list[str]:
+    """Format a whitespace-separated IP string into clickable URLs.
+
+    Tolerates malformed input: callers can pass leftover sentinel
+    strings (e.g. 'Unknown' from ``get_node_ip()`` on a slow Balena
+    boot) and ``ipaddress.ip_address()`` raises on those. Skipping
+    invalid tokens keeps a single garbage value from 500-ing the
+    consuming view.
+    """
     if node_ip in ('Unknown', 'Unable to retrieve IP.'):
         return []
     out: list[str] = []
@@ -86,6 +151,11 @@ def _safe_ip_addresses() -> list[str]:
         else:
             out.append(f'http://{ip}')  # NOSONAR
     return out
+
+
+def _safe_ip_addresses() -> list[str]:
+    """Fast-path resolver+formatter for the splash polling endpoint."""
+    return _format_ip_urls(_resolve_node_ip())
 
 
 class NetworkIpAddressesViewV2(APIView):
@@ -481,7 +551,13 @@ class InfoViewV2(InfoViewMixin):
         }
 
     def get_ip_addresses(self) -> list[str]:
-        return _safe_ip_addresses()
+        # /api/v2/info is auth'd and not polled, so blocking on
+        # get_node_ip()'s host-readiness loop is acceptable here —
+        # the formatter still tolerates 'Unknown'/'Unable to retrieve
+        # IP.' sentinels via _format_ip_urls. The polling endpoint
+        # (NetworkIpAddressesViewV2) uses _safe_ip_addresses() instead,
+        # which never blocks.
+        return _format_ip_urls(get_node_ip())
 
     @extend_schema(
         summary='Get system information',

@@ -52,6 +52,15 @@
     var noun = document.getElementById('splash-prompt-noun');
     var list = document.getElementById('splash-ip-list');
     var attempts = 0;
+    // Hard cap on poll lifetime. The splash is on screen for ~60s
+    // inside the viewer, but if this page is opened by a human
+    // (curl, dev tools, accidentally left open in a browser tab)
+    // we don't want it generating forever-requests in the background.
+    // 120s is double the in-viewer display window — generous enough
+    // for slow first-boot recoveries, bounded enough that an idle tab
+    // doesn't accumulate load.
+    var startedAt = Date.now();
+    var maxPollMs = 120 * 1000;
 
     function render(ips) {
         if (!ips.length) {
@@ -87,6 +96,12 @@
             .catch(function() { /* keep polling on transient errors */ })
             .finally(function() {
                 attempts++;
+                if (Date.now() - startedAt >= maxPollMs) {
+                    // Bound exhausted — stop polling. Whatever's
+                    // currently rendered stays on screen (real IPs
+                    // if we got them, "Detecting network…" if not).
+                    return;
+                }
                 // 2s for the first ~30s, then back off to 5s. The host
                 // bus is usually answering well before 30s; the slow
                 // tier is for long-tail recoveries during the rest of
