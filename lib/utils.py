@@ -77,9 +77,17 @@ def validate_url(string: str) -> bool:
 def get_balena_supervisor_api_response(
     method: str,
     action: str,
+    *,
+    version: str = 'v1',
     **kwargs: Any,
 ) -> requests.Response:
-    version = kwargs.get('version', 'v1')
+    """Call the Balena supervisor API.
+
+    Extra kwargs (e.g. ``timeout``, ``allow_redirects``) are forwarded
+    to ``requests.get`` / ``requests.post``. Existing callers that
+    don't pass any extras are unaffected — the request still goes out
+    with no timeout, matching prior behavior.
+    """
     response: requests.Response = getattr(requests, method)(
         '{}/{}/{}?apikey={}'.format(
             os.getenv('BALENA_SUPERVISOR_ADDRESS'),
@@ -88,12 +96,25 @@ def get_balena_supervisor_api_response(
             os.getenv('BALENA_SUPERVISOR_API_KEY'),
         ),
         headers={'Content-Type': 'application/json'},
+        **kwargs,
     )
     return response
 
 
-def get_balena_device_info() -> requests.Response:
-    return get_balena_supervisor_api_response(method='get', action='device')
+def get_balena_device_info(
+    *,
+    timeout: float | tuple[float, float] | None = None,
+) -> requests.Response:
+    """Fetch device info from the Balena supervisor.
+
+    The optional timeout is for callers on a hot path (e.g. the splash
+    polling endpoint) that need a bounded wait so a slow supervisor
+    doesn't pin a request worker. Default of ``None`` preserves the
+    existing unbounded behavior for the long-standing callers.
+    """
+    return get_balena_supervisor_api_response(
+        method='get', action='device', timeout=timeout
+    )
 
 
 def shutdown_via_balena_supervisor() -> requests.Response:

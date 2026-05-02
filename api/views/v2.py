@@ -1,4 +1,5 @@
 import ipaddress
+import json
 import logging
 from datetime import timedelta
 from os import getenv, statvfs
@@ -6,6 +7,8 @@ from platform import machine
 from typing import Any
 
 import psutil
+import redis
+import requests
 from drf_spectacular.utils import extend_schema
 from hurry.filesize import size
 from rest_framework import status
@@ -47,6 +50,7 @@ from lib.auth import authorized
 from lib.github import is_up_to_date
 from lib.utils import (
     connect_to_redis,
+    get_balena_device_info,
     get_node_ip,
     get_node_mac_address,
     is_balena_app,
@@ -54,6 +58,250 @@ from lib.utils import (
 from settings import ViewerPublisher, settings
 
 r = connect_to_redis()
+
+
+# Bounded HTTP timeout for the Balena supervisor lookup below. Hit by
+# every poll on Balena devices, so it must stay well under the JS
+# poll cadence (2s) to keep request workers free. A real supervisor
+# answers in well under this; the timeout is the worst-case bound.
+_BALENA_SUPERVISOR_TIMEOUT_S = 1.5
+
+# Debounce key + window for the bare-metal cache-miss refresh. The
+# splash polls every 2s; host_agent.set_ip_addresses runs an internet
+# probe with a 10x1s tenacity retry, so worst-case it takes ~10s. The
+# TTL covers that window with a small margin so we don't queue
+# redundant refresh requests while the first one is in flight.
+_IP_REFRESH_PENDING_KEY = 'splash:ip_refresh_pending'
+_IP_REFRESH_DEBOUNCE_S = 12
+
+
+def _resolve_node_ip() -> str:
+    """Non-blocking IP-string resolver for the splash polling endpoint.
+
+    ``lib.utils.get_node_ip()`` is the right primitive for one-shot
+    server-rendered surfaces like ``/api/v2/info``: it publishes
+    ``set_ip_addresses`` to host_agent and waits up to ~80s
+    (60s host_agent_ready + 20s ip_addresses_ready) for the result.
+    That's catastrophic from inside a 2-second polling endpoint —
+    request workers would queue behind a single slow first call and
+    the splash would never populate.
+
+    This resolver is the fast-path version. On bare metal it reads
+    the cached ``ip_addresses`` key directly (host_agent populates it
+    on demand) and fires a fire-and-forget ``hostcmd`` publish on a
+    cache miss so the next poll (~2s later) finds something to read.
+    On Balena it calls the supervisor directly with a tight HTTP
+    timeout, since the supervisor is the only source of truth there
+    and there's no host_agent cache to fall back on.
+
+    Returns the raw whitespace-separated IP string (or empty), shaped
+    to match what ``get_node_ip()`` would have returned, so the
+    formatter below can stay shared with ``InfoViewV2``.
+    """
+    if is_balena_app():
+        # Reuse the shared lib.utils helper so URL construction /
+        # auth / headers stay in one place (extending it to accept a
+        # timeout was the smaller change). The bounded timeout is the
+        # load-bearing part of this fix — without it, a slow
+        # supervisor on first boot would pin a request worker for
+        # longer than the JS poll cadence.
+        try:
+            response = get_balena_device_info(
+                timeout=_BALENA_SUPERVISOR_TIMEOUT_S,
+            )
+        except requests.RequestException:
+            return ''
+        if not response.ok:
+            return ''
+        try:
+            return str(response.json().get('ip_address') or '')
+        except ValueError:
+            return ''
+
+    try:
+        raw = r.get('ip_addresses')
+    except redis.RedisError:
+        # Redis is the cache backing this whole codepath; if it's
+        # flaking (early boot, transient broker hiccup), fall through
+        # to the MY_IP fallback below instead of 500-ing the splash
+        # poll. The JS keeps polling and recovers as soon as Redis
+        # comes back.
+        raw = None
+    if raw:
+        try:
+            ips = json.loads(raw)
+        except (ValueError, TypeError):
+            ips = None
+        # Validate the decoded payload is a list of strings — host_agent
+        # writes ``json.dumps([...])`` so that's the only shape we
+        # expect here. A different producer (or a corrupted write)
+        # could yield a string / int / dict; ``' '.join`` would either
+        # crash on non-iterable or quietly join characters of a string,
+        # both of which are wrong. Treat anything that doesn't match
+        # ``list[str]`` as a cache miss and fall through to refresh.
+        #
+        # Empty list also falls through: host_agent's first run on a
+        # still-coming-up network writes ``'[]'``, and we don't want
+        # the splash to freeze on that — every subsequent poll would
+        # short-circuit on the empty cached value otherwise.
+        if (
+            isinstance(ips, list)
+            and ips
+            and all(isinstance(ip, str) for ip in ips)
+        ):
+            # Cache hit. Also kick off a debounced background refresh
+            # so the splash stays current if the device's IPs change
+            # during its display window (DHCP renewal, link flap,
+            # operator plugging in a different cable). Without this,
+            # once the cache is populated the splash would freeze on
+            # whatever IPs were valid at first poll. _publish_refresh
+            # is bounded by the same SETNX TTL as the cache-miss path,
+            # so a busy poll loop won't queue redundant refreshes.
+            _publish_refresh()
+            return ' '.join(ips)
+
+    # Cache miss / empty list / malformed / Redis flake: ask
+    # host_agent to populate. The next poll picks it up — we don't
+    # block waiting for completion.
+    _publish_refresh()
+
+    # Mirror ``lib.utils.get_node_ip()``'s ``MY_IP`` fallback.
+    # ``bin/upgrade_containers.sh`` exports the host's outbound IP
+    # into the server container via ``docker-compose.yml.tmpl``, so
+    # the splash can show *something* useful even when host_agent
+    # isn't running (custom deploys, late host_agent start, crashed
+    # host_agent). Without this fallback, those installs would be
+    # stuck on "Detecting network…" forever.
+    return getenv('MY_IP', '') or ''
+
+
+def _publish_refresh() -> None:
+    """Best-effort host_agent refresh, debounced.
+
+    At a 2s poll cadence, host_agent's set_ip_addresses takes longer
+    than one poll interval (it does an internet probe with a 10x1s
+    tenacity retry). Without a debounce we'd queue many redundant
+    refresh requests before the first one completes. SETNX with a
+    short TTL ensures only one refresh fires per window; later polls
+    no-op until the TTL expires.
+
+    Redis errors are swallowed (with the debounce key released on
+    publish failure) so a transient broker hiccup doesn't 500 the
+    splash poll — the JS retries on the next poll.
+    """
+    try:
+        acquired = r.set(
+            _IP_REFRESH_PENDING_KEY,
+            '1',
+            nx=True,
+            ex=_IP_REFRESH_DEBOUNCE_S,
+        )
+    except redis.RedisError:
+        return
+    if not acquired:
+        return
+    try:
+        r.publish('hostcmd', 'set_ip_addresses')
+    except redis.RedisError:
+        # Drop the debounce key so the next poll can retry —
+        # otherwise we'd wait out the TTL after a transient flake
+        # that didn't actually queue a refresh.
+        try:
+            r.delete(_IP_REFRESH_PENDING_KEY)
+        except redis.RedisError:
+            pass
+
+
+def _format_ip_urls(node_ip: str) -> list[str]:
+    """Format a whitespace-separated IP string into clickable URLs.
+
+    Tolerates malformed input: callers can pass leftover sentinel
+    strings (e.g. 'Unknown' from ``get_node_ip()`` on a slow Balena
+    boot) and ``ipaddress.ip_address()`` raises on those. Skipping
+    invalid tokens keeps a single garbage value from 500-ing the
+    consuming view.
+    """
+    if node_ip in ('Unknown', 'Unable to retrieve IP.'):
+        return []
+    out: list[str] = []
+    for ip in node_ip.split():
+        try:
+            obj = ipaddress.ip_address(ip)
+        except ValueError:
+            continue
+        # NOSONAR (S5332): Anthias serves the admin UI on plain HTTP per
+        # CLAUDE.md; TLS is opt-in via the Caddy sidecar. The splash
+        # surfaces these URLs so the operator can click into the
+        # device's LAN UI — they must match how the device actually
+        # listens. Emitting https:// here would point at a port that
+        # isn't bound on a default install.
+        if isinstance(obj, ipaddress.IPv6Address):
+            out.append(f'http://[{ip}]')  # NOSONAR
+        else:
+            out.append(f'http://{ip}')  # NOSONAR
+    return out
+
+
+def _safe_ip_addresses() -> list[str]:
+    """Fast-path resolver+formatter for the splash polling endpoint."""
+    return _format_ip_urls(_resolve_node_ip())
+
+
+class NetworkIpAddressesViewV2(APIView):
+    """Lightweight IP-list endpoint for the splash page to poll.
+
+    Unauth'd because the splash page itself is unauth'd and the viewer
+    isn't a credentialed client. The data here is already disclosed by
+    /splash-page rendering — there's no new exposure.
+
+    Narrow on purpose: only IPs, no diagnostics. /api/v2/info covers
+    the "everything about the device" case but is auth'd and does
+    heavier work (psutil, statvfs, version checks) that would compound
+    on a 2-second poll. Don't bolt onto this; add a sibling endpoint
+    if a different unauth'd value is ever needed.
+
+    **KNOWN LIMITATION (deferred to broader auth work).** This GET has
+    a side effect — ``_resolve_node_ip`` calls ``_publish_refresh()``
+    on cache miss / hit / empty-list, which publishes ``hostcmd:
+    set_ip_addresses`` to host_agent. ``host_agent.set_ip_addresses``
+    in turn does an internet probe (``requests.get`` to 1.1.1.1 with
+    a 10×1s tenacity retry). An unauthenticated LAN client can drive
+    that side effect at the debounce-bounded rate (one publish per
+    ``_IP_REFRESH_DEBOUNCE_S``).
+
+    The mitigations already in place keep blast radius bounded:
+
+      * SETNX-debounced publishes (only one refresh per 12s window
+        regardless of poll volume),
+      * the response body carries no data not already disclosed by
+        the splash page itself,
+      * host_agent's own retry/throttle behavior caps the
+        downstream cost.
+
+    The proper fix is a shared internal-auth gate (matching the one
+    on AssetRecheckViewV2) — but the splash polling endpoint is
+    consumed by the viewer's webview from the device's local
+    network with no way to attach BasicAuth, so internal-auth here
+    needs to be designed alongside the broader auth rework. Tracked
+    in the same followup as AssetRecheckViewV2's gating.
+    """
+
+    @extend_schema(
+        summary='Get device IP addresses (for splash poll)',
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'ip_addresses': {
+                        'type': 'array',
+                        'items': {'type': 'string'},
+                    },
+                },
+            },
+        },
+    )
+    def get(self, request: Request) -> Response:
+        return Response({'ip_addresses': _safe_ip_addresses()})
 
 
 class AssetListViewV2(APIView):
@@ -478,21 +726,13 @@ class InfoViewV2(InfoViewMixin):
         }
 
     def get_ip_addresses(self) -> list[str]:
-        ip_addresses = []
-        node_ip = get_node_ip()
-
-        if node_ip == 'Unable to retrieve IP.':
-            return []
-
-        for ip_address in node_ip.split():
-            ip_address_object = ipaddress.ip_address(ip_address)
-
-            if isinstance(ip_address_object, ipaddress.IPv6Address):
-                ip_addresses.append(f'http://[{ip_address}]')
-            else:
-                ip_addresses.append(f'http://{ip_address}')
-
-        return ip_addresses
+        # /api/v2/info is auth'd and not polled, so blocking on
+        # get_node_ip()'s host-readiness loop is acceptable here —
+        # the formatter still tolerates 'Unknown'/'Unable to retrieve
+        # IP.' sentinels via _format_ip_urls. The polling endpoint
+        # (NetworkIpAddressesViewV2) uses _safe_ip_addresses() instead,
+        # which never blocks.
+        return _format_ip_urls(get_node_ip())
 
     @extend_schema(
         summary='Get system information',
