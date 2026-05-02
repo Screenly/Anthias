@@ -45,6 +45,9 @@ class AssetSerializer(ModelSerializer[Asset]):
     is_processing = IntegerField(min_value=0, max_value=1)
     nocache = IntegerField(min_value=0, max_value=1)
     skip_asset_check = IntegerField(min_value=0, max_value=1)
+    # is_reachable is exposed as 0/1 (read-only) in v1 to match the
+    # other boolean fields above; v2 returns it as a JSON bool.
+    is_reachable = IntegerField(min_value=0, max_value=1, read_only=True)
 
     class Meta:
         model = Asset
@@ -62,6 +65,12 @@ class AssetSerializer(ModelSerializer[Asset]):
             'skip_asset_check',
             'is_active',
             'is_processing',
+            'is_reachable',
+            'last_reachability_check',
+        ]
+        read_only_fields = [
+            'is_reachable',
+            'last_reachability_check',
         ]
 
 

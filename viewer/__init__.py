@@ -9,9 +9,10 @@ from typing import Any
 
 import django
 import pydbus
+import requests
 import sh as sh
 
-from settings import ReplySender, settings
+from settings import LISTEN, PORT, ReplySender, settings
 from viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
 from viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
 from viewer.constants import SPLASH_DELAY as SPLASH_DELAY
@@ -34,7 +35,6 @@ django.setup()
 from lib.utils import (  # noqa: E402
     connect_to_redis,
     string_to_bool,
-    url_fails,
 )
 from viewer.messaging import ViewerSubscriber  # noqa: E402
 from viewer.scheduling import Scheduler  # noqa: E402
@@ -193,6 +193,54 @@ def load_settings() -> None:
     )
 
 
+def _asset_is_displayable(asset: dict[str, Any]) -> bool:
+    """Decide whether to play an asset this rotation.
+
+    The reachability of remote URLs is owned by the server (a celery
+    beat task refreshes ``Asset.is_reachable`` on a 15-min cadence and
+    the ``/api/v2/assets/<id>/recheck`` endpoint covers on-demand
+    re-validation). The viewer used to call ``url_fails`` itself on
+    every play, but ffprobe on streams blocks the loop for up to 15s
+    per rotation — so we trust the field instead and let the server
+    own that work.
+
+    Local files still get a filesystem check: the asset row's
+    ``is_reachable`` is set against the celery worker's view of the
+    filesystem, but assetdir is shared by volume so the answer is the
+    same. Cheap, no roundtrip, mirrors prior behavior for local files.
+    """
+    if asset.get('skip_asset_check'):
+        return True
+    uri = asset.get('uri') or ''
+    if uri.startswith('/'):
+        return path.isfile(uri)
+    # Default to True so a row written before this field existed
+    # (or by an older serializer that doesn't set it) doesn't get
+    # silently skipped.
+    return bool(asset.get('is_reachable', True))
+
+
+def _trigger_asset_recheck(asset_id: str | None) -> None:
+    """Ask the server to re-probe an asset we couldn't display.
+
+    Best-effort: a failure here just means the asset stays marked
+    unreachable until the next periodic sweep, which is acceptable.
+    The server-side task rate-limits per asset, so spamming this on
+    every rotation through an unreachable asset is safe.
+    """
+    if not asset_id:
+        return
+    try:
+        requests.post(
+            f'http://{LISTEN}:{PORT}/api/v2/assets/{asset_id}/recheck',
+            timeout=2,
+        )
+    except requests.RequestException as e:
+        logging.debug(
+            'Failed to trigger recheck for %s: %s', asset_id, e
+        )
+
+
 def asset_loop(scheduler: Any) -> None:
     asset = scheduler.get_next_asset()
 
@@ -212,9 +260,7 @@ def asset_loop(scheduler: Any) -> None:
             # Duration elapsed normally, continue to next iteration
             pass
 
-    elif path.isfile(asset['uri']) or (
-        not url_fails(asset['uri']) or asset['skip_asset_check']
-    ):
+    elif _asset_is_displayable(asset):
         name, mime, uri = asset['name'], asset['mimetype'], asset['uri']
         logging.info('Showing asset %s (%s)', name, mime)
         logging.debug('Asset URI %s', uri)
@@ -247,6 +293,7 @@ def asset_loop(scheduler: Any) -> None:
             asset['name'],
             asset['uri'],
         )
+        _trigger_asset_recheck(asset.get('asset_id'))
         skip_event = get_skip_event()
         skip_event.clear()
         if skip_event.wait(timeout=0.5):

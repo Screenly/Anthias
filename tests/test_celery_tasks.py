@@ -1,13 +1,21 @@
 import os
 import tempfile
 import time
+from datetime import timedelta
 from os import path
+from unittest import mock
 
 from django.test import TestCase
+from django.utils import timezone
 
 from anthias_app.models import Asset
-from celery_tasks import celery as celeryapp
-from celery_tasks import cleanup
+from celery_tasks import (
+    RECHECK_COOLDOWN_S,
+    celery as celeryapp,
+    cleanup,
+    revalidate_asset_url,
+    revalidate_asset_urls,
+)
 from settings import settings
 
 
@@ -116,3 +124,187 @@ class TestCleanupOrphanSweep(TestCase):
         cleanup.apply()
         self.assertFalse(path.exists(stale_part))
         self.assertFalse(path.exists(stale_info))
+
+
+class TestRevalidateAssetUrls(TestCase):
+    """
+    Periodic sweep flips Asset.is_reachable based on url_fails. The probe
+    itself is exercised by tests/test_utils.py — here we cover the
+    dispatch shape: which assets get probed, what gets written back, and
+    how exceptions are contained so a single bad asset can't kill the
+    sweep.
+    """
+
+    def setUp(self) -> None:
+        celeryapp.conf.update(
+            CELERY_ALWAYS_EAGER=True,
+            CELERY_RESULT_BACKEND='',
+            CELERY_BROKER_URL='',
+        )
+        Asset.objects.all().delete()
+
+    def tearDown(self) -> None:
+        Asset.objects.all().delete()
+
+    def _make_asset(
+        self,
+        asset_id: str,
+        uri: str = 'http://example.com/x.png',
+        is_enabled: bool = True,
+        is_processing: bool = False,
+        skip_asset_check: bool = False,
+        is_reachable: bool = True,
+    ) -> Asset:
+        return Asset.objects.create(
+            asset_id=asset_id,
+            name=asset_id,
+            uri=uri,
+            mimetype='image',
+            duration=10,
+            is_enabled=is_enabled,
+            is_processing=is_processing,
+            skip_asset_check=skip_asset_check,
+            is_reachable=is_reachable,
+        )
+
+    def test_marks_unreachable_when_url_fails(self) -> None:
+        self._make_asset('a1')
+        with mock.patch('celery_tasks.url_fails', return_value=True):
+            revalidate_asset_urls.apply()
+        self.assertFalse(Asset.objects.get(asset_id='a1').is_reachable)
+
+    def test_marks_reachable_when_url_succeeds(self) -> None:
+        self._make_asset('a1', is_reachable=False)
+        with mock.patch('celery_tasks.url_fails', return_value=False):
+            revalidate_asset_urls.apply()
+        self.assertTrue(Asset.objects.get(asset_id='a1').is_reachable)
+
+    def test_updates_last_reachability_check(self) -> None:
+        self._make_asset('a1')
+        before = timezone.now()
+        with mock.patch('celery_tasks.url_fails', return_value=False):
+            revalidate_asset_urls.apply()
+        last = Asset.objects.get(asset_id='a1').last_reachability_check
+        self.assertIsNotNone(last)
+        assert last is not None
+        self.assertGreaterEqual(last, before)
+
+    def test_skips_disabled_assets(self) -> None:
+        self._make_asset('a1', is_enabled=False, is_reachable=True)
+        with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+            revalidate_asset_urls.apply()
+        m.assert_not_called()
+        self.assertTrue(Asset.objects.get(asset_id='a1').is_reachable)
+
+    def test_skips_processing_assets(self) -> None:
+        self._make_asset('a1', is_processing=True)
+        with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+            revalidate_asset_urls.apply()
+        m.assert_not_called()
+        self.assertTrue(Asset.objects.get(asset_id='a1').is_reachable)
+
+    def test_skip_asset_check_short_circuits_probe(self) -> None:
+        """Operator opted out of validation; trust them and don't probe."""
+        self._make_asset('a1', skip_asset_check=True)
+        with mock.patch('celery_tasks.url_fails') as m:
+            revalidate_asset_urls.apply()
+        m.assert_not_called()
+        self.assertTrue(Asset.objects.get(asset_id='a1').is_reachable)
+
+    def test_local_file_existence_check(self) -> None:
+        """Local URIs short-circuit url_fails and check the filesystem."""
+        with tempfile.NamedTemporaryFile(delete=False) as fh:
+            local = fh.name
+        try:
+            self._make_asset('a1', uri=local)
+            with mock.patch('celery_tasks.url_fails') as m:
+                revalidate_asset_urls.apply()
+            m.assert_not_called()
+            self.assertTrue(Asset.objects.get(asset_id='a1').is_reachable)
+        finally:
+            os.unlink(local)
+
+        # Same row, file now gone — sweep should mark it unreachable.
+        revalidate_asset_urls.apply()
+        self.assertFalse(Asset.objects.get(asset_id='a1').is_reachable)
+
+    def test_probe_exception_does_not_kill_sweep(self) -> None:
+        """One asset's probe blowing up must not break the others."""
+        self._make_asset('boom', uri='http://example.com/boom')
+        self._make_asset('ok', uri='http://example.com/ok')
+
+        def fake_url_fails(url: str) -> bool:
+            if 'boom' in url:
+                raise RuntimeError('synthetic')
+            return False
+
+        with mock.patch('celery_tasks.url_fails', side_effect=fake_url_fails):
+            revalidate_asset_urls.apply()
+
+        # 'boom' is left as-is (we don't have a probe result to write),
+        # but 'ok' must still have been processed.
+        self.assertTrue(Asset.objects.get(asset_id='ok').is_reachable)
+        self.assertIsNotNone(
+            Asset.objects.get(asset_id='ok').last_reachability_check
+        )
+
+
+class TestRevalidateAssetUrl(TestCase):
+    """
+    On-demand single-asset probe, called from the
+    /api/v2/assets/<id>/recheck endpoint. Exists primarily to break the
+    "asset just went unreachable mid-rotation" failure mode without
+    waiting for the next periodic sweep, with a per-asset cooldown so a
+    viewer that keeps hitting the same broken asset can't pin the worker
+    on back-to-back ffprobe runs.
+    """
+
+    def setUp(self) -> None:
+        celeryapp.conf.update(
+            CELERY_ALWAYS_EAGER=True,
+            CELERY_RESULT_BACKEND='',
+            CELERY_BROKER_URL='',
+        )
+        Asset.objects.all().delete()
+
+    def tearDown(self) -> None:
+        Asset.objects.all().delete()
+
+    def _make(self, **kwargs: object) -> Asset:
+        defaults = dict(
+            asset_id='a1',
+            name='a1',
+            uri='http://example.com/x.png',
+            mimetype='image',
+            duration=10,
+            is_enabled=True,
+        )
+        defaults.update(kwargs)
+        return Asset.objects.create(**defaults)
+
+    def test_no_op_when_asset_does_not_exist(self) -> None:
+        with mock.patch('celery_tasks.url_fails') as m:
+            revalidate_asset_url.apply(args=('nope',))
+        m.assert_not_called()
+
+    def test_flips_is_reachable(self) -> None:
+        self._make(is_reachable=True)
+        with mock.patch('celery_tasks.url_fails', return_value=True):
+            revalidate_asset_url.apply(args=('a1',))
+        self.assertFalse(Asset.objects.get(asset_id='a1').is_reachable)
+
+    def test_cooldown_prevents_back_to_back_probes(self) -> None:
+        recent = timezone.now() - timedelta(seconds=RECHECK_COOLDOWN_S - 5)
+        self._make(is_reachable=False, last_reachability_check=recent)
+        with mock.patch('celery_tasks.url_fails', return_value=False) as m:
+            revalidate_asset_url.apply(args=('a1',))
+        m.assert_not_called()
+        # Field is unchanged.
+        self.assertFalse(Asset.objects.get(asset_id='a1').is_reachable)
+
+    def test_cooldown_elapsed_allows_recheck(self) -> None:
+        old = timezone.now() - timedelta(seconds=RECHECK_COOLDOWN_S + 5)
+        self._make(is_reachable=False, last_reachability_check=old)
+        with mock.patch('celery_tasks.url_fails', return_value=False):
+            revalidate_asset_url.apply(args=('a1',))
+        self.assertTrue(Asset.objects.get(asset_id='a1').is_reachable)

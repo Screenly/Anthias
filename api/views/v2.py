@@ -164,6 +164,28 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
         return self.update(request, asset_id, partial=False)
 
 
+class AssetRecheckViewV2(APIView):
+    @extend_schema(
+        summary='Recheck asset reachability',
+        responses={202: None, 404: None},
+    )
+    @authorized
+    def post(self, request: Request, asset_id: str) -> Response:
+        try:
+            Asset.objects.get(asset_id=asset_id)
+        except Asset.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # Imported here to avoid a circular import at module load:
+        # celery_tasks imports api.* via Django's app registry, and
+        # importing it at the top of this view module pulls celery into
+        # the request path on every request even when not needed.
+        from celery_tasks import revalidate_asset_url
+
+        revalidate_asset_url.delay(asset_id)
+        return Response(status=status.HTTP_202_ACCEPTED)
+
+
 class BackupViewV2(BackupViewMixin):
     pass
 

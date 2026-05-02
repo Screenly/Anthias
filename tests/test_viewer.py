@@ -160,6 +160,105 @@ class TestLoadBrowser(ViewerTestCase):
             self.p_cmd.stop()
 
 
+class TestAssetDisplayability(ViewerTestCase):
+    """
+    The viewer used to call url_fails(uri) on every play, which blocked
+    the loop for 1-15s on streams. Reachability is now owned by the
+    server (celery beat sweep + on-demand recheck endpoint), and the
+    viewer just consults Asset.is_reachable.
+    """
+
+    def test_skip_asset_check_short_circuits(self) -> None:
+        """skip_asset_check=True means the operator opted out of any
+        gating — display unconditionally, even if is_reachable=False."""
+        asset = {
+            'asset_id': 'a',
+            'uri': 'http://example.com/x',
+            'skip_asset_check': True,
+            'is_reachable': False,
+        }
+        self.assertTrue(self.u._asset_is_displayable(asset))
+
+    def test_local_file_existence_check(self) -> None:
+        """Local URIs hit the filesystem directly (cheap, no roundtrip
+        to the server's view of the world)."""
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(delete=False) as fh:
+            local_path = fh.name
+        try:
+            self.assertTrue(
+                self.u._asset_is_displayable(
+                    {
+                        'asset_id': 'a',
+                        'uri': local_path,
+                        'skip_asset_check': False,
+                        'is_reachable': True,
+                    }
+                )
+            )
+        finally:
+            os.unlink(local_path)
+        # Same path, file gone.
+        self.assertFalse(
+            self.u._asset_is_displayable(
+                {
+                    'asset_id': 'a',
+                    'uri': local_path,
+                    'skip_asset_check': False,
+                    'is_reachable': True,
+                }
+            )
+        )
+
+    def test_remote_uri_consults_is_reachable(self) -> None:
+        ok = {
+            'asset_id': 'a',
+            'uri': 'http://example.com/x',
+            'skip_asset_check': False,
+            'is_reachable': True,
+        }
+        bad = {**ok, 'is_reachable': False}
+        self.assertTrue(self.u._asset_is_displayable(ok))
+        self.assertFalse(self.u._asset_is_displayable(bad))
+
+    def test_missing_is_reachable_defaults_to_displayable(self) -> None:
+        """Backstop for legacy rows / serializers that don't include the
+        field. Don't silently freeze a playlist on an upgrade."""
+        asset = {
+            'asset_id': 'a',
+            'uri': 'http://example.com/x',
+            'skip_asset_check': False,
+        }
+        self.assertTrue(self.u._asset_is_displayable(asset))
+
+
+class TestTriggerAssetRecheck(ViewerTestCase):
+    def test_posts_to_recheck_endpoint(self) -> None:
+        with mock.patch.object(self.u.requests, 'post') as m:
+            self.u._trigger_asset_recheck('abc')
+        m.assert_called_once()
+        url = m.call_args.args[0]
+        self.assertIn('/api/v2/assets/abc/recheck', url)
+
+    def test_no_op_on_missing_asset_id(self) -> None:
+        with mock.patch.object(self.u.requests, 'post') as m:
+            self.u._trigger_asset_recheck(None)
+        m.assert_not_called()
+
+    def test_swallows_request_errors(self) -> None:
+        """Best-effort: a server hiccup must not interrupt the asset loop."""
+        import requests
+
+        with mock.patch.object(
+            self.u.requests,
+            'post',
+            side_effect=requests.ConnectionError('boom'),
+        ):
+            # Must not raise.
+            self.u._trigger_asset_recheck('abc')
+
+
 class TestWatchdog(ViewerTestCase):
     def test_watchdog_should_create_file_if_not_exists(self) -> None:
         try:
