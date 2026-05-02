@@ -191,3 +191,84 @@ def test_delete_asset_should_return_204(
 
     assert response.status_code == status.HTTP_204_NO_CONTENT
     assert len(assets) == 0
+
+
+@pytest.fixture
+def v2_asset_detail_url(api_client: APIClient) -> str:
+    asset = api_client.post(
+        reverse('api:asset_list_v2'),
+        data=ASSET_CREATION_DATA,
+    ).data
+    return reverse('api:asset_detail_v2', args=[asset['asset_id']])
+
+
+@pytest.mark.django_db
+def test_v2_update_with_empty_play_days_rejected(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    response = api_client.put(
+        v2_asset_detail_url,
+        data={**ASSET_UPDATE_DATA_V2, 'play_days': []},
+        format='json',
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'play_days' in response.data
+
+
+@pytest.mark.django_db
+def test_v2_update_with_partial_time_window_rejected(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    response = api_client.put(
+        v2_asset_detail_url,
+        data={
+            **ASSET_UPDATE_DATA_V2,
+            'play_time_from': '09:00:00',
+            'play_time_to': None,
+        },
+        format='json',
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'play_time_to' in response.data
+
+
+@pytest.mark.django_db
+def test_v2_update_with_full_time_window_accepted(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    response = api_client.put(
+        v2_asset_detail_url,
+        data={
+            **ASSET_UPDATE_DATA_V2,
+            'play_time_from': '09:00:00',
+            'play_time_to': '17:00:00',
+        },
+        format='json',
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['play_time_from'] == '09:00:00'
+    assert response.data['play_time_to'] == '17:00:00'
+
+
+@pytest.mark.django_db
+def test_v2_create_with_play_days_round_trips(
+    api_client: APIClient,
+) -> None:
+    # Regression: serializer.data must round-trip play_days through
+    # AssetListViewV2.post -> Asset.objects.create(**serializer.data).
+    # Previously _normalise_play_days returned a JSON string, which
+    # ListField.to_representation could not iterate as ints.
+    response = api_client.post(
+        reverse('api:asset_list_v2'),
+        data={
+            **ASSET_CREATION_DATA,
+            'play_days': [3, 1, 1, 5],
+            'play_time_from': '09:00:00',
+            'play_time_to': '17:00:00',
+        },
+        format='json',
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data['play_days'] == [1, 3, 5]
+    assert response.data['play_time_from'] == '09:00:00'
+    assert response.data['play_time_to'] == '17:00:00'

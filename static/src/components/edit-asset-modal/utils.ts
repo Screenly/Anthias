@@ -31,7 +31,9 @@ export const handleSubmit = async ({
     const startDate = new Date(`${startDateDate}T${startDateTime}`)
     const endDate = new Date(`${endDateDate}T${endDateTime}`)
 
-    // Prepare data for API
+    // play_time_from / play_time_to are sent as null when the
+    // operator hasn't enabled the time-of-day window; play_days
+    // travels as a list of ISO weekdays 1-7.
     const updatedAsset = {
       ...formData,
       start_date: startDate.toISOString(),
