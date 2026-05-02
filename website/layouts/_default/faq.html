@@ -1,0 +1,53 @@
+{{ define "main" }}
+{{- $faq := site.Data.faq -}}
+{{- $iconPlus := resources.Get "images/plus.svg" -}}
+{{- $iconMinus := resources.Get "images/minus.svg" -}}
+<header class="bg-brand-dark py-16 md:py-20 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-white text-4xl md:text-5xl font-extrabold tracking-tight">FAQ</h1>
+        <p class="text-white/60 text-lg mt-4 max-w-xl">Common questions about Anthias.</p>
+    </div>
+</header>
+
+<section class="bg-white py-16 lg:py-24 px-6 md:px-12 lg:px-20">
+    <div class="max-w-3xl mx-auto space-y-12">
+        {{- range $gi, $group := $faq -}}
+        <div>
+            <h2 class="text-xs font-semibold uppercase tracking-[0.12em] text-brand-purple mb-2">{{ $group.group }}</h2>
+            <div class="divide-y divide-black/10 border-t border-black/10">
+                {{- range $i, $item := $group.items -}}
+                {{- $id := printf "faq-%d-%d" (add $gi 1) (add $i 1) -}}
+                <div>
+                    <button
+                        id="{{ $id }}-btn"
+                        data-accordion="{{ $id }}"
+                        aria-expanded="false"
+                        aria-controls="{{ $id }}"
+                        class="w-full flex items-center justify-between text-left py-5 bg-transparent border-0 cursor-pointer text-brand-near-black font-bold leading-relaxed gap-4"
+                    >
+                        <span>{{ $item.question }}</span>
+                        <img class="icon-plus w-5 h-5 shrink-0" src="{{ $iconPlus.RelPermalink }}" alt="" aria-hidden="true" />
+                        <img class="icon-minus w-5 h-5 shrink-0 hidden" src="{{ $iconMinus.RelPermalink }}" alt="" aria-hidden="true" />
+                    </button>
+                    <section id="{{ $id }}" aria-labelledby="{{ $id }}-btn" class="hidden pb-6 docs-prose" data-accordion-content>
+                        {{ $item.answer | markdownify }}
+                    </section>
+                </div>
+                {{- end -}}
+            </div>
+        </div>
+        {{- end -}}
+    </div>
+</section>
+
+<section class="bg-bg-light py-16 lg:py-24 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto text-center">
+        <h2 class="text-2xl font-bold">Still have questions?</h2>
+        <p class="text-zinc-500 mt-2">Ask on the forum or open a GitHub discussion.</p>
+        <div class="flex flex-wrap justify-center gap-4 mt-6">
+            <a class="btn-primary" href="https://forums.screenly.io" target="_blank" rel="noopener">Visit the Forum</a>
+            <a class="btn-secondary text-brand-near-black border-black/20 hover:border-black/40 hover:bg-black/5" href="https://github.com/Screenly/Anthias/discussions" target="_blank" rel="noopener">GitHub Discussions</a>
+        </div>
+    </div>
+</section>
+{{ end }}

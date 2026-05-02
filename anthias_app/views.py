@@ -66,5 +66,10 @@ def splash_page(request: HttpRequest) -> HttpResponse:
             ip_addresses.append(f'http://{ip_address}')
 
     return template(
-        request, 'splash-page.html', {'ip_addresses': ip_addresses}
+        request,
+        'splash-page.html',
+        {
+            'ip_addresses': ip_addresses,
+            'splash_logo_url': settings['splash_logo_url'],
+        },
     )

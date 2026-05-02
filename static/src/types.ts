@@ -209,6 +209,10 @@ export interface OperationConfig {
 export interface UploadFileParams {
   file: File
   skipAssetCheck: boolean
+  // Suppress slice-driven statusMessage/isSubmitting mutations so the
+  // caller (e.g., the multi-file batch hook) can drive its own UI state
+  // without the per-file thunk lifecycle clobbering the batch label.
+  silent?: boolean
 }
 
 export interface SaveAssetParams {
@@ -226,6 +230,9 @@ export interface SaveAssetParams {
     start_date: string
     uri: string
   }
+  // Same purpose as UploadFileParams.silent — the batch hook owns the
+  // status/isSubmitting transitions for multi-file uploads.
+  silent?: boolean
 }
 
 export interface FileData {

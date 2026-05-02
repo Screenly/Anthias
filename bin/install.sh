@@ -17,7 +17,7 @@ ARCHITECTURE=$(uname -m)
 UV_PIN_VERSION="0.9.17"
 
 INTRO_MESSAGE=(
-    "Anthias runs on a dedicated Raspberry Pi (1-5) or x86 device."
+    "Anthias runs on a dedicated Raspberry Pi (2/3/4-64-bit/5) or x86 device."
     "The host will be repurposed for digital signage — on a Pi you lose the"
     "regular desktop environment, and on x86 the machine should not be used"
     "for anything else."
@@ -177,7 +177,23 @@ function clone_repo() {
     fi
     git -C "${ANTHIAS_REPO_DIR}" fetch --tags origin
     git -C "${ANTHIAS_REPO_DIR}" checkout "${BRANCH}"
-    git -C "${ANTHIAS_REPO_DIR}" reset --hard "origin/${BRANCH}"
+
+    # Releases are pinned via tags (e.g. v0.20.5), which fetch into
+    # refs/tags/ — `origin/v0.20.5` is not a valid ref. Resolve tags
+    # explicitly via refs/tags/${BRANCH} and fall through to
+    # origin/${BRANCH} only for actual branches.
+    local RESET_REF
+    if git -C "${ANTHIAS_REPO_DIR}" show-ref --verify --quiet \
+        "refs/tags/${BRANCH}"; then
+        RESET_REF="refs/tags/${BRANCH}"
+    elif git -C "${ANTHIAS_REPO_DIR}" show-ref --verify --quiet \
+        "refs/remotes/origin/${BRANCH}"; then
+        RESET_REF="origin/${BRANCH}"
+    else
+        echo "error: '${BRANCH}' is neither a tag nor a remote branch" >&2
+        exit 1
+    fi
+    git -C "${ANTHIAS_REPO_DIR}" reset --hard "${RESET_REF}"
 }
 
 function install_ansible() {
@@ -201,11 +217,14 @@ function install_ansible() {
     fi
 
     # Resolve and install the `host` dependency group from pyproject.toml.
-    # uv will fetch a compatible Python automatically (the project requires
-    # >=3.11), so this works on Debian 11 too.
+    # `--python ">=3.13"` matches pyproject.toml's requires-python pin —
+    # Trixie ships 3.13 by default, so the installer just picks up the
+    # system interpreter on supported hosts. Older Debian releases
+    # (Bookworm = 3.11) are no longer supported on the host.
     UV_PROJECT_ENVIRONMENT="${INSTALLER_VENV}" \
         uv sync \
             --project "${ANTHIAS_REPO_DIR}" \
+            --python ">=3.13" \
             --no-default-groups \
             --group host \
             --no-install-project
@@ -217,13 +236,14 @@ function set_device_type() {
     elif grep -qF "Raspberry Pi 5" /proc/device-tree/model || grep -qF "Compute Module 5" /proc/device-tree/model; then
         export DEVICE_TYPE="pi5"
     elif grep -qF "Raspberry Pi 4" /proc/device-tree/model || grep -qF "Compute Module 4" /proc/device-tree/model; then
-        export DEVICE_TYPE="pi4"
+        export DEVICE_TYPE="pi4-64"
     elif grep -qF "Raspberry Pi 3" /proc/device-tree/model || grep -qF "Compute Module 3" /proc/device-tree/model; then
         export DEVICE_TYPE="pi3"
     elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
         export DEVICE_TYPE="pi2"
     else
-        export DEVICE_TYPE="pi1"
+        echo "Unsupported Raspberry Pi model. Anthias supports Pi 2/3/4 (64-bit)/5 and x86." >&2
+        exit 1
     fi
 }
 

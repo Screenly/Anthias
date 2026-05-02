@@ -1,5 +1,3 @@
-#include <QStandardPaths>
-#include <QWebEngineSettings>
 #include <QGuiApplication>
 #include <QScreen>
 
@@ -10,12 +8,8 @@
 MainWindow::MainWindow() : QMainWindow()
 {
     view = new View(this);
-    view->webView->settings()->setAttribute(QWebEngineSettings::LocalStorageEnabled, true);
-    view->webView->settings()->setAttribute(QWebEngineSettings::ShowScrollBars, false);
     setCentralWidget(view);
 
-    QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
-    setGeometry(screenGeometry);
     showFullScreen();
 }
 

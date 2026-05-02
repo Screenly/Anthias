@@ -1,33 +1,56 @@
 #!/usr/bin/env python
 
 import os
+import subprocess
+import sys
 from datetime import datetime
-
-import cec
 
 from lib import device_helper
 
 from . import utils
 
 
+_CEC_QUERY_SCRIPT = """
+import sys
+try:
+    import cec
+    cec.init()
+    tv = cec.Device(cec.CECDEVICE_TV)
+except Exception:
+    sys.stdout.write('CEC error')
+    sys.exit(0)
+try:
+    sys.stdout.write('True' if tv.is_on() else 'False')
+except IOError:
+    sys.stdout.write('Unknown')
+"""
+
+
 def get_display_power() -> str | bool:
     """
-    Queries the TV using CEC
-    """
-    tv_status: str | bool = False
+    Queries the TV using CEC.
 
+    The CEC stack can block inside libcec (no HDMI link, TV asleep,
+    adapter unresponsive) in a C call that ignores Python signals,
+    which would tie up the celery worker until it hits its hard
+    time_limit and gets SIGKILL'd. Run the query in a subprocess so
+    we can enforce a timeout and recover cleanly.
+    """
     try:
-        cec.init()
-        tv = cec.Device(cec.CECDEVICE_TV)
-    except Exception:
+        result = subprocess.run(
+            [sys.executable, '-c', _CEC_QUERY_SCRIPT],
+            capture_output=True,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
         return 'CEC error'
 
-    try:
-        tv_status = tv.is_on()
-    except IOError:
-        return 'Unknown'
-
-    return tv_status
+    output = result.stdout.decode('utf-8', errors='replace').strip()
+    if output == 'True':
+        return True
+    if output == 'False':
+        return False
+    return output or 'CEC error'
 
 
 def get_uptime() -> float:

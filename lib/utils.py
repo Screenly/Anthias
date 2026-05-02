@@ -5,7 +5,6 @@ import random
 import re
 import string
 from datetime import datetime, timedelta
-from distutils.util import strtobool
 from os import getenv, path, utime
 from platform import machine
 from subprocess import call, check_output
@@ -33,7 +32,14 @@ arch = machine()
 
 
 def string_to_bool(string: Any) -> bool:
-    return bool(strtobool(str(string)))
+    # Direct port of distutils.util.strtobool (removed in Python 3.12)
+    # so existing callers keep accepting the same y/yes/t/true/on/1 set.
+    value = str(string).strip().lower()
+    if value in ('y', 'yes', 't', 'true', 'on', '1'):
+        return True
+    if value in ('n', 'no', 'f', 'false', 'off', '0'):
+        return False
+    raise ValueError(f'invalid truth value {string!r}')
 
 
 def touch(path: str) -> None:
@@ -348,19 +354,30 @@ def url_fails(url: str) -> bool:
     If it is streaming
     """
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
+        # ffprobe ships with ffmpeg, which is already in the base
+        # image. Exit code 0 means libavformat could open the stream
+        # and read its header; non-zero means it could not. The
+        # 15s wall-clock cap mirrors the implicit cap mplayer gave us
+        # via `-frames 0` (it would tear down once it had probed the
+        # stream) and prevents a stuck RTSP handshake from hanging
+        # the API request that called us.
         try:
-            run_mplayer = sh.Command('mplayer')(
-                '-identify', '-frames', '0', '-nosound', url
+            sh.Command('ffprobe')(
+                '-v',
+                'quiet',
+                '-show_streams',
+                '-i',
+                url,
+                _timeout=15,
             )
         except sh.CommandNotFound:
             logging.warning(
-                'mplayer is not installed; skipping streaming URL probe'
+                'ffprobe is not installed; skipping streaming URL probe'
             )
             return False
-        for line in run_mplayer.split('\n'):
-            if 'Clip info:' in line:
-                return False
-        return True
+        except (sh.TimeoutException, sh.ErrorReturnCode):
+            return True
+        return False
 
     """
     Try HEAD and GET for URL availability check.
@@ -409,12 +426,14 @@ def download_video_from_youtube(
     uri: str,
     asset_id: str,
 ) -> tuple[str, str, int]:
-    home = getenv('HOME') or ''
     name = check_output(['yt-dlp', '-O', 'title', uri])
     info = json.loads(check_output(['yt-dlp', '-j', uri]))
     duration = info['duration']
 
-    location = path.join(home, 'anthias_assets', f'{asset_id}.mp4')
+    # Write into settings['assetdir'] so cleanup() (which sweeps the same
+    # path) sees these files; otherwise a custom assetdir would leak
+    # orphaned YouTube downloads in $HOME/anthias_assets.
+    location = path.join(settings['assetdir'], f'{asset_id}.mp4')
     thread = YoutubeDownloadThread(location, uri, asset_id)
     thread.daemon = True
     thread.start()

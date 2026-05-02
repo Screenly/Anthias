@@ -29,8 +29,6 @@ from django.views.decorators.http import require_GET
 # on purpose — Sonar's S1313 ("don't hardcode IPs") doesn't apply.
 ANTHIAS_ASSETS_ROOT = Path('/data/anthias_assets')
 STATIC_FILES_ROOT = Path('/data/anthias/staticfiles')
-HOTSPOT_FILE = Path('/data/hotspot/hotspot.html')
-INITIALIZED_FLAG = Path('/data/.anthias/initialized')
 
 DOCKER_BRIDGE_CIDR = ipaddress.ip_network('172.16.0.0/12')  # NOSONAR
 RFC1918_CIDRS = (
@@ -121,11 +119,3 @@ def static_with_mime(request: HttpRequest, filename: str) -> HttpResponseBase:
         return FileResponse(open(target, 'rb'), content_type=content_type)
     except (FileNotFoundError, IsADirectoryError):
         raise Http404
-
-
-@require_GET
-@require_client_in(DOCKER_BRIDGE_CIDR)
-def hotspot(request: HttpRequest, path: str = '') -> HttpResponseBase:
-    if INITIALIZED_FLAG.exists() or not HOTSPOT_FILE.is_file():
-        raise Http404
-    return FileResponse(HOTSPOT_FILE.open('rb'), content_type='text/html')

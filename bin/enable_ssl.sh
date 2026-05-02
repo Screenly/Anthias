@@ -185,7 +185,7 @@ services:
       - FORWARDED_ALLOW_IPS=*
 
   anthias-caddy:
-    image: caddy:2-alpine
+    image: mirror.gcr.io/library/caddy:2-alpine
     restart: always
     ports:
       - 80:80

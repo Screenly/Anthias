@@ -10,7 +10,7 @@ on:
       python-version:
         description: 'Python version to use'
         required: false
-        default: '3.11'
+        default: '3.13'
         type: string
 
 jobs:
@@ -43,7 +43,6 @@ jobs:
           uv run python -m tools.image_builder \
             --dockerfiles-only \
             --disable-cache-mounts \
-            --service celery \
             --service redis \
             --service test
 
@@ -63,7 +62,8 @@ jobs:
         if: inputs.test-type == 'python'
         run: |
           docker compose exec anthias-test \
-            ./manage.py test --noinput --parallel --exclude-tag=integration
+            pytest -n auto -m "not integration" \
+              --cov --cov-report=xml --cov-report=term
 
       - name: Setup integration test environment
         if: inputs.test-type == 'python'
@@ -71,6 +71,32 @@ jobs:
           docker compose exec anthias-test \
             bash ./bin/prepare_test_environment.sh -s
 
+      # Snapshot the unit-only `.coverage` before the retry begins.
+      # Each retry attempt restores from this snapshot before invoking
+      # pytest, so partial line-hit data from a failed earlier attempt
+      # cannot leak into the final coverage.xml via `--cov-append`.
+      - name: Snapshot unit-only coverage data
+        if: inputs.test-type == 'python'
+        run: |
+          docker compose exec anthias-test \
+            cp .coverage .coverage.unit-snapshot
+
+      # ANTHIAS_INTEGRATION_TEST=1 tells anthias_django/settings.py to
+      # pin DATABASES.default.TEST.NAME to the same SQLite path the
+      # anthias-server container reads. Selenium tests assert on
+      # `Asset.objects.all()` after the server persists an upload, so
+      # both ends must share one file. Unit tests must NOT set this
+      # — they run under xdist and need pytest-django's default
+      # per-worker `:memory:` DB to avoid file-lock contention.
+      #
+      # `--reuse-db` keeps pytest-django from running its default
+      # destroy-and-recreate cycle on the SQLite file. The previous
+      # step already migrated the file via `manage.py migrate` and
+      # started uvicorn against it; if pytest-django were to delete
+      # and recreate the file mid-run, uvicorn's open handle would
+      # point at an unlinked inode while pytest's test process wrote
+      # to the new one. `transaction=True` on integration tests still
+      # flushes tables between tests for isolation.
       - name: Run Python integration tests
         if: inputs.test-type == 'python'
         uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4
@@ -79,11 +105,19 @@ jobs:
           max_attempts: 5
           command: |
             docker compose exec anthias-test \
-              ./manage.py test --noinput --tag=integration
+              cp .coverage.unit-snapshot .coverage
+            docker compose exec -e ANTHIAS_INTEGRATION_TEST=1 anthias-test \
+              pytest -m integration --reuse-db \
+                --cov --cov-append --cov-report=xml --cov-report=term
 
+      # The /usr/src/app bind-mount means coverage.xml lands directly on
+      # the runner workspace, so no docker cp is needed. Codecov picks it
+      # up via the explicit `files:` argument.
       - name: Upload coverage reports to Codecov
         if: inputs.test-type == 'python'
         uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
+        with:
+          files: ./coverage.xml
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 

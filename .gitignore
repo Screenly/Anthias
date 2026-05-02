@@ -1,5 +1,6 @@
 *.py[co]
 .idea/
+.qt5-toolchain-build/
 
 # Packages
 *.egg
@@ -44,18 +45,29 @@ docker/Dockerfile.base
 docker/Dockerfile.nginx
 docker/Dockerfile.server
 docker/Dockerfile.websocket
-docker/Dockerfile.celery
 docker/Dockerfile.redis
 docker/Dockerfile.viewer
-docker/Dockerfile.wifi-connect
 docker/Dockerfile.test
 docker-compose.yml
 
 balena-deploy/
 db.sqlite3
 
+# Local pytest SQLite database (created by anthias_django/settings.py
+# when ENVIRONMENT=test and ANTHIAS_TEST_DB_PATH is not set). The
+# `-journal` / `-wal` / `-shm` siblings appear in WAL mode.
+.anthias-test.db
+.anthias-test.db-journal
+.anthias-test.db-wal
+.anthias-test.db-shm
+
 # Django
 staticfiles/
+
+# Hugo
+website/public/
+website/resources/
+website/.hugo_build.lock
 
 # ESLint
 .eslintcache

@@ -2,6 +2,10 @@
 
 services:
   anthias-server:
+    # Explicit image tag so anthias-celery below can reference the same
+    # built image without a duplicate `build:` block (which would
+    # produce a separate, byte-identical-but-distinct image tag).
+    image: anthias-server:dev
     build:
       context: .
       dockerfile: docker/Dockerfile.server
@@ -21,23 +25,31 @@ services:
       - ./:/usr/src/app/
 
   anthias-celery:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.celery
+    # Reuses anthias-server:dev via the explicit image tag above.
+    # Compose builds anthias-server first (it owns the build:) and
+    # this service inherits the same image, only overriding CMD.
+    image: anthias-server:dev
     depends_on:
-      - anthias-server
-      - redis
+      anthias-server:
+        condition: service_started
+      redis:
+        condition: service_started
+    command: >
+      celery -A celery_tasks.celery worker -B -n worker@anthias
+      --loglevel=info --schedule /tmp/celerybeat-schedule
     environment:
       - HOME=/data
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ENVIRONMENT=development
     restart: always
     volumes:
       - anthias-data:/data
+      - ./:/usr/src/app/
 
   redis:
     platform: "linux/amd64"
-    image: redis:alpine
+    image: mirror.gcr.io/library/redis:alpine
 
 volumes:
     anthias-data:

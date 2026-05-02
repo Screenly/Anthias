@@ -15,7 +15,16 @@ DEBIAN_VERSION=$(lsb_release -cs)
 MAKE_CORES="$(expr $(nproc) + 2)"
 
 ANTHIAS_RELEASE_URL="https://github.com/Screenly/Anthias/releases"
-WEBVIEW_VERSION="0.3.5"
+# Pre-built Qt 5 cross-compile toolchain published under this WebView
+# release tag. Pinned independently of the current WEBVIEW_VERSION since
+# the toolchain itself doesn't change between WebView releases.
+QT5_TOOLCHAIN_TAG="WebView-v2026.04.1"
+
+# WEBVIEW_VERSION is the CalVer release identifier (YYYY.MM.PATCH).
+# CI extracts it from the WebView-v* tag; for local builds the caller
+# can set it explicitly, otherwise we fall back to a date-stamped dev
+# version so the artifact filename is still well-formed.
+WEBVIEW_VERSION="${WEBVIEW_VERSION:-$(date -u +%Y.%m).0-dev}"
 
 mkdir -p "$BUILD_TARGET"
 mkdir -p "$SRC"
@@ -38,7 +47,7 @@ function download_and_extract_qt5() {
     local SRC_DIR="$1"
     local DEVICE="$2"
 
-    WEBVIEW_DL_URL="$ANTHIAS_RELEASE_URL/download/WebView-v$WEBVIEW_VERSION/qt5-$QT_VERSION-$DEBIAN_VERSION-$DEVICE.tar.gz"
+    WEBVIEW_DL_URL="$ANTHIAS_RELEASE_URL/download/$QT5_TOOLCHAIN_TAG/qt5-$QT_VERSION-$DEBIAN_VERSION-$DEVICE.tar.gz"
     WEBVIEW_DL_URL_SHA256="$WEBVIEW_DL_URL.sha256"
 
     if [ ! -f /tmp/qt5-$QT_VERSION-$DEBIAN_VERSION-$DEVICE.tar.gz ]; then
@@ -73,16 +82,18 @@ function build_qt () {
     make -j"$MAKE_CORES"
     make install
 
-    mkdir -p fakeroot/bin fakeroot/share/ScreenlyWebview
-    mv ScreenlyWebview fakeroot/bin/
-    cp -rf /webview/res fakeroot/share/ScreenlyWebview/
+    mkdir -p fakeroot/bin fakeroot/share/AnthiasWebview
+    mv AnthiasWebview fakeroot/bin/
+    cp -rf /webview/res fakeroot/share/AnthiasWebview/
+
+    local ARCHIVE="webview-$WEBVIEW_VERSION-$DEBIAN_VERSION-$1.tar.gz"
 
     pushd fakeroot
-    tar cfz "$BUILD_TARGET/webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" .
+    tar cfz "$BUILD_TARGET/$ARCHIVE" .
     popd
 
     pushd "$BUILD_TARGET"
-    sha256sum "webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz" > "webview-$QT_VERSION-$DEBIAN_VERSION-$1-$GIT_HASH.tar.gz.sha256"
+    sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
     popd
 }
 

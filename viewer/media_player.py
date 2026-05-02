@@ -1,13 +1,27 @@
 import logging
+import os
 import subprocess
 from typing import ClassVar
-
-import vlc
 
 from lib.device_helper import get_device_type
 from settings import settings
 
 VIDEO_TIMEOUT = 20  # secs
+
+
+def get_alsa_audio_device() -> str:
+    if settings['audio_output'] == 'local':
+        if get_device_type() == 'pi5':
+            return 'default:CARD=vc4hdmi0'
+
+        return 'plughw:CARD=Headphones'
+    else:
+        if get_device_type() in ['pi4', 'pi5']:
+            return 'default:CARD=vc4hdmi0'
+        elif get_device_type() in ['pi1', 'pi2', 'pi3']:
+            return 'default:CARD=vc4hdmi'
+        else:
+            return 'default:CARD=HID'
 
 
 class MediaPlayer:
@@ -37,8 +51,33 @@ class MPVMediaPlayer(MediaPlayer):
         self.uri = uri
 
     def play(self) -> None:
+        # Re-read settings each play so the audio_output dropdown takes
+        # effect without a viewer restart, matching VLCMediaPlayer.
+        settings.load()
+
+        # Pin to 1080p on Pi4-64/Pi5: mpv's default --drm-mode=preferred
+        # reads the connector's EDID-preferred mode (4K on most modern
+        # TVs) and runs CPU zimg upscale, which drops below real-time
+        # on the A72. Software decode of 1080p H.264 fits 4 cores fine.
+        device_type = os.environ.get('DEVICE_TYPE', '')
+        extra_args: list[str] = []
+        if device_type in ('pi4-64', 'pi5'):
+            extra_args = [
+                '--drm-mode=1920x1080@60',
+                '--vd-lavc-threads=4',
+            ]
+
         self.process = subprocess.Popen(
-            ['mpv', '--no-terminal', '--vo=drm', '--', self.uri],
+            [
+                'mpv',
+                '--no-terminal',
+                '--vo=drm',
+                '--hwdec=auto-safe',
+                *extra_args,
+                f'--audio-device=alsa/{get_alsa_audio_device()}',
+                '--',
+                self.uri,
+            ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -61,37 +100,22 @@ class VLCMediaPlayer(MediaPlayer):
     def __init__(self) -> None:
         MediaPlayer.__init__(self)
 
-        options = self.__get_options()
+        # Imported here so Qt6 boards (which route to MPVMediaPlayer
+        # via MediaPlayerProxy) don't need libvlc available just to
+        # load this module.
+        import vlc
+
+        self._vlc = vlc
+        options = [f'--alsa-audio-device={get_alsa_audio_device()}']
         self.instance = vlc.Instance(options)
         self.player = self.instance.media_player_new()
 
         self.player.audio_output_set('alsa')
 
-    def get_alsa_audio_device(self) -> str:
-        if settings['audio_output'] == 'local':
-            if get_device_type() == 'pi5':
-                return 'default:CARD=vc4hdmi0'
-
-            return 'plughw:CARD=Headphones'
-        else:
-            if get_device_type() in ['pi4', 'pi5']:
-                return 'default:CARD=vc4hdmi0'
-            elif get_device_type() in ['pi1', 'pi2', 'pi3']:
-                return 'default:CARD=vc4hdmi'
-            else:
-                return 'default:CARD=HID'
-
-    def __get_options(self) -> list[str]:
-        return [
-            f'--alsa-audio-device={self.get_alsa_audio_device()}',
-        ]
-
     def set_asset(self, uri: str, duration: int | str) -> None:
         self.player.set_mrl(uri)
         settings.load()
-        self.player.audio_output_device_set(
-            'alsa', self.get_alsa_audio_device()
-        )
+        self.player.audio_output_device_set('alsa', get_alsa_audio_device())
         # Use synchronous parse() to pre-load file metadata before play() is
         # called. parse_with_options() is async and returns before metadata is
         # ready, which negates the pre-loading benefit and causes the same
@@ -106,9 +130,9 @@ class VLCMediaPlayer(MediaPlayer):
 
     def is_playing(self) -> bool:
         return self.player.get_state() in [
-            vlc.State.Playing,
-            vlc.State.Buffering,
-            vlc.State.Opening,
+            self._vlc.State.Playing,
+            self._vlc.State.Buffering,
+            self._vlc.State.Opening,
         ]
 
 
@@ -118,7 +142,14 @@ class MediaPlayerProxy:
     @classmethod
     def get_instance(cls) -> MediaPlayer:
         if cls.INSTANCE is None:
-            if get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']:
+            # pi4-64 runs Qt6 + linuxfb like pi5/x86, so VLC's GL/GLES2/XCB
+            # outputs have no parent window to draw into. Route it to mpv,
+            # which renders straight to KMS via --vo=drm.
+            is_pi4_64 = os.environ.get('DEVICE_TYPE') == 'pi4-64'
+            if (
+                get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']
+                and not is_pi4_64
+            ):
                 cls.INSTANCE = VLCMediaPlayer()
             else:
                 cls.INSTANCE = MPVMediaPlayer()

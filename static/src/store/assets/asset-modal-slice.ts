@@ -176,6 +176,9 @@ const assetModalSlice = createSlice({
     setStatusMessage: (state, action) => {
       state.statusMessage = action.payload
     },
+    setIsSubmitting: (state, action) => {
+      state.isSubmitting = action.payload
+    },
     setUploadProgress: (state, action) => {
       state.uploadProgress = action.payload
     },
@@ -208,11 +211,17 @@ const assetModalSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Upload file
-      .addCase(uploadFile.pending, (state) => {
+      // Upload file. The `silent` flag (batch-upload hook) suppresses
+      // statusMessage/isSubmitting writes here so the hook can keep
+      // "Uploading X of N" visible across the whole batch instead of
+      // having each file's pending/fulfilled clobber it.
+      .addCase(uploadFile.pending, (state, action) => {
+        state.uploadProgress = 0
+        if (action.meta.arg.silent) {
+          return
+        }
         state.isSubmitting = true
         state.statusMessage = ''
-        state.uploadProgress = 0
       })
       .addCase(uploadFile.fulfilled, (state, action) => {
         const {
@@ -235,9 +244,12 @@ const assetModalSlice = createSlice({
           dates,
         }
 
+        state.uploadProgress = 0
+        if (action.meta.arg.silent) {
+          return
+        }
         state.statusMessage = 'Upload completed.'
         state.isSubmitting = false
-        state.uploadProgress = 0
       })
       .addCase(uploadFile.rejected, (state, action) => {
         state.errorMessage = `Upload failed: ${action.payload}`
@@ -245,10 +257,16 @@ const assetModalSlice = createSlice({
         state.uploadProgress = 0
       })
       // Save asset
-      .addCase(saveAsset.pending, (state) => {
+      .addCase(saveAsset.pending, (state, action) => {
+        if (action.meta.arg.silent) {
+          return
+        }
         state.isSubmitting = true
       })
-      .addCase(saveAsset.fulfilled, (state) => {
+      .addCase(saveAsset.fulfilled, (state, action) => {
+        if (action.meta.arg.silent) {
+          return
+        }
         state.isSubmitting = false
         state.statusMessage = 'Asset saved successfully.'
       })
@@ -266,6 +284,7 @@ export const {
   setValid,
   setErrorMessage,
   setStatusMessage,
+  setIsSubmitting,
   setUploadProgress,
   resetForm,
   validateUrl,

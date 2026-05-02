@@ -1,2 +1,0 @@
-network_systemd_units:
-  - wifi-connect.service

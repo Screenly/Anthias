@@ -37,19 +37,39 @@ jobs:
 
   buildx:
     needs: run-tests
+    # Scoped per-job (not at workflow level) so `run-tests` and any
+    # future read-only job don't inherit `packages: write`. `buildx`
+    # needs it so `docker login ghcr.io` with GITHUB_TOKEN can push
+    # both ghcr.io/screenly/anthias-* image tags and the
+    # `buildcache-*` registry cache tags written by --cache-backend=
+    # registry. `contents: read` is the implicit default but pinned
+    # explicitly so a future workflow edit can't silently lose
+    # checkout access.
+    permissions:
+      contents: read
+      packages: write
     strategy:
       # Don't cancel sibling jobs on the first failure: any platform that
-      # has already finished building its image will have pushed the
-      # immutable <short-hash>-<board> tag, which is harmless on its own.
-      # Only the publish-latest job below — gated on the entire matrix
-      # succeeding — moves the floating latest-* tag, so a partial failure
-      # leaves users on the previous coherent latest-* set instead of a
-      # half-pushed mix of old + new images.
+      # has already finished building its images will have pushed the
+      # immutable <short-hash>-<board> tags, which are harmless on their
+      # own. Only the publish-latest job below — gated on the entire
+      # matrix succeeding — moves the floating latest-* tag, so a partial
+      # failure leaves users on the previous coherent latest-* set
+      # instead of a half-pushed mix of old + new images.
+      #
+      # The matrix is intentionally only on `board`, not `(board, service)`:
+      # buildkit's per-runner cache hashes apt-get-update output (timestamps
+      # in /var/lib/apt/lists/*, mirror selection) into the layer digest,
+      # so the same package list installed on two different runners
+      # produces two different layer hashes. Building all services for
+      # one board on a single runner means the base apt layer is hashed
+      # once and shared across server / viewer / test / etc. — which is
+      # what makes Dockerfile.base.j2's include-shared layer actually
+      # dedup at the registry level. See refactor: drop celery image.
       fail-fast: false
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi4-64', 'pi5', 'x86']
-        service: ['server', 'celery', 'redis', 'websocket', 'nginx', 'viewer', 'wifi-connect']
-        python-version: ["3.11"]
+        board: ['pi2', 'pi3', 'pi4-64', 'pi5', 'x86']
+        python-version: ["3.13"]
     runs-on: ubuntu-24.04
 
     steps:
@@ -86,19 +106,6 @@ jobs:
           docker buildx create --use --name multiarch-builder
           docker buildx inspect --bootstrap
 
-      - name: Cache Docker layers
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
-        id: cache
-        with:
-          path: /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }}
-          key: buildx-${{ matrix.board }}-${{ matrix.service }}-${{ hashFiles('docker/**/*') }}
-          restore-keys: |
-            buildx-${{ matrix.board }}-${{ matrix.service }}-
-
-      - name: Inspect cache before build
-        run: |
-          ls -la /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }} || true
-
       - name: Login to Docker Hub
         if: success() && github.event_name == 'push'
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
@@ -106,19 +113,39 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build Container
+      - name: Login to GitHub Container Registry
+        if: success() && github.event_name == 'push'
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Containers
         env:
           DOCKER_BUILDKIT: 1
           BUILDKIT_PROGRESS: plain
+          # On push events (master): use BuildKit's registry cache
+          # backend — pushes cache to ghcr.io/screenly/anthias-
+          # <service>:buildcache-<board> so subsequent push runs of
+          # the same board can pull cached layers without
+          # re-installing ~825 MB of apt packages from scratch.
+          #
+          # On workflow_dispatch (manual runs on any branch): fall
+          # through to `local` mode — a per-runner ephemeral
+          # directory, so effectively no-cache. workflow_dispatch
+          # also skips the `docker login ghcr.io` step above (it's
+          # gated on `event_name == 'push'`), so registry cache
+          # would have no auth to write with anyway. This workflow
+          # has no `pull_request` trigger; PRs never run this job.
+          BUILDX_CACHE_BACKEND: ${{ github.event_name == 'push' && 'registry' || 'local' }}
         run: |
           uv run python -m tools.image_builder \
             --build-target=${{ matrix.board }} \
-            --service=${{ matrix.service }} \
+            --service=server \
+            --service=viewer \
+            --service=redis \
             ${{ github.event_name == 'push' && '--push --skip-latest-tag' || '' }}
-
-      - name: Inspect cache after build
-        run: |
-          ls -la /tmp/.buildx-cache/${{ matrix.board }}-${{ matrix.service }} || true
 
   # Mirror the immutable <short-hash>-<board> tags pushed by the buildx
   # matrix onto the floating latest-<board> tag. Runs only after every
@@ -132,13 +159,36 @@ jobs:
   # checks every <short-hash>-<board> tag is resolvable before any
   # retag fires, so a missing source tag fails the job before it
   # mutates the registry. `imagetools create` re-points the registry
-  # tag to the existing manifest without re-uploading layers, so the
-  # full ~98 retags (7 boards × 7 services × 2 namespaces) finish in
-  # under two minutes.
+  # tag to the existing manifest without re-uploading layers, and each
+  # call is wrapped in 5-attempt exponential backoff so a transient
+  # 429 / 5xx doesn't strand latest-* half-mirrored.
+  #
+  # Two registries, two steps: `ghcr.io/screenly/anthias-*` is the new
+  # primary (rate-limit-friendly, free unlimited storage for public
+  # packages, auth via the workflow-issued GITHUB_TOKEN with
+  # `packages: write`) and is the hard-fail step. `screenly/anthias-*`
+  # on Docker Hub stays as a parallel mirror during the migration
+  # window so devices that haven't yet picked up the compose-template
+  # flip keep getting `latest-*` advanced — but it runs in its own
+  # step with `continue-on-error: true` because Docker Hub's
+  # unauthenticated/free-tier pull rate limit periodically 429s the
+  # manifest GETs that `imagetools create` issues, and GHCR being
+  # current is what actually matters for new devices. GHCR runs first
+  # so the canonical primary is up to date even if Docker Hub flakes.
+  # The legacy `screenly/srly-ose-*` namespace was dropped: every
+  # device that has run `upgrade_containers.sh` since 2023-02
+  # (b9998438) is on `screenly/anthias-*` already, so the parallel
+  # `srly-ose-*` push was buying no real back-compat in exchange for
+  # half the manifest GETs (one of two reasons d568602's publish hit
+  # Docker Hub's 429).
   publish-latest:
     needs: buildx
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
+    # See `buildx.permissions` above for rationale; same scoping reason.
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -152,45 +202,36 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Mirror short-hash tags to latest-<board>
-        run: |
-          set -euo pipefail
-          GIT_SHORT_HASH=$(git rev-parse --short=7 HEAD)
-          BOARDS=(pi1 pi2 pi3 pi4 pi4-64 pi5 x86)
-          SERVICES=(server celery redis websocket nginx viewer wifi-connect)
-          NAMESPACES=(screenly/anthias screenly/srly-ose)
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-          echo "::group::Preflight: verify every <short-hash>-<board> source tag exists"
-          for namespace in "${NAMESPACES[@]}"; do
-            for service in "${SERVICES[@]}"; do
-              for board in "${BOARDS[@]}"; do
-                src="${namespace}-${service}:${GIT_SHORT_HASH}-${board}"
-                echo "Verifying ${src}"
-                docker buildx imagetools inspect --raw "${src}" >/dev/null
-              done
-            done
-          done
-          echo "::endgroup::"
+      - name: Mirror short-hash tags to latest-<board> (GHCR)
+        env:
+          NAMESPACE: ghcr.io/screenly/anthias
+        run: bash .github/workflows/scripts/mirror-latest-tags.sh
 
-          echo "::group::Mirror <short-hash>-<board> -> latest-<board>"
-          for namespace in "${NAMESPACES[@]}"; do
-            for service in "${SERVICES[@]}"; do
-              for board in "${BOARDS[@]}"; do
-                src="${namespace}-${service}:${GIT_SHORT_HASH}-${board}"
-                dst="${namespace}-${service}:latest-${board}"
-                echo "Mirroring ${src} -> ${dst}"
-                docker buildx imagetools create -t "${dst}" "${src}"
-              done
-            done
-          done
-          echo "::endgroup::"
+      # Soft-fail: Docker Hub's free-tier pull rate limit regularly 429s
+      # the manifest GETs that `imagetools create` issues, and GHCR
+      # (mirrored above) is the canonical primary — failing the whole
+      # job because the mirror flaked would needlessly red-X otherwise
+      # green pushes. The step still runs to completion so partial
+      # mirrors get as far as they can.
+      - name: Mirror short-hash tags to latest-<board> (Docker Hub)
+        continue-on-error: true
+        env:
+          NAMESPACE: screenly/anthias
+        run: bash .github/workflows/scripts/mirror-latest-tags.sh
 
   balena:
     if: ${{ github.ref == 'refs/heads/master' }}
     needs: buildx
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi5']
+        board: ['pi2', 'pi3', 'pi4-64', 'pi5']
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -198,15 +239,23 @@ jobs:
 
       - name: Set Docker tag
         run: |
-          echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          {
+            echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)"
+            echo "BOARD=${{ matrix.board }}"
+            echo "SHM_SIZE=256mb"
+          } >> "$GITHUB_ENV"
 
-          if [ "${{ matrix.board }}" == "pi4" ]; then
-            echo "BOARD=${{ matrix.board }}-64" >> "$GITHUB_ENV"
-          else
-            echo "BOARD=${{ matrix.board }}" >> "$GITHUB_ENV"
+      - name: Get fleet slug
+        run: |
+          if [ "${{ matrix.board }}" == 'pi2' ]; then
+            echo "FLEET_SLUG=anthias-pi2" >> "$GITHUB_ENV"
+          elif [ "${{ matrix.board }}" == 'pi3' ]; then
+            echo "FLEET_SLUG=anthias-pi3" >> "$GITHUB_ENV"
+          elif [ "${{ matrix.board }}" == 'pi4-64' ]; then
+            echo "FLEET_SLUG=anthias-pi4" >> "$GITHUB_ENV"
+          elif [ "${{ matrix.board }}" == 'pi5' ]; then
+            echo "FLEET_SLUG=anthias-pi5" >> "$GITHUB_ENV"
           fi
-
-          echo "SHM_SIZE=256mb" >> "$GITHUB_ENV"
 
       - name: Prepare Balena file
         run: |
@@ -230,7 +279,7 @@ jobs:
         continue-on-error: true
         with:
           balena_token: ${{ secrets.BALENA_TOKEN }}
-          fleet: screenly_ose/anthias-${{ matrix.board }}
+          fleet: screenly_ose/${{ env.FLEET_SLUG }}
           source: balena-deploy
 
       - name: Sleep random sleep before retry
@@ -245,5 +294,5 @@ jobs:
         if: ${{ failure() && steps.build.conclusion == 'failure' }}
         with:
           balena_token: ${{ secrets.BALENA_TOKEN }}
-          fleet: screenly_ose/anthias-${{ matrix.board }}
+          fleet: screenly_ose/${{ env.FLEET_SLUG }}
           source: balena-deploy

@@ -1,69 +1,53 @@
+import os
 from typing import Any
 
-import click
-import requests
 from jinja2 import Environment, FileSystemLoader
 
-from tools.image_builder.constants import GITHUB_REPO_URL
+from tools.image_builder.constants import BASE_IMAGE, GITHUB_REPO_URL
 
 
 def get_build_parameters(build_target: str) -> dict[str, Any]:
-    default_build_parameters = {
-        'board': 'x86',
-        'base_image': 'debian',
-        'target_platform': 'linux/amd64',
-    }
-
+    # Every surviving board now lands on vanilla `debian:trixie`. The
+    # `pi2`/`pi3` armhf builds add the Raspberry Pi / Raspbian apt
+    # sources at image-build time (see Dockerfile.base.j2); 64-bit and
+    # x86 builds need nothing Pi-specific at all.
     if build_target == 'pi5':
         return {
             'board': 'pi5',
-            'base_image': 'balenalib/raspberrypi5-debian',
+            'base_image': BASE_IMAGE,
             'target_platform': 'linux/arm64/v8',
         }
-    if build_target == 'pi4':
+    if build_target == 'pi4-64':
         return {
-            'board': 'pi4',
-            'base_image': 'balenalib/raspberrypi3-debian',
-            'target_platform': 'linux/arm/v8',
-        }
-    elif build_target == 'pi4-64':
-        return {
-            'board': 'pi4',
-            'base_image': 'balenalib/raspberrypi3-debian',
+            'board': 'pi4-64',
+            'base_image': BASE_IMAGE,
             'target_platform': 'linux/arm64/v8',
         }
-    elif build_target == 'pi3':
+    if build_target == 'pi3':
         return {
             'board': 'pi3',
-            'base_image': 'balenalib/raspberrypi3-debian',
+            'base_image': BASE_IMAGE,
             'target_platform': 'linux/arm/v7',
         }
-    elif build_target == 'pi2':
+    if build_target == 'pi2':
         return {
             'board': 'pi2',
-            'base_image': 'balenalib/raspberry-pi2',
-            'target_platform': 'linux/arm/v6',
-        }
-    elif build_target == 'pi1':
-        return {
-            'board': 'pi1',
-            'base_image': 'balenalib/raspberry-pi',
-            'target_platform': 'linux/arm/v6',
+            'base_image': BASE_IMAGE,
+            'target_platform': 'linux/arm/v7',
         }
 
-    return default_build_parameters
+    return {
+        'board': 'x86',
+        'base_image': BASE_IMAGE,
+        'target_platform': 'linux/amd64',
+    }
 
 
 def get_docker_tag(git_branch: str, board: str, platform: str) -> str:
-    result_board = board
-
-    if platform == 'linux/arm64/v8' and board == 'pi4':
-        result_board = f'{board}-64'
-
     if git_branch == 'master':
-        return f'latest-{result_board}'
+        return f'latest-{board}'
     else:
-        return f'{git_branch}-{result_board}'
+        return f'{git_branch}-{board}'
 
 
 def generate_dockerfile(service: str, context: dict[str, Any]) -> None:
@@ -81,8 +65,6 @@ def generate_dockerfile(service: str, context: dict[str, Any]) -> None:
 def get_uv_builder_context(service: str) -> dict[str, Any]:
     service_to_group = {
         'server': 'server',
-        'celery': 'server',
-        'wifi-connect': 'wifi-connect',
         'viewer': 'viewer',
         'test': 'test',
     }
@@ -133,45 +115,73 @@ def get_test_context() -> dict[str, Any]:
     }
 
 
-def get_viewer_context(board: str) -> dict[str, Any]:
+def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     releases_url = f'{GITHUB_REPO_URL}/releases/download'
 
-    webview_git_hash = 'd7a7e2c'
-    webview_base_url = f'{releases_url}/WebView-v0.3.12'
+    # CalVer release of the WebView (YYYY.MM.PATCH). Bump this default
+    # together with the corresponding WebView-v* tag in the release.
+    # Override via WEBVIEW_VERSION env when building the viewer image
+    # ahead of (or against a fork of) the canonical release — useful
+    # while the new WebView-v* tag is still being cut, since
+    # Dockerfile.viewer.j2 will otherwise 404 when fetching the
+    # not-yet-published artifact.
+    webview_version = os.environ.get('WEBVIEW_VERSION', '2026.04.1')
+    webview_base_url = f'{releases_url}/WebView-v{webview_version}'
 
-    qt_version = '5.15.14'
+    is_qt6 = board in ['pi5', 'pi4-64', 'x86']
 
-    if board in ['pi5', 'x86']:
+    # Qt version is only used to pull the cross-built Qt 5 toolchain
+    # archive on legacy 32-bit Pi boards; Qt 6 boards consume Qt from
+    # apt and don't need this in the artifact name.
+    if is_qt6:
         qt_version = '6.4.2'
     else:
         qt_version = '5.15.14'
 
     qt_major_version = qt_version.split('.')[0]
 
-    apt_dependencies = [
-        'build-essential',
+    # Viewer-only apt deps. The shared runtime set (cec-utils, curl,
+    # ffmpeg, git, libcec7, procps, psmisc, python-is-python3,
+    # python3-gi, python3-pip, python3-setuptools, sqlite3, sudo,
+    # plus libraspberrypi0 on 32-bit Pi boards) is installed by
+    # Dockerfile.base.j2 in a layer that server (and test) also use,
+    # so it dedups across images. Anything listed here is unique to
+    # the viewer image.
+    #
+    # Most of the long *-dev list this file used to carry was needed
+    # to *build* Qt + the WebView. Now that both ship as prebuilt
+    # tarballs (downloaded in Dockerfile.viewer.j2) the runtime image
+    # only needs the .so files those binaries link against — i.e. the
+    # non -dev runtime libs. The list below is the still-being-trimmed
+    # remainder; expect more to fall off as ldd-driven cleanup
+    # continues.
+    #
+    # X11/XCB packages are intentionally absent: the WebView is
+    # configured with `-no-xcb -no-xcb-xlib -qpa eglfs` (see
+    # webview/build_qt{5,6}.sh) and runs under QT_QPA_PLATFORM=linuxfb
+    # straight on KMS/DRM, so Qt has no X code path to dlopen. mpv
+    # uses --vo=drm. Same reason there's nothing wayland-related here.
+    viewer_extra_apt_dependencies = [
         'ca-certificates',
-        'curl',
         'dbus-daemon',
         'fonts-arphic-uming',
-        'git-core',
         'libasound2-dev',
         'libavcodec-dev',
+        'libavdevice-dev',
+        'libavfilter-dev',
         'libavformat-dev',
         'libavutil-dev',
         'libbz2-dev',
-        'libcec-dev ',
         'libdbus-1-dev',
         'libdbus-glib-1-dev',
         'libdrm-dev',
         'libegl1-mesa-dev',
         'libevent-dev',
-        'libffi-dev',
         'libfontconfig1-dev',
         'libfreetype6-dev',
         'libgbm-dev',
         'libgcrypt20-dev',
-        'libgles2-mesa',
+        'libgles2',
         'libgles2-mesa-dev',
         'libglib2.0-dev',
         'libicu-dev',
@@ -186,7 +196,7 @@ def get_viewer_context(board: str) -> dict[str, Any]:
         'libopus-dev',
         'libpci-dev',
         'libpng-dev',
-        'libpng16-16',
+        'libpng16-16t64',
         'libpq-dev',
         'libpulse-dev',
         'librsvg2-common',
@@ -194,71 +204,31 @@ def get_viewer_context(board: str) -> dict[str, Any]:
         'libsnappy-dev',
         'libsqlite3-dev',
         'libsrtp2-dev',
-        'libssl-dev',
-        'libzmq3-dev',
+        'libswresample-dev',
         'libswscale-dev',
         'libsystemd-dev',
         'libts-dev',
         'libudev-dev',
         'libvpx-dev',
         'libwebp-dev',
-        'libx11-dev',
-        'libx11-xcb-dev',
-        'libx11-xcb1',
-        'libxcb-glx0-dev',
-        'libxcb-icccm4',
-        'libxcb-icccm4-dev',
-        'libxcb-image0',
-        'libxcb-image0-dev',
-        'libxcb-keysyms1',
-        'libxcb-keysyms1-dev',
-        'libxcb-randr0-dev',
-        'libxcb-render-util0',
-        'libxcb-render-util0-dev',
-        'libxcb-shape0-dev',
-        'libxcb-shm0',
-        'libxcb-shm0-dev',
-        'libxcb-sync-dev',
-        'libxcb-sync1',
-        'libxcb-xfixes0-dev',
-        'libxcb-xinerama0',
-        'libxcb-xinerama0-dev',
-        'libxcb1',
-        'libxcb1-dev',
-        'libxext-dev',
-        'libxi-dev',
-        'libxkbcommon-dev',
-        'libxrender-dev',
-        'libxslt1-dev',
-        'libxss-dev',
-        'libxtst-dev',
-        'libzmq5-dev',
-        'libzmq5',
-        'net-tools',
-        'procps',
-        'psmisc',
-        'python3-dev',
-        'python3-gi',
+        'libxkbcommon0',
+        # The prebuilt WebView binary dlopens libharfbuzz-subset.so.0
+        # (Chromium's font-subsetting path). It's pulled in
+        # transitively by qt6-webengine-dev on Qt6 boards but nothing
+        # on Qt5 brings it, so the lib was simply missing on pi2/pi3
+        # in production (pre-existing bug, not a regression here).
+        # 200 KB, easier to just install everywhere than gate on board.
+        'libharfbuzz-subset0',
         'python3-netifaces',
-        'python3-pip',
-        'python3-setuptools',
-        'python-is-python3',
-        'ttf-wqy-zenhei',
-        'vlc',
-        'sudo',
-        'sqlite3',
-        'ffmpeg',
-        'libavcodec-dev',
-        'libavdevice-dev',
-        'libavfilter-dev',
-        'libavformat-dev',
-        'libavutil-dev',
-        'libswresample-dev',
-        'libswscale-dev',
+        'fonts-wqy-zenhei',
     ]
 
-    if board in ['pi5', 'x86']:
-        apt_dependencies.extend(
+    if is_qt6:
+        # pi4-64/pi5/x86 use mpv (--vo=drm) for video. VLC is
+        # deliberately *not* installed: MediaPlayerProxy in
+        # viewer/media_player.py routes Qt6 boards to MPVMediaPlayer,
+        # so VLC would just be ~80–100 MB of dead weight here.
+        viewer_extra_apt_dependencies.extend(
             [
                 'mpv',
                 'qt6-base-dev',
@@ -266,79 +236,30 @@ def get_viewer_context(board: str) -> dict[str, Any]:
                 'qt6-image-formats-plugins',
             ]
         )
-
-    if board not in ['x86', 'pi5']:
-        apt_dependencies.extend(
+    else:
+        # libraspberrypi0 already comes in via base_apt_dependencies on
+        # 32-bit Pi boards (see __main__.py), so it's deliberately not
+        # repeated here. libssl1.1 is gone in trixie; the rebuilt Qt 5
+        # webview archive links against libssl3 from the base image.
+        # libgst-dev / libsqlite0-dev / libsrtp0-dev were dropped in
+        # trixie — libsqlite3-dev and libsrtp2-dev are already in the
+        # main viewer apt list above; libgstreamer1.0-dev is Qt 5-only
+        # and is added in the extend() below. VLC is Qt5-only because
+        # MediaPlayerProxy only routes pi2/pi3 to VLCMediaPlayer.
+        viewer_extra_apt_dependencies.extend(
             [
-                'libraspberrypi0',
-                'libgst-dev',
-                'libsqlite0-dev',
-                'libsrtp0-dev',
+                'libgstreamer1.0-dev',
                 'qt5-image-formats-plugins',
+                'vlc',
             ]
         )
 
-        if board != 'pi1':
-            apt_dependencies.extend(['libssl1.1'])
-
     return {
-        'apt_dependencies': apt_dependencies,
+        'viewer_extra_apt_dependencies': viewer_extra_apt_dependencies,
         'qt_version': qt_version,
         'qt_major_version': qt_major_version,
-        'webview_git_hash': webview_git_hash,
+        'webview_version': webview_version,
         'webview_base_url': webview_base_url,
-    }
-
-
-def get_wifi_connect_context(target_platform: str) -> dict[str, Any]:
-    if target_platform == 'linux/arm/v6':
-        architecture = 'rpi'
-    elif target_platform in ['linux/arm/v7', 'linux/arm/v8']:
-        architecture = 'armv7hf'
-    elif target_platform == 'linux/arm64/v8':
-        architecture = 'aarch64'
-    elif target_platform == 'linux/amd64':
-        architecture = 'amd64'
-    else:
-        click.secho(
-            f'Unsupported target platform: {target_platform}',
-            fg='red',
-        )
-        return {}
-
-    wc_download_url = (
-        'https://api.github.com/repos/balena-os/wifi-connect/releases/93025295'
-    )
-
-    try:
-        response = requests.get(wc_download_url)
-        response.raise_for_status()
-        data = response.json()
-        assets = [asset['browser_download_url'] for asset in data['assets']]
-
-        try:
-            archive_url = next(
-                asset for asset in assets if f'linux-{architecture}' in asset
-            )
-        except StopIteration:
-            click.secho(
-                'No wifi-connect release found for this architecture.',
-                fg='red',
-            )
-            archive_url = ''
-
-    except requests.exceptions.RequestException as e:
-        click.secho(f'Failed to get wifi-connect release: {e}', fg='red')
-        return {}
-
-    return {
-        'apt_dependencies': [
-            'dnsmasq',
-            'iw',
-            'network-manager',
-            'unzip',
-            'wget',
-            'wireless-tools',
-        ],
-        'archive_url': archive_url,
+        'is_qt6': is_qt6,
+        'artifact_board': board,
     }

@@ -1,10 +1,11 @@
 import logging
 import os
+from collections.abc import Iterator
 from datetime import datetime, time, timedelta
 from typing import Any
 
+import pytest
 import time_machine
-from django.test import TestCase
 from django.utils import timezone
 
 from anthias_app.models import Asset
@@ -97,94 +98,127 @@ ASSET_TOMORROW = {
 FAKE_DB_PATH = '/tmp/fakedb'
 
 
-class SchedulerTest(TestCase):
-    def tearDown(self) -> None:
+@pytest.fixture
+def restore_shuffle_setting() -> Iterator[None]:
+    try:
+        yield
+    finally:
         settings['shuffle_playlist'] = False
 
-    def create_assets(self, assets: list[dict[str, Any]]) -> None:
-        for asset in assets:
-            Asset.objects.create(**asset)
 
-    def test_generate_asset_list_assets_should_return_list_sorted_by_play_order(
-        self,
-    ) -> None:  # noqa: E501
-        self.create_assets([ASSET_X, ASSET_Y])
-        assets, _ = generate_asset_list()
-        self.assertEqual(assets, [ASSET_Y, ASSET_X])
+def _create_assets(assets: list[dict[str, Any]]) -> None:
+    for asset in assets:
+        Asset.objects.create(**asset)
 
-    def test_generate_asset_list_check_deadline_if_both_active(self) -> None:
-        self.create_assets([ASSET_X, ASSET_Y])
-        _, deadline = generate_asset_list()
-        self.assertEqual(deadline, ASSET_Y['end_date'])
 
-    def test_generate_asset_list_check_deadline_if_asset_scheduled(
-        self,
-    ) -> None:
-        """If ASSET_X is active and ASSET_X[end_date] == (now + 3) and
-        ASSET_TOMORROW will be active tomorrow then deadline should be
-        ASSET_TOMORROW[start_date]
-        """
-        self.create_assets([ASSET_X, ASSET_TOMORROW])
-        _, deadline = generate_asset_list()
-        self.assertEqual(deadline, ASSET_TOMORROW['start_date'])
+@pytest.mark.django_db
+def test_generate_asset_list_assets_should_return_list_sorted_by_play_order(
+    restore_shuffle_setting: None,
+) -> None:
+    _create_assets([ASSET_X, ASSET_Y])
+    assets, _ = generate_asset_list()
+    assert assets == [ASSET_Y, ASSET_X]
 
-    def test_get_next_asset_should_be_y_and_x(self) -> None:
-        self.create_assets([ASSET_X, ASSET_Y])
-        scheduler = Scheduler()
 
-        expected_y = scheduler.get_next_asset()
-        expected_x = scheduler.get_next_asset()
+@pytest.mark.django_db
+def test_generate_asset_list_check_deadline_if_both_active(
+    restore_shuffle_setting: None,
+) -> None:
+    _create_assets([ASSET_X, ASSET_Y])
+    _, deadline = generate_asset_list()
+    assert deadline == ASSET_Y['end_date']
 
-        self.assertEqual([expected_y, expected_x], [ASSET_Y, ASSET_X])
 
-    def test_keep_same_position_on_playlist_update(self) -> None:
-        self.create_assets([ASSET_X, ASSET_Y])
-        scheduler = Scheduler()
-        scheduler.get_next_asset()
+@pytest.mark.django_db
+def test_generate_asset_list_check_deadline_if_asset_scheduled(
+    restore_shuffle_setting: None,
+) -> None:
+    """If ASSET_X is active and ASSET_X[end_date] == (now + 3) and
+    ASSET_TOMORROW will be active tomorrow then deadline should be
+    ASSET_TOMORROW[start_date]
+    """
+    _create_assets([ASSET_X, ASSET_TOMORROW])
+    _, deadline = generate_asset_list()
+    assert deadline == ASSET_TOMORROW['start_date']
 
-        self.create_assets([ASSET_Z])
-        scheduler.update_playlist()
 
-        self.assertEqual(scheduler.index, 1)
+@pytest.mark.django_db
+def test_get_next_asset_should_be_y_and_x(
+    restore_shuffle_setting: None,
+) -> None:
+    _create_assets([ASSET_X, ASSET_Y])
+    scheduler = Scheduler()
 
-    def test_counter_should_increment_after_full_asset_loop(self) -> None:
-        settings['shuffle_playlist'] = True
-        self.create_assets([ASSET_X, ASSET_Y])
-        scheduler = Scheduler()
+    expected_y = scheduler.get_next_asset()
+    expected_x = scheduler.get_next_asset()
 
-        self.assertEqual(scheduler.counter, 0)
+    assert [expected_y, expected_x] == [ASSET_Y, ASSET_X]
 
-        scheduler.get_next_asset()
-        scheduler.get_next_asset()
 
-        self.assertEqual(scheduler.counter, 1)
+@pytest.mark.django_db
+def test_keep_same_position_on_playlist_update(
+    restore_shuffle_setting: None,
+) -> None:
+    _create_assets([ASSET_X, ASSET_Y])
+    scheduler = Scheduler()
+    scheduler.get_next_asset()
 
-    def test_check_get_db_mtime(self) -> None:
+    _create_assets([ASSET_Z])
+    scheduler.update_playlist()
+
+    assert scheduler.index == 1
+
+
+@pytest.mark.django_db
+def test_counter_should_increment_after_full_asset_loop(
+    restore_shuffle_setting: None,
+) -> None:
+    settings['shuffle_playlist'] = True
+    _create_assets([ASSET_X, ASSET_Y])
+    scheduler = Scheduler()
+
+    assert scheduler.counter == 0
+
+    scheduler.get_next_asset()
+    scheduler.get_next_asset()
+
+    assert scheduler.counter == 1
+
+
+@pytest.mark.django_db
+def test_check_get_db_mtime(restore_shuffle_setting: None) -> None:
+    original_database = settings['database']
+    try:
         settings['database'] = FAKE_DB_PATH
         with open(FAKE_DB_PATH, 'a'):
             os.utime(FAKE_DB_PATH, (0, 0))
 
-        self.assertEqual(0, Scheduler().get_db_mtime())
+        assert Scheduler().get_db_mtime() == 0
+    finally:
+        settings['database'] = original_database
 
-    def test_playlist_should_be_updated_after_deadline_reached(self) -> None:
-        self.create_assets([ASSET_X, ASSET_Y])
-        _, deadline = generate_asset_list()
-        assert deadline is not None
 
-        traveller = time_machine.travel(deadline + timedelta(seconds=1))
-        traveller.start()
+@pytest.mark.django_db
+def test_playlist_should_be_updated_after_deadline_reached(
+    restore_shuffle_setting: None,
+) -> None:
+    _create_assets([ASSET_X, ASSET_Y])
+    _, deadline = generate_asset_list()
+    assert deadline is not None
 
-        scheduler = Scheduler()
-        scheduler.refresh_playlist()
+    traveller = time_machine.travel(deadline + timedelta(seconds=1))
+    traveller.start()
 
-        self.assertEqual([ASSET_X], scheduler.assets)
-        traveller.stop()
+    scheduler = Scheduler()
+    scheduler.refresh_playlist()
+
+    assert scheduler.assets == [ASSET_X]
+    traveller.stop()
 
 
 def _aware(
     year: int, month: int, day: int, hour: int, minute: int = 0
 ) -> datetime:
-    """Build a timezone-aware datetime in the local zone."""
     return datetime(
         year,
         month,
@@ -210,129 +244,128 @@ def _scheduled_asset(
 
 
 def _first_asset() -> Asset:
-    """Asset.objects.first() narrowed for typed test assertions."""
     asset = Asset.objects.first()
     assert asset is not None
     return asset
 
 
-class WindowFilterTest(TestCase):
-    """is_active() with the new play_days / play_time_from / play_time_to."""
-
-    def test_play_days_restricts_weekday(self) -> None:
-        # 2026-01-05 is a Monday.
-        Asset.objects.create(
-            **_scheduled_asset(play_days='[1]'),
-        )
-        with time_machine.travel(_aware(2026, 1, 5, 12, 0)):
-            self.assertTrue(_first_asset().is_active())
-        with time_machine.travel(_aware(2026, 1, 6, 12, 0)):
-            self.assertFalse(_first_asset().is_active())
-
-    def test_play_time_window_restricts_hour(self) -> None:
-        Asset.objects.create(
-            **_scheduled_asset(
-                play_time_from=time(9, 0),
-                play_time_to=time(17, 0),
-            ),
-        )
-        with time_machine.travel(_aware(2026, 1, 5, 10, 0)):
-            self.assertTrue(_first_asset().is_active())
-        with time_machine.travel(_aware(2026, 1, 5, 6, 0)):
-            self.assertFalse(_first_asset().is_active())
-        with time_machine.travel(_aware(2026, 1, 5, 17, 0)):
-            self.assertFalse(_first_asset().is_active())
-
-    def test_overnight_window_active_before_and_after_midnight(self) -> None:
-        Asset.objects.create(
-            **_scheduled_asset(
-                play_days='[1]',
-                play_time_from=time(22, 0),
-                play_time_to=time(6, 0),
-            ),
-        )
-        # Mon 23:30 — pre-midnight portion.
-        with time_machine.travel(_aware(2026, 1, 5, 23, 30)):
-            self.assertTrue(_first_asset().is_active())
-        # Tue 02:30 — post-midnight, "yesterday" was Mon (in days).
-        with time_machine.travel(_aware(2026, 1, 6, 2, 30)):
-            self.assertTrue(_first_asset().is_active())
-        # Tue 23:30 — pre-midnight, today is Tue (not in days).
-        with time_machine.travel(_aware(2026, 1, 6, 23, 30)):
-            self.assertFalse(_first_asset().is_active())
-        # Wed 02:30 — post-midnight, "yesterday" was Tue (not in days).
-        with time_machine.travel(_aware(2026, 1, 7, 2, 30)):
-            self.assertFalse(_first_asset().is_active())
-
-    def test_unscheduled_asset_unchanged(self) -> None:
-        """Backward compat: defaults must not narrow is_active().
-
-        ASSET_X carries no play_days/play_time_* overrides, so the new
-        window filter should be a no-op and the existing date-range
-        check should continue to govern is_active().
-        """
-        Asset.objects.create(**ASSET_X)
-        self.assertTrue(_first_asset().is_active())
+@pytest.mark.django_db
+def test_play_days_restricts_weekday() -> None:
+    # 2026-01-05 is a Monday.
+    Asset.objects.create(**_scheduled_asset(play_days='[1]'))
+    with time_machine.travel(_aware(2026, 1, 5, 12, 0)):
+        assert _first_asset().is_active()
+    with time_machine.travel(_aware(2026, 1, 6, 12, 0)):
+        assert not _first_asset().is_active()
 
 
-class WindowedDeadlineCapTest(TestCase):
-    """Windowed assets cap the deadline so transitions are picked up."""
+@pytest.mark.django_db
+def test_play_time_window_restricts_hour() -> None:
+    Asset.objects.create(
+        **_scheduled_asset(
+            play_time_from=time(9, 0),
+            play_time_to=time(17, 0),
+        ),
+    )
+    with time_machine.travel(_aware(2026, 1, 5, 10, 0)):
+        assert _first_asset().is_active()
+    with time_machine.travel(_aware(2026, 1, 5, 6, 0)):
+        assert not _first_asset().is_active()
+    with time_machine.travel(_aware(2026, 1, 5, 17, 0)):
+        assert not _first_asset().is_active()
 
-    def test_cap_applies_when_any_asset_has_window(self) -> None:
-        # An asset with a play_days filter should cap the deadline at
-        # ~ now + WINDOWED_DEADLINE_CAP_SECONDS, even if its date
-        # boundaries are far out.
-        Asset.objects.create(
-            **_scheduled_asset(play_days='[1]'),
-        )
-        with time_machine.travel(_aware(2026, 1, 5, 12, 0)):
-            now = timezone.now()
-            _, deadline = generate_asset_list()
-            assert deadline is not None
-            cap = now + timedelta(seconds=WINDOWED_DEADLINE_CAP_SECONDS)
-            # Allow tiny clock drift; deadline should be at the cap.
-            self.assertLessEqual(
-                abs((deadline - cap).total_seconds()),
-                1,
-            )
 
-    def test_cap_does_not_apply_without_window(self) -> None:
-        Asset.objects.create(**ASSET_X)
+@pytest.mark.django_db
+def test_overnight_window_active_before_and_after_midnight() -> None:
+    Asset.objects.create(
+        **_scheduled_asset(
+            play_days='[1]',
+            play_time_from=time(22, 0),
+            play_time_to=time(6, 0),
+        ),
+    )
+    # Mon 23:30 — pre-midnight portion.
+    with time_machine.travel(_aware(2026, 1, 5, 23, 30)):
+        assert _first_asset().is_active()
+    # Tue 02:30 — post-midnight, "yesterday" was Mon (in days).
+    with time_machine.travel(_aware(2026, 1, 6, 2, 30)):
+        assert _first_asset().is_active()
+    # Tue 23:30 — pre-midnight, today is Tue (not in days).
+    with time_machine.travel(_aware(2026, 1, 6, 23, 30)):
+        assert not _first_asset().is_active()
+    # Wed 02:30 — post-midnight, "yesterday" was Tue (not in days).
+    with time_machine.travel(_aware(2026, 1, 7, 2, 30)):
+        assert not _first_asset().is_active()
+
+
+@pytest.mark.django_db
+def test_unscheduled_asset_unchanged() -> None:
+    """Backward compat: defaults must not narrow is_active().
+
+    ASSET_X carries no play_days/play_time_* overrides, so the new
+    window filter should be a no-op and the existing date-range
+    check should continue to govern is_active().
+    """
+    Asset.objects.create(**ASSET_X)
+    assert _first_asset().is_active()
+
+
+@pytest.mark.django_db
+def test_windowed_cap_applies_when_any_asset_has_window() -> None:
+    # An asset with a play_days filter should cap the deadline at
+    # ~ now + WINDOWED_DEADLINE_CAP_SECONDS, even if its date
+    # boundaries are far out.
+    Asset.objects.create(**_scheduled_asset(play_days='[1]'))
+    with time_machine.travel(_aware(2026, 1, 5, 12, 0)):
+        now = timezone.now()
         _, deadline = generate_asset_list()
-        # No windowing: deadline should be the asset's end_date.
-        self.assertEqual(deadline, ASSET_X['end_date'])
-
-    def test_deadline_never_lands_in_the_past(self) -> None:
-        """A windowed-but-currently-inactive asset must not poison the
-        deadline with its long-past start_date — that would cause
-        refresh_playlist() to fire on every tick.
-        """
-        # Tue (day 2) at noon. Asset is restricted to Mon only.
-        Asset.objects.create(
-            **_scheduled_asset(play_days='[1]'),
-        )
-        with time_machine.travel(_aware(2026, 1, 6, 12, 0)):
-            now = timezone.now()
-            _, deadline = generate_asset_list()
         assert deadline is not None
-        self.assertGreater(deadline, now)
+        cap = now + timedelta(seconds=WINDOWED_DEADLINE_CAP_SECONDS)
+        # Allow tiny clock drift; deadline should be at the cap.
+        assert abs((deadline - cap).total_seconds()) <= 1
 
 
-class GetPlayDaysFallbackTest(TestCase):
-    """get_play_days() must defend against junk in the column."""
+@pytest.mark.django_db
+def test_windowed_cap_does_not_apply_without_window() -> None:
+    Asset.objects.create(**ASSET_X)
+    _, deadline = generate_asset_list()
+    assert deadline == ASSET_X['end_date']
 
-    def test_malformed_json_falls_back_to_all_days(self) -> None:
-        a = Asset.objects.create(**_scheduled_asset(play_days='not json'))
-        self.assertEqual(a.get_play_days(), [1, 2, 3, 4, 5, 6, 7])
 
-    def test_non_list_json_falls_back_to_all_days(self) -> None:
-        a = Asset.objects.create(**_scheduled_asset(play_days='{"a": 1}'))
-        self.assertEqual(a.get_play_days(), [1, 2, 3, 4, 5, 6, 7])
+@pytest.mark.django_db
+def test_deadline_never_lands_in_the_past() -> None:
+    """A windowed-but-currently-inactive asset must not poison the
+    deadline with its long-past start_date — that would cause
+    refresh_playlist() to fire on every tick.
+    """
+    # Tue (day 2) at noon. Asset is restricted to Mon only.
+    Asset.objects.create(**_scheduled_asset(play_days='[1]'))
+    with time_machine.travel(_aware(2026, 1, 6, 12, 0)):
+        now = timezone.now()
+        _, deadline = generate_asset_list()
+    assert deadline is not None
+    assert deadline > now
 
-    def test_out_of_range_int_falls_back_to_all_days(self) -> None:
-        a = Asset.objects.create(**_scheduled_asset(play_days='[0, 8]'))
-        self.assertEqual(a.get_play_days(), [1, 2, 3, 4, 5, 6, 7])
 
-    def test_non_int_element_falls_back_to_all_days(self) -> None:
-        a = Asset.objects.create(**_scheduled_asset(play_days='["mon"]'))
-        self.assertEqual(a.get_play_days(), [1, 2, 3, 4, 5, 6, 7])
+@pytest.mark.django_db
+def test_get_play_days_malformed_json_falls_back_to_all_days() -> None:
+    a = Asset.objects.create(**_scheduled_asset(play_days='not json'))
+    assert a.get_play_days() == [1, 2, 3, 4, 5, 6, 7]
+
+
+@pytest.mark.django_db
+def test_get_play_days_non_list_json_falls_back_to_all_days() -> None:
+    a = Asset.objects.create(**_scheduled_asset(play_days='{"a": 1}'))
+    assert a.get_play_days() == [1, 2, 3, 4, 5, 6, 7]
+
+
+@pytest.mark.django_db
+def test_get_play_days_out_of_range_int_falls_back_to_all_days() -> None:
+    a = Asset.objects.create(**_scheduled_asset(play_days='[0, 8]'))
+    assert a.get_play_days() == [1, 2, 3, 4, 5, 6, 7]
+
+
+@pytest.mark.django_db
+def test_get_play_days_non_int_element_falls_back_to_all_days() -> None:
+    a = Asset.objects.create(**_scheduled_asset(play_days='["mon"]'))
+    assert a.get_play_days() == [1, 2, 3, 4, 5, 6, 7]

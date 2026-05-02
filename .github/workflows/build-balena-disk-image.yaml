@@ -37,7 +37,7 @@ jobs:
   balena-build-images:
     strategy:
       matrix:
-        board: ['pi1', 'pi2', 'pi3', 'pi4', 'pi5']
+        board: ['pi2', 'pi3', 'pi4-64', 'pi5']
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -67,16 +67,18 @@ jobs:
 
       - name: Get base board
         run: |
-          if [ "${{ matrix.board }}" == 'pi1' ]; then
-            echo "BALENA_IMAGE=raspberry-pi" >> "$GITHUB_ENV"
-          elif [ "${{ matrix.board }}" == 'pi2' ]; then
+          if [ "${{ matrix.board }}" == 'pi2' ]; then
             echo "BALENA_IMAGE=raspberry-pi2" >> "$GITHUB_ENV"
+            echo "FLEET_SLUG=anthias-pi2" >> "$GITHUB_ENV"
           elif [ "${{ matrix.board }}" == 'pi3' ]; then
             echo "BALENA_IMAGE=raspberrypi3" >> "$GITHUB_ENV"
-          elif [ "${{ matrix.board }}" == 'pi4' ]; then
+            echo "FLEET_SLUG=anthias-pi3" >> "$GITHUB_ENV"
+          elif [ "${{ matrix.board }}" == 'pi4-64' ]; then
             echo "BALENA_IMAGE=raspberrypi4-64" >> "$GITHUB_ENV"
+            echo "FLEET_SLUG=anthias-pi4" >> "$GITHUB_ENV"
           elif [ "${{ matrix.board }}" == 'pi5' ]; then
             echo "BALENA_IMAGE=raspberrypi5" >> "$GITHUB_ENV"
+            echo "FLEET_SLUG=anthias-pi5" >> "$GITHUB_ENV"
           fi
 
       - name: Download OS image
@@ -89,7 +91,7 @@ jobs:
         run: |
           balena preload \
             "$BALENA_IMAGE.img" \
-            --fleet screenly_ose/anthias-${{ matrix.board }} \
+            --fleet "screenly_ose/$FLEET_SLUG" \
             --pin-device-to-release \
             --splash-image ansible/roles/splashscreen/files/splashscreen.png \
             --commit latest
@@ -99,7 +101,7 @@ jobs:
           balena os configure \
             "$BALENA_IMAGE.img" \
             --config-network=ethernet \
-            --fleet screenly_ose/anthias-${{ matrix.board }}
+            --fleet "screenly_ose/$FLEET_SLUG"
 
       - name: Package up image
         run: |

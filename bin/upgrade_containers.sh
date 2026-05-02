@@ -34,53 +34,49 @@ if [ -z "$DOCKER_TAG" ]; then
     export DOCKER_TAG="latest"
 fi
 
-# Detect Raspberry Pi version
+# Detect Raspberry Pi version. Pi 4 is always treated as pi4-64 (the
+# 32-bit pi4 image stream was retired with the Trixie upgrade); legacy
+# 0.19.5-and-older 32-bit pi4 deployments stay on whatever DOCKER_TAG
+# they were already running and don't reach this code path.
 if [ ! -f /proc/device-tree/model ] && [ "$(uname -m)" = "x86_64" ]; then
     export DEVICE_TYPE="x86"
 elif grep -qF "Raspberry Pi 5" /proc/device-tree/model || grep -qF "Compute Module 5" /proc/device-tree/model; then
     export DEVICE_TYPE="pi5"
 elif grep -qF "Raspberry Pi 4" /proc/device-tree/model || grep -qF "Compute Module 4" /proc/device-tree/model; then
-    if [ "$(getconf LONG_BIT)" = "64" ]; then
-        if [ "$GIT_BRANCH" = "master" ]; then
-            export DEVICE_TYPE="pi4-64"
-        else
-            # Remove 'v' prefix if present for version comparison
-            VERSION_NUM=${GIT_BRANCH#v}
-            if printf '%s\n' "$VERSION_NUM" "0.19.5" | sort -V -C; then
-                export DEVICE_TYPE="pi4"
-            else
-                export DEVICE_TYPE="pi4-64"
-            fi
-        fi
-    else
-        export DEVICE_TYPE="pi4"
-    fi
+    export DEVICE_TYPE="pi4-64"
 elif grep -qF "Raspberry Pi 3" /proc/device-tree/model || grep -qF "Compute Module 3" /proc/device-tree/model; then
     export DEVICE_TYPE="pi3"
 elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
     export DEVICE_TYPE="pi2"
 else
-    # If all else fail, assume pi1
-    export DEVICE_TYPE="pi1"
+    echo "Unsupported Raspberry Pi model. Anthias supports Pi 2/3/4/5 and x86." >&2
+    exit 1
 fi
 
 if [[ -n $(docker ps | grep srly-ose) ]]; then
     # @TODO: Rename later
     set +e
-    docker container rename srly-ose-wifi-connect anthias-wifi-connect
     docker container rename srly-ose-server anthias-server
     docker container rename srly-ose-viewer anthias-viewer
-    docker container rename srly-ose-celery anthias-celery
     set -e
 fi
 
-# Drop legacy nginx + websocket containers — they were folded into
-# anthias-server (uvicorn) and are no longer in the compose file. Volumes
-# are shared across services, so removing the containers is safe.
+# Drop legacy containers no longer in the compose file:
+#   * nginx / websocket — folded into anthias-server (uvicorn).
+#   * wifi-connect      — service removed; nmcli/nmtui is the supported
+#                          path now.
+#   * anthias-celery / srly-ose-celery containers from the era when
+#     celery had its own image. The new compose file recreates the
+#     anthias-celery container against ghcr.io/screenly/anthias-server,
+#     so the old container (still pointing at the deleted celery image)
+#     must be removed first or the server-image-backed replacement
+#     can't take its name.
+# Volumes are shared across services, so removing the containers is safe.
 set +e
 docker rm -f \
-    anthias-nginx anthias-websocket \
-    srly-ose-nginx srly-ose-websocket \
+    anthias-nginx anthias-websocket anthias-wifi-connect \
+    srly-ose-nginx srly-ose-websocket srly-ose-wifi-connect \
+    anthias-celery srly-ose-celery \
     >/dev/null 2>&1
 set -e
 

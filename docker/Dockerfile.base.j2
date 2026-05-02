@@ -1,5 +1,51 @@
 FROM {{ base_image }}:{{ base_image_tag }}
 
+{% if is_legacy_pi_armhf %}
+# 32-bit Pi boards (pi2, pi3) need libraspberrypi0 (legacy Broadcom
+# userland: libbcm_host, libmmal, libvchiq_arm) for the Qt 5 webview.
+# Trixie's archive.raspberrypi.org/main no longer ships it (replaced
+# by raspi-utils, which doesn't cover Qt's link path), so we pull it
+# from archive.raspbian.org's `firmware` component instead (verified:
+# libraspberrypi0 ships there on trixie/armhf, not in `rpi`).
+#
+# Trixie's apt uses Sequoia (sqv) for signature verification and rejects
+# the standalone .public.key / .gpg.key files because their User ID
+# self-signatures are SHA-1, deprecated since 2026-02-01. The .deb
+# keyring packages in each archive ship freshly-bound keys that pass
+# the new policy — install those instead.
+#
+# Sources are written as Deb822 (.sources) entries — the format Trixie
+# prefers (its own /etc/apt/sources.list.d/debian.sources uses it).
+# Lets us pin Architectures: armhf so apt doesn't query the Pi mirrors
+# for arches they don't ship.
+#
+# Keyring .deb downloads and Deb822 URIs use HTTPS (both archives serve
+# it cleanly). The .deb hashes are pinned to a known-good SHA256 because
+# the .deb is the trust anchor for everything that follows: a tampered
+# keyring would invalidate the chain even with TLS.
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+{% endif %}
+    apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl && \
+    mkdir -p /tmp/keyrings && \
+    curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/keyrings/raspberrypi-archive-keyring.deb \
+        https://archive.raspberrypi.org/debian/pool/main/r/raspberrypi-archive-keyring/raspberrypi-archive-keyring_2025.1+rpt1_all.deb && \
+    curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/keyrings/raspbian-archive-keyring.deb \
+        https://archive.raspbian.org/raspbian/pool/main/r/raspbian-archive-keyring/raspbian-archive-keyring_20120528.4_all.deb && \
+    echo '2e727149d7acb8cc7f604e66d0049161039c8aa1eaf1175e54f9e69d963d60e4  /tmp/keyrings/raspberrypi-archive-keyring.deb' | sha256sum -c - && \
+    echo 'eb2bc175ecfad128ece8222b42eefabd0a2846afd14f3af04364f4a047cbc88f  /tmp/keyrings/raspbian-archive-keyring.deb' | sha256sum -c - && \
+    dpkg-deb -x /tmp/keyrings/raspberrypi-archive-keyring.deb / && \
+    dpkg-deb -x /tmp/keyrings/raspbian-archive-keyring.deb / && \
+    rm -rf /tmp/keyrings && \
+    printf 'Types: deb\nURIs: https://archive.raspberrypi.org/debian\nSuites: trixie\nComponents: main\nArchitectures: armhf\nSigned-By: /usr/share/keyrings/raspberrypi-archive-keyring.gpg\n' \
+        > /etc/apt/sources.list.d/raspi.sources && \
+    printf 'Types: deb\nURIs: https://archive.raspbian.org/raspbian\nSuites: trixie\nComponents: firmware\nArchitectures: armhf\nSigned-By: /usr/share/keyrings/raspbian-archive-keyring.gpg\n' \
+        > /etc/apt/sources.list.d/raspbian-firmware.sources
+{% endif %}
+
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
@@ -15,7 +61,4 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         {% endif %}
     {% endfor %}
 
-# Works around issue with `curl`
-# https://github.com/balena-io-library/base-images/issues/562
-RUN c_rehash
-
+{% include 'labels.j2' %}

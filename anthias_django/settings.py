@@ -2,29 +2,43 @@
 Django settings for anthias_django project.
 
 For more information on this file, see
-https://docs.djangoproject.com/en/4.2/topics/settings/
+https://docs.djangoproject.com/en/5.2/topics/settings/
 
 For the full list of settings and their values, see
-https://docs.djangoproject.com/en/4.2/ref/settings/
+https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import secrets
+import sys
 from os import getenv
 from pathlib import Path
+from typing import Any
 
-import django_stubs_ext
 import pytz
 
 from settings import settings as device_settings
 
-django_stubs_ext.monkeypatch()
+# django_stubs_ext.monkeypatch() makes Django generic classes
+# subscriptable at runtime, and the server side of this repo relies on
+# that — anthias_app/admin.py defines `class AssetAdmin(admin.ModelAdmin
+# [Asset])` at import time, which raises TypeError without the patch.
+# Keep the import optional so the viewer image (and any future service
+# that doesn't ship django-stubs-ext) can still load this settings
+# module; do not remove the patch as a no-op.
+try:
+    import django_stubs_ext
+
+    django_stubs_ext.monkeypatch()
+except ModuleNotFoundError as exc:
+    if exc.name != 'django_stubs_ext':
+        raise
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 # Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
+# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -66,20 +80,33 @@ ALLOWED_HOSTS = [
 
 # Application definition
 
+# Apps every Django consumer needs: ORM access to the Asset model,
+# plus the contenttypes + auth tables those models implicitly depend
+# on. Loaded by every service that calls django.setup() — server,
+# celery, viewer, test.
 INSTALLED_APPS = [
-    'channels',
     'anthias_app.apps.AnthiasAppConfig',
-    'drf_spectacular',
-    'rest_framework',
-    'api.apps.ApiConfig',
-    'django.contrib.admin',
-    'django.contrib.auth',
     'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'dbbackup',
+    'django.contrib.auth',
 ]
+
+# Apps only the HTTP-serving services need (REST API, OpenAPI schema,
+# Channels for WebSockets, the admin UI, sessions/messages, static
+# files, DB backups). The viewer never serves HTTP, so it skips these
+# at django.setup() time and the viewer image doesn't have to ship
+# the packages they live in. Server/celery/test images are unaffected.
+if getenv('ANTHIAS_SERVICE') != 'viewer':
+    INSTALLED_APPS += [
+        'channels',
+        'drf_spectacular',
+        'rest_framework',
+        'api.apps.ApiConfig',
+        'django.contrib.admin',
+        'django.contrib.sessions',
+        'django.contrib.messages',
+        'django.contrib.staticfiles',
+        'dbbackup',
+    ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -125,21 +152,59 @@ CHANNEL_LAYERS = {
 
 
 # Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': (
-            '/data/.anthias/test.db'
-            if getenv('ENVIRONMENT') == 'test'
-            else '/data/.anthias/anthias.db'
-        ),
-    },
+# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+#
+# Detect "running under tests" without depending solely on the
+# ENVIRONMENT env var. The root conftest.py sets ENVIRONMENT=test via
+# os.environ.setdefault, but pytest-django's plugin-time settings load
+# can fire before that conftest executes — leaving getenv() blank and
+# this module pointed at the production /data path on local pytest
+# runs. Detect pytest itself by inspecting argv (covers `pytest ...`,
+# `python -m pytest ...`, and `uv run pytest ...`) so the test branch
+# is taken regardless of import order.
+_running_under_pytest = any('pytest' in (a or '') for a in sys.argv)
+
+# In test mode the DB path defaults to a repo-local file so the suite
+# runs without Docker / without writable `/data`. CI containers can
+# preserve their existing layout by exporting
+# `ANTHIAS_TEST_DB_PATH=/data/.anthias/test.db` (see
+# docker-compose.test.yml).
+if getenv('ENVIRONMENT') == 'test' or _running_under_pytest:
+    db_path = getenv('ANTHIAS_TEST_DB_PATH') or str(
+        BASE_DIR / '.anthias-test.db'
+    )
+else:
+    db_path = '/data/.anthias/anthias.db'
+
+# Integration tests drive the live anthias-server container in
+# docker-compose.test.yml. The test process and the server live in
+# different containers but must share DB state — the test asserts on
+# `Asset.objects.all()` after the server persists an uploaded file.
+# Without TEST.NAME, pytest-django defaults to an in-memory SQLite, so
+# writes from the server never reach the test process. Pinning
+# TEST.NAME to the same path keeps both ends on one DB; the
+# `transaction=True` marker truncates between tests, which is safe
+# because the test DB is throwaway.
+#
+# ONLY set TEST.NAME for the integration step. The unit step runs
+# under `pytest -n auto`; pinning every worker to the same SQLite
+# file would cause `database is locked` and cross-worker leakage.
+# Without TEST.NAME, pytest-django gives each xdist worker its own
+# `:memory:` DB, which is what we want for unit runs.
+# .github/workflows/test-runner.yml exports ANTHIAS_INTEGRATION_TEST=1
+# only for the `pytest -m integration` step.
+_db_default: dict[str, Any] = {
+    'ENGINE': 'django.db.backends.sqlite3',
+    'NAME': db_path,
 }
+if getenv('ANTHIAS_INTEGRATION_TEST') == '1':
+    _db_default['TEST'] = {'NAME': db_path}
+
+DATABASES = {'default': _db_default}
 
 
 # Password validation
-# https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
+# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 AUTH_MODULE_PREFIX = 'django.contrib.auth.password_validation'
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -158,13 +223,11 @@ AUTH_PASSWORD_VALIDATORS = [
 
 
 # Internationalization
-# https://docs.djangoproject.com/en/4.2/topics/i18n/
+# https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
 
 USE_I18N = True
-
-USE_L10N = True
 
 USE_TZ = True
 
@@ -177,7 +240,7 @@ except (pytz.exceptions.UnknownTimeZoneError, FileNotFoundError):
 
 
 # Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/4.2/howto/static-files/
+# https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [
@@ -207,7 +270,7 @@ if getenv('FORWARDED_ALLOW_IPS'):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Default primary key field type
-# https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
+# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -227,7 +290,18 @@ SPECTACULAR_SETTINGS = {
     ],
 }
 
-# `django-dbbackup` settings
-DBBACKUP_STORAGE = 'django.core.files.storage.FileSystemStorage'
-DBBACKUP_STORAGE_OPTIONS = {'location': '/data/.anthias/backups'}
+# django-dbbackup v5 moved storage config under Django 5's STORAGES
+# dict; defining STORAGES replaces the framework defaults entirely.
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+    'dbbackup': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'OPTIONS': {'location': '/data/.anthias/backups'},
+    },
+}
 DBBACKUP_HOSTNAME = 'anthias'

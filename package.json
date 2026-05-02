@@ -2,7 +2,7 @@
   "name": "anthias",
   "version": "1.0.0",
   "scripts": {
-    "build:js": "bun build ./static/src/index.tsx --outfile=./static/dist/js/anthias.js --target=browser --minify --define process.env.NODE_ENV='\"production\"' --define process.env.ENVIRONMENT='\"production\"'",
+    "build:js": "bun build ./static/src/index.tsx --outfile=./static/dist/js/anthias.js --target=browser --production --define process.env.ENVIRONMENT='\"production\"'",
     "build:css": "bunx sass static/sass/anthias.scss static/dist/css/anthias.css --style=compressed --quiet-deps --silence-deprecation=import,global-builtin,color-functions,if-function",
     "build": "bun run build:js && bun run build:css",
     "dev:js": "bun build ./static/src/index.tsx --outfile=./static/dist/js/anthias.js --target=browser --sourcemap=linked --watch --define process.env.NODE_ENV='\"development\"' --define process.env.ENVIRONMENT='\"development\"'",
@@ -30,7 +30,7 @@
     "sweetalert2": "^11.26.23"
   },
   "devDependencies": {
-    "@eslint-react/eslint-plugin": "^4.2.1",
+    "@eslint-react/eslint-plugin": "^5.6.2",
     "@happy-dom/global-registrator": "^20.9.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -40,11 +40,11 @@
     "@types/jquery": "^4.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@typescript-eslint/eslint-plugin": "^8.58.0",
-    "@typescript-eslint/parser": "^8.58.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.1",
+    "@typescript-eslint/parser": "^8.59.1",
     "classnames": "^2.5.1",
     "eslint": "^10.1.0",
-    "msw": "^2.12.12",
+    "msw": "^2.14.2",
     "prettier": "3.8.3",
     "sass": "^1.98.0",
     "typescript": "^6.0.3"

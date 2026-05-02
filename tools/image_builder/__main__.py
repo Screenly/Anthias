@@ -17,7 +17,6 @@ from tools.image_builder.utils import (
     get_test_context,
     get_uv_builder_context,
     get_viewer_context,
-    get_wifi_connect_context,
 )
 
 
@@ -35,64 +34,81 @@ def build_image(
     clean_build: bool,
     push: bool,
     dockerfiles_only: bool,
+    cache_backend: str,
 ) -> None:
     # Enable BuildKit
     os.environ['DOCKER_BUILDKIT'] = '1'
 
     context = {}
 
-    # Create board-specific cache directory
-    cache_dir = Path('/tmp/.buildx-cache') / (
-        f'{board}-64'
-        if board == 'pi4' and target_platform == 'linux/arm64/v8'
-        else board
+    # Local cache: per-board on-disk directory under the user's
+    # XDG-style cache home (override via $XDG_CACHE_HOME). Per-user
+    # rather than under /tmp so a multi-user host doesn't share
+    # buildkit cache state across accounts. Unused by the registry
+    # backend, which pushes to GHCR instead.
+    cache_scope = board
+    xdg_cache_home = (
+        Path(os.environ['XDG_CACHE_HOME'])
+        if os.environ.get('XDG_CACHE_HOME')
+        else Path.home() / '.cache'
     )
-    try:
-        cache_dir.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        click.secho(
-            f'Warning: Failed to create cache directory: {e}', fg='yellow'
-        )
+    cache_dir = xdg_cache_home / 'anthias-buildx' / cache_scope
+    if cache_backend == 'local':
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            click.secho(
+                f'Warning: Failed to create cache directory: {e}',
+                fg='yellow',
+            )
 
+    # Runtime-only base set. Compilers and *-dev headers live in the
+    # uv-builder stage (docker/uv-builder.j2); the runtime image gets
+    # the venv COPY'd in pre-built, so anything builder-only would just
+    # be dead weight here. `libcec7` is the runtime SONAME the cec
+    # Python wheel (built in uv-builder) dlopens at import time —
+    # debian:trixie shipped libcec 7.0 (Ubuntu still has libcec6, easy
+    # to mix up). `iproute2` is needed by bin/wait.py — debian:trixie's
+    # base image ships neither iproute2 nor net-tools by default, so
+    # we install it explicitly. `python3-gi` stays because pydbus does
+    # `from gi.repository import GLib, Gio` at import — viewer's
+    # `--system-site-packages` venv picks it up from the system
+    # site-packages.
     base_apt_dependencies = [
-        'build-essential',
         'cec-utils',
         'curl',
         'ffmpeg',
         'git',
-        'git-core',
-        'ifupdown',
-        'libcec-dev ',
-        'libffi-dev',
-        'libssl-dev',
-        'libzmq3-dev',
-        'libzmq5-dev',
-        'libzmq5',
+        'iproute2',
+        'libcec7',
         'lsb-release',
-        'mplayer',
-        'net-tools',
         'procps',
         'psmisc',
-        'python3-dev',
         'python3-gi',
-        'python3-pil',
         'python3-pip',
         'python3-setuptools',
-        'python3-simplejson',
         'python-is-python3',
         'sudo',
         'sqlite3',
     ]
 
-    if board in ['pi1', 'pi2', 'pi3', 'pi4']:
+    # The 32-bit Pi boards (pi2, pi3) link against Broadcom's legacy
+    # userland (libbcm_host, libmmal, libvchiq_arm) at runtime via
+    # libraspberrypi0. Pull it from archive.raspbian.org's `firmware`
+    # component — Trixie's archive.raspberrypi.org/main no longer
+    # ships it (replaced by raspi-utils, which doesn't cover the
+    # Qt 5 webview link path), and on archive.raspbian.org's trixie
+    # tree it's `firmware` not `rpi` that ships libraspberrypi0
+    # (verified via Packages.gz). 64-bit boards don't need it: their
+    # Qt 6 viewer uses KMS/DRM directly.
+    is_legacy_pi_armhf = board in ['pi2', 'pi3']
+    if is_legacy_pi_armhf:
         base_apt_dependencies.extend(['libraspberrypi0'])
 
     if service == 'viewer':
-        context.update(get_viewer_context(board))
+        context.update(get_viewer_context(board, target_platform))
     elif service == 'test':
         context.update(get_test_context())
-    elif service == 'wifi-connect':
-        context.update(get_wifi_connect_context(target_platform))
 
     context.update(get_uv_builder_context(service))
 
@@ -100,15 +116,18 @@ def build_image(
         service,
         {
             'base_image': base_image,
-            'base_image_tag': 'bookworm',
+            'base_image_tag': 'trixie',
             'base_apt_dependencies': base_apt_dependencies,
             'board': board,
-            'debian_version': 'bookworm',
+            'device_type': board,
+            'debian_version': 'trixie',
             'disable_cache_mounts': disable_cache_mounts,
             'environment': environment,
             'git_branch': git_branch,
             'git_hash': git_hash,
             'git_short_hash': git_short_hash,
+            'is_legacy_pi_armhf': is_legacy_pi_armhf,
+            'service': service,
             'target_platform': target_platform,
             **context,
         },
@@ -127,22 +146,79 @@ def build_image(
     except:  # noqa: E722
         docker.buildx.create(name='multiarch-builder', use=True)
 
-    docker.buildx.build(
-        context_path='.',
-        cache=(not clean_build),
-        cache_from={
-            'type': 'local',
-            'src': str(cache_dir),
-        }
-        if not clean_build
-        else None,
-        cache_to={
+    # Resolve cache_from / cache_to. `--clean-build` short-circuits both
+    # to None for a true cold rebuild. Otherwise we pick a backend:
+    #
+    #   * local    — board-scoped on-disk directory at
+    #     $XDG_CACHE_HOME/anthias-buildx/<board> (typically
+    #     ~/.cache/anthias-buildx/<board>). Used for local dev so
+    #     cache state survives across `tools.image_builder`
+    #     invocations on the same machine.
+    #   * registry — BuildKit's registry cache backend
+    #     (https://docs.docker.com/build/cache/backends/registry/).
+    #     Pushes cache to a tagged image at
+    #     <namespace>-<service>:buildcache-<board>. Reuses the GHCR
+    #     login already done by CI — no extra tokens or third-party
+    #     actions needed — and inherits GHCR's free unlimited
+    #     storage for public packages. Cache lives next to the real
+    #     image tags but with a `buildcache-*` prefix so it can't
+    #     collide with the immutable <short-hash>-<board> or
+    #     floating latest-<board> tags.
+    if clean_build:
+        cache_from = None
+        cache_to = None
+    elif cache_backend == 'registry':
+        # Hardcode the GHCR-primary namespace so the cache lives next to
+        # the published images for this service. Doesn't read from
+        # `namespaces` below: cache only needs one canonical home, and
+        # GHCR's free unlimited storage for public packages makes it the
+        # right one. If the namespaces list changes in the future, this
+        # ref needs to move with it.
+        cache_ref = (
+            f'ghcr.io/screenly/anthias-{service}:buildcache-{cache_scope}'
+        )
+        # Reads are always safe — anthias-* GHCR packages are public,
+        # so cache_from works without auth (matters for someone
+        # invoking this locally with --cache-backend=registry to
+        # warm-start off CI's cache).
+        cache_from = {'type': 'registry', 'ref': cache_ref}
+        if push:
+            cache_to = {
+                'type': 'registry',
+                'ref': cache_ref,
+                'mode': 'max',
+                # `image-manifest=true` writes the cache as an OCI
+                # image manifest rather than the legacy index-only
+                # form, which is the only thing GHCR will accept
+                # under the ghcr.io/screenly/anthias-* repos (it
+                # rejects standalone cache manifests). Cheap, just
+                # affects how the cache blob is wrapped.
+                'image-manifest': 'true',
+            }
+        else:
+            # Without --push the build hasn't authenticated to GHCR,
+            # so trying to write cache there would fail mid-build.
+            # Read-only: pull layers from the published cache, don't
+            # update it.
+            cache_to = None
+            click.secho(
+                f'cache-backend=registry without --push: reading from '
+                f'{cache_ref} but not writing back.',
+                fg='yellow',
+            )
+    else:
+        cache_from = {'type': 'local', 'src': str(cache_dir)}
+        cache_to = {
             'type': 'local',
             'dest': str(cache_dir),
             'mode': 'max',
         }
-        if not clean_build
-        else None,
+
+    docker.buildx.build(
+        context_path='.',
+        cache=(not clean_build),
+        cache_from=cache_from,
+        cache_to=cache_to,
         builder='multiarch-builder',
         file=f'docker/Dockerfile.{service}',
         load=True,
@@ -211,6 +287,21 @@ def build_image(
     '--dockerfiles-only',
     is_flag=True,
 )
+@click.option(
+    '--cache-backend',
+    type=click.Choice(['local', 'registry']),
+    default='local',
+    envvar='BUILDX_CACHE_BACKEND',
+    help=(
+        'BuildKit cache backend. `local` (default) writes to '
+        '$XDG_CACHE_HOME/anthias-buildx/<board>/ (typically '
+        '~/.cache/anthias-buildx/) and is right for local dev. '
+        '`registry` pushes the cache to '
+        'ghcr.io/screenly/anthias-<service>:buildcache-<board> for '
+        'CI — reuses the GHCR login already done by the workflow, '
+        'no extra tokens needed. Override via $BUILDX_CACHE_BACKEND.'
+    ),
+)
 def main(
     clean_build: bool,
     build_target: str,
@@ -221,6 +312,7 @@ def main(
     push: bool,
     skip_latest_tag: bool,
     dockerfiles_only: bool,
+    cache_backend: str,
 ) -> None:
     git_branch = pygit2.Repository('.').head.shorthand
     git_hash = str(pygit2.Repository('.').head.target)
@@ -239,13 +331,22 @@ def main(
 
     # Build Docker images
     for service_name in services_to_build:
-        # Define tag components
-        namespaces = ['screenly/anthias', 'screenly/srly-ose']
-        version_suffix = (
-            f'{board}-64'
-            if board == 'pi4' and platform == 'linux/arm64/v8'
-            else f'{board}'
-        )
+        # Define tag components.
+        #
+        # GHCR is listed first because it is the primary, canonical source
+        # for Anthias images going forward — `bin/upgrade_containers.sh`
+        # regenerates compose from `docker-compose.yml.tmpl`, so flipping
+        # the template (separate change) flips every device on next
+        # upgrade. Docker Hub stays in the list as a parallel push during
+        # the migration window so devices that haven't yet picked up the
+        # template flip keep getting `latest-*` advanced.
+        #
+        # The legacy `screenly/srly-ose-*` namespace was dropped: every
+        # device that has run `upgrade_containers.sh` since 2023-02
+        # (b9998438) is on `screenly/anthias-*`, and stale `srly-ose-*`
+        # `latest-*` mirroring (one of two reasons d568602 hit Docker
+        # Hub's 429) gives no real back-compat in exchange.
+        namespaces = ['ghcr.io/screenly/anthias', 'screenly/anthias']
 
         # Generate all tags
         docker_tags = []
@@ -255,7 +356,7 @@ def main(
                 docker_tags.append(f'{namespace}-{service_name}:{docker_tag}')
             # Immutable short-hash tag.
             docker_tags.append(
-                f'{namespace}-{service_name}:{git_short_hash}-{version_suffix}'
+                f'{namespace}-{service_name}:{git_short_hash}-{board}'
             )
 
         build_image(
@@ -272,6 +373,7 @@ def main(
             clean_build,
             push,
             dockerfiles_only,
+            cache_backend,
         )
 
 

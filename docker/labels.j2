@@ -1,0 +1,17 @@
+{# OCI image labels (https://specs.opencontainers.org/image-spec/annotations/).
+   `image.source` is the load-bearing one for GitHub Container Registry:
+   GHCR uses it to link the package to its source repo, which makes the
+   package inherit the repo's visibility and grants repo collaborators
+   push/delete access. Without it, packages stay private even when the
+   repo is public, and the package page on GitHub has no link back. #}
+{% set service_descriptions = {
+    'server': 'Anthias web server (uvicorn + Django + Channels); also runs the Celery worker via a CMD override',
+    'redis': 'Redis broker for Anthias Celery and Channels',
+    'viewer': 'Anthias display/viewer service',
+    'test': 'Anthias test runner',
+} %}
+LABEL org.opencontainers.image.source="https://github.com/Screenly/Anthias"
+LABEL org.opencontainers.image.url="https://anthias.screenly.io"
+LABEL org.opencontainers.image.licenses="GPL-2.0"
+LABEL org.opencontainers.image.title="anthias-{{ service }}"
+LABEL org.opencontainers.image.description="{{ service_descriptions.get(service, 'Anthias ' + service) }}"

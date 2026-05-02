@@ -6,10 +6,7 @@ import json
 import logging
 from collections import UserDict
 from os import getenv, path
-from time import sleep
-from typing import Any, ClassVar
-
-import zmq
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from lib.auth import (
     Auth,
@@ -17,7 +14,13 @@ from lib.auth import (
     NoAuth,
     _is_legacy_sha256,
 )
-from lib.errors import ZmqCollectorTimeoutError
+from lib.errors import ReplyTimeoutError
+
+if TYPE_CHECKING:
+    import redis
+
+VIEWER_CHANNEL = 'anthias.viewer'
+REPLY_KEY_PREFIX = 'anthias.reply.'
 
 CONFIG_DIR = '.anthias/'
 CONFIG_FILE = 'anthias.conf'
@@ -27,6 +30,7 @@ DEFAULTS = {
         'assetdir': 'anthias_assets',
         'database': CONFIG_DIR + 'anthias.db',
         'date_format': 'mm/dd/yyyy',
+        'splash_logo_url': '/static/img/logo-full-splash.svg',
         'use_24_hour_clock': False,
         'use_ssl': False,
         'auth_backend': '',
@@ -221,68 +225,82 @@ class AnthiasSettings(UserDict[str, Any]):
 settings = AnthiasSettings()
 
 
-class ZmqPublisher:
-    INSTANCE: ClassVar['ZmqPublisher | None'] = None
+class ViewerPublisher:
+    INSTANCE: ClassVar['ViewerPublisher | None'] = None
 
     def __init__(self) -> None:
         if self.INSTANCE is not None:
             raise ValueError('An instance already exists!')
 
-        self.context = zmq.Context()
+        from lib.utils import connect_to_redis
 
-        self.socket = self.context.socket(zmq.PUB)
-        self.socket.bind('tcp://0.0.0.0:10001')
-        sleep(1)
+        self._redis: 'redis.Redis' = connect_to_redis()
 
     @classmethod
-    def get_instance(cls) -> 'ZmqPublisher':
+    def get_instance(cls) -> 'ViewerPublisher':
         if cls.INSTANCE is None:
-            cls.INSTANCE = ZmqPublisher()
+            cls.INSTANCE = ViewerPublisher()
         return cls.INSTANCE
 
     def send_to_viewer(self, msg: str) -> None:
-        self.socket.send_string('viewer {}'.format(msg))
+        self._redis.publish(VIEWER_CHANNEL, 'viewer {}'.format(msg))
 
 
-class ZmqConsumer:
-    def __init__(self) -> None:
-        self.context = zmq.Context()
+class ReplySender:
+    """Push a JSON reply onto a per-correlation-ID list. Used by the viewer
+    to answer request-reply commands like ``current_asset_id``.
 
-        self.socket = self.context.socket(zmq.PUSH)
-        self.socket.setsockopt(zmq.LINGER, 0)
-        self.socket.connect('tcp://anthias-server:5558')
+    The list expires after 30s so unread replies (e.g. server timed out
+    before the viewer answered) don't accumulate in Redis.
 
-        sleep(1)
+    Takes the caller's redis connection so we don't open a fresh
+    connection (and connection pool) per reply — the viewer reuses its
+    process-wide ``r`` here.
+    """
 
-    def send(self, msg: Any) -> None:
-        self.socket.send_json(msg, flags=zmq.NOBLOCK)
+    def __init__(self, redis_connection: 'redis.Redis') -> None:
+        self._redis = redis_connection
+
+    def send(self, correlation_id: str, msg: Any) -> None:
+        key = f'{REPLY_KEY_PREFIX}{correlation_id}'
+        self._redis.rpush(key, json.dumps(msg))
+        self._redis.expire(key, 30)
 
 
-class ZmqCollector:
-    INSTANCE: ClassVar['ZmqCollector | None'] = None
+class ReplyCollector:
+    INSTANCE: ClassVar['ReplyCollector | None'] = None
 
     def __init__(self) -> None:
         if self.INSTANCE is not None:
             raise ValueError('An instance already exists!')
 
-        self.context = zmq.Context()
+        from lib.utils import connect_to_redis
 
-        self.socket = self.context.socket(zmq.PULL)
-        self.socket.bind('tcp://0.0.0.0:5558')
-
-        self.poller = zmq.Poller()
-        self.poller.register(self.socket, zmq.POLLIN)
-
-        sleep(1)
+        self._redis: 'redis.Redis' = connect_to_redis()
 
     @classmethod
-    def get_instance(cls) -> 'ZmqCollector':
+    def get_instance(cls) -> 'ReplyCollector':
         if cls.INSTANCE is None:
-            cls.INSTANCE = ZmqCollector()
+            cls.INSTANCE = ReplyCollector()
         return cls.INSTANCE
 
-    def recv_json(self, timeout: int) -> Any:
-        if self.poller.poll(timeout):
-            return json.loads(self.socket.recv(zmq.NOBLOCK))
+    def recv_json(self, correlation_id: str, timeout_ms: int) -> Any:
+        key = f'{REPLY_KEY_PREFIX}{correlation_id}'
 
-        raise ZmqCollectorTimeoutError
+        # ``timeout_ms <= 0`` is a non-blocking poll — match the old ZMQ
+        # collector's contract (zmq.poll(0) returns immediately) instead
+        # of blocking BLPOP for a full second. Use LPOP and raise the
+        # same timeout error if nothing's queued.
+        if timeout_ms <= 0:
+            result = self._redis.lpop(key)
+            if result is None:
+                raise ReplyTimeoutError
+            return json.loads(result)
+
+        # BLPOP takes whole seconds; round up so the caller never waits
+        # less than the requested ms.
+        timeout_seconds = (timeout_ms + 999) // 1000
+        blpop_result = self._redis.blpop(key, timeout=timeout_seconds)
+        if blpop_result is None:
+            raise ReplyTimeoutError
+        return json.loads(blpop_result[1])

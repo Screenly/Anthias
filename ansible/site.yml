@@ -16,11 +16,11 @@
           - anthias_user | length > 0
           - anthias_branch | length > 0
           - device_type | length > 0
-          - device_type in ['pi1', 'pi2', 'pi3', 'pi4', 'pi5', 'x86']
+          - device_type in ['pi2', 'pi3', 'pi4-64', 'pi5', 'x86']
         fail_msg: >-
           Required environment variables missing or invalid.
           USER must be set; DEVICE_TYPE must be one of
-          pi1, pi2, pi3, pi4, pi5, x86.
+          pi2, pi3, pi4-64, pi5, x86.
 
   roles:
     - system

@@ -1,0 +1,130 @@
+{{ define "main" }}
+<header class="bg-brand-dark">
+    <div class="max-w-7xl mx-auto px-6 md:px-12 lg:px-20 py-16 md:py-20 lg:py-28">
+        <div class="max-w-2xl">
+            <h1 class="text-white text-4xl md:text-5xl lg:text-[3.5rem] font-extrabold leading-tight tracking-tight">
+                Free digital signage<br class="hidden sm:inline"> for everyone.
+            </h1>
+            <p class="text-white/60 text-lg mt-6 leading-relaxed">
+                Turn a Raspberry Pi or any PC into a digital sign. Schedule images, videos, and web pages from a web interface. No subscriptions, no cloud lock-in.
+            </p>
+            <div class="flex flex-wrap items-center gap-4 mt-8">
+                <a class="btn-primary" href="/get-started/">Get Started</a>
+                <a class="btn-secondary" href="/features/">See Features</a>
+            </div>
+            <div class="mt-8">
+                <iframe class="border-0 overflow-hidden" src="https://ghbtns.com/github-btn.html?user=Screenly&repo=Anthias&type=star&count=true&size=large" width="170" height="30" title="GitHub stars"></iframe>
+            </div>
+        </div>
+    </div>
+    <div class="max-w-7xl mx-auto px-6 md:px-12 lg:px-20 pb-8">
+        {{- $heroMobile1x := resources.Get "images/overview-mobile.png" -}}
+        {{- $heroMobile2x := resources.Get "images/overview-mobile@2x.png" -}}
+        {{- $heroMobile3x := resources.Get "images/overview-mobile@3x.png" -}}
+        {{- $heroDesk1x := resources.Get "images/overview.png" -}}
+        {{- $heroDesk2x := resources.Get "images/overview@2x.png" -}}
+        {{- $heroDesk3x := resources.Get "images/overview@3x.png" -}}
+        <img
+            class="md:hidden rounded-t-lg w-full"
+            srcset="{{ $heroMobile1x.RelPermalink }}, {{ $heroMobile2x.RelPermalink }} 2x, {{ $heroMobile3x.RelPermalink }} 3x"
+            src="{{ $heroMobile1x.RelPermalink }}"
+            alt="Anthias dashboard showing scheduled content"
+        />
+        <img
+            class="hidden md:block rounded-t-lg w-full"
+            srcset="{{ $heroDesk1x.RelPermalink }}, {{ $heroDesk2x.RelPermalink }} 2x, {{ $heroDesk3x.RelPermalink }} 3x"
+            src="{{ $heroDesk1x.RelPermalink }}"
+            alt="Anthias dashboard showing scheduled content"
+        />
+    </div>
+</header>
+
+<section class="bg-bg-light border-y border-black/5 py-10">
+    <div class="max-w-7xl mx-auto px-6 md:px-12 lg:px-20">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+            <div>
+                <p class="text-2xl font-extrabold text-brand-dark">3,500+</p>
+                <p class="text-zinc-500 text-sm mt-1">GitHub stars</p>
+            </div>
+            <div>
+                <p class="text-2xl font-extrabold text-brand-dark">Since 2012</p>
+                <p class="text-zinc-500 text-sm mt-1">Active development</p>
+            </div>
+            <div>
+                <p class="text-2xl font-extrabold text-brand-dark">6 boards</p>
+                <p class="text-zinc-500 text-sm mt-1">Pi 2 through Pi 5 + x86</p>
+            </div>
+            <div>
+                <p class="text-2xl font-extrabold text-brand-dark">100% free</p>
+                <p class="text-zinc-500 text-sm mt-1">Open source, forever</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="bg-white py-20 lg:py-28 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto">
+        <h2 class="text-3xl lg:text-4xl font-extrabold tracking-tight">What Anthias does</h2>
+        <p class="text-zinc-500 mt-3 text-lg max-w-xl">A complete digital signage platform that runs on hardware you already own.</p>
+
+        <div class="grid md:grid-cols-3 gap-8 mt-12">
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-yellow/20 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-dark" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M9 16v4M15 16v4"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">Multiple content types</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Display images, videos, and web pages. Upload files or point to any URL.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-purple/10 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">Content scheduling</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Set start and end dates for each asset. Control duration and playlist order.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-yellow/20 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-dark" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 18l2-2-2-2M8 6L6 8l2 2"/><path d="M14.5 4l-5 16"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">REST API</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Automate content updates and manage devices programmatically.</p>
+            </div>
+        </div>
+
+        <div class="mt-8">
+            <a class="text-brand-purple font-semibold text-sm no-underline hover:underline" href="/features/">See all features &rarr;</a>
+        </div>
+    </div>
+</section>
+
+<section class="bg-bg-light py-20 lg:py-28 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto">
+        <h2 class="text-3xl lg:text-4xl font-extrabold tracking-tight">Get running in minutes</h2>
+        <p class="text-zinc-500 mt-3 text-lg max-w-xl">Install Anthias on Raspberry Pi OS or Debian with a single command.</p>
+
+        <div class="mt-8 bg-brand-dark rounded-lg p-6 max-w-2xl">
+            <p class="text-white/50 text-xs font-mono mb-2">$ install on Raspberry Pi OS / Debian</p>
+            <code class="text-brand-yellow font-mono text-sm md:text-base break-all">bash &lt;(curl -sL https://install-anthias.srly.io)</code>
+        </div>
+
+        <p class="text-zinc-500 mt-4 text-sm">Or use pre-built disk images for Raspberry Pi via <a class="text-brand-purple no-underline hover:underline" href="https://github.com/Screenly/Anthias/releases/latest" target="_blank" rel="noopener">GitHub Releases</a> or <a class="text-brand-purple no-underline hover:underline" href="https://www.raspberrypi.com/software/" target="_blank" rel="noopener">Raspberry Pi Imager</a>.</p>
+
+        <div class="mt-8">
+            <a class="text-brand-purple font-semibold text-sm no-underline hover:underline" href="/get-started/">All installation options &rarr;</a>
+        </div>
+    </div>
+</section>
+
+<section class="bg-brand-dark py-20 lg:py-28 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto text-center">
+        <h2 class="text-white text-3xl lg:text-4xl font-extrabold tracking-tight">Ready to set up your digital sign?</h2>
+        <p class="text-white/50 mt-4 text-lg max-w-lg mx-auto">Anthias is free and open source. Get started in minutes on any Raspberry Pi or x86 PC.</p>
+        <div class="flex flex-wrap justify-center gap-4 mt-8">
+            <a class="btn-primary" href="/get-started/">Get Started</a>
+            <a class="btn-secondary" href="https://github.com/Screenly/Anthias" target="_blank" rel="noopener">View on GitHub</a>
+        </div>
+    </div>
+</section>
+{{ end }}

@@ -1,4 +1,0 @@
-services:
-  rpi-imager:
-    build:
-      dockerfile: Dockerfile.rpi-imager

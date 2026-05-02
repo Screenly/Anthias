@@ -1,4 +1,6 @@
 import logging
+import os
+import time
 from datetime import timedelta
 from os import getenv, path
 from typing import Any
@@ -8,20 +10,20 @@ import sh
 from celery import Celery
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
-try:
-    django.setup()
+django.setup()
 
-    # Place imports that uses Django in this block.
+# Place imports that uses Django in this block.
 
-    from lib import diagnostics
-    from lib.utils import (
-        connect_to_redis,
-        is_balena_app,
-        reboot_via_balena_supervisor,
-        shutdown_via_balena_supervisor,
-    )
-except Exception:
-    pass
+from anthias_app.models import Asset  # noqa: E402
+from lib import diagnostics  # noqa: E402
+from lib.telemetry import send_telemetry  # noqa: E402
+from lib.utils import (  # noqa: E402
+    connect_to_redis,
+    is_balena_app,
+    reboot_via_balena_supervisor,
+    shutdown_via_balena_supervisor,
+)
+from settings import settings  # noqa: E402
 
 
 __author__ = 'Screenly, Inc'
@@ -51,6 +53,9 @@ def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
     sender.add_periodic_task(
         60 * 5, get_display_power.s(), name='display_power'
     )
+    # Hourly tick; send_telemetry_task itself enforces a 24h cooldown
+    # via Redis, so each device emits at most one GA event per day.
+    sender.add_periodic_task(3600, send_telemetry_task.s(), name='telemetry')
 
 
 @celery.task(time_limit=30)
@@ -59,21 +64,72 @@ def get_display_power() -> None:
     r.expire('display_power', 3600)
 
 
+@celery.task(time_limit=30)
+def send_telemetry_task() -> None:
+    send_telemetry()
+
+
 @celery.task
 def cleanup() -> None:
-    # Without HOME, `path.join(..., 'anthias_assets')` would be a
-    # relative path and `find -delete` could chew through whatever
-    # directory celery happens to be running in. Bail out instead.
-    home = getenv('HOME')
-    if not home:
-        logging.error('cleanup() skipped: HOME is not set')
+    asset_dir = settings['assetdir']
+    if not path.isdir(asset_dir):
         return
+
+    # Stale upload remnants: in-progress uploads write to <uuid>.tmp and
+    # rename on commit. The 1h mtime guard avoids killing an upload that
+    # is still streaming when celery beat fires.
     sh.find(
-        path.join(home, 'anthias_assets'),
+        asset_dir,
         '-name',
         '*.tmp',
+        '-type',
+        'f',
+        '-mmin',
+        '+60',
         '-delete',
     )
+
+    # Orphaned asset files: forum 6636 / GH #2657. Asset rows can be
+    # deleted while their file lingers (e.g. URI didn't match assetdir
+    # exactly, or the file was renamed by an upgrade). Sweep anything
+    # in assetdir that no live Asset row references, with the same 1h
+    # guard so a freshly-renamed file (or in-flight yt-dlp sidecar:
+    # .part/.ytdl/.info.json) isn't removed before its row is written
+    # or its download finishes. Stale sidecars from abandoned downloads
+    # fall outside the freshness window and get swept like any other
+    # orphan.
+    #
+    # Resolve URIs through realpath so legacy rows that still reference
+    # the pre-rebrand prefix (~/screenly_assets/..., now a symlink to
+    # ~/anthias_assets) are recognized as live and their files aren't
+    # mistaken for orphans on upgraded installs.
+    asset_dir_real = path.realpath(asset_dir)
+    referenced = set()
+    for uri in (
+        Asset.objects.exclude(uri__isnull=True)
+        .exclude(uri__exact='')
+        .values_list('uri', flat=True)
+    ):
+        if not uri:
+            continue
+        try:
+            if path.realpath(path.dirname(uri)) == asset_dir_real:
+                referenced.add(path.basename(uri))
+        except OSError:
+            continue
+    cutoff = 60 * 60  # match the .tmp guard above
+    now = time.time()
+    for entry in os.scandir(asset_dir):
+        if not entry.is_file():
+            continue
+        if entry.name in referenced:
+            continue
+        try:
+            if now - entry.stat().st_mtime < cutoff:
+                continue
+            os.remove(entry.path)
+        except OSError as e:
+            logging.warning('cleanup: could not remove %s: %s', entry.path, e)
 
 
 @celery.task

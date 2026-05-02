@@ -1,27 +1,8 @@
 # vim: ft=yaml.docker-compose
 
 services:
-  anthias-wifi-connect:
-    image: screenly/anthias-wifi-connect:${DOCKER_TAG}-${DEVICE_TYPE}
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.wifi-connect
-    depends_on:
-      - anthias-viewer
-    environment:
-      PORTAL_LISTENING_PORT: 8000
-      CHECK_CONN_FREQ: 10
-      PORTAL_SSID: 'Anthias WiFi Connect'
-      DBUS_SYSTEM_BUS_ADDRESS: 'unix:path=/run/dbus/system_bus_socket'
-    network_mode: host
-    privileged: true
-    volumes:
-      - type: bind
-        source: /run/dbus/system_bus_socket
-        target: /run/dbus/system_bus_socket
-
   anthias-server:
-    image: screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: ghcr.io/screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.server
@@ -51,7 +32,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   anthias-viewer:
-    image: screenly/anthias-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: ghcr.io/screenly/anthias-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
@@ -63,8 +44,6 @@ services:
       - PORT=8080
       - NOREFRESH=1
       - LISTEN=anthias-server
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     privileged: true
     restart: always
     shm_size: ${SHM_SIZE_KB}kb
@@ -79,10 +58,15 @@ services:
       io.balena.features.supervisor-api: '1'
 
   anthias-celery:
-    image: screenly/anthias-celery:${DOCKER_TAG}-${DEVICE_TYPE}
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.celery
+    # Runs on the same image as anthias-server with a CMD override.
+    # Shipping one image instead of two is the point — server and celery
+    # share their entire root filesystem (base apt + venv + app source),
+    # and a separate celery image was duplicating ~825 MB extracted of
+    # identical content per device. See refactor: drop celery image.
+    image: ghcr.io/screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
+    command: >
+      celery -A celery_tasks.celery worker -B -n worker@anthias
+      --loglevel=info --schedule /tmp/celerybeat-schedule
     depends_on:
       - anthias-server
       - redis
@@ -103,7 +87,7 @@ services:
       io.balena.features.supervisor-api: '1'
 
   redis:
-    image: screenly/anthias-redis:${DOCKER_TAG}-${DEVICE_TYPE}
+    image: ghcr.io/screenly/anthias-redis:${DOCKER_TAG}-${DEVICE_TYPE}
     build:
       context: .
       dockerfile: docker/Dockerfile.redis

@@ -2,13 +2,11 @@
 
 #include <QWidget>
 #include <QWebEngineView>
-#include <QWebEnginePage>
-#include <QEventLoop>
-#include <QNetworkReply>
+#include <QAuthenticator>
 #include <QNetworkAccessManager>
 #include <QImage>
 #include <QMovie>
-#include <QTimer>
+#include <QUrl>
 
 class View : public QWidget
 {
@@ -17,7 +15,6 @@ class View : public QWidget
 public:
     explicit View(QWidget* parent);
     ~View();
-    QWebEngineView* webView;  // Made public for MainWindow access
 
     void loadPage(const QString &uri);
     void loadImage(const QString &uri);
@@ -27,27 +24,22 @@ protected:
     void resizeEvent(QResizeEvent* event) override;
 
 private slots:
-    void handleAuthRequest(QNetworkReply*, QAuthenticator*);
-    void updateMovieFrame();
-    void onWebPageLoadFinished(bool ok);
-    void onWebPageLoadProgress(int progress);
+    void handleAuthRequest(const QUrl& requestUrl, QAuthenticator* authenticator);
 
 private:
+    void configureWebView(QWebEngineView* view);
+    void stopAnimation();
     bool tryLoadAsAnimatedGif(const QByteArray& data);
     void loadAsStaticImage(const QByteArray& data);
-    void scheduleNextFrame();
     void setupAnimation();
     void switchToNextWebView();
-    void resetWebViewStates();
 
-    QWebEnginePage* pre_loader;
-    QEventLoop pre_loader_loop;
     QNetworkAccessManager* networkManager;
     QImage currentImage;
     QImage nextImage;
     QMovie* movie;
-    QTimer* animationTimer;
     bool isAnimatedImage;
+    quint64 loadGenerationId;
 
     // Dual web view system
     QWebEngineView* webView1;
@@ -55,4 +47,9 @@ private:
     QWebEngineView* currentWebView;
     QWebEngineView* nextWebView;
     bool nextWebViewReady;
+
+    // Connection handle for the currently-pending loadFinished slot, so
+    // we can drop it before issuing stop() on the next loadPage and
+    // avoid a synchronous loadFinished(false) racing into a stale slot.
+    QMetaObject::Connection pageLoadConnection;
 };
