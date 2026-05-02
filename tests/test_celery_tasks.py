@@ -149,7 +149,7 @@ class TestRevalidateAssetUrls(TestCase):
     def _make_asset(
         self,
         asset_id: str,
-        uri: str = 'http://example.com/x.png',
+        uri: str = 'https://example.com/x.png',
         is_enabled: bool = True,
         is_processing: bool = False,
         skip_asset_check: bool = False,
@@ -230,8 +230,8 @@ class TestRevalidateAssetUrls(TestCase):
 
     def test_probe_exception_does_not_kill_sweep(self) -> None:
         """One asset's probe blowing up must not break the others."""
-        self._make_asset('boom', uri='http://example.com/boom')
-        self._make_asset('ok', uri='http://example.com/ok')
+        self._make_asset('boom', uri='https://example.com/boom')
+        self._make_asset('ok', uri='https://example.com/ok')
 
         def fake_url_fails(url: str) -> bool:
             if 'boom' in url:
@@ -271,14 +271,14 @@ class TestRevalidateAssetUrl(TestCase):
         Asset.objects.all().delete()
 
     def _make(self, **kwargs: object) -> Asset:
-        defaults = dict(
-            asset_id='a1',
-            name='a1',
-            uri='http://example.com/x.png',
-            mimetype='image',
-            duration=10,
-            is_enabled=True,
-        )
+        defaults = {
+            'asset_id': 'a1',
+            'name': 'a1',
+            'uri': 'https://example.com/x.png',
+            'mimetype': 'image',
+            'duration': 10,
+            'is_enabled': True,
+        }
         defaults.update(kwargs)
         return Asset.objects.create(**defaults)
 
