@@ -172,11 +172,30 @@ class AssetRecheckViewV2(APIView):
     credentials. Decorating with ``@authorized`` would silently 401 the
     viewer's POST on auth-enabled installs and defeat the on-demand
     mitigation entirely (the asset would stay marked unreachable until
-    the next 15-min periodic sweep). The blast radius of leaving this
-    open is bounded: the request is a 404 unless the caller already
-    knows a valid asset_id, the underlying task is rate-limited per
-    asset (RECHECK_COOLDOWN_S in celery_tasks.py), and there's no data
-    in the response — it just enqueues a probe.
+    the next 15-min periodic sweep).
+
+    **KNOWN LIMITATION (deferred to broader auth work).** Because this
+    endpoint is unauth'd, on a default LAN deploy any client that can
+    reach the API port can:
+
+      * fan out POSTs across many asset_ids to trigger probe storms
+        (DoS — partially bounded by the per-asset SETNX rate-limit
+        and the unguessability of 32-char hex asset_ids);
+      * trigger ``url_fails`` / ``ffprobe`` against URLs already in
+        the asset DB if asset_ids leak by some other path.
+
+    The intended fix is a shared internal-auth mechanism (e.g. a
+    token both anthias-server and anthias-viewer derive from
+    anthias.conf, sent as ``X-Anthias-Internal-Token``) that the
+    viewer can satisfy without BasicAuth credentials. That cuts
+    across other inter-service surfaces too — adding it just here
+    would be premature. Tracked alongside the broader auth rework.
+
+    Until then the existing mitigations bound the blast radius:
+    requests are 404 unless the caller already knows a valid
+    asset_id, the underlying task is rate-limited per asset
+    (RECHECK_COOLDOWN_S in celery_tasks.py), and the response carries
+    no data — it just enqueues a probe.
     """
 
     @extend_schema(
