@@ -22,9 +22,7 @@ from api.views import v2 as v2_views
 class SafeIpAddressesTest(TestCase):
     def test_returns_empty_when_node_ip_is_unknown(self) -> None:
         """Balena first-boot mode: supervisor responded but with no IP."""
-        with mock.patch(
-            'api.views.v2.get_node_ip', return_value='Unknown'
-        ):
+        with mock.patch('api.views.v2.get_node_ip', return_value='Unknown'):
             self.assertEqual(v2_views._safe_ip_addresses(), [])
 
     def test_returns_empty_when_node_ip_is_unavailable_string(self) -> None:
@@ -43,9 +41,7 @@ class SafeIpAddressesTest(TestCase):
             )
 
     def test_formats_ipv6_in_brackets(self) -> None:
-        with mock.patch(
-            'api.views.v2.get_node_ip', return_value='fe80::1'
-        ):
+        with mock.patch('api.views.v2.get_node_ip', return_value='fe80::1'):
             self.assertEqual(
                 v2_views._safe_ip_addresses(), ['http://[fe80::1]']
             )
@@ -87,9 +83,7 @@ class NetworkIpAddressesEndpointTest(TestCase):
     def test_returns_200_with_empty_list_when_unknown(self) -> None:
         """Pinned regression: 'Unknown' used to ValueError into a 500.
         Now the endpoint gracefully degrades to []."""
-        with mock.patch(
-            'api.views.v2.get_node_ip', return_value='Unknown'
-        ):
+        with mock.patch('api.views.v2.get_node_ip', return_value='Unknown'):
             response = Client().get('/api/v2/network/ip-addresses')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'ip_addresses': []})
