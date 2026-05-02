@@ -45,10 +45,10 @@ See [this](https://anthias.screenly.io/docs/installation-options/) page for opti
 * Raspberry Pi 3 Model B+ - 64-bit Trixie, 64-bit Bookworm
 * Raspberry Pi 3 Model B - 64-bit Trixie, 64-bit Bookworm
 * Raspberry Pi 2 Model B - 32-bit Trixie, 32-bit Bookworm
-* PC (x86 Devices) - 64-bit Trixie, 64-bit Bookworm
-  * These devices can be something similar to a NUC.
-  * See [this](https://anthias.screenly.io/docs/x86-installation/) page for instructions on how to install Debian in a specific way
-    before running the [installation script](https://anthias.screenly.io/docs/installation-options/#installing-on-raspberry-pi-os-lite-or-debian).
+* PC (x86) - 64-bit Trixie, 64-bit Bookworm
+  * Any 64-bit PC works (Intel NUCs, mini-PCs, old laptops).
+  * See the [PC installation guide](https://anthias.screenly.io/docs/x86-installation/) for the Debian setup steps,
+    then run the standard [installation script](https://anthias.screenly.io/docs/installation-options/#installing-on-raspberry-pi-os-lite-or-debian).
 
 > [!NOTE]
 > We're still fixing the Raspberry Pi OS installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 1.

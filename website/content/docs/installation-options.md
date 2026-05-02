@@ -69,8 +69,7 @@ If you'd like more control over your digital signage instance, try installing it
 
 > **Important**
 >
-> When installing on PC (x86) devices, make sure do follow the steps in the [x86 installation guide](/docs/x86-installation/)
-> so that the installation script will work.
+> Installing on a **PC (x86)**? Follow the [PC installation guide](/docs/x86-installation/) first to prepare Debian — the script below assumes that setup.
 
 > **Note**
 >
