@@ -96,9 +96,21 @@ def test_format_drops_garbage_tokens() -> None:
 
 
 @pytest.fixture
-def bare_metal_no_pending() -> None:
-    """Each test starts with a clean Redis fake (no debounce key set)."""
+def bare_metal_no_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each test starts with a clean Redis fake (no debounce key set)
+    and an unset ``MY_IP`` env var.
+
+    ``_resolve_node_ip()`` falls back to ``MY_IP`` on the cache-miss
+    path (mirroring ``lib.utils.get_node_ip()``); leaving the env var
+    in whatever state the dev shell or CI runner picked up would let
+    that fallback bleed into tests that mean to assert on the
+    no-cache-no-fallback case. Tests that exercise the MY_IP
+    fallback set the env var explicitly via ``monkeypatch.setenv``.
+    """
     v2_views.r.delete(v2_views._IP_REFRESH_PENDING_KEY)
+    monkeypatch.delenv('MY_IP', raising=False)
 
 
 def test_resolve_reads_from_redis_cache(bare_metal_no_pending: None) -> None:
@@ -269,6 +281,59 @@ def test_resolve_setnx_failure_returns_empty(
         mock.patch.object(
             v2_views.r, 'set', side_effect=redis.RedisError('synthetic')
         ),
+    ):
+        assert v2_views._resolve_node_ip() == ''
+
+
+def test_resolve_cache_miss_falls_back_to_my_ip(
+    bare_metal_no_pending: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``bin/upgrade_containers.sh`` exports the host's outbound IP
+    into the server container as ``MY_IP``. ``lib.utils.get_node_ip()``
+    falls back to it when ``ip_addresses`` is empty in Redis. The
+    polling resolver mirrors that — without the fallback, any setup
+    where host_agent isn't running (custom deploys, late-starting
+    host_agent, crashed host_agent) would freeze the splash on
+    'Detecting network…' forever."""
+    monkeypatch.setenv('MY_IP', _FIXTURE_IPV4)
+    with (
+        mock.patch('api.views.v2.is_balena_app', return_value=False),
+        mock.patch.object(v2_views.r, 'get', return_value=None),
+        mock.patch.object(v2_views.r, 'publish'),
+    ):
+        assert v2_views._resolve_node_ip() == _FIXTURE_IPV4
+
+
+def test_resolve_redis_get_failure_falls_back_to_my_ip(
+    bare_metal_no_pending: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If Redis is fully down (early boot, broker crash), the cache
+    read raises before we can decide cache miss vs hit. The MY_IP
+    fallback must still apply — that's exactly the scenario it's
+    there to cover."""
+    monkeypatch.setenv('MY_IP', _FIXTURE_IPV4)
+    with (
+        mock.patch('api.views.v2.is_balena_app', return_value=False),
+        mock.patch.object(
+            v2_views.r, 'get', side_effect=redis.RedisError('synthetic')
+        ),
+    ):
+        assert v2_views._resolve_node_ip() == _FIXTURE_IPV4
+
+
+def test_resolve_cache_miss_with_unset_my_ip_returns_empty(
+    bare_metal_no_pending: None,
+) -> None:
+    """The fixture clears MY_IP. With no cache and no env fallback,
+    we return '' so the JS keeps polling (and the splash continues
+    to show 'Detecting network…' until something populates either
+    side)."""
+    with (
+        mock.patch('api.views.v2.is_balena_app', return_value=False),
+        mock.patch.object(v2_views.r, 'get', return_value=None),
+        mock.patch.object(v2_views.r, 'publish'),
     ):
         assert v2_views._resolve_node_ip() == ''
 
