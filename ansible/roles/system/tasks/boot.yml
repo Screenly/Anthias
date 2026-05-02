@@ -21,17 +21,21 @@
     regexp: ^framebuffer_ignore_alpha=
     line: framebuffer_ignore_alpha=1
 
-- name: Disable rainbow splash on boot (silent boot)
-  ansible.builtin.lineinfile:
-    dest: "{{ system_config_path }}"
-    regexp: ^disable_splash=
-    line: disable_splash=1
+# Ship silent-boot firmware bits as a config.txt drop-in. Pi firmware natively supports the
+# `include` directive, so we keep our additions in their own file and avoid touching values
+# elsewhere in config.txt.
+- name: Install silent-boot firmware drop-in
+  ansible.builtin.copy:
+    src: anthias-silent-boot.conf
+    dest: "{{ system_config_path | dirname }}/anthias-silent-boot.conf"
+    owner: root
+    group: root
+    mode: "0755"  # NOSONAR
 
-- name: Skip firmware boot delay (silent boot)
+- name: Include silent-boot drop-in from config.txt
   ansible.builtin.lineinfile:
     dest: "{{ system_config_path }}"
-    regexp: ^boot_delay=
-    line: boot_delay=0
+    line: include anthias-silent-boot.conf
 
 - name: Add gpu_mem_256 in config.txt if it doesn't exist
   ansible.builtin.lineinfile:
@@ -137,33 +141,42 @@
     regexp: (^(?!$)((?!cgroup_memory=1).)*$)
     replace: \1 cgroup_memory=1
 
-- name: Suppress kernel log messages (silent boot)
-  ansible.builtin.replace:
-    dest: "{{ system_cmdline_path }}"
-    regexp: (^(?!$)((?!loglevel=0).)*$)
-    replace: \1 loglevel=0
+# Token-level rewrite of cmdline.txt to (a) move the kernel console to an invisible tty so
+# anything not silenced by `quiet` doesn't paint the display, and (b) append loglevel=0 and
+# logo.nologo if missing. Done via a Jinja template using string ops only — no regex.
+- name: Read current cmdline.txt
+  ansible.builtin.slurp:
+    src: "{{ system_cmdline_path }}"
+  register: system_cmdline_current
 
-- name: Hide kernel boot logo (silent boot)
-  ansible.builtin.replace:
+- name: Apply silent-boot cmdline rewrites
+  ansible.builtin.copy:
+    content: "{{ lookup('template', 'cmdline_silent_boot.j2') }}\n"
     dest: "{{ system_cmdline_path }}"
-    regexp: (^(?!$)((?!logo.nologo).)*$)
-    replace: \1 logo.nologo
+    owner: root
+    group: root
+    mode: "0755"  # NOSONAR
 
-- name: Disable console blanking (silent boot)
-  ansible.builtin.replace:
-    dest: "{{ system_cmdline_path }}"
-    regexp: (^(?!$)((?!consoleblank=0).)*$)
-    replace: \1 consoleblank=0
+# Defensive stats — disable login prompts on tty1 whether the active unit is the stock
+# getty@tty1.service or raspi-config's autologin@tty1.service.
+- name: Look up getty@ template
+  ansible.builtin.stat:
+    path: /lib/systemd/system/getty@.service
+  register: system_getty_template
 
-# Move kernel console to an invisible tty so any messages not silenced by `quiet` don't paint the display.
-- name: Redirect kernel console from tty1 to tty3 (silent boot)
-  ansible.builtin.replace:
-    dest: "{{ system_cmdline_path }}"
-    regexp: console=tty1\b
-    replace: console=tty3
+- name: Look up autologin@ template
+  ansible.builtin.stat:
+    path: /etc/systemd/system/autologin@.service
+  register: system_autologin_template
 
-# Without this, getty would draw a login prompt on the display before/around the viewer.
 - name: Disable getty on tty1 (no login prompt on display)
   ansible.builtin.systemd:
     name: getty@tty1.service
     enabled: false
+  when: system_getty_template.stat.exists
+
+- name: Disable autologin on tty1 (no auto-login on display)
+  ansible.builtin.systemd:
+    name: autologin@tty1.service
+    enabled: false
+  when: system_autologin_template.stat.exists
