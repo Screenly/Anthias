@@ -21,6 +21,18 @@
     regexp: ^framebuffer_ignore_alpha=
     line: framebuffer_ignore_alpha=1
 
+- name: Disable rainbow splash on boot (silent boot)
+  ansible.builtin.lineinfile:
+    dest: "{{ system_config_path }}"
+    regexp: ^disable_splash=
+    line: disable_splash=1
+
+- name: Skip firmware boot delay (silent boot)
+  ansible.builtin.lineinfile:
+    dest: "{{ system_config_path }}"
+    regexp: ^boot_delay=
+    line: boot_delay=0
+
 - name: Add gpu_mem_256 in config.txt if it doesn't exist
   ansible.builtin.lineinfile:
     path: "{{ system_config_path }}"
@@ -124,3 +136,34 @@
     dest: "{{ system_cmdline_path }}"
     regexp: (^(?!$)((?!cgroup_memory=1).)*$)
     replace: \1 cgroup_memory=1
+
+- name: Suppress kernel log messages (silent boot)
+  ansible.builtin.replace:
+    dest: "{{ system_cmdline_path }}"
+    regexp: (^(?!$)((?!loglevel=0).)*$)
+    replace: \1 loglevel=0
+
+- name: Hide kernel boot logo (silent boot)
+  ansible.builtin.replace:
+    dest: "{{ system_cmdline_path }}"
+    regexp: (^(?!$)((?!logo.nologo).)*$)
+    replace: \1 logo.nologo
+
+- name: Disable console blanking (silent boot)
+  ansible.builtin.replace:
+    dest: "{{ system_cmdline_path }}"
+    regexp: (^(?!$)((?!consoleblank=0).)*$)
+    replace: \1 consoleblank=0
+
+# Move kernel console to an invisible tty so any messages not silenced by `quiet` don't paint the display.
+- name: Redirect kernel console from tty1 to tty3 (silent boot)
+  ansible.builtin.replace:
+    dest: "{{ system_cmdline_path }}"
+    regexp: console=tty1\b
+    replace: console=tty3
+
+# Without this, getty would draw a login prompt on the display before/around the viewer.
+- name: Disable getty on tty1 (no login prompt on display)
+  ansible.builtin.systemd:
+    name: getty@tty1.service
+    enabled: false
