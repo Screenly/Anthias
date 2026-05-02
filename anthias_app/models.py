@@ -73,8 +73,16 @@ class Asset(models.Model):
         return deduped
 
     def has_window_filter(self) -> bool:
-        """True if this asset has any day-of-week or time-of-day filter set."""
-        if self.play_time_from is not None or self.play_time_to is not None:
+        """True if this asset has any day-of-week or time-of-day filter set.
+
+        A time-of-day filter only applies when both endpoints are set —
+        _matches_play_window() treats a partial window as no filter — so
+        report it that way here too. Otherwise a stray single-endpoint
+        value (rejected by the v2 API but possible via admin / direct DB
+        edits) would force the windowed deadline cap on every tick
+        without actually filtering anything.
+        """
+        if self.play_time_from is not None and self.play_time_to is not None:
             return True
         return self.get_play_days() != list(ALL_DAYS)
 

@@ -337,6 +337,22 @@ def test_windowed_cap_does_not_apply_without_window() -> None:
 
 
 @pytest.mark.django_db
+def test_windowed_cap_does_not_apply_for_partial_time_window() -> None:
+    """Partial windows (only one of from/to set) are no-ops in
+    _matches_play_window — has_window_filter() must agree, otherwise
+    the 60s cap fires forever without actually filtering anything.
+    The v2 API rejects this shape, but admin/DB edits can produce it.
+    """
+    Asset.objects.create(
+        **_scheduled_asset(play_time_from=time(9, 0), play_time_to=None)
+    )
+    _, deadline = generate_asset_list()
+    # Cap should NOT apply: deadline tracks the asset's end_date, not now+60s
+    assert deadline is not None
+    assert (deadline - timezone.now()).total_seconds() > 60
+
+
+@pytest.mark.django_db
 def test_deadline_never_lands_in_the_past() -> None:
     """A windowed-but-currently-inactive asset must not poison the
     deadline with its long-past start_date — that would cause
