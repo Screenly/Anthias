@@ -1,7 +1,6 @@
 import ipaddress
 import json
 import logging
-import os
 from datetime import timedelta
 from os import getenv, statvfs
 from platform import machine
@@ -50,6 +49,7 @@ from lib.auth import authorized
 from lib.github import is_up_to_date
 from lib.utils import (
     connect_to_redis,
+    get_balena_device_info,
     get_node_ip,
     get_node_mac_address,
     is_balena_app,
@@ -98,13 +98,14 @@ def _resolve_node_ip() -> str:
     formatter below can stay shared with ``InfoViewV2``.
     """
     if is_balena_app():
+        # Reuse the shared lib.utils helper so URL construction /
+        # auth / headers stay in one place (extending it to accept a
+        # timeout was the smaller change). The bounded timeout is the
+        # load-bearing part of this fix — without it, a slow
+        # supervisor on first boot would pin a request worker for
+        # longer than the JS poll cadence.
         try:
-            response = requests.get(
-                '{}/v1/device?apikey={}'.format(
-                    os.getenv('BALENA_SUPERVISOR_ADDRESS'),
-                    os.getenv('BALENA_SUPERVISOR_API_KEY'),
-                ),
-                headers={'Content-Type': 'application/json'},
+            response = get_balena_device_info(
                 timeout=_BALENA_SUPERVISOR_TIMEOUT_S,
             )
         except requests.RequestException:
@@ -131,11 +132,7 @@ def _resolve_node_ip() -> str:
             return ''
 
     # Cache miss. Best-effort: ask host_agent to populate. The next
-    # poll picks it up — we don't block waiting for completion. Catch
-    # only redis-specific failures here: a bare ``except Exception``
-    # would swallow a programming error (e.g. ``r`` accidentally None
-    # after a refactor) and turn "splash IPs never populate" into a
-    # silent failure with no breadcrumb.
+    # poll picks it up — we don't block waiting for completion.
     #
     # Debounce the publish: at a 2s poll cadence, host_agent's
     # set_ip_addresses takes longer than one poll interval (it does
@@ -144,12 +141,21 @@ def _resolve_node_ip() -> str:
     # first one completes. SETNX with a short TTL ensures only one
     # refresh fires per window; a future poll past the TTL retries
     # naturally if the cache is still empty.
-    if r.set(
-        _IP_REFRESH_PENDING_KEY,
-        '1',
-        nx=True,
-        ex=_IP_REFRESH_DEBOUNCE_S,
-    ):
+    #
+    # Wrap the SETNX itself in a RedisError catch — Redis can flake
+    # between the get() above and the set() here, and a bare raise
+    # would 500 the splash poll. Treat as cache miss + skip the
+    # publish (the next poll retries naturally).
+    try:
+        acquired = r.set(
+            _IP_REFRESH_PENDING_KEY,
+            '1',
+            nx=True,
+            ex=_IP_REFRESH_DEBOUNCE_S,
+        )
+    except redis.RedisError:
+        return ''
+    if acquired:
         try:
             r.publish('hostcmd', 'set_ip_addresses')
         except redis.RedisError:

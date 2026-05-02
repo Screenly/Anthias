@@ -198,6 +198,22 @@ class ResolveNodeIpBareMetalTest(TestCase):
         # Debounce key must NOT be set after a failed publish.
         self.assertIsNone(v2_views.r.get(v2_views._IP_REFRESH_PENDING_KEY))
 
+    def test_setnx_failure_returns_empty(self) -> None:
+        """Redis can flake between the get() and the SETNX. Without
+        a guard around SETNX, the polling endpoint would 500 — same
+        500 we'd already prevented for get() and publish(). Treat as
+        cache miss and let the JS keep polling."""
+        with (
+            mock.patch('api.views.v2.is_balena_app', return_value=False),
+            mock.patch.object(v2_views.r, 'get', return_value=None),
+            mock.patch.object(
+                v2_views.r,
+                'set',
+                side_effect=redis.RedisError('synthetic'),
+            ),
+        ):
+            self.assertEqual(v2_views._resolve_node_ip(), '')
+
 
 class ResolveNodeIpBalenaTest(TestCase):
     """Balena fast-path: bounded-timeout supervisor lookup. The 1.5s
@@ -212,7 +228,8 @@ class ResolveNodeIpBalenaTest(TestCase):
         with (
             mock.patch('api.views.v2.is_balena_app', return_value=True),
             mock.patch(
-                'api.views.v2.requests.get', return_value=fake_response
+                'api.views.v2.get_balena_device_info',
+                return_value=fake_response,
             ) as m_get,
         ):
             self.assertEqual(v2_views._resolve_node_ip(), _FIXTURE_IPV4)
@@ -227,7 +244,7 @@ class ResolveNodeIpBalenaTest(TestCase):
         with (
             mock.patch('api.views.v2.is_balena_app', return_value=True),
             mock.patch(
-                'api.views.v2.requests.get',
+                'api.views.v2.get_balena_device_info',
                 side_effect=requests.Timeout('synthetic'),
             ),
         ):
@@ -239,7 +256,8 @@ class ResolveNodeIpBalenaTest(TestCase):
         with (
             mock.patch('api.views.v2.is_balena_app', return_value=True),
             mock.patch(
-                'api.views.v2.requests.get', return_value=fake_response
+                'api.views.v2.get_balena_device_info',
+                return_value=fake_response,
             ),
         ):
             self.assertEqual(v2_views._resolve_node_ip(), '')
