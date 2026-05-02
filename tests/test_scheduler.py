@@ -389,3 +389,37 @@ def test_get_play_days_out_of_range_int_falls_back_to_all_days() -> None:
 def test_get_play_days_non_int_element_falls_back_to_all_days() -> None:
     a = Asset.objects.create(**_scheduled_asset(play_days='["mon"]'))
     assert a.get_play_days() == [1, 2, 3, 4, 5, 6, 7]
+
+
+@pytest.mark.django_db
+def test_cap_driven_refresh_preserves_shuffle_play_through(
+    restore_shuffle_setting: None,
+) -> None:
+    """With shuffle_playlist on, the ~60s windowed-asset deadline cap
+    must not reshuffle mid-cycle. Membership is unchanged, so the
+    Scheduler should keep its current order/index/counter and only
+    refresh the deadline.
+    """
+    settings['shuffle_playlist'] = True
+    # Enough assets for shuffle to almost certainly differ from sort order.
+    for i in range(8):
+        Asset.objects.create(
+            **_scheduled_asset(asset_id=f'a{i}', play_order=i)
+        )
+    # Make one asset windowed so generate_asset_list() applies the cap.
+    a0 = Asset.objects.get(asset_id='a0')
+    a0.play_days = '[1]'
+    a0.save()
+
+    with time_machine.travel(_aware(2026, 1, 5, 12, 0)):  # Mon noon
+        scheduler = Scheduler()
+        original_assets = list(scheduler.assets)
+        scheduler.index = 3
+        scheduler.counter = 2
+        # Simulate an expired cap-driven deadline.
+        scheduler.deadline = timezone.now() - timedelta(seconds=1)
+        scheduler.refresh_playlist()
+
+    assert scheduler.assets == original_assets
+    assert scheduler.index == 3
+    assert scheduler.counter == 2

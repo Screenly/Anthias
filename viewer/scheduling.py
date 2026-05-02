@@ -173,16 +173,28 @@ class Scheduler:
             logging.debug('updating playlist due to database modification')
             self.update_playlist()
         elif settings['shuffle_playlist'] and self.counter >= 5:
-            self.update_playlist()
+            # End-of-cycle reshuffle: the current play-through is over,
+            # so it's safe to take the freshly shuffled order.
+            self.update_playlist(allow_reshuffle=True)
         elif self.deadline and self.deadline <= time_cur:
             self.update_playlist()
 
-    def update_playlist(self) -> None:
+    def update_playlist(self, *, allow_reshuffle: bool = False) -> None:
         logging.debug('update_playlist')
         self.last_update_db_mtime = self.get_db_mtime()
         (new_assets, new_deadline) = generate_asset_list()
-        if new_assets == self.assets and new_deadline == self.deadline:
-            # If nothing changed, don't disturb the current play-through.
+
+        current_ids = sorted(a.get('asset_id') for a in self.assets)
+        new_ids = sorted(a.get('asset_id') for a in new_assets)
+        membership_changed = current_ids != new_ids
+
+        if not membership_changed and not allow_reshuffle:
+            # Same set of active assets: keep the current play-through
+            # order. With shuffle_playlist on, generate_asset_list
+            # produces a fresh random order every call, so without this
+            # guard the cap-driven refresh (every ~60s for windowed
+            # assets) would reshuffle mid-cycle and disrupt playback.
+            self.deadline = new_deadline
             return
 
         self.assets, self.deadline = new_assets, new_deadline
