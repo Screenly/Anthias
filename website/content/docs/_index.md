@@ -79,8 +79,9 @@ $ $HOME/anthias/bin/run_upgrade.sh
 
 ## Accessing the REST API
 
-To get started, open your browser and go to `http://<ip-address>/api/docs/` (or `http://localhost:8000/api/docs/`
-if you're in development mode). You should see the API docs for the endpoints.
+The full endpoint reference is on the [API page](/api/) — endpoints, parameters, and response schemas grouped by tag.
+
+If you'd prefer the live ReDoc-rendered docs straight from your device, open `http://<device-ip>/api/docs/` (or `http://localhost:8000/api/docs/` in development mode).
 
 ## TLS / SSL
 

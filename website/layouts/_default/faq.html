@@ -1,4 +1,5 @@
 {{ define "main" }}
+{{- $faq := site.Data.faq -}}
 <header class="bg-brand-dark py-16 md:py-20 px-6 md:px-12 lg:px-20">
     <div class="max-w-7xl mx-auto">
         <h1 class="text-white text-4xl md:text-5xl font-extrabold tracking-tight">FAQ</h1>
@@ -7,111 +8,33 @@
 </header>
 
 <section class="bg-white py-16 lg:py-24 px-6 md:px-12 lg:px-20">
-    <div class="max-w-3xl mx-auto">
-        <div class="divide-y divide-black/10">
-            <div>
-                <button
-                    id="faq-btn-1"
-                    data-accordion="faq-1"
-                    aria-expanded="false"
-                    aria-controls="faq-1"
-                    class="w-full flex items-center justify-between text-left py-6 bg-transparent border-0 cursor-pointer text-brand-near-black font-bold leading-relaxed"
-                >
-                    <span>What is the difference between Anthias and Screenly?</span>
-                    <img class="icon-plus w-5 h-5 ml-4 shrink-0" src="/assets/images/plus.svg" alt="" aria-hidden="true" />
-                    <img class="icon-minus w-5 h-5 ml-4 shrink-0 hidden" src="/assets/images/minus.svg" alt="" aria-hidden="true" />
-                </button>
-                <div id="faq-1" role="region" aria-labelledby="faq-btn-1" class="hidden pb-6 text-zinc-600 leading-relaxed" data-accordion-content>
-                    <p>Anthias is free, open-source digital signage software built by Screenly, Inc. Screenly is a paid, cloud-managed digital signage platform designed for professional multi-screen deployments. You can learn more about the differences on <a class="text-brand-purple no-underline hover:underline" href="https://www.screenly.io/screenly-vs-anthias/" target="_blank" rel="noopener">screenly.io</a>.</p>
-                    <p class="mt-3">Choose Screenly if you need multi-screen management from a single account, enterprise user management, or professional support. Choose Anthias if you're comfortable managing individual devices and want a free, self-hosted solution.</p>
+    <div class="max-w-3xl mx-auto space-y-12">
+        {{- range $gi, $group := $faq -}}
+        <div>
+            <h2 class="text-xs font-semibold uppercase tracking-[0.12em] text-brand-purple mb-2">{{ $group.group }}</h2>
+            <div class="divide-y divide-black/10 border-t border-black/10">
+                {{- range $i, $item := $group.items -}}
+                {{- $id := printf "faq-%d-%d" (add $gi 1) (add $i 1) -}}
+                <div>
+                    <button
+                        id="{{ $id }}-btn"
+                        data-accordion="{{ $id }}"
+                        aria-expanded="false"
+                        aria-controls="{{ $id }}"
+                        class="w-full flex items-center justify-between text-left py-5 bg-transparent border-0 cursor-pointer text-brand-near-black font-bold leading-relaxed gap-4"
+                    >
+                        <span>{{ $item.question }}</span>
+                        <img class="icon-plus w-5 h-5 shrink-0" src="/assets/images/plus.svg" alt="" aria-hidden="true" />
+                        <img class="icon-minus w-5 h-5 shrink-0 hidden" src="/assets/images/minus.svg" alt="" aria-hidden="true" />
+                    </button>
+                    <div id="{{ $id }}" role="region" aria-labelledby="{{ $id }}-btn" class="hidden pb-6 docs-prose" data-accordion-content>
+                        {{ $item.answer | markdownify }}
+                    </div>
                 </div>
-            </div>
-
-            <div>
-                <button
-                    id="faq-btn-2"
-                    data-accordion="faq-2"
-                    aria-expanded="false"
-                    aria-controls="faq-2"
-                    class="w-full flex items-center justify-between text-left py-6 bg-transparent border-0 cursor-pointer text-brand-near-black font-bold leading-relaxed"
-                >
-                    <span>What hardware do I need?</span>
-                    <img class="icon-plus w-5 h-5 ml-4 shrink-0" src="/assets/images/plus.svg" alt="" aria-hidden="true" />
-                    <img class="icon-minus w-5 h-5 ml-4 shrink-0 hidden" src="/assets/images/minus.svg" alt="" aria-hidden="true" />
-                </button>
-                <div id="faq-2" role="region" aria-labelledby="faq-btn-2" class="hidden pb-6 text-zinc-600 leading-relaxed" data-accordion-content>
-                    <p>Anthias runs on <a class="text-brand-purple no-underline hover:underline" href="https://www.raspberrypi.com/" target="_blank" rel="noopener">Raspberry Pi</a> 2 through 5 and 64-bit x86 PCs (Intel NUC or similar). You'll also need a screen with an HDMI input. We recommend a Raspberry Pi 4 or 5 for new installations.</p>
-                </div>
-            </div>
-
-            <div>
-                <button
-                    id="faq-btn-3"
-                    data-accordion="faq-3"
-                    aria-expanded="false"
-                    aria-controls="faq-3"
-                    class="w-full flex items-center justify-between text-left py-6 bg-transparent border-0 cursor-pointer text-brand-near-black font-bold leading-relaxed"
-                >
-                    <span>Is there support for Anthias?</span>
-                    <img class="icon-plus w-5 h-5 ml-4 shrink-0" src="/assets/images/plus.svg" alt="" aria-hidden="true" />
-                    <img class="icon-minus w-5 h-5 ml-4 shrink-0 hidden" src="/assets/images/minus.svg" alt="" aria-hidden="true" />
-                </button>
-                <div id="faq-3" role="region" aria-labelledby="faq-btn-3" class="hidden pb-6 text-zinc-600 leading-relaxed" data-accordion-content>
-                    <p>Anthias is a community-supported project. You can get help on the <a class="text-brand-purple no-underline hover:underline" href="https://forums.screenly.io" target="_blank" rel="noopener">Anthias forum</a> or file issues on <a class="text-brand-purple no-underline hover:underline" href="https://github.com/Screenly/Anthias/issues" target="_blank" rel="noopener">GitHub</a>. For professional support, SLAs, and managed infrastructure, consider <a class="text-brand-purple no-underline hover:underline" href="https://www.screenly.io" target="_blank" rel="noopener">Screenly</a>.</p>
-                </div>
-            </div>
-
-            <div>
-                <button
-                    id="faq-btn-4"
-                    data-accordion="faq-4"
-                    aria-expanded="false"
-                    aria-controls="faq-4"
-                    class="w-full flex items-center justify-between text-left py-6 bg-transparent border-0 cursor-pointer text-brand-near-black font-bold leading-relaxed"
-                >
-                    <span>Does Anthias require an internet connection?</span>
-                    <img class="icon-plus w-5 h-5 ml-4 shrink-0" src="/assets/images/plus.svg" alt="" aria-hidden="true" />
-                    <img class="icon-minus w-5 h-5 ml-4 shrink-0 hidden" src="/assets/images/minus.svg" alt="" aria-hidden="true" />
-                </button>
-                <div id="faq-4" role="region" aria-labelledby="faq-btn-4" class="hidden pb-6 text-zinc-600 leading-relaxed" data-accordion-content>
-                    <p>No. Anthias runs entirely on your local network. You only need internet access for the initial installation and to display content from external URLs. Uploaded images and videos play from local storage.</p>
-                </div>
-            </div>
-
-            <div>
-                <button
-                    id="faq-btn-5"
-                    data-accordion="faq-5"
-                    aria-expanded="false"
-                    aria-controls="faq-5"
-                    class="w-full flex items-center justify-between text-left py-6 bg-transparent border-0 cursor-pointer text-brand-near-black font-bold leading-relaxed"
-                >
-                    <span>Can I manage multiple screens?</span>
-                    <img class="icon-plus w-5 h-5 ml-4 shrink-0" src="/assets/images/plus.svg" alt="" aria-hidden="true" />
-                    <img class="icon-minus w-5 h-5 ml-4 shrink-0 hidden" src="/assets/images/minus.svg" alt="" aria-hidden="true" />
-                </button>
-                <div id="faq-5" role="region" aria-labelledby="faq-btn-5" class="hidden pb-6 text-zinc-600 leading-relaxed" data-accordion-content>
-                    <p>Each Anthias instance manages one screen. You can run multiple instances on separate devices, but each has its own dashboard. If you need centralized multi-screen management, <a class="text-brand-purple no-underline hover:underline" href="https://www.screenly.io" target="_blank" rel="noopener">Screenly</a> is designed for that.</p>
-                </div>
-            </div>
-
-            <div>
-                <button
-                    id="faq-btn-6"
-                    data-accordion="faq-6"
-                    aria-expanded="false"
-                    aria-controls="faq-6"
-                    class="w-full flex items-center justify-between text-left py-6 bg-transparent border-0 cursor-pointer text-brand-near-black font-bold leading-relaxed"
-                >
-                    <span>How do I update Anthias?</span>
-                    <img class="icon-plus w-5 h-5 ml-4 shrink-0" src="/assets/images/plus.svg" alt="" aria-hidden="true" />
-                    <img class="icon-minus w-5 h-5 ml-4 shrink-0 hidden" src="/assets/images/minus.svg" alt="" aria-hidden="true" />
-                </button>
-                <div id="faq-6" role="region" aria-labelledby="faq-btn-6" class="hidden pb-6 text-zinc-600 leading-relaxed" data-accordion-content>
-                    <p>If you installed via balenaHub, updates are applied automatically over the air. For command-line installations, re-run the installer or pull the latest Docker images. Disk image installations are pinned to the version you downloaded.</p>
-                </div>
+                {{- end -}}
             </div>
         </div>
+        {{- end -}}
     </div>
 </section>
 
