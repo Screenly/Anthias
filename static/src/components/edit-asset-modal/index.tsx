@@ -67,6 +67,13 @@ export const EditAssetModal = ({
         return `${hours}:${minutes}`
       }
 
+      // The v2 API returns times as HH:MM:SS, but <input type="time">
+      // defaults to minute precision and won't display HH:MM:SS values
+      // reliably across browsers. Trim to HH:MM on load so the input
+      // and form state agree; DRF's TimeField accepts HH:MM on submit.
+      const toHourMinute = (value: string | null) =>
+        value ? value.slice(0, 5) : null
+
       setFormData({
         name: asset.name || '',
         start_date: asset.start_date || '',
@@ -76,8 +83,8 @@ export const EditAssetModal = ({
         nocache: asset.nocache || false,
         skip_asset_check: asset.skip_asset_check || false,
         play_days: asset.play_days ?? [1, 2, 3, 4, 5, 6, 7],
-        play_time_from: asset.play_time_from ?? null,
-        play_time_to: asset.play_time_to ?? null,
+        play_time_from: toHourMinute(asset.play_time_from ?? null),
+        play_time_to: toHourMinute(asset.play_time_to ?? null),
       })
 
       setStartDateDate(formatDatePart(startDate))
