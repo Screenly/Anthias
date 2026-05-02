@@ -5,6 +5,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 import sh
 
 from lib import utils
@@ -22,10 +23,6 @@ from lib.utils import (
     validate_url,
 )
 
-url_fail = 'http://doesnotwork.example.com'
-url_redir = 'http://example.com'
-uri_ = '/home/user/file'
-
 
 def test_unicode_correctness_in_bottle_templates() -> None:
     assert template_handle_unicode('hello') == 'hello'
@@ -38,18 +35,29 @@ def test_json_tz() -> None:
 
 
 @pytest.mark.django_db
-def test_url_1() -> None:
-    assert url_fails(url_fail)
+def test_url_fails_returns_true_on_connection_error() -> None:
+    with patch(
+        'lib.utils.requests.head',
+        side_effect=requests.ConnectionError,
+    ):
+        assert url_fails('http://doesnotwork.example.com') is True
 
 
 @pytest.mark.django_db
-def test_url_2() -> None:
-    assert not url_fails(url_redir)
+def test_url_fails_returns_false_on_2xx_response() -> None:
+    fake = MagicMock()
+    fake.ok = True
+    with patch('lib.utils.requests.head', return_value=fake):
+        assert url_fails('http://example.com') is False
 
 
 @pytest.mark.django_db
-def test_url_3() -> None:
-    assert not url_fails(uri_)
+def test_url_fails_short_circuits_for_invalid_url() -> None:
+    # validate_url() rejects schemeless paths, so url_fails should
+    # return False without ever touching the network layer.
+    with patch('lib.utils.requests.head') as mock_head:
+        assert url_fails('/home/user/file') is False
+    mock_head.assert_not_called()
 
 
 @pytest.mark.django_db
