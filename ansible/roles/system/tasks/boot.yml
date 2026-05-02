@@ -4,11 +4,6 @@
     system_config_path: "{{ '/boot/config.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/config.txt' }}"
     system_cmdline_path: "{{ '/boot/cmdline.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/cmdline.txt' }}"
 
-- name: Check NOOBS
-  ansible.builtin.command: cat {{ system_config_path }}
-  register: system_config_txt
-  changed_when: false
-
 # Render config.txt from a vanilla template that owns the whole file.
 # Pi firmware sections ([cm4], [cm5], etc.) handle per-model variants
 # at boot time, so the template stays mostly static; the only Jinja
@@ -19,6 +14,8 @@
     dest: "{{ system_config_path }}"
     owner: root
     group: root
+    # /boot/firmware is vfat with umask=022, so files appear as 0755
+    # regardless of the requested mode. Match that to keep idempotency.
     mode: "0755"  # NOSONAR
 
 - name: Backup kernel boot args
@@ -38,13 +35,11 @@
 
 # Render cmdline.txt from the .orig backup using the template. The
 # template owns every Anthias-managed kernel parameter (silent boot,
-# Plymouth handoff, systemd init, network naming, cgroups). NOOBS images
-# manage cmdline.txt themselves — skip when detected.
+# Plymouth handoff, systemd init, network naming, cgroups).
 - name: Read cmdline.txt.orig
   ansible.builtin.slurp:
     src: "{{ system_cmdline_path }}.orig"
   register: system_cmdline_orig
-  when: system_config_txt.stdout.find('NOOBS') == -1
 
 - name: Render cmdline.txt from template
   ansible.builtin.copy:
@@ -52,8 +47,8 @@
     dest: "{{ system_cmdline_path }}"
     owner: root
     group: root
+    # cmdline.txt is 0755 on Raspberry Pi by default — match that.
     mode: "0755"  # NOSONAR
-  when: system_config_txt.stdout.find('NOOBS') == -1
 
 # Defensive stats — disable login prompts on tty1 whether the active unit
 # is the stock getty@tty1.service or raspi-config's autologin@tty1.service.
