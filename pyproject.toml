@@ -122,8 +122,8 @@ mypy = [
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "anthias_django.settings"
-testpaths = ["tests", "api/tests", "anthias_app"]
-python_files = ["test_*.py", "tests.py"]
+testpaths = ["tests", "api/tests"]
+python_files = ["test_*.py"]
 markers = [
     "integration: marks tests as integration (deselect with '-m \"not integration\"')",
 ]

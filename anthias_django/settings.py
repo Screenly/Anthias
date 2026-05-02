@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import secrets
+import sys
 from os import getenv
 from pathlib import Path
 from typing import Any
@@ -153,12 +154,22 @@ CHANNEL_LAYERS = {
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 #
+# Detect "running under tests" without depending solely on the
+# ENVIRONMENT env var. The root conftest.py sets ENVIRONMENT=test via
+# os.environ.setdefault, but pytest-django's plugin-time settings load
+# can fire before that conftest executes — leaving getenv() blank and
+# this module pointed at the production /data path on local pytest
+# runs. Detect pytest itself by inspecting argv (covers `pytest ...`,
+# `python -m pytest ...`, and `uv run pytest ...`) so the test branch
+# is taken regardless of import order.
+_running_under_pytest = any('pytest' in (a or '') for a in sys.argv)
+
 # In test mode the DB path defaults to a repo-local file so the suite
 # runs without Docker / without writable `/data`. CI containers can
 # preserve their existing layout by exporting
 # `ANTHIAS_TEST_DB_PATH=/data/.anthias/test.db` (see
 # docker-compose.test.yml).
-if getenv('ENVIRONMENT') == 'test':
+if getenv('ENVIRONMENT') == 'test' or _running_under_pytest:
     db_path = getenv('ANTHIAS_TEST_DB_PATH') or str(
         BASE_DIR / '.anthias-test.db'
     )
@@ -174,17 +185,11 @@ else:
 # TEST.NAME to the same path keeps both ends on one DB; the
 # `transaction=True` marker truncates between tests, which is safe
 # because the test DB is throwaway.
-#
-# Gate this on ENVIRONMENT=test so unit-test runs that didn't manage
-# to export the env var before pytest-django imported settings (the
-# root conftest sets it via os.environ.setdefault, which races with
-# plugin-time settings load) don't end up with TEST.NAME pointing at
-# the production /data path and failing to open it.
 _db_default: dict[str, Any] = {
     'ENGINE': 'django.db.backends.sqlite3',
     'NAME': db_path,
 }
-if getenv('ENVIRONMENT') == 'test':
+if getenv('ENVIRONMENT') == 'test' or _running_under_pytest:
     _db_default['TEST'] = {'NAME': db_path}
 
 DATABASES = {'default': _db_default}
