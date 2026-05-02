@@ -76,3 +76,175 @@ html {
   font-size: 1.125rem;
   flex-shrink: 0;
 }
+
+.docs-prose {
+  color: #1f1722;
+  font-size: 1rem;
+  line-height: 1.7;
+
+  & h1 {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-brand-near-black);
+    margin: 2.5rem 0 1rem;
+    letter-spacing: -0.01em;
+  }
+  & h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-brand-near-black);
+    margin: 2.25rem 0 0.75rem;
+    letter-spacing: -0.01em;
+  }
+  & h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-brand-near-black);
+    margin: 1.75rem 0 0.5rem;
+  }
+  & h4 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-brand-near-black);
+    margin: 1.5rem 0 0.5rem;
+  }
+  & h1:first-child,
+  & h2:first-child,
+  & h3:first-child {
+    margin-top: 0;
+  }
+
+  & p,
+  & ul,
+  & ol {
+    margin: 0.85rem 0;
+  }
+  & ul,
+  & ol {
+    padding-left: 1.5rem;
+  }
+  & ul {
+    list-style: disc;
+  }
+  & ol {
+    list-style: decimal;
+  }
+  & li {
+    margin: 0.25rem 0;
+  }
+  & li > p {
+    margin: 0.25rem 0;
+  }
+
+  & a {
+    color: var(--color-brand-purple);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
+  & a:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  & strong {
+    font-weight: 700;
+    color: var(--color-brand-near-black);
+  }
+
+  & code {
+    background: #f4f1f6;
+    color: var(--color-brand-dark);
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.9em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  & pre {
+    background: #1b0028;
+    color: #f8f6f9;
+    padding: 1rem 1.25rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    margin: 1.25rem 0;
+    font-size: 0.875rem;
+    line-height: 1.55;
+  }
+  & pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    border-radius: 0;
+    font-size: inherit;
+  }
+
+  & img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    margin: 1.5rem 0;
+    border: 1px solid rgb(0 0 0 / 0.08);
+  }
+
+  & blockquote {
+    border-left: 3px solid #d8d2dc;
+    padding: 0.5rem 0 0.5rem 1rem;
+    margin: 1.25rem 0;
+    color: #4b3f55;
+    background: #faf8fb;
+    border-radius: 0 0.25rem 0.25rem 0;
+  }
+  & blockquote > p:first-child {
+    margin-top: 0;
+  }
+  & blockquote > p:last-child {
+    margin-bottom: 0;
+  }
+
+  /* GitHub-style alert blockquotes rendered by Goldmark.
+     Hugo emits <blockquote class="alert alert-note"> etc. */
+  & blockquote.alert {
+    border-left-width: 4px;
+    background: #faf8fb;
+  }
+  & blockquote.alert-note { border-left-color: #2563eb; }
+  & blockquote.alert-tip { border-left-color: #16a34a; }
+  & blockquote.alert-important { border-left-color: #7e2bd0; }
+  & blockquote.alert-warning { border-left-color: #ea580c; }
+  & blockquote.alert-caution { border-left-color: #dc2626; }
+  & blockquote.alert .alert-heading {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+  }
+
+  & table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.25rem 0;
+    font-size: 0.9rem;
+  }
+  & th,
+  & td {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #e5e1ea;
+    vertical-align: top;
+  }
+  & thead th {
+    background: #faf8fb;
+    font-weight: 700;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b5d76;
+  }
+
+  & hr {
+    border: none;
+    border-top: 1px solid #e5e1ea;
+    margin: 2rem 0;
+  }
+}

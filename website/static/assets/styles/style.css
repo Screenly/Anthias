@@ -33,6 +33,7 @@
     --container-xl: 36rem;
     --container-2xl: 42rem;
     --container-3xl: 48rem;
+    --container-4xl: 56rem;
     --container-7xl: 80rem;
     --text-xs: 0.75rem;
     --text-xs--line-height: calc(1 / 0.75);
@@ -289,6 +290,9 @@
   .mb-4 {
     margin-bottom: calc(var(--spacing) * 4);
   }
+  .mb-12 {
+    margin-bottom: calc(var(--spacing) * 12);
+  }
   .ml-1 {
     margin-left: calc(var(--spacing) * 1);
   }
@@ -357,6 +361,9 @@
   .inline-block {
     display: inline-block;
   }
+  .table {
+    display: table;
+  }
   .h-5 {
     height: calc(var(--spacing) * 5);
   }
@@ -383,6 +390,9 @@
   }
   .max-w-3xl {
     max-width: var(--container-3xl);
+  }
+  .max-w-4xl {
+    max-width: var(--container-4xl);
   }
   .max-w-7xl {
     max-width: var(--container-7xl);
@@ -921,6 +931,13 @@
       }
     }
   }
+  .hover\:border-brand-purple {
+    &:hover {
+      @media (hover: hover) {
+        border-color: var(--color-brand-purple);
+      }
+    }
+  }
   .hover\:bg-black\/5 {
     &:hover {
       @media (hover: hover) {
@@ -960,6 +977,19 @@
       @media (hover: hover) {
         text-decoration-line: underline;
       }
+    }
+  }
+  .hover\:shadow-sm {
+    &:hover {
+      @media (hover: hover) {
+        --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 1px 2px -1px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
+        box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+      }
+    }
+  }
+  .sm\:grid-cols-2 {
+    @media (width >= 40rem) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
   .md\:block {
@@ -1007,9 +1037,20 @@
       padding-inline: calc(var(--spacing) * 12);
     }
   }
+  .md\:py-16 {
+    @media (width >= 48rem) {
+      padding-block: calc(var(--spacing) * 16);
+    }
+  }
   .md\:py-20 {
     @media (width >= 48rem) {
       padding-block: calc(var(--spacing) * 20);
+    }
+  }
+  .md\:text-4xl {
+    @media (width >= 48rem) {
+      font-size: var(--text-4xl);
+      line-height: var(--tw-leading, var(--text-4xl--line-height));
     }
   }
   .md\:text-5xl {
@@ -1098,6 +1139,168 @@ html {
   outline: 2px solid var(--color-brand-purple);
   outline-offset: 2px;
 }
+.docs-prose {
+  color: #1f1722;
+  font-size: 1rem;
+  line-height: 1.7;
+  & h1 {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-brand-near-black);
+    margin: 2.5rem 0 1rem;
+    letter-spacing: -0.01em;
+  }
+  & h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-brand-near-black);
+    margin: 2.25rem 0 0.75rem;
+    letter-spacing: -0.01em;
+  }
+  & h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-brand-near-black);
+    margin: 1.75rem 0 0.5rem;
+  }
+  & h4 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-brand-near-black);
+    margin: 1.5rem 0 0.5rem;
+  }
+  & h1:first-child, & h2:first-child, & h3:first-child {
+    margin-top: 0;
+  }
+  & p, & ul, & ol {
+    margin: 0.85rem 0;
+  }
+  & ul, & ol {
+    padding-left: 1.5rem;
+  }
+  & ul {
+    list-style: disc;
+  }
+  & ol {
+    list-style: decimal;
+  }
+  & li {
+    margin: 0.25rem 0;
+  }
+  & li > p {
+    margin: 0.25rem 0;
+  }
+  & a {
+    color: var(--color-brand-purple);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
+  & a:hover {
+    text-decoration-thickness: 2px;
+  }
+  & strong {
+    font-weight: 700;
+    color: var(--color-brand-near-black);
+  }
+  & code {
+    background: #f4f1f6;
+    color: var(--color-brand-dark);
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.9em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  & pre {
+    background: #1b0028;
+    color: #f8f6f9;
+    padding: 1rem 1.25rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    margin: 1.25rem 0;
+    font-size: 0.875rem;
+    line-height: 1.55;
+  }
+  & pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    border-radius: 0;
+    font-size: inherit;
+  }
+  & img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    margin: 1.5rem 0;
+    border: 1px solid rgb(0 0 0 / 0.08);
+  }
+  & blockquote {
+    border-left: 3px solid #d8d2dc;
+    padding: 0.5rem 0 0.5rem 1rem;
+    margin: 1.25rem 0;
+    color: #4b3f55;
+    background: #faf8fb;
+    border-radius: 0 0.25rem 0.25rem 0;
+  }
+  & blockquote > p:first-child {
+    margin-top: 0;
+  }
+  & blockquote > p:last-child {
+    margin-bottom: 0;
+  }
+  & blockquote.alert {
+    border-left-width: 4px;
+    background: #faf8fb;
+  }
+  & blockquote.alert-note {
+    border-left-color: #2563eb;
+  }
+  & blockquote.alert-tip {
+    border-left-color: #16a34a;
+  }
+  & blockquote.alert-important {
+    border-left-color: #7e2bd0;
+  }
+  & blockquote.alert-warning {
+    border-left-color: #ea580c;
+  }
+  & blockquote.alert-caution {
+    border-left-color: #dc2626;
+  }
+  & blockquote.alert .alert-heading {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+  }
+  & table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.25rem 0;
+    font-size: 0.9rem;
+  }
+  & th, & td {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #e5e1ea;
+    vertical-align: top;
+  }
+  & thead th {
+    background: #faf8fb;
+    font-weight: 700;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b5d76;
+  }
+  & hr {
+    border: none;
+    border-top: 1px solid #e5e1ea;
+    margin: 2rem 0;
+  }
+}
 @property --tw-space-y-reverse {
   syntax: "*";
   inherits: false;
@@ -1125,6 +1328,71 @@ html {
   syntax: "*";
   inherits: false;
 }
+@property --tw-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-shadow-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@property --tw-inset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-inset-shadow-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-inset-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@property --tw-ring-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-inset-ring-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-inset-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-ring-inset {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-ring-offset-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --tw-ring-offset-color {
+  syntax: "*";
+  inherits: false;
+  initial-value: #fff;
+}
+@property --tw-ring-offset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
 @layer properties {
   @supports ((-webkit-hyphens: none) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))) {
     *, ::before, ::after, ::backdrop {
@@ -1134,6 +1402,20 @@ html {
       --tw-leading: initial;
       --tw-font-weight: initial;
       --tw-tracking: initial;
+      --tw-shadow: 0 0 #0000;
+      --tw-shadow-color: initial;
+      --tw-shadow-alpha: 100%;
+      --tw-inset-shadow: 0 0 #0000;
+      --tw-inset-shadow-color: initial;
+      --tw-inset-shadow-alpha: 100%;
+      --tw-ring-color: initial;
+      --tw-ring-shadow: 0 0 #0000;
+      --tw-inset-ring-color: initial;
+      --tw-inset-ring-shadow: 0 0 #0000;
+      --tw-ring-inset: initial;
+      --tw-ring-offset-width: 0px;
+      --tw-ring-offset-color: #fff;
+      --tw-ring-offset-shadow: 0 0 #0000;
     }
   }
 }
