@@ -104,7 +104,10 @@ docker compose -f docker-compose.test.yml exec anthias-test pytest -n auto -m "n
 # ANTHIAS_INTEGRATION_TEST=1 pins TEST.NAME to the same SQLite file the
 # anthias-server container writes — required for Selenium tests that
 # assert on Asset.objects after a browser-driven upload.
-docker compose -f docker-compose.test.yml exec -e ANTHIAS_INTEGRATION_TEST=1 anthias-test pytest -m integration
+# --reuse-db skips pytest-django's destroy-and-recreate cycle so
+# uvicorn's open handle stays valid; prepare_test_environment.sh has
+# already applied migrations.
+docker compose -f docker-compose.test.yml exec -e ANTHIAS_INTEGRATION_TEST=1 anthias-test pytest -m integration --reuse-db
 
 # Coverage (CI uses these flags; --cov reads source/omit from pyproject.toml).
 # CI fails the build when total line+branch coverage drops below 80%

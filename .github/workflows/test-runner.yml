@@ -88,6 +88,15 @@ jobs:
       # both ends must share one file. Unit tests must NOT set this
       # — they run under xdist and need pytest-django's default
       # per-worker `:memory:` DB to avoid file-lock contention.
+      #
+      # `--reuse-db` keeps pytest-django from running its default
+      # destroy-and-recreate cycle on the SQLite file. The previous
+      # step already migrated the file via `manage.py migrate` and
+      # started uvicorn against it; if pytest-django were to delete
+      # and recreate the file mid-run, uvicorn's open handle would
+      # point at an unlinked inode while pytest's test process wrote
+      # to the new one. `transaction=True` on integration tests still
+      # flushes tables between tests for isolation.
       - name: Run Python integration tests
         if: inputs.test-type == 'python'
         uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4
@@ -98,7 +107,7 @@ jobs:
             docker compose exec anthias-test \
               cp .coverage.unit-snapshot .coverage
             docker compose exec -e ANTHIAS_INTEGRATION_TEST=1 anthias-test \
-              pytest -m integration \
+              pytest -m integration --reuse-db \
                 --cov --cov-append --cov-report=xml --cov-report=term
 
       # The /usr/src/app bind-mount means coverage.xml lands directly on
