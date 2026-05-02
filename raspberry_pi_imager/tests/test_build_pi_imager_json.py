@@ -1,5 +1,6 @@
 import json
 import unittest
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from raspberry_pi_imager.build_pi_imager_json import (
@@ -58,7 +59,7 @@ MOCK_RELEASE_ASSETS = {
 }
 
 
-def make_image_metadata(board: str) -> dict:
+def make_image_metadata(board: str) -> dict[str, Any]:
     return {
         'name': f'Anthias ({board})',
         'description': 'Anthias digital signage',
@@ -107,9 +108,7 @@ class TestGetBoardFromUrl(unittest.TestCase):
 
 class TestGetAssetList(unittest.TestCase):
     @patch('raspberry_pi_imager.build_pi_imager_json.requests.get')
-    def test_filters_to_supported_boards(
-        self, mock_get: MagicMock
-    ) -> None:
+    def test_filters_to_supported_boards(self, mock_get: MagicMock) -> None:
         mock_response = MagicMock()
         mock_response.json.return_value = MOCK_RELEASE_ASSETS
         mock_get.return_value = mock_response
@@ -226,9 +225,7 @@ class TestBuildImagerJson(unittest.TestCase):
             else:
                 for board in SUPPORTED_BOARDS:
                     if board in url:
-                        mock.json.return_value = make_image_metadata(
-                            board
-                        )
+                        mock.json.return_value = make_image_metadata(board)
                         break
             return mock
 
@@ -251,9 +248,7 @@ class TestBuildImagerJson(unittest.TestCase):
             else:
                 for board in SUPPORTED_BOARDS:
                     if board in url:
-                        mock.json.return_value = make_image_metadata(
-                            board
-                        )
+                        mock.json.return_value = make_image_metadata(board)
                         break
             return mock
 
@@ -276,9 +271,7 @@ class TestBuildImagerJson(unittest.TestCase):
             else:
                 for board in SUPPORTED_BOARDS:
                     if board in url:
-                        mock.json.return_value = make_image_metadata(
-                            board
-                        )
+                        mock.json.return_value = make_image_metadata(board)
                         break
             return mock
 
