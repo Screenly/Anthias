@@ -53,6 +53,19 @@ else
     exit 1
 fi
 
+# Pin the pull platform off DEVICE_TYPE rather than letting Docker
+# auto-detect from the host. Docker 29.4.x on Trixie has been observed
+# advertising `linux/arm/v8` (32-bit ARMv8) on aarch64 Pi 4 hosts, which
+# doesn't match the single-platform `linux/arm64/v8` manifest we publish
+# for `pi4-64` and breaks `docker compose pull`. We already know the
+# correct platform from DEVICE_TYPE, so just set it explicitly. `-E`
+# below propagates this into the sudo'd `docker compose` invocations.
+case "$DEVICE_TYPE" in
+    pi5|pi4-64) export DOCKER_DEFAULT_PLATFORM="linux/arm64" ;;
+    pi3|pi2)    export DOCKER_DEFAULT_PLATFORM="linux/arm/v7" ;;
+    x86)        export DOCKER_DEFAULT_PLATFORM="linux/amd64" ;;
+esac
+
 if [[ -n $(docker ps | grep srly-ose) ]]; then
     # @TODO: Rename later
     set +e
