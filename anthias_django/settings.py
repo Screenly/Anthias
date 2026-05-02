@@ -9,8 +9,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import secrets
+import sys
 from os import getenv
 from pathlib import Path
+from typing import Any
 
 import pytz
 
@@ -151,16 +153,54 @@ CHANNEL_LAYERS = {
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': (
-            '/data/.anthias/test.db'
-            if getenv('ENVIRONMENT') == 'test'
-            else '/data/.anthias/anthias.db'
-        ),
-    },
+#
+# Detect "running under tests" without depending solely on the
+# ENVIRONMENT env var. The root conftest.py sets ENVIRONMENT=test via
+# os.environ.setdefault, but pytest-django's plugin-time settings load
+# can fire before that conftest executes — leaving getenv() blank and
+# this module pointed at the production /data path on local pytest
+# runs. Detect pytest itself by inspecting argv (covers `pytest ...`,
+# `python -m pytest ...`, and `uv run pytest ...`) so the test branch
+# is taken regardless of import order.
+_running_under_pytest = any('pytest' in (a or '') for a in sys.argv)
+
+# In test mode the DB path defaults to a repo-local file so the suite
+# runs without Docker / without writable `/data`. CI containers can
+# preserve their existing layout by exporting
+# `ANTHIAS_TEST_DB_PATH=/data/.anthias/test.db` (see
+# docker-compose.test.yml).
+if getenv('ENVIRONMENT') == 'test' or _running_under_pytest:
+    db_path = getenv('ANTHIAS_TEST_DB_PATH') or str(
+        BASE_DIR / '.anthias-test.db'
+    )
+else:
+    db_path = '/data/.anthias/anthias.db'
+
+# Integration tests drive the live anthias-server container in
+# docker-compose.test.yml. The test process and the server live in
+# different containers but must share DB state — the test asserts on
+# `Asset.objects.all()` after the server persists an uploaded file.
+# Without TEST.NAME, pytest-django defaults to an in-memory SQLite, so
+# writes from the server never reach the test process. Pinning
+# TEST.NAME to the same path keeps both ends on one DB; the
+# `transaction=True` marker truncates between tests, which is safe
+# because the test DB is throwaway.
+#
+# ONLY set TEST.NAME for the integration step. The unit step runs
+# under `pytest -n auto`; pinning every worker to the same SQLite
+# file would cause `database is locked` and cross-worker leakage.
+# Without TEST.NAME, pytest-django gives each xdist worker its own
+# `:memory:` DB, which is what we want for unit runs.
+# .github/workflows/test-runner.yml exports ANTHIAS_INTEGRATION_TEST=1
+# only for the `pytest -m integration` step.
+_db_default: dict[str, Any] = {
+    'ENGINE': 'django.db.backends.sqlite3',
+    'NAME': db_path,
 }
+if getenv('ANTHIAS_INTEGRATION_TEST') == '1':
+    _db_default['TEST'] = {'NAME': db_path}
+
+DATABASES = {'default': _db_default}
 
 
 # Password validation

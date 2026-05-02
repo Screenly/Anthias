@@ -16,7 +16,6 @@ dev-host = [
     "ruff==0.14.10",
     "tenacity==9.1.2",
     "types-gunicorn==25.3.0.20260408",
-    "types-mock==5.2.0.20260408",
     "types-netifaces==0.11.0.20260408",
     "types-python-dateutil==2.9.0.20260408",
     "types-pytz==2026.1.1.20260408",
@@ -75,11 +74,14 @@ viewer = [
     "urllib3==2.6.3",
 ]
 dev = [
-    "mock==5.2.0",
+    "pytest==8.3.4",
+    "pytest-cov==6.0.0",
+    "pytest-django==4.10.0",
+    "pytest-mock==3.14.0",
+    "pytest-xdist==3.6.1",
     "selenium==4.36.0",
     "splinter==0.21.0",
     "time-machine==2.15.0",
-    "unittest-parametrize==1.8.0",
 ]
 host = [
     "ansible-core==2.19.9",
@@ -117,6 +119,54 @@ mypy = [
     "pytz==2025.2",
     "whitenoise==6.12.0",
 ]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "anthias_django.settings"
+testpaths = ["tests", "api/tests"]
+python_files = ["test_*.py"]
+markers = [
+    "integration: marks tests as integration (deselect with '-m \"not integration\"')",
+]
+addopts = "--strict-markers"
+
+[tool.coverage.run]
+branch = true
+source = [
+    "anthias_app",
+    "api",
+    "celery_tasks",
+    "lib",
+    "settings",
+    "viewer",
+]
+omit = [
+    "*/migrations/*",
+    "*/__init__.py",
+    "anthias_django/asgi.py",
+    "anthias_django/routing.py",
+    "anthias_django/urls.py",
+    "anthias_django/wsgi.py",
+    "anthias_app/management/*",
+    "bin/*",
+    "host_agent.py",
+    "raspberry_pi_imager/*",
+    "tools/image_builder/*",
+    "viewer/__main__.py",
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+
+[tool.coverage.xml]
+output = "coverage.xml"
 
 [tool.mypy]
 python_version = "3.13"

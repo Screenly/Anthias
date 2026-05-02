@@ -70,6 +70,29 @@ uv run ruff check /path/to/file.py     # Lint specific file
 
 ### Python Tests
 
+#### Local development (no Docker, no Redis required)
+
+The unit suite runs on the host via uv. The root `conftest.py` sets
+`ENVIRONMENT=test`, force-mocks `lib.utils.connect_to_redis` for every
+test, and stubs `gi`/`pydbus` so viewer modules import without the
+distro PyGObject stack. The SQLite test DB lands at
+`<repo>/.anthias-test.db` (gitignored); CI overrides via
+`ANTHIAS_TEST_DB_PATH` in `docker-compose.test.yml`.
+
+```bash
+# One-time host prep: libcec headers (cec wheel build dep). Skip if
+# the cec system package is already installed.
+sudo apt-get install -y libcec-dev
+
+uv sync --group test
+uv run pytest -m "not integration"
+```
+
+Integration tests (`-m integration`) drive Selenium/Chrome and still
+require the Docker stack; use the recipe below.
+
+#### Docker-based runs (CI parity, integration suite)
+
 ```bash
 # Build and start test containers
 uv run python -m tools.image_builder --dockerfiles-only --disable-cache-mounts --service redis --service test
@@ -77,8 +100,20 @@ docker compose -f docker-compose.test.yml up -d --build
 
 # Prepare and run tests (integration and non-integration must be run separately)
 docker compose -f docker-compose.test.yml exec anthias-test bash ./bin/prepare_test_environment.sh -s
-docker compose -f docker-compose.test.yml exec anthias-test ./manage.py test --exclude-tag=integration
-docker compose -f docker-compose.test.yml exec anthias-test ./manage.py test --tag=integration
+docker compose -f docker-compose.test.yml exec anthias-test pytest -n auto -m "not integration"
+# ANTHIAS_INTEGRATION_TEST=1 pins TEST.NAME to the same SQLite file the
+# anthias-server container writes — required for Selenium tests that
+# assert on Asset.objects after a browser-driven upload.
+# --reuse-db skips pytest-django's destroy-and-recreate cycle so
+# uvicorn's open handle stays valid; prepare_test_environment.sh has
+# already applied migrations.
+docker compose -f docker-compose.test.yml exec -e ANTHIAS_INTEGRATION_TEST=1 anthias-test pytest -m integration --reuse-db
+
+# Coverage (CI uses these flags; --cov reads source/omit from pyproject.toml).
+# CI fails the build when total line+branch coverage drops below 80%
+# (`fail_under = 80` in [tool.coverage.report]).
+docker compose -f docker-compose.test.yml exec anthias-test \
+    pytest -n auto -m "not integration" --cov --cov-report=term
 ```
 
 ### Django Admin
