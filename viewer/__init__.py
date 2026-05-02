@@ -10,12 +10,9 @@ from typing import Any
 import django
 import pydbus
 import sh as sh
-from tenacity import Retrying, stop_after_attempt, wait_fixed
 
 from settings import ReplySender, settings
-from viewer.constants import BALENA_IP_RETRY_DELAY as BALENA_IP_RETRY_DELAY
 from viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
-from viewer.constants import MAX_BALENA_IP_RETRIES as MAX_BALENA_IP_RETRIES
 from viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
 from viewer.constants import SPLASH_DELAY as SPLASH_DELAY
 from viewer.constants import SPLASH_PAGE_URL as SPLASH_PAGE_URL
@@ -36,9 +33,6 @@ django.setup()
 
 from lib.utils import (  # noqa: E402
     connect_to_redis,
-    get_balena_device_info,
-    get_node_ip,
-    is_balena_app,
     string_to_bool,
     url_fails,
 )
@@ -285,15 +279,6 @@ def setup() -> None:
     browser_bus = bus.get('anthias.webview', '/Anthias')
 
 
-def wait_for_node_ip(seconds: int) -> None:
-    for _ in range(seconds):
-        try:
-            get_node_ip()
-            break
-        except Exception:
-            sleep(1)
-
-
 def start_loop() -> None:
     global loop_is_stopped
 
@@ -324,14 +309,6 @@ def main() -> None:
     scheduler = Scheduler()
 
     if settings['show_splash']:
-        if is_balena_app():
-            for attempt in Retrying(
-                stop=stop_after_attempt(MAX_BALENA_IP_RETRIES),
-                wait=wait_fixed(BALENA_IP_RETRY_DELAY),
-            ):
-                with attempt:
-                    get_balena_device_info()
-
         view_webpage(SPLASH_PAGE_URL)
         sleep(SPLASH_DELAY)
 
