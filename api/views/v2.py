@@ -165,11 +165,24 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
 
 
 class AssetRecheckViewV2(APIView):
+    """On-demand reachability recheck, called from the viewer.
+
+    Unauth'd on purpose: the viewer is the sole intended client, lives
+    in the same compose stack, and has no way to attach BasicAuth
+    credentials. Decorating with ``@authorized`` would silently 401 the
+    viewer's POST on auth-enabled installs and defeat the on-demand
+    mitigation entirely (the asset would stay marked unreachable until
+    the next 15-min periodic sweep). The blast radius of leaving this
+    open is bounded: the request is a 404 unless the caller already
+    knows a valid asset_id, the underlying task is rate-limited per
+    asset (RECHECK_COOLDOWN_S in celery_tasks.py), and there's no data
+    in the response — it just enqueues a probe.
+    """
+
     @extend_schema(
         summary='Recheck asset reachability',
         responses={202: None, 404: None},
     )
-    @authorized
     def post(self, request: Request, asset_id: str) -> Response:
         try:
             Asset.objects.get(asset_id=asset_id)

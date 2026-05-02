@@ -10,9 +10,11 @@ from django.utils import timezone
 
 from anthias_app.models import Asset
 from celery_tasks import (
+    ASSET_REVALIDATION_LOCK_KEY,
     RECHECK_COOLDOWN_S,
     celery as celeryapp,
     cleanup,
+    r as redis_conn,
     revalidate_asset_url,
     revalidate_asset_urls,
 )
@@ -142,9 +144,13 @@ class TestRevalidateAssetUrls(TestCase):
             CELERY_BROKER_URL='',
         )
         Asset.objects.all().delete()
+        # Drop any stale singleton lock from a prior test run that
+        # crashed before its finally clause could clean up.
+        redis_conn.delete(ASSET_REVALIDATION_LOCK_KEY)
 
     def tearDown(self) -> None:
         Asset.objects.all().delete()
+        redis_conn.delete(ASSET_REVALIDATION_LOCK_KEY)
 
     def _make_asset(
         self,
@@ -247,6 +253,33 @@ class TestRevalidateAssetUrls(TestCase):
         self.assertIsNotNone(
             Asset.objects.get(asset_id='ok').last_reachability_check
         )
+
+    def test_lock_prevents_overlap(self) -> None:
+        """A second beat tick that fires while a sweep is running must
+        be a no-op. Without the lock, two workers would race on the
+        same asset rows; in practice on a streaming-heavy playlist a
+        sweep can approach the periodic interval and overlap is real.
+        """
+        self._make_asset('a1', is_reachable=True)
+        # Pre-acquire the lock to simulate a sweep already in flight.
+        redis_conn.set(ASSET_REVALIDATION_LOCK_KEY, '1', ex=60)
+        try:
+            with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+                revalidate_asset_urls.apply()
+            # The sweep saw the lock and exited without probing.
+            m.assert_not_called()
+            self.assertTrue(Asset.objects.get(asset_id='a1').is_reachable)
+        finally:
+            redis_conn.delete(ASSET_REVALIDATION_LOCK_KEY)
+
+    def test_lock_released_after_clean_run(self) -> None:
+        """The finally clause must release the lock so the next beat
+        tick can run. Without it, a successful sweep would block the
+        next sweep until the TTL expired."""
+        self._make_asset('a1')
+        with mock.patch('celery_tasks.url_fails', return_value=False):
+            revalidate_asset_urls.apply()
+        self.assertIsNone(redis_conn.get(ASSET_REVALIDATION_LOCK_KEY))
 
 
 class TestRevalidateAssetUrl(TestCase):

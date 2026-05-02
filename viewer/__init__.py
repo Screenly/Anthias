@@ -236,12 +236,27 @@ def _trigger_asset_recheck(asset_id: str | None) -> None:
         # bin/enable_ssl.sh installs as a compose override). LISTEN
         # defaults to the in-stack hostname; this URL never crosses a
         # network boundary in any default deploy.
-        requests.post(
+        response = requests.post(
             f'http://{LISTEN}:{PORT}/api/v2/assets/{asset_id}/recheck',  # NOSONAR
             timeout=2,
+            allow_redirects=False,
         )
     except requests.RequestException as e:
         logging.debug('Failed to trigger recheck for %s: %s', asset_id, e)
+        return
+
+    if response.status_code != 202:
+        # 404 means the row was deleted between scheduler refresh and
+        # this call — the recheck is moot. Anything else (a 5xx, or a
+        # 401/302 if the endpoint ever gets re-decorated with @authorized)
+        # means the recheck didn't actually enqueue. Log at debug so the
+        # operator can see the chain is silently broken without spamming
+        # the loop on every rotation past the unreachable asset.
+        logging.debug(
+            'Recheck request for %s returned unexpected status %s',
+            asset_id,
+            response.status_code,
+        )
 
 
 def asset_loop(scheduler: Any) -> None:

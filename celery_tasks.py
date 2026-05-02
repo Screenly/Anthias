@@ -59,6 +59,19 @@ ASSET_REVALIDATION_INTERVAL_S = 60 * 15
 # back-to-back ffprobe runs (each up to 15s wall-clock under url_fails).
 RECHECK_COOLDOWN_S = 60
 
+# Hard ceiling on how long a single sweep is allowed to run. Set above
+# the periodic interval so a sweep that's running long doesn't get
+# guillotined while the next beat tick races to start a new one — the
+# Redis lock below is the primary overlap guard, the time_limit just
+# bounds pathological cases (broken DNS resolver, a stuck ffprobe).
+ASSET_REVALIDATION_TIME_LIMIT_S = 60 * 30
+
+# Redis key for the sweep singleton lock. Whoever sets it first runs
+# the sweep; later beat ticks observe the key and exit. The TTL matches
+# the time_limit so a worker that crashes mid-sweep doesn't lock the
+# next sweep out forever.
+ASSET_REVALIDATION_LOCK_KEY = 'celery:revalidate_asset_urls:lock'
+
 
 @celery.on_after_configure.connect
 def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
@@ -198,7 +211,7 @@ def _check_asset_reachability(asset: Asset) -> bool:
     return not url_fails(uri)
 
 
-@celery.task(time_limit=60 * 10)
+@celery.task(time_limit=ASSET_REVALIDATION_TIME_LIMIT_S)
 def revalidate_asset_urls() -> None:
     """Refresh ``Asset.is_reachable`` for every enabled asset.
 
@@ -208,24 +221,52 @@ def revalidate_asset_urls() -> None:
     out, so a probe is meaningless until it lands). The probe itself
     is delegated to ``url_fails``, which already knows the rules for
     streaming vs HTTP and caps RTSP probes at 15s wall-clock.
+
+    A Redis lock guards against overlap. A streaming-heavy playlist
+    can have a worst-case sweep duration approaching the periodic
+    interval (15s per RTSP probe, 20s per HTTP HEAD+GET timeout).
+    Without the lock, the next beat tick would enqueue a second sweep
+    while the first is still running, and we'd end up with multiple
+    workers hammering the same asset list and racing on the
+    ``Asset.objects.filter(...).update()`` writes.
     """
     from django.utils import timezone
 
-    qs = Asset.objects.filter(is_enabled=True, is_processing=False)
-    for asset in qs:
-        try:
-            reachable = _check_asset_reachability(asset)
-        except Exception:
-            # url_fails should swallow its own exceptions, but a
-            # surprise from sh/requests shouldn't kill the whole sweep.
-            logging.exception(
-                'revalidate_asset_urls: probe crashed for %s', asset.asset_id
-            )
-            continue
-        Asset.objects.filter(asset_id=asset.asset_id).update(
-            is_reachable=reachable,
-            last_reachability_check=timezone.now(),
+    # SETNX with TTL: succeeds only if the key isn't held. The TTL
+    # matches the task time_limit so a hard kill doesn't leave the
+    # lock orphaned.
+    if not r.set(
+        ASSET_REVALIDATION_LOCK_KEY,
+        '1',
+        nx=True,
+        ex=ASSET_REVALIDATION_TIME_LIMIT_S,
+    ):
+        logging.info(
+            'revalidate_asset_urls: previous sweep still running, skipping'
         )
+        return
+
+    try:
+        qs = Asset.objects.filter(is_enabled=True, is_processing=False)
+        for asset in qs:
+            try:
+                reachable = _check_asset_reachability(asset)
+            except Exception:
+                # url_fails should swallow its own exceptions, but a
+                # surprise from sh/requests shouldn't kill the whole sweep.
+                logging.exception(
+                    'revalidate_asset_urls: probe crashed for %s',
+                    asset.asset_id,
+                )
+                continue
+            Asset.objects.filter(asset_id=asset.asset_id).update(
+                is_reachable=reachable,
+                last_reachability_check=timezone.now(),
+            )
+    finally:
+        # Release the lock proactively on clean exit so the next beat
+        # tick doesn't have to wait out the TTL.
+        r.delete(ASSET_REVALIDATION_LOCK_KEY)
 
 
 @celery.task(time_limit=30)
