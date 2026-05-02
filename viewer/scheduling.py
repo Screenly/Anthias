@@ -198,9 +198,7 @@ class Scheduler:
                 # refresh each dict so DB-driven field edits (duration,
                 # uri, etc.) take effect on the next get_next_asset().
                 new_by_id = {a['asset_id']: a for a in new_assets}
-                self.assets = [
-                    new_by_id[a['asset_id']] for a in self.assets
-                ]
+                self.assets = [new_by_id[a['asset_id']] for a in self.assets]
                 self.deadline = new_deadline
                 return
         elif new_assets == self.assets and new_deadline == self.deadline:
