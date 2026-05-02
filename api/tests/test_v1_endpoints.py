@@ -85,7 +85,7 @@ def test_playlist_order(
             }
         )
 
-    assert all([asset.play_order == 0 for asset in Asset.objects.all()])
+    assert all(asset.play_order == 0 for asset in Asset.objects.all())
 
     asset_1, asset_2, asset_3 = Asset.objects.all()
     asset_ids = [asset_1.asset_id, asset_2.asset_id, asset_3.asset_id]

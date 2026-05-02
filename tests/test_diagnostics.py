@@ -46,7 +46,7 @@ def test_get_uptime_reads_proc_uptime() -> None:
     fake_uptime = '12345.67 234567.89\n'
     m_open = mock.mock_open(read_data=fake_uptime)
     with mock.patch('builtins.open', m_open):
-        assert diagnostics.get_uptime() == 12345.67
+        assert diagnostics.get_uptime() == pytest.approx(12345.67)
     m_open.assert_called_once_with('/proc/uptime', 'r')
 
 

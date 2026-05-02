@@ -174,7 +174,7 @@ def test_basic_auth_session_login(
     request = factory.get('/')
     request.session = SessionStore()
     request.session['auth_username'] = 'alice'
-    request.session['auth_password'] = 's3cret'
+    request.session['auth_password'] = 's3cret'  # NOSONAR
     assert basic_auth.is_authenticated(request) is True
 
 
@@ -209,7 +209,8 @@ def test_basic_auth_update_settings_initial_set(
 ) -> None:
     factory = RequestFactory()
     request = factory.post(
-        '/', {'user': 'alice', 'password': 'pw1', 'password2': 'pw1'}
+        '/',
+        {'user': 'alice', 'password': 'pw1', 'password2': 'pw1'},  # NOSONAR
     )
     basic_auth.update_settings(request, current_pass_correct=None)
     assert basic_auth_settings['user'] == 'alice'
@@ -232,7 +233,7 @@ def test_basic_auth_update_settings_initial_no_username_raises(
     basic_auth: BasicAuth, basic_auth_settings: dict[str, Any]
 ) -> None:
     factory = RequestFactory()
-    request = factory.post('/', {'user': '', 'password': 'pw'})
+    request = factory.post('/', {'user': '', 'password': 'pw'})  # NOSONAR
     with pytest.raises(ValueError, match='Must provide username'):
         basic_auth.update_settings(request, current_pass_correct=None)
 
@@ -243,7 +244,8 @@ def test_basic_auth_update_settings_initial_password_mismatch(
 ) -> None:
     factory = RequestFactory()
     request = factory.post(
-        '/', {'user': 'alice', 'password': 'a', 'password2': 'b'}
+        '/',
+        {'user': 'alice', 'password': 'a', 'password2': 'b'},  # NOSONAR
     )
     with pytest.raises(ValueError, match='New passwords do not match'):
         basic_auth.update_settings(request, current_pass_correct=None)
@@ -274,7 +276,11 @@ def test_basic_auth_update_settings_change_password_requires_current(
     factory = RequestFactory()
     request = factory.post(
         '/',
-        {'user': 'alice', 'password': 'newpw', 'password2': 'newpw'},
+        {
+            'user': 'alice',
+            'password': 'newpw',
+            'password2': 'newpw',
+        },  # NOSONAR
     )
 
     with pytest.raises(
@@ -294,7 +300,7 @@ def test_basic_auth_update_settings_change_password_mismatch(
     factory = RequestFactory()
     request = factory.post(
         '/',
-        {'user': 'alice', 'password': 'a', 'password2': 'b'},
+        {'user': 'alice', 'password': 'a', 'password2': 'b'},  # NOSONAR
     )
     with pytest.raises(ValueError, match='New passwords do not match'):
         basic_auth.update_settings(request, current_pass_correct=True)
@@ -308,7 +314,11 @@ def test_basic_auth_update_settings_change_password_success(
     factory = RequestFactory()
     request = factory.post(
         '/',
-        {'user': 'alice', 'password': 'newpw', 'password2': 'newpw'},
+        {
+            'user': 'alice',
+            'password': 'newpw',
+            'password2': 'newpw',
+        },  # NOSONAR
     )
     basic_auth.update_settings(request, current_pass_correct=True)
     assert verify_password('newpw', basic_auth_settings['password'])
@@ -413,7 +423,7 @@ def test_authorized_returns_auth_response_when_required(
         return 'ok'
 
     factory = RequestFactory()
-    assert view(factory.get('/')) is sentinel_response
+    assert view(factory.get('/')) == sentinel_response
 
 
 def test_authorized_calls_view_when_authenticated(monkeypatch: Any) -> None:

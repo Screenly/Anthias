@@ -43,7 +43,14 @@ show_splash = offf
 
 """
 
-CONFIG_DIR = '/tmp/.anthias/'
+# Each xdist worker gets its own /tmp root so the four tests in this
+# module — which all rewrite the same on-disk config file — don't race
+# against one another. Without the worker suffix, worker A's file
+# write/cleanup interleaves with worker B's import/remove and tests
+# fail intermittently with FileNotFoundError.
+_WORKER_ID = os.environ.get('PYTEST_XDIST_WORKER', 'main')
+_TMP_HOME = f'/tmp/.anthias-test-{_WORKER_ID}'
+CONFIG_DIR = f'{_TMP_HOME}/.anthias/'
 CONFIG_FILE = CONFIG_DIR + 'anthias.conf'
 
 
@@ -69,21 +76,20 @@ def fake_settings(raw: str) -> Iterator[tuple[Any, Any]]:
 
 def getenv(k: str, default: Any = None) -> Any:
     try:
-        return '/tmp' if k == 'HOME' else os.environ[k]
+        return _TMP_HOME if k == 'HOME' else os.environ[k]
     except KeyError:
         return default
 
 
 @pytest.fixture
 def settings_env() -> Iterator[None]:
-    if not os.path.exists(CONFIG_DIR):
-        os.mkdir(CONFIG_DIR)
+    os.makedirs(CONFIG_DIR, exist_ok=True)
     getenv_patcher = mock.patch.object(os, 'getenv', side_effect=getenv)
     getenv_patcher.start()
     try:
         yield
     finally:
-        shutil.rmtree(CONFIG_DIR)
+        shutil.rmtree(_TMP_HOME, ignore_errors=True)
         getenv_patcher.stop()
 
 

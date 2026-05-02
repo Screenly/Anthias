@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import secrets
 from os import getenv
 from pathlib import Path
+from typing import Any
 
 import pytz
 
@@ -164,12 +165,29 @@ if getenv('ENVIRONMENT') == 'test':
 else:
     db_path = '/data/.anthias/anthias.db'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': db_path,
-    },
+# Integration tests drive the live anthias-server container in
+# docker-compose.test.yml. The test process and the server live in
+# different containers but must share DB state — the test asserts on
+# `Asset.objects.all()` after the server persists an uploaded file.
+# Without TEST.NAME, pytest-django defaults to an in-memory SQLite, so
+# writes from the server never reach the test process. Pinning
+# TEST.NAME to the same path keeps both ends on one DB; the
+# `transaction=True` marker truncates between tests, which is safe
+# because the test DB is throwaway.
+#
+# Gate this on ENVIRONMENT=test so unit-test runs that didn't manage
+# to export the env var before pytest-django imported settings (the
+# root conftest sets it via os.environ.setdefault, which races with
+# plugin-time settings load) don't end up with TEST.NAME pointing at
+# the production /data path and failing to open it.
+_db_default: dict[str, Any] = {
+    'ENGINE': 'django.db.backends.sqlite3',
+    'NAME': db_path,
 }
+if getenv('ENVIRONMENT') == 'test':
+    _db_default['TEST'] = {'NAME': db_path}
+
+DATABASES = {'default': _db_default}
 
 
 # Password validation
