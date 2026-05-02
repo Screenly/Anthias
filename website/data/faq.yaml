@@ -46,7 +46,13 @@
 
     - question: How do I enable SSH on the device?
       answer: |
-        SSH is enabled by default on the Anthias disk images and on the scripted Debian / Raspberry Pi OS install. If you flashed Raspberry Pi OS yourself, place an empty file named `ssh` in the `/boot` partition before first boot, or use Raspberry Pi Imager's advanced options to pre-enable it. Then connect with `ssh <user>@<device-ip>`.
+        Whether SSH is enabled depends on the OS image, not on Anthias itself — the installer doesn't touch `sshd`.
+
+        * **Anthias Raspberry Pi Imager image** and **balenaHub fleets**: SSH is on out of the box.
+        * **Raspberry Pi OS Lite** (you flashed it yourself): use Raspberry Pi Imager's advanced options to pre-enable SSH and set a username, or drop an empty file named `ssh` into the `/boot` partition before first boot.
+        * **Debian on PC**: the Debian installer leaves SSH on if you selected the *SSH server* package during install.
+
+        Then connect with `ssh <user>@<device-ip>`.
 
 - group: Display & playback
   items:
@@ -75,9 +81,9 @@
         This usually means the viewer container can't reach the server, or there are no active assets. Try these in order:
 
         1. SSH in and run `docker compose ps` from `~/anthias/` — all four containers (`anthias-server`, `anthias-celery`, `anthias-viewer`, `redis`) should be `Up`.
-        2. If a container is restarting, check `docker logs -f anthias-anthias-viewer-1`.
+        2. If a container is restarting, tail its logs: `docker logs -f anthias-anthias-viewer-1` (or `…-server-1`).
         3. Open the dashboard from another device and confirm at least one asset is **enabled** with a current schedule.
-        4. If the screen has gone to power save, press a key on a connected keyboard or use `xset dpms force on` over SSH.
+        4. If the display has gone to power save, briefly unplug and reconnect the HDMI cable, or check the TV's input source. Anthias renders to the framebuffer (Qt `linuxfb`) and uses no X server, so `xset` won't help.
 
         If a recent update broke the display, running `~/anthias/bin/upgrade_containers.sh` re-creates the containers cleanly.
 
@@ -89,7 +95,9 @@
 
     - question: How do I switch audio between HDMI and the 3.5mm jack?
       answer: |
-        Open the web dashboard, go to **Settings**, and choose **HDMI** or **3.5mm jack** under *Audio output*. The change applies to all video assets immediately — no reboot required.
+        Open the web dashboard, go to **Settings**, and pick **HDMI** or **3.5mm jack** under *Audio output*. The change applies to video assets immediately — no reboot required.
+
+        Note: Raspberry Pi 5 only exposes the **HDMI** option in the dropdown — the 3.5mm jack was removed from the Pi 5 hardware, so the dashboard hides that choice on Pi 5 devices.
 
     - question: Can I add transitions (fade / crossfade) between assets?
       answer: |
