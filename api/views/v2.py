@@ -8,6 +8,7 @@ from platform import machine
 from typing import Any
 
 import psutil
+import redis
 import requests
 from drf_spectacular.utils import extend_schema
 from hurry.filesize import size
@@ -115,10 +116,14 @@ def _resolve_node_ip() -> str:
             return ''
 
     # Cache miss. Best-effort: ask host_agent to populate. The next
-    # poll picks it up — we don't block waiting for completion.
+    # poll picks it up — we don't block waiting for completion. Catch
+    # only redis-specific failures here: a bare ``except Exception``
+    # would swallow a programming error (e.g. ``r`` accidentally None
+    # after a refactor) and turn "splash IPs never populate" into a
+    # silent failure with no breadcrumb.
     try:
         r.publish('hostcmd', 'set_ip_addresses')
-    except Exception:
+    except redis.RedisError:
         pass
     return ''
 

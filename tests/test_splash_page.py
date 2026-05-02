@@ -232,20 +232,31 @@ class NetworkIpAddressesEndpointTest(TestCase):
 
 
 class SplashPageViewTest(TestCase):
-    def test_renders_200_even_when_node_ip_would_return_unknown(self) -> None:
-        """Pinned regression: prior render called ipaddress.ip_address
-        on the get_node_ip() string, which raised ValueError on
-        'Unknown' and 500'd the page. The view no longer touches
-        get_node_ip at all; this should work without any mocking."""
-        # Belt-and-suspenders: assert the view doesn't call get_node_ip
-        # synchronously even if some future refactor reintroduces an
-        # import. The page is now JS-driven.
-        with mock.patch(
-            'api.views.v2.get_node_ip',
-            side_effect=AssertionError('splash view must not call this'),
-        ):
-            response = Client().get('/splash-page')
+    def test_renders_200_without_mocking_anything(self) -> None:
+        """Pinned regression: the prior render called
+        ``ipaddress.ip_address(get_node_ip())`` and 500'd on 'Unknown'.
+        The view now does no IP work at all — render must succeed
+        with no fixtures, no mocks, no Redis state."""
+        response = Client().get('/splash-page')
         self.assertEqual(response.status_code, 200)
+
+    def test_splash_view_does_not_import_get_node_ip(self) -> None:
+        """Belt-and-suspenders: assert the splash view module no longer
+        carries get_node_ip in its namespace. A future refactor that
+        re-imports it (and might re-introduce the synchronous IP work
+        we just removed) would fail this test before any rendering
+        regression hits production. Asserting on the module attribute
+        is more robust than mock.patch on a specific resolution path —
+        the previous version of this test patched api.views.v2 by
+        mistake and would have silently passed regardless of what the
+        splash view did."""
+        from anthias_app import views as splash_module
+
+        self.assertFalse(
+            hasattr(splash_module, 'get_node_ip'),
+            'splash_page view should not import get_node_ip; '
+            'IP resolution now lives in /api/v2/network/ip-addresses',
+        )
 
     def test_renders_with_polling_script(self) -> None:
         """The splash relies on the JS poll to populate IPs. If the
