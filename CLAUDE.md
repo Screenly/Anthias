@@ -101,7 +101,10 @@ docker compose -f docker-compose.test.yml up -d --build
 # Prepare and run tests (integration and non-integration must be run separately)
 docker compose -f docker-compose.test.yml exec anthias-test bash ./bin/prepare_test_environment.sh -s
 docker compose -f docker-compose.test.yml exec anthias-test pytest -n auto -m "not integration"
-docker compose -f docker-compose.test.yml exec anthias-test pytest -m integration
+# ANTHIAS_INTEGRATION_TEST=1 pins TEST.NAME to the same SQLite file the
+# anthias-server container writes — required for Selenium tests that
+# assert on Asset.objects after a browser-driven upload.
+docker compose -f docker-compose.test.yml exec -e ANTHIAS_INTEGRATION_TEST=1 anthias-test pytest -m integration
 
 # Coverage (CI uses these flags; --cov reads source/omit from pyproject.toml).
 # CI fails the build when total line+branch coverage drops below 80%
