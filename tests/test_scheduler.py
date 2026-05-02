@@ -443,3 +443,30 @@ def test_cap_driven_refresh_preserves_shuffle_play_through(
     assert scheduler.assets == original_assets
     assert scheduler.index == 3
     assert scheduler.counter == 2
+
+
+@pytest.mark.django_db
+def test_shuffle_refresh_picks_up_field_edits_when_membership_unchanged(
+    restore_shuffle_setting: None,
+) -> None:
+    """With shuffle on and membership unchanged, the cap-driven refresh
+    must still surface DB-driven field edits (e.g. duration) on the
+    next play-through — order is preserved, contents are refreshed."""
+    settings['shuffle_playlist'] = True
+    Asset.objects.create(**_scheduled_asset(asset_id='a', play_days='[1]'))
+    Asset.objects.create(**_scheduled_asset(asset_id='b'))
+
+    with time_machine.travel(_aware(2026, 1, 5, 12, 0)):
+        scheduler = Scheduler()
+        original_order = [x['asset_id'] for x in scheduler.assets]
+
+        target = Asset.objects.get(asset_id='b')
+        target.duration = 999
+        target.save()
+
+        scheduler.deadline = timezone.now() - timedelta(seconds=1)
+        scheduler.refresh_playlist()
+
+    assert [x['asset_id'] for x in scheduler.assets] == original_order
+    refreshed = next(x for x in scheduler.assets if x['asset_id'] == 'b')
+    assert refreshed['duration'] == 999
