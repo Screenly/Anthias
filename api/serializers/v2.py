@@ -154,7 +154,7 @@ class CreateAssetSerializerV2(
     play_time_from = TimeField(required=False, allow_null=True)
     play_time_to = TimeField(required=False, allow_null=True)
 
-    def validate_play_days(self, value: Any) -> str:
+    def validate_play_days(self, value: Any) -> list[int]:
         return _normalise_play_days(value)
 
     def validate(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -175,7 +175,7 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
     play_time_from = TimeField(required=False, allow_null=True)
     play_time_to = TimeField(required=False, allow_null=True)
 
-    def validate_play_days(self, value: Any) -> str:
+    def validate_play_days(self, value: Any) -> list[int]:
         return _normalise_play_days(value)
 
     def validate(self, data: dict[str, Any]) -> dict[str, Any]:
