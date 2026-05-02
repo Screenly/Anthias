@@ -2,12 +2,14 @@
   "name": "website",
   "private": true,
   "scripts": {
-    "css:build": "bunx @tailwindcss/cli -i src/main.css -o assets/styles/style.css",
-    "css:watch": "bunx @tailwindcss/cli -i src/main.css -o assets/styles/style.css --watch",
+    "fonts:install": "bun run scripts/install-fonts.ts",
+    "css:build": "bun run fonts:install && bunx @tailwindcss/cli -i src/main.css -o assets/styles/style.css",
+    "css:watch": "bun run fonts:install && bunx @tailwindcss/cli -i src/main.css -o assets/styles/style.css --watch",
     "dev": "bun run css:watch & hugo server",
     "build": "bun run css:build && hugo"
   },
   "devDependencies": {
+    "@fontsource/plus-jakarta-sans": "^5.2.8",
     "@tailwindcss/cli": "^4.2.4"
   }
 }

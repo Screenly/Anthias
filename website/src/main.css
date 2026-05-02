@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../assets/fonts/plus-jakarta-sans.css";
 @source "../layouts";
 
 @theme {

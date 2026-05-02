@@ -36,7 +36,6 @@
     {{- $style := resources.Get "styles/style.css" | fingerprint -}}
     {{- $chroma := resources.Get "styles/chroma.css" | fingerprint -}}
     <link rel="icon" href="{{ $favicon.RelPermalink }}">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ $style.RelPermalink }}" integrity="{{ $style.Data.Integrity }}">
     <link rel="stylesheet" href="{{ $chroma.RelPermalink }}" integrity="{{ $chroma.Data.Integrity }}">
 

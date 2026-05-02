@@ -6,6 +6,10 @@ out
 dist
 *.tgz
 
+# fonts materialized from @fontsource/plus-jakarta-sans by `bun run fonts:install`
+assets/fonts/
+static/fonts/
+
 # code coverage
 coverage
 *.lcov
