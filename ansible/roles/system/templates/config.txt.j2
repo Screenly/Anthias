@@ -1,0 +1,53 @@
+{#-
+  Anthias-managed config.txt. Slurps the current config.txt, strips
+  any user-set value for a key we own, then emits ours authoritatively
+  in a single [all] block at the end.
+
+  The block is fenced by `# >>> anthias managed (do not edit) >>>`
+  and `# <<< anthias managed <<<`. Anything between those fences (from
+  a previous render) is dropped first so re-runs are idempotent and we
+  don't accumulate stale state. Anything outside the fences is kept
+  verbatim.
+
+  Pure string ops — no regex.
+-#}
+{%- set anthias_managed = [
+      ('disable_splash',           '1'),
+      ('framebuffer_depth',        '32'),
+      ('framebuffer_ignore_alpha', '1'),
+      ('gpu_mem_256',              '96'),
+      ('gpu_mem_512',              '128'),
+      ('gpu_mem_1024',             '196'),
+    ] -%}
+{%- set begin_fence = '# >>> anthias managed (do not edit) >>>' -%}
+{%- set end_fence   = '# <<< anthias managed <<<' -%}
+{%- set managed_keys = anthias_managed | map('first') | list -%}
+{%- set existing = (system_config_current.content | b64decode).splitlines() -%}
+{%- set state = namespace(in_block=false) -%}
+{%- set kept = [] -%}
+{%- for line in existing -%}
+{%-   if line.strip() == begin_fence -%}
+{%-     set state.in_block = true -%}
+{%-   elif line.strip() == end_fence -%}
+{%-     set state.in_block = false -%}
+{%-   elif not state.in_block -%}
+{%-     set is_managed = namespace(value=false) -%}
+{%-     set stripped = line.lstrip() -%}
+{%-     for key in managed_keys -%}
+{%-       if stripped.startswith(key ~ '=') -%}
+{%-         set is_managed.value = true -%}
+{%-       endif -%}
+{%-     endfor -%}
+{%-     if not is_managed.value -%}
+{%-       set _ = kept.append(line) -%}
+{%-     endif -%}
+{%-   endif -%}
+{%- endfor -%}
+{{ kept | join('\n') | trim }}
+
+{{ begin_fence }}
+[all]
+{% for key, value in anthias_managed -%}
+{{ key }}={{ value }}
+{% endfor -%}
+{{ end_fence }}

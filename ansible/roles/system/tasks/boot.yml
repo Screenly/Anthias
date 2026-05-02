@@ -9,22 +9,23 @@
   register: system_config_txt
   changed_when: false
 
-# All additive Anthias firmware config (silent boot, framebuffer, GPU
-# memory) lives in a single drop-in. config.txt itself only gets one
-# `include` line — anything the user has in their config.txt is left
-# alone.
-- name: Install Anthias firmware drop-in
+# Render config.txt from a template that authoritatively owns the
+# Anthias-managed firmware directives. Strips any user-set value for a
+# key we own (so an existing `disable_splash=0` is replaced by our 1
+# rather than leaving both lines in conflicting order), then emits ours
+# in a single [all] block at the end. All other content is preserved.
+- name: Read current config.txt
+  ansible.builtin.slurp:
+    src: "{{ system_config_path }}"
+  register: system_config_current
+
+- name: Render config.txt from template
   ansible.builtin.copy:
-    src: anthias.conf
-    dest: "{{ system_config_path | dirname }}/anthias.conf"
+    content: "{{ lookup('template', 'config.txt.j2') }}\n"
+    dest: "{{ system_config_path }}"
     owner: root
     group: root
     mode: "0755"  # NOSONAR
-
-- name: Include Anthias drop-in from config.txt
-  ansible.builtin.lineinfile:
-    dest: "{{ system_config_path }}"
-    line: include anthias.conf
 
 # Legacy: pre-Bullseye Pi OS shipped vc4-fkms-v3d (or vc4-kms-v3d
 # commented). Bullseye+ already ships KMS active. Kept for back-compat
