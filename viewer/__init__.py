@@ -233,9 +233,13 @@ def _trigger_asset_recheck(asset_id: str | None) -> None:
     try:
         # NOSONAR (S5332): viewer talks to anthias-server over plain
         # HTTP per CLAUDE.md (TLS is opt-in via the Caddy sidecar that
-        # bin/enable_ssl.sh installs as a compose override). LISTEN
-        # defaults to the in-stack hostname; this URL never crosses a
-        # network boundary in any default deploy.
+        # bin/enable_ssl.sh installs as a compose override). The
+        # production compose templates set LISTEN=anthias-server in the
+        # viewer container's environment, so this resolves to the
+        # in-stack service hostname; the settings.py default of
+        # 127.0.0.1 only kicks in for non-compose deployments. Either
+        # way the URL never crosses a network boundary on a default
+        # deploy.
         response = requests.post(
             f'http://{LISTEN}:{PORT}/api/v2/assets/{asset_id}/recheck',  # NOSONAR
             timeout=2,
