@@ -138,23 +138,38 @@ def _resolve_node_ip() -> str:
         # — every subsequent poll would short-circuit on the empty
         # cached value.
         if ips:
+            # Cache hit. Also kick off a debounced background refresh
+            # so the splash stays current if the device's IPs change
+            # during its display window (DHCP renewal, link flap,
+            # operator plugging in a different cable). Without this,
+            # once the cache is populated the splash would freeze on
+            # whatever IPs were valid at first poll. _publish_refresh
+            # is bounded by the same SETNX TTL as the cache-miss path,
+            # so a busy poll loop won't queue redundant refreshes.
+            _publish_refresh()
             return ' '.join(ips)
 
-    # Cache miss. Best-effort: ask host_agent to populate. The next
-    # poll picks it up — we don't block waiting for completion.
-    #
-    # Debounce the publish: at a 2s poll cadence, host_agent's
-    # set_ip_addresses takes longer than one poll interval (it does
-    # an internet probe with a 10x1s tenacity retry). Without a
-    # debounce we'd queue many redundant refresh requests before the
-    # first one completes. SETNX with a short TTL ensures only one
-    # refresh fires per window; a future poll past the TTL retries
-    # naturally if the cache is still empty.
-    #
-    # Wrap the SETNX itself in a RedisError catch — Redis can flake
-    # between the get() above and the set() here, and a bare raise
-    # would 500 the splash poll. Treat as cache miss + skip the
-    # publish (the next poll retries naturally).
+    # Cache miss / empty list / malformed: ask host_agent to
+    # populate. The next poll picks it up — we don't block waiting
+    # for completion.
+    _publish_refresh()
+    return ''
+
+
+def _publish_refresh() -> None:
+    """Best-effort host_agent refresh, debounced.
+
+    At a 2s poll cadence, host_agent's set_ip_addresses takes longer
+    than one poll interval (it does an internet probe with a 10x1s
+    tenacity retry). Without a debounce we'd queue many redundant
+    refresh requests before the first one completes. SETNX with a
+    short TTL ensures only one refresh fires per window; later polls
+    no-op until the TTL expires.
+
+    Redis errors are swallowed (with the debounce key released on
+    publish failure) so a transient broker hiccup doesn't 500 the
+    splash poll — the JS retries on the next poll.
+    """
     try:
         acquired = r.set(
             _IP_REFRESH_PENDING_KEY,
@@ -163,18 +178,19 @@ def _resolve_node_ip() -> str:
             ex=_IP_REFRESH_DEBOUNCE_S,
         )
     except redis.RedisError:
-        return ''
-    if acquired:
+        return
+    if not acquired:
+        return
+    try:
+        r.publish('hostcmd', 'set_ip_addresses')
+    except redis.RedisError:
+        # Drop the debounce key so the next poll can retry —
+        # otherwise we'd wait out the TTL after a transient flake
+        # that didn't actually queue a refresh.
         try:
-            r.publish('hostcmd', 'set_ip_addresses')
+            r.delete(_IP_REFRESH_PENDING_KEY)
         except redis.RedisError:
-            # Drop the debounce key so the next poll can retry —
-            # otherwise we'd wait out the TTL after a transient flake.
-            try:
-                r.delete(_IP_REFRESH_PENDING_KEY)
-            except redis.RedisError:
-                pass
-    return ''
+            pass
 
 
 def _format_ip_urls(node_ip: str) -> list[str]:

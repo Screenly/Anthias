@@ -110,15 +110,32 @@ class ResolveNodeIpBareMetalTest(TestCase):
             mock.patch.object(
                 v2_views.r, 'get', return_value=json.dumps([_FIXTURE_IPV4])
             ),
-            mock.patch.object(v2_views.r, 'publish') as m_publish,
+            mock.patch.object(v2_views.r, 'publish'),
             mock.patch(
                 'api.views.v2.get_node_ip',
                 side_effect=AssertionError('must not block on get_node_ip'),
             ),
         ):
             self.assertEqual(v2_views._resolve_node_ip(), _FIXTURE_IPV4)
-        # Cache hit — must not have triggered a refresh.
-        m_publish.assert_not_called()
+
+    def test_cache_hit_also_kicks_off_refresh(self) -> None:
+        """The splash docstring promises 'updates if IPs change during
+        the splash's display window' (e.g. DHCP renewal mid-splash).
+        Honoring that requires the cache-hit path to also fire a
+        debounced refresh — without it, once Redis is populated the
+        cached value would freeze for the rest of the display window
+        even if the underlying IPs changed. The publish is the same
+        SETNX-debounced one the cache-miss path uses, so a tight
+        poll loop won't queue redundant refreshes."""
+        with (
+            mock.patch('api.views.v2.is_balena_app', return_value=False),
+            mock.patch.object(
+                v2_views.r, 'get', return_value=json.dumps([_FIXTURE_IPV4])
+            ),
+            mock.patch.object(v2_views.r, 'publish') as m_publish,
+        ):
+            self.assertEqual(v2_views._resolve_node_ip(), _FIXTURE_IPV4)
+        m_publish.assert_called_once_with('hostcmd', 'set_ip_addresses')
 
     def test_publishes_refresh_on_cache_miss(self) -> None:
         """Empty cache: return '' and ask host_agent to populate. The
