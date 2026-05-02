@@ -32,6 +32,7 @@ django.setup()
 
 # Place imports that uses Django in this block.
 
+from lib.internal_auth import INTERNAL_AUTH_HEADER, internal_auth_token  # noqa: E402
 from lib.utils import (  # noqa: E402
     connect_to_redis,
     string_to_bool,
@@ -212,12 +213,17 @@ def _asset_is_displayable(asset: dict[str, Any]) -> bool:
     if asset.get('skip_asset_check'):
         return True
     uri = asset.get('uri') or ''
-    if uri.startswith('/'):
+    if _asset_is_local_file(asset):
         return path.isfile(uri)
     # Default to True so a row written before this field existed
     # (or by an older serializer that doesn't set it) doesn't get
     # silently skipped.
     return bool(asset.get('is_reachable', True))
+
+
+def _asset_is_local_file(asset: dict[str, Any]) -> bool:
+    uri = asset.get('uri') or ''
+    return uri.startswith('/')
 
 
 def _trigger_asset_recheck(asset_id: str | None) -> None:
@@ -229,6 +235,12 @@ def _trigger_asset_recheck(asset_id: str | None) -> None:
     every rotation through an unreachable asset is safe.
     """
     if not asset_id:
+        return
+    token = internal_auth_token(settings)
+    if not token:
+        logging.debug(
+            'Skipping recheck for %s: internal token unavailable', asset_id
+        )
         return
     try:
         # NOSONAR (S5332): viewer talks to anthias-server over plain
@@ -244,6 +256,7 @@ def _trigger_asset_recheck(asset_id: str | None) -> None:
             f'http://{LISTEN}:{PORT}/api/v2/assets/{asset_id}/recheck',  # NOSONAR
             timeout=2,
             allow_redirects=False,
+            headers={INTERNAL_AUTH_HEADER: token},
         )
     except requests.RequestException as e:
         logging.debug('Failed to trigger recheck for %s: %s', asset_id, e)
@@ -315,7 +328,8 @@ def asset_loop(scheduler: Any) -> None:
             asset['name'],
             asset['uri'],
         )
-        _trigger_asset_recheck(asset.get('asset_id'))
+        if not _asset_is_local_file(asset):
+            _trigger_asset_recheck(asset.get('asset_id'))
         skip_event = get_skip_event()
         skip_event.clear()
         if skip_event.wait(timeout=0.5):

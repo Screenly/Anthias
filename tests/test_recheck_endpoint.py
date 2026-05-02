@@ -4,11 +4,14 @@ Tests for POST /api/v2/assets/<asset_id>/recheck.
 The endpoint is a thin wrapper around the on-demand
 ``revalidate_asset_url`` Celery task. It exists so the viewer can
 nudge the server when it skips an asset marked unreachable, without
-the viewer holding any auth credentials. Cooldown / queue-churn
-protection is implemented as a per-asset SETNX queue-debounce key in
-Redis (separate from the task's own per-asset cooldown lock).
+the viewer holding any operator BasicAuth credentials. It uses a
+shared internal token derived from anthias.conf. Cooldown /
+queue-churn protection is implemented as a per-asset SETNX
+queue-debounce key in Redis (separate from the task's own per-asset
+cooldown lock).
 """
 
+from collections.abc import Iterator
 from unittest import mock
 
 import pytest
@@ -17,6 +20,22 @@ from django.test import Client
 import api.views.v2 as v2_module
 from anthias_app.models import Asset
 from celery_tasks import asset_recheck_queue_key
+from lib.internal_auth import INTERNAL_AUTH_HEADER, internal_auth_token
+from settings import settings as anthias_settings
+
+
+@pytest.fixture(autouse=True)
+def internal_auth_secret() -> Iterator[None]:
+    original_secret = anthias_settings.get('django_secret_key', '')
+    anthias_settings['django_secret_key'] = 'test-internal-secret'
+    try:
+        yield
+    finally:
+        anthias_settings['django_secret_key'] = original_secret
+
+
+def _auth_headers() -> dict[str, str]:
+    return {INTERNAL_AUTH_HEADER: internal_auth_token(anthias_settings)}
 
 
 def _make(**kwargs: object) -> Asset:
@@ -35,7 +54,10 @@ def _make(**kwargs: object) -> Asset:
 @pytest.mark.django_db
 def test_returns_404_for_unknown_asset() -> None:
     with mock.patch('celery_tasks.revalidate_asset_url.delay') as m:
-        response = Client().post('/api/v2/assets/nope/recheck')
+        response = Client().post(
+            '/api/v2/assets/nope/recheck',
+            headers=_auth_headers(),
+        )
     assert response.status_code == 404
     m.assert_not_called()
 
@@ -45,7 +67,10 @@ def test_enqueues_task_when_no_lock_held() -> None:
     """Fresh asset, no recent recheck: SETNX succeeds → enqueue."""
     _make()
     with mock.patch('celery_tasks.revalidate_asset_url.delay') as m:
-        response = Client().post('/api/v2/assets/a1/recheck')
+        response = Client().post(
+            '/api/v2/assets/a1/recheck',
+            headers=_auth_headers(),
+        )
     assert response.status_code == 202
     m.assert_called_once_with('a1')
 
@@ -62,7 +87,10 @@ def test_skips_enqueue_when_queue_debounce_held() -> None:
     # endpoint reads from.
     v2_module.r.set(asset_recheck_queue_key('a1'), '1')
     with mock.patch('celery_tasks.revalidate_asset_url.delay') as m:
-        response = Client().post('/api/v2/assets/a1/recheck')
+        response = Client().post(
+            '/api/v2/assets/a1/recheck',
+            headers=_auth_headers(),
+        )
     assert response.status_code == 202
     m.assert_not_called()
 
@@ -76,20 +104,35 @@ def test_back_to_back_calls_only_enqueue_once() -> None:
     would both read the stale value and each enqueue."""
     _make()
     with mock.patch('celery_tasks.revalidate_asset_url.delay') as m:
-        r1 = Client().post('/api/v2/assets/a1/recheck')
-        r2 = Client().post('/api/v2/assets/a1/recheck')
+        r1 = Client().post(
+            '/api/v2/assets/a1/recheck', headers=_auth_headers()
+        )
+        r2 = Client().post(
+            '/api/v2/assets/a1/recheck', headers=_auth_headers()
+        )
     assert r1.status_code == 202
     assert r2.status_code == 202
     assert m.call_count == 1
 
 
 @pytest.mark.django_db
-def test_endpoint_is_unauthenticated() -> None:
-    """Pinned design choice: viewer can't BasicAuth, so decorator would
-    silently 401 and break the on-demand mitigation. This test makes a
-    future flip to @authorized fail fast."""
+def test_missing_internal_auth_is_forbidden() -> None:
     _make()
-    with mock.patch('celery_tasks.revalidate_asset_url.delay'):
-        # No auth headers, no session — must still work.
+    with mock.patch('celery_tasks.revalidate_asset_url.delay') as m:
         response = Client().post('/api/v2/assets/a1/recheck')
+    assert response.status_code == 403
+    m.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_internal_auth_works_without_basic_auth() -> None:
+    """Viewer has no operator BasicAuth credentials; the internal header
+    is sufficient for this side-effect-only endpoint."""
+    _make()
+    with mock.patch('celery_tasks.revalidate_asset_url.delay') as m:
+        response = Client().post(
+            '/api/v2/assets/a1/recheck',
+            headers=_auth_headers(),
+        )
     assert response.status_code == 202
+    m.assert_called_once_with('a1')

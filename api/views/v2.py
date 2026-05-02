@@ -21,6 +21,7 @@ from api.helpers import (
     save_active_assets_ordering,
 )
 from lib.auth import hash_password
+from lib.internal_auth import is_internal_request
 from api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
@@ -167,42 +168,22 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
 class AssetRecheckViewV2(APIView):
     """On-demand reachability recheck, called from the viewer.
 
-    Unauth'd on purpose: the viewer is the sole intended client, lives
-    in the same compose stack, and has no way to attach BasicAuth
-    credentials. Decorating with ``@authorized`` would silently 401 the
-    viewer's POST on auth-enabled installs and defeat the on-demand
-    mitigation entirely (the asset would stay marked unreachable until
-    the next 15-min periodic sweep).
-
-    **KNOWN LIMITATION (deferred to broader auth work).** Because this
-    endpoint is unauth'd, on a default LAN deploy any client that can
-    reach the API port can:
-
-      * fan out POSTs across many asset_ids to trigger probe storms
-        (DoS — partially bounded by the per-asset SETNX rate-limit
-        and the unguessability of 32-char hex asset_ids);
-      * trigger ``url_fails`` / ``ffprobe`` against URLs already in
-        the asset DB if asset_ids leak by some other path.
-
-    The intended fix is a shared internal-auth mechanism (e.g. a
-    token both anthias-server and anthias-viewer derive from
-    anthias.conf, sent as ``X-Anthias-Internal-Token``) that the
-    viewer can satisfy without BasicAuth credentials. That cuts
-    across other inter-service surfaces too — adding it just here
-    would be premature. Tracked alongside the broader auth rework.
-
-    Until then the existing mitigations bound the blast radius:
-    requests are 404 unless the caller already knows a valid
-    asset_id, the underlying task is rate-limited per asset
-    (RECHECK_COOLDOWN_S in celery_tasks.py), and the response carries
-    no data — it just enqueues a probe.
+    The viewer cannot attach operator BasicAuth credentials, so this
+    endpoint uses a lightweight internal token derived from the shared
+    ``anthias.conf`` secret instead. The request still remains
+    side-effect-only and rate-limited: it returns no asset data, queue
+    churn is debounced here, and the Celery task enforces the longer
+    per-asset probe cooldown.
     """
 
     @extend_schema(
         summary='Recheck asset reachability',
-        responses={202: None, 404: None},
+        responses={202: None, 403: None, 404: None},
     )
     def post(self, request: Request, asset_id: str) -> Response:
+        if not is_internal_request(request, settings):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
         # Existence check before locking — a 404 is more useful than
         # a silent 202 on an unknown id, and we don't want to acquire
         # a lock for an asset that doesn't exist.

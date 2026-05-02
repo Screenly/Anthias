@@ -348,18 +348,6 @@ def revalidate_asset_url(asset_id: str) -> None:
     """
     from django.utils import timezone
 
-    # Atomic cooldown gate. Replaces a previous timestamp-comparison
-    # check that was racy under Celery worker concurrency: multiple
-    # tasks for the same asset_id could all read the same stale
-    # ``last_reachability_check`` and each decide they should probe.
-    if not r.set(
-        asset_recheck_lock_key(asset_id),
-        '1',
-        nx=True,
-        ex=RECHECK_COOLDOWN_S,
-    ):
-        return
-
     try:
         asset = Asset.objects.get(asset_id=asset_id)
     except Asset.DoesNotExist:
@@ -373,6 +361,20 @@ def revalidate_asset_url(asset_id: str) -> None:
     if asset.skip_asset_check:
         # Operator opted out of validation; matches sweep behavior of
         # not touching is_reachable / last_reachability_check.
+        return
+
+    # Atomic cooldown gate. Replaces a previous timestamp-comparison
+    # check that was racy under Celery worker concurrency: multiple
+    # tasks for the same asset_id could all read the same stale
+    # ``last_reachability_check`` and each decide they should probe.
+    # Acquire it after eligibility checks so missing or temporarily
+    # ineligible assets do not suppress a later legitimate recheck.
+    if not r.set(
+        asset_recheck_lock_key(asset_id),
+        '1',
+        nx=True,
+        ex=RECHECK_COOLDOWN_S,
+    ):
         return
 
     try:

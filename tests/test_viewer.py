@@ -289,11 +289,24 @@ def test_displayable_missing_is_reachable_defaults_to_displayable() -> None:
 
 
 def test_trigger_recheck_posts_to_recheck_endpoint() -> None:
-    with mock.patch('viewer.requests.post') as m:
+    from lib.internal_auth import INTERNAL_AUTH_HEADER, internal_auth_token
+    from settings import settings as anthias_settings
+
+    with (
+        mock.patch.dict(
+            anthias_settings,
+            {'django_secret_key': 'test-internal-secret'},
+        ),
+        mock.patch('viewer.requests.post') as m,
+    ):
+        expected_token = internal_auth_token(anthias_settings)
         viewer._trigger_asset_recheck('abc')
     m.assert_called_once()
     url = m.call_args.args[0]
     assert '/api/v2/assets/abc/recheck' in url
+    assert m.call_args.kwargs['headers'] == {
+        INTERNAL_AUTH_HEADER: expected_token
+    }
 
 
 def test_trigger_recheck_no_op_on_missing_asset_id() -> None:
@@ -302,13 +315,74 @@ def test_trigger_recheck_no_op_on_missing_asset_id() -> None:
     m.assert_not_called()
 
 
+def test_trigger_recheck_no_op_when_internal_token_missing() -> None:
+    from settings import settings as anthias_settings
+
+    with (
+        mock.patch.dict(anthias_settings, {'django_secret_key': ''}),
+        mock.patch('viewer.requests.post') as m,
+    ):
+        viewer._trigger_asset_recheck('abc')
+    m.assert_not_called()
+
+
 def test_trigger_recheck_swallows_request_errors() -> None:
     """Best-effort: a server hiccup must not interrupt the asset loop."""
     import requests as _requests
 
-    with mock.patch(
-        'viewer.requests.post',
-        side_effect=_requests.ConnectionError('boom'),
+    from settings import settings as anthias_settings
+
+    with (
+        mock.patch(
+            'viewer.requests.post',
+            side_effect=_requests.ConnectionError('boom'),
+        ),
+        mock.patch.dict(
+            anthias_settings,
+            {'django_secret_key': 'test-internal-secret'},
+        ),
     ):
         # Must not raise.
         viewer._trigger_asset_recheck('abc')
+
+
+def test_asset_loop_does_not_recheck_missing_local_asset() -> None:
+    scheduler = mock.Mock()
+    scheduler.get_next_asset.return_value = {
+        'asset_id': 'local',
+        'name': 'local',
+        'uri': '/tmp/anthias-missing-local-asset',
+        'mimetype': 'image',
+        'duration': 10,
+        'skip_asset_check': False,
+        'is_reachable': True,
+    }
+    skip_event = mock.Mock()
+    skip_event.wait.return_value = False
+    with (
+        mock.patch('viewer._trigger_asset_recheck') as trigger,
+        mock.patch('viewer.get_skip_event', return_value=skip_event),
+    ):
+        viewer.asset_loop(scheduler)
+    trigger.assert_not_called()
+
+
+def test_asset_loop_rechecks_unreachable_remote_asset() -> None:
+    scheduler = mock.Mock()
+    scheduler.get_next_asset.return_value = {
+        'asset_id': 'remote',
+        'name': 'remote',
+        'uri': 'https://example.com/offline.png',
+        'mimetype': 'image',
+        'duration': 10,
+        'skip_asset_check': False,
+        'is_reachable': False,
+    }
+    skip_event = mock.Mock()
+    skip_event.wait.return_value = False
+    with (
+        mock.patch('viewer._trigger_asset_recheck') as trigger,
+        mock.patch('viewer.get_skip_event', return_value=skip_event),
+    ):
+        viewer.asset_loop(scheduler)
+    trigger.assert_called_once_with('remote')

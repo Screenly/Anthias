@@ -474,6 +474,7 @@ def test_recheck_no_op_when_asset_does_not_exist(
     with mock.patch('celery_tasks.url_fails') as m:
         revalidate_asset_url.apply(args=('nope',))
     m.assert_not_called()
+    assert celery_tasks_module.r.get(asset_recheck_lock_key('nope')) is None
 
 
 @pytest.mark.django_db
@@ -522,6 +523,7 @@ def test_recheck_skips_disabled_asset(
         revalidate_asset_url.apply(args=('a1',))
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').is_reachable
+    assert celery_tasks_module.r.get(asset_recheck_lock_key('a1')) is None
 
 
 @pytest.mark.django_db
@@ -533,6 +535,7 @@ def test_recheck_skips_processing_asset(
         revalidate_asset_url.apply(args=('a1',))
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').is_reachable
+    assert celery_tasks_module.r.get(asset_recheck_lock_key('a1')) is None
 
 
 @pytest.mark.django_db
@@ -546,6 +549,7 @@ def test_recheck_skips_skip_asset_check_asset(
         revalidate_asset_url.apply(args=('a1',))
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').last_reachability_check is None
+    assert celery_tasks_module.r.get(asset_recheck_lock_key('a1')) is None
 
 
 @pytest.mark.django_db
