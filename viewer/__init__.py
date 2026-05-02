@@ -236,9 +236,7 @@ def _trigger_asset_recheck(asset_id: str | None) -> None:
             timeout=2,
         )
     except requests.RequestException as e:
-        logging.debug(
-            'Failed to trigger recheck for %s: %s', asset_id, e
-        )
+        logging.debug('Failed to trigger recheck for %s: %s', asset_id, e)
 
 
 def asset_loop(scheduler: Any) -> None:

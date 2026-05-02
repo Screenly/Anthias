@@ -27,6 +27,8 @@ ASSET_X = {
     'is_processing': 0,
     'play_order': 1,
     'skip_asset_check': 0,
+    'is_reachable': True,
+    'last_reachability_check': None,
 }
 
 ASSET_X_DIFF = {'duration': 10}
@@ -44,6 +46,8 @@ ASSET_Y = {
     'is_processing': 0,
     'play_order': 0,
     'skip_asset_check': 0,
+    'is_reachable': True,
+    'last_reachability_check': None,
 }
 
 ASSET_Z = {
@@ -59,6 +63,8 @@ ASSET_Z = {
     'is_processing': 0,
     'play_order': 2,
     'skip_asset_check': 0,
+    'is_reachable': True,
+    'last_reachability_check': None,
 }
 
 ASSET_TOMORROW = {
@@ -74,6 +80,8 @@ ASSET_TOMORROW = {
     'is_processing': 0,
     'play_order': 2,
     'skip_asset_check': 0,
+    'is_reachable': True,
+    'last_reachability_check': None,
 }
 
 FAKE_DB_PATH = '/tmp/fakedb'
