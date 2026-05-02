@@ -50,7 +50,7 @@ $ ./bin/start_development_server.sh
 >
 > The script currently supports Debian-based systems and macOS.
 
-unning the command above will start the development server and you should be able to
+Running the command above will start the development server and you should be able to
 access the web interface at `http://localhost:8000`.
 
 To stop the development server, run the following:
@@ -102,23 +102,24 @@ $ docker compose \
     -f docker-compose.test.yml up -d --build
 ```
 
-Run the unit tests.
+Run the unit tests. The Python test suite uses **pytest**.
 
 ```bash
 $ docker compose \
     -f docker-compose.test.yml \
     exec anthias-test bash ./bin/prepare_test_environment.sh -s
 
-# Integration and non-integration tests should be run separately as the
-# former doesn't run as expected when run together with the latter.
+# Integration and non-integration tests must be run separately —
+# fixture state from integration runs leaks into the non-integration
+# suite when they share a single pytest invocation.
 
 $ docker compose \
     -f docker-compose.test.yml \
-    exec anthias-test ./manage.py test --exclude-tag=integration
+    exec anthias-test pytest -n auto -m "not integration"
 
 $ docker compose \
     -f docker-compose.test.yml \
-    exec anthias-test ./manage.py test --tag=integration
+    exec anthias-test pytest -m integration
 ```
 
 ### The QA checklist

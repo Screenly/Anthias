@@ -17,7 +17,7 @@ Go to the project root directory and install the dependencies required by
 the assets migration script using [uv](https://docs.astral.sh/uv/):
 
 ```bash
-$ cd ~/screenly
+$ cd ~/anthias
 $ uv sync --group local
 ```
 

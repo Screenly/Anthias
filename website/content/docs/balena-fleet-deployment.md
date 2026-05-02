@@ -103,10 +103,10 @@ $ ./bin/deploy_to_balena.sh \
     --fleet $FLEET_NAME \
 ```
 
-`$BOARD_TYPE` could be any one of the following &mdash; `pi1`, `pi2`, `pi3`, `pi4`.
-You can run `./bin/deploy_to_balena.sh --help` for details.
+`$BOARD_TYPE` is one of `pi2`, `pi3`, `pi4-64`, or `pi5`. Run
+`./bin/deploy_to_balena.sh --help` for the current list of supported boards.
 
-Running the command above will pull the latest Docker images from Docker Hub and
+Running the command above will pull the latest Docker images from GHCR and
 push them to your balenaCloud account. It will also create a new release and
 deploy it to your fleet.
 
