@@ -11,9 +11,13 @@ import celery_tasks as celery_tasks_module
 from anthias_app.models import Asset
 from celery_tasks import celery as celeryapp
 from celery_tasks import (
+    ASSET_REVALIDATION_LOCK_KEY,
+    asset_recheck_lock_key,
     cleanup,
     get_display_power,
     reboot_anthias,
+    revalidate_asset_url,
+    revalidate_asset_urls,
     send_telemetry_task,
     shutdown_anthias,
 )
@@ -229,3 +233,331 @@ def test_shutdown_anthias_uses_balena_supervisor_on_balena() -> None:
     ):
         shutdown_anthias.apply()
     mock_shutdown.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# revalidate_asset_urls (periodic sweep)
+# ---------------------------------------------------------------------------
+
+
+def _make_revalidation_asset(
+    asset_id: str = 'a1',
+    *,
+    uri: str = 'https://example.com/x.png',
+    is_enabled: bool = True,
+    is_processing: bool = False,
+    skip_asset_check: bool = False,
+    is_reachable: bool = True,
+) -> Asset:
+    return Asset.objects.create(
+        asset_id=asset_id,
+        name=asset_id,
+        uri=uri,
+        mimetype='image',
+        duration=10,
+        is_enabled=is_enabled,
+        is_processing=is_processing,
+        skip_asset_check=skip_asset_check,
+        is_reachable=is_reachable,
+    )
+
+
+@pytest.fixture
+def eager_celery() -> None:
+    """
+    Periodic sweep flips Asset.is_reachable based on url_fails. The probe
+    itself is exercised by tests/test_utils.py — here we cover the
+    dispatch shape: which assets get probed, what gets written back, and
+    how exceptions are contained so a single bad asset can't kill the
+    sweep.
+    """
+    celeryapp.conf.update(
+        CELERY_ALWAYS_EAGER=True,
+        CELERY_RESULT_BACKEND='',
+        CELERY_BROKER_URL='',
+    )
+    Asset.objects.all().delete()
+
+
+@pytest.mark.django_db
+def test_sweep_marks_unreachable_when_url_fails(eager_celery: None) -> None:
+    _make_revalidation_asset()
+    with mock.patch('celery_tasks.url_fails', return_value=True):
+        revalidate_asset_urls.apply()
+    assert not Asset.objects.get(asset_id='a1').is_reachable
+
+
+@pytest.mark.django_db
+def test_sweep_marks_reachable_when_url_succeeds(eager_celery: None) -> None:
+    _make_revalidation_asset(is_reachable=False)
+    with mock.patch('celery_tasks.url_fails', return_value=False):
+        revalidate_asset_urls.apply()
+    assert Asset.objects.get(asset_id='a1').is_reachable
+
+
+@pytest.mark.django_db
+def test_sweep_updates_last_reachability_check(eager_celery: None) -> None:
+    from django.utils import timezone
+
+    _make_revalidation_asset()
+    before = timezone.now()
+    with mock.patch('celery_tasks.url_fails', return_value=False):
+        revalidate_asset_urls.apply()
+    last = Asset.objects.get(asset_id='a1').last_reachability_check
+    assert last is not None
+    assert last >= before
+
+
+@pytest.mark.django_db
+def test_sweep_skips_disabled_assets(eager_celery: None) -> None:
+    _make_revalidation_asset(is_enabled=False, is_reachable=True)
+    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+        revalidate_asset_urls.apply()
+    m.assert_not_called()
+    assert Asset.objects.get(asset_id='a1').is_reachable
+
+
+@pytest.mark.django_db
+def test_sweep_skips_processing_assets(eager_celery: None) -> None:
+    _make_revalidation_asset(is_processing=True)
+    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+        revalidate_asset_urls.apply()
+    m.assert_not_called()
+    assert Asset.objects.get(asset_id='a1').is_reachable
+
+
+@pytest.mark.django_db
+def test_sweep_skips_skip_asset_check_assets_entirely(
+    eager_celery: None,
+) -> None:
+    """Operator opted out of validation; trust them and don't probe.
+    Critically, last_reachability_check must NOT be set — the API
+    exposes that field as 'last check' and writing it without an
+    actual probe would advertise a check that never happened."""
+    _make_revalidation_asset(skip_asset_check=True)
+    with mock.patch('celery_tasks.url_fails') as m:
+        revalidate_asset_urls.apply()
+    m.assert_not_called()
+    assert Asset.objects.get(asset_id='a1').is_reachable
+    assert Asset.objects.get(asset_id='a1').last_reachability_check is None
+
+
+@pytest.mark.django_db
+def test_sweep_local_file_existence_check(eager_celery: None) -> None:
+    """Local URIs short-circuit url_fails and check the filesystem."""
+    with tempfile.NamedTemporaryFile(delete=False) as fh:
+        local = fh.name
+    try:
+        _make_revalidation_asset(uri=local)
+        with mock.patch('celery_tasks.url_fails') as m:
+            revalidate_asset_urls.apply()
+        m.assert_not_called()
+        assert Asset.objects.get(asset_id='a1').is_reachable
+    finally:
+        os.unlink(local)
+
+    # Same row, file now gone — sweep should mark it unreachable.
+    revalidate_asset_urls.apply()
+    assert not Asset.objects.get(asset_id='a1').is_reachable
+
+
+@pytest.mark.django_db
+def test_sweep_probe_exception_does_not_kill_sweep(
+    eager_celery: None,
+) -> None:
+    """One asset's probe blowing up must not break the others."""
+    _make_revalidation_asset('boom', uri='https://example.com/boom')
+    _make_revalidation_asset('ok', uri='https://example.com/ok')
+
+    def fake_url_fails(url: str) -> bool:
+        if 'boom' in url:
+            raise RuntimeError('synthetic')
+        return False
+
+    with mock.patch('celery_tasks.url_fails', side_effect=fake_url_fails):
+        revalidate_asset_urls.apply()
+
+    # 'boom' is left as-is (we don't have a probe result to write),
+    # but 'ok' must still have been processed.
+    assert Asset.objects.get(asset_id='ok').is_reachable
+    assert Asset.objects.get(asset_id='ok').last_reachability_check is not None
+
+
+@pytest.mark.django_db
+def test_sweep_lock_prevents_overlap(eager_celery: None) -> None:
+    """A second beat tick that fires while a sweep is running must
+    be a no-op. Without the lock, two workers would race on the same
+    asset rows; in practice on a streaming-heavy playlist a sweep can
+    approach the periodic interval and overlap is real."""
+    _make_revalidation_asset()
+    # Pre-acquire the lock to simulate a sweep already in flight.
+    celery_tasks_module.r.set(ASSET_REVALIDATION_LOCK_KEY, 'someone-else')
+    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+        revalidate_asset_urls.apply()
+    # The sweep saw the lock and exited without probing.
+    m.assert_not_called()
+    assert Asset.objects.get(asset_id='a1').is_reachable
+
+
+@pytest.mark.django_db
+def test_sweep_lock_release_does_not_clobber_different_holder(
+    eager_celery: None,
+) -> None:
+    """Pathological: TTL expires while sweep A is still running, sweep
+    B acquires the (now-free) lock with a fresh token, then sweep A
+    finishes and hits its finally clause. A's release must only delete
+    the lock if its token still matches — else it would clobber B's
+    lock and let yet another sweep slip in."""
+    _make_revalidation_asset()
+
+    def steal_during_sweep(*args: object, **kwargs: object) -> bool:
+        # Overwrite the lock value mid-sweep to simulate B taking over.
+        celery_tasks_module.r.set(ASSET_REVALIDATION_LOCK_KEY, 'someone-else')
+        return False  # url_fails return — asset is reachable
+
+    with mock.patch('celery_tasks.url_fails', side_effect=steal_during_sweep):
+        revalidate_asset_urls.apply()
+
+    # Compare-and-delete saw a token mismatch and left the lock alone.
+    assert (
+        celery_tasks_module.r.get(ASSET_REVALIDATION_LOCK_KEY)
+        == 'someone-else'
+    )
+
+
+@pytest.mark.django_db
+def test_sweep_lock_released_after_clean_run(eager_celery: None) -> None:
+    """The finally clause must release the lock so the next beat tick
+    can run."""
+    _make_revalidation_asset()
+    with mock.patch('celery_tasks.url_fails', return_value=False):
+        revalidate_asset_urls.apply()
+    assert celery_tasks_module.r.get(ASSET_REVALIDATION_LOCK_KEY) is None
+
+
+# ---------------------------------------------------------------------------
+# revalidate_asset_url (on-demand single-asset task)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def eager_celery_recheck() -> None:
+    """
+    On-demand single-asset probe. Cooldown- and concurrency-safe via
+    an atomic Redis SETNX lock per asset (TTL = RECHECK_COOLDOWN_S).
+    """
+    celeryapp.conf.update(
+        CELERY_ALWAYS_EAGER=True,
+        CELERY_RESULT_BACKEND='',
+        CELERY_BROKER_URL='',
+    )
+    Asset.objects.all().delete()
+
+
+def _make_recheck_asset(**kwargs: object) -> Asset:
+    defaults: dict[str, object] = {
+        'asset_id': 'a1',
+        'name': 'a1',
+        'uri': 'https://example.com/x.png',
+        'mimetype': 'image',
+        'duration': 10,
+        'is_enabled': True,
+    }
+    defaults.update(kwargs)
+    return Asset.objects.create(**defaults)
+
+
+@pytest.mark.django_db
+def test_recheck_no_op_when_asset_does_not_exist(
+    eager_celery_recheck: None,
+) -> None:
+    with mock.patch('celery_tasks.url_fails') as m:
+        revalidate_asset_url.apply(args=('nope',))
+    m.assert_not_called()
+    assert celery_tasks_module.r.get(asset_recheck_lock_key('nope')) is None
+
+
+@pytest.mark.django_db
+def test_recheck_flips_is_reachable(eager_celery_recheck: None) -> None:
+    _make_recheck_asset(is_reachable=True)
+    with mock.patch('celery_tasks.url_fails', return_value=True):
+        revalidate_asset_url.apply(args=('a1',))
+    assert not Asset.objects.get(asset_id='a1').is_reachable
+
+
+@pytest.mark.django_db
+def test_recheck_lock_prevents_back_to_back_probes(
+    eager_celery_recheck: None,
+) -> None:
+    """SETNX cooldown gate: if the per-asset lock is already held
+    (someone else just probed within RECHECK_COOLDOWN_S), this task
+    must no-op without calling url_fails."""
+    _make_recheck_asset(is_reachable=False)
+    # Pre-acquire the cooldown lock to simulate a recent probe.
+    celery_tasks_module.r.set(asset_recheck_lock_key('a1'), '1')
+    with mock.patch('celery_tasks.url_fails', return_value=False) as m:
+        revalidate_asset_url.apply(args=('a1',))
+    m.assert_not_called()
+    assert not Asset.objects.get(asset_id='a1').is_reachable
+
+
+@pytest.mark.django_db
+def test_recheck_acquires_lock_when_running(
+    eager_celery_recheck: None,
+) -> None:
+    """The task must SETNX the cooldown lock before probing — that
+    gate is what prevents concurrent ffprobe calls for the same asset
+    across workers."""
+    _make_recheck_asset()
+    with mock.patch('celery_tasks.url_fails', return_value=False):
+        revalidate_asset_url.apply(args=('a1',))
+    assert celery_tasks_module.r.get(asset_recheck_lock_key('a1')) == '1'
+
+
+@pytest.mark.django_db
+def test_recheck_skips_disabled_asset(
+    eager_celery_recheck: None,
+) -> None:
+    _make_recheck_asset(is_enabled=False, is_reachable=True)
+    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+        revalidate_asset_url.apply(args=('a1',))
+    m.assert_not_called()
+    assert Asset.objects.get(asset_id='a1').is_reachable
+    assert celery_tasks_module.r.get(asset_recheck_lock_key('a1')) is None
+
+
+@pytest.mark.django_db
+def test_recheck_skips_processing_asset(
+    eager_celery_recheck: None,
+) -> None:
+    _make_recheck_asset(is_processing=True)
+    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+        revalidate_asset_url.apply(args=('a1',))
+    m.assert_not_called()
+    assert Asset.objects.get(asset_id='a1').is_reachable
+    assert celery_tasks_module.r.get(asset_recheck_lock_key('a1')) is None
+
+
+@pytest.mark.django_db
+def test_recheck_skips_skip_asset_check_asset(
+    eager_celery_recheck: None,
+) -> None:
+    """Operator opted out of validation; matches sweep behavior of not
+    touching is_reachable / last_reachability_check."""
+    _make_recheck_asset(skip_asset_check=True, is_reachable=True)
+    with mock.patch('celery_tasks.url_fails') as m:
+        revalidate_asset_url.apply(args=('a1',))
+    m.assert_not_called()
+    assert Asset.objects.get(asset_id='a1').last_reachability_check is None
+    assert celery_tasks_module.r.get(asset_recheck_lock_key('a1')) is None
+
+
+@pytest.mark.django_db
+def test_recheck_runs_when_no_lock_held(
+    eager_celery_recheck: None,
+) -> None:
+    """No lock held → SETNX succeeds → probe runs."""
+    _make_recheck_asset(is_reachable=False)
+    with mock.patch('celery_tasks.url_fails', return_value=False):
+        revalidate_asset_url.apply(args=('a1',))
+    assert Asset.objects.get(asset_id='a1').is_reachable

@@ -117,12 +117,49 @@ def _make_fake_redis() -> MagicMock:
 
     fake = MagicMock(name='FakeRedis')
     fake.get.side_effect = store.get
-    fake.set.side_effect = lambda key, value: store.__setitem__(key, value)
-    fake.delete.side_effect = lambda *keys: [store.pop(k, None) for k in keys]
+
+    def _set(
+        key: str,
+        value: Any,
+        *,
+        nx: bool = False,
+        ex: int | None = None,
+        **_: Any,
+    ) -> bool | None:
+        # Match real Redis ``SET ... NX``: succeeds only if the key is
+        # not already present, returns True on success / None on no-op.
+        # Tests for SETNX-based gates (per-asset recheck cooldown,
+        # sweep singleton lock, splash IP-refresh debounce) rely on
+        # this — without it, every "is the lock held?" check would
+        # spuriously believe the lock was free.
+        if nx and key in store:
+            return None
+        store[key] = value
+        return True
+
+    fake.set.side_effect = _set
+    fake.delete.side_effect = lambda *keys: sum(
+        1 for k in keys if store.pop(k, None) is not None
+    )
     fake.expire.side_effect = lambda key, _ttl: bool(key in store)
     fake.exists.side_effect = lambda *keys: sum(1 for k in keys if k in store)
     fake.flushdb.side_effect = lambda: store.clear()
     fake.publish.side_effect = lambda channel, msg: 0
+
+    def _eval(script: str, numkeys: int, *args: Any) -> Any:
+        # Compare-and-delete is the only ``EVAL`` script in the
+        # codebase (sweep lock release in celery_tasks.py). Implement
+        # that pattern directly; any other script becomes a no-op.
+        if "redis.call('get', KEYS[1])" in script and "'del'" in script:
+            keys = list(args[:numkeys])
+            argv = list(args[numkeys:])
+            if keys and argv and store.get(keys[0]) == argv[0]:
+                store.pop(keys[0], None)
+                return 1
+            return 0
+        return None
+
+    fake.eval.side_effect = _eval
 
     def _rpush(key: str, *values: Any) -> int:
         bucket = store.setdefault(key, [])

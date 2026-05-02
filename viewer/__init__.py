@@ -9,9 +9,10 @@ from typing import Any
 
 import django
 import pydbus
+import requests
 import sh as sh
 
-from settings import ReplySender, settings
+from settings import LISTEN, PORT, ReplySender, settings
 from viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
 from viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
 from viewer.constants import SPLASH_DELAY as SPLASH_DELAY
@@ -31,10 +32,10 @@ django.setup()
 
 # Place imports that uses Django in this block.
 
+from lib.internal_auth import INTERNAL_AUTH_HEADER, internal_auth_token  # noqa: E402
 from lib.utils import (  # noqa: E402
     connect_to_redis,
     string_to_bool,
-    url_fails,
 )
 from viewer.messaging import ViewerSubscriber  # noqa: E402
 from viewer.scheduling import Scheduler  # noqa: E402
@@ -193,6 +194,88 @@ def load_settings() -> None:
     )
 
 
+def _asset_is_displayable(asset: dict[str, Any]) -> bool:
+    """Decide whether to play an asset this rotation.
+
+    The reachability of remote URLs is owned by the server (a celery
+    beat task refreshes ``Asset.is_reachable`` on a 15-min cadence and
+    the ``/api/v2/assets/<id>/recheck`` endpoint covers on-demand
+    re-validation). The viewer used to call ``url_fails`` itself on
+    every play, but ffprobe on streams blocks the loop for up to 15s
+    per rotation — so we trust the field instead and let the server
+    own that work.
+
+    Local files still get a filesystem check: the asset row's
+    ``is_reachable`` is set against the celery worker's view of the
+    filesystem, but assetdir is shared by volume so the answer is the
+    same. Cheap, no roundtrip, mirrors prior behavior for local files.
+    """
+    if asset.get('skip_asset_check'):
+        return True
+    uri = asset.get('uri') or ''
+    if _asset_is_local_file(asset):
+        return path.isfile(uri)
+    # Default to True so a row written before this field existed
+    # (or by an older serializer that doesn't set it) doesn't get
+    # silently skipped.
+    return bool(asset.get('is_reachable', True))
+
+
+def _asset_is_local_file(asset: dict[str, Any]) -> bool:
+    uri = asset.get('uri') or ''
+    return uri.startswith('/')
+
+
+def _trigger_asset_recheck(asset_id: str | None) -> None:
+    """Ask the server to re-probe an asset we couldn't display.
+
+    Best-effort: a failure here just means the asset stays marked
+    unreachable until the next periodic sweep, which is acceptable.
+    The server-side task rate-limits per asset, so spamming this on
+    every rotation through an unreachable asset is safe.
+    """
+    if not asset_id:
+        return
+    token = internal_auth_token(settings)
+    if not token:
+        logging.debug(
+            'Skipping recheck for %s: internal token unavailable', asset_id
+        )
+        return
+    try:
+        # NOSONAR (S5332): viewer talks to anthias-server over plain
+        # HTTP per CLAUDE.md (TLS is opt-in via the Caddy sidecar that
+        # bin/enable_ssl.sh installs as a compose override). The
+        # production compose templates set LISTEN=anthias-server in the
+        # viewer container's environment, so this resolves to the
+        # in-stack service hostname; the settings.py default of
+        # 127.0.0.1 only kicks in for non-compose deployments. Either
+        # way the URL never crosses a network boundary on a default
+        # deploy.
+        response = requests.post(
+            f'http://{LISTEN}:{PORT}/api/v2/assets/{asset_id}/recheck',  # NOSONAR
+            timeout=2,
+            allow_redirects=False,
+            headers={INTERNAL_AUTH_HEADER: token},
+        )
+    except requests.RequestException as e:
+        logging.debug('Failed to trigger recheck for %s: %s', asset_id, e)
+        return
+
+    if response.status_code != 202:
+        # 404 means the row was deleted between scheduler refresh and
+        # this call — the recheck is moot. Anything else (a 5xx, or a
+        # 401/302 if the endpoint ever gets re-decorated with @authorized)
+        # means the recheck didn't actually enqueue. Log at debug so the
+        # operator can see the chain is silently broken without spamming
+        # the loop on every rotation past the unreachable asset.
+        logging.debug(
+            'Recheck request for %s returned unexpected status %s',
+            asset_id,
+            response.status_code,
+        )
+
+
 def asset_loop(scheduler: Any) -> None:
     asset = scheduler.get_next_asset()
 
@@ -212,9 +295,7 @@ def asset_loop(scheduler: Any) -> None:
             # Duration elapsed normally, continue to next iteration
             pass
 
-    elif path.isfile(asset['uri']) or (
-        not url_fails(asset['uri']) or asset['skip_asset_check']
-    ):
+    elif _asset_is_displayable(asset):
         name, mime, uri = asset['name'], asset['mimetype'], asset['uri']
         logging.info('Showing asset %s (%s)', name, mime)
         logging.debug('Asset URI %s', uri)
@@ -247,6 +328,8 @@ def asset_loop(scheduler: Any) -> None:
             asset['name'],
             asset['uri'],
         )
+        if not _asset_is_local_file(asset):
+            _trigger_asset_recheck(asset.get('asset_id'))
         skip_event = get_skip_event()
         skip_event.clear()
         if skip_event.wait(timeout=0.5):

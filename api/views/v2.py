@@ -21,6 +21,7 @@ from api.helpers import (
     save_active_assets_ordering,
 )
 from lib.auth import hash_password
+from lib.internal_auth import is_internal_request
 from api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
@@ -162,6 +163,67 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
     @authorized
     def put(self, request: Request, asset_id: str) -> Response:
         return self.update(request, asset_id, partial=False)
+
+
+class AssetRecheckViewV2(APIView):
+    """On-demand reachability recheck, called from the viewer.
+
+    The viewer cannot attach operator BasicAuth credentials, so this
+    endpoint uses a lightweight internal token derived from the shared
+    ``anthias.conf`` secret instead. The request still remains
+    side-effect-only and rate-limited: it returns no asset data, queue
+    churn is debounced here, and the Celery task enforces the longer
+    per-asset probe cooldown.
+    """
+
+    @extend_schema(
+        summary='Recheck asset reachability',
+        responses={202: None, 403: None, 404: None},
+    )
+    def post(self, request: Request, asset_id: str) -> Response:
+        if not is_internal_request(request, settings):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        # Existence check before locking — a 404 is more useful than
+        # a silent 202 on an unknown id, and we don't want to acquire
+        # a lock for an asset that doesn't exist.
+        if not Asset.objects.filter(asset_id=asset_id).exists():
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # Imported here to avoid a circular import at module load:
+        # celery_tasks imports api.* via Django's app registry, and
+        # importing it at the top of this view module pulls celery into
+        # the request path on every request even when not needed.
+        from celery_tasks import (
+            ASSET_RECHECK_QUEUE_DEBOUNCE_S,
+            asset_recheck_queue_key,
+            revalidate_asset_url,
+        )
+
+        # Atomic per-asset queue-debounce gate. Replaces a racy check
+        # on ``asset.last_reachability_check`` — the timestamp only
+        # updates after the probe completes, so near-simultaneous
+        # endpoint hits would all read the same stale value and each
+        # enqueue a task. SETNX with a short TTL gates queue churn:
+        # only the first endpoint hit in the window enqueues, the
+        # rest no-op. The actual cooldown (don't probe again within
+        # RECHECK_COOLDOWN_S) is enforced by a separate task-side lock
+        # in ``revalidate_asset_url`` — they're separate keys with
+        # different TTLs because a single shared key would block the
+        # task we just enqueued from acquiring its own lock. Returns
+        # 202 on the no-op path because the recheck is effectively
+        # up-to-date already; the viewer doesn't need to distinguish
+        # "fresh" from "skipped due to debounce".
+        if not r.set(
+            asset_recheck_queue_key(asset_id),
+            '1',
+            nx=True,
+            ex=ASSET_RECHECK_QUEUE_DEBOUNCE_S,
+        ):
+            return Response(status=status.HTTP_202_ACCEPTED)
+
+        revalidate_asset_url.delay(asset_id)
+        return Response(status=status.HTTP_202_ACCEPTED)
 
 
 class BackupViewV2(BackupViewMixin):

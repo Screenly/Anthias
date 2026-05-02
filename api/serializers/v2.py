@@ -42,6 +42,12 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
             'skip_asset_check',
             'is_active',
             'is_processing',
+            'is_reachable',
+            'last_reachability_check',
+        ]
+        read_only_fields = [
+            'is_reachable',
+            'last_reachability_check',
         ]
 
 
