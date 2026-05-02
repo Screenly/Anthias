@@ -227,13 +227,9 @@ def test_playlist_should_be_updated_after_deadline_reached(
 def _aware(
     year: int, month: int, day: int, hour: int, minute: int = 0
 ) -> datetime:
-    return datetime(
-        year,
-        month,
-        day,
-        hour,
-        minute,
-        tzinfo=timezone.get_current_timezone(),
+    return timezone.make_aware(
+        datetime(year, month, day, hour, minute),
+        timezone.get_current_timezone(),
     )
 
 
