@@ -272,6 +272,34 @@ class TestRevalidateAssetUrls(TestCase):
         finally:
             redis_conn.delete(ASSET_REVALIDATION_LOCK_KEY)
 
+    def test_lock_release_does_not_clobber_a_different_holder(self) -> None:
+        """Pathological case: TTL expires while sweep A is still running,
+        sweep B acquires the (now-free) lock with a fresh token, then
+        sweep A finishes and hits its finally clause. A's release must
+        only delete the lock if its token still matches — else it would
+        clobber B's lock and let yet another sweep slip in.
+        """
+        self._make_asset('a1')
+
+        # Run the sweep, but in the middle of it, simulate the lock
+        # being stolen by a different "sweep" (different token).
+        def steal_during_sweep(*args: object, **kwargs: object) -> bool:
+            # Overwrite the lock value with someone else's token.
+            redis_conn.set(ASSET_REVALIDATION_LOCK_KEY, 'someone-else', ex=60)
+            return False  # url_fails return — asset is reachable
+
+        with mock.patch(
+            'celery_tasks.url_fails', side_effect=steal_during_sweep
+        ):
+            revalidate_asset_urls.apply()
+
+        # Our sweep's finally clause ran, but the lock value should
+        # still be 'someone-else' — the compare-and-delete saw a
+        # token mismatch and left the lock in place.
+        self.assertEqual(
+            redis_conn.get(ASSET_REVALIDATION_LOCK_KEY), 'someone-else'
+        )
+
     def test_lock_released_after_clean_run(self) -> None:
         """The finally clause must release the lock so the next beat
         tick can run. Without it, a successful sweep would block the

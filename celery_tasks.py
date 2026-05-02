@@ -1,5 +1,6 @@
 import logging
 import os
+import secrets
 import time
 from datetime import timedelta
 from os import getenv, path
@@ -71,6 +72,17 @@ ASSET_REVALIDATION_TIME_LIMIT_S = 60 * 30
 # the time_limit so a worker that crashes mid-sweep doesn't lock the
 # next sweep out forever.
 ASSET_REVALIDATION_LOCK_KEY = 'celery:revalidate_asset_urls:lock'
+
+# Compare-and-delete: only release the lock if the value still matches
+# the token we wrote. Prevents a pathological case where sweep A's TTL
+# expires while it's still running, sweep B acquires the (now-free)
+# lock, and sweep A's ``finally`` block then deletes B's lock and
+# allows further overlap. ``redis.eval`` runs the script atomically.
+_LOCK_RELEASE_LUA = (
+    "if redis.call('get', KEYS[1]) == ARGV[1] then "
+    "return redis.call('del', KEYS[1]) "
+    'else return 0 end'
+)
 
 
 @celery.on_after_configure.connect
@@ -229,15 +241,22 @@ def revalidate_asset_urls() -> None:
     while the first is still running, and we'd end up with multiple
     workers hammering the same asset list and racing on the
     ``Asset.objects.filter(...).update()`` writes.
+
+    The lock value is a unique per-sweep token, and release is a Lua
+    compare-and-delete. The token guards a pathological case: if our
+    TTL expires while we're still running and a fresh sweep acquires
+    the lock, our ``finally`` block must NOT delete that fresh lock.
     """
     from django.utils import timezone
 
-    # SETNX with TTL: succeeds only if the key isn't held. The TTL
-    # matches the task time_limit so a hard kill doesn't leave the
-    # lock orphaned.
+    # SETNX with TTL and a unique token: succeeds only if the key
+    # isn't held. The TTL matches the task time_limit so a hard kill
+    # doesn't leave the lock orphaned. The token lets us release
+    # safely even if the TTL expired and someone else now owns it.
+    token = secrets.token_hex(16)
     if not r.set(
         ASSET_REVALIDATION_LOCK_KEY,
-        '1',
+        token,
         nx=True,
         ex=ASSET_REVALIDATION_TIME_LIMIT_S,
     ):
@@ -264,9 +283,10 @@ def revalidate_asset_urls() -> None:
                 last_reachability_check=timezone.now(),
             )
     finally:
-        # Release the lock proactively on clean exit so the next beat
-        # tick doesn't have to wait out the TTL.
-        r.delete(ASSET_REVALIDATION_LOCK_KEY)
+        # Compare-and-delete: only release if the lock still holds
+        # *our* token. If the TTL expired and someone else acquired
+        # the lock with a different token, leave it alone.
+        r.eval(_LOCK_RELEASE_LUA, 1, ASSET_REVALIDATION_LOCK_KEY, token)
 
 
 @celery.task(time_limit=30)

@@ -185,7 +185,7 @@ class AssetRecheckViewV2(APIView):
     )
     def post(self, request: Request, asset_id: str) -> Response:
         try:
-            Asset.objects.get(asset_id=asset_id)
+            asset = Asset.objects.get(asset_id=asset_id)
         except Asset.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -193,7 +193,24 @@ class AssetRecheckViewV2(APIView):
         # celery_tasks imports api.* via Django's app registry, and
         # importing it at the top of this view module pulls celery into
         # the request path on every request even when not needed.
-        from celery_tasks import revalidate_asset_url
+        from celery_tasks import RECHECK_COOLDOWN_S, revalidate_asset_url
+
+        # Pre-filter at the endpoint with the same cooldown the task
+        # itself enforces. The viewer can rotate quickly past an
+        # unreachable asset (every few seconds during normal playback),
+        # and without this gate every rotation would enqueue a Celery
+        # task that immediately no-ops — sustained queue churn for
+        # zero work. Returns 202 on the no-op path because the recheck
+        # is effectively up-to-date already; the viewer doesn't need
+        # to distinguish "fresh" from "skipped due to cooldown".
+        from django.utils import timezone
+
+        last = asset.last_reachability_check
+        if (
+            last is not None
+            and (timezone.now() - last).total_seconds() < RECHECK_COOLDOWN_S
+        ):
+            return Response(status=status.HTTP_202_ACCEPTED)
 
         revalidate_asset_url.delay(asset_id)
         return Response(status=status.HTTP_202_ACCEPTED)
