@@ -225,12 +225,16 @@ def test_resolve_publish_failure_releases_debounce(
     though no refresh actually got requested. Clear the key on
     publish failure so the next poll can retry.
 
-    Asserts via the underlying fake store rather than ``v2_views.r``
-    so the post-condition can't be confounded by the in-block
-    patches: the autouse Redis fake the conftest installed exposes
-    its dict via ``side_effect`` on ``get``, so we check directly
-    against an unmocked surface (``in_dict_after``) that the
-    ``_publish_refresh`` cleanup actually wrote."""
+    Asserts on the ``delete`` call directly via ``wraps=`` rather than
+    re-reading the key after the block: ``r.get`` is patched to
+    always return ``None`` inside the block (so we can simulate the
+    cache-miss path that triggers the publish), which would make a
+    post-block ``r.get(_IP_REFRESH_PENDING_KEY) is None`` assertion
+    pass for the wrong reason. ``wraps=`` lets the real
+    ``r.delete`` run (so it actually clears the key in the fake
+    store) while also recording the call, giving us a non-vacuous
+    assertion that ``_publish_refresh`` invoked it on the right key.
+    """
     with (
         mock.patch('api.views.v2.is_balena_app', return_value=False),
         mock.patch.object(v2_views.r, 'get', return_value=None),
