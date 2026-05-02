@@ -75,10 +75,16 @@ def _safe_ip_addresses() -> list[str]:
             obj = ipaddress.ip_address(ip)
         except ValueError:
             continue
+        # NOSONAR (S5332): Anthias serves the admin UI on plain HTTP per
+        # CLAUDE.md; TLS is opt-in via the Caddy sidecar. The splash
+        # surfaces these URLs so the operator can click into the
+        # device's LAN UI — they must match how the device actually
+        # listens. Emitting https:// here would point at a port that
+        # isn't bound on a default install.
         if isinstance(obj, ipaddress.IPv6Address):
-            out.append(f'http://[{ip}]')
+            out.append(f'http://[{ip}]')  # NOSONAR
         else:
-            out.append(f'http://{ip}')
+            out.append(f'http://{ip}')  # NOSONAR
     return out
 
 

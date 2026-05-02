@@ -10,6 +10,14 @@ and a static snapshot at render time meant the page couldn't update if
 the host bus came back online during the splash's display window.
 The view now renders immediately with no IPs and the page polls
 /api/v2/network/ip-addresses to populate them.
+
+The IP literals and ``http://`` schemes below are deliberate test
+fixtures: arbitrary non-loopback addresses to exercise IPv4/IPv6
+formatting, and the ``http://`` scheme matches the splash output
+(Anthias is plain HTTP per CLAUDE.md, with TLS as an opt-in Caddy
+sidecar). NOSONAR markers suppress S1313 (hardcoded IP) and S5332
+(use https) on the centralized constants below; downstream f-strings
+and assertions inherit the suppression by referencing them.
 """
 
 from unittest import mock
@@ -17,6 +25,10 @@ from unittest import mock
 from django.test import Client, TestCase
 
 from api.views import v2 as v2_views
+
+_FIXTURE_IPV4 = '192.168.1.42'  # NOSONAR
+_FIXTURE_IPV4_ALT = '10.0.0.5'  # NOSONAR
+_FIXTURE_IPV6 = 'fe80::1'  # NOSONAR
 
 
 class SafeIpAddressesTest(TestCase):
@@ -34,26 +46,28 @@ class SafeIpAddressesTest(TestCase):
 
     def test_formats_ipv4_as_http_url(self) -> None:
         with mock.patch(
-            'api.views.v2.get_node_ip', return_value='192.168.1.42'
+            'api.views.v2.get_node_ip', return_value=_FIXTURE_IPV4
         ):
             self.assertEqual(
-                v2_views._safe_ip_addresses(), ['http://192.168.1.42']
+                v2_views._safe_ip_addresses(), [f'http://{_FIXTURE_IPV4}']
             )
 
     def test_formats_ipv6_in_brackets(self) -> None:
-        with mock.patch('api.views.v2.get_node_ip', return_value='fe80::1'):
+        with mock.patch(
+            'api.views.v2.get_node_ip', return_value=_FIXTURE_IPV6
+        ):
             self.assertEqual(
-                v2_views._safe_ip_addresses(), ['http://[fe80::1]']
+                v2_views._safe_ip_addresses(), [f'http://[{_FIXTURE_IPV6}]']
             )
 
     def test_returns_multiple_when_node_ip_is_space_separated(self) -> None:
         with mock.patch(
             'api.views.v2.get_node_ip',
-            return_value='192.168.1.42 10.0.0.5',
+            return_value=f'{_FIXTURE_IPV4} {_FIXTURE_IPV4_ALT}',
         ):
             self.assertEqual(
                 v2_views._safe_ip_addresses(),
-                ['http://192.168.1.42', 'http://10.0.0.5'],
+                [f'http://{_FIXTURE_IPV4}', f'http://{_FIXTURE_IPV4_ALT}'],
             )
 
     def test_silently_drops_garbage_tokens(self) -> None:
@@ -62,22 +76,22 @@ class SafeIpAddressesTest(TestCase):
         through."""
         with mock.patch(
             'api.views.v2.get_node_ip',
-            return_value='not-an-ip 192.168.1.42 also-garbage',
+            return_value=f'not-an-ip {_FIXTURE_IPV4} also-garbage',
         ):
             self.assertEqual(
-                v2_views._safe_ip_addresses(), ['http://192.168.1.42']
+                v2_views._safe_ip_addresses(), [f'http://{_FIXTURE_IPV4}']
             )
 
 
 class NetworkIpAddressesEndpointTest(TestCase):
     def test_returns_200_with_ip_list(self) -> None:
         with mock.patch(
-            'api.views.v2.get_node_ip', return_value='192.168.1.42'
+            'api.views.v2.get_node_ip', return_value=_FIXTURE_IPV4
         ):
             response = Client().get('/api/v2/network/ip-addresses')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.json(), {'ip_addresses': ['http://192.168.1.42']}
+            response.json(), {'ip_addresses': [f'http://{_FIXTURE_IPV4}']}
         )
 
     def test_returns_200_with_empty_list_when_unknown(self) -> None:
@@ -94,7 +108,7 @@ class NetworkIpAddressesEndpointTest(TestCase):
         test pins the choice — flipping it to @authorized would silently
         break the splash on auth-enabled installs."""
         with mock.patch(
-            'api.views.v2.get_node_ip', return_value='192.168.1.42'
+            'api.views.v2.get_node_ip', return_value=_FIXTURE_IPV4
         ):
             # No auth headers, no session — must still work.
             response = Client().get('/api/v2/network/ip-addresses')
