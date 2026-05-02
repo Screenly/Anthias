@@ -278,9 +278,9 @@ def test_basic_auth_update_settings_change_password_requires_current(
         '/',
         {
             'user': 'alice',
-            'password': 'newpw',
-            'password2': 'newpw',
-        },  # NOSONAR
+            'password': 'newpw',  # NOSONAR
+            'password2': 'newpw',  # NOSONAR
+        },
     )
 
     with pytest.raises(
@@ -316,9 +316,9 @@ def test_basic_auth_update_settings_change_password_success(
         '/',
         {
             'user': 'alice',
-            'password': 'newpw',
-            'password2': 'newpw',
-        },  # NOSONAR
+            'password': 'newpw',  # NOSONAR
+            'password2': 'newpw',  # NOSONAR
+        },
     )
     basic_auth.update_settings(request, current_pass_correct=True)
     assert verify_password('newpw', basic_auth_settings['password'])
