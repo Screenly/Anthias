@@ -131,6 +131,31 @@ describe('ScheduleFields', () => {
     expect(latest!.play_time_from).toBe('08:30')
   })
 
+  it('preserves HH:MM:SS state when the input is not edited', () => {
+    // Assets configured via the v2 API can carry sub-minute precision
+    // (e.g. 17:00:01 to include the 17:00 boundary minute). Opening
+    // and saving the modal without touching the time inputs must not
+    // silently truncate that precision.
+    let latest: EditFormData | null = null
+    render(
+      <Harness
+        initial={{
+          ...baseForm,
+          play_time_from: '09:00:30',
+          play_time_to: '17:00:01',
+        }}
+        onState={(s) => (latest = s)}
+      />,
+    )
+
+    const fromInput = screen.getByLabelText(
+      'Play time from',
+    ) as HTMLInputElement
+    expect(fromInput.value).toBe('09:00')
+    expect(latest!.play_time_from).toBe('09:00:30')
+    expect(latest!.play_time_to).toBe('17:00:01')
+  })
+
   it('collapses the whole window when one side is cleared', () => {
     // The v2 API rejects partial windows, so the UI must never let
     // play_time_from and play_time_to drift apart.

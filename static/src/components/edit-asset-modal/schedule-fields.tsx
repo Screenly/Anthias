@@ -129,7 +129,7 @@ export const ScheduleFields = ({
               <input
                 className="form-control time shadow-none"
                 type="time"
-                value={formData.play_time_from || ''}
+                value={(formData.play_time_from || '').slice(0, 5)}
                 onChange={(e) =>
                   handleTimeChange('play_time_from', e.target.value)
                 }
@@ -140,7 +140,7 @@ export const ScheduleFields = ({
               <input
                 className="form-control time shadow-none"
                 type="time"
-                value={formData.play_time_to || ''}
+                value={(formData.play_time_to || '').slice(0, 5)}
                 onChange={(e) =>
                   handleTimeChange('play_time_to', e.target.value)
                 }

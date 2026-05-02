@@ -184,17 +184,21 @@ class Scheduler:
         self.last_update_db_mtime = self.get_db_mtime()
         (new_assets, new_deadline) = generate_asset_list()
 
-        current_ids = sorted(a['asset_id'] for a in self.assets)
-        new_ids = sorted(a['asset_id'] for a in new_assets)
-        membership_changed = current_ids != new_ids
-
-        if not membership_changed and not allow_reshuffle:
-            # Same set of active assets: keep the current play-through
-            # order. With shuffle_playlist on, generate_asset_list
-            # produces a fresh random order every call, so without this
-            # guard the cap-driven refresh (every ~60s for windowed
-            # assets) would reshuffle mid-cycle and disrupt playback.
-            self.deadline = new_deadline
+        if settings['shuffle_playlist'] and not allow_reshuffle:
+            # generate_asset_list() reshuffles on every call, so list
+            # equality would always fail and disrupt the play-through
+            # whenever the cap-driven refresh fires (~60s for windowed
+            # assets). Compare by membership only here; legitimate
+            # reshuffles (end-of-cycle, counter >= 5) opt in via
+            # allow_reshuffle.
+            current_ids = sorted(a['asset_id'] for a in self.assets)
+            new_ids = sorted(a['asset_id'] for a in new_assets)
+            if current_ids == new_ids:
+                self.deadline = new_deadline
+                return
+        elif new_assets == self.assets and new_deadline == self.deadline:
+            # Shuffle off: list equality is meaningful, so a no-op
+            # refresh shouldn't disturb the current play-through.
             return
 
         self.assets, self.deadline = new_assets, new_deadline

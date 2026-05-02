@@ -67,19 +67,16 @@ export const EditAssetModal = ({
         return `${hours}:${minutes}`
       }
 
-      // The v2 API returns times as HH:MM:SS, but <input type="time">
-      // defaults to minute precision and won't display HH:MM:SS values
-      // reliably across browsers. Trim to HH:MM on load so the input
-      // and form state agree; DRF's TimeField accepts HH:MM on submit.
-      const toHourMinute = (value: string | null) =>
-        value ? value.slice(0, 5) : null
-
       // The v2 API rejects partial windows. Legacy / admin-edited rows
       // could still arrive here with one side null, so collapse to both
       // null on load — otherwise the restrict-time toggle would read
-      // "enabled" but the form would be unsaveable.
-      const fromValue = toHourMinute(asset.play_time_from ?? null)
-      const toValue = toHourMinute(asset.play_time_to ?? null)
+      // "enabled" but the form would be unsaveable. Keep the original
+      // HH:MM:SS in state so opening + saving without touching the
+      // time inputs doesn't silently drop sub-minute precision; the
+      // <input type="time"> only renders HH:MM, but ScheduleFields
+      // handles that at display time.
+      const fromValue = asset.play_time_from ?? null
+      const toValue = asset.play_time_to ?? null
       const [normalizedFrom, normalizedTo] =
         fromValue && toValue ? [fromValue, toValue] : [null, null]
 

@@ -392,6 +392,26 @@ def test_get_play_days_non_int_element_falls_back_to_all_days() -> None:
 
 
 @pytest.mark.django_db
+def test_play_order_change_propagates_when_shuffle_off(
+    restore_shuffle_setting: None,
+) -> None:
+    """With shuffle off, an admin reordering assets via play_order
+    should take effect on the next refresh — the membership-equality
+    fast path is shuffle-only."""
+    a = Asset.objects.create(**_scheduled_asset(asset_id='a', play_order=0))
+    b = Asset.objects.create(**_scheduled_asset(asset_id='b', play_order=1))
+    scheduler = Scheduler()
+    assert [x['asset_id'] for x in scheduler.assets] == ['a', 'b']
+
+    a.play_order = 2
+    a.save()
+    scheduler.update_playlist()
+    assert [x['asset_id'] for x in scheduler.assets] == ['b', 'a']
+    # Silence unused-binding warnings
+    _ = b
+
+
+@pytest.mark.django_db
 def test_cap_driven_refresh_preserves_shuffle_play_through(
     restore_shuffle_setting: None,
 ) -> None:
