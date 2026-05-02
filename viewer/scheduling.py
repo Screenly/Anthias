@@ -101,6 +101,8 @@ def _compute_deadline(
         # on their date boundary alone, not periodic polling.
         if (
             asset.has_window_filter()
+            and asset.start_date is not None
+            and asset.end_date is not None
             and asset.start_date < now < asset.end_date
         ):
             has_windowed = True
