@@ -40,7 +40,7 @@ here are the links to the images:
 * [Raspberry Pi 1](https://hub.balena.io/fleets-for-good/1971378/anthias-pi1)
 
 Go to one of the links above and click the *Join* button, then select either *Ethernet only* or *Wifi + Ethernet* for Network options.
-You can either click the *Flash* button to open balenaEthcher (make sure that it's installed) or download the image file and flash it using your preferred imager.
+You can either click the *Flash* button to open balenaEtcher (make sure that it's installed) or download the image file and flash it using your preferred imager.
 Flash the SD card and boot up your Raspberry Pi. It will take a few minutes to boot up and start the services.
 
 Alternatively, you can [download our pre-built Balena disk images from the releases](#using-the-images-from-the-releases).

@@ -123,7 +123,7 @@ $ ./bin/deploy_to_balena.sh \
     --dev
 ```
 
-You can also includa a `--shm-size` flag to specify the shared memory size, which defaults
+You can also include a `--shm-size` flag to specify the shared memory size, which defaults
 to `256mb`. For example:
 
 ```bash

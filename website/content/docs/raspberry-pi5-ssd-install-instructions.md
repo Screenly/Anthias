@@ -54,7 +54,7 @@ Depending on the bootloader version of your Pi (confirmed that as of at least **
 
 Once your Pi is booting from the SSD, if you installed the Raspberry Pi OS image you have a couple of housekeeping tasks to perform;
 
-- Update the OS using `sudo apt update -y` and `sudo apt full-upgrade -y`
+- Update the OS using `sudo apt update` and `sudo apt full-upgrade -y`
 - Check the bootloader is at the latest version using `sudo rpi-eeprom-update`
 - If there is an EEPROM update, then use `sudo raspi-config` to update it
 - Go to `6 Advanced Options` &rarr; `A5 Bootloader Version` &rarr; `E1 Latest`, then select `Yes`

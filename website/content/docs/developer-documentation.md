@@ -275,7 +275,7 @@ present in a Raspberry Pi with Anthias installed.
 
 * `anthias.plymouth` &mdash; Plymouth config file (sets module name, `ImageDir` and `ScriptFile` dir)
 * `anthias.script` &ndash; plymouth script file that loads and scales the splash screen image during the boot process
-* `splashscreen.png` &mdash; the spash screen image that is displayed during the boot process
+* `splashscreen.png` &mdash; the splash screen image that is displayed during the boot process
 
 ## Debugging the Anthias WebView
 

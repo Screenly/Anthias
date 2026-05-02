@@ -37,7 +37,7 @@ Running unit tests is a good way to make sure that the code is working as expect
 2. If desired, change the device's **Player name**.
 3. Change a default value for the **Default duration** and upload any asset. Make sure that the duration value is correct.
 4. Change a default value for the **Default streaming duration** and upload any stream. Make sure that the asset is being displayed for the specified duration.
-5. Enable **Show splash screen** and reboot the device. Make sure that the splash screen is not being displayed upon boot.
+5. Enable **Show splash screen** and reboot the device. Make sure that the splash screen is being displayed upon boot.
 6. Enable **Default assets** and make sure that the default assets are added to the list of active assets. Also make sure that the assets are being displayed on the screen.
 7. Disable **Default assets** and make sure that the assets are deleted from the list of active assets. Also make sure that the assets are not being displayed on the screen.
 8. Enable **Shuffle playlist**. Activate some assets and make sure that the assets are being displayed in random order.
@@ -47,7 +47,7 @@ Running unit tests is a good way to make sure that the code is working as expect
 12. Choose any format for the **Date format**. Go to the assets page and make sure that the date field uses the correct format.
 13. Enable authentication by selecting **Basic** from the **Authentication** dropdown. Reload page and make sure that you'll now be prompted to enter a username and a password.
 14. Click the **Get Backup** button. Delete all assets. Click on **Upload and Recover** and make sure that the assets are restored.
-15. Try to reboot or shutdown the device by clickin on the **Reboot** or **Shutdown** buttons, respectively. Make sure that the device does the corresponding action.
+15. Try to reboot or shutdown the device by clicking on the **Reboot** or **Shutdown** buttons, respectively. Make sure that the device does the corresponding action.
 16. Go to the **System Info** page and make sure that all information are correct.
 17. Make sure that all the footer links are being displayed correctly.
 18. Connect to the device by ssh. Run `./bin/enable_ssl.sh` script. Make sure the site URL uses SSL.

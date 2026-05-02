@@ -107,7 +107,7 @@ jobs:
           # key at a time, so iterate the required-key list with `all`.
           jq -e '
             .os_list[] as $entry
-            | ["name","description","url","extract_size","extract_sha256","image_download_size","image_download_sha256","release_date"]
+            | ["name","description","icon","website","url","extract_size","extract_sha256","image_download_size","image_download_sha256","release_date"]
             | all(. as $k | $entry | has($k))
           ' < website/public/rpi-imager.json > /dev/null
 
