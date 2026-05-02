@@ -105,7 +105,14 @@ _install_dbus_stubs()
 
 
 def _make_fake_redis() -> MagicMock:
-    """A dict-backed Redis mock matching the real client's surface."""
+    """
+    A dict-backed Redis mock matching the surface our code uses.
+
+    String ops (get/set/delete/expire/exists/flushdb/publish) and list
+    ops (rpush/lpop/blpop) are modelled on the real Redis semantics so
+    test paths that exercise both — notably ``ReplyCollector.recv_json``
+    via BLPOP — see realistic behaviour rather than no-ops.
+    """
     store: dict[str, Any] = {}
 
     fake = MagicMock(name='FakeRedis')
@@ -116,15 +123,37 @@ def _make_fake_redis() -> MagicMock:
     fake.exists.side_effect = lambda *keys: sum(1 for k in keys if k in store)
     fake.flushdb.side_effect = lambda: store.clear()
     fake.publish.side_effect = lambda channel, msg: 0
-    fake.blpop.side_effect = lambda keys, timeout=None: None
-    fake.lpop.side_effect = lambda key: store.pop(key, None)
 
     def _rpush(key: str, *values: Any) -> int:
         bucket = store.setdefault(key, [])
         bucket.extend(values)
         return len(bucket)
 
+    def _lpop(key: str) -> Any:
+        bucket = store.get(key)
+        if not bucket:
+            return None
+        value = bucket.pop(0)
+        if not bucket:
+            store.pop(key, None)
+        return value
+
+    def _blpop(keys: Any, timeout: float | None = None) -> Any:
+        # Real BLPOP blocks until a value is available or the timeout
+        # expires. Tests don't drive a writer thread, so block-then-
+        # poll behaviour collapses to "return immediately": yield the
+        # first available value, or None if every key is empty.
+        if isinstance(keys, (str, bytes)):
+            keys = [keys]
+        for key in keys:
+            value = _lpop(key)
+            if value is not None:
+                return (key, value)
+        return None
+
     fake.rpush.side_effect = _rpush
+    fake.lpop.side_effect = _lpop
+    fake.blpop.side_effect = _blpop
     return fake
 
 

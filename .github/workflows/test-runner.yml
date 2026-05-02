@@ -71,6 +71,16 @@ jobs:
           docker compose exec anthias-test \
             bash ./bin/prepare_test_environment.sh -s
 
+      # Snapshot the unit-only `.coverage` before the retry begins.
+      # Each retry attempt restores from this snapshot before invoking
+      # pytest, so partial line-hit data from a failed earlier attempt
+      # cannot leak into the final coverage.xml via `--cov-append`.
+      - name: Snapshot unit-only coverage data
+        if: inputs.test-type == 'python'
+        run: |
+          docker compose exec anthias-test \
+            cp .coverage .coverage.unit-snapshot
+
       # ANTHIAS_INTEGRATION_TEST=1 tells anthias_django/settings.py to
       # pin DATABASES.default.TEST.NAME to the same SQLite path the
       # anthias-server container reads. Selenium tests assert on
@@ -85,6 +95,8 @@ jobs:
           timeout_minutes: 5
           max_attempts: 5
           command: |
+            docker compose exec anthias-test \
+              cp .coverage.unit-snapshot .coverage
             docker compose exec -e ANTHIAS_INTEGRATION_TEST=1 anthias-test \
               pytest -m integration \
                 --cov --cov-append --cov-report=xml --cov-report=term
