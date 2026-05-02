@@ -1,0 +1,135 @@
+- group: About
+  items:
+    - question: What is the difference between Anthias and Screenly?
+      answer: |
+        Anthias is free, open-source digital signage software built by Screenly, Inc. Screenly is a paid, cloud-managed digital signage platform designed for professional multi-screen deployments. You can learn more about the differences on [screenly.io](https://www.screenly.io/screenly-vs-anthias/).
+
+        Choose **Screenly** if you need multi-screen management from a single account, enterprise user management, or professional support. Choose **Anthias** if you're comfortable managing individual devices and want a free, self-hosted solution.
+
+    - question: What hardware do I need?
+      answer: |
+        Anthias runs on [Raspberry Pi](https://www.raspberrypi.com/) 2 through 5 and 64-bit x86 PCs (Intel NUC or similar). You'll also need a screen with an HDMI input. We recommend a Raspberry Pi 4 or 5 for new installations.
+
+    - question: Does Anthias require an internet connection?
+      answer: |
+        No. Anthias runs entirely on your local network. You only need internet access for the initial installation and to display content from external URLs. Uploaded images and videos play from local storage.
+
+    - question: Can I manage multiple screens?
+      answer: |
+        Each Anthias instance manages one screen. You can run multiple instances on separate devices, but each has its own dashboard. If you need centralized multi-screen management, [Screenly](https://www.screenly.io) is designed for that.
+
+    - question: Can I use Anthias commercially?
+      answer: |
+        Yes. Anthias is dual-licensed under [GPLv2](https://github.com/Screenly/Anthias/blob/master/LICENSE) and a commercial license. You can deploy it commercially under GPLv2 — including in customer-facing storefronts and lobbies — as long as you comply with the GPL's copyleft terms when redistributing modified versions.
+
+        If you need a non-copyleft license, professional support, or fleet-scale management, see [Screenly](https://www.screenly.io).
+
+    - question: Is there support for Anthias?
+      answer: |
+        Anthias is a community-supported project. You can get help on the [Anthias forum](https://forums.screenly.io) or file issues on [GitHub](https://github.com/Screenly/Anthias/issues). For professional support, SLAs, and managed infrastructure, consider [Screenly](https://www.screenly.io).
+
+- group: Installation & updates
+  items:
+    - question: How do I update Anthias?
+      answer: |
+        If you installed via balenaHub, updates are applied automatically over the air. For command-line installations, re-run the installer (`$HOME/anthias/bin/run_upgrade.sh`) or pull the latest Docker images. Disk image installations are pinned to the version you downloaded.
+
+    - question: How do I configure Wi-Fi or change networks?
+      answer: |
+        Anthias uses [NetworkManager](https://wiki.debian.org/NetworkManager) for networking when the installer's "manage the network" prompt is enabled. SSH into the device and run `sudo nmtui` for an interactive UI, or use `nmcli device wifi connect <SSID> password <pwd>` from the command line.
+
+        The legacy WiFi-Connect captive portal has been removed; `nmtui` / `nmcli` are the supported path going forward.
+
+    - question: Can I assign a static IP address?
+      answer: |
+        Yes, via NetworkManager. SSH in and run `sudo nmtui` → **Edit a connection** → choose your interface → set **IPv4 Configuration** to *Manual* and fill in the address, gateway, and DNS. Apply and reboot to confirm. You can also do this with `nmcli` non-interactively if you're scripting deployments.
+
+    - question: How do I enable SSH on the device?
+      answer: |
+        Whether SSH is enabled depends on the OS image, not on Anthias itself — the installer doesn't touch `sshd`.
+
+        * **Anthias Raspberry Pi Imager image** and **balenaHub fleets**: SSH is on out of the box.
+        * **Raspberry Pi OS Lite** (you flashed it yourself): use Raspberry Pi Imager's advanced options to pre-enable SSH and set a username, or drop an empty file named `ssh` into the `/boot` partition before first boot.
+        * **Debian on PC**: the Debian installer leaves SSH on if you selected the *SSH server* package during install.
+
+        Then connect with `ssh <user>@<device-ip>`.
+
+- group: Display & playback
+  items:
+    - question: How do I rotate the screen for portrait orientation?
+      answer: |
+        Rotation happens at the kernel / firmware level. The Anthias viewer renders straight to the Linux framebuffer (Qt `linuxfb`) and to KMS (mpv `--vo=drm`) — there's no Wayland compositor in the stack — so the standard Raspberry Pi config knobs apply directly.
+
+        Edit `/boot/firmware/config.txt` and add one of:
+
+        ```
+        display_rotate=1   # 90°
+        display_rotate=2   # 180°
+        display_rotate=3   # 270°
+        ```
+
+        Then reboot. If `display_rotate` doesn't take effect on a particular Pi 5 / KMS setup, set the rotation on the kernel cmdline instead — edit `/boot/firmware/cmdline.txt` and append `video=HDMI-A-1:1920x1080@60,rotate=90` (or 180/270) on the same line. Many displays also expose a rotation setting in their own OSD as a fallback.
+
+    - question: How do I change the screen resolution? Does Anthias support 4K?
+      answer: |
+        Anthias displays at whatever resolution the OS reports — there's no resolution setting in the dashboard. Set the output mode at the OS level: on Raspberry Pi OS, use `sudo raspi-config` → **Display Options** → **Resolution**, or set `hdmi_group` / `hdmi_mode` in `/boot/firmware/config.txt`.
+
+        4K is supported on hardware that supports it natively: Pi 5 handles 4K@60Hz on either HDMI port; Pi 4 supports 4K@30Hz on `HDMI-0` (or 4K@60Hz with `hdmi_enable_4kp60=1` and adequate cooling).
+
+    - question: My screen is black or stuck on "Manage the content" — what now?
+      answer: |
+        This usually means the viewer container can't reach the server, or there are no active assets. Try these in order:
+
+        1. SSH in and run `docker compose ps` from `~/anthias/` — all four containers (`anthias-server`, `anthias-celery`, `anthias-viewer`, `redis`) should be `Up`.
+        2. If a container is restarting, tail its logs: `docker logs -f anthias-anthias-viewer-1` (or `…-server-1`).
+        3. Open the dashboard from another device and confirm at least one asset is **enabled** with a current schedule.
+        4. If the display has gone to power save, briefly unplug and reconnect the HDMI cable, or check the TV's input source. Anthias renders to the framebuffer (Qt `linuxfb`) and uses no X server, so `xset` won't help.
+
+        If a recent update broke the display, running `~/anthias/bin/upgrade_containers.sh` re-creates the containers cleanly.
+
+    - question: Can I display YouTube videos?
+      answer: |
+        Yes — paste a YouTube URL into the **Add Asset** dialog. Anthias uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) behind the scenes to fetch and cache the video locally so it plays without buffering at runtime.
+
+        If a particular video fails to load, it's almost always because YouTube has changed something on their end and yt-dlp needs an update — pulling the latest Anthias release usually fixes it. Embedding a live YouTube page directly (as a webpage asset) is generally not recommended; the bundled WebView isn't tuned for streaming video playback.
+
+    - question: How do I switch audio between HDMI and the 3.5mm jack?
+      answer: |
+        Open the web dashboard, go to **Settings**, and pick **HDMI** or **3.5mm jack** under *Audio output*. The change applies to video assets immediately — no reboot required.
+
+        Note: Raspberry Pi 5 only exposes the **HDMI** option in the dropdown — the 3.5mm jack was removed from the Pi 5 hardware, so the dashboard hides that choice on Pi 5 devices.
+
+    - question: Can I add transitions (fade / crossfade) between assets?
+      answer: |
+        Not currently. Anthias plays one asset, then immediately switches to the next. Adding crossfades would require composited rendering on the viewer side, which the lightweight Pi WebView pipeline doesn't do. If this matters for your deployment, [Screenly](https://www.screenly.io) supports transitions.
+
+- group: Operations
+  items:
+    - question: How do I get logs from Anthias?
+      answer: |
+        SSH into the device and use either of these:
+
+        ```bash
+        # Tail a single container directly
+        docker logs -f anthias-anthias-server-1
+
+        # Or via Compose (run from ~/anthias/)
+        cd ~/anthias
+        docker compose logs -f anthias-server
+        ```
+
+        The container names are `anthias-anthias-server-1`, `anthias-anthias-celery-1`, `anthias-anthias-viewer-1`, and `anthias-redis-1`. If TLS is enabled, there's also `anthias-anthias-caddy-1`.
+
+    - question: Where are my assets stored, and how do I back them up?
+      answer: |
+        The easy way: open the dashboard, go to **Settings**, and click **Get Backup** to download a single-file archive. To restore, click **Upload and Recover** on the same page.
+
+        If you'd rather copy the files manually, asset binaries live in `~/anthias_assets/` and configuration plus the SQLite database (`anthias.db`) live in `~/.anthias/`. Backing up both directories captures everything.
+
+    - question: How do I enable HTTPS?
+      answer: |
+        From `~/anthias/`, run `./bin/enable_ssl.sh`. The default mode uses Caddy's built-in local CA, which is fine for IP-based LAN access. For Let's Encrypt or bring-your-own certificate, see the [TLS / SSL section in the docs](/docs/#tls-ssl).
+
+    - question: Where is the API reference?
+      answer: |
+        See the [API page](/api/) for endpoints grouped by tag with their parameters and response schemas. The live ReDoc-rendered docs are also served straight from each device at `http://<device-ip>/api/docs/`.

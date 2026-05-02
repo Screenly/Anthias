@@ -1,0 +1,739 @@
+openapi: 3.0.3
+info:
+  title: Anthias API
+  version: 2.0.0
+paths:
+  /api/v2/assets:
+    get:
+      operationId: assets_list
+      summary: List assets
+      tags:
+      - assets
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetSerializerV2'
+          description: ''
+    post:
+      operationId: assets_create
+      summary: Create asset
+      tags:
+      - assets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAssetSerializerV2'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateAssetSerializerV2'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateAssetSerializerV2'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetSerializerV2'
+          description: ''
+  /api/v2/assets/{asset_id}:
+    get:
+      operationId: assets_retrieve
+      summary: Get asset
+      parameters:
+      - in: path
+        name: asset_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - assets
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetSerializerV2'
+          description: ''
+    put:
+      operationId: assets_update
+      summary: Update asset
+      parameters:
+      - in: path
+        name: asset_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - assets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAssetSerializerV2'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UpdateAssetSerializerV2'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UpdateAssetSerializerV2'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetSerializerV2'
+          description: ''
+    patch:
+      operationId: assets_partial_update
+      summary: Update asset
+      parameters:
+      - in: path
+        name: asset_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - assets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateAssetSerializerV2'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateAssetSerializerV2'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateAssetSerializerV2'
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetSerializerV2'
+          description: ''
+    delete:
+      operationId: assets_destroy
+      summary: Delete asset
+      parameters:
+      - in: path
+        name: asset_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - assets
+      security:
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v2/assets/{asset_id}/content:
+    get:
+      operationId: assets_content_retrieve
+      description: |-
+        The content of the asset.
+        `type` can either be `file` or `url`.
+
+        In case of a file, the fields `mimetype`, `filename`, and `content`
+        will be present. In case of a URL, the field `url` will be present.
+      summary: Get asset content
+      parameters:
+      - in: path
+        name: asset_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - assets
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  url:
+                    type: string
+                  filename:
+                    type: string
+                  mimetype:
+                    type: string
+                  content:
+                    type: string
+          description: ''
+  /api/v2/assets/control/{command}:
+    get:
+      operationId: assets_control_retrieve
+      description: |-
+        Use any of the following commands to control asset playback:
+        * `next` - Show the next asset
+        * `previous` - Show the previous asset
+        * `asset&{asset_id}` - Show the asset with the specified `asset_id`
+      summary: Control asset playback
+      parameters:
+      - in: path
+        name: command
+        schema:
+          type: string
+          enum:
+          - asset&{asset_id}
+          - next
+          - previous
+        required: true
+      tags:
+      - assets
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                example: Asset switched
+          description: ''
+  /api/v2/assets/order:
+    post:
+      operationId: assets_order_create
+      summary: Update playlist order
+      tags:
+      - assets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaylistOrderSerializerMixin'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlaylistOrderSerializerMixin'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlaylistOrderSerializerMixin'
+        required: true
+      security:
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v2/backup:
+    post:
+      operationId: backup_create
+      description: |-
+        Create a backup of the current Anthias instance, which
+        includes the following:
+        * current settings
+        * image and video assets
+        * asset metadata (e.g. name, duration, play order, status),
+          which is stored in a SQLite database
+      summary: Create backup
+      tags:
+      - backup
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: string
+                example: anthias-backup-2021-09-16T15-00-00.tar.gz
+                description: Backup file name
+          description: ''
+  /api/v2/device_settings:
+    get:
+      operationId: device_settings_retrieve
+      summary: Get device settings
+      tags:
+      - device_settings
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceSettingsSerializerV2'
+          description: ''
+    patch:
+      operationId: device_settings_partial_update
+      summary: Update device settings
+      tags:
+      - device_settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateDeviceSettingsSerializerV2'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateDeviceSettingsSerializerV2'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateDeviceSettingsSerializerV2'
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+          description: ''
+  /api/v2/file_asset:
+    post:
+      operationId: file_asset_create
+      summary: Upload file asset
+      tags:
+      - file_asset
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file_upload:
+                  type: string
+                  format: binary
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uri:
+                    type: string
+                  ext:
+                    type: string
+          description: ''
+  /api/v2/info:
+    get:
+      operationId: info_retrieve
+      summary: Get system information
+      tags:
+      - info
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  viewlog:
+                    type: string
+                  loadavg:
+                    type: number
+                  free_space:
+                    type: string
+                  display_power:
+                    type:
+                    - string
+                    - 'null'
+                  up_to_date:
+                    type: boolean
+                  anthias_version:
+                    type: string
+                  device_model:
+                    type: string
+                  uptime:
+                    type: object
+                    properties:
+                      days:
+                        type: integer
+                      hours:
+                        type: number
+                  memory:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      used:
+                        type: integer
+                      free:
+                        type: integer
+                      shared:
+                        type: integer
+                      buff:
+                        type: integer
+                      available:
+                        type: integer
+                  ip_addresses:
+                    type: array
+                    items:
+                      type: string
+                  mac_address:
+                    type: string
+                  host_user:
+                    type: string
+          description: ''
+  /api/v2/integrations:
+    get:
+      operationId: integrations_retrieve
+      summary: Get integrations information
+      tags:
+      - integrations
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntegrationsSerializerV2'
+          description: ''
+  /api/v2/reboot:
+    post:
+      operationId: reboot_create
+      summary: Reboot system
+      tags:
+      - reboot
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v2/recover:
+    post:
+      operationId: recover_create
+      description: |-
+        Recover data from a backup file. The backup file must be
+        a `.tar.gz` file.
+      summary: Recover from backup
+      tags:
+      - recover
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                backup_upload:
+                  type: string
+                  format: binary
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                example: Recovery successful.
+          description: ''
+  /api/v2/shutdown:
+    post:
+      operationId: shutdown_create
+      summary: Shut down system
+      tags:
+      - shutdown
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+components:
+  schemas:
+    AssetSerializerV2:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          nullable: true
+        uri:
+          type: string
+          nullable: true
+        start_date:
+          type: string
+          format: date-time
+          nullable: true
+        end_date:
+          type: string
+          format: date-time
+          nullable: true
+        duration:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        mimetype:
+          type: string
+          nullable: true
+        is_enabled:
+          type: boolean
+        nocache:
+          type: boolean
+        play_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+        skip_asset_check:
+          type: boolean
+        is_active:
+          type: boolean
+          readOnly: true
+        is_processing:
+          type: boolean
+      required:
+      - asset_id
+      - is_active
+    AuthBackendEnum:
+      enum:
+      - auth_basic
+      type: string
+      description: |-
+        * `` - No authentication
+        * `auth_basic` - Basic authentication
+    BlankEnum:
+      enum:
+      - ''
+    CreateAssetSerializerV2:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          readOnly: true
+        ext:
+          type: string
+          writeOnly: true
+        name:
+          type: string
+        uri:
+          type: string
+        start_date:
+          type: string
+          format: date-time
+        end_date:
+          type: string
+          format: date-time
+        duration:
+          type: integer
+        mimetype:
+          type: string
+        is_enabled:
+          type: boolean
+        is_processing:
+          type: boolean
+        nocache:
+          type: boolean
+        play_order:
+          type: integer
+        skip_asset_check:
+          type: boolean
+      required:
+      - asset_id
+      - duration
+      - end_date
+      - is_enabled
+      - mimetype
+      - name
+      - start_date
+      - uri
+    DeviceSettingsSerializerV2:
+      type: object
+      properties:
+        player_name:
+          type: string
+        audio_output:
+          type: string
+        default_duration:
+          type: integer
+        default_streaming_duration:
+          type: integer
+        date_format:
+          type: string
+        auth_backend:
+          type: string
+        show_splash:
+          type: boolean
+        default_assets:
+          type: boolean
+        shuffle_playlist:
+          type: boolean
+        use_24_hour_clock:
+          type: boolean
+        debug_logging:
+          type: boolean
+        username:
+          type: string
+      required:
+      - audio_output
+      - auth_backend
+      - date_format
+      - debug_logging
+      - default_assets
+      - default_duration
+      - default_streaming_duration
+      - player_name
+      - show_splash
+      - shuffle_playlist
+      - use_24_hour_clock
+      - username
+    IntegrationsSerializerV2:
+      type: object
+      properties:
+        is_balena:
+          type: boolean
+        balena_device_id:
+          type: string
+          nullable: true
+        balena_app_id:
+          type: string
+          nullable: true
+        balena_app_name:
+          type: string
+          nullable: true
+        balena_supervisor_version:
+          type: string
+          nullable: true
+        balena_host_os_version:
+          type: string
+          nullable: true
+        balena_device_name_at_init:
+          type: string
+          nullable: true
+      required:
+      - is_balena
+    PatchedUpdateAssetSerializerV2:
+      type: object
+      properties:
+        name:
+          type: string
+        start_date:
+          type: string
+          format: date-time
+        end_date:
+          type: string
+          format: date-time
+        duration:
+          type: integer
+        is_enabled:
+          type: boolean
+        is_processing:
+          type: boolean
+        nocache:
+          type: boolean
+        play_order:
+          type: integer
+        skip_asset_check:
+          type: boolean
+    PatchedUpdateDeviceSettingsSerializerV2:
+      type: object
+      properties:
+        player_name:
+          type: string
+        audio_output:
+          type: string
+        default_duration:
+          type: integer
+        default_streaming_duration:
+          type: integer
+        date_format:
+          type: string
+        show_splash:
+          type: boolean
+        default_assets:
+          type: boolean
+        shuffle_playlist:
+          type: boolean
+        use_24_hour_clock:
+          type: boolean
+        debug_logging:
+          type: boolean
+        username:
+          type: string
+        password:
+          type: string
+        password_2:
+          type: string
+        auth_backend:
+          oneOf:
+          - $ref: '#/components/schemas/AuthBackendEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        current_password:
+          type: string
+    PlaylistOrderSerializerMixin:
+      type: object
+      properties:
+        ids:
+          type: string
+          writeOnly: true
+          description: |-
+            Comma-separated list of asset IDs in the order
+            they should be played. For example:
+
+            `793406aa1fd34b85aa82614004c0e63a,1c5cfa719d1f4a9abae16c983a18903b,9c41068f3b7e452baf4dc3f9b7906595`
+      required:
+      - ids
+    UpdateAssetSerializerV2:
+      type: object
+      properties:
+        name:
+          type: string
+        start_date:
+          type: string
+          format: date-time
+        end_date:
+          type: string
+          format: date-time
+        duration:
+          type: integer
+        is_enabled:
+          type: boolean
+        is_processing:
+          type: boolean
+        nocache:
+          type: boolean
+        play_order:
+          type: integer
+        skip_asset_check:
+          type: boolean
+      required:
+      - duration
+      - end_date
+      - is_enabled
+      - name
+      - start_date

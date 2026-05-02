@@ -1,0 +1,43 @@
+baseURL = 'https://anthias.screenly.io/'
+languageCode = 'en-us'
+title = "Anthias - The world's most popular open source digital signage project"
+
+disableKinds = ['taxonomy']
+
+[markup]
+  [markup.highlight]
+    codeFences = true
+    guessSyntax = true
+    noClasses = false
+    lineNos = false
+    tabWidth = 4
+    style = "github"
+
+[menus]
+  [[menus.main]]
+    name = 'Features'
+    pageRef = '/features'
+    weight = 10
+  [[menus.main]]
+    name = 'Get Started'
+    pageRef = '/get-started'
+    weight = 20
+  [[menus.main]]
+    name = 'Docs'
+    pageRef = '/docs'
+    weight = 25
+  [[menus.main]]
+    name = 'API'
+    pageRef = '/api'
+    weight = 30
+  [[menus.main]]
+    name = 'FAQ'
+    pageRef = '/faq'
+    weight = 40
+  [[menus.main]]
+    name = 'Screenly'
+    url = 'https://www.screenly.io'
+    weight = 50
+    [menus.main.params]
+      external = true
+

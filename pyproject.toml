@@ -96,6 +96,10 @@ local = [
     "requests==2.33.1",
     "tenacity==9.1.2",
 ]
+website = [
+    "pytest==9.0.3",
+    "requests==2.33.1",
+]
 test = [
     { include-group = "server" },
     { include-group = "viewer" },
