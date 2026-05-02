@@ -1,0 +1,79 @@
+{{/* Renders an inline summary of an OpenAPI schema. Args: dict "schema" $schema "spec" $spec */}}
+{{- $schema := .schema -}}
+{{- $spec := .spec -}}
+
+{{- /* Resolve $ref */ -}}
+{{- $ref := index $schema "$ref" -}}
+{{- if $ref -}}
+  {{- $name := replace $ref "#/components/schemas/" "" -}}
+  {{- $schema = index $spec.components.schemas $name -}}
+  <p class="text-xs text-zinc-500 mb-2">Schema: <code class="font-mono">{{ $name }}</code></p>
+{{- end -}}
+
+{{- if eq $schema.type "array" -}}
+  <p class="text-xs text-zinc-500 mb-2">Array of:</p>
+  {{- $items := $schema.items -}}
+  {{- $itemsRef := index $items "$ref" -}}
+  {{- if $itemsRef -}}
+    {{- $name := replace $itemsRef "#/components/schemas/" "" -}}
+    {{- $items = index $spec.components.schemas $name -}}
+    <p class="text-xs text-zinc-500 mb-2"><code class="font-mono">{{ $name }}</code></p>
+  {{- end -}}
+  {{- $schema = $items -}}
+{{- end -}}
+
+{{- if $schema.properties -}}
+<div class="overflow-x-auto">
+  <table class="w-full text-sm border-collapse">
+    <thead>
+      <tr class="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500">
+        <th class="py-2 pr-4 font-semibold">Field</th>
+        <th class="py-2 pr-4 font-semibold">Type</th>
+        <th class="py-2 font-semibold">Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{- $required := default (slice) $schema.required -}}
+      {{- range $name, $prop := $schema.properties -}}
+      {{- $propRef := index $prop "$ref" -}}
+      <tr class="border-b border-zinc-100 align-top">
+        <td class="py-2 pr-4 font-mono text-brand-purple">
+          {{ $name }}{{ if in $required $name }}<span class="text-red-500" title="required">*</span>{{ end }}
+        </td>
+        <td class="py-2 pr-4 font-mono text-xs text-zinc-700">
+          {{- if $propRef -}}
+            {{ replace $propRef "#/components/schemas/" "" }}
+          {{- else if eq $prop.type "array" -}}
+            {{- $itemsRef := index $prop.items "$ref" -}}
+            {{- if $itemsRef -}}
+              {{ replace $itemsRef "#/components/schemas/" "" }}[]
+            {{- else -}}
+              {{ default "any" $prop.items.type }}[]
+            {{- end -}}
+          {{- else -}}
+            {{ default "any" $prop.type }}{{ with $prop.format }} <span class="text-zinc-500">({{ . }})</span>{{ end }}
+          {{- end -}}
+          {{- if $prop.nullable }} <span class="text-zinc-500">| null</span>{{ end -}}
+        </td>
+        <td class="py-2 text-xs text-zinc-600">
+          {{- with $prop.description }}{{ . }}{{ end -}}
+          {{- if $prop.readOnly }}<span class="inline-block px-1.5 py-0.5 ml-1 rounded bg-zinc-100 text-zinc-600 text-[10px] uppercase tracking-wide">read-only</span>{{ end -}}
+          {{- if $prop.writeOnly }}<span class="inline-block px-1.5 py-0.5 ml-1 rounded bg-zinc-100 text-zinc-600 text-[10px] uppercase tracking-wide">write-only</span>{{ end -}}
+          {{- with $prop.enum }}
+            <div class="mt-1 flex flex-wrap gap-1">
+              {{- range . -}}<code class="px-1.5 py-0.5 rounded bg-zinc-100 text-[11px]">{{ . }}</code>{{- end -}}
+            </div>
+          {{- end -}}
+        </td>
+      </tr>
+      {{- end -}}
+    </tbody>
+  </table>
+</div>
+{{- else if $schema.enum -}}
+  <div class="flex flex-wrap gap-1">
+    {{- range $schema.enum -}}<code class="px-2 py-1 rounded bg-zinc-100 text-xs">{{ . }}</code>{{- end -}}
+  </div>
+{{- else -}}
+  <p class="text-xs text-zinc-500">{{ default "any" $schema.type }}</p>
+{{- end -}}

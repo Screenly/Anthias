@@ -14,13 +14,17 @@ disableKinds = ['taxonomy']
     pageRef = '/get-started'
     weight = 20
   [[menus.main]]
+    name = 'API'
+    pageRef = '/api'
+    weight = 30
+  [[menus.main]]
     name = 'FAQ'
     pageRef = '/faq'
-    weight = 30
+    weight = 40
   [[menus.main]]
     name = 'Screenly'
     url = 'https://www.screenly.io'
-    weight = 40
+    weight = 50
     [menus.main.params]
       external = true
 
