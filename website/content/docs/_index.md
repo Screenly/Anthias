@@ -57,7 +57,7 @@ $ docker compose logs -f ${SERVICE_NAME}
 # e.g., docker compose logs -f anthias-server
 ```
 
-Check out [this section](/docs/developer-documentation/#understanding-the-components-that-make-up-anthias) of the Developer documentation page for the list of available services.
+Check out [this section](/docs/development/#understanding-the-components-that-make-up-anthias) of the Developer documentation page for the list of available services.
 
 ## Enabling SSH
 

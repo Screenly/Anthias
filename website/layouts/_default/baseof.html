@@ -11,7 +11,7 @@
       {{- $titleSuffix = printf " | %s" $brand -}}
     {{- end -}}
     {{- $pageTitle := printf "%s%s" .Title $titleSuffix -}}
-    {{- $pageImage := absURL "assets/images/overview.png" -}}
+    {{- $pageImage := (resources.Get "images/overview.png").Permalink -}}
 
     <title>{{ $pageTitle }}</title>
     <meta name="description" content="{{ $description }}">
@@ -32,10 +32,13 @@
     <meta name="twitter:image" content="{{ $pageImage }}">
     <meta name="twitter:image:alt" content="Anthias dashboard showing scheduled content on a Raspberry Pi-driven display">
 
-    <link rel="icon" href="/assets/images/favicon.ico">
+    {{- $favicon := resources.Get "images/favicon.ico" -}}
+    {{- $style := resources.Get "styles/style.css" | fingerprint -}}
+    {{- $chroma := resources.Get "styles/chroma.css" | fingerprint -}}
+    <link rel="icon" href="{{ $favicon.RelPermalink }}">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/assets/styles/style.css">
-    <link rel="stylesheet" href="/assets/styles/chroma.css">
+    <link rel="stylesheet" href="{{ $style.RelPermalink }}" integrity="{{ $style.Data.Integrity }}">
+    <link rel="stylesheet" href="{{ $chroma.RelPermalink }}" integrity="{{ $chroma.Data.Integrity }}">
 
     {{ if .IsHome }}
     <script type="application/ld+json">

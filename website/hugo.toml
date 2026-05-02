@@ -41,16 +41,3 @@ disableKinds = ['taxonomy']
     [menus.main.params]
       external = true
 
-[module]
-  [[module.mounts]]
-    source = 'assets'
-    target = 'static/assets'
-  [[module.mounts]]
-    source = 'static'
-    target = 'static'
-  [[module.mounts]]
-    source = 'layouts'
-    target = 'layouts'
-  [[module.mounts]]
-    source = 'content'
-    target = 'content'

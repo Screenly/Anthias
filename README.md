@@ -27,16 +27,16 @@ Want to help Anthias thrive? Support us using [GitHub Sponsor](https://github.co
 
 ## :rocket: Getting Started
 
-See [this](https://anthias.screenly.io/docs/installation-options/) page for options on how to install Anthias.
+See [this](https://anthias.screenly.io/docs/install/) page for options on how to install Anthias.
 
 ## :white_check_mark: Compatibility
 
 ### balenaOS
 
 > [!NOTE]
-> See [this](https://anthias.screenly.io/docs/installation-options/) page for instructions on how to install Anthias on balenaOS.
-> You can either use the [images from balenaHub](https://anthias.screenly.io/docs/installation-options/#using-the-images-from-balenahub)
-> or [download the images from the releases](https://anthias.screenly.io/docs/installation-options/#using-the-images-from-the-releases).
+> See [this](https://anthias.screenly.io/docs/install/) page for instructions on how to install Anthias on balenaOS.
+> You can either use the [images from balenaHub](https://anthias.screenly.io/docs/install/#using-the-images-from-balenahub)
+> or [download the images from the releases](https://anthias.screenly.io/docs/install/#using-the-images-from-the-releases).
 
 ### Raspberry Pi OS
 
@@ -47,8 +47,8 @@ See [this](https://anthias.screenly.io/docs/installation-options/) page for opti
 * Raspberry Pi 2 Model B - 32-bit Trixie, 32-bit Bookworm
 * PC (x86) - 64-bit Trixie, 64-bit Bookworm
   * Any 64-bit PC works (Intel NUCs, mini-PCs, old laptops).
-  * See the [PC installation guide](https://anthias.screenly.io/docs/x86-installation/) for the Debian setup steps,
-    then run the standard [installation script](https://anthias.screenly.io/docs/installation-options/#installing-on-raspberry-pi-os-lite-or-debian).
+  * See the [PC installation guide](https://anthias.screenly.io/docs/pc/) for the Debian setup steps,
+    then run the standard [installation script](https://anthias.screenly.io/docs/install/#installing-on-raspberry-pi-os-lite-or-debian).
 
 > [!NOTE]
 > We're still fixing the Raspberry Pi OS installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 1.
@@ -69,6 +69,6 @@ See [this](https://anthias.screenly.io/docs/installation-options/) page for opti
 * [Forum](https://forums.screenly.io/)
 * [Website](https://anthias.screenly.io) (hosted on GitHub and the source is available [here](/website))
 * [General documentation](https://anthias.screenly.io/docs/)
-* [Developer documentation](https://anthias.screenly.io/docs/developer-documentation/)
-* [Migrating assets from Anthias to Screenly](https://anthias.screenly.io/docs/migrating-assets-to-screenly/)
+* [Developer documentation](https://anthias.screenly.io/docs/development/)
+* [Migrating assets from Anthias to Screenly](https://anthias.screenly.io/docs/migrate-to-screenly/)
 * [WebView](/webview/README.md)

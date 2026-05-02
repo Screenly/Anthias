@@ -1,0 +1,16 @@
+{{- /* Render markdown image references through Hugo Pipes when the
+       image lives under assets/. Falls back to a plain <img> for
+       external/absolute URLs the renderer doesn't own. */ -}}
+{{- $src := .Destination -}}
+{{- $alt := .Text -}}
+{{- $title := .Title -}}
+{{- $resourcePath := strings.TrimPrefix "/" $src -}}
+{{- $resource := "" -}}
+{{- if not (or (hasPrefix $src "http://") (hasPrefix $src "https://") (hasPrefix $src "//")) -}}
+  {{- $resource = resources.Get $resourcePath -}}
+{{- end -}}
+{{- if $resource -}}
+<img src="{{ $resource.RelPermalink }}" alt="{{ $alt }}"{{ with $title }} title="{{ . }}"{{ end }} loading="lazy" decoding="async" />
+{{- else -}}
+<img src="{{ $src }}" alt="{{ $alt }}"{{ with $title }} title="{{ . }}"{{ end }} loading="lazy" decoding="async" />
+{{- end -}}

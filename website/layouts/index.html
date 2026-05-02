@@ -18,16 +18,22 @@
         </div>
     </div>
     <div class="max-w-7xl mx-auto px-6 md:px-12 lg:px-20 pb-8">
+        {{- $heroMobile1x := resources.Get "images/overview-mobile.png" -}}
+        {{- $heroMobile2x := resources.Get "images/overview-mobile@2x.png" -}}
+        {{- $heroMobile3x := resources.Get "images/overview-mobile@3x.png" -}}
+        {{- $heroDesk1x := resources.Get "images/overview.png" -}}
+        {{- $heroDesk2x := resources.Get "images/overview@2x.png" -}}
+        {{- $heroDesk3x := resources.Get "images/overview@3x.png" -}}
         <img
             class="md:hidden rounded-t-lg w-full"
-            srcset="/assets/images/overview-mobile.png, /assets/images/overview-mobile@2x.png 2x, /assets/images/overview-mobile@3x.png 3x"
-            src="/assets/images/overview-mobile.png"
+            srcset="{{ $heroMobile1x.RelPermalink }}, {{ $heroMobile2x.RelPermalink }} 2x, {{ $heroMobile3x.RelPermalink }} 3x"
+            src="{{ $heroMobile1x.RelPermalink }}"
             alt="Anthias dashboard showing scheduled content"
         />
         <img
             class="hidden md:block rounded-t-lg w-full"
-            srcset="/assets/images/overview.png, /assets/images/overview@2x.png 2x, /assets/images/overview@3x.png 3x"
-            src="/assets/images/overview.png"
+            srcset="{{ $heroDesk1x.RelPermalink }}, {{ $heroDesk2x.RelPermalink }} 2x, {{ $heroDesk3x.RelPermalink }} 3x"
+            src="{{ $heroDesk1x.RelPermalink }}"
             alt="Anthias dashboard showing scheduled content"
         />
     </div>

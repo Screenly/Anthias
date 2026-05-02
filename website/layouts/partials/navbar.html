@@ -1,8 +1,10 @@
 <nav class="bg-brand-dark py-4 px-6 md:px-12 lg:px-20">
     <div class="max-w-7xl mx-auto flex items-center justify-between">
+        {{- $logoMobile := resources.Get "images/logo-full-mobile.svg" -}}
+        {{- $logoDesk := resources.Get "images/logo-full.svg" -}}
         <a href="/" class="shrink-0">
-            <img class="md:hidden h-7" src="/assets/images/logo-full-mobile.svg" alt="Anthias" />
-            <img class="hidden md:block h-7" src="/assets/images/logo-full.svg" alt="Anthias" />
+            <img class="md:hidden h-7" src="{{ $logoMobile.RelPermalink }}" alt="Anthias" />
+            <img class="hidden md:block h-7" src="{{ $logoDesk.RelPermalink }}" alt="Anthias" />
         </a>
 
         <button id="menu-toggle" class="lg:hidden border-0 bg-transparent p-1" aria-label="Toggle navigation" aria-expanded="false" aria-controls="mobile-menu">

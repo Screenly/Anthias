@@ -1,6 +1,9 @@
 ---
 title: "Raspberry Pi 5 SSD Install"
 description: "Install Anthias on a Raspberry Pi 5 with an SSD."
+slug: "pi5-ssd"
+aliases:
+  - "/docs/raspberry-pi5-ssd-install-instructions/"
 ---
 
 ## Hardware

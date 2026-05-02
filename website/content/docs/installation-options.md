@@ -1,6 +1,9 @@
 ---
 title: "Installation Options"
 description: "Install Anthias on Raspberry Pi or Debian: imager, balenaHub, releases, or scripted install."
+slug: "install"
+aliases:
+  - "/docs/installation-options/"
 ---
 
 > **Note**
@@ -69,7 +72,7 @@ If you'd like more control over your digital signage instance, try installing it
 
 > **Important**
 >
-> Installing on a **PC (x86)**? Follow the [PC installation guide](/docs/x86-installation/) first to prepare Debian — the script below assumes that setup.
+> Installing on a **PC (x86)**? Follow the [PC installation guide](/docs/pc/) first to prepare Debian — the script below assumes that setup.
 
 > **Note**
 >
@@ -149,10 +152,10 @@ Otherwise, if you've selected **No** for the system upgrade, then you don't need
 
 # Installing with Balena
 
-Go through the steps in [this documentation](/docs/balena-fleet-deployment/)
+Go through the steps in [this documentation](/docs/balena/)
 to deploy Anthias on your own Balena fleet.
 
 # Installing on a Raspberry Pi 5 with an SSD
 
-Go through the steps in [this documentation](/docs/raspberry-pi5-ssd-install-instructions/)
+Go through the steps in [this documentation](/docs/pi5-ssd/)
 to deploy Anthias on a Pi5 with an SSD

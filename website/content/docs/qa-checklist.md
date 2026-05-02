@@ -1,6 +1,9 @@
 ---
 title: "QA Checklist"
 description: "Manual testing checklist for Anthias."
+slug: "qa"
+aliases:
+  - "/docs/qa-checklist/"
 ---
 
 Running unit tests is a good way to make sure that the code is working as expected. However, it's also important to do manual testing as some bugs may not be caught by unit tests. This document contains a list of things that you can do to test the application manually.

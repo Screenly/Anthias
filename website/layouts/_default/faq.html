@@ -1,5 +1,7 @@
 {{ define "main" }}
 {{- $faq := site.Data.faq -}}
+{{- $iconPlus := resources.Get "images/plus.svg" -}}
+{{- $iconMinus := resources.Get "images/minus.svg" -}}
 <header class="bg-brand-dark py-16 md:py-20 px-6 md:px-12 lg:px-20">
     <div class="max-w-7xl mx-auto">
         <h1 class="text-white text-4xl md:text-5xl font-extrabold tracking-tight">FAQ</h1>
@@ -24,8 +26,8 @@
                         class="w-full flex items-center justify-between text-left py-5 bg-transparent border-0 cursor-pointer text-brand-near-black font-bold leading-relaxed gap-4"
                     >
                         <span>{{ $item.question }}</span>
-                        <img class="icon-plus w-5 h-5 shrink-0" src="/assets/images/plus.svg" alt="" aria-hidden="true" />
-                        <img class="icon-minus w-5 h-5 shrink-0 hidden" src="/assets/images/minus.svg" alt="" aria-hidden="true" />
+                        <img class="icon-plus w-5 h-5 shrink-0" src="{{ $iconPlus.RelPermalink }}" alt="" aria-hidden="true" />
+                        <img class="icon-minus w-5 h-5 shrink-0 hidden" src="{{ $iconMinus.RelPermalink }}" alt="" aria-hidden="true" />
                     </button>
                     <div id="{{ $id }}" role="region" aria-labelledby="{{ $id }}-btn" class="hidden pb-6 docs-prose" data-accordion-content>
                         {{ $item.answer | markdownify }}

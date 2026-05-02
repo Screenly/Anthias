@@ -1,6 +1,9 @@
 ---
 title: "PC (x86) Installation"
 description: "Install Anthias on PC / x86 hardware running Debian 13 (Trixie) or Debian 12 (Bookworm)."
+slug: "pc"
+aliases:
+  - "/docs/x86-installation/"
 ---
 
 Anthias runs on any 64-bit PC (something like an Intel NUC works well) once you've prepared a fresh Debian install. Pre-built BalenaOS images aren't available for PC hardware yet, so you'll install Debian manually and then run the standard Anthias installer on top of it.
@@ -67,7 +70,7 @@ Once you can SSH (or log in locally) to the new install:
 
 ## Step 5 — Run the Anthias installer
 
-You're now ready to run the standard installer. Follow the [scripted install steps](/docs/installation-options/#installing-on-raspberry-pi-os-lite-or-debian) — they're the same on PC as on a Raspberry Pi.
+You're now ready to run the standard installer. Follow the [scripted install steps](/docs/install/#installing-on-raspberry-pi-os-lite-or-debian) — they're the same on PC as on a Raspberry Pi.
 
 ## References
 

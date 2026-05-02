@@ -1,6 +1,9 @@
 ---
 title: "balena Fleet Deployment"
 description: "Deploy Anthias on your own balena fleet."
+slug: "balena"
+aliases:
+  - "/docs/balena-fleet-deployment/"
 ---
 
 You can use the Balena disk images provided in the releases page to install

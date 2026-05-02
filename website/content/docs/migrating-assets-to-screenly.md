@@ -1,6 +1,9 @@
 ---
 title: "Migrating Assets to Screenly"
 description: "Migrate assets from Anthias to Screenly."
+slug: "migrate-to-screenly"
+aliases:
+  - "/docs/migrating-assets-to-screenly/"
 ---
 
 > **Note**

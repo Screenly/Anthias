@@ -1,6 +1,9 @@
 ---
 title: "Developer Documentation"
 description: "Develop and contribute to Anthias: architecture, services, building, and testing."
+slug: "development"
+aliases:
+  - "/docs/developer-documentation/"
 ---
 
 ## Understanding the components that make up Anthias
@@ -102,29 +105,28 @@ $ docker compose \
     -f docker-compose.test.yml up -d --build
 ```
 
-Run the unit tests. The Python test suite uses **pytest**.
+Run the unit tests.
 
 ```bash
 $ docker compose \
     -f docker-compose.test.yml \
     exec anthias-test bash ./bin/prepare_test_environment.sh -s
 
-# Integration and non-integration tests must be run separately —
-# fixture state from integration runs leaks into the non-integration
-# suite when they share a single pytest invocation.
+# Integration and non-integration tests should be run separately as the
+# former doesn't run as expected when run together with the latter.
 
 $ docker compose \
     -f docker-compose.test.yml \
-    exec anthias-test pytest -n auto -m "not integration"
+    exec anthias-test ./manage.py test --exclude-tag=integration
 
 $ docker compose \
     -f docker-compose.test.yml \
-    exec anthias-test pytest -m integration
+    exec anthias-test ./manage.py test --tag=integration
 ```
 
 ### The QA checklist
 
-We've also provided a [checklist](/docs/qa-checklist/) that can serve as a guide for testing Anthias manually.
+We've also provided a [checklist](/docs/qa/) that can serve as a guide for testing Anthias manually.
 
 ## Generating CSS and JS files
 
