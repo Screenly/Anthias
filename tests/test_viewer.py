@@ -173,7 +173,7 @@ class TestAssetDisplayability(ViewerTestCase):
         gating — display unconditionally, even if is_reachable=False."""
         asset = {
             'asset_id': 'a',
-            'uri': 'http://example.com/x',
+            'uri': 'https://example.com/x',
             'skip_asset_check': True,
             'is_reachable': False,
         }
@@ -214,7 +214,7 @@ class TestAssetDisplayability(ViewerTestCase):
     def test_remote_uri_consults_is_reachable(self) -> None:
         ok = {
             'asset_id': 'a',
-            'uri': 'http://example.com/x',
+            'uri': 'https://example.com/x',
             'skip_asset_check': False,
             'is_reachable': True,
         }
@@ -227,7 +227,7 @@ class TestAssetDisplayability(ViewerTestCase):
         field. Don't silently freeze a playlist on an upgrade."""
         asset = {
             'asset_id': 'a',
-            'uri': 'http://example.com/x',
+            'uri': 'https://example.com/x',
             'skip_asset_check': False,
         }
         self.assertTrue(self.u._asset_is_displayable(asset))
