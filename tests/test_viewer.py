@@ -289,24 +289,23 @@ def test_displayable_missing_is_reachable_defaults_to_displayable() -> None:
 
 
 def test_trigger_recheck_posts_to_recheck_endpoint() -> None:
-    from lib.internal_auth import INTERNAL_AUTH_HEADER, internal_auth_token
-    from settings import settings as anthias_settings
+    """The viewer's job is to send whatever ``internal_auth_token``
+    yields as a header; the HMAC derivation itself is exercised in
+    ``lib/internal_auth`` and through the recheck-endpoint tests.
+    Mocking the token-derivation here keeps this test independent of
+    settings state, which has bitten us under pytest-xdist + Docker
+    test-image conftest configurations."""
+    from lib.internal_auth import INTERNAL_AUTH_HEADER
 
     with (
-        mock.patch.dict(
-            anthias_settings,
-            {'django_secret_key': 'test-internal-secret'},
-        ),
+        mock.patch('viewer.internal_auth_token', return_value='deadbeef'),
         mock.patch('viewer.requests.post') as m,
     ):
-        expected_token = internal_auth_token(anthias_settings)
         viewer._trigger_asset_recheck('abc')
     m.assert_called_once()
     url = m.call_args.args[0]
     assert '/api/v2/assets/abc/recheck' in url
-    assert m.call_args.kwargs['headers'] == {
-        INTERNAL_AUTH_HEADER: expected_token
-    }
+    assert m.call_args.kwargs['headers'] == {INTERNAL_AUTH_HEADER: 'deadbeef'}
 
 
 def test_trigger_recheck_no_op_on_missing_asset_id() -> None:
@@ -316,10 +315,11 @@ def test_trigger_recheck_no_op_on_missing_asset_id() -> None:
 
 
 def test_trigger_recheck_no_op_when_internal_token_missing() -> None:
-    from settings import settings as anthias_settings
-
+    """When ``internal_auth_token`` returns '' (no secret available
+    in settings or env), the request would be a guaranteed 403 — so
+    the viewer skips it rather than burning an HTTP round-trip."""
     with (
-        mock.patch.dict(anthias_settings, {'django_secret_key': ''}),
+        mock.patch('viewer.internal_auth_token', return_value=''),
         mock.patch('viewer.requests.post') as m,
     ):
         viewer._trigger_asset_recheck('abc')
@@ -330,17 +330,12 @@ def test_trigger_recheck_swallows_request_errors() -> None:
     """Best-effort: a server hiccup must not interrupt the asset loop."""
     import requests as _requests
 
-    from settings import settings as anthias_settings
-
     with (
         mock.patch(
             'viewer.requests.post',
             side_effect=_requests.ConnectionError('boom'),
         ),
-        mock.patch.dict(
-            anthias_settings,
-            {'django_secret_key': 'test-internal-secret'},
-        ),
+        mock.patch('viewer.internal_auth_token', return_value='deadbeef'),
     ):
         # Must not raise.
         viewer._trigger_asset_recheck('abc')
