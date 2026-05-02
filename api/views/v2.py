@@ -184,31 +184,41 @@ class AssetRecheckViewV2(APIView):
         responses={202: None, 404: None},
     )
     def post(self, request: Request, asset_id: str) -> Response:
-        try:
-            asset = Asset.objects.get(asset_id=asset_id)
-        except Asset.DoesNotExist:
+        # Existence check before locking — a 404 is more useful than
+        # a silent 202 on an unknown id, and we don't want to acquire
+        # a lock for an asset that doesn't exist.
+        if not Asset.objects.filter(asset_id=asset_id).exists():
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         # Imported here to avoid a circular import at module load:
         # celery_tasks imports api.* via Django's app registry, and
         # importing it at the top of this view module pulls celery into
         # the request path on every request even when not needed.
-        from celery_tasks import RECHECK_COOLDOWN_S, revalidate_asset_url
+        from celery_tasks import (
+            ASSET_RECHECK_QUEUE_DEBOUNCE_S,
+            asset_recheck_queue_key,
+            revalidate_asset_url,
+        )
 
-        # Pre-filter at the endpoint with the same cooldown the task
-        # itself enforces. The viewer can rotate quickly past an
-        # unreachable asset (every few seconds during normal playback),
-        # and without this gate every rotation would enqueue a Celery
-        # task that immediately no-ops — sustained queue churn for
-        # zero work. Returns 202 on the no-op path because the recheck
-        # is effectively up-to-date already; the viewer doesn't need
-        # to distinguish "fresh" from "skipped due to cooldown".
-        from django.utils import timezone
-
-        last = asset.last_reachability_check
-        if (
-            last is not None
-            and (timezone.now() - last).total_seconds() < RECHECK_COOLDOWN_S
+        # Atomic per-asset queue-debounce gate. Replaces a racy check
+        # on ``asset.last_reachability_check`` — the timestamp only
+        # updates after the probe completes, so near-simultaneous
+        # endpoint hits would all read the same stale value and each
+        # enqueue a task. SETNX with a short TTL gates queue churn:
+        # only the first endpoint hit in the window enqueues, the
+        # rest no-op. The actual cooldown (don't probe again within
+        # RECHECK_COOLDOWN_S) is enforced by a separate task-side lock
+        # in ``revalidate_asset_url`` — they're separate keys with
+        # different TTLs because a single shared key would block the
+        # task we just enqueued from acquiring its own lock. Returns
+        # 202 on the no-op path because the recheck is effectively
+        # up-to-date already; the viewer doesn't need to distinguish
+        # "fresh" from "skipped due to debounce".
+        if not r.set(
+            asset_recheck_queue_key(asset_id),
+            '1',
+            nx=True,
+            ex=ASSET_RECHECK_QUEUE_DEBOUNCE_S,
         ):
             return Response(status=status.HTTP_202_ACCEPTED)
 

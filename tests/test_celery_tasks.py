@@ -1,7 +1,6 @@
 import os
 import tempfile
 import time
-from datetime import timedelta
 from os import path
 from unittest import mock
 
@@ -12,6 +11,7 @@ from anthias_app.models import Asset
 from celery_tasks import (
     ASSET_REVALIDATION_LOCK_KEY,
     RECHECK_COOLDOWN_S,
+    asset_recheck_lock_key,
     celery as celeryapp,
     cleanup,
     r as redis_conn,
@@ -216,6 +216,12 @@ class TestRevalidateAssetUrls(TestCase):
             revalidate_asset_urls.apply()
         m.assert_not_called()
         self.assertTrue(Asset.objects.get(asset_id='a1').is_reachable)
+        # last_reachability_check must NOT be set — the API exposes
+        # that field as "last check", and writing it without an
+        # actual probe would advertise a check that never happened.
+        self.assertIsNone(
+            Asset.objects.get(asset_id='a1').last_reachability_check
+        )
 
     def test_local_file_existence_check(self) -> None:
         """Local URIs short-circuit url_fails and check the filesystem."""
@@ -313,11 +319,11 @@ class TestRevalidateAssetUrls(TestCase):
 class TestRevalidateAssetUrl(TestCase):
     """
     On-demand single-asset probe, called from the
-    /api/v2/assets/<id>/recheck endpoint. Exists primarily to break the
-    "asset just went unreachable mid-rotation" failure mode without
-    waiting for the next periodic sweep, with a per-asset cooldown so a
-    viewer that keeps hitting the same broken asset can't pin the worker
-    on back-to-back ffprobe runs.
+    /api/v2/assets/<id>/recheck endpoint. Cooldown- and concurrency-
+    safe via an atomic Redis SETNX lock per asset (TTL =
+    RECHECK_COOLDOWN_S). Replaces an earlier timestamp-based check
+    that was racy: multiple workers could read the same stale
+    last_reachability_check and each decide they should run a probe.
     """
 
     def setUp(self) -> None:
@@ -327,9 +333,13 @@ class TestRevalidateAssetUrl(TestCase):
             CELERY_BROKER_URL='',
         )
         Asset.objects.all().delete()
+        # Drop any per-asset cooldown lock from a prior test so this
+        # test starts with a clean slate.
+        redis_conn.delete(asset_recheck_lock_key('a1'))
 
     def tearDown(self) -> None:
         Asset.objects.all().delete()
+        redis_conn.delete(asset_recheck_lock_key('a1'))
 
     def _make(self, **kwargs: object) -> Asset:
         defaults = {
@@ -354,18 +364,66 @@ class TestRevalidateAssetUrl(TestCase):
             revalidate_asset_url.apply(args=('a1',))
         self.assertFalse(Asset.objects.get(asset_id='a1').is_reachable)
 
-    def test_cooldown_prevents_back_to_back_probes(self) -> None:
-        recent = timezone.now() - timedelta(seconds=RECHECK_COOLDOWN_S - 5)
-        self._make(is_reachable=False, last_reachability_check=recent)
+    def test_cooldown_lock_prevents_back_to_back_probes(self) -> None:
+        """SETNX cooldown gate: if the per-asset lock is already held
+        (someone else just probed within RECHECK_COOLDOWN_S), this
+        task must no-op without calling url_fails."""
+        self._make(is_reachable=False)
+        # Pre-acquire the cooldown lock to simulate a recent probe.
+        redis_conn.set(
+            asset_recheck_lock_key('a1'),
+            '1',
+            ex=RECHECK_COOLDOWN_S,
+        )
         with mock.patch('celery_tasks.url_fails', return_value=False) as m:
             revalidate_asset_url.apply(args=('a1',))
         m.assert_not_called()
         # Field is unchanged.
         self.assertFalse(Asset.objects.get(asset_id='a1').is_reachable)
 
+    def test_acquires_lock_when_running(self) -> None:
+        """The task must SETNX the cooldown lock before probing — that
+        gate is what prevents concurrent ffprobe calls for the same
+        asset across workers."""
+        self._make()
+        with mock.patch('celery_tasks.url_fails', return_value=False):
+            revalidate_asset_url.apply(args=('a1',))
+        self.assertEqual(redis_conn.get(asset_recheck_lock_key('a1')), '1')
+
+    def test_skips_disabled_asset(self) -> None:
+        """Mirror sweep filter: probing a disabled asset would write
+        state that's immediately moot."""
+        self._make(is_enabled=False, is_reachable=True)
+        with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+            revalidate_asset_url.apply(args=('a1',))
+        m.assert_not_called()
+        self.assertTrue(Asset.objects.get(asset_id='a1').is_reachable)
+
+    def test_skips_processing_asset(self) -> None:
+        """Mirror sweep filter: an in-flight youtube_asset download
+        can still be writing the file out, so a probe is meaningless."""
+        self._make(is_processing=True)
+        with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+            revalidate_asset_url.apply(args=('a1',))
+        m.assert_not_called()
+        self.assertTrue(Asset.objects.get(asset_id='a1').is_reachable)
+
+    def test_skips_skip_asset_check_asset(self) -> None:
+        """Operator opted out of validation; matches sweep behavior of
+        not touching is_reachable / last_reachability_check."""
+        self._make(skip_asset_check=True, is_reachable=True)
+        with mock.patch('celery_tasks.url_fails') as m:
+            revalidate_asset_url.apply(args=('a1',))
+        m.assert_not_called()
+        # Timestamp must not be advertised as a "successful check"
+        # since no probe ran.
+        self.assertIsNone(
+            Asset.objects.get(asset_id='a1').last_reachability_check
+        )
+
     def test_cooldown_elapsed_allows_recheck(self) -> None:
-        old = timezone.now() - timedelta(seconds=RECHECK_COOLDOWN_S + 5)
-        self._make(is_reachable=False, last_reachability_check=old)
+        """No lock held → SETNX succeeds → probe runs."""
+        self._make(is_reachable=False)
         with mock.patch('celery_tasks.url_fails', return_value=False):
             revalidate_asset_url.apply(args=('a1',))
         self.assertTrue(Asset.objects.get(asset_id='a1').is_reachable)

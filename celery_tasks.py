@@ -85,6 +85,34 @@ _LOCK_RELEASE_LUA = (
 )
 
 
+# Two separate per-asset SETNX gates. The previous design used a
+# single timestamp-based cooldown check at both the endpoint and the
+# task, which was racy: the timestamp only updates after the probe
+# completes, so multiple near-simultaneous callers each read the same
+# stale value. SETNX is atomic per-key, but a single shared key
+# would conflict — endpoint's lock would block the task it just
+# enqueued. Hence two keys with different TTLs and different jobs.
+
+# Short-TTL endpoint debounce. Bounds queue churn from a viewer that
+# rotates quickly past the same unreachable asset: only the first
+# endpoint call in the window queues a task.
+ASSET_RECHECK_QUEUE_DEBOUNCE_S = 5
+
+
+# Long-TTL task cooldown gate. Prevents concurrent ffprobe / HEAD
+# probes for the same asset across Celery workers — only the first
+# task to acquire actually runs, others (whether enqueued by the
+# endpoint or directly via ``revalidate_asset_url.delay``) no-op.
+def asset_recheck_queue_key(asset_id: str) -> str:
+    """Endpoint-side queue debounce key (TTL = QUEUE_DEBOUNCE)."""
+    return f'recheck:{asset_id}:queue'
+
+
+def asset_recheck_lock_key(asset_id: str) -> str:
+    """Task-side cooldown lock key (TTL = RECHECK_COOLDOWN_S)."""
+    return f'recheck:{asset_id}:lock'
+
+
 @celery.on_after_configure.connect
 def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
     # Calls cleanup() every hour.
@@ -268,6 +296,17 @@ def revalidate_asset_urls() -> None:
     try:
         qs = Asset.objects.filter(is_enabled=True, is_processing=False)
         for asset in qs:
+            if asset.skip_asset_check:
+                # No probe runs for these rows (the operator opted
+                # out of validation), so don't update
+                # ``last_reachability_check`` either — the API
+                # exposes that field as "last check" and writing it
+                # without an actual probe would advertise a check
+                # that never happened. is_reachable is left at its
+                # default (True), which matches what the viewer's
+                # _asset_is_displayable expects for skip_asset_check
+                # rows.
+                continue
             try:
                 reachable = _check_asset_reachability(asset)
             except Exception:
@@ -295,22 +334,45 @@ def revalidate_asset_url(asset_id: str) -> None:
 
     Triggered when the viewer hits an asset it can't display, so the
     sweep doesn't have to be the only path that flips
-    ``is_reachable``. Rate-limited per asset so a viewer that loops
-    through an unreachable asset every few seconds (during normal
-    rotation) doesn't pin the worker on ffprobe.
+    ``is_reachable``. Concurrency- and cooldown-gated by an atomic
+    Redis SETNX on a per-asset key (TTL = RECHECK_COOLDOWN_S):
+    multiple near-simultaneous tasks for the same asset_id no-op
+    after the first one acquires the lock, and a viewer that loops
+    through an unreachable asset every few seconds doesn't pin the
+    worker on ffprobe.
+
+    Mirrors the sweep's filtering on ``is_enabled`` /
+    ``is_processing`` / ``skip_asset_check`` — probing a disabled or
+    in-flight youtube_asset row would write misleading state, and
+    skip_asset_check rows are explicitly opted out of validation.
     """
     from django.utils import timezone
+
+    # Atomic cooldown gate. Replaces a previous timestamp-comparison
+    # check that was racy under Celery worker concurrency: multiple
+    # tasks for the same asset_id could all read the same stale
+    # ``last_reachability_check`` and each decide they should probe.
+    if not r.set(
+        asset_recheck_lock_key(asset_id),
+        '1',
+        nx=True,
+        ex=RECHECK_COOLDOWN_S,
+    ):
+        return
 
     try:
         asset = Asset.objects.get(asset_id=asset_id)
     except Asset.DoesNotExist:
         return
 
-    last = asset.last_reachability_check
-    if (
-        last is not None
-        and (timezone.now() - last).total_seconds() < RECHECK_COOLDOWN_S
-    ):
+    if not asset.is_enabled or asset.is_processing:
+        # Mirror the sweep filter. Probing a disabled/in-flight row
+        # would write state that's immediately moot.
+        return
+
+    if asset.skip_asset_check:
+        # Operator opted out of validation; matches sweep behavior of
+        # not touching is_reachable / last_reachability_check.
         return
 
     try:
