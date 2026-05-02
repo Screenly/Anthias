@@ -10,6 +10,7 @@ from api.views.v2 import (
     FileAssetViewV2,
     InfoViewV2,
     IntegrationsViewV2,
+    NetworkIpAddressesViewV2,
     PlaylistOrderViewV2,
     RebootViewV2,
     RecoverViewV2,
@@ -59,5 +60,10 @@ def get_url_patterns() -> list[URLPattern | URLResolver]:
             'v2/integrations',
             IntegrationsViewV2.as_view(),
             name='integrations_v2',
+        ),
+        path(
+            'v2/network/ip-addresses',
+            NetworkIpAddressesViewV2.as_view(),
+            name='network_ip_addresses_v2',
         ),
     ]

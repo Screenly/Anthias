@@ -55,6 +55,65 @@ from settings import ViewerPublisher, settings
 r = connect_to_redis()
 
 
+def _safe_ip_addresses() -> list[str]:
+    """Best-effort IP-list resolver, tolerant of host-bus flakiness.
+
+    ``get_node_ip()`` returns 'Unknown' on a fresh Balena boot when the
+    supervisor isn't responsive yet, and 'Unable to retrieve IP.' on
+    bare metal when host_agent hasn't populated Redis. Either string
+    fails ``ipaddress.ip_address()`` with ValueError if naively passed
+    on, which is how a slow first boot used to 500 the splash page.
+    Filter both out and skip any other token that isn't a valid IP, so
+    a malformed return value can't crash a consumer.
+    """
+    node_ip = get_node_ip()
+    if node_ip in ('Unknown', 'Unable to retrieve IP.'):
+        return []
+    out: list[str] = []
+    for ip in node_ip.split():
+        try:
+            obj = ipaddress.ip_address(ip)
+        except ValueError:
+            continue
+        if isinstance(obj, ipaddress.IPv6Address):
+            out.append(f'http://[{ip}]')
+        else:
+            out.append(f'http://{ip}')
+    return out
+
+
+class NetworkIpAddressesViewV2(APIView):
+    """Lightweight IP-list endpoint for the splash page to poll.
+
+    Unauth'd because the splash page itself is unauth'd and the viewer
+    isn't a credentialed client. The data here is already disclosed by
+    /splash-page rendering — there's no new exposure.
+
+    Narrow on purpose: only IPs, no diagnostics. /api/v2/info covers
+    the "everything about the device" case but is auth'd and does
+    heavier work (psutil, statvfs, version checks) that would compound
+    on a 2-second poll. Don't bolt onto this; add a sibling endpoint
+    if a different unauth'd value is ever needed.
+    """
+
+    @extend_schema(
+        summary='Get device IP addresses (for splash poll)',
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'ip_addresses': {
+                        'type': 'array',
+                        'items': {'type': 'string'},
+                    },
+                },
+            },
+        },
+    )
+    def get(self, request: Request) -> Response:
+        return Response({'ip_addresses': _safe_ip_addresses()})
+
+
 class AssetListViewV2(APIView):
     serializer_class = AssetSerializerV2
 
@@ -416,21 +475,7 @@ class InfoViewV2(InfoViewMixin):
         }
 
     def get_ip_addresses(self) -> list[str]:
-        ip_addresses = []
-        node_ip = get_node_ip()
-
-        if node_ip == 'Unable to retrieve IP.':
-            return []
-
-        for ip_address in node_ip.split():
-            ip_address_object = ipaddress.ip_address(ip_address)
-
-            if isinstance(ip_address_object, ipaddress.IPv6Address):
-                ip_addresses.append(f'http://[{ip_address}]')
-            else:
-                ip_addresses.append(f'http://{ip_address}')
-
-        return ip_addresses
+        return _safe_ip_addresses()
 
     @extend_schema(
         summary='Get system information',
