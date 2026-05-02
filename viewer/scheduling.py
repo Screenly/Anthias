@@ -184,8 +184,8 @@ class Scheduler:
         self.last_update_db_mtime = self.get_db_mtime()
         (new_assets, new_deadline) = generate_asset_list()
 
-        current_ids = sorted(a.get('asset_id') for a in self.assets)
-        new_ids = sorted(a.get('asset_id') for a in new_assets)
+        current_ids = sorted(a['asset_id'] for a in self.assets)
+        new_ids = sorted(a['asset_id'] for a in new_assets)
         membership_changed = current_ids != new_ids
 
         if not membership_changed and not allow_reshuffle:
