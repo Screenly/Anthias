@@ -71,6 +71,13 @@ jobs:
           docker compose exec anthias-test \
             bash ./bin/prepare_test_environment.sh -s
 
+      # ANTHIAS_INTEGRATION_TEST=1 tells anthias_django/settings.py to
+      # pin DATABASES.default.TEST.NAME to the same SQLite path the
+      # anthias-server container reads. Selenium tests assert on
+      # `Asset.objects.all()` after the server persists an upload, so
+      # both ends must share one file. Unit tests must NOT set this
+      # — they run under xdist and need pytest-django's default
+      # per-worker `:memory:` DB to avoid file-lock contention.
       - name: Run Python integration tests
         if: inputs.test-type == 'python'
         uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4
@@ -78,7 +85,7 @@ jobs:
           timeout_minutes: 5
           max_attempts: 5
           command: |
-            docker compose exec anthias-test \
+            docker compose exec -e ANTHIAS_INTEGRATION_TEST=1 anthias-test \
               pytest -m integration \
                 --cov --cov-append --cov-report=xml --cov-report=term
 

@@ -185,11 +185,19 @@ else:
 # TEST.NAME to the same path keeps both ends on one DB; the
 # `transaction=True` marker truncates between tests, which is safe
 # because the test DB is throwaway.
+#
+# ONLY set TEST.NAME for the integration step. The unit step runs
+# under `pytest -n auto`; pinning every worker to the same SQLite
+# file would cause `database is locked` and cross-worker leakage.
+# Without TEST.NAME, pytest-django gives each xdist worker its own
+# `:memory:` DB, which is what we want for unit runs.
+# .github/workflows/test-runner.yml exports ANTHIAS_INTEGRATION_TEST=1
+# only for the `pytest -m integration` step.
 _db_default: dict[str, Any] = {
     'ENGINE': 'django.db.backends.sqlite3',
     'NAME': db_path,
 }
-if getenv('ENVIRONMENT') == 'test' or _running_under_pytest:
+if getenv('ANTHIAS_INTEGRATION_TEST') == '1':
     _db_default['TEST'] = {'NAME': db_path}
 
 DATABASES = {'default': _db_default}
