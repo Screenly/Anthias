@@ -1,0 +1,78 @@
+@import "tailwindcss";
+@source "../layouts";
+
+@theme {
+  --color-brand-dark: #270035;
+  --color-brand-yellow: #fff963;
+  --color-brand-gold: #ffd800;
+  --color-brand-purple: #7e2bd0;
+  --color-brand-yellow-bullet: #ffe019;
+  --color-brand-near-black: #08000b;
+  --color-bg-light: #f8f6f9;
+  --font-sans: "Plus Jakarta Sans", Arial, Helvetica, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-purple);
+  outline-offset: 2px;
+}
+
+@utility btn-primary {
+  background: linear-gradient(133.73deg, #fff963 14.42%, #ffd800 108.14%);
+  border: 1px solid #fff963;
+  color: #270035;
+  padding: 0.75rem 1.75rem;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  display: inline-block;
+  text-decoration: none;
+  transition: transform 0.15s, box-shadow 0.15s;
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgb(255 223 0 / 0.3);
+  }
+}
+
+@utility btn-secondary {
+  background: transparent;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  color: #fff;
+  padding: 0.75rem 1.75rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  display: inline-block;
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+  &:hover {
+    border-color: rgb(255 255 255 / 0.6);
+    background: rgb(255 255 255 / 0.05);
+  }
+}
+
+@utility feature-card {
+  background: #fff;
+  border: 1px solid rgb(0 0 0 / 0.06);
+  border-radius: 1rem;
+  padding: 2rem;
+  transition: box-shadow 0.2s, transform 0.2s;
+  &:hover {
+    box-shadow: 0 8px 24px rgb(39 0 53 / 0.08);
+    transform: translateY(-2px);
+  }
+}
+
+@utility step-number {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.125rem;
+  flex-shrink: 0;
+}

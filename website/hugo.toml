@@ -4,6 +4,26 @@ title = "Anthias - The world's most popular open source digital signage project"
 
 disableKinds = ['taxonomy']
 
+[menus]
+  [[menus.main]]
+    name = 'Features'
+    pageRef = '/features'
+    weight = 10
+  [[menus.main]]
+    name = 'Get Started'
+    pageRef = '/get-started'
+    weight = 20
+  [[menus.main]]
+    name = 'FAQ'
+    pageRef = '/faq'
+    weight = 30
+  [[menus.main]]
+    name = 'Screenly'
+    url = 'https://www.screenly.io'
+    weight = 40
+    [menus.main.params]
+      external = true
+
 [module]
   [[module.mounts]]
     source = 'assets'

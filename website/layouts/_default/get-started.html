@@ -1,0 +1,133 @@
+{{ define "main" }}
+<header class="bg-brand-dark py-16 md:py-20 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-white text-4xl md:text-5xl font-extrabold tracking-tight">Get Started</h1>
+        <p class="text-white/60 text-lg mt-4 max-w-xl">Choose the installation method that works best for your hardware and setup.</p>
+    </div>
+</header>
+
+<section class="bg-white py-16 lg:py-24 px-6 md:px-12 lg:px-20">
+    <div class="max-w-3xl mx-auto">
+        <div class="border border-black/10 rounded-lg p-6 md:p-8">
+            <div class="flex items-start gap-4">
+                <div class="step-number bg-brand-yellow text-brand-dark">1</div>
+                <div>
+                    <h2 class="text-xl font-bold">Install with one command</h2>
+                    <p class="text-zinc-500 mt-2 leading-relaxed">On a fresh Raspberry Pi OS Lite or Debian installation, run:</p>
+                    <div class="mt-4 bg-brand-dark rounded-lg p-5">
+                        <code class="text-brand-yellow font-mono text-sm md:text-base break-all">bash &lt;(curl -sL https://install-anthias.srly.io)</code>
+                    </div>
+                    <p class="text-zinc-400 text-sm mt-3">The installer will set up Docker, pull the container images, and start Anthias. This takes around 10&ndash;15 minutes depending on your hardware and network speed.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="border border-black/10 rounded-lg p-6 md:p-8 mt-6">
+            <div class="flex items-start gap-4">
+                <div class="step-number bg-brand-yellow text-brand-dark">2</div>
+                <div>
+                    <h2 class="text-xl font-bold">Open the dashboard</h2>
+                    <p class="text-zinc-500 mt-2 leading-relaxed">Once the installation completes, open a browser and navigate to your device's IP address. The Anthias web dashboard will be ready at port 80.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="border border-black/10 rounded-lg p-6 md:p-8 mt-6">
+            <div class="flex items-start gap-4">
+                <div class="step-number bg-brand-yellow text-brand-dark">3</div>
+                <div>
+                    <h2 class="text-xl font-bold">Add your content</h2>
+                    <p class="text-zinc-500 mt-2 leading-relaxed">Upload images and videos, or add URLs to web pages. Set a schedule for each asset, and Anthias takes care of the rest.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="bg-bg-light py-16 lg:py-24 px-6 md:px-12 lg:px-20">
+    <div class="max-w-3xl mx-auto">
+        <h2 class="text-2xl font-bold">Alternative installation methods</h2>
+
+        <div class="mt-8 space-y-6">
+            <div class="bg-white border border-black/10 rounded-lg p-6">
+                <h3 class="text-lg font-bold">Raspberry Pi Imager</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">The quickest path for supported Raspberry Pi models. Open <a class="text-brand-purple no-underline hover:underline" href="https://www.raspberrypi.com/software/" target="_blank" rel="noopener">Raspberry Pi Imager</a> and find Anthias under <strong>Other specific-purpose OS</strong>. Flash the SD card and boot.</p>
+                <p class="text-zinc-400 text-xs mt-2">Pi 5 images are not yet available in the Imager. Use the command-line installer or disk images instead.</p>
+            </div>
+
+            <div class="bg-white border border-black/10 rounded-lg p-6">
+                <h3 class="text-lg font-bold">Pre-built disk images</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Download a disk image from the <a class="text-brand-purple no-underline hover:underline" href="https://github.com/Screenly/Anthias/releases/latest" target="_blank" rel="noopener">latest GitHub release</a> and flash it to an SD card with Raspberry Pi Imager or balenaEtcher. Images are compressed with Zstandard (.zst).</p>
+            </div>
+
+            <div class="bg-white border border-black/10 rounded-lg p-6">
+                <h3 class="text-lg font-bold">balenaHub</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">For a fully managed device experience with automatic over-the-air updates. Find Anthias images on <a class="text-brand-purple no-underline hover:underline" href="https://hub.balena.io/fleets-for-good" target="_blank" rel="noopener">balenaHub Fleets for Good</a> for Pi 2 through Pi 5.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="bg-white py-16 lg:py-24 px-6 md:px-12 lg:px-20">
+    <div class="max-w-3xl mx-auto">
+        <h2 class="text-2xl font-bold">Supported hardware</h2>
+        <p class="text-zinc-500 mt-2">Anthias runs on Raspberry Pi single-board computers and 64-bit x86 PCs running Raspberry Pi OS or Debian (Trixie or Bookworm).</p>
+
+        <div class="mt-6 overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-black/10">
+                        <th class="text-left py-3 pr-4 font-semibold">Device</th>
+                        <th class="text-left py-3 pr-4 font-semibold">Architecture</th>
+                        <th class="text-left py-3 font-semibold">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="text-zinc-600">
+                    <tr class="border-b border-black/5">
+                        <td class="py-3 pr-4">Raspberry Pi 5 Model B</td>
+                        <td class="py-3 pr-4">64-bit</td>
+                        <td class="py-3"><span class="text-green-700 font-medium">Recommended</span></td>
+                    </tr>
+                    <tr class="border-b border-black/5">
+                        <td class="py-3 pr-4">Raspberry Pi 4 Model B</td>
+                        <td class="py-3 pr-4">64-bit</td>
+                        <td class="py-3"><span class="text-green-700 font-medium">Recommended</span></td>
+                    </tr>
+                    <tr class="border-b border-black/5">
+                        <td class="py-3 pr-4">Raspberry Pi 3 Model B+</td>
+                        <td class="py-3 pr-4">64-bit</td>
+                        <td class="py-3"><span class="text-zinc-400">Maintenance</span></td>
+                    </tr>
+                    <tr class="border-b border-black/5">
+                        <td class="py-3 pr-4">Raspberry Pi 3 Model B</td>
+                        <td class="py-3 pr-4">64-bit</td>
+                        <td class="py-3"><span class="text-zinc-400">Maintenance</span></td>
+                    </tr>
+                    <tr class="border-b border-black/5">
+                        <td class="py-3 pr-4">Raspberry Pi 2 Model B</td>
+                        <td class="py-3 pr-4">32-bit</td>
+                        <td class="py-3"><span class="text-zinc-400">Maintenance</span></td>
+                    </tr>
+                    <tr>
+                        <td class="py-3 pr-4">x86 PC (NUC or similar)</td>
+                        <td class="py-3 pr-4">64-bit</td>
+                        <td class="py-3"><span class="text-green-700 font-medium">Recommended</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<section class="bg-brand-dark py-16 lg:py-24 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto text-center">
+        <h2 class="text-white text-3xl lg:text-4xl font-extrabold tracking-tight">Need help?</h2>
+        <p class="text-white/50 mt-4 text-lg max-w-lg mx-auto">Check the documentation, ask on the forum, or file an issue on GitHub.</p>
+        <div class="flex flex-wrap justify-center gap-4 mt-8">
+            <a class="btn-secondary" href="https://github.com/Screenly/Anthias/blob/master/docs/README.md" target="_blank" rel="noopener">Documentation</a>
+            <a class="btn-secondary" href="https://forums.screenly.io" target="_blank" rel="noopener">Forum</a>
+            <a class="btn-secondary" href="https://github.com/Screenly/Anthias/issues" target="_blank" rel="noopener">Report an Issue</a>
+        </div>
+    </div>
+</section>
+{{ end }}

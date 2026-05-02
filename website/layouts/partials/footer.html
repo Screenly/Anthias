@@ -1,29 +1,45 @@
-<footer>
-    <div class="container-fluid bg-container background-dark">
-        <div class="text-center">
-            <h2 class="mb-4">Get started with Anthias <br/> digital signage software today</h2>
-            <p>You can find the entire code base on GitHub &mdash; it's 100% free, forever.</p>
-            <a class="btn btn-primary mt-3 mb-5" href="https://github.com/Screenly/Anthias">Get Started</a>
-        </div>
+<footer class="bg-brand-dark text-white">
+    <div class="max-w-7xl mx-auto px-6 md:px-12 lg:px-20 py-12 lg:py-16">
+        <div class="flex flex-col lg:flex-row justify-between items-start gap-8">
+            <div>
+                <a href="/">
+                    <img class="md:hidden h-7" src="/assets/images/logo-full-mobile.svg" alt="Anthias" />
+                    <img class="hidden md:block h-7" src="/assets/images/logo-full.svg" alt="Anthias" />
+                </a>
+                <p class="text-white/40 text-sm mt-3 max-w-xs">Open source digital signage for Raspberry Pi and PC. Built by Screenly.</p>
+            </div>
 
-        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-center">
-            <img class="d-md-none" src="/assets/images/logo-full-mobile.svg" alt="Anthias logo" />
-            <img class="d-none d-md-block" src="/assets/images/logo-full.svg" alt="Anthias logo" />
-            <nav class="d-flex justify-content-between w-100 my-4 footer-links">
-                <a class="text-white text-decoration-none" href="#features">Features</a>
-                <a class="text-white text-decoration-none" href="#faq">FAQ</a>
-                <a class="text-white text-decoration-none" href="https://www.screenly.io">Screenly</a>
-            </nav>
-            <div class="d-flex social-icons">
-                <a href="https://x.com/ScreenlyApp" target="_blank" rel="noopener"><img src="/assets/images/twitter.svg" alt="Follow on X" /></a>
-                <a href="https://www.facebook.com/Screenly" target="_blank" rel="noopener"><img src="/assets/images/fb.svg" alt="Follow on Facebook" /></a>
-                <a href="https://www.instagram.com/screenlyapp/" target="_blank" rel="noopener"><img src="/assets/images/instagram.svg" alt="Follow on Instagram" /></a>
-                <a href="https://github.com/Screenly" target="_blank" rel="noopener"><img src="/assets/images/gh.svg" alt="Star on GitHub" /></a>
+            <div class="flex flex-wrap gap-12 lg:gap-16">
+                <div>
+                    <h3 class="text-xs font-semibold uppercase tracking-wider text-white/50 mb-3">Product</h3>
+                    <ul class="list-none m-0 p-0 flex flex-col gap-2">
+                        <li><a class="text-white/70 no-underline text-sm hover:text-white transition-colors" href="/features/">Features</a></li>
+                        <li><a class="text-white/70 no-underline text-sm hover:text-white transition-colors" href="/get-started/">Get Started</a></li>
+                        <li><a class="text-white/70 no-underline text-sm hover:text-white transition-colors" href="/faq/">FAQ</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-xs font-semibold uppercase tracking-wider text-white/50 mb-3">Resources</h3>
+                    <ul class="list-none m-0 p-0 flex flex-col gap-2">
+                        <li><a class="text-white/70 no-underline text-sm hover:text-white transition-colors" href="https://github.com/Screenly/Anthias" target="_blank" rel="noopener">GitHub</a></li>
+                        <li><a class="text-white/70 no-underline text-sm hover:text-white transition-colors" href="https://forums.screenly.io" target="_blank" rel="noopener">Forum</a></li>
+                        <li><a class="text-white/70 no-underline text-sm hover:text-white transition-colors" href="https://github.com/Screenly/Anthias/blob/master/docs/README.md" target="_blank" rel="noopener">Docs</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-xs font-semibold uppercase tracking-wider text-white/50 mb-3">Social</h3>
+                    <div class="flex gap-4">
+                        <a href="https://x.com/ScreenlyApp" target="_blank" rel="noopener" class="text-white/40 hover:text-white transition-colors"><img class="w-5 h-5" src="/assets/images/twitter.svg" alt="X" /></a>
+                        <a href="https://www.facebook.com/Screenly" target="_blank" rel="noopener" class="text-white/40 hover:text-white transition-colors"><img class="w-5 h-5" src="/assets/images/fb.svg" alt="Facebook" /></a>
+                        <a href="https://www.instagram.com/screenlyapp/" target="_blank" rel="noopener" class="text-white/40 hover:text-white transition-colors"><img class="w-5 h-5" src="/assets/images/instagram.svg" alt="Instagram" /></a>
+                        <a href="https://github.com/Screenly" target="_blank" rel="noopener" class="text-white/40 hover:text-white transition-colors"><img class="w-5 h-5" src="/assets/images/gh.svg" alt="GitHub" /></a>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="text-center legal mt-5 pt-5">
-            &copy; 2022 - {{ now.Year }} Screenly, Inc
+        <div class="text-white/30 border-t border-white/10 mt-12 pt-6 text-sm">
+            &copy; 2012&ndash;{{ now.Year }} Screenly, Inc.
         </div>
     </div>
 </footer>

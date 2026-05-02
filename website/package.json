@@ -1,0 +1,13 @@
+{
+  "name": "website",
+  "private": true,
+  "scripts": {
+    "css:build": "bunx @tailwindcss/cli -i src/main.css -o assets/styles/style.css",
+    "css:watch": "bunx @tailwindcss/cli -i src/main.css -o assets/styles/style.css --watch",
+    "dev": "bun run css:watch & hugo server",
+    "build": "bun run css:build && hugo"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.2.4"
+  }
+}

@@ -1,0 +1,163 @@
+{{ define "main" }}
+<header class="bg-brand-dark py-16 md:py-20 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-white text-4xl md:text-5xl font-extrabold tracking-tight">Features</h1>
+        <p class="text-white/60 text-lg mt-4 max-w-xl">Everything you need to run digital signage on your own hardware.</p>
+    </div>
+</header>
+
+<section class="bg-white py-16 lg:py-24 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto">
+        <h2 class="text-2xl font-bold">Content &amp; display</h2>
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-yellow/20 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-dark" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M9 16v4M15 16v4"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">Images, videos, and web pages</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Upload files directly or point to any HTTP/HTTPS URL. Anthias handles rendering through its built-in Qt-based browser and hardware-accelerated media players.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-purple/10 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">Content scheduling</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Set start and end dates for each asset. Control per-asset display duration. Assets activate and deactivate on schedule without manual intervention.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-yellow/20 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-dark" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h10M4 18h7"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">Playlist management</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Drag-and-drop ordering, shuffle mode, active/inactive states. Skip forward, back, or jump to a specific asset.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-purple/10 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">Full HD output</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">1920&times;1080 native resolution with hardware-accelerated video playback on Raspberry Pi. HDMI audio output supported.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-yellow/20 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-dark" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">Real-time updates</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">WebSocket-powered live sync between the web dashboard and the display. Changes reflect immediately without a page refresh.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-purple/10 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">Display power control</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Turn the connected display on and off programmatically. Reduce energy consumption outside of business hours.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="bg-bg-light py-16 lg:py-24 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto">
+        <h2 class="text-2xl font-bold">Management &amp; integration</h2>
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-yellow/20 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-dark" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M2 12h20M12 2c2.5 3 4 6.5 4 10s-1.5 7-4 10c-2.5-3-4-6.5-4-10s1.5-7 4-10z"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">Web dashboard</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Manage assets, view system health, and configure settings from any browser on your local network. No app to install.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-purple/10 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 18l2-2-2-2M8 6L6 8l2 2"/><path d="M14.5 4l-5 16"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">REST API</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Full API with OpenAPI documentation. Create, update, and delete assets. Control playback. Manage settings. Automate everything.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-yellow/20 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-dark" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">Docker containers</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Runs as a set of Docker containers: web server, task queue, viewer, and Redis. Clean isolation, easy updates.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-purple/10 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">Backup &amp; restore</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Export settings and assets as a single compressed archive. Restore to the same device or migrate to a new one.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-yellow/20 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-dark" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">Authentication</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Optional HTTP basic authentication protects the dashboard and API from unauthorized access on your network.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="w-10 h-10 rounded-lg bg-brand-purple/10 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                </div>
+                <h3 class="text-lg font-bold">System monitoring</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">View disk space, CPU load, uptime, and software version from the System Info page. Reboot or shut down remotely.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="bg-white py-16 lg:py-24 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto">
+        <h2 class="text-2xl font-bold">Supported hardware</h2>
+        <p class="text-zinc-500 mt-2 max-w-xl">Anthias runs on Raspberry Pi single-board computers and 64-bit x86 PCs.</p>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mt-8">
+            <div class="bg-bg-light rounded-lg p-4 text-center">
+                <p class="font-bold text-sm">Pi 5</p>
+                <p class="text-zinc-500 text-xs mt-1">64-bit</p>
+            </div>
+            <div class="bg-bg-light rounded-lg p-4 text-center">
+                <p class="font-bold text-sm">Pi 4</p>
+                <p class="text-zinc-500 text-xs mt-1">64-bit</p>
+            </div>
+            <div class="bg-bg-light rounded-lg p-4 text-center">
+                <p class="font-bold text-sm">Pi 3 B+</p>
+                <p class="text-zinc-500 text-xs mt-1">64-bit</p>
+            </div>
+            <div class="bg-bg-light rounded-lg p-4 text-center">
+                <p class="font-bold text-sm">Pi 3 B</p>
+                <p class="text-zinc-500 text-xs mt-1">64-bit</p>
+            </div>
+            <div class="bg-bg-light rounded-lg p-4 text-center">
+                <p class="font-bold text-sm">Pi 2 B</p>
+                <p class="text-zinc-500 text-xs mt-1">32-bit</p>
+            </div>
+            <div class="bg-bg-light rounded-lg p-4 text-center">
+                <p class="font-bold text-sm">x86 PC</p>
+                <p class="text-zinc-500 text-xs mt-1">64-bit</p>
+            </div>
+        </div>
+        <p class="text-zinc-400 text-xs mt-4">Pi 2 and Pi 3 are in maintenance mode. We recommend Pi 4 or later for new installations.</p>
+    </div>
+</section>
+
+<section class="bg-brand-dark py-16 lg:py-24 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto text-center">
+        <h2 class="text-white text-3xl lg:text-4xl font-extrabold tracking-tight">Ready to try Anthias?</h2>
+        <p class="text-white/50 mt-4 text-lg max-w-lg mx-auto">Free, open source, and yours to run on any supported device.</p>
+        <div class="flex flex-wrap justify-center gap-4 mt-8">
+            <a class="btn-primary" href="/get-started/">Get Started</a>
+            <a class="btn-secondary" href="https://github.com/Screenly/Anthias" target="_blank" rel="noopener">View on GitHub</a>
+        </div>
+    </div>
+</section>
+{{ end }}

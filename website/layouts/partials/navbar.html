@@ -1,27 +1,44 @@
-<div>
-    <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/">
-                <img class="d-md-none" src="/assets/images/logo-full-mobile.svg" alt="Anthias logo" />
-                <img class="d-none d-md-block" src="/assets/images/logo-full.svg" alt="Anthias logo" />
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar-nav" aria-controls="navbar-nav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbar-nav">
-                <ul class="navbar-nav nav-main">
-                    <li class="nav-item">
-                        <a class="nav-link active" aria-current="page" href="#features">Features</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#faq">FAQ</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="https://www.screenly.io">Screenly</a>
-                    </li>
-                </ul>
-            </div>
-            <a class="btn btn-primary d-none d-lg-inline-block" href="https://github.com/Screenly/Anthias">Get Started</a>
+<nav class="bg-brand-dark py-4 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+        <a href="/" class="shrink-0">
+            <img class="md:hidden h-7" src="/assets/images/logo-full-mobile.svg" alt="Anthias" />
+            <img class="hidden md:block h-7" src="/assets/images/logo-full.svg" alt="Anthias" />
+        </a>
+
+        <button id="menu-toggle" class="lg:hidden border-0 bg-transparent p-1" aria-label="Toggle navigation" aria-expanded="false" aria-controls="mobile-menu">
+            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+        </button>
+
+        <div class="hidden lg:flex items-center gap-8">
+            <ul class="flex gap-1 list-none m-0 p-0">
+                {{ range site.Menus.main }}
+                <li>
+                    <a class="text-white/70 no-underline px-3 py-2 rounded-md text-sm font-medium hover:text-white transition-colors"
+                       href="{{ .URL }}"
+                       {{ if .Params.external }}target="_blank" rel="noopener"{{ end }}>
+                        {{ .Name }}
+                    </a>
+                </li>
+                {{ end }}
+            </ul>
+            <a class="btn-primary text-sm" href="https://github.com/Screenly/Anthias">GitHub</a>
         </div>
-    </nav>
-</div>
+    </div>
+
+    <div id="mobile-menu" class="hidden lg:hidden mt-4 max-w-7xl mx-auto border-t border-white/10 pt-4">
+        <ul class="flex flex-col gap-0 list-none m-0 p-0">
+            {{ range site.Menus.main }}
+            <li>
+                <a class="text-white/70 no-underline block py-2.5 text-sm hover:text-white transition-colors"
+                   href="{{ .URL }}"
+                   {{ if .Params.external }}target="_blank" rel="noopener"{{ end }}>
+                    {{ .Name }}
+                </a>
+            </li>
+            {{ end }}
+        </ul>
+        <a class="btn-primary mt-3 mb-1 text-sm text-center block" href="https://github.com/Screenly/Anthias">GitHub</a>
+    </div>
+</nav>
