@@ -9,19 +9,66 @@ from settings import settings
 VIDEO_TIMEOUT = 20  # secs
 
 
+def _detect_hdmi_audio_device() -> str:
+    """Auto-detect which HDMI port is connected on Pi4/Pi5.
+
+    The vc4 DRM driver exposes both HDMI connectors as
+    /sys/class/drm/card1-HDMI-A-{1,2}/, and ALSA exposes the
+    matching audio devices as vc4hdmi0 (HDMI-A-1) and vc4hdmi1
+    (HDMI-A-2). The ALSA card name (vc4hdmiN) is independent of
+    the DRM card index (card1).
+
+    Returns sysdefault:CARD=<vc4hdmiN> for the first connector
+    whose status file reads "connected". sysdefault is preferred
+    over default to bypass PulseAudio/dmix wrappers that can
+    intercept the "default" device.
+
+    Falls back to sysdefault:CARD=vc4hdmi0 when neither connector
+    reports connected (display asleep, status files unavailable,
+    or unexpected DRM card layout).
+    """
+    for port, card_name in [
+        ('card1-HDMI-A-1', 'vc4hdmi0'),
+        ('card1-HDMI-A-2', 'vc4hdmi1'),
+    ]:
+        status_path = f'/sys/class/drm/{port}/status'
+        try:
+            if os.path.exists(status_path):
+                with open(status_path) as f:
+                    if f.read().strip() == 'connected':
+                        logging.info(
+                            'Detected connected HDMI: %s -> '
+                            'sysdefault:CARD=%s',
+                            port,
+                            card_name,
+                        )
+                        return f'sysdefault:CARD={card_name}'
+        except OSError as exc:
+            logging.debug(
+                'HDMI status read failed for %s: %s',
+                status_path,
+                exc,
+            )
+
+    logging.warning(
+        'No connected HDMI detected, falling back to sysdefault:CARD=vc4hdmi0',
+    )
+    return 'sysdefault:CARD=vc4hdmi0'
+
+
 def get_alsa_audio_device() -> str:
     if settings['audio_output'] == 'local':
         if get_device_type() == 'pi5':
-            return 'default:CARD=vc4hdmi0'
+            return 'sysdefault:CARD=vc4hdmi0'
 
         return 'plughw:CARD=Headphones'
     else:
         if get_device_type() in ['pi4', 'pi5']:
-            return 'default:CARD=vc4hdmi0'
+            return _detect_hdmi_audio_device()
         elif get_device_type() in ['pi1', 'pi2', 'pi3']:
-            return 'default:CARD=vc4hdmi'
+            return 'sysdefault:CARD=vc4hdmi'
         else:
-            return 'default:CARD=HID'
+            return 'sysdefault:CARD=HID'
 
 
 class MediaPlayer:

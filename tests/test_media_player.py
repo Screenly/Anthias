@@ -42,9 +42,13 @@ def mpv(monkeypatch: pytest.MonkeyPatch) -> Iterator[_MPVFixtures]:
         patch_device_type.stop()
 
 
+@patch(
+    'viewer.media_player._detect_hdmi_audio_device',
+    return_value='sysdefault:CARD=vc4hdmi0',
+)
 @patch('viewer.media_player.subprocess.Popen')
 def test_play_invokes_popen_with_expected_args(
-    mock_popen: Any, mpv: _MPVFixtures
+    mock_popen: Any, _mock_detect: Any, mpv: _MPVFixtures
 ) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)
     with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4'}):
@@ -56,7 +60,7 @@ def test_play_invokes_popen_with_expected_args(
             '--no-terminal',
             '--vo=drm',
             '--hwdec=auto-safe',
-            '--audio-device=alsa/default:CARD=vc4hdmi0',
+            '--audio-device=alsa/sysdefault:CARD=vc4hdmi0',
             '--',
             'file:///test/video.mp4',
         ],
@@ -185,7 +189,7 @@ def alsa_settings() -> Iterator[Any]:
 def test_local_on_pi5_uses_hdmi_card(alsa_settings: Any) -> None:
     alsa_settings.__getitem__.return_value = 'local'
     with patch('viewer.media_player.get_device_type', return_value='pi5'):
-        assert get_alsa_audio_device() == 'default:CARD=vc4hdmi0'
+        assert get_alsa_audio_device() == 'sysdefault:CARD=vc4hdmi0'
 
 
 @pytest.mark.parametrize('device_type', ['pi1', 'pi2', 'pi3', 'pi4'])
@@ -201,15 +205,22 @@ def test_local_on_other_pi_uses_headphones(
 
 
 @pytest.mark.parametrize('device_type', ['pi4', 'pi5'])
-def test_hdmi_on_pi4_pi5_uses_vc4hdmi0(
+def test_hdmi_on_pi4_pi5_uses_detected_device(
     alsa_settings: Any, device_type: str
 ) -> None:
     alsa_settings.__getitem__.return_value = 'hdmi'
-    with patch(
-        'viewer.media_player.get_device_type',
-        return_value=device_type,
+    with (
+        patch(
+            'viewer.media_player.get_device_type',
+            return_value=device_type,
+        ),
+        patch(
+            'viewer.media_player._detect_hdmi_audio_device',
+            return_value='sysdefault:CARD=vc4hdmi1',
+        ) as mock_detect,
     ):
-        assert get_alsa_audio_device() == 'default:CARD=vc4hdmi0'
+        assert get_alsa_audio_device() == 'sysdefault:CARD=vc4hdmi1'
+        mock_detect.assert_called_once()
 
 
 @pytest.mark.parametrize('device_type', ['pi1', 'pi2', 'pi3'])
@@ -221,13 +232,76 @@ def test_hdmi_on_pi1_pi2_pi3_uses_vc4hdmi(
         'viewer.media_player.get_device_type',
         return_value=device_type,
     ):
-        assert get_alsa_audio_device() == 'default:CARD=vc4hdmi'
+        assert get_alsa_audio_device() == 'sysdefault:CARD=vc4hdmi'
 
 
 def test_hdmi_on_x86_falls_back_to_hid(alsa_settings: Any) -> None:
     alsa_settings.__getitem__.return_value = 'hdmi'
     with patch('viewer.media_player.get_device_type', return_value='x86'):
-        assert get_alsa_audio_device() == 'default:CARD=HID'
+        assert get_alsa_audio_device() == 'sysdefault:CARD=HID'
+
+
+def test_detect_hdmi_returns_first_connected_port() -> None:
+    from viewer.media_player import _detect_hdmi_audio_device
+
+    statuses = {
+        '/sys/class/drm/card1-HDMI-A-1/status': 'connected\n',
+        '/sys/class/drm/card1-HDMI-A-2/status': 'disconnected\n',
+    }
+
+    def fake_exists(path: str) -> bool:
+        return path in statuses
+
+    def fake_open(path: str, *args: Any, **kwargs: Any) -> Any:
+        from io import StringIO
+
+        return StringIO(statuses[path])
+
+    with (
+        patch('viewer.media_player.os.path.exists', side_effect=fake_exists),
+        patch('builtins.open', side_effect=fake_open),
+    ):
+        assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
+
+
+def test_detect_hdmi_returns_second_port_when_only_it_is_connected() -> None:
+    from viewer.media_player import _detect_hdmi_audio_device
+
+    statuses = {
+        '/sys/class/drm/card1-HDMI-A-1/status': 'disconnected\n',
+        '/sys/class/drm/card1-HDMI-A-2/status': 'connected\n',
+    }
+
+    def fake_exists(path: str) -> bool:
+        return path in statuses
+
+    def fake_open(path: str, *args: Any, **kwargs: Any) -> Any:
+        from io import StringIO
+
+        return StringIO(statuses[path])
+
+    with (
+        patch('viewer.media_player.os.path.exists', side_effect=fake_exists),
+        patch('builtins.open', side_effect=fake_open),
+    ):
+        assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi1'
+
+
+def test_detect_hdmi_falls_back_when_no_status_files() -> None:
+    from viewer.media_player import _detect_hdmi_audio_device
+
+    with patch('viewer.media_player.os.path.exists', return_value=False):
+        assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
+
+
+def test_detect_hdmi_falls_back_on_oserror() -> None:
+    from viewer.media_player import _detect_hdmi_audio_device
+
+    with (
+        patch('viewer.media_player.os.path.exists', return_value=True),
+        patch('builtins.open', side_effect=OSError('boom')),
+    ):
+        assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
 
 
 class _VLCFixtures:
