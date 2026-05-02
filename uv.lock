@@ -248,6 +248,10 @@ viewer = [
     { name = "tenacity" },
     { name = "urllib3" },
 ]
+website = [
+    { name = "pytest" },
+    { name = "requests" },
+]
 
 [package.metadata]
 
@@ -406,6 +410,10 @@ viewer = [
     { name = "sh", specifier = "==2.2.2" },
     { name = "tenacity", specifier = "==9.1.2" },
     { name = "urllib3", specifier = "==2.6.3" },
+]
+website = [
+    { name = "pytest", specifier = "==9.0.3" },
+    { name = "requests", specifier = "==2.33.1" },
 ]
 
 [[package]]

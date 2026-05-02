@@ -3,6 +3,7 @@ from django.urls import URLPattern, URLResolver, path
 from api.views.v2 import (
     AssetContentViewV2,
     AssetListViewV2,
+    AssetRecheckViewV2,
     AssetsControlViewV2,
     AssetViewV2,
     BackupViewV2,
@@ -45,6 +46,11 @@ def get_url_patterns() -> list[URLPattern | URLResolver]:
             'v2/assets/<str:asset_id>/content',
             AssetContentViewV2.as_view(),
             name='asset_content_v2',
+        ),
+        path(
+            'v2/assets/<str:asset_id>/recheck',
+            AssetRecheckViewV2.as_view(),
+            name='asset_recheck_v2',
         ),
         path(
             'v2/device_settings',

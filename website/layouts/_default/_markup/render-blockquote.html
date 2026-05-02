@@ -1,0 +1,27 @@
+{{- /*
+Renders a blockquote. If the first paragraph starts with **Note**,
+**Tip**, **Important**, **Warning**, or **Caution** (the form our
+docs preprocessor produces from GitHub-style `> [!NOTE]` markers),
+we emit it as an alert callout with a typed CSS hook so the docs
+prose can style each kind distinctly. Otherwise it's a plain quote.
+*/ -}}
+{{- $kinds := slice "Note" "Tip" "Important" "Warning" "Caution" -}}
+{{- $kind := "" -}}
+{{- $body := .Text -}}
+{{- range $kinds -}}
+  {{- $marker := printf "<p><strong>%s</strong></p>" . -}}
+  {{- if hasPrefix $body $marker -}}
+    {{- $kind = . -}}
+    {{- $body = strings.TrimPrefix $marker $body -}}
+  {{- end -}}
+{{- end -}}
+{{- if $kind -}}
+<blockquote class="docs-alert docs-alert-{{ lower $kind }}">
+  <div class="docs-alert-label">{{ $kind }}</div>
+  {{ $body | safeHTML }}
+</blockquote>
+{{- else -}}
+<blockquote>
+  {{ $body | safeHTML }}
+</blockquote>
+{{- end -}}

@@ -1,0 +1,15 @@
+{
+  "name": "website",
+  "private": true,
+  "scripts": {
+    "fonts:install": "bun run scripts/install-fonts.ts",
+    "css:build": "bun run fonts:install && bunx @tailwindcss/cli -i src/main.css -o assets/styles/style.css",
+    "css:watch": "bun run fonts:install && bunx @tailwindcss/cli -i src/main.css -o assets/styles/style.css --watch",
+    "dev": "bash -c 'bun run css:watch & css=$!; hugo server & hugo=$!; trap \"kill $css $hugo 2>/dev/null\" EXIT INT TERM; wait -n; exit $?'",
+    "build": "bun run css:build && hugo"
+  },
+  "devDependencies": {
+    "@fontsource/plus-jakarta-sans": "^5.2.8",
+    "@tailwindcss/cli": "^4.2.4"
+  }
+}

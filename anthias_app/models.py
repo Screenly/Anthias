@@ -24,6 +24,8 @@ class Asset(models.Model):
     nocache = models.BooleanField(default=False)
     play_order = models.IntegerField(default=0)
     skip_asset_check = models.BooleanField(default=False)
+    is_reachable = models.BooleanField(default=True)
+    last_reachability_check = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = 'assets'

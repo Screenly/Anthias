@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="{{ default "en" site.LanguageCode }}">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{- $brand := "Anthias" -}}
+    {{- $defaultDescription := "Anthias is the world's most popular open source digital signage solution. Turn any Raspberry Pi or PC into a powerful digital sign displaying images, videos, and web pages." -}}
+    {{- $description := default $defaultDescription .Params.description -}}
+    {{- $titleSuffix := "" -}}
+    {{- if and (not .IsHome) (not (in .Title $brand)) -}}
+      {{- $titleSuffix = printf " | %s" $brand -}}
+    {{- end -}}
+    {{- $pageTitle := printf "%s%s" .Title $titleSuffix -}}
+    {{- $pageImage := (resources.Get "images/overview.png").Permalink -}}
+
+    <title>{{ $pageTitle }}</title>
+    <meta name="description" content="{{ $description }}">
+    <link rel="canonical" href="{{ .Permalink }}">
+    <meta name="theme-color" content="#270035">
+
+    <meta property="og:title" content="{{ $pageTitle }}">
+    <meta property="og:description" content="{{ $description }}">
+    <meta property="og:type" content="{{ if and .IsPage (eq (string .Section) "docs") }}article{{ else }}website{{ end }}">
+    <meta property="og:url" content="{{ .Permalink }}">
+    <meta property="og:image" content="{{ $pageImage }}">
+    <meta property="og:image:alt" content="Anthias dashboard showing scheduled content on a Raspberry Pi-driven display">
+    <meta property="og:site_name" content="{{ $brand }}">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ $pageTitle }}">
+    <meta name="twitter:description" content="{{ $description }}">
+    <meta name="twitter:image" content="{{ $pageImage }}">
+    <meta name="twitter:image:alt" content="Anthias dashboard showing scheduled content on a Raspberry Pi-driven display">
+
+    {{- $favicon := resources.Get "images/favicon.ico" -}}
+    {{- $style := resources.Get "styles/style.css" | fingerprint -}}
+    {{- $chroma := resources.Get "styles/chroma.css" | fingerprint -}}
+    <link rel="icon" href="{{ $favicon.RelPermalink }}">
+    <link rel="stylesheet" href="{{ $style.RelPermalink }}" integrity="{{ $style.Data.Integrity }}">
+    <link rel="stylesheet" href="{{ $chroma.RelPermalink }}" integrity="{{ $chroma.Data.Integrity }}">
+
+    {{ if .IsHome }}
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Anthias",
+      "description": {{ $defaultDescription | jsonify }},
+      "url": "{{ site.BaseURL }}",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "Linux",
+      "license": "https://github.com/Screenly/Anthias/blob/master/LICENSE",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "Screenly, Inc",
+        "url": "https://www.screenly.io"
+      }
+    }
+    </script>
+    {{ end }}
+
+    {{- /* FAQPage structured data — generated from data/faq.yaml */ -}}
+    {{ if eq .Layout "faq" }}
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {{- $first := true -}}
+        {{- range site.Data.faq -}}
+          {{- range .items -}}
+            {{- if not $first }},{{ end -}}
+            {{- $first = false }}
+        {
+          "@type": "Question",
+          "name": {{ .question | jsonify }},
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": {{ .answer | markdownify | plainify | jsonify }}
+          }
+        }
+          {{- end -}}
+        {{- end }}
+      ]
+    }
+    </script>
+    {{ end }}
+
+    {{- /* Article structured data on individual docs pages */ -}}
+    {{ if and .IsPage (eq (string .Section) "docs") }}
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      "headline": {{ .Title | jsonify }},
+      "description": {{ $description | jsonify }},
+      "url": "{{ .Permalink }}",
+      "image": "{{ $pageImage }}",
+      "publisher": {
+        "@type": "Organization",
+        "name": "Screenly, Inc",
+        "url": "https://www.screenly.io"
+      }
+    }
+    </script>
+    {{ end }}
+  </head>
+  <body class="font-sans text-base text-brand-near-black">
+    {{ partial "navbar.html" . }}
+
+    {{ block "main" . }}{{ end }}
+
+    {{ partial "footer.html" . }}
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        var toggle = document.getElementById('menu-toggle');
+        var menu = document.getElementById('mobile-menu');
+        if (toggle && menu) {
+          toggle.addEventListener('click', function () {
+            var isOpen = !menu.classList.toggle('hidden');
+            toggle.setAttribute('aria-expanded', isOpen);
+          });
+          menu.querySelectorAll('a').forEach(function (link) {
+            link.addEventListener('click', function () {
+              menu.classList.add('hidden');
+              toggle.setAttribute('aria-expanded', 'false');
+            });
+          });
+        }
+
+        document.querySelectorAll('[data-accordion]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var targetId = this.dataset.accordion;
+            var target = document.getElementById(targetId);
+            var isOpen = !target.classList.contains('hidden');
+
+            document.querySelectorAll('[data-accordion-content]').forEach(function (c) {
+              c.classList.add('hidden');
+            });
+            document.querySelectorAll('[data-accordion]').forEach(function (b) {
+              b.querySelector('.icon-minus').classList.add('hidden');
+              b.querySelector('.icon-plus').classList.remove('hidden');
+              b.setAttribute('aria-expanded', 'false');
+            });
+
+            if (!isOpen) {
+              target.classList.remove('hidden');
+              this.querySelector('.icon-minus').classList.remove('hidden');
+              this.querySelector('.icon-plus').classList.add('hidden');
+              this.setAttribute('aria-expanded', 'true');
+            }
+          });
+        });
+      });
+    </script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-W6BH3H6SZ6"></script>
+    <script>
+        globalThis.dataLayer = globalThis.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-W6BH3H6SZ6');
+    </script>
+  </body>
+</html>

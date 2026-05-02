@@ -1,0 +1,148 @@
+{{ define "main" }}
+{{- $spec := site.Data.openapi -}}
+{{- $methods := slice "get" "post" "put" "patch" "delete" -}}
+
+{{- /* Build sorted list of unique tags */ -}}
+{{- $allTags := slice -}}
+{{- range $path, $ops := sort $spec.paths -}}
+  {{- range $method := $methods -}}
+    {{- with index $ops $method -}}
+      {{- $op := . -}}
+      {{- with $op.tags -}}
+        {{- range . -}}{{- $allTags = $allTags | append . -}}{{- end -}}
+      {{- else -}}
+        {{- $allTags = $allTags | append "default" -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $tags := $allTags | uniq | sort -}}
+
+<header class="bg-brand-dark py-16 md:py-20 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-white text-4xl md:text-5xl font-extrabold tracking-tight">API Reference</h1>
+        <p class="text-white/60 text-lg mt-4 max-w-2xl">{{ $spec.info.title }} v{{ $spec.info.version }} — manage assets, device settings, backups, and integrations over HTTP.</p>
+        <div class="mt-6 flex flex-wrap gap-2">
+            {{- range $tags -}}
+            <a href="#tag-{{ . | urlize }}" class="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition">{{ . }}</a>
+            {{- end -}}
+        </div>
+    </div>
+</header>
+
+<section class="bg-white py-16 lg:py-20 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto space-y-16">
+        {{- range $tag := $tags -}}
+        <div id="tag-{{ $tag | urlize }}" class="scroll-mt-24">
+            <h2 class="text-2xl font-bold text-brand-near-black capitalize">{{ replace $tag "_" " " }}</h2>
+            <div class="mt-6 space-y-6">
+                {{- range $path, $ops := sort $spec.paths -}}
+                  {{- range $method := $methods -}}
+                    {{- with index $ops $method -}}
+                      {{- $op := . -}}
+                      {{- $opTags := default (slice "default") $op.tags -}}
+                      {{- if in $opTags $tag -}}
+                      <article class="border border-zinc-200 rounded-lg overflow-hidden">
+                        <header class="flex items-center gap-3 px-4 md:px-6 py-3 bg-zinc-50 border-b border-zinc-200">
+                          {{- $methodColors := dict
+                              "get" "bg-blue-100 text-blue-800"
+                              "post" "bg-green-100 text-green-800"
+                              "put" "bg-amber-100 text-amber-800"
+                              "patch" "bg-orange-100 text-orange-800"
+                              "delete" "bg-red-100 text-red-800" -}}
+                          <span class="px-2 py-1 rounded text-xs font-bold uppercase font-mono shrink-0 {{ index $methodColors $method }}">{{ $method }}</span>
+                          <code class="font-mono text-sm text-brand-near-black break-all">{{ $path }}</code>
+                          {{- with $op.summary -}}
+                          <span class="ml-auto text-xs text-zinc-500 hidden md:inline">{{ . }}</span>
+                          {{- end -}}
+                        </header>
+                        <div class="px-4 md:px-6 py-5 space-y-5">
+                          {{- with $op.description -}}<p class="text-sm text-zinc-700">{{ . }}</p>{{- end -}}
+
+                          {{- with $op.parameters -}}
+                          <div>
+                            <h3 class="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-2">Parameters</h3>
+                            <div class="overflow-x-auto">
+                              <table class="w-full text-sm border-collapse">
+                                <thead>
+                                  <tr class="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500">
+                                    <th class="py-2 pr-4 font-semibold">Name</th>
+                                    <th class="py-2 pr-4 font-semibold">In</th>
+                                    <th class="py-2 pr-4 font-semibold">Type</th>
+                                    <th class="py-2 font-semibold">Required</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {{- range . -}}
+                                  <tr class="border-b border-zinc-100">
+                                    <td class="py-2 pr-4 font-mono text-brand-purple">{{ .name }}</td>
+                                    <td class="py-2 pr-4 text-xs text-zinc-600">{{ .in }}</td>
+                                    <td class="py-2 pr-4 font-mono text-xs text-zinc-700">{{ default "string" .schema.type }}</td>
+                                    <td class="py-2 text-xs">{{ if .required }}yes{{ else }}no{{ end }}</td>
+                                  </tr>
+                                  {{- end -}}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                          {{- end -}}
+
+                          {{- with $op.requestBody -}}
+                          {{- /* Pick the best content type to render. JSON first;
+                                 otherwise fall back to the first one in the spec
+                                 (e.g. multipart/form-data for upload endpoints). */ -}}
+                          {{- $body := index .content "application/json" -}}
+                          {{- $contentType := "application/json" -}}
+                          {{- if not $body -}}
+                            {{- $content := .content -}}
+                            {{- range $ct, $entry := sort $content -}}
+                              {{- if not $body -}}{{- $body = $entry -}}{{- $contentType = $ct -}}{{- end -}}
+                            {{- end -}}
+                          {{- end -}}
+                          <div>
+                            <h3 class="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-2">Request body
+                              <span class="ml-1 font-mono normal-case tracking-normal text-zinc-400">{{ $contentType }}</span>
+                            </h3>
+                            {{ partial "api-schema.html" (dict "schema" $body.schema "spec" $spec) }}
+                          </div>
+                          {{- end -}}
+
+                          {{- with $op.responses -}}
+                          {{- $responses := . -}}
+                          <div>
+                            <h3 class="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-2">Responses</h3>
+                            <div class="space-y-3">
+                              {{- range $status, $resp := sort $responses -}}
+                              <details class="border border-zinc-200 rounded">
+                                <summary class="cursor-pointer px-3 py-2 text-sm font-mono flex items-center gap-3 hover:bg-zinc-50">
+                                  {{- $statusColor := "bg-zinc-100 text-zinc-700" -}}
+                                  {{- if hasPrefix $status "2" }}{{ $statusColor = "bg-green-100 text-green-800" }}{{ end -}}
+                                  {{- if hasPrefix $status "4" }}{{ $statusColor = "bg-amber-100 text-amber-800" }}{{ end -}}
+                                  {{- if hasPrefix $status "5" }}{{ $statusColor = "bg-red-100 text-red-800" }}{{ end -}}
+                                  <span class="px-2 py-0.5 rounded text-xs font-bold {{ $statusColor }}">{{ $status }}</span>
+                                  <span class="text-xs text-zinc-500">{{ default "" $resp.description }}</span>
+                                </summary>
+                                {{- with $resp.content -}}
+                                  {{- with index . "application/json" -}}
+                                  <div class="px-3 py-3 border-t border-zinc-200">
+                                    {{ partial "api-schema.html" (dict "schema" .schema "spec" $spec) }}
+                                  </div>
+                                  {{- end -}}
+                                {{- end -}}
+                              </details>
+                              {{- end -}}
+                            </div>
+                          </div>
+                          {{- end -}}
+                        </div>
+                      </article>
+                      {{- end -}}
+                    {{- end -}}
+                  {{- end -}}
+                {{- end -}}
+            </div>
+        </div>
+        {{- end -}}
+    </div>
+</section>
+{{ end }}
