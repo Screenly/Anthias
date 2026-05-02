@@ -10,15 +10,22 @@ VIDEO_TIMEOUT = 20  # secs
 
 
 def _detect_hdmi_audio_device() -> str:
-    """Auto-detect connected HDMI audio device on Pi4/Pi5.
+    """Auto-detect which HDMI port is connected on Pi4/Pi5.
 
-    Pi4 has two HDMI ports:
-      - HDMI-A-1 = card 1 = vc4hdmi0
-      - HDMI-A-2 = card 2 = vc4hdmi1
+    The vc4 DRM driver exposes both HDMI connectors as
+    /sys/class/drm/card1-HDMI-A-{1,2}/, and ALSA exposes the
+    matching audio devices as vc4hdmi0 (HDMI-A-1) and vc4hdmi1
+    (HDMI-A-2). The ALSA card name (vc4hdmiN) is independent of
+    the DRM card index (card1).
 
-    Checks /sys/class/drm/cardN-HDMI-A-N/status to find which port
-    is connected and returns the matching ALSA device. Uses
-    sysdefault instead of default to bypass PulseAudio/dmix.
+    Returns sysdefault:CARD=<vc4hdmiN> for the first connector
+    whose status file reads "connected". sysdefault is preferred
+    over default to bypass PulseAudio/dmix wrappers that can
+    intercept the "default" device.
+
+    Falls back to sysdefault:CARD=vc4hdmi0 when neither connector
+    reports connected (display asleep, status files unavailable,
+    or unexpected DRM card layout).
     """
     for port, card_name in [
         ('card1-HDMI-A-1', 'vc4hdmi0'),
@@ -36,8 +43,12 @@ def _detect_hdmi_audio_device() -> str:
                             card_name,
                         )
                         return f'sysdefault:CARD={card_name}'
-        except OSError:
-            pass
+        except OSError as exc:
+            logging.debug(
+                'HDMI status read failed for %s: %s',
+                status_path,
+                exc,
+            )
 
     logging.warning(
         'No connected HDMI detected, falling back to sysdefault:CARD=vc4hdmi0',
