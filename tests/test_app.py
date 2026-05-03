@@ -396,7 +396,7 @@ def test_enable_asset(reset_assets: None) -> None:
 
         # Find the toggle element and scroll it into view
         toggle_element = browser.find_by_css(
-            '.form-switch input[type="checkbox"]'
+            '.app-switch input[type="checkbox"]'
         ).first
         browser.execute_script(
             'arguments[0].scrollIntoView(true);', toggle_element._element
@@ -411,7 +411,7 @@ def test_enable_asset(reset_assets: None) -> None:
 
         # Re-find the element after React re-renders it
         toggle_element_after = browser.find_by_css(
-            '.form-switch input[type="checkbox"]'
+            '.app-switch input[type="checkbox"]'
         ).first
         browser.execute_script(
             'return arguments[0].checked;', toggle_element_after._element
@@ -442,7 +442,7 @@ def test_disable_asset(reset_assets: None) -> None:
 
         # Find the toggle element and scroll it into view
         toggle_element = browser.find_by_css(
-            '.form-switch input[type="checkbox"]'
+            '.app-switch input[type="checkbox"]'
         ).first
         browser.execute_script(
             'arguments[0].scrollIntoView(true);', toggle_element._element
@@ -457,7 +457,7 @@ def test_disable_asset(reset_assets: None) -> None:
 
         # Re-find the element after React re-renders it
         toggle_element_after = browser.find_by_css(
-            '.form-switch input[type="checkbox"]'
+            '.app-switch input[type="checkbox"]'
         ).first
         browser.execute_script(
             'return arguments[0].checked;', toggle_element_after._element
