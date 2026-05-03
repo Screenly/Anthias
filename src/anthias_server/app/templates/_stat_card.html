@@ -1,12 +1,4 @@
-{# Reusable stat card for the System Info dashboard.
-
-   Vars:
-   - label    : eyebrow text above the value (required)
-   - value    : main value (required, may be HTML-safe via |safe upstream)
-   - meta     : optional secondary line below the value
-   - href     : optional URL — when set, value renders as a link
-   - span     : pass "2" to make this card span two columns
-#}
+{% comment %}Reusable stat card for the System Info dashboard. Vars: label (required eyebrow), value (required main value), meta (optional secondary line), href (optional, renders value as link), span (pass "2" for 2-col span).{% endcomment %}
 <div class="stat-card{% if span %} stat-card--span-{{ span }}{% endif %}">
   <p class="stat-card__label">{{ label }}</p>
   <div class="stat-card__value">
