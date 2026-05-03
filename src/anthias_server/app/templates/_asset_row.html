@@ -1,0 +1,51 @@
+{% load asset_filters %}
+<tr data-asset-id="{{ asset.asset_id }}">
+  <td>
+    <span class="d-inline-flex align-items-center gap-2">
+      {% if is_active %}<i class="bi bi-grip-vertical text-white-50 drag-handle" style="cursor: grab"></i>{% endif %}
+      {% if asset.mimetype == 'image' %}<i class="bi bi-image"></i>
+      {% elif asset.mimetype == 'video' %}<i class="bi bi-camera-video"></i>
+      {% else %}<i class="bi bi-globe"></i>
+      {% endif %}
+      <span class="text-truncate" style="max-width: 220px; display: inline-block; vertical-align: middle">{{ asset.name }}</span>
+    </span>
+  </td>
+  <td>{{ asset.start_date|date:"m/d/Y g:i:s A" }}</td>
+  <td>{{ asset.end_date|date:"m/d/Y g:i:s A" }}</td>
+  <td>{{ asset.duration }} sec</td>
+  <td>
+    {% if asset.is_processing %}
+    <small class="text-secondary">Processing</small>
+    {% else %}
+    <form method="post" action="{% url 'anthias_app:assets_toggle' asset_id=asset.asset_id %}" class="m-0">
+      {% csrf_token %}
+      <div class="form-check form-switch m-0">
+        <input
+          type="checkbox"
+          class="form-check-input"
+          {% if asset.is_enabled %}checked{% endif %}
+          onchange="this.form.requestSubmit()"
+        >
+      </div>
+    </form>
+    {% endif %}
+  </td>
+  <td class="text-end">
+    <div class="d-inline-flex gap-1">
+      <a href="{% url 'anthias_app:assets_download' asset_id=asset.asset_id %}" class="btn btn-outline-{% if is_active %}light{% else %}dark{% endif %} btn-sm" title="Download">
+        <i class="bi bi-download"></i>
+      </a>
+      <button type="button" class="btn btn-outline-{% if is_active %}light{% else %}dark{% endif %} btn-sm" title="Edit"
+        @click='openEdit({{ asset|to_json }})'>
+        <i class="bi bi-pencil"></i>
+      </button>
+      <form method="post" action="{% url 'anthias_app:assets_delete' asset_id=asset.asset_id %}" class="m-0"
+        onsubmit="return confirm('Are you sure? This action cannot be undone.')">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-{% if is_active %}light{% else %}dark{% endif %} btn-sm" title="Delete">
+          <i class="bi bi-trash"></i>
+        </button>
+      </form>
+    </div>
+  </td>
+</tr>

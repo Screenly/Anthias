@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.http import FileResponse, HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from anthias_server.app import page_context
@@ -53,6 +54,201 @@ def integrations(request: HttpRequest) -> HttpResponse:
     context = page_context.integrations()
     context['active_nav'] = 'integrations'
     return template(request, 'integrations.html', context)
+
+
+# --- /home (Schedule Overview) ----------------------------------------------
+
+@authorized
+@require_http_methods(['GET'])
+def home(request: HttpRequest) -> HttpResponse:
+    context = page_context.assets()
+    context['active_nav'] = 'home'
+    return template(request, 'home.html', context)
+
+
+@authorized
+@require_http_methods(['GET'])
+def assets_table_partial(request: HttpRequest) -> HttpResponse:
+    """HTMX endpoint for the table area only — re-rendered every 5s
+    by the home page and after every successful write."""
+    from django.shortcuts import render as _render
+    return _render(request, '_asset_table.html', page_context.assets())
+
+
+@authorized
+@require_http_methods(['POST'])
+def assets_create(request: HttpRequest) -> HttpResponse:
+    """URI-based asset add (the Add modal's URI tab). Mirrors the
+    minimum field-set the React modal sent: uri, derived mimetype,
+    default duration window."""
+    from anthias_common.utils import validate_url
+    from anthias_server.app.models import Asset
+    from datetime import timedelta
+
+    uri = (request.POST.get('uri') or '').strip()
+    if not uri or not validate_url(uri):
+        messages.error(request, 'Invalid URL.')
+        return _asset_table_response(request)
+
+    # Best-effort mimetype guess from extension; default to webpage.
+    mimetype = 'webpage'
+    lower = uri.lower()
+    if lower.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg')):
+        mimetype = 'image'
+    elif lower.endswith(('.mp4', '.mov', '.mkv', '.webm', '.avi', '.flv')):
+        mimetype = 'video'
+
+    now = timezone.now()
+    Asset.objects.create(
+        name=uri,
+        uri=uri,
+        mimetype=mimetype,
+        duration=settings['default_duration'],
+        is_enabled=True,
+        is_processing=False,
+        play_order=0,
+        start_date=now,
+        end_date=now + timedelta(days=30),
+    )
+    return _asset_table_response(request)
+
+
+@authorized
+@require_http_methods(['POST'])
+def assets_upload(request: HttpRequest) -> HttpResponse:
+    """File upload tab. Mirrors api.views.mixins.FileAssetViewMixin.post:
+    move the upload into assetdir, create an Asset row, return the
+    table partial so HTMX can swap straight in."""
+    from anthias_server.app.models import Asset
+    from datetime import timedelta
+
+    file_upload = request.FILES.get('file_upload')
+    if file_upload is None:
+        messages.error(request, 'No file uploaded.')
+        return _asset_table_response(request)
+
+    file_type = guess_type(file_upload.name)[0] or ''
+    if file_type.split('/')[0] not in ('image', 'video'):
+        messages.error(request, 'Invalid file type. Expected image or video.')
+        return _asset_table_response(request)
+
+    final_name = (
+        uuid.uuid5(uuid.NAMESPACE_URL, file_upload.name).hex
+    )
+    final_path = path.join(settings['assetdir'], final_name)
+    with open(final_path, 'wb') as f:
+        for chunk in file_upload.chunks():
+            f.write(chunk)
+
+    now = timezone.now()
+    Asset.objects.create(
+        name=file_upload.name,
+        uri=final_path,
+        mimetype=file_type.split('/')[0],
+        duration=settings['default_duration'],
+        is_enabled=True,
+        is_processing=False,
+        play_order=0,
+        start_date=now,
+        end_date=now + timedelta(days=30),
+    )
+    return _asset_table_response(request)
+
+
+@authorized
+@require_http_methods(['POST'])
+def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
+    from anthias_server.app.models import Asset
+    asset = Asset.objects.filter(asset_id=asset_id).first()
+    if asset is None:
+        return _asset_table_response(request)
+
+    asset.name = request.POST.get('name', asset.name)
+    asset.mimetype = request.POST.get('mimetype', asset.mimetype)
+    asset.duration = int(request.POST.get('duration') or asset.duration or 0)
+    start = request.POST.get('start_date')
+    end = request.POST.get('end_date')
+    if start:
+        asset.start_date = timezone.make_aware(
+            timezone.datetime.fromisoformat(start)
+        )
+    if end:
+        asset.end_date = timezone.make_aware(
+            timezone.datetime.fromisoformat(end)
+        )
+    asset.nocache = _checkbox(request, 'nocache')
+    asset.skip_asset_check = _checkbox(request, 'skip_asset_check')
+    asset.save()
+    ViewerPublisher.get_instance().send_to_viewer('reload')
+    return _asset_table_response(request)
+
+
+@authorized
+@require_http_methods(['POST'])
+def assets_toggle(request: HttpRequest, asset_id: str) -> HttpResponse:
+    from anthias_server.app.models import Asset
+    asset = Asset.objects.filter(asset_id=asset_id).first()
+    if asset is not None:
+        asset.is_enabled = not asset.is_enabled
+        asset.save()
+        ViewerPublisher.get_instance().send_to_viewer('reload')
+    return _asset_table_response(request)
+
+
+@authorized
+@require_http_methods(['POST'])
+def assets_delete(request: HttpRequest, asset_id: str) -> HttpResponse:
+    from anthias_server.app.models import Asset
+    Asset.objects.filter(asset_id=asset_id).delete()
+    ViewerPublisher.get_instance().send_to_viewer('reload')
+    return _asset_table_response(request)
+
+
+@authorized
+@require_http_methods(['POST'])
+def assets_order(request: HttpRequest) -> HttpResponse:
+    """Mirrors api.helpers.save_active_assets_ordering — same comma-csv
+    body that React's @dnd-kit handler POSTs."""
+    from anthias_server.api.helpers import save_active_assets_ordering
+    ids = [i for i in request.POST.get('ids', '').split(',') if i]
+    save_active_assets_ordering(ids)
+    ViewerPublisher.get_instance().send_to_viewer('reload')
+    return _asset_table_response(request)
+
+
+@authorized
+@require_http_methods(['GET'])
+def assets_download(request: HttpRequest, asset_id: str) -> HttpResponse:
+    """Stream the asset's content back the way React's download button
+    did: redirect to the URL for url-mimetypes, FileResponse for files."""
+    from anthias_server.app.models import Asset
+    asset = Asset.objects.filter(asset_id=asset_id).first()
+    if asset is None:
+        return redirect(reverse('anthias_app:home'))
+    if asset.mimetype in ('webpage', 'streaming'):
+        return redirect(asset.uri)
+    return FileResponse(open(asset.uri, 'rb'), as_attachment=True)
+
+
+@authorized
+@require_http_methods(['POST'])
+def assets_control(request: HttpRequest, command: str) -> HttpResponse:
+    """Previous / Next playback. Dispatches the same Redis pub/sub
+    command the API mixin sends."""
+    if command in ('previous', 'next'):
+        ViewerPublisher.get_instance().send_to_viewer(f'asset_{command}')
+    return redirect(reverse('anthias_app:home'))
+
+
+def _asset_table_response(request: HttpRequest) -> HttpResponse:
+    """Shared response helper for all write endpoints.
+
+    HTMX requests (hx-post) get the swapped partial; plain form
+    submits fall back to a redirect so the page reloads end-to-end."""
+    if request.headers.get('HX-Request'):
+        from django.shortcuts import render as _render
+        return _render(request, '_asset_table.html', page_context.assets())
+    return redirect(reverse('anthias_app:home'))
 
 
 @authorized

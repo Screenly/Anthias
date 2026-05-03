@@ -118,6 +118,28 @@ def device_settings() -> dict[str, Any]:
     }
 
 
+def assets() -> dict[str, Any]:
+    """Active + inactive asset lists for /, identical split to the React
+    home component (active = is_enabled and is_active and not processing,
+    sorted by play_order; inactive = everything else)."""
+    from anthias_server.app.models import Asset
+
+    qs = Asset.objects.all()
+    active: list[Asset] = []
+    inactive: list[Asset] = []
+    for asset in qs:
+        if asset.is_active() and asset.is_enabled and not asset.is_processing:
+            active.append(asset)
+        else:
+            inactive.append(asset)
+    active.sort(key=lambda a: a.play_order)
+    inactive.sort(key=lambda a: a.play_order)
+    return {
+        'active_assets': active,
+        'inactive_assets': inactive,
+    }
+
+
 def integrations() -> dict[str, Any]:
     data: dict[str, Any] = {'is_balena': is_balena_app()}
     if data['is_balena']:

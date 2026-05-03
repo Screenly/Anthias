@@ -1,0 +1,73 @@
+{% extends "_layout.html" %}
+{% load static %}
+
+{% block title %}{% if player_name %}{{ player_name }} · {% endif %}Schedule Overview{% endblock %}
+
+{% block main %}
+<div class="container" x-data="homeApp()" @asset-saved.window="closeModal()">
+  <div class="row py-2">
+    <div class="col-12">
+      <h4 class="page-header text-white"><b>Schedule Overview</b></h4>
+    </div>
+  </div>
+
+  {% if messages %}
+  <div class="row">
+    <div class="col-12">
+      {% for message in messages %}
+      <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="row pb-3">
+    <div class="col-12 d-flex flex-wrap gap-2">
+      <form method="post" action="{% url 'anthias_app:assets_control' command='previous' %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-light fw-bold rounded-pill px-4">
+          <i class="bi bi-skip-backward-fill me-1"></i> Previous Asset
+        </button>
+      </form>
+      <form method="post" action="{% url 'anthias_app:assets_control' command='next' %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-light fw-bold rounded-pill px-4">
+          <i class="bi bi-skip-forward-fill me-1"></i> Next Asset
+        </button>
+      </form>
+      <button type="button" class="btn btn-primary fw-bold rounded-pill px-4" @click="openAdd()">
+        <i class="bi bi-plus me-1"></i> Add Asset
+      </button>
+    </div>
+  </div>
+
+  <div
+    id="asset-table"
+    hx-get="{% url 'anthias_app:assets_table' %}"
+    hx-trigger="every 5s, refresh-assets from:body"
+    hx-swap="outerHTML"
+  >
+    {% include "_asset_table.html" %}
+  </div>
+
+  {% include "_asset_modal.html" %}
+</div>
+
+<script>
+  // Per-page state for the home view: tracks which modal mode is open
+  // (none / add / edit) and which asset is being edited. Wired to the
+  // outer container's x-data so child modals can read/mutate via Alpine.
+  function homeApp() {
+    return {
+      mode: null,         // null | 'add' | 'edit'
+      editAsset: null,    // raw Asset object when mode==='edit'
+      openAdd() { this.mode = 'add'; this.editAsset = null; },
+      openEdit(asset) { this.mode = 'edit'; this.editAsset = asset; },
+      closeModal() { this.mode = null; this.editAsset = null; },
+    };
+  }
+</script>
+{% endblock %}

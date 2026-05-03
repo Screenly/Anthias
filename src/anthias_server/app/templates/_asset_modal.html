@@ -1,0 +1,139 @@
+<div
+  x-show="mode"
+  x-cloak
+  class="position-fixed top-0 start-0 w-100 h-100 overflow-auto py-4"
+  style="display: flex; align-items: flex-start; justify-content: center; background: rgba(0,0,0,.5); z-index: 1050"
+  @keydown.escape.window="closeModal()"
+  @click.self="closeModal()"
+>
+  <div class="card shadow" style="max-width: 720px; width: 95%">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="m-0" x-text="mode === 'edit' ? 'Edit Asset' : 'Add Asset'"></h5>
+      <button type="button" class="btn-close" @click="closeModal()"></button>
+    </div>
+    <div class="card-body">
+      <ul class="nav nav-tabs mb-3" x-data="{ tab: 'uri' }" x-show="mode === 'add'">
+        <li class="nav-item">
+          <button type="button" class="nav-link" :class="tab === 'uri' && 'active'" @click="tab = 'uri'">URI</button>
+        </li>
+        <li class="nav-item">
+          <button type="button" class="nav-link" :class="tab === 'file' && 'active'" @click="tab = 'file'">File Upload</button>
+        </li>
+      </ul>
+
+      <template x-if="mode === 'add'">
+        <div>
+          <form
+            method="post"
+            action="{% url 'anthias_app:assets_create' %}"
+            hx-post="{% url 'anthias_app:assets_create' %}"
+            hx-trigger="submit"
+            hx-target="#asset-table"
+            hx-swap="outerHTML"
+            hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); htmx.trigger('body', 'refresh-assets'); }"
+          >
+            {% csrf_token %}
+            <div class="form-floating mb-3">
+              <input type="url" class="form-control" id="add-uri" name="uri" placeholder="URL" required>
+              <label for="add-uri">URL</label>
+            </div>
+            <div class="text-end">
+              <button type="button" class="btn btn-link text-secondary" @click="closeModal()">Back to Assets</button>
+              <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+          </form>
+
+          <hr>
+
+          <form
+            method="post"
+            action="{% url 'anthias_app:assets_upload' %}"
+            enctype="multipart/form-data"
+            hx-post="{% url 'anthias_app:assets_upload' %}"
+            hx-encoding="multipart/form-data"
+            hx-target="#asset-table"
+            hx-swap="outerHTML"
+            hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); htmx.trigger('body', 'refresh-assets'); }"
+          >
+            {% csrf_token %}
+            <div class="mb-3">
+              <label for="add-file" class="form-label">Or upload a file (image / video)</label>
+              <input type="file" class="form-control" id="add-file" name="file_upload" accept="image/*,video/*">
+            </div>
+            <div class="text-end">
+              <button type="submit" class="btn btn-primary">Upload</button>
+            </div>
+          </form>
+        </div>
+      </template>
+
+      <template x-if="mode === 'edit' && editAsset">
+        <form
+          method="post"
+          :action="`/assets/${editAsset.asset_id}/update`"
+          hx-post=""
+          hx-target="#asset-table"
+          hx-swap="outerHTML"
+          hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); htmx.trigger('body', 'refresh-assets'); }"
+        >
+          {% csrf_token %}
+          <div class="form-floating mb-3">
+            <input type="text" class="form-control" id="edit-name" name="name" :value="editAsset.name" required>
+            <label for="edit-name">Name</label>
+          </div>
+          <div class="form-floating mb-3">
+            <input type="text" class="form-control" id="edit-uri" :value="editAsset.uri" readonly>
+            <label for="edit-uri">Asset Location</label>
+          </div>
+          <div class="form-floating mb-3">
+            <select class="form-select" id="edit-mimetype" name="mimetype">
+              <option value="image" :selected="editAsset.mimetype === 'image'">image</option>
+              <option value="video" :selected="editAsset.mimetype === 'video'">video</option>
+              <option value="webpage" :selected="editAsset.mimetype === 'webpage'">webpage</option>
+              <option value="streaming" :selected="editAsset.mimetype === 'streaming'">streaming</option>
+            </select>
+            <label for="edit-mimetype">Type</label>
+          </div>
+          <div class="row">
+            <div class="col-6">
+              <div class="form-floating mb-3">
+                <input type="datetime-local" class="form-control" id="edit-start" name="start_date" :value="editAsset.start_date_local" required>
+                <label for="edit-start">Start</label>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="form-floating mb-3">
+                <input type="datetime-local" class="form-control" id="edit-end" name="end_date" :value="editAsset.end_date_local" required>
+                <label for="edit-end">End</label>
+              </div>
+            </div>
+          </div>
+          <div class="form-floating mb-3">
+            <input type="number" class="form-control" id="edit-duration" name="duration" :value="editAsset.duration" required>
+            <label for="edit-duration">Duration (seconds)</label>
+          </div>
+          <div class="row">
+            <div class="col-6">
+              <div class="form-check form-switch">
+                <input type="hidden" name="nocache" value="false">
+                <input type="checkbox" class="form-check-input" id="edit-nocache" name="nocache" value="true" :checked="editAsset.nocache">
+                <label class="form-check-label" for="edit-nocache">No cache</label>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="form-check form-switch">
+                <input type="hidden" name="skip_asset_check" value="false">
+                <input type="checkbox" class="form-check-input" id="edit-skip" name="skip_asset_check" value="true" :checked="editAsset.skip_asset_check">
+                <label class="form-check-label" for="edit-skip">Skip asset check</label>
+              </div>
+            </div>
+          </div>
+          <div class="text-end">
+            <button type="button" class="btn btn-link text-secondary" @click="closeModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </template>
+    </div>
+  </div>
+</div>

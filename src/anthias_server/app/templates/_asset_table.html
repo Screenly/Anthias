@@ -1,0 +1,82 @@
+{% load asset_filters %}
+<div id="asset-table">
+  <div id="active-assets-section" class="active-content mb-4 p-4">
+      <h5 class="text-white fw-bold mb-3">Active assets</h5>
+      {% if active_assets %}
+      <table class="table text-white table-borderless align-middle">
+        <thead>
+          <tr class="text-white-50 small">
+            <th scope="col">Name</th>
+            <th scope="col" style="width:21%">Start</th>
+            <th scope="col" style="width:21%">End</th>
+            <th scope="col" style="width:13%">Duration</th>
+            <th scope="col" style="width:7%">Activity</th>
+            <th scope="col" style="width:13%" class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="active-rows">
+          {% for asset in active_assets %}
+          {% include "_asset_row.html" with asset=asset is_active=True %}
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      {% include "_empty_assets.html" with is_active=True %}
+      {% endif %}
+  </div>
+
+  <div id="inactive-assets-section" class="content mb-4 p-4">
+      <h5 class="fw-bold mb-3">Inactive assets</h5>
+      {% if inactive_assets %}
+      <table class="table table-borderless align-middle">
+        <thead>
+          <tr class="text-secondary small">
+            <th scope="col">Name</th>
+            <th scope="col" style="width:21%">Start</th>
+            <th scope="col" style="width:21%">End</th>
+            <th scope="col" style="width:13%">Duration</th>
+            <th scope="col" style="width:7%">Activity</th>
+            <th scope="col" style="width:13%" class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for asset in inactive_assets %}
+          {% include "_asset_row.html" with asset=asset is_active=False %}
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      {% include "_empty_assets.html" with is_active=False %}
+      {% endif %}
+  </div>
+</div>
+
+{% if active_assets %}
+<script>
+  // Sortable on the active list. Re-init on every HTMX swap (the
+  // tbody is replaced wholesale). Drag-end POSTs the new id order
+  // back to /assets/order; the response triggers refresh-assets so
+  // the table re-fetches with the persisted order.
+  (function () {
+    const tbody = document.getElementById('active-rows');
+    if (!tbody || !window.Sortable) return;
+    new Sortable(tbody, {
+      handle: '.drag-handle',
+      animation: 150,
+      onEnd: () => {
+        const ids = Array.from(tbody.children)
+          .map(tr => tr.dataset.assetId)
+          .filter(Boolean)
+          .join(',');
+        const fd = new FormData();
+        fd.append('ids', ids);
+        fetch('{% url "anthias_app:assets_order" %}', {
+          method: 'POST',
+          body: fd,
+          headers: { 'X-CSRFToken': document.querySelector('input[name=csrfmiddlewaretoken]').value },
+        }).then(() => htmx.trigger('body', 'refresh-assets'));
+      },
+    });
+  })();
+</script>
+{% endif %}
