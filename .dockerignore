@@ -44,7 +44,19 @@ docker-compose.*
 # Linter / type-checker caches — host-side only, regenerate in CI.
 .mypy_cache
 .ruff_cache
+.pytest_cache
 .cache
+**/__pycache__
+
+# Local pytest SQLite database. Created at the repo root by
+# src/anthias_server/django_project/settings.py when ENVIRONMENT=test
+# and ANTHIAS_TEST_DB_PATH is unset. Without this entry, a host-side
+# pytest run leaves the file behind and `COPY .` bakes it into the
+# image.
+.anthias-test.db
+.anthias-test.db-journal
+.anthias-test.db-wal
+.anthias-test.db-shm
 
 # IDE / agent metadata
 .idea
