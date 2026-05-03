@@ -25,11 +25,19 @@
           id="github-stars"
           class="col-3 text-end justify-content-center align-self-center"
         >
-          <a href="https://github.com/Screenly/Anthias" target="_blank" rel="noopener noreferrer">
-            <img
-              alt="GitHub Repo stars"
-              src="https://img.shields.io/github/stars/Screenly/Anthias?style=for-the-badge&labelColor=%23EBF0F4&color=%23FFE11A&logo=github&logoColor=black"
-            >
+          {# Was an img.shields.io GitHub-stars badge — that's a
+             runtime CDN dependency, which the rest of the page
+             explicitly avoids (signage devices may live behind a
+             firewall). Use a vendored Bootstrap Icon + text link
+             instead so the footer renders offline. #}
+          <a
+            href="https://github.com/Screenly/Anthias"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-decoration-none small d-inline-flex align-items-center gap-1"
+          >
+            <i class="bi bi-github"></i>
+            <span>Star on GitHub</span>
           </a>
         </div>
       </div>
