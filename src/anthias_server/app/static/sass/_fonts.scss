@@ -1,0 +1,18 @@
+// Vendored Plus Jakarta Sans (was a Google Fonts CDN reference in
+// base.html). Files are copied from @fontsource/plus-jakarta-sans
+// into /static/dist/fonts/ by the build:fonts script.
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/static/dist/fonts/plus-jakarta-sans-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/static/dist/fonts/plus-jakarta-sans-latin-700-normal.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
