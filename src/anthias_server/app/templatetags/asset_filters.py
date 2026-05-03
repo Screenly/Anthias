@@ -256,9 +256,7 @@ def schedule_window(asset: Any) -> dict[str, str]:
     # the day-of-week filter and the play_time_from/to slot. If those
     # exclude today/now, the asset is enabled and 'within window' but
     # not on screen — call it "Scheduled" so we don't lie about "Live".
-    is_active = (
-        asset.is_active() if hasattr(asset, 'is_active') else True
-    )
+    is_active = asset.is_active() if hasattr(asset, 'is_active') else True
     delta = end - now
     if not is_active:
         return {
