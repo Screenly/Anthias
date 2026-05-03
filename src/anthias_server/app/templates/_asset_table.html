@@ -1,12 +1,12 @@
 {% load asset_filters %}
-{# The wrapper carries id="asset-table" PLUS the hx-get/hx-trigger pair
+{% comment %} The wrapper carries id="asset-table" PLUS the hx-get/hx-trigger pair
    that drives both the 5 s background poll and the refresh-assets event
    triggered after every write. Because every endpoint that returns
    this partial uses hx-swap="outerHTML", the swap replaces the wrapper
    with itself — keeping id + hx-* attributes on the partial means
    polling and event-driven swaps survive each refresh. (Don't add a
    second #asset-table around the include in home.html — the duplicate-
-   id problem from the earlier review comes back.) #}
+   id problem from the earlier review comes back.) {% endcomment %}
 <div
   id="asset-table"
   hx-get="{% url 'anthias_app:assets_table' %}"

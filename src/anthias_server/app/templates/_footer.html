@@ -25,11 +25,11 @@
           id="github-stars"
           class="col-3 text-end justify-content-center align-self-center"
         >
-          {# Was an img.shields.io GitHub-stars badge — that's a
+          {% comment %} Was an img.shields.io GitHub-stars badge — that's a
              runtime CDN dependency, which the rest of the page
              explicitly avoids (signage devices may live behind a
              firewall). Use a vendored Bootstrap Icon + text link
-             instead so the footer renders offline. #}
+             instead so the footer renders offline. {% endcomment %}
           <a
             href="https://github.com/Screenly/Anthias"
             target="_blank"

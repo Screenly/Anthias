@@ -65,12 +65,12 @@
       </div>
 
       <template x-if="mode === 'edit' && editAsset">
-        {# Both `:action` (form-native fallback) and `x-bind:hx-post`
+        {% comment %} Both `:action` (form-native fallback) and `x-bind:hx-post`
            (HTMX submit) are bound to the same /assets/<id>/update URL.
            An empty hx-post would have made HTMX POST to the current
            page (i.e. /, not the per-asset update endpoint); the
            x-bind keeps the dynamic value flowing through Alpine so
-           HTMX picks up the right URL on every render. #}
+           HTMX picks up the right URL on every render. {% endcomment %}
         <form
           method="post"
           :action="`/assets/${editAsset.asset_id}/update`"
@@ -88,12 +88,12 @@
             <input type="text" class="form-control" id="edit-uri" :value="editAsset.uri" readonly>
             <label for="edit-uri">Asset Location</label>
           </div>
-          {# Mimetype is shown read-only — the value is derived from the
+          {% comment %} Mimetype is shown read-only — the value is derived from the
              URI / file content at create time, and letting the user
              flip an image asset to "webpage" (or vice-versa) only
              desyncs the row from its actual content. assets_update
              also ignores the posted mimetype now to prevent the same
-             desync via direct API calls. #}
+             desync via direct API calls. {% endcomment %}
           <div class="form-floating mb-3">
             <input
               type="text"
@@ -118,11 +118,11 @@
               </div>
             </div>
           </div>
-          {# Video assets must stay at duration=0 (v2 API rule). Disable
+          {% comment %} Video assets must stay at duration=0 (v2 API rule). Disable
              the input for videos and clear its value so the form POST
              omits it (browsers skip disabled fields), and the server
              defends against a hand-crafted POST anyway. Image / web
-             assets are still freely editable. #}
+             assets are still freely editable. {% endcomment %}
           <div class="form-floating mb-3">
             <input
               type="number"
