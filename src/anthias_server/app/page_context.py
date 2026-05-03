@@ -9,7 +9,6 @@ surfaces stay in lockstep without going through the HTTP API.
 from datetime import timedelta
 import os
 from os import getenv, statvfs
-from platform import machine
 from typing import Any
 
 import psutil
@@ -47,9 +46,7 @@ def system_info() -> dict[str, Any]:
     disk_free = slash.f_bavail * slash.f_frsize
     disk_used = max(0, disk_total - disk_free)
     uptime = timedelta(seconds=diagnostics.get_uptime())
-    device_model = device_helper.parse_cpu_info().get('model')
-    if device_model is None and machine() == 'x86_64':
-        device_model = 'Generic x86_64 Device'
+    device_model = device_helper.get_friendly_device_model()
 
     anthias_version = '{}@{}'.format(
         diagnostics.get_git_branch(),
