@@ -862,6 +862,7 @@ label { text-align: left; }
 }
 
 .stat-card--span-2 { grid-column: span 2; @media (max-width: 540px) { grid-column: span 1; } }
+.stat-card--span-full { grid-column: 1 / -1; }
 
 // Section grouping on System Info — three named blocks (Resources /
 // Display / Anthias) so the eye lands on a heading instead of a wall
@@ -981,9 +982,13 @@ label { text-align: left; }
 .resource-card {
   display: grid;
   grid-template-columns: 11rem 1fr;
-  gap: var(--space-5);
+  gap: var(--space-6);
   align-items: center;
   margin-top: var(--space-2);
+  // Keep the donut+legend block from stretching across an entire
+  // full-row card on wide screens — anchored on the left so the
+  // section reads left-to-right.
+  max-width: 44rem;
   @media (max-width: 540px) {
     grid-template-columns: 1fr;
     justify-items: center;
