@@ -104,18 +104,43 @@ function homeApp(): HomeAppData {
       const dateFmt =
         DATE_FMT_MAP[metaContent('anthias-date-format')] || 'm/d/Y'
       const use24 = metaContent('anthias-use-24h') === 'true'
+
+      // Alpine seeds the inputs with ISO strings (start_date_local =
+      // "2026-05-02T00:00", play_time_from = "09:30") because that's
+      // what the server hands us. Parse the seed into a Date here and
+      // hand it to Flatpickr via setDate(); leaving the raw ISO string
+      // as the input value would make Flatpickr fail to parse it
+      // against the user-format mask and display garbage like
+      // "08/06/2027" — which then made existing assets fall out of
+      // their is_active() window when the form was saved.
+      const seedDateTime = (raw: string): Date | null => {
+        if (!raw) return null
+        const d = new Date(raw)
+        return isNaN(d.getTime()) ? null : d
+      }
+      const seedTimeOnly = (raw: string): Date | null => {
+        if (!raw) return null
+        const m = raw.match(/^(\d{1,2}):(\d{2})/)
+        if (!m) return null
+        const d = new Date()
+        d.setHours(parseInt(m[1], 10), parseInt(m[2], 10), 0, 0)
+        return d
+      }
+
       document
         .querySelectorAll<HTMLInputElement>('.flatpickr-datetime')
         .forEach((el) => {
           const fp = (el as { _flatpickr?: { destroy: () => void } })
             ._flatpickr
           if (fp) fp.destroy()
-          window.flatpickr(el, {
+          const seed = seedDateTime(el.value)
+          const inst = window.flatpickr(el, {
             enableTime: true,
             time_24hr: use24,
             dateFormat: `${dateFmt} ${use24 ? 'H:i' : 'h:i K'}`,
             allowInput: true,
           })
+          if (seed) (inst as { setDate: (d: Date, fire: boolean) => void }).setDate(seed, false)
         })
       document
         .querySelectorAll<HTMLInputElement>('.flatpickr-time')
@@ -123,13 +148,15 @@ function homeApp(): HomeAppData {
           const fp = (el as { _flatpickr?: { destroy: () => void } })
             ._flatpickr
           if (fp) fp.destroy()
-          window.flatpickr(el, {
+          const seed = seedTimeOnly(el.value)
+          const inst = window.flatpickr(el, {
             enableTime: true,
             noCalendar: true,
             time_24hr: use24,
             dateFormat: use24 ? 'H:i' : 'h:i K',
             allowInput: true,
           })
+          if (seed) (inst as { setDate: (d: Date, fire: boolean) => void }).setDate(seed, false)
         })
     },
 
