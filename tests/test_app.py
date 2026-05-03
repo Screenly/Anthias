@@ -96,24 +96,30 @@ def wait_for_and_do(
 
 
 def _wait_for_asset_in_table(
-    browser: Any, needle: str, timeout: float = 15.0
+    browser: Any, needle: str, timeout: float = 30.0
 ) -> None:
-    """Poll the rendered asset-table partial for ``needle`` (typically
-    a filename) up to ``timeout`` seconds. Replaces brittle constant
-    ``sleep()`` calls between Selenium-driven uploads — the asset row
-    only appears after the HTMX form submit + table re-render finishes,
-    and that round-trip varies materially between local Docker and CI."""
+    """Poll the rendered page until ``needle`` (typically a just-uploaded
+    filename) shows up. Replaces brittle constant ``sleep()`` calls
+    between Selenium-driven uploads — the asset row only appears after
+    the HTMX form submit + table re-render finishes, and that round-trip
+    varies materially between local Docker and CI.
+
+    Reads the whole-page HTML rather than holding an element reference
+    so the 5 s asset-table HTMX poll (which re-renders #asset-table on
+    its own clock) doesn't invalidate our handle mid-read with a
+    StaleElementReferenceException."""
     deadline = time() + timeout
+    last_err: Exception | None = None
     while time() < deadline:
         try:
-            section = browser.find_by_id('asset-table').first
-        except Exception:
-            section = None
-        if section and needle in section.html:
-            return
+            if needle in browser.html:
+                return
+        except Exception as exc:
+            last_err = exc
         sleep(0.5)
     raise AssertionError(
-        f'Asset {needle!r} did not appear in #asset-table within {timeout}s'
+        f'Asset {needle!r} did not appear in the page within '
+        f'{timeout}s (last_err={last_err!r})'
     )
 
 
