@@ -65,7 +65,7 @@ services:
     # identical content per device. See refactor: drop celery image.
     image: ghcr.io/screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
     command: >
-      celery -A celery_tasks.celery worker -B -n worker@anthias
+      celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
       --loglevel=info --schedule /tmp/celerybeat-schedule
     depends_on:
       - anthias-server

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from requests import exceptions as requests_exceptions
 
-from lib import github
+from anthias_server.lib import github
 
 logging.disable(logging.CRITICAL)
 

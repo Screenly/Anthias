@@ -12,8 +12,8 @@ from selenium import webdriver
 from selenium.common.exceptions import ElementNotVisibleException
 from splinter import Browser
 
-from anthias_app.models import Asset
-from settings import settings
+from anthias_server.app.models import Asset
+from anthias_server.settings import settings
 
 main_page_url = 'http://localhost:8080'
 settings_url = 'http://foo:bar@localhost:8080/settings'

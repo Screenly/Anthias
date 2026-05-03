@@ -6,8 +6,8 @@ import pytest
 from django.contrib.sessions.backends.signed_cookies import SessionStore
 from django.test import RequestFactory
 
-from lib import auth
-from lib.auth import (
+from anthias_server.lib import auth
+from anthias_server.lib.auth import (
     Auth,
     BasicAuth,
     NoAuth,
@@ -396,7 +396,7 @@ def test_authorized_passthrough_when_no_auth(monkeypatch: Any) -> None:
     """If settings.auth is falsy, the wrapped view is called directly."""
     fake_settings = MagicMock()
     fake_settings.auth = None
-    monkeypatch.setattr('settings.settings', fake_settings)
+    monkeypatch.setattr('anthias_server.settings.settings', fake_settings)
 
     @authorized
     def view(request: Any) -> str:
@@ -416,7 +416,7 @@ def test_authorized_returns_auth_response_when_required(
 
     fake_settings = MagicMock()
     fake_settings.auth = auth_backend
-    monkeypatch.setattr('settings.settings', fake_settings)
+    monkeypatch.setattr('anthias_server.settings.settings', fake_settings)
 
     @authorized
     def view(request: Any) -> str:
@@ -431,7 +431,7 @@ def test_authorized_calls_view_when_authenticated(monkeypatch: Any) -> None:
     auth_backend.authenticate_if_needed.return_value = None
     fake_settings = MagicMock()
     fake_settings.auth = auth_backend
-    monkeypatch.setattr('settings.settings', fake_settings)
+    monkeypatch.setattr('anthias_server.settings.settings', fake_settings)
 
     @authorized
     def view(request: Any) -> str:
@@ -444,7 +444,7 @@ def test_authorized_calls_view_when_authenticated(monkeypatch: Any) -> None:
 def test_authorized_no_args_raises(monkeypatch: Any) -> None:
     fake_settings = MagicMock()
     fake_settings.auth = MagicMock()
-    monkeypatch.setattr('settings.settings', fake_settings)
+    monkeypatch.setattr('anthias_server.settings.settings', fake_settings)
 
     @authorized
     def view() -> str:
@@ -457,7 +457,7 @@ def test_authorized_no_args_raises(monkeypatch: Any) -> None:
 def test_authorized_non_request_arg_raises(monkeypatch: Any) -> None:
     fake_settings = MagicMock()
     fake_settings.auth = MagicMock()
-    monkeypatch.setattr('settings.settings', fake_settings)
+    monkeypatch.setattr('anthias_server.settings.settings', fake_settings)
 
     @authorized
     def view(request: Any) -> str:

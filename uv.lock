@@ -90,7 +90,7 @@ wheels = [
 [[package]]
 name = "anthias"
 version = "0.20.4"
-source = { virtual = "." }
+source = { editable = "." }
 
 [package.dev-dependencies]
 dev = [

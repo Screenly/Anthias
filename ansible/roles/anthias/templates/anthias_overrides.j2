@@ -1,6 +1,6 @@
 {{ anthias_user }} ALL=NOPASSWD: /usr/local/sbin/upgrade_anthias.sh
 
-# Restricted to the specific systemctl verbs host_agent.py invokes.
-# Path must match what host_agent.py actually calls (/usr/bin/systemctl).
+# Restricted to the specific systemctl verbs anthias_host_agent invokes.
+# Path must match what anthias_host_agent actually calls (/usr/bin/systemctl).
 # Unrestricted systemctl would let the user start/stop/mask any unit.
 {{ anthias_user }} ALL=NOPASSWD: /usr/bin/systemctl reboot, /usr/bin/systemctl poweroff

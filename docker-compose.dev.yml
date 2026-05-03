@@ -35,7 +35,7 @@ services:
       redis:
         condition: service_started
     command: >
-      celery -A celery_tasks.celery worker -B -n worker@anthias
+      celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
       --loglevel=info --schedule /tmp/celerybeat-schedule
     environment:
       - HOME=/data

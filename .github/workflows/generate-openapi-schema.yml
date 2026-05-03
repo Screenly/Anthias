@@ -97,7 +97,7 @@ jobs:
       - name: Generate OpenAPI Schema
         run: |
           docker compose exec anthias-server \
-            ./manage.py spectacular \
+            python -m anthias_server.manage spectacular \
             --format openapi-json \
             --file anthias-api-schema.json
 

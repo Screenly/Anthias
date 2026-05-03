@@ -28,7 +28,7 @@ on:
       - '!docker/Dockerfile.dev'
       - '!.cursor/**'
       - '!.claude/**'
-      - '!host_agent.py'
+      - '!src/anthias_host_agent/**'
   workflow_dispatch:
 
 jobs:
