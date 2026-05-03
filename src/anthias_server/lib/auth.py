@@ -193,7 +193,7 @@ class BasicAuth(Auth):
         from django.shortcuts import redirect
         from django.urls import reverse
 
-        return redirect(reverse('anthias_server.app:login'))
+        return redirect(reverse('anthias_app:login'))
 
     def update_settings(
         self,

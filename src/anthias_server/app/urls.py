@@ -2,7 +2,7 @@ from django.urls import path, re_path
 
 from . import views
 
-app_name = 'anthias_server.app'
+app_name = 'anthias_app'
 
 urlpatterns = [
     path('splash-page', views.splash_page, name='splash_page'),
