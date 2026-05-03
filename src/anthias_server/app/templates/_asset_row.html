@@ -3,11 +3,11 @@
 <tr data-asset-id="{{ asset.asset_id }}" data-processing="{{ asset.is_processing|yesno:'true,false' }}" data-name="{{ asset.name|default:''|escape }}" data-duration="{{ asset.duration|default:0 }}">
   <td>
     <div class="asset-cell-name">
-      {% if is_active %}<i class="bi bi-grip-vertical drag-handle" title="Drag to reorder"></i>{% endif %}
+      {% if is_active %}<i class="ti ti-grip-vertical drag-handle" title="Drag to reorder"></i>{% endif %}
       <span class="asset-cell-name__icon">
-        {% if asset.mimetype == 'image' %}<i class="bi bi-image"></i>
-        {% elif asset.mimetype == 'video' %}<i class="bi bi-camera-video"></i>
-        {% else %}<i class="bi bi-globe"></i>
+        {% if asset.mimetype == 'image' %}<i class="ti ti-photo"></i>
+        {% elif asset.mimetype == 'video' %}<i class="ti ti-video"></i>
+        {% else %}<i class="ti ti-world"></i>
         {% endif %}
       </span>
       <span class="asset-cell-name__title">
@@ -16,9 +16,9 @@
         <span class="schedule-chips">
           {% for pill in pills %}
           <span class="schedule-chip schedule-chip--{{ pill.kind }}">
-            {% if pill.kind == 'all' %}<i class="bi bi-calendar-check"></i>
-            {% elif pill.kind == 'time' %}<i class="bi bi-clock"></i>
-            {% else %}<i class="bi bi-calendar-week"></i>{% endif %}
+            {% if pill.kind == 'all' %}<i class="ti ti-calendar-check"></i>
+            {% elif pill.kind == 'time' %}<i class="ti ti-clock"></i>
+            {% else %}<i class="ti ti-calendar-event"></i>{% endif %}
             <span>{{ pill.label }}</span>
           </span>
           {% endfor %}
@@ -41,7 +41,7 @@
   <td>{{ asset.duration|humanize_duration }}</td>
   <td>
     {% if asset.is_processing %}
-    <span class="processing-pill"><i class="bi bi-arrow-repeat"></i>Processing</span>
+    <span class="processing-pill"><i class="ti ti-refresh"></i>Processing</span>
     {% else %}
     <form method="post" action="{% url 'anthias_app:assets_toggle' asset_id=asset.asset_id %}" class="m-0">
       {% csrf_token %}
@@ -64,24 +64,24 @@
         class="btn btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
         title="Preview"
         @click='openPreview({{ asset|to_json }})'
-      ><i class="bi bi-eye"></i></button>
+      ><i class="ti ti-eye"></i></button>
       <a
         href="{% url 'anthias_app:assets_download' asset_id=asset.asset_id %}"
         class="btn btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
         title="Download"
-      ><i class="bi bi-download"></i></a>
+      ><i class="ti ti-download"></i></a>
       <button
         type="button"
         class="btn btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
         title="Edit"
         @click='openEdit({{ asset|to_json }})'
-      ><i class="bi bi-pencil"></i></button>
+      ><i class="ti ti-pencil"></i></button>
       <button
         type="button"
         class="btn btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
         title="Delete"
         @click="openDelete('{{ asset.asset_id }}', '{{ asset.name|default:''|escapejs }}')"
-      ><i class="bi bi-trash3"></i></button>
+      ><i class="ti ti-trash"></i></button>
     </div>
   </td>
 </tr>

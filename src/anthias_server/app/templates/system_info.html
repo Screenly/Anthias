@@ -14,7 +14,7 @@
 
   <section class="info-section">
     <header class="info-section__header">
-      <h2><i class="bi bi-activity mr-2"></i>Live diagnostics</h2>
+      <h2><i class="ti ti-activity mr-2"></i>Live diagnostics</h2>
       <p class="info-section__lede">CPU load, memory and storage updated each refresh.</p>
     </header>
     <div class="stat-grid">
@@ -31,7 +31,7 @@
             {% endfor %}
           </div>
           <div class="loadavg-trend loadavg-trend--{{ load.trend }}">
-            <i class="bi {% if load.trend == 'up' %}bi-arrow-up-right-circle-fill{% elif load.trend == 'down' %}bi-arrow-down-right-circle-fill{% else %}bi-dash-circle-fill{% endif %}"></i>
+            <i class="bi {% if load.trend == 'up' %}ti-trending-up{% elif load.trend == 'down' %}ti-trending-down{% else %}ti-minus-circle{% endif %}"></i>
             <div>
               <p class="loadavg-trend__primary">
                 {% if load.trend == 'up' %}Trending up{% elif load.trend == 'down' %}Cooling off{% else %}Steady{% endif %}
@@ -119,7 +119,7 @@
 
   <section class="info-section">
     <header class="info-section__header">
-      <h2><i class="bi bi-display mr-2"></i>Display &amp; hardware</h2>
+      <h2><i class="ti ti-device-desktop mr-2"></i>Display &amp; hardware</h2>
       <p class="info-section__lede">What this player is rendering to and what it's running on.</p>
     </header>
     <div class="stat-grid">
@@ -131,8 +131,8 @@
         <p class="stat-card__label">Resolution</p>
         <div class="stat-card__value">{{ resolution.value }}</div>
         <div class="stat-card__meta">
-          {% if resolution.source == 'live' %}<i class="bi bi-broadcast mr-1"></i>Reported by viewer
-          {% else %}<i class="bi bi-gear mr-1"></i>Configured (no viewer report yet){% endif %}
+          {% if resolution.source == 'live' %}<i class="ti ti-broadcast mr-1"></i>Reported by viewer
+          {% else %}<i class="ti ti-settings mr-1"></i>Configured (no viewer report yet){% endif %}
         </div>
       </div>
       {% include "_stat_card.html" with label="Display Power (CEC)" value=display_power|default:"None" %}
@@ -141,7 +141,7 @@
 
   <section class="info-section">
     <header class="info-section__header">
-      <h2><i class="bi bi-fingerprint mr-2"></i>Identity</h2>
+      <h2><i class="ti ti-fingerprint mr-2"></i>Identity</h2>
       <p class="info-section__lede">Anthias build and host network identifiers.</p>
     </header>
     <div class="stat-grid">

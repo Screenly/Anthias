@@ -2,10 +2,10 @@
 <div class="app-toast-stack" aria-live="polite" aria-atomic="true" x-data>
   <template x-for="t in $store.toasts.items" :key="t.id">
     <div class="app-toast" :class="`app-toast--${t.kind}`" role="status">
-      <i class="bi" :class="t.kind === 'error' ? 'bi-exclamation-triangle-fill' : t.kind === 'success' ? 'bi-check-circle-fill' : 'bi-info-circle-fill'"></i>
+      <i class="ti" :class="t.kind === 'error' ? 'ti-alert-triangle-filled' : t.kind === 'success' ? 'ti-circle-check-filled' : 'ti-info-circle-filled'"></i>
       <span class="app-toast__msg" x-text="t.message"></span>
       <button type="button" class="app-toast__close" @click="$store.toasts.dismiss(t.id)" aria-label="Dismiss">
-        <i class="bi bi-x"></i>
+        <i class="ti ti-x"></i>
       </button>
     </div>
   </template>

@@ -11,7 +11,7 @@
     <div class="modal-card__header">
       <h2 x-text="previewAsset && previewAsset.name ? previewAsset.name : 'Preview'"></h2>
       <button type="button" class="modal-card__close" @click="closePreview()" aria-label="Close">
-        <i class="bi bi-x-lg"></i>
+        <i class="ti ti-x"></i>
       </button>
     </div>
     <div class="modal-card__body modal-card__body--preview">
@@ -54,10 +54,10 @@
         rel="noopener noreferrer"
         class="btn btn-link"
       >
-        <i class="bi bi-box-arrow-up-right"></i><span>Open in new tab</span>
+        <i class="ti ti-external-link"></i><span>Open in new tab</span>
       </a>
       <button type="button" class="btn btn-primary" @click="closePreview()">
-        <i class="bi bi-check2"></i><span>Done</span>
+        <i class="ti ti-check"></i><span>Done</span>
       </button>
     </div>
   </div>

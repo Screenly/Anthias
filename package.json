@@ -7,7 +7,7 @@
     "build:css:tailwind": "bunx @tailwindcss/cli -i src/anthias_server/app/static/src/tailwind.css -o src/anthias_server/app/static/dist/css/tailwind.css --minify",
     "build:css:components": "bunx sass src/anthias_server/app/static/sass/anthias.scss src/anthias_server/app/static/dist/css/anthias.css --load-path=node_modules --style=compressed --quiet-deps --silence-deprecation=import,global-builtin,color-functions,if-function",
     "build:css": "bun run build:css:tailwind && bun run build:css:components",
-    "build:fonts": "mkdir -p src/anthias_server/app/static/dist/fonts && cp node_modules/@fontsource/plus-jakarta-sans/files/plus-jakarta-sans-latin-400-normal.woff2 node_modules/@fontsource/plus-jakarta-sans/files/plus-jakarta-sans-latin-700-normal.woff2 node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2 src/anthias_server/app/static/dist/fonts/",
+    "build:fonts": "mkdir -p src/anthias_server/app/static/dist/fonts src/anthias_server/app/static/dist/css/fonts && cp node_modules/@fontsource/plus-jakarta-sans/files/plus-jakarta-sans-latin-400-normal.woff2 node_modules/@fontsource/plus-jakarta-sans/files/plus-jakarta-sans-latin-700-normal.woff2 src/anthias_server/app/static/dist/fonts/ && cp node_modules/@tabler/icons-webfont/dist/tabler-icons.css src/anthias_server/app/static/dist/css/tabler-icons.css && cp node_modules/@tabler/icons-webfont/dist/fonts/tabler-icons.woff2 node_modules/@tabler/icons-webfont/dist/fonts/tabler-icons.woff node_modules/@tabler/icons-webfont/dist/fonts/tabler-icons.ttf src/anthias_server/app/static/dist/css/fonts/",
     "build": "bun run build:vendor && bun run build:home && bun run build:css && bun run build:fonts",
     "dev:vendor": "bun build ./src/anthias_server/app/static/src/vendor.ts --outfile=./src/anthias_server/app/static/dist/js/vendor.js --target=browser --sourcemap=linked --watch",
     "dev:home": "bun build ./src/anthias_server/app/static/src/home.ts --outfile=./src/anthias_server/app/static/dist/js/home.js --target=browser --sourcemap=linked --watch",
@@ -22,8 +22,8 @@
   },
   "dependencies": {
     "@fontsource/plus-jakarta-sans": "^5.2.8",
+    "@tabler/icons-webfont": "^3.41.1",
     "alpinejs": "^3.15.12",
-    "bootstrap-icons": "^1.13.1",
     "flatpickr": "^4.6.13",
     "htmx.org": "^2.0.10",
     "sortablejs": "^1.15.7"

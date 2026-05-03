@@ -17,11 +17,15 @@
   font-display: swap;
 }
 
-// Bootstrap Icons (replaces react-icons in the navbar). Override the
-// upstream variable so the @font-face URL resolves to where build:fonts
-// drops the woff2, then pull in the full set of `.bi` classes.
-$bootstrap-icons-font-dir: '/static/dist/fonts';
-@import 'bootstrap-icons/font/bootstrap-icons';
+// Tabler Icons webfont — 5,800+ modern line-art glyphs, MIT, ships
+// in @tabler/icons-webfont. The upstream stylesheet is loaded as a
+// separate <link> in base.html (build:icons copies the .css to
+// /static/dist/css/tabler-icons.css and the woff2 to
+// /static/dist/css/fonts/tabler-icons.woff2 so the relative font URL
+// inside the upstream CSS resolves). SASS @import of a .css file
+// emits a runtime @import url(...) instead of inlining, which then
+// fails to resolve against /static/dist/css/anthias.css's path —
+// hence the separate <link>.
 
 // Alpine sets [x-cloak] on elements that should stay hidden until
 // Alpine initialises; without this rule the cloaked markup flashes

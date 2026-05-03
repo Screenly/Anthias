@@ -16,7 +16,7 @@
     <div class="modal-card__header">
       <h2 x-text="mode === 'edit' ? 'Edit asset' : 'Add asset'"></h2>
       <button type="button" class="modal-card__close" @click="closeModal()" aria-label="Close">
-        <i class="bi bi-x-lg"></i>
+        <i class="ti ti-x"></i>
       </button>
     </div>
 
@@ -28,14 +28,14 @@
             <button type="button" id="tab-uri"
               class="nav-link" :class="tab === 'uri' && 'active'"
               @click="tab = 'uri'">
-              <i class="bi bi-link-45deg mr-1"></i>From URL
+              <i class="ti ti-link mr-1"></i>From URL
             </button>
           </li>
           <li class="nav-item">
             <button type="button"
               class="nav-link upload-asset-tab" :class="tab === 'file' && 'active'"
               @click="tab = 'file'">
-              <i class="bi bi-cloud-arrow-up mr-1"></i>Upload file
+              <i class="ti ti-cloud-upload mr-1"></i>Upload file
             </button>
           </li>
         </ul>
@@ -61,7 +61,7 @@
         <div class="modal-card__footer">
           <button type="button" class="btn btn-link" @click="closeModal()">Cancel</button>
           <button type="submit" id="add-form" class="btn btn-primary">
-            <i class="bi bi-plus-lg"></i><span>Add asset</span>
+            <i class="ti ti-plus"></i><span>Add asset</span>
           </button>
         </div>
       </form>
@@ -87,7 +87,7 @@
             :class="{ 'is-disabled': uploadState }"
             x-show="!uploadState"
           >
-            <i class="bi bi-cloud-arrow-up" style="font-size: 2.25rem; opacity: 0.55"></i>
+            <i class="ti ti-cloud-upload" style="font-size: 2.25rem; opacity: 0.55"></i>
             <p class="mb-1 font-semibold mt-2">Click to choose a file</p>
             <p class="muted-label mb-0">Image or video. Upload starts immediately.</p>
             <input type="file" class="hidden" id="add-file" name="file_upload" accept="image/*,video/*"
@@ -96,7 +96,7 @@
 
           <div class="upload-progress" x-show="uploadState" x-cloak>
             <div class="upload-progress__head">
-              <i class="bi" :class="uploadState === 'sending' ? 'bi-cloud-arrow-up-fill' : 'bi-arrow-repeat upload-progress__spin'"></i>
+              <i class="ti" :class="uploadState === 'sending' ? 'ti-cloud-upload' : 'ti-refresh upload-progress__spin'"></i>
               <div class="upload-progress__text">
                 <p class="m-0 font-semibold" x-text="uploadFileName || 'Uploading…'"></p>
                 <p class="muted-label m-0" x-text="uploadState === 'sending'
@@ -210,7 +210,7 @@
         <div class="modal-card__footer">
           <button type="button" class="btn btn-link" @click="closeModal()">Cancel</button>
           <button type="submit" class="btn btn-primary">
-            <i class="bi bi-check2"></i><span>Save changes</span>
+            <i class="ti ti-check"></i><span>Save changes</span>
           </button>
         </div>
       </form>

@@ -12,7 +12,7 @@
       aria-label="Toggle navigation"
       @click="open = !open"
     >
-      <i class="bi bi-list"></i>
+      <i class="ti ti-menu-2"></i>
     </button>
 
     {# Desktop: always visible. Mobile: show only when open. #}
@@ -29,7 +29,7 @@
             class="nav-link"
             @click="open = false"
           >
-            <i class="bi bi-arrow-down-circle-fill"></i>
+            <i class="ti ti-cloud-download"></i>
             <span class="hidden lg:inline">Update available</span>
             <span class="lg:hidden">Update</span>
           </a>
@@ -42,7 +42,7 @@
             class="nav-link {% if active_nav == 'home' %}active{% endif %}"
             @click="open = false"
           >
-            <i class="bi bi-collection-play"></i>
+            <i class="ti ti-playlist"></i>
             <span>Schedule</span>
           </a>
         </li>
@@ -54,7 +54,7 @@
             class="nav-link {% if active_nav == 'integrations' %}active{% endif %}"
             @click="open = false"
           >
-            <i class="bi bi-puzzle"></i>
+            <i class="ti ti-puzzle"></i>
             <span>Integrations</span>
           </a>
         </li>
@@ -66,7 +66,7 @@
             class="nav-link {% if active_nav == 'settings' %}active{% endif %}"
             @click="open = false"
           >
-            <i class="bi bi-gear"></i>
+            <i class="ti ti-settings"></i>
             <span>Settings</span>
           </a>
         </li>
@@ -81,7 +81,7 @@
             class="nav-link {% if active_nav == 'system-info' %}active{% endif %}"
             @click="open = false"
           >
-            <i class="bi bi-activity"></i>
+            <i class="ti ti-activity"></i>
             <span>System info</span>
           </a>
         </li>

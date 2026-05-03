@@ -132,7 +132,7 @@
 
     <div class="flex justify-end">
       <button type="submit" class="btn btn-primary">
-        <i class="bi bi-check2"></i><span>Save settings</span>
+        <i class="ti ti-check"></i><span>Save settings</span>
       </button>
     </div>
   </form>
@@ -150,7 +150,7 @@
         <form method="post" action="{% url 'anthias_app:settings_backup' %}" class="inline m-0">
           {% csrf_token %}
           <button type="submit" id="btn-backup" class="btn btn-outline-dark">
-            <i class="bi bi-download"></i><span>Get backup</span>
+            <i class="ti ti-download"></i><span>Get backup</span>
           </button>
         </form>
         <form method="post" action="{% url 'anthias_app:settings_recover' %}" enctype="multipart/form-data" class="inline m-0">
@@ -165,7 +165,7 @@
           >
           <button type="button" id="btn-upload" class="btn btn-primary"
             @click="document.getElementById('backup_upload').click()">
-            <i class="bi bi-upload"></i><span>Upload &amp; recover</span>
+            <i class="ti ti-upload"></i><span>Upload &amp; recover</span>
           </button>
         </form>
       </div>
@@ -181,10 +181,10 @@
       </div>
       <div class="settings-section__actions">
         <button type="button" class="btn btn-outline-dark" @click="pending = 'reboot'">
-          <i class="bi bi-arrow-clockwise"></i><span>Reboot</span>
+          <i class="ti ti-rotate-clockwise"></i><span>Reboot</span>
         </button>
         <button type="button" class="btn btn-danger" @click="pending = 'shutdown'">
-          <i class="bi bi-power"></i><span>Shutdown</span>
+          <i class="ti ti-power"></i><span>Shutdown</span>
         </button>
       </div>
     </header>
@@ -200,7 +200,7 @@
         <div class="modal-card__header">
           <h2 x-text="pending === 'reboot' ? 'Reboot device?' : 'Shut down device?'"></h2>
           <button type="button" class="modal-card__close" @click="pending = null" aria-label="Close">
-            <i class="bi bi-x-lg"></i>
+            <i class="ti ti-x"></i>
           </button>
         </div>
         <div class="modal-card__body">
