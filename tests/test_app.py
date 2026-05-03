@@ -264,7 +264,10 @@ def test_add_asset_video_upload(reset_assets: None) -> None:
 
         assert asset.name == 'video.mov'
         assert asset.mimetype == 'video'
-        assert asset.duration == 5
+        # Video uploads land with duration=0 — the v2 API enforces this
+        # (CreateAssetSerializerV2 rejects video duration > 0) and the
+        # scheduler reads the real length from the file at playtime.
+        assert asset.duration == 0
 
 
 @pytest.mark.integration
@@ -317,7 +320,8 @@ def test_add_two_assets_upload(reset_assets: None) -> None:
 
         assert assets[1].name == 'video.mov'
         assert assets[1].mimetype == 'video'
-        assert assets[1].duration == 5
+        # Video uploads land with duration=0 — see test_add_asset_video_upload.
+        assert assets[1].duration == 0
 
 
 @pytest.mark.integration
