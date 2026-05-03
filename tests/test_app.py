@@ -228,7 +228,9 @@ def test_add_asset_image_upload(reset_assets: None) -> None:
     asset = assets.first()
     assert asset is not None
 
-    assert asset.name == 'image.png'
+    # `_prettify_upload_name` strips the extension and title-cases the
+    # stem, so 'image.png' lands as 'Image' on the row.
+    assert asset.name == 'Image'
     assert asset.mimetype == 'image'
     assert asset.duration == settings['default_duration']
 
@@ -262,7 +264,7 @@ def test_add_asset_video_upload(reset_assets: None) -> None:
         asset = assets.first()
         assert asset is not None
 
-        assert asset.name == 'video.mov'
+        assert asset.name == 'Video'
         assert asset.mimetype == 'video'
         # Video uploads land with duration=0 — the v2 API enforces this
         # (CreateAssetSerializerV2 rejects video duration > 0) and the
