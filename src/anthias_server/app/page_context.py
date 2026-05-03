@@ -7,6 +7,7 @@ surfaces stay in lockstep without going through the HTTP API.
 """
 
 from datetime import timedelta
+import os
 from os import getenv, statvfs
 from platform import machine
 from typing import Any
@@ -37,6 +38,9 @@ def navbar() -> dict[str, Any]:
 
 
 def system_info() -> dict[str, Any]:
+    from django.utils.timesince import timesince
+    from django.utils import timezone
+
     slash = statvfs('/')
     virtual_memory = psutil.virtual_memory()
     disk_total = slash.f_blocks * slash.f_frsize
@@ -65,8 +69,48 @@ def system_info() -> dict[str, Any]:
     def _pct(n: int, total: int) -> float:
         return round((n / total) * 100, 1) if total else 0.0
 
+    # Surface all three load-average windows so the System Info card
+    # can render trend (1m vs 15m) instead of just a single number.
+    # Bars are sized as a fraction of the CPU count — load == nproc
+    # means the system is exactly saturated. Cap the headroom at
+    # 1.5×nproc so a single runaway process doesn't drown out the
+    # baseline. trend ∈ {'up', 'down', 'stable'} drives the arrow.
+    cpu_count = os.cpu_count() or 1
+    load_raw = diagnostics.get_load_avg()
+    load_1m = load_raw['1 min']
+    load_5m = load_raw['5 min']
+    load_15m = load_raw['15 min']
+    load_scale = max(cpu_count * 1.5, max(load_1m, load_5m, load_15m, 0.5))
+    if load_15m == 0:
+        load_trend = 'stable'
+    elif load_1m > load_15m * 1.1:
+        load_trend = 'up'
+    elif load_1m < load_15m * 0.9:
+        load_trend = 'down'
+    else:
+        load_trend = 'stable'
+
+    def _load_bar(value: float) -> dict[str, float | str]:
+        pct = round((value / load_scale) * 100, 1) if load_scale else 0.0
+        if value >= cpu_count:
+            severity = 'high'
+        elif value >= cpu_count * 0.7:
+            severity = 'warn'
+        else:
+            severity = 'ok'
+        return {'value': value, 'pct': pct, 'severity': severity}
+
     return {
-        'loadavg': diagnostics.get_load_avg()['15 min'],
+        'loadavg': load_15m,
+        'load': {
+            'cpu_count': cpu_count,
+            'trend': load_trend,
+            'windows': [
+                (_load_bar(load_1m), '1 min'),
+                (_load_bar(load_5m), '5 min'),
+                (_load_bar(load_15m), '15 min'),
+            ],
+        },
         'free_space': size(disk_free),
         'disk': {
             'total_human': size(disk_total),
@@ -87,9 +131,14 @@ def system_info() -> dict[str, Any]:
             'cache_pct': _pct(mem_cache, mem_total),
             'free_pct': _pct(mem_free, mem_total),
         },
+        # Uptime as "2 days, 3 hours" via Django's timesince — pass the
+        # boot-time so timesince computes against now(). Pass depth=2 so
+        # 'X year, Y month' style formats stay readable on long-lived
+        # devices instead of the 6-segment default.
         'uptime': {
             'days': uptime.days,
             'hours': round(uptime.seconds / 3600, 2),
+            'human': timesince(timezone.now() - uptime, depth=2),
         },
         'display_power': _redis.get('display_power'),
         'device_model': device_model,

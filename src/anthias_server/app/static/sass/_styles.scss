@@ -847,6 +847,86 @@ label { text-align: left; }
 
 .stat-card--span-2 { grid-column: span 2; @media (max-width: 540px) { grid-column: span 1; } }
 
+// Load-average card on System Info. Three rows (1m / 5m / 15m), each
+// a label + bar + numeric. Bar fill colour is driven by severity
+// ('ok' green, 'warn' amber, 'high' red) so a saturated CPU pops.
+// The trend block on the right reads off whether 1m has climbed or
+// cooled off vs 15m so the operator can spot rising load at a glance.
+.loadavg-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-5);
+  align-items: center;
+  margin-top: var(--space-2);
+  @media (max-width: 540px) {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+}
+.loadavg-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.loadavg-row {
+  display: grid;
+  grid-template-columns: 3rem 1fr 3.5rem;
+  gap: var(--space-3);
+  align-items: center;
+  font-size: 0.875rem;
+}
+.loadavg-row__label {
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.loadavg-row__bar {
+  position: relative;
+  height: 0.55rem;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.loadavg-row__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: #34d399;
+  transition: width 200ms var(--ease-out);
+}
+.loadavg-row--warn .loadavg-row__fill { background: #f59e0b; }
+.loadavg-row--high .loadavg-row__fill { background: var(--color-danger); }
+.loadavg-row__value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+  color: var(--color-text);
+}
+
+.loadavg-trend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: var(--radius-md);
+  min-width: 12rem;
+
+  i { font-size: 1.6rem; flex: none; color: var(--color-text-muted); }
+}
+.loadavg-trend--up i { color: var(--color-danger); }
+.loadavg-trend--down i { color: #34d399; }
+.loadavg-trend__primary {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1rem;
+}
+.loadavg-trend__secondary {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
 // Resource donut + legend (memory and disk on System Info). Slice
 // percentages are seeded inline as --slice-1 / --slice-2 (slice 3
 // fills to 100%), so the same component renders both a 3-slice

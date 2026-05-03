@@ -13,11 +13,34 @@
   </div>
 
   <div class="stat-grid">
-    {% include "_stat_card.html" with label="Load Average (15m)" value=loadavg %}
+    <div class="stat-card stat-card--span-2">
+      <p class="stat-card__label">Load Average</p>
+      <div class="loadavg-card">
+        <div class="loadavg-rows">
+          {% for window, label in load.windows %}
+          <div class="loadavg-row loadavg-row--{{ window.severity }}">
+            <span class="loadavg-row__label">{{ label }}</span>
+            <span class="loadavg-row__bar"><span class="loadavg-row__fill" style="width: {{ window.pct }}%"></span></span>
+            <span class="loadavg-row__value">{{ window.value }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="loadavg-trend loadavg-trend--{{ load.trend }}">
+          <i class="bi {% if load.trend == 'up' %}bi-arrow-up-right-circle-fill{% elif load.trend == 'down' %}bi-arrow-down-right-circle-fill{% else %}bi-dash-circle-fill{% endif %}"></i>
+          <div>
+            <p class="loadavg-trend__primary">
+              {% if load.trend == 'up' %}Trending up{% elif load.trend == 'down' %}Cooling off{% else %}Steady{% endif %}
+            </p>
+            <p class="loadavg-trend__secondary">{{ load.cpu_count }} CPU{{ load.cpu_count|pluralize }} · saturation at {{ load.cpu_count }}.0</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="stat-card">
       <p class="stat-card__label">Uptime</p>
-      <div class="stat-card__value">{{ uptime.days }}d</div>
-      <div class="stat-card__meta">and {{ uptime.hours }} hours</div>
+      <div class="stat-card__value" style="font-size: 1.25rem">{{ uptime.human }}</div>
+      <div class="stat-card__meta">{{ uptime.days }} day{{ uptime.days|pluralize }} since boot</div>
     </div>
     {% include "_stat_card.html" with label="Display Power (CEC)" value=display_power|default:"None" %}
 
