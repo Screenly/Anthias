@@ -48,6 +48,7 @@ def asset() -> Asset:
 # ---------------------------------------------------------------------------
 # GET (rendering) paths
 
+
 @pytest.mark.django_db
 def test_home_renders(client: Client, asset: Asset) -> None:
     response = client.get(reverse('anthias_app:home'))
@@ -109,6 +110,7 @@ def test_asset_table_partial(client: Client, asset: Asset) -> None:
 # layer so coverage of the tiny pure-Python functions doesn't depend on
 # the request stack.
 
+
 @pytest.mark.django_db
 def test_page_context_assets_split(asset: Asset) -> None:
     # asset is enabled + active by fixture.
@@ -151,6 +153,7 @@ def test_page_context_integrations_when_off_balena() -> None:
 # ---------------------------------------------------------------------------
 # Templatetag
 
+
 @pytest.mark.django_db
 def test_to_json_serialises_asset(asset: Asset) -> None:
     encoded = str(to_json(asset))
@@ -168,6 +171,7 @@ def test_to_json_serialises_asset(asset: Asset) -> None:
 
 # ---------------------------------------------------------------------------
 # Write endpoints — exercise each branch enough to count for coverage.
+
 
 @pytest.mark.django_db
 def test_assets_create_via_post(client: Client) -> None:
@@ -227,12 +231,20 @@ def test_assets_delete_removes_row(client: Client, asset: Asset) -> None:
 @pytest.mark.django_db
 def test_assets_order_persists_play_order(client: Client) -> None:
     a1 = Asset.objects.create(
-        name='a1', uri='u1', mimetype='webpage', duration=1,
-        is_enabled=True, play_order=0,
+        name='a1',
+        uri='u1',
+        mimetype='webpage',
+        duration=1,
+        is_enabled=True,
+        play_order=0,
     )
     a2 = Asset.objects.create(
-        name='a2', uri='u2', mimetype='webpage', duration=1,
-        is_enabled=True, play_order=1,
+        name='a2',
+        uri='u2',
+        mimetype='webpage',
+        duration=1,
+        is_enabled=True,
+        play_order=1,
     )
     with mock.patch(
         'anthias_server.settings.ViewerPublisher.send_to_viewer',
