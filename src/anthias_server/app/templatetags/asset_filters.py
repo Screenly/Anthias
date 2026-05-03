@@ -94,22 +94,6 @@ def schedule_pills(asset: Any) -> list[dict[str, str]]:
 
 
 @register.filter
-def schedule_label(asset: Any) -> str:
-    """Backwards-compat string version of schedule_pills.
-
-    Kept so anything still calling the prior single-chip filter (or a
-    test asserting on the join) keeps working. Joins the pill labels
-    with ', ' for days and ' · ' between days and time.
-    """
-    pills = schedule_pills(asset)
-    days = ', '.join(p['label'] for p in pills if p['kind'] == 'day')
-    time_part = next((p['label'] for p in pills if p['kind'] == 'time'), '')
-    if days and time_part:
-        return f'{days} · {time_part}'
-    return days or time_part
-
-
-@register.filter
 def asset_date(value: datetime | None) -> str:
     """Format an Asset start/end datetime using the configured
     date_format + use_24_hour_clock device settings.

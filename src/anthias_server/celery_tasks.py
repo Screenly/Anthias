@@ -205,7 +205,14 @@ def cleanup() -> None:
             logging.warning('cleanup: could not remove %s: %s', entry.path, e)
 
 
-@celery.task(time_limit=120)
+@celery.task(
+    time_limit=120,
+    autoretry_for=(sh.TimeoutException, sh.ErrorReturnCode, OSError),
+    retry_backoff=10,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=3,
+)
 def probe_video_duration(asset_id: str) -> None:
     """Resolve a freshly uploaded video's length out of band.
 
@@ -216,9 +223,16 @@ def probe_video_duration(asset_id: str) -> None:
     completes the duration is written and the flag is cleared, which
     drops the "Processing" pill on the next 5s table poll.
 
-    On probe failure the row still leaves ``is_processing=False`` so it
-    becomes editable; the operator gets a sensible-default duration
-    (whatever the upload view seeded) and can adjust manually.
+    Retry policy:
+      - sh.TimeoutException / sh.ErrorReturnCode / OSError → autoretry
+        with exponential backoff (10s / 20s / 40s / cap 300s, max 3
+        retries). These cover transient disk pressure, ffprobe timing
+        out under load, kernel-level read errors.
+      - get_video_duration returning None (ffprobe missing) → not a
+        transient error; permanent miss-and-move-on. The row leaves
+        is_processing=False so the operator can adjust manually.
+      - Any other exception is swallowed (logged) so a programmer
+        error in the helper doesn't hammer the worker via retries.
     """
     try:
         asset = Asset.objects.get(asset_id=asset_id)
@@ -229,15 +243,21 @@ def probe_video_duration(asset_id: str) -> None:
         Asset.objects.filter(asset_id=asset_id).update(is_processing=False)
         return
 
+    # Let TimeoutException / ErrorReturnCode / OSError bubble so the
+    # @autoretry_for kwarg picks them up. Other exceptions are bugs;
+    # log + leave the row marked done.
     duration: int | None = None
     try:
         td = get_video_duration(asset.uri)
-        if td is not None:
-            duration = max(1, int(td.total_seconds()))
+    except (sh.TimeoutException, sh.ErrorReturnCode, OSError):
+        raise
     except Exception:
         logging.exception(
-            'probe_video_duration: ffprobe failed for %s', asset_id
+            'probe_video_duration: unexpected failure for %s', asset_id
         )
+        td = None
+    if td is not None:
+        duration = max(1, int(td.total_seconds()))
 
     update: dict[str, Any] = {'is_processing': False}
     if duration is not None:

@@ -5,6 +5,18 @@
 // classes (.btn, .surface, .asset-table, .modal-card, .schedule-chip,
 // .stat-card, .settings-section, .empty-state) are the public API the
 // templates compose from; nothing in here targets React-era hooks.
+//
+// NAMING NOTE — some classes in this file (.btn, .form-control,
+// .form-floating, .form-check, .form-switch, .nav, .nav-tabs, .nav-link,
+// .nav-item, .container, .navbar-toggler, .navbar-nav, .navbar-brand)
+// share names with Bootstrap. The implementation behind each is local
+// to this file (Section 19 — "Bootstrap-replacement component
+// classes"); we kept the names so the template diff during the
+// Bootstrap → Tailwind cutover stayed reviewable. If you ever
+// reintroduce Bootstrap (or a downstream consumer expects these
+// classes to behave like Bootstrap), expect divergence — these
+// are NOT Bootstrap classes, only Bootstrap-shaped re-implementations
+// driven from our design tokens.
 // =============================================================================
 
 // Brand colour tokens — referenced via #{$anthias-...} in this file

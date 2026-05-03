@@ -1,8 +1,10 @@
+import ipaddress
 import json
 import logging
 import os
 import random
 import re
+import socket
 import string
 from datetime import datetime, timedelta
 from os import getenv, path, utime
@@ -511,10 +513,63 @@ def json_dump(obj: Any) -> str:
     return json.dumps(obj, default=handler)
 
 
+def _is_private_address(host: str) -> bool:
+    """True when the resolved host points at a private/loopback range.
+
+    SSRF defence — the asset-revalidation sweep is a celery task that
+    fetches operator-supplied URIs. Without this guard, an authenticated
+    operator could store http://192.168.x.x/internal-admin and use the
+    sweep as a probe of the host's LAN, leaking reachable services.
+
+    Operators on a trusted intranet (signage running entirely against
+    LAN content) can opt back in with the ANTHIAS_ALLOW_PRIVATE_FETCH
+    env var; defaults to off.
+    """
+    if os.getenv('ANTHIAS_ALLOW_PRIVATE_FETCH', '').lower() in (
+        '1',
+        'true',
+        'yes',
+    ):
+        return False
+    if not host:
+        return False
+    try:
+        # AF_UNSPEC so we cover both IPv4 and IPv6 results from DNS.
+        infos = socket.getaddrinfo(host, None)
+    except (socket.gaierror, UnicodeError):
+        return False
+    for info in infos:
+        try:
+            addr = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_multicast
+            or addr.is_reserved
+        ):
+            return True
+    return False
+
+
 def url_fails(url: str) -> bool:
     """
     If it is streaming
     """
+    parsed = urlparse(url)
+    # Reject URLs whose host resolves into a private / loopback /
+    # link-local / multicast / reserved range. Treats failure-to-fetch
+    # as `True` (the sweep marks the asset un-reachable) — safe-failing
+    # behaviour: a URL we won't fetch shouldn't be flagged 'reachable'.
+    if parsed.scheme in (
+        'http',
+        'https',
+        'rtsp',
+        'rtmp',
+    ) and _is_private_address(parsed.hostname or ''):
+        return True
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
         # ffprobe ships with ffmpeg, which is already in the base
         # image. Exit code 0 means libavformat could open the stream

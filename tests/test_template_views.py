@@ -871,3 +871,30 @@ def test_safe_local_asset_path_rejects_symlink_escape(
         assert _safe_local_asset_path(str(sneaky)) is None
     finally:
         settings.data = original
+
+
+# ---------------------------------------------------------------------------
+# Bootstrap-removal guard — fail loudly if anyone reintroduces a
+# Bootstrap dependency. The component classes in _styles.scss share
+# names with Bootstrap intentionally (so the template diff stayed
+# reviewable during the cutover) and could be silently swallowed by
+# Bootstrap's own rules if it ever lands back in node_modules.
+
+
+def test_bootstrap_is_not_in_package_dependencies() -> None:
+    """package.json must not reintroduce bootstrap. Our SCSS
+    re-implements the Bootstrap-shaped classes (.btn, .form-control,
+    .nav-tabs, etc.) directly — pulling in the real Bootstrap stylesheet
+    on top would cascade-collide and produce silent visual regressions.
+    """
+    import json
+    from pathlib import Path
+
+    pkg = json.loads(
+        (Path(__file__).resolve().parent.parent / 'package.json').read_text()
+    )
+    deps = {**pkg.get('dependencies', {}), **pkg.get('devDependencies', {})}
+    assert 'bootstrap' not in deps, (
+        'bootstrap was reintroduced as a dep — see _styles.scss naming '
+        'note for why this collides with our component classes'
+    )

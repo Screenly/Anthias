@@ -418,3 +418,80 @@ def test_detect_local_mac_prefers_default_route(
         lambda iface: '11:22:33:44:55:66' if iface == 'wlan0' else None,
     )
     assert utils._detect_local_mac() == '11:22:33:44:55:66'
+
+
+# ---------------------------------------------------------------------------
+# SSRF guard — url_fails must reject hosts that resolve to private /
+# loopback / link-local addresses unless the operator opted in via the
+# env var. Test the resolver helper directly so we don't need DNS.
+
+
+@pytest.mark.parametrize(
+    'fake_addr,is_private',
+    [
+        ('10.0.0.1', True),
+        ('192.168.1.50', True),
+        ('172.20.5.5', True),
+        ('127.0.0.1', True),
+        ('169.254.1.1', True),  # link-local
+        ('::1', True),  # ipv6 loopback
+        ('fe80::1', True),  # ipv6 link-local
+        ('8.8.8.8', False),
+        ('1.1.1.1', False),
+    ],
+)
+def test_is_private_address_classification(
+    fake_addr: str, is_private: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from anthias_common import utils
+
+    monkeypatch.delenv('ANTHIAS_ALLOW_PRIVATE_FETCH', raising=False)
+    family = (
+        (
+            utils.__dict__['socket'].AF_INET6
+            if ':' in fake_addr
+            else utils.__dict__['socket'].AF_INET
+        )
+        if 'socket' in utils.__dict__
+        else 2
+    )
+    monkeypatch.setattr(
+        'anthias_common.utils.socket.getaddrinfo',
+        lambda host, port: [(family, 0, 0, '', (fake_addr, 0))],
+    )
+    assert utils._is_private_address('any.host') is is_private
+
+
+def test_is_private_address_opt_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    from anthias_common import utils
+
+    monkeypatch.setenv('ANTHIAS_ALLOW_PRIVATE_FETCH', '1')
+    # Even a private result returns False — operator opted in.
+    monkeypatch.setattr(
+        'anthias_common.utils.socket.getaddrinfo',
+        lambda host, port: [(2, 0, 0, '', ('10.0.0.1', 0))],
+    )
+    assert utils._is_private_address('intranet.local') is False
+
+
+def test_url_fails_rejects_private_http_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A http:// URL whose host resolves to RFC1918 must be marked
+    'fails' — the sweep then flags it un-reachable instead of the
+    server probing it."""
+    from anthias_common import utils
+
+    monkeypatch.delenv('ANTHIAS_ALLOW_PRIVATE_FETCH', raising=False)
+    monkeypatch.setattr(
+        'anthias_common.utils.socket.getaddrinfo',
+        lambda host, port: [(2, 0, 0, '', ('10.0.0.1', 0))],
+    )
+    # If the SSRF guard fires, requests.head must not be called.
+    called: list[Any] = []
+    monkeypatch.setattr(
+        'anthias_common.utils.requests.head',
+        lambda *a, **k: called.append(1),
+    )
+    assert utils.url_fails('http://intranet.local/admin') is True
+    assert called == []
