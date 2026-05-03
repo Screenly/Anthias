@@ -63,15 +63,18 @@
   --color-danger: #dc3545;
   --color-focus-ring: rgba(136, 25, 199, 0.35);
 
-  // Anchors on light surfaces. Bootstrap's $primary is yellow (used for
-  // accents, not links) so we override link-color separately to keep
-  // body anchors readable on white cards.
+  // Anchors on light surfaces — kept readable against white cards
+  // (the brand yellow we use for accents has too little contrast).
   --color-link: #6633a0;
   --color-link-hover: #4a1f80;
-  --bs-link-color: var(--color-link);
-  --bs-link-color-rgb: 102, 51, 160;
-  --bs-link-hover-color: var(--color-link-hover);
-  --bs-link-hover-color-rgb: 74, 31, 128;
+}
+
+// Default anchor styling; overridden in dark contexts (.surface--active,
+// navbar, footer) where the link colour switches to white-ish.
+a {
+  color: var(--color-link);
+  text-decoration: none;
+  &:hover { color: var(--color-link-hover); text-decoration: underline; }
 }
 
 // -----------------------------------------------------------------------------
@@ -197,28 +200,33 @@ label { text-align: left; }
 // 5. Buttons
 // -----------------------------------------------------------------------------
 .btn {
-  --bs-btn-padding-x: var(--space-4);
-  --bs-btn-padding-y: 0.5625rem;
-  --bs-btn-font-weight: 600;
-  --bs-btn-border-radius: var(--radius-md);
-  --bs-btn-line-height: 1.4;
-  transition: transform var(--t-fast),
-              box-shadow var(--t-fast),
-              background-color var(--t-fast),
-              color var(--t-fast),
-              border-color var(--t-fast);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.4em;
+  padding: 0.5625rem var(--space-4);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform var(--t-fast), box-shadow var(--t-fast),
+    background-color var(--t-fast), color var(--t-fast),
+    border-color var(--t-fast);
 
   &:focus,
   &:focus-visible {
-    box-shadow: 0 0 0 3px var(--color-focus-ring) !important;
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
     outline: none;
   }
   &:hover:not(:disabled):not(.disabled) { transform: translateY(-1px); }
   &:active:not(:disabled):not(.disabled) { transform: translateY(0); }
+  &:disabled,
+  &.disabled { opacity: 0.55; cursor: not-allowed; }
 }
 
 .btn-primary {
@@ -266,8 +274,7 @@ label { text-align: left; }
 
 // Icon-only square button (used for asset row actions and modal close).
 .btn-icon {
-  --bs-btn-padding-x: 0.5rem;
-  --bs-btn-padding-y: 0.5rem;
+  padding: 0.5rem;
   width: 2.25rem;
   height: 2.25rem;
   flex: none;
@@ -299,7 +306,7 @@ label { text-align: left; }
 }
 
 .btn-pill {
-  --bs-btn-border-radius: var(--radius-pill);
+  border-radius: var(--radius-pill);
   padding-left: 1.25rem;
   padding-right: 1.25rem;
 }
@@ -311,7 +318,6 @@ label { text-align: left; }
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  --bs-table-bg: transparent;
 
   thead th {
     font-size: 0.7rem;
@@ -657,11 +663,6 @@ label { text-align: left; }
 // underline indicator for the active tab.
 .modal-card .nav-tabs {
   border-bottom: 1px solid var(--color-border);
-  --bs-nav-tabs-border-color: transparent;
-  --bs-nav-tabs-link-hover-border-color: transparent;
-  --bs-nav-tabs-link-active-bg: transparent;
-  --bs-nav-tabs-link-active-color: var(--color-text);
-  --bs-nav-tabs-link-active-border-color: transparent transparent var(--color-text) transparent;
 
   .nav-link {
     color: var(--color-text-muted);

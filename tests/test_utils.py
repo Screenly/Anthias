@@ -282,7 +282,6 @@ def test_template_handle_unicode_non_string() -> None:
 # through. Each is pure I/O so we mock /sys readers with monkeypatch.
 
 
-
 def test_drm_resolution_picks_first_connected_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

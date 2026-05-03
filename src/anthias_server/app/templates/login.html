@@ -3,41 +3,29 @@
 {% block title %}Login to Anthias{% endblock %}
 
 {% block content %}
-<div class="container mt-6">
-  <div class="row justify-center">
-    <div class="col-md-6">
-      <div class="card">
-        <div class="card-header">
-          <h4 class="mb-0">Login to Anthias</h4>
-        </div>
-        <div class="card-body">
-          {% if messages %}
-          <div class="alert alert-danger">
-            {% for message in messages %}
-            {{ message }}
-            {% endfor %}
-          </div>
-          {% endif %}
-
-          <form method="post" action="{% url 'anthias_app:login' %}">
-            {% csrf_token %}
-            <input type="hidden" name="next" value="{{ next }}">
-
-            <div class="form-group mb-3">
-              <label for="username">Username</label>
-              <input type="text" class="form-control shadow-none" id="username" name="username" required>
-            </div>
-
-            <div class="form-group mb-3">
-              <label for="password">Password</label>
-              <input type="password" class="form-control shadow-none" id="password" name="password" required>
-            </div>
-
-            <button type="submit" class="btn btn-primary">Login</button>
-          </form>
-        </div>
-      </div>
+<div class="container mt-6 max-w-prose">
+  <div class="surface">
+    <h1 class="text-xl font-bold mb-4">Login to Anthias</h1>
+    {% if messages %}
+    <div class="rounded-lg border border-red-300 bg-red-50 text-red-800 px-4 py-3 mb-4 text-sm">
+      {% for message in messages %}{{ message }}{% endfor %}
     </div>
+    {% endif %}
+    <form method="post" action="{% url 'anthias_app:login' %}" class="flex flex-col gap-3">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="form-floating">
+        <input type="text" class="form-control" id="username" name="username" placeholder=" " required>
+        <label for="username">Username</label>
+      </div>
+      <div class="form-floating">
+        <input type="password" class="form-control" id="password" name="password" placeholder=" " required>
+        <label for="password">Password</label>
+      </div>
+      <button type="submit" class="btn btn-primary mt-2">
+        <i class="bi bi-box-arrow-in-right"></i><span>Login</span>
+      </button>
+    </form>
   </div>
 </div>
 {% endblock %}

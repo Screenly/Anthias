@@ -15,31 +15,21 @@
         }
     </style>
 </head>
-<body class="splash container table">
-<div class="col-12 table-cell align-middle">
-    <div class="row">
-        <div class="col-12">
-            <div
-                class="logo-container page-header flex flex-nowrap justify-center items-center"
-            >
-                <img src="{{ splash_logo_url }}" alt="splash-logo" class="img-fluid"/>
-            </div>
-        </div>
+<body class="splash flex items-center justify-center min-h-screen px-6">
+<div class="w-full max-w-2xl">
+    <div class="logo-container flex flex-nowrap justify-center items-center mb-6">
+        <img src="{{ splash_logo_url }}" alt="splash-logo" class="max-w-full h-auto"/>
     </div>
-    <div class="splash-body p-6">
-        <div class="row">
-            <div class="col-12 text-center">
-                <p id="splash-prompt-detecting">Detecting network&hellip;</p>
-                <p id="splash-prompt-found" hidden>
-                    To manage the content on this screen, just point your
-                    browser to
-                    <span id="splash-prompt-any" hidden>any of</span>
-                    the IP <span id="splash-prompt-noun">address</span>
-                    provided below.
-                </p>
-                <div class="form-actions" id="splash-ip-list"></div>
-            </div>
-        </div>
+    <div class="splash-body p-6 text-center">
+        <p id="splash-prompt-detecting">Detecting network&hellip;</p>
+        <p id="splash-prompt-found" hidden>
+            To manage the content on this screen, just point your
+            browser to
+            <span id="splash-prompt-any" hidden>any of</span>
+            the IP <span id="splash-prompt-noun">address</span>
+            provided below.
+        </p>
+        <div class="splash-ip-list mt-3 flex flex-col gap-1" id="splash-ip-list"></div>
     </div>
 </div>
 <script>
