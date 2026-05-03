@@ -33,13 +33,29 @@
   ansible.builtin.debug:
     msg: "Use cmdline.txt.orig for boot parameters (don't remove this file)"
 
-# Render cmdline.txt from the .orig backup using the template. The
-# template owns every Anthias-managed kernel parameter (silent boot,
-# Plymouth handoff, systemd init, network naming, cgroups).
+# Render cmdline.txt authoritatively. The image-specific root= token
+# comes from the .orig backup; every other boot parameter is owned by
+# the template.
 - name: Read cmdline.txt.orig
   ansible.builtin.slurp:
     src: "{{ system_cmdline_path }}.orig"
   register: system_cmdline_orig
+
+- name: Extract root boot arg
+  ansible.builtin.set_fact:
+    system_cmdline_root_args: "{{ system_cmdline_orig_tokens | select('match', '^root=') | list }}"
+  vars:
+    system_cmdline_orig_tokens: "{{ (system_cmdline_orig.content | b64decode | trim).split() }}"
+
+- name: Validate root boot arg
+  ansible.builtin.assert:
+    that:
+      - system_cmdline_root_args | length == 1
+    fail_msg: "Expected exactly one root= boot parameter in {{ system_cmdline_path }}.orig"
+
+- name: Set root boot arg
+  ansible.builtin.set_fact:
+    system_cmdline_root_arg: "{{ system_cmdline_root_args[0] }}"
 
 - name: Render cmdline.txt from template
   ansible.builtin.copy:
@@ -65,11 +81,13 @@
 - name: Disable getty on tty1 (no login prompt on display)
   ansible.builtin.systemd:
     name: getty@tty1.service
+    state: stopped
     enabled: false
   when: system_getty_template.stat.exists
 
 - name: Disable autologin on tty1 (no auto-login on display)
   ansible.builtin.systemd:
     name: autologin@tty1.service
+    state: stopped
     enabled: false
   when: system_autologin_template.stat.exists
