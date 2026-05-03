@@ -446,7 +446,9 @@ def assets_download(request: HttpRequest, asset_id: str) -> HttpResponseBase:
     # _safe_local_asset_path realpaths the URI and verifies it lives
     # under settings['assetdir'] before returning, so the open() call
     # cannot escape the assets directory.
-    return FileResponse(open(safe_path, 'rb'), as_attachment=True)  # lgtm [py/path-injection]
+    return FileResponse(
+        open(safe_path, 'rb'), as_attachment=True
+    )  # lgtm [py/path-injection]
 
 
 @authorized
@@ -472,7 +474,9 @@ def assets_preview(request: HttpRequest, asset_id: str) -> HttpResponseBase:
     safe_path = _safe_local_asset_path(asset.uri)
     if safe_path is None:
         return redirect(reverse('anthias_app:home'))
-    return FileResponse(open(safe_path, 'rb'), as_attachment=False)  # lgtm [py/path-injection]
+    return FileResponse(
+        open(safe_path, 'rb'), as_attachment=False
+    )  # lgtm [py/path-injection]
 
 
 @authorized
