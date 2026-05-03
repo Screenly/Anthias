@@ -1,4 +1,5 @@
 {% extends "_layout.html" %}
+{% load humanize %}
 
 {% block title %}{% if player_name %}{{ player_name }} · {% endif %}System Info{% endblock %}
 
@@ -13,7 +14,6 @@
 
   <div class="stat-grid">
     {% include "_stat_card.html" with label="Load Average (15m)" value=loadavg %}
-    {% include "_stat_card.html" with label="Free Disk" value=free_space %}
     <div class="stat-card">
       <p class="stat-card__label">Uptime</p>
       <div class="stat-card__value">{{ uptime.days }}d</div>
@@ -21,21 +21,77 @@
     </div>
     {% include "_stat_card.html" with label="Display Power (CEC)" value=display_power|default:"None" %}
 
-    <div class="stat-card stat-card--span-2">
-      <p class="stat-card__label">Memory</p>
-      <dl class="stat-card__memory mt-1 mb-0">
-        <dt>Total</dt><dd>{{ memory.total }} MiB</dd>
-        <dt>Used</dt><dd>{{ memory.used }} MiB</dd>
-        <dt>Free</dt><dd>{{ memory.free }} MiB</dd>
-        <dt>Available</dt><dd>{{ memory.available }} MiB</dd>
-        <dt>Shared</dt><dd>{{ memory.shared }} MiB</dd>
-        <dt>Buff</dt><dd>{{ memory.buff }} MiB</dd>
-      </dl>
-    </div>
-
     <div class="stat-card">
       <p class="stat-card__label">Device model</p>
       <div class="stat-card__value" style="font-size: 1.1rem">{{ device_model }}</div>
+    </div>
+
+    <div class="stat-card stat-card--span-2">
+      <p class="stat-card__label">Memory</p>
+      <div class="resource-card">
+        <div
+          class="resource-pie resource-pie--memory"
+          style="--slice-1: {{ memory.used_pct }}; --slice-2: {{ memory.cache_pct }}"
+          role="img"
+          aria-label="Memory: {{ memory.used|intcomma }} MiB used, {{ memory.cache|intcomma }} MiB cache, {{ memory.free|intcomma }} MiB free of {{ memory.total|intcomma }} MiB total"
+        >
+          <div class="resource-pie__inner">
+            <div class="resource-pie__total">{{ memory.total|intcomma }}</div>
+            <div class="resource-pie__unit">MiB total</div>
+          </div>
+        </div>
+        <ul class="resource-legend">
+          <li class="resource-legend__row resource-legend__row--slice-1">
+            <span class="resource-legend__swatch" aria-hidden="true"></span>
+            <span class="resource-legend__name">Used</span>
+            <span class="resource-legend__value">{{ memory.used|intcomma }} MiB · {{ memory.used_pct }}%</span>
+          </li>
+          <li class="resource-legend__row resource-legend__row--slice-2">
+            <span class="resource-legend__swatch" aria-hidden="true"></span>
+            <span class="resource-legend__name">Buffers / cache</span>
+            <span class="resource-legend__value">{{ memory.cache|intcomma }} MiB · {{ memory.cache_pct }}%</span>
+          </li>
+          <li class="resource-legend__row resource-legend__row--slice-3">
+            <span class="resource-legend__swatch" aria-hidden="true"></span>
+            <span class="resource-legend__name">Free</span>
+            <span class="resource-legend__value">{{ memory.free|intcomma }} MiB · {{ memory.free_pct }}%</span>
+          </li>
+          <li class="resource-legend__row resource-legend__row--ghost">
+            <span class="resource-legend__swatch" aria-hidden="true"></span>
+            <span class="resource-legend__name">Available</span>
+            <span class="resource-legend__value">{{ memory.available|intcomma }} MiB</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="stat-card stat-card--span-2">
+      <p class="stat-card__label">Disk</p>
+      <div class="resource-card">
+        <div
+          class="resource-pie resource-pie--disk"
+          style="--slice-1: {{ disk.used_pct }}; --slice-2: 0"
+          role="img"
+          aria-label="Disk: {{ disk.used_human }} used of {{ disk.total_human }} total ({{ disk.used_pct }}%)"
+        >
+          <div class="resource-pie__inner">
+            <div class="resource-pie__total">{{ disk.total_human }}</div>
+            <div class="resource-pie__unit">total</div>
+          </div>
+        </div>
+        <ul class="resource-legend">
+          <li class="resource-legend__row resource-legend__row--slice-1">
+            <span class="resource-legend__swatch" aria-hidden="true"></span>
+            <span class="resource-legend__name">Used</span>
+            <span class="resource-legend__value">{{ disk.used_human }} · {{ disk.used_pct }}%</span>
+          </li>
+          <li class="resource-legend__row resource-legend__row--slice-3">
+            <span class="resource-legend__swatch" aria-hidden="true"></span>
+            <span class="resource-legend__name">Free</span>
+            <span class="resource-legend__value">{{ disk.free_human }} · {{ disk.free_pct }}%</span>
+          </li>
+        </ul>
+      </div>
     </div>
 
     <div class="stat-card">

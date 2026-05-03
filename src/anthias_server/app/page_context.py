@@ -39,6 +39,9 @@ def navbar() -> dict[str, Any]:
 def system_info() -> dict[str, Any]:
     slash = statvfs('/')
     virtual_memory = psutil.virtual_memory()
+    disk_total = slash.f_blocks * slash.f_frsize
+    disk_free = slash.f_bavail * slash.f_frsize
+    disk_used = max(0, disk_total - disk_free)
     uptime = timedelta(seconds=diagnostics.get_uptime())
     device_model = device_helper.parse_cpu_info().get('model')
     if device_model is None and machine() == 'x86_64':
@@ -49,16 +52,40 @@ def system_info() -> dict[str, Any]:
         diagnostics.get_git_short_hash(),
     )
 
+    # Pie-friendly breakdown — three slices that sum to total. psutil's
+    # `used` already excludes buffers/cache on Linux (matches `free -m`),
+    # `available` is what new processes can claim before swapping.
+    # Cache estimate = total − used − free; clamped to ≥0 so kernels
+    # that report differently still produce sane geometry.
+    mem_total = virtual_memory.total >> 20
+    mem_used = virtual_memory.used >> 20
+    mem_free = virtual_memory.free >> 20
+    mem_cache = max(0, mem_total - mem_used - mem_free)
+
+    def _pct(n: int, total: int) -> float:
+        return round((n / total) * 100, 1) if total else 0.0
+
     return {
         'loadavg': diagnostics.get_load_avg()['15 min'],
-        'free_space': size(slash.f_bavail * slash.f_frsize),
+        'free_space': size(disk_free),
+        'disk': {
+            'total_human': size(disk_total),
+            'used_human': size(disk_used),
+            'free_human': size(disk_free),
+            'used_pct': _pct(disk_used, disk_total),
+            'free_pct': _pct(disk_free, disk_total),
+        },
         'memory': {
-            'total': virtual_memory.total >> 20,
-            'used': virtual_memory.used >> 20,
-            'free': virtual_memory.free >> 20,
+            'total': mem_total,
+            'used': mem_used,
+            'free': mem_free,
             'shared': virtual_memory.shared >> 20,
             'buff': virtual_memory.buffers >> 20,
             'available': virtual_memory.available >> 20,
+            'cache': mem_cache,
+            'used_pct': _pct(mem_used, mem_total),
+            'cache_pct': _pct(mem_cache, mem_total),
+            'free_pct': _pct(mem_free, mem_total),
         },
         'uptime': {
             'days': uptime.days,

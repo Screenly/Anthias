@@ -847,15 +847,111 @@ label { text-align: left; }
 
 .stat-card--span-2 { grid-column: span 2; @media (max-width: 540px) { grid-column: span 1; } }
 
-// Memory mini-grid inside one stat card
-.stat-card__memory {
+// Resource donut + legend (memory and disk on System Info). Slice
+// percentages are seeded inline as --slice-1 / --slice-2 (slice 3
+// fills to 100%), so the same component renders both a 3-slice
+// memory pie (used / cache / free) and a 2-slice disk pie (used /
+// free) by setting --slice-2: 0.
+.resource-card {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px var(--space-3);
-  font-size: 0.825rem;
+  grid-template-columns: 11rem 1fr;
+  gap: var(--space-5);
+  align-items: center;
+  margin-top: var(--space-2);
+  @media (max-width: 540px) {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: var(--space-4);
+  }
+}
+.resource-pie {
+  width: 11rem;
+  height: 11rem;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--slice-1-color, #6633a0) 0% calc(var(--slice-1) * 1%),
+    var(--slice-2-color, #f59e0b)
+      calc(var(--slice-1) * 1%)
+      calc((var(--slice-1) + var(--slice-2)) * 1%),
+    var(--slice-3-color, #34d399)
+      calc((var(--slice-1) + var(--slice-2)) * 1%) 100%
+  );
+  position: relative;
+  flex: none;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06), var(--shadow-sm);
+}
+// Disk uses different slice colours (red-ish for used, green for free)
+// so a near-full drive reads as a warning at a glance.
+.resource-pie--disk {
+  --slice-1-color: #dc3545;
+  --slice-3-color: #34d399;
+}
+.resource-pie__inner {
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 var(--space-2);
+}
+.resource-pie__total {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+  line-height: 1;
+}
+.resource-pie__unit {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-top: 0.35rem;
+}
 
-  dt { color: var(--color-text-muted); margin: 0; }
-  dd { margin: 0; font-weight: 600; }
+.resource-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 0.875rem;
+  min-width: 0;
+}
+.resource-legend__row {
+  display: grid;
+  grid-template-columns: 0.85rem 1fr auto;
+  gap: var(--space-2);
+  align-items: center;
+}
+.resource-legend__swatch {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 0.25rem;
+  background: var(--color-text-muted);
+  flex: none;
+}
+.resource-legend__name { color: var(--color-text); font-weight: 600; }
+.resource-legend__value {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.resource-legend__row--slice-1 .resource-legend__swatch { background: #6633a0; }
+.resource-legend__row--slice-2 .resource-legend__swatch { background: #f59e0b; }
+.resource-legend__row--slice-3 .resource-legend__swatch { background: #34d399; }
+.resource-pie--disk ~ .resource-legend .resource-legend__row--slice-1 .resource-legend__swatch { background: #dc3545; }
+.resource-legend__row--ghost .resource-legend__swatch {
+  background: transparent;
+  border: 1.5px dashed rgba(0, 0, 0, 0.25);
+}
+.resource-legend__row--ghost .resource-legend__name {
+  color: var(--color-text-muted);
+  font-weight: 500;
 }
 
 // -----------------------------------------------------------------------------
