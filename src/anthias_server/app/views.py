@@ -97,6 +97,11 @@ def assets_create(request: HttpRequest) -> HttpResponse:
         mimetype = 'video'
 
     now = timezone.now()
+    # New assets land at the end of the active playlist instead of
+    # always-position-zero, so a fresh upload doesn't yank ordering
+    # from under everything else. (`Asset.is_active()` is the same
+    # predicate the home page uses to split active/inactive rows.)
+    play_order = sum(1 for a in Asset.objects.all() if a.is_active())
     Asset.objects.create(
         name=uri,
         uri=uri,
@@ -104,7 +109,7 @@ def assets_create(request: HttpRequest) -> HttpResponse:
         duration=settings['default_duration'],
         is_enabled=True,
         is_processing=False,
-        play_order=0,
+        play_order=play_order,
         start_date=now,
         end_date=now + timedelta(days=30),
     )
@@ -131,29 +136,27 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         messages.error(request, 'Invalid file type. Expected image or video.')
         return _asset_table_response(request)
 
-    final_name = uuid.uuid5(uuid.NAMESPACE_URL, upload_name).hex
+    # uuid4 (random) instead of uuid5(NAMESPACE_URL, name): the
+    # deterministic v5 form would collide on disk for two files
+    # uploaded with the same name (different content), silently
+    # overwriting the older one.
+    final_name = uuid.uuid4().hex
     final_path = path.join(settings['assetdir'], final_name)
     with open(final_path, 'wb') as f:
         for chunk in file_upload.chunks():
             f.write(chunk)
 
     mimetype = file_type.split('/')[0]
-    if mimetype == 'video':
-        # Probe the actual video duration so the row stores something
-        # meaningful instead of the default-duration placeholder; React's
-        # upload flow does the same via get_video_duration.
-        from anthias_common.utils import get_video_duration
-
-        probed = get_video_duration(final_path)
-        duration = (
-            int(probed.total_seconds())
-            if probed is not None
-            else settings['default_duration']
-        )
-    else:
-        duration = settings['default_duration']
+    # The v2 API's CreateAssetSerializerV2 enforces duration=0 for
+    # video assets and resolves the actual length at save time via
+    # get_video_duration. Mirror that contract here so the HTML and
+    # API write paths agree (otherwise a video uploaded through the
+    # UI would carry a probed duration, while the same file pushed
+    # through the API would be rejected at duration=N>0).
+    duration = 0 if mimetype == 'video' else settings['default_duration']
 
     now = timezone.now()
+    play_order = sum(1 for a in Asset.objects.all() if a.is_active())
     Asset.objects.create(
         name=upload_name,
         uri=final_path,
@@ -161,7 +164,7 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         duration=duration,
         is_enabled=True,
         is_processing=False,
-        play_order=0,
+        play_order=play_order,
         start_date=now,
         end_date=now + timedelta(days=30),
     )
@@ -185,7 +188,17 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
     # update would let the row desync from the actual content (an image
     # row marked as 'webpage', etc.). The edit modal renders mimetype
     # read-only for the same reason.
-    asset.duration = int(request.POST.get('duration') or asset.duration or 0)
+    if asset.mimetype == 'video':
+        # Video assets must keep duration=0 — the API enforces this on
+        # writes and the playlist scheduler reads the real length back
+        # from the file at playtime. The edit form disables the input
+        # for videos, but defend on the server too so a hand-crafted
+        # POST can't desync the DB from the API contract.
+        asset.duration = 0
+    else:
+        asset.duration = int(
+            request.POST.get('duration') or asset.duration or 0
+        )
     start = request.POST.get('start_date')
     end = request.POST.get('end_date')
     if start:
@@ -401,8 +414,17 @@ def settings_backup(request: HttpRequest) -> HttpResponseBase:
     """Same as api.views.mixins.BackupViewMixin.post but streams the
     archive back inline instead of returning the filename + relying
     on a follow-up /static_with_mime/ fetch."""
+    from os import getenv
+
     filename = backup_helper.create_backup(name=settings['player_name'])
-    archive_path = path.join('static', filename)
+    # backup_helper.create_backup writes to $HOME/anthias/staticfiles/.
+    # Reach for the same base here so we serve the archive from the
+    # path it was actually written to. The pre-fix path.join('static',
+    # filename) was relative to CWD and would FileNotFoundError in
+    # production where uvicorn runs out of /usr/src/app.
+    archive_path = path.join(
+        getenv('HOME') or '', 'anthias/staticfiles', filename
+    )
     response = FileResponse(
         open(archive_path, 'rb'),
         as_attachment=True,

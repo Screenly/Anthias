@@ -104,7 +104,19 @@
             method: 'POST',
             body: fd,
             headers: { 'X-CSRFToken': csrfToken() },
-          }).then(() => htmx.trigger('body', 'refresh-assets'));
+          }).then((r) => {
+            if (!r.ok) {
+              // POST rejected (likely a CSRF or 5xx hiccup). Refresh
+              // the table from the server so the visible order
+              // matches the persisted state instead of leaving the
+              // user thinking the drag took.
+              console.error('reorder POST failed:', r.status, r.statusText);
+            }
+            htmx.trigger('body', 'refresh-assets');
+          }).catch((err) => {
+            console.error('reorder POST errored:', err);
+            htmx.trigger('body', 'refresh-assets');
+          });
         },
       });
     }

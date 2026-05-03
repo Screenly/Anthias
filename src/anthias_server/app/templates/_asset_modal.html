@@ -118,8 +118,21 @@
               </div>
             </div>
           </div>
+          {# Video assets must stay at duration=0 (v2 API rule). Disable
+             the input for videos and clear its value so the form POST
+             omits it (browsers skip disabled fields), and the server
+             defends against a hand-crafted POST anyway. Image / web
+             assets are still freely editable. #}
           <div class="form-floating mb-3">
-            <input type="number" class="form-control" id="edit-duration" name="duration" :value="editAsset.duration" required>
+            <input
+              type="number"
+              class="form-control"
+              id="edit-duration"
+              name="duration"
+              :value="editAsset.mimetype === 'video' ? 0 : editAsset.duration"
+              :disabled="editAsset.mimetype === 'video'"
+              required
+            >
             <label for="edit-duration">Duration (seconds)</label>
           </div>
           <div class="row">
