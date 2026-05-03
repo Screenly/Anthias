@@ -1,12 +1,12 @@
 {% load static %}
-<nav class="navbar fixed top-0 inset-x-0 z-50" x-data="{ open: false }">
-  <div class="container flex flex-wrap items-center gap-3 py-3">
-    <a href="{% url 'anthias_app:home' %}" class="navbar-brand">
+<nav class="app-nav fixed top-0 inset-x-0 z-50" x-data="{ open: false }">
+  <div class="app-container flex flex-wrap items-center gap-3 py-3">
+    <a href="{% url 'anthias_app:home' %}" class="app-nav-brand">
       <img src="{% static 'img/logo-full.svg' %}" alt="Anthias">
     </a>
 
     <button
-      class="navbar-toggler ml-auto lg:hidden"
+      class="app-nav-toggler ml-auto lg:hidden"
       type="button"
       :aria-expanded="open"
       aria-label="Toggle navigation"
@@ -21,12 +21,12 @@
       :class="open ? 'block' : 'hidden lg:block'"
       id="navbarNav"
     >
-      <ul class="navbar-nav flex flex-col lg:flex-row lg:items-center lg:gap-1">
+      <ul class="app-nav-items flex flex-col lg:flex-row lg:items-center lg:gap-1">
         {% if not up_to_date and not is_balena %}
-        <li class="nav-item update-available">
+        <li class="app-tab-item update-available">
           <a
             href="{% url 'anthias_app:settings' %}#upgrade-section"
-            class="nav-link"
+            class="app-tab-link"
             @click="open = false"
           >
             <i class="ti ti-cloud-download"></i>
@@ -36,10 +36,10 @@
         </li>
         {% endif %}
 
-        <li class="nav-item">
+        <li class="app-tab-item">
           <a
             href="{% url 'anthias_app:home' %}"
-            class="nav-link {% if active_nav == 'home' %}active{% endif %}"
+            class="app-tab-link {% if active_nav == 'home' %}active{% endif %}"
             @click="open = false"
           >
             <i class="ti ti-playlist"></i>
@@ -48,10 +48,10 @@
         </li>
 
         {% if is_balena %}
-        <li class="nav-item">
+        <li class="app-tab-item">
           <a
             href="{% url 'anthias_app:integrations' %}"
-            class="nav-link {% if active_nav == 'integrations' %}active{% endif %}"
+            class="app-tab-link {% if active_nav == 'integrations' %}active{% endif %}"
             @click="open = false"
           >
             <i class="ti ti-puzzle"></i>
@@ -60,10 +60,10 @@
         </li>
         {% endif %}
 
-        <li class="nav-item">
+        <li class="app-tab-item">
           <a
             href="{% url 'anthias_app:settings' %}"
-            class="nav-link {% if active_nav == 'settings' %}active{% endif %}"
+            class="app-tab-link {% if active_nav == 'settings' %}active{% endif %}"
             @click="open = false"
           >
             <i class="ti ti-settings"></i>
@@ -71,14 +71,14 @@
           </a>
         </li>
 
-        <li class="nav-item hidden lg:block" aria-hidden="true">
+        <li class="app-tab-item hidden lg:block" aria-hidden="true">
           <span class="divider-vertical"></span>
         </li>
 
-        <li class="nav-item">
+        <li class="app-tab-item">
           <a
             href="{% url 'anthias_app:system_info' %}"
-            class="nav-link {% if active_nav == 'system-info' %}active{% endif %}"
+            class="app-tab-link {% if active_nav == 'system-info' %}active{% endif %}"
             @click="open = false"
           >
             <i class="ti ti-activity"></i>

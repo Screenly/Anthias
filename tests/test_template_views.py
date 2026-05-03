@@ -898,3 +898,91 @@ def test_bootstrap_is_not_in_package_dependencies() -> None:
         'bootstrap was reintroduced as a dep — see _styles.scss naming '
         'note for why this collides with our component classes'
     )
+
+
+def test_no_bootstrap_class_names_in_templates() -> None:
+    """Regression guard for the rename pass that took us off Bootstrap.
+    Scan every template for a fixed list of Bootstrap utility / component
+    class names. Catches an accidental copy-paste re-introducing one of
+    them long after the cutover.
+    """
+    import re
+    from pathlib import Path
+
+    forbidden = {
+        # Utility classes Tailwind replaced
+        'd-flex',
+        'd-block',
+        'd-none',
+        'd-inline',
+        'd-inline-flex',
+        'd-inline-block',
+        'me-auto',
+        'ms-auto',
+        'fw-bold',
+        'fw-semibold',
+        'text-end',
+        'position-fixed',
+        'position-absolute',
+        'w-100',
+        'h-100',
+        # Components our SCSS now re-implements as .app-*
+        'btn',
+        'btn-primary',
+        'btn-link',
+        'btn-icon',
+        'btn-pill',
+        'btn-light',
+        'btn-danger',
+        'btn-outline-dark',
+        'btn-close',
+        'form-control',
+        'form-select',
+        'form-floating',
+        'form-check',
+        'form-check-input',
+        'form-check-label',
+        'form-switch',
+        'form-grid',
+        'form-label',
+        'form-group',
+        'nav-tabs',
+        'nav-link',
+        'nav-item',
+        'navbar',
+        'navbar-brand',
+        'navbar-toggler',
+        'navbar-nav',
+        'navbar-dark',
+        'navbar-expand-lg',
+        # Misc Bootstrap
+        'alert',
+        'alert-danger',
+        'alert-info',
+        'alert-success',
+        'alert-warning',
+        'alert-dismissible',
+        'collapse',
+        'fixed-top',
+        'card-header',
+        'card-body',
+        'row',
+        'col-12',
+        'col-md-6',
+    }
+    templates = Path(__file__).resolve().parent.parent / (
+        'src/anthias_server/app/templates'
+    )
+    pattern = re.compile(r'class="([^"]+)"')
+    seen: list[str] = []
+    for path in templates.rglob('*.html'):
+        for match in pattern.finditer(path.read_text()):
+            tokens = match.group(1).split()
+            for tok in tokens:
+                if tok in forbidden:
+                    seen.append(f'{path.name}: {tok}')
+    assert not seen, (
+        'Bootstrap-shaped class names reintroduced — see _styles.scss '
+        'header for why these collide with our .app-* re-implementations:\n  '
+        + '\n  '.join(seen)
+    )

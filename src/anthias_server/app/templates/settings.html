@@ -4,7 +4,7 @@
 {% block title %}{% if player_name %}{{ player_name }} · {% endif %}Settings{% endblock %}
 
 {% block main %}
-<div class="container">
+<div class="app-container">
   <div class="page-header-bar">
     <div class="page-header-bar__title">
       <h1 class="page-header">Settings</h1>
@@ -30,8 +30,8 @@
           <p class="settings-section__lede">A friendly name shown in this UI and in the page title.</p>
         </div>
       </header>
-      <div class="form-floating">
-        <input type="text" class="form-control" id="player_name" name="player_name" value="{{ player_name }}" placeholder=" ">
+      <div class="app-floating">
+        <input type="text" class="app-input" id="player_name" name="player_name" value="{{ player_name }}" placeholder=" ">
         <label for="player_name">Player name</label>
       </div>
     </section>
@@ -45,20 +45,20 @@
         </div>
       </header>
 
-      <div class="form-grid mb-4">
-        <div class="form-floating">
-          <input type="number" class="form-control" id="default_duration" name="default_duration" value="{{ default_duration }}" placeholder=" " required>
+      <div class="app-form-grid mb-4">
+        <div class="app-floating">
+          <input type="number" class="app-input" id="default_duration" name="default_duration" value="{{ default_duration }}" placeholder=" " required>
           <label for="default_duration">Default duration (seconds)</label>
         </div>
-        <div class="form-floating">
-          <input type="number" class="form-control" id="default_streaming_duration" name="default_streaming_duration" value="{{ default_streaming_duration }}" placeholder=" " required>
+        <div class="app-floating">
+          <input type="number" class="app-input" id="default_streaming_duration" name="default_streaming_duration" value="{{ default_streaming_duration }}" placeholder=" " required>
           <label for="default_streaming_duration">Default streaming duration (seconds)</label>
         </div>
       </div>
 
-      <div class="form-grid mb-4">
-        <div class="form-floating">
-          <select class="form-select" id="audio_output" name="audio_output">
+      <div class="app-form-grid mb-4">
+        <div class="app-floating">
+          <select class="app-select" id="audio_output" name="audio_output">
             <option value="hdmi" {% if audio_output == 'hdmi' %}selected{% endif %}>HDMI</option>
             {% if not is_pi5 %}
             <option value="local" {% if audio_output == 'local' %}selected{% endif %}>3.5mm jack</option>
@@ -67,8 +67,8 @@
           <label for="audio_output">Audio output</label>
         </div>
 
-        <div class="form-floating">
-          <select class="form-select" id="date_format" name="date_format">
+        <div class="app-floating">
+          <select class="app-select" id="date_format" name="date_format">
             {% for value, label in date_format_options %}
             <option value="{{ value }}" {% if date_format == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -95,8 +95,8 @@
         </div>
       </header>
 
-      <div class="form-floating mb-3">
-        <select class="form-select" id="auth_backend" name="auth_backend" x-model="authBackend">
+      <div class="app-floating mb-3">
+        <select class="app-select" id="auth_backend" name="auth_backend" x-model="authBackend">
           <option value="">Disabled</option>
           <option value="auth_basic" {% if auth_backend == 'auth_basic' %}selected{% endif %}>Basic auth</option>
         </select>
@@ -104,25 +104,25 @@
       </div>
 
       {% if has_saved_basic_auth %}
-      <div class="form-floating mb-3" x-show="authBackend === 'auth_basic' || '{{ auth_backend }}' === 'auth_basic'">
-        <input type="password" class="form-control" id="current_password" name="current_password" placeholder=" " autocomplete="current-password">
+      <div class="app-floating mb-3" x-show="authBackend === 'auth_basic' || '{{ auth_backend }}' === 'auth_basic'">
+        <input type="password" class="app-input" id="current_password" name="current_password" placeholder=" " autocomplete="current-password">
         <label for="current_password">Current password</label>
       </div>
       {% endif %}
 
       <template x-if="authBackend === 'auth_basic'">
         <div>
-          <div class="form-floating mb-3">
-            <input type="text" class="form-control" id="user" name="user" value="{{ username }}" placeholder=" " autocomplete="username">
+          <div class="app-floating mb-3">
+            <input type="text" class="app-input" id="user" name="user" value="{{ username }}" placeholder=" " autocomplete="username">
             <label for="user">Username</label>
           </div>
-          <div class="form-grid">
-            <div class="form-floating">
-              <input type="password" class="form-control" id="password" name="password" placeholder=" " autocomplete="new-password">
+          <div class="app-form-grid">
+            <div class="app-floating">
+              <input type="password" class="app-input" id="password" name="password" placeholder=" " autocomplete="new-password">
               <label for="password">New password</label>
             </div>
-            <div class="form-floating">
-              <input type="password" class="form-control" id="password_2" name="password_2" placeholder=" " autocomplete="new-password">
+            <div class="app-floating">
+              <input type="password" class="app-input" id="password_2" name="password_2" placeholder=" " autocomplete="new-password">
               <label for="password_2">Confirm new password</label>
             </div>
           </div>
@@ -131,7 +131,7 @@
     </section>
 
     <div class="flex justify-end">
-      <button type="submit" class="btn btn-primary">
+      <button type="submit" class="app-btn app-btn-primary">
         <i class="ti ti-check"></i><span>Save settings</span>
       </button>
     </div>
@@ -149,7 +149,7 @@
       <div class="settings-section__actions" x-data>
         <form method="post" action="{% url 'anthias_app:settings_backup' %}" class="inline m-0">
           {% csrf_token %}
-          <button type="submit" id="btn-backup" class="btn btn-outline-dark">
+          <button type="submit" id="btn-backup" class="app-btn app-btn-outline-dark">
             <i class="ti ti-download"></i><span>Get backup</span>
           </button>
         </form>
@@ -163,7 +163,7 @@
             hidden
             @change="if ($event.target.files.length) $event.target.form.requestSubmit()"
           >
-          <button type="button" id="btn-upload" class="btn btn-primary"
+          <button type="button" id="btn-upload" class="app-btn app-btn-primary"
             @click="document.getElementById('backup_upload').click()">
             <i class="ti ti-upload"></i><span>Upload &amp; recover</span>
           </button>
@@ -180,10 +180,10 @@
         <p class="settings-section__lede">Reboot or power down the device. Both prompt for confirmation.</p>
       </div>
       <div class="settings-section__actions">
-        <button type="button" class="btn btn-outline-dark" @click="pending = 'reboot'">
+        <button type="button" class="app-btn app-btn-outline-dark" @click="pending = 'reboot'">
           <i class="ti ti-rotate-clockwise"></i><span>Reboot</span>
         </button>
-        <button type="button" class="btn btn-danger" @click="pending = 'shutdown'">
+        <button type="button" class="app-btn app-btn-danger" @click="pending = 'shutdown'">
           <i class="ti ti-power"></i><span>Shutdown</span>
         </button>
       </div>
@@ -209,14 +209,14 @@
             : 'The device will power off now. You may need to unplug and replug to bring it back up.'"></p>
         </div>
         <div class="modal-card__footer">
-          <button type="button" class="btn btn-link" @click="pending = null">Cancel</button>
+          <button type="button" class="app-btn app-btn-link" @click="pending = null">Cancel</button>
           <form
             method="post"
             :action="pending === 'reboot' ? '{% url 'anthias_app:settings_reboot' %}' : '{% url 'anthias_app:settings_shutdown' %}'"
             class="inline m-0"
           >
             {% csrf_token %}
-            <button type="submit" class="btn btn-danger" x-text="pending === 'reboot' ? 'Reboot now' : 'Shut down'"></button>
+            <button type="submit" class="app-btn app-btn-danger" x-text="pending === 'reboot' ? 'Reboot now' : 'Shut down'"></button>
           </form>
         </div>
       </div>

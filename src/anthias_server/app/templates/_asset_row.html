@@ -45,10 +45,10 @@
     {% else %}
     <form method="post" action="{% url 'anthias_app:assets_toggle' asset_id=asset.asset_id %}" class="m-0">
       {% csrf_token %}
-      <div class="form-check form-switch activity-toggle m-0">
+      <div class="app-check app-switch activity-toggle m-0">
         <input
           type="checkbox"
-          class="form-check-input"
+          class="app-check-input"
           {% if asset.is_enabled %}checked{% endif %}
           aria-label="Toggle active"
           onchange="this.form.requestSubmit()"
@@ -61,24 +61,24 @@
     <div class="action-group">
       <button
         type="button"
-        class="btn btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
+        class="app-btn app-btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
         title="Preview"
         @click='openPreview({{ asset|to_json }})'
       ><i class="ti ti-eye"></i></button>
       <a
         href="{% url 'anthias_app:assets_download' asset_id=asset.asset_id %}"
-        class="btn btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
+        class="app-btn app-btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
         title="Download"
       ><i class="ti ti-download"></i></a>
       <button
         type="button"
-        class="btn btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
+        class="app-btn app-btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
         title="Edit"
         @click='openEdit({{ asset|to_json }})'
       ><i class="ti ti-pencil"></i></button>
       <button
         type="button"
-        class="btn btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
+        class="app-btn app-btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
         title="Delete"
         @click="openDelete('{{ asset.asset_id }}', '{{ asset.name|default:''|escapejs }}')"
       ><i class="ti ti-trash"></i></button>

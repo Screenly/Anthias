@@ -23,17 +23,17 @@
     {# ---- Add mode ---- #}
     <div x-show="mode === 'add'" x-data="{ tab: 'uri' }">
       <div class="modal-card__body" style="padding-bottom: var(--space-3)">
-        <ul class="nav nav-tabs mb-4" id="add-asset-nav-tabs">
-          <li class="nav-item">
+        <ul class="nav app-tabs mb-4" id="add-asset-nav-tabs">
+          <li class="app-tab-item">
             <button type="button" id="tab-uri"
-              class="nav-link" :class="tab === 'uri' && 'active'"
+              class="app-tab-link" :class="tab === 'uri' && 'active'"
               @click="tab = 'uri'">
               <i class="ti ti-link mr-1"></i>From URL
             </button>
           </li>
-          <li class="nav-item">
+          <li class="app-tab-item">
             <button type="button"
-              class="nav-link upload-asset-tab" :class="tab === 'file' && 'active'"
+              class="app-tab-link upload-asset-tab" :class="tab === 'file' && 'active'"
               @click="tab = 'file'">
               <i class="ti ti-cloud-upload mr-1"></i>Upload file
             </button>
@@ -52,15 +52,15 @@
       >
         {% csrf_token %}
         <div class="modal-card__body" style="padding-top: 0">
-          <div class="form-floating mb-3">
-            <input type="url" class="form-control" id="add-uri" name="uri" placeholder=" " required>
+          <div class="app-floating mb-3">
+            <input type="url" class="app-input" id="add-uri" name="uri" placeholder=" " required>
             <label for="add-uri">Asset URL</label>
           </div>
           <p class="muted-label m-0">Web pages, hosted images, hosted videos, and streaming URLs are all supported.</p>
         </div>
         <div class="modal-card__footer">
-          <button type="button" class="btn btn-link" @click="closeModal()">Cancel</button>
-          <button type="submit" id="add-form" class="btn btn-primary">
+          <button type="button" class="app-btn app-btn-link" @click="closeModal()">Cancel</button>
+          <button type="submit" id="add-form" class="app-btn app-btn-primary">
             <i class="ti ti-plus"></i><span>Add asset</span>
           </button>
         </div>
@@ -112,7 +112,7 @@
           </div>
         </div>
         <div class="modal-card__footer">
-          <button type="button" class="btn btn-link" @click="closeModal()" :disabled="uploadState === 'processing'">
+          <button type="button" class="app-btn app-btn-link" @click="closeModal()" :disabled="uploadState === 'processing'">
             <span x-text="uploadState ? 'Hide' : 'Cancel'"></span>
           </button>
         </div>
@@ -131,13 +131,13 @@
       >
         {% csrf_token %}
         <div class="modal-card__body">
-          <div class="form-floating mb-3">
-            <input type="text" class="form-control" id="edit-name" name="name" :value="editAsset.name" required>
+          <div class="app-floating mb-3">
+            <input type="text" class="app-input" id="edit-name" name="name" :value="editAsset.name" required>
             <label for="edit-name">Name</label>
           </div>
 
-          <div class="form-floating mb-3">
-            <input type="text" class="form-control" id="edit-uri" :value="editAsset.uri" readonly>
+          <div class="app-floating mb-3">
+            <input type="text" class="app-input" id="edit-uri" :value="editAsset.uri" readonly>
             <label for="edit-uri">Asset location</label>
           </div>
 
@@ -149,13 +149,13 @@
             <span class="schedule-chip text-capitalize" x-text="editAsset.mimetype"></span>
           </div>
 
-          <div class="form-grid mb-3">
-            <div class="form-floating">
-              <input type="text" class="form-control flatpickr-datetime" id="edit-start" name="start_date" :value="editAsset.start_date_local" required autocomplete="off">
+          <div class="app-form-grid mb-3">
+            <div class="app-floating">
+              <input type="text" class="app-input flatpickr-datetime" id="edit-start" name="start_date" :value="editAsset.start_date_local" required autocomplete="off">
               <label for="edit-start">Start</label>
             </div>
-            <div class="form-floating">
-              <input type="text" class="form-control flatpickr-datetime" id="edit-end" name="end_date" :value="editAsset.end_date_local" required autocomplete="off">
+            <div class="app-floating">
+              <input type="text" class="app-input flatpickr-datetime" id="edit-end" name="end_date" :value="editAsset.end_date_local" required autocomplete="off">
               <label for="edit-end">End</label>
             </div>
           </div>
@@ -163,8 +163,8 @@
           {% comment %} Video assets must stay at duration=0 (v2 API rule) — disable
              the input for videos so the form POST omits it; the server defends too.
           {% endcomment %}
-          <div class="form-floating mb-4">
-            <input type="number" class="form-control" id="edit-duration" name="duration"
+          <div class="app-floating mb-4">
+            <input type="number" class="app-input" id="edit-duration" name="duration"
               :value="editAsset.mimetype === 'video' ? 0 : editAsset.duration"
               :disabled="editAsset.mimetype === 'video'" required>
             <label for="edit-duration">Duration (seconds)</label>
@@ -182,34 +182,34 @@
             </template>
           </div>
 
-          <div class="form-grid mb-4">
-            <div class="form-floating">
-              <input type="text" class="form-control flatpickr-time" id="edit-play-from" name="play_time_from" :value="editAsset.play_time_from || ''" autocomplete="off">
+          <div class="app-form-grid mb-4">
+            <div class="app-floating">
+              <input type="text" class="app-input flatpickr-time" id="edit-play-from" name="play_time_from" :value="editAsset.play_time_from || ''" autocomplete="off">
               <label for="edit-play-from">Play from</label>
             </div>
-            <div class="form-floating">
-              <input type="text" class="form-control flatpickr-time" id="edit-play-to" name="play_time_to" :value="editAsset.play_time_to || ''" autocomplete="off">
+            <div class="app-floating">
+              <input type="text" class="app-input flatpickr-time" id="edit-play-to" name="play_time_to" :value="editAsset.play_time_to || ''" autocomplete="off">
               <label for="edit-play-to">Play until</label>
             </div>
           </div>
 
           <div class="flex flex-wrap gap-4">
-            <div class="form-check form-switch m-0">
+            <div class="app-check app-switch m-0">
               <input type="hidden" name="nocache" value="false">
-              <input type="checkbox" class="form-check-input" id="edit-nocache" name="nocache" value="true" :checked="editAsset.nocache">
-              <label class="form-check-label ml-2" for="edit-nocache">No cache</label>
+              <input type="checkbox" class="app-check-input" id="edit-nocache" name="nocache" value="true" :checked="editAsset.nocache">
+              <label class="app-check-label ml-2" for="edit-nocache">No cache</label>
             </div>
-            <div class="form-check form-switch m-0">
+            <div class="app-check app-switch m-0">
               <input type="hidden" name="skip_asset_check" value="false">
-              <input type="checkbox" class="form-check-input" id="edit-skip" name="skip_asset_check" value="true" :checked="editAsset.skip_asset_check">
-              <label class="form-check-label ml-2" for="edit-skip">Skip asset check</label>
+              <input type="checkbox" class="app-check-input" id="edit-skip" name="skip_asset_check" value="true" :checked="editAsset.skip_asset_check">
+              <label class="app-check-label ml-2" for="edit-skip">Skip asset check</label>
             </div>
           </div>
         </div>
 
         <div class="modal-card__footer">
-          <button type="button" class="btn btn-link" @click="closeModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary">
+          <button type="button" class="app-btn app-btn-link" @click="closeModal()">Cancel</button>
+          <button type="submit" class="app-btn app-btn-primary">
             <i class="ti ti-check"></i><span>Save changes</span>
           </button>
         </div>

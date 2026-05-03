@@ -2,7 +2,7 @@
  *
  * The Anthias design system lives in SCSS (anthias.scss). Tailwind
  * here is purely utility-class layer: spacing, flex/grid, typography
- * helpers. Component classes (.btn, .surface, .modal-card, .stat-card,
+ * helpers. Component classes (.app-btn, .surface, .modal-card, .stat-card,
  * .schedule-chip, .schedule-window, .resource-pie, .loadavg-card,
  * .app-toast …) stay hand-rolled so the named design surface survives
  * the cutover from Bootstrap.

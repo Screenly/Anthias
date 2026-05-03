@@ -3,11 +3,11 @@
     <label class="block font-semibold text-sm" for="{{ name }}">{{ label }}</label>
     {% if hint %}<p class="text-xs text-black/60 mt-1 mb-0">{{ hint }}</p>{% endif %}
   </div>
-  <div class="form-check form-switch m-0 flex-none">
+  <div class="app-check app-switch m-0 flex-none">
     <input type="hidden" name="{{ name }}" value="false">
     <input
       type="checkbox"
-      class="form-check-input"
+      class="app-check-input"
       id="{{ name }}"
       name="{{ name }}"
       value="true"

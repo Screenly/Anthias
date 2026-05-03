@@ -1,22 +1,12 @@
 // =============================================================================
 // _styles.scss — Anthias UI design system
 //
-// Layered as: tokens → base → components → page-specific bits. Component
-// classes (.btn, .surface, .asset-table, .modal-card, .schedule-chip,
-// .stat-card, .settings-section, .empty-state) are the public API the
-// templates compose from; nothing in here targets React-era hooks.
-//
-// NAMING NOTE — some classes in this file (.btn, .form-control,
-// .form-floating, .form-check, .form-switch, .nav, .nav-tabs, .nav-link,
-// .nav-item, .container, .navbar-toggler, .navbar-nav, .navbar-brand)
-// share names with Bootstrap. The implementation behind each is local
-// to this file (Section 19 — "Bootstrap-replacement component
-// classes"); we kept the names so the template diff during the
-// Bootstrap → Tailwind cutover stayed reviewable. If you ever
-// reintroduce Bootstrap (or a downstream consumer expects these
-// classes to behave like Bootstrap), expect divergence — these
-// are NOT Bootstrap classes, only Bootstrap-shaped re-implementations
-// driven from our design tokens.
+// Layered as: tokens → base → components → page-specific bits.
+// Everything is project-namespaced (.app-btn, .app-input, .app-tabs,
+// .surface, .modal-card, .schedule-chip, .stat-card, .app-toast,
+// .resource-pie, .loadavg-row, …) — there is no Bootstrap (or any
+// other framework) layered underneath, just Tailwind utilities for
+// one-off spacing/flex.
 // =============================================================================
 
 // Brand colour tokens — referenced via #{$anthias-...} in this file
@@ -82,7 +72,7 @@
 }
 
 // Default anchor styling; overridden in dark contexts (.surface--active,
-// navbar, footer) where the link colour switches to white-ish.
+// app-nav, footer) where the link colour switches to white-ish.
 a {
   color: var(--color-link);
   text-decoration: none;
@@ -103,7 +93,7 @@ html {
 body {
   background-color: var(--color-bg);
   margin: 0;
-  padding-top: 4.5rem;          // navbar height
+  padding-top: 4.5rem;          // app-nav height
   font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
   font-size: 1rem;
   line-height: 1.5;
@@ -113,7 +103,7 @@ body {
 
 main {
   display: block;
-  min-height: calc(100vh - 4.5rem - 13rem);   // navbar + footer
+  min-height: calc(100vh - 4.5rem - 13rem);   // app-nav + footer
   padding: var(--space-6) 0 var(--space-7);
 }
 
@@ -211,7 +201,7 @@ label { text-align: left; }
 // -----------------------------------------------------------------------------
 // 5. Buttons
 // -----------------------------------------------------------------------------
-.btn {
+.app-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -241,7 +231,7 @@ label { text-align: left; }
   &.disabled { opacity: 0.55; cursor: not-allowed; }
 }
 
-.btn-primary {
+.app-btn-primary {
   background-image: $anthias-yellow-gradient;
   background-color: $anthias-yellow-3;
   border-color: transparent;
@@ -256,7 +246,7 @@ label { text-align: left; }
   &:active { background-color: $anthias-yellow-2; }
 }
 
-.btn-light {
+.app-btn-light {
   background: #ffffff;
   border-color: rgba(0, 0, 0, 0.06);
   color: var(--color-text);
@@ -270,14 +260,14 @@ label { text-align: left; }
   &:hover { background: #2d0a40; border-color: #2d0a40; color: #ffffff; }
 }
 
-.btn-danger {
+.app-btn-danger {
   background: var(--color-danger);
   border-color: var(--color-danger);
   color: #ffffff;
   &:hover { background: #c82333; border-color: #bd2130; color: #ffffff; }
 }
 
-.btn-link {
+.app-btn-link {
   color: var(--color-text-muted);
   text-decoration: none;
   font-weight: 600;
@@ -285,7 +275,7 @@ label { text-align: left; }
 }
 
 // Icon-only square button (used for asset row actions and modal close).
-.btn-icon {
+.app-btn-icon {
   padding: 0.5rem;
   width: 2.25rem;
   height: 2.25rem;
@@ -293,7 +283,7 @@ label { text-align: left; }
   font-size: 0.95rem;
 }
 
-// On-dark outline (active section, navbar)
+// On-dark outline (active section, app-nav)
 .btn-outline-light {
   color: #ffffff;
   border-color: rgba(255, 255, 255, 0.5);
@@ -306,7 +296,7 @@ label { text-align: left; }
 }
 
 // On-light outline (inactive section, settings)
-.btn-outline-dark {
+.app-btn-outline-dark {
   color: var(--color-text);
   border-color: rgba(0, 0, 0, 0.18);
   background: transparent;
@@ -317,7 +307,7 @@ label { text-align: left; }
   }
 }
 
-.btn-pill {
+.app-btn-pill {
   border-radius: var(--radius-pill);
   padding-left: 1.25rem;
   padding-right: 1.25rem;
@@ -540,12 +530,12 @@ label { text-align: left; }
 // -----------------------------------------------------------------------------
 // 8. Activity toggle (form switch) sizing
 // -----------------------------------------------------------------------------
-.form-switch.activity-toggle .form-check-input {
+.app-switch.activity-toggle .app-check-input {
   width: 2.4em;
   height: 1.35em;
   cursor: pointer;
 }
-.surface--active .form-check-input:not(:checked) {
+.surface--active .app-check-input:not(:checked) {
   background-color: rgba(255, 255, 255, 0.18);
   border-color: rgba(255, 255, 255, 0.3);
 }
@@ -677,13 +667,13 @@ label { text-align: left; }
   }
 }
 
-// Bootstrap's $primary (yellow) bleeds into nav-tabs by default, leaving
+// Bootstrap's $primary (yellow) bleeds into app-tabs by default, leaving
 // inactive tabs unreadable on white. Restyle to dark-on-white with an
 // underline indicator for the active tab.
-.modal-card .nav-tabs {
+.modal-card .app-tabs {
   border-bottom: 1px solid var(--color-border);
 
-  .nav-link {
+  .app-tab-link {
     color: var(--color-text-muted);
     background: transparent;
     border: none;
@@ -750,8 +740,8 @@ label { text-align: left; }
 // -----------------------------------------------------------------------------
 // 12. Forms — replaces Bootstrap's form components on a token base.
 // -----------------------------------------------------------------------------
-.form-control,
-.form-select {
+.app-input,
+.app-select {
   display: block;
   width: 100%;
   padding: 0.65rem 0.85rem;
@@ -780,7 +770,7 @@ label { text-align: left; }
     opacity: 0.7;
   }
 }
-.form-select {
+.app-select {
   appearance: none;
   padding-right: 2.5rem;
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%235e5868' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
@@ -789,11 +779,11 @@ label { text-align: left; }
   background-size: 14px;
   cursor: pointer;
 }
-.form-floating {
+.app-floating {
   position: relative;
 
-  > .form-control,
-  > .form-select {
+  > .app-input,
+  > .app-select {
     height: 3.6rem;
     padding-block: 1.4rem 0.4rem;
   }
@@ -809,9 +799,9 @@ label { text-align: left; }
     transform-origin: 0 0;
     font-weight: 500;
   }
-  > .form-control:focus ~ label,
-  > .form-control:not(:placeholder-shown) ~ label,
-  > .form-select ~ label {
+  > .app-input:focus ~ label,
+  > .app-input:not(:placeholder-shown) ~ label,
+  > .app-select ~ label {
     transform: translateY(-0.55rem);
     font-size: 0.72rem;
     color: var(--color-text-muted);
@@ -820,13 +810,13 @@ label { text-align: left; }
   }
 }
 
-.form-check {
+.app-check {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   min-height: 1.5rem;
 }
-.form-check-input {
+.app-check-input {
   appearance: none;
   width: 1rem;
   height: 1rem;
@@ -852,11 +842,11 @@ label { text-align: left; }
     box-shadow: 0 0 0 3px var(--color-focus-ring);
   }
 }
-.form-check-label {
+.app-check-label {
   cursor: pointer;
   user-select: none;
 }
-.form-switch .form-check-input {
+.app-switch .app-check-input {
   width: 2.25rem;
   height: 1.25rem;
   border-radius: var(--radius-pill);
@@ -871,7 +861,7 @@ label { text-align: left; }
   }
 }
 
-.form-grid {
+.app-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
@@ -1254,7 +1244,7 @@ label { text-align: left; }
 // -----------------------------------------------------------------------------
 // 15. Navbar (component partial reuses these classes)
 // -----------------------------------------------------------------------------
-.navbar {
+.app-nav {
   height: 4.5rem;
   padding: 0;
   background: rgba(15, 0, 25, 0.7) !important;
@@ -1262,7 +1252,7 @@ label { text-align: left; }
   -webkit-backdrop-filter: blur(10px) saturate(140%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 
-  .navbar-brand {
+  .app-nav-brand {
     padding: 0;
     display: flex;
     align-items: center;
@@ -1270,7 +1260,7 @@ label { text-align: left; }
     img { height: 28px; }
   }
 
-  .nav-link {
+  .app-tab-link {
     color: rgba(255, 255, 255, 0.65) !important;
     padding: 0.45rem 0.85rem !important;
     border-radius: var(--radius-md);
@@ -1293,7 +1283,7 @@ label { text-align: left; }
     }
   }
 
-  .nav-item.update-available .nav-link {
+  .app-tab-item.update-available .app-tab-link {
     color: $anthias-yellow-3 !important;
     font-weight: 700;
     &:hover { background: rgba(255, 225, 26, 0.1); }
@@ -1306,7 +1296,7 @@ label { text-align: left; }
     margin: 0 var(--space-2);
   }
 
-  .navbar-toggler {
+  .app-nav-toggler {
     border: 1px solid rgba(255, 255, 255, 0.15);
     color: #ffffff;
     padding: 0.4rem 0.55rem;
@@ -1453,7 +1443,7 @@ $footer-height: 13rem;
 // -----------------------------------------------------------------------------
 .app-toast-stack {
   position: fixed;
-  top: calc(4.5rem + var(--space-4));   // below the fixed navbar
+  top: calc(4.5rem + var(--space-4));   // below the fixed app-nav
   right: var(--space-5);
   z-index: 1080;
   display: flex;
@@ -1520,16 +1510,16 @@ $footer-height: 13rem;
 // =============================================================================
 // 19. Bootstrap-replacement component classes
 //
-// Templates still ship .container / .form-control / .form-floating /
-// .form-check / .nav-tabs / .row / .col-* etc. Bootstrap is gone so we
+// Templates still ship .app-container / .app-input / .app-floating /
+// .app-check / .app-tabs / .row / .col-* etc. Bootstrap is gone so we
 // re-implement the minimum surface the templates depend on, all driven
-// from our design-token CSS variables. Anything more bespoke (.btn,
+// from our design-token CSS variables. Anything more bespoke (.app-btn,
 // .surface, .modal-card, .stat-card, .schedule-chip, …) is already
 // declared earlier in this file.
 // =============================================================================
 
-// --- Layout container (matches Bootstrap's responsive max-widths) ---
-.container {
+// --- Layout app-container (matches Bootstrap's responsive max-widths) ---
+.app-container {
   width: 100%;
   margin-inline: auto;
   padding-inline: var(--space-4);
@@ -1560,8 +1550,8 @@ $footer-height: 13rem;
   margin: 0;
   padding: 0;
 }
-.nav-item { display: flex; }
-.nav-link {
+.app-tab-item { display: flex; }
+.app-tab-link {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -1579,10 +1569,10 @@ $footer-height: 13rem;
   &:hover { background: rgba(0, 0, 0, 0.04); }
 }
 
-// --- Bootstrap-style "btn-close" — kept only for legacy alerts. The
+// --- Bootstrap-style "app-btn-close" — kept only for legacy alerts. The
 // app-toast component has its own .app-toast__close so this is a safety
 // net; the new flash-message stack drains into toasts anyway.
-.btn-close {
+.app-btn-close {
   width: 1.25rem;
   height: 1.25rem;
   padding: 0;
@@ -1595,7 +1585,7 @@ $footer-height: 13rem;
   &:hover { opacity: 1; }
 }
 
-// --- Mobile navbar collapse (.navbar-collapse + .show) for the
+// --- Mobile app-nav collapse (.navbar-collapse + .show) for the
 // existing _navbar.html markup. Matches Bootstrap's hide-by-default,
 // show-when-.show behaviour just enough to keep the Alpine toggle
 // working.
@@ -1607,7 +1597,7 @@ $footer-height: 13rem;
     margin-top: var(--space-3);
   }
 }
-.navbar-toggler {
+.app-nav-toggler {
   cursor: pointer;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1618,7 +1608,7 @@ $footer-height: 13rem;
   line-height: 1;
   @media (min-width: 992px) { display: none; }
 }
-.navbar-nav {
+.app-nav-items {
   display: flex;
   flex-direction: column;
   list-style: none;
@@ -1626,7 +1616,7 @@ $footer-height: 13rem;
   padding: 0;
   @media (min-width: 992px) { flex-direction: row; }
 }
-.navbar-brand {
+.app-nav-brand {
   display: inline-flex;
   align-items: center;
   text-decoration: none;
