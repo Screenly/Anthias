@@ -1,6 +1,9 @@
-<div class="flex justify-between items-center py-2">
-  <label class="form-label mb-0" for="{{ name }}">{{ label }}</label>
-  <div class="form-check form-switch m-0">
+<div class="flex justify-between items-center gap-4 py-2 border-t border-black/5 first:border-t-0">
+  <div class="min-w-0">
+    <label class="block font-semibold text-sm" for="{{ name }}">{{ label }}</label>
+    {% if hint %}<p class="text-xs text-black/60 mt-1 mb-0">{{ hint }}</p>{% endif %}
+  </div>
+  <div class="form-check form-switch m-0 flex-none">
     <input type="hidden" name="{{ name }}" value="false">
     <input
       type="checkbox"
