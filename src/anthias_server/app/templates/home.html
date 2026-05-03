@@ -44,14 +44,7 @@
     </div>
   </div>
 
-  <div
-    id="asset-table"
-    hx-get="{% url 'anthias_app:assets_table' %}"
-    hx-trigger="every 5s, refresh-assets from:body"
-    hx-swap="outerHTML"
-  >
-    {% include "_asset_table.html" %}
-  </div>
+  {% include "_asset_table.html" %}
 
   {% include "_asset_modal.html" %}
 </div>

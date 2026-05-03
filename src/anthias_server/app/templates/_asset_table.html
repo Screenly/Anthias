@@ -1,8 +1,18 @@
 {% load asset_filters %}
-{# The outer #asset-table wrapper that HTMX swaps lives in home.html;
-   keep this partial wrapper id-less so the page never has two
-   #asset-table divs at the same time (Copilot caught the duplicate). #}
-<div>
+{# The wrapper carries id="asset-table" PLUS the hx-get/hx-trigger pair
+   that drives both the 5 s background poll and the refresh-assets event
+   triggered after every write. Because every endpoint that returns
+   this partial uses hx-swap="outerHTML", the swap replaces the wrapper
+   with itself — keeping id + hx-* attributes on the partial means
+   polling and event-driven swaps survive each refresh. (Don't add a
+   second #asset-table around the include in home.html — the duplicate-
+   id problem from the earlier review comes back.) #}
+<div
+  id="asset-table"
+  hx-get="{% url 'anthias_app:assets_table' %}"
+  hx-trigger="every 5s, refresh-assets from:body"
+  hx-swap="outerHTML"
+>
   <div id="active-assets-section" class="active-content mb-4 p-4">
       <h5 class="text-white fw-bold mb-3">Active assets</h5>
       {% if active_assets %}

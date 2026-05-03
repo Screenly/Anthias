@@ -65,10 +65,18 @@
       </div>
 
       <template x-if="mode === 'edit' && editAsset">
+        {# No hx-post here — htmx.org reads an empty hx-post as
+           "POST to the current URL" (which is /, not /assets/<id>/update),
+           and that nullified the dynamic :action binding. Drop hx-post
+           entirely and let the browser submit the form to its `action`;
+           the after-request asset-saved event still fires because the
+           successful submit lands the asset_table_response (HX-Request
+           branch) and HTMX handles the response normally via hx-target.
+        #}
         <form
           method="post"
           :action="`/assets/${editAsset.asset_id}/update`"
-          hx-post=""
+          x-bind:hx-post="`/assets/${editAsset.asset_id}/update`"
           hx-target="#asset-table"
           hx-swap="outerHTML"
           hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); htmx.trigger('body', 'refresh-assets'); }"

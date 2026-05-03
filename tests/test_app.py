@@ -2,7 +2,7 @@ import os
 import shutil
 import tempfile
 from datetime import timedelta
-from time import sleep
+from time import sleep, time
 from types import TracebackType
 from typing import Any, Callable
 
@@ -93,6 +93,28 @@ def wait_for_and_do(
             if n > 20:
                 raise e
             n += 1
+
+
+def _wait_for_asset_in_table(
+    browser: Any, needle: str, timeout: float = 15.0
+) -> None:
+    """Poll the rendered asset-table partial for ``needle`` (typically
+    a filename) up to ``timeout`` seconds. Replaces brittle constant
+    ``sleep()`` calls between Selenium-driven uploads — the asset row
+    only appears after the HTMX form submit + table re-render finishes,
+    and that round-trip varies materially between local Docker and CI."""
+    deadline = time() + timeout
+    while time() < deadline:
+        try:
+            section = browser.find_by_id('asset-table').first
+        except Exception:
+            section = None
+        if section and needle in section.html:
+            return
+        sleep(0.5)
+    raise AssertionError(
+        f'Asset {needle!r} did not appear in #asset-table within {timeout}s'
+    )
 
 
 @pytest.fixture
@@ -262,20 +284,20 @@ def test_add_two_assets_upload(reset_assets: None) -> None:
                 'input[name="file_upload"]',
                 lambda file_input: file_input.fill(image_file),
             )
-            # Give the first onchange-triggered HTMX upload time to
-            # round-trip and re-render the asset-table partial before
-            # we drive a second .fill() on the same input. Without
-            # this gap CI runners (slower than local Docker) sometimes
-            # see the second submit race the first and only one Asset
-            # row gets persisted.
-            sleep(3)
+            # Wait on the first asset row landing in the asset-table
+            # partial (the 5 s poll + the explicit refresh-assets event
+            # both repaint into #asset-table) instead of sleeping a
+            # constant interval — fixed sleeps either run too long
+            # locally or too short on slower CI runners and reintroduce
+            # the flake the constant-sleep version was meant to fix.
+            _wait_for_asset_in_table(browser, 'standby.png')
+
             wait_for_and_do(
                 browser,
                 'input[name="file_upload"]',
                 lambda file_input: file_input.fill(video_file),
             )
-
-            sleep(5)
+            _wait_for_asset_in_table(browser, 'video.mov')
 
         assets = Asset.objects.all()
 
