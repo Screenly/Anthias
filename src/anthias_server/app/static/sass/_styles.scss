@@ -1,37 +1,74 @@
+// =============================================================================
+// _styles.scss — Anthias UI design system
+//
+// Layered as: tokens → base → components → page-specific bits. Component
+// classes (.btn, .surface, .asset-table, .modal-card, .schedule-chip,
+// .stat-card, .settings-section, .empty-state) are the public API the
+// templates compose from; nothing in here targets React-era hooks.
+// =============================================================================
+
 @import "tooltip";
 @import "sweetalert2-overrides";
 @import "form-overrides";
 
-// Transformations
-@mixin rotate($degrees) {
-  -webkit-transform: rotate($degrees);
-  -moz-transform: rotate($degrees);
-  -ms-transform: rotate($degrees);
-  -o-transform: rotate($degrees);
-  transform: rotate($degrees);
+// -----------------------------------------------------------------------------
+// 1. Design tokens
+// -----------------------------------------------------------------------------
+:root {
+  // Spacing — 4 px base, doubled tier above 16 px so layouts stay tidy.
+  --space-1: 0.25rem;   //  4
+  --space-2: 0.5rem;    //  8
+  --space-3: 0.75rem;   // 12
+  --space-4: 1rem;      // 16
+  --space-5: 1.5rem;    // 24
+  --space-6: 2rem;      // 32
+  --space-7: 3rem;      // 48
+  --space-8: 4rem;      // 64
+
+  // Radii
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  // Shadows — soft, layered, modern. Use --shadow-md as the default card lift.
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.06), 0 16px 48px rgba(0, 0, 0, 0.14);
+
+  // Transitions
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-fast: 120ms var(--ease-out);
+  --t-med: 200ms var(--ease-out);
+
+  // Colour roles. Backgrounds, surfaces, text — referenced by name through
+  // the rest of the file so tweaks happen in one place.
+  --color-bg: #{$anthias-purple-1};
+  --color-bg-elevated: #{$anthias-purple-3};
+  --color-surface: #ffffff;
+  --color-surface-soft: #fafafa;
+  --color-surface-tint: #f4f1f6;
+  --color-active: #{$anthias-purple-2};
+  --color-text: #1f002a;
+  --color-text-muted: #5e5868;
+  --color-text-on-dark: #ffffff;
+  --color-text-on-dark-muted: rgba(255, 255, 255, 0.65);
+  --color-text-on-dark-faint: rgba(255, 255, 255, 0.45);
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-on-dark: rgba(255, 255, 255, 0.12);
+  --color-accent: #{$anthias-yellow-3};
+  --color-accent-soft: #{$anthias-yellow-4};
+  --color-accent-text: #1f002a;
+  --color-danger: #dc3545;
+  --color-focus-ring: rgba(136, 25, 199, 0.35);
 }
 
-// Drop shadows
-@mixin box-shadow($shadow...) {
-  -webkit-box-shadow: $shadow;
-  -moz-box-shadow: $shadow;
-  box-shadow: $shadow;
-}
-
-// Selected text
-@mixin selection {
-    ::-moz-selection { @content; }
-    ::selection { @content; }
-}
-
-@include selection {
-  color: #000000;
-  background: $anthias-yellow-3;
-}
-
-$footer-height: 250px;
-$secondary-color: #6c757d;
-$base-line-height: 50px !default;
+// -----------------------------------------------------------------------------
+// 2. Base
+// -----------------------------------------------------------------------------
+::-moz-selection { color: #000; background: var(--color-accent); }
+::selection      { color: #000; background: var(--color-accent); }
 
 html {
   position: relative;
@@ -39,562 +76,819 @@ html {
 }
 
 body {
-  background-color: $anthias-purple-1;
-  margin-top: 95px;
-  margin-bottom: $footer-height + $base-line-height;
+  background-color: var(--color-bg);
+  margin: 0;
+  padding-top: 4.5rem;          // navbar height
   font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--color-text-on-dark);
+  -webkit-font-smoothing: antialiased;
 }
+
+main {
+  display: block;
+  min-height: calc(100vh - 4.5rem - 13rem);   // navbar + footer
+  padding: var(--space-6) 0 var(--space-7);
+}
+
+label { text-align: left; }
 
 @include tooltip;
 @include swal2-overrides;
 
-.form-control:focus {
-  border-color: $anthias-purple-5;
-}
-
-.content {
-  background-color: white;
-  border-left: 6px solid $anthias-yellow-3;
-  border-radius: 4px;
-  padding: 15px 0;
+// -----------------------------------------------------------------------------
+// 3. Typography helpers
+// -----------------------------------------------------------------------------
+.page-header {
+  font-size: 1.875rem;          // 30px
+  font-weight: 700;
+  letter-spacing: -0.02em;
   margin: 0;
+  color: var(--color-text-on-dark);
 }
 
-.active-content {
-  background-color: $anthias-purple-2;
-  color: #FFFFFF;
+.page-header-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
 
-  table {
-    // Bootstrap 5's .table cascade paints every cell using
-    // --bs-table-bg / --bs-table-color, with the bg defaulting to
-    // var(--bs-body-bg) (white) and the colour to a dark emphasis
-    // value. Override both variables here so the active-section
-    // cells inherit the purple bg + white text instead of rendering
-    // dark text on white tds (poor contrast even before the buttons
-    // disappeared into the white tile).
-    --bs-table-bg: transparent;
-    --bs-table-color: #FFFFFF;
-    color: #FFFFFF;
-
-    tbody > tr {
-      background-color: $anthias-purple-2;
-      color: #FFFFFF;
-    }
-
-    th {
-      color: rgba(255, 255, 255, 0.85);
-    }
+  .page-header-bar__title { flex: 1 1 auto; min-width: 0; }
+  .page-header-bar__lede {
+    margin: var(--space-1) 0 0;
+    color: var(--color-text-on-dark-muted);
+    font-size: 0.95rem;
   }
-
-  .btn {
-    color: #FFFFFF;
-    border-color: #FFFFFF;
-
-    &:hover {
-      background-color: #FFFFFF;
-      color: $anthias-purple-1;
-    }
+  .page-header-bar__actions {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
   }
 }
 
-.inactive-content {
-  border-left: 6px solid $anthias-yellow-3;
+.eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
+.muted-label {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
 
-@media (max-width: 1199px) {
-  .container {
-    max-width: 100%;
+// -----------------------------------------------------------------------------
+// 4. Surface (card) component
+// -----------------------------------------------------------------------------
+.surface {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-6);
+  color: var(--color-text);
+}
+
+.surface--active {
+  background: linear-gradient(180deg, #503061 0%, #{$anthias-purple-2} 100%);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-6);
+  color: var(--color-text-on-dark);
+}
+
+.surface--inset {
+  padding: var(--space-5);
+}
+
+.surface__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+
+  h2 {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .surface__count {
+    font-size: 0.75rem;
+    color: var(--color-text-on-dark-muted);
+    font-variant-numeric: tabular-nums;
   }
 }
+.surface .surface__header .surface__count { color: var(--color-text-muted); }
 
-.modal-dialog {
-  max-width: 580px;
-  margin-top: 70px;
-}
-
-label {
-  text-align: right;
-}
-
+// -----------------------------------------------------------------------------
+// 5. Buttons
+// -----------------------------------------------------------------------------
 .btn {
-  padding: 12px 24px 12px 24px;
+  --bs-btn-padding-x: var(--space-4);
+  --bs-btn-padding-y: 0.5625rem;
+  --bs-btn-font-weight: 600;
+  --bs-btn-border-radius: var(--radius-md);
+  --bs-btn-line-height: 1.4;
+  transition: transform var(--t-fast),
+              box-shadow var(--t-fast),
+              background-color var(--t-fast),
+              color var(--t-fast),
+              border-color var(--t-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
 
-  &:focus {
-    box-shadow: none !important;
+  &:focus,
+  &:focus-visible {
+    box-shadow: 0 0 0 3px var(--color-focus-ring) !important;
+    outline: none;
   }
-}
-
-.btn-long {
-  min-width: 13.125rem;
-  @extend .rounded-pill;
+  &:hover:not(:disabled):not(.disabled) { transform: translateY(-1px); }
+  &:active:not(:disabled):not(.disabled) { transform: translateY(0); }
 }
 
 .btn-primary {
-  background-color: $primary;
-  color: $dark;
-  font-weight: 600;
-}
+  background-image: $anthias-yellow-gradient;
+  background-color: $anthias-yellow-3;
+  border-color: transparent;
+  color: var(--color-accent-text);
+  font-weight: 700;
 
-.btn-outline-primary {
-  color: #000000;
-  background-color: #FFFFFF;
-  border-color: #FFFFFF;
-  transition: none;
-
-  &:hover {
+  &:hover, &:focus {
     background-image: $anthias-yellow-gradient;
+    color: var(--color-accent-text);
+    box-shadow: var(--shadow-md);
+  }
+  &:active { background-color: $anthias-yellow-2; }
+}
+
+.btn-light {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.06);
+  color: var(--color-text);
+  &:hover { background: #f8f9fa; color: var(--color-text); }
+}
+
+.btn-secondary {
+  background: var(--color-text);
+  color: #ffffff;
+  border-color: var(--color-text);
+  &:hover { background: #2d0a40; border-color: #2d0a40; color: #ffffff; }
+}
+
+.btn-danger {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: #ffffff;
+  &:hover { background: #c82333; border-color: #bd2130; color: #ffffff; }
+}
+
+.btn-link {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-weight: 600;
+  &:hover { color: var(--color-text); text-decoration: underline; }
+}
+
+// Icon-only square button (used for asset row actions and modal close).
+.btn-icon {
+  --bs-btn-padding-x: 0.5rem;
+  --bs-btn-padding-y: 0.5rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: none;
+  font-size: 0.95rem;
+}
+
+// On-dark outline (active section, navbar)
+.btn-outline-light {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.5);
+  background: transparent;
+  &:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: #ffffff;
+    color: #ffffff;
   }
 }
 
-#app {
-  .ActiveAssets, .InactiveAssets {
-    thead {
-      tr {
-        th {
-          text-align: center;
-        }
-      }
-    }
-
-  }
-
-  .ActiveAssets {
-    thead {
-      tr {
-        th {
-          background-color: $anthias-purple-2;
-          color: #FFFFFF;
-          border-bottom: 0.15rem solid #FFFFFF;
-        }
-      }
-    }
-
-    tbody {
-      tr {
-        td {
-          background-color: $anthias-purple-2;
-          color: #FFFFFF;
-        }
-      }
-    }
-  }
-
-  .InactiveAssets {
-    thead {
-      tr {
-        th {
-          border-bottom-width: 0.15rem;
-          color: $secondary-color;
-        }
-      }
-    }
-  }
-
-  .EmptyAssetMessage, #footer {
-    a {
-      text-decoration: none;
-
-      &:hover {
-        text-decoration: underline;
-      }
-    }
+// On-light outline (inactive section, settings)
+.btn-outline-dark {
+  color: var(--color-text);
+  border-color: rgba(0, 0, 0, 0.18);
+  background: transparent;
+  &:hover {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.4);
+    color: var(--color-text);
   }
 }
 
+.btn-pill {
+  --bs-btn-border-radius: var(--radius-pill);
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+// -----------------------------------------------------------------------------
+// 6. Asset table
+// -----------------------------------------------------------------------------
+.asset-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  --bs-table-bg: transparent;
+
+  thead th {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: var(--space-3) var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+  }
+
+  tbody td {
+    padding: var(--space-4) var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+    color: var(--color-text);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: rgba(0, 0, 0, 0.02); }
+}
+
+.surface--active .asset-table {
+  thead th {
+    color: var(--color-text-on-dark-muted);
+    border-bottom-color: var(--color-border-on-dark);
+  }
+  tbody td {
+    color: var(--color-text-on-dark);
+    border-bottom-color: var(--color-border-on-dark);
+  }
+  tbody tr:hover td { background: rgba(255, 255, 255, 0.04); }
+}
+
+.asset-cell-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+
+  .drag-handle {
+    cursor: grab;
+    opacity: 0.6;
+    transition: opacity var(--t-fast);
+    &:hover { opacity: 1; }
+    &:active { cursor: grabbing; }
+  }
+  .asset-cell-name__icon {
+    flex: none;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: var(--radius-md);
+    background: rgba(0, 0, 0, 0.05);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+  .asset-cell-name__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .asset-cell-name__primary {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+.surface--active .asset-cell-name {
+  .asset-cell-name__icon {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--color-text-on-dark-muted);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 7. Schedule chip
+// -----------------------------------------------------------------------------
+.schedule-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--color-text-muted);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+
+  i { font-size: 0.85em; opacity: 0.85; }
+}
+.surface--active .schedule-chip {
+  background: rgba(255, 225, 26, 0.16);
+  color: $anthias-yellow-3;
+  border-color: rgba(255, 225, 26, 0.32);
+}
+
+// -----------------------------------------------------------------------------
+// 8. Activity toggle (form switch) sizing
+// -----------------------------------------------------------------------------
+.form-switch.activity-toggle .form-check-input {
+  width: 2.4em;
+  height: 1.35em;
+  cursor: pointer;
+}
+.surface--active .form-check-input:not(:checked) {
+  background-color: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+// -----------------------------------------------------------------------------
+// 9. Action group (icon buttons) and processing label
+// -----------------------------------------------------------------------------
+.action-group {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.processing-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--color-text-muted);
+}
+.surface--active .processing-pill {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-on-dark-muted);
+}
+
+// -----------------------------------------------------------------------------
+// 10. Empty state
+// -----------------------------------------------------------------------------
+.empty-state {
+  text-align: center;
+  padding: var(--space-7) var(--space-4);
+  color: var(--color-text-muted);
+
+  .empty-state__icon {
+    font-size: 2rem;
+    opacity: 0.45;
+    margin-bottom: var(--space-2);
+  }
+  .empty-state__title {
+    font-weight: 600;
+    margin-bottom: var(--space-1);
+  }
+  .empty-state__description {
+    font-size: 0.9rem;
+    margin: 0 0 var(--space-3);
+  }
+  a { font-weight: 600; }
+}
+.surface--active .empty-state {
+  color: var(--color-text-on-dark-muted);
+  a { color: var(--color-accent); }
+}
+
+// -----------------------------------------------------------------------------
+// 11. Modal
+// -----------------------------------------------------------------------------
+.modal-overlay {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  position: fixed;
+  inset: 0;
+  padding: var(--space-5);
+  overflow-y: auto;
+  background: rgba(15, 0, 25, 0.55);
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+  z-index: 1050;
+}
+
+.modal-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 720px;
+  margin: auto;
+  overflow: hidden;
+  color: var(--color-text);
+  animation: modal-in 220ms var(--ease-out) both;
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal-card--sm { max-width: 480px; }
+
+.modal-card__header {
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+
+  h2 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+}
+
+.modal-card__close {
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  border: none;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+  &:hover { background: rgba(0, 0, 0, 0.1); color: var(--color-text); }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+  }
+}
+
+.modal-card__body  { padding: var(--space-6); }
+.modal-card__footer {
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-soft);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+// -----------------------------------------------------------------------------
+// 12. Forms
+// -----------------------------------------------------------------------------
+.form-control,
+.form-select {
+  border-radius: var(--radius-md);
+  border-color: var(--color-border);
+  &:focus {
+    border-color: $anthias-purple-5;
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+  }
+}
+.form-control[readonly],
+.form-control:disabled {
+  background-color: var(--color-surface-soft);
+}
+
+.form-floating > .form-control,
+.form-floating > .form-select {
+  height: 3.5rem;
+}
+.form-floating > label {
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.form-check-input {
+  cursor: pointer;
+  &:focus {
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+    border-color: $anthias-purple-5;
+  }
+  &:checked {
+    background-color: $anthias-yellow-3;
+    border-color: $anthias-yellow-2;
+  }
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  @media (max-width: 720px) { grid-template-columns: 1fr; }
+}
+
+.weekday-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+
+  .weekday {
+    --bg: var(--color-surface-tint);
+    --fg: var(--color-text);
+    border: 1px solid var(--color-border);
+    background: var(--bg);
+    color: var(--fg);
+    font-weight: 600;
+    padding: 0.4rem 0.85rem;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    user-select: none;
+    transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+    input { display: none; }
+  }
+  .weekday:has(input:checked) {
+    --bg: #{$anthias-yellow-3};
+    --fg: var(--color-accent-text);
+    border-color: $anthias-yellow-2;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 13. Stat card (system info)
+// -----------------------------------------------------------------------------
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+
+  @media (max-width: 1100px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 540px)  { grid-template-columns: 1fr; }
+}
+
+.stat-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+
+  .stat-card__label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+  .stat-card__value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    word-break: break-word;
+  }
+  .stat-card__meta {
+    font-size: 0.825rem;
+    color: var(--color-text-muted);
+  }
+  .stat-card__meta a { color: $anthias-purple-5; text-decoration: none; }
+  .stat-card__meta a:hover { text-decoration: underline; }
+}
+
+.stat-card--span-2 { grid-column: span 2; @media (max-width: 540px) { grid-column: span 1; } }
+
+// Memory mini-grid inside one stat card
+.stat-card__memory {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px var(--space-3);
+  font-size: 0.825rem;
+
+  dt { color: var(--color-text-muted); margin: 0; }
+  dd { margin: 0; font-weight: 600; }
+}
+
+// -----------------------------------------------------------------------------
+// 14. Settings sections
+// -----------------------------------------------------------------------------
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.settings-section {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-6);
+  color: var(--color-text);
+
+  > header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+  }
+
+  h2 {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .settings-section__lede {
+    margin: var(--space-1) 0 0;
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    max-width: 60ch;
+  }
+  .settings-section__actions {
+    display: flex;
+    gap: var(--space-2);
+  }
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+  &:last-child { border-bottom: none; }
+
+  .toggle-row__label {
+    font-weight: 600;
+    margin: 0;
+  }
+  .toggle-row__hint {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin: 2px 0 0;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 15. Navbar (component partial reuses these classes)
+// -----------------------------------------------------------------------------
+.navbar {
+  height: 4.5rem;
+  padding: 0;
+  background: rgba(15, 0, 25, 0.7) !important;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+
+  .navbar-brand {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    img { height: 28px; }
+  }
+
+  .nav-link {
+    color: rgba(255, 255, 255, 0.65) !important;
+    padding: 0.45rem 0.85rem !important;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    font-size: 0.95rem;
+    transition: color var(--t-fast), background var(--t-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+
+    i { font-size: 0.95em; opacity: 0.85; }
+
+    &:hover {
+      color: #ffffff !important;
+      background: rgba(255, 255, 255, 0.06);
+    }
+    &.active {
+      color: #ffffff !important;
+      background: rgba(255, 255, 255, 0.1);
+    }
+  }
+
+  .nav-item.update-available .nav-link {
+    color: $anthias-yellow-3 !important;
+    font-weight: 700;
+    &:hover { background: rgba(255, 225, 26, 0.1); }
+  }
+
+  .divider-vertical {
+    width: 1px;
+    height: 1.5rem;
+    background: rgba(255, 255, 255, 0.12);
+    margin: 0 var(--space-2);
+  }
+
+  .navbar-toggler {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    padding: 0.4rem 0.55rem;
+    &:focus { box-shadow: 0 0 0 3px var(--color-focus-ring); }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 16. Footer
+// -----------------------------------------------------------------------------
+$footer-height: 13rem;
+
+#footer {
+  margin-top: var(--space-8);
+  background: rgba(15, 0, 25, 0.5);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--color-text-on-dark-muted);
+
+  .links a {
+    color: var(--color-text-on-dark-muted);
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-decoration: none;
+    transition: color var(--t-fast);
+    &:hover { color: #ffffff; }
+  }
+
+  a.brand { color: var(--color-accent); text-decoration: none; }
+  a.brand:hover { color: #ffffff; }
+
+  .copy {
+    margin-top: var(--space-5);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--color-text-on-dark-faint);
+    font-size: 0.7rem;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 17. Splash page (kept compact, mostly unchanged behaviour)
+// -----------------------------------------------------------------------------
 .splash {
   background-color: $anthias-purple-1;
   background-size: 100% 100%;
   margin-top: 0;
+  padding-top: 0;
   font-size: calc((1.5vw + 1.5vh) / 2);
 
   .splash-body {
     background-color: $anthias-purple-3;
     color: white;
+    border-radius: var(--radius-lg);
   }
-
-  // Temporary fix splash page for uzbl.
-  .row {
-    display: block;
-  }
-
+  .row { display: block; }
   .logo-container {
     padding: 3vh 0;
     margin-bottom: 3vh;
-
-    img {
-      width: 75%;
-    }
+    img { width: 75%; }
   }
-
   @media (max-width: 767px) {
     .logo-container {
-      padding: 20px 0px 20px 0px;
-
-      img {
-        max-height: 100px;
-        width: auto;
-      }
-    }
-  }
-
-  .wireload-link {
-    span {
-      font-size: 16px;
-    }
-
-    a {
-      img {
-        width: 150px;
-      }
+      padding: 20px 0;
+      img { max-height: 100px; width: auto; }
     }
   }
 }
 
-.navbar {
-  padding: 5px 0px;
-  &.navbar-header {
-    height: 85px;
-  }
+// -----------------------------------------------------------------------------
+// 18. Misc
+// -----------------------------------------------------------------------------
+[hidden] { display: none !important; }
 
-  .container {
-    ul.nav li {
-      a {
-        padding: 10px 15px 10px;
-        color: #fff;
-        opacity: 0.5;
-
-        &.active, &:hover {
-          opacity: 1;
-          text-decoration: none;
-        }
-      }
-      &:last-child {
-        a {
-          padding-right: 0;
-        }
-      }
-    }
-
-    a {
-      &.brand {
-        text-shadow: 0 1px 0 #000;
-        padding: 4px 0px;
-
-        img {
-          height: 38px;
-        }
-
-        span {
-          font-size: 15px;
-        }
-      }
-    }
-
-    li.update-available {
-      a {
-        font-weight: bold;
-      }
-    }
-  }
-}
-
-#footer {
-  bottom: 0;
-  height: $footer-height;
-  position: absolute;
-  width: 100%;
-
-  .logo {
-    img {
-      max-height: 50px;
-    }
-  }
-
-  .links {
-    a {
-      color: rgba(255, 255, 255, 0.70);
-      font-weight: bold;
-      text-transform: uppercase;
-
-      &:hover {
-        text-decoration: none;
-        color: rgba(255, 255, 255, 0.90);
-      }
-    }
-  }
-
-  .copy {
-    border-top: 1px solid rgba(0, 0, 0, .1);
-    color: rgba(255, 255, 255, 0.70);
-    font-size: 0.7em;
-  }
-}
-
-h1.page-header {
-  padding-bottom: 9px;
-  margin: 20px 0 30px;
-  border-bottom: 1px solid #eee;
-  font-weight: bold;
-}
-
-section {
-  .header {
-    color: #fff;
-    padding: 6px 9px;
-    margin-bottom: 9px;
-    border-top-right-radius: 4px;
-    border-top-left-radius: 4px;
-    font-weight: bold;
-    text-shadow: #555 0px 1px 1px !important;
-    text-transform: uppercase;
-  }
-}
-
-.modal form {
-  margin-bottom: 0;
-}
-
-.asset-location .nav {
-  margin-bottom: 20px;
-}
-
-a.nav-link:not(.active) {
-  color: #A0A0A0;
-}
-
-#add-asset-nav-tabs {
-  border: 0px;
-
-  .nav-link {
-    border: 0px;
-  }
-
-  .active {
-    border-bottom: 3px solid $anthias-yellow-3;
-    font-weight: 600;
-  }
-}
-
-.popover {
-
-  .popover-header {
-    font-weight: bold;
-  }
-
-  .popover-delete-content {
-    width: 200px;
-    padding-bottom: 4em;
-  }
-
-}
-
-#request-error {
-  z-index: 10000;
-
-  .alert {
-    margin-left: 300px;
-    width: 500px;
-  }
-}
-
-#add-form {
-  .uri-text {
-    padding-top: 5px;
-    margin-left: 0px;
-    overflow: hidden;
-  }
-}
-
-.modal-footer {
-  .status {
-    float: left;
-    margin-top: 6px;
-  }
-
-  .progress {
-    margin-top: 4px;
-    margin-bottom: 0px;
-    width: 69%;
-  }
-}
-
-#backup-section {
-  .progress {
-    margin-top: 5px;
-    width: 50%;
-    margin-bottom: 5px;
-    display: inline-block;
-  }
-}
-
-#assets {
-  table td {
-    line-height: 32px;
-  }
-}
-
-input[name="file_upload"] {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  top: 0;
-  left: 0;
-}
-
-.bootstrap-timepicker table td input {
-  border: 1px solid #ced4da;
-  border-radius: .25rem;
-  width: 39px !important;
-}
-
-.duration {
-  .controls {
-    display: flex;
-    align-items: center;
-  }
-
-  input {
-    float: left;
-    width: 24%;
-    margin-right: 5px;
-  }
-}
-
-.invalid-feedback {
-  width: auto;
-}
-
-.form-actions {
-  padding: 20px 20px;
-  margin-top: 20px;
-  margin-bottom: 20px;
-  background-color: $anthias-purple-4;
-
-  a, span {
-    color: #1F002A;
-  }
-}
-
-@mixin ellip() {
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
-}
-
-.filedrop {
-  position: relative;
-  border: 3px dashed #ccc;
-  padding: 50px;
-  text-align: center;
-  color: #888;
-  border-radius: 7px;
-}
-
-#file_upload_label {
-  position: absolute;
-  top: 5px;
-  left: 105px;
-  right: 0;
-  @include ellip();
-}
-
-.accordion-inner {
-  padding: 9px 0 0 0;
-}
-
-.accordion-group {
+.alert {
+  border-radius: var(--radius-md);
   border: none;
+  box-shadow: var(--shadow-sm);
 }
 
-@mixin rota($angle,$time) {
-  @each $prefix in webkit moz ms o {
-    -#{$prefix}-transition: all $time linear;
-    -#{$prefix}-transform: rotate($angle);
-  }
-  transition: all $time linear;
-  transform: rotate($angle);
-}
-
-.unrotated {
-  @include rota(0deg, .15s);
-}
-
-.rotated {
-  @include rota(90deg, .15s);
-}
-
-.nocache-toggle {
-  padding-top: 0 !important;
-}
-
-.advanced-accordion {
-  display: none;
-}
-
-.modal-body {
-  max-height: 600px !important;
-}
-
-.ui-sortable-helper {
-  background: #fff;
-}
-
-.asset-icon {
-  margin-left: 5px;
-}
-
-#inactive-assets i.fa-grip-vertical {
-  display: none;
-}
-
-.asset_row_name {
-  @include ellip();
-  max-width: 290px;
-  min-width: 290px;
-  img {
-    cursor: move;
-  }
-}
-
-.asset_row_btns {
-  padding: 12px 8px 10px 8px !important;
-  white-space: nowrap;
-
-  button {
-    padding: 7px 10px;
-  }
-}
-
-.table {
-  td {
-    vertical-align: middle !important;
-  }
-
-  .processing-message {
-    width: 117px;
-    margin-bottom: 2px;
-  }
-}
-
-.terminal {
-  background-color: #000 !important;
-  border: none;
-  color: #00ff00;
-  padding: 8px;
-  font-family: courier new, Helvetica, Arial, sans-serif;
-  font-weight: bold;
-
-  &:hover, &:active, &:focus {
-    background-color: #000 !important;
-    border: none;
-    color: #00ff00;
-    padding: 8px;
-    font-family: courier new, Helvetica, Arial, sans-serif;
-    font-weight: bold;
-    box-shadow: none !important;
-    outline: 0 !important;
-    -webkit-appearance: none;
-  }
+.divider-vertical-inline {
+  display: inline-block;
+  width: 1px;
+  height: 1rem;
+  background: var(--color-border);
+  margin: 0 var(--space-2);
+  vertical-align: middle;
 }

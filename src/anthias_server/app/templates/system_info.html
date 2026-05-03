@@ -4,68 +4,52 @@
 
 {% block main %}
 <div class="container">
-  <div class="row py-2">
-    <div class="col-12">
-      <h4 class="page-header text-white"><b>System Info</b></h4>
+  <div class="page-header-bar">
+    <div class="page-header-bar__title">
+      <h1 class="page-header">System Info</h1>
+      <p class="page-header-bar__lede">Live diagnostics for this player. Refresh the page to update.</p>
     </div>
   </div>
-  <div class="row content">
-    <div class="col-12">
-      <table class="table mb-5">
-        <thead class="table-borderless">
-          <tr>
-            <th class="text-secondary fw-normal" scope="col" style="width: 20%">Option</th>
-            <th class="text-secondary fw-normal" scope="col">Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <th scope="row">Load Average</th>
-            <td>{{ loadavg }}</td>
-          </tr>
-          <tr>
-            <th scope="row">Free Space</th>
-            <td>{{ free_space }}</td>
-          </tr>
-          <tr>
-            <th scope="row">Memory</th>
-            <td>
-              <div>Total: <strong>{{ memory.total }} MiB</strong></div>
-              <div>Used: <strong>{{ memory.used }} MiB</strong></div>
-              <div>Free: <strong>{{ memory.free }} MiB</strong></div>
-              <div>Shared: <strong>{{ memory.shared }} MiB</strong></div>
-              <div>Buff: <strong>{{ memory.buff }} MiB</strong></div>
-              <div>Available: <strong>{{ memory.available }} MiB</strong></div>
-            </td>
-          </tr>
-          <tr>
-            <th scope="row">Uptime</th>
-            <td>{{ uptime.days }} days and {{ uptime.hours }} hours</td>
-          </tr>
-          <tr>
-            <th scope="row">Display Power (CEC)</th>
-            <td>{{ display_power|default:"None" }}</td>
-          </tr>
-          <tr>
-            <th scope="row">Device Model</th>
-            <td>{{ device_model }}</td>
-          </tr>
-          <tr>
-            <th scope="row">Anthias Version</th>
-            <td>
-              {% if anthias_version_master_link %}
-              <a href="{{ anthias_version_master_link }}" rel="noopener" target="_blank" class="text-dark">{{ anthias_version }}</a>
-              {% else %}
-              {{ anthias_version }}
-              {% endif %}
-            </td>
-          </tr>
-          <tr>
-            <th scope="row">MAC Address</th>
-            <td>{{ mac_address }}</td>
-          </tr>
-        </tbody>
-      </table>
+
+  <div class="stat-grid">
+    {% include "_stat_card.html" with label="Load Average (15m)" value=loadavg %}
+    {% include "_stat_card.html" with label="Free Disk" value=free_space %}
+    <div class="stat-card">
+      <p class="stat-card__label">Uptime</p>
+      <div class="stat-card__value">{{ uptime.days }}d</div>
+      <div class="stat-card__meta">and {{ uptime.hours }} hours</div>
+    </div>
+    {% include "_stat_card.html" with label="Display Power (CEC)" value=display_power|default:"None" %}
+
+    <div class="stat-card stat-card--span-2">
+      <p class="stat-card__label">Memory</p>
+      <dl class="stat-card__memory mt-1 mb-0">
+        <dt>Total</dt><dd>{{ memory.total }} MiB</dd>
+        <dt>Used</dt><dd>{{ memory.used }} MiB</dd>
+        <dt>Free</dt><dd>{{ memory.free }} MiB</dd>
+        <dt>Available</dt><dd>{{ memory.available }} MiB</dd>
+        <dt>Shared</dt><dd>{{ memory.shared }} MiB</dd>
+        <dt>Buff</dt><dd>{{ memory.buff }} MiB</dd>
+      </dl>
+    </div>
+
+    <div class="stat-card">
+      <p class="stat-card__label">Device model</p>
+      <div class="stat-card__value" style="font-size: 1.1rem">{{ device_model }}</div>
+    </div>
+
+    <div class="stat-card">
+      <p class="stat-card__label">Anthias version</p>
+      <div class="stat-card__value" style="font-size: 1rem; word-break: break-all">
+        {% if anthias_version_master_link %}
+        <a href="{{ anthias_version_master_link }}" rel="noopener" target="_blank">{{ anthias_version }}</a>
+        {% else %}{{ anthias_version }}{% endif %}
+      </div>
+    </div>
+
+    <div class="stat-card stat-card--span-2">
+      <p class="stat-card__label">MAC address</p>
+      <div class="stat-card__value" style="font-size: 1rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">{{ mac_address }}</div>
     </div>
   </div>
 </div>

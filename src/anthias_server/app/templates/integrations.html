@@ -4,63 +4,76 @@
 
 {% block main %}
 <div class="container">
-  <div class="row py-2">
-    <div class="col-12">
-      <h4 class="page-header text-white"><b>Integrations</b></h4>
+  <div class="page-header-bar">
+    <div class="page-header-bar__title">
+      <h1 class="page-header">Integrations</h1>
+      <p class="page-header-bar__lede">External platforms managing this player.</p>
     </div>
   </div>
 
   {% if is_balena %}
-  <div class="row content">
-    <div class="col-12">
-      <h5 class="text-white py-2">Balena</h5>
-      <table class="table mb-5">
-        <thead class="table-borderless">
-          <tr>
-            <th class="text-secondary fw-normal" scope="col" style="width: 20%">Option</th>
-            <th class="text-secondary fw-normal" scope="col" style="width: 35%">Value</th>
-            <th class="text-secondary fw-normal" scope="col">Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% if balena_device_name_at_init %}
-          <tr>
-            <th scope="row">Device Name</th>
-            <td>{{ balena_device_name_at_init }}</td>
-            <td>The name of the device on first initialisation.</td>
-          </tr>
-          {% endif %}
-          <tr>
-            <th scope="row">Device UUID</th>
-            <td>{{ balena_device_id }}</td>
-            <td>The unique identification number for the device. This is used to identify it on balena.</td>
-          </tr>
-          <tr>
-            <th scope="row">App ID</th>
-            <td>{{ balena_app_id }}</td>
-            <td>ID number of the balena application the device is associated.</td>
-          </tr>
-          <tr>
-            <th scope="row">App Name</th>
-            <td>{{ balena_app_name }}</td>
-            <td>The name of the balena application the device is associated with.</td>
-          </tr>
-          {% if balena_supervisor_version %}
-          <tr>
-            <th scope="row">Supervisor Version</th>
-            <td>{{ balena_supervisor_version }}</td>
-            <td>The current version of the supervisor agent running on the device.</td>
-          </tr>
-          {% endif %}
-          <tr>
-            <th scope="row">Host OS Version</th>
-            <td>{{ balena_host_os_version }}</td>
-            <td>The version of the host OS.</td>
-          </tr>
-        </tbody>
-      </table>
+  <section class="surface">
+    <header class="surface__header">
+      <h2><i class="bi bi-cloud me-2"></i>Balena</h2>
+    </header>
+
+    <table class="asset-table">
+      <thead>
+        <tr>
+          <th scope="col" style="width: 24%">Field</th>
+          <th scope="col" style="width: 36%">Value</th>
+          <th scope="col">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if balena_device_name_at_init %}
+        <tr>
+          <th scope="row">Device name</th>
+          <td>{{ balena_device_name_at_init }}</td>
+          <td class="muted-label">The name of the device on first initialisation.</td>
+        </tr>
+        {% endif %}
+        <tr>
+          <th scope="row">Device UUID</th>
+          <td style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace">{{ balena_device_id }}</td>
+          <td class="muted-label">Unique identifier used by Balena to identify this device.</td>
+        </tr>
+        <tr>
+          <th scope="row">App ID</th>
+          <td>{{ balena_app_id }}</td>
+          <td class="muted-label">ID number of the Balena application this device belongs to.</td>
+        </tr>
+        <tr>
+          <th scope="row">App name</th>
+          <td>{{ balena_app_name }}</td>
+          <td class="muted-label">Name of the Balena application this device belongs to.</td>
+        </tr>
+        {% if balena_supervisor_version %}
+        <tr>
+          <th scope="row">Supervisor version</th>
+          <td>{{ balena_supervisor_version }}</td>
+          <td class="muted-label">Current version of the supervisor agent on the device.</td>
+        </tr>
+        {% endif %}
+        <tr>
+          <th scope="row">Host OS version</th>
+          <td>{{ balena_host_os_version }}</td>
+          <td class="muted-label">Version of the host OS.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+  {% else %}
+  <section class="surface">
+    <div class="empty-state">
+      <div class="empty-state__icon"><i class="bi bi-puzzle"></i></div>
+      <p class="empty-state__title">No integrations connected</p>
+      <p class="empty-state__description">
+        This player isn't currently managed by an external platform. Integrations
+        like Balena will appear here when configured.
+      </p>
     </div>
-  </div>
+  </section>
   {% endif %}
 </div>
 {% endblock %}

@@ -9,14 +9,34 @@
 
 {% block main %}
 <div class="container" x-data="homeApp()" @asset-saved.window="closeModal()">
-  <div class="row py-2">
-    <div class="col-12">
-      <h4 class="page-header text-white"><b>Schedule Overview</b></h4>
+  <div class="page-header-bar">
+    <div class="page-header-bar__title">
+      <h1 class="page-header">Schedule Overview</h1>
+      <p class="page-header-bar__lede">
+        {% if player_name %}<strong>{{ player_name }}</strong> · {% endif %}Manage what plays on this screen.
+      </p>
+    </div>
+    <div class="page-header-bar__actions">
+      <form method="post" action="{% url 'anthias_app:assets_control' command='previous' %}" class="d-inline m-0">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-light btn-pill" title="Skip to previous asset">
+          <i class="bi bi-skip-backward-fill"></i><span class="d-none d-md-inline">Previous</span>
+        </button>
+      </form>
+      <form method="post" action="{% url 'anthias_app:assets_control' command='next' %}" class="d-inline m-0">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-light btn-pill" title="Skip to next asset">
+          <i class="bi bi-skip-forward-fill"></i><span class="d-none d-md-inline">Next</span>
+        </button>
+      </form>
+      <button type="button" id="add-asset-button" class="btn btn-primary btn-pill" @click="openAdd()">
+        <i class="bi bi-plus-lg"></i><span>Add Asset</span>
+      </button>
     </div>
   </div>
 
   {% if messages %}
-  <div class="row">
+  <div class="row mb-4">
     <div class="col-12">
       {% for message in messages %}
       <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
@@ -28,67 +48,44 @@
   </div>
   {% endif %}
 
-  <div class="row pb-3">
-    <div class="col-12 d-flex flex-wrap gap-2">
-      <form method="post" action="{% url 'anthias_app:assets_control' command='previous' %}" class="d-inline">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-light fw-bold rounded-pill px-4">
-          <i class="bi bi-skip-backward-fill me-1"></i> Previous Asset
-        </button>
-      </form>
-      <form method="post" action="{% url 'anthias_app:assets_control' command='next' %}" class="d-inline">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-light fw-bold rounded-pill px-4">
-          <i class="bi bi-skip-forward-fill me-1"></i> Next Asset
-        </button>
-      </form>
-      <button type="button" id="add-asset-button" class="btn btn-primary fw-bold rounded-pill px-4" @click="openAdd()">
-        <i class="bi bi-plus me-1"></i> Add Asset
-      </button>
-    </div>
-  </div>
-
   {% include "_asset_table.html" %}
 
   {% include "_asset_modal.html" %}
 
-  {% comment %} Delete confirmation overlay — replaces the native window.confirm()
-     dialog so the UX matches the reboot/shutdown modals on /settings.
-     Sets pendingDeleteId via openDelete() in the row template, and
-     POSTs to /assets/<id>/delete on confirm. {% endcomment %}
+  {% comment %} Delete confirmation overlay — shared shell with the reboot/shutdown
+     prompt on /settings (.modal-overlay + .modal-card pattern). {% endcomment %}
   <div
     x-show="pendingDeleteId"
     x-cloak
-    style="display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; right: 0; bottom: 0; padding: 1.5rem; background: rgba(0,0,0,.5); z-index: 1060"
+    class="modal-overlay"
+    style="z-index: 1060"
     @keydown.escape.window="pendingDeleteId = null"
     @click.self="pendingDeleteId = null"
   >
-    <div class="card shadow" style="max-width: 480px; width: 95%; margin: auto">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="m-0">Are you sure?</h5>
-        <button type="button" class="btn-close" @click="pendingDeleteId = null"></button>
+    <div class="modal-card modal-card--sm">
+      <div class="modal-card__header">
+        <h2>Delete asset?</h2>
+        <button type="button" class="modal-card__close" @click="pendingDeleteId = null" aria-label="Close">
+          <i class="bi bi-x-lg"></i>
+        </button>
       </div>
-      <div class="card-body">
-        <p class="mb-0">
-          Delete <strong x-text="pendingDeleteName || 'this asset'"></strong>?
+      <div class="modal-card__body">
+        <p class="m-0">
+          You're about to delete
+          <strong x-text="pendingDeleteName || 'this asset'"></strong>.
           This action cannot be undone.
         </p>
       </div>
-      <div class="card-footer text-end">
-        <button type="button" class="btn btn-secondary me-2" @click="pendingDeleteId = null">Cancel</button>
-        <form
-          method="post"
-          :action="`/assets/${pendingDeleteId}/delete`"
-          class="d-inline"
-        >
+      <div class="modal-card__footer">
+        <button type="button" class="btn btn-link" @click="pendingDeleteId = null">Cancel</button>
+        <form method="post" :action="`/assets/${pendingDeleteId}/delete`" class="d-inline m-0">
           {% csrf_token %}
-          <button type="submit" class="btn btn-danger confirm-delete">Delete</button>
+          <button type="submit" class="btn btn-danger confirm-delete">
+            <i class="bi bi-trash3"></i><span>Delete</span>
+          </button>
         </form>
       </div>
     </div>
   </div>
 </div>
-
-{% comment %} Per-page Alpine + Flatpickr glue lives in home.ts (loaded above
-   via {% block extra_head %}); this template only ships markup. {% endcomment %}
 {% endblock %}

@@ -2,45 +2,35 @@
 {% with sched=asset|schedule_label %}
 <tr data-asset-id="{{ asset.asset_id }}">
   <td>
-    <span class="d-inline-flex align-items-center gap-2">
-      {% if is_active %}<i class="bi bi-grip-vertical text-white-50 drag-handle" style="cursor: grab"></i>{% endif %}
-      {% if asset.mimetype == 'image' %}<i class="bi bi-image"></i>
-      {% elif asset.mimetype == 'video' %}<i class="bi bi-camera-video"></i>
-      {% else %}<i class="bi bi-globe"></i>
-      {% endif %}
-      <span style="max-width: 280px; display: inline-block; vertical-align: middle">
-        <span class="d-block text-truncate">{{ asset.name }}</span>
-        {% if sched %}
-        {% comment %} Schedule subtitle. Use text-warning on the active section's
-           purple bg (yellow-on-purple is high-contrast and matches
-           the page's accent palette); text-secondary on the inactive
-           white card stays muted as before. {% endcomment %}
-        <span
-          class="d-block text-truncate"
-          style="font-size: 0.85rem"
-          title="Schedule"
-        >
-          <i class="bi bi-calendar-week me-1 {% if is_active %}text-warning{% else %}text-secondary{% endif %}"></i>
-          <span class="{% if is_active %}text-warning{% else %}text-secondary{% endif %}">{{ sched }}</span>
-        </span>
+    <div class="asset-cell-name">
+      {% if is_active %}<i class="bi bi-grip-vertical drag-handle" title="Drag to reorder"></i>{% endif %}
+      <span class="asset-cell-name__icon">
+        {% if asset.mimetype == 'image' %}<i class="bi bi-image"></i>
+        {% elif asset.mimetype == 'video' %}<i class="bi bi-camera-video"></i>
+        {% else %}<i class="bi bi-globe"></i>
         {% endif %}
       </span>
-    </span>
+      <span class="asset-cell-name__title">
+        <span class="asset-cell-name__primary">{{ asset.name }}</span>
+        {% include "_schedule_chip.html" with text=sched %}
+      </span>
+    </div>
   </td>
   <td>{{ asset.start_date|asset_date }}</td>
   <td>{{ asset.end_date|asset_date }}</td>
   <td>{{ asset.duration }} sec</td>
   <td>
     {% if asset.is_processing %}
-    <small class="text-secondary">Processing</small>
+    <span class="processing-pill"><i class="bi bi-arrow-repeat"></i>Processing</span>
     {% else %}
     <form method="post" action="{% url 'anthias_app:assets_toggle' asset_id=asset.asset_id %}" class="m-0">
       {% csrf_token %}
-      <div class="form-check form-switch m-0">
+      <div class="form-check form-switch activity-toggle m-0">
         <input
           type="checkbox"
           class="form-check-input"
           {% if asset.is_enabled %}checked{% endif %}
+          aria-label="Toggle active"
           onchange="this.form.requestSubmit()"
         >
       </div>
@@ -48,22 +38,24 @@
     {% endif %}
   </td>
   <td class="text-end">
-    <div class="d-inline-flex gap-1">
-      <a href="{% url 'anthias_app:assets_download' asset_id=asset.asset_id %}" class="btn btn-outline-{% if is_active %}light{% else %}dark{% endif %} btn-sm" title="Download">
-        <i class="bi bi-download"></i>
-      </a>
-      <button type="button" class="btn btn-outline-{% if is_active %}light{% else %}dark{% endif %} btn-sm" title="Edit"
-        @click='openEdit({{ asset|to_json }})'>
-        <i class="bi bi-pencil"></i>
-      </button>
+    <div class="action-group">
+      <a
+        href="{% url 'anthias_app:assets_download' asset_id=asset.asset_id %}"
+        class="btn btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
+        title="Download"
+      ><i class="bi bi-download"></i></a>
       <button
         type="button"
-        class="btn btn-outline-{% if is_active %}light{% else %}dark{% endif %} btn-sm"
+        class="btn btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
+        title="Edit"
+        @click='openEdit({{ asset|to_json }})'
+      ><i class="bi bi-pencil"></i></button>
+      <button
+        type="button"
+        class="btn btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
         title="Delete"
         @click="openDelete('{{ asset.asset_id }}', '{{ asset.name|default:''|escapejs }}')"
-      >
-        <i class="bi bi-trash"></i>
-      </button>
+      ><i class="bi bi-trash3"></i></button>
     </div>
   </td>
 </tr>

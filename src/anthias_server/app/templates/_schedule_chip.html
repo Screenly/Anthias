@@ -1,0 +1,10 @@
+{# Reusable schedule-window chip for the asset row.
+   Vars:
+   - text : preformatted "Mon, Wed, Fri · 9:00 – 17:00" string. Empty / missing → no chip.
+#}
+{% if text %}
+<span class="schedule-chip" title="Schedule">
+  <i class="bi bi-calendar-week"></i>
+  <span>{{ text }}</span>
+</span>
+{% endif %}

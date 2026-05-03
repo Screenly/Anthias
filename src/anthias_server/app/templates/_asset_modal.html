@@ -1,228 +1,195 @@
+{% comment %} Combined Add / Edit asset modal. Mode is driven by the
+   parent homeApp() Alpine state (mode === 'add' | 'edit'); editAsset
+   carries the inline JSON blob produced by the to_json filter. Layout
+   uses the shared .modal-overlay + .modal-card pattern so the look
+   matches the delete + reboot/shutdown prompts. Each form renders its
+   own footer so the Save button is always inside the right <form>.
+{% endcomment %}
 <div
   x-show="mode"
   x-cloak
-  style="display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; right: 0; bottom: 0; padding: 1.5rem; overflow-y: auto; background: rgba(0,0,0,.5); z-index: 1050"
+  class="modal-overlay"
   @keydown.escape.window="closeModal()"
   @click.self="closeModal()"
 >
-  <div class="card shadow" style="max-width: 720px; width: 95%; margin: auto">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <h5 class="m-0" x-text="mode === 'edit' ? 'Edit Asset' : 'Add Asset'"></h5>
-      <button type="button" class="btn-close" @click="closeModal()"></button>
+  <div class="modal-card">
+    <div class="modal-card__header">
+      <h2 x-text="mode === 'edit' ? 'Edit asset' : 'Add asset'"></h2>
+      <button type="button" class="modal-card__close" @click="closeModal()" aria-label="Close">
+        <i class="bi bi-x-lg"></i>
+      </button>
     </div>
-    <div class="card-body">
-      <div x-show="mode === 'add'" x-data="{ tab: 'uri' }">
-          <ul class="nav nav-tabs mb-3">
-            <li class="nav-item">
-              <button type="button" id="tab-uri" class="nav-link" :class="tab === 'uri' && 'active'" @click="tab = 'uri'">URI</button>
-            </li>
-            <li class="nav-item">
-              <button type="button" class="nav-link upload-asset-tab" :class="tab === 'file' && 'active'" @click="tab = 'file'">File Upload</button>
-            </li>
-          </ul>
-          <form
-            x-show="tab === 'uri'"
-            method="post"
-            action="{% url 'anthias_app:assets_create' %}"
-            hx-post="{% url 'anthias_app:assets_create' %}"
-            hx-trigger="submit"
-            hx-target="#asset-table"
-            hx-swap="outerHTML"
-            hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); }"
-          >
-            {% csrf_token %}
-            <div class="form-floating mb-3">
-              <input type="url" class="form-control" id="add-uri" name="uri" placeholder="URL" required>
-              <label for="add-uri">URL</label>
-            </div>
-            <div class="text-end">
-              <button type="button" class="btn btn-link text-secondary" @click="closeModal()">Back to Assets</button>
-              <button type="submit" id="add-form" class="btn btn-primary">Save</button>
-            </div>
-          </form>
 
-          <form
-            x-show="tab === 'file'"
-            method="post"
-            action="{% url 'anthias_app:assets_upload' %}"
-            enctype="multipart/form-data"
-            hx-post="{% url 'anthias_app:assets_upload' %}"
-            hx-encoding="multipart/form-data"
-            hx-target="#asset-table"
-            hx-swap="outerHTML"
-          >
-            {% csrf_token %}
-            <div class="mb-3">
-              <label for="add-file" class="form-label">Upload a file (image / video)</label>
-              <input type="file" class="form-control" id="add-file" name="file_upload" accept="image/*,video/*" onchange="this.form.requestSubmit()">
-            </div>
-            <div class="text-end">
-              <button type="submit" class="btn btn-primary">Upload</button>
-            </div>
-          </form>
+    {# ---- Add mode ---- #}
+    <div x-show="mode === 'add'" x-data="{ tab: 'uri' }">
+      <div class="modal-card__body" style="padding-bottom: var(--space-3)">
+        <ul class="nav nav-tabs mb-4" id="add-asset-nav-tabs">
+          <li class="nav-item">
+            <button type="button" id="tab-uri"
+              class="nav-link" :class="tab === 'uri' && 'active'"
+              @click="tab = 'uri'">
+              <i class="bi bi-link-45deg me-1"></i>From URL
+            </button>
+          </li>
+          <li class="nav-item">
+            <button type="button"
+              class="nav-link upload-asset-tab" :class="tab === 'file' && 'active'"
+              @click="tab = 'file'">
+              <i class="bi bi-cloud-arrow-up me-1"></i>Upload file
+            </button>
+          </li>
+        </ul>
       </div>
 
-      <template x-if="mode === 'edit' && editAsset">
-        {% comment %} Both `:action` (form-native fallback) and `x-bind:hx-post`
-           (HTMX submit) are bound to the same /assets/<id>/update URL.
-           An empty hx-post would have made HTMX POST to the current
-           page (i.e. /, not the per-asset update endpoint); the
-           x-bind keeps the dynamic value flowing through Alpine so
-           HTMX picks up the right URL on every render. {% endcomment %}
-        <form
-          method="post"
-          :action="`/assets/${editAsset.asset_id}/update`"
-          x-bind:hx-post="`/assets/${editAsset.asset_id}/update`"
-          hx-target="#asset-table"
-          hx-swap="outerHTML"
-          hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); }"
-        >
-          {% csrf_token %}
+      <form
+        x-show="tab === 'uri'"
+        method="post"
+        action="{% url 'anthias_app:assets_create' %}"
+        hx-post="{% url 'anthias_app:assets_create' %}"
+        hx-target="#asset-table"
+        hx-swap="outerHTML"
+        hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); }"
+      >
+        {% csrf_token %}
+        <div class="modal-card__body" style="padding-top: 0">
+          <div class="form-floating mb-3">
+            <input type="url" class="form-control" id="add-uri" name="uri" placeholder="https://" required>
+            <label for="add-uri">Asset URL</label>
+          </div>
+          <p class="muted-label m-0">Web pages, hosted images, hosted videos, and streaming URLs are all supported.</p>
+        </div>
+        <div class="modal-card__footer">
+          <button type="button" class="btn btn-link" @click="closeModal()">Cancel</button>
+          <button type="submit" id="add-form" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i><span>Add asset</span>
+          </button>
+        </div>
+      </form>
+
+      <form
+        x-show="tab === 'file'"
+        method="post"
+        action="{% url 'anthias_app:assets_upload' %}"
+        enctype="multipart/form-data"
+        hx-post="{% url 'anthias_app:assets_upload' %}"
+        hx-encoding="multipart/form-data"
+        hx-target="#asset-table"
+        hx-swap="outerHTML"
+      >
+        {% csrf_token %}
+        <div class="modal-card__body" style="padding-top: 0">
+          <label
+            for="add-file"
+            class="d-block text-center"
+            style="border: 2px dashed var(--color-border); border-radius: var(--radius-lg); padding: var(--space-6); cursor: pointer; background: var(--color-surface-tint);"
+          >
+            <i class="bi bi-cloud-arrow-up" style="font-size: 2.25rem; opacity: 0.55"></i>
+            <p class="mb-1 fw-semibold mt-2">Click to choose a file</p>
+            <p class="muted-label mb-0">Image or video. Upload starts immediately.</p>
+            <input type="file" class="d-none" id="add-file" name="file_upload" accept="image/*,video/*" onchange="this.form.requestSubmit()">
+          </label>
+        </div>
+        <div class="modal-card__footer">
+          <button type="button" class="btn btn-link" @click="closeModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+
+    {# ---- Edit mode ---- #}
+    <template x-if="mode === 'edit' && editAsset">
+      <form
+        method="post"
+        :action="`/assets/${editAsset.asset_id}/update`"
+        x-bind:hx-post="`/assets/${editAsset.asset_id}/update`"
+        hx-target="#asset-table"
+        hx-swap="outerHTML"
+        hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); }"
+      >
+        {% csrf_token %}
+        <div class="modal-card__body">
           <div class="form-floating mb-3">
             <input type="text" class="form-control" id="edit-name" name="name" :value="editAsset.name" required>
             <label for="edit-name">Name</label>
           </div>
+
           <div class="form-floating mb-3">
             <input type="text" class="form-control" id="edit-uri" :value="editAsset.uri" readonly>
-            <label for="edit-uri">Asset Location</label>
+            <label for="edit-uri">Asset location</label>
           </div>
-          {% comment %} Mimetype is derived at create time from the URI /
-             file content; rendering it as a plain-text label here (vs an
-             <input readonly>) keeps the read-only intent visually obvious
-             so users don't try to click into it. assets_update ignores
-             any posted mimetype too to defend against a hand-crafted POST.
+
+          <div
+            class="d-flex justify-content-between align-items-center mb-4 pb-3"
+            style="border-bottom: 1px solid var(--color-border);"
+          >
+            <span class="muted-label">Type</span>
+            <span class="schedule-chip text-capitalize" x-text="editAsset.mimetype"></span>
+          </div>
+
+          <div class="form-grid mb-3">
+            <div class="form-floating">
+              <input type="text" class="form-control flatpickr-datetime" id="edit-start" name="start_date" :value="editAsset.start_date_local" required autocomplete="off">
+              <label for="edit-start">Start</label>
+            </div>
+            <div class="form-floating">
+              <input type="text" class="form-control flatpickr-datetime" id="edit-end" name="end_date" :value="editAsset.end_date_local" required autocomplete="off">
+              <label for="edit-end">End</label>
+            </div>
+          </div>
+
+          {% comment %} Video assets must stay at duration=0 (v2 API rule) — disable
+             the input for videos so the form POST omits it; the server defends too.
           {% endcomment %}
-          <div class="mb-3">
-            <label class="form-label small text-secondary mb-1">Type</label>
-            <div
-              class="fs-6 text-capitalize"
-              x-text="editAsset.mimetype"
-            ></div>
-          </div>
-          <div class="row">
-            <div class="col-6">
-              <div class="form-floating mb-3">
-                <input
-                  type="text"
-                  class="form-control flatpickr-datetime"
-                  id="edit-start"
-                  name="start_date"
-                  :value="editAsset.start_date_local"
-                  required
-                  autocomplete="off"
-                >
-                <label for="edit-start">Start</label>
-              </div>
-            </div>
-            <div class="col-6">
-              <div class="form-floating mb-3">
-                <input
-                  type="text"
-                  class="form-control flatpickr-datetime"
-                  id="edit-end"
-                  name="end_date"
-                  :value="editAsset.end_date_local"
-                  required
-                  autocomplete="off"
-                >
-                <label for="edit-end">End</label>
-              </div>
-            </div>
-          </div>
-          {% comment %} Video assets must stay at duration=0 (v2 API rule). Disable
-             the input for videos and clear its value so the form POST
-             omits it (browsers skip disabled fields), and the server
-             defends against a hand-crafted POST anyway. Image / web
-             assets are still freely editable. {% endcomment %}
-          <div class="form-floating mb-3">
-            <input
-              type="number"
-              class="form-control"
-              id="edit-duration"
-              name="duration"
+          <div class="form-floating mb-4">
+            <input type="number" class="form-control" id="edit-duration" name="duration"
               :value="editAsset.mimetype === 'video' ? 0 : editAsset.duration"
-              :disabled="editAsset.mimetype === 'video'"
-              required
-            >
+              :disabled="editAsset.mimetype === 'video'" required>
             <label for="edit-duration">Duration (seconds)</label>
           </div>
 
-          {% comment %} Schedule — day-of-week filter (1=Mon..7=Sun, ISO).
-             Hidden empty input lets the server detect "user unchecked
-             everything" vs "user submitted no widget at all"; the
-             schedule helper treats absence as "all days". {% endcomment %}
-          <div class="mb-3">
-            <label class="form-label">Schedule (days of week)</label>
-            <div class="d-flex flex-wrap gap-3">
-              <template x-for="d in [{n:1,l:'Mon'},{n:2,l:'Tue'},{n:3,l:'Wed'},{n:4,l:'Thu'},{n:5,l:'Fri'},{n:6,l:'Sat'},{n:7,l:'Sun'}]" :key="d.n">
-                <label class="form-check form-check-inline m-0">
-                  <input
-                    type="checkbox"
-                    class="form-check-input me-1"
-                    name="play_days"
-                    :value="d.n"
-                    :checked="(editAsset.play_days_list || []).includes(d.n)"
-                  >
-                  <span x-text="d.l"></span>
-                </label>
-              </template>
+          <p class="muted-label mb-2">Schedule</p>
+          <div class="weekday-picker mb-4">
+            <template x-for="d in [{n:1,l:'Mon'},{n:2,l:'Tue'},{n:3,l:'Wed'},{n:4,l:'Thu'},{n:5,l:'Fri'},{n:6,l:'Sat'},{n:7,l:'Sun'}]" :key="d.n">
+              <label class="weekday">
+                <input type="checkbox" name="play_days"
+                  :value="d.n"
+                  :checked="(editAsset.play_days_list || []).includes(d.n)">
+                <span x-text="d.l"></span>
+              </label>
+            </template>
+          </div>
+
+          <div class="form-grid mb-4">
+            <div class="form-floating">
+              <input type="text" class="form-control flatpickr-time" id="edit-play-from" name="play_time_from" :value="editAsset.play_time_from || ''" autocomplete="off">
+              <label for="edit-play-from">Play from</label>
+            </div>
+            <div class="form-floating">
+              <input type="text" class="form-control flatpickr-time" id="edit-play-to" name="play_time_to" :value="editAsset.play_time_to || ''" autocomplete="off">
+              <label for="edit-play-to">Play until</label>
             </div>
           </div>
 
-          {% comment %} Time-of-day window. Both endpoints set or both
-             cleared — _validate_time_window in the API rejects partial
-             windows, so the matching server view does the same. {% endcomment %}
-          <div class="row">
-            <div class="col-6">
-              <div class="form-floating mb-3">
-                <input
-                  type="text"
-                  class="form-control flatpickr-time"
-                  id="edit-play-from"
-                  name="play_time_from"
-                  :value="editAsset.play_time_from || ''"
-                  autocomplete="off"
-                >
-                <label for="edit-play-from">Play from</label>
-              </div>
+          <div class="d-flex flex-wrap gap-4">
+            <div class="form-check form-switch m-0">
+              <input type="hidden" name="nocache" value="false">
+              <input type="checkbox" class="form-check-input" id="edit-nocache" name="nocache" value="true" :checked="editAsset.nocache">
+              <label class="form-check-label ms-2" for="edit-nocache">No cache</label>
             </div>
-            <div class="col-6">
-              <div class="form-floating mb-3">
-                <input
-                  type="text"
-                  class="form-control flatpickr-time"
-                  id="edit-play-to"
-                  name="play_time_to"
-                  :value="editAsset.play_time_to || ''"
-                  autocomplete="off"
-                >
-                <label for="edit-play-to">Play until</label>
-              </div>
+            <div class="form-check form-switch m-0">
+              <input type="hidden" name="skip_asset_check" value="false">
+              <input type="checkbox" class="form-check-input" id="edit-skip" name="skip_asset_check" value="true" :checked="editAsset.skip_asset_check">
+              <label class="form-check-label ms-2" for="edit-skip">Skip asset check</label>
             </div>
           </div>
+        </div>
 
-          <div class="row">
-            <div class="col-6">
-              <div class="form-check form-switch">
-                <input type="hidden" name="nocache" value="false">
-                <input type="checkbox" class="form-check-input" id="edit-nocache" name="nocache" value="true" :checked="editAsset.nocache">
-                <label class="form-check-label" for="edit-nocache">No cache</label>
-              </div>
-            </div>
-            <div class="col-6">
-              <div class="form-check form-switch">
-                <input type="hidden" name="skip_asset_check" value="false">
-                <input type="checkbox" class="form-check-input" id="edit-skip" name="skip_asset_check" value="true" :checked="editAsset.skip_asset_check">
-                <label class="form-check-label" for="edit-skip">Skip asset check</label>
-              </div>
-            </div>
-          </div>
-          <div class="text-end">
-            <button type="button" class="btn btn-link text-secondary" @click="closeModal()">Cancel</button>
-            <button type="submit" class="btn btn-primary">Save</button>
-          </div>
-        </form>
-      </template>
-    </div>
+        <div class="modal-card__footer">
+          <button type="button" class="btn btn-link" @click="closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check2"></i><span>Save changes</span>
+          </button>
+        </div>
+      </form>
+    </template>
   </div>
 </div>

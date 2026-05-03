@@ -5,220 +5,231 @@
 
 {% block main %}
 <div class="container">
-  <div class="row py-2">
-    <div class="col-12">
-      <h4 class="page-header text-white"><b>Settings</b></h4>
+  <div class="page-header-bar">
+    <div class="page-header-bar__title">
+      <h1 class="page-header">Settings</h1>
+      <p class="page-header-bar__lede">Configure how this player behaves and what it should display.</p>
     </div>
   </div>
 
   {% if messages %}
-  <div class="row">
-    <div class="col-12">
-      {% for message in messages %}
-      <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
-        {{ message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close" onclick="this.parentElement.remove()"></button>
-      </div>
-      {% endfor %}
+  <div class="mb-4">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+      {{ message }}
+      <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
     </div>
+    {% endfor %}
   </div>
   {% endif %}
 
-  <div class="row content">
-    <div class="col-12">
-      <form
-        method="post"
-        action="{% url 'anthias_app:settings_save' %}"
-        x-data="{ authBackend: '{{ auth_backend }}' }"
-      >
-        {% csrf_token %}
-        <div class="card mb-4">
-          <div class="card-body">
-            <div class="row">
-              <div class="col-md-6">
-                <div class="form-floating mb-3">
-                  <input type="text" class="form-control shadow-none" id="player_name" name="player_name" value="{{ player_name }}" placeholder="Player name">
-                  <label for="player_name">Player name</label>
-                </div>
+  <form
+    method="post"
+    action="{% url 'anthias_app:settings_save' %}"
+    x-data="{ authBackend: '{{ auth_backend }}' }"
+    class="settings-stack"
+  >
+    {% csrf_token %}
 
-                <div class="row">
-                  <div class="col-6">
-                    <div class="form-floating mb-3">
-                      <input type="number" class="form-control shadow-none" id="default_duration" name="default_duration" value="{{ default_duration }}" placeholder="Default duration (seconds)" required>
-                      <label for="default_duration">Default duration (seconds)</label>
-                    </div>
-                  </div>
-                  <div class="col-6">
-                    <div class="form-floating mb-3">
-                      <input type="number" class="form-control shadow-none" id="default_streaming_duration" name="default_streaming_duration" value="{{ default_streaming_duration }}" placeholder="Default streaming duration (seconds)" required>
-                      <label for="default_streaming_duration">Default streaming duration (seconds)</label>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="form-floating mb-3">
-                  <select class="form-select shadow-none" id="audio_output" name="audio_output">
-                    <option value="hdmi" {% if audio_output == 'hdmi' %}selected{% endif %}>HDMI</option>
-                    {% if not is_pi5 %}
-                    <option value="local" {% if audio_output == 'local' %}selected{% endif %}>3.5mm jack</option>
-                    {% endif %}
-                  </select>
-                  <label for="audio_output">Audio output</label>
-                </div>
-
-                <div class="form-floating mb-3">
-                  <select class="form-select shadow-none" id="date_format" name="date_format">
-                    {% for value, label in date_format_options %}
-                    <option value="{{ value }}" {% if date_format == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                  </select>
-                  <label for="date_format">Date format</label>
-                </div>
-
-                <div class="form-floating mb-3">
-                  <select class="form-select shadow-none" id="auth_backend" name="auth_backend" x-model="authBackend">
-                    <option value="">Disabled</option>
-                    <option value="auth_basic" {% if auth_backend == 'auth_basic' %}selected{% endif %}>Basic</option>
-                  </select>
-                  <label for="auth_backend">Authentication</label>
-                </div>
-
-                {% if has_saved_basic_auth %}
-                <div class="form-floating mb-3" x-show="authBackend === 'auth_basic' || '{{ auth_backend }}' === 'auth_basic'">
-                  <input type="password" class="form-control shadow-none" id="current_password" name="current_password" placeholder="Current Password" autocomplete="current-password">
-                  <label for="current_password">Current Password</label>
-                </div>
-                {% endif %}
-
-                <template x-if="authBackend === 'auth_basic'">
-                  <div>
-                    <div class="form-floating mb-3">
-                      <input type="text" class="form-control shadow-none" id="user" name="user" value="{{ username }}" placeholder="User" autocomplete="username">
-                      <label for="user">User</label>
-                    </div>
-                    <div class="row">
-                      <div class="col-6">
-                        <div class="form-floating mb-3">
-                          <input type="password" class="form-control shadow-none" id="password" name="password" placeholder="Password" autocomplete="new-password">
-                          <label for="password">Password</label>
-                        </div>
-                      </div>
-                      <div class="col-6">
-                        <div class="form-floating mb-3">
-                          <input type="password" class="form-control shadow-none" id="password_2" name="password_2" placeholder="Confirm Password" autocomplete="new-password">
-                          <label for="password_2">Confirm Password</label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </template>
-              </div>
-
-              <div class="col-md-6">
-                {% include "_settings_toggle.html" with name="show_splash" label="Show splash screen" checked=show_splash %}
-                {% include "_settings_toggle.html" with name="default_assets" label="Default assets" checked=default_assets %}
-                {% include "_settings_toggle.html" with name="shuffle_playlist" label="Shuffle playlist" checked=shuffle_playlist %}
-                {% include "_settings_toggle.html" with name="use_24_hour_clock" label="Use 24-hour clock" checked=use_24_hour_clock %}
-                {% include "_settings_toggle.html" with name="debug_logging" label="Debug logging" checked=debug_logging %}
-              </div>
-            </div>
-
-            <div class="row">
-              <div class="col-12 text-end">
-                <button type="submit" class="btn btn-primary">Save Settings</button>
-              </div>
-            </div>
-          </div>
+    {# ===== Player identity ===== #}
+    <section class="settings-section">
+      <header>
+        <div>
+          <h2>Player identity</h2>
+          <p class="settings-section__lede">A friendly name shown in this UI and in the page title.</p>
         </div>
-      </form>
+      </header>
+      <div class="form-floating">
+        <input type="text" class="form-control" id="player_name" name="player_name" value="{{ player_name }}" placeholder="Player name">
+        <label for="player_name">Player name</label>
+      </div>
+    </section>
 
-      <div id="upgrade-section"></div>
+    {# ===== Display & playback ===== #}
+    <section class="settings-section">
+      <header>
+        <div>
+          <h2>Display & playback</h2>
+          <p class="settings-section__lede">Default durations, audio, and date format.</p>
+        </div>
+      </header>
 
-      <h4 class="page-header text-white py-2"><b>Backup</b></h4>
-      <div class="card mb-4">
-        <div class="card-body">
-          <div class="row align-items-center">
-            <div class="col-12 text-end">
-              <form
-                method="post"
-                action="{% url 'anthias_app:settings_backup' %}"
-                class="d-inline"
-              >
-                {% csrf_token %}
-                <button type="submit" id="btn-backup" class="btn btn-secondary">Get Backup</button>
-              </form>
-
-              <form
-                method="post"
-                action="{% url 'anthias_app:settings_recover' %}"
-                enctype="multipart/form-data"
-                class="d-inline"
-                x-data="{ filename: '' }"
-              >
-                {% csrf_token %}
-                <input
-                  type="file"
-                  name="backup_upload"
-                  id="backup_upload"
-                  accept=".tar.gz,.tgz,application/x-tar,application/gzip"
-                  hidden
-                  @change="filename = $event.target.files[0]?.name || ''; if (filename) $event.target.form.requestSubmit()"
-                >
-                <button
-                  type="button"
-                  id="btn-upload"
-                  class="btn btn-primary"
-                  @click="document.getElementById('backup_upload').click()"
-                >
-                  Upload and Recover
-                </button>
-              </form>
-            </div>
-          </div>
+      <div class="form-grid mb-4">
+        <div class="form-floating">
+          <input type="number" class="form-control" id="default_duration" name="default_duration" value="{{ default_duration }}" placeholder=" " required>
+          <label for="default_duration">Default duration (seconds)</label>
+        </div>
+        <div class="form-floating">
+          <input type="number" class="form-control" id="default_streaming_duration" name="default_streaming_duration" value="{{ default_streaming_duration }}" placeholder=" " required>
+          <label for="default_streaming_duration">Default streaming duration (seconds)</label>
         </div>
       </div>
 
-      <h4 class="page-header text-white py-2"><b>System Controls</b></h4>
-      <div class="card mb-5" x-data="{ pending: null }">
-        <div class="card-body">
-          <div class="row align-items-center">
-            <div class="col-12 text-end">
-              <button type="button" class="btn btn-danger me-2" @click="pending = 'reboot'">Reboot</button>
-              <button type="button" class="btn btn-danger" @click="pending = 'shutdown'">Shutdown</button>
-            </div>
-          </div>
+      <div class="form-grid mb-4">
+        <div class="form-floating">
+          <select class="form-select" id="audio_output" name="audio_output">
+            <option value="hdmi" {% if audio_output == 'hdmi' %}selected{% endif %}>HDMI</option>
+            {% if not is_pi5 %}
+            <option value="local" {% if audio_output == 'local' %}selected{% endif %}>3.5mm jack</option>
+            {% endif %}
+          </select>
+          <label for="audio_output">Audio output</label>
+        </div>
 
-          <div
-            x-show="pending"
-            x-cloak
-            style="display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; right: 0; bottom: 0; padding: 1.5rem; overflow-y: auto; background: rgba(0,0,0,.5); z-index: 1050"
-            @keydown.escape.window="pending = null"
-            @click.self="pending = null"
-          >
-            <div class="card shadow" style="max-width: 500px; width: 95%; margin: auto">
-              <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="m-0">Are you sure?</h5>
-                <button type="button" class="btn-close" @click="pending = null"></button>
-              </div>
-              <div class="card-body">
-                <p x-text="pending === 'reboot' ? 'Are you sure you want to reboot your device?' : 'Are you sure you want to shutdown your device?'"></p>
-              </div>
-              <div class="card-footer text-end">
-                <button type="button" class="btn btn-secondary me-2" @click="pending = null">Cancel</button>
-                <form
-                  method="post"
-                  :action="pending === 'reboot' ? '{% url 'anthias_app:settings_reboot' %}' : '{% url 'anthias_app:settings_shutdown' %}'"
-                  class="d-inline"
-                >
-                  {% csrf_token %}
-                  <button type="submit" class="btn btn-danger" x-text="pending === 'reboot' ? 'Reboot' : 'Shutdown'"></button>
-                </form>
-              </div>
+        <div class="form-floating">
+          <select class="form-select" id="date_format" name="date_format">
+            {% for value, label in date_format_options %}
+            <option value="{{ value }}" {% if date_format == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <label for="date_format">Date format</label>
+        </div>
+      </div>
+
+      <div>
+        {% include "_settings_toggle.html" with name="show_splash" label="Show splash screen" hint="Display the device's IP address on screen at boot." checked=show_splash %}
+        {% include "_settings_toggle.html" with name="default_assets" label="Include default sample assets" hint="Auto-add the bundled sample assets to a fresh playlist." checked=default_assets %}
+        {% include "_settings_toggle.html" with name="shuffle_playlist" label="Shuffle playlist" hint="Randomise the play order on every loop." checked=shuffle_playlist %}
+        {% include "_settings_toggle.html" with name="use_24_hour_clock" label="Use 24-hour clock" hint="Display times in 24-hour format across the UI." checked=use_24_hour_clock %}
+        {% include "_settings_toggle.html" with name="debug_logging" label="Debug logging" hint="Verbose viewer logs. Leave off unless you're chasing a problem." checked=debug_logging %}
+      </div>
+    </section>
+
+    {# ===== Authentication ===== #}
+    <section class="settings-section">
+      <header>
+        <div>
+          <h2>Authentication</h2>
+          <p class="settings-section__lede">Restrict access to this management UI. Leave disabled on a trusted LAN.</p>
+        </div>
+      </header>
+
+      <div class="form-floating mb-3">
+        <select class="form-select" id="auth_backend" name="auth_backend" x-model="authBackend">
+          <option value="">Disabled</option>
+          <option value="auth_basic" {% if auth_backend == 'auth_basic' %}selected{% endif %}>Basic auth</option>
+        </select>
+        <label for="auth_backend">Method</label>
+      </div>
+
+      {% if has_saved_basic_auth %}
+      <div class="form-floating mb-3" x-show="authBackend === 'auth_basic' || '{{ auth_backend }}' === 'auth_basic'">
+        <input type="password" class="form-control" id="current_password" name="current_password" placeholder=" " autocomplete="current-password">
+        <label for="current_password">Current password</label>
+      </div>
+      {% endif %}
+
+      <template x-if="authBackend === 'auth_basic'">
+        <div>
+          <div class="form-floating mb-3">
+            <input type="text" class="form-control" id="user" name="user" value="{{ username }}" placeholder=" " autocomplete="username">
+            <label for="user">Username</label>
+          </div>
+          <div class="form-grid">
+            <div class="form-floating">
+              <input type="password" class="form-control" id="password" name="password" placeholder=" " autocomplete="new-password">
+              <label for="password">New password</label>
+            </div>
+            <div class="form-floating">
+              <input type="password" class="form-control" id="password_2" name="password_2" placeholder=" " autocomplete="new-password">
+              <label for="password_2">Confirm new password</label>
             </div>
           </div>
+        </div>
+      </template>
+    </section>
+
+    <div class="d-flex justify-content-end">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check2"></i><span>Save settings</span>
+      </button>
+    </div>
+  </form>
+
+  <div id="upgrade-section"></div>
+
+  {# ===== Backup & restore ===== #}
+  <section class="settings-section mt-4">
+    <header>
+      <div>
+        <h2>Backup & restore</h2>
+        <p class="settings-section__lede">Download a tarball of your settings and asset metadata, or recover from one.</p>
+      </div>
+      <div class="settings-section__actions" x-data>
+        <form method="post" action="{% url 'anthias_app:settings_backup' %}" class="d-inline m-0">
+          {% csrf_token %}
+          <button type="submit" id="btn-backup" class="btn btn-outline-dark">
+            <i class="bi bi-download"></i><span>Get backup</span>
+          </button>
+        </form>
+        <form method="post" action="{% url 'anthias_app:settings_recover' %}" enctype="multipart/form-data" class="d-inline m-0">
+          {% csrf_token %}
+          <input
+            type="file"
+            name="backup_upload"
+            id="backup_upload"
+            accept=".tar.gz,.tgz,application/x-tar,application/gzip"
+            hidden
+            @change="if ($event.target.files.length) $event.target.form.requestSubmit()"
+          >
+          <button type="button" id="btn-upload" class="btn btn-primary"
+            @click="document.getElementById('backup_upload').click()">
+            <i class="bi bi-upload"></i><span>Upload &amp; recover</span>
+          </button>
+        </form>
+      </div>
+    </header>
+  </section>
+
+  {# ===== System controls ===== #}
+  <section class="settings-section mt-4" x-data="{ pending: null }">
+    <header>
+      <div>
+        <h2>System controls</h2>
+        <p class="settings-section__lede">Reboot or power down the device. Both prompt for confirmation.</p>
+      </div>
+      <div class="settings-section__actions">
+        <button type="button" class="btn btn-outline-dark" @click="pending = 'reboot'">
+          <i class="bi bi-arrow-clockwise"></i><span>Reboot</span>
+        </button>
+        <button type="button" class="btn btn-danger" @click="pending = 'shutdown'">
+          <i class="bi bi-power"></i><span>Shutdown</span>
+        </button>
+      </div>
+    </header>
+
+    <div
+      x-show="pending"
+      x-cloak
+      class="modal-overlay"
+      @keydown.escape.window="pending = null"
+      @click.self="pending = null"
+    >
+      <div class="modal-card modal-card--sm">
+        <div class="modal-card__header">
+          <h2 x-text="pending === 'reboot' ? 'Reboot device?' : 'Shut down device?'"></h2>
+          <button type="button" class="modal-card__close" @click="pending = null" aria-label="Close">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="modal-card__body">
+          <p class="m-0" x-text="pending === 'reboot'
+            ? 'The device will reboot now. The screen will go dark for about a minute.'
+            : 'The device will power off now. You may need to unplug and replug to bring it back up.'"></p>
+        </div>
+        <div class="modal-card__footer">
+          <button type="button" class="btn btn-link" @click="pending = null">Cancel</button>
+          <form
+            method="post"
+            :action="pending === 'reboot' ? '{% url 'anthias_app:settings_reboot' %}' : '{% url 'anthias_app:settings_shutdown' %}'"
+            class="d-inline m-0"
+          >
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger" x-text="pending === 'reboot' ? 'Reboot now' : 'Shut down'"></button>
+          </form>
         </div>
       </div>
     </div>
-  </div>
+  </section>
 </div>
 {% endblock %}

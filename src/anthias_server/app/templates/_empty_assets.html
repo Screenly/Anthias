@@ -1,4 +1,16 @@
-<p class="{% if is_active %}text-white-50{% else %}text-secondary{% endif %} m-0">
-  Currently, there are no assets.
-  <a href="#" class="text-{% if is_active %}primary{% else %}info{% endif %}" @click.prevent="openAdd()">Add asset</a> now.
-</p>
+<div class="empty-state">
+  <div class="empty-state__icon">
+    <i class="bi bi-{% if is_active %}collection-play{% else %}archive{% endif %}"></i>
+  </div>
+  <p class="empty-state__title">
+    {% if is_active %}No active assets{% else %}No inactive assets{% endif %}
+  </p>
+  <p class="empty-state__description">
+    {% if is_active %}Assets you toggle on appear here and play on the screen.
+    {% else %}Assets you toggle off — or that haven't been enabled yet — appear here.
+    {% endif %}
+  </p>
+  <a href="#" @click.prevent="openAdd()">
+    <i class="bi bi-plus-lg me-1"></i>Add an asset
+  </a>
+</div>

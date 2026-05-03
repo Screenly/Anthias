@@ -1,21 +1,21 @@
 {% load static %}
 <nav
-  class="navbar navbar-dark navbar-expand-lg fixed-top bg-dark"
+  class="navbar navbar-dark navbar-expand-lg fixed-top"
   x-data="{ open: false }"
 >
   <div class="container">
-    <a href="{% url 'anthias_app:home' %}" class="navbar-brand py-3">
+    <a href="{% url 'anthias_app:home' %}" class="navbar-brand">
       <img src="{% static 'img/logo-full.svg' %}" alt="Anthias">
     </a>
 
     <button
-      class="navbar-toggler shadow-none border-2 border-light"
+      class="navbar-toggler"
       type="button"
       :aria-expanded="open"
       aria-label="Toggle navigation"
       @click="open = !open"
     >
-      <i class="bi bi-list text-light"></i>
+      <i class="bi bi-list"></i>
     </button>
 
     <div
@@ -23,7 +23,7 @@
       :class="{ 'show': open }"
       id="navbarNav"
     >
-      <ul class="navbar-nav ms-auto">
+      <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-1">
         {% if not up_to_date and not is_balena %}
         <li class="nav-item update-available">
           <a
@@ -31,8 +31,8 @@
             class="nav-link"
             @click="open = false"
           >
-            <span class="pe-1"><i class="bi bi-arrow-down-circle-fill"></i></span>
-            <span class="d-none d-lg-inline">Update Available</span>
+            <i class="bi bi-arrow-down-circle-fill"></i>
+            <span class="d-none d-lg-inline">Update available</span>
             <span class="d-lg-none">Update</span>
           </a>
         </li>
@@ -44,9 +44,8 @@
             class="nav-link {% if active_nav == 'home' %}active{% endif %}"
             @click="open = false"
           >
-            <span class="pe-1"><i class="bi bi-clock"></i></span>
-            <span class="d-none d-lg-inline">Schedule Overview</span>
-            <span class="d-lg-none">Schedule</span>
+            <i class="bi bi-collection-play"></i>
+            <span>Schedule</span>
           </a>
         </li>
 
@@ -57,8 +56,8 @@
             class="nav-link {% if active_nav == 'integrations' %}active{% endif %}"
             @click="open = false"
           >
-            <span class="pe-1"><i class="bi bi-plus-square"></i></span>
-            Integrations
+            <i class="bi bi-puzzle"></i>
+            <span>Integrations</span>
           </a>
         </li>
         {% endif %}
@@ -69,13 +68,13 @@
             class="nav-link {% if active_nav == 'settings' %}active{% endif %}"
             @click="open = false"
           >
-            <span class="pe-1"><i class="bi bi-gear-fill"></i></span>
-            Settings
+            <i class="bi bi-gear"></i>
+            <span>Settings</span>
           </a>
         </li>
 
-        <li class="nav-item d-none d-lg-block">
-          <div class="divider-vertical"></div>
+        <li class="nav-item d-none d-lg-block" aria-hidden="true">
+          <span class="divider-vertical"></span>
         </li>
 
         <li class="nav-item">
@@ -84,9 +83,8 @@
             class="nav-link {% if active_nav == 'system-info' %}active{% endif %}"
             @click="open = false"
           >
-            <span class="pe-1"><i class="bi bi-list-task"></i></span>
-            <span class="d-none d-lg-inline">System Info</span>
-            <span class="d-lg-none">System Info</span>
+            <i class="bi bi-activity"></i>
+            <span>System info</span>
           </a>
         </li>
       </ul>

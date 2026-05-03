@@ -67,7 +67,7 @@ def test_system_info_renders(client: Client) -> None:
     # The shared system_info() helper supplies these context keys; they
     # must show up in the rendered table even if the values themselves
     # are environment-dependent.
-    for label in ('Load Average', 'Free Space', 'Memory', 'Uptime'):
+    for label in ('Load Average', 'Free Disk', 'Memory', 'Uptime'):
         assert label in body
 
 
@@ -93,7 +93,7 @@ def test_settings_renders(client: Client) -> None:
         'Authentication',
         'Show splash screen',
         'Backup',
-        'System Controls',
+        'System controls',
     ):
         assert label in body
 

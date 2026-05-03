@@ -1,0 +1,18 @@
+{# Reusable page-header bar: title + optional subtitle on the left,
+   actions slot on the right (rendered by the caller via the
+   `actions` context variable, expected to be HTML-safe).
+
+   Vars:
+   - title    : required
+   - lede     : optional supporting copy
+   - actions  : optional pre-rendered HTML for the right-hand action group
+#}
+<div class="page-header-bar">
+  <div class="page-header-bar__title">
+    <h1 class="page-header">{{ title }}</h1>
+    {% if lede %}<p class="page-header-bar__lede">{{ lede }}</p>{% endif %}
+  </div>
+  {% if actions %}
+  <div class="page-header-bar__actions">{{ actions|safe }}</div>
+  {% endif %}
+</div>

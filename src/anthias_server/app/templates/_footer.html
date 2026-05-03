@@ -1,51 +1,27 @@
-<footer id="footer" class="bg-dark">
-  <div class="container">
-    <div class="row">
-      <div class="col-6 small text-white mt-5 mb-5">
-        <span>
-          Want to get more out of your digital signage?
-          <a
-            class="brand"
-            href="https://www.screenly.io/?utm_source=Anthias&utm_medium=root-page&utm_campaign=UI"
-            target="_blank"
-            rel="noopener noreferrer"
-          ><strong>Try Screenly</strong></a>
-        </span>
+<footer id="footer">
+  <div class="container py-5">
+    <div class="row g-4 align-items-center">
+      <div class="col-12 col-md-6 small">
+        Want to get more out of your digital signage?
+        <a class="brand fw-bold ms-1" href="https://www.screenly.io/?utm_source=Anthias&utm_medium=root-page&utm_campaign=UI" target="_blank" rel="noopener noreferrer">
+          Try Screenly →
+        </a>
       </div>
-      <div id="screenly-logo" class="col-12 row m-2 ms-0 me-0">
-        <div
-          class="links offset-3 col-6 text-center justify-content-center align-self-center"
-        >
-          <a href="/api/docs/" target="_blank" class="me-4 small" rel="noopener noreferrer">API</a>
-          <a href="https://anthias.screenly.io/#faq?utm_source=Anthias&utm_medium=footer&utm_campaign=UI" target="_blank" class="me-4 small" rel="noopener noreferrer">FAQ</a>
-          <a href="https://screenly.io/?utm_source=Anthias&utm_medium=footer&utm_campaign=UI" target="_blank" class="me-4 small" rel="noopener noreferrer">Screenly.io</a>
-          <a href="https://forums.screenly.io/" target="_blank" class="me-4 small" rel="noopener noreferrer">Support</a>
-        </div>
-        <div
-          id="github-stars"
-          class="col-3 text-end justify-content-center align-self-center"
-        >
-          {% comment %} Was an img.shields.io GitHub-stars badge — that's a
-             runtime CDN dependency, which the rest of the page
-             explicitly avoids (signage devices may live behind a
-             firewall). Use a vendored Bootstrap Icon + text link
-             instead so the footer renders offline. {% endcomment %}
-          <a
-            href="https://github.com/Screenly/Anthias"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-decoration-none small d-inline-flex align-items-center gap-1"
-          >
-            <i class="bi bi-github"></i>
-            <span>Star on GitHub</span>
+      <div class="col-12 col-md-6">
+        <div class="links d-flex flex-wrap justify-content-md-end gap-4">
+          <a href="/api/docs/" target="_blank" rel="noopener noreferrer">API</a>
+          <a href="https://anthias.screenly.io/#faq?utm_source=Anthias&utm_medium=footer&utm_campaign=UI" target="_blank" rel="noopener noreferrer">FAQ</a>
+          <a href="https://screenly.io/?utm_source=Anthias&utm_medium=footer&utm_campaign=UI" target="_blank" rel="noopener noreferrer">Screenly.io</a>
+          <a href="https://forums.screenly.io/" target="_blank" rel="noopener noreferrer">Support</a>
+          <a href="https://github.com/Screenly/Anthias" target="_blank" rel="noopener noreferrer" class="d-inline-flex align-items-center gap-1">
+            <i class="bi bi-github"></i> GitHub
           </a>
         </div>
       </div>
     </div>
-  </div>
-  <div class="copy pb-4">
-    <div class="container">
-      <div class="text-center p-2">&copy; Screenly, Inc.</div>
+
+    <div class="copy text-center pt-4">
+      &copy; Screenly, Inc.
     </div>
   </div>
 </footer>
