@@ -1,0 +1,57 @@
+# Anthias firmware configuration.
+#
+# Managed authoritatively by the Anthias installer. Manual edits to this
+# file will be overwritten on the next Ansible run.
+#
+# Pi firmware reference:
+#   https://www.raspberrypi.com/documentation/computers/config_txt.html
+# Sections ([cm4], [cm5], etc.) are evaluated by the firmware against
+# the actual board at boot, so per-model overrides go in their own
+# section rather than behind a Jinja conditional.
+
+# === Audio ===
+dtparam=audio=on
+
+# === Display ===
+camera_auto_detect=1
+display_auto_detect=1
+auto_initramfs=1
+dtoverlay=vc4-kms-v3d
+max_framebuffers=2
+
+# Don't have the firmware add a video= line to cmdline.txt — let the
+# kernel pick its own default.
+disable_fw_kms_setup=1
+disable_overscan=1
+
+# === Performance ===
+arm_boost=1
+
+# === Anthias ===
+# Silent boot: suppress the firmware rainbow splash.
+disable_splash=1
+
+# 32-bit framebuffer is what video playback expects; ignore alpha.
+framebuffer_depth=32
+framebuffer_ignore_alpha=1
+
+# Larger GPU partitions improve hardware video decode headroom on
+# smaller models. The firmware only reads the line matching board RAM.
+gpu_mem_256=96
+gpu_mem_512=128
+gpu_mem_1024=196
+
+{% if ansible_architecture == 'aarch64' %}
+# 64-bit OS — boot kernel8.img.
+arm_64bit=1
+
+{% endif %}
+[cm4]
+# Compute Module 4: enable host mode on the built-in XHCI controller.
+otg_mode=1
+
+[cm5]
+# Compute Module 5: USB host mode via DWC2.
+dtoverlay=dwc2,dr_mode=host
+
+[all]

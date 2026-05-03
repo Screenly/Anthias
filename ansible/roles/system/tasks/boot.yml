@@ -4,58 +4,19 @@
     system_config_path: "{{ '/boot/config.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/config.txt' }}"
     system_cmdline_path: "{{ '/boot/cmdline.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/cmdline.txt' }}"
 
-- name: Check NOOBS
-  ansible.builtin.command: cat {{ system_config_path }}
-  register: system_config_txt
-  changed_when: false
-
-- name: Make sure we have proper framebuffer depth
-  ansible.builtin.lineinfile:
+# Render config.txt from a vanilla template that owns the whole file.
+# Pi firmware sections ([cm4], [cm5], etc.) handle per-model variants
+# at boot time, so the template stays mostly static; the only Jinja
+# conditional is arm_64bit=1 on aarch64.
+- name: Render config.txt
+  ansible.builtin.template:
+    src: config.txt.j2
     dest: "{{ system_config_path }}"
-    regexp: ^framebuffer_depth=
-    line: framebuffer_depth=32
-
-- name: Fix framebuffer bug
-  ansible.builtin.lineinfile:
-    dest: "{{ system_config_path }}"
-    regexp: ^framebuffer_ignore_alpha=
-    line: framebuffer_ignore_alpha=1
-
-- name: Add gpu_mem_256 in config.txt if it doesn't exist
-  ansible.builtin.lineinfile:
-    path: "{{ system_config_path }}"
-    line: gpu_mem_256=96
-  when: system_config_txt.stdout.find('gpu_mem_256') == -1
-
-- name: Add gpu_mem_512 in config.txt if it doesn't exist
-  ansible.builtin.lineinfile:
-    path: "{{ system_config_path }}"
-    line: gpu_mem_512=128
-  when: system_config_txt.stdout.find('gpu_mem_512') == -1
-
-- name: Add gpu_mem_1024 in config.txt if it doesn't exist
-  ansible.builtin.lineinfile:
-    path: "{{ system_config_path }}"
-    line: gpu_mem_1024=196
-  when: system_config_txt.stdout.find('gpu_mem_1024') == -1
-
-- name: Add pi4 section in config.txt if it doesn't exist
-  ansible.builtin.lineinfile:
-    path: "{{ system_config_path }}"
-    line: "\n[pi4]"
-  when: system_config_txt.stdout.find('[pi4]') == -1
-
-- name: Uncomment out the original dtoverlay config.
-  ansible.builtin.replace:
-    dest: "{{ system_config_path }}"
-    regexp: '^#\s*(dtoverlay=vc4-kms-v3d)'
-    replace: '\1'
-
-- name: Remove the FKMS config for all devices.
-  ansible.builtin.lineinfile:
-    path: "{{ system_config_path }}"
-    state: absent
-    regexp: "^dtoverlay=vc4-fkms-v3d$"
+    owner: root
+    group: root
+    # /boot/firmware is vfat with umask=022, so files appear as 0755
+    # regardless of the requested mode. Match that to keep idempotency.
+    mode: "0755"  # NOSONAR
 
 - name: Backup kernel boot args
   ansible.builtin.copy:
@@ -72,55 +33,61 @@
   ansible.builtin.debug:
     msg: "Use cmdline.txt.orig for boot parameters (don't remove this file)"
 
-- name: Copy cmdline.txt.orig to cmdline.txt
-  ansible.builtin.copy:
+# Render cmdline.txt authoritatively. The image-specific root= token
+# comes from the .orig backup; every other boot parameter is owned by
+# the template.
+- name: Read cmdline.txt.orig
+  ansible.builtin.slurp:
     src: "{{ system_cmdline_path }}.orig"
+  register: system_cmdline_orig
+
+- name: Extract root boot arg
+  ansible.builtin.set_fact:
+    system_cmdline_root_args: "{{ system_cmdline_orig_tokens | select('match', '^root=') | list }}"
+  vars:
+    system_cmdline_orig_tokens: "{{ (system_cmdline_orig.content | b64decode | trim).split() }}"
+
+- name: Validate root boot arg
+  ansible.builtin.assert:
+    that:
+      - system_cmdline_root_args | length == 1
+    fail_msg: "Expected exactly one root= boot parameter in {{ system_cmdline_path }}.orig"
+
+- name: Set root boot arg
+  ansible.builtin.set_fact:
+    system_cmdline_root_arg: "{{ system_cmdline_root_args[0] }}"
+
+- name: Render cmdline.txt from template
+  ansible.builtin.copy:
+    content: "{{ lookup('template', 'cmdline.txt.j2') }}\n"
     dest: "{{ system_cmdline_path }}"
     owner: root
     group: root
     # cmdline.txt is 0755 on Raspberry Pi by default — match that.
     mode: "0755"  # NOSONAR
-    force: true
-  when: system_config_txt.stdout.find('NOOBS') == -1
 
-- name: For splash screen using Plymouth
-  ansible.builtin.replace:
-    dest: "{{ system_cmdline_path }}"
-    regexp: (^(?!$)((?!splash).)*$)
-    replace: \1 splash
+# Defensive stats — disable login prompts on tty1 whether the active unit
+# is the stock getty@tty1.service or raspi-config's autologin@tty1.service.
+- name: Look up getty@ template
+  ansible.builtin.stat:
+    path: /lib/systemd/system/getty@.service
+  register: system_getty_template
 
-- name: Remove blinking cursor
-  ansible.builtin.replace:
-    dest: "{{ system_cmdline_path }}"
-    regexp: (^(?!$)((?!vt.global_cursor_default=0).)*$)
-    replace: \1 vt.global_cursor_default=0
+- name: Look up autologin@ template
+  ansible.builtin.stat:
+    path: /etc/systemd/system/autologin@.service
+  register: system_autologin_template
 
-- name: Plymouth ignore serial consoles
-  ansible.builtin.replace:
-    dest: "{{ system_cmdline_path }}"
-    regexp: (^(?!$)((?!plymouth.ignore-serial-consoles).)*$)
-    replace: \1 plymouth.ignore-serial-consoles
+- name: Disable getty on tty1 (no login prompt on display)
+  ansible.builtin.systemd:
+    name: getty@tty1.service
+    state: stopped
+    enabled: false
+  when: system_getty_template.stat.exists
 
-- name: Use Systemd as init and quiet boot process
-  ansible.builtin.replace:
-    dest: "{{ system_cmdline_path }}"
-    regexp: (^(?!$)((?!quiet init=/lib/systemd/systemd).)*$)
-    replace: \1 quiet init=/lib/systemd/systemd
-
-- name: Set ethN/wlanN names for interfaces
-  ansible.builtin.replace:
-    dest: "{{ system_cmdline_path }}"
-    regexp: (^(?!$)((?!net\.ifnames=0).)*$)
-    replace: \1 net.ifnames=0
-
-- name: Set cgroup_enable required by containerd for OOM
-  ansible.builtin.replace:
-    dest: "{{ system_cmdline_path }}"
-    regexp: (^(?!$)((?!cgroup_enable=memory).)*$)
-    replace: \1 cgroup_enable=memory
-
-- name: Set cgroup_memory required by containerd for OOM
-  ansible.builtin.replace:
-    dest: "{{ system_cmdline_path }}"
-    regexp: (^(?!$)((?!cgroup_memory=1).)*$)
-    replace: \1 cgroup_memory=1
+- name: Disable autologin on tty1 (no auto-login on display)
+  ansible.builtin.systemd:
+    name: autologin@tty1.service
+    state: stopped
+    enabled: false
+  when: system_autologin_template.stat.exists
