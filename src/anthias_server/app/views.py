@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 from mimetypes import guess_type
 from os import path, remove
+from urllib.parse import urlparse
 
 from django.contrib import messages
 from django.http import FileResponse, HttpRequest, HttpResponse
@@ -382,23 +383,36 @@ def assets_order(request: HttpRequest) -> HttpResponse:
 def _safe_redirect_uri(uri: str) -> str | None:
     """Defang asset.uri before handing it to redirect().
 
-    Restricts to plain http(s):// — drops javascript:/data:/vbscript:
-    and assorted other schemes that CodeQL flags as open-redirect
-    sinks. The asset row is operator-controlled, but tightening here
-    keeps a hostile API user from turning a legitimate-looking
-    download link into an XSS vector.
+    Threat model: the asset row is operator-controlled (authenticated
+    session, gated by @authorized on the calling endpoint). The risk
+    we mitigate is a hostile-but-authenticated operator stashing a
+    `javascript:` / `data:` URI on an asset and tricking a colleague
+    into a "download"-link click that runs script in their session
+    against the management UI's origin — i.e. a stored XSS via the
+    redirect sink.
+
+    Defenses:
+      1. Allowlist schemes to plain http / https only. javascript:,
+         data:, vbscript:, file:, about: etc. are all rejected.
+      2. Require a netloc. `http:///foo` and friends parse with an
+         empty host; redirect() would resolve them as same-origin
+         relative paths.
+
+    Operators legitimately store http:// URIs for LAN-only signage
+    (intranet pages, RTSP/RTMP gateways) where TLS isn't terminated,
+    so we accept http alongside https.
     """
     if not uri:
         return None
-    lowered = uri.strip().lower()
-    # We're whitelisting schemes here for the redirect filter — not
-    # initiating an HTTP connection ourselves. Operators legitimately
-    # store http:// URIs for LAN-only signage (intranets, RTSP gateways)
-    # where TLS isn't terminated; rejecting http would break those
-    # installs without improving security.
-    if lowered.startswith(('http://', 'https://')):  # NOSONAR(S5332)
-        return uri
-    return None
+    parsed = urlparse(uri.strip())
+    # `scheme` and `netloc` are both mandatory — empty either means
+    # the input wasn't a fully qualified URL we can safely send the
+    # browser to.
+    if parsed.scheme.lower() not in ('http', 'https'):  # NOSONAR(S5332)
+        return None
+    if not parsed.netloc:
+        return None
+    return uri
 
 
 def _safe_local_asset_path(uri: str) -> str | None:

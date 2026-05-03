@@ -274,3 +274,148 @@ def test_get_balena_supervisor_version_error(monkeypatch: Any) -> None:
 def test_template_handle_unicode_non_string() -> None:
     assert template_handle_unicode(42) == '42'
     assert template_handle_unicode(None) == 'None'
+
+
+# ---------------------------------------------------------------------------
+# Resolution detection — the helpers detect_screen_resolution() chains
+# through. Each is pure I/O so we mock /sys readers with monkeypatch.
+
+import io
+
+
+def test_drm_resolution_picks_first_connected_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A /sys/class/drm/card?-HDMI-A-1 dir reads as 'connected' with a
+    1920x1080 mode → _drm_resolution() returns '1920x1080'."""
+    from anthias_common import utils
+
+    class FakeEntry:
+        def __init__(self, name: str, path: str) -> None:
+            self.name = name
+            self.path = path
+
+    monkeypatch.setattr(
+        'anthias_common.utils.os.scandir',
+        lambda _p: [FakeEntry('card1-HDMI-A-1', '/fake/drm/card1-HDMI-A-1')],
+    )
+
+    def fake_open(path: str, *_a: Any, **_k: Any) -> io.StringIO:
+        if path.endswith('/status'):
+            return io.StringIO('connected\n')
+        if path.endswith('/modes'):
+            return io.StringIO('1920x1080\n1280x720\n')
+        raise OSError('unexpected path')
+
+    monkeypatch.setattr('builtins.open', fake_open)
+    assert utils._drm_resolution() == '1920x1080'
+
+
+def test_fb_resolution_parses_comma_pair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_common import utils
+
+    monkeypatch.setattr(
+        'builtins.open', lambda *_a, **_k: io.StringIO('1920,1080\n')
+    )
+    assert utils._fb_resolution() == '1920x1080'
+
+
+def test_fb_resolution_handles_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_common import utils
+
+    def boom(*_a: Any, **_k: Any) -> None:
+        raise OSError('no fb0')
+
+    monkeypatch.setattr('builtins.open', boom)
+    assert utils._fb_resolution() is None
+
+
+# ---------------------------------------------------------------------------
+# MAC interface detection — _detect_local_mac() picks default-route
+# iface from /proc/net/route then reads /sys/class/net/<iface>/address.
+
+
+def test_default_route_iface_picks_up_flag_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_common import utils
+
+    sample = (
+        'Iface\tDestination\tGateway\tFlags\n'
+        'eth0\t00000000\t0100A8C0\t0003\t0\t0\t100\n'
+        'eth0\t0000A8C0\t00000000\t0001\t0\t0\t0\n'
+    )
+    monkeypatch.setattr('builtins.open', lambda *_a, **_k: io.StringIO(sample))
+    assert utils._default_route_iface() == 'eth0'
+
+
+def test_default_route_iface_skips_down_route(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_common import utils
+
+    # Same destination but RTF_UP=0 (flags=0002) — should NOT match.
+    sample = (
+        'Iface\tDestination\tGateway\tFlags\n'
+        'eth0\t00000000\t0100A8C0\t0002\t0\t0\t100\n'
+    )
+    monkeypatch.setattr('builtins.open', lambda *_a, **_k: io.StringIO(sample))
+    assert utils._default_route_iface() is None
+
+
+def test_read_iface_mac_skips_zero_mac(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_common import utils
+
+    monkeypatch.setattr(
+        'builtins.open', lambda *_a, **_k: io.StringIO('00:00:00:00:00:00\n')
+    )
+    assert utils._read_iface_mac('eth0') is None
+
+
+def test_read_iface_mac_returns_real_mac(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_common import utils
+
+    monkeypatch.setattr(
+        'builtins.open', lambda *_a, **_k: io.StringIO('aa:bb:cc:dd:ee:ff\n')
+    )
+    assert utils._read_iface_mac('eth0') == 'aa:bb:cc:dd:ee:ff'
+
+
+def test_first_non_loopback_mac_skips_docker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_common import utils
+
+    monkeypatch.setattr(
+        'anthias_common.utils.os.listdir',
+        lambda _p: ['lo', 'docker0', 'eth0', 'br-foo'],
+    )
+    monkeypatch.setattr(
+        utils,
+        '_read_iface_mac',
+        lambda iface: 'aa:bb:cc:dd:ee:ff' if iface == 'eth0' else None,
+    )
+    assert utils._first_non_loopback_mac() == 'aa:bb:cc:dd:ee:ff'
+
+
+def test_detect_local_mac_prefers_default_route(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_common import utils
+
+    monkeypatch.setattr('anthias_common.utils.os.path.isdir', lambda _p: True)
+    monkeypatch.setattr(utils, '_default_route_iface', lambda: 'wlan0')
+    monkeypatch.setattr(
+        utils,
+        '_read_iface_mac',
+        lambda iface: '11:22:33:44:55:66' if iface == 'wlan0' else None,
+    )
+    assert utils._detect_local_mac() == '11:22:33:44:55:66'

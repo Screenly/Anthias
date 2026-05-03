@@ -791,3 +791,74 @@ def test_system_info_context_shape() -> None:
     )
     assert ctx['resolution']['source'] in ('live', 'configured')
     assert isinstance(ctx['uptime']['human'], str)
+
+
+# ---------------------------------------------------------------------------
+# Security: _safe_redirect_uri allowlist + _safe_local_asset_path guard
+# These exist because asset.uri is operator-controlled (authenticated
+# session, not arbitrary user input) but the redirect/open sinks
+# downstream still need to be hardened. Tests prove the defenses bite.
+
+
+@pytest.mark.parametrize(
+    'uri,expected',
+    [
+        ('https://example.com/x.png', 'https://example.com/x.png'),
+        ('http://intranet.lan/page', 'http://intranet.lan/page'),
+        ('javascript:alert(1)', None),
+        ('data:text/html,<script>', None),
+        ('vbscript:msg', None),
+        ('file:///etc/passwd', None),
+        ('about:blank', None),
+        ('http://', None),  # missing netloc
+        ('http:///path', None),
+        ('', None),
+        ('   ', None),
+    ],
+)
+def test_safe_redirect_uri_allowlist(uri: str, expected: str | None) -> None:
+    from anthias_server.app.views import _safe_redirect_uri
+
+    assert _safe_redirect_uri(uri) == expected
+
+
+@pytest.mark.parametrize(
+    'rel_path', ['../../etc/passwd', 'subdir/../../etc/passwd']
+)
+def test_safe_local_asset_path_rejects_traversal(
+    tmp_path: Any, rel_path: str, monkeypatch: Any
+) -> None:
+    from anthias_server.app.views import _safe_local_asset_path
+    from anthias_server.settings import settings
+
+    assetdir = tmp_path / 'assets'
+    assetdir.mkdir()
+    original = dict(settings.data)
+    settings['assetdir'] = str(assetdir)
+    try:
+        candidate = str(assetdir / rel_path)
+        assert _safe_local_asset_path(candidate) is None
+    finally:
+        settings.data = original
+
+
+def test_safe_local_asset_path_rejects_symlink_escape(
+    tmp_path: Any, monkeypatch: Any
+) -> None:
+    """A symlink inside assetdir pointing outside it must not be served.
+    realpath resolves the link before the startswith check."""
+    from anthias_server.app.views import _safe_local_asset_path
+    from anthias_server.settings import settings
+
+    assetdir = tmp_path / 'assets'
+    assetdir.mkdir()
+    sneaky = assetdir / 'sneaky'
+    target_outside = tmp_path / 'outside.txt'
+    target_outside.write_bytes(b'secret')
+    sneaky.symlink_to(target_outside)
+    original = dict(settings.data)
+    settings['assetdir'] = str(assetdir)
+    try:
+        assert _safe_local_asset_path(str(sneaky)) is None
+    finally:
+        settings.data = original
