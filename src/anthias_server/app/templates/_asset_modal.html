@@ -102,13 +102,29 @@
           <div class="row">
             <div class="col-6">
               <div class="form-floating mb-3">
-                <input type="datetime-local" class="form-control" id="edit-start" name="start_date" :value="editAsset.start_date_local" required>
+                <input
+                  type="text"
+                  class="form-control flatpickr-datetime"
+                  id="edit-start"
+                  name="start_date"
+                  :value="editAsset.start_date_local"
+                  required
+                  autocomplete="off"
+                >
                 <label for="edit-start">Start</label>
               </div>
             </div>
             <div class="col-6">
               <div class="form-floating mb-3">
-                <input type="datetime-local" class="form-control" id="edit-end" name="end_date" :value="editAsset.end_date_local" required>
+                <input
+                  type="text"
+                  class="form-control flatpickr-datetime"
+                  id="edit-end"
+                  name="end_date"
+                  :value="editAsset.end_date_local"
+                  required
+                  autocomplete="off"
+                >
                 <label for="edit-end">End</label>
               </div>
             </div>
@@ -160,11 +176,12 @@
             <div class="col-6">
               <div class="form-floating mb-3">
                 <input
-                  type="time"
-                  class="form-control"
+                  type="text"
+                  class="form-control flatpickr-time"
                   id="edit-play-from"
                   name="play_time_from"
                   :value="editAsset.play_time_from || ''"
+                  autocomplete="off"
                 >
                 <label for="edit-play-from">Play from</label>
               </div>
@@ -172,11 +189,12 @@
             <div class="col-6">
               <div class="form-floating mb-3">
                 <input
-                  type="time"
-                  class="form-control"
+                  type="text"
+                  class="form-control flatpickr-time"
                   id="edit-play-to"
                   name="play_time_to"
                   :value="editAsset.play_time_to || ''"
+                  autocomplete="off"
                 >
                 <label for="edit-play-to">Play until</label>
               </div>

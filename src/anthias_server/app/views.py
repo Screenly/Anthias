@@ -34,6 +34,41 @@ r = connect_to_redis()
 _ANTHIAS_REPO_URL = 'https://github.com/Screenly/Anthias'
 
 
+def _parse_local_datetime(value: str) -> 'timezone.datetime':
+    """Parse a date/time the edit-form posts back from Flatpickr.
+
+    Flatpickr formats the value using whatever format we asked for
+    (m/d/Y h:i K, d-m-Y H:i, Y/m/d, etc.) — i.e. the device's
+    configured date_format + use_24_hour_clock pair. Try the active
+    set of formats here, fall back to ISO fromisoformat() so any
+    pre-existing rows / API-side writes still parse cleanly.
+    """
+    from datetime import datetime as _dt
+
+    settings.load()
+    df = settings['date_format']
+    date_part_map = {
+        'mm/dd/yyyy': '%m/%d/%Y',
+        'dd/mm/yyyy': '%d/%m/%Y',
+        'yyyy/mm/dd': '%Y/%m/%d',
+        'mm-dd-yyyy': '%m-%d-%Y',
+        'dd-mm-yyyy': '%d-%m-%Y',
+        'yyyy-mm-dd': '%Y-%m-%d',
+        'mm.dd.yyyy': '%m.%d.%Y',
+        'dd.mm.yyyy': '%d.%m.%Y',
+        'yyyy.mm.dd': '%Y.%m.%d',
+    }
+    date_fmt = date_part_map.get(df, '%m/%d/%Y')
+    time_fmt = '%H:%M' if settings['use_24_hour_clock'] else '%I:%M %p'
+    candidates = [f'{date_fmt} {time_fmt}', f'{date_fmt} %H:%M']
+    for fmt in candidates:
+        try:
+            return timezone.make_aware(_dt.strptime(value, fmt))
+        except ValueError:
+            continue
+    return timezone.make_aware(_dt.fromisoformat(value))
+
+
 def _checkbox(post: HttpRequest, name: str) -> bool:
     """Read a HTML checkbox: present-and-truthy = True, otherwise False.
 
@@ -202,9 +237,9 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
     start = request.POST.get('start_date')
     end = request.POST.get('end_date')
     if start:
-        asset.start_date = timezone.make_aware(datetime.fromisoformat(start))
+        asset.start_date = _parse_local_datetime(start)
     if end:
-        asset.end_date = timezone.make_aware(datetime.fromisoformat(end))
+        asset.end_date = _parse_local_datetime(end)
     asset.nocache = _checkbox(request, 'nocache')
     asset.skip_asset_check = _checkbox(request, 'skip_asset_check')
 

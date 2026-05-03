@@ -41,6 +41,45 @@ _DATE_FORMAT_MAP = {
 }
 
 
+_DAY_LABELS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
+
+
+@register.filter
+def schedule_label(asset: Any) -> str:
+    """Compact human label for the asset's schedule window.
+
+    Empty when no filter is active (asset plays every day, all hours).
+    Otherwise one of:
+      - "Mon, Wed, Fri" — day-of-week filter only
+      - "9:00 – 17:00"  — time window only (24h or 12h per device)
+      - "Mon, Wed, Fri · 9:00 – 17:00" — both
+    Lets the asset row tell the operator at a glance which assets are
+    scheduled vs free-running, without opening the edit modal.
+    """
+    if not hasattr(asset, 'get_play_days'):
+        return ''
+    days = asset.get_play_days()
+    days_label = ''
+    if days != list(range(1, 8)):
+        days_label = ', '.join(_DAY_LABELS[d - 1] for d in days if 1 <= d <= 7)
+
+    time_label = ''
+    pf = getattr(asset, 'play_time_from', None)
+    pt = getattr(asset, 'play_time_to', None)
+    if pf and pt:
+        if settings['use_24_hour_clock']:
+            fmt = '%H:%M'
+        else:
+            fmt = '%I:%M %p'
+        time_label = (
+            f'{pf.strftime(fmt).lstrip("0")} – {pt.strftime(fmt).lstrip("0")}'
+        )
+
+    if days_label and time_label:
+        return f'{days_label} · {time_label}'
+    return days_label or time_label
+
+
 @register.filter
 def asset_date(value: datetime | None) -> str:
     """Format an Asset start/end datetime using the configured

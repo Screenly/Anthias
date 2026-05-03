@@ -3,6 +3,10 @@
 
 {% block title %}{% if player_name %}{{ player_name }} · {% endif %}Schedule Overview{% endblock %}
 
+{% block extra_head %}
+<script src="{% static 'dist/js/home.js' %}" defer></script>
+{% endblock %}
+
 {% block main %}
 <div class="container" x-data="homeApp()" @asset-saved.window="closeModal()">
   <div class="row py-2">
@@ -85,25 +89,6 @@
   </div>
 </div>
 
-<script>
-  // Per-page state for the home view: tracks which modal mode is open
-  // (none / add / edit), which asset is being edited, and which asset
-  // (if any) has a pending delete confirmation. Wired to the outer
-  // container's x-data so child partials can read/mutate via Alpine.
-  function homeApp() {
-    return {
-      mode: null,            // null | 'add' | 'edit'
-      editAsset: null,       // raw Asset object when mode==='edit'
-      pendingDeleteId: null, // asset_id while delete confirm is open
-      pendingDeleteName: '', // friendly name for the confirm body
-      openAdd() { this.mode = 'add'; this.editAsset = null; },
-      openEdit(asset) { this.mode = 'edit'; this.editAsset = asset; },
-      openDelete(id, name) {
-        this.pendingDeleteId = id;
-        this.pendingDeleteName = name || '';
-      },
-      closeModal() { this.mode = null; this.editAsset = null; },
-    };
-  }
-</script>
+{% comment %} Per-page Alpine + Flatpickr glue lives in home.ts (loaded above
+   via {% block extra_head %}); this template only ships markup. {% endcomment %}
 {% endblock %}

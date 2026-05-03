@@ -1,4 +1,5 @@
 {% load asset_filters %}
+{% with sched=asset|schedule_label %}
 <tr data-asset-id="{{ asset.asset_id }}">
   <td>
     <span class="d-inline-flex align-items-center gap-2">
@@ -7,7 +8,14 @@
       {% elif asset.mimetype == 'video' %}<i class="bi bi-camera-video"></i>
       {% else %}<i class="bi bi-globe"></i>
       {% endif %}
-      <span class="text-truncate" style="max-width: 220px; display: inline-block; vertical-align: middle">{{ asset.name }}</span>
+      <span style="max-width: 280px; display: inline-block; vertical-align: middle">
+        <span class="d-block text-truncate">{{ asset.name }}</span>
+        {% if sched %}
+        <span class="d-block small {% if is_active %}text-white-50{% else %}text-secondary{% endif %} text-truncate" title="Schedule">
+          <i class="bi bi-calendar-week me-1"></i>{{ sched }}
+        </span>
+        {% endif %}
+      </span>
     </span>
   </td>
   <td>{{ asset.start_date|asset_date }}</td>
@@ -50,3 +58,4 @@
     </div>
   </td>
 </tr>
+{% endwith %}

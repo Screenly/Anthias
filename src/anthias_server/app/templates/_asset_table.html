@@ -65,71 +65,8 @@
 </div>
 
 {% if active_assets %}
-<script>
-  // Sortable on the active list. Re-init on every HTMX swap (the
-  // tbody is replaced wholesale). Drag-end POSTs the new id order
-  // back to /assets/order; the response triggers refresh-assets so
-  // the table re-fetches with the persisted order.
-  //
-  // vendor.js loads with `defer`, so on the *initial* page render this
-  // inline script runs before window.Sortable is defined. Wait for
-  // DOMContentLoaded in that case; subsequent HTMX-driven swaps see
-  // Sortable already loaded and run inline.
-  (function () {
-    // The CSRF token would normally come from a hidden form input,
-    // but the partial endpoint is also reachable without a form on
-    // the page (e.g. direct hx-get of /_partials/asset-table during
-    // testing). Read from the csrftoken cookie instead so the
-    // sortable handler degrades gracefully if no form is mounted.
-    function csrfToken() {
-      const fromForm = document.querySelector('input[name=csrfmiddlewaretoken]');
-      if (fromForm) return fromForm.value;
-      const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
-      return m ? decodeURIComponent(m[1]) : '';
-    }
-    function init() {
-      const tbody = document.getElementById('active-rows');
-      if (!tbody || !window.Sortable) return;
-      new Sortable(tbody, {
-        handle: '.drag-handle',
-        animation: 150,
-        onEnd: () => {
-          const ids = Array.from(tbody.children)
-            .map(tr => tr.dataset.assetId)
-            .filter(Boolean)
-            .join(',');
-          const fd = new FormData();
-          fd.append('ids', ids);
-          fetch('{% url "anthias_app:assets_order" %}', {
-            method: 'POST',
-            body: fd,
-            // 'HX-Request: true' tells the Django view to return the
-            // re-rendered asset-table partial instead of redirecting
-            // back to / (the plain-form fallback). fetch() would
-            // otherwise follow the 302 and download the full home
-            // page only to discard it.
-            headers: { 'X-CSRFToken': csrfToken(), 'HX-Request': 'true' },
-          }).then((r) => {
-            if (!r.ok) {
-              // POST rejected (likely a CSRF or 5xx hiccup). Refresh
-              // the table from the server so the visible order
-              // matches the persisted state instead of leaving the
-              // user thinking the drag took.
-              console.error('reorder POST failed:', r.status, r.statusText);
-            }
-            htmx.trigger('body', 'refresh-assets');
-          }).catch((err) => {
-            console.error('reorder POST errored:', err);
-            htmx.trigger('body', 'refresh-assets');
-          });
-        },
-      });
-    }
-    if (window.Sortable) {
-      init();
-    } else {
-      document.addEventListener('DOMContentLoaded', init, { once: true });
-    }
-  })();
-</script>
+{% comment %} initAssetTableSortable lives in home.ts; this is the only line that
+   has to stay inline because the assets_order URL is resolved by
+   Django's reverser at template-render time. {% endcomment %}
+<script>window.initAssetTableSortable && window.initAssetTableSortable('{% url "anthias_app:assets_order" %}');</script>
 {% endif %}
