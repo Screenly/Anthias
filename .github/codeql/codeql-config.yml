@@ -26,3 +26,13 @@ query-filters:
       id:
         - py/url-redirection
         - py/path-injection
+        - py/full-server-side-request-forgery
+
+# py/full-server-side-request-forgery fires on anthias_common.utils.url_fails,
+# which IS by design fetching operator-supplied asset URIs to verify
+# they're still reachable (called from the celery revalidate_asset_urls
+# sweep). The "user-provided value" is a Django Asset.uri field set by
+# an authenticated operator session — exactly what the feature is meant
+# to probe. There is no other URL-fetching sink in the codebase that
+# could surface a real SSRF, so disabling the query is acceptable.
+
