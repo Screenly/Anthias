@@ -262,13 +262,20 @@ def test_add_two_assets_upload(reset_assets: None) -> None:
                 'input[name="file_upload"]',
                 lambda file_input: file_input.fill(image_file),
             )
+            # Give the first onchange-triggered HTMX upload time to
+            # round-trip and re-render the asset-table partial before
+            # we drive a second .fill() on the same input. Without
+            # this gap CI runners (slower than local Docker) sometimes
+            # see the second submit race the first and only one Asset
+            # row gets persisted.
+            sleep(3)
             wait_for_and_do(
                 browser,
                 'input[name="file_upload"]',
                 lambda file_input: file_input.fill(video_file),
             )
 
-            sleep(3)
+            sleep(5)
 
         assets = Asset.objects.all()
 
