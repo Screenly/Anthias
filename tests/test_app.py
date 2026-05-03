@@ -212,7 +212,7 @@ def test_add_asset_image_upload(reset_assets: None) -> None:
         sleep(1)
 
         wait_for_and_do(
-            browser, '.nav-link.upload-asset-tab', lambda tab: tab.click()
+            browser, '.app-tab-link.upload-asset-tab', lambda tab: tab.click()
         )
         wait_for_and_do(
             browser,
@@ -247,7 +247,7 @@ def test_add_asset_video_upload(reset_assets: None) -> None:
 
             wait_for_and_do(
                 browser,
-                '.nav-link.upload-asset-tab',
+                '.app-tab-link.upload-asset-tab',
                 lambda tab: tab.click(),
             )
             wait_for_and_do(
@@ -293,7 +293,7 @@ def test_add_two_assets_upload(reset_assets: None) -> None:
 
             wait_for_and_do(
                 browser,
-                '.nav-link.upload-asset-tab',
+                '.app-tab-link.upload-asset-tab',
                 lambda tab: tab.click(),
             )
             wait_for_and_do(

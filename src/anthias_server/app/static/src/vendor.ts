@@ -80,7 +80,9 @@ const handleToast = (ev: Event): void => {
     kind?: ToastItem['kind']
     message?: string
   }>).detail
-  if (!detail || !detail.message) return
+  if (!detail?.message) {
+    return
+  }
   ;(Alpine.store('toasts') as ToastStore).push(
     detail.kind ?? 'info',
     detail.message,
