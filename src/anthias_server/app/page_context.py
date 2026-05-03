@@ -95,7 +95,10 @@ def device_settings() -> dict[str, Any]:
     the choice tuples for the auth_backend / date_format dropdowns.
     """
     settings.load()
-    device_model = device_helper.parse_cpu_info().get('model') or ''
+    # parse_cpu_info() returns Mapping[str, int | str] per its stub, so
+    # cast to str before substring-checking against the Pi 5 model name —
+    # mypy refuses `'X' in (int|str)` even though str-len-check works.
+    device_model = str(device_helper.parse_cpu_info().get('model') or '')
     return {
         'player_name': settings['player_name'],
         'default_duration': settings['default_duration'],

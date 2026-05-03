@@ -6,6 +6,7 @@ from os import path, remove
 
 from django.contrib import messages
 from django.http import FileResponse, HttpRequest, HttpResponse
+from django.http.response import HttpResponseBase
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -53,6 +54,7 @@ def integrations(request: HttpRequest) -> HttpResponse:
 
 # --- /home (Schedule Overview) ----------------------------------------------
 
+
 @authorized
 @require_http_methods(['GET'])
 def home(request: HttpRequest) -> HttpResponse:
@@ -67,6 +69,7 @@ def assets_table_partial(request: HttpRequest) -> HttpResponse:
     """HTMX endpoint for the table area only — re-rendered every 5s
     by the home page and after every successful write."""
     from django.shortcuts import render as _render
+
     return _render(request, '_asset_table.html', page_context.assets())
 
 
@@ -118,18 +121,17 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     from datetime import timedelta
 
     file_upload = request.FILES.get('file_upload')
-    if file_upload is None:
+    if file_upload is None or not file_upload.name:
         messages.error(request, 'No file uploaded.')
         return _asset_table_response(request)
 
-    file_type = guess_type(file_upload.name)[0] or ''
+    upload_name: str = file_upload.name
+    file_type = guess_type(upload_name)[0] or ''
     if file_type.split('/')[0] not in ('image', 'video'):
         messages.error(request, 'Invalid file type. Expected image or video.')
         return _asset_table_response(request)
 
-    final_name = (
-        uuid.uuid5(uuid.NAMESPACE_URL, file_upload.name).hex
-    )
+    final_name = uuid.uuid5(uuid.NAMESPACE_URL, upload_name).hex
     final_path = path.join(settings['assetdir'], final_name)
     with open(final_path, 'wb') as f:
         for chunk in file_upload.chunks():
@@ -141,6 +143,7 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         # meaningful instead of the default-duration placeholder; React's
         # upload flow does the same via get_video_duration.
         from anthias_common.utils import get_video_duration
+
         probed = get_video_duration(final_path)
         duration = (
             int(probed.total_seconds())
@@ -152,7 +155,7 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
 
     now = timezone.now()
     Asset.objects.create(
-        name=file_upload.name,
+        name=upload_name,
         uri=final_path,
         mimetype=mimetype,
         duration=duration,
@@ -169,9 +172,12 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
 @require_http_methods(['POST'])
 def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
     from anthias_server.app.models import Asset
+
     asset = Asset.objects.filter(asset_id=asset_id).first()
     if asset is None:
         return _asset_table_response(request)
+
+    from datetime import datetime
 
     asset.name = request.POST.get('name', asset.name)
     asset.mimetype = request.POST.get('mimetype', asset.mimetype)
@@ -179,13 +185,9 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
     start = request.POST.get('start_date')
     end = request.POST.get('end_date')
     if start:
-        asset.start_date = timezone.make_aware(
-            timezone.datetime.fromisoformat(start)
-        )
+        asset.start_date = timezone.make_aware(datetime.fromisoformat(start))
     if end:
-        asset.end_date = timezone.make_aware(
-            timezone.datetime.fromisoformat(end)
-        )
+        asset.end_date = timezone.make_aware(datetime.fromisoformat(end))
     asset.nocache = _checkbox(request, 'nocache')
     asset.skip_asset_check = _checkbox(request, 'skip_asset_check')
     asset.save()
@@ -197,6 +199,7 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
 @require_http_methods(['POST'])
 def assets_toggle(request: HttpRequest, asset_id: str) -> HttpResponse:
     from anthias_server.app.models import Asset
+
     asset = Asset.objects.filter(asset_id=asset_id).first()
     if asset is not None:
         asset.is_enabled = not asset.is_enabled
@@ -209,6 +212,7 @@ def assets_toggle(request: HttpRequest, asset_id: str) -> HttpResponse:
 @require_http_methods(['POST'])
 def assets_delete(request: HttpRequest, asset_id: str) -> HttpResponse:
     from anthias_server.app.models import Asset
+
     Asset.objects.filter(asset_id=asset_id).delete()
     ViewerPublisher.get_instance().send_to_viewer('reload')
     return _asset_table_response(request)
@@ -220,6 +224,7 @@ def assets_order(request: HttpRequest) -> HttpResponse:
     """Mirrors api.helpers.save_active_assets_ordering — same comma-csv
     body that React's @dnd-kit handler POSTs."""
     from anthias_server.api.helpers import save_active_assets_ordering
+
     ids = [i for i in request.POST.get('ids', '').split(',') if i]
     save_active_assets_ordering(ids)
     ViewerPublisher.get_instance().send_to_viewer('reload')
@@ -228,12 +233,13 @@ def assets_order(request: HttpRequest) -> HttpResponse:
 
 @authorized
 @require_http_methods(['GET'])
-def assets_download(request: HttpRequest, asset_id: str) -> HttpResponse:
+def assets_download(request: HttpRequest, asset_id: str) -> HttpResponseBase:
     """Stream the asset's content back the way React's download button
     did: redirect to the URL for url-mimetypes, FileResponse for files."""
     from anthias_server.app.models import Asset
+
     asset = Asset.objects.filter(asset_id=asset_id).first()
-    if asset is None:
+    if asset is None or not asset.uri:
         return redirect(reverse('anthias_app:home'))
     if asset.mimetype in ('webpage', 'streaming'):
         return redirect(asset.uri)
@@ -257,6 +263,7 @@ def _asset_table_response(request: HttpRequest) -> HttpResponse:
     submits fall back to a redirect so the page reloads end-to-end."""
     if request.headers.get('HX-Request'):
         from django.shortcuts import render as _render
+
         return _render(request, '_asset_table.html', page_context.assets())
     return redirect(reverse('anthias_app:home'))
 
@@ -302,17 +309,54 @@ def settings_save(request: HttpRequest) -> HttpResponse:
             current_pass_correct = settings.auth_backends[
                 prev_auth_backend
             ].check_password(current_password)
-        next_auth_backend = settings.auth_backends[auth_backend]
-        next_auth_backend.update_settings(
-            {
-                'username': request.POST.get('user', ''),
-                'password': request.POST.get('password', ''),
-                'password_2': request.POST.get('password_2', ''),
-            },
-            next_auth_backend.name,
-            current_pass_correct,
-        )
+        # Mirror api.views.v2.DeviceSettingsViewV2.update_auth_settings
+        # inline rather than reaching for the per-backend update_settings —
+        # the backend's signature takes a DRF request, not the form-POST
+        # dict we've got, and its v2 implementation lives in the API view.
+        if auth_backend == 'auth_basic':
+            new_user = request.POST.get('user', '')
+            new_pass = request.POST.get('password', '')
+            new_pass_2 = request.POST.get('password_2', '')
+
+            from anthias_server.lib.auth import hash_password
+
+            if settings['password']:
+                if new_user != settings['user']:
+                    if current_pass_correct is None:
+                        raise ValueError(
+                            'Must supply current password to change username'
+                        )
+                    if not current_pass_correct:
+                        raise ValueError('Incorrect current password.')
+                    settings['user'] = new_user
+                if new_pass:
+                    if current_pass_correct is None:
+                        raise ValueError(
+                            'Must supply current password to change password'
+                        )
+                    if not current_pass_correct:
+                        raise ValueError('Incorrect current password.')
+                    if new_pass_2 != new_pass:
+                        raise ValueError('New passwords do not match!')
+                    settings['password'] = hash_password(new_pass)
+            else:
+                if new_user:
+                    if new_pass and new_pass != new_pass_2:
+                        raise ValueError('New passwords do not match!')
+                    if not new_pass:
+                        raise ValueError('Must provide password')
+                    settings['user'] = new_user
+                    settings['password'] = hash_password(new_pass)
+                elif current_pass_correct is None:
+                    # Switching to basic auth without a username is a no-op
+                    # — fall through and let auth_backend save below. Same
+                    # behaviour the API view falls into when its
+                    # update_auth_settings sees an empty username.
+                    pass
         settings['auth_backend'] = auth_backend
+        # current_pass_correct is consumed above; reference it so the
+        # local doesn't read as unused.
+        _ = current_pass_correct
 
         settings['player_name'] = request.POST.get('player_name', '')
         settings['default_duration'] = int(
@@ -349,7 +393,7 @@ def settings_save(request: HttpRequest) -> HttpResponse:
 
 @authorized
 @require_http_methods(['POST'])
-def settings_backup(request: HttpRequest) -> HttpResponse:
+def settings_backup(request: HttpRequest) -> HttpResponseBase:
     """Same as api.views.mixins.BackupViewMixin.post but streams the
     archive back inline instead of returning the filename + relying
     on a follow-up /static_with_mime/ fetch."""
@@ -369,7 +413,7 @@ def settings_backup(request: HttpRequest) -> HttpResponse:
 def settings_recover(request: HttpRequest) -> HttpResponse:
     publisher = ViewerPublisher.get_instance()
     file_upload = request.FILES.get('backup_upload')
-    if file_upload is None:
+    if file_upload is None or not file_upload.name:
         messages.error(request, 'No backup file uploaded.')
         return redirect(reverse('anthias_app:settings'))
 

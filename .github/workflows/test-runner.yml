@@ -52,11 +52,15 @@ jobs:
 
       - name: Run TypeScript tests
         if: inputs.test-type == 'typescript'
+        # Invokes the package.json `test` script rather than `bun test`
+        # directly so the post-React tree (which has no .test.ts files)
+        # can declare a no-op script and exit cleanly. When real tests
+        # come back the script just needs to call `bun test` itself.
         run: |
           docker compose exec anthias-test \
             bun install --frozen-lockfile
           docker compose exec anthias-test \
-            bun test
+            bun run test
 
       - name: Run Python unit tests
         if: inputs.test-type == 'python'

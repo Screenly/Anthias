@@ -8,7 +8,12 @@
     "build": "bun run build:vendor && bun run build:css && bun run build:fonts",
     "dev:vendor": "bun build ./src/anthias_server/app/static/src/vendor.ts --outfile=./src/anthias_server/app/static/dist/js/vendor.js --target=browser --sourcemap=linked --watch",
     "dev:css": "bunx sass src/anthias_server/app/static/sass/anthias.scss src/anthias_server/app/static/dist/css/anthias.css --load-path=node_modules --watch --quiet-deps --silence-deprecation=import,global-builtin,color-functions,if-function",
-    "dev": "bash -c 'bun run dev:vendor & js=$!; bun run dev:css & css=$!; trap \"kill $js $css 2>/dev/null\" EXIT INT TERM; wait -n; exit $?'"
+    "dev": "bash -c 'bun run dev:vendor & js=$!; bun run dev:css & css=$!; trap \"kill $js $css 2>/dev/null\" EXIT INT TERM; wait -n; exit $?'",
+    "lint:check": "echo 'no-op: TS lint not configured for the htmx/alpine entrypoint'",
+    "lint:fix": "echo 'no-op'",
+    "format:check": "echo 'no-op'",
+    "format:fix": "echo 'no-op'",
+    "test": "echo 'no-op: TS tests removed with the React stack'"
   },
   "dependencies": {
     "@fontsource/plus-jakarta-sans": "^5.2.8",

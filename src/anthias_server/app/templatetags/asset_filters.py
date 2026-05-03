@@ -31,9 +31,9 @@ def _to_dict(obj: Any) -> Any:
                 obj.start_date
             ).strftime('%Y-%m-%dT%H:%M')
         if hasattr(obj, 'end_date') and obj.end_date:
-            out['end_date_local'] = timezone.localtime(
-                obj.end_date
-            ).strftime('%Y-%m-%dT%H:%M')
+            out['end_date_local'] = timezone.localtime(obj.end_date).strftime(
+                '%Y-%m-%dT%H:%M'
+            )
         return out
     return _coerce(obj)
 
@@ -56,8 +56,7 @@ def to_json(value: Any) -> SafeString:
     # the apostrophe and ampersand below to keep the literal valid as
     # a JS string inside an `x-on:click="openEdit(...)"` attribute.
     safe = (
-        encoded
-        .replace('&', '\\u0026')
+        encoded.replace('&', '\\u0026')
         .replace("'", '\\u0027')
         .replace('<', '\\u003c')
         .replace('>', '\\u003e')
