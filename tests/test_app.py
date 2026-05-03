@@ -266,10 +266,14 @@ def test_add_asset_video_upload(reset_assets: None) -> None:
 
         assert asset.name == 'Video'
         assert asset.mimetype == 'video'
-        # Video uploads land with duration=0 — the v2 API enforces this
-        # (CreateAssetSerializerV2 rejects video duration > 0) and the
-        # scheduler reads the real length from the file at playtime.
-        assert asset.duration == 0
+        # Video uploads land with the configured default_duration as a
+        # placeholder while the probe_video_duration Celery task runs
+        # ffprobe out of band. The asset is is_processing=True until
+        # the worker writes the resolved length back. Asserting the
+        # placeholder seeds matches what the operator sees on the row
+        # immediately after the upload completes.
+        assert asset.duration == settings['default_duration']
+        assert asset.is_processing is True
 
 
 @pytest.mark.integration
@@ -303,27 +307,30 @@ def test_add_two_assets_upload(reset_assets: None) -> None:
             # constant interval — fixed sleeps either run too long
             # locally or too short on slower CI runners and reintroduce
             # the flake the constant-sleep version was meant to fix.
-            _wait_for_asset_in_table(browser, 'standby.png')
+            _wait_for_asset_in_table(browser, 'Standby')
 
             wait_for_and_do(
                 browser,
                 'input[name="file_upload"]',
                 lambda file_input: file_input.fill(video_file),
             )
-            _wait_for_asset_in_table(browser, 'video.mov')
+            _wait_for_asset_in_table(browser, 'Video')
 
         assets = Asset.objects.all()
 
         assert len(assets) == 2
 
-        assert assets[0].name == 'standby.png'
+        assert assets[0].name == 'Standby'
         assert assets[0].mimetype == 'image'
         assert assets[0].duration == settings['default_duration']
 
-        assert assets[1].name == 'video.mov'
+        assert assets[1].name == 'Video'
         assert assets[1].mimetype == 'video'
-        # Video uploads land with duration=0 — see test_add_asset_video_upload.
-        assert assets[1].duration == 0
+        # Video uploads keep default_duration as a placeholder while
+        # probe_video_duration runs out of band — see
+        # test_add_asset_video_upload.
+        assert assets[1].duration == settings['default_duration']
+        assert assets[1].is_processing is True
 
 
 @pytest.mark.integration
