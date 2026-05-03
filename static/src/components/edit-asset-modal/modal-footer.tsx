@@ -35,7 +35,7 @@ export const ModalFooter = ({
   setIsSubmitting,
 }: ModalFooterProps) => {
   return (
-    <div className="modal-footer">
+    <div className="modal-footer flex-column-reverse flex-sm-row">
       <div className="float-start progress active" style={{ display: 'none' }}>
         <div className="bar progress-bar-striped progress-bar progress-bar-animated"></div>
       </div>

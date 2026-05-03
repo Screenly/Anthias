@@ -9,7 +9,7 @@ export const NameField = ({ formData, handleInputChange }: NameFieldProps) => {
   return (
     <div className="row mb-3 name">
       <label className="col-4 col-form-label">Name</label>
-      <div className="col-7">
+      <div className="col-8">
         <input
           className="form-control shadow-none"
           name="name"

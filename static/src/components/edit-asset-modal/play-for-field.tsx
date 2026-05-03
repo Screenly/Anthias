@@ -23,7 +23,7 @@ export const PlayForField = ({
   return (
     <div className="row mb-3 loop_date">
       <label className="col-4 col-form-label">Play for</label>
-      <div className="controls col-7">
+      <div className="controls col-8">
         <select
           className="form-control shadow-none form-select"
           id="loop_times"

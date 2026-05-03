@@ -58,6 +58,18 @@ $swal2-cancel-hover-color: #5a6268;
       &:hover {
         background-color: $anthias-yellow-3;
       }
+
+      // Destructive confirmations (delete / reboot / shutdown) override
+      // the default yellow CTA so a misclick on a destructive action
+      // is visually distinct from "Save" elsewhere in the app.
+      &.swal2-confirm-danger {
+        color: #fff;
+        background-color: $swal2-error-color;
+
+        &:hover {
+          background-color: darken($swal2-error-color, 5%);
+        }
+      }
     }
 
     .swal2-cancel {

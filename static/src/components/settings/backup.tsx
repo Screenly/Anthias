@@ -147,8 +147,18 @@ export const Backup = () => {
         </div>
       </div>
       <div className="row content px-3">
-        <div id="backup-section" className="col-12 my-3">
-          <div className="text-end">
+        <div
+          id="backup-section"
+          className="col-12 my-3 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3"
+        >
+          <div className="flex-grow-1">
+            <div className="fw-semibold">Back up or restore</div>
+            <small className="text-muted">
+              Download a snapshot of your assets and settings, or restore from a
+              previous backup file.
+            </small>
+          </div>
+          <div className="d-flex flex-wrap justify-content-md-end gap-2">
             <input
               name="backup_upload"
               style={{ display: 'none' }}
@@ -157,7 +167,7 @@ export const Backup = () => {
             />
             <button
               id="btn-backup"
-              className="btn btn-long btn-info me-2"
+              className="btn btn-long btn-info"
               onClick={handleBackup}
               disabled={isUploading}
             >

@@ -2,22 +2,6 @@
 @import "sweetalert2-overrides";
 @import "form-overrides";
 
-// Transformations
-@mixin rotate($degrees) {
-  -webkit-transform: rotate($degrees);
-  -moz-transform: rotate($degrees);
-  -ms-transform: rotate($degrees);
-  -o-transform: rotate($degrees);
-  transform: rotate($degrees);
-}
-
-// Drop shadows
-@mixin box-shadow($shadow...) {
-  -webkit-box-shadow: $shadow;
-  -moz-box-shadow: $shadow;
-  box-shadow: $shadow;
-}
-
 // Selected text
 @mixin selection {
     ::-moz-selection { @content; }
@@ -29,9 +13,8 @@
   background: $anthias-yellow-3;
 }
 
-$footer-height: 250px;
+$footer-height: 160px;
 $secondary-color: #6c757d;
-$base-line-height: 50px !default;
 
 html {
   position: relative;
@@ -40,8 +23,8 @@ html {
 
 body {
   background-color: $anthias-purple-1;
-  margin-top: 95px;
-  margin-bottom: $footer-height + $base-line-height;
+  margin-top: 5.9375rem;
+  margin-bottom: $footer-height;
   font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
 }
 
@@ -97,18 +80,26 @@ body {
 
 .modal-dialog {
   max-width: 580px;
-  margin-top: 70px;
+  margin-top: 4.375rem;
+
+  @media (max-width: 575.98px) {
+    margin: 0.5rem;
+    margin-top: 0.5rem;
+  }
 }
 
-label {
+// Forms inside modals and the settings page rely on right-aligned
+// labels so the col-form-label sits flush against its input column.
+.modal label.col-form-label,
+.row.content label.col-form-label {
   text-align: right;
 }
 
 .btn {
-  padding: 12px 24px 12px 24px;
+  padding: 0.75rem 1.5rem;
 
   &:focus {
-    box-shadow: none !important;
+    box-shadow: none;
   }
 }
 
@@ -288,13 +279,13 @@ label {
 
 #footer {
   bottom: 0;
-  height: $footer-height;
+  min-height: $footer-height;
   position: absolute;
   width: 100%;
 
   .logo {
     img {
-      max-height: 50px;
+      max-height: 3.125rem;
     }
   }
 
@@ -319,21 +310,58 @@ label {
 }
 
 h1.page-header {
-  padding-bottom: 9px;
-  margin: 20px 0 30px;
+  padding-bottom: 0.5625rem;
+  margin: 1.25rem 0 1.875rem;
   border-bottom: 1px solid #eee;
   font-weight: bold;
+}
+
+// On narrow viewports the asset table hides Start/End/Duration columns
+// (see active-assets.tsx / asset-row/index.tsx) so Activity + Actions
+// stay reachable. Tighten the action-button cell so the three icons
+// fit alongside the activity toggle on a 360px-wide phone.
+@media (max-width: 767.98px) {
+  .asset_row_btns {
+    padding: 0.5rem 0.25rem;
+
+    button {
+      padding: 0.375rem 0.5rem;
+    }
+  }
+}
+
+@media (max-width: 575.98px) {
+  // The schedule-action buttons in the header (Previous / Next / Add)
+  // already stack via flex-column flex-sm-row; let them fill the column
+  // width instead of staying pinned at 13.125rem.
+  #previous-asset-button,
+  #next-asset-button,
+  #add-asset-button {
+    width: 100%;
+  }
+}
+
+.empty-state-message {
+  color: $secondary-color;
+  text-align: center;
+  padding: 3rem 1rem;
+
+  .empty-state-icon {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+    opacity: 0.4;
+  }
 }
 
 section {
   .header {
     color: #fff;
-    padding: 6px 9px;
-    margin-bottom: 9px;
-    border-top-right-radius: 4px;
-    border-top-left-radius: 4px;
+    padding: 0.375rem 0.5625rem;
+    margin-bottom: 0.5625rem;
+    border-top-right-radius: 0.25rem;
+    border-top-left-radius: 0.25rem;
     font-weight: bold;
-    text-shadow: #555 0px 1px 1px !important;
+    text-shadow: #555 0 1px 1px;
     text-transform: uppercase;
   }
 }
@@ -376,48 +404,16 @@ a.nav-link:not(.active) {
 
 }
 
-#request-error {
-  z-index: 10000;
-
-  .alert {
-    margin-left: 300px;
-    width: 500px;
-  }
-}
-
-#add-form {
-  .uri-text {
-    padding-top: 5px;
-    margin-left: 0px;
-    overflow: hidden;
-  }
-}
-
 .modal-footer {
   .status {
     float: left;
-    margin-top: 6px;
+    margin-top: 0.375rem;
   }
 
   .progress {
-    margin-top: 4px;
-    margin-bottom: 0px;
+    margin-top: 0.25rem;
+    margin-bottom: 0;
     width: 69%;
-  }
-}
-
-#backup-section {
-  .progress {
-    margin-top: 5px;
-    width: 50%;
-    margin-bottom: 5px;
-    display: inline-block;
-  }
-}
-
-#assets {
-  table td {
-    line-height: 32px;
   }
 }
 
@@ -430,12 +426,6 @@ input[name="file_upload"] {
   left: 0;
 }
 
-.bootstrap-timepicker table td input {
-  border: 1px solid #ced4da;
-  border-radius: .25rem;
-  width: 39px !important;
-}
-
 .duration {
   .controls {
     display: flex;
@@ -445,7 +435,7 @@ input[name="file_upload"] {
   input {
     float: left;
     width: 24%;
-    margin-right: 5px;
+    margin-right: 0.3125rem;
   }
 }
 
@@ -454,9 +444,9 @@ input[name="file_upload"] {
 }
 
 .form-actions {
-  padding: 20px 20px;
-  margin-top: 20px;
-  margin-bottom: 20px;
+  padding: 1.25rem 1.25rem;
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
   background-color: $anthias-purple-4;
 
   a, span {
@@ -472,116 +462,58 @@ input[name="file_upload"] {
 
 .filedrop {
   position: relative;
-  border: 3px dashed #ccc;
-  padding: 50px;
+  border: 0.1875rem dashed #ccc;
+  padding: 3.125rem;
   text-align: center;
   color: #888;
-  border-radius: 7px;
-}
-
-#file_upload_label {
-  position: absolute;
-  top: 5px;
-  left: 105px;
-  right: 0;
-  @include ellip();
-}
-
-.accordion-inner {
-  padding: 9px 0 0 0;
-}
-
-.accordion-group {
-  border: none;
-}
-
-@mixin rota($angle,$time) {
-  @each $prefix in webkit moz ms o {
-    -#{$prefix}-transition: all $time linear;
-    -#{$prefix}-transform: rotate($angle);
-  }
-  transition: all $time linear;
-  transform: rotate($angle);
-}
-
-.unrotated {
-  @include rota(0deg, .15s);
-}
-
-.rotated {
-  @include rota(90deg, .15s);
-}
-
-.nocache-toggle {
-  padding-top: 0 !important;
-}
-
-.advanced-accordion {
-  display: none;
-}
-
-.modal-body {
-  max-height: 600px !important;
-}
-
-.ui-sortable-helper {
-  background: #fff;
-}
-
-.asset-icon {
-  margin-left: 5px;
-}
-
-#inactive-assets i.fa-grip-vertical {
-  display: none;
+  border-radius: 0.4375rem;
 }
 
 .asset_row_name {
   @include ellip();
-  max-width: 290px;
-  min-width: 290px;
+  // On mobile, drop both bounds so Activity + Actions can claim the
+  // space they need; the @media block below restores the wider name
+  // column once Start/End/Duration columns are visible again.
+  max-width: 8rem;
+  min-width: 0;
   img {
     cursor: move;
   }
 }
 
+@media (min-width: 768px) {
+  .asset_row_name {
+    max-width: 18.125rem;
+    min-width: 12.5rem;
+  }
+}
+
 .asset_row_btns {
-  padding: 12px 8px 10px 8px !important;
+  padding: 0.75rem 0.5rem 0.625rem;
   white-space: nowrap;
 
   button {
-    padding: 7px 10px;
+    padding: 0.4375rem 0.625rem;
   }
 }
 
 .table {
   td {
-    vertical-align: middle !important;
-  }
-
-  .processing-message {
-    width: 117px;
-    margin-bottom: 2px;
+    vertical-align: middle;
   }
 }
 
-.terminal {
-  background-color: #000 !important;
+.terminal,
+.terminal:hover,
+.terminal:active,
+.terminal:focus {
+  background-color: #000;
   border: none;
   color: #00ff00;
-  padding: 8px;
+  padding: 0.5rem;
   font-family: courier new, Helvetica, Arial, sans-serif;
   font-weight: bold;
-
-  &:hover, &:active, &:focus {
-    background-color: #000 !important;
-    border: none;
-    color: #00ff00;
-    padding: 8px;
-    font-family: courier new, Helvetica, Arial, sans-serif;
-    font-weight: bold;
-    box-shadow: none !important;
-    outline: 0 !important;
-    -webkit-appearance: none;
-  }
+  box-shadow: none;
+  outline: 0;
+  appearance: none;
 }

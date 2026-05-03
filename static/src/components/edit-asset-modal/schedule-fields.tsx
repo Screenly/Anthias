@@ -77,7 +77,7 @@ export const ScheduleFields = ({
       <div className="row mb-3">
         <label className="col-4 col-form-label">Days of week</label>
         <div className="col-8">
-          <div className="d-flex flex-wrap align-items-center">
+          <div className="d-flex flex-wrap align-items-center gap-1">
             {DAYS.map((d) => {
               const isOnlyChecked =
                 formData.play_days.length === 1 &&
@@ -85,7 +85,7 @@ export const ScheduleFields = ({
               return (
                 <label
                   key={d.value}
-                  className="form-check form-check-inline me-2 mb-1"
+                  className="form-check form-check-inline m-0"
                   title={
                     isOnlyChecked
                       ? 'At least one day must be selected'
@@ -114,18 +114,24 @@ export const ScheduleFields = ({
       <div className="row mb-3">
         <label className="col-4 col-form-label">Time of day</label>
         <div className="col-8">
-          <label className="form-check mb-2">
+          <div className="form-check d-flex align-items-center mb-2">
             <input
               type="checkbox"
-              className="form-check-input"
+              className="form-check-input me-2 mt-0"
+              id="restrict-time-toggle"
               checked={restrictTimeEnabled}
               onChange={toggleRestrictTime}
               aria-label="Restrict time of day"
             />
-            <span className="form-check-label">Restrict to a daily window</span>
-          </label>
+            <label
+              htmlFor="restrict-time-toggle"
+              className="form-check-label mb-0"
+            >
+              Restrict to a daily window
+            </label>
+          </div>
           {restrictTimeEnabled && (
-            <div className="d-flex align-items-center">
+            <div className="d-flex align-items-center flex-wrap gap-2">
               <input
                 className="form-control time shadow-none"
                 type="time"
@@ -134,9 +140,9 @@ export const ScheduleFields = ({
                   handleTimeChange('play_time_from', e.target.value)
                 }
                 aria-label="Play time from"
-                style={{ marginRight: '5px', maxWidth: '150px' }}
+                style={{ maxWidth: '9.375rem' }}
               />
-              <span className="me-2">to</span>
+              <span>to</span>
               <input
                 className="form-control time shadow-none"
                 type="time"
@@ -145,7 +151,7 @@ export const ScheduleFields = ({
                   handleTimeChange('play_time_to', e.target.value)
                 }
                 aria-label="Play time to"
-                style={{ maxWidth: '150px' }}
+                style={{ maxWidth: '9.375rem' }}
               />
             </div>
           )}

@@ -14,13 +14,22 @@ export const InactiveAssetsTable = ({
         <thead>
           <tr>
             <th className="text-secondary fw-bold asset_row_name">Name</th>
-            <th className="text-secondary fw-bold" style={{ width: '21%' }}>
+            <th
+              className="text-secondary fw-bold d-none d-md-table-cell"
+              style={{ width: '21%' }}
+            >
               Start
             </th>
-            <th className="text-secondary fw-bold" style={{ width: '21%' }}>
+            <th
+              className="text-secondary fw-bold d-none d-lg-table-cell"
+              style={{ width: '21%' }}
+            >
               End
             </th>
-            <th className="text-secondary fw-bold" style={{ width: '13%' }}>
+            <th
+              className="text-secondary fw-bold d-none d-lg-table-cell"
+              style={{ width: '13%' }}
+            >
               Duration
             </th>
             <th className="text-secondary fw-bold" style={{ width: '7%' }}>

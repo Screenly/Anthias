@@ -86,7 +86,7 @@ export const AddAssetModal = ({
       }}
     >
       <div
-        className="modal-dialog"
+        className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
         role="document"
         ref={modalRef}
         style={{
@@ -162,7 +162,7 @@ export const AddAssetModal = ({
               </div>
             </div>
           </div>
-          <div className="modal-footer">
+          <div className="modal-footer flex-column-reverse flex-sm-row">
             <div
               className="status"
               style={{

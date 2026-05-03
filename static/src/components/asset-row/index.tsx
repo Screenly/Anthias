@@ -121,8 +121,8 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
             </span>
           </td>
           <td
-            style={{ width: '21%', maxWidth: '200px' }}
-            className="text-truncate"
+            style={{ width: '21%', maxWidth: '12.5rem' }}
+            className="text-truncate d-none d-md-table-cell"
             data-bs-toggle="tooltip"
             data-bs-placement="top"
             title={formatDate(props.startDate, dateFormat, use24HourClock)}
@@ -130,8 +130,8 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
             {formatDate(props.startDate, dateFormat, use24HourClock)}
           </td>
           <td
-            style={{ width: '21%', maxWidth: '200px' }}
-            className="text-truncate"
+            style={{ width: '21%', maxWidth: '12.5rem' }}
+            className="text-truncate d-none d-lg-table-cell"
             data-bs-toggle="tooltip"
             data-bs-placement="top"
             title={formatDate(props.endDate, dateFormat, use24HourClock)}
@@ -139,8 +139,8 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
             {formatDate(props.endDate, dateFormat, use24HourClock)}
           </td>
           <td
-            style={{ width: '13%', maxWidth: '150px' }}
-            className={classNames('text-truncate')}
+            style={{ width: '13%', maxWidth: '9.375rem' }}
+            className="text-truncate d-none d-lg-table-cell"
             data-bs-toggle="tooltip"
             data-bs-placement="top"
             title={formatDuration(props.duration)}

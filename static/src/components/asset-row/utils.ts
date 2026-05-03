@@ -124,7 +124,7 @@ export const handleDelete = async (
       popup: 'swal2-popup',
       title: 'swal2-title',
       htmlContainer: 'swal2-html-container',
-      confirmButton: 'swal2-confirm',
+      confirmButton: 'swal2-confirm swal2-confirm-danger',
       cancelButton: 'swal2-cancel',
       actions: 'swal2-actions',
     },

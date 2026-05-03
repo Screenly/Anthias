@@ -47,7 +47,7 @@ export const SystemControls = () => {
         popup: 'swal2-popup',
         title: 'swal2-title',
         htmlContainer: 'swal2-html-container',
-        confirmButton: 'swal2-confirm',
+        confirmButton: 'swal2-confirm swal2-confirm-danger',
         cancelButton: 'swal2-cancel',
         actions: 'swal2-actions',
       },
@@ -102,10 +102,17 @@ export const SystemControls = () => {
         </div>
       </div>
       <div className="row content px-3">
-        <div className="col-12 my-3">
-          <div className="text-end">
+        <div className="col-12 my-3 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+          <div className="flex-grow-1">
+            <div className="fw-semibold">Power controls</div>
+            <small className="text-muted">
+              Reboot or shut down the device. The screen will go blank until the
+              device is powered back on.
+            </small>
+          </div>
+          <div className="d-flex flex-wrap justify-content-md-end gap-2">
             <button
-              className="btn btn-danger btn-long me-2"
+              className="btn btn-danger btn-long"
               type="button"
               onClick={handleReboot}
             >

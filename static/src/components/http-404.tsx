@@ -1,5 +1,6 @@
 import React from 'react'
 import classNames from 'classnames'
+import { Link } from 'react-router'
 
 const Http404: React.FC = () => {
   return (
@@ -30,6 +31,9 @@ const Http404: React.FC = () => {
                 <br />
                 had its name changed, or is temporarily unavailable.
               </p>
+              <Link to="/" className="btn btn-primary btn-long">
+                Back to Schedule Overview
+              </Link>
             </div>
           </div>
         </div>

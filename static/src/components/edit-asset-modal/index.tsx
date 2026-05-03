@@ -178,7 +178,7 @@ export const EditAssetModal = ({
       }}
     >
       <div
-        className="modal-dialog"
+        className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
         role="document"
         style={{
           transition: 'transform 0.3s ease-in-out',
@@ -241,11 +241,11 @@ export const EditAssetModal = ({
                   endDateTime={endDateTime}
                   handleDateChange={handleDateChange}
                 />
-                <ScheduleFields formData={formData} setFormData={setFormData} />
                 <DurationField
                   formData={formData}
                   handleInputChange={handleInputChange}
                 />
+                <ScheduleFields formData={formData} setFormData={setFormData} />
                 <AdvancedFields
                   formData={formData}
                   handleInputChange={handleInputChange}

@@ -195,7 +195,16 @@ export const SystemInfo = () => {
               <tr>
                 <th scope="row">MAC Address</th>
                 <td>
-                  <Skeleton isLoading={isLoading}>{macAddress}</Skeleton>
+                  <Skeleton isLoading={isLoading}>
+                    {macAddress &&
+                    macAddress.toLowerCase().startsWith('unable') ? (
+                      <span className="text-muted fst-italic">
+                        {macAddress}
+                      </span>
+                    ) : (
+                      macAddress
+                    )}
+                  </Skeleton>
                 </td>
               </tr>
             </tbody>

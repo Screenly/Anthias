@@ -86,7 +86,7 @@ export const ScheduleOverview = () => {
         onAddAsset={handleAddAsset}
       />
 
-      <span id="assets">
+      <div id="assets">
         <ActiveAssetsSection
           activeAssetsCount={activeAssets.length}
           onEditAsset={handleEditAsset}
@@ -98,7 +98,7 @@ export const ScheduleOverview = () => {
           onEditAsset={handleEditAsset}
           onAddAssetClick={handleAddAsset}
         />
-      </span>
+      </div>
 
       <AddAssetModal
         isOpen={isModalOpen}

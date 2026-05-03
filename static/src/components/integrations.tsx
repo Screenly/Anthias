@@ -47,7 +47,21 @@ export const Integrations = () => {
           </h4>
         </div>
       </div>
-      <div className="row content" style={{ minHeight: '60vh' }}>
+      <div className="row content">
+        {!data.is_balena && (
+          <div className="col-12">
+            <div className="empty-state-message">
+              <div className="empty-state-icon">⚙</div>
+              <div className="fw-semibold mb-1 text-dark">
+                No integrations are enabled
+              </div>
+              <small>
+                Integrations appear here when this device is provisioned through
+                a supported platform (e.g. balena).
+              </small>
+            </div>
+          </div>
+        )}
         {data.is_balena && (
           <div id="balena-section" className="col-12">
             <h4 className="page-header">
