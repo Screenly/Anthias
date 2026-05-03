@@ -458,6 +458,28 @@ def test_assets_upload_rejects_unknown_extension(client: Client) -> None:
 
 
 @pytest.mark.django_db
+def test_write_endpoint_fires_websocket_notify(
+    client: Client, asset: Asset
+) -> None:
+    """Every successful write goes through _asset_table_response which
+    must fan a refresh nudge over the Channels group so connected
+    browsers repaint without waiting for the 5s poll."""
+    with (
+        mock.patch(
+            'anthias_server.app.consumers.notify_asset_update'
+        ) as notify_mock,
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_toggle', args=[asset.asset_id])
+        )
+    notify_mock.assert_called()
+
+
+@pytest.mark.django_db
 def test_assets_upload_video_marks_processing_and_queues_probe(
     client: Client,
 ) -> None:

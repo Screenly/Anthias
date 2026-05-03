@@ -246,6 +246,13 @@ def probe_video_duration(asset_id: str) -> None:
     # materialised — same trigger every other write path uses.
     r.publish('anthias.viewer', 'reload')
 
+    # Push a refresh nudge over the browser-facing WebSocket so the
+    # operator sees the row stop "Processing" and pick up its real
+    # duration without waiting for the next 5s table poll.
+    from anthias_server.app.consumers import notify_asset_update
+
+    notify_asset_update(asset_id)
+
 
 @celery.task
 def reboot_anthias() -> None:

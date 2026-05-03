@@ -73,6 +73,51 @@ document.body.addEventListener('toast', ((ev: Event) => {
   )
 }) as EventListener)
 
+// WebSocket fan-out from the Channels AssetConsumer. The server
+// triggers `htmx.trigger('body', 'refresh-assets')` indirectly: on
+// every Asset write the view fans a small message over /ws, this
+// listener picks it up and asks htmx to re-fetch the table partial
+// immediately (rather than waiting for the 5s poll). Falls back to
+// the poll if the socket isn't reachable — so this is purely an
+// optimisation, never a correctness dependency.
+function connectAssetSocket(): void {
+  if (!('WebSocket' in window)) return
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const url = `${proto}//${window.location.host}/ws`
+  let socket: WebSocket | null = null
+  let backoff = 1000
+  const open = (): void => {
+    try {
+      socket = new WebSocket(url)
+    } catch {
+      // URL or environment refused — give up; the poll covers it.
+      return
+    }
+    socket.addEventListener('open', () => {
+      backoff = 1000
+    })
+    socket.addEventListener('message', () => {
+      const htmx = (window as unknown as {
+        htmx?: { trigger: (...args: unknown[]) => void }
+      }).htmx
+      htmx?.trigger('body', 'refresh-assets')
+    })
+    socket.addEventListener('close', () => {
+      // Reconnect with capped exponential backoff so a transient
+      // server restart doesn't leave the page stuck on poll-only.
+      const delay = Math.min(backoff, 15000)
+      backoff = Math.min(backoff * 2, 15000)
+      window.setTimeout(open, delay)
+    })
+    socket.addEventListener('error', () => {
+      // Triggers a 'close' right after; let the close handler manage
+      // backoff so we don't double-schedule the reconnect.
+      socket?.close()
+    })
+  }
+  open()
+}
+
 // Drain server-rendered Django flash messages once the DOM is up.
 function drainDjangoMessages(): void {
   const node = document.getElementById('django-messages')
@@ -110,12 +155,14 @@ function drainDjangoMessages(): void {
 if (document.readyState === 'complete') {
   Alpine.start()
   drainDjangoMessages()
+  connectAssetSocket()
 } else {
   document.addEventListener(
     'DOMContentLoaded',
     () => {
       Alpine.start()
       drainDjangoMessages()
+      connectAssetSocket()
     },
     { once: true },
   )

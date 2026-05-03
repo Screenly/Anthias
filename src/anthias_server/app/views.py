@@ -403,6 +403,14 @@ def _asset_table_response(
     Pass `toast=("success", "Asset deleted")` to fire a client toast
     via the HX-Trigger header (HTMX requests) or a Django flash
     message (full-page reload)."""
+    # Fan out a refresh nudge over the WebSocket so other browsers
+    # currently looking at the home page repaint without waiting for
+    # their next 5s poll. Skipped on read endpoints (those don't call
+    # this helper at all). Failures are swallowed inside notify_asset_update.
+    from anthias_server.app.consumers import notify_asset_update
+
+    notify_asset_update()
+
     if request.headers.get('HX-Request'):
         from django.shortcuts import render as _render
 
