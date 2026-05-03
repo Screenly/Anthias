@@ -76,6 +76,17 @@
   // DOMContentLoaded in that case; subsequent HTMX-driven swaps see
   // Sortable already loaded and run inline.
   (function () {
+    // The CSRF token would normally come from a hidden form input,
+    // but the partial endpoint is also reachable without a form on
+    // the page (e.g. direct hx-get of /_partials/asset-table during
+    // testing). Read from the csrftoken cookie instead so the
+    // sortable handler degrades gracefully if no form is mounted.
+    function csrfToken() {
+      const fromForm = document.querySelector('input[name=csrfmiddlewaretoken]');
+      if (fromForm) return fromForm.value;
+      const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : '';
+    }
     function init() {
       const tbody = document.getElementById('active-rows');
       if (!tbody || !window.Sortable) return;
@@ -92,7 +103,7 @@
           fetch('{% url "anthias_app:assets_order" %}', {
             method: 'POST',
             body: fd,
-            headers: { 'X-CSRFToken': document.querySelector('input[name=csrfmiddlewaretoken]').value },
+            headers: { 'X-CSRFToken': csrfToken() },
           }).then(() => htmx.trigger('body', 'refresh-assets'));
         },
       });

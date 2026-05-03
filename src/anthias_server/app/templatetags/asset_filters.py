@@ -4,6 +4,11 @@
 safe for inlining into an Alpine `@click` handler. The form-modal opens
 edit mode by reading these inline blobs rather than refetching from the
 API — keeps the row markup self-contained.
+
+`asset_date` formats an Asset's start/end timestamps using the
+device-settings configured `date_format` and `use_24_hour_clock`
+toggles so the table matches what the Settings page advertises
+(matches the React component's Intl.DateTimeFormat output).
 """
 
 import json
@@ -14,7 +19,39 @@ from django.template import Library
 from django.utils.safestring import SafeString, mark_safe
 from django.utils import timezone
 
+from anthias_server.settings import settings
+
 register = Library()
+
+
+# Maps the user-facing `date_format` strings the Settings page exposes
+# (mm/dd/yyyy, etc.) to the strftime tokens we actually format with.
+# The trailing time portion is appended dynamically based on the
+# use_24_hour_clock toggle.
+_DATE_FORMAT_MAP = {
+    'mm/dd/yyyy': '%m/%d/%Y',
+    'dd/mm/yyyy': '%d/%m/%Y',
+    'yyyy/mm/dd': '%Y/%m/%d',
+    'mm-dd-yyyy': '%m-%d-%Y',
+    'dd-mm-yyyy': '%d-%m-%Y',
+    'yyyy-mm-dd': '%Y-%m-%d',
+    'mm.dd.yyyy': '%m.%d.%Y',
+    'dd.mm.yyyy': '%d.%m.%Y',
+    'yyyy.mm.dd': '%Y.%m.%d',
+}
+
+
+@register.filter
+def asset_date(value: datetime | None) -> str:
+    """Format an Asset start/end datetime using the configured
+    date_format + use_24_hour_clock device settings."""
+    if value is None:
+        return ''
+    settings.load()
+    date_part = _DATE_FORMAT_MAP.get(settings['date_format'], '%m/%d/%Y')
+    time_part = '%H:%M:%S' if settings['use_24_hour_clock'] else '%I:%M:%S %p'
+    local = timezone.localtime(value)
+    return local.strftime(f'{date_part} {time_part}')
 
 
 def _to_dict(obj: Any) -> Any:

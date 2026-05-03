@@ -65,14 +65,12 @@
       </div>
 
       <template x-if="mode === 'edit' && editAsset">
-        {# No hx-post here — htmx.org reads an empty hx-post as
-           "POST to the current URL" (which is /, not /assets/<id>/update),
-           and that nullified the dynamic :action binding. Drop hx-post
-           entirely and let the browser submit the form to its `action`;
-           the after-request asset-saved event still fires because the
-           successful submit lands the asset_table_response (HX-Request
-           branch) and HTMX handles the response normally via hx-target.
-        #}
+        {# Both `:action` (form-native fallback) and `x-bind:hx-post`
+           (HTMX submit) are bound to the same /assets/<id>/update URL.
+           An empty hx-post would have made HTMX POST to the current
+           page (i.e. /, not the per-asset update endpoint); the
+           x-bind keeps the dynamic value flowing through Alpine so
+           HTMX picks up the right URL on every render. #}
         <form
           method="post"
           :action="`/assets/${editAsset.asset_id}/update`"
