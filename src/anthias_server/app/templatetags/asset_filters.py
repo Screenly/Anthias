@@ -12,7 +12,7 @@ toggles so the table matches what the Settings page advertises
 """
 
 import json
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from django.template import Library
@@ -186,6 +186,77 @@ def to_json(value: Any) -> SafeString:
         .replace('>', '\\u003e')
     )
     return mark_safe(safe)
+
+
+@register.filter
+def schedule_window(asset: Any) -> dict[str, str]:
+    """Return a structured descriptor for the asset's start/end window.
+
+    Renders as a single visual block in the schedule table — primary
+    line is a relative phrase ('Active', 'Starts in 3 days', 'Ended 2
+    days ago'), secondary is a compact absolute range ('Mar 12 → May
+    23'). `kind` ∈ {'live', 'upcoming', 'expired', 'unknown'} so the
+    template can colour-code without re-deriving the state.
+    """
+    start = getattr(asset, 'start_date', None)
+    end = getattr(asset, 'end_date', None)
+    if not start or not end:
+        return {'kind': 'unknown', 'primary': 'No window', 'secondary': ''}
+
+    now = timezone.now()
+    start_local = timezone.localtime(start)
+    end_local = timezone.localtime(end)
+
+    same_year = start_local.year == end_local.year == now.year
+    abs_fmt = '%b %d' if same_year else '%b %d, %Y'
+    secondary = (
+        f'{start_local.strftime(abs_fmt)} → {end_local.strftime(abs_fmt)}'
+    )
+
+    if now < start:
+        delta = start - now
+        primary = (
+            'Starts soon'
+            if delta.total_seconds() < 60 * 60
+            else f'Starts {_relative_phrase(delta, future=True)}'
+        )
+        return {'kind': 'upcoming', 'primary': primary, 'secondary': secondary}
+    if now > end:
+        delta = now - end
+        primary = (
+            'Just ended'
+            if delta.total_seconds() < 60 * 60
+            else f'Ended {_relative_phrase(delta, future=False)}'
+        )
+        return {'kind': 'expired', 'primary': primary, 'secondary': secondary}
+
+    delta = end - now
+    if delta.days >= 365:
+        primary = 'Live · open-ended'
+    else:
+        primary = f'Live · ends {_relative_phrase(delta, future=True)}'
+    return {'kind': 'live', 'primary': primary, 'secondary': secondary}
+
+
+def _relative_phrase(delta: 'timedelta', *, future: bool) -> str:
+    """Compact relative duration: 'in 3 days' / '2 days ago' / 'in 5h'."""
+    seconds = int(delta.total_seconds())
+    if seconds < 60:
+        unit = 'now'
+    elif seconds < 3600:
+        unit = f'{seconds // 60}m'
+    elif seconds < 86400:
+        unit = f'{seconds // 3600}h'
+    elif seconds < 86400 * 30:
+        days = seconds // 86400
+        unit = f'{days} day{"s" if days != 1 else ""}'
+    elif seconds < 86400 * 365:
+        months = seconds // (86400 * 30)
+        unit = f'{months} month{"s" if months != 1 else ""}'
+    else:
+        years = seconds // (86400 * 365)
+        unit = f'{years} year{"s" if years != 1 else ""}'
+    return f'in {unit}' if future else f'{unit} ago'
 
 
 @register.filter

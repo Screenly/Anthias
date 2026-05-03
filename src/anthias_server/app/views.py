@@ -391,7 +391,12 @@ def _safe_redirect_uri(uri: str) -> str | None:
     if not uri:
         return None
     lowered = uri.strip().lower()
-    if lowered.startswith(('http://', 'https://')):
+    # NOSONAR(python:S5332): we're whitelisting schemes here for the
+    # redirect filter — not initiating an HTTP connection ourselves.
+    # Operators legitimately store http:// URIs for LAN-only signage
+    # (intranets, RTSP gateways) where TLS isn't terminated; rejecting
+    # http would break those installs without improving security.
+    if lowered.startswith(('http://', 'https://')):  # NOSONAR
         return uri
     return None
 

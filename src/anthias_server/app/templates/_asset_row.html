@@ -27,8 +27,17 @@
       </span>
     </div>
   </td>
-  <td>{{ asset.start_date|asset_date }}</td>
-  <td>{{ asset.end_date|asset_date }}</td>
+  {% with window=asset|schedule_window %}
+  <td>
+    <div class="schedule-window schedule-window--{{ window.kind }}">
+      <div class="schedule-window__dot" aria-hidden="true"></div>
+      <div>
+        <p class="schedule-window__primary">{{ window.primary }}</p>
+        {% if window.secondary %}<p class="schedule-window__secondary">{{ window.secondary }}</p>{% endif %}
+      </div>
+    </div>
+  </td>
+  {% endwith %}
   <td>{{ asset.duration|humanize_duration }}</td>
   <td>
     {% if asset.is_processing %}

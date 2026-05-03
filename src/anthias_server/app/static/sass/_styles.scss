@@ -443,6 +443,69 @@ label { text-align: left; }
   border-color: rgba(52, 211, 153, 0.4);
 }
 
+// Schedule-window cell — replaces the prior pair of raw start/end
+// datetime columns with a single human-readable block: status dot,
+// relative phrase ('Live · ends in 21 days'), compact absolute range
+// ('Mar 12 → May 23').
+.schedule-window {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.schedule-window__dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  flex: none;
+  background: var(--color-text-muted);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.04);
+}
+.schedule-window__primary {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+.schedule-window__secondary {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  letter-spacing: 0.01em;
+}
+.schedule-window--live .schedule-window__dot {
+  background: #34d399;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18);
+  animation: schedule-window-pulse 2.4s ease-in-out infinite;
+}
+.schedule-window--upcoming .schedule-window__dot {
+  background: var(--color-link);
+  box-shadow: 0 0 0 3px rgba(102, 51, 160, 0.18);
+}
+.schedule-window--expired .schedule-window__dot {
+  background: var(--color-text-muted);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
+}
+.schedule-window--expired .schedule-window__primary {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+  text-decoration-color: rgba(94, 88, 104, 0.4);
+}
+.surface--active .schedule-window__primary { color: var(--color-text-on-dark); }
+.surface--active .schedule-window__secondary { color: var(--color-text-on-dark-muted); }
+.surface--active .schedule-window__dot {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+}
+.surface--active .schedule-window--live .schedule-window__dot {
+  background: #4ade80;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.22);
+}
+
+@keyframes schedule-window-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18); }
+  50%      { box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.32); }
+}
+
 // -----------------------------------------------------------------------------
 // 8. Activity toggle (form switch) sizing
 // -----------------------------------------------------------------------------
