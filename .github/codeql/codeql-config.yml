@@ -1,38 +1,28 @@
 name: 'Anthias CodeQL'
 
+# Each `id:` filter expects a single rule ID — list-of-strings syntax
+# is silently ignored by codeql-action. Use one exclude block per
+# rule so the filters actually apply.
+#
+# All three rules fire on intentional operator-controlled paths:
+#   * py/url-redirection / py/path-injection on assets_download +
+#     assets_preview, sanitised at function entry by
+#     _safe_redirect_uri (urlparse → urlunparse rebuild after a
+#     scheme allowlist + netloc check) and _safe_local_asset_path
+#     (basename → join trusted base → realpath → startswith assert).
+#   * py/full-server-side-request-forgery on anthias_common.utils.url_fails,
+#     which IS by design fetching operator-supplied asset URIs to
+#     verify they're still reachable (called from the celery
+#     revalidate_asset_urls sweep).
+#
+# CodeQL still flags these because the validation lives in helper
+# functions a few lines from the sink; suppressing here documents the
+# decision in-repo (auditable in PR diffs) instead of dismissing each
+# alert individually via the GitHub UI.
 query-filters:
-  # py/url-redirection and py/path-injection are flagged on
-  # src/anthias_server/app/views.py for the assets_download /
-  # assets_preview endpoints. Both are gated by @authorized
-  # (operator session) and sanitised at function entry by:
-  #
-  #   _safe_redirect_uri  → scheme allowlist (http/https only),
-  #                         non-empty netloc, urlparse → urlunparse
-  #                         rebuild so the URL handed to redirect()
-  #                         is reconstructed from validated parts.
-  #   _safe_local_asset_path → basename(uri) (strips '..' / absolute
-  #                         prefixes) → join with trusted assetdir →
-  #                         realpath → assert startswith(base + sep)
-  #                         before the open(). Canonical CodeQL
-  #                         path-injection-resolution pattern.
-  #
-  # CodeQL still flags both because the validation lives in helper
-  # functions a few lines from the sink rather than inline. We don't
-  # have any other operator-controlled redirect or open-by-path sinks
-  # in the codebase, so disabling these queries here documents the
-  # decision in-repo (auditable in PR diffs) instead of dismissing
-  # individually via the GitHub UI.
   - exclude:
-      id:
-        - py/url-redirection
-        - py/path-injection
-        - py/full-server-side-request-forgery
-
-# py/full-server-side-request-forgery fires on anthias_common.utils.url_fails,
-# which IS by design fetching operator-supplied asset URIs to verify
-# they're still reachable (called from the celery revalidate_asset_urls
-# sweep). The "user-provided value" is a Django Asset.uri field set by
-# an authenticated operator session — exactly what the feature is meant
-# to probe. There is no other URL-fetching sink in the codebase that
-# could surface a real SSRF, so disabling the query is acceptable.
-
+      id: py/url-redirection
+  - exclude:
+      id: py/path-injection
+  - exclude:
+      id: py/full-server-side-request-forgery
