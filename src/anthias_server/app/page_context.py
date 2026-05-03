@@ -36,6 +36,24 @@ def navbar() -> dict[str, Any]:
     }
 
 
+def _resolved_resolution() -> dict[str, Any]:
+    """Active display resolution (reported by the viewer) with a
+    fallback to the operator-configured value from settings.
+
+    The viewer publishes 'viewer:display_resolution' to Redis every
+    minute with a 3-minute TTL. When the key is present we trust it
+    over the configured value — that's the actual screen the player
+    is rendering to. When it's absent (key expired, viewer never
+    detected an output, single-process dev runs), we surface the
+    configured value with a 'configured' label so the operator knows
+    it's the requested mode rather than the live one.
+    """
+    live = _redis.get('viewer:display_resolution')
+    if live:
+        return {'value': live, 'source': 'live'}
+    return {'value': settings['resolution'], 'source': 'configured'}
+
+
 def system_info() -> dict[str, Any]:
     from django.utils.timesince import timesince
     from django.utils import timezone
@@ -138,6 +156,7 @@ def system_info() -> dict[str, Any]:
             'human': timesince(timezone.now() - uptime, depth=2),
         },
         'display_power': _redis.get('display_power'),
+        'resolution': _resolved_resolution(),
         'device_model': device_model,
         'anthias_version': anthias_version,
         'mac_address': get_node_mac_address(),

@@ -535,3 +535,259 @@ def test_assets_upload_video_marks_processing_and_queues_probe(
     assert created.name == 'Clip'
     assert created.is_processing is True
     delay_mock.assert_called_once_with(created.asset_id)
+
+
+# ---------------------------------------------------------------------------
+# Schedule-window template filter (status dot + relative phrasing)
+
+
+@pytest.mark.django_db
+def test_schedule_window_live() -> None:
+    from anthias_server.app.templatetags.asset_filters import schedule_window
+
+    now = timezone.now()
+    a = Asset.objects.create(
+        name='live',
+        uri='https://x',
+        mimetype='webpage',
+        duration=10,
+        is_enabled=True,
+        is_processing=False,
+        play_order=0,
+        start_date=now - timedelta(days=2),
+        end_date=now + timedelta(days=30),
+    )
+    out = schedule_window(a)
+    assert out['kind'] == 'live'
+    assert 'Live' in out['primary']
+    assert '→' in out['secondary']
+
+
+@pytest.mark.django_db
+def test_schedule_window_disabled_overrides_state() -> None:
+    from anthias_server.app.templatetags.asset_filters import schedule_window
+
+    now = timezone.now()
+    a = Asset.objects.create(
+        name='disabled',
+        uri='https://x',
+        mimetype='webpage',
+        duration=10,
+        is_enabled=False,
+        is_processing=False,
+        play_order=0,
+        start_date=now - timedelta(days=1),
+        end_date=now + timedelta(days=30),
+    )
+    out = schedule_window(a)
+    assert out['kind'] == 'disabled'
+    assert out['primary'] == 'Disabled'
+
+
+@pytest.mark.django_db
+def test_schedule_window_upcoming_and_expired() -> None:
+    from anthias_server.app.templatetags.asset_filters import schedule_window
+
+    now = timezone.now()
+    upcoming = Asset.objects.create(
+        name='upcoming',
+        uri='https://x',
+        mimetype='webpage',
+        duration=10,
+        is_enabled=True,
+        is_processing=False,
+        play_order=0,
+        start_date=now + timedelta(days=3),
+        end_date=now + timedelta(days=30),
+    )
+    expired = Asset.objects.create(
+        name='expired',
+        uri='https://x',
+        mimetype='webpage',
+        duration=10,
+        is_enabled=True,
+        is_processing=False,
+        play_order=1,
+        start_date=now - timedelta(days=30),
+        end_date=now - timedelta(days=5),
+    )
+    assert schedule_window(upcoming)['kind'] == 'upcoming'
+    assert schedule_window(expired)['kind'] == 'expired'
+
+
+@pytest.mark.django_db
+def test_schedule_window_missing_dates_falls_back() -> None:
+    from anthias_server.app.templatetags.asset_filters import schedule_window
+
+    a = Asset(name='empty', mimetype='webpage', is_enabled=True)
+    out = schedule_window(a)
+    assert out['kind'] == 'unknown'
+
+
+# ---------------------------------------------------------------------------
+# humanize_duration / schedule_pills filters
+
+
+def test_humanize_duration_unit_buckets() -> None:
+    from anthias_server.app.templatetags.asset_filters import humanize_duration
+
+    assert humanize_duration(0) == '0s'
+    assert humanize_duration(30) == '30s'
+    assert humanize_duration(90) == '1m 30s'
+    assert humanize_duration(120) == '2m'
+    assert humanize_duration(3600) == '1h'
+    assert humanize_duration(3900) == '1h 5m'
+    assert humanize_duration('not-a-number') == ''
+
+
+@pytest.mark.django_db
+def test_schedule_pills_everyday_short_circuit(asset: Asset) -> None:
+    from anthias_server.app.templatetags.asset_filters import schedule_pills
+
+    pills = schedule_pills(asset)
+    kinds = {p['kind'] for p in pills}
+    # Default fixture has no day filter and no time window — just the
+    # "Everyday" pill should fire.
+    assert kinds == {'all'}
+    assert pills[0]['label'] == 'Everyday'
+
+
+# ---------------------------------------------------------------------------
+# get_friendly_device_model — Pi vs x86 vs virt
+
+
+def test_friendly_device_model_pi(monkeypatch: pytest.MonkeyPatch) -> None:
+    from anthias_common import device_helper
+
+    monkeypatch.setattr(
+        device_helper,
+        'parse_cpu_info',
+        lambda: {
+            'cpu_count': 4,
+            'model': 'Raspberry Pi 5 Model B Rev 1.0',
+        },
+    )
+    assert device_helper.get_friendly_device_model() == (
+        'Raspberry Pi 5 Model B Rev 1.0'
+    )
+
+
+def test_friendly_device_model_x86_with_dmi(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_common import device_helper
+
+    monkeypatch.setattr(
+        device_helper, 'parse_cpu_info', lambda: {'cpu_count': 4}
+    )
+
+    def fake_sysfs(path: str) -> str:
+        if path.endswith('sys_vendor'):
+            return 'Intel Corp.'
+        if path.endswith('product_name'):
+            return 'NUC11PAHi5'
+        return ''
+
+    monkeypatch.setattr(device_helper, '_read_sysfs', fake_sysfs)
+    monkeypatch.setattr(
+        device_helper,
+        '_read_cpu_brand',
+        lambda: 'Intel Core i5-1135G7 @ 2.40GHz',
+    )
+    assert device_helper.get_friendly_device_model() == (
+        'Intel Corp. NUC11PAHi5 · Intel Core i5-1135G7 @ 2.40GHz'
+    )
+
+
+def test_friendly_device_model_drops_virt_chassis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_common import device_helper
+
+    monkeypatch.setattr(
+        device_helper, 'parse_cpu_info', lambda: {'cpu_count': 4}
+    )
+
+    def fake_sysfs(path: str) -> str:
+        if path.endswith('sys_vendor'):
+            return 'QEMU'
+        if path.endswith('product_name'):
+            return 'Standard PC (Q35 + ICH9, 2009)'
+        return ''
+
+    monkeypatch.setattr(device_helper, '_read_sysfs', fake_sysfs)
+    monkeypatch.setattr(
+        device_helper,
+        '_read_cpu_brand',
+        lambda: 'AMD Ryzen 7 5700G',
+    )
+    # Chassis is dropped because both vendor + product look virtual;
+    # only the CPU brand survives.
+    assert device_helper.get_friendly_device_model() == 'AMD Ryzen 7 5700G'
+
+
+def test_friendly_device_model_generic_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_common import device_helper
+
+    monkeypatch.setattr(
+        device_helper, 'parse_cpu_info', lambda: {'cpu_count': 4}
+    )
+    monkeypatch.setattr(device_helper, '_read_sysfs', lambda _path: '')
+    monkeypatch.setattr(device_helper, '_read_cpu_brand', lambda: '')
+    out = device_helper.get_friendly_device_model()
+    assert out.startswith('Generic ') and out.endswith(' Device')
+
+
+def test_cpu_brand_strips_marketing(monkeypatch: pytest.MonkeyPatch) -> None:
+    from anthias_common import device_helper
+
+    sample = (
+        'model name      : AMD Ryzen 7 5700G with Radeon Graphics\n'
+        'cache size      : 4096 KB\n'
+    )
+    import io
+
+    monkeypatch.setattr('builtins.open', lambda *_a, **_k: io.StringIO(sample))
+    assert device_helper._read_cpu_brand() == 'AMD Ryzen 7 5700G'
+
+
+# ---------------------------------------------------------------------------
+# detect_screen_resolution + page_context.system_info shape
+
+
+def test_detect_screen_resolution_returns_none_in_headless(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Headless host (the test runner) has no /sys/class/drm cards or
+    fb0 — function should return None cleanly so the server falls back
+    to the configured value."""
+    from anthias_common import utils
+
+    def boom(_path: str) -> Any:
+        raise OSError('no display')
+
+    monkeypatch.setattr('os.scandir', boom)
+    monkeypatch.setattr('builtins.open', boom)
+    assert utils.detect_screen_resolution() is None
+
+
+@pytest.mark.django_db
+def test_system_info_context_shape() -> None:
+    """Smoke test for the enriched page-context dict — guards against
+    silent shape regressions in the load/disk/memory/resolution
+    helpers the System Info template binds to."""
+    from anthias_server.app import page_context
+
+    ctx = page_context.system_info()
+    assert {'one', 'five', 'fifteen'} <= {
+        w[1].split()[0] + w[1].split()[1] for w in ctx['load']['windows']
+    } or len(ctx['load']['windows']) == 3
+    assert ctx['load']['trend'] in ('up', 'down', 'stable')
+    assert ctx['memory']['used_pct'] >= 0
+    assert ctx['disk']['used_pct'] + ctx['disk']['free_pct'] == pytest.approx(
+        100, abs=0.5
+    )
+    assert ctx['resolution']['source'] in ('live', 'configured')
+    assert isinstance(ctx['uptime']['human'], str)

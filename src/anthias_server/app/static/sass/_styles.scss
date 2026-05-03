@@ -820,7 +820,10 @@ label { text-align: left; }
   color: var(--color-text);
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
+  // Equal-height cards within a row of the stat-grid so a 1-line
+  // value next to a 3-line memory donut doesn't jump heights.
+  height: 100%;
 
   .stat-card__label {
     font-size: 0.7rem;
@@ -830,22 +833,65 @@ label { text-align: left; }
     color: var(--color-text-muted);
     margin: 0;
   }
+  // Two-line layout: label on top, value-block flex-grows so cards
+  // with extra content (donut + legend, loadavg bars) bottom-align
+  // their footer meta the same way as compact text cards.
   .stat-card__value {
-    font-size: 1.5rem;
+    font-size: 1.35rem;
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.2;
     word-break: break-word;
+    margin-top: auto;
+  }
+  // Variant for monospace identifier values (MAC, version) so the
+  // typography reads as 'identifier' instead of 'headline number'.
+  .stat-card__value--mono {
+    font-size: 1rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 600;
+    letter-spacing: 0;
   }
   .stat-card__meta {
-    font-size: 0.825rem;
+    font-size: 0.78rem;
     color: var(--color-text-muted);
+    margin-top: 0;
   }
   .stat-card__meta a { color: $anthias-purple-5; text-decoration: none; }
   .stat-card__meta a:hover { text-decoration: underline; }
 }
 
 .stat-card--span-2 { grid-column: span 2; @media (max-width: 540px) { grid-column: span 1; } }
+
+// Section grouping on System Info — three named blocks (Resources /
+// Display / Anthias) so the eye lands on a heading instead of a wall
+// of stat-cards. Header eyebrow + lede mirrors the settings sections.
+.info-section {
+  margin-bottom: var(--space-7);
+  &:last-child { margin-bottom: 0; }
+}
+.info-section__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--space-4);
+
+  h2 {
+    margin: 0;
+    color: var(--color-text-on-dark);
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    display: inline-flex;
+    align-items: center;
+    i { color: var(--color-text-on-dark-muted); font-size: 0.95em; }
+  }
+}
+.info-section__lede {
+  margin: 0;
+  color: var(--color-text-on-dark-muted);
+  font-size: 0.875rem;
+}
 
 // Load-average card on System Info. Three rows (1m / 5m / 15m), each
 // a label + bar + numeric. Bar fill colour is driven by severity

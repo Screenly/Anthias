@@ -12,124 +12,153 @@
     </div>
   </div>
 
-  <div class="stat-grid">
-    <div class="stat-card stat-card--span-2">
-      <p class="stat-card__label">Load Average</p>
-      <div class="loadavg-card">
-        <div class="loadavg-rows">
-          {% for window, label in load.windows %}
-          <div class="loadavg-row loadavg-row--{{ window.severity }}">
-            <span class="loadavg-row__label">{{ label }}</span>
-            <span class="loadavg-row__bar"><span class="loadavg-row__fill" style="width: {{ window.pct }}%"></span></span>
-            <span class="loadavg-row__value">{{ window.value }}</span>
+  <section class="info-section">
+    <header class="info-section__header">
+      <h2><i class="bi bi-activity me-2"></i>Live diagnostics</h2>
+      <p class="info-section__lede">CPU load, memory and storage updated each refresh.</p>
+    </header>
+    <div class="stat-grid">
+      <div class="stat-card stat-card--span-2">
+        <p class="stat-card__label">Load Average</p>
+        <div class="loadavg-card">
+          <div class="loadavg-rows">
+            {% for window, label in load.windows %}
+            <div class="loadavg-row loadavg-row--{{ window.severity }}">
+              <span class="loadavg-row__label">{{ label }}</span>
+              <span class="loadavg-row__bar"><span class="loadavg-row__fill" style="width: {{ window.pct }}%"></span></span>
+              <span class="loadavg-row__value">{{ window.value }}</span>
+            </div>
+            {% endfor %}
           </div>
-          {% endfor %}
-        </div>
-        <div class="loadavg-trend loadavg-trend--{{ load.trend }}">
-          <i class="bi {% if load.trend == 'up' %}bi-arrow-up-right-circle-fill{% elif load.trend == 'down' %}bi-arrow-down-right-circle-fill{% else %}bi-dash-circle-fill{% endif %}"></i>
-          <div>
-            <p class="loadavg-trend__primary">
-              {% if load.trend == 'up' %}Trending up{% elif load.trend == 'down' %}Cooling off{% else %}Steady{% endif %}
-            </p>
-            <p class="loadavg-trend__secondary">{{ load.cpu_count }} CPU{{ load.cpu_count|pluralize }} · saturation at {{ load.cpu_count }}.0</p>
+          <div class="loadavg-trend loadavg-trend--{{ load.trend }}">
+            <i class="bi {% if load.trend == 'up' %}bi-arrow-up-right-circle-fill{% elif load.trend == 'down' %}bi-arrow-down-right-circle-fill{% else %}bi-dash-circle-fill{% endif %}"></i>
+            <div>
+              <p class="loadavg-trend__primary">
+                {% if load.trend == 'up' %}Trending up{% elif load.trend == 'down' %}Cooling off{% else %}Steady{% endif %}
+              </p>
+              <p class="loadavg-trend__secondary">{{ load.cpu_count }} CPU{{ load.cpu_count|pluralize }} · saturation at {{ load.cpu_count }}.0</p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="stat-card">
-      <p class="stat-card__label">Uptime</p>
-      <div class="stat-card__value" style="font-size: 1.25rem">{{ uptime.human }}</div>
-      <div class="stat-card__meta">{{ uptime.days }} day{{ uptime.days|pluralize }} since boot</div>
-    </div>
-    {% include "_stat_card.html" with label="Display Power (CEC)" value=display_power|default:"None" %}
+      <div class="stat-card">
+        <p class="stat-card__label">Uptime</p>
+        <div class="stat-card__value">{{ uptime.human }}</div>
+        <div class="stat-card__meta">{{ uptime.days }} day{{ uptime.days|pluralize }} since boot</div>
+      </div>
 
-    <div class="stat-card">
-      <p class="stat-card__label">Device model</p>
-      <div class="stat-card__value" style="font-size: 1.1rem">{{ device_model }}</div>
-    </div>
-
-    <div class="stat-card stat-card--span-2">
-      <p class="stat-card__label">Memory</p>
-      <div class="resource-card">
-        <div
-          class="resource-pie resource-pie--memory"
-          style="--slice-1: {{ memory.used_pct }}; --slice-2: {{ memory.cache_pct }}"
-          role="img"
-          aria-label="Memory: {{ memory.used|intcomma }} MiB used, {{ memory.cache|intcomma }} MiB cache, {{ memory.free|intcomma }} MiB free of {{ memory.total|intcomma }} MiB total"
-        >
-          <div class="resource-pie__inner">
-            <div class="resource-pie__total">{{ memory.total|intcomma }}</div>
-            <div class="resource-pie__unit">MiB total</div>
+      <div class="stat-card stat-card--span-2">
+        <p class="stat-card__label">Memory</p>
+        <div class="resource-card">
+          <div
+            class="resource-pie resource-pie--memory"
+            style="--slice-1: {{ memory.used_pct }}; --slice-2: {{ memory.cache_pct }}"
+            role="img"
+            aria-label="Memory: {{ memory.used|intcomma }} MiB used, {{ memory.cache|intcomma }} MiB cache, {{ memory.free|intcomma }} MiB free of {{ memory.total|intcomma }} MiB total"
+          >
+            <div class="resource-pie__inner">
+              <div class="resource-pie__total">{{ memory.total|intcomma }}</div>
+              <div class="resource-pie__unit">MiB total</div>
+            </div>
           </div>
+          <ul class="resource-legend">
+            <li class="resource-legend__row resource-legend__row--slice-1">
+              <span class="resource-legend__swatch" aria-hidden="true"></span>
+              <span class="resource-legend__name">Used</span>
+              <span class="resource-legend__value">{{ memory.used|intcomma }} MiB · {{ memory.used_pct }}%</span>
+            </li>
+            <li class="resource-legend__row resource-legend__row--slice-2">
+              <span class="resource-legend__swatch" aria-hidden="true"></span>
+              <span class="resource-legend__name">Buffers / cache</span>
+              <span class="resource-legend__value">{{ memory.cache|intcomma }} MiB · {{ memory.cache_pct }}%</span>
+            </li>
+            <li class="resource-legend__row resource-legend__row--slice-3">
+              <span class="resource-legend__swatch" aria-hidden="true"></span>
+              <span class="resource-legend__name">Free</span>
+              <span class="resource-legend__value">{{ memory.free|intcomma }} MiB · {{ memory.free_pct }}%</span>
+            </li>
+            <li class="resource-legend__row resource-legend__row--ghost">
+              <span class="resource-legend__swatch" aria-hidden="true"></span>
+              <span class="resource-legend__name">Available</span>
+              <span class="resource-legend__value">{{ memory.available|intcomma }} MiB</span>
+            </li>
+          </ul>
         </div>
-        <ul class="resource-legend">
-          <li class="resource-legend__row resource-legend__row--slice-1">
-            <span class="resource-legend__swatch" aria-hidden="true"></span>
-            <span class="resource-legend__name">Used</span>
-            <span class="resource-legend__value">{{ memory.used|intcomma }} MiB · {{ memory.used_pct }}%</span>
-          </li>
-          <li class="resource-legend__row resource-legend__row--slice-2">
-            <span class="resource-legend__swatch" aria-hidden="true"></span>
-            <span class="resource-legend__name">Buffers / cache</span>
-            <span class="resource-legend__value">{{ memory.cache|intcomma }} MiB · {{ memory.cache_pct }}%</span>
-          </li>
-          <li class="resource-legend__row resource-legend__row--slice-3">
-            <span class="resource-legend__swatch" aria-hidden="true"></span>
-            <span class="resource-legend__name">Free</span>
-            <span class="resource-legend__value">{{ memory.free|intcomma }} MiB · {{ memory.free_pct }}%</span>
-          </li>
-          <li class="resource-legend__row resource-legend__row--ghost">
-            <span class="resource-legend__swatch" aria-hidden="true"></span>
-            <span class="resource-legend__name">Available</span>
-            <span class="resource-legend__value">{{ memory.available|intcomma }} MiB</span>
-          </li>
-        </ul>
       </div>
-    </div>
 
-    <div class="stat-card stat-card--span-2">
-      <p class="stat-card__label">Disk</p>
-      <div class="resource-card">
-        <div
-          class="resource-pie resource-pie--disk"
-          style="--slice-1: {{ disk.used_pct }}; --slice-2: 0"
-          role="img"
-          aria-label="Disk: {{ disk.used_human }} used of {{ disk.total_human }} total ({{ disk.used_pct }}%)"
-        >
-          <div class="resource-pie__inner">
-            <div class="resource-pie__total">{{ disk.total_human }}</div>
-            <div class="resource-pie__unit">total</div>
+      <div class="stat-card stat-card--span-2">
+        <p class="stat-card__label">Disk</p>
+        <div class="resource-card">
+          <div
+            class="resource-pie resource-pie--disk"
+            style="--slice-1: {{ disk.used_pct }}; --slice-2: 0"
+            role="img"
+            aria-label="Disk: {{ disk.used_human }} used of {{ disk.total_human }} total ({{ disk.used_pct }}%)"
+          >
+            <div class="resource-pie__inner">
+              <div class="resource-pie__total">{{ disk.total_human }}</div>
+              <div class="resource-pie__unit">total</div>
+            </div>
           </div>
+          <ul class="resource-legend">
+            <li class="resource-legend__row resource-legend__row--slice-1">
+              <span class="resource-legend__swatch" aria-hidden="true"></span>
+              <span class="resource-legend__name">Used</span>
+              <span class="resource-legend__value">{{ disk.used_human }} · {{ disk.used_pct }}%</span>
+            </li>
+            <li class="resource-legend__row resource-legend__row--slice-3">
+              <span class="resource-legend__swatch" aria-hidden="true"></span>
+              <span class="resource-legend__name">Free</span>
+              <span class="resource-legend__value">{{ disk.free_human }} · {{ disk.free_pct }}%</span>
+            </li>
+          </ul>
         </div>
-        <ul class="resource-legend">
-          <li class="resource-legend__row resource-legend__row--slice-1">
-            <span class="resource-legend__swatch" aria-hidden="true"></span>
-            <span class="resource-legend__name">Used</span>
-            <span class="resource-legend__value">{{ disk.used_human }} · {{ disk.used_pct }}%</span>
-          </li>
-          <li class="resource-legend__row resource-legend__row--slice-3">
-            <span class="resource-legend__swatch" aria-hidden="true"></span>
-            <span class="resource-legend__name">Free</span>
-            <span class="resource-legend__value">{{ disk.free_human }} · {{ disk.free_pct }}%</span>
-          </li>
-        </ul>
       </div>
     </div>
+  </section>
 
-    <div class="stat-card">
-      <p class="stat-card__label">Anthias version</p>
-      <div class="stat-card__value" style="font-size: 1rem; word-break: break-all">
-        {% if anthias_version_master_link %}
-        <a href="{{ anthias_version_master_link }}" rel="noopener" target="_blank">{{ anthias_version }}</a>
-        {% else %}{{ anthias_version }}{% endif %}
+  <section class="info-section">
+    <header class="info-section__header">
+      <h2><i class="bi bi-display me-2"></i>Display &amp; hardware</h2>
+      <p class="info-section__lede">What this player is rendering to and what it's running on.</p>
+    </header>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <p class="stat-card__label">Resolution</p>
+        <div class="stat-card__value">{{ resolution.value }}</div>
+        <div class="stat-card__meta">
+          {% if resolution.source == 'live' %}<i class="bi bi-broadcast me-1"></i>Reported by viewer
+          {% else %}<i class="bi bi-gear me-1"></i>Configured (no viewer report yet){% endif %}
+        </div>
+      </div>
+      {% include "_stat_card.html" with label="Display Power (CEC)" value=display_power|default:"None" %}
+      <div class="stat-card">
+        <p class="stat-card__label">Device model</p>
+        <div class="stat-card__value">{{ device_model }}</div>
       </div>
     </div>
+  </section>
 
-    <div class="stat-card stat-card--span-2">
-      <p class="stat-card__label">MAC address</p>
-      <div class="stat-card__value" style="font-size: 1rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">{{ mac_address }}</div>
+  <section class="info-section">
+    <header class="info-section__header">
+      <h2><i class="bi bi-fingerprint me-2"></i>Identity</h2>
+      <p class="info-section__lede">Anthias build and host network identifiers.</p>
+    </header>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <p class="stat-card__label">Anthias version</p>
+        <div class="stat-card__value stat-card__value--mono">
+          {% if anthias_version_master_link %}
+          <a href="{{ anthias_version_master_link }}" rel="noopener" target="_blank">{{ anthias_version }}</a>
+          {% else %}{{ anthias_version }}{% endif %}
+        </div>
+      </div>
+      <div class="stat-card stat-card--span-2">
+        <p class="stat-card__label">MAC address</p>
+        <div class="stat-card__value stat-card__value--mono">{{ mac_address }}</div>
+      </div>
     </div>
-  </div>
+  </section>
 </div>
 {% endblock %}

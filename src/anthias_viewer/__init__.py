@@ -41,6 +41,7 @@ from anthias_common.internal_auth import INTERNAL_AUTH_HEADER  # noqa: E402
 from anthias_common.internal_auth import internal_auth_token  # noqa: E402
 from anthias_common.utils import (  # noqa: E402
     connect_to_redis,
+    detect_screen_resolution,
     string_to_bool,
 )
 from anthias_viewer.messaging import ViewerSubscriber  # noqa: E402
@@ -380,6 +381,42 @@ def start_loop() -> None:
         asset_loop(scheduler)
 
 
+DISPLAY_RESOLUTION_KEY = 'viewer:display_resolution'
+DISPLAY_RESOLUTION_INTERVAL_S = 60
+DISPLAY_RESOLUTION_TTL_S = 180
+
+
+def _publish_display_resolution_loop() -> None:
+    """Background reporter — write the active display resolution to
+    Redis on a 1-minute cadence with a 3-minute TTL.
+
+    The TTL serves as a liveness signal: if the viewer crashes or the
+    HDMI output goes away, the key expires and the System Info card
+    automatically falls back to the operator-configured resolution
+    from anthias.conf rather than showing stale data.
+    """
+    import threading
+
+    def tick() -> None:
+        while True:
+            try:
+                value = detect_screen_resolution()
+                if value:
+                    r.set(
+                        DISPLAY_RESOLUTION_KEY,
+                        value,
+                        ex=DISPLAY_RESOLUTION_TTL_S,
+                    )
+            except Exception:
+                logging.exception('publish_display_resolution failed')
+            sleep(DISPLAY_RESOLUTION_INTERVAL_S)
+
+    t = threading.Thread(
+        target=tick, name='display-resolution-reporter', daemon=True
+    )
+    t.start()
+
+
 def main() -> None:
     global scheduler
 
@@ -388,6 +425,8 @@ def main() -> None:
     subscriber = ViewerSubscriber(r, commands)
     subscriber.daemon = True
     subscriber.start()
+
+    _publish_display_resolution_loop()
 
     # This will prevent white screen from happening before showing the
     # splash screen with IP addresses.

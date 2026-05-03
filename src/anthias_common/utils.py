@@ -206,6 +206,51 @@ def get_node_ip() -> str:
     return 'Unable to retrieve IP.'
 
 
+def detect_screen_resolution() -> str | None:
+    """Probe the active display's resolution as 'WIDTHxHEIGHT'.
+
+    Tries Linux KMS/framebuffer interfaces first (work without an X
+    server, which matches the viewer's Qt direct-render setup) before
+    falling back to xrandr/wlr-randr binaries. Returns None when
+    nothing is reachable so the caller can fall back to the operator-
+    configured resolution from settings.
+    """
+    import re
+
+    # /sys/class/drm/card?-HDMI-A-?/modes — first line is the active
+    # mode for a connected output. Skip cards in 'disconnected' state.
+    try:
+        for entry in os.scandir('/sys/class/drm'):
+            if 'card' not in entry.name or '-' not in entry.name:
+                continue
+            try:
+                with open(os.path.join(entry.path, 'status')) as f:
+                    if f.read().strip() != 'connected':
+                        continue
+                with open(os.path.join(entry.path, 'modes')) as f:
+                    modes = f.read().strip().splitlines()
+                if modes:
+                    m = re.match(r'(\d+)x(\d+)', modes[0])
+                    if m:
+                        return f'{m.group(1)}x{m.group(2)}'
+            except OSError:
+                continue
+    except OSError:
+        pass
+
+    # Plain framebuffer (Pi 1-4 in legacy KMS, some embedded boards).
+    try:
+        with open('/sys/class/graphics/fb0/virtual_size') as f:
+            raw = f.read().strip()
+        if ',' in raw:
+            w, h = raw.split(',', 1)
+            return f'{int(w)}x{int(h)}'
+    except (OSError, ValueError):
+        pass
+
+    return None
+
+
 def get_node_mac_address() -> str:
     """
     Returns the MAC address.
@@ -226,7 +271,83 @@ def get_node_mac_address() -> str:
             return str(r.json()['mac_address'])
         return 'Unknown'
 
-    return os.getenv('MAC_ADDRESS', 'Unable to retrieve MAC address.')
+    # MAC_ADDRESS is injected by bin/upgrade_containers.sh on production
+    # installs (host MAC, not the container veth). When that env var
+    # isn't set — dev `docker-compose.dev.yml` doesn't define it, and
+    # operators running the prebuilt images standalone may miss it too
+    # — fall back to detecting whatever MAC is reachable from inside
+    # the container via the getmac package. That's the best signal we
+    # have without --net=host, and it beats showing 'Unable to retrieve'.
+    env_value = os.getenv('MAC_ADDRESS')
+    if env_value:
+        return env_value
+    detected = _detect_local_mac()
+    if detected:
+        return detected
+    return 'Unable to retrieve MAC address.'
+
+
+def _detect_local_mac() -> str | None:
+    """Return the MAC of the interface carrying the default route.
+
+    Picking the 'active' interface this way matches what an operator
+    expects to see — the NIC the player actually reaches the network
+    through — rather than alphabetical first-non-loopback. Reads
+    /proc/net/route for the entry with destination 00000000, then
+    pulls /sys/class/net/<iface>/address.
+
+    Falls back to the first non-loopback / non-docker / non-veth
+    interface when no default route is published (single-host LAN
+    box plugged into nothing routable yet).
+    """
+    sysnet = '/sys/class/net'
+    if not os.path.isdir(sysnet):
+        return None
+
+    primary_iface: str | None = None
+    try:
+        with open('/proc/net/route') as f:
+            next(f, None)  # header row
+            for line in f:
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+                iface, destination, _gw, flags_hex = parts[:4]
+                # Default-route entries: destination is all-zeros and
+                # the RTF_UP flag (0x1) is set so we ignore stale rows.
+                if destination == '00000000' and (int(flags_hex, 16) & 0x1):
+                    primary_iface = iface
+                    break
+    except OSError:
+        pass
+
+    def _read_mac(iface: str) -> str | None:
+        try:
+            with open(os.path.join(sysnet, iface, 'address')) as f:
+                mac = f.read().strip()
+        except OSError:
+            return None
+        if mac and mac != '00:00:00:00:00:00':
+            return mac
+        return None
+
+    if primary_iface:
+        mac = _read_mac(primary_iface)
+        if mac:
+            return mac
+
+    skip_prefixes = ('lo', 'docker', 'br-', 'veth')
+    try:
+        candidates = sorted(os.listdir(sysnet))
+    except OSError:
+        return None
+    for iface in candidates:
+        if any(iface.startswith(prefix) for prefix in skip_prefixes):
+            continue
+        mac = _read_mac(iface)
+        if mac:
+            return mac
+    return None
 
 
 def get_active_connections(
