@@ -191,12 +191,11 @@
           <div
             x-show="pending"
             x-cloak
-            class="position-fixed top-0 start-0 w-100 h-100"
-            style="display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.5); z-index: 1050"
+            style="display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; right: 0; bottom: 0; padding: 1.5rem; overflow-y: auto; background: rgba(0,0,0,.5); z-index: 1050"
             @keydown.escape.window="pending = null"
             @click.self="pending = null"
           >
-            <div class="card shadow" style="max-width: 500px; width: 90%">
+            <div class="card shadow" style="max-width: 500px; width: 95%; margin: auto">
               <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="m-0">Are you sure?</h5>
                 <button type="button" class="btn-close" @click="pending = null"></button>

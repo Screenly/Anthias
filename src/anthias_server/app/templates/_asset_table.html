@@ -23,7 +23,7 @@
             <th scope="col" style="width:21%">Start</th>
             <th scope="col" style="width:21%">End</th>
             <th scope="col" style="width:13%">Duration</th>
-            <th scope="col" style="width:7%">Activity</th>
+            <th scope="col" style="width:7%">Active</th>
             <th scope="col" style="width:13%" class="text-end">Actions</th>
           </tr>
         </thead>
@@ -48,7 +48,7 @@
             <th scope="col" style="width:21%">Start</th>
             <th scope="col" style="width:21%">End</th>
             <th scope="col" style="width:13%">Duration</th>
-            <th scope="col" style="width:7%">Activity</th>
+            <th scope="col" style="width:7%">Active</th>
             <th scope="col" style="width:13%" class="text-end">Actions</th>
           </tr>
         </thead>
@@ -103,7 +103,12 @@
           fetch('{% url "anthias_app:assets_order" %}', {
             method: 'POST',
             body: fd,
-            headers: { 'X-CSRFToken': csrfToken() },
+            // 'HX-Request: true' tells the Django view to return the
+            // re-rendered asset-table partial instead of redirecting
+            // back to / (the plain-form fallback). fetch() would
+            // otherwise follow the 302 and download the full home
+            // page only to discard it.
+            headers: { 'X-CSRFToken': csrfToken(), 'HX-Request': 'true' },
           }).then((r) => {
             if (!r.ok) {
               // POST rejected (likely a CSRF or 5xx hiccup). Refresh

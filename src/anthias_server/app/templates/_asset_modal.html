@@ -1,12 +1,11 @@
 <div
   x-show="mode"
   x-cloak
-  class="position-fixed top-0 start-0 w-100 h-100 overflow-auto py-4"
-  style="display: flex; align-items: flex-start; justify-content: center; background: rgba(0,0,0,.5); z-index: 1050"
+  style="display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; right: 0; bottom: 0; padding: 1.5rem; overflow-y: auto; background: rgba(0,0,0,.5); z-index: 1050"
   @keydown.escape.window="closeModal()"
   @click.self="closeModal()"
 >
-  <div class="card shadow" style="max-width: 720px; width: 95%">
+  <div class="card shadow" style="max-width: 720px; width: 95%; margin: auto">
     <div class="card-header d-flex justify-content-between align-items-center">
       <h5 class="m-0" x-text="mode === 'edit' ? 'Edit Asset' : 'Add Asset'"></h5>
       <button type="button" class="btn-close" @click="closeModal()"></button>
@@ -29,7 +28,7 @@
             hx-trigger="submit"
             hx-target="#asset-table"
             hx-swap="outerHTML"
-            hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); htmx.trigger('body', 'refresh-assets'); }"
+            hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); }"
           >
             {% csrf_token %}
             <div class="form-floating mb-3">
@@ -51,7 +50,6 @@
             hx-encoding="multipart/form-data"
             hx-target="#asset-table"
             hx-swap="outerHTML"
-            hx-on::after-request="if (event.detail.successful) { htmx.trigger('body', 'refresh-assets'); }"
           >
             {% csrf_token %}
             <div class="mb-3">
@@ -77,7 +75,7 @@
           x-bind:hx-post="`/assets/${editAsset.asset_id}/update`"
           hx-target="#asset-table"
           hx-swap="outerHTML"
-          hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); htmx.trigger('body', 'refresh-assets'); }"
+          hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); }"
         >
           {% csrf_token %}
           <div class="form-floating mb-3">
@@ -88,21 +86,18 @@
             <input type="text" class="form-control" id="edit-uri" :value="editAsset.uri" readonly>
             <label for="edit-uri">Asset Location</label>
           </div>
-          {% comment %} Mimetype is shown read-only — the value is derived from the
-             URI / file content at create time, and letting the user
-             flip an image asset to "webpage" (or vice-versa) only
-             desyncs the row from its actual content. assets_update
-             also ignores the posted mimetype now to prevent the same
-             desync via direct API calls. {% endcomment %}
-          <div class="form-floating mb-3">
-            <input
-              type="text"
-              class="form-control"
-              id="edit-mimetype-display"
-              :value="editAsset.mimetype"
-              readonly
-            >
-            <label for="edit-mimetype-display">Type</label>
+          {% comment %} Mimetype is derived at create time from the URI /
+             file content; rendering it as a plain-text label here (vs an
+             <input readonly>) keeps the read-only intent visually obvious
+             so users don't try to click into it. assets_update ignores
+             any posted mimetype too to defend against a hand-crafted POST.
+          {% endcomment %}
+          <div class="mb-3">
+            <label class="form-label small text-secondary mb-1">Type</label>
+            <div
+              class="fs-6 text-capitalize"
+              x-text="editAsset.mimetype"
+            ></div>
           </div>
           <div class="row">
             <div class="col-6">
@@ -135,6 +130,59 @@
             >
             <label for="edit-duration">Duration (seconds)</label>
           </div>
+
+          {% comment %} Schedule — day-of-week filter (1=Mon..7=Sun, ISO).
+             Hidden empty input lets the server detect "user unchecked
+             everything" vs "user submitted no widget at all"; the
+             schedule helper treats absence as "all days". {% endcomment %}
+          <div class="mb-3">
+            <label class="form-label">Schedule (days of week)</label>
+            <div class="d-flex flex-wrap gap-3">
+              <template x-for="d in [{n:1,l:'Mon'},{n:2,l:'Tue'},{n:3,l:'Wed'},{n:4,l:'Thu'},{n:5,l:'Fri'},{n:6,l:'Sat'},{n:7,l:'Sun'}]" :key="d.n">
+                <label class="form-check form-check-inline m-0">
+                  <input
+                    type="checkbox"
+                    class="form-check-input me-1"
+                    name="play_days"
+                    :value="d.n"
+                    :checked="(editAsset.play_days_list || []).includes(d.n)"
+                  >
+                  <span x-text="d.l"></span>
+                </label>
+              </template>
+            </div>
+          </div>
+
+          {% comment %} Time-of-day window. Both endpoints set or both
+             cleared — _validate_time_window in the API rejects partial
+             windows, so the matching server view does the same. {% endcomment %}
+          <div class="row">
+            <div class="col-6">
+              <div class="form-floating mb-3">
+                <input
+                  type="time"
+                  class="form-control"
+                  id="edit-play-from"
+                  name="play_time_from"
+                  :value="editAsset.play_time_from || ''"
+                >
+                <label for="edit-play-from">Play from</label>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="form-floating mb-3">
+                <input
+                  type="time"
+                  class="form-control"
+                  id="edit-play-to"
+                  name="play_time_to"
+                  :value="editAsset.play_time_to || ''"
+                >
+                <label for="edit-play-to">Play until</label>
+              </div>
+            </div>
+          </div>
+
           <div class="row">
             <div class="col-6">
               <div class="form-check form-switch">

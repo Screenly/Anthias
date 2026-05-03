@@ -207,6 +207,42 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
         asset.end_date = timezone.make_aware(datetime.fromisoformat(end))
     asset.nocache = _checkbox(request, 'nocache')
     asset.skip_asset_check = _checkbox(request, 'skip_asset_check')
+
+    # Day-of-week filter — POST sends one value per checked weekday
+    # (1=Mon..7=Sun, ISO). Empty / unchecked-all means "every day", same
+    # convention Asset.get_play_days() falls back to. Persist as JSON
+    # so Asset.get_play_days() (which json.loads the field on read) can
+    # round-trip cleanly.
+    import json as _json
+
+    raw_days = request.POST.getlist('play_days')
+    parsed_days: list[int] = []
+    for d in raw_days:
+        try:
+            n = int(d)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= n <= 7:
+            parsed_days.append(n)
+    asset.play_days = _json.dumps(
+        sorted(set(parsed_days)) or [1, 2, 3, 4, 5, 6, 7]
+    )
+
+    # Time-of-day window. Reject partial windows (only one endpoint
+    # set) the same way _validate_time_window does on the API path.
+    play_from = (request.POST.get('play_time_from') or '').strip()
+    play_to = (request.POST.get('play_time_to') or '').strip()
+    if play_from and play_to:
+        from datetime import time as _time
+
+        h1, m1 = play_from.split(':')[:2]
+        h2, m2 = play_to.split(':')[:2]
+        asset.play_time_from = _time(int(h1), int(m1))
+        asset.play_time_to = _time(int(h2), int(m2))
+    else:
+        asset.play_time_from = None
+        asset.play_time_to = None
+
     asset.save()
     ViewerPublisher.get_instance().send_to_viewer('reload')
     return _asset_table_response(request)

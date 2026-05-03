@@ -65,11 +65,24 @@ body {
   color: #FFFFFF;
 
   table {
+    // Bootstrap 5's .table cascade paints every cell using
+    // --bs-table-bg / --bs-table-color, with the bg defaulting to
+    // var(--bs-body-bg) (white) and the colour to a dark emphasis
+    // value. Override both variables here so the active-section
+    // cells inherit the purple bg + white text instead of rendering
+    // dark text on white tds (poor contrast even before the buttons
+    // disappeared into the white tile).
+    --bs-table-bg: transparent;
+    --bs-table-color: #FFFFFF;
     color: #FFFFFF;
 
     tbody > tr {
       background-color: $anthias-purple-2;
-      color: rgba(255, 255, 255, 0.8);
+      color: #FFFFFF;
+    }
+
+    th {
+      color: rgba(255, 255, 255, 0.85);
     }
   }
 

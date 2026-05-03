@@ -39,13 +39,14 @@
         @click='openEdit({{ asset|to_json }})'>
         <i class="bi bi-pencil"></i>
       </button>
-      <form method="post" action="{% url 'anthias_app:assets_delete' asset_id=asset.asset_id %}" class="m-0"
-        onsubmit="return confirm('Are you sure? This action cannot be undone.')">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-outline-{% if is_active %}light{% else %}dark{% endif %} btn-sm" title="Delete">
-          <i class="bi bi-trash"></i>
-        </button>
-      </form>
+      <button
+        type="button"
+        class="btn btn-outline-{% if is_active %}light{% else %}dark{% endif %} btn-sm"
+        title="Delete"
+        @click="openDelete('{{ asset.asset_id }}', {{ asset|to_json }}.name)"
+      >
+        <i class="bi bi-trash"></i>
+      </button>
     </div>
   </td>
 </tr>

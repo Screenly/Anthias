@@ -77,6 +77,19 @@ def _to_dict(obj: Any) -> Any:
             out['end_date_local'] = timezone.localtime(obj.end_date).strftime(
                 '%Y-%m-%dT%H:%M'
             )
+        # Normalise play_days to a list[int] so the day-of-week
+        # checkboxes can `.includes(day)` straight off Alpine state.
+        # The TextField stores JSON; get_play_days() handles the parse
+        # + clamp to 1-7.
+        if hasattr(obj, 'get_play_days'):
+            out['play_days_list'] = obj.get_play_days()
+        # play_time_from / play_time_to are TimeFields that serialise
+        # as ISO strings (HH:MM:SS); the <input type="time"> binding
+        # wants HH:MM. Trim if present.
+        for key in ('play_time_from', 'play_time_to'):
+            v = out.get(key)
+            if isinstance(v, str) and len(v) >= 5:
+                out[key] = v[:5]
         return out
     return _coerce(obj)
 
