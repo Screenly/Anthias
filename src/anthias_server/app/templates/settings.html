@@ -12,16 +12,7 @@
     </div>
   </div>
 
-  {% if messages %}
-  <div class="mb-4">
-    {% for message in messages %}
-    <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
-      {{ message }}
-      <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
-    </div>
-    {% endfor %}
-  </div>
-  {% endif %}
+  {% comment %}Flash messages are emitted as toasts by _toasts.html (vendor.ts drainDjangoMessages()).{% endcomment %}
 
   <form
     method="post"

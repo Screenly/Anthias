@@ -35,18 +35,7 @@
     </div>
   </div>
 
-  {% if messages %}
-  <div class="row mb-4">
-    <div class="col-12">
-      {% for message in messages %}
-      <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
-        {{ message }}
-        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
+  {% comment %}Flash messages are emitted as toasts by _toasts.html (vendor.ts drainDjangoMessages()).{% endcomment %}
 
   {% include "_asset_table.html" %}
 
@@ -89,5 +78,7 @@
       </div>
     </div>
   </div>
+
+  {% comment %}Toast stack lives in _layout.html so every page benefits.{% endcomment %}
 </div>
 {% endblock %}

@@ -153,7 +153,7 @@ def assets_create(request: HttpRequest) -> HttpResponse:
         start_date=now,
         end_date=now + timedelta(days=30),
     )
-    return _asset_table_response(request)
+    return _asset_table_response(request, toast=('success', 'Asset added'))
 
 
 @authorized
@@ -215,7 +215,9 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         start_date=now,
         end_date=now + timedelta(days=30),
     )
-    return _asset_table_response(request)
+    return _asset_table_response(
+        request, toast=('success', f'Uploaded {upload_name}')
+    )
 
 
 @authorized
@@ -290,7 +292,7 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
 
     asset.save()
     ViewerPublisher.get_instance().send_to_viewer('reload')
-    return _asset_table_response(request)
+    return _asset_table_response(request, toast=('success', 'Changes saved'))
 
 
 @authorized
@@ -298,12 +300,17 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
 def assets_toggle(request: HttpRequest, asset_id: str) -> HttpResponse:
     from anthias_server.app.models import Asset
 
+    toast: tuple[str, str] | None = None
     asset = Asset.objects.filter(asset_id=asset_id).first()
     if asset is not None:
         asset.is_enabled = not asset.is_enabled
         asset.save()
         ViewerPublisher.get_instance().send_to_viewer('reload')
-    return _asset_table_response(request)
+        toast = (
+            'success',
+            f'Asset {"enabled" if asset.is_enabled else "disabled"}',
+        )
+    return _asset_table_response(request, toast=toast)
 
 
 @authorized
@@ -313,7 +320,7 @@ def assets_delete(request: HttpRequest, asset_id: str) -> HttpResponse:
 
     Asset.objects.filter(asset_id=asset_id).delete()
     ViewerPublisher.get_instance().send_to_viewer('reload')
-    return _asset_table_response(request)
+    return _asset_table_response(request, toast=('success', 'Asset deleted'))
 
 
 @authorized
@@ -370,16 +377,53 @@ def assets_control(request: HttpRequest, command: str) -> HttpResponse:
     return redirect(reverse('anthias_app:home'))
 
 
-def _asset_table_response(request: HttpRequest) -> HttpResponse:
+def _asset_table_response(
+    request: HttpRequest,
+    *,
+    toast: tuple[str, str] | None = None,
+) -> HttpResponse:
     """Shared response helper for all write endpoints.
 
     HTMX requests (hx-post) get the swapped partial; plain form
-    submits fall back to a redirect so the page reloads end-to-end."""
+    submits fall back to a redirect so the page reloads end-to-end.
+
+    Pass `toast=("success", "Asset deleted")` to fire a client toast
+    via the HX-Trigger header (HTMX requests) or a Django flash
+    message (full-page reload)."""
     if request.headers.get('HX-Request'):
         from django.shortcuts import render as _render
 
-        return _render(request, '_asset_table.html', page_context.assets())
+        response = _render(request, '_asset_table.html', page_context.assets())
+        if toast is not None:
+            _set_toast_header(response, toast[0], toast[1])
+        return response
+
+    if toast is not None:
+        _msg = messages.success if toast[0] == 'success' else messages.error
+        _msg(request, toast[1])
     return redirect(reverse('anthias_app:home'))
+
+
+def _set_toast_header(response: HttpResponse, kind: str, message: str) -> None:
+    """Attach an HX-Trigger header so the global Alpine store
+    (registered in vendor.ts) renders a toast for this response."""
+    import json as _json
+
+    payload = {'toast': {'kind': kind, 'message': message}}
+    # Merge with any existing HX-Trigger so callers stacking triggers
+    # don't clobber each other.
+    existing = response.headers.get('HX-Trigger')
+    if existing:
+        try:
+            merged = _json.loads(existing)
+            if isinstance(merged, dict):
+                merged.update(payload)
+                payload = merged
+        except _json.JSONDecodeError:
+            # Existing value was a bare event name, not JSON — drop
+            # it; the toast payload supersedes for our use case.
+            pass
+    response['HX-Trigger'] = _json.dumps(payload)
 
 
 @authorized

@@ -952,6 +952,124 @@ $footer-height: 13rem;
 }
 
 // -----------------------------------------------------------------------------
+// 17b. Upload dropzone + progress (asset add modal)
+// -----------------------------------------------------------------------------
+.upload-dropzone {
+  display: block;
+  text-align: center;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  cursor: pointer;
+  background: var(--color-surface-tint);
+  transition: border-color var(--t-fast), background var(--t-fast);
+
+  &:hover {
+    border-color: var(--color-link);
+    background: #ece4f5;
+  }
+  &.is-disabled { pointer-events: none; opacity: 0.5; }
+}
+
+.upload-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-soft);
+
+  .upload-progress__head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    i { font-size: 1.5rem; color: var(--color-link); flex: none; }
+  }
+  .upload-progress__text { min-width: 0; flex: 1 1 auto; }
+  .upload-progress__bar {
+    position: relative;
+    height: 8px;
+    background: var(--color-border);
+    border-radius: var(--radius-pill);
+    overflow: hidden;
+  }
+  .upload-progress__fill {
+    height: 100%;
+    background: var(--color-link);
+    border-radius: var(--radius-pill);
+    transition: width 200ms var(--ease-out);
+  }
+  .upload-progress__fill--indeterminate {
+    background: linear-gradient(
+      90deg,
+      var(--color-link) 0%,
+      #9b6bd6 50%,
+      var(--color-link) 100%
+    );
+    background-size: 200% 100%;
+    animation: upload-shimmer 1.6s linear infinite;
+  }
+  .upload-progress__spin {
+    display: inline-block;
+    animation: upload-spin 1.2s linear infinite;
+  }
+}
+@keyframes upload-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@keyframes upload-spin {
+  to { transform: rotate(360deg); }
+}
+
+// -----------------------------------------------------------------------------
+// 17c. Toast stack (global)
+// -----------------------------------------------------------------------------
+.toast-stack {
+  position: fixed;
+  top: calc(4.5rem + var(--space-4));   // below the fixed navbar
+  right: var(--space-5);
+  z-index: 1080;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+  max-width: min(420px, calc(100vw - var(--space-5) * 2));
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: #1f002a;
+  color: var(--color-text-on-dark);
+  box-shadow: var(--shadow-lg);
+  font-size: 0.95rem;
+  border-left: 4px solid var(--color-link);
+
+  > i { flex: none; font-size: 1.1rem; }
+  .toast__msg { flex: 1 1 auto; min-width: 0; }
+  .toast__close {
+    flex: none;
+    background: transparent;
+    border: none;
+    color: var(--color-text-on-dark-muted);
+    cursor: pointer;
+    padding: 0 var(--space-1);
+    line-height: 1;
+    border-radius: var(--radius-sm);
+    transition: color var(--t-fast), background var(--t-fast);
+    &:hover { color: var(--color-text-on-dark); background: rgba(255, 255, 255, 0.08); }
+  }
+}
+.toast--success { border-left-color: #34d399; > i { color: #34d399; } }
+.toast--error   { border-left-color: var(--color-danger); > i { color: var(--color-danger); } }
+.toast--info    { border-left-color: var(--color-link); > i { color: var(--color-accent); } }
+
+// -----------------------------------------------------------------------------
 // 18. Misc
 // -----------------------------------------------------------------------------
 [hidden] { display: none !important; }

@@ -75,22 +75,46 @@
         hx-encoding="multipart/form-data"
         hx-target="#asset-table"
         hx-swap="outerHTML"
+        @htmx:xhr:loadstart="onUploadStart()"
+        @htmx:xhr:progress="onUploadProgress($event)"
+        @htmx:after-request="onUploadDone($event)"
       >
         {% csrf_token %}
         <div class="modal-card__body" style="padding-top: 0">
           <label
             for="add-file"
-            class="d-block text-center"
-            style="border: 2px dashed var(--color-border); border-radius: var(--radius-lg); padding: var(--space-6); cursor: pointer; background: var(--color-surface-tint);"
+            class="upload-dropzone"
+            :class="{ 'is-disabled': uploadState }"
+            x-show="!uploadState"
           >
             <i class="bi bi-cloud-arrow-up" style="font-size: 2.25rem; opacity: 0.55"></i>
             <p class="mb-1 fw-semibold mt-2">Click to choose a file</p>
             <p class="muted-label mb-0">Image or video. Upload starts immediately.</p>
-            <input type="file" class="d-none" id="add-file" name="file_upload" accept="image/*,video/*" onchange="this.form.requestSubmit()">
+            <input type="file" class="d-none" id="add-file" name="file_upload" accept="image/*,video/*"
+              @change="if ($event.target.files.length) { uploadFileName = $event.target.files[0].name; $event.target.form.requestSubmit() }">
           </label>
+
+          <div class="upload-progress" x-show="uploadState" x-cloak>
+            <div class="upload-progress__head">
+              <i class="bi" :class="uploadState === 'sending' ? 'bi-cloud-arrow-up-fill' : 'bi-arrow-repeat upload-progress__spin'"></i>
+              <div class="upload-progress__text">
+                <p class="m-0 fw-semibold" x-text="uploadFileName || 'Uploading…'"></p>
+                <p class="muted-label m-0" x-text="uploadState === 'sending'
+                  ? `Uploading… ${uploadProgress}%`
+                  : 'Processing on server…'"></p>
+              </div>
+            </div>
+            <div class="upload-progress__bar">
+              <div class="upload-progress__fill"
+                :style="`width: ${uploadState === 'sending' ? uploadProgress : 100}%`"
+                :class="uploadState === 'processing' && 'upload-progress__fill--indeterminate'"></div>
+            </div>
+          </div>
         </div>
         <div class="modal-card__footer">
-          <button type="button" class="btn btn-link" @click="closeModal()">Cancel</button>
+          <button type="button" class="btn btn-link" @click="closeModal()" :disabled="uploadState === 'processing'">
+            <span x-text="uploadState ? 'Hide' : 'Cancel'"></span>
+          </button>
         </div>
       </form>
     </div>

@@ -40,12 +40,21 @@ interface AssetEdit {
   play_time_to: string | null
 }
 
+type UploadState = null | 'sending' | 'processing'
+
+interface ToastStoreLike {
+  push(kind: 'success' | 'error' | 'info', message: string): number
+}
+
 interface HomeAppData {
   mode: 'add' | 'edit' | null
   editAsset: AssetEdit | null
   previewAsset: AssetEdit | null
   pendingDeleteId: string | null
   pendingDeleteName: string
+  uploadState: UploadState
+  uploadProgress: number
+  uploadFileName: string
   init(): void
   openAdd(): void
   openEdit(asset: AssetEdit): void
@@ -54,6 +63,9 @@ interface HomeAppData {
   closeModal(): void
   closePreview(): void
   bindFlatpickr(): void
+  onUploadStart(): void
+  onUploadProgress(ev: CustomEvent<ProgressEvent>): void
+  onUploadDone(ev: CustomEvent<{ successful: boolean; xhr: XMLHttpRequest }>): void
 }
 
 const DATE_FMT_MAP: Record<string, string> = {
@@ -91,6 +103,9 @@ function homeApp(): HomeAppData {
     previewAsset: null,
     pendingDeleteId: null,
     pendingDeleteName: '',
+    uploadState: null,
+    uploadProgress: 0,
+    uploadFileName: '',
 
     init(this: HomeAppData & { $watch: (k: string, cb: () => void) => void }) {
       // Re-bind Flatpickr every time the edit modal opens. The
@@ -180,11 +195,55 @@ function homeApp(): HomeAppData {
       this.pendingDeleteName = name || ''
     },
     closeModal() {
+      // The Hide button stays clickable while the upload bytes are
+      // still going up — that just hides the modal. Once the bytes are
+      // sent and the server is processing, dropping the modal would
+      // strip the form HTMX is still waiting for, so the button is
+      // disabled in the template at that point.
       this.mode = null
       this.editAsset = null
+      if (this.uploadState !== 'processing') {
+        this.uploadState = null
+        this.uploadProgress = 0
+        this.uploadFileName = ''
+      }
     },
     closePreview() {
       this.previewAsset = null
+    },
+    onUploadStart() {
+      this.uploadState = 'sending'
+      this.uploadProgress = 0
+    },
+    onUploadProgress(ev) {
+      const detail = ev.detail
+      if (!detail || !detail.lengthComputable || detail.total === 0) return
+      const pct = Math.min(99, Math.round((detail.loaded / detail.total) * 100))
+      this.uploadProgress = pct
+      // Once bytes hit the server we flip to "processing" — the server
+      // still has to write the file to disk and (for videos) shell out
+      // to ffprobe, which is the longest part of the round-trip.
+      if (detail.loaded >= detail.total) {
+        this.uploadState = 'processing'
+      }
+    },
+    onUploadDone(ev) {
+      const ok = ev.detail?.successful
+      // Success toast is fired by the server via HX-Trigger so we
+      // don't double up here. The client only owns the failure path
+      // (transport errors that never reach the server) and the
+      // modal-close + state-reset bookkeeping.
+      this.uploadState = null
+      this.uploadProgress = 0
+      if (ok) {
+        this.uploadFileName = ''
+        this.mode = null
+      } else {
+        const store = window.Alpine.store('toasts') as
+          | ToastStoreLike
+          | undefined
+        store?.push('error', 'Upload failed — check the file and try again')
+      }
     },
   }
 }
