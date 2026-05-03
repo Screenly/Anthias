@@ -1,0 +1,63 @@
+{% comment %}Asset preview modal. Driven by the parent homeApp() Alpine state — previewAsset carries the JSON blob from to_json. Image/video render inline via /assets/<id>/preview; webpage/streaming load the source URI in a sandboxed iframe.{% endcomment %}
+<div
+  x-show="previewAsset"
+  x-cloak
+  class="modal-overlay"
+  style="z-index: 1060"
+  @keydown.escape.window="closePreview()"
+  @click.self="closePreview()"
+>
+  <div class="modal-card modal-card--preview">
+    <div class="modal-card__header">
+      <h2 x-text="previewAsset && previewAsset.name ? previewAsset.name : 'Preview'"></h2>
+      <button type="button" class="modal-card__close" @click="closePreview()" aria-label="Close">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <div class="modal-card__body modal-card__body--preview">
+      <template x-if="previewAsset && previewAsset.mimetype === 'image'">
+        <img
+          class="preview-media"
+          :src="`/assets/${previewAsset.asset_id}/preview`"
+          :alt="previewAsset.name || ''"
+        >
+      </template>
+      <template x-if="previewAsset && previewAsset.mimetype === 'video'">
+        <video
+          class="preview-media"
+          :src="`/assets/${previewAsset.asset_id}/preview`"
+          controls
+          autoplay
+          muted
+          playsinline
+        ></video>
+      </template>
+      <template x-if="previewAsset && (previewAsset.mimetype === 'webpage' || previewAsset.mimetype === 'streaming')">
+        <iframe
+          class="preview-media preview-media--frame"
+          :src="previewAsset.uri"
+          referrerpolicy="no-referrer"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+          allow="autoplay; fullscreen"
+        ></iframe>
+      </template>
+    </div>
+    <div class="modal-card__footer">
+      <p class="muted-label m-0 me-auto" x-show="previewAsset && (previewAsset.mimetype === 'webpage' || previewAsset.mimetype === 'streaming')">
+        Some sites refuse to load inside an iframe. Use Open in new tab if the preview is blank.
+      </p>
+      <a
+        x-show="previewAsset"
+        :href="previewAsset && (previewAsset.mimetype === 'webpage' || previewAsset.mimetype === 'streaming') ? previewAsset.uri : `/assets/${previewAsset.asset_id}/preview`"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="btn btn-link"
+      >
+        <i class="bi bi-box-arrow-up-right"></i><span>Open in new tab</span>
+      </a>
+      <button type="button" class="btn btn-primary" @click="closePreview()">
+        <i class="bi bi-check2"></i><span>Done</span>
+      </button>
+    </div>
+  </div>
+</div>

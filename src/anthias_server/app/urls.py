@@ -53,4 +53,9 @@ urlpatterns = [
         views.assets_download,
         name='assets_download',
     ),
+    path(
+        'assets/<str:asset_id>/preview',
+        views.assets_preview,
+        name='assets_preview',
+    ),
 ]

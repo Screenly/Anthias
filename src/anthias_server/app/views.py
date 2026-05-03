@@ -345,6 +345,22 @@ def assets_download(request: HttpRequest, asset_id: str) -> HttpResponseBase:
 
 
 @authorized
+@require_http_methods(['GET'])
+def assets_preview(request: HttpRequest, asset_id: str) -> HttpResponseBase:
+    """Serve an uploaded asset inline so the preview modal can embed it
+    in <img>/<video>. URL-typed assets (webpage/streaming) redirect to
+    the source URI; the modal renders those in an <iframe>."""
+    from anthias_server.app.models import Asset
+
+    asset = Asset.objects.filter(asset_id=asset_id).first()
+    if asset is None or not asset.uri:
+        return redirect(reverse('anthias_app:home'))
+    if asset.mimetype in ('webpage', 'streaming'):
+        return redirect(asset.uri)
+    return FileResponse(open(asset.uri, 'rb'), as_attachment=False)
+
+
+@authorized
 @require_http_methods(['POST'])
 def assets_control(request: HttpRequest, command: str) -> HttpResponse:
     """Previous / Next playback. Dispatches the same Redis pub/sub

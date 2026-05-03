@@ -62,6 +62,16 @@
   --color-accent-text: #1f002a;
   --color-danger: #dc3545;
   --color-focus-ring: rgba(136, 25, 199, 0.35);
+
+  // Anchors on light surfaces. Bootstrap's $primary is yellow (used for
+  // accents, not links) so we override link-color separately to keep
+  // body anchors readable on white cards.
+  --color-link: #6633a0;
+  --color-link-hover: #4a1f80;
+  --bs-link-color: var(--color-link);
+  --bs-link-color-rgb: 102, 51, 160;
+  --bs-link-hover-color: var(--color-link-hover);
+  --bs-link-hover-color-rgb: 74, 31, 128;
 }
 
 // -----------------------------------------------------------------------------
@@ -467,7 +477,11 @@ label { text-align: left; }
     font-size: 0.9rem;
     margin: 0 0 var(--space-3);
   }
-  a { font-weight: 600; }
+  a {
+    font-weight: 600;
+    color: var(--color-link);
+    &:hover { color: var(--color-link-hover); }
+  }
 }
 .surface--active .empty-state {
   color: var(--color-text-on-dark-muted);
@@ -545,6 +559,40 @@ label { text-align: left; }
   }
 }
 
+// Bootstrap's $primary (yellow) bleeds into nav-tabs by default, leaving
+// inactive tabs unreadable on white. Restyle to dark-on-white with an
+// underline indicator for the active tab.
+.modal-card .nav-tabs {
+  border-bottom: 1px solid var(--color-border);
+  --bs-nav-tabs-border-color: transparent;
+  --bs-nav-tabs-link-hover-border-color: transparent;
+  --bs-nav-tabs-link-active-bg: transparent;
+  --bs-nav-tabs-link-active-color: var(--color-text);
+  --bs-nav-tabs-link-active-border-color: transparent transparent var(--color-text) transparent;
+
+  .nav-link {
+    color: var(--color-text-muted);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 0.55rem 0.85rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: color var(--t-fast), border-color var(--t-fast);
+
+    &:hover {
+      color: var(--color-text);
+      border-bottom-color: var(--color-border);
+    }
+    &.active {
+      color: var(--color-text);
+      background: transparent;
+      border-bottom-color: var(--color-text);
+    }
+  }
+}
+
 .modal-card__body  { padding: var(--space-6); }
 .modal-card__footer {
   padding: var(--space-4) var(--space-6);
@@ -554,6 +602,36 @@ label { text-align: left; }
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
+}
+
+// Preview modal — wider card, dark stage so transparent images stay
+// readable and videos sit on a neutral surround.
+.modal-card--preview { max-width: 960px; }
+.modal-card__body--preview {
+  padding: 0;
+  background: #0f0019;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  max-height: calc(100vh - 12rem);
+}
+.preview-media {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 12rem);
+  width: auto;
+  height: auto;
+  margin: 0 auto;
+  background: #000;
+  outline: none;
+}
+.preview-media--frame {
+  width: 100%;
+  height: 70vh;
+  max-height: calc(100vh - 12rem);
+  border: 0;
+  background: #ffffff;
 }
 
 // -----------------------------------------------------------------------------

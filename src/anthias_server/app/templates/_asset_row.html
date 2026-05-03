@@ -39,6 +39,12 @@
   </td>
   <td class="text-end">
     <div class="action-group">
+      <button
+        type="button"
+        class="btn btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
+        title="Preview"
+        @click='openPreview({{ asset|to_json }})'
+      ><i class="bi bi-eye"></i></button>
       <a
         href="{% url 'anthias_app:assets_download' asset_id=asset.asset_id %}"
         class="btn btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"

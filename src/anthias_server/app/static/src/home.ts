@@ -43,13 +43,16 @@ interface AssetEdit {
 interface HomeAppData {
   mode: 'add' | 'edit' | null
   editAsset: AssetEdit | null
+  previewAsset: AssetEdit | null
   pendingDeleteId: string | null
   pendingDeleteName: string
   init(): void
   openAdd(): void
   openEdit(asset: AssetEdit): void
+  openPreview(asset: AssetEdit): void
   openDelete(id: string, name: string): void
   closeModal(): void
+  closePreview(): void
   bindFlatpickr(): void
 }
 
@@ -85,6 +88,7 @@ function homeApp(): HomeAppData {
   return {
     mode: null,
     editAsset: null,
+    previewAsset: null,
     pendingDeleteId: null,
     pendingDeleteName: '',
 
@@ -168,6 +172,9 @@ function homeApp(): HomeAppData {
       this.mode = 'edit'
       this.editAsset = asset
     },
+    openPreview(asset: AssetEdit) {
+      this.previewAsset = asset
+    },
     openDelete(id: string, name: string) {
       this.pendingDeleteId = id
       this.pendingDeleteName = name || ''
@@ -175,6 +182,9 @@ function homeApp(): HomeAppData {
     closeModal() {
       this.mode = null
       this.editAsset = null
+    },
+    closePreview() {
+      this.previewAsset = null
     },
   }
 }

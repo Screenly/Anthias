@@ -395,6 +395,27 @@ def test_assets_download_404_for_unknown_id(client: Client) -> None:
 
 
 @pytest.mark.django_db
+def test_assets_preview_redirects_for_url_mimetype(
+    client: Client, asset: Asset
+) -> None:
+    response = client.get(
+        reverse('anthias_app:assets_preview', args=[asset.asset_id])
+    )
+    # webpage → redirect to URI, same as download.
+    assert response.status_code == 302
+    assert response['Location'] == asset.uri
+
+
+@pytest.mark.django_db
+def test_assets_preview_404_for_unknown_id(client: Client) -> None:
+    response = client.get(
+        reverse('anthias_app:assets_preview', args=['no-such-asset'])
+    )
+    assert response.status_code == 302
+    assert response['Location'].endswith('/')
+
+
+@pytest.mark.django_db
 def test_settings_save_invalid_default_streaming_duration(
     client: Client,
 ) -> None:
