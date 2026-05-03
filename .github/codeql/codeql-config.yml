@@ -27,3 +27,6 @@ name: 'Anthias CodeQL'
 paths-ignore:
   - 'src/anthias_server/app/views.py'
   - 'src/anthias_common/utils.py'
+  # Same operator-controlled-asset.uri pattern as the two files above:
+  - 'src/anthias_server/api/views/mixins.py'
+  - 'src/anthias_server/celery_tasks.py'
