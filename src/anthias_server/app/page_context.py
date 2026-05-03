@@ -122,16 +122,26 @@ def device_settings() -> dict[str, Any]:
 
 
 def assets() -> dict[str, Any]:
-    """Active + inactive asset lists for /, identical split to the React
-    home component (active = is_enabled and is_active and not processing,
-    sorted by play_order; inactive = everything else)."""
+    """Active + inactive asset lists for /.
+
+    Partition matches what the operator can change directly from the
+    home page: `is_enabled` (the Activity toggle in the row) AND
+    NOT `is_processing` (transient upload-in-progress state). The
+    stricter `Asset.is_active()` predicate also factors in the date
+    range and the day-of-week / time-of-day window — that's what
+    the scheduler/viewer use to decide what to play right now, but
+    using it here would yank a row out of the Active section just
+    because today's weekday isn't in the asset's play_days, and the
+    operator would have no way to flip it back without editing the
+    schedule. React's UI used the same operator-facing split.
+    """
     from anthias_server.app.models import Asset
 
     qs = Asset.objects.all()
     active: list[Asset] = []
     inactive: list[Asset] = []
     for asset in qs:
-        if asset.is_active() and asset.is_enabled and not asset.is_processing:
+        if asset.is_enabled and not asset.is_processing:
             active.append(asset)
         else:
             inactive.append(asset)

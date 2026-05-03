@@ -133,9 +133,15 @@ def assets_create(request: HttpRequest) -> HttpResponse:
     now = timezone.now()
     # New assets land at the end of the active playlist instead of
     # always-position-zero, so a fresh upload doesn't yank ordering
-    # from under everything else. (`Asset.is_active()` is the same
-    # predicate the home page uses to split active/inactive rows.)
-    play_order = sum(1 for a in Asset.objects.all() if a.is_active())
+    # from under everything else.
+    # Count is_enabled rows (the same partition the home page uses to
+    # split Active vs Inactive). is_active() also factors in the date
+    # range and play_window, which would silently shrink play_order
+    # past the visible row count whenever today's weekday excluded
+    # some scheduled assets.
+    play_order = Asset.objects.filter(
+        is_enabled=True, is_processing=False
+    ).count()
     Asset.objects.create(
         name=uri,
         uri=uri,
@@ -190,7 +196,14 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     duration = 0 if mimetype == 'video' else settings['default_duration']
 
     now = timezone.now()
-    play_order = sum(1 for a in Asset.objects.all() if a.is_active())
+    # Count is_enabled rows (the same partition the home page uses to
+    # split Active vs Inactive). is_active() also factors in the date
+    # range and play_window, which would silently shrink play_order
+    # past the visible row count whenever today's weekday excluded
+    # some scheduled assets.
+    play_order = Asset.objects.filter(
+        is_enabled=True, is_processing=False
+    ).count()
     Asset.objects.create(
         name=upload_name,
         uri=final_path,
