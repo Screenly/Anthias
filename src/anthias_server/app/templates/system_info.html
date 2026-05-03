@@ -48,7 +48,7 @@
         <div class="stat-card__meta">{{ uptime.days }} day{{ uptime.days|pluralize }} since boot</div>
       </div>
 
-      <div class="stat-card stat-card--span-full">
+      <div class="stat-card stat-card--span-2">
         <p class="stat-card__label">Memory</p>
         <div class="resource-card">
           <div
@@ -87,7 +87,7 @@
         </div>
       </div>
 
-      <div class="stat-card stat-card--span-full">
+      <div class="stat-card stat-card--span-2">
         <p class="stat-card__label">Disk</p>
         <div class="resource-card">
           <div
@@ -124,6 +124,10 @@
       <p class="info-section__lede">What this player is rendering to and what it's running on.</p>
     </header>
     <div class="stat-grid">
+      <div class="stat-card stat-card--span-2">
+        <p class="stat-card__label">Device model</p>
+        <div class="stat-card__value">{{ device_model }}</div>
+      </div>
       <div class="stat-card">
         <p class="stat-card__label">Resolution</p>
         <div class="stat-card__value">{{ resolution.value }}</div>
@@ -133,10 +137,6 @@
         </div>
       </div>
       {% include "_stat_card.html" with label="Display Power (CEC)" value=display_power|default:"None" %}
-      <div class="stat-card">
-        <p class="stat-card__label">Device model</p>
-        <div class="stat-card__value">{{ device_model }}</div>
-      </div>
     </div>
   </section>
 
@@ -146,7 +146,7 @@
       <p class="info-section__lede">Anthias build and host network identifiers.</p>
     </header>
     <div class="stat-grid">
-      <div class="stat-card">
+      <div class="stat-card stat-card--span-2">
         <p class="stat-card__label">Anthias version</p>
         <div class="stat-card__value stat-card__value--mono">
           {% if anthias_version_master_link %}

@@ -982,14 +982,13 @@ label { text-align: left; }
 .resource-card {
   display: grid;
   grid-template-columns: 11rem 1fr;
-  gap: var(--space-6);
+  gap: var(--space-5);
   align-items: center;
   margin-top: var(--space-2);
-  // Keep the donut+legend block from stretching across an entire
-  // full-row card on wide screens — anchored on the left so the
-  // section reads left-to-right.
-  max-width: 44rem;
-  @media (max-width: 540px) {
+  // Drop to a stacked layout on narrow viewports / when the host
+  // card is span-1 in a 4-col grid — donut + legend can't share a
+  // row at < 30rem of inner width without crowding.
+  @media (max-width: 880px) {
     grid-template-columns: 1fr;
     justify-items: center;
     gap: var(--space-4);
