@@ -68,6 +68,29 @@ def _parse_local_datetime(value: str) -> datetime:
     return timezone.make_aware(datetime.fromisoformat(value))
 
 
+def _prettify_upload_name(filename: str) -> str:
+    """Turn 'My_day-2.mp4' into 'My Day 2'.
+
+    Strips the file extension, normalises common separators
+    (underscores, hyphens, dots within the stem) into spaces, collapses
+    repeated whitespace, and title-cases the result. Empty input or a
+    bare extension falls back to the original filename so the operator
+    never gets a blank Asset.name."""
+    if not filename:
+        return filename
+    stem, _ext = path.splitext(filename)
+    if not stem:
+        return filename
+    # Drop any leading dot from a hidden file once the extension is
+    # gone (e.g. `.hidden.mp4` → `.hidden` → `hidden`).
+    cleaned = stem.lstrip('.')
+    cleaned = cleaned.replace('_', ' ').replace('-', ' ').replace('.', ' ')
+    cleaned = ' '.join(cleaned.split())
+    if not cleaned:
+        return filename
+    return cleaned.title()
+
+
 def _checkbox(post: HttpRequest, name: str) -> bool:
     """Read a HTML checkbox: present-and-truthy = True, otherwise False.
 
@@ -176,6 +199,13 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         messages.error(request, 'Invalid file type. Expected image or video.')
         return _asset_table_response(request)
 
+    # Operator-friendly display name: 'My_day-2.mp4' → 'My Day 2'.
+    # Drops the extension (the row already carries mimetype) and
+    # title-cases the stem so the schedule reads cleanly. The original
+    # filename still rides along on the upload toast so the operator
+    # has a breadcrumb back to what they picked.
+    display_name = _prettify_upload_name(upload_name)
+
     # uuid4 (random) instead of uuid5(NAMESPACE_URL, name): the
     # deterministic v5 form would collide on disk for two files
     # uploaded with the same name (different content), silently
@@ -207,7 +237,7 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         is_enabled=True, is_processing=False
     ).count()
     asset = Asset.objects.create(
-        name=upload_name,
+        name=display_name,
         uri=final_path,
         mimetype=mimetype,
         duration=duration,
@@ -349,6 +379,43 @@ def assets_order(request: HttpRequest) -> HttpResponse:
     return _asset_table_response(request)
 
 
+def _safe_redirect_uri(uri: str) -> str | None:
+    """Defang asset.uri before handing it to redirect().
+
+    Restricts to plain http(s):// — drops javascript:/data:/vbscript:
+    and assorted other schemes that CodeQL flags as open-redirect
+    sinks. The asset row is operator-controlled, but tightening here
+    keeps a hostile API user from turning a legitimate-looking
+    download link into an XSS vector.
+    """
+    if not uri:
+        return None
+    lowered = uri.strip().lower()
+    if lowered.startswith(('http://', 'https://')):
+        return uri
+    return None
+
+
+def _safe_local_asset_path(uri: str) -> str | None:
+    """Resolve uri to a real path under settings['assetdir'].
+
+    Mirrors the realpath + startswith guard that views_files.anthias_assets
+    uses for the public asset URL prefix. CodeQL flags the raw
+    open(asset.uri) calls as path-traversal sinks even though the
+    upload view writes filenames as uuid4().hex; defending here means
+    a hand-crafted DB row can't escape the assets directory.
+    """
+    if not uri:
+        return None
+    base = path.realpath(settings['assetdir']) + path.sep
+    target = path.realpath(uri)
+    if not target.startswith(base):
+        return None
+    if not path.isfile(target):
+        return None
+    return target
+
+
 @authorized
 @require_http_methods(['GET'])
 def assets_download(request: HttpRequest, asset_id: str) -> HttpResponseBase:
@@ -360,8 +427,14 @@ def assets_download(request: HttpRequest, asset_id: str) -> HttpResponseBase:
     if asset is None or not asset.uri:
         return redirect(reverse('anthias_app:home'))
     if asset.mimetype in ('webpage', 'streaming'):
-        return redirect(asset.uri)
-    return FileResponse(open(asset.uri, 'rb'), as_attachment=True)
+        safe = _safe_redirect_uri(asset.uri)
+        return (
+            redirect(safe) if safe else redirect(reverse('anthias_app:home'))
+        )
+    safe_path = _safe_local_asset_path(asset.uri)
+    if safe_path is None:
+        return redirect(reverse('anthias_app:home'))
+    return FileResponse(open(safe_path, 'rb'), as_attachment=True)
 
 
 @authorized
@@ -376,8 +449,14 @@ def assets_preview(request: HttpRequest, asset_id: str) -> HttpResponseBase:
     if asset is None or not asset.uri:
         return redirect(reverse('anthias_app:home'))
     if asset.mimetype in ('webpage', 'streaming'):
-        return redirect(asset.uri)
-    return FileResponse(open(asset.uri, 'rb'), as_attachment=False)
+        safe = _safe_redirect_uri(asset.uri)
+        return (
+            redirect(safe) if safe else redirect(reverse('anthias_app:home'))
+        )
+    safe_path = _safe_local_asset_path(asset.uri)
+    if safe_path is None:
+        return redirect(reverse('anthias_app:home'))
+    return FileResponse(open(safe_path, 'rb'), as_attachment=False)
 
 
 @authorized

@@ -49,7 +49,7 @@
       </p>
       <a
         x-show="previewAsset"
-        :href="previewAsset && (previewAsset.mimetype === 'webpage' || previewAsset.mimetype === 'streaming') ? previewAsset.uri : `/assets/${previewAsset.asset_id}/preview`"
+        :href="!previewAsset ? '#' : (previewAsset.mimetype === 'webpage' || previewAsset.mimetype === 'streaming') ? previewAsset.uri : `/assets/${previewAsset.asset_id}/preview`"
         target="_blank"
         rel="noopener noreferrer"
         class="btn btn-link"

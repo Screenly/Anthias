@@ -479,6 +479,28 @@ def test_write_endpoint_fires_websocket_notify(
     notify_mock.assert_called()
 
 
+@pytest.mark.parametrize(
+    'raw,expected',
+    [
+        ('My_day.mp4', 'My Day'),
+        ('video-clip-2.MP4', 'Video Clip 2'),
+        ('UPPER_CASE_TITLE.png', 'Upper Case Title'),
+        ('  spaces.mp4', 'Spaces'),
+        (
+            'mixed_separators-here.over.there.mp4',
+            'Mixed Separators Here Over There',
+        ),
+        ('no_extension', 'No Extension'),
+        ('', ''),
+        ('.hidden.mp4', 'Hidden'),
+    ],
+)
+def test_prettify_upload_name(raw: str, expected: str) -> None:
+    from anthias_server.app.views import _prettify_upload_name
+
+    assert _prettify_upload_name(raw) == expected
+
+
 @pytest.mark.django_db
 def test_assets_upload_video_marks_processing_and_queues_probe(
     client: Client,
@@ -506,8 +528,10 @@ def test_assets_upload_video_marks_processing_and_queues_probe(
             },
         )
 
-    created = Asset.objects.filter(name='clip.mp4').first()
+    # The upload view prettifies the filename ('clip.mp4' → 'Clip')
+    # before persisting, so query by mimetype instead.
+    created = Asset.objects.filter(mimetype='video').first()
     assert created is not None
-    assert created.mimetype == 'video'
+    assert created.name == 'Clip'
     assert created.is_processing is True
     delay_mock.assert_called_once_with(created.asset_id)
