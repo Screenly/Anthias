@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+{% include "_navbar.html" %}
+<main>
+  {% block main %}{% endblock %}
+</main>
+{% include "_footer.html" %}
+{% endblock %}

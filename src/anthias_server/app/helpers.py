@@ -8,7 +8,7 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from anthias_server.app.models import Asset
-from anthias_server.lib.github import is_up_to_date
+from anthias_server.app.page_context import navbar as _navbar_context
 from anthias_common.utils import get_video_duration
 from anthias_server.settings import settings
 
@@ -35,8 +35,9 @@ def template(
         ],
         'default_filters': ['template_handle_unicode'],
     }
-    context['up_to_date'] = is_up_to_date()
     context['use_24_hour_clock'] = settings['use_24_hour_clock']
+    # Navbar needs is_balena / up_to_date / player_name on every page.
+    context.update(_navbar_context())
 
     return render(request, template_name, context)
 

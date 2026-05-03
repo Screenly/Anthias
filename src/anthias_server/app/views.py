@@ -4,6 +4,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
+from anthias_server.app import page_context
 from anthias_server.lib.auth import authorized
 from anthias_common.utils import (
     connect_to_redis,
@@ -17,9 +18,29 @@ from .helpers import (
 r = connect_to_redis()
 
 
+_ANTHIAS_REPO_URL = 'https://github.com/Screenly/Anthias'
+
+
 @authorized
 def react(request: HttpRequest) -> HttpResponse:
     return template(request, 'react.html', {})
+
+
+@authorized
+@require_http_methods(['GET'])
+def system_info(request: HttpRequest) -> HttpResponse:
+    context = page_context.system_info()
+    # Master-branch builds get a clickable link to the commit; other
+    # branches stay as plain text (mirrors AnthiasVersionValue in the
+    # old React component, which only built the link when branch==master).
+    version = context.get('anthias_version') or ''
+    branch, _, commit = version.partition('@')
+    if branch == 'master' and commit:
+        context['anthias_version_master_link'] = (
+            f'{_ANTHIAS_REPO_URL}/commit/{commit}'
+        )
+    context['active_nav'] = 'system-info'
+    return template(request, 'system_info.html', context)
 
 
 @require_http_methods(['GET', 'POST'])

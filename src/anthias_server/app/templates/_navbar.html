@@ -1,0 +1,95 @@
+{% load static %}
+<nav
+  class="navbar navbar-dark navbar-expand-lg fixed-top bg-dark"
+  x-data="{ open: false }"
+>
+  <div class="container">
+    <a href="{% url 'anthias_app:home' %}" class="navbar-brand py-3">
+      <img src="{% static 'img/logo-full.svg' %}" alt="Anthias">
+    </a>
+
+    <button
+      class="navbar-toggler shadow-none border-2 border-light"
+      type="button"
+      :aria-expanded="open"
+      aria-label="Toggle navigation"
+      @click="open = !open"
+    >
+      <i class="bi bi-list text-light"></i>
+    </button>
+
+    <div
+      class="collapse navbar-collapse"
+      :class="{ 'show': open }"
+      id="navbarNav"
+    >
+      <ul class="navbar-nav ms-auto">
+        {% if not up_to_date and not is_balena %}
+        <li class="nav-item update-available">
+          <a
+            href="{% url 'anthias_app:settings' %}#upgrade-section"
+            class="nav-link"
+            @click="open = false"
+          >
+            <span class="pe-1"><i class="bi bi-arrow-down-circle-fill"></i></span>
+            <span class="d-none d-lg-inline">Update Available</span>
+            <span class="d-lg-none">Update</span>
+          </a>
+        </li>
+        {% endif %}
+
+        <li class="nav-item">
+          <a
+            href="{% url 'anthias_app:home' %}"
+            class="nav-link {% if active_nav == 'home' %}active{% endif %}"
+            @click="open = false"
+          >
+            <span class="pe-1"><i class="bi bi-clock"></i></span>
+            <span class="d-none d-lg-inline">Schedule Overview</span>
+            <span class="d-lg-none">Schedule</span>
+          </a>
+        </li>
+
+        {% if is_balena %}
+        <li class="nav-item">
+          <a
+            href="{% url 'anthias_app:integrations' %}"
+            class="nav-link {% if active_nav == 'integrations' %}active{% endif %}"
+            @click="open = false"
+          >
+            <span class="pe-1"><i class="bi bi-plus-square"></i></span>
+            Integrations
+          </a>
+        </li>
+        {% endif %}
+
+        <li class="nav-item">
+          <a
+            href="{% url 'anthias_app:settings' %}"
+            class="nav-link {% if active_nav == 'settings' %}active{% endif %}"
+            @click="open = false"
+          >
+            <span class="pe-1"><i class="bi bi-gear-fill"></i></span>
+            Settings
+          </a>
+        </li>
+
+        <li class="nav-item d-none d-lg-block">
+          <div class="divider-vertical"></div>
+        </li>
+
+        <li class="nav-item">
+          <a
+            href="{% url 'anthias_app:system_info' %}"
+            class="nav-link {% if active_nav == 'system-info' %}active{% endif %}"
+            @click="open = false"
+          >
+            <span class="pe-1"><i class="bi bi-list-task"></i></span>
+            <span class="d-none d-lg-inline">System Info</span>
+            <span class="d-lg-none">System Info</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>

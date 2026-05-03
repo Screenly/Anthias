@@ -16,3 +16,9 @@
   font-style: normal;
   font-display: swap;
 }
+
+// Bootstrap Icons (replaces react-icons in the navbar). Override the
+// upstream variable so the @font-face URL resolves to where build:fonts
+// drops the woff2, then pull in the full set of `.bi` classes.
+$bootstrap-icons-font-dir: '/static/dist/fonts';
+@import 'bootstrap-icons/font/bootstrap-icons';
