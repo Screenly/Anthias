@@ -39,27 +39,25 @@ def _read_cpu_brand() -> str:
     AMD APUs tack on (operators care about the CPU, not the iGPU).
     Yields 'Intel Core i7-9700K @ 3.60GHz' / 'AMD Ryzen 7 5700G'.
     """
-    import re
-
     try:
         with open('/proc/cpuinfo') as f:
             for line in f:
-                if line.startswith('model name'):
-                    raw = line.split(':', 1)[1].strip()
-                    cleaned = (
-                        raw.replace('(R)', '')
-                        .replace('(TM)', '')
-                        .replace(' CPU ', ' ')
-                    )
-                    # Match ' with <token>... Graphics' without
-                    # alternation that can backtrack: each character
-                    # class is non-overlapping, terminator is fixed.
-                    cleaned = re.sub(
-                        r'\s+with(?:\s+[A-Za-z0-9]+){1,4}\s+Graphics\b',
-                        '',
-                        cleaned,
-                    )
-                    return ' '.join(cleaned.split())
+                if not line.startswith('model name'):
+                    continue
+                raw = line.split(':', 1)[1].strip()
+                cleaned = (
+                    raw.replace('(R)', '')
+                    .replace('(TM)', '')
+                    .replace(' CPU ', ' ')
+                )
+                # Strip the ' with X Graphics' suffix using simple
+                # string ops — avoids the regex polynomial-backtracking
+                # warning Sonar flags on nested-quantifier patterns.
+                lower = cleaned.lower()
+                with_idx = lower.find(' with ')
+                if with_idx != -1 and lower.rstrip().endswith('graphics'):
+                    cleaned = cleaned[:with_idx]
+                return ' '.join(cleaned.split())
     except OSError:
         pass
     return ''

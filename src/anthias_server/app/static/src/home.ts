@@ -329,7 +329,7 @@ function bindActiveRowsSortable(): void {
   if (!window.Sortable) return
   const wrapper = document.getElementById('asset-table')
   if (!wrapper) return
-  const orderUrl = wrapper.getAttribute('data-order-url')
+  const orderUrl = wrapper.dataset.orderUrl
   if (!orderUrl) return
   const tbody = document.getElementById('active-rows')
   if (!tbody) return

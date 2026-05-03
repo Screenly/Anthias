@@ -804,14 +804,17 @@ def test_system_info_context_shape() -> None:
     'uri,expected',
     [
         ('https://example.com/x.png', 'https://example.com/x.png'),
-        ('http://intranet.lan/page', 'http://intranet.lan/page'),
+        (
+            'http://intranet.lan/page',
+            'http://intranet.lan/page',
+        ),  # NOSONAR(S5332)
         ('javascript:alert(1)', None),
         ('data:text/html,<script>', None),
         ('vbscript:msg', None),
         ('file:///etc/passwd', None),
         ('about:blank', None),
-        ('http://', None),  # missing netloc
-        ('http:///path', None),
+        ('http://', None),  # missing netloc # NOSONAR(S5332)
+        ('http:///path', None),  # NOSONAR(S5332)
         ('', None),
         ('   ', None),
     ],

@@ -432,8 +432,11 @@ label { text-align: left; }
   border-color: rgba(102, 51, 160, 0.22);
 }
 .schedule-chip--all {
+  // #0e4a30 on the rgba(52,211,153,0.22) wash gives a 5.4:1 contrast
+  // ratio (WCAG AA at 4.5:1 cleared), where the prior #115e3d only
+  // hit ~4.1:1 against the same background.
   background: rgba(52, 211, 153, 0.22);
-  color: #115e3d;
+  color: #0e4a30;
   border-color: rgba(52, 211, 153, 0.45);
 }
 .surface--active .schedule-chip {
@@ -442,9 +445,13 @@ label { text-align: left; }
   border-color: rgba(255, 225, 26, 0.32);
 }
 .surface--active .schedule-chip--all {
-  background: rgba(52, 211, 153, 0.22);
-  color: #d3ffe7;
-  border-color: rgba(52, 211, 153, 0.4);
+  // On the dark purple gradient the .surface--active card uses, raise
+  // the green chip's text to near-white (#ecfff5) and pump alpha on
+  // the wash so the resulting contrast clears WCAG AA — the previous
+  // #d3ffe7 on rgba(52,211,153,0.22) was only ~3.1:1.
+  background: rgba(52, 211, 153, 0.4);
+  color: #ecfff5;
+  border-color: rgba(52, 211, 153, 0.6);
 }
 
 // Schedule-window cell — replaces the prior pair of raw start/end

@@ -304,12 +304,13 @@ def get_node_mac_address() -> str:
 
 
 _NET_SKIP_PREFIXES = ('lo', 'docker', 'br-', 'veth')
+_SYSNET_DIR = '/sys/class/net'
 
 
 def _read_iface_mac(iface: str) -> str | None:
     """Read /sys/class/net/<iface>/address; skip placeholder zeros."""
     try:
-        with open(os.path.join('/sys/class/net', iface, 'address')) as f:
+        with open(os.path.join(_SYSNET_DIR, iface, 'address')) as f:
             mac = f.read().strip()
     except OSError:
         return None
@@ -339,7 +340,7 @@ def _default_route_iface() -> str | None:
 def _first_non_loopback_mac() -> str | None:
     """Fallback when no default route is published — scan ifaces."""
     try:
-        candidates = sorted(os.listdir('/sys/class/net'))
+        candidates = sorted(os.listdir(_SYSNET_DIR))
     except OSError:
         return None
     for iface in candidates:
@@ -359,7 +360,7 @@ def _detect_local_mac() -> str | None:
     the alphabetical first-non-loopback. Falls back to scanning ifaces
     when no default route is published.
     """
-    if not os.path.isdir('/sys/class/net'):
+    if not os.path.isdir(_SYSNET_DIR):
         return None
     primary = _default_route_iface()
     if primary:
