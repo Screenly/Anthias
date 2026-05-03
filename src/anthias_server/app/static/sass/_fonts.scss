@@ -22,3 +22,10 @@
 // drops the woff2, then pull in the full set of `.bi` classes.
 $bootstrap-icons-font-dir: '/static/dist/fonts';
 @import 'bootstrap-icons/font/bootstrap-icons';
+
+// Alpine sets [x-cloak] on elements that should stay hidden until
+// Alpine initialises; without this rule the cloaked markup flashes
+// visible during the initial paint.
+[x-cloak] {
+  display: none !important;
+}

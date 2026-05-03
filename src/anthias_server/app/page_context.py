@@ -72,6 +72,52 @@ def system_info() -> dict[str, Any]:
     }
 
 
+_DATE_FORMAT_OPTIONS = (
+    ('mm/dd/yyyy', 'month/day/year'),
+    ('dd/mm/yyyy', 'day/month/year'),
+    ('yyyy/mm/dd', 'year/month/day'),
+    ('mm-dd-yyyy', 'month-day-year'),
+    ('dd-mm-yyyy', 'day-month-year'),
+    ('yyyy-mm-dd', 'year-month-day'),
+    ('mm.dd.yyyy', 'month.day.year'),
+    ('dd.mm.yyyy', 'day.month.year'),
+    ('yyyy.mm.dd', 'year.month.day'),
+)
+
+
+def device_settings() -> dict[str, Any]:
+    """Form values + dropdown choices for /settings.
+
+    Pulls from the live settings object (no API hop). Adds the
+    page-only state the React component used to track:
+    `has_saved_basic_auth` (whether to show the Current Password
+    field), `is_pi5` (whether to hide the 3.5mm jack option), and
+    the choice tuples for the auth_backend / date_format dropdowns.
+    """
+    settings.load()
+    device_model = device_helper.parse_cpu_info().get('model') or ''
+    return {
+        'player_name': settings['player_name'],
+        'default_duration': settings['default_duration'],
+        'default_streaming_duration': settings['default_streaming_duration'],
+        'audio_output': settings['audio_output'],
+        'date_format': settings['date_format'],
+        'auth_backend': settings['auth_backend'],
+        'username': settings['user'],
+        'show_splash': settings['show_splash'],
+        'default_assets': settings['default_assets'],
+        'shuffle_playlist': settings['shuffle_playlist'],
+        'use_24_hour_clock': settings['use_24_hour_clock'],
+        'debug_logging': settings['debug_logging'],
+        # Auth-form chrome
+        'has_saved_basic_auth': bool(settings['auth_backend'] == 'auth_basic'),
+        # Hide the 3.5mm jack option on Pi 5 — the jack moved off-board
+        # on that revision (matches the React audio-output dropdown).
+        'is_pi5': 'Raspberry Pi 5' in device_model,
+        'date_format_options': _DATE_FORMAT_OPTIONS,
+    }
+
+
 def integrations() -> dict[str, Any]:
     data: dict[str, Any] = {'is_balena': is_balena_app()}
     if data['is_balena']:

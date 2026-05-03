@@ -1,0 +1,66 @@
+{% extends "_layout.html" %}
+
+{% block title %}{% if player_name %}{{ player_name }} · {% endif %}Integrations{% endblock %}
+
+{% block main %}
+<div class="container">
+  <div class="row py-2">
+    <div class="col-12">
+      <h4 class="page-header text-white"><b>Integrations</b></h4>
+    </div>
+  </div>
+
+  {% if is_balena %}
+  <div class="row content">
+    <div class="col-12">
+      <h5 class="text-white py-2">Balena</h5>
+      <table class="table mb-5">
+        <thead class="table-borderless">
+          <tr>
+            <th class="text-secondary font-weight-normal" scope="col" style="width: 20%">Option</th>
+            <th class="text-secondary font-weight-normal" scope="col" style="width: 35%">Value</th>
+            <th class="text-secondary font-weight-normal" scope="col">Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if balena_device_name_at_init %}
+          <tr>
+            <th scope="row">Device Name</th>
+            <td>{{ balena_device_name_at_init }}</td>
+            <td>The name of the device on first initialisation.</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <th scope="row">Device UUID</th>
+            <td>{{ balena_device_id }}</td>
+            <td>The unique identification number for the device. This is used to identify it on balena.</td>
+          </tr>
+          <tr>
+            <th scope="row">App ID</th>
+            <td>{{ balena_app_id }}</td>
+            <td>ID number of the balena application the device is associated.</td>
+          </tr>
+          <tr>
+            <th scope="row">App Name</th>
+            <td>{{ balena_app_name }}</td>
+            <td>The name of the balena application the device is associated with.</td>
+          </tr>
+          {% if balena_supervisor_version %}
+          <tr>
+            <th scope="row">Supervisor Version</th>
+            <td>{{ balena_supervisor_version }}</td>
+            <td>The current version of the supervisor agent running on the device.</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <th scope="row">Host OS Version</th>
+            <td>{{ balena_host_os_version }}</td>
+            <td>The version of the host OS.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
