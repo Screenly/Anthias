@@ -11,11 +11,11 @@
   hx-trigger="every 5s, refresh-assets from:body"
   hx-swap="outerHTML"
   data-order-url="{% url 'anthias_app:assets_order' %}"
-  class="d-flex flex-column gap-4"
+  class="flex flex-col gap-4"
 >
   <section id="active-assets-section" class="surface surface--active">
     <header class="surface__header">
-      <h2><i class="bi bi-toggle-on me-2"></i>Enabled</h2>
+      <h2><i class="bi bi-toggle-on mr-2"></i>Enabled</h2>
       <span class="surface__count">{{ active_assets|length }} item{{ active_assets|length|pluralize }}</span>
     </header>
 
@@ -27,7 +27,7 @@
           <th scope="col" style="width: 28%">Schedule window</th>
           <th scope="col" style="width: 10%">Duration</th>
           <th scope="col" style="width: 8%">Enabled</th>
-          <th scope="col" style="width: 14%" class="text-end">Actions</th>
+          <th scope="col" style="width: 14%" class="text-right">Actions</th>
         </tr>
       </thead>
       <tbody id="active-rows">
@@ -43,7 +43,7 @@
 
   <section id="inactive-assets-section" class="surface">
     <header class="surface__header">
-      <h2><i class="bi bi-pause-circle me-2"></i>Inactive</h2>
+      <h2><i class="bi bi-pause-circle mr-2"></i>Inactive</h2>
       <span class="surface__count">{{ inactive_assets|length }} item{{ inactive_assets|length|pluralize }}</span>
     </header>
 
@@ -55,7 +55,7 @@
           <th scope="col" style="width: 28%">Schedule window</th>
           <th scope="col" style="width: 10%">Duration</th>
           <th scope="col" style="width: 8%">Active</th>
-          <th scope="col" style="width: 14%" class="text-end">Actions</th>
+          <th scope="col" style="width: 14%" class="text-right">Actions</th>
         </tr>
       </thead>
       <tbody>

@@ -7,9 +7,9 @@
 // templates compose from; nothing in here targets React-era hooks.
 // =============================================================================
 
-@import "tooltip";
-@import "sweetalert2-overrides";
-@import "form-overrides";
+// Brand colour tokens — referenced via #{$anthias-...} in this file
+// to seed the CSS-custom-property design tokens declared further down.
+@import "variables";
 
 // -----------------------------------------------------------------------------
 // 1. Design tokens
@@ -104,8 +104,6 @@ main {
 
 label { text-align: left; }
 
-@include tooltip;
-@include swal2-overrides;
 
 // -----------------------------------------------------------------------------
 // 3. Typography helpers
@@ -1411,4 +1409,245 @@ $footer-height: 13rem;
   background: var(--color-border);
   margin: 0 var(--space-2);
   vertical-align: middle;
+}
+
+// =============================================================================
+// 19. Bootstrap-replacement component classes
+//
+// Templates still ship .container / .form-control / .form-floating /
+// .form-check / .nav-tabs / .row / .col-* etc. Bootstrap is gone so we
+// re-implement the minimum surface the templates depend on, all driven
+// from our design-token CSS variables. Anything more bespoke (.btn,
+// .surface, .modal-card, .stat-card, .schedule-chip, …) is already
+// declared earlier in this file.
+// =============================================================================
+
+// --- Layout container (matches Bootstrap's responsive max-widths) ---
+.container {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: var(--space-4);
+  @media (min-width: 576px)  { max-width: 540px; }
+  @media (min-width: 768px)  { max-width: 720px; }
+  @media (min-width: 992px)  { max-width: 960px; }
+  @media (min-width: 1200px) { max-width: 1140px; }
+  @media (min-width: 1400px) { max-width: 1320px; }
+}
+
+// --- Row / col (only the variants the templates actually use) ---
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-inline: calc(var(--space-3) * -1);
+  > [class*="col-"] { padding-inline: var(--space-3); }
+}
+.col-12 { flex: 0 0 100%; max-width: 100%; }
+@media (min-width: 768px) {
+  .col-md-6 { flex: 0 0 50%; max-width: 50%; }
+}
+
+// --- Forms: text inputs + selects ---
+.form-control,
+.form-select {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  background-clip: padding-box;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-link);
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+  }
+  &:disabled,
+  &[readonly] {
+    background-color: var(--color-surface-tint);
+    color: var(--color-text-muted);
+  }
+  &::placeholder {
+    color: var(--color-text-muted);
+    opacity: 0.7;
+  }
+}
+.form-select {
+  appearance: none;
+  padding-right: 2.5rem;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%235e5868' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  background-size: 14px;
+  cursor: pointer;
+}
+
+// --- Floating labels ---
+.form-floating {
+  position: relative;
+
+  > .form-control,
+  > .form-select {
+    height: 3.6rem;
+    padding-block: 1.4rem 0.4rem;
+  }
+  > label {
+    position: absolute;
+    inset: 0 auto auto 0;
+    padding: 0.85rem;
+    pointer-events: none;
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+    transition: opacity var(--t-fast), transform var(--t-fast),
+      font-size var(--t-fast);
+    transform-origin: 0 0;
+  }
+  > .form-control:focus ~ label,
+  > .form-control:not(:placeholder-shown) ~ label,
+  > .form-select ~ label {
+    transform: translateY(-0.55rem);
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    letter-spacing: 0.04em;
+    font-weight: 600;
+  }
+}
+
+// --- Checkboxes + switches (replaces .form-check / .form-switch) ---
+.form-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 1.5rem;
+}
+.form-check-input {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  margin: 0;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  cursor: pointer;
+  transition: background-color var(--t-fast), border-color var(--t-fast),
+    box-shadow var(--t-fast);
+
+  &:checked {
+    background-color: var(--color-link);
+    border-color: var(--color-link);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='m4 8.5 3 3 5-7'/%3e%3c/svg%3e");
+    background-size: 0.85rem 0.85rem;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+  }
+}
+.form-check-label {
+  cursor: pointer;
+  user-select: none;
+}
+
+// Toggle switch — pill-shaped form-check-input variant.
+.form-switch .form-check-input {
+  width: 2.25rem;
+  height: 1.25rem;
+  border-radius: var(--radius-pill);
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%235e5868'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: left 0.15rem center;
+  background-size: 0.85rem;
+
+  &:checked {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e");
+    background-position: right 0.15rem center;
+  }
+}
+
+// --- Nav / tabs (only the variants used in the asset modal) ---
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.nav-item { display: flex; }
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  text-decoration: none;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: color var(--t-fast), background var(--t-fast);
+
+  &:hover { background: rgba(0, 0, 0, 0.04); }
+}
+
+// --- Bootstrap-style "btn-close" — kept only for legacy alerts. The
+// app-toast component has its own .app-toast__close so this is a safety
+// net; the new flash-message stack drains into toasts anyway.
+.btn-close {
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  background: transparent
+    url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%231f002a'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e")
+    center/0.85rem no-repeat;
+  border: none;
+  opacity: 0.55;
+  cursor: pointer;
+  &:hover { opacity: 1; }
+}
+
+// --- Mobile navbar collapse (.navbar-collapse + .show) for the
+// existing _navbar.html markup. Matches Bootstrap's hide-by-default,
+// show-when-.show behaviour just enough to keep the Alpine toggle
+// working.
+@media (max-width: 991.98px) {
+  .navbar-collapse { display: none; }
+  .navbar-collapse.show {
+    display: block;
+    width: 100%;
+    margin-top: var(--space-3);
+  }
+}
+.navbar-toggler {
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--radius-md);
+  font-size: 1.1rem;
+  line-height: 1;
+  @media (min-width: 992px) { display: none; }
+}
+.navbar-nav {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  @media (min-width: 992px) { flex-direction: row; }
+}
+.navbar-brand {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }

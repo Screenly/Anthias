@@ -31,7 +31,7 @@
         </div>
       </header>
       <div class="form-floating">
-        <input type="text" class="form-control" id="player_name" name="player_name" value="{{ player_name }}" placeholder="Player name">
+        <input type="text" class="form-control" id="player_name" name="player_name" value="{{ player_name }}" placeholder=" ">
         <label for="player_name">Player name</label>
       </div>
     </section>
@@ -130,7 +130,7 @@
       </template>
     </section>
 
-    <div class="d-flex justify-content-end">
+    <div class="flex justify-end">
       <button type="submit" class="btn btn-primary">
         <i class="bi bi-check2"></i><span>Save settings</span>
       </button>
@@ -147,13 +147,13 @@
         <p class="settings-section__lede">Download a tarball of your settings and asset metadata, or recover from one.</p>
       </div>
       <div class="settings-section__actions" x-data>
-        <form method="post" action="{% url 'anthias_app:settings_backup' %}" class="d-inline m-0">
+        <form method="post" action="{% url 'anthias_app:settings_backup' %}" class="inline m-0">
           {% csrf_token %}
           <button type="submit" id="btn-backup" class="btn btn-outline-dark">
             <i class="bi bi-download"></i><span>Get backup</span>
           </button>
         </form>
-        <form method="post" action="{% url 'anthias_app:settings_recover' %}" enctype="multipart/form-data" class="d-inline m-0">
+        <form method="post" action="{% url 'anthias_app:settings_recover' %}" enctype="multipart/form-data" class="inline m-0">
           {% csrf_token %}
           <input
             type="file"
@@ -213,7 +213,7 @@
           <form
             method="post"
             :action="pending === 'reboot' ? '{% url 'anthias_app:settings_reboot' %}' : '{% url 'anthias_app:settings_shutdown' %}'"
-            class="d-inline m-0"
+            class="inline m-0"
           >
             {% csrf_token %}
             <button type="submit" class="btn btn-danger" x-text="pending === 'reboot' ? 'Reboot now' : 'Shut down'"></button>

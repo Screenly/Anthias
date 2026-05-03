@@ -28,14 +28,14 @@
             <button type="button" id="tab-uri"
               class="nav-link" :class="tab === 'uri' && 'active'"
               @click="tab = 'uri'">
-              <i class="bi bi-link-45deg me-1"></i>From URL
+              <i class="bi bi-link-45deg mr-1"></i>From URL
             </button>
           </li>
           <li class="nav-item">
             <button type="button"
               class="nav-link upload-asset-tab" :class="tab === 'file' && 'active'"
               @click="tab = 'file'">
-              <i class="bi bi-cloud-arrow-up me-1"></i>Upload file
+              <i class="bi bi-cloud-arrow-up mr-1"></i>Upload file
             </button>
           </li>
         </ul>
@@ -53,7 +53,7 @@
         {% csrf_token %}
         <div class="modal-card__body" style="padding-top: 0">
           <div class="form-floating mb-3">
-            <input type="url" class="form-control" id="add-uri" name="uri" placeholder="https://" required>
+            <input type="url" class="form-control" id="add-uri" name="uri" placeholder=" " required>
             <label for="add-uri">Asset URL</label>
           </div>
           <p class="muted-label m-0">Web pages, hosted images, hosted videos, and streaming URLs are all supported.</p>
@@ -88,9 +88,9 @@
             x-show="!uploadState"
           >
             <i class="bi bi-cloud-arrow-up" style="font-size: 2.25rem; opacity: 0.55"></i>
-            <p class="mb-1 fw-semibold mt-2">Click to choose a file</p>
+            <p class="mb-1 font-semibold mt-2">Click to choose a file</p>
             <p class="muted-label mb-0">Image or video. Upload starts immediately.</p>
-            <input type="file" class="d-none" id="add-file" name="file_upload" accept="image/*,video/*"
+            <input type="file" class="hidden" id="add-file" name="file_upload" accept="image/*,video/*"
               @change="if ($event.target.files.length) { uploadFileName = $event.target.files[0].name; $event.target.form.requestSubmit() }">
           </label>
 
@@ -98,7 +98,7 @@
             <div class="upload-progress__head">
               <i class="bi" :class="uploadState === 'sending' ? 'bi-cloud-arrow-up-fill' : 'bi-arrow-repeat upload-progress__spin'"></i>
               <div class="upload-progress__text">
-                <p class="m-0 fw-semibold" x-text="uploadFileName || 'Uploading…'"></p>
+                <p class="m-0 font-semibold" x-text="uploadFileName || 'Uploading…'"></p>
                 <p class="muted-label m-0" x-text="uploadState === 'sending'
                   ? `Uploading… ${uploadProgress}%`
                   : 'Processing on server…'"></p>
@@ -142,7 +142,7 @@
           </div>
 
           <div
-            class="d-flex justify-content-between align-items-center mb-4 pb-3"
+            class="flex justify-between items-center mb-4 pb-3"
             style="border-bottom: 1px solid var(--color-border);"
           >
             <span class="muted-label">Type</span>
@@ -193,16 +193,16 @@
             </div>
           </div>
 
-          <div class="d-flex flex-wrap gap-4">
+          <div class="flex flex-wrap gap-4">
             <div class="form-check form-switch m-0">
               <input type="hidden" name="nocache" value="false">
               <input type="checkbox" class="form-check-input" id="edit-nocache" name="nocache" value="true" :checked="editAsset.nocache">
-              <label class="form-check-label ms-2" for="edit-nocache">No cache</label>
+              <label class="form-check-label ml-2" for="edit-nocache">No cache</label>
             </div>
             <div class="form-check form-switch m-0">
               <input type="hidden" name="skip_asset_check" value="false">
               <input type="checkbox" class="form-check-input" id="edit-skip" name="skip_asset_check" value="true" :checked="editAsset.skip_asset_check">
-              <label class="form-check-label ms-2" for="edit-skip">Skip asset check</label>
+              <label class="form-check-label ml-2" for="edit-skip">Skip asset check</label>
             </div>
           </div>
         </div>

@@ -1,15 +1,12 @@
 {% load static %}
-<nav
-  class="navbar navbar-dark navbar-expand-lg fixed-top"
-  x-data="{ open: false }"
->
-  <div class="container">
+<nav class="navbar fixed top-0 inset-x-0 z-50" x-data="{ open: false }">
+  <div class="container flex flex-wrap items-center gap-3 py-3">
     <a href="{% url 'anthias_app:home' %}" class="navbar-brand">
       <img src="{% static 'img/logo-full.svg' %}" alt="Anthias">
     </a>
 
     <button
-      class="navbar-toggler"
+      class="navbar-toggler ml-auto lg:hidden"
       type="button"
       :aria-expanded="open"
       aria-label="Toggle navigation"
@@ -18,12 +15,13 @@
       <i class="bi bi-list"></i>
     </button>
 
+    {# Desktop: always visible. Mobile: show only when open. #}
     <div
-      class="collapse navbar-collapse"
-      :class="{ 'show': open }"
+      class="basis-full lg:basis-auto lg:ml-auto"
+      :class="open ? 'block' : 'hidden lg:block'"
       id="navbarNav"
     >
-      <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-1">
+      <ul class="navbar-nav flex flex-col lg:flex-row lg:items-center lg:gap-1">
         {% if not up_to_date and not is_balena %}
         <li class="nav-item update-available">
           <a
@@ -32,8 +30,8 @@
             @click="open = false"
           >
             <i class="bi bi-arrow-down-circle-fill"></i>
-            <span class="d-none d-lg-inline">Update available</span>
-            <span class="d-lg-none">Update</span>
+            <span class="hidden lg:inline">Update available</span>
+            <span class="lg:hidden">Update</span>
           </a>
         </li>
         {% endif %}
@@ -73,7 +71,7 @@
           </a>
         </li>
 
-        <li class="nav-item d-none d-lg-block" aria-hidden="true">
+        <li class="nav-item hidden lg:block" aria-hidden="true">
           <span class="divider-vertical"></span>
         </li>
 

@@ -17,16 +17,16 @@
       </p>
     </div>
     <div class="page-header-bar__actions">
-      <form method="post" action="{% url 'anthias_app:assets_control' command='previous' %}" class="d-inline m-0">
+      <form method="post" action="{% url 'anthias_app:assets_control' command='previous' %}" class="inline m-0">
         {% csrf_token %}
         <button type="submit" class="btn btn-light btn-pill" title="Skip to previous asset">
-          <i class="bi bi-skip-backward-fill"></i><span class="d-none d-md-inline">Previous</span>
+          <i class="bi bi-skip-backward-fill"></i><span class="hidden md:inline">Previous</span>
         </button>
       </form>
-      <form method="post" action="{% url 'anthias_app:assets_control' command='next' %}" class="d-inline m-0">
+      <form method="post" action="{% url 'anthias_app:assets_control' command='next' %}" class="inline m-0">
         {% csrf_token %}
         <button type="submit" class="btn btn-light btn-pill" title="Skip to next asset">
-          <i class="bi bi-skip-forward-fill"></i><span class="d-none d-md-inline">Next</span>
+          <i class="bi bi-skip-forward-fill"></i><span class="hidden md:inline">Next</span>
         </button>
       </form>
       <button type="button" id="add-asset-button" class="btn btn-primary btn-pill" @click="openAdd()">
@@ -69,7 +69,7 @@
       </div>
       <div class="modal-card__footer">
         <button type="button" class="btn btn-link" @click="pendingDeleteId = null">Cancel</button>
-        <form method="post" :action="`/assets/${pendingDeleteId}/delete`" class="d-inline m-0">
+        <form method="post" :action="`/assets/${pendingDeleteId}/delete`" class="inline m-0">
           {% csrf_token %}
           <button type="submit" class="btn btn-danger confirm-delete">
             <i class="bi bi-trash3"></i><span>Delete</span>

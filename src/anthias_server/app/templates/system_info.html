@@ -14,7 +14,7 @@
 
   <section class="info-section">
     <header class="info-section__header">
-      <h2><i class="bi bi-activity me-2"></i>Live diagnostics</h2>
+      <h2><i class="bi bi-activity mr-2"></i>Live diagnostics</h2>
       <p class="info-section__lede">CPU load, memory and storage updated each refresh.</p>
     </header>
     <div class="stat-grid">
@@ -119,7 +119,7 @@
 
   <section class="info-section">
     <header class="info-section__header">
-      <h2><i class="bi bi-display me-2"></i>Display &amp; hardware</h2>
+      <h2><i class="bi bi-display mr-2"></i>Display &amp; hardware</h2>
       <p class="info-section__lede">What this player is rendering to and what it's running on.</p>
     </header>
     <div class="stat-grid">
@@ -131,8 +131,8 @@
         <p class="stat-card__label">Resolution</p>
         <div class="stat-card__value">{{ resolution.value }}</div>
         <div class="stat-card__meta">
-          {% if resolution.source == 'live' %}<i class="bi bi-broadcast me-1"></i>Reported by viewer
-          {% else %}<i class="bi bi-gear me-1"></i>Configured (no viewer report yet){% endif %}
+          {% if resolution.source == 'live' %}<i class="bi bi-broadcast mr-1"></i>Reported by viewer
+          {% else %}<i class="bi bi-gear mr-1"></i>Configured (no viewer report yet){% endif %}
         </div>
       </div>
       {% include "_stat_card.html" with label="Display Power (CEC)" value=display_power|default:"None" %}
@@ -141,7 +141,7 @@
 
   <section class="info-section">
     <header class="info-section__header">
-      <h2><i class="bi bi-fingerprint me-2"></i>Identity</h2>
+      <h2><i class="bi bi-fingerprint mr-2"></i>Identity</h2>
       <p class="info-section__lede">Anthias build and host network identifiers.</p>
     </header>
     <div class="stat-grid">
