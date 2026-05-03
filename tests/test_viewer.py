@@ -10,8 +10,8 @@ from unittest import mock
 
 import pytest
 
-import viewer
-from viewer.scheduling import Scheduler
+import anthias_viewer as viewer
+from anthias_viewer.scheduling import Scheduler
 
 logging.disable(logging.CRITICAL)
 
@@ -78,12 +78,12 @@ def noop(*a: Any, **k: Any) -> None:
     return None
 
 
-@mock.patch('viewer.constants.SERVER_WAIT_TIMEOUT', 0)
+@mock.patch('anthias_viewer.constants.SERVER_WAIT_TIMEOUT', 0)
 def test_empty(viewer_fixtures: _ViewerFixtures) -> None:
     m_asset_list = mock.Mock()
     m_asset_list.return_value = ([], None)
 
-    with mock.patch('viewer.scheduling.generate_asset_list', m_asset_list):
+    with mock.patch('anthias_viewer.scheduling.generate_asset_list', m_asset_list):
         setattr(viewer_fixtures.u, 'scheduler', Scheduler())
 
         m_asset_list.assert_called_once()
@@ -295,11 +295,11 @@ def test_trigger_recheck_posts_to_recheck_endpoint() -> None:
     Mocking the token-derivation here keeps this test independent of
     settings state, which has bitten us under pytest-xdist + Docker
     test-image conftest configurations."""
-    from lib.internal_auth import INTERNAL_AUTH_HEADER
+    from anthias_common.internal_auth import INTERNAL_AUTH_HEADER
 
     with (
-        mock.patch('viewer.internal_auth_token', return_value='deadbeef'),
-        mock.patch('viewer.requests.post') as m,
+        mock.patch('anthias_viewer.internal_auth_token', return_value='deadbeef'),
+        mock.patch('anthias_viewer.requests.post') as m,
     ):
         viewer._trigger_asset_recheck('abc')
     m.assert_called_once()
@@ -309,7 +309,7 @@ def test_trigger_recheck_posts_to_recheck_endpoint() -> None:
 
 
 def test_trigger_recheck_no_op_on_missing_asset_id() -> None:
-    with mock.patch('viewer.requests.post') as m:
+    with mock.patch('anthias_viewer.requests.post') as m:
         viewer._trigger_asset_recheck(None)
     m.assert_not_called()
 
@@ -319,8 +319,8 @@ def test_trigger_recheck_no_op_when_internal_token_missing() -> None:
     in settings or env), the request would be a guaranteed 403 — so
     the viewer skips it rather than burning an HTTP round-trip."""
     with (
-        mock.patch('viewer.internal_auth_token', return_value=''),
-        mock.patch('viewer.requests.post') as m,
+        mock.patch('anthias_viewer.internal_auth_token', return_value=''),
+        mock.patch('anthias_viewer.requests.post') as m,
     ):
         viewer._trigger_asset_recheck('abc')
     m.assert_not_called()
@@ -332,10 +332,10 @@ def test_trigger_recheck_swallows_request_errors() -> None:
 
     with (
         mock.patch(
-            'viewer.requests.post',
+            'anthias_viewer.requests.post',
             side_effect=_requests.ConnectionError('boom'),
         ),
-        mock.patch('viewer.internal_auth_token', return_value='deadbeef'),
+        mock.patch('anthias_viewer.internal_auth_token', return_value='deadbeef'),
     ):
         # Must not raise.
         viewer._trigger_asset_recheck('abc')
@@ -355,8 +355,8 @@ def test_asset_loop_does_not_recheck_missing_local_asset() -> None:
     skip_event = mock.Mock()
     skip_event.wait.return_value = False
     with (
-        mock.patch('viewer._trigger_asset_recheck') as trigger,
-        mock.patch('viewer.get_skip_event', return_value=skip_event),
+        mock.patch('anthias_viewer._trigger_asset_recheck') as trigger,
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
     ):
         viewer.asset_loop(scheduler)
     trigger.assert_not_called()
@@ -376,8 +376,8 @@ def test_asset_loop_rechecks_unreachable_remote_asset() -> None:
     skip_event = mock.Mock()
     skip_event.wait.return_value = False
     with (
-        mock.patch('viewer._trigger_asset_recheck') as trigger,
-        mock.patch('viewer.get_skip_event', return_value=skip_event),
+        mock.patch('anthias_viewer._trigger_asset_recheck') as trigger,
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
     ):
         viewer.asset_loop(scheduler)
     trigger.assert_called_once_with('remote')

@@ -17,11 +17,11 @@ from unittest import mock
 import pytest
 from django.test import Client
 
-import api.views.v2 as v2_module
-from anthias_app.models import Asset
-from celery_tasks import asset_recheck_queue_key
-from lib.internal_auth import INTERNAL_AUTH_HEADER, internal_auth_token
-from settings import settings as anthias_settings
+import anthias_server.api.views.v2 as v2_module
+from anthias_server.app.models import Asset
+from anthias_server.celery_tasks import asset_recheck_queue_key
+from anthias_common.internal_auth import INTERNAL_AUTH_HEADER, internal_auth_token
+from anthias_server.settings import settings as anthias_settings
 
 
 @pytest.fixture(autouse=True)
@@ -53,7 +53,7 @@ def _make(**kwargs: object) -> Asset:
 
 @pytest.mark.django_db
 def test_returns_404_for_unknown_asset() -> None:
-    with mock.patch('celery_tasks.revalidate_asset_url.delay') as m:
+    with mock.patch('anthias_server.celery_tasks.revalidate_asset_url.delay') as m:
         response = Client().post(
             '/api/v2/assets/nope/recheck',
             headers=_auth_headers(),
@@ -66,7 +66,7 @@ def test_returns_404_for_unknown_asset() -> None:
 def test_enqueues_task_when_no_lock_held() -> None:
     """Fresh asset, no recent recheck: SETNX succeeds → enqueue."""
     _make()
-    with mock.patch('celery_tasks.revalidate_asset_url.delay') as m:
+    with mock.patch('anthias_server.celery_tasks.revalidate_asset_url.delay') as m:
         response = Client().post(
             '/api/v2/assets/a1/recheck',
             headers=_auth_headers(),
@@ -86,7 +86,7 @@ def test_skips_enqueue_when_queue_debounce_held() -> None:
     # Pre-acquire the queue-debounce key on the same fake the
     # endpoint reads from.
     v2_module.r.set(asset_recheck_queue_key('a1'), '1')
-    with mock.patch('celery_tasks.revalidate_asset_url.delay') as m:
+    with mock.patch('anthias_server.celery_tasks.revalidate_asset_url.delay') as m:
         response = Client().post(
             '/api/v2/assets/a1/recheck',
             headers=_auth_headers(),
@@ -103,7 +103,7 @@ def test_back_to_back_calls_only_enqueue_once() -> None:
     after the task finishes, so two near-simultaneous endpoint hits
     would both read the stale value and each enqueue."""
     _make()
-    with mock.patch('celery_tasks.revalidate_asset_url.delay') as m:
+    with mock.patch('anthias_server.celery_tasks.revalidate_asset_url.delay') as m:
         r1 = Client().post(
             '/api/v2/assets/a1/recheck', headers=_auth_headers()
         )
@@ -118,7 +118,7 @@ def test_back_to_back_calls_only_enqueue_once() -> None:
 @pytest.mark.django_db
 def test_missing_internal_auth_is_forbidden() -> None:
     _make()
-    with mock.patch('celery_tasks.revalidate_asset_url.delay') as m:
+    with mock.patch('anthias_server.celery_tasks.revalidate_asset_url.delay') as m:
         response = Client().post('/api/v2/assets/a1/recheck')
     assert response.status_code == 403
     m.assert_not_called()
@@ -129,7 +129,7 @@ def test_internal_auth_works_without_basic_auth() -> None:
     """Viewer has no operator BasicAuth credentials; the internal header
     is sufficient for this side-effect-only endpoint."""
     _make()
-    with mock.patch('celery_tasks.revalidate_asset_url.delay') as m:
+    with mock.patch('anthias_server.celery_tasks.revalidate_asset_url.delay') as m:
         response = Client().post(
             '/api/v2/assets/a1/recheck',
             headers=_auth_headers(),

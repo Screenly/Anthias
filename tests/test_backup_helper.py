@@ -9,7 +9,7 @@ from unittest import mock
 
 import pytest
 
-from lib.backup_helper import (
+from anthias_server.lib.backup_helper import (
     create_backup,
     recover,
     static_dir,
@@ -43,7 +43,7 @@ def backup_home() -> Iterator[str]:
 def test_get_backup_name(backup_home: str) -> None:
     dt = datetime(2016, 7, 19, 12, 42, 12)
     expected_archive_name = 'anthias-backup-2016-07-19T12-42-12.tar.gz'
-    with mock.patch('lib.backup_helper.datetime') as mock_datetime:
+    with mock.patch('anthias_server.lib.backup_helper.datetime') as mock_datetime:
         mock_datetime.now.return_value = dt
         archive_name = create_backup()
         assert archive_name == expected_archive_name

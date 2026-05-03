@@ -8,9 +8,9 @@ import pytest
 import time_machine
 from django.utils import timezone
 
-from anthias_app.models import Asset
-from settings import settings
-from viewer.scheduling import (
+from anthias_server.app.models import Asset
+from anthias_server.settings import settings
+from anthias_viewer.scheduling import (
     Scheduler,
     WINDOWED_DEADLINE_CAP_SECONDS,
     generate_asset_list,

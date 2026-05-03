@@ -7,7 +7,7 @@ on:
     paths:
       - '.github/workflows/deploy-website.yaml'
       - 'website/**'
-      - 'raspberry_pi_imager/**'
+      - 'tools/raspberry_pi_imager/**'
 
   # Re-deploy the marketing site whenever a release is published — the
   # build-balena-disk-image workflow's final step creates the GitHub
@@ -51,7 +51,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
 
       - name: Run rpi-imager tests
-        run: uv run --no-dev --group website -m pytest --confcutdir=raspberry_pi_imager raspberry_pi_imager/tests/ -v
+        run: uv run --no-dev --group website -m pytest --confcutdir=raspberry_pi_imager tools/raspberry_pi_imager/tests/ -v
 
   # Build job
   build:
@@ -93,7 +93,7 @@ jobs:
         run: hugo --source website --minify
 
       - name: Build Raspberry Pi Imager JSON
-        run: uv run --no-dev --group website python -m raspberry_pi_imager.build_pi_imager_json > website/public/rpi-imager.json
+        run: uv run --no-dev --group website python -m tools.raspberry_pi_imager.build_pi_imager_json > website/public/rpi-imager.json
         env:
           GITHUB_TOKEN: ${{ github.token }}
 

@@ -1,0 +1,110 @@
+import uuid
+from os import getenv, path
+from typing import Any
+
+import yaml
+from django.http import HttpRequest, HttpResponse
+from django.shortcuts import render
+from django.utils import timezone
+
+from anthias_server.app.models import Asset
+from anthias_server.lib.github import is_up_to_date
+from anthias_common.utils import get_video_duration
+from anthias_server.settings import settings
+
+
+def template(
+    request: HttpRequest,
+    template_name: str,
+    context: dict[str, Any],
+) -> HttpResponse:
+    """
+    This is a helper function that is used to render a template
+    with some global context. This is used to avoid having to
+    repeat code in other views.
+    """
+
+    context['date_format'] = settings['date_format']
+    context['default_duration'] = settings['default_duration']
+    context['default_streaming_duration'] = settings[
+        'default_streaming_duration'
+    ]
+    context['template_settings'] = {
+        'imports': ['from anthias_common.utils import template_handle_unicode'],
+        'default_filters': ['template_handle_unicode'],
+    }
+    context['up_to_date'] = is_up_to_date()
+    context['use_24_hour_clock'] = settings['use_24_hour_clock']
+
+    return render(request, template_name, context)
+
+
+def prepare_default_asset(**kwargs: Any) -> dict[str, Any] | None:
+    if kwargs['mimetype'] not in ['image', 'video', 'webpage']:
+        return None
+
+    asset_id = 'default_{}'.format(uuid.uuid4().hex)
+    if 'video' == kwargs['mimetype']:
+        video_duration = get_video_duration(kwargs['uri'])
+        if video_duration is None:
+            raise ValueError(
+                f'Could not determine duration of video {kwargs["uri"]!r}'
+            )
+        duration = int(video_duration.total_seconds())
+    else:
+        duration = kwargs['duration']
+
+    return {
+        'asset_id': asset_id,
+        'duration': duration,
+        'end_date': kwargs['end_date'],
+        'is_enabled': True,
+        'is_processing': 0,
+        'mimetype': kwargs['mimetype'],
+        'name': kwargs['name'],
+        'nocache': 0,
+        'play_order': 0,
+        'skip_asset_check': 0,
+        'start_date': kwargs['start_date'],
+        'uri': kwargs['uri'],
+    }
+
+
+def add_default_assets() -> None:
+    settings.load()
+
+    datetime_now = timezone.now()
+    default_asset_settings = {
+        'start_date': datetime_now,
+        'end_date': datetime_now.replace(year=datetime_now.year + 6),
+        'duration': settings['default_duration'],
+    }
+
+    default_assets_yaml = path.join(
+        getenv('HOME') or '',
+        '.anthias/default_assets.yml',
+    )
+
+    with open(default_assets_yaml, 'r') as yaml_file:
+        default_assets = yaml.safe_load(yaml_file).get('assets')
+
+        for default_asset in default_assets:
+            default_asset_settings.update(
+                {
+                    'name': default_asset.get('name'),
+                    'uri': default_asset.get('uri'),
+                    'mimetype': default_asset.get('mimetype'),
+                }
+            )
+            asset = prepare_default_asset(**default_asset_settings)
+
+            if asset:
+                Asset.objects.create(**asset)
+
+
+def remove_default_assets() -> None:
+    settings.load()
+
+    for asset in Asset.objects.all():
+        if asset.asset_id.startswith('default_'):
+            asset.delete()

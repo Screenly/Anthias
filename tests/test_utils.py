@@ -8,8 +8,8 @@ import pytest
 import requests
 import sh
 
-from lib import utils
-from lib.utils import (
+from anthias_common import utils
+from anthias_common.utils import (
     generate_perfect_paper_password,
     handler,
     is_balena_app,
@@ -37,7 +37,7 @@ def test_json_tz() -> None:
 @pytest.mark.django_db
 def test_url_fails_returns_true_on_connection_error() -> None:
     with patch(
-        'lib.utils.requests.head',
+        'anthias_common.utils.requests.head',
         side_effect=requests.ConnectionError,
     ):
         assert url_fails('http://doesnotwork.example.com') is True
@@ -47,7 +47,7 @@ def test_url_fails_returns_true_on_connection_error() -> None:
 def test_url_fails_returns_false_on_2xx_response() -> None:
     fake = MagicMock()
     fake.ok = True
-    with patch('lib.utils.requests.head', return_value=fake):
+    with patch('anthias_common.utils.requests.head', return_value=fake):
         assert url_fails('http://example.com') is False
 
 
@@ -55,14 +55,14 @@ def test_url_fails_returns_false_on_2xx_response() -> None:
 def test_url_fails_short_circuits_for_invalid_url() -> None:
     # validate_url() rejects schemeless paths, so url_fails should
     # return False without ever touching the network layer.
-    with patch('lib.utils.requests.head') as mock_head:
+    with patch('anthias_common.utils.requests.head') as mock_head:
         assert url_fails('/home/user/file') is False
     mock_head.assert_not_called()
 
 
 @pytest.mark.django_db
 def test_rtsp_ffprobe_success_returns_false() -> None:
-    with patch('lib.utils.sh.Command') as mock_command:
+    with patch('anthias_common.utils.sh.Command') as mock_command:
         mock_command.return_value.return_value = ''
         assert not url_fails('rtsp://example.com/stream')
         mock_command.assert_called_once_with('ffprobe')
@@ -71,14 +71,14 @@ def test_rtsp_ffprobe_success_returns_false() -> None:
 @pytest.mark.django_db
 def test_rtmp_ffprobe_nonzero_exit_returns_true() -> None:
     err = sh.ErrorReturnCode_1('ffprobe', b'', b'cannot open stream')
-    with patch('lib.utils.sh.Command') as mock_command:
+    with patch('anthias_common.utils.sh.Command') as mock_command:
         mock_command.return_value.side_effect = err
         assert url_fails('rtmp://example.com/live')
 
 
 @pytest.mark.django_db
 def test_rtsp_ffprobe_timeout_returns_true() -> None:
-    with patch('lib.utils.sh.Command') as mock_command:
+    with patch('anthias_common.utils.sh.Command') as mock_command:
         mock_command.return_value.side_effect = sh.TimeoutException(
             124, 'ffprobe ...'
         )
@@ -87,7 +87,7 @@ def test_rtsp_ffprobe_timeout_returns_true() -> None:
 
 @pytest.mark.django_db
 def test_rtsp_ffprobe_missing_returns_false() -> None:
-    with patch('lib.utils.sh.Command') as mock_command:
+    with patch('anthias_common.utils.sh.Command') as mock_command:
         mock_command.side_effect = sh.CommandNotFound('ffprobe')
         assert not url_fails('rtsp://example.com/stream')
 
@@ -171,9 +171,9 @@ def test_is_demo_node_false(monkeypatch: Any) -> None:
 
 
 def test_is_docker_uses_dockerenv_marker() -> None:
-    with patch('lib.utils.os.path.isfile', return_value=True):
+    with patch('anthias_common.utils.os.path.isfile', return_value=True):
         assert is_docker() is True
-    with patch('lib.utils.os.path.isfile', return_value=False):
+    with patch('anthias_common.utils.os.path.isfile', return_value=False):
         assert is_docker() is False
 
 
@@ -207,7 +207,7 @@ def test_get_balena_supervisor_api_response_uses_env(
     monkeypatch.setenv('BALENA_SUPERVISOR_ADDRESS', 'http://supervisor:5000')
     monkeypatch.setenv('BALENA_SUPERVISOR_API_KEY', 'k')
     fake = MagicMock()
-    with patch('lib.utils.requests.get', return_value=fake) as mock_get:
+    with patch('anthias_common.utils.requests.get', return_value=fake) as mock_get:
         result = utils.get_balena_supervisor_api_response('get', 'device')
     assert result is fake
     url = mock_get.call_args.args[0]
@@ -218,7 +218,7 @@ def test_get_balena_device_info_calls_v1_device(monkeypatch: Any) -> None:
     monkeypatch.setenv('BALENA_SUPERVISOR_ADDRESS', 'http://x')
     monkeypatch.setenv('BALENA_SUPERVISOR_API_KEY', 'k')
     fake = MagicMock()
-    with patch('lib.utils.requests.get', return_value=fake) as mock_get:
+    with patch('anthias_common.utils.requests.get', return_value=fake) as mock_get:
         utils.get_balena_device_info()
     assert '/v1/device' in mock_get.call_args.args[0]
 
@@ -227,7 +227,7 @@ def test_reboot_via_balena_supervisor_uses_post(monkeypatch: Any) -> None:
     monkeypatch.setenv('BALENA_SUPERVISOR_ADDRESS', 'http://x')
     monkeypatch.setenv('BALENA_SUPERVISOR_API_KEY', 'k')
     fake = MagicMock()
-    with patch('lib.utils.requests.post', return_value=fake) as mock_post:
+    with patch('anthias_common.utils.requests.post', return_value=fake) as mock_post:
         utils.reboot_via_balena_supervisor()
     assert '/v1/reboot' in mock_post.call_args.args[0]
 
@@ -236,7 +236,7 @@ def test_shutdown_via_balena_supervisor_uses_post(monkeypatch: Any) -> None:
     monkeypatch.setenv('BALENA_SUPERVISOR_ADDRESS', 'http://x')
     monkeypatch.setenv('BALENA_SUPERVISOR_API_KEY', 'k')
     fake = MagicMock()
-    with patch('lib.utils.requests.post', return_value=fake) as mock_post:
+    with patch('anthias_common.utils.requests.post', return_value=fake) as mock_post:
         utils.shutdown_via_balena_supervisor()
     assert '/v1/shutdown' in mock_post.call_args.args[0]
 
@@ -247,7 +247,7 @@ def test_get_balena_supervisor_version_ok(monkeypatch: Any) -> None:
     fake = MagicMock()
     fake.ok = True
     fake.json.return_value = {'version': '14.2.3'}
-    with patch('lib.utils.requests.get', return_value=fake):
+    with patch('anthias_common.utils.requests.get', return_value=fake):
         assert utils.get_balena_supervisor_version() == '14.2.3'
 
 
@@ -256,7 +256,7 @@ def test_get_balena_supervisor_version_error(monkeypatch: Any) -> None:
     monkeypatch.setenv('BALENA_SUPERVISOR_API_KEY', 'k')
     fake = MagicMock()
     fake.ok = False
-    with patch('lib.utils.requests.get', return_value=fake):
+    with patch('anthias_common.utils.requests.get', return_value=fake):
         assert (
             utils.get_balena_supervisor_version()
             == 'Error getting the Supervisor version'

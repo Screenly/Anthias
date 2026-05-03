@@ -1,0 +1,307 @@
+"""
+Django settings for anthias_server.django_project project.
+
+For more information on this file, see
+https://docs.djangoproject.com/en/5.2/topics/settings/
+
+For the full list of settings and their values, see
+https://docs.djangoproject.com/en/5.2/ref/settings/
+"""
+
+import secrets
+import sys
+from os import getenv
+from pathlib import Path
+from typing import Any
+
+import pytz
+
+from anthias_server.settings import settings as device_settings
+
+# django_stubs_ext.monkeypatch() makes Django generic classes
+# subscriptable at runtime, and the server side of this repo relies on
+# that — anthias_server.app/admin.py defines `class AssetAdmin(admin.ModelAdmin
+# [Asset])` at import time, which raises TypeError without the patch.
+# Keep the import optional so the viewer image (and any future service
+# that doesn't ship django-stubs-ext) can still load this settings
+# module; do not remove the patch as a no-op.
+try:
+    import django_stubs_ext
+
+    django_stubs_ext.monkeypatch()
+except ModuleNotFoundError as exc:
+    if exc.name != 'django_stubs_ext':
+        raise
+
+# Repo root: src/anthias_server/django_project/settings.py → up 3 to repo root.
+BASE_DIR = Path(__file__).resolve().parents[3]
+
+
+# Quick-start development settings - unsuitable for production
+# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+
+
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = getenv('ENVIRONMENT', 'production') in ['development', 'test']
+
+if not DEBUG:
+    if not device_settings.get('django_secret_key'):
+        # Modify the generated so that string interpolation
+        # errors can be avoided.
+        secret_key = secrets.token_urlsafe(50)
+        device_settings['django_secret_key'] = secret_key
+        device_settings.save()
+
+    SECRET_KEY = device_settings.get('django_secret_key')
+else:
+    # SECURITY WARNING: keep the secret key used in production secret!
+    SECRET_KEY = (
+        'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j'  # noqa: E501
+    )
+
+# Anthias is a local-network signage device with no fixed public
+# hostname — the device is reached by LAN IP, mDNS name, or the
+# operator's chosen DNS entry. The default of '*' preserves that
+# flexibility but is permissive against DNS-rebinding attacks where a
+# malicious page rebinds an attacker-controlled hostname to the
+# device's IP. Operators on hardened LANs can opt into a strict
+# allowlist by setting the ALLOWED_HOSTS env var (comma-separated;
+# include the LAN IP / mDNS name / etc.).
+ALLOWED_HOSTS = [
+    h.strip() for h in getenv('ALLOWED_HOSTS', '*').split(',') if h.strip()
+]
+
+# CSRF_TRUSTED_ORIGINS is intentionally not set. Django only honours
+# subdomain wildcards there (e.g. https://*.example.com), so a leading
+# 'http://*' / 'https://*' would be a no-op rather than the broad
+# allowlist it appears to be. Same-origin POSTs pass without it via
+# Django's built-in Host/Origin equality check.
+
+
+# Application definition
+
+# Apps every Django consumer needs: ORM access to the Asset model,
+# plus the contenttypes + auth tables those models implicitly depend
+# on. Loaded by every service that calls django.setup() — server,
+# celery, viewer, test.
+INSTALLED_APPS = [
+    'anthias_server.app.apps.AnthiasAppConfig',
+    'django.contrib.contenttypes',
+    'django.contrib.auth',
+]
+
+# Apps only the HTTP-serving services need (REST API, OpenAPI schema,
+# Channels for WebSockets, the admin UI, sessions/messages, static
+# files, DB backups). The viewer never serves HTTP, so it skips these
+# at django.setup() time and the viewer image doesn't have to ship
+# the packages they live in. Server/celery/test images are unaffected.
+if getenv('ANTHIAS_SERVICE') != 'viewer':
+    INSTALLED_APPS += [
+        'channels',
+        'drf_spectacular',
+        'rest_framework',
+        'anthias_server.api.apps.ApiConfig',
+        'django.contrib.admin',
+        'django.contrib.sessions',
+        'django.contrib.messages',
+        'django.contrib.staticfiles',
+        'dbbackup',
+    ]
+
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+ROOT_URLCONF = 'anthias_server.django_project.urls'
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [
+            BASE_DIR / 'templates',
+        ],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
+ASGI_APPLICATION = 'anthias_server.django_project.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [(getenv('REDIS_HOST', 'redis'), 6379)],
+        },
+    },
+}
+
+
+# Database
+# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+#
+# Detect "running under tests" without depending solely on the
+# ENVIRONMENT env var. The root conftest.py sets ENVIRONMENT=test via
+# os.environ.setdefault, but pytest-django's plugin-time settings load
+# can fire before that conftest executes — leaving getenv() blank and
+# this module pointed at the production /data path on local pytest
+# runs. Detect pytest itself by inspecting argv (covers `pytest ...`,
+# `python -m pytest ...`, and `uv run pytest ...`) so the test branch
+# is taken regardless of import order.
+_running_under_pytest = any('pytest' in (a or '') for a in sys.argv)
+
+# In test mode the DB path defaults to a repo-local file so the suite
+# runs without Docker / without writable `/data`. CI containers can
+# preserve their existing layout by exporting
+# `ANTHIAS_TEST_DB_PATH=/data/.anthias/test.db` (see
+# docker-compose.test.yml).
+if getenv('ENVIRONMENT') == 'test' or _running_under_pytest:
+    db_path = getenv('ANTHIAS_TEST_DB_PATH') or str(
+        BASE_DIR / '.anthias-test.db'
+    )
+else:
+    db_path = '/data/.anthias/anthias.db'
+
+# Integration tests drive the live anthias-server container in
+# docker-compose.test.yml. The test process and the server live in
+# different containers but must share DB state — the test asserts on
+# `Asset.objects.all()` after the server persists an uploaded file.
+# Without TEST.NAME, pytest-django defaults to an in-memory SQLite, so
+# writes from the server never reach the test process. Pinning
+# TEST.NAME to the same path keeps both ends on one DB; the
+# `transaction=True` marker truncates between tests, which is safe
+# because the test DB is throwaway.
+#
+# ONLY set TEST.NAME for the integration step. The unit step runs
+# under `pytest -n auto`; pinning every worker to the same SQLite
+# file would cause `database is locked` and cross-worker leakage.
+# Without TEST.NAME, pytest-django gives each xdist worker its own
+# `:memory:` DB, which is what we want for unit runs.
+# .github/workflows/test-runner.yml exports ANTHIAS_INTEGRATION_TEST=1
+# only for the `pytest -m integration` step.
+_db_default: dict[str, Any] = {
+    'ENGINE': 'django.db.backends.sqlite3',
+    'NAME': db_path,
+}
+if getenv('ANTHIAS_INTEGRATION_TEST') == '1':
+    _db_default['TEST'] = {'NAME': db_path}
+
+DATABASES = {'default': _db_default}
+
+
+# Password validation
+# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
+AUTH_MODULE_PREFIX = 'django.contrib.auth.password_validation'
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': f'{AUTH_MODULE_PREFIX}.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': f'{AUTH_MODULE_PREFIX}.MinimumLengthValidator',
+    },
+    {
+        'NAME': f'{AUTH_MODULE_PREFIX}.CommonPasswordValidator',
+    },
+    {
+        'NAME': f'{AUTH_MODULE_PREFIX}.NumericPasswordValidator',
+    },
+]
+
+
+# Internationalization
+# https://docs.djangoproject.com/en/5.2/topics/i18n/
+
+LANGUAGE_CODE = 'en-us'
+
+USE_I18N = True
+
+USE_TZ = True
+
+try:
+    with open('/etc/timezone', 'r') as f:
+        TIME_ZONE = f.read().strip()
+        pytz.timezone(TIME_ZONE)  # Checks if the timezone is valid.
+except (pytz.exceptions.UnknownTimeZoneError, FileNotFoundError):
+    TIME_ZONE = 'UTC'
+
+
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/5.2/howto/static-files/
+
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
+STATIC_ROOT = '/data/anthias/staticfiles'
+
+# Dev runs uvicorn (not runserver) and skips collectstatic, so files
+# only exist in STATICFILES_DIRS — let WhiteNoise fall back to the
+# finders and re-stat on each request so live-reloaded JS/CSS shows up.
+if DEBUG:
+    WHITENOISE_USE_FINDERS = True
+    WHITENOISE_AUTOREFRESH = True
+
+# Backups can be multi-GB; preserve the 4 GB body capacity nginx provided.
+DATA_UPLOAD_MAX_MEMORY_SIZE = None
+FILE_UPLOAD_MAX_MEMORY_SIZE = 26_214_400
+
+# Trust X-Forwarded-Proto from a TLS-terminating proxy (the Caddy
+# sidecar that bin/enable_ssl.sh installs) only when uvicorn has been
+# told to honour proxy headers via FORWARDED_ALLOW_IPS. Without the
+# gate, any client could set X-Forwarded-Proto: https on a plain-HTTP
+# deploy and flip request.is_secure() — secure-cookied sessions would
+# then drop on the next plain-HTTP request, and redirects would point
+# at https:// URLs that don't exist.
+if getenv('FORWARDED_ALLOW_IPS'):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Default primary key field type
+# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'EXCEPTION_HANDLER': 'anthias_server.api.helpers.custom_exception_handler',
+    # The project uses custom authentication classes,
+    # so we need to disable the default ones.
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Anthias API',
+    'VERSION': '2.0.0',
+    'PREPROCESSING_HOOKS': [
+        'anthias_server.api.api_docs_filter_spec.preprocessing_filter_spec'
+    ],
+}
+
+# django-dbbackup v5 moved storage config under Django 5's STORAGES
+# dict; defining STORAGES replaces the framework defaults entirely.
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+    'dbbackup': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'OPTIONS': {'location': '/data/.anthias/backups'},
+    },
+}
+DBBACKUP_HOSTNAME = 'anthias'

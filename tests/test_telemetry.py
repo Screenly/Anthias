@@ -7,7 +7,7 @@ import pytest
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import Timeout
 
-from lib import telemetry
+from anthias_server.lib import telemetry
 
 
 @pytest.fixture
