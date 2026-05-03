@@ -62,6 +62,9 @@ db.sqlite3
 .anthias-test.db-wal
 .anthias-test.db-shm
 
+# Local agent state (Claude Code)
+.claude/
+
 # Django
 staticfiles/
 
