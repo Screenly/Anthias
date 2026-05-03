@@ -102,6 +102,7 @@ if getenv('ANTHIAS_SERVICE') != 'viewer':
         'rest_framework',
         'anthias_server.api.apps.ApiConfig',
         'django.contrib.admin',
+        'django.contrib.humanize',
         'django.contrib.sessions',
         'django.contrib.messages',
         'django.contrib.staticfiles',

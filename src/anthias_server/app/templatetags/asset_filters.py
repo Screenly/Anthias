@@ -203,15 +203,26 @@ def schedule_window(asset: Any) -> dict[str, str]:
     if not start or not end:
         return {'kind': 'unknown', 'primary': 'No window', 'secondary': ''}
 
+    from django.contrib.humanize.templatetags.humanize import naturalday
+
     now = timezone.now()
     start_local = timezone.localtime(start)
     end_local = timezone.localtime(end)
 
+    # Django's naturalday humanises dates within a few days of today
+    # ('today', 'tomorrow', 'yesterday') and falls back to the
+    # locale-formatted absolute date otherwise. Drop the year suffix
+    # when both endpoints land in the current calendar year. Title-case
+    # the leading token so "today → May 5" reads as "Today → May 5"
+    # (matches the primary line's sentence-case style).
     same_year = start_local.year == end_local.year == now.year
-    abs_fmt = '%b %d' if same_year else '%b %d, %Y'
-    secondary = (
-        f'{start_local.strftime(abs_fmt)} → {end_local.strftime(abs_fmt)}'
-    )
+    abs_fmt = 'M j' if same_year else 'M j, Y'
+
+    def _label(value: datetime) -> str:
+        rendered = str(naturalday(value, abs_fmt))
+        return rendered[:1].upper() + rendered[1:] if rendered else rendered
+
+    secondary = f'{_label(start_local)} → {_label(end_local)}'
 
     # Disabled rows aren't playing, regardless of where 'now' falls
     # in the window — surface that explicitly so the operator doesn't
