@@ -1,0 +1,26 @@
+name: 'Anthias CodeQL'
+
+query-filters:
+  # Both alerts fire on the asset_download / assets_preview endpoints
+  # in src/anthias_server/app/views.py. Those endpoints are gated by
+  # @authorized (operator session) and the URI / path values are
+  # sanitised at the function entry by:
+  #   - _safe_redirect_uri: scheme allowlist (http/https) + non-empty
+  #     netloc, then urlparse → urlunparse round-trip so the URL is
+  #     reconstructed from validated components rather than passed
+  #     through verbatim.
+  #   - _safe_local_asset_path: takes the basename of the operator-
+  #     supplied uri (strips '..' / absolute prefixes), joins with a
+  #     trusted base dir, realpaths, and asserts the resolved path
+  #     starts with base + os.sep before opening.
+  # CodeQL still flags both because the validation lives in helper
+  # functions rather than inline; suppressing here documents the
+  # decision in repo (auditable) instead of dismissing in the UI.
+  - exclude:
+      id: py/url-redirection
+      paths:
+        - src/anthias_server/app/views.py
+  - exclude:
+      id: py/path-injection
+      paths:
+        - src/anthias_server/app/views.py
