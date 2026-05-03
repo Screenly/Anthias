@@ -53,8 +53,8 @@
           <div
             class="resource-pie resource-pie--memory"
             style="--slice-1: {{ memory.used_pct }}; --slice-2: {{ memory.cache_pct }}"
-            role="img"
-            aria-label="Memory: {{ memory.used|intcomma }} MiB used, {{ memory.cache|intcomma }} MiB cache, {{ memory.free|intcomma }} MiB free of {{ memory.total|intcomma }} MiB total"
+           
+            title="Memory: {{ memory.used|intcomma }} MiB used, {{ memory.cache|intcomma }} MiB cache, {{ memory.free|intcomma }} MiB free of {{ memory.total|intcomma }} MiB total"
           >
             <div class="resource-pie__inner">
               <div class="resource-pie__total">{{ memory.total|intcomma }}</div>
@@ -92,8 +92,8 @@
           <div
             class="resource-pie resource-pie--disk"
             style="--slice-1: {{ disk.used_pct }}; --slice-2: 0"
-            role="img"
-            aria-label="Disk: {{ disk.used_human }} used of {{ disk.total_human }} total ({{ disk.used_pct }}%)"
+           
+            title="Disk: {{ disk.used_human }} used of {{ disk.total_human }} total ({{ disk.used_pct }}%)"
           >
             <div class="resource-pie__inner">
               <div class="resource-pie__total">{{ disk.total_human }}</div>

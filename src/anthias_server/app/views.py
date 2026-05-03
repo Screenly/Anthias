@@ -391,12 +391,12 @@ def _safe_redirect_uri(uri: str) -> str | None:
     if not uri:
         return None
     lowered = uri.strip().lower()
-    # NOSONAR(python:S5332): we're whitelisting schemes here for the
-    # redirect filter — not initiating an HTTP connection ourselves.
-    # Operators legitimately store http:// URIs for LAN-only signage
-    # (intranets, RTSP gateways) where TLS isn't terminated; rejecting
-    # http would break those installs without improving security.
-    if lowered.startswith(('http://', 'https://')):  # NOSONAR
+    # We're whitelisting schemes here for the redirect filter — not
+    # initiating an HTTP connection ourselves. Operators legitimately
+    # store http:// URIs for LAN-only signage (intranets, RTSP gateways)
+    # where TLS isn't terminated; rejecting http would break those
+    # installs without improving security.
+    if lowered.startswith(('http://', 'https://')):  # NOSONAR(S5332)
         return uri
     return None
 
@@ -433,13 +433,20 @@ def assets_download(request: HttpRequest, asset_id: str) -> HttpResponseBase:
         return redirect(reverse('anthias_app:home'))
     if asset.mimetype in ('webpage', 'streaming'):
         safe = _safe_redirect_uri(asset.uri)
-        return (
+        # `safe` is whitelisted to http(s):// schemes by _safe_redirect_uri,
+        # and the endpoint is gated by @authorized (only operators with a
+        # session reach this). The redirect target is the operator's own
+        # asset URI — that's the feature, not a sink.
+        return (  # lgtm [py/url-redirection]
             redirect(safe) if safe else redirect(reverse('anthias_app:home'))
         )
     safe_path = _safe_local_asset_path(asset.uri)
     if safe_path is None:
         return redirect(reverse('anthias_app:home'))
-    return FileResponse(open(safe_path, 'rb'), as_attachment=True)
+    # _safe_local_asset_path realpaths the URI and verifies it lives
+    # under settings['assetdir'] before returning, so the open() call
+    # cannot escape the assets directory.
+    return FileResponse(open(safe_path, 'rb'), as_attachment=True)  # lgtm [py/path-injection]
 
 
 @authorized
@@ -455,13 +462,17 @@ def assets_preview(request: HttpRequest, asset_id: str) -> HttpResponseBase:
         return redirect(reverse('anthias_app:home'))
     if asset.mimetype in ('webpage', 'streaming'):
         safe = _safe_redirect_uri(asset.uri)
-        return (
+        # `safe` is whitelisted to http(s):// schemes by _safe_redirect_uri,
+        # and the endpoint is gated by @authorized (only operators with a
+        # session reach this). The redirect target is the operator's own
+        # asset URI — that's the feature, not a sink.
+        return (  # lgtm [py/url-redirection]
             redirect(safe) if safe else redirect(reverse('anthias_app:home'))
         )
     safe_path = _safe_local_asset_path(asset.uri)
     if safe_path is None:
         return redirect(reverse('anthias_app:home'))
-    return FileResponse(open(safe_path, 'rb'), as_attachment=False)
+    return FileResponse(open(safe_path, 'rb'), as_attachment=False)  # lgtm [py/path-injection]
 
 
 @authorized

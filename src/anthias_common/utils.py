@@ -206,49 +206,65 @@ def get_node_ip() -> str:
     return 'Unable to retrieve IP.'
 
 
-def detect_screen_resolution() -> str | None:
-    """Probe the active display's resolution as 'WIDTHxHEIGHT'.
+_DRM_RES_RE = re.compile(r'^(\d+)x(\d+)')
 
-    Tries Linux KMS/framebuffer interfaces first (work without an X
-    server, which matches the viewer's Qt direct-render setup) before
-    falling back to xrandr/wlr-randr binaries. Returns None when
-    nothing is reachable so the caller can fall back to the operator-
-    configured resolution from settings.
-    """
-    import re
 
-    # /sys/class/drm/card?-HDMI-A-?/modes — first line is the active
-    # mode for a connected output. Skip cards in 'disconnected' state.
+def _drm_card_resolution(entry_path: str) -> str | None:
+    """First active mode on a /sys/class/drm/<card-port> entry, or None."""
     try:
-        for entry in os.scandir('/sys/class/drm'):
-            if 'card' not in entry.name or '-' not in entry.name:
-                continue
-            try:
-                with open(os.path.join(entry.path, 'status')) as f:
-                    if f.read().strip() != 'connected':
-                        continue
-                with open(os.path.join(entry.path, 'modes')) as f:
-                    modes = f.read().strip().splitlines()
-                if modes:
-                    m = re.match(r'(\d+)x(\d+)', modes[0])
-                    if m:
-                        return f'{m.group(1)}x{m.group(2)}'
-            except OSError:
-                continue
+        with open(os.path.join(entry_path, 'status')) as f:
+            if f.read().strip() != 'connected':
+                return None
+        with open(os.path.join(entry_path, 'modes')) as f:
+            modes = f.read().strip().splitlines()
     except OSError:
-        pass
+        return None
+    if not modes:
+        return None
+    m = _DRM_RES_RE.match(modes[0])
+    return f'{m.group(1)}x{m.group(2)}' if m else None
 
-    # Plain framebuffer (Pi 1-4 in legacy KMS, some embedded boards).
+
+def _drm_resolution() -> str | None:
+    """Walk /sys/class/drm/ for the first connected output's mode."""
+    try:
+        entries = list(os.scandir('/sys/class/drm'))
+    except OSError:
+        return None
+    for entry in entries:
+        if 'card' not in entry.name or '-' not in entry.name:
+            continue
+        result = _drm_card_resolution(entry.path)
+        if result:
+            return result
+    return None
+
+
+def _fb_resolution() -> str | None:
+    """Plain framebuffer fallback (Pi 1-4 legacy KMS, some embedded)."""
     try:
         with open('/sys/class/graphics/fb0/virtual_size') as f:
             raw = f.read().strip()
-        if ',' in raw:
-            w, h = raw.split(',', 1)
-            return f'{int(w)}x{int(h)}'
-    except (OSError, ValueError):
-        pass
+    except OSError:
+        return None
+    if ',' not in raw:
+        return None
+    try:
+        w, h = raw.split(',', 1)
+        return f'{int(w)}x{int(h)}'
+    except ValueError:
+        return None
 
-    return None
+
+def detect_screen_resolution() -> str | None:
+    """Probe the active display's resolution as 'WIDTHxHEIGHT'.
+
+    Tries Linux KMS first, then the legacy framebuffer interface. Both
+    work without an X server, which matches the viewer's Qt direct-
+    render setup. Returns None when nothing is reachable so the caller
+    can fall back to the operator-configured resolution from settings.
+    """
+    return _drm_resolution() or _fb_resolution()
 
 
 def get_node_mac_address() -> str:
@@ -287,24 +303,23 @@ def get_node_mac_address() -> str:
     return 'Unable to retrieve MAC address.'
 
 
-def _detect_local_mac() -> str | None:
-    """Return the MAC of the interface carrying the default route.
+_NET_SKIP_PREFIXES = ('lo', 'docker', 'br-', 'veth')
 
-    Picking the 'active' interface this way matches what an operator
-    expects to see — the NIC the player actually reaches the network
-    through — rather than alphabetical first-non-loopback. Reads
-    /proc/net/route for the entry with destination 00000000, then
-    pulls /sys/class/net/<iface>/address.
 
-    Falls back to the first non-loopback / non-docker / non-veth
-    interface when no default route is published (single-host LAN
-    box plugged into nothing routable yet).
-    """
-    sysnet = '/sys/class/net'
-    if not os.path.isdir(sysnet):
+def _read_iface_mac(iface: str) -> str | None:
+    """Read /sys/class/net/<iface>/address; skip placeholder zeros."""
+    try:
+        with open(os.path.join('/sys/class/net', iface, 'address')) as f:
+            mac = f.read().strip()
+    except OSError:
         return None
+    if mac and mac != '00:00:00:00:00:00':
+        return mac
+    return None
 
-    primary_iface: str | None = None
+
+def _default_route_iface() -> str | None:
+    """Interface name carrying the default route, or None."""
     try:
         with open('/proc/net/route') as f:
             next(f, None)  # header row
@@ -313,41 +328,45 @@ def _detect_local_mac() -> str | None:
                 if len(parts) < 4:
                     continue
                 iface, destination, _gw, flags_hex = parts[:4]
-                # Default-route entries: destination is all-zeros and
-                # the RTF_UP flag (0x1) is set so we ignore stale rows.
+                # Default route: destination 0.0.0.0 + RTF_UP flag set.
                 if destination == '00000000' and (int(flags_hex, 16) & 0x1):
-                    primary_iface = iface
-                    break
+                    return iface
     except OSError:
         pass
+    return None
 
-    def _read_mac(iface: str) -> str | None:
-        try:
-            with open(os.path.join(sysnet, iface, 'address')) as f:
-                mac = f.read().strip()
-        except OSError:
-            return None
-        if mac and mac != '00:00:00:00:00:00':
-            return mac
-        return None
 
-    if primary_iface:
-        mac = _read_mac(primary_iface)
-        if mac:
-            return mac
-
-    skip_prefixes = ('lo', 'docker', 'br-', 'veth')
+def _first_non_loopback_mac() -> str | None:
+    """Fallback when no default route is published — scan ifaces."""
     try:
-        candidates = sorted(os.listdir(sysnet))
+        candidates = sorted(os.listdir('/sys/class/net'))
     except OSError:
         return None
     for iface in candidates:
-        if any(iface.startswith(prefix) for prefix in skip_prefixes):
+        if any(iface.startswith(p) for p in _NET_SKIP_PREFIXES):
             continue
-        mac = _read_mac(iface)
+        mac = _read_iface_mac(iface)
         if mac:
             return mac
     return None
+
+
+def _detect_local_mac() -> str | None:
+    """Return the MAC of the interface carrying the default route.
+
+    Picking the 'active' interface matches what an operator expects to
+    see — the NIC the player reaches the network through — rather than
+    the alphabetical first-non-loopback. Falls back to scanning ifaces
+    when no default route is published.
+    """
+    if not os.path.isdir('/sys/class/net'):
+        return None
+    primary = _default_route_iface()
+    if primary:
+        mac = _read_iface_mac(primary)
+        if mac:
+            return mac
+    return _first_non_loopback_mac()
 
 
 def get_active_connections(

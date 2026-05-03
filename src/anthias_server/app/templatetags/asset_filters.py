@@ -230,48 +230,70 @@ def schedule_window(asset: Any) -> dict[str, str]:
     # Disabled rows aren't playing, regardless of where 'now' falls
     # in the window — surface that explicitly so the operator doesn't
     # see "Live · ends in 21 days" on a paused asset.
+    return _schedule_window_phrase(asset, now, start, end, secondary)
+
+
+def _schedule_window_phrase(
+    asset: Any,
+    now: datetime,
+    start: datetime,
+    end: datetime,
+    secondary: str,
+) -> dict[str, str]:
+    """Pick the {kind, primary} pair for a populated start/end window.
+
+    Split off from schedule_window() so the latter stays under the
+    SonarCloud cognitive-complexity threshold; the orchestration is
+    branchy by nature (disabled / upcoming / expired / scheduled / live)
+    so we cluster the decisions here.
+    """
     if not getattr(asset, 'is_enabled', True):
         return {
             'kind': 'disabled',
             'primary': 'Disabled',
             'secondary': secondary,
         }
-
     if now < start:
-        delta = start - now
-        primary = (
-            'Starts soon'
-            if delta.total_seconds() < 60 * 60
-            else f'Starts {_relative_phrase(delta, future=True)}'
+        return _phrase_with_kind(
+            'upcoming', start - now, 'Starts soon', 'Starts', True, secondary
         )
-        return {'kind': 'upcoming', 'primary': primary, 'secondary': secondary}
     if now > end:
-        delta = now - end
-        primary = (
-            'Just ended'
-            if delta.total_seconds() < 60 * 60
-            else f'Ended {_relative_phrase(delta, future=False)}'
+        return _phrase_with_kind(
+            'expired', now - end, 'Just ended', 'Ended', False, secondary
         )
-        return {'kind': 'expired', 'primary': primary, 'secondary': secondary}
-
     # Inside the date window — but is the asset *actually playing*
     # right this minute? Asset.is_active() folds the date window with
-    # the day-of-week filter and the play_time_from/to slot. If those
-    # exclude today/now, the asset is enabled and 'within window' but
-    # not on screen — call it "Scheduled" so we don't lie about "Live".
+    # the day-of-week filter and the play_time_from/to slot.
     is_active = asset.is_active() if hasattr(asset, 'is_active') else True
-    delta = end - now
     if not is_active:
         return {
             'kind': 'scheduled',
             'primary': 'Scheduled · off-window now',
             'secondary': secondary,
         }
-    if delta.days >= 365:
-        primary = 'Live · open-ended'
-    else:
-        primary = f'Live · ends {_relative_phrase(delta, future=True)}'
+    delta = end - now
+    primary = (
+        'Live · open-ended'
+        if delta.days >= 365
+        else f'Live · ends {_relative_phrase(delta, future=True)}'
+    )
     return {'kind': 'live', 'primary': primary, 'secondary': secondary}
+
+
+def _phrase_with_kind(
+    kind: str,
+    delta: timedelta,
+    soon_label: str,
+    verb: str,
+    future: bool,
+    secondary: str,
+) -> dict[str, str]:
+    primary = (
+        soon_label
+        if delta.total_seconds() < 3600
+        else f'{verb} {_relative_phrase(delta, future=future)}'
+    )
+    return {'kind': kind, 'primary': primary, 'secondary': secondary}
 
 
 def _relative_phrase(delta: 'timedelta', *, future: bool) -> str:

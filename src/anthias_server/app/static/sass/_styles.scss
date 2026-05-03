@@ -728,40 +728,126 @@ label { text-align: left; }
 }
 
 // -----------------------------------------------------------------------------
-// 12. Forms
+// 12. Forms — replaces Bootstrap's form components on a token base.
 // -----------------------------------------------------------------------------
 .form-control,
 .form-select {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  background-clip: padding-box;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  border-color: var(--color-border);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+
   &:focus {
-    border-color: $anthias-purple-5;
+    outline: none;
+    border-color: var(--color-link);
     box-shadow: 0 0 0 3px var(--color-focus-ring);
   }
+  &:disabled,
+  &[readonly] {
+    background-color: var(--color-surface-tint);
+    color: var(--color-text-muted);
+  }
+  &::placeholder {
+    color: var(--color-text-muted);
+    opacity: 0.7;
+  }
 }
-.form-control[readonly],
-.form-control:disabled {
-  background-color: var(--color-surface-soft);
-}
-
-.form-floating > .form-control,
-.form-floating > .form-select {
-  height: 3.5rem;
-}
-.form-floating > label {
-  font-weight: 500;
-  color: var(--color-text-muted);
-}
-
-.form-check-input {
+.form-select {
+  appearance: none;
+  padding-right: 2.5rem;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%235e5868' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  background-size: 14px;
   cursor: pointer;
-  &:focus {
-    box-shadow: 0 0 0 3px var(--color-focus-ring);
-    border-color: $anthias-purple-5;
+}
+.form-floating {
+  position: relative;
+
+  > .form-control,
+  > .form-select {
+    height: 3.6rem;
+    padding-block: 1.4rem 0.4rem;
   }
+  > label {
+    position: absolute;
+    inset: 0 auto auto 0;
+    padding: 0.85rem;
+    pointer-events: none;
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+    transition: opacity var(--t-fast), transform var(--t-fast),
+      font-size var(--t-fast);
+    transform-origin: 0 0;
+    font-weight: 500;
+  }
+  > .form-control:focus ~ label,
+  > .form-control:not(:placeholder-shown) ~ label,
+  > .form-select ~ label {
+    transform: translateY(-0.55rem);
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    letter-spacing: 0.04em;
+    font-weight: 600;
+  }
+}
+
+.form-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 1.5rem;
+}
+.form-check-input {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  margin: 0;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  cursor: pointer;
+  transition: background-color var(--t-fast), border-color var(--t-fast),
+    box-shadow var(--t-fast);
+
   &:checked {
-    background-color: $anthias-yellow-3;
-    border-color: $anthias-yellow-2;
+    background-color: var(--color-link);
+    border-color: var(--color-link);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='m4 8.5 3 3 5-7'/%3e%3c/svg%3e");
+    background-size: 0.85rem 0.85rem;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+  }
+}
+.form-check-label {
+  cursor: pointer;
+  user-select: none;
+}
+.form-switch .form-check-input {
+  width: 2.25rem;
+  height: 1.25rem;
+  border-radius: var(--radius-pill);
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%235e5868'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: left 0.15rem center;
+  background-size: 0.85rem;
+
+  &:checked {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e");
+    background-position: right 0.15rem center;
   }
 }
 
@@ -1444,132 +1530,6 @@ $footer-height: 13rem;
 .col-12 { flex: 0 0 100%; max-width: 100%; }
 @media (min-width: 768px) {
   .col-md-6 { flex: 0 0 50%; max-width: 50%; }
-}
-
-// --- Forms: text inputs + selects ---
-.form-control,
-.form-select {
-  display: block;
-  width: 100%;
-  padding: 0.65rem 0.85rem;
-  font-size: 1rem;
-  font-weight: 400;
-  line-height: 1.4;
-  color: var(--color-text);
-  background-color: var(--color-surface);
-  background-clip: padding-box;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  transition: border-color var(--t-fast), box-shadow var(--t-fast);
-
-  &:focus {
-    outline: none;
-    border-color: var(--color-link);
-    box-shadow: 0 0 0 3px var(--color-focus-ring);
-  }
-  &:disabled,
-  &[readonly] {
-    background-color: var(--color-surface-tint);
-    color: var(--color-text-muted);
-  }
-  &::placeholder {
-    color: var(--color-text-muted);
-    opacity: 0.7;
-  }
-}
-.form-select {
-  appearance: none;
-  padding-right: 2.5rem;
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%235e5868' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-position: right 0.85rem center;
-  background-size: 14px;
-  cursor: pointer;
-}
-
-// --- Floating labels ---
-.form-floating {
-  position: relative;
-
-  > .form-control,
-  > .form-select {
-    height: 3.6rem;
-    padding-block: 1.4rem 0.4rem;
-  }
-  > label {
-    position: absolute;
-    inset: 0 auto auto 0;
-    padding: 0.85rem;
-    pointer-events: none;
-    color: var(--color-text-muted);
-    font-size: 0.95rem;
-    transition: opacity var(--t-fast), transform var(--t-fast),
-      font-size var(--t-fast);
-    transform-origin: 0 0;
-  }
-  > .form-control:focus ~ label,
-  > .form-control:not(:placeholder-shown) ~ label,
-  > .form-select ~ label {
-    transform: translateY(-0.55rem);
-    font-size: 0.72rem;
-    color: var(--color-text-muted);
-    letter-spacing: 0.04em;
-    font-weight: 600;
-  }
-}
-
-// --- Checkboxes + switches (replaces .form-check / .form-switch) ---
-.form-check {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 1.5rem;
-}
-.form-check-input {
-  appearance: none;
-  width: 1rem;
-  height: 1rem;
-  flex: none;
-  margin: 0;
-  border: 1.5px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background-color: var(--color-surface);
-  cursor: pointer;
-  transition: background-color var(--t-fast), border-color var(--t-fast),
-    box-shadow var(--t-fast);
-
-  &:checked {
-    background-color: var(--color-link);
-    border-color: var(--color-link);
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='m4 8.5 3 3 5-7'/%3e%3c/svg%3e");
-    background-size: 0.85rem 0.85rem;
-    background-position: center;
-    background-repeat: no-repeat;
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px var(--color-focus-ring);
-  }
-}
-.form-check-label {
-  cursor: pointer;
-  user-select: none;
-}
-
-// Toggle switch — pill-shaped form-check-input variant.
-.form-switch .form-check-input {
-  width: 2.25rem;
-  height: 1.25rem;
-  border-radius: var(--radius-pill);
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%235e5868'/%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-position: left 0.15rem center;
-  background-size: 0.85rem;
-
-  &:checked {
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e");
-    background-position: right 0.15rem center;
-  }
 }
 
 // --- Nav / tabs (only the variants used in the asset modal) ---

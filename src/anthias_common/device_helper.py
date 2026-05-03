@@ -51,8 +51,11 @@ def _read_cpu_brand() -> str:
                         .replace('(TM)', '')
                         .replace(' CPU ', ' ')
                     )
+                    # Match ' with <token>... Graphics' without
+                    # alternation that can backtrack: each character
+                    # class is non-overlapping, terminator is fixed.
                     cleaned = re.sub(
-                        r'\s+with\s+[A-Za-z0-9 ]+Graphics\b',
+                        r'\s+with(?:\s+[A-Za-z0-9]+){1,4}\s+Graphics\b',
                         '',
                         cleaned,
                     )
