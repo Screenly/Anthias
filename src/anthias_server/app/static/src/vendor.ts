@@ -9,19 +9,26 @@
 // and wires the global DOMContentLoaded listener. The other libs
 // don't auto-expose, so we attach them explicitly so inline scripts
 // in templates can reach them without going through a module bundler.
-import 'htmx.org'
+import htmx from 'htmx.org'
 import Alpine from 'alpinejs'
 import Sortable from 'sortablejs'
 import flatpickr from 'flatpickr'
 
 declare global {
   interface Window {
+    htmx: typeof htmx
     Alpine: typeof Alpine
     Sortable: typeof Sortable
     flatpickr: typeof flatpickr
   }
 }
 
+// htmx ships an IIFE (var htmx = (function(){...})(); export default htmx).
+// When bun bundles it, the IIFE's internal var stays module-scoped, so
+// `window.htmx` is undefined unless we assign it explicitly. Inline scripts
+// in templates and home.ts both reach for window.htmx.trigger(...) and would
+// throw a TypeError without this line.
+window.htmx = htmx
 window.Alpine = Alpine
 window.Sortable = Sortable
 window.flatpickr = flatpickr
