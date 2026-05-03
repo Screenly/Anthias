@@ -215,8 +215,11 @@ def schedule_window(asset: Any) -> dict[str, str]:
     # when both endpoints land in the current calendar year. Title-case
     # the leading token so "today → May 5" reads as "Today → May 5"
     # (matches the primary line's sentence-case style).
+    # Django format spec: `F` = full month name, `j` = day with no
+    # leading zero, `S` = English ordinal suffix ("st"/"nd"/"rd"/"th"),
+    # `Y` = 4-digit year. Yields 'June 2nd' or 'June 2nd, 2027'.
     same_year = start_local.year == end_local.year == now.year
-    abs_fmt = 'M j' if same_year else 'M j, Y'
+    abs_fmt = 'F jS' if same_year else 'F jS, Y'
 
     def _label(value: datetime) -> str:
         rendered = str(naturalday(value, abs_fmt))
