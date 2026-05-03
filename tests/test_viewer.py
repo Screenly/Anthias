@@ -83,7 +83,9 @@ def test_empty(viewer_fixtures: _ViewerFixtures) -> None:
     m_asset_list = mock.Mock()
     m_asset_list.return_value = ([], None)
 
-    with mock.patch('anthias_viewer.scheduling.generate_asset_list', m_asset_list):
+    with mock.patch(
+        'anthias_viewer.scheduling.generate_asset_list', m_asset_list
+    ):
         setattr(viewer_fixtures.u, 'scheduler', Scheduler())
 
         m_asset_list.assert_called_once()
@@ -298,7 +300,9 @@ def test_trigger_recheck_posts_to_recheck_endpoint() -> None:
     from anthias_common.internal_auth import INTERNAL_AUTH_HEADER
 
     with (
-        mock.patch('anthias_viewer.internal_auth_token', return_value='deadbeef'),
+        mock.patch(
+            'anthias_viewer.internal_auth_token', return_value='deadbeef'
+        ),
         mock.patch('anthias_viewer.requests.post') as m,
     ):
         viewer._trigger_asset_recheck('abc')
@@ -335,7 +339,9 @@ def test_trigger_recheck_swallows_request_errors() -> None:
             'anthias_viewer.requests.post',
             side_effect=_requests.ConnectionError('boom'),
         ),
-        mock.patch('anthias_viewer.internal_auth_token', return_value='deadbeef'),
+        mock.patch(
+            'anthias_viewer.internal_auth_token', return_value='deadbeef'
+        ),
     ):
         # Must not raise.
         viewer._trigger_asset_recheck('abc')

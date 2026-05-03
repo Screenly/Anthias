@@ -30,7 +30,9 @@ def template(
         'default_streaming_duration'
     ]
     context['template_settings'] = {
-        'imports': ['from anthias_common.utils import template_handle_unicode'],
+        'imports': [
+            'from anthias_common.utils import template_handle_unicode'
+        ],
         'default_filters': ['template_handle_unicode'],
     }
     context['up_to_date'] = is_up_to_date()

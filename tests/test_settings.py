@@ -70,6 +70,7 @@ def fake_settings(raw: str) -> Iterator[tuple[Any, Any]]:
     # object via the parent's namespace and __init__ never re-runs.
     sys.modules.pop('anthias_server.settings', None)
     import anthias_server as _anthias_server
+
     if hasattr(_anthias_server, 'settings'):
         del _anthias_server.settings
     try:

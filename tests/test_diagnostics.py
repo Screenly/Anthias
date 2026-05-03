@@ -91,7 +91,8 @@ def test_get_raspberry_code_returns_hardware() -> None:
 
 def test_get_raspberry_code_unknown() -> None:
     with mock.patch(
-        'anthias_server.lib.diagnostics.device_helper.parse_cpu_info', return_value={}
+        'anthias_server.lib.diagnostics.device_helper.parse_cpu_info',
+        return_value={},
     ):
         assert diagnostics.get_raspberry_code() == 'Unknown'
 
@@ -106,7 +107,8 @@ def test_get_raspberry_model_returns_model() -> None:
 
 def test_get_raspberry_model_unknown() -> None:
     with mock.patch(
-        'anthias_server.lib.diagnostics.device_helper.parse_cpu_info', return_value={}
+        'anthias_server.lib.diagnostics.device_helper.parse_cpu_info',
+        return_value={},
     ):
         assert diagnostics.get_raspberry_model() == 'Unknown'
 
@@ -156,7 +158,9 @@ def test_get_display_power_subprocess_timeout() -> None:
 
 
 def test_try_connectivity_all_succeed() -> None:
-    with mock.patch('anthias_server.lib.diagnostics.utils.url_fails', return_value=False):
+    with mock.patch(
+        'anthias_server.lib.diagnostics.utils.url_fails', return_value=False
+    ):
         results = diagnostics.try_connectivity()
     assert len(results) == 4
     for line in results:
@@ -164,7 +168,9 @@ def test_try_connectivity_all_succeed() -> None:
 
 
 def test_try_connectivity_all_fail() -> None:
-    with mock.patch('anthias_server.lib.diagnostics.utils.url_fails', return_value=True):
+    with mock.patch(
+        'anthias_server.lib.diagnostics.utils.url_fails', return_value=True
+    ):
         results = diagnostics.try_connectivity()
     assert len(results) == 4
     for line in results:
@@ -175,7 +181,8 @@ def test_try_connectivity_mixed() -> None:
     # Alternate True/False/True/False across the four URLs.
     side_effect = [True, False, True, False]
     with mock.patch(
-        'anthias_server.lib.diagnostics.utils.url_fails', side_effect=side_effect
+        'anthias_server.lib.diagnostics.utils.url_fails',
+        side_effect=side_effect,
     ):
         results = diagnostics.try_connectivity()
     assert results[0].endswith(': Error')

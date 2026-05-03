@@ -19,7 +19,12 @@ from anthias_viewer.constants import SPLASH_DELAY as SPLASH_DELAY
 from anthias_viewer.constants import SPLASH_PAGE_URL as SPLASH_PAGE_URL
 from anthias_viewer.constants import STANDBY_SCREEN as STANDBY_SCREEN
 from anthias_viewer.media_player import MediaPlayerProxy
-from anthias_viewer.playback import navigate_to_asset, play_loop, skip_asset, stop_loop
+from anthias_viewer.playback import (
+    navigate_to_asset,
+    play_loop,
+    skip_asset,
+    stop_loop,
+)
 from anthias_viewer.utils import (
     command_not_found,
     get_skip_event,
@@ -32,7 +37,8 @@ django.setup()
 
 # Place imports that uses Django in this block.
 
-from anthias_common.internal_auth import INTERNAL_AUTH_HEADER, internal_auth_token  # noqa: E402
+from anthias_common.internal_auth import INTERNAL_AUTH_HEADER  # noqa: E402
+from anthias_common.internal_auth import internal_auth_token  # noqa: E402
 from anthias_common.utils import (  # noqa: E402
     connect_to_redis,
     string_to_bool,

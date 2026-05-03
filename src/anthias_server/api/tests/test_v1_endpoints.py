@@ -112,7 +112,10 @@ def test_playlist_order(
         'asset&6ee2394e760643748b9353f06f405424',
     ],
 )
-@mock.patch('anthias_server.api.views.v1.ViewerPublisher.send_to_viewer', return_value=None)
+@mock.patch(
+    'anthias_server.api.views.v1.ViewerPublisher.send_to_viewer',
+    return_value=None,
+)
 def test_assets_control(
     send_to_viewer_mock: Any,
     command: str,
@@ -163,7 +166,10 @@ def test_shutdown(
 
 
 @pytest.mark.django_db
-@mock.patch('anthias_server.api.views.v1.ViewerPublisher.send_to_viewer', return_value=None)
+@mock.patch(
+    'anthias_server.api.views.v1.ViewerPublisher.send_to_viewer',
+    return_value=None,
+)
 def test_viewer_current_asset(
     send_to_viewer_mock: Any,
     api_client: APIClient,
@@ -180,7 +186,9 @@ def test_viewer_current_asset(
     recv_json_mock = mock.MagicMock(
         return_value={'current_asset_id': asset_id}
     )
-    with mock.patch('anthias_server.api.views.v1.ReplyCollector.recv_json', recv_json_mock):
+    with mock.patch(
+        'anthias_server.api.views.v1.ReplyCollector.recv_json', recv_json_mock
+    ):
         viewer_current_asset_url = reverse('api:viewer_current_asset_v1')
         response = api_client.get(viewer_current_asset_url)
         data = response.data

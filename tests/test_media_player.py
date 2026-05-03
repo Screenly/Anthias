@@ -184,7 +184,9 @@ def alsa_settings() -> Iterator[Any]:
 
 def test_local_on_pi5_uses_hdmi_card(alsa_settings: Any) -> None:
     alsa_settings.__getitem__.return_value = 'local'
-    with patch('anthias_viewer.media_player.get_device_type', return_value='pi5'):
+    with patch(
+        'anthias_viewer.media_player.get_device_type', return_value='pi5'
+    ):
         assert get_alsa_audio_device() == 'default:CARD=vc4hdmi0'
 
 
@@ -226,7 +228,9 @@ def test_hdmi_on_pi1_pi2_pi3_uses_vc4hdmi(
 
 def test_hdmi_on_x86_falls_back_to_hid(alsa_settings: Any) -> None:
     alsa_settings.__getitem__.return_value = 'hdmi'
-    with patch('anthias_viewer.media_player.get_device_type', return_value='x86'):
+    with patch(
+        'anthias_viewer.media_player.get_device_type', return_value='x86'
+    ):
         assert get_alsa_audio_device() == 'default:CARD=HID'
 
 
@@ -313,7 +317,9 @@ def test_get_instance_returns_mpv_for_pi5_and_x86(
 def test_get_instance_returns_mpv_for_pi4_64(reset_media_proxy: None) -> None:
     MediaPlayerProxy.INSTANCE = None
     with (
-        patch('anthias_viewer.media_player.get_device_type', return_value='pi4'),
+        patch(
+            'anthias_viewer.media_player.get_device_type', return_value='pi4'
+        ),
         patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}),
     ):
         instance = MediaPlayerProxy.get_instance()

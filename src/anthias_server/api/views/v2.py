@@ -16,7 +16,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from anthias_server.app.helpers import add_default_assets, remove_default_assets
+from anthias_server.app.helpers import (
+    add_default_assets,
+    remove_default_assets,
+)
 from anthias_server.app.models import Asset
 from anthias_server.api.helpers import (
     AssetCreationError,

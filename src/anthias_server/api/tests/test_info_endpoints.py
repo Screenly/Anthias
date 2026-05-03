@@ -32,8 +32,13 @@ def _assert_response_data(
 
 
 @pytest.mark.django_db
-@mock.patch('anthias_server.api.views.mixins.is_up_to_date', return_value=False)
-@mock.patch('anthias_server.lib.diagnostics.get_load_avg', return_value={'15 min': 0.11})
+@mock.patch(
+    'anthias_server.api.views.mixins.is_up_to_date', return_value=False
+)
+@mock.patch(
+    'anthias_server.lib.diagnostics.get_load_avg',
+    return_value={'15 min': 0.11},
+)
 @mock.patch('anthias_server.api.views.mixins.size', return_value='15G')
 @mock.patch('anthias_server.api.views.mixins.statvfs', mock.MagicMock())
 @mock.patch('anthias_server.api.views.mixins.r.get', return_value='off')
@@ -69,19 +74,28 @@ def test_info_v1_endpoint(
 
 @pytest.mark.django_db
 @mock.patch('anthias_server.api.views.v2.is_up_to_date', return_value=True)
-@mock.patch('anthias_server.lib.diagnostics.get_load_avg', return_value={'15 min': 0.25})
+@mock.patch(
+    'anthias_server.lib.diagnostics.get_load_avg',
+    return_value={'15 min': 0.25},
+)
 @mock.patch('anthias_server.api.views.v2.size', return_value='20G')
 @mock.patch('anthias_server.api.views.v2.statvfs', mock.MagicMock())
 @mock.patch('anthias_server.api.views.v2.r.get', return_value='on')
-@mock.patch('anthias_server.api.views.v2.diagnostics.get_git_branch', return_value='main')
 @mock.patch(
-    'anthias_server.api.views.v2.diagnostics.get_git_short_hash', return_value='a1b2c3d'
+    'anthias_server.api.views.v2.diagnostics.get_git_branch',
+    return_value='main',
+)
+@mock.patch(
+    'anthias_server.api.views.v2.diagnostics.get_git_short_hash',
+    return_value='a1b2c3d',
 )
 @mock.patch(
     'anthias_server.api.views.v2.device_helper.parse_cpu_info',
     return_value={'model': 'Raspberry Pi 4'},
 )
-@mock.patch('anthias_server.api.views.v2.diagnostics.get_uptime', return_value=86400)
+@mock.patch(
+    'anthias_server.api.views.v2.diagnostics.get_uptime', return_value=86400
+)
 @mock.patch(
     'anthias_server.api.views.v2.psutil.virtual_memory',
     return_value=mock.MagicMock(
@@ -94,9 +108,13 @@ def test_info_v1_endpoint(
     ),
 )
 @mock.patch(
-    'anthias_server.api.views.v2.get_node_mac_address', return_value='00:11:22:33:44:55'
+    'anthias_server.api.views.v2.get_node_mac_address',
+    return_value='00:11:22:33:44:55',
 )
-@mock.patch('anthias_server.api.views.v2.get_node_ip', return_value='192.168.1.100 10.0.0.50')
+@mock.patch(
+    'anthias_server.api.views.v2.get_node_ip',
+    return_value='192.168.1.100 10.0.0.50',
+)
 @mock.patch('anthias_server.api.views.v2.getenv', return_value='testuser')
 def test_info_v2_endpoint(
     getenv_mock: Any,
