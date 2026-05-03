@@ -51,7 +51,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
 
       - name: Run rpi-imager tests
-        run: uv run --no-dev --group website -m pytest --confcutdir=raspberry_pi_imager tools/raspberry_pi_imager/tests/ -v
+        run: uv run --no-dev --group website -m pytest --confcutdir=tools/raspberry_pi_imager tools/raspberry_pi_imager/tests/ -v
 
   # Build job
   build:
