@@ -187,13 +187,15 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
             f.write(chunk)
 
     mimetype = file_type.split('/')[0]
-    # The v2 API's CreateAssetSerializerV2 enforces duration=0 for
-    # video assets and resolves the actual length at save time via
-    # get_video_duration. Mirror that contract here so the HTML and
-    # API write paths agree (otherwise a video uploaded through the
-    # UI would carry a probed duration, while the same file pushed
-    # through the API would be rejected at duration=N>0).
-    duration = 0 if mimetype == 'video' else settings['default_duration']
+    # Video duration is resolved out of band by the
+    # `probe_video_duration` Celery task — ffprobe can take several
+    # seconds on a Pi 1/Zero and we don't want the upload POST to block
+    # the operator's modal that long. The row is created with
+    # is_processing=True so the table renders a "Processing" pill until
+    # the worker writes the real duration back; the API's v2 path uses
+    # the same convention. Images keep the configured default.
+    duration = settings['default_duration']
+    is_video = mimetype == 'video'
 
     now = timezone.now()
     # Count is_enabled rows (the same partition the home page uses to
@@ -204,17 +206,28 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     play_order = Asset.objects.filter(
         is_enabled=True, is_processing=False
     ).count()
-    Asset.objects.create(
+    asset = Asset.objects.create(
         name=upload_name,
         uri=final_path,
         mimetype=mimetype,
         duration=duration,
         is_enabled=True,
-        is_processing=False,
+        is_processing=is_video,
         play_order=play_order,
         start_date=now,
         end_date=now + timedelta(days=30),
     )
+    if is_video:
+        from anthias_server.celery_tasks import probe_video_duration
+
+        probe_video_duration.delay(asset.asset_id)
+        return _asset_table_response(
+            request,
+            toast=(
+                'info',
+                f'Uploaded {upload_name} — analysing video…',
+            ),
+        )
     return _asset_table_response(
         request, toast=('success', f'Uploaded {upload_name}')
     )
@@ -399,8 +412,12 @@ def _asset_table_response(
         return response
 
     if toast is not None:
-        _msg = messages.success if toast[0] == 'success' else messages.error
-        _msg(request, toast[1])
+        _msg_fn = {
+            'success': messages.success,
+            'error': messages.error,
+            'info': messages.info,
+        }.get(toast[0], messages.info)
+        _msg_fn(request, toast[1])
     return redirect(reverse('anthias_app:home'))
 
 

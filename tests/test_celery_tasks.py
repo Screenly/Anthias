@@ -15,6 +15,7 @@ from anthias_server.celery_tasks import (
     asset_recheck_lock_key,
     cleanup,
     get_display_power,
+    probe_video_duration,
     reboot_anthias,
     revalidate_asset_url,
     revalidate_asset_urls,
@@ -591,3 +592,65 @@ def test_recheck_runs_when_no_lock_held(
     ):
         revalidate_asset_url.apply(args=('a1',))
     assert Asset.objects.get(asset_id='a1').is_reachable
+
+
+# ---------------------------------------------------------------------------
+# probe_video_duration — async ffprobe path used by the HTML upload view
+
+
+@pytest.mark.django_db
+def test_probe_video_duration_writes_back_real_duration() -> None:
+    """Happy path: ffprobe returns a length, the row gets it and is
+    flipped out of is_processing."""
+    from datetime import timedelta
+
+    Asset.objects.create(
+        asset_id='vid-1',
+        name='clip.mp4',
+        uri='/tmp/anthias_assets/x.mp4',
+        mimetype='video',
+        duration=10,
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
+    )
+    with mock.patch(
+        'anthias_server.celery_tasks.get_video_duration',
+        return_value=timedelta(seconds=42),
+    ):
+        probe_video_duration('vid-1')
+    a = Asset.objects.get(asset_id='vid-1')
+    assert a.duration == 42
+    assert a.is_processing is False
+
+
+@pytest.mark.django_db
+def test_probe_video_duration_clears_processing_when_ffprobe_unavailable() -> (
+    None
+):
+    """ffprobe missing → keep the seeded duration, still clear the
+    processing flag so the row leaves the placeholder state."""
+    Asset.objects.create(
+        asset_id='vid-2',
+        name='clip.mp4',
+        uri='/tmp/anthias_assets/x.mp4',
+        mimetype='video',
+        duration=10,
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
+    )
+    with mock.patch(
+        'anthias_server.celery_tasks.get_video_duration', return_value=None
+    ):
+        probe_video_duration('vid-2')
+    a = Asset.objects.get(asset_id='vid-2')
+    assert a.duration == 10
+    assert a.is_processing is False
+
+
+@pytest.mark.django_db
+def test_probe_video_duration_no_op_for_unknown_asset() -> None:
+    """Stale asset_id (deleted between enqueue and run) — task must not
+    crash. Nothing to assert beyond a clean return."""
+    probe_video_duration('does-not-exist')

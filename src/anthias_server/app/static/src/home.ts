@@ -248,6 +248,69 @@ function homeApp(): HomeAppData {
   }
 }
 
+// Tracks the assets that were `is_processing=true` on the previous
+// render of the asset table. After every htmx swap we diff the current
+// processing set against this snapshot; any asset that left the set
+// (probe finished) gets a "Processing complete" toast with the
+// resolved duration. Lives on `window` so the htmx event listener
+// installed once at page load can reach it across re-renders.
+declare global {
+  interface Window {
+    __anthiasProcessing?: Set<string>
+  }
+}
+
+function snapshotProcessing(): Set<string> {
+  const next = new Set<string>()
+  document
+    .querySelectorAll<HTMLTableRowElement>('tr[data-asset-id][data-processing="true"]')
+    .forEach((tr) => {
+      const id = tr.dataset.assetId
+      if (id) next.add(id)
+    })
+  return next
+}
+
+function diffProcessingAndToast(prev: Set<string>): void {
+  const store = window.Alpine?.store('toasts') as
+    | { push: (k: 'success' | 'error' | 'info', m: string) => number }
+    | undefined
+  if (!store) return
+  // Find rows that *were* processing last time and are no longer in
+  // the processing set now. A row that's been entirely removed (e.g.
+  // operator deleted it) is also dropped from the set silently — no
+  // toast for that since assets_delete already fires its own.
+  prev.forEach((id) => {
+    const row = document.querySelector<HTMLTableRowElement>(
+      `tr[data-asset-id="${CSS.escape(id)}"]`,
+    )
+    if (!row) return
+    if (row.dataset.processing === 'true') return
+    const name = row.dataset.name || 'video'
+    const duration = parseInt(row.dataset.duration || '0', 10)
+    const suffix = duration > 0 ? ` — duration ${duration}s` : ''
+    store.push('success', `Analysed ${name}${suffix}`)
+  })
+}
+
+function installProcessingToastWatcher(): void {
+  if (window.__anthiasProcessing !== undefined) return
+  window.__anthiasProcessing = snapshotProcessing()
+  document.body.addEventListener('htmx:afterSwap', (ev) => {
+    const target = (ev as CustomEvent<{ target?: Element }>).detail?.target
+    if (!target) return
+    if (
+      !(target instanceof Element) ||
+      !target.querySelector('tr[data-asset-id]')
+    ) {
+      return
+    }
+    const prev = window.__anthiasProcessing ?? new Set<string>()
+    diffProcessingAndToast(prev)
+    window.__anthiasProcessing = snapshotProcessing()
+  })
+}
+
 function initAssetTableSortable(orderUrl: string): void {
   // Sortable on the active list. Re-init on every HTMX swap (the
   // tbody is replaced wholesale). Drag-end POSTs the new id order
@@ -308,3 +371,16 @@ function initAssetTableSortable(orderUrl: string): void {
 
 window.homeApp = homeApp
 window.initAssetTableSortable = initAssetTableSortable
+
+// Wire the processing→done toast watcher once Alpine is up. Fires on
+// every htmx swap of the asset table and also catches the initial
+// page render's processing rows so a refresh mid-probe still works.
+if (document.readyState === 'complete') {
+  installProcessingToastWatcher()
+} else {
+  document.addEventListener(
+    'DOMContentLoaded',
+    () => installProcessingToastWatcher(),
+    { once: true },
+  )
+}

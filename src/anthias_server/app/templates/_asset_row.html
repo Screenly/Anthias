@@ -1,6 +1,6 @@
 {% load asset_filters %}
 {% with sched=asset|schedule_label %}
-<tr data-asset-id="{{ asset.asset_id }}">
+<tr data-asset-id="{{ asset.asset_id }}" data-processing="{{ asset.is_processing|yesno:'true,false' }}" data-name="{{ asset.name|default:''|escape }}" data-duration="{{ asset.duration|default:0 }}">
   <td>
     <div class="asset-cell-name">
       {% if is_active %}<i class="bi bi-grip-vertical drag-handle" title="Drag to reorder"></i>{% endif %}

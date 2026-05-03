@@ -455,3 +455,37 @@ def test_assets_upload_rejects_unknown_extension(client: Client) -> None:
     )
     assert response.status_code in (200, 302)
     assert not Asset.objects.filter(name='random.bin').exists()
+
+
+@pytest.mark.django_db
+def test_assets_upload_video_marks_processing_and_queues_probe(
+    client: Client,
+) -> None:
+    """Video uploads return immediately with is_processing=True and
+    enqueue the duration probe as a Celery task so ffprobe doesn't
+    block the upload POST on slow hardware."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    with (
+        mock.patch(
+            'anthias_server.celery_tasks.probe_video_duration.delay'
+        ) as delay_mock,
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'\x00fake-mp4', content_type='video/mp4'
+                ),
+            },
+        )
+
+    created = Asset.objects.filter(name='clip.mp4').first()
+    assert created is not None
+    assert created.mimetype == 'video'
+    assert created.is_processing is True
+    delay_mock.assert_called_once_with(created.asset_id)

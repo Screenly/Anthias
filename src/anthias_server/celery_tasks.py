@@ -20,6 +20,7 @@ from anthias_server.lib import diagnostics  # noqa: E402
 from anthias_server.lib.telemetry import send_telemetry  # noqa: E402
 from anthias_common.utils import (  # noqa: E402
     connect_to_redis,
+    get_video_duration,
     is_balena_app,
     reboot_via_balena_supervisor,
     shutdown_via_balena_supervisor,
@@ -202,6 +203,48 @@ def cleanup() -> None:
             os.remove(entry.path)
         except OSError as e:
             logging.warning('cleanup: could not remove %s: %s', entry.path, e)
+
+
+@celery.task(time_limit=120)
+def probe_video_duration(asset_id: str) -> None:
+    """Resolve a freshly uploaded video's length out of band.
+
+    The HTML upload view returns the table partial as soon as the bytes
+    are written so the operator isn't held up by ffprobe (which can
+    take several seconds on a Pi 1/Zero). The asset is marked
+    ``is_processing=True`` while this task is queued; once the probe
+    completes the duration is written and the flag is cleared, which
+    drops the "Processing" pill on the next 5s table poll.
+
+    On probe failure the row still leaves ``is_processing=False`` so it
+    becomes editable; the operator gets a sensible-default duration
+    (whatever the upload view seeded) and can adjust manually.
+    """
+    try:
+        asset = Asset.objects.get(asset_id=asset_id)
+    except Asset.DoesNotExist:
+        return
+
+    if asset.mimetype != 'video' or not asset.uri:
+        Asset.objects.filter(asset_id=asset_id).update(is_processing=False)
+        return
+
+    duration: int | None = None
+    try:
+        td = get_video_duration(asset.uri)
+        if td is not None:
+            duration = max(1, int(td.total_seconds()))
+    except Exception:
+        logging.exception('probe_video_duration: ffprobe failed for %s', asset_id)
+
+    update: dict[str, Any] = {'is_processing': False}
+    if duration is not None:
+        update['duration'] = duration
+    Asset.objects.filter(asset_id=asset_id).update(**update)
+
+    # Tell the viewer to reload its playlist now that the row is fully
+    # materialised — same trigger every other write path uses.
+    r.publish('anthias.viewer', 'reload')
 
 
 @celery.task
