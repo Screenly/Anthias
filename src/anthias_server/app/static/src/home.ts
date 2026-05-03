@@ -288,9 +288,19 @@ function diffProcessingAndToast(prev: Set<string>): void {
     if (row.dataset.processing === 'true') return
     const name = row.dataset.name || 'video'
     const duration = parseInt(row.dataset.duration || '0', 10)
-    const suffix = duration > 0 ? ` — duration ${duration}s` : ''
+    const suffix = duration > 0 ? ` — ${humanizeDuration(duration)}` : ''
     store.push('success', `Analysed ${name}${suffix}`)
   })
+}
+
+function humanizeDuration(total: number): string {
+  if (total <= 0) return '0s'
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  if (hours) return minutes ? `${hours}h ${minutes}m` : `${hours}h`
+  if (minutes) return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`
+  return `${seconds}s`
 }
 
 function installProcessingToastWatcher(): void {

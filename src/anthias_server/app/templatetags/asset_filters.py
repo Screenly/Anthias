@@ -45,39 +45,68 @@ _DAY_LABELS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
 
 
 @register.filter
-def schedule_label(asset: Any) -> str:
-    """Compact human label for the asset's schedule window.
+def schedule_pills(asset: Any) -> list[dict[str, str]]:
+    """Return the schedule window as a list of pill descriptors.
 
-    Empty when no filter is active (asset plays every day, all hours).
-    Otherwise one of:
-      - "Mon, Wed, Fri" — day-of-week filter only
-      - "9:00 – 17:00"  — time window only (24h or 12h per device)
-      - "Mon, Wed, Fri · 9:00 – 17:00" — both
-    Lets the asset row tell the operator at a glance which assets are
-    scheduled vs free-running, without opening the edit modal.
+    Each pill is a {kind, label} dict the row template iterates over.
+    `kind` is one of:
+      - 'all'  — shorthand "Everyday" pill, emitted only when no
+                 day-of-week filter narrows the schedule.
+      - 'day'  — one per active weekday: 'Mon', 'Tue', ...
+      - 'time' — the play_time_from/to window, formatted in the
+                 device's configured 24h/12h clock.
+
+    The list collapses to a single 'all' pill when the asset has no
+    day filter and no time window — the row then renders a green-ish
+    chip rather than a wall of seven Mon/Tue/Wed pills.
     """
-    if not hasattr(asset, 'get_play_days'):
-        return ''
-    days = asset.get_play_days()
-    days_label = ''
-    if days != list(range(1, 8)):
-        days_label = ', '.join(_DAY_LABELS[d - 1] for d in days if 1 <= d <= 7)
+    pills: list[dict[str, str]] = []
+    days_set: list[int] = []
+    if hasattr(asset, 'get_play_days'):
+        days_set = asset.get_play_days()
+    full_week = days_set == list(range(1, 8))
 
-    time_label = ''
     pf = getattr(asset, 'play_time_from', None)
     pt = getattr(asset, 'play_time_to', None)
-    if pf and pt:
-        if settings['use_24_hour_clock']:
-            fmt = '%H:%M'
-        else:
-            fmt = '%I:%M %p'
-        time_label = (
-            f'{pf.strftime(fmt).lstrip("0")} – {pt.strftime(fmt).lstrip("0")}'
-        )
 
-    if days_label and time_label:
-        return f'{days_label} · {time_label}'
-    return days_label or time_label
+    if not full_week and days_set:
+        for d in days_set:
+            if 1 <= d <= 7:
+                pills.append({'kind': 'day', 'label': _DAY_LABELS[d - 1]})
+    elif not (pf and pt):
+        # Full-week plays that also play all hours get the catch-all
+        # "Everyday" pill so the row reads "Everyday" instead of
+        # nothing — matches the tooltip we used to show.
+        pills.append({'kind': 'all', 'label': 'Everyday'})
+
+    if pf and pt:
+        fmt = '%H:%M' if settings['use_24_hour_clock'] else '%I:%M %p'
+        pills.append(
+            {
+                'kind': 'time',
+                'label': (
+                    f'{pf.strftime(fmt).lstrip("0")} – '
+                    f'{pt.strftime(fmt).lstrip("0")}'
+                ),
+            }
+        )
+    return pills
+
+
+@register.filter
+def schedule_label(asset: Any) -> str:
+    """Backwards-compat string version of schedule_pills.
+
+    Kept so anything still calling the prior single-chip filter (or a
+    test asserting on the join) keeps working. Joins the pill labels
+    with ', ' for days and ' · ' between days and time.
+    """
+    pills = schedule_pills(asset)
+    days = ', '.join(p['label'] for p in pills if p['kind'] == 'day')
+    time_part = next((p['label'] for p in pills if p['kind'] == 'time'), '')
+    if days and time_part:
+        return f'{days} · {time_part}'
+    return days or time_part
 
 
 @register.filter
@@ -157,3 +186,35 @@ def to_json(value: Any) -> SafeString:
         .replace('>', '\\u003e')
     )
     return mark_safe(safe)
+
+
+@register.filter
+def humanize_duration(value: Any) -> str:
+    """Format a duration in seconds as 'Xh Ym', 'Xm Ys', or 'Xs'.
+
+    Asset.duration is stored as integer seconds. The schedule table
+    used to render '42 sec' / '3600 sec' which scans poorly for long
+    streams; this filter renders the same value as '42s', '1m 30s',
+    '1h 5m'. Drops the seconds component once we're into hours so
+    a 1h05m02s stream doesn't read like a stopwatch.
+    """
+    try:
+        total = int(value)
+    except (TypeError, ValueError):
+        return ''
+    if total <= 0:
+        return '0s'
+    hours, remainder = divmod(total, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    parts: list[str] = []
+    if hours:
+        parts.append(f'{hours}h')
+        if minutes:
+            parts.append(f'{minutes}m')
+        return ' '.join(parts)
+    if minutes:
+        parts.append(f'{minutes}m')
+        if seconds:
+            parts.append(f'{seconds}s')
+        return ' '.join(parts)
+    return f'{seconds}s'

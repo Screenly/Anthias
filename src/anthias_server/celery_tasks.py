@@ -235,7 +235,9 @@ def probe_video_duration(asset_id: str) -> None:
         if td is not None:
             duration = max(1, int(td.total_seconds()))
     except Exception:
-        logging.exception('probe_video_duration: ffprobe failed for %s', asset_id)
+        logging.exception(
+            'probe_video_duration: ffprobe failed for %s', asset_id
+        )
 
     update: dict[str, Any] = {'is_processing': False}
     if duration is not None:

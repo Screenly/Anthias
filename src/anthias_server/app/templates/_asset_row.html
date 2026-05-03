@@ -1,5 +1,5 @@
 {% load asset_filters %}
-{% with sched=asset|schedule_label %}
+{% with pills=asset|schedule_pills %}
 <tr data-asset-id="{{ asset.asset_id }}" data-processing="{{ asset.is_processing|yesno:'true,false' }}" data-name="{{ asset.name|default:''|escape }}" data-duration="{{ asset.duration|default:0 }}">
   <td>
     <div class="asset-cell-name">
@@ -12,13 +12,24 @@
       </span>
       <span class="asset-cell-name__title">
         <span class="asset-cell-name__primary">{{ asset.name }}</span>
-        {% include "_schedule_chip.html" with text=sched %}
+        {% if pills %}
+        <span class="schedule-chips">
+          {% for pill in pills %}
+          <span class="schedule-chip schedule-chip--{{ pill.kind }}">
+            {% if pill.kind == 'all' %}<i class="bi bi-calendar-check"></i>
+            {% elif pill.kind == 'time' %}<i class="bi bi-clock"></i>
+            {% else %}<i class="bi bi-calendar-week"></i>{% endif %}
+            <span>{{ pill.label }}</span>
+          </span>
+          {% endfor %}
+        </span>
+        {% endif %}
       </span>
     </div>
   </td>
   <td>{{ asset.start_date|asset_date }}</td>
   <td>{{ asset.end_date|asset_date }}</td>
-  <td>{{ asset.duration }} sec</td>
+  <td>{{ asset.duration|humanize_duration }}</td>
   <td>
     {% if asset.is_processing %}
     <span class="processing-pill"><i class="bi bi-arrow-repeat"></i>Processing</span>

@@ -398,6 +398,12 @@ label { text-align: left; }
 // -----------------------------------------------------------------------------
 // 7. Schedule chip
 // -----------------------------------------------------------------------------
+.schedule-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  vertical-align: middle;
+}
 .schedule-chip {
   display: inline-flex;
   align-items: center;
@@ -413,10 +419,28 @@ label { text-align: left; }
 
   i { font-size: 0.85em; opacity: 0.85; }
 }
+// Time-window pill stays a soft neutral; day pills get a slightly
+// stronger purple tint so a row scheduled across many days reads as
+// "playlist, not free-running".
+.schedule-chip--day {
+  background: rgba(102, 51, 160, 0.08);
+  color: var(--color-link);
+  border-color: rgba(102, 51, 160, 0.22);
+}
+.schedule-chip--all {
+  background: rgba(52, 211, 153, 0.12);
+  color: #1f8a5d;
+  border-color: rgba(52, 211, 153, 0.3);
+}
 .surface--active .schedule-chip {
   background: rgba(255, 225, 26, 0.16);
   color: $anthias-yellow-3;
   border-color: rgba(255, 225, 26, 0.32);
+}
+.surface--active .schedule-chip--all {
+  background: rgba(52, 211, 153, 0.22);
+  color: #d3ffe7;
+  border-color: rgba(52, 211, 153, 0.4);
 }
 
 // -----------------------------------------------------------------------------
