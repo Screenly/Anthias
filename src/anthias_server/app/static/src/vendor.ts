@@ -62,15 +62,48 @@ Alpine.store('toasts', {
 
 // HX-Trigger fan-out. The server attaches a JSON header
 //   HX-Trigger: {"toast": {"kind":"success", "message":"Asset deleted"}}
-// HTMX dispatches a custom event named `toast` on the body with that
-// detail payload; we wire it into the global store.
-document.body.addEventListener('toast', ((ev: Event) => {
-  const detail = (ev as CustomEvent<{ kind?: ToastItem['kind']; message?: string }>).detail
+// htmx 2.x dispatches the named event on the *triggering* element
+// (the form/button), so we listen at the document level — events
+// bubble (htmx sets bubbles: true on its CustomEvents), and document
+// catches anything regardless of whether the trigger element survived
+// the swap. Listening on document.body would miss frames where the
+// triggering element was already detached before the bubble reached.
+const handleToast = (ev: Event): void => {
+  const detail = (ev as CustomEvent<{
+    kind?: ToastItem['kind']
+    message?: string
+  }>).detail
   if (!detail || !detail.message) return
   ;(Alpine.store('toasts') as ToastStore).push(
     detail.kind ?? 'info',
     detail.message,
   )
+}
+document.addEventListener('toast', handleToast as EventListener)
+// Belt-and-suspenders: htmx's beforeOnLoad fires before the swap, so
+// even if the named-event dispatch is lost (the requesting element
+// was removed mid-flight, an extension swallowed the event, etc.),
+// we can still parse the HX-Trigger header off the XHR response and
+// pump the toast into the store ourselves.
+document.body.addEventListener('htmx:beforeOnLoad', ((ev: Event) => {
+  const xhr = (ev as CustomEvent<{ xhr?: XMLHttpRequest }>).detail?.xhr
+  if (!xhr) return
+  const header = xhr.getResponseHeader('HX-Trigger')
+  if (!header) return
+  try {
+    const parsed = JSON.parse(header) as Record<string, unknown>
+    const t = parsed['toast'] as
+      | { kind?: ToastItem['kind']; message?: string }
+      | undefined
+    if (t && t.message) {
+      ;(Alpine.store('toasts') as ToastStore).push(
+        t.kind ?? 'info',
+        t.message,
+      )
+    }
+  } catch {
+    // Plain string HX-Trigger value — not a toast payload, ignore.
+  }
 }) as EventListener)
 
 // WebSocket fan-out from the Channels AssetConsumer. The server

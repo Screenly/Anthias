@@ -321,76 +321,91 @@ function installProcessingToastWatcher(): void {
   })
 }
 
-function initAssetTableSortable(orderUrl: string): void {
-  // Sortable on the active list. Re-init on every HTMX swap (the
-  // tbody is replaced wholesale). Drag-end POSTs the new id order
-  // back to /assets/order; the response triggers refresh-assets so
-  // the table re-fetches with the persisted order. vendor.js loads
-  // with `defer`, so on the *initial* page render this runs before
-  // window.Sortable is defined — fall back to DOMContentLoaded in
-  // that case; HTMX-driven re-renders see Sortable already loaded.
-  const init = () => {
-    const tbody = document.getElementById('active-rows')
-    if (!tbody || !window.Sortable) return
-    new window.Sortable(tbody, {
-      handle: '.drag-handle',
-      animation: 150,
-      onEnd: () => {
-        const ids = Array.from(tbody.children)
-          .map((tr) => (tr as HTMLElement).dataset.assetId)
-          .filter(Boolean)
-          .join(',')
-        const fd = new FormData()
-        fd.append('ids', ids)
-        fetch(orderUrl, {
-          method: 'POST',
-          body: fd,
-          // `HX-Request: true` makes the Django view return the
-          // re-rendered partial instead of redirecting to / and
-          // forcing fetch() to download the whole page only to
-          // discard it.
-          headers: {
-            'X-CSRFToken': csrfToken(),
-            'HX-Request': 'true',
-          },
+// Bind Sortable on the active-rows tbody. Idempotent: each call
+// destroys any existing instance on the tbody before creating a fresh
+// one, so we can call this from both DOMContentLoaded and the
+// htmx:afterSwap watcher without leaking listeners.
+function bindActiveRowsSortable(): void {
+  if (!window.Sortable) return
+  const wrapper = document.getElementById('asset-table')
+  if (!wrapper) return
+  const orderUrl = wrapper.getAttribute('data-order-url')
+  if (!orderUrl) return
+  const tbody = document.getElementById('active-rows')
+  if (!tbody) return
+  // Sortable.js stamps the element with an internal `_sortable`
+  // reference; re-creating without destroying first stacks listeners
+  // on document and breaks subsequent drags after a swap.
+  const existing = (
+    window.Sortable as { get?: (el: HTMLElement) => { destroy: () => void } | null }
+  ).get?.(tbody)
+  if (existing) existing.destroy()
+  new window.Sortable(tbody, {
+    handle: '.drag-handle',
+    animation: 150,
+    onEnd: () => {
+      const ids = Array.from(tbody.children)
+        .map((tr) => (tr as HTMLElement).dataset.assetId)
+        .filter(Boolean)
+        .join(',')
+      const fd = new FormData()
+      fd.append('ids', ids)
+      fetch(orderUrl, {
+        method: 'POST',
+        body: fd,
+        headers: {
+          'X-CSRFToken': csrfToken(),
+          'HX-Request': 'true',
+        },
+      })
+        .then((r) => {
+          if (!r.ok) {
+            console.error('reorder POST failed:', r.status, r.statusText)
+          }
+          ;(
+            window as unknown as { htmx: { trigger: (...args: unknown[]) => void } }
+          ).htmx.trigger('body', 'refresh-assets')
         })
-          .then((r) => {
-            if (!r.ok) {
-              console.error('reorder POST failed:', r.status, r.statusText)
-            }
-            // htmx is exposed by vendor.js (htmx.org auto-attaches).
-            ;(
-              window as unknown as { htmx: { trigger: (...args: unknown[]) => void } }
-            ).htmx.trigger('body', 'refresh-assets')
-          })
-          .catch((err) => {
-            console.error('reorder POST errored:', err)
-            ;(
-              window as unknown as { htmx: { trigger: (...args: unknown[]) => void } }
-            ).htmx.trigger('body', 'refresh-assets')
-          })
-      },
-    })
-  }
-  if (window.Sortable) {
-    init()
-  } else {
-    document.addEventListener('DOMContentLoaded', init, { once: true })
-  }
+        .catch((err) => {
+          console.error('reorder POST errored:', err)
+          ;(
+            window as unknown as { htmx: { trigger: (...args: unknown[]) => void } }
+          ).htmx.trigger('body', 'refresh-assets')
+        })
+    },
+  })
+}
+
+// Compatibility shim for any external caller that still uses the
+// previous explicit URL-passing entry point. Internally we now read
+// the URL off the data attribute, so the arg is ignored.
+function initAssetTableSortable(_orderUrl?: string): void {
+  bindActiveRowsSortable()
 }
 
 window.homeApp = homeApp
 window.initAssetTableSortable = initAssetTableSortable
 
-// Wire the processing→done toast watcher once Alpine is up. Fires on
-// every htmx swap of the asset table and also catches the initial
-// page render's processing rows so a refresh mid-probe still works.
-if (document.readyState === 'complete') {
+// Bind Sortable on initial page render and re-bind after every
+// htmx swap that brings a new active-rows tbody. The previous
+// approach used an inline <script> at the end of the asset-table
+// partial which raced with home.js (defer): on initial parse the
+// inline script ran before window.initAssetTableSortable was
+// defined and Sortable never bound until the first 5s poll.
+function bootHomePage(): void {
   installProcessingToastWatcher()
+  bindActiveRowsSortable()
+  document.body.addEventListener('htmx:afterSwap', (ev) => {
+    const target = (ev as CustomEvent<{ target?: Element }>).detail?.target
+    if (!target) return
+    if (target instanceof Element && target.querySelector('#active-rows')) {
+      bindActiveRowsSortable()
+    }
+  })
+}
+
+if (document.readyState === 'complete') {
+  bootHomePage()
 } else {
-  document.addEventListener(
-    'DOMContentLoaded',
-    () => installProcessingToastWatcher(),
-    { once: true },
-  )
+  document.addEventListener('DOMContentLoaded', bootHomePage, { once: true })
 }

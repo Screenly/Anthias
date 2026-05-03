@@ -10,6 +10,7 @@
   hx-get="{% url 'anthias_app:assets_table' %}"
   hx-trigger="every 5s, refresh-assets from:body"
   hx-swap="outerHTML"
+  data-order-url="{% url 'anthias_app:assets_order' %}"
   class="d-flex flex-column gap-4"
 >
   <section id="active-assets-section" class="surface surface--active">
@@ -71,9 +72,4 @@
   </section>
 </div>
 
-{% if active_assets %}
-{% comment %} initAssetTableSortable lives in home.ts; this is the only
-   line that has to stay inline because the assets_order URL is
-   resolved by Django's reverser at template-render time. {% endcomment %}
-<script>window.initAssetTableSortable && window.initAssetTableSortable('{% url "anthias_app:assets_order" %}');</script>
-{% endif %}
+{% comment %}initAssetTableSortable now reads the order URL from the data-order-url attribute on #asset-table and binds itself on DOMContentLoaded + on every htmx:afterSwap. The previous inline-script approach raced with home.js: at initial page parse the script ran before window.initAssetTableSortable was defined (defer), so Sortable never bound until the first htmx swap.{% endcomment %}
