@@ -1,11 +1,9 @@
-from django.urls import path, re_path
+from django.urls import path
 
 from . import views
 
 app_name = 'anthias_app'
 
-# Order: explicit paths first; the React catch-all stays last for any
-# legacy in-flight URLs (404s would surface immediately otherwise).
 urlpatterns = [
     path('splash-page', views.splash_page, name='splash_page'),
     path('login/', views.login, name='login'),
@@ -22,8 +20,11 @@ urlpatterns = [
         views.settings_shutdown,
         name='settings_shutdown',
     ),
-    # Asset list partial + write endpoints
-    path('_partials/asset-table', views.assets_table_partial, name='assets_table'),
+    path(
+        '_partials/asset-table',
+        views.assets_table_partial,
+        name='assets_table',
+    ),
     path('assets/new', views.assets_create, name='assets_create'),
     path('assets/upload', views.assets_upload, name='assets_upload'),
     path('assets/order', views.assets_order, name='assets_order'),
@@ -52,5 +53,4 @@ urlpatterns = [
         views.assets_download,
         name='assets_download',
     ),
-    re_path(r'^(?!api/).*$', views.react, name='react'),
 ]

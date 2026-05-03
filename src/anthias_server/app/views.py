@@ -44,11 +44,6 @@ def _checkbox(post: HttpRequest, name: str) -> bool:
 
 
 @authorized
-def react(request: HttpRequest) -> HttpResponse:
-    return template(request, 'react.html', {})
-
-
-@authorized
 @require_http_methods(['GET'])
 def integrations(request: HttpRequest) -> HttpResponse:
     context = page_context.integrations()
@@ -447,7 +442,7 @@ def login(request: HttpRequest) -> HttpResponse:
             request.session['auth_username'] = username
             request.session['auth_password'] = password
 
-            return redirect(reverse('anthias_app:react'))
+            return redirect(reverse('anthias_app:home'))
         else:
             messages.error(request, 'Invalid username or password')
             return template(
