@@ -11,8 +11,17 @@
       <span style="max-width: 280px; display: inline-block; vertical-align: middle">
         <span class="d-block text-truncate">{{ asset.name }}</span>
         {% if sched %}
-        <span class="d-block small {% if is_active %}text-white-50{% else %}text-secondary{% endif %} text-truncate" title="Schedule">
-          <i class="bi bi-calendar-week me-1"></i>{{ sched }}
+        {# Schedule subtitle. Use text-warning on the active section's
+           purple bg (yellow-on-purple is high-contrast and matches
+           the page's accent palette); text-secondary on the inactive
+           white card stays muted as before. #}
+        <span
+          class="d-block text-truncate"
+          style="font-size: 0.85rem"
+          title="Schedule"
+        >
+          <i class="bi bi-calendar-week me-1 {% if is_active %}text-warning{% else %}text-secondary{% endif %}"></i>
+          <span class="{% if is_active %}text-warning{% else %}text-secondary{% endif %}">{{ sched }}</span>
         </span>
         {% endif %}
       </span>
@@ -51,7 +60,7 @@
         type="button"
         class="btn btn-outline-{% if is_active %}light{% else %}dark{% endif %} btn-sm"
         title="Delete"
-        @click="openDelete('{{ asset.asset_id }}', {{ asset|to_json }}.name)"
+        @click="openDelete('{{ asset.asset_id }}', '{{ asset.name|default:''|escapejs }}')"
       >
         <i class="bi bi-trash"></i>
       </button>

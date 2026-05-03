@@ -1,6 +1,7 @@
 import logging
 import tarfile
 import uuid
+from datetime import datetime
 from mimetypes import guess_type
 from os import path, remove
 
@@ -34,7 +35,7 @@ r = connect_to_redis()
 _ANTHIAS_REPO_URL = 'https://github.com/Screenly/Anthias'
 
 
-def _parse_local_datetime(value: str) -> 'timezone.datetime':
+def _parse_local_datetime(value: str) -> datetime:
     """Parse a date/time the edit-form posts back from Flatpickr.
 
     Flatpickr formats the value using whatever format we asked for
@@ -43,8 +44,6 @@ def _parse_local_datetime(value: str) -> 'timezone.datetime':
     set of formats here, fall back to ISO fromisoformat() so any
     pre-existing rows / API-side writes still parse cleanly.
     """
-    from datetime import datetime as _dt
-
     settings.load()
     df = settings['date_format']
     date_part_map = {
@@ -63,10 +62,10 @@ def _parse_local_datetime(value: str) -> 'timezone.datetime':
     candidates = [f'{date_fmt} {time_fmt}', f'{date_fmt} %H:%M']
     for fmt in candidates:
         try:
-            return timezone.make_aware(_dt.strptime(value, fmt))
+            return timezone.make_aware(datetime.strptime(value, fmt))
         except ValueError:
             continue
-    return timezone.make_aware(_dt.fromisoformat(value))
+    return timezone.make_aware(datetime.fromisoformat(value))
 
 
 def _checkbox(post: HttpRequest, name: str) -> bool:
@@ -214,8 +213,6 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
     asset = Asset.objects.filter(asset_id=asset_id).first()
     if asset is None:
         return _asset_table_response(request)
-
-    from datetime import datetime
 
     asset.name = request.POST.get('name', asset.name)
     # mimetype is intentionally NOT pulled from the POST: it's derived

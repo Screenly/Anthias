@@ -25,4 +25,20 @@ declare global {
 window.Alpine = Alpine
 window.Sortable = Sortable
 window.flatpickr = flatpickr
-Alpine.start()
+
+// Defer Alpine.start() until DOMContentLoaded so per-page bundles
+// (loaded as separate `defer` <script>s) get to define their
+// components — `window.homeApp`, etc. — BEFORE Alpine scans the DOM
+// and tries to evaluate `x-data="homeApp()"`. Without this guard
+// vendor.js (which loads first under defer) would call Alpine.start()
+// at parse time; at that point readyState is already 'interactive'
+// but home.js hasn't been executed yet, and every x-data blows up
+// with "homeApp is not defined". Wait for the actual DCL event
+// instead — that fires only after every other defer script has run.
+if (document.readyState === 'complete') {
+  Alpine.start()
+} else {
+  document.addEventListener('DOMContentLoaded', () => Alpine.start(), {
+    once: true,
+  })
+}
