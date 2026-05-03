@@ -180,7 +180,11 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
     from datetime import datetime
 
     asset.name = request.POST.get('name', asset.name)
-    asset.mimetype = request.POST.get('mimetype', asset.mimetype)
+    # mimetype is intentionally NOT pulled from the POST: it's derived
+    # from the URI/file at create time, and accepting a client-supplied
+    # update would let the row desync from the actual content (an image
+    # row marked as 'webpage', etc.). The edit modal renders mimetype
+    # read-only for the same reason.
     asset.duration = int(request.POST.get('duration') or asset.duration or 0)
     start = request.POST.get('start_date')
     end = request.POST.get('end_date')

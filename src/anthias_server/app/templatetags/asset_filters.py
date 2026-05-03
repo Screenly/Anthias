@@ -44,10 +44,16 @@ _DATE_FORMAT_MAP = {
 @register.filter
 def asset_date(value: datetime | None) -> str:
     """Format an Asset start/end datetime using the configured
-    date_format + use_24_hour_clock device settings."""
+    date_format + use_24_hour_clock device settings.
+
+    No `settings.load()` call: the AnthiasSettings singleton is loaded
+    at django.setup() time and the only writer is the Settings page
+    POST handler (which calls .save() against the same in-memory
+    object). Re-reading the .conf file on every cell of the asset
+    table — and again every 5 s on the HTMX poll — is real perf
+    overhead on long playlists, so read the cached values directly."""
     if value is None:
         return ''
-    settings.load()
     date_part = _DATE_FORMAT_MAP.get(settings['date_format'], '%m/%d/%Y')
     time_part = '%H:%M:%S' if settings['use_24_hour_clock'] else '%I:%M:%S %p'
     local = timezone.localtime(value)

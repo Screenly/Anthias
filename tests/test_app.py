@@ -2,7 +2,7 @@ import os
 import shutil
 import tempfile
 from datetime import timedelta
-from time import sleep, time
+from time import monotonic, sleep
 from types import TracebackType
 from typing import Any, Callable
 
@@ -107,10 +107,12 @@ def _wait_for_asset_in_table(
     Reads the whole-page HTML rather than holding an element reference
     so the 5 s asset-table HTMX poll (which re-renders #asset-table on
     its own clock) doesn't invalidate our handle mid-read with a
-    StaleElementReferenceException."""
-    deadline = time() + timeout
+    StaleElementReferenceException. Uses ``monotonic()`` for the
+    deadline so an NTP step / VM clock drift can't shorten or extend
+    the wait window."""
+    deadline = monotonic() + timeout
     last_err: Exception | None = None
-    while time() < deadline:
+    while monotonic() < deadline:
         try:
             if needle in browser.html:
                 return

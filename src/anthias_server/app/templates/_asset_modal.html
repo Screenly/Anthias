@@ -88,14 +88,21 @@
             <input type="text" class="form-control" id="edit-uri" :value="editAsset.uri" readonly>
             <label for="edit-uri">Asset Location</label>
           </div>
+          {# Mimetype is shown read-only — the value is derived from the
+             URI / file content at create time, and letting the user
+             flip an image asset to "webpage" (or vice-versa) only
+             desyncs the row from its actual content. assets_update
+             also ignores the posted mimetype now to prevent the same
+             desync via direct API calls. #}
           <div class="form-floating mb-3">
-            <select class="form-select" id="edit-mimetype" name="mimetype">
-              <option value="image" :selected="editAsset.mimetype === 'image'">image</option>
-              <option value="video" :selected="editAsset.mimetype === 'video'">video</option>
-              <option value="webpage" :selected="editAsset.mimetype === 'webpage'">webpage</option>
-              <option value="streaming" :selected="editAsset.mimetype === 'streaming'">streaming</option>
-            </select>
-            <label for="edit-mimetype">Type</label>
+            <input
+              type="text"
+              class="form-control"
+              id="edit-mimetype-display"
+              :value="editAsset.mimetype"
+              readonly
+            >
+            <label for="edit-mimetype-display">Type</label>
           </div>
           <div class="row">
             <div class="col-6">
