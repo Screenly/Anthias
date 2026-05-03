@@ -482,7 +482,8 @@ label { text-align: left; }
   background: var(--color-link);
   box-shadow: 0 0 0 3px rgba(102, 51, 160, 0.18);
 }
-.schedule-window--expired .schedule-window__dot {
+.schedule-window--expired .schedule-window__dot,
+.schedule-window--disabled .schedule-window__dot {
   background: var(--color-text-muted);
   box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
 }
@@ -490,6 +491,13 @@ label { text-align: left; }
   color: var(--color-text-muted);
   text-decoration: line-through;
   text-decoration-color: rgba(94, 88, 104, 0.4);
+}
+.schedule-window--disabled .schedule-window__primary {
+  color: var(--color-text-muted);
+}
+.schedule-window--scheduled .schedule-window__dot {
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
 }
 .surface--active .schedule-window__primary { color: var(--color-text-on-dark); }
 .surface--active .schedule-window__secondary { color: var(--color-text-on-dark-muted); }

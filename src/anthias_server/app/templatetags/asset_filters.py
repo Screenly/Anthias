@@ -213,6 +213,16 @@ def schedule_window(asset: Any) -> dict[str, str]:
         f'{start_local.strftime(abs_fmt)} → {end_local.strftime(abs_fmt)}'
     )
 
+    # Disabled rows aren't playing, regardless of where 'now' falls
+    # in the window — surface that explicitly so the operator doesn't
+    # see "Live · ends in 21 days" on a paused asset.
+    if not getattr(asset, 'is_enabled', True):
+        return {
+            'kind': 'disabled',
+            'primary': 'Disabled',
+            'secondary': secondary,
+        }
+
     if now < start:
         delta = start - now
         primary = (
@@ -230,7 +240,21 @@ def schedule_window(asset: Any) -> dict[str, str]:
         )
         return {'kind': 'expired', 'primary': primary, 'secondary': secondary}
 
+    # Inside the date window — but is the asset *actually playing*
+    # right this minute? Asset.is_active() folds the date window with
+    # the day-of-week filter and the play_time_from/to slot. If those
+    # exclude today/now, the asset is enabled and 'within window' but
+    # not on screen — call it "Scheduled" so we don't lie about "Live".
+    is_active = (
+        asset.is_active() if hasattr(asset, 'is_active') else True
+    )
     delta = end - now
+    if not is_active:
+        return {
+            'kind': 'scheduled',
+            'primary': 'Scheduled · off-window now',
+            'secondary': secondary,
+        }
     if delta.days >= 365:
         primary = 'Live · open-ended'
     else:
