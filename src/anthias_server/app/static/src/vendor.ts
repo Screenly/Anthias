@@ -87,31 +87,6 @@ const handleToast = (ev: Event): void => {
   )
 }
 document.addEventListener('toast', handleToast as EventListener)
-// Belt-and-suspenders: htmx's beforeOnLoad fires before the swap, so
-// even if the named-event dispatch is lost (the requesting element
-// was removed mid-flight, an extension swallowed the event, etc.),
-// we can still parse the HX-Trigger header off the XHR response and
-// pump the toast into the store ourselves.
-document.body.addEventListener('htmx:beforeOnLoad', ((ev: Event) => {
-  const xhr = (ev as CustomEvent<{ xhr?: XMLHttpRequest }>).detail?.xhr
-  if (!xhr) return
-  const header = xhr.getResponseHeader('HX-Trigger')
-  if (!header) return
-  try {
-    const parsed = JSON.parse(header) as Record<string, unknown>
-    const t = parsed['toast'] as
-      | { kind?: ToastItem['kind']; message?: string }
-      | undefined
-    if (t && t.message) {
-      ;(Alpine.store('toasts') as ToastStore).push(
-        t.kind ?? 'info',
-        t.message,
-      )
-    }
-  } catch {
-    // Plain string HX-Trigger value — not a toast payload, ignore.
-  }
-}) as EventListener)
 
 // WebSocket fan-out from the Channels AssetConsumer. The server
 // triggers `htmx.trigger('body', 'refresh-assets')` indirectly: on

@@ -1347,7 +1347,7 @@ $footer-height: 13rem;
 // -----------------------------------------------------------------------------
 // 17c. Toast stack (global)
 // -----------------------------------------------------------------------------
-.toast-stack {
+.app-toast-stack {
   position: fixed;
   top: calc(4.5rem + var(--space-4));   // below the fixed navbar
   right: var(--space-5);
@@ -1358,7 +1358,10 @@ $footer-height: 13rem;
   pointer-events: none;
   max-width: min(420px, calc(100vw - var(--space-5) * 2));
 }
-.toast {
+// `.app-toast` (not `.toast`) — Bootstrap's own .toast component sets
+// `display: none` until `.show` is added, which would invisibly black-
+// hole every notification we push into the global Alpine store.
+.app-toast {
   pointer-events: auto;
   display: flex;
   align-items: center;
@@ -1372,8 +1375,8 @@ $footer-height: 13rem;
   border-left: 4px solid var(--color-link);
 
   > i { flex: none; font-size: 1.1rem; }
-  .toast__msg { flex: 1 1 auto; min-width: 0; }
-  .toast__close {
+  .app-toast__msg { flex: 1 1 auto; min-width: 0; }
+  .app-toast__close {
     flex: none;
     background: transparent;
     border: none;
@@ -1386,9 +1389,9 @@ $footer-height: 13rem;
     &:hover { color: var(--color-text-on-dark); background: rgba(255, 255, 255, 0.08); }
   }
 }
-.toast--success { border-left-color: #34d399; > i { color: #34d399; } }
-.toast--error   { border-left-color: var(--color-danger); > i { color: var(--color-danger); } }
-.toast--info    { border-left-color: var(--color-link); > i { color: var(--color-accent); } }
+.app-toast--success { border-left-color: #34d399; > i { color: #34d399; } }
+.app-toast--error   { border-left-color: var(--color-danger); > i { color: var(--color-danger); } }
+.app-toast--info    { border-left-color: var(--color-link); > i { color: var(--color-accent); } }
 
 // -----------------------------------------------------------------------------
 // 18. Misc

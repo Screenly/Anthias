@@ -1,10 +1,10 @@
 {% comment %}Global toast stack. Driven by the Alpine.store('toasts') registered in vendor.ts. Server emits via HX-Trigger header (HTMX requests) or Django flash messages drained from the embedded JSON below (full-page redirects).{% endcomment %}
-<div class="toast-stack" aria-live="polite" aria-atomic="true" x-data>
+<div class="app-toast-stack" aria-live="polite" aria-atomic="true" x-data>
   <template x-for="t in $store.toasts.items" :key="t.id">
-    <div class="toast" :class="`toast--${t.kind}`" x-transition.opacity.duration.180ms role="status">
+    <div class="app-toast" :class="`app-toast--${t.kind}`" role="status">
       <i class="bi" :class="t.kind === 'error' ? 'bi-exclamation-triangle-fill' : t.kind === 'success' ? 'bi-check-circle-fill' : 'bi-info-circle-fill'"></i>
-      <span class="toast__msg" x-text="t.message"></span>
-      <button type="button" class="toast__close" @click="$store.toasts.dismiss(t.id)" aria-label="Dismiss">
+      <span class="app-toast__msg" x-text="t.message"></span>
+      <button type="button" class="app-toast__close" @click="$store.toasts.dismiss(t.id)" aria-label="Dismiss">
         <i class="bi bi-x"></i>
       </button>
     </div>
