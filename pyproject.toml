@@ -193,7 +193,7 @@ exclude = [
     "^\\.venv/",
     "^node_modules/",
     "/migrations/",
-    "^static/",
+    "/static/",
     "^build/",
     "^dist/",
 ]

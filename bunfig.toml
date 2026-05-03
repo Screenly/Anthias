@@ -1,3 +1,3 @@
 [test]
-preload = ["./static/src/setupTests.ts"]
-root = "./static/src"
+preload = ["./src/anthias_server/app/static/src/setupTests.ts"]
+root = "./src/anthias_server/app/static/src"
