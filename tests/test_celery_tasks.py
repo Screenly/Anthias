@@ -607,7 +607,7 @@ def test_probe_video_duration_writes_back_real_duration() -> None:
     Asset.objects.create(
         asset_id='vid-1',
         name='clip.mp4',
-        uri='/tmp/anthias_assets/x.mp4',
+        uri='/data/anthias_assets/probe-fixture.mp4',
         mimetype='video',
         duration=10,
         is_enabled=True,
@@ -633,7 +633,7 @@ def test_probe_video_duration_clears_processing_when_ffprobe_unavailable() -> (
     Asset.objects.create(
         asset_id='vid-2',
         name='clip.mp4',
-        uri='/tmp/anthias_assets/x.mp4',
+        uri='/data/anthias_assets/probe-fixture.mp4',
         mimetype='video',
         duration=10,
         is_enabled=True,
