@@ -9,8 +9,8 @@ import pytest
 from django.http import Http404, HttpRequest, HttpResponseBase
 from django.test import RequestFactory
 
-from anthias_app import views_files
-from anthias_app.views_files import (
+from anthias_server.app import views_files
+from anthias_server.app.views_files import (
     DOCKER_BRIDGE_CIDR,
     RFC1918_CIDRS,
     _client_ip,

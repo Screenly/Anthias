@@ -50,9 +50,9 @@ if [ "$START_SERVER" = true ]; then
 
     bun install && bun run build
 
-    ./manage.py makemigrations
-    ./manage.py migrate --fake-initial
-    uvicorn anthias_django.asgi:application \
+    python -m anthias_server.manage makemigrations
+    python -m anthias_server.manage migrate --fake-initial
+    uvicorn anthias_server.django_project.asgi:application \
         --host 127.0.0.1 --port 8080 &
 
     sleep 3

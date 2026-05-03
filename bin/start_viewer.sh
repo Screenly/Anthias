@@ -100,8 +100,8 @@ fi
 # --preserve-env=XDG_RUNTIME_DIR forces sudo to forward the runtime dir
 # we just set; -E alone is subject to env_check / env_delete and is not
 # guaranteed for XDG_* on Debian's default sudoers.
-sudo --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR -E -u viewer \
-    dbus-run-session /venv/bin/python -m viewer &
+sudo --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH -E -u viewer \
+    dbus-run-session /venv/bin/python -m anthias_viewer &
 
 # Wait for the viewer
 while true; do

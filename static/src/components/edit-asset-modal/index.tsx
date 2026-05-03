@@ -10,6 +10,7 @@ import { AssetTypeField } from '@/components/edit-asset-modal/asset-type-field'
 import { PlayForField } from '@/components/edit-asset-modal/play-for-field'
 import { DateFields } from '@/components/edit-asset-modal/date-fields'
 import { DurationField } from '@/components/edit-asset-modal/duration-field'
+import { ScheduleFields } from '@/components/edit-asset-modal/schedule-fields'
 import { ModalFooter } from '@/components/edit-asset-modal/modal-footer'
 import { AdvancedFields } from '@/components/edit-asset-modal/advanced'
 
@@ -35,6 +36,9 @@ export const EditAssetModal = ({
     mimetype: 'webpage',
     nocache: false,
     skip_asset_check: false,
+    play_days: [1, 2, 3, 4, 5, 6, 7],
+    play_time_from: null,
+    play_time_to: null,
   })
   const [loopTimes, setLoopTimes] = useState('manual')
   const [startDateDate, setStartDateDate] = useState('')
@@ -63,6 +67,19 @@ export const EditAssetModal = ({
         return `${hours}:${minutes}`
       }
 
+      // The v2 API rejects partial windows. Legacy / admin-edited rows
+      // could still arrive here with one side null, so collapse to both
+      // null on load — otherwise the restrict-time toggle would read
+      // "enabled" but the form would be unsaveable. Keep the original
+      // HH:MM:SS in state so opening + saving without touching the
+      // time inputs doesn't silently drop sub-minute precision; the
+      // <input type="time"> only renders HH:MM, but ScheduleFields
+      // handles that at display time.
+      const fromValue = asset.play_time_from ?? null
+      const toValue = asset.play_time_to ?? null
+      const [normalizedFrom, normalizedTo] =
+        fromValue && toValue ? [fromValue, toValue] : [null, null]
+
       setFormData({
         name: asset.name || '',
         start_date: asset.start_date || '',
@@ -71,6 +88,9 @@ export const EditAssetModal = ({
         mimetype: asset.mimetype || 'webpage',
         nocache: asset.nocache || false,
         skip_asset_check: asset.skip_asset_check || false,
+        play_days: asset.play_days ?? [1, 2, 3, 4, 5, 6, 7],
+        play_time_from: normalizedFrom,
+        play_time_to: normalizedTo,
       })
 
       setStartDateDate(formatDatePart(startDate))
@@ -221,6 +241,7 @@ export const EditAssetModal = ({
                   endDateTime={endDateTime}
                   handleDateChange={handleDateChange}
                 />
+                <ScheduleFields formData={formData} setFormData={setFormData} />
                 <DurationField
                   formData={formData}
                   handleInputChange={handleInputChange}

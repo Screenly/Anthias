@@ -4,7 +4,7 @@ from unittest import mock
 
 import pytest
 
-from lib.github import is_up_to_date
+from anthias_server.lib.github import is_up_to_date
 
 GIT_HASH_1 = 'da39a3ee5e6b4b0d3255bfef95601890afd80709'
 GIT_SHORT_HASH_1 = 'da39a3e'
@@ -15,7 +15,7 @@ logging.disable(logging.CRITICAL)
 
 
 @mock.patch(
-    'lib.github.fetch_remote_hash',
+    'anthias_server.lib.github.fetch_remote_hash',
     mock.MagicMock(return_value=(None, False)),
 )
 def test_returns_true_when_git_branch_env_missing() -> None:
@@ -98,19 +98,19 @@ def test_is_up_to_date_should_return_value_depending_on_git_hashes(
 
     with (
         mock.patch(
-            'lib.github.fetch_remote_hash',
+            'anthias_server.lib.github.fetch_remote_hash',
             mock.MagicMock(return_value=(latest_remote_hash, False)),
         ),
         mock.patch(
-            'lib.github.get_git_hash',
+            'anthias_server.lib.github.get_git_hash',
             mock.MagicMock(return_value=git_hash),
         ),
         mock.patch(
-            'lib.github.get_git_short_hash',
+            'anthias_server.lib.github.get_git_short_hash',
             mock.MagicMock(return_value=git_short_hash),
         ),
         mock.patch(
-            'lib.github.is_running_latest_published_image',
+            'anthias_server.lib.github.is_running_latest_published_image',
             mock.MagicMock(return_value=published_match),
         ),
     ):

@@ -22,7 +22,7 @@ services:
       # Pin the test DB to the writable volume mount on /data so CI
       # keeps its historic location. Local runs (no override) fall back
       # to a repo-local path inside BASE_DIR — see
-      # anthias_django/settings.py.
+      # src/anthias_server/django_project/settings.py.
       - ANTHIAS_TEST_DB_PATH=/data/.anthias/test.db
     stdin_open: true
     tty: true
@@ -39,7 +39,7 @@ services:
     image: anthias-test:dev
     build: *test_build
     command: >
-      celery -A celery_tasks.celery worker -B -n worker@anthias
+      celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
       --loglevel=info --schedule /tmp/celerybeat-schedule
     depends_on:
       anthias-test:

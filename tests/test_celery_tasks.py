@@ -7,10 +7,10 @@ from unittest import mock
 
 import pytest
 
-import celery_tasks as celery_tasks_module
-from anthias_app.models import Asset
-from celery_tasks import celery as celeryapp
-from celery_tasks import (
+import anthias_server.celery_tasks as celery_tasks_module
+from anthias_server.app.models import Asset
+from anthias_server.celery_tasks import celery as celeryapp
+from anthias_server.celery_tasks import (
     ASSET_REVALIDATION_LOCK_KEY,
     asset_recheck_lock_key,
     cleanup,
@@ -21,7 +21,7 @@ from celery_tasks import (
     send_telemetry_task,
     shutdown_anthias,
 )
-from settings import settings
+from anthias_server.settings import settings
 
 
 def _set_mtime(file_path: str, age_seconds: int) -> None:
@@ -168,7 +168,7 @@ def test_get_display_power_writes_redis() -> None:
     with (
         mock.patch.object(celery_tasks_module, 'r', fake_redis),
         mock.patch(
-            'celery_tasks.diagnostics.get_display_power',
+            'anthias_server.celery_tasks.diagnostics.get_display_power',
             return_value=True,
         ),
     ):
@@ -179,7 +179,7 @@ def test_get_display_power_writes_redis() -> None:
 
 
 def test_send_telemetry_task_dispatches() -> None:
-    """The hourly Celery task is a thin wrapper over lib.telemetry."""
+    """The hourly Celery task is a thin wrapper over anthias_server.lib.telemetry."""
     with mock.patch.object(celery_tasks_module, 'send_telemetry') as mock_send:
         send_telemetry_task.apply()
     mock_send.assert_called_once_with()
@@ -282,7 +282,9 @@ def eager_celery() -> None:
 @pytest.mark.django_db
 def test_sweep_marks_unreachable_when_url_fails(eager_celery: None) -> None:
     _make_revalidation_asset()
-    with mock.patch('celery_tasks.url_fails', return_value=True):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=True
+    ):
         revalidate_asset_urls.apply()
     assert not Asset.objects.get(asset_id='a1').is_reachable
 
@@ -290,7 +292,9 @@ def test_sweep_marks_unreachable_when_url_fails(eager_celery: None) -> None:
 @pytest.mark.django_db
 def test_sweep_marks_reachable_when_url_succeeds(eager_celery: None) -> None:
     _make_revalidation_asset(is_reachable=False)
-    with mock.patch('celery_tasks.url_fails', return_value=False):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=False
+    ):
         revalidate_asset_urls.apply()
     assert Asset.objects.get(asset_id='a1').is_reachable
 
@@ -301,7 +305,9 @@ def test_sweep_updates_last_reachability_check(eager_celery: None) -> None:
 
     _make_revalidation_asset()
     before = timezone.now()
-    with mock.patch('celery_tasks.url_fails', return_value=False):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=False
+    ):
         revalidate_asset_urls.apply()
     last = Asset.objects.get(asset_id='a1').last_reachability_check
     assert last is not None
@@ -311,7 +317,9 @@ def test_sweep_updates_last_reachability_check(eager_celery: None) -> None:
 @pytest.mark.django_db
 def test_sweep_skips_disabled_assets(eager_celery: None) -> None:
     _make_revalidation_asset(is_enabled=False, is_reachable=True)
-    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=True
+    ) as m:
         revalidate_asset_urls.apply()
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').is_reachable
@@ -320,7 +328,9 @@ def test_sweep_skips_disabled_assets(eager_celery: None) -> None:
 @pytest.mark.django_db
 def test_sweep_skips_processing_assets(eager_celery: None) -> None:
     _make_revalidation_asset(is_processing=True)
-    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=True
+    ) as m:
         revalidate_asset_urls.apply()
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').is_reachable
@@ -335,7 +345,7 @@ def test_sweep_skips_skip_asset_check_assets_entirely(
     exposes that field as 'last check' and writing it without an
     actual probe would advertise a check that never happened."""
     _make_revalidation_asset(skip_asset_check=True)
-    with mock.patch('celery_tasks.url_fails') as m:
+    with mock.patch('anthias_server.celery_tasks.url_fails') as m:
         revalidate_asset_urls.apply()
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').is_reachable
@@ -349,7 +359,7 @@ def test_sweep_local_file_existence_check(eager_celery: None) -> None:
         local = fh.name
     try:
         _make_revalidation_asset(uri=local)
-        with mock.patch('celery_tasks.url_fails') as m:
+        with mock.patch('anthias_server.celery_tasks.url_fails') as m:
             revalidate_asset_urls.apply()
         m.assert_not_called()
         assert Asset.objects.get(asset_id='a1').is_reachable
@@ -374,7 +384,9 @@ def test_sweep_probe_exception_does_not_kill_sweep(
             raise RuntimeError('synthetic')
         return False
 
-    with mock.patch('celery_tasks.url_fails', side_effect=fake_url_fails):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', side_effect=fake_url_fails
+    ):
         revalidate_asset_urls.apply()
 
     # 'boom' is left as-is (we don't have a probe result to write),
@@ -392,7 +404,9 @@ def test_sweep_lock_prevents_overlap(eager_celery: None) -> None:
     _make_revalidation_asset()
     # Pre-acquire the lock to simulate a sweep already in flight.
     celery_tasks_module.r.set(ASSET_REVALIDATION_LOCK_KEY, 'someone-else')
-    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=True
+    ) as m:
         revalidate_asset_urls.apply()
     # The sweep saw the lock and exited without probing.
     m.assert_not_called()
@@ -415,7 +429,9 @@ def test_sweep_lock_release_does_not_clobber_different_holder(
         celery_tasks_module.r.set(ASSET_REVALIDATION_LOCK_KEY, 'someone-else')
         return False  # url_fails return — asset is reachable
 
-    with mock.patch('celery_tasks.url_fails', side_effect=steal_during_sweep):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', side_effect=steal_during_sweep
+    ):
         revalidate_asset_urls.apply()
 
     # Compare-and-delete saw a token mismatch and left the lock alone.
@@ -430,7 +446,9 @@ def test_sweep_lock_released_after_clean_run(eager_celery: None) -> None:
     """The finally clause must release the lock so the next beat tick
     can run."""
     _make_revalidation_asset()
-    with mock.patch('celery_tasks.url_fails', return_value=False):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=False
+    ):
         revalidate_asset_urls.apply()
     assert celery_tasks_module.r.get(ASSET_REVALIDATION_LOCK_KEY) is None
 
@@ -471,7 +489,7 @@ def _make_recheck_asset(**kwargs: object) -> Asset:
 def test_recheck_no_op_when_asset_does_not_exist(
     eager_celery_recheck: None,
 ) -> None:
-    with mock.patch('celery_tasks.url_fails') as m:
+    with mock.patch('anthias_server.celery_tasks.url_fails') as m:
         revalidate_asset_url.apply(args=('nope',))
     m.assert_not_called()
     assert celery_tasks_module.r.get(asset_recheck_lock_key('nope')) is None
@@ -480,7 +498,9 @@ def test_recheck_no_op_when_asset_does_not_exist(
 @pytest.mark.django_db
 def test_recheck_flips_is_reachable(eager_celery_recheck: None) -> None:
     _make_recheck_asset(is_reachable=True)
-    with mock.patch('celery_tasks.url_fails', return_value=True):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=True
+    ):
         revalidate_asset_url.apply(args=('a1',))
     assert not Asset.objects.get(asset_id='a1').is_reachable
 
@@ -495,7 +515,9 @@ def test_recheck_lock_prevents_back_to_back_probes(
     _make_recheck_asset(is_reachable=False)
     # Pre-acquire the cooldown lock to simulate a recent probe.
     celery_tasks_module.r.set(asset_recheck_lock_key('a1'), '1')
-    with mock.patch('celery_tasks.url_fails', return_value=False) as m:
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=False
+    ) as m:
         revalidate_asset_url.apply(args=('a1',))
     m.assert_not_called()
     assert not Asset.objects.get(asset_id='a1').is_reachable
@@ -509,7 +531,9 @@ def test_recheck_acquires_lock_when_running(
     gate is what prevents concurrent ffprobe calls for the same asset
     across workers."""
     _make_recheck_asset()
-    with mock.patch('celery_tasks.url_fails', return_value=False):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=False
+    ):
         revalidate_asset_url.apply(args=('a1',))
     assert celery_tasks_module.r.get(asset_recheck_lock_key('a1')) == '1'
 
@@ -519,7 +543,9 @@ def test_recheck_skips_disabled_asset(
     eager_celery_recheck: None,
 ) -> None:
     _make_recheck_asset(is_enabled=False, is_reachable=True)
-    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=True
+    ) as m:
         revalidate_asset_url.apply(args=('a1',))
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').is_reachable
@@ -531,7 +557,9 @@ def test_recheck_skips_processing_asset(
     eager_celery_recheck: None,
 ) -> None:
     _make_recheck_asset(is_processing=True)
-    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=True
+    ) as m:
         revalidate_asset_url.apply(args=('a1',))
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').is_reachable
@@ -545,7 +573,7 @@ def test_recheck_skips_skip_asset_check_asset(
     """Operator opted out of validation; matches sweep behavior of not
     touching is_reachable / last_reachability_check."""
     _make_recheck_asset(skip_asset_check=True, is_reachable=True)
-    with mock.patch('celery_tasks.url_fails') as m:
+    with mock.patch('anthias_server.celery_tasks.url_fails') as m:
         revalidate_asset_url.apply(args=('a1',))
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').last_reachability_check is None
@@ -558,6 +586,8 @@ def test_recheck_runs_when_no_lock_held(
 ) -> None:
     """No lock held → SETNX succeeds → probe runs."""
     _make_recheck_asset(is_reachable=False)
-    with mock.patch('celery_tasks.url_fails', return_value=False):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=False
+    ):
         revalidate_asset_url.apply(args=('a1',))
     assert Asset.objects.get(asset_id='a1').is_reachable

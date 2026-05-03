@@ -74,6 +74,9 @@ export const AssetRow = forwardRef<HTMLTableRowElement, AssetRowProps>(
           is_enabled: props.isEnabled,
           nocache: props.nocache,
           skip_asset_check: props.skipAssetCheck,
+          play_days: props.playDays,
+          play_time_from: props.playTimeFrom,
+          play_time_to: props.playTimeTo,
         })
       }
     }

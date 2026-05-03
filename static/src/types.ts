@@ -16,6 +16,9 @@ export interface Asset {
   is_active: boolean
   play_order: number
   is_processing: boolean
+  play_days: number[]
+  play_time_from: string | null
+  play_time_to: string | null
 }
 
 export interface AssetEditData {
@@ -30,6 +33,9 @@ export interface AssetEditData {
   nocache: boolean
   skip_asset_check: boolean
   play_order?: number
+  play_days: number[]
+  play_time_from: string | null
+  play_time_to: string | null
 }
 
 export interface EditFormData {
@@ -40,6 +46,9 @@ export interface EditFormData {
   mimetype: string
   nocache: boolean
   skip_asset_check: boolean
+  play_days: number[]
+  play_time_from: string | null
+  play_time_to: string | null
 }
 
 export interface HandleSubmitParams {
@@ -155,6 +164,9 @@ export interface AssetRowProps {
   dragHandleProps?: React.HTMLAttributes<HTMLElement>
   isDragging?: boolean
   onEditAsset?: (asset: AssetEditData) => void
+  playDays: number[]
+  playTimeFrom: string | null
+  playTimeTo: string | null
 }
 
 // Settings-related types

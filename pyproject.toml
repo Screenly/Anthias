@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "anthias"
 version = "0.20.4"
@@ -5,6 +9,14 @@ description = "The world's most popular open source digital signage project."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = []
+
+[project.scripts]
+anthias-manage = "anthias_server.manage:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["anthias_*"]
+namespaces = false
 
 [dependency-groups]
 dev-host = [
@@ -106,7 +118,7 @@ test = [
     { include-group = "dev" },
 ]
 # Used by the python-mypy CI job. The django-stubs plugin imports
-# anthias_django.settings to introspect the app registry, so we need the
+# anthias_server.django_project.settings to introspect the app registry, so we need the
 # runtime deps that settings touches — but not the heavy native-extension
 # deps from the server group (cec, netifaces, etc.). We also include
 # docker-image-builder so its tools (pygit2, python_on_whales) resolve.
@@ -125,8 +137,8 @@ mypy = [
 ]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "anthias_django.settings"
-testpaths = ["tests", "api/tests"]
+DJANGO_SETTINGS_MODULE = "anthias_server.django_project.settings"
+testpaths = ["tests", "src/anthias_server/api/tests"]
 python_files = ["test_*.py"]
 markers = [
     "integration: marks tests as integration (deselect with '-m \"not integration\"')",
@@ -136,26 +148,24 @@ addopts = "--strict-markers"
 [tool.coverage.run]
 branch = true
 source = [
-    "anthias_app",
-    "api",
-    "celery_tasks",
-    "lib",
-    "settings",
-    "viewer",
+    "src/anthias_server",
+    "src/anthias_common",
+    "src/anthias_viewer",
 ]
 omit = [
     "*/migrations/*",
     "*/__init__.py",
-    "anthias_django/asgi.py",
-    "anthias_django/routing.py",
-    "anthias_django/urls.py",
-    "anthias_django/wsgi.py",
-    "anthias_app/management/*",
+    "src/anthias_server/django_project/asgi.py",
+    "src/anthias_server/django_project/routing.py",
+    "src/anthias_server/django_project/urls.py",
+    "src/anthias_server/django_project/wsgi.py",
+    "src/anthias_server/app/management/*",
+    "src/anthias_server/manage.py",
+    "src/anthias_host_agent/*",
     "bin/*",
-    "host_agent.py",
-    "raspberry_pi_imager/*",
+    "tools/raspberry_pi_imager/*",
     "tools/image_builder/*",
-    "viewer/__main__.py",
+    "src/anthias_viewer/__main__.py",
 ]
 
 [tool.coverage.report]
@@ -176,7 +186,8 @@ output = "coverage.xml"
 python_version = "3.13"
 strict = true
 follow_imports = "normal"
-mypy_path = "stubs"
+mypy_path = ["src", "stubs"]
+explicit_package_bases = true
 plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
 exclude = [
     "^\\.venv/",
@@ -204,4 +215,4 @@ module = [
 ignore_missing_imports = true
 
 [tool.django-stubs]
-django_settings_module = "anthias_django.settings"
+django_settings_module = "anthias_server.django_project.settings"

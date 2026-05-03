@@ -1,5 +1,5 @@
 line-length = 79
-exclude = ["anthias_app/migrations/*.py"]
+exclude = ["src/anthias_server/app/migrations/*.py", "src/anthias_server/api/migrations/*.py"]
 target-version = "py313"
 
 [format]
