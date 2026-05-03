@@ -135,12 +135,27 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         for chunk in file_upload.chunks():
             f.write(chunk)
 
+    mimetype = file_type.split('/')[0]
+    if mimetype == 'video':
+        # Probe the actual video duration so the row stores something
+        # meaningful instead of the default-duration placeholder; React's
+        # upload flow does the same via get_video_duration.
+        from anthias_common.utils import get_video_duration
+        probed = get_video_duration(final_path)
+        duration = (
+            int(probed.total_seconds())
+            if probed is not None
+            else settings['default_duration']
+        )
+    else:
+        duration = settings['default_duration']
+
     now = timezone.now()
     Asset.objects.create(
         name=file_upload.name,
         uri=final_path,
-        mimetype=file_type.split('/')[0],
-        duration=settings['default_duration'],
+        mimetype=mimetype,
+        duration=duration,
         is_enabled=True,
         is_processing=False,
         play_order=0,

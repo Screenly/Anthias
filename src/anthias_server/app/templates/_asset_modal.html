@@ -12,18 +12,17 @@
       <button type="button" class="btn-close" @click="closeModal()"></button>
     </div>
     <div class="card-body">
-      <ul class="nav nav-tabs mb-3" x-data="{ tab: 'uri' }" x-show="mode === 'add'">
-        <li class="nav-item">
-          <button type="button" class="nav-link" :class="tab === 'uri' && 'active'" @click="tab = 'uri'">URI</button>
-        </li>
-        <li class="nav-item">
-          <button type="button" class="nav-link" :class="tab === 'file' && 'active'" @click="tab = 'file'">File Upload</button>
-        </li>
-      </ul>
-
-      <template x-if="mode === 'add'">
-        <div>
+      <div x-show="mode === 'add'" x-data="{ tab: 'uri' }">
+          <ul class="nav nav-tabs mb-3">
+            <li class="nav-item">
+              <button type="button" id="tab-uri" class="nav-link" :class="tab === 'uri' && 'active'" @click="tab = 'uri'">URI</button>
+            </li>
+            <li class="nav-item">
+              <button type="button" class="nav-link upload-asset-tab" :class="tab === 'file' && 'active'" @click="tab = 'file'">File Upload</button>
+            </li>
+          </ul>
           <form
+            x-show="tab === 'uri'"
             method="post"
             action="{% url 'anthias_app:assets_create' %}"
             hx-post="{% url 'anthias_app:assets_create' %}"
@@ -39,13 +38,12 @@
             </div>
             <div class="text-end">
               <button type="button" class="btn btn-link text-secondary" @click="closeModal()">Back to Assets</button>
-              <button type="submit" class="btn btn-primary">Save</button>
+              <button type="submit" id="add-form" class="btn btn-primary">Save</button>
             </div>
           </form>
 
-          <hr>
-
           <form
+            x-show="tab === 'file'"
             method="post"
             action="{% url 'anthias_app:assets_upload' %}"
             enctype="multipart/form-data"
@@ -53,19 +51,18 @@
             hx-encoding="multipart/form-data"
             hx-target="#asset-table"
             hx-swap="outerHTML"
-            hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); htmx.trigger('body', 'refresh-assets'); }"
+            hx-on::after-request="if (event.detail.successful) { htmx.trigger('body', 'refresh-assets'); }"
           >
             {% csrf_token %}
             <div class="mb-3">
-              <label for="add-file" class="form-label">Or upload a file (image / video)</label>
-              <input type="file" class="form-control" id="add-file" name="file_upload" accept="image/*,video/*">
+              <label for="add-file" class="form-label">Upload a file (image / video)</label>
+              <input type="file" class="form-control" id="add-file" name="file_upload" accept="image/*,video/*" onchange="this.form.requestSubmit()">
             </div>
             <div class="text-end">
               <button type="submit" class="btn btn-primary">Upload</button>
             </div>
           </form>
-        </div>
-      </template>
+      </div>
 
       <template x-if="mode === 'edit' && editAsset">
         <form
