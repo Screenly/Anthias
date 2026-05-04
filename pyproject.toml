@@ -143,7 +143,19 @@ python_files = ["test_*.py"]
 markers = [
     "integration: marks tests as integration (deselect with '-m \"not integration\"')",
 ]
-addopts = "--strict-markers"
+# pytest-playwright config:
+#   --browser chromium       - skip firefox/webkit (only chromium is
+#                              installed in docker/Dockerfile.test).
+#   --tracing retain-on-failure
+#                            - per-test trace; dropped for green tests,
+#                              drained to test-artifacts/<id>/trace.zip
+#                              on failure. `playwright show-trace
+#                              trace.zip` replays.
+#   --screenshot only-on-failure
+#                            - full-page PNG into the same per-test dir.
+#   --output test-artifacts  - directory the GH Actions upload-artifact
+#                              step picks up (.gitignored).
+addopts = "--strict-markers --browser chromium --tracing retain-on-failure --screenshot only-on-failure --output test-artifacts"
 
 [tool.coverage.run]
 branch = true

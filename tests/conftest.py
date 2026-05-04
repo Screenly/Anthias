@@ -32,11 +32,9 @@ Three concerns are handled here, in order:
 
 import importlib.util
 import os
-import re
 import sys
 import types
-from collections.abc import Generator, Iterator
-from pathlib import Path
+from collections.abc import Iterator
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -239,70 +237,13 @@ def _ensure_assetdir() -> None:
         os.makedirs(asset_dir, exist_ok=True)
 
 
-# ---------------------------------------------------------------------------
-# 4. Browser-test failure artifacts (Playwright screenshot + page HTML)
-# ---------------------------------------------------------------------------
-#
-# When an integration test using the ``page`` fixture fails, drop a
-# full-page screenshot and the rendered HTML into ``test-artifacts/``
-# so the GH Actions ``upload-artifact`` step can attach them to the
-# workflow run. The run page links the bundle from the bottom of the
-# PR's checks tab. Passing tests produce nothing.
-#
-# The ``test-artifacts/`` directory is gitignored and lives at the repo
-# root; the test container's bind-mount (``.:/usr/src/app``) means
-# anything we write here is visible on the host runner without an
-# extra ``docker cp``. Override the location via PYTEST_ARTIFACTS_DIR
-# if a future setup wants per-attempt subdirs.
-
-_ARTIFACTS_DIR = Path(os.environ.get('PYTEST_ARTIFACTS_DIR', 'test-artifacts'))
-
-
-def _safe_node_id(node_id: str) -> str:
-    """Turn a pytest nodeid like ``tests/test_app.py::test_foo`` into a
-    filename-safe stem. Stripping path slashes plus ``::`` separators
-    keeps the artifact name short and ext4/NTFS-portable."""
-    return re.sub(r'[^A-Za-z0-9_.-]+', '_', node_id).strip('_')
-
-
-@pytest.hookimpl(hookwrapper=True)
-def pytest_runtest_makereport(
-    item: pytest.Item, call: pytest.CallInfo[None]
-) -> Generator[None, None, None]:
-    """Grab a screenshot + HTML when an integration test using the
-    ``page`` fixture fails.
-
-    Hooks at ``call`` phase only (not setup/teardown) — a teardown
-    failure usually indicates the page is already closed, so the
-    screenshot call would just raise. Errors from the artifact-write
-    paths are swallowed: a flaky screenshot must not mask the original
-    test failure.
-    """
-    # ``hookwrapper=True`` makes pluggy send the call's Result back
-    # into the generator on yield. mypy can't see that through
-    # _pytest's stubs, so type the receive as Any.
-    outcome: Any = yield
-    report = outcome.get_result()
-    if report.when != 'call' or not report.failed:
-        return
-    page = item.funcargs.get('page') if hasattr(item, 'funcargs') else None
-    if page is None:
-        return
-
-    _ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-    stem = _safe_node_id(item.nodeid)
-    try:
-        page.screenshot(
-            path=str(_ARTIFACTS_DIR / f'{stem}.png'), full_page=True
-        )
-    except Exception:
-        pass
-    try:
-        (_ARTIFACTS_DIR / f'{stem}.html').write_text(
-            page.content(), encoding='utf-8'
-        )
-    except Exception:
-        pass
+# Browser-test failure artifacts are owned by pytest-playwright. The
+# `--tracing retain-on-failure --screenshot only-on-failure
+# --output test-artifacts` flags in pyproject.toml's addopts make it
+# write `<output>/<test-id>/{trace.zip,test-failed-1.png}` for failed
+# tests and nothing for passing ones. The GH Actions
+# upload-artifact@v7 step in test-runner.yml uploads the directory on
+# job failure, where the trace replays via `playwright show-trace`.
 
 
 @pytest.fixture(autouse=True)

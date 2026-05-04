@@ -33,14 +33,14 @@ import json
 import os
 import shutil
 import tempfile
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from datetime import timedelta
 from time import monotonic, sleep
 from typing import Any
 
 import pytest
 from django.utils import timezone
-from playwright.sync_api import Browser, Page, expect, sync_playwright
+from playwright.sync_api import Page, expect
 
 from anthias_server.app.models import Asset
 from anthias_server.settings import settings
@@ -239,30 +239,48 @@ def _drag_handle_to_row(
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope='session')
-def _playwright() -> Iterator[Any]:
-    with sync_playwright() as pw:
-        yield pw
+# pytest-playwright supplies the `page` fixture. The CLI flags below
+# (set in pyproject.toml addopts) control its behaviour:
+#   --headed=false          headless chromium
+#   --browser chromium      run only chromium (skip firefox/webkit)
+#   --tracing retain-on-failure
+#                           start a per-test trace, drop it for green
+#                           tests, drain to <output>/.../trace.zip on
+#                           failure (`playwright show-trace` replays)
+#   --screenshot only-on-failure
+#                           full-page PNG into the same per-test dir
+#                           on failure
+#   --output test-artifacts the failure bundle directory the GH
+#                           Actions upload-artifact step picks up
+#
+# Browser context args (viewport, default timeout) come from the
+# fixture override below — pytest-playwright merges these into its
+# new_context() call.
 
 
 @pytest.fixture(scope='session')
-def _browser(_playwright: Any) -> Iterator[Browser]:
-    browser = _playwright.chromium.launch(headless=True, args=['--no-sandbox'])
-    try:
-        yield browser
-    finally:
-        browser.close()
+def browser_context_args(
+    browser_context_args: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        **browser_context_args,
+        'viewport': {'width': 1400, 'height': 900},
+    }
 
 
-@pytest.fixture
-def page(_browser: Browser) -> Iterator[Page]:
-    context = _browser.new_context(viewport={'width': 1400, 'height': 900})
-    context.set_default_timeout(DEFAULT_TIMEOUT_MS)
-    page = context.new_page()
-    try:
-        yield page
-    finally:
-        context.close()
+@pytest.fixture(scope='session')
+def browser_type_launch_args(
+    browser_type_launch_args: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        **browser_type_launch_args,
+        'args': [*browser_type_launch_args.get('args', []), '--no-sandbox'],
+    }
+
+
+@pytest.fixture(autouse=True)
+def _default_timeout(page: Page) -> None:
+    page.set_default_timeout(DEFAULT_TIMEOUT_MS)
 
 
 @pytest.fixture
