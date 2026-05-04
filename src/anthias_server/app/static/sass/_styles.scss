@@ -267,28 +267,36 @@ label { text-align: left; }
   &:hover { color: var(--color-text); text-decoration: underline; }
 }
 
-// Icon-only square button (used for asset row actions and modal close).
+// Icon-only square button — borderless on either surface; the
+// surrounding `.surface--active` flips contrast (see below) so the same
+// markup renders correctly on the white inactive table AND the dark
+// active card.
 .app-btn-icon {
   padding: 0.5rem;
   width: 2.25rem;
   height: 2.25rem;
   flex: none;
   font-size: 0.95rem;
-}
-
-// On-dark outline (active section, app-nav)
-.app-btn-outline-light {
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.5);
   background: transparent;
-  &:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: #ffffff;
-    color: #ffffff;
+  border: 1px solid transparent;
+  color: var(--color-text-muted);
+
+  &:hover:not(:disabled):not(.disabled) {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--color-text);
   }
 }
 
-// On-light outline (inactive section, settings)
+.surface--active .app-btn-icon {
+  color: var(--color-text-on-dark-muted);
+
+  &:hover:not(:disabled):not(.disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-on-dark);
+  }
+}
+
+// On-light outline (settings page — Backup / Reboot etc.)
 .app-btn-outline-dark {
   color: var(--color-text);
   border-color: rgba(0, 0, 0, 0.18);
