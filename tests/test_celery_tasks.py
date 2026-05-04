@@ -697,13 +697,16 @@ def fake_youtube_dl() -> Iterator[mock.MagicMock]:
         import types
 
         fake_module = types.ModuleType('yt_dlp')
-        fake_module.YoutubeDL = fake_cls
+        # setattr keeps mypy happy on a dynamically-created ModuleType
+        # (a static `module.attr = ...` assignment is `attr-defined`
+        # under --strict).
+        setattr(fake_module, 'YoutubeDL', fake_cls)
         utils_mod = types.ModuleType('yt_dlp.utils')
 
         class FakeDownloadError(Exception):
             pass
 
-        utils_mod.DownloadError = FakeDownloadError
+        setattr(utils_mod, 'DownloadError', FakeDownloadError)
         sys.modules['yt_dlp'] = fake_module
         sys.modules['yt_dlp.utils'] = utils_mod
         # Exposing the inst lets the test reach `.extract_info` to set

@@ -171,9 +171,7 @@ def assets_create(request: HttpRequest) -> HttpResponse:
         lower = uri.lower()
         if lower.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg')):
             mimetype = 'image'
-        elif lower.endswith(
-            ('.mp4', '.mov', '.mkv', '.webm', '.avi', '.flv')
-        ):
+        elif lower.endswith(('.mp4', '.mov', '.mkv', '.webm', '.avi', '.flv')):
             mimetype = 'video'
 
     now = timezone.now()

@@ -222,6 +222,8 @@ module = [
     "pydbus",
     "sh",
     "vlc",
+    "yt_dlp",
+    "yt_dlp.*",
 ]
 ignore_missing_imports = true
 

@@ -233,6 +233,7 @@ def test_assets_create_routes_youtube_to_celery(client: Client) -> None:
     assert row is not None
     assert row.mimetype == 'video'
     assert row.is_processing is True
+    assert row.uri is not None
     assert row.uri.endswith(f'{row.asset_id}.mp4')
     assert row.duration == 0
 
