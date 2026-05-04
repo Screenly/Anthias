@@ -2,8 +2,9 @@
   "name": "anthias",
   "version": "1.0.0",
   "scripts": {
-    "build:vendor": "bun build ./src/anthias_server/app/static/src/vendor.ts --outfile=./src/anthias_server/app/static/dist/js/vendor.js --target=browser --production",
-    "build:home": "bun build ./src/anthias_server/app/static/src/home.ts --outfile=./src/anthias_server/app/static/dist/js/home.js --target=browser --production",
+    "_build_note": "Alpine evaluates @click expressions against a `with(scope)`-style closure at runtime. Bun's --minify-identifiers renames internal Alpine vars (and our handler names in home.ts) in ways that break that lookup — silently. Stick to whitespace+syntax minification, which trims the bundle by half without touching identifiers.",
+    "build:vendor": "bun build ./src/anthias_server/app/static/src/vendor.ts --outfile=./src/anthias_server/app/static/dist/js/vendor.js --target=browser --minify-whitespace --minify-syntax",
+    "build:home": "bun build ./src/anthias_server/app/static/src/home.ts --outfile=./src/anthias_server/app/static/dist/js/home.js --target=browser --minify-whitespace --minify-syntax",
     "build:css:tailwind": "bunx @tailwindcss/cli -i src/anthias_server/app/static/src/tailwind.css -o src/anthias_server/app/static/dist/css/tailwind.css --minify",
     "build:css:components": "bunx sass src/anthias_server/app/static/sass/anthias.scss src/anthias_server/app/static/dist/css/anthias.css --load-path=node_modules --style=compressed --quiet-deps --silence-deprecation=import,global-builtin,color-functions,if-function",
     "build:css": "bun run build:css:tailwind && bun run build:css:components",
@@ -25,8 +26,7 @@
     "@tabler/icons-webfont": "^3.41.1",
     "alpinejs": "^3.15.12",
     "flatpickr": "^4.6.13",
-    "htmx.org": "^2.0.10",
-    "sortablejs": "^1.15.7"
+    "htmx.org": "^2.0.10"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.2.4",

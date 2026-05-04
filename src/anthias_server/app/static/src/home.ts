@@ -1,26 +1,16 @@
-// Home page (Schedule Overview) client logic. Exposes `homeApp()`
-// for the Alpine x-data on home.html and the `initAssetTableSortable`
-// helper that the asset-table partial calls from a tiny inline script
-// (the `{% url 'anthias_app:assets_order' %}` value is the only
-// reason that line stays in the template; everything else lives here
-// so we get TypeScript type-checking instead of debugging inline
-// strings via devtools).
-//
-// Loaded by home.html as a deferred bundle alongside vendor.js, so
-// window.flatpickr / window.Sortable are guaranteed to exist by the
-// time `requestAnimationFrame` fires the modal binding callback.
+// Home page (Schedule Overview) client logic. Loaded by home.html as
+// a deferred bundle alongside vendor.js, so window.flatpickr is
+// guaranteed to exist by the time `requestAnimationFrame` fires the
+// modal binding callback.
 
 import type Alpine from 'alpinejs'
-import type SortableLib from 'sortablejs'
 import type flatpickrLib from 'flatpickr'
 
 declare global {
   interface Window {
     Alpine: typeof Alpine
-    Sortable: typeof SortableLib
     flatpickr: typeof flatpickrLib
     homeApp: () => HomeAppData
-    initAssetTableSortable: (orderUrl: string) => void
   }
 }
 
@@ -321,91 +311,143 @@ function installProcessingToastWatcher(): void {
   })
 }
 
-// Bind Sortable on the active-rows tbody. Idempotent: each call
-// destroys any existing instance on the tbody before creating a fresh
-// one, so we can call this from both DOMContentLoaded and the
-// htmx:afterSwap watcher without leaking listeners.
-function bindActiveRowsSortable(): void {
-  if (!window.Sortable) return
+type HtmxLike = { trigger: (target: string, event: string) => void }
+
+function postOrder(orderUrl: string, tbody: HTMLElement): void {
+  const ids = Array.from(tbody.children)
+    .map((tr) => (tr as HTMLElement).dataset.assetId)
+    .filter(Boolean)
+    .join(',')
+  const fd = new FormData()
+  fd.append('ids', ids)
+  const refresh = () =>
+    (window as unknown as { htmx: HtmxLike }).htmx.trigger(
+      'body',
+      'refresh-assets',
+    )
+  fetch(orderUrl, {
+    method: 'POST',
+    body: fd,
+    headers: {
+      'X-CSRFToken': csrfToken(),
+      'HX-Request': 'true',
+    },
+  })
+    .then((r) => {
+      if (!r.ok) {
+        console.error('reorder POST failed:', r.status, r.statusText)
+      }
+      refresh()
+    })
+    .catch((err) => {
+      console.error('reorder POST errored:', err)
+      refresh()
+    })
+}
+
+// Vanilla pointer-events drag-to-reorder. We intentionally don't use
+// SortableJS — its <tr> handling kept silently failing under what
+// looked like correct configuration, and the whole library is
+// overkill for "swap rows in one tbody and POST the new order".
+//
+// The dragged <tr> stays in place while the cursor moves; on every
+// pointermove we find the row under the cursor and reinsert the
+// dragged row before/after it based on which half of the row the
+// cursor is over. On pointerup we POST the resulting id sequence.
+function bindActiveRowsDrag(tbody: HTMLElement, orderUrl: string): void {
+  if (tbody.dataset.dragBound === '1') return
+  tbody.dataset.dragBound = '1'
+
+  let dragRow: HTMLTableRowElement | null = null
+  let pointerId = -1
+  let moved = false
+
+  const cleanup = (): void => {
+    document.removeEventListener('pointermove', onMove)
+    document.removeEventListener('pointerup', onUp)
+    document.removeEventListener('pointercancel', onUp)
+    if (dragRow) {
+      dragRow.classList.remove('is-dragging')
+      dragRow = null
+    }
+  }
+
+  const onMove = (ev: PointerEvent): void => {
+    if (!dragRow || ev.pointerId !== pointerId) return
+    const overEl = document.elementFromPoint(ev.clientX, ev.clientY)
+    const overRow = overEl?.closest('tr') as HTMLTableRowElement | null
+    if (!overRow || overRow === dragRow) return
+    if (overRow.parentElement !== tbody) return
+    const rect = overRow.getBoundingClientRect()
+    const before = ev.clientY < rect.top + rect.height / 2
+    tbody.insertBefore(dragRow, before ? overRow : overRow.nextSibling)
+    moved = true
+  }
+
+  const onUp = (ev: PointerEvent): void => {
+    if (ev.pointerId !== pointerId) return
+    const didMove = moved
+    cleanup()
+    if (didMove) postOrder(orderUrl, tbody)
+  }
+
+  tbody.addEventListener('pointerdown', (ev: PointerEvent) => {
+    if (ev.button !== 0) return
+    const handle = (ev.target as HTMLElement).closest('.drag-handle')
+    if (!handle) return
+    const row = handle.closest('tr') as HTMLTableRowElement | null
+    if (!row || row.parentElement !== tbody) return
+
+    ev.preventDefault()
+    dragRow = row
+    pointerId = ev.pointerId
+    moved = false
+    dragRow.classList.add('is-dragging')
+
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onUp)
+  })
+}
+
+function setupActiveRowsDrag(): void {
   const wrapper = document.getElementById('asset-table')
   if (!wrapper) return
   const orderUrl = wrapper.dataset.orderUrl
   if (!orderUrl) return
   const tbody = document.getElementById('active-rows')
   if (!tbody) return
-  // Sortable.js stamps the element with an internal `_sortable`
-  // reference; re-creating without destroying first stacks listeners
-  // on document and breaks subsequent drags after a swap.
-  const existing = (
-    window.Sortable as { get?: (el: HTMLElement) => { destroy: () => void } | null }
-  ).get?.(tbody)
-  if (existing) existing.destroy()
-  new window.Sortable(tbody, {
-    handle: '.drag-handle',
-    animation: 150,
-    onEnd: () => {
-      const ids = Array.from(tbody.children)
-        .map((tr) => (tr as HTMLElement).dataset.assetId)
-        .filter(Boolean)
-        .join(',')
-      const fd = new FormData()
-      fd.append('ids', ids)
-      fetch(orderUrl, {
-        method: 'POST',
-        body: fd,
-        headers: {
-          'X-CSRFToken': csrfToken(),
-          'HX-Request': 'true',
-        },
-      })
-        .then((r) => {
-          if (!r.ok) {
-            console.error('reorder POST failed:', r.status, r.statusText)
-          }
-          ;(
-            window as unknown as { htmx: { trigger: (...args: unknown[]) => void } }
-          ).htmx.trigger('body', 'refresh-assets')
-        })
-        .catch((err) => {
-          console.error('reorder POST errored:', err)
-          ;(
-            window as unknown as { htmx: { trigger: (...args: unknown[]) => void } }
-          ).htmx.trigger('body', 'refresh-assets')
-        })
-    },
-  })
-}
-
-// Compatibility shim for any external caller that still uses the
-// previous explicit URL-passing entry point. Internally we now read
-// the URL off the data attribute, so the arg is ignored.
-function initAssetTableSortable(_orderUrl?: string): void {
-  bindActiveRowsSortable()
+  bindActiveRowsDrag(tbody, orderUrl)
 }
 
 window.homeApp = homeApp
-window.initAssetTableSortable = initAssetTableSortable
 
-// Bind Sortable on initial page render and re-bind after every
-// htmx swap that brings a new active-rows tbody. The previous
-// approach used an inline <script> at the end of the asset-table
-// partial which raced with home.js (defer): on initial parse the
-// inline script ran before window.initAssetTableSortable was
-// defined and Sortable never bound until the first 5s poll.
 function bootHomePage(): void {
   installProcessingToastWatcher()
-  bindActiveRowsSortable()
+  setupActiveRowsDrag()
   document.body.addEventListener('htmx:afterSwap', (ev) => {
     const target = (ev as CustomEvent<{ target?: Element }>).detail?.target
     if (!target) return
     if (target instanceof Element && target.querySelector('#active-rows')) {
-      bindActiveRowsSortable()
+      setupActiveRowsDrag()
     }
   })
 }
 
-if (document.readyState === 'complete') {
+// Mirrors the vendor.ts pattern: subscribe to BOTH DOMContentLoaded
+// and load so a dynamically-injected bundle (readyState already
+// 'interactive', DCL already fired) still boots via the load event.
+// The `booted` guard de-dupes the normal-load case where both fire.
+let booted = false
+function bootOnce(): void {
+  if (booted) return
+  booted = true
   bootHomePage()
+}
+
+if (document.readyState === 'complete') {
+  bootOnce()
 } else {
-  document.addEventListener('DOMContentLoaded', bootHomePage, { once: true })
+  document.addEventListener('DOMContentLoaded', bootOnce, { once: true })
+  window.addEventListener('load', bootOnce, { once: true })
 }

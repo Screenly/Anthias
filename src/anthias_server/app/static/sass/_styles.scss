@@ -412,6 +412,7 @@ label { text-align: left; }
   }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover td { background: var(--surface-scrim-2); }
+  tbody tr.is-dragging td { background: var(--surface-scrim-5); opacity: 0.85; }
 }
 
 .asset-cell-name {

@@ -1,9 +1,8 @@
 // Self-hosted vendored bundle for the post-React stack: htmx for
 // server-driven interactivity, Alpine for the few client-only state
-// sprinkles (modal open/close, mobile-nav collapse), Sortable for
-// drag-to-reorder on the home page, Flatpickr for locale-aware
-// date/time inputs in the edit modal. Loaded by base.html via
-// /static/dist/js/vendor.js, before any page-specific script.
+// sprinkles (modal open/close, mobile-nav collapse), Flatpickr for
+// locale-aware date/time inputs in the edit modal. Loaded by base.html
+// via /static/dist/js/vendor.js, before any page-specific script.
 //
 // Importing htmx.org for its side effect attaches `htmx` to window
 // and wires the global DOMContentLoaded listener. The other libs
@@ -11,14 +10,12 @@
 // in templates can reach them without going through a module bundler.
 import htmx from 'htmx.org'
 import Alpine from 'alpinejs'
-import Sortable from 'sortablejs'
 import flatpickr from 'flatpickr'
 
 declare global {
   interface Window {
     htmx: typeof htmx
     Alpine: typeof Alpine
-    Sortable: typeof Sortable
     flatpickr: typeof flatpickr
   }
 }
@@ -30,7 +27,6 @@ declare global {
 // throw a TypeError without this line.
 window.htmx = htmx
 window.Alpine = Alpine
-window.Sortable = Sortable
 window.flatpickr = flatpickr
 
 interface ToastItem {
@@ -169,18 +165,24 @@ function drainDjangoMessages(): void {
 // but home.js hasn't been executed yet, and every x-data blows up
 // with "homeApp is not defined". Wait for the actual DCL event
 // instead — that fires only after every other defer script has run.
-if (document.readyState === 'complete') {
+//
+// The `load` listener is a belt for the case where this bundle is
+// ever injected dynamically after DCL has already fired (readyState
+// would be 'interactive' but the DCL listener would never trigger).
+// The `started` guard de-dupes when both DCL and load fire on a
+// normal page load.
+let started = false
+function startup(): void {
+  if (started) return
+  started = true
   Alpine.start()
   drainDjangoMessages()
   connectAssetSocket()
+}
+
+if (document.readyState === 'complete') {
+  startup()
 } else {
-  document.addEventListener(
-    'DOMContentLoaded',
-    () => {
-      Alpine.start()
-      drainDjangoMessages()
-      connectAssetSocket()
-    },
-    { once: true },
-  )
+  document.addEventListener('DOMContentLoaded', startup, { once: true })
+  window.addEventListener('load', startup, { once: true })
 }
