@@ -21,6 +21,14 @@ def client() -> Client:
     return Client()
 
 
+# Centralized test fixtures so Sonar's S2068 (hardcoded credential)
+# fires on a single suppressed line instead of once per assertion.
+# These are arbitrary strings consumed only by a MagicMock auth
+# backend below — they never reach a real credential store.
+_FIXTURE_PASSWORD = 's3cret'  # NOSONAR
+_FIXTURE_BAD_PASSWORD = 'wrong'  # NOSONAR
+
+
 @pytest.mark.django_db
 def test_login_get_renders_auth_card(client: Client) -> None:
     """A bare GET /login/ must produce the new auth-card layout. The
@@ -70,7 +78,7 @@ def test_login_post_honors_safe_next() -> None:
             '/login/',
             {
                 'username': 'alice',
-                'password': 's3cret',
+                'password': _FIXTURE_PASSWORD,
                 'next': '/settings/',
             },
         )
@@ -91,7 +99,7 @@ def test_login_post_rejects_offhost_next() -> None:
             '/login/',
             {
                 'username': 'alice',
-                'password': 's3cret',
+                'password': _FIXTURE_PASSWORD,
                 'next': 'https://evil.example/',
             },
         )
@@ -113,7 +121,7 @@ def test_login_post_invalid_creds_keeps_next() -> None:
             '/login/',
             {
                 'username': 'alice',
-                'password': 'wrong',
+                'password': _FIXTURE_BAD_PASSWORD,
                 'next': '/settings/',
             },
         )

@@ -10,11 +10,11 @@ interface IpResponse {
   ip_addresses?: string[]
 }
 
-interface SplashWindow extends Window {
+interface SplashGlobal {
   __splashIpsUrl?: string
 }
 
-const w = window as SplashWindow
+const g = globalThis as unknown as SplashGlobal
 
 const detecting = document.getElementById('splash-status-detecting')
 const ready = document.getElementById('splash-status-ready')
@@ -41,49 +41,61 @@ function svgFor(url: string): Promise<string> {
   })
 }
 
-async function render(ips: string[]): Promise<void> {
-  const sig = ips.join('|')
-  if (sig === lastSig) return
-  lastSig = sig
+function showEmpty(): void {
+  if (detecting) detecting.hidden = false
+  if (ready) ready.hidden = true
+  if (prompt) prompt.hidden = true
+  if (list) list.innerHTML = ''
+  if (qrCard) qrCard.hidden = true
+  if (qrSlot) qrSlot.innerHTML = ''
+}
 
-  if (!list) return
-
-  if (!ips.length) {
-    if (detecting) detecting.hidden = false
-    if (ready) ready.hidden = true
-    if (prompt) prompt.hidden = true
-    list.innerHTML = ''
-    if (qrCard) qrCard.hidden = true
-    if (qrSlot) qrSlot.innerHTML = ''
-    return
-  }
-
+function showStatusReady(): void {
   if (detecting) detecting.hidden = true
   if (ready) ready.hidden = false
   if (prompt) prompt.hidden = false
+}
 
+function paintIpPills(ips: string[]): void {
+  if (!list) return
   list.innerHTML = ''
-  ips.forEach((ip) => {
+  for (const ip of ips) {
     const a = document.createElement('a')
     a.href = ip
     a.textContent = ip
     a.className = 'splash-ip-pill'
     list.appendChild(a)
-  })
-
-  if (qrSlot && qrCard) {
-    try {
-      qrSlot.innerHTML = await svgFor(ips[0])
-      qrCard.hidden = false
-    } catch {
-      qrSlot.innerHTML = ''
-      qrCard.hidden = true
-    }
   }
 }
 
+async function paintQr(url: string): Promise<void> {
+  if (!qrSlot || !qrCard) return
+  try {
+    qrSlot.innerHTML = await svgFor(url)
+    qrCard.hidden = false
+  } catch {
+    qrSlot.innerHTML = ''
+    qrCard.hidden = true
+  }
+}
+
+async function render(ips: string[]): Promise<void> {
+  const sig = ips.join('|')
+  if (sig === lastSig) return
+  lastSig = sig
+
+  if (!ips.length) {
+    showEmpty()
+    return
+  }
+
+  showStatusReady()
+  paintIpPills(ips)
+  await paintQr(ips[0])
+}
+
 function poll(): void {
-  const url = w.__splashIpsUrl
+  const url = g.__splashIpsUrl
   if (!url) return
   fetch(url, { cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : ({ ip_addresses: [] } as IpResponse)))
@@ -97,7 +109,7 @@ function poll(): void {
       // 2s for the first ~30s, then back off to 5s. Host bus usually
       // answers well before 30s; the slow tier is for long-tail
       // recoveries during the rest of the splash's ~60s window.
-      window.setTimeout(poll, attempts < 15 ? 2000 : 5000)
+      globalThis.setTimeout(poll, attempts < 15 ? 2000 : 5000)
     })
 }
 

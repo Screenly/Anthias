@@ -64,7 +64,7 @@
 <script>
   // The splash bundle reverses the API URL via Django so the JS layer
   // doesn't hard-code the version prefix.
-  window.__splashIpsUrl = '{% url "api:network_ip_addresses_v2" %}';
+  globalThis.__splashIpsUrl = '{% url "api:network_ip_addresses_v2" %}';
 </script>
 </body>
 </html>
