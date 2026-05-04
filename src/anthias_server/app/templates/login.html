@@ -7,9 +7,9 @@
   <div class="surface">
     <h1 class="text-xl font-bold mb-4">Login to Anthias</h1>
     {% if messages %}
-    <div class="rounded-lg border border-red-300 bg-red-50 text-red-800 px-4 py-3 mb-4 text-sm">
-      {% for message in messages %}{{ message }}{% endfor %}
-    </div>
+    <ul class="rounded-lg border border-red-300 bg-red-50 text-red-800 px-4 py-3 mb-4 text-sm list-disc list-inside m-0 space-y-1">
+      {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+    </ul>
     {% endif %}
     <form method="post" action="{% url 'anthias_app:login' %}" class="flex flex-col gap-3">
       {% csrf_token %}

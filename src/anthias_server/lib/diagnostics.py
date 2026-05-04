@@ -148,8 +148,11 @@ def _read_version_from_pyproject() -> str:
 
 
 def get_anthias_version_head() -> str:
-    """The primary version line — ``v{calver}``. Empty when the
-    package isn't installed (host scripts without `uv sync`)."""
+    """The primary version line — ``v{calver}``. Returns ``''`` only
+    when ``get_anthias_release()`` finds neither the installed package
+    metadata nor the repo-root pyproject.toml (i.e. the running code
+    is detached from both its install record and its source tree —
+    in practice, never on a real device or CI runner)."""
     release = get_anthias_release()
     return f'v{release}' if release else ''
 
