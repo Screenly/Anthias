@@ -1679,8 +1679,14 @@ $footer-height: 13rem;
 }
 
 .splash-qr {
-  width: clamp(8rem, 18vw, 12rem);
-  aspect-ratio: 1 / 1;
+  // Set width AND height to the same clamp() so the slot is square
+  // without depending on `aspect-ratio` (Chromium 88+, not available
+  // in the Qt5 webview that runs on Pi 1-4). The child SVG fills the
+  // slot, so a missing aspect-ratio implementation would otherwise
+  // collapse this to height: 0.
+  $size: clamp(8rem, 18vw, 12rem);
+  width: $size;
+  height: $size;
   display: flex;
   align-items: center;
   justify-content: center;

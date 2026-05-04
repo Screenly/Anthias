@@ -1,0 +1,8 @@
+{% extends "_error.html" %}
+{# Django's CSRF failure view renders 403_csrf.html, not 403.html. #}
+
+{% block title %}Session expired — Anthias{% endblock %}
+{% block error_icon %}ti-clock-exclamation{% endblock %}
+{% block error_code %}403 · CSRF{% endblock %}
+{% block error_headline %}Your session expired{% endblock %}
+{% block error_subhead %}The form's security token didn't match. Reload the page and try again.{% endblock %}

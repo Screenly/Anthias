@@ -12,6 +12,7 @@ from django.http.response import HttpResponseBase
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
 from anthias_server.app import page_context
@@ -808,8 +809,33 @@ def system_info(request: HttpRequest) -> HttpResponse:
     return template(request, 'system_info.html', context)
 
 
+def _safe_login_next(request: HttpRequest, candidate: str) -> str:
+    """Whitelist `next` to same-host paths so the login flow can't be
+    weaponised as an open redirect. Falls back to the dashboard for
+    empty / off-host / scheme-mismatched values."""
+    home = reverse('anthias_app:home')
+    if not candidate:
+        return home
+    if url_has_allowed_host_and_scheme(
+        url=candidate,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return candidate
+    return home
+
+
 @require_http_methods(['GET', 'POST'])
 def login(request: HttpRequest) -> HttpResponse:
+    # Read `next` from the form on POST (login.html round-trips the
+    # query-string value through a hidden input) and from the query
+    # string on GET (initial render after a 401/403 redirect).
+    next_url = (
+        request.POST.get('next')
+        if request.method == 'POST'
+        else request.GET.get('next')
+    ) or ''
+
     if request.method == 'POST':
         username = request.POST.get('username') or ''
         password = request.POST.get('password') or ''
@@ -824,16 +850,12 @@ def login(request: HttpRequest) -> HttpResponse:
             request.session['auth_username'] = username
             request.session['auth_password'] = password
 
-            return redirect(reverse('anthias_app:home'))
+            return redirect(_safe_login_next(request, next_url))
         else:
             messages.error(request, 'Invalid username or password')
-            return template(
-                request, 'login.html', {'next': request.GET.get('next', '/')}
-            )
+            return template(request, 'login.html', {'next': next_url})
 
-    return template(
-        request, 'login.html', {'next': request.GET.get('next', '/')}
-    )
+    return template(request, 'login.html', {'next': next_url})
 
 
 @require_http_methods(['GET'])

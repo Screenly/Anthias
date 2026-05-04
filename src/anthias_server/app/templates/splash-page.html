@@ -5,8 +5,20 @@
 <head>
     {% load static %}
     <meta charset="utf-8"/>
+    {% comment %}
+      The splash is opened from phones (QR scan) as well as the device
+      webview, so the viewport tag is load-bearing — without it mobile
+      Safari/Chrome would render against their default 980px layout
+      viewport and shrink the IP pills + QR.
+    {% endcomment %}
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>Welcome to Anthias</title>
-    <link href="{% static 'dist/css/tailwind.css' %}" rel="stylesheet"/>
+    {% comment %}
+      This page uses no Tailwind utility classes — every selector
+      (.splash-*, .auth-*) lives in anthias.css. Skip the Tailwind
+      bundle so first paint on a constrained Pi 1 webview avoids one
+      extra ~30 KB stylesheet fetch.
+    {% endcomment %}
     <link href="{% static 'dist/css/anthias.css' %}" rel="stylesheet"/>
     <link rel="icon" href="/static/favicons/favicon.ico"/>
     <script src="{% static 'dist/js/splash.js' %}" defer></script>
@@ -28,11 +40,13 @@
         <span>Ready to manage</span>
       </p>
 
-      {# Headline + subhead are hidden on cold boot so the page doesn't
-         tell operators to "open this address" before any address has
-         been resolved. The pulsing status chip above carries the empty
-         state on its own. splash.ts toggles the [hidden] flag once at
-         least one IP arrives. #}
+      {% comment %}
+        Headline + subhead are hidden on cold boot so the page doesn't
+        tell operators to "open this address" before any address has
+        been resolved. The pulsing status chip above carries the empty
+        state on its own. splash.ts toggles the [hidden] flag once at
+        least one IP arrives.
+      {% endcomment %}
       <div id="splash-prompt" hidden>
         <h1 class="splash-headline">Open this on your phone or laptop</h1>
         <p class="splash-subhead">Point a browser at one of the addresses below, or scan the QR code.</p>
