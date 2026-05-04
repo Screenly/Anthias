@@ -87,7 +87,7 @@ jobs:
 
       # ANTHIAS_INTEGRATION_TEST=1 tells src/anthias_server/django_project/settings.py to
       # pin DATABASES.default.TEST.NAME to the same SQLite path the
-      # anthias-server container reads. Selenium tests assert on
+      # anthias-server container reads. Playwright tests assert on
       # `Asset.objects.all()` after the server persists an upload, so
       # both ends must share one file. Unit tests must NOT set this
       # — they run under xdist and need pytest-django's default

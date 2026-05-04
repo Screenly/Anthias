@@ -562,7 +562,7 @@ def assets_control(request: HttpRequest, command: str) -> HttpResponse:
     """Previous / Next playback. Dispatches the same Redis pub/sub
     command the API mixin sends."""
     if command in ('previous', 'next'):
-        ViewerPublisher.get_instance().send_to_viewer(f'asset_{command}')
+        ViewerPublisher.get_instance().send_to_viewer(command)
     return redirect(reverse('anthias_app:home'))
 
 

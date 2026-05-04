@@ -88,8 +88,9 @@ uv sync --group test
 uv run pytest -m "not integration"
 ```
 
-Integration tests (`-m integration`) drive Selenium/Chrome and still
-require the Docker stack; use the recipe below.
+Integration tests (`-m integration`) drive Playwright (sync API)
+against Chromium and still require the Docker stack; use the recipe
+below.
 
 #### Docker-based runs (CI parity, integration suite)
 
@@ -102,7 +103,7 @@ docker compose -f docker-compose.test.yml up -d --build
 docker compose -f docker-compose.test.yml exec anthias-test bash ./bin/prepare_test_environment.sh -s
 docker compose -f docker-compose.test.yml exec anthias-test pytest -n auto -m "not integration"
 # ANTHIAS_INTEGRATION_TEST=1 pins TEST.NAME to the same SQLite file the
-# anthias-server container writes — required for Selenium tests that
+# anthias-server container writes — required for Playwright tests that
 # assert on Asset.objects after a browser-driven upload.
 # --reuse-db skips pytest-django's destroy-and-recreate cycle so
 # uvicorn's open handle stays valid; prepare_test_environment.sh has
