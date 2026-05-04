@@ -66,10 +66,9 @@ def system_info() -> dict[str, Any]:
     uptime = timedelta(seconds=diagnostics.get_uptime())
     device_model = device_helper.get_friendly_device_model()
 
-    anthias_version = '{}@{}'.format(
-        diagnostics.get_git_branch(),
-        diagnostics.get_git_short_hash(),
-    )
+    anthias_version = diagnostics.get_anthias_version()
+    anthias_version_head = diagnostics.get_anthias_version_head()
+    anthias_version_meta = diagnostics.get_anthias_version_meta()
 
     # Pie-friendly breakdown — three slices that sum to total. psutil's
     # `used` already excludes buffers/cache on Linux (matches `free -m`),
@@ -159,6 +158,8 @@ def system_info() -> dict[str, Any]:
         'resolution': _resolved_resolution(),
         'device_model': device_model,
         'anthias_version': anthias_version,
+        'anthias_version_head': anthias_version_head,
+        'anthias_version_meta': anthias_version_meta,
         'mac_address': get_node_mac_address(),
         'host_user': getenv('HOST_USER'),
     }

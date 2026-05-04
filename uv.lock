@@ -89,7 +89,7 @@ wheels = [
 
 [[package]]
 name = "anthias"
-version = "0.20.4"
+version = "2026.5.0"
 source = { editable = "." }
 
 [package.dev-dependencies]

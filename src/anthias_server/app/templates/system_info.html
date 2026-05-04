@@ -147,10 +147,20 @@
     <div class="stat-grid">
       <div class="stat-card stat-card--span-2">
         <p class="stat-card__label">Anthias version</p>
-        <div class="stat-card__value stat-card__value--mono">
-          {% if anthias_version_master_link %}
-          <a href="{{ anthias_version_master_link }}" rel="noopener" target="_blank">{{ anthias_version }}</a>
-          {% else %}{{ anthias_version }}{% endif %}
+        <div class="stat-card__value stat-card__value--mono version-line">
+          <span class="version-line__head">
+            {% if anthias_version_master_link %}
+            <a href="{{ anthias_version_master_link }}" rel="noopener" target="_blank">{{ anthias_version_head }}</a>
+            {% else %}{{ anthias_version_head }}{% endif %}
+          </span>
+          {% if anthias_version_meta %}
+          <span class="version-line__meta">{{ anthias_version_meta }}</span>
+          {% endif %}
+          {% if not up_to_date and not is_balena %}
+          <a class="update-pill" href="https://github.com/Screenly/Anthias/releases/latest" rel="noopener" target="_blank" title="A newer release is available">
+            <i class="ti ti-cloud-download"></i><span>Update available</span>
+          </a>
+          {% endif %}
         </div>
       </div>
       <div class="stat-card stat-card--span-2">

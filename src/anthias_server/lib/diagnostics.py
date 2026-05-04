@@ -85,6 +85,74 @@ def get_git_hash() -> str | None:
     return os.getenv('GIT_HASH')
 
 
+# Treat both as the project's release line — `master` is upstream's
+# convention; `main` is the GitHub default for forks. Either resolves
+# to "no branch suffix on the version label".
+_RELEASE_BRANCHES = frozenset({'master', 'main'})
+
+
+def get_anthias_release() -> str:
+    """Read the project version from the installed package metadata
+    (sourced from pyproject.toml's [project].version, currently
+    CalVer ``YYYY.M.MICRO``). Falls back to the empty string when the
+    package isn't installed under this interpreter — e.g. running
+    ad-hoc scripts straight off the source tree without `uv sync`."""
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+
+        return version('anthias')
+    except PackageNotFoundError:
+        return ''
+    except Exception:
+        return ''
+
+
+def get_anthias_version_head() -> str:
+    """The primary version line — ``v{calver}``. Empty when the
+    package isn't installed (host scripts without `uv sync`)."""
+    release = get_anthias_release()
+    return f'v{release}' if release else ''
+
+
+def get_anthias_version_meta() -> str:
+    """The de-emphasised git-meta line — ``(short_hash[, branch])``
+    when the env vars are present, empty otherwise. Branch is
+    suppressed on master/main since operators don't need to be told
+    they're on the release line.
+
+    Rendered on its own row under the version head in the System Info
+    template, in a smaller, muted font.
+    """
+    short_hash = get_git_short_hash()
+    branch = get_git_branch()
+    parts: list[str] = []
+    if short_hash:
+        parts.append(short_hash)
+    if branch and branch not in _RELEASE_BRANCHES:
+        parts.append(branch)
+    return f'({", ".join(parts)})' if parts else ''
+
+
+def get_anthias_version() -> str:
+    """The combined label, used by the v2 info API so external clients
+    get a single human-readable string.
+
+    Format:
+      - on master/main:   ``v2026.5.0 (08c26f3)``
+      - on a feature/PR branch: ``v2026.5.0 (08c26f3, vanilla-django)``
+      - if either piece is missing (e.g. host run with no GIT_BRANCH
+        env var):
+            * just release:       ``v2026.5.0``
+            * just git, no release: ``(08c26f3)`` / ``(08c26f3, branch)``
+
+    Replaces the old ``{branch}@{hash}`` shape so the operator sees a
+    real release number first instead of "vanilla-django@08c26f3".
+    """
+    head = get_anthias_version_head()
+    meta = get_anthias_version_meta()
+    return f'{head} {meta}'.strip() if head and meta else (head or meta)
+
+
 def try_connectivity() -> list[str]:
     urls = [
         'http://www.google.com',

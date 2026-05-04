@@ -2,6 +2,7 @@
 Tests for Info API endpoints (v1 and v2).
 """
 
+from importlib.metadata import version as _pkg_version
 from typing import Any
 from unittest import mock
 
@@ -9,6 +10,11 @@ import pytest
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
+
+# Pulled from pyproject.toml's [project].version via the installed
+# package metadata so the test moves in lockstep with the release
+# bumper without anyone having to update both places.
+_ANTHIAS_RELEASE = _pkg_version('anthias')
 
 
 @pytest.fixture
@@ -163,7 +169,12 @@ def test_info_v2_endpoint(
         'free_space': '20G',
         'display_power': 'on',
         'up_to_date': True,
-        'anthias_version': 'main@a1b2c3d',
+        # Version label format is `v{calver} ({short_hash})` on a
+        # release branch (`main`/`master`); the branch is suppressed
+        # in that case because operators don't need to see "you are on
+        # the release branch". lib.diagnostics composes the label from
+        # importlib.metadata.version('anthias') + GIT_SHORT_HASH.
+        'anthias_version': f'v{_ANTHIAS_RELEASE} (a1b2c3d)',
         'device_model': 'Raspberry Pi 4',
         'uptime': {'days': 1, 'hours': 0.0},
         'memory': {

@@ -16,7 +16,7 @@ from django.views.decorators.http import require_http_methods
 
 from anthias_server.app import page_context
 from anthias_server.celery_tasks import reboot_anthias, shutdown_anthias
-from anthias_server.lib import backup_helper
+from anthias_server.lib import backup_helper, diagnostics
 from anthias_server.lib.auth import authorized
 from anthias_common.utils import (
     connect_to_redis,
@@ -794,8 +794,10 @@ def system_info(request: HttpRequest) -> HttpResponse:
     # Master-branch builds get a clickable link to the commit; other
     # branches stay as plain text (mirrors AnthiasVersionValue in the
     # old React component, which only built the link when branch==master).
-    version = context.get('anthias_version') or ''
-    branch, _, commit = version.partition('@')
+    # Read git pieces straight off the env so we don't have to re-parse
+    # the version label in lib.diagnostics.get_anthias_version().
+    branch = diagnostics.get_git_branch() or ''
+    commit = diagnostics.get_git_short_hash() or ''
     if branch == 'master' and commit:
         context['anthias_version_master_link'] = (
             f'{_ANTHIAS_REPO_URL}/commit/{commit}'

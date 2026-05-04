@@ -22,20 +22,6 @@
       id="navbarNav"
     >
       <ul class="app-nav-items flex flex-col lg:flex-row lg:items-center lg:gap-1">
-        {% if not up_to_date and not is_balena %}
-        <li class="app-tab-item update-available">
-          <a
-            href="{% url 'anthias_app:settings' %}#upgrade-section"
-            class="app-tab-link"
-            @click="open = false"
-          >
-            <i class="ti ti-cloud-download"></i>
-            <span class="hidden lg:inline">Update available</span>
-            <span class="lg:hidden">Update</span>
-          </a>
-        </li>
-        {% endif %}
-
         <li class="app-tab-item">
           <a
             href="{% url 'anthias_app:home' %}"

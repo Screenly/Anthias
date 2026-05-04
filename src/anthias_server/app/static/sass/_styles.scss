@@ -1026,6 +1026,43 @@ label { text-align: left; }
 .stat-card--span-2 { grid-column: span 2; @media (max-width: 540px) { grid-column: span 1; } }
 .stat-card--span-full { grid-column: 1 / -1; }
 
+// Version line on System Info — calver `v2026.5.0` is the headline
+// number; the git-meta `(08c26f3, vanilla-django)` sits underneath
+// in a smaller muted font so it doesn't compete with the release
+// number. Optional "Update available" pill stacks below both.
+// Replaces the prior Update-available nav-tab so the announcement
+// lives next to the thing it's announcing about.
+.version-line {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+.version-line__head { font-size: 1.05rem; line-height: 1.2; }
+.version-line__meta {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.update-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--t-fast);
+  > i { font-size: 0.95rem; }
+  &:hover { background: var(--color-accent-hover); text-decoration: none; }
+}
+
 // Section grouping on System Info — three named blocks (Resources /
 // Display / Anthias) so the eye lands on a heading instead of a wall
 // of stat-cards. Header eyebrow + lede mirrors the settings sections.
@@ -1349,12 +1386,6 @@ label { text-align: left; }
       color: var(--color-text-on-dark) !important;
       background: var(--scrim-on-dark-10);
     }
-  }
-
-  .app-tab-item.update-available .app-tab-link {
-    color: var(--color-accent) !important;
-    font-weight: 700;
-    &:hover { background: var(--color-accent-hover); }
   }
 
   .divider-vertical {
