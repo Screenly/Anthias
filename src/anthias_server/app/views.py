@@ -280,12 +280,14 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
     # row marked as 'webpage', etc.). The edit modal renders mimetype
     # read-only for the same reason.
     if asset.mimetype == 'video':
-        # Video assets must keep duration=0 — the API enforces this on
-        # writes and the playlist scheduler reads the real length back
-        # from the file at playtime. The edit form disables the input
-        # for videos, but defend on the server too so a hand-crafted
-        # POST can't desync the DB from the API contract.
-        asset.duration = 0
+        # Video duration is owned by the probe_video_duration Celery
+        # task, not the edit form. Leave the persisted value alone so
+        # an edit doesn't clobber the probed length back to 0. The
+        # edit form already disables the duration input for videos
+        # (`:disabled="editAsset.mimetype === 'video'"`); this branch
+        # is the matching server-side guard against hand-crafted POSTs
+        # that try to write a duration anyway.
+        pass
     else:
         asset.duration = int(
             request.POST.get('duration') or asset.duration or 0

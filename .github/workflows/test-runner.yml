@@ -125,14 +125,18 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-      # Browser-test failure artifacts (Chrome screenshot + rendered
-      # HTML + console log) are written by tests/conftest.py's
-      # pytest_runtest_makereport hook into ./test-artifacts/. Same
+      # Browser-test failure artifacts (Playwright trace.zip +
+      # full-page screenshot per failed test) are written by
+      # pytest-playwright via the
+      # `--tracing retain-on-failure --screenshot only-on-failure
+      # --output test-artifacts` addopts in pyproject.toml. Same
       # bind-mount story as coverage.xml: anything inside the test
       # container under /usr/src/app shows up directly on the runner.
-      # `if: failure()` keeps green runs from uploading an empty bundle;
-      # `if-no-files-found: ignore` is a belt for the case where a
-      # failure is in setup/teardown and never reaches the hook.
+      # `if: failure()` keeps green runs from uploading an empty
+      # bundle; `if-no-files-found: ignore` is a belt for the case
+      # where the failure happens before any test reaches the
+      # tracing-stop call. `playwright show-trace trace.zip` replays
+      # the test interactively when downloading the bundle locally.
       - name: Upload integration test artifacts
         if: failure() && inputs.test-type == 'python'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

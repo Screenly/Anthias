@@ -8,7 +8,7 @@ from typing import Any
 
 import django
 import sh
-from celery import Celery
+from celery import Celery, Task
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
 django.setup()
@@ -205,7 +205,47 @@ def cleanup() -> None:
             logging.warning('cleanup: could not remove %s: %s', entry.path, e)
 
 
+class _ProbeVideoTask(Task):  # type: ignore[type-arg]
+    """Custom Task subclass so ``on_failure`` can clear
+    ``is_processing`` when retries are exhausted.
+
+    Without this, a row whose probe permanently fails (e.g. ffprobe
+    missing on a stripped-down image, or 3 consecutive ffprobe
+    timeouts) stays at "Processing" forever and the operator has no
+    way to interact with it. Celery calls ``on_failure`` after
+    ``max_retries`` is exhausted *or* on any non-autoretry exception
+    that escapes the task body.
+    """
+
+    def on_failure(
+        self,
+        exc: BaseException,
+        task_id: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        einfo: Any,
+    ) -> None:
+        asset_id = args[0] if args else kwargs.get('asset_id')
+        if not asset_id:
+            return
+        try:
+            Asset.objects.filter(asset_id=asset_id).update(is_processing=False)
+            # Same WS nudge the success path sends so the row drops
+            # the "Processing" pill without waiting for the 5s table
+            # poll. Operator then has the row in its terminal state
+            # and can edit/delete it.
+            from anthias_server.app.consumers import notify_asset_update
+
+            notify_asset_update(asset_id)
+        except Exception:
+            logging.exception(
+                'probe_video_duration on_failure cleanup failed for %s',
+                asset_id,
+            )
+
+
 @celery.task(
+    base=_ProbeVideoTask,
     time_limit=120,
     autoretry_for=(sh.TimeoutException, sh.ErrorReturnCode, OSError),
     retry_backoff=10,
@@ -233,6 +273,9 @@ def probe_video_duration(asset_id: str) -> None:
         is_processing=False so the operator can adjust manually.
       - Any other exception is swallowed (logged) so a programmer
         error in the helper doesn't hammer the worker via retries.
+      - Retries exhausted (autoretry_for raise after max_retries) →
+        _ProbeVideoTask.on_failure clears is_processing so the row
+        doesn't stay stuck at "Processing" indefinitely.
     """
     try:
         asset = Asset.objects.get(asset_id=asset_id)
