@@ -21,10 +21,12 @@ def client() -> Client:
 
 # Centralized test fixtures so Sonar's S2068 (hardcoded credential)
 # fires on a single suppressed line instead of once per assertion.
-# These are arbitrary strings consumed only by a Django test User —
-# they never reach a real credential store.
-_FIXTURE_PASSWORD = 's3cret'  # NOSONAR
-_FIXTURE_BAD_PASSWORD = 'wrong'  # NOSONAR
+# Avoid recognisable / breached passwords (`s3cret`, `password`, etc.)
+# so Sonar's S6437 compromised-password rule doesn't fire either.
+# These strings never reach a real credential store — they're consumed
+# only by an in-memory Django test User created per test.
+_FIXTURE_PASSWORD = 'fixture-login-test-pwd'  # NOSONAR
+_FIXTURE_BAD_PASSWORD = 'fixture-login-bad-pwd'  # NOSONAR
 
 
 @pytest.fixture

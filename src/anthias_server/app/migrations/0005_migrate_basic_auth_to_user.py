@@ -37,26 +37,20 @@ def _conf_path() -> str | None:
     return os.path.join(home, '.anthias', 'anthias.conf')
 
 
-def _migrate(apps, schema_editor):  # type: ignore[no-untyped-def]
-    User = apps.get_model('auth', 'User')
-
-    path = _conf_path()
-    if path is None or not os.path.isfile(path):
-        return
-
+def _read_auth_state(path):  # type: ignore[no-untyped-def]
+    """Return ``(auth_backend, username, password_hash)`` extracted
+    from anthias.conf, or ``None`` if the file can't be parsed."""
     config = configparser.ConfigParser()
     try:
         config.read(path)
     except configparser.Error:
         logging.exception('Could not parse %s; skipping auth migration', path)
-        return
-
+        return None
     auth_backend = (
         config.get('main', 'auth_backend', fallback='').strip()
         if config.has_section('main')
         else ''
     )
-
     username = (
         config.get('auth_basic', 'user', fallback='').strip()
         if config.has_section('auth_basic')
@@ -67,33 +61,68 @@ def _migrate(apps, schema_editor):  # type: ignore[no-untyped-def]
         if config.has_section('auth_basic')
         else ''
     )
+    return config, auth_backend, username, password_hash
 
-    needs_write = False
 
-    if auth_backend == 'auth_basic' and username and password_hash:
-        if _LEGACY_SHA256_HEX.match(password_hash) or '$' not in password_hash:
-            # Legacy SHA256 (pre-Django) or plaintext / unrecognised
-            # format. We can't verify it against Django's hashers, so
-            # the operator must re-set credentials. Disable auth so the
-            # device stays reachable.
+def _promote_user(User, username, password_hash):  # type: ignore[no-untyped-def]
+    """Idempotent upsert of the operator User row from the conf hash."""
+    User.objects.update_or_create(
+        username=username,
+        defaults={
+            'password': password_hash,
+            'is_staff': True,
+            'is_superuser': True,
+            'is_active': True,
+        },
+    )
+
+
+def _migrate(apps, schema_editor):  # type: ignore[no-untyped-def]
+    User = apps.get_model('auth', 'User')
+
+    path = _conf_path()
+    if path is None or not os.path.isfile(path):
+        return
+
+    state = _read_auth_state(path)
+    if state is None:
+        return
+    config, auth_backend, username, password_hash = state
+
+    # Three branches keyed on what the conf says about auth_basic:
+    #   * complete + Django-format hash → promote to User row, keep
+    #     ``auth_backend`` as 'auth_basic' so the feature flag still
+    #     enforces login.
+    #   * complete + legacy SHA256/plaintext hash → unverifiable, fail
+    #     open: clear ``auth_backend`` so the device stays reachable.
+    #   * ``auth_basic`` selected but creds missing/blank → previously
+    #     would have gated everything against a no-User device →
+    #     lockout. Same fail-open: clear ``auth_backend``.
+    disable_auth = False
+    if auth_backend == 'auth_basic':
+        if not username or not password_hash:
+            logging.error(
+                'auth_basic enabled in %s but credentials are missing; '
+                'disabling basic auth to avoid a lockout. Re-set the '
+                'password from the Settings page.',
+                path,
+            )
+            disable_auth = True
+        elif _LEGACY_SHA256_HEX.match(password_hash) or '$' not in password_hash:
             logging.error(
                 'Insecure password hash in %s; clearing credentials and '
                 'disabling basic auth. Re-set the password from the '
                 'Settings page.',
                 path,
             )
-            config.set('main', 'auth_backend', '')
-            needs_write = True
+            disable_auth = True
         else:
-            User.objects.update_or_create(
-                username=username,
-                defaults={
-                    'password': password_hash,
-                    'is_staff': True,
-                    'is_superuser': True,
-                    'is_active': True,
-                },
-            )
+            _promote_user(User, username, password_hash)
+
+    needs_write = False
+    if disable_auth:
+        config.set('main', 'auth_backend', '')
+        needs_write = True
 
     # Strip the migrated credentials from the conf — DB is authoritative
     # from this point on. Wipe the whole [auth_basic] section so a

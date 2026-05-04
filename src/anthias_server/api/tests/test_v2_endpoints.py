@@ -12,6 +12,12 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+# Centralised fixture password for the basic-auth flow tests so Sonar's
+# S2068 fires once per file, not once per test. Avoids dictionary
+# words / breached-password tokens to keep S6437 quiet too. Never
+# reaches a real credential store — only an in-memory test User row.
+_FIXTURE_PASSWORD = 'fixture-v2-test-pwd'  # NOSONAR
+
 
 @pytest.fixture
 def api_client() -> APIClient:
@@ -208,8 +214,8 @@ def test_enable_basic_auth(
     data = {
         'auth_backend': 'auth_basic',
         'username': 'testuser',
-        'password': 'testpass',
-        'password_2': 'testpass',
+        'password': _FIXTURE_PASSWORD,
+        'password_2': _FIXTURE_PASSWORD,
     }
 
     response = api_client.patch(device_settings_url, data=data, format='json')
@@ -223,7 +229,7 @@ def test_enable_basic_auth(
 
     # The User row is the new source of truth for credentials.
     user = User.objects.get(username='testuser')
-    assert user.check_password('testpass')
+    assert user.check_password(_FIXTURE_PASSWORD)
     assert user.is_staff and user.is_superuser
 
     publisher_instance.send_to_viewer.assert_called_once_with('reload')
@@ -244,7 +250,7 @@ def test_disable_basic_auth(
     the patch as the operator (force_authenticate) so the operator's
     credentials reach apply_auth_settings."""
     user = User.objects.create_superuser(
-        username='testuser', password='testpass'  # NOSONAR
+        username='testuser', password=_FIXTURE_PASSWORD
     )
     api_client.force_authenticate(user=user)
 
@@ -270,7 +276,7 @@ def test_disable_basic_auth(
 
     data = {
         'auth_backend': '',
-        'current_password': 'testpass',
+        'current_password': _FIXTURE_PASSWORD,
     }
 
     response = api_client.patch(device_settings_url, data=data, format='json')

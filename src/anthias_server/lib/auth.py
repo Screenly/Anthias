@@ -13,7 +13,7 @@ four credential paths, each with a distinct caller and trust model:
 
 2. **Bearer token** (preferred for new headless integrations).
    Issued by ``rest_framework.authtoken``. A caller POSTs
-   ``{username, password}`` to ``/api/v2/auth/token/`` once, stores
+   ``{username, password}`` to ``/api/v2/auth/token`` once, stores
    the returned token, and sends ``Authorization: Bearer <token>`` on
    every subsequent request. :class:`BearerTokenAuthentication`
    (registered globally in ``django_project.settings.REST_FRAMEWORK``)
@@ -64,7 +64,7 @@ import logging
 import os.path
 import re
 from functools import wraps
-from typing import TYPE_CHECKING, Callable, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Callable, ParamSpec, TypeVar, cast
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractBaseUser
@@ -134,7 +134,7 @@ def _build_auth_classes() -> dict[str, type]:
         <b64(user:pass)>`` to /api/v2/...; we keep accepting that
         header for back-compat but it's on the chopping block.
         Operators should migrate to bearer tokens
-        (POST /api/v2/auth/token/) — log line tells them which IP
+        (POST /api/v2/auth/token) — log line tells them which IP
         and which path is still using the old scheme.
         """
 
@@ -163,7 +163,7 @@ def _build_auth_classes() -> dict[str, type]:
                 'DEPRECATED: HTTP Basic auth used on %s by user %r from '
                 '%s. The Basic auth path is retained for back-compat '
                 'only and will be removed in a future release. Migrate '
-                'to bearer tokens via POST /api/v2/auth/token/.',
+                'to bearer tokens via POST /api/v2/auth/token.',
                 path,
                 user.get_username(),
                 client_ip,
@@ -307,6 +307,12 @@ class AuthSettingsError(ValueError):
     Exception/ValueError still surface the message in the UI."""
 
 
+# Operator-facing strings centralised so the HTML / DRF surfaces stay
+# consistent and the linter stops complaining about the duplicates.
+_ERR_INCORRECT_CURRENT = 'Incorrect current password.'
+_ERR_PWD_MISMATCH = 'New passwords do not match!'
+
+
 def _operator_user(
     request: 'HttpRequest',
 ) -> 'AbstractBaseUser | None':
@@ -314,13 +320,96 @@ def _operator_user(
 
     When auth is currently enabled the calling view is gated by
     ``@authorized``, so ``request.user`` is the authenticated operator
-    — return them. When auth is disabled there is no operator yet
+     — return them. When auth is disabled there is no operator yet
     (initial setup) and we return None.
     """
     user = getattr(request, 'user', None)
-    if user is not None and user.is_authenticated:
-        return user
-    return None
+    if user is None or not user.is_authenticated:
+        return None
+    # ``request.user`` is typed as ``Any`` via ``getattr``; narrow it so
+    # the function's annotated return type holds without a generic Any
+    # leak (mypy --strict-no-any-return).
+    return cast('AbstractBaseUser', user)
+
+
+def _require_current_password(
+    current_password: str,
+    current_pass_correct: bool | None,
+    *,
+    action: str,
+) -> None:
+    """Shared guard for any settings change that needs the operator
+    to re-prove their current password (changing the backend,
+    username, or password). Caller passes the human label of the
+    action being attempted so the error message is specific."""
+    if current_pass_correct is None:
+        raise AuthSettingsError(
+            f'Must supply current password to change {action}'
+        )
+    if not current_pass_correct:
+        raise AuthSettingsError(_ERR_INCORRECT_CURRENT)
+
+
+def _update_existing_operator(
+    operator: 'AbstractBaseUser',
+    *,
+    new_username: str,
+    new_password: str,
+    new_password_confirm: str,
+    current_pass_correct: bool | None,
+) -> None:
+    """Mutate the existing operator row in response to the settings
+    form. Each of username / password is independently optional —
+    only changes that were actually requested validate the current
+    password."""
+    if new_username and new_username != operator.get_username():
+        _require_current_password(
+            current_password='_',
+            current_pass_correct=current_pass_correct,
+            action='username',
+        )
+        operator.username = new_username  # type: ignore[attr-defined]
+
+    if new_password:
+        _require_current_password(
+            current_password='_',
+            current_pass_correct=current_pass_correct,
+            action='password',
+        )
+        if new_password != new_password_confirm:
+            raise AuthSettingsError(_ERR_PWD_MISMATCH)
+        operator.set_password(new_password)
+
+    operator.save()
+
+
+def _create_initial_operator(
+    new_username: str,
+    new_password: str,
+    new_password_confirm: str,
+) -> None:
+    """First-time enable: no User row exists yet, so both username
+    and password are required and the form's confirm field must
+    match."""
+    from django.contrib.auth.models import User
+
+    if not new_username:
+        raise AuthSettingsError('Must provide username')
+    if not new_password:
+        raise AuthSettingsError('Must provide password')
+    if new_password != new_password_confirm:
+        raise AuthSettingsError(_ERR_PWD_MISMATCH)
+
+    user, _ = User.objects.update_or_create(
+        username=new_username,
+        defaults={
+            'is_staff': True,
+            'is_superuser': True,
+            'is_active': True,
+        },
+    )
+    user.set_password(new_password)
+    user.save()
 
 
 def apply_auth_settings(
@@ -342,16 +431,13 @@ def apply_auth_settings(
     (we don't touch the conf file from here so a failed write of one
     setting can't half-apply auth).
     """
-    from django.contrib.auth.models import User
-
     operator = _operator_user(request)
 
     current_pass_correct: bool | None = None
     if current_password:
-        if operator is not None:
-            current_pass_correct = bool(operator.check_password(current_password))
-        else:
-            current_pass_correct = False
+        current_pass_correct = bool(
+            operator is not None and operator.check_password(current_password)
+        )
 
     # Switching the backend off (or to anything else) when one was
     # already configured requires the current password.
@@ -361,54 +447,26 @@ def apply_auth_settings(
                 'Must supply current password to change authentication method'
             )
         if not current_pass_correct:
-            raise AuthSettingsError('Incorrect current password.')
+            raise AuthSettingsError(_ERR_INCORRECT_CURRENT)
 
     if new_auth_backend != 'auth_basic':
         return
 
     if operator is not None:
-        # Already enabled — update the existing operator account.
-        if new_username and new_username != operator.get_username():
-            if current_pass_correct is None:
-                raise AuthSettingsError(
-                    'Must supply current password to change username'
-                )
-            if not current_pass_correct:
-                raise AuthSettingsError('Incorrect current password.')
-            operator.username = new_username  # type: ignore[attr-defined]
-
-        if new_password:
-            if current_pass_correct is None:
-                raise AuthSettingsError(
-                    'Must supply current password to change password'
-                )
-            if not current_pass_correct:
-                raise AuthSettingsError('Incorrect current password.')
-            if new_password != new_password_confirm:
-                raise AuthSettingsError('New passwords do not match!')
-            operator.set_password(new_password)
-
-        operator.save()
+        _update_existing_operator(
+            operator,
+            new_username=new_username,
+            new_password=new_password,
+            new_password_confirm=new_password_confirm,
+            current_pass_correct=current_pass_correct,
+        )
         return
 
-    # Initial enable from a previously-disabled state.
-    if not new_username:
-        raise AuthSettingsError('Must provide username')
-    if not new_password:
-        raise AuthSettingsError('Must provide password')
-    if new_password != new_password_confirm:
-        raise AuthSettingsError('New passwords do not match!')
-
-    user, _ = User.objects.update_or_create(
-        username=new_username,
-        defaults={
-            'is_staff': True,
-            'is_superuser': True,
-            'is_active': True,
-        },
+    _create_initial_operator(
+        new_username=new_username,
+        new_password=new_password,
+        new_password_confirm=new_password_confirm,
     )
-    user.set_password(new_password)
-    user.save()
 
 
 def operator_username() -> str:

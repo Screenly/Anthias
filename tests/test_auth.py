@@ -22,6 +22,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.contrib.auth.models import User
+from django.http import HttpResponse
 from django.test import Client, RequestFactory
 
 from anthias_server.lib import auth
@@ -35,6 +36,21 @@ from anthias_server.lib.auth import (
     verify_password,
 )
 
+# Centralised fixture credentials so Sonar's S2068 (potentially-hardcoded
+# credential) fires on a single suppressed line per value instead of
+# once per assertion across the file. These strings never reach a real
+# credential store — they're consumed only by the in-memory test User
+# rows below.
+_PWD_OLD = 'fixture-old-pwd'  # NOSONAR
+_PWD_NEW = 'fixture-new-pwd'  # NOSONAR
+_PWD_INITIAL = 'fixture-initial-pwd'  # NOSONAR
+_PWD_TOKEN_USER = 'fixture-token-pwd'  # NOSONAR
+_PWD_WRONG = 'fixture-wrong-pwd'  # NOSONAR
+_PWD_THROWAWAY_1 = 'fixture-throwaway-1'  # NOSONAR
+_PWD_THROWAWAY_2 = 'fixture-throwaway-2'  # NOSONAR
+_PWD_MISMATCH_A = 'fixture-mismatch-a'  # NOSONAR
+_PWD_MISMATCH_B = 'fixture-mismatch-b'  # NOSONAR
+
 
 # ---------------------------------------------------------------------------
 # hash_password / verify_password
@@ -42,12 +58,12 @@ from anthias_server.lib.auth import (
 
 @pytest.mark.django_db
 def test_hash_password_round_trip() -> None:
-    hashed = hash_password('hunter2')
-    assert hashed != 'hunter2'
+    hashed = hash_password(_PWD_INITIAL)
+    assert hashed != _PWD_INITIAL
     # Django's hashers always produce an algorithm-prefixed string.
     assert '$' in hashed
-    assert verify_password('hunter2', hashed) is True
-    assert verify_password('wrong', hashed) is False
+    assert verify_password(_PWD_INITIAL, hashed) is True
+    assert verify_password(_PWD_WRONG, hashed) is False
 
 
 @pytest.mark.django_db
@@ -115,6 +131,7 @@ def test_authorized_redirects_when_unauthenticated(monkeypatch: Any) -> None:
     # run; emulate that by attaching a MagicMock with is_authenticated=False.
     request.user = MagicMock(is_authenticated=False)
     response = view(request)
+    assert isinstance(response, HttpResponse)
     assert response.status_code == 302
     assert response['Location'].startswith('/login')
     assert 'next=%2Fsystem-info%2F' in response['Location']
@@ -151,6 +168,7 @@ def test_authorized_drops_next_for_unsafe_methods(monkeypatch: Any) -> None:
         request = getattr(factory, method)('/api/v2/assets/')
         request.user = MagicMock(is_authenticated=False)
         response = view(request)
+        assert isinstance(response, HttpResponse)
         assert response.status_code == 302
         assert response['Location'].endswith('/login/')
         assert 'next=' not in response['Location']
@@ -171,6 +189,7 @@ def test_authorized_drops_next_for_htmx_partial(monkeypatch: Any) -> None:
     request = factory.get('/_partials/asset-table/', HTTP_HX_REQUEST='true')
     request.user = MagicMock(is_authenticated=False)
     response = view(request)
+    assert isinstance(response, HttpResponse)
     assert response.status_code == 302
     assert response['Location'].endswith('/login/')
     assert 'next=' not in response['Location']
@@ -211,9 +230,10 @@ def test_operator_username_empty_when_no_user_exists() -> None:
 
 @pytest.mark.django_db
 def test_operator_username_returns_first_superuser() -> None:
-    User.objects.create_user(username='non-admin', password='pw1')  # NOSONAR
+    User.objects.create_user(username='non-admin', password=_PWD_THROWAWAY_1)
     User.objects.create_superuser(
-        username='alice', password='pw2'  # NOSONAR
+        username='alice',
+        password=_PWD_THROWAWAY_2,
     )
     assert operator_username() == 'alice'
 
@@ -243,13 +263,13 @@ def test_apply_auth_settings_initial_enable_creates_superuser() -> None:
         new_auth_backend='auth_basic',
         current_password='',
         new_username='alice',
-        new_password='hunter2',
-        new_password_confirm='hunter2',
+        new_password=_PWD_INITIAL,
+        new_password_confirm=_PWD_INITIAL,
         prev_auth_backend='',
     )
     user = User.objects.get(username='alice')
     assert user.is_active and user.is_staff and user.is_superuser
-    assert user.check_password('hunter2')
+    assert user.check_password(_PWD_INITIAL)
 
 
 @pytest.mark.django_db
@@ -261,8 +281,8 @@ def test_apply_auth_settings_initial_enable_requires_username() -> None:
             new_auth_backend='auth_basic',
             current_password='',
             new_username='',
-            new_password='hunter2',
-            new_password_confirm='hunter2',
+            new_password=_PWD_INITIAL,
+            new_password_confirm=_PWD_INITIAL,
             prev_auth_backend='',
         )
 
@@ -291,36 +311,32 @@ def test_apply_auth_settings_initial_enable_password_mismatch() -> None:
             new_auth_backend='auth_basic',
             current_password='',
             new_username='alice',
-            new_password='a',
-            new_password_confirm='b',
+            new_password=_PWD_MISMATCH_A,
+            new_password_confirm=_PWD_MISMATCH_B,
             prev_auth_backend='',
         )
 
 
 @pytest.mark.django_db
 def test_apply_auth_settings_change_password_success() -> None:
-    user = User.objects.create_superuser(
-        username='alice', password='oldpass'  # NOSONAR
-    )
+    user = User.objects.create_superuser(username='alice', password=_PWD_OLD)
     request = _request_with_user(user)
     apply_auth_settings(
         request,
         new_auth_backend='auth_basic',
-        current_password='oldpass',
+        current_password=_PWD_OLD,
         new_username='alice',
-        new_password='newpass',  # NOSONAR
-        new_password_confirm='newpass',  # NOSONAR
+        new_password=_PWD_NEW,
+        new_password_confirm=_PWD_NEW,
         prev_auth_backend='auth_basic',
     )
     user.refresh_from_db()
-    assert user.check_password('newpass')
+    assert user.check_password(_PWD_NEW)
 
 
 @pytest.mark.django_db
 def test_apply_auth_settings_change_password_requires_current() -> None:
-    user = User.objects.create_superuser(
-        username='alice', password='oldpass'  # NOSONAR
-    )
+    user = User.objects.create_superuser(username='alice', password=_PWD_OLD)
     request = _request_with_user(user)
     with pytest.raises(
         AuthSettingsError, match='supply current password to change password'
@@ -330,40 +346,36 @@ def test_apply_auth_settings_change_password_requires_current() -> None:
             new_auth_backend='auth_basic',
             current_password='',
             new_username='alice',
-            new_password='newpass',  # NOSONAR
-            new_password_confirm='newpass',  # NOSONAR
+            new_password=_PWD_NEW,
+            new_password_confirm=_PWD_NEW,
             prev_auth_backend='auth_basic',
         )
 
 
 @pytest.mark.django_db
 def test_apply_auth_settings_change_password_wrong_current() -> None:
-    user = User.objects.create_superuser(
-        username='alice', password='oldpass'  # NOSONAR
-    )
+    user = User.objects.create_superuser(username='alice', password=_PWD_OLD)
     request = _request_with_user(user)
     with pytest.raises(AuthSettingsError, match='Incorrect current password'):
         apply_auth_settings(
             request,
             new_auth_backend='auth_basic',
-            current_password='wrong',  # NOSONAR
+            current_password=_PWD_WRONG,
             new_username='alice',
-            new_password='newpass',  # NOSONAR
-            new_password_confirm='newpass',  # NOSONAR
+            new_password=_PWD_NEW,
+            new_password_confirm=_PWD_NEW,
             prev_auth_backend='auth_basic',
         )
 
 
 @pytest.mark.django_db
 def test_apply_auth_settings_change_username_success() -> None:
-    user = User.objects.create_superuser(
-        username='alice', password='oldpass'  # NOSONAR
-    )
+    user = User.objects.create_superuser(username='alice', password=_PWD_OLD)
     request = _request_with_user(user)
     apply_auth_settings(
         request,
         new_auth_backend='auth_basic',
-        current_password='oldpass',
+        current_password=_PWD_OLD,
         new_username='bob',
         new_password='',
         new_password_confirm='',
@@ -372,14 +384,12 @@ def test_apply_auth_settings_change_username_success() -> None:
     user.refresh_from_db()
     assert user.username == 'bob'
     # Password is unchanged.
-    assert user.check_password('oldpass')
+    assert user.check_password(_PWD_OLD)
 
 
 @pytest.mark.django_db
 def test_apply_auth_settings_disable_requires_current_password() -> None:
-    user = User.objects.create_superuser(
-        username='alice', password='oldpass'  # NOSONAR
-    )
+    user = User.objects.create_superuser(username='alice', password=_PWD_OLD)
     request = _request_with_user(user)
     with pytest.raises(
         AuthSettingsError,
@@ -398,14 +408,12 @@ def test_apply_auth_settings_disable_requires_current_password() -> None:
 
 @pytest.mark.django_db
 def test_apply_auth_settings_disable_with_correct_password_succeeds() -> None:
-    user = User.objects.create_superuser(
-        username='alice', password='oldpass'  # NOSONAR
-    )
+    user = User.objects.create_superuser(username='alice', password=_PWD_OLD)
     request = _request_with_user(user)
     apply_auth_settings(
         request,
         new_auth_backend='',
-        current_password='oldpass',
+        current_password=_PWD_OLD,
         new_username='',
         new_password='',
         new_password_confirm='',
@@ -431,7 +439,7 @@ def operator_with_token() -> tuple[User, str]:
     from rest_framework.authtoken.models import Token
 
     user = User.objects.create_superuser(
-        username='alice', password='hunter2'  # NOSONAR
+        username='alice', password=_PWD_TOKEN_USER
     )
     token = Token.objects.create(user=user)
     return user, token.key
@@ -452,7 +460,7 @@ def test_basic_auth_header_authenticates_for_back_compat(
     """Pre-2826 callers that send Authorization: Basic must keep
     working; we deliberately retained DRF's BasicAuthentication."""
     user, _ = operator_with_token
-    creds = b64encode(b'alice:hunter2').decode('ascii')
+    creds = b64encode(f'alice:{_PWD_TOKEN_USER}'.encode()).decode('ascii')
     client = Client()
     with _enable_auth():
         response = client.get(
@@ -469,7 +477,7 @@ def test_basic_auth_header_authenticates_for_back_compat(
 def test_basic_auth_header_rejects_wrong_password(
     operator_with_token: tuple[User, str],
 ) -> None:
-    creds = b64encode(b'alice:wrong').decode('ascii')
+    creds = b64encode(f'alice:{_PWD_WRONG}'.encode()).decode('ascii')
     client = Client()
     with _enable_auth():
         response = client.get(
@@ -517,7 +525,7 @@ def test_obtain_auth_token_endpoint(
     client = Client()
     response = client.post(
         '/api/v2/auth/token',
-        data={'username': 'alice', 'password': 'hunter2'},
+        data={'username': 'alice', 'password': _PWD_TOKEN_USER},
         content_type='application/json',
     )
     assert response.status_code == 200
@@ -533,7 +541,7 @@ def test_obtain_auth_token_endpoint_rejects_bad_password(
     client = Client()
     response = client.post(
         '/api/v2/auth/token',
-        data={'username': 'alice', 'password': 'wrong'},
+        data={'username': 'alice', 'password': _PWD_WRONG},
         content_type='application/json',
     )
     assert response.status_code == 400

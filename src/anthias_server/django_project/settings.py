@@ -283,7 +283,7 @@ REST_FRAMEWORK = {
     #     that gates the HTML views.
     #   * BearerTokenAuthentication — preferred path for new headless
     #     callers; the operator obtains a token via
-    #     /api/v2/auth/token/ and sends ``Authorization: Bearer <hex>``.
+    #     /api/v2/auth/token and sends ``Authorization: Bearer <hex>``.
     #   * BasicAuthentication — kept for backwards compatibility with
     #     pre-2826 Anthias-CLI builds and existing third-party
     #     scripts; new integrations should use bearer tokens. All three
