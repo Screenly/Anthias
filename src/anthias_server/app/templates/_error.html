@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="auth-page">
+  <main class="auth-shell">
+    <div class="auth-card error-card">
+      <div class="auth-card__brand">
+        <img src="{% static 'img/logo-full.svg' %}" alt="Anthias" class="auth-logo"/>
+      </div>
+
+      <div class="error-card__icon" aria-hidden="true">
+        <i class="ti {% block error_icon %}ti-alert-triangle{% endblock %}"></i>
+      </div>
+
+      <p class="error-card__code">{% block error_code %}{% endblock %}</p>
+      <h1 class="auth-headline">{% block error_headline %}Something went wrong{% endblock %}</h1>
+      <p class="auth-subhead">{% block error_subhead %}{% endblock %}</p>
+
+      {% block error_cta %}
+      <a href="/" class="app-btn app-btn-primary auth-submit">
+        <i class="ti ti-home"></i><span>Back to dashboard</span>
+      </a>
+      {% endblock %}
+    </div>
+  </main>
+</div>
+{% endblock %}

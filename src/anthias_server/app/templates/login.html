@@ -1,31 +1,41 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Login to Anthias{% endblock %}
 
 {% block content %}
-<div class="app-container mt-6 max-w-prose">
-  <div class="surface">
-    <h1 class="text-xl font-bold mb-4">Login to Anthias</h1>
-    {% if messages %}
-    <ul class="rounded-lg border border-red-300 bg-red-50 text-red-800 px-4 py-3 mb-4 text-sm list-disc list-inside m-0 space-y-1">
-      {% for message in messages %}<li>{{ message }}</li>{% endfor %}
-    </ul>
-    {% endif %}
-    <form method="post" action="{% url 'anthias_app:login' %}" class="flex flex-col gap-3">
-      {% csrf_token %}
-      <input type="hidden" name="next" value="{{ next }}">
-      <div class="app-floating">
-        <input type="text" class="app-input" id="username" name="username" placeholder=" " required>
-        <label for="username">Username</label>
+<div class="auth-page">
+  <main class="auth-shell">
+    <div class="auth-card">
+      <div class="auth-card__brand">
+        <img src="{% static 'img/logo-full.svg' %}" alt="Anthias" class="auth-logo"/>
       </div>
-      <div class="app-floating">
-        <input type="password" class="app-input" id="password" name="password" placeholder=" " required>
-        <label for="password">Password</label>
-      </div>
-      <button type="submit" class="app-btn app-btn-primary mt-2">
-        <i class="ti ti-login"></i><span>Login</span>
-      </button>
-    </form>
-  </div>
+
+      <h1 class="auth-headline">Welcome back</h1>
+      <p class="auth-subhead">Sign in to manage what plays on your screen.</p>
+
+      {% if messages %}
+      <ul class="auth-alert" role="alert">
+        {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+
+      <form method="post" action="{% url 'anthias_app:login' %}" class="auth-form">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <div class="app-floating">
+          <input type="text" class="app-input" id="username" name="username" placeholder=" " autocomplete="username" required>
+          <label for="username">Username</label>
+        </div>
+        <div class="app-floating">
+          <input type="password" class="app-input" id="password" name="password" placeholder=" " autocomplete="current-password" required>
+          <label for="password">Password</label>
+        </div>
+        <button type="submit" class="app-btn app-btn-primary auth-submit">
+          <i class="ti ti-login"></i><span>Sign in</span>
+        </button>
+      </form>
+    </div>
+  </main>
 </div>
 {% endblock %}

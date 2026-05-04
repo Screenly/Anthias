@@ -1519,31 +1519,299 @@ $footer-height: 13rem;
 }
 
 // -----------------------------------------------------------------------------
-// 17. Splash page (kept compact, mostly unchanged behaviour)
+// 17. Splash page — full-bleed gradient + elevated card with a QR slot.
+//     Kept conservative for the device webview: no backdrop-filter (Qt5
+//     on Pi 1-4 is on an older Chromium and silently no-ops it), no
+//     CSS variables that don't already exist in :root.
 // -----------------------------------------------------------------------------
-.splash {
-  background-color: $anthias-purple-1;
-  background-size: 100% 100%;
-  margin-top: 0;
-  padding-top: 0;
-  font-size: calc((1.5vw + 1.5vh) / 2);
+.splash-page {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, sans-serif);
+  color: var(--color-text-on-dark);
+  background-color: var(--color-bg-deep);
+  background-image:
+    radial-gradient(at 20% 10%, rgba(124, 48, 205, 0.45), transparent 55%),
+    radial-gradient(at 85% 90%, rgba(91, 32, 144, 0.4), transparent 55%),
+    linear-gradient(160deg, #{$anthias-purple-1} 0%, var(--color-bg-deep) 100%);
+  overflow: hidden;
+}
 
-  .splash-body {
-    background-color: $anthias-purple-3;
-    color: white;
+.splash-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1rem, 4vw, 3rem);
+}
+
+.splash-card {
+  width: min(64rem, 100%);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: clamp(1.5rem, 4vw, 3rem);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(1.25rem, 3vw, 2.5rem);
+  align-items: center;
+
+  &__brand {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+  }
+
+  &__body {
+    min-width: 0;
+  }
+
+  &__qr {
+    justify-self: center;
+    background: #ffffff;
     border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    text-align: center;
+    box-shadow: var(--shadow-md);
   }
-  .row { display: block; }
-  .logo-container {
-    padding: 3vh 0;
-    margin-bottom: 3vh;
-    img { width: 75%; }
-  }
-  @media (max-width: 767px) {
-    .logo-container {
-      padding: 20px 0;
-      img { max-height: 100px; width: auto; }
+
+  @media (min-width: 768px) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    &__brand {
+      grid-column: 1 / -1;
     }
+  }
+}
+
+.splash-logo {
+  height: clamp(2.5rem, 6vh, 4.5rem);
+  width: auto;
+  max-width: 100%;
+}
+
+.splash-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4) 0;
+  padding: var(--space-1) var(--space-3);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-text-on-dark-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-pill);
+
+  &__dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--color-text-on-dark-muted);
+    flex-shrink: 0;
+  }
+  &__dot--pulse {
+    background: var(--color-accent);
+    box-shadow: 0 0 0 0 rgba(255, 225, 26, 0.55);
+    animation: splash-pulse 1.6s ease-out infinite;
+  }
+  &__dot--ok {
+    background: var(--color-success-bright);
+    box-shadow: 0 0 0 4px var(--color-success-ring);
+  }
+}
+
+@keyframes splash-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 225, 26, 0.55); }
+  70%  { box-shadow: 0 0 0 10px rgba(255, 225, 26, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 225, 26, 0); }
+}
+
+.splash-headline {
+  margin: 0 0 var(--space-2) 0;
+  font-size: clamp(1.5rem, 2.4vw + 1rem, 2.5rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--color-text-on-dark);
+}
+
+.splash-subhead {
+  margin: 0 0 var(--space-5) 0;
+  font-size: clamp(0.95rem, 0.5vw + 0.85rem, 1.125rem);
+  color: var(--color-text-on-dark-muted);
+  max-width: 36rem;
+}
+
+.splash-ip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.splash-ip-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-on-dark);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-pill);
+  text-decoration: none;
+  transition: background var(--t-fast), border-color var(--t-fast),
+              transform var(--t-fast);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.28);
+    color: var(--color-text-on-dark);
+    text-decoration: none;
+  }
+  &:active { transform: translateY(1px); }
+}
+
+.splash-qr {
+  width: clamp(8rem, 18vw, 12rem);
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+}
+
+.splash-qr__caption {
+  margin: var(--space-3) 0 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text);
+}
+
+// -----------------------------------------------------------------------------
+// 17a. Login / pre-auth — same gradient background as the splash so the
+//      pre-dashboard surface feels like one product, then a light card
+//      with the existing app-floating inputs.
+// -----------------------------------------------------------------------------
+.auth-page {
+  min-height: 100vh;
+  font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, sans-serif);
+  color: var(--color-text);
+  background-color: var(--color-bg-deep);
+  background-image:
+    radial-gradient(at 20% 10%, rgba(124, 48, 205, 0.45), transparent 55%),
+    radial-gradient(at 85% 90%, rgba(91, 32, 144, 0.4), transparent 55%),
+    linear-gradient(160deg, #{$anthias-purple-1} 0%, var(--color-bg-deep) 100%);
+}
+
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1rem, 4vw, 3rem);
+}
+
+.auth-card {
+  width: min(28rem, 100%);
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+
+  &__brand {
+    display: flex;
+    justify-content: center;
+    margin-bottom: var(--space-2);
+  }
+}
+
+.auth-logo {
+  height: 2.5rem;
+  width: auto;
+}
+
+.auth-headline {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-align: center;
+  color: var(--color-text);
+}
+
+.auth-subhead {
+  margin: calc(var(--space-2) * -1) 0 0 0;
+  font-size: 0.95rem;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.auth-alert {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  list-style: disc inside;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.auth-submit {
+  margin-top: var(--space-2);
+  width: 100%;
+  justify-content: center;
+}
+
+.error-card {
+  text-align: center;
+  align-items: center;
+
+  &__icon {
+    width: 4rem;
+    height: 4rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-link-wash);
+    color: var(--color-link);
+    font-size: 2rem;
+    line-height: 1;
+
+    .ti { display: inline-flex; }
+  }
+
+  &__code {
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
   }
 }
 
