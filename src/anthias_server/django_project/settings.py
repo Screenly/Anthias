@@ -102,6 +102,7 @@ if getenv('ANTHIAS_SERVICE') != 'viewer':
         'rest_framework',
         'anthias_server.api.apps.ApiConfig',
         'django.contrib.admin',
+        'django.contrib.humanize',
         'django.contrib.sessions',
         'django.contrib.messages',
         'django.contrib.staticfiles',
@@ -124,9 +125,7 @@ ROOT_URLCONF = 'anthias_server.django_project.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [
-            BASE_DIR / 'templates',
-        ],
+        'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -243,9 +242,6 @@ except (pytz.exceptions.UnknownTimeZoneError, FileNotFoundError):
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
 STATIC_ROOT = '/data/anthias/staticfiles'
 
 # Dev runs uvicorn (not runserver) and skips collectstatic, so files

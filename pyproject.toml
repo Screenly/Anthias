@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anthias"
-version = "0.20.4"
+version = "2026.5.0"
 description = "The world's most popular open source digital signage project."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -91,8 +91,8 @@ dev = [
     "pytest-django==4.10.0",
     "pytest-mock==3.14.0",
     "pytest-xdist==3.6.1",
-    "selenium==4.36.0",
-    "splinter==0.21.0",
+    "playwright==1.59.0",
+    "pytest-playwright==0.7.2",
     "time-machine==2.15.0",
 ]
 host = [
@@ -143,7 +143,19 @@ python_files = ["test_*.py"]
 markers = [
     "integration: marks tests as integration (deselect with '-m \"not integration\"')",
 ]
-addopts = "--strict-markers"
+# pytest-playwright config:
+#   --browser chromium       - skip firefox/webkit (only chromium is
+#                              installed in docker/Dockerfile.test).
+#   --tracing retain-on-failure
+#                            - per-test trace; dropped for green tests,
+#                              drained to test-artifacts/<id>/trace.zip
+#                              on failure. `playwright show-trace
+#                              trace.zip` replays.
+#   --screenshot only-on-failure
+#                            - full-page PNG into the same per-test dir.
+#   --output test-artifacts  - directory the GH Actions upload-artifact
+#                              step picks up (.gitignored).
+addopts = "--strict-markers --browser chromium --tracing retain-on-failure --screenshot only-on-failure --output test-artifacts"
 
 [tool.coverage.run]
 branch = true
@@ -193,7 +205,7 @@ exclude = [
     "^\\.venv/",
     "^node_modules/",
     "/migrations/",
-    "^static/",
+    "/static/",
     "^build/",
     "^dist/",
 ]
@@ -209,7 +221,6 @@ module = [
     "hurry.filesize",
     "pydbus",
     "sh",
-    "splinter",
     "vlc",
 ]
 ignore_missing_imports = true

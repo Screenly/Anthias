@@ -8,7 +8,7 @@ from typing import Any
 
 import django
 import sh
-from celery import Celery
+from celery import Celery, Task
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
 django.setup()
@@ -20,6 +20,7 @@ from anthias_server.lib import diagnostics  # noqa: E402
 from anthias_server.lib.telemetry import send_telemetry  # noqa: E402
 from anthias_common.utils import (  # noqa: E402
     connect_to_redis,
+    get_video_duration,
     is_balena_app,
     reboot_via_balena_supervisor,
     shutdown_via_balena_supervisor,
@@ -202,6 +203,120 @@ def cleanup() -> None:
             os.remove(entry.path)
         except OSError as e:
             logging.warning('cleanup: could not remove %s: %s', entry.path, e)
+
+
+class _ProbeVideoTask(Task):  # type: ignore[type-arg]
+    """Custom Task subclass so ``on_failure`` can clear
+    ``is_processing`` when retries are exhausted.
+
+    Without this, a row whose probe permanently fails (e.g. ffprobe
+    missing on a stripped-down image, or 3 consecutive ffprobe
+    timeouts) stays at "Processing" forever and the operator has no
+    way to interact with it. Celery calls ``on_failure`` after
+    ``max_retries`` is exhausted *or* on any non-autoretry exception
+    that escapes the task body.
+    """
+
+    def on_failure(
+        self,
+        exc: BaseException,
+        task_id: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        einfo: Any,
+    ) -> None:
+        asset_id = args[0] if args else kwargs.get('asset_id')
+        if not asset_id:
+            return
+        try:
+            Asset.objects.filter(asset_id=asset_id).update(is_processing=False)
+            # Same WS nudge the success path sends so the row drops
+            # the "Processing" pill without waiting for the 5s table
+            # poll. Operator then has the row in its terminal state
+            # and can edit/delete it.
+            from anthias_server.app.consumers import notify_asset_update
+
+            notify_asset_update(asset_id)
+        except Exception:
+            logging.exception(
+                'probe_video_duration on_failure cleanup failed for %s',
+                asset_id,
+            )
+
+
+@celery.task(
+    base=_ProbeVideoTask,
+    time_limit=120,
+    autoretry_for=(sh.TimeoutException, sh.ErrorReturnCode, OSError),
+    retry_backoff=10,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=3,
+)
+def probe_video_duration(asset_id: str) -> None:
+    """Resolve a freshly uploaded video's length out of band.
+
+    The HTML upload view returns the table partial as soon as the bytes
+    are written so the operator isn't held up by ffprobe (which can
+    take several seconds on a Pi 1/Zero). The asset is marked
+    ``is_processing=True`` while this task is queued; once the probe
+    completes the duration is written and the flag is cleared, which
+    drops the "Processing" pill on the next 5s table poll.
+
+    Retry policy:
+      - sh.TimeoutException / sh.ErrorReturnCode / OSError → autoretry
+        with exponential backoff (10s / 20s / 40s / cap 300s, max 3
+        retries). These cover transient disk pressure, ffprobe timing
+        out under load, kernel-level read errors.
+      - get_video_duration returning None (ffprobe missing) → not a
+        transient error; permanent miss-and-move-on. The row leaves
+        is_processing=False so the operator can adjust manually.
+      - Any other exception is swallowed (logged) so a programmer
+        error in the helper doesn't hammer the worker via retries.
+      - Retries exhausted (autoretry_for raise after max_retries) →
+        _ProbeVideoTask.on_failure clears is_processing so the row
+        doesn't stay stuck at "Processing" indefinitely.
+    """
+    try:
+        asset = Asset.objects.get(asset_id=asset_id)
+    except Asset.DoesNotExist:
+        return
+
+    if asset.mimetype != 'video' or not asset.uri:
+        Asset.objects.filter(asset_id=asset_id).update(is_processing=False)
+        return
+
+    # Let TimeoutException / ErrorReturnCode / OSError bubble so the
+    # @autoretry_for kwarg picks them up. Other exceptions are bugs;
+    # log + leave the row marked done.
+    duration: int | None = None
+    try:
+        td = get_video_duration(asset.uri)
+    except (sh.TimeoutException, sh.ErrorReturnCode, OSError):
+        raise
+    except Exception:
+        logging.exception(
+            'probe_video_duration: unexpected failure for %s', asset_id
+        )
+        td = None
+    if td is not None:
+        duration = max(1, int(td.total_seconds()))
+
+    update: dict[str, Any] = {'is_processing': False}
+    if duration is not None:
+        update['duration'] = duration
+    Asset.objects.filter(asset_id=asset_id).update(**update)
+
+    # Tell the viewer to reload its playlist now that the row is fully
+    # materialised — same trigger every other write path uses.
+    r.publish('anthias.viewer', 'reload')
+
+    # Push a refresh nudge over the browser-facing WebSocket so the
+    # operator sees the row stop "Processing" and pick up its real
+    # duration without waiting for the next 5s table poll.
+    from anthias_server.app.consumers import notify_asset_update
+
+    notify_asset_update(asset_id)
 
 
 @celery.task

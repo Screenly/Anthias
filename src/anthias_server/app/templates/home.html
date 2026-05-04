@@ -1,0 +1,84 @@
+{% extends "_layout.html" %}
+{% load static %}
+
+{% block title %}{% if player_name %}{{ player_name }} · {% endif %}Schedule Overview{% endblock %}
+
+{% block extra_head %}
+<script src="{% static 'dist/js/home.js' %}" defer></script>
+{% endblock %}
+
+{% block main %}
+<div class="app-container" x-data="homeApp()" @asset-saved.window="closeModal()">
+  <div class="page-header-bar">
+    <div class="page-header-bar__title">
+      <h1 class="page-header">Schedule Overview</h1>
+      <p class="page-header-bar__lede">
+        {% if player_name %}<strong>{{ player_name }}</strong> · {% endif %}Manage what plays on this screen.
+      </p>
+    </div>
+    <div class="page-header-bar__actions">
+      <form method="post" action="{% url 'anthias_app:assets_control' command='previous' %}" class="inline m-0">
+        {% csrf_token %}
+        <button type="submit" class="app-btn app-btn-light app-btn-pill" title="Skip to previous asset">
+          <i class="ti ti-player-skip-back-filled"></i><span class="hidden md:inline">Previous</span>
+        </button>
+      </form>
+      <form method="post" action="{% url 'anthias_app:assets_control' command='next' %}" class="inline m-0">
+        {% csrf_token %}
+        <button type="submit" class="app-btn app-btn-light app-btn-pill" title="Skip to next asset">
+          <i class="ti ti-player-skip-forward-filled"></i><span class="hidden md:inline">Next</span>
+        </button>
+      </form>
+      <button type="button" id="add-asset-button" class="app-btn app-btn-primary app-btn-pill" @click="openAdd()">
+        <i class="ti ti-plus"></i><span>Add Asset</span>
+      </button>
+    </div>
+  </div>
+
+  {% comment %}Flash messages are emitted as toasts by _toasts.html (vendor.ts drainDjangoMessages()).{% endcomment %}
+
+  {% include "_asset_table.html" %}
+
+  {% include "_asset_modal.html" %}
+
+  {% include "_preview_modal.html" %}
+
+  {% comment %} Delete confirmation overlay — shared shell with the reboot/shutdown
+     prompt on /settings (.modal-overlay + .modal-card pattern). {% endcomment %}
+  <div
+    x-show="pendingDeleteId"
+    x-cloak
+    class="modal-overlay"
+    style="z-index: 1060"
+    @keydown.escape.window="pendingDeleteId = null"
+    @click.self="pendingDeleteId = null"
+  >
+    <div class="modal-card modal-card--sm">
+      <div class="modal-card__header">
+        <h2>Delete asset?</h2>
+        <button type="button" class="modal-card__close" @click="pendingDeleteId = null" aria-label="Close">
+          <i class="ti ti-x"></i>
+        </button>
+      </div>
+      <div class="modal-card__body">
+        <p class="m-0">
+          You're about to delete
+          <strong x-text="pendingDeleteName || 'this asset'"></strong>.
+          This action cannot be undone.
+        </p>
+      </div>
+      <div class="modal-card__footer">
+        <button type="button" class="app-btn app-btn-link" @click="pendingDeleteId = null">Cancel</button>
+        <form method="post" :action="`/assets/${pendingDeleteId}/delete/`" class="inline m-0">
+          {% csrf_token %}
+          <button type="submit" class="app-btn app-btn-danger confirm-delete">
+            <i class="ti ti-trash"></i><span>Delete</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {% comment %}Toast stack lives in _layout.html so every page benefits.{% endcomment %}
+</div>
+{% endblock %}

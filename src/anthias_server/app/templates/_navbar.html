@@ -1,0 +1,78 @@
+{% load static %}
+<nav class="app-nav fixed top-0 inset-x-0 z-50" x-data="{ open: false }">
+  <div class="app-container flex flex-wrap items-center gap-3 py-3">
+    <a href="{% url 'anthias_app:home' %}" class="app-nav-brand">
+      <img src="{% static 'img/logo-full.svg' %}" alt="Anthias">
+    </a>
+
+    <button
+      class="app-nav-toggler ml-auto lg:hidden"
+      type="button"
+      :aria-expanded="open"
+      aria-controls="navbarNav"
+      aria-label="Toggle navigation"
+      @click="open = !open"
+    >
+      <i class="ti ti-menu-2"></i>
+    </button>
+
+    {# Desktop: always visible. Mobile: show only when open. #}
+    <div
+      class="basis-full lg:basis-auto lg:ml-auto"
+      :class="open ? 'block' : 'hidden lg:block'"
+      id="navbarNav"
+    >
+      <ul class="app-nav-items flex flex-col lg:flex-row lg:items-center lg:gap-1">
+        <li class="app-tab-item">
+          <a
+            href="{% url 'anthias_app:home' %}"
+            class="app-tab-link {% if active_nav == 'home' %}active{% endif %}"
+            @click="open = false"
+          >
+            <i class="ti ti-playlist"></i>
+            <span>Schedule</span>
+          </a>
+        </li>
+
+        {% if is_balena %}
+        <li class="app-tab-item">
+          <a
+            href="{% url 'anthias_app:integrations' %}"
+            class="app-tab-link {% if active_nav == 'integrations' %}active{% endif %}"
+            @click="open = false"
+          >
+            <i class="ti ti-puzzle"></i>
+            <span>Integrations</span>
+          </a>
+        </li>
+        {% endif %}
+
+        <li class="app-tab-item">
+          <a
+            href="{% url 'anthias_app:settings' %}"
+            class="app-tab-link {% if active_nav == 'settings' %}active{% endif %}"
+            @click="open = false"
+          >
+            <i class="ti ti-settings"></i>
+            <span>Settings</span>
+          </a>
+        </li>
+
+        <li class="app-tab-item hidden lg:block" aria-hidden="true">
+          <span class="divider-vertical"></span>
+        </li>
+
+        <li class="app-tab-item">
+          <a
+            href="{% url 'anthias_app:system_info' %}"
+            class="app-tab-link {% if active_nav == 'system-info' %}active{% endif %}"
+            @click="open = false"
+          >
+            <i class="ti ti-activity"></i>
+            <span>System info</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>

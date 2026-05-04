@@ -51,12 +51,17 @@ if [[ "$ENVIRONMENT" == "development" ]]; then
     echo "Building frontend assets..."
     bun install && bun run build
     echo "Starting uvicorn (development, --reload)..."
+    # uvicorn's --reload watches *.py only by default. Add Django
+    # templates and built CSS so a template / SCSS edit on the host
+    # propagates to the running worker without a manual restart.
     exec uvicorn anthias_server.django_project.asgi:application \
         --host "$UVICORN_BIND_HOST" \
         --port "$UVICORN_BIND_PORT" \
         --timeout-keep-alive 30 \
         --reload \
         --reload-dir /usr/src/app \
+        --reload-include "*.html" \
+        --reload-include "*.css" \
         "${UVICORN_PROXY_ARGS[@]}"
 else
     echo "Generating Django static files..."

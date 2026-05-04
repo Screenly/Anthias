@@ -1,0 +1,9 @@
+{% comment %}Reusable stat card for the System Info dashboard. Vars: label (required eyebrow), value (required main value), meta (optional secondary line), href (optional, renders value as link), span (pass "2" for 2-col span).{% endcomment %}
+<div class="stat-card{% if span %} stat-card--span-{{ span }}{% endif %}">
+  <p class="stat-card__label">{{ label }}</p>
+  <div class="stat-card__value">
+    {% if href %}<a href="{{ href }}" rel="noopener noreferrer" target="_blank">{{ value }}</a>
+    {% else %}{{ value }}{% endif %}
+  </div>
+  {% if meta %}<div class="stat-card__meta">{{ meta }}</div>{% endif %}
+</div>

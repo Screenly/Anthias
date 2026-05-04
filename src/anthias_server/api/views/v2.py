@@ -695,13 +695,9 @@ class DeviceSettingsViewV2(APIView):
 
 class InfoViewV2(InfoViewMixin):
     def get_anthias_version(self) -> str:
-        git_branch = diagnostics.get_git_branch()
-        git_short_hash = diagnostics.get_git_short_hash()
-
-        return '{}@{}'.format(
-            git_branch,
-            git_short_hash,
-        )
+        # Composed in lib.diagnostics so HTML and API ship the same
+        # label string. See get_anthias_version() for the format.
+        return diagnostics.get_anthias_version()
 
     def get_device_model(self) -> str | int | None:
         device_model = device_helper.parse_cpu_info().get('model')

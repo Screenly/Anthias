@@ -1,0 +1,1682 @@
+// =============================================================================
+// _styles.scss — Anthias UI design system
+//
+// Layered as: tokens → base → components → page-specific bits.
+// Everything is project-namespaced (.app-btn, .app-input, .app-tabs,
+// .surface, .modal-card, .schedule-chip, .stat-card, .app-toast,
+// .resource-pie, .loadavg-row, …) — there is no Bootstrap (or any
+// other framework) layered underneath, just Tailwind utilities for
+// one-off spacing/flex.
+// =============================================================================
+
+// Brand colour tokens — referenced via #{$anthias-...} in this file
+// to seed the CSS-custom-property design tokens declared further down.
+@import "variables";
+
+// -----------------------------------------------------------------------------
+// 1. Design tokens
+// -----------------------------------------------------------------------------
+:root {
+  // Spacing — 4 px base, doubled tier above 16 px so layouts stay tidy.
+  --space-1: 0.25rem;   //  4
+  --space-2: 0.5rem;    //  8
+  --space-3: 0.75rem;   // 12
+  --space-4: 1rem;      // 16
+  --space-5: 1.5rem;    // 24
+  --space-6: 2rem;      // 32
+  --space-7: 3rem;      // 48
+  --space-8: 4rem;      // 64
+
+  // Radii
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  // Shadows — soft, layered, modern. Use --shadow-md as the default card lift.
+  --shadow-sm: 0 1px 2px var(--scrim-4), 0 1px 3px var(--scrim-6);
+  --shadow-md: 0 2px 6px var(--scrim-4), 0 8px 24px var(--scrim-8);
+  --shadow-lg: 0 4px 12px var(--scrim-6), 0 16px 48px var(--scrim-14);
+
+  // Transitions
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-fast: 120ms var(--ease-out);
+  --t-med: 200ms var(--ease-out);
+
+  // Colour roles. Backgrounds, surfaces, text — referenced by name through
+  // the rest of the file so tweaks happen in one place.
+  --color-bg: #{$anthias-purple-1};
+  --color-bg-deep: #0f0019;          // splash / extreme dark
+  --color-bg-elevated: #{$anthias-purple-3};
+  --color-surface: #ffffff;
+  --color-surface-soft: #fafafa;
+  --color-surface-tint: #f4f1f6;
+  --color-active: #{$anthias-purple-2};
+  --color-active-tint: #503061;      // gradient stop above $anthias-purple-2
+  --color-text: #1f002a;
+  --color-text-muted: #5e5868;
+  --color-text-on-dark: #ffffff;
+  --color-text-on-dark-muted: rgba(255, 255, 255, 0.65);
+  --color-text-on-dark-faint: rgba(255, 255, 255, 0.45);
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-on-dark: rgba(255, 255, 255, 0.12);
+  --color-accent: #{$anthias-yellow-3};
+  --color-accent-soft: #{$anthias-yellow-4};
+  --color-accent-text: #1f002a;
+  --color-accent-wash: rgba(255, 225, 26, 0.16);     // chip bg
+  --color-accent-edge: rgba(255, 225, 26, 0.32);     // chip border
+  --color-accent-hover: rgba(255, 225, 26, 0.10);    // hover tint
+  --color-danger: #dc3545;
+  --color-danger-hover: #c82333;
+  --color-danger-active: #bd2130;
+
+  // Functional status colours (success / warning) used by chips,
+  // load-average bars, resource-pie slices, and toasts. Hex baseline
+  // + alpha variants for chip/wash/ring use.
+  --color-success: #34d399;
+  --color-success-wash: rgba(52, 211, 153, 0.22);
+  --color-success-wash-strong: rgba(52, 211, 153, 0.4);
+  --color-success-edge: rgba(52, 211, 153, 0.45);
+  --color-success-edge-strong: rgba(52, 211, 153, 0.6);
+  --color-success-ring: rgba(52, 211, 153, 0.18);
+  --color-success-ring-pulse: rgba(52, 211, 153, 0.32);
+  --color-success-text-on-wash: #0e4a30;             // WCAG-AA on wash
+  --color-success-text-on-wash-strong: #ecfff5;      // WCAG-AA on dark
+  --color-success-bright: #4ade80;                   // active dot
+  --color-warning: #f59e0b;
+  --color-warning-ring: rgba(245, 158, 11, 0.18);
+
+  // Anchors on light surfaces — kept readable against white cards
+  // (the brand yellow we use for accents has too little contrast).
+  --color-link: #6633a0;
+  --color-link-hover: #4a1f80;
+  --color-link-wash: rgba(102, 51, 160, 0.08);       // chip bg
+  --color-link-edge: rgba(102, 51, 160, 0.22);       // chip border
+  --color-link-ring: rgba(102, 51, 160, 0.18);
+
+  // Focus ring — used at every input/button focus state.
+  --color-focus-ring: rgba(136, 25, 199, 0.35);
+  --ring-width: 3px;
+
+  // Scrim ladder — neutral overlays for hovers, borders, dividers,
+  // tints. Two contexts: light surface and dark surface. Pick the
+  // closest tier instead of inventing a new alpha at the use site.
+  --scrim-2:  rgba(0, 0, 0, 0.02);   // row hover
+  --scrim-4:  rgba(0, 0, 0, 0.04);
+  --scrim-5:  rgba(0, 0, 0, 0.05);
+  --scrim-6:  rgba(0, 0, 0, 0.06);
+  --scrim-8:  rgba(0, 0, 0, 0.08);   // = --color-border
+  --scrim-10: rgba(0, 0, 0, 0.10);
+  --scrim-14: rgba(0, 0, 0, 0.14);   // shadow-lg outer
+  --scrim-18: rgba(0, 0, 0, 0.18);   // outline border
+  --scrim-25: rgba(0, 0, 0, 0.25);   // dashed dropzone
+  --scrim-40: rgba(0, 0, 0, 0.40);   // outline hover-border
+  --scrim-on-dark-4:  rgba(255, 255, 255, 0.04);
+  --scrim-on-dark-5:  rgba(255, 255, 255, 0.05);
+  --scrim-on-dark-6:  rgba(255, 255, 255, 0.06);
+  --scrim-on-dark-8:  rgba(255, 255, 255, 0.08);
+  --scrim-on-dark-10: rgba(255, 255, 255, 0.10);
+  --scrim-on-dark-12: rgba(255, 255, 255, 0.12);   // = --color-border-on-dark
+  --scrim-on-dark-15: rgba(255, 255, 255, 0.15);
+  --scrim-on-dark-18: rgba(255, 255, 255, 0.18);
+  --scrim-on-dark-30: rgba(255, 255, 255, 0.30);
+}
+
+// Default anchor styling; overridden in dark contexts (.surface--active,
+// app-nav, footer) where the link colour switches to white-ish.
+a {
+  color: var(--color-link);
+  text-decoration: none;
+  &:hover { color: var(--color-link-hover); text-decoration: underline; }
+}
+
+// -----------------------------------------------------------------------------
+// 2. Base
+// -----------------------------------------------------------------------------
+::-moz-selection { color: #000; background: var(--color-accent); }
+::selection      { color: #000; background: var(--color-accent); }
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  margin: 0;
+  padding-top: 4.5rem;          // app-nav height
+  font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--color-text-on-dark);
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  display: block;
+  min-height: calc(100vh - 4.5rem - 13rem);   // app-nav + footer
+  padding: var(--space-6) 0 var(--space-7);
+}
+
+label { text-align: left; }
+
+
+// -----------------------------------------------------------------------------
+// 3. Typography helpers
+// -----------------------------------------------------------------------------
+.page-header {
+  font-size: 1.875rem;          // 30px
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--color-text-on-dark);
+}
+
+.page-header-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+
+  .page-header-bar__title { flex: 1 1 auto; min-width: 0; }
+  .page-header-bar__lede {
+    margin: var(--space-1) 0 0;
+    color: var(--color-text-on-dark-muted);
+    font-size: 0.95rem;
+  }
+  .page-header-bar__actions {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+}
+
+.eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.muted-label {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+// -----------------------------------------------------------------------------
+// 4. Surface (card) component
+//
+// `.surface` declares a *context*, not just a background — it exposes
+// --surface-* CSS custom properties (text colour, muted text, scrim
+// for hover tints, divider colour, anchor colour) that every child
+// component reads. `.surface--active` overrides the context tokens to
+// flip contrast for the dark gradient variant — children don't need
+// per-component overrides to know "I'm on a dark surface now".
+// -----------------------------------------------------------------------------
+.surface {
+  --surface-bg: var(--color-surface);
+  --surface-text: var(--color-text);
+  --surface-text-muted: var(--color-text-muted);
+  --surface-text-faint: var(--color-text-muted);
+  --surface-divider: var(--color-border);
+  --surface-scrim-2: var(--scrim-2);
+  --surface-scrim-5: var(--scrim-5);
+  --surface-scrim-8: var(--scrim-6);
+  --surface-scrim-10: var(--scrim-10);
+  --surface-anchor: var(--color-link);
+  --surface-anchor-hover: var(--color-link-hover);
+
+  background: var(--surface-bg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-6);
+  color: var(--surface-text);
+}
+
+.surface--active {
+  --surface-bg: linear-gradient(180deg, var(--color-active-tint) 0%, var(--color-active) 100%);
+  --surface-text: var(--color-text-on-dark);
+  --surface-text-muted: var(--color-text-on-dark-muted);
+  --surface-text-faint: var(--color-text-on-dark-faint);
+  --surface-divider: var(--color-border-on-dark);
+  --surface-scrim-2: var(--scrim-on-dark-4);
+  --surface-scrim-5: var(--scrim-on-dark-8);
+  --surface-scrim-8: var(--scrim-on-dark-10);
+  --surface-scrim-10: var(--scrim-on-dark-15);
+  --surface-anchor: var(--color-accent);
+  --surface-anchor-hover: var(--color-accent);
+}
+
+.surface--inset {
+  padding: var(--space-5);
+}
+
+.surface__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+
+  h2 {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .surface__count {
+    font-size: 0.75rem;
+    color: var(--surface-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 5. Buttons
+// -----------------------------------------------------------------------------
+.app-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  padding: 0.5625rem var(--space-4);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform var(--t-fast), box-shadow var(--t-fast),
+    background-color var(--t-fast), color var(--t-fast),
+    border-color var(--t-fast);
+
+  &:focus,
+  &:focus-visible {
+    box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
+    outline: none;
+  }
+  &:hover:not(:disabled):not(.disabled) { transform: translateY(-1px); }
+  &:active:not(:disabled):not(.disabled) { transform: translateY(0); }
+  &:disabled,
+  &.disabled { opacity: 0.55; cursor: not-allowed; }
+}
+
+.app-btn-primary {
+  background-image: $anthias-yellow-gradient;
+  background-color: $anthias-yellow-3;
+  border-color: transparent;
+  color: var(--color-accent-text);
+  font-weight: 700;
+
+  &:hover, &:focus {
+    background-image: $anthias-yellow-gradient;
+    color: var(--color-accent-text);
+    box-shadow: var(--shadow-md);
+  }
+  &:active { background-color: $anthias-yellow-2; }
+}
+
+.app-btn-light {
+  background: var(--color-surface);
+  border-color: var(--scrim-6);
+  color: var(--color-text);
+  &:hover { background: var(--color-surface-soft); color: var(--color-text); }
+}
+
+.app-btn-danger {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: var(--color-text-on-dark);
+  &:hover {
+    background: var(--color-danger-hover);
+    border-color: var(--color-danger-active);
+    color: var(--color-text-on-dark);
+  }
+}
+
+.app-btn-link {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-weight: 600;
+  &:hover { color: var(--color-text); text-decoration: underline; }
+}
+
+// Icon-only square button — reads surface context, so the same markup
+// renders correctly on the white inactive table AND the dark active
+// card without any parent-selector override.
+.app-btn-icon {
+  padding: 0.5rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: none;
+  font-size: 0.95rem;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--surface-text-muted);
+
+  &:hover:not(:disabled):not(.disabled) {
+    background: var(--surface-scrim-8);
+    color: var(--surface-text);
+  }
+}
+
+// On-light outline (settings page — Backup / Reboot etc.)
+.app-btn-outline-dark {
+  color: var(--color-text);
+  border-color: var(--scrim-18);
+  background: transparent;
+  &:hover {
+    background: var(--scrim-4);
+    border-color: var(--scrim-40);
+    color: var(--color-text);
+  }
+}
+
+.app-btn-pill {
+  border-radius: var(--radius-pill);
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+// -----------------------------------------------------------------------------
+// 6. Asset table
+// -----------------------------------------------------------------------------
+.asset-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+
+  thead th {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: var(--space-3) var(--space-3);
+    border-bottom: 1px solid var(--surface-divider);
+    background: transparent;
+    color: var(--surface-text-muted);
+    white-space: nowrap;
+  }
+
+  tbody td {
+    padding: var(--space-4) var(--space-3);
+    border-bottom: 1px solid var(--surface-divider);
+    vertical-align: middle;
+    color: var(--surface-text);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--surface-scrim-2); }
+  tbody tr.is-dragging td { background: var(--surface-scrim-5); opacity: 0.85; }
+}
+
+.asset-cell-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+
+  .drag-handle {
+    cursor: grab;
+    opacity: 0.6;
+    transition: opacity var(--t-fast);
+    &:hover { opacity: 1; }
+    &:active { cursor: grabbing; }
+  }
+  .asset-cell-name__icon {
+    flex: none;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: var(--radius-md);
+    background: var(--surface-scrim-5);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    color: var(--surface-text-muted);
+  }
+  .asset-cell-name__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .asset-cell-name__primary {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+// -----------------------------------------------------------------------------
+// 7. Schedule chip
+// -----------------------------------------------------------------------------
+.schedule-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  vertical-align: middle;
+}
+// Chip palette is exposed through context tokens so each surface picks
+// its own three-colour set (bg / text / border) without per-child
+// .surface--active rules. Defaults below are for light surface; the
+// .surface--active block down in section 4 flips them to the dark-
+// surface chip palette (yellow accent, deeper-green --all variant).
+.surface {
+  --chip-neutral-bg:     var(--scrim-5);
+  --chip-neutral-text:   var(--color-text-muted);
+  --chip-neutral-edge:   var(--scrim-6);
+  --chip-day-bg:         var(--color-link-wash);
+  --chip-day-text:       var(--color-link);
+  --chip-day-edge:       var(--color-link-edge);
+  --chip-all-bg:         var(--color-success-wash);
+  --chip-all-text:       var(--color-success-text-on-wash);
+  --chip-all-edge:       var(--color-success-edge);
+}
+.surface--active {
+  // On the dark purple gradient: time-window neutral chips lift to
+  // accent-yellow; the green --all chip pumps wash + text strength so
+  // contrast still clears WCAG AA against the darker background.
+  --chip-neutral-bg:     var(--color-accent-wash);
+  --chip-neutral-text:   var(--color-accent);
+  --chip-neutral-edge:   var(--color-accent-edge);
+  --chip-all-bg:         var(--color-success-wash-strong);
+  --chip-all-text:       var(--color-success-text-on-wash-strong);
+  --chip-all-edge:       var(--color-success-edge-strong);
+  // --chip-day-* inherits the light-surface defaults; that palette
+  // already reads cleanly on the gradient.
+}
+
+.schedule-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--chip-neutral-bg);
+  color: var(--chip-neutral-text);
+  border: 1px solid var(--chip-neutral-edge);
+
+  i { font-size: 0.85em; opacity: 0.85; }
+}
+.schedule-chip--day {
+  background: var(--chip-day-bg);
+  color: var(--chip-day-text);
+  border-color: var(--chip-day-edge);
+}
+.schedule-chip--all {
+  background: var(--chip-all-bg);
+  color: var(--chip-all-text);
+  border-color: var(--chip-all-edge);
+}
+
+// Schedule-window cell — replaces the prior pair of raw start/end
+// datetime columns with a single human-readable block: status dot,
+// relative phrase ('Live · ends in 21 days'), compact absolute range
+// ('Mar 12 → May 23').
+.schedule-window {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+// Schedule-window state-color set is also exposed through chip-style
+// context tokens so the live-dot fill and outer ring can shift on the
+// dark active surface (where success-bright reads better than the
+// regular --color-success). Sets default to light-surface palette;
+// .surface--active flips just the live-state pair.
+.surface {
+  --window-dot-default-ring: var(--scrim-4);
+  --window-live-fill: var(--color-success);
+  --window-live-ring: var(--color-success-ring);
+}
+.surface--active {
+  --window-dot-default-ring: var(--scrim-on-dark-5);
+  --window-live-fill: var(--color-success-bright);
+  --window-live-ring: var(--color-success-wash);
+}
+
+.schedule-window__dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  flex: none;
+  background: var(--surface-text-muted);
+  box-shadow: 0 0 0 var(--ring-width) var(--window-dot-default-ring);
+}
+.schedule-window__primary {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  color: var(--surface-text);
+}
+.schedule-window__secondary {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: var(--surface-text-muted);
+  letter-spacing: 0.01em;
+}
+.schedule-window--live .schedule-window__dot {
+  background: var(--window-live-fill);
+  box-shadow: 0 0 0 var(--ring-width) var(--window-live-ring);
+  animation: schedule-window-pulse 2.4s ease-in-out infinite;
+}
+.schedule-window--upcoming .schedule-window__dot {
+  background: var(--color-link);
+  box-shadow: 0 0 0 var(--ring-width) var(--color-link-ring);
+}
+.schedule-window--expired .schedule-window__dot,
+.schedule-window--disabled .schedule-window__dot {
+  background: var(--surface-text-muted);
+  box-shadow: 0 0 0 var(--ring-width) var(--window-dot-default-ring);
+}
+.schedule-window--expired .schedule-window__primary {
+  color: var(--surface-text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--surface-text-faint);
+}
+.schedule-window--disabled .schedule-window__primary {
+  color: var(--surface-text-muted);
+}
+.schedule-window--scheduled .schedule-window__dot {
+  background: var(--color-warning);
+  box-shadow: 0 0 0 var(--ring-width) var(--color-warning-ring);
+}
+
+@keyframes schedule-window-pulse {
+  0%, 100% { box-shadow: 0 0 0 var(--ring-width) var(--color-success-ring); }
+  50%      { box-shadow: 0 0 0 calc(var(--ring-width) * 2) var(--color-success-ring-pulse); }
+}
+
+// -----------------------------------------------------------------------------
+// 8. Activity toggle (form switch) sizing
+// -----------------------------------------------------------------------------
+.app-switch.activity-toggle .app-check-input {
+  width: 2.4em;
+  height: 1.35em;
+  cursor: pointer;
+}
+
+// Default unchecked switch uses the browser's native appearance — no
+// override needed on the light surface. The dark surface needs an
+// explicit fill because a transparent off-state vanishes against the
+// purple gradient.
+.surface--active .app-check-input:not(:checked) {
+  background-color: var(--scrim-on-dark-18);
+  border-color: var(--scrim-on-dark-30);
+}
+
+// -----------------------------------------------------------------------------
+// 9. Action group (icon buttons) and processing label
+// -----------------------------------------------------------------------------
+.action-group {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.processing-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--surface-scrim-5);
+  color: var(--surface-text-muted);
+}
+
+// -----------------------------------------------------------------------------
+// 10. Empty state
+// -----------------------------------------------------------------------------
+.empty-state {
+  text-align: center;
+  padding: var(--space-7) var(--space-4);
+  color: var(--surface-text-muted);
+
+  .empty-state__icon {
+    font-size: 2rem;
+    opacity: 0.45;
+    margin-bottom: var(--space-2);
+  }
+  .empty-state__title {
+    font-weight: 600;
+    margin-bottom: var(--space-1);
+  }
+  .empty-state__description {
+    font-size: 0.9rem;
+    margin: 0 0 var(--space-3);
+  }
+  a {
+    font-weight: 600;
+    color: var(--surface-anchor);
+    &:hover { color: var(--surface-anchor-hover); }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 11. Modal
+// -----------------------------------------------------------------------------
+.modal-overlay {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  position: fixed;
+  inset: 0;
+  padding: var(--space-5);
+  overflow-y: auto;
+  background: rgba(15, 0, 25, 0.55);
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+  z-index: 1050;
+}
+
+.modal-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 720px;
+  margin: auto;
+  overflow: hidden;
+  color: var(--color-text);
+  animation: modal-in 220ms var(--ease-out) both;
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal-card--sm { max-width: 480px; }
+
+.modal-card__header {
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+
+  h2 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+}
+
+.modal-card__close {
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--scrim-5);
+  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+  &:hover { background: var(--scrim-10); color: var(--color-text); }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
+  }
+}
+
+// Modal-scoped tab styling — dark-on-white with an underline indicator
+// for the active tab. Overrides the default `.app-tabs` so the wider
+// inactive-tab muting reads cleanly inside the asset modal.
+.modal-card .app-tabs {
+  border-bottom: 1px solid var(--color-border);
+
+  .app-tab-link {
+    color: var(--color-text-muted);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 0.55rem 0.85rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: color var(--t-fast), border-color var(--t-fast);
+
+    &:hover {
+      color: var(--color-text);
+      border-bottom-color: var(--color-border);
+    }
+    &.active {
+      color: var(--color-text);
+      background: transparent;
+      border-bottom-color: var(--color-text);
+    }
+  }
+}
+
+.modal-card__body  { padding: var(--space-6); }
+.modal-card__footer {
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-soft);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+// Preview modal — wider card, dark stage so transparent images stay
+// readable and videos sit on a neutral surround.
+.modal-card--preview { max-width: 960px; }
+.modal-card__body--preview {
+  padding: 0;
+  background: var(--color-bg-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  max-height: calc(100vh - 12rem);
+}
+.preview-media {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 12rem);
+  width: auto;
+  height: auto;
+  margin: 0 auto;
+  background: #000;
+  outline: none;
+}
+.preview-media--frame {
+  width: 100%;
+  height: 70vh;
+  max-height: calc(100vh - 12rem);
+  border: 0;
+  background: var(--color-surface);
+}
+
+// -----------------------------------------------------------------------------
+// 12. Forms — token-driven form components.
+// -----------------------------------------------------------------------------
+.app-input,
+.app-select {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  background-clip: padding-box;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-link);
+    box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
+  }
+  &:disabled,
+  &[readonly] {
+    background-color: var(--color-surface-tint);
+    color: var(--color-text-muted);
+  }
+  &::placeholder {
+    color: var(--color-text-muted);
+    opacity: 0.7;
+  }
+}
+.app-select {
+  appearance: none;
+  padding-right: 2.5rem;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%235e5868' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  background-size: 14px;
+  cursor: pointer;
+}
+.app-floating {
+  position: relative;
+
+  > .app-input,
+  > .app-select {
+    height: 3.6rem;
+    padding-block: 1.4rem 0.4rem;
+  }
+  > label {
+    position: absolute;
+    inset: 0 auto auto 0;
+    padding: 0.85rem;
+    pointer-events: none;
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+    transition: opacity var(--t-fast), transform var(--t-fast),
+      font-size var(--t-fast);
+    transform-origin: 0 0;
+    font-weight: 500;
+  }
+  > .app-input:focus ~ label,
+  > .app-input:not(:placeholder-shown) ~ label,
+  > .app-select ~ label {
+    transform: translateY(-0.55rem);
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    letter-spacing: 0.04em;
+    font-weight: 600;
+  }
+}
+
+.app-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 1.5rem;
+}
+.app-check-input {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  margin: 0;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  cursor: pointer;
+  transition: background-color var(--t-fast), border-color var(--t-fast),
+    box-shadow var(--t-fast);
+
+  &:checked {
+    background-color: var(--color-link);
+    border-color: var(--color-link);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='m4 8.5 3 3 5-7'/%3e%3c/svg%3e");
+    background-size: 0.85rem 0.85rem;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
+  }
+}
+.app-check-label {
+  cursor: pointer;
+  user-select: none;
+}
+.app-switch .app-check-input {
+  width: 2.25rem;
+  height: 1.25rem;
+  border-radius: var(--radius-pill);
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%235e5868'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: left 0.15rem center;
+  background-size: 0.85rem;
+
+  &:checked {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e");
+    background-position: right 0.15rem center;
+  }
+}
+
+.app-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  @media (max-width: 720px) { grid-template-columns: 1fr; }
+}
+
+.weekday-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+
+  .weekday {
+    --bg: var(--color-surface-tint);
+    --fg: var(--color-text);
+    border: 1px solid var(--color-border);
+    background: var(--bg);
+    color: var(--fg);
+    font-weight: 600;
+    padding: 0.4rem 0.85rem;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    user-select: none;
+    transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+    input { display: none; }
+  }
+  .weekday:has(input:checked) {
+    --bg: #{$anthias-yellow-3};
+    --fg: var(--color-accent-text);
+    border-color: $anthias-yellow-2;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 13. Stat card (system info)
+// -----------------------------------------------------------------------------
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+
+  @media (max-width: 1100px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 540px)  { grid-template-columns: 1fr; }
+}
+
+.stat-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  // Equal-height cards within a row of the stat-grid so a 1-line
+  // value next to a 3-line memory donut doesn't jump heights.
+  height: 100%;
+
+  .stat-card__label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+  // Two-line layout: label on top, value-block flex-grows so cards
+  // with extra content (donut + legend, loadavg bars) bottom-align
+  // their footer meta the same way as compact text cards.
+  .stat-card__value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    word-break: break-word;
+    margin-top: auto;
+
+    a { color: inherit; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  }
+  // Variant for monospace identifier values (MAC, version) so the
+  // typography reads as 'identifier' instead of 'headline number'.
+  .stat-card__value--mono {
+    font-size: 1rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+  .stat-card__meta {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    margin-top: 0;
+  }
+  .stat-card__meta a { color: $anthias-purple-5; text-decoration: none; }
+  .stat-card__meta a:hover { text-decoration: underline; }
+}
+
+.stat-card--span-2 { grid-column: span 2; @media (max-width: 540px) { grid-column: span 1; } }
+.stat-card--span-full { grid-column: 1 / -1; }
+
+// Version line on System Info — calver `v2026.5.0` is the headline
+// number; the git-meta `(08c26f3, vanilla-django)` sits underneath
+// in a smaller muted font so it doesn't compete with the release
+// number. Optional "Update available" pill stacks below both.
+// Replaces the prior Update-available nav-tab so the announcement
+// lives next to the thing it's announcing about.
+.version-line {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+.version-line__head { font-size: 1.05rem; line-height: 1.2; }
+.version-line__meta {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.update-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--t-fast);
+  > i { font-size: 0.95rem; }
+  &:hover { background: var(--color-accent-hover); text-decoration: none; }
+}
+
+// Section grouping on System Info — three named blocks (Resources /
+// Display / Anthias) so the eye lands on a heading instead of a wall
+// of stat-cards. Header eyebrow + lede mirrors the settings sections.
+.info-section {
+  margin-bottom: var(--space-7);
+  &:last-child { margin-bottom: 0; }
+}
+.info-section__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--space-4);
+
+  h2 {
+    margin: 0;
+    color: var(--color-text-on-dark);
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    display: inline-flex;
+    align-items: center;
+    i { color: var(--color-text-on-dark-muted); font-size: 0.95em; }
+  }
+}
+.info-section__lede {
+  margin: 0;
+  color: var(--color-text-on-dark-muted);
+  font-size: 0.875rem;
+}
+
+// Load-average card on System Info. Three rows (1m / 5m / 15m), each
+// a label + bar + numeric. Bar fill colour is driven by severity
+// ('ok' green, 'warn' amber, 'high' red) so a saturated CPU pops.
+// The trend block on the right reads off whether 1m has climbed or
+// cooled off vs 15m so the operator can spot rising load at a glance.
+.loadavg-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-5);
+  align-items: center;
+  margin-top: var(--space-2);
+  @media (max-width: 540px) {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+}
+.loadavg-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.loadavg-row {
+  display: grid;
+  grid-template-columns: 3rem 1fr 3.5rem;
+  gap: var(--space-3);
+  align-items: center;
+  font-size: 0.875rem;
+}
+.loadavg-row__label {
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.loadavg-row__bar {
+  position: relative;
+  height: 0.55rem;
+  background: var(--scrim-6);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.loadavg-row__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--color-success);
+  transition: width 200ms var(--ease-out);
+}
+.loadavg-row--warn .loadavg-row__fill { background: var(--color-warning); }
+.loadavg-row--high .loadavg-row__fill { background: var(--color-danger); }
+.loadavg-row__value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+  color: var(--color-text);
+}
+
+.loadavg-trend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--scrim-4);
+  border-radius: var(--radius-md);
+  min-width: 12rem;
+
+  i { font-size: 1.6rem; flex: none; color: var(--color-text-muted); }
+}
+.loadavg-trend--up i { color: var(--color-danger); }
+.loadavg-trend--down i { color: var(--color-success); }
+.loadavg-trend__primary {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1rem;
+}
+.loadavg-trend__secondary {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+// Resource donut + legend (memory and disk on System Info). Slice
+// percentages are seeded inline as --slice-1 / --slice-2 (slice 3
+// fills to 100%), so the same component renders both a 3-slice
+// memory pie (used / cache / free) and a 2-slice disk pie (used /
+// free) by setting --slice-2: 0.
+.resource-card {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: var(--space-5);
+  align-items: center;
+  margin-top: var(--space-2);
+  // Drop to a stacked layout on narrow viewports / when the host
+  // card is span-1 in a 4-col grid — donut + legend can't share a
+  // row at < 30rem of inner width without crowding.
+  @media (max-width: 880px) {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: var(--space-4);
+  }
+}
+.resource-pie {
+  width: 11rem;
+  height: 11rem;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--slice-1-color, var(--color-link)) 0% calc(var(--slice-1) * 1%),
+    var(--slice-2-color, var(--color-warning))
+      calc(var(--slice-1) * 1%)
+      calc((var(--slice-1) + var(--slice-2)) * 1%),
+    var(--slice-3-color, var(--color-success))
+      calc((var(--slice-1) + var(--slice-2)) * 1%) 100%
+  );
+  position: relative;
+  flex: none;
+  box-shadow: inset 0 0 0 1px var(--scrim-6), var(--shadow-sm);
+}
+// Disk uses different slice colours (red-ish for used, green for free)
+// so a near-full drive reads as a warning at a glance.
+.resource-pie--disk {
+  --slice-1-color: var(--color-danger);
+  --slice-3-color: var(--color-success);
+}
+.resource-pie__inner {
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 var(--space-2);
+}
+.resource-pie__total {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+  line-height: 1;
+}
+.resource-pie__unit {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-top: 0.35rem;
+}
+
+.resource-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 0.875rem;
+  min-width: 0;
+}
+.resource-legend__row {
+  display: grid;
+  grid-template-columns: 0.85rem 1fr auto;
+  gap: var(--space-2);
+  align-items: center;
+}
+.resource-legend__swatch {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 0.25rem;
+  background: var(--color-text-muted);
+  flex: none;
+}
+.resource-legend__name { color: var(--color-text); font-weight: 600; }
+.resource-legend__value {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.resource-legend__row--slice-1 .resource-legend__swatch { background: var(--color-link); }
+.resource-legend__row--slice-2 .resource-legend__swatch { background: var(--color-warning); }
+.resource-legend__row--slice-3 .resource-legend__swatch { background: var(--color-success); }
+.resource-pie--disk ~ .resource-legend .resource-legend__row--slice-1 .resource-legend__swatch { background: var(--color-danger); }
+.resource-legend__row--ghost .resource-legend__swatch {
+  background: transparent;
+  border: 1.5px dashed var(--scrim-25);
+}
+.resource-legend__row--ghost .resource-legend__name {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+// -----------------------------------------------------------------------------
+// 14. Settings sections
+// -----------------------------------------------------------------------------
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.settings-section {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-6);
+  color: var(--color-text);
+
+  > header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+  }
+
+  h2 {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .settings-section__lede {
+    margin: var(--space-1) 0 0;
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    max-width: 60ch;
+  }
+  .settings-section__actions {
+    display: flex;
+    gap: var(--space-2);
+  }
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+  &:last-child { border-bottom: none; }
+
+  .toggle-row__label {
+    font-weight: 600;
+    margin: 0;
+  }
+  .toggle-row__hint {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin: 2px 0 0;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 15. Navbar (component partial reuses these classes)
+// -----------------------------------------------------------------------------
+.app-nav {
+  height: 4.5rem;
+  padding: 0;
+  background: rgba(15, 0, 25, 0.7) !important;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  border-bottom: 1px solid var(--scrim-on-dark-6);
+
+  .app-nav-brand {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    img { height: 28px; }
+  }
+
+  .app-tab-link {
+    color: var(--color-text-on-dark-muted) !important;
+    padding: 0.45rem 0.85rem !important;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    font-size: 0.95rem;
+    transition: color var(--t-fast), background var(--t-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+
+    i { font-size: 0.95em; opacity: 0.85; }
+
+    &:hover {
+      color: var(--color-text-on-dark) !important;
+      background: var(--scrim-on-dark-6);
+    }
+    &.active {
+      color: var(--color-text-on-dark) !important;
+      background: var(--scrim-on-dark-10);
+    }
+  }
+
+  .divider-vertical {
+    width: 1px;
+    height: 1.5rem;
+    background: var(--color-border-on-dark);
+    margin: 0 var(--space-2);
+  }
+
+  .app-nav-toggler {
+    border: 1px solid var(--scrim-on-dark-15);
+    color: var(--color-text-on-dark);
+    padding: 0.4rem 0.55rem;
+    &:focus { box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring); }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 16. Footer
+// -----------------------------------------------------------------------------
+$footer-height: 13rem;
+
+#footer {
+  margin-top: var(--space-8);
+  background: rgba(15, 0, 25, 0.5);
+  border-top: 1px solid var(--scrim-on-dark-6);
+  color: var(--color-text-on-dark-muted);
+
+  .links a {
+    color: var(--color-text-on-dark-muted);
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-decoration: none;
+    transition: color var(--t-fast);
+    &:hover { color: var(--color-text-on-dark); }
+  }
+
+  a.brand { color: var(--color-accent); text-decoration: none; }
+  a.brand:hover { color: var(--color-text-on-dark); }
+
+  .copy {
+    margin-top: var(--space-5);
+    border-top: 1px solid var(--scrim-on-dark-5);
+    color: var(--color-text-on-dark-faint);
+    font-size: 0.7rem;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 17. Splash page (kept compact, mostly unchanged behaviour)
+// -----------------------------------------------------------------------------
+.splash {
+  background-color: $anthias-purple-1;
+  background-size: 100% 100%;
+  margin-top: 0;
+  padding-top: 0;
+  font-size: calc((1.5vw + 1.5vh) / 2);
+
+  .splash-body {
+    background-color: $anthias-purple-3;
+    color: white;
+    border-radius: var(--radius-lg);
+  }
+  .row { display: block; }
+  .logo-container {
+    padding: 3vh 0;
+    margin-bottom: 3vh;
+    img { width: 75%; }
+  }
+  @media (max-width: 767px) {
+    .logo-container {
+      padding: 20px 0;
+      img { max-height: 100px; width: auto; }
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 17b. Upload dropzone + progress (asset add modal)
+// -----------------------------------------------------------------------------
+.upload-dropzone {
+  display: block;
+  text-align: center;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  cursor: pointer;
+  background: var(--color-surface-tint);
+  transition: border-color var(--t-fast), background var(--t-fast);
+
+  &:hover {
+    border-color: var(--color-link);
+    background: #ece4f5;
+  }
+  &.is-disabled { pointer-events: none; opacity: 0.5; }
+}
+
+.upload-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-soft);
+
+  .upload-progress__head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    i { font-size: 1.5rem; color: var(--color-link); flex: none; }
+  }
+  .upload-progress__text { min-width: 0; flex: 1 1 auto; }
+  .upload-progress__bar {
+    position: relative;
+    height: 8px;
+    background: var(--color-border);
+    border-radius: var(--radius-pill);
+    overflow: hidden;
+  }
+  .upload-progress__fill {
+    height: 100%;
+    background: var(--color-link);
+    border-radius: var(--radius-pill);
+    transition: width 200ms var(--ease-out);
+  }
+  .upload-progress__fill--indeterminate {
+    background: linear-gradient(
+      90deg,
+      var(--color-link) 0%,
+      #9b6bd6 50%,
+      var(--color-link) 100%
+    );
+    background-size: 200% 100%;
+    animation: upload-shimmer 1.6s linear infinite;
+  }
+  .upload-progress__spin {
+    display: inline-block;
+    animation: upload-spin 1.2s linear infinite;
+  }
+}
+@keyframes upload-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@keyframes upload-spin {
+  to { transform: rotate(360deg); }
+}
+
+// -----------------------------------------------------------------------------
+// 17c. Toast stack (global)
+// -----------------------------------------------------------------------------
+.app-toast-stack {
+  position: fixed;
+  top: calc(4.5rem + var(--space-4));   // below the fixed app-nav
+  right: var(--space-5);
+  z-index: 1080;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+  max-width: min(420px, calc(100vw - var(--space-5) * 2));
+}
+// Named `.app-toast` rather than `.toast` so we don't collide with any
+// other framework's toast component if one ever lands underneath.
+//
+// The body background is anthias-purple-1 (#1f0029); the prior
+// `background: var(--color-text)` resolved to #1f002a — one hex
+// digit off, indistinguishable from the page. Use the surface white
+// instead so toasts stand out as a card notification on the dark
+// theme. Accent stays on the left-border + leading icon.
+.app-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+  font-size: 0.95rem;
+  border-left: 4px solid var(--color-link);
+
+  > i { flex: none; font-size: 1.1rem; }
+  .app-toast__msg { flex: 1 1 auto; min-width: 0; }
+  .app-toast__close {
+    flex: none;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 0 var(--space-1);
+    line-height: 1;
+    border-radius: var(--radius-sm);
+    transition: color var(--t-fast), background var(--t-fast);
+    &:hover { color: var(--color-text); background: var(--scrim-8); }
+  }
+}
+.app-toast--success { border-left-color: var(--color-success); > i { color: var(--color-success); } }
+.app-toast--error   { border-left-color: var(--color-danger); > i { color: var(--color-danger); } }
+.app-toast--info    { border-left-color: var(--color-link); > i { color: var(--color-accent); } }
+
+// -----------------------------------------------------------------------------
+// 18. Misc
+// -----------------------------------------------------------------------------
+[hidden] { display: none !important; }
+
+.divider-vertical-inline {
+  display: inline-block;
+  width: 1px;
+  height: 1rem;
+  background: var(--color-border);
+  margin: 0 var(--space-2);
+  vertical-align: middle;
+}
+
+// =============================================================================
+// 19. App component classes
+//
+// The earlier sections style page-bespoke components (.app-btn, .surface,
+// .modal-card, .stat-card, .schedule-chip, …). The block below covers
+// the small layout / nav primitives the templates depend on, all driven
+// from the design-token CSS variables.
+// =============================================================================
+
+// --- Layout app-container — responsive max-widths ---
+.app-container {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: var(--space-4);
+  @media (min-width: 576px)  { max-width: 540px; }
+  @media (min-width: 768px)  { max-width: 720px; }
+  @media (min-width: 992px)  { max-width: 960px; }
+  @media (min-width: 1200px) { max-width: 1140px; }
+  @media (min-width: 1400px) { max-width: 1320px; }
+}
+
+// --- Tabs (asset modal) ---
+.app-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.app-tab-item { display: flex; }
+.app-tab-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  text-decoration: none;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: color var(--t-fast), background var(--t-fast);
+
+  &:hover { background: var(--scrim-4); }
+}
+
+.app-nav-toggler {
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--scrim-on-dark-15);
+  color: var(--color-text-on-dark);
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--radius-md);
+  font-size: 1.1rem;
+  line-height: 1;
+  @media (min-width: 992px) { display: none; }
+}
+.app-nav-items {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  @media (min-width: 992px) { flex-direction: row; }
+}
+.app-nav-brand {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}

@@ -1,0 +1,88 @@
+{% load asset_filters %}
+{% with pills=asset|schedule_pills %}
+<tr data-asset-id="{{ asset.asset_id }}" data-processing="{{ asset.is_processing|yesno:'true,false' }}" data-name="{{ asset.name|default:''|escape }}" data-duration="{{ asset.duration|default:0 }}">
+  <td>
+    <div class="asset-cell-name">
+      {% if is_active %}<i class="ti ti-grip-vertical drag-handle" title="Drag to reorder"></i>{% endif %}
+      <span class="asset-cell-name__icon">
+        {% if asset.mimetype == 'image' %}<i class="ti ti-photo"></i>
+        {% elif asset.mimetype == 'video' %}<i class="ti ti-video"></i>
+        {% else %}<i class="ti ti-world"></i>
+        {% endif %}
+      </span>
+      <span class="asset-cell-name__title">
+        <span class="asset-cell-name__primary">{{ asset.name }}</span>
+        {% if pills %}
+        <span class="schedule-chips">
+          {% for pill in pills %}
+          <span class="schedule-chip schedule-chip--{{ pill.kind }}">
+            {% if pill.kind == 'all' %}<i class="ti ti-calendar-check"></i>
+            {% elif pill.kind == 'time' %}<i class="ti ti-clock"></i>
+            {% else %}<i class="ti ti-calendar-event"></i>{% endif %}
+            <span>{{ pill.label }}</span>
+          </span>
+          {% endfor %}
+        </span>
+        {% endif %}
+      </span>
+    </div>
+  </td>
+  {% with window=asset|schedule_window %}
+  <td>
+    <div class="schedule-window schedule-window--{{ window.kind }}">
+      <div class="schedule-window__dot" aria-hidden="true"></div>
+      <div>
+        <p class="schedule-window__primary">{{ window.primary }}</p>
+        {% if window.secondary %}<p class="schedule-window__secondary">{{ window.secondary }}</p>{% endif %}
+      </div>
+    </div>
+  </td>
+  {% endwith %}
+  <td>{{ asset.duration|humanize_duration }}</td>
+  <td>
+    {% if asset.is_processing %}
+    <span class="processing-pill"><i class="ti ti-refresh"></i>Processing</span>
+    {% else %}
+    <form method="post" action="{% url 'anthias_app:assets_toggle' asset_id=asset.asset_id %}" class="m-0">
+      {% csrf_token %}
+      <div class="app-check app-switch activity-toggle m-0">
+        <input
+          type="checkbox"
+          class="app-check-input"
+          {% if asset.is_enabled %}checked{% endif %}
+          aria-label="Toggle active"
+          onchange="this.form.requestSubmit()"
+        >
+      </div>
+    </form>
+    {% endif %}
+  </td>
+  <td class="text-right">
+    <div class="action-group">
+      <button
+        type="button"
+        class="app-btn app-btn-icon"
+        title="Preview"
+        @click='openPreview({{ asset|to_json }})'
+      ><i class="ti ti-eye"></i></button>
+      <a
+        href="{% url 'anthias_app:assets_download' asset_id=asset.asset_id %}"
+        class="app-btn app-btn-icon"
+        title="Download"
+      ><i class="ti ti-download"></i></a>
+      <button
+        type="button"
+        class="app-btn app-btn-icon"
+        title="Edit"
+        @click='openEdit({{ asset|to_json }})'
+      ><i class="ti ti-pencil"></i></button>
+      <button
+        type="button"
+        class="app-btn app-btn-icon"
+        title="Delete"
+        @click="openDelete('{{ asset.asset_id }}', '{{ asset.name|default:''|escapejs }}')"
+      ><i class="ti ti-trash"></i></button>
+    </div>
+  </td>
+</tr>
+{% endwith %}

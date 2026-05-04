@@ -1,8 +1,10 @@
+import ipaddress
 import json
 import logging
 import os
 import random
 import re
+import socket
 import string
 from datetime import datetime, timedelta
 from os import getenv, path, utime
@@ -206,6 +208,67 @@ def get_node_ip() -> str:
     return 'Unable to retrieve IP.'
 
 
+_DRM_RES_RE = re.compile(r'^(\d+)x(\d+)')
+
+
+def _drm_card_resolution(entry_path: str) -> str | None:
+    """First active mode on a /sys/class/drm/<card-port> entry, or None."""
+    try:
+        with open(os.path.join(entry_path, 'status')) as f:
+            if f.read().strip() != 'connected':
+                return None
+        with open(os.path.join(entry_path, 'modes')) as f:
+            modes = f.read().strip().splitlines()
+    except OSError:
+        return None
+    if not modes:
+        return None
+    m = _DRM_RES_RE.match(modes[0])
+    return f'{m.group(1)}x{m.group(2)}' if m else None
+
+
+def _drm_resolution() -> str | None:
+    """Walk /sys/class/drm/ for the first connected output's mode."""
+    try:
+        entries = list(os.scandir('/sys/class/drm'))
+    except OSError:
+        return None
+    for entry in entries:
+        if 'card' not in entry.name or '-' not in entry.name:
+            continue
+        result = _drm_card_resolution(entry.path)
+        if result:
+            return result
+    return None
+
+
+def _fb_resolution() -> str | None:
+    """Plain framebuffer fallback (Pi 1-4 legacy KMS, some embedded)."""
+    try:
+        with open('/sys/class/graphics/fb0/virtual_size') as f:
+            raw = f.read().strip()
+    except OSError:
+        return None
+    if ',' not in raw:
+        return None
+    try:
+        w, h = raw.split(',', 1)
+        return f'{int(w)}x{int(h)}'
+    except ValueError:
+        return None
+
+
+def detect_screen_resolution() -> str | None:
+    """Probe the active display's resolution as 'WIDTHxHEIGHT'.
+
+    Tries Linux KMS first, then the legacy framebuffer interface. Both
+    work without an X server, which matches the viewer's Qt direct-
+    render setup. Returns None when nothing is reachable so the caller
+    can fall back to the operator-configured resolution from settings.
+    """
+    return _drm_resolution() or _fb_resolution()
+
+
 def get_node_mac_address() -> str:
     """
     Returns the MAC address.
@@ -226,7 +289,87 @@ def get_node_mac_address() -> str:
             return str(r.json()['mac_address'])
         return 'Unknown'
 
-    return os.getenv('MAC_ADDRESS', 'Unable to retrieve MAC address.')
+    # MAC_ADDRESS is injected by bin/upgrade_containers.sh on production
+    # installs (host MAC, not the container veth). When that env var
+    # isn't set — dev `docker-compose.dev.yml` doesn't define it, and
+    # operators running the prebuilt images standalone may miss it too
+    # — fall back to detecting whatever MAC is reachable from inside
+    # the container via the getmac package. That's the best signal we
+    # have without --net=host, and it beats showing 'Unable to retrieve'.
+    env_value = os.getenv('MAC_ADDRESS')
+    if env_value:
+        return env_value
+    detected = _detect_local_mac()
+    if detected:
+        return detected
+    return 'Unable to retrieve MAC address.'
+
+
+_NET_SKIP_PREFIXES = ('lo', 'docker', 'br-', 'veth')
+_SYSNET_DIR = '/sys/class/net'
+
+
+def _read_iface_mac(iface: str) -> str | None:
+    """Read /sys/class/net/<iface>/address; skip placeholder zeros."""
+    try:
+        with open(os.path.join(_SYSNET_DIR, iface, 'address')) as f:
+            mac = f.read().strip()
+    except OSError:
+        return None
+    if mac and mac != '00:00:00:00:00:00':
+        return mac
+    return None
+
+
+def _default_route_iface() -> str | None:
+    """Interface name carrying the default route, or None."""
+    try:
+        with open('/proc/net/route') as f:
+            next(f, None)  # header row
+            for line in f:
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+                iface, destination, _gw, flags_hex = parts[:4]
+                # Default route: destination 0.0.0.0 + RTF_UP flag set.
+                if destination == '00000000' and (int(flags_hex, 16) & 0x1):
+                    return iface
+    except OSError:
+        pass
+    return None
+
+
+def _first_non_loopback_mac() -> str | None:
+    """Fallback when no default route is published — scan ifaces."""
+    try:
+        candidates = sorted(os.listdir(_SYSNET_DIR))
+    except OSError:
+        return None
+    for iface in candidates:
+        if any(iface.startswith(p) for p in _NET_SKIP_PREFIXES):
+            continue
+        mac = _read_iface_mac(iface)
+        if mac:
+            return mac
+    return None
+
+
+def _detect_local_mac() -> str | None:
+    """Return the MAC of the interface carrying the default route.
+
+    Picking the 'active' interface matches what an operator expects to
+    see — the NIC the player reaches the network through — rather than
+    the alphabetical first-non-loopback. Falls back to scanning ifaces
+    when no default route is published.
+    """
+    if not os.path.isdir(_SYSNET_DIR):
+        return None
+    primary = _default_route_iface()
+    if primary:
+        mac = _read_iface_mac(primary)
+        if mac:
+            return mac
+    return _first_non_loopback_mac()
 
 
 def get_active_connections(
@@ -370,10 +513,63 @@ def json_dump(obj: Any) -> str:
     return json.dumps(obj, default=handler)
 
 
+def _is_private_address(host: str) -> bool:
+    """True when the resolved host points at a private/loopback range.
+
+    SSRF defence — the asset-revalidation sweep is a celery task that
+    fetches operator-supplied URIs. Without this guard, an authenticated
+    operator could store http://192.168.x.x/internal-admin and use the
+    sweep as a probe of the host's LAN, leaking reachable services.
+
+    Operators on a trusted intranet (signage running entirely against
+    LAN content) can opt back in with the ANTHIAS_ALLOW_PRIVATE_FETCH
+    env var; defaults to off.
+    """
+    if os.getenv('ANTHIAS_ALLOW_PRIVATE_FETCH', '').lower() in (
+        '1',
+        'true',
+        'yes',
+    ):
+        return False
+    if not host:
+        return False
+    try:
+        # AF_UNSPEC so we cover both IPv4 and IPv6 results from DNS.
+        infos = socket.getaddrinfo(host, None)
+    except (socket.gaierror, UnicodeError):
+        return False
+    for info in infos:
+        try:
+            addr = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_multicast
+            or addr.is_reserved
+        ):
+            return True
+    return False
+
+
 def url_fails(url: str) -> bool:
     """
     If it is streaming
     """
+    parsed = urlparse(url)
+    # Reject URLs whose host resolves into a private / loopback /
+    # link-local / multicast / reserved range. Treats failure-to-fetch
+    # as `True` (the sweep marks the asset un-reachable) — safe-failing
+    # behaviour: a URL we won't fetch shouldn't be flagged 'reachable'.
+    if parsed.scheme in (
+        'http',
+        'https',
+        'rtsp',
+        'rtmp',
+    ) and _is_private_address(parsed.hostname or ''):
+        return True
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
         # ffprobe ships with ffmpeg, which is already in the base
         # image. Exit code 0 means libavformat could open the stream

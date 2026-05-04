@@ -30,8 +30,18 @@ COPY package.json \
     /app/
 RUN bun install --frozen-lockfile
 
-COPY ./static/sass/*.scss /app/static/sass/
-COPY ./static/src/ /app/static/src/
+COPY ./src/anthias_server/app/static/sass/*.scss \
+    /app/src/anthias_server/app/static/sass/
+COPY ./src/anthias_server/app/static/src/ \
+    /app/src/anthias_server/app/static/src/
+# Tailwind v4 reads `@source` directives from tailwind.css, which
+# point at ../../templates/**/*.html. Without the template tree in
+# the builder context the JIT scan finds zero class strings and emits
+# an almost-empty utility CSS — dev/test work because they share the
+# host bind-mount, but the production image would ship unstyled.
+# Copy the templates in before running the build.
+COPY ./src/anthias_server/app/templates/ \
+    /app/src/anthias_server/app/templates/
 RUN bun run build
 
 {% endif %}
@@ -49,8 +59,8 @@ WORKDIR /usr/src/app
 
 {% if environment == 'production' %}
 COPY --from=bun-builder \
-    /app/static/dist/ \
-    /usr/src/app/static/dist/
+    /app/src/anthias_server/app/static/dist/ \
+    /usr/src/app/src/anthias_server/app/static/dist/
 {% else %}
 COPY --from=oven/bun:1.3.13-slim /usr/local/bin/bun /usr/local/bin/bun
 RUN ln -sf bun /usr/local/bin/bunx

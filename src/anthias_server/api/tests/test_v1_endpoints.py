@@ -53,10 +53,9 @@ def test_asset_content(api_client: APIClient, cleanup_asset_dir: None) -> None:
 
 @pytest.mark.django_db
 def test_file_asset(api_client: APIClient, cleanup_asset_dir: None) -> None:
-    project_base_path = django_settings.BASE_DIR
     image_path = os.path.join(
-        project_base_path,
-        'static/img/standby.png',
+        django_settings.BASE_DIR,
+        'src/anthias_server/app/static/img/standby.png',
     )
 
     with open(image_path, 'rb') as file_upload:

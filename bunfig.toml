@@ -1,3 +1,0 @@
-[test]
-preload = ["./static/src/setupTests.ts"]
-root = "./static/src"

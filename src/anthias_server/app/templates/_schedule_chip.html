@@ -1,0 +1,7 @@
+{% comment %}Reusable schedule-window chip for the asset row. Vars: text — preformatted "Mon, Wed, Fri · 9:00 – 17:00" string. Empty / missing → no chip.{% endcomment %}
+{% if text %}
+<span class="schedule-chip" title="Schedule">
+  <i class="ti ti-calendar-event"></i>
+  <span>{{ text }}</span>
+</span>
+{% endif %}

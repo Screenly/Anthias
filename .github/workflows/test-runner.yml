@@ -52,11 +52,15 @@ jobs:
 
       - name: Run TypeScript tests
         if: inputs.test-type == 'typescript'
+        # Invokes the package.json `test` script rather than `bun test`
+        # directly so the post-React tree (which has no .test.ts files)
+        # can declare a no-op script and exit cleanly. When real tests
+        # come back the script just needs to call `bun test` itself.
         run: |
           docker compose exec anthias-test \
             bun install --frozen-lockfile
           docker compose exec anthias-test \
-            bun test
+            bun run test
 
       - name: Run Python unit tests
         if: inputs.test-type == 'python'
@@ -120,6 +124,27 @@ jobs:
           files: ./coverage.xml
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      # Browser-test failure artifacts (Playwright trace.zip +
+      # full-page screenshot per failed test) are written by
+      # pytest-playwright via the
+      # `--tracing retain-on-failure --screenshot only-on-failure
+      # --output test-artifacts` addopts in pyproject.toml. Same
+      # bind-mount story as coverage.xml: anything inside the test
+      # container under /usr/src/app shows up directly on the runner.
+      # `if: failure()` keeps green runs from uploading an empty
+      # bundle; `if-no-files-found: ignore` is a belt for the case
+      # where the failure happens before any test reaches the
+      # tracing-stop call. `playwright show-trace trace.zip` replays
+      # the test interactively when downloading the bundle locally.
+      - name: Upload integration test artifacts
+        if: failure() && inputs.test-type == 'python'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: integration-test-artifacts
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Stop the test container
         run: |
