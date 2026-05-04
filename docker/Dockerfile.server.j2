@@ -34,6 +34,14 @@ COPY ./src/anthias_server/app/static/sass/*.scss \
     /app/src/anthias_server/app/static/sass/
 COPY ./src/anthias_server/app/static/src/ \
     /app/src/anthias_server/app/static/src/
+# Tailwind v4 reads `@source` directives from tailwind.css, which
+# point at ../../templates/**/*.html. Without the template tree in
+# the builder context the JIT scan finds zero class strings and emits
+# an almost-empty utility CSS — dev/test work because they share the
+# host bind-mount, but the production image would ship unstyled.
+# Copy the templates in before running the build.
+COPY ./src/anthias_server/app/templates/ \
+    /app/src/anthias_server/app/templates/
 RUN bun run build
 
 {% endif %}
