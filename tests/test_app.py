@@ -33,7 +33,7 @@ import json
 import os
 import shutil
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import timedelta
 from time import monotonic, sleep
 from typing import Any
@@ -57,7 +57,7 @@ DEFAULT_TIMEOUT_MS = 15_000
 # Asset seed data
 # ---------------------------------------------------------------------------
 
-asset_active = {
+asset_active: dict[str, Any] = {
     'mimetype': 'image',
     'asset_id': '7e978f8c1204a6f70770a1eb54a76e9b',
     'name': 'Sample Image',
@@ -71,7 +71,7 @@ asset_active = {
     'skip_asset_check': 0,
 }
 
-asset_active_2 = {
+asset_active_2: dict[str, Any] = {
     'mimetype': 'web',
     'asset_id': '4c8dbce552edb5812d3a866cfe5f159d',
     'name': 'Wireload',
@@ -85,7 +85,7 @@ asset_active_2 = {
     'skip_asset_check': 0,
 }
 
-asset_disabled = {
+asset_disabled: dict[str, Any] = {
     'mimetype': 'web',
     'asset_id': 'aa11bb22cc33dd44ee55ff6677889900',
     'name': 'Disabled Page',
@@ -179,7 +179,12 @@ def _disable_asset_poll(page: Page) -> None:
     )
 
 
-def _wait_db(predicate, timeout: float = 15.0, *, description: str) -> None:
+def _wait_db(
+    predicate: Callable[[], bool],
+    timeout: float = 15.0,
+    *,
+    description: str,
+) -> None:
     """Poll a Django ORM predicate until truthy. Playwright's locator
     auto-waits don't help here — the assertion is on DB state written
     by uvicorn after a form submit. Walks the deadline manually instead

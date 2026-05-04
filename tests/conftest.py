@@ -31,12 +31,11 @@ Three concerns are handled here, in order:
 """
 
 import importlib.util
-import json
 import os
 import re
 import sys
 import types
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -271,7 +270,7 @@ def _safe_node_id(node_id: str) -> str:
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(
     item: pytest.Item, call: pytest.CallInfo[None]
-) -> Iterator[None]:
+) -> Generator[None, None, None]:
     """Grab a screenshot + HTML when an integration test using the
     ``page`` fixture fails.
 
@@ -281,7 +280,10 @@ def pytest_runtest_makereport(
     paths are swallowed: a flaky screenshot must not mask the original
     test failure.
     """
-    outcome = yield
+    # ``hookwrapper=True`` makes pluggy send the call's Result back
+    # into the generator on yield. mypy can't see that through
+    # _pytest's stubs, so type the receive as Any.
+    outcome: Any = yield
     report = outcome.get_result()
     if report.when != 'call' or not report.failed:
         return
