@@ -61,24 +61,24 @@
     <div class="action-group">
       <button
         type="button"
-        class="app-btn app-btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
+        class="app-btn app-btn-icon app-btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
         title="Preview"
         @click='openPreview({{ asset|to_json }})'
       ><i class="ti ti-eye"></i></button>
       <a
         href="{% url 'anthias_app:assets_download' asset_id=asset.asset_id %}"
-        class="app-btn app-btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
+        class="app-btn app-btn-icon app-btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
         title="Download"
       ><i class="ti ti-download"></i></a>
       <button
         type="button"
-        class="app-btn app-btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
+        class="app-btn app-btn-icon app-btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
         title="Edit"
         @click='openEdit({{ asset|to_json }})'
       ><i class="ti ti-pencil"></i></button>
       <button
         type="button"
-        class="app-btn app-btn-icon btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
+        class="app-btn app-btn-icon app-btn-outline-{% if is_active %}light{% else %}dark{% endif %}"
         title="Delete"
         @click="openDelete('{{ asset.asset_id }}', '{{ asset.name|default:''|escapejs }}')"
       ><i class="ti ti-trash"></i></button>

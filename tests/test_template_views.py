@@ -875,17 +875,17 @@ def test_safe_local_asset_path_rejects_symlink_escape(
 
 # ---------------------------------------------------------------------------
 # Bootstrap-removal guard — fail loudly if anyone reintroduces a
-# Bootstrap dependency. The component classes in _styles.scss share
-# names with Bootstrap intentionally (so the template diff stayed
-# reviewable during the cutover) and could be silently swallowed by
-# Bootstrap's own rules if it ever lands back in node_modules.
+# Bootstrap dependency. The component classes in _styles.scss are now
+# fully namespaced under `.app-*` (.app-btn, .app-form-control, etc.),
+# so a stray Bootstrap class in a template no longer styles to anything
+# — these tests catch the silently-broken markup before it ships.
 
 
 def test_bootstrap_is_not_in_package_dependencies() -> None:
-    """package.json must not reintroduce bootstrap. Our SCSS
-    re-implements the Bootstrap-shaped classes (.btn, .form-control,
-    .nav-tabs, etc.) directly — pulling in the real Bootstrap stylesheet
-    on top would cascade-collide and produce silent visual regressions.
+    """package.json must not reintroduce bootstrap — the SCSS layer
+    no longer relies on it (every component lives under `.app-*`), and
+    pulling Bootstrap back in would just bloat the bundle while
+    cascade-colliding with the namespaced rules.
     """
     import json
     from pathlib import Path
@@ -895,21 +895,30 @@ def test_bootstrap_is_not_in_package_dependencies() -> None:
     )
     deps = {**pkg.get('dependencies', {}), **pkg.get('devDependencies', {})}
     assert 'bootstrap' not in deps, (
-        'bootstrap was reintroduced as a dep — see _styles.scss naming '
-        'note for why this collides with our component classes'
+        'bootstrap was reintroduced as a dep — components are namespaced '
+        'under .app-* now, so Bootstrap would only collide / bloat'
     )
 
 
 def test_no_bootstrap_class_names_in_templates() -> None:
     """Regression guard for the rename pass that took us off Bootstrap.
-    Scan every template for a fixed list of Bootstrap utility / component
-    class names. Catches an accidental copy-paste re-introducing one of
-    them long after the cutover.
+
+    Scans every template for a fixed list of Bootstrap utility /
+    component class names *and* Bootstrap Icons (`bi`, `bi-*`).
+
+    Tokenisation note: a class attribute that contains a Django
+    template branch like
+        class="app-btn btn-outline-{% if x %}light{% else %}dark{% endif %}"
+    must surface BOTH branches as separate tokens. We strip
+    `{% ... %}` and `{{ ... }}` first (replacing each with whitespace),
+    then split — so `btn-outline-light` and `btn-outline-dark` both
+    appear in the token list and get checked.
     """
     import re
     from pathlib import Path
 
-    forbidden = {
+    # Exact-match tokens (stable Bootstrap class names).
+    forbidden_exact = {
         # Utility classes Tailwind replaced
         'd-flex',
         'd-block',
@@ -926,6 +935,8 @@ def test_no_bootstrap_class_names_in_templates() -> None:
         'position-absolute',
         'w-100',
         'h-100',
+        # Bootstrap Icons (replaced by Tabler `.ti` / `.ti-*`)
+        'bi',
         # Components our SCSS now re-implements as .app-*
         'btn',
         'btn-primary',
@@ -935,6 +946,7 @@ def test_no_bootstrap_class_names_in_templates() -> None:
         'btn-light',
         'btn-danger',
         'btn-outline-dark',
+        'btn-outline-light',
         'btn-close',
         'form-control',
         'form-select',
@@ -946,6 +958,7 @@ def test_no_bootstrap_class_names_in_templates() -> None:
         'form-grid',
         'form-label',
         'form-group',
+        'nav',
         'nav-tabs',
         'nav-link',
         'nav-item',
@@ -955,6 +968,15 @@ def test_no_bootstrap_class_names_in_templates() -> None:
         'navbar-nav',
         'navbar-dark',
         'navbar-expand-lg',
+        'modal-dialog',
+        'modal-content',
+        'modal-header',
+        'modal-body',
+        'modal-footer',
+        'modal-title',
+        'dropdown',
+        'dropdown-menu',
+        'dropdown-item',
         # Misc Bootstrap
         'alert',
         'alert-danger',
@@ -964,25 +986,47 @@ def test_no_bootstrap_class_names_in_templates() -> None:
         'alert-dismissible',
         'collapse',
         'fixed-top',
+        'card',
         'card-header',
         'card-body',
         'row',
+        'container-fluid',
         'col-12',
         'col-md-6',
     }
+    # Prefix-match tokens — anything starting with these is forbidden.
+    # Catches `bi-archive`, `bi-collection-play` etc. without enumerating
+    # every Bootstrap Icon glyph by name.
+    forbidden_prefixes = (
+        'bi-',
+        'col-xs-',
+        'col-sm-',
+        'col-md-',
+        'col-lg-',
+        'col-xl-',
+        'col-xxl-',
+    )
+    # Strip Django template tags (`{% ... %}` and `{{ ... }}`) so that a
+    # class attribute fragmented by an `{% if %}` surfaces both branches
+    # as discrete tokens.
+    django_tag_re = re.compile(r'\{%[^%]*%\}|\{\{[^}]*\}\}')
+    class_attr_re = re.compile(r'class="([^"]+)"')
+
     templates = Path(__file__).resolve().parent.parent / (
         'src/anthias_server/app/templates'
     )
-    pattern = re.compile(r'class="([^"]+)"')
     seen: list[str] = []
     for path in templates.rglob('*.html'):
-        for match in pattern.finditer(path.read_text()):
-            tokens = match.group(1).split()
-            for tok in tokens:
-                if tok in forbidden:
+        for match in class_attr_re.finditer(path.read_text()):
+            cleaned = django_tag_re.sub(' ', match.group(1))
+            for tok in cleaned.split():
+                if tok in forbidden_exact:
+                    seen.append(f'{path.name}: {tok}')
+                    continue
+                if any(tok.startswith(p) for p in forbidden_prefixes):
                     seen.append(f'{path.name}: {tok}')
     assert not seen, (
-        'Bootstrap-shaped class names reintroduced — see _styles.scss '
-        'header for why these collide with our .app-* re-implementations:\n  '
-        + '\n  '.join(seen)
+        'Bootstrap-shaped class names reintroduced — components live '
+        'under .app-* now, and Bootstrap Icons were replaced by Tabler '
+        '(.ti / .ti-*):\n  ' + '\n  '.join(seen)
     )

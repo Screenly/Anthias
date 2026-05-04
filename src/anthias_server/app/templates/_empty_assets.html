@@ -1,6 +1,6 @@
 <div class="empty-state">
   <div class="empty-state__icon">
-    <i class="bi bi-{% if is_active %}collection-play{% else %}archive{% endif %}"></i>
+    <i class="ti ti-{% if is_active %}playlist{% else %}archive{% endif %}"></i>
   </div>
   <p class="empty-state__title">
     {% if is_active %}No active assets{% else %}No inactive assets{% endif %}

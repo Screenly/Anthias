@@ -31,7 +31,7 @@
             {% endfor %}
           </div>
           <div class="loadavg-trend loadavg-trend--{{ load.trend }}">
-            <i class="bi {% if load.trend == 'up' %}ti-trending-up{% elif load.trend == 'down' %}ti-trending-down{% else %}ti-minus-circle{% endif %}"></i>
+            <i class="ti {% if load.trend == 'up' %}ti-trending-up{% elif load.trend == 'down' %}ti-trending-down{% else %}ti-minus-circle{% endif %}"></i>
             <div>
               <p class="loadavg-trend__primary">
                 {% if load.trend == 'up' %}Trending up{% elif load.trend == 'down' %}Cooling off{% else %}Steady{% endif %}

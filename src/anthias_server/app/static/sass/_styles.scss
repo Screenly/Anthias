@@ -253,13 +253,6 @@ label { text-align: left; }
   &:hover { background: #f8f9fa; color: var(--color-text); }
 }
 
-.btn-secondary {
-  background: var(--color-text);
-  color: #ffffff;
-  border-color: var(--color-text);
-  &:hover { background: #2d0a40; border-color: #2d0a40; color: #ffffff; }
-}
-
 .app-btn-danger {
   background: var(--color-danger);
   border-color: var(--color-danger);
@@ -284,7 +277,7 @@ label { text-align: left; }
 }
 
 // On-dark outline (active section, app-nav)
-.btn-outline-light {
+.app-btn-outline-light {
   color: #ffffff;
   border-color: rgba(255, 255, 255, 0.5);
   background: transparent;
@@ -667,9 +660,9 @@ label { text-align: left; }
   }
 }
 
-// Bootstrap's $primary (yellow) bleeds into app-tabs by default, leaving
-// inactive tabs unreadable on white. Restyle to dark-on-white with an
-// underline indicator for the active tab.
+// Modal-scoped tab styling — dark-on-white with an underline indicator
+// for the active tab. Overrides the default `.app-tabs` so the wider
+// inactive-tab muting reads cleanly inside the asset modal.
 .modal-card .app-tabs {
   border-bottom: 1px solid var(--color-border);
 
@@ -1492,12 +1485,6 @@ $footer-height: 13rem;
 // -----------------------------------------------------------------------------
 [hidden] { display: none !important; }
 
-.alert {
-  border-radius: var(--radius-md);
-  border: none;
-  box-shadow: var(--shadow-sm);
-}
-
 .divider-vertical-inline {
   display: inline-block;
   width: 1px;
@@ -1508,17 +1495,15 @@ $footer-height: 13rem;
 }
 
 // =============================================================================
-// 19. Bootstrap-replacement component classes
+// 19. App component classes
 //
-// Templates still ship .app-container / .app-input / .app-floating /
-// .app-check / .app-tabs / .row / .col-* etc. Bootstrap is gone so we
-// re-implement the minimum surface the templates depend on, all driven
-// from our design-token CSS variables. Anything more bespoke (.app-btn,
-// .surface, .modal-card, .stat-card, .schedule-chip, …) is already
-// declared earlier in this file.
+// The earlier sections style page-bespoke components (.app-btn, .surface,
+// .modal-card, .stat-card, .schedule-chip, …). The block below covers
+// the small layout / nav primitives the templates depend on, all driven
+// from the design-token CSS variables.
 // =============================================================================
 
-// --- Layout app-container (matches Bootstrap's responsive max-widths) ---
+// --- Layout app-container — responsive max-widths ---
 .app-container {
   width: 100%;
   margin-inline: auto;
@@ -1530,20 +1515,8 @@ $footer-height: 13rem;
   @media (min-width: 1400px) { max-width: 1320px; }
 }
 
-// --- Row / col (only the variants the templates actually use) ---
-.row {
-  display: flex;
-  flex-wrap: wrap;
-  margin-inline: calc(var(--space-3) * -1);
-  > [class*="col-"] { padding-inline: var(--space-3); }
-}
-.col-12 { flex: 0 0 100%; max-width: 100%; }
-@media (min-width: 768px) {
-  .col-md-6 { flex: 0 0 50%; max-width: 50%; }
-}
-
-// --- Nav / tabs (only the variants used in the asset modal) ---
-.nav {
+// --- Tabs (asset modal) ---
+.app-tabs {
   display: flex;
   flex-wrap: wrap;
   list-style: none;
@@ -1569,34 +1542,6 @@ $footer-height: 13rem;
   &:hover { background: rgba(0, 0, 0, 0.04); }
 }
 
-// --- Bootstrap-style "app-btn-close" — kept only for legacy alerts. The
-// app-toast component has its own .app-toast__close so this is a safety
-// net; the new flash-message stack drains into toasts anyway.
-.app-btn-close {
-  width: 1.25rem;
-  height: 1.25rem;
-  padding: 0;
-  background: transparent
-    url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%231f002a'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e")
-    center/0.85rem no-repeat;
-  border: none;
-  opacity: 0.55;
-  cursor: pointer;
-  &:hover { opacity: 1; }
-}
-
-// --- Mobile app-nav collapse (.navbar-collapse + .show) for the
-// existing _navbar.html markup. Matches Bootstrap's hide-by-default,
-// show-when-.show behaviour just enough to keep the Alpine toggle
-// working.
-@media (max-width: 991.98px) {
-  .navbar-collapse { display: none; }
-  .navbar-collapse.show {
-    display: block;
-    width: 100%;
-    margin-top: var(--space-3);
-  }
-}
 .app-nav-toggler {
   cursor: pointer;
   background: transparent;
