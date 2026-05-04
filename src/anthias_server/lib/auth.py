@@ -43,15 +43,49 @@ def verify_password(password: str, stored: str) -> bool:
     return bool(check_password(password, stored))
 
 
+def _is_safe_login_next_source(request: 'HttpRequest') -> bool:
+    """Decide whether a request's path is worth round-tripping through
+    the login form's ``?next=`` parameter.
+
+    Two classes of request must NOT propagate ``next``:
+
+    * **Non-GET methods** (POST/PUT/PATCH/DELETE). After the operator
+      signs in we issue a 302 → next, which the browser follows as a
+      GET. Routes that only accept the original method then 405. The
+      operator landing on a 405 right after signing in is worse than
+      landing on the dashboard, so we drop ``next`` for unsafe
+      methods.
+    * **htmx partial endpoints**. The dashboard polls fragments such
+      as ``assets_table_partial`` every 5s with ``HX-Request: true``;
+      the operator's actual address bar still points at the parent
+      page. Bouncing through ``?next=/_partials/asset-table/`` would
+      land them on a bare fragment URL after sign-in instead of the
+      page they were on.
+    """
+    if request.method != 'GET':
+        return False
+    if request.headers.get('HX-Request') is not None:
+        return False
+    return True
+
+
 class Auth(metaclass=ABCMeta):
     display_name: str = ''
     name: str = ''
     config: dict[str, Any] = {}
 
     @abstractmethod
-    def authenticate(self) -> 'HttpResponse | None':
+    def authenticate(
+        self, request: 'HttpRequest | None' = None
+    ) -> 'HttpResponse | None':
         """
         Let the user authenticate himself.
+
+        :param request: the inbound request that triggered the auth
+            check. Implementations that redirect to a login form use
+            it to attach a ``?next=<original-path>`` so the operator
+            returns to where they were after signing in. Optional —
+            backends with no return-to concept (e.g. NoAuth) ignore it.
         :return: a Response which initiates authentication.
         """
         pass
@@ -78,7 +112,7 @@ class Auth(metaclass=ABCMeta):
 
         try:
             if not self.is_authenticated(request):
-                return self.authenticate()
+                return self.authenticate(request)
         except ValueError as e:
             return HttpResponse(
                 'Authorization backend is unavailable: ' + str(e), status=503
@@ -126,7 +160,7 @@ class NoAuth(Auth):
     def is_authenticated(self, request: 'HttpRequest') -> bool:
         return True
 
-    def authenticate(self) -> None:
+    def authenticate(self, request: 'HttpRequest | None' = None) -> None:
         pass
 
     def check_password(self, password: str) -> bool:
@@ -189,11 +223,26 @@ class BasicAuth(Auth):
     def template(self) -> tuple[str, dict[str, Any]]:
         return 'auth_basic.html', {'user': self.settings['user']}
 
-    def authenticate(self) -> 'HttpResponse':
+    def authenticate(
+        self, request: 'HttpRequest | None' = None
+    ) -> 'HttpResponse':
+        from urllib.parse import urlencode
+
         from django.shortcuts import redirect
         from django.urls import reverse
 
-        return redirect(reverse('anthias_app:login'))
+        login_url = reverse('anthias_app:login')
+        if request is None or not _is_safe_login_next_source(request):
+            return redirect(login_url)
+        # Round-trip the operator's original destination through the
+        # login form so they don't land on the dashboard after signing
+        # in from a deep link (/settings/, /system-info/, etc.).
+        # request.get_full_path() preserves any query string. The login
+        # view validates `next` via url_has_allowed_host_and_scheme, so
+        # an off-host value smuggled in here can't redirect outward.
+        return redirect(
+            f'{login_url}?{urlencode({"next": request.get_full_path()})}'
+        )
 
     def update_settings(
         self,

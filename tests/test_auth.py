@@ -204,6 +204,74 @@ def test_basic_auth_authenticate_redirects_to_login(
 
 
 @pytest.mark.django_db
+def test_basic_auth_authenticate_appends_next_for_deep_link(
+    basic_auth: BasicAuth,
+) -> None:
+    """When the request is supplied, the redirect to /login should
+    carry ?next=<original-path> so the operator returns to the page
+    they originally tried to reach. Without this, deep links from
+    outside the dashboard (`/settings/`, `/system-info/`, etc.) drop
+    the operator on the home page after signing in."""
+    factory = RequestFactory()
+    request = factory.get('/settings/?tab=playback')
+    response = basic_auth.authenticate(request)
+    assert response.status_code == 302
+    assert response['Location'].startswith('/login')
+    # urlencode(quote_via=quote_plus) percent-encodes '/' as %2F and '?' as %3F.
+    assert 'next=%2Fsettings%2F%3Ftab%3Dplayback' in response['Location']
+
+
+@pytest.mark.django_db
+def test_authenticate_if_needed_threads_request_through(
+    basic_auth: BasicAuth, basic_auth_settings: dict[str, Any]
+) -> None:
+    """End-to-end: an unauthenticated request hitting a protected
+    view should reach /login with ?next set, not the bare /login.
+    Locks in the request-threading we added to authenticate_if_needed."""
+    basic_auth_settings['password'] = hash_password('s3cret')
+    factory = RequestFactory()
+    request = factory.get('/system-info/')
+    request.session = SessionStore()
+    response = basic_auth.authenticate_if_needed(request)
+    assert response is not None
+    assert response.status_code == 302
+    assert 'next=%2Fsystem-info%2F' in response['Location']
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('method', ['post', 'put', 'patch', 'delete'])
+def test_basic_auth_authenticate_drops_next_for_unsafe_methods(
+    basic_auth: BasicAuth, method: str
+) -> None:
+    """A POST/PUT/PATCH/DELETE that 401s would otherwise produce a
+    ?next=/some/write/endpoint that the post-login GET redirect
+    bounces back to → 405. Drop next for unsafe methods so the
+    operator lands on the dashboard instead."""
+    factory = RequestFactory()
+    request = getattr(factory, method)('/api/v2/assets/')
+    response = basic_auth.authenticate(request)
+    assert response.status_code == 302
+    assert response['Location'].endswith('/login/')
+    assert 'next=' not in response['Location']
+
+
+@pytest.mark.django_db
+def test_basic_auth_authenticate_drops_next_for_htmx_partial(
+    basic_auth: BasicAuth,
+) -> None:
+    """Dashboard polls htmx fragments every 5s; if the session
+    expires mid-poll we'd otherwise serialize the partial URL into
+    next, dumping the operator on a bare table fragment after sign-in
+    instead of the parent page."""
+    factory = RequestFactory()
+    request = factory.get('/_partials/asset-table/', HTTP_HX_REQUEST='true')
+    response = basic_auth.authenticate(request)
+    assert response.status_code == 302
+    assert response['Location'].endswith('/login/')
+    assert 'next=' not in response['Location']
+
+
+@pytest.mark.django_db
 def test_basic_auth_update_settings_initial_set(
     basic_auth: BasicAuth, basic_auth_settings: dict[str, Any]
 ) -> None:
@@ -341,7 +409,7 @@ def test_auth_base_class_defaults() -> None:
     """Cover the base Auth methods that subclasses don't always override."""
 
     class _Concrete(Auth):
-        def authenticate(self) -> None:
+        def authenticate(self, request: Any = None) -> None:
             return None
 
     backend = _Concrete()
@@ -382,7 +450,7 @@ def test_authenticate_if_needed_handles_value_error() -> None:
         def is_authenticated(self, request: Any) -> bool:
             raise ValueError('something wrong')
 
-        def authenticate(self) -> None:
+        def authenticate(self, request: Any = None) -> None:
             return None
 
     factory = RequestFactory()

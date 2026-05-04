@@ -1,0 +1,47 @@
+{% load static %}
+{% comment %}
+  Standalone error shell — does NOT extend base.html on purpose.
+  base.html pulls vendor.js, which unconditionally opens a /ws
+  connection with automatic reconnect. On public 404s, that turns
+  crawler/bot traffic into long-lived WebSocket sessions, which is
+  the wrong shape of load for an error page. Tailwind is also not
+  used here (every selector is .auth-*/.error-* from anthias.css),
+  so keep the asset list tight.
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="robots" content="noindex"/>
+  <title>{% block title %}Error — Anthias{% endblock %}</title>
+  <link href="{% static 'dist/css/tabler-icons.css' %}" rel="stylesheet"/>
+  <link href="{% static 'dist/css/anthias.css' %}" rel="stylesheet"/>
+  <link rel="icon" href="/static/favicons/favicon.ico"/>
+</head>
+<body class="auth-body">
+<div class="auth-page">
+  <main class="auth-shell">
+    <div class="auth-card error-card">
+      <div class="auth-card__brand">
+        <img src="{% static 'img/dark.svg' %}" alt="Anthias" class="auth-logo"/>
+      </div>
+
+      <div class="error-card__icon" aria-hidden="true">
+        <i class="ti {% block error_icon %}ti-alert-triangle{% endblock %}"></i>
+      </div>
+
+      <p class="error-card__code">{% block error_code %}{% endblock %}</p>
+      <h1 class="auth-headline">{% block error_headline %}Something went wrong{% endblock %}</h1>
+      <p class="auth-subhead">{% block error_subhead %}{% endblock %}</p>
+
+      {% block error_cta %}
+      <a href="{% url 'anthias_app:home' %}" class="app-btn app-btn-primary auth-submit">
+        <i class="ti ti-home"></i><span>Back to dashboard</span>
+      </a>
+      {% endblock %}
+    </div>
+  </main>
+</div>
+</body>
+</html>

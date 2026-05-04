@@ -1,111 +1,70 @@
 {# vim: ft=htmldjango #}
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     {% load static %}
     <meta charset="utf-8"/>
+    {% comment %}
+      The splash is opened from phones (QR scan) as well as the device
+      webview, so the viewport tag is load-bearing — without it mobile
+      Safari/Chrome would render against their default 980px layout
+      viewport and shrink the IP pills + QR.
+    {% endcomment %}
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>Welcome to Anthias</title>
+    {% comment %}
+      This page uses no Tailwind utility classes — every selector
+      (.splash-*, .auth-*) lives in anthias.css. Skip the Tailwind
+      bundle so first paint on a constrained Pi 1 webview avoids one
+      extra ~30 KB stylesheet fetch.
+    {% endcomment %}
     <link href="{% static 'dist/css/anthias.css' %}" rel="stylesheet"/>
-    <link rel="icon" href="/static/favicons/favicon.ico">
-    <style type="text/css">
-        html, body {
-            height: 100%;
-            overflow-y: hidden;
-        }
-    </style>
+    <link rel="icon" href="/static/favicons/favicon.ico"/>
+    <script src="{% static 'dist/js/splash.js' %}" defer></script>
 </head>
-<body class="splash flex items-center justify-center min-h-screen px-6">
-<div class="w-full max-w-2xl">
-    <div class="logo-container flex flex-nowrap justify-center items-center mb-6">
-        <img src="{{ splash_logo_url }}" alt="splash-logo" class="max-w-full h-auto"/>
+<body class="splash-page">
+<main class="splash-shell">
+  <div class="splash-card">
+    <div class="splash-card__brand">
+      <img src="{{ splash_logo_url }}" alt="Anthias" class="splash-logo"/>
     </div>
-    <div class="splash-body p-6 text-center">
-        <p id="splash-prompt-detecting">Detecting network&hellip;</p>
-        <p id="splash-prompt-found" hidden>
-            To manage the content on this screen, just point your
-            browser to
-            <span id="splash-prompt-any" hidden>any of</span>
-            the IP <span id="splash-prompt-noun">address</span>
-            provided below.
-        </p>
-        <div class="splash-ip-list mt-3 flex flex-col gap-1" id="splash-ip-list"></div>
+
+    <div class="splash-card__body">
+      <p id="splash-status-detecting" class="splash-status">
+        <span class="splash-status__dot splash-status__dot--pulse" aria-hidden="true"></span>
+        <span>Detecting network&hellip;</span>
+      </p>
+      <p id="splash-status-ready" class="splash-status" hidden>
+        <span class="splash-status__dot splash-status__dot--ok" aria-hidden="true"></span>
+        <span>Ready to manage</span>
+      </p>
+
+      {% comment %}
+        Headline + subhead are hidden on cold boot so the page doesn't
+        tell operators to "open this address" before any address has
+        been resolved. The pulsing status chip above carries the empty
+        state on its own. splash.ts toggles the [hidden] flag once at
+        least one IP arrives.
+      {% endcomment %}
+      <div id="splash-prompt" hidden>
+        <h1 class="splash-headline">Open this on your phone or laptop</h1>
+        <p class="splash-subhead">Point a browser at one of the addresses below, or scan the QR code.</p>
+      </div>
+
+      <div id="splash-ip-list" class="splash-ip-list" aria-live="polite"></div>
     </div>
-</div>
+
+    <aside id="splash-qr-card" class="splash-card__qr" hidden>
+      <div id="splash-qr" class="splash-qr"></div>
+      <p class="splash-qr__caption">Scan to manage</p>
+    </aside>
+  </div>
+</main>
 <script>
-(function() {
-    var detecting = document.getElementById('splash-prompt-detecting');
-    var found = document.getElementById('splash-prompt-found');
-    var anyOf = document.getElementById('splash-prompt-any');
-    var noun = document.getElementById('splash-prompt-noun');
-    var list = document.getElementById('splash-ip-list');
-    var attempts = 0;
-    // Hard cap on poll lifetime. The splash is on screen for ~60s
-    // inside the viewer, but if this page is opened by a human
-    // (curl, dev tools, accidentally left open in a browser tab)
-    // we don't want it generating forever-requests in the background.
-    // 120s is double the in-viewer display window — generous enough
-    // for slow first-boot recoveries, bounded enough that an idle tab
-    // doesn't accumulate load.
-    var startedAt = Date.now();
-    var maxPollMs = 120 * 1000;
-
-    function render(ips) {
-        if (!ips.length) {
-            // Stay on the "Detecting network…" placeholder. The splash
-            // only lives ~60s, so a permanent failure shows that the
-            // whole time — same UX as the prior "Unable to retrieve IP."
-            // fallback, but without crashing the page on 'Unknown'.
-            detecting.hidden = false;
-            found.hidden = true;
-            list.innerHTML = '';
-            return;
-        }
-        detecting.hidden = true;
-        found.hidden = false;
-        anyOf.hidden = ips.length <= 1;
-        noun.textContent = ips.length > 1 ? 'addresses' : 'address';
-        list.innerHTML = '';
-        ips.forEach(function(ip, i) {
-            var a = document.createElement('a');
-            a.href = ip;
-            a.textContent = ip;
-            list.appendChild(a);
-            if (i < ips.length - 1) {
-                list.appendChild(document.createElement('br'));
-            }
-        });
-    }
-
-    // Resolve the IP-list endpoint via Django's URL reverser so the
-    // template doesn't break if the API mount path or version prefix
-    // ever changes. The reverser emits the resolved path server-side
-    // and the JS just consumes it as a string.
-    var ipsUrl = '{% url "api:network_ip_addresses_v2" %}';
-
-    function poll() {
-        fetch(ipsUrl, { cache: 'no-store' })
-            .then(function(r) { return r.ok ? r.json() : { ip_addresses: [] }; })
-            .then(function(data) { render(data.ip_addresses || []); })
-            .catch(function() { /* keep polling on transient errors */ })
-            .finally(function() {
-                attempts++;
-                if (Date.now() - startedAt >= maxPollMs) {
-                    // Bound exhausted — stop polling. Whatever's
-                    // currently rendered stays on screen (real IPs
-                    // if we got them, "Detecting network…" if not).
-                    return;
-                }
-                // 2s for the first ~30s, then back off to 5s. The host
-                // bus is usually answering well before 30s; the slow
-                // tier is for long-tail recoveries during the rest of
-                // the splash's ~60s display window.
-                setTimeout(poll, attempts < 15 ? 2000 : 5000);
-            });
-    }
-
-    poll();
-})();
+  // The splash bundle reverses the API URL via Django so the JS layer
+  // doesn't hard-code the version prefix.
+  globalThis.__splashIpsUrl = '{% url "api:network_ip_addresses_v2" %}';
 </script>
 </body>
 </html>
