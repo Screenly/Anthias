@@ -28,6 +28,7 @@ from anthias_server.api.helpers import (
 )
 from anthias_server.lib.auth import hash_password
 from anthias_common.internal_auth import is_internal_request
+from anthias_common.youtube import dispatch_download
 from anthias_server.api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
@@ -340,6 +341,13 @@ class AssetListViewV2(APIView):
         active_asset_ids = get_active_asset_ids()
         asset = Asset.objects.create(**serializer.data)
         asset.refresh_from_db()
+
+        # Kick off the YouTube download out of band when the
+        # serializer flagged a youtube_asset. The row is already
+        # persisted with is_processing=True; the task fills in the
+        # title + duration once yt-dlp finishes.
+        if serializer._pending_youtube_uri:
+            dispatch_download(asset.asset_id, serializer._pending_youtube_uri)
 
         if asset.is_active():
             active_asset_ids.insert(asset.play_order, asset.asset_id)

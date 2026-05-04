@@ -203,6 +203,64 @@ def test_assets_create_rejects_invalid_url(client: Client) -> None:
 
 
 @pytest.mark.django_db
+def test_assets_create_routes_youtube_to_celery(client: Client) -> None:
+    """Pasting a YouTube URL into the Add modal must NOT classify it
+    as a webpage (the iframe embed is blocked by YouTube). The row
+    is created as is_processing=True with mimetype=video and a local
+    mp4 destination, and download_youtube_asset is queued."""
+    youtube_url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+        mock.patch(
+            'anthias_common.youtube.dispatch_download'
+        ) as mock_dispatch,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_create'),
+            data={'uri': youtube_url},
+        )
+    assert response.status_code in (200, 302)
+
+    # The persisted row points at the local mp4 destination, not the
+    # YouTube URL. The placeholder name carries the URL so the
+    # operator can identify the row in the table while it processes.
+    rows = Asset.objects.filter(name=youtube_url)
+    assert rows.count() == 1
+    row = rows.first()
+    assert row is not None
+    assert row.mimetype == 'video'
+    assert row.is_processing is True
+    assert row.uri.endswith(f'{row.asset_id}.mp4')
+    assert row.duration == 0
+
+    mock_dispatch.assert_called_once_with(row.asset_id, youtube_url)
+
+
+@pytest.mark.django_db
+def test_assets_create_youtube_short_form(client: Client) -> None:
+    """youtu.be short URLs are recognised the same as full URLs."""
+    short_url = 'https://youtu.be/dQw4w9WgXcQ'
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+        mock.patch(
+            'anthias_common.youtube.dispatch_download'
+        ) as mock_dispatch,
+    ):
+        client.post(
+            reverse('anthias_app:assets_create'),
+            data={'uri': short_url},
+        )
+    assert Asset.objects.filter(name=short_url, mimetype='video').exists()
+    mock_dispatch.assert_called_once()
+
+
+@pytest.mark.django_db
 def test_assets_toggle_flips_is_enabled(client: Client, asset: Asset) -> None:
     initial = asset.is_enabled
     with mock.patch(

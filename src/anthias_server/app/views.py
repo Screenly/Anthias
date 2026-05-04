@@ -136,8 +136,21 @@ def assets_table_partial(request: HttpRequest) -> HttpResponse:
 def assets_create(request: HttpRequest) -> HttpResponse:
     """URI-based asset add (the Add modal's URI tab). Mirrors the
     minimum field-set the React modal sent: uri, derived mimetype,
-    default duration window."""
+    default duration window.
+
+    YouTube URLs are special-cased: rather than persisting the URL as
+    a webpage (which YouTube's referrer policy renders as a broken
+    embed), the row is created as ``mimetype='video'`` pointing at a
+    yet-to-be-downloaded local mp4, and ``download_youtube_asset`` is
+    queued to fetch the file. The "Processing" pill on the table row
+    clears once the worker completes.
+    """
     from anthias_common.utils import validate_url
+    from anthias_common.youtube import (
+        dispatch_download,
+        is_youtube_url,
+        youtube_destination_path,
+    )
     from anthias_server.app.models import Asset
     from datetime import timedelta
 
@@ -147,12 +160,21 @@ def assets_create(request: HttpRequest) -> HttpResponse:
         return _asset_table_response(request)
 
     # Best-effort mimetype guess from extension; default to webpage.
-    mimetype = 'webpage'
-    lower = uri.lower()
-    if lower.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg')):
-        mimetype = 'image'
-    elif lower.endswith(('.mp4', '.mov', '.mkv', '.webm', '.avi', '.flv')):
+    # YouTube takes priority — its watch URLs end in `?v=…` not a
+    # video extension, so the file-extension heuristic below would
+    # otherwise classify them as a webpage.
+    is_youtube = is_youtube_url(uri)
+    if is_youtube:
         mimetype = 'video'
+    else:
+        mimetype = 'webpage'
+        lower = uri.lower()
+        if lower.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg')):
+            mimetype = 'image'
+        elif lower.endswith(
+            ('.mp4', '.mov', '.mkv', '.webm', '.avi', '.flv')
+        ):
+            mimetype = 'video'
 
     now = timezone.now()
     # New assets land at the end of the active playlist instead of
@@ -166,6 +188,32 @@ def assets_create(request: HttpRequest) -> HttpResponse:
     play_order = Asset.objects.filter(
         is_enabled=True, is_processing=False
     ).count()
+
+    if is_youtube:
+        # Generate the asset_id up front so the row's URI can point
+        # at the destination path the Celery task will write to.
+        # Title + duration land on the row when the task completes;
+        # the placeholder name is the URL the operator pasted, which
+        # is at least recognisable in the table while processing.
+        asset_id = uuid.uuid4().hex
+        asset = Asset.objects.create(
+            asset_id=asset_id,
+            name=uri,
+            uri=youtube_destination_path(asset_id, settings),
+            mimetype='video',
+            duration=0,
+            is_enabled=True,
+            is_processing=True,
+            play_order=play_order,
+            start_date=now,
+            end_date=now + timedelta(days=30),
+        )
+        dispatch_download(asset.asset_id, uri)
+        return _asset_table_response(
+            request,
+            toast=('info', 'Downloading YouTube video…'),
+        )
+
     Asset.objects.create(
         name=uri,
         uri=uri,

@@ -26,6 +26,7 @@ from anthias_common.utils import (  # noqa: E402
     shutdown_via_balena_supervisor,
     url_fails,
 )
+from anthias_common.youtube import youtube_destination_path  # noqa: E402
 from anthias_server.settings import settings  # noqa: E402
 
 
@@ -314,6 +315,192 @@ def probe_video_duration(asset_id: str) -> None:
     # Push a refresh nudge over the browser-facing WebSocket so the
     # operator sees the row stop "Processing" and pick up its real
     # duration without waiting for the next 5s table poll.
+    from anthias_server.app.consumers import notify_asset_update
+
+    notify_asset_update(asset_id)
+
+
+class _DownloadYoutubeTask(Task):  # type: ignore[type-arg]
+    """Custom Task subclass so ``on_failure`` clears ``is_processing``
+    when the download fails, mirroring ``_ProbeVideoTask``.
+
+    The previous in-process daemon thread swallowed yt-dlp's exit
+    code, so a failed download silently left the row stuck at
+    "Processing" with an empty .mp4 — the operator had no way to
+    unblock it without editing the database. Now any uncaught
+    exception (DownloadError, ExtractorError, ...) bubbles to celery
+    and lands here once retries are exhausted.
+    """
+
+    def on_failure(
+        self,
+        exc: BaseException,
+        task_id: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        einfo: Any,
+    ) -> None:
+        asset_id = args[0] if args else kwargs.get('asset_id')
+        if not asset_id:
+            return
+        try:
+            Asset.objects.filter(asset_id=asset_id).update(is_processing=False)
+            from anthias_server.app.consumers import notify_asset_update
+
+            notify_asset_update(asset_id)
+        except Exception:
+            logging.exception(
+                'download_youtube_asset on_failure cleanup failed for %s',
+                asset_id,
+            )
+
+
+# Bound the wall-clock cost of a single download attempt. 1080p videos
+# on a slow connection / Pi 1 can run several minutes; 15 min is a
+# generous ceiling that still fails fast enough for the operator to
+# notice via the "Processing" pill not clearing.
+YOUTUBE_DOWNLOAD_TIME_LIMIT_S = 60 * 15
+
+
+@celery.task(
+    base=_DownloadYoutubeTask,
+    time_limit=YOUTUBE_DOWNLOAD_TIME_LIMIT_S,
+    # Transient OSError covers IO-level hiccups (disk pressure,
+    # connection reset surfacing as ConnectionResetError which is an
+    # OSError). yt-dlp's own DownloadError is *not* retried: its
+    # common causes (404, 403, age-gate, geo-block, deleted video,
+    # signature extraction breakage) are permanent and re-running
+    # just burns the worker. Let on_failure clean up.
+    autoretry_for=(OSError,),
+    retry_backoff=15,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=2,
+)
+def download_youtube_asset(asset_id: str, uri: str) -> None:
+    """Download a YouTube video out of band and finalize the row.
+
+    Replaces the previous ``YoutubeDownloadThread`` (a daemon thread
+    in the anthias-server process) which:
+      - lost the download on uvicorn restart, leaving rows stuck at
+        ``is_processing=True`` indefinitely,
+      - ignored yt-dlp's exit code, so failures advertised the asset
+        as ready while pointing at an empty file,
+      - blocked the API request for two upfront yt-dlp shellouts
+        (``-O title`` and ``-j``) before returning.
+
+    The row is created upstream with ``mimetype='video'``,
+    ``is_processing=True``, and ``uri`` already pointing at the
+    eventual ``<assetdir>/<asset_id>.mp4``. This task overwrites
+    ``name`` (with the resolved title) and ``duration``, then clears
+    ``is_processing`` and nudges the viewer + browser the same way
+    ``probe_video_duration`` does.
+
+    Uses yt-dlp as a Python library rather than a CLI shellout: a
+    single ``extract_info(uri, download=True)`` call returns title +
+    duration as Python values, eliminating the previous three-
+    shellouts-per-asset pattern (``-O title``, ``-j``, then download)
+    plus the brittle ``\\t``-separated ``--print`` parser (YouTube
+    titles can contain literal tabs).
+    """
+    try:
+        asset = Asset.objects.get(asset_id=asset_id)
+    except Asset.DoesNotExist:
+        # Row was deleted between dispatch and pickup. Any partial
+        # files left behind get swept by cleanup() after the 1h
+        # freshness window — same behaviour as a row deleted
+        # mid-download in the old thread path.
+        return
+
+    if not asset.is_processing:
+        # Row already finalized (e.g. by an earlier invocation) or
+        # operator-edited. Don't re-download or clobber its state.
+        return
+
+    location = youtube_destination_path(asset_id, settings)
+
+    # Lazy import: yt_dlp pulls in hundreds of extractors at import
+    # time. Keeping it inside the task body avoids the cost on
+    # worker startup for jobs that don't touch YouTube.
+    from yt_dlp import YoutubeDL
+    from yt_dlp.utils import DownloadError
+
+    ydl_opts = {
+        # ``format_sort`` mirrors the previous CLI's `-S
+        # vcodec:h264,fps,res:1080,acodec:m4a` — bias toward h264
+        # video and m4a audio, keep resolution at 1080p, prefer
+        # higher fps. yt-dlp still picks the *best matching* format,
+        # falling back to whatever is available if no exact match
+        # exists. Strict `format=` filters would reject videos that
+        # happen to have only vp9, which we don't want.
+        'format_sort': ['vcodec:h264', 'fps', 'res:1080', 'acodec:m4a'],
+        # Final filename — yt-dlp writes <location>.part during the
+        # download and renames on success. cleanup() recognises
+        # .part / .info.json sidecars and skips them inside the 1h
+        # freshness window.
+        'outtmpl': location,
+        # Quiet the worker log: yt-dlp's progress bars and "info"
+        # noise drown out everything else under load. Errors still
+        # raise DownloadError, which we surface via celery.
+        'noprogress': True,
+        'quiet': True,
+        'no_warnings': True,
+        # Don't pull a playlist if the URL happens to be one — we
+        # only want a single-file asset row per request. The viewer
+        # has no concept of "this row expands into N files".
+        'noplaylist': True,
+    }
+
+    try:
+        with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(uri, download=True)
+    except DownloadError:
+        # Permanent failure surface — let it bubble to on_failure.
+        # autoretry_for excludes DownloadError specifically.
+        raise
+
+    if info is None:
+        # Should not happen with a successful extract_info, but
+        # guard so a future yt-dlp behaviour change doesn't write a
+        # row with a stale name and stale duration. on_failure path
+        # via the explicit raise gives the operator the same
+        # clear-flag-and-stop signal as a download error.
+        raise DownloadError(f'yt-dlp returned no info for {uri!r}')
+
+    # ``noplaylist=True`` collapses single-video extractions; for
+    # the playlist edge cases yt-dlp falls through to, the first
+    # entry is the one we downloaded.
+    if info.get('_type') == 'playlist':
+        entries = info.get('entries') or []
+        info = entries[0] if entries else info
+
+    title = info.get('title') or asset.name
+    raw_duration = info.get('duration')
+    duration: int | None
+    if raw_duration is None:
+        duration = None
+    else:
+        try:
+            # Floor to 1 so a sub-second clip can't slot a 0s entry
+            # into the viewer rotation.
+            duration = max(1, int(float(raw_duration)))
+        except (TypeError, ValueError):
+            duration = None
+
+    update: dict[str, Any] = {
+        'is_processing': False,
+        'name': title,
+    }
+    if duration is not None:
+        update['duration'] = duration
+    Asset.objects.filter(asset_id=asset_id).update(**update)
+
+    # Tell the viewer to reload its playlist now that the file
+    # exists and the row is fully materialised.
+    r.publish('anthias.viewer', 'reload')
+
+    # Browser-side nudge so the table drops "Processing" and picks
+    # up the resolved title/duration without waiting for the 5s poll.
     from anthias_server.app.consumers import notify_asset_update
 
     notify_asset_update(asset_id)

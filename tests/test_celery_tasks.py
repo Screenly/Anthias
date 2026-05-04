@@ -14,6 +14,7 @@ from anthias_server.celery_tasks import (
     ASSET_REVALIDATION_LOCK_KEY,
     asset_recheck_lock_key,
     cleanup,
+    download_youtube_asset,
     get_display_power,
     probe_video_duration,
     reboot_anthias,
@@ -654,3 +655,196 @@ def test_probe_video_duration_no_op_for_unknown_asset() -> None:
     """Stale asset_id (deleted between enqueue and run) — task must not
     crash. Nothing to assert beyond a clean return."""
     probe_video_duration('does-not-exist')
+
+
+# ---------------------------------------------------------------------------
+# download_youtube_asset
+# ---------------------------------------------------------------------------
+
+
+def _make_youtube_asset(asset_id: str = 'yt-1') -> Asset:
+    """A row in the state the serializer / frontend create leaves
+    behind: mimetype=video, is_processing=True, uri pointing at the
+    local destination path, duration=0 placeholder."""
+    return Asset.objects.create(
+        asset_id=asset_id,
+        name='https://www.youtube.com/watch?v=abc',
+        uri=path.join(settings['assetdir'], f'{asset_id}.mp4'),
+        mimetype='video',
+        duration=0,
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
+    )
+
+
+@pytest.fixture
+def fake_youtube_dl() -> Iterator[mock.MagicMock]:
+    """Patch ``yt_dlp.YoutubeDL`` with a context-manager-shaped mock.
+
+    The task does ``with YoutubeDL(opts) as ydl: ydl.extract_info(...)``,
+    so the fake has to support both __enter__ / __exit__ and
+    extract_info. Tests configure the return value (or side_effect) of
+    extract_info per case.
+    """
+    fake_cls = mock.MagicMock(name='YoutubeDL')
+    fake_inst = mock.MagicMock(name='YoutubeDL_inst')
+    fake_cls.return_value.__enter__.return_value = fake_inst
+    fake_cls.return_value.__exit__.return_value = False
+    with mock.patch.dict('sys.modules'):
+        # yt_dlp is lazy-imported inside the task; mock at module load.
+        import sys
+        import types
+
+        fake_module = types.ModuleType('yt_dlp')
+        fake_module.YoutubeDL = fake_cls
+        utils_mod = types.ModuleType('yt_dlp.utils')
+
+        class FakeDownloadError(Exception):
+            pass
+
+        utils_mod.DownloadError = FakeDownloadError
+        sys.modules['yt_dlp'] = fake_module
+        sys.modules['yt_dlp.utils'] = utils_mod
+        # Exposing the inst lets the test reach `.extract_info` to set
+        # return_value / side_effect; the class itself is also handy
+        # for assertions about ydl_opts.
+        fake_inst._download_error = FakeDownloadError
+        fake_inst._cls = fake_cls
+        yield fake_inst
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_success_writes_title_and_duration(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """Happy path: extract_info returns a populated info dict;
+    is_processing clears, name + duration are persisted, viewer +
+    browser get a refresh nudge."""
+    _make_youtube_asset()
+    fake_youtube_dl.extract_info.return_value = {
+        'title': 'Never Gonna Give You Up',
+        'duration': 213,
+    }
+    fake_redis = mock.MagicMock()
+    with (
+        mock.patch.object(celery_tasks_module, 'r', fake_redis),
+        mock.patch(
+            'anthias_server.app.consumers.notify_asset_update'
+        ) as mock_notify,
+    ):
+        download_youtube_asset('yt-1', 'https://www.youtube.com/watch?v=abc')
+
+    a = Asset.objects.get(asset_id='yt-1')
+    assert a.name == 'Never Gonna Give You Up'
+    assert a.duration == 213
+    assert a.is_processing is False
+
+    # Same notifications as probe_video_duration on success.
+    fake_redis.publish.assert_any_call('anthias.viewer', 'reload')
+    mock_notify.assert_called_once_with('yt-1')
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_floors_subsecond_duration_to_one(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """A sub-second clip must not slot a 0s rotation entry."""
+    _make_youtube_asset()
+    fake_youtube_dl.extract_info.return_value = {
+        'title': 't',
+        'duration': 0.4,
+    }
+    with mock.patch('anthias_server.app.consumers.notify_asset_update'):
+        download_youtube_asset('yt-1', 'https://youtu.be/abc')
+    assert Asset.objects.get(asset_id='yt-1').duration == 1
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_handles_missing_duration(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """Live streams / radio uploads omit duration. Persist what we
+    have (title) without overwriting the placeholder duration."""
+    _make_youtube_asset()
+    fake_youtube_dl.extract_info.return_value = {
+        'title': 'Live now',
+        'duration': None,
+    }
+    with mock.patch('anthias_server.app.consumers.notify_asset_update'):
+        download_youtube_asset('yt-1', 'https://www.youtube.com/watch?v=abc')
+    a = Asset.objects.get(asset_id='yt-1')
+    assert a.name == 'Live now'
+    # Placeholder seeded by the serializer; not overwritten.
+    assert a.duration == 0
+    assert a.is_processing is False
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_no_op_for_missing_row(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """Row deleted between dispatch and pickup — task returns cleanly
+    without invoking yt-dlp at all."""
+    download_youtube_asset(
+        'does-not-exist', 'https://www.youtube.com/watch?v=abc'
+    )
+    fake_youtube_dl.extract_info.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_no_op_when_row_already_finalized(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """A duplicate task firing for a row whose first invocation
+    already cleared is_processing must not re-download or stomp on
+    operator-edited state."""
+    Asset.objects.create(
+        asset_id='yt-2',
+        name='Some title',
+        uri=path.join(settings['assetdir'], 'yt-2.mp4'),
+        mimetype='video',
+        duration=120,
+        is_enabled=True,
+        is_processing=False,
+        play_order=0,
+    )
+    download_youtube_asset('yt-2', 'https://youtu.be/abc')
+    fake_youtube_dl.extract_info.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_failure_propagates_for_on_failure(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """yt-dlp DownloadError is permanent — the task re-raises so
+    Celery's on_failure path runs (which clears is_processing)."""
+    _make_youtube_asset()
+    DownloadError = fake_youtube_dl._download_error  # noqa: N806
+    fake_youtube_dl.extract_info.side_effect = DownloadError('404')
+    with pytest.raises(DownloadError):
+        download_youtube_asset('yt-1', 'https://youtu.be/dead')
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_on_failure_clears_processing() -> None:
+    """When Celery declares the task failed, is_processing must
+    flip back to False so the operator can interact with the row.
+    Otherwise the "Processing" pill sticks forever."""
+    _make_youtube_asset()
+    fake_redis = mock.MagicMock()
+    with (
+        mock.patch.object(celery_tasks_module, 'r', fake_redis),
+        mock.patch(
+            'anthias_server.app.consumers.notify_asset_update'
+        ) as mock_notify,
+    ):
+        download_youtube_asset.on_failure(
+            RuntimeError('boom'),
+            task_id='t-1',
+            args=('yt-1',),
+            kwargs={},
+            einfo=None,
+        )
+    assert Asset.objects.get(asset_id='yt-1').is_processing is False
+    mock_notify.assert_called_once_with('yt-1')
