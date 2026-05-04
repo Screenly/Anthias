@@ -775,6 +775,85 @@ label { text-align: left; }
   gap: var(--space-2);
 }
 
+// Edit-asset form sections. Two semantic blocks share the same
+// title/hint typography: Availability (always visible) and Advanced
+// (collapsible). The collapsible variant turns the heading into a
+// button with a rotating chevron; auto-open is wired in the template
+// when the asset has any non-default value in the Advanced block.
+.modal-section {
+  margin-bottom: var(--space-5);
+
+  &:last-child { margin-bottom: 0; }
+}
+
+.modal-section__title {
+  display: block;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.modal-section__hint {
+  margin: var(--space-1) 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.modal-section--collapsible {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+}
+
+.modal-section__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: var(--space-1) 0;
+  cursor: pointer;
+  color: var(--color-text);
+  text-align: left;
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
+    border-radius: var(--radius-sm);
+  }
+}
+
+.modal-section__chevron {
+  font-size: 1.1rem;
+  color: var(--color-text-muted);
+  transition: transform var(--t-fast);
+
+  .modal-section--collapsible.is-open & {
+    transform: rotate(180deg);
+  }
+}
+
+.modal-section__body {
+  padding-top: var(--space-3);
+}
+
+.modal-section__divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--space-4) 0;
+}
+
+// Flatpickr in modal — keep the popup above the modal overlay's
+// stacking context (the overlay is z-index 1050) so the calendar /
+// time wheels render on top of the modal-card body. The default
+// flatpickr z-index is 99999 in its own stylesheet, but our import
+// order can lose to local rules — pin it explicitly here.
+.flatpickr-calendar.open { z-index: 1100; }
+
 // Preview modal — wider card, dark stage so transparent images stay
 // readable and videos sit on a neutral surround.
 .modal-card--preview { max-width: 960px; }

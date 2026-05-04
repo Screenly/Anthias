@@ -136,8 +136,12 @@ function homeApp(): HomeAppData {
         return d
       }
 
+      // js- prefix avoids the collision with flatpickr's own
+      // .flatpickr-time internal class (max-height: 40px), which
+      // otherwise capped our floating-label inputs at 40px instead
+      // of the .app-floating 3.6rem height.
       document
-        .querySelectorAll<HTMLInputElement>('.flatpickr-datetime')
+        .querySelectorAll<HTMLInputElement>('.js-flatpickr-datetime')
         .forEach((el) => {
           const fp = (el as { _flatpickr?: { destroy: () => void } })
             ._flatpickr
@@ -152,7 +156,7 @@ function homeApp(): HomeAppData {
           if (seed) (inst as { setDate: (d: Date, fire: boolean) => void }).setDate(seed, false)
         })
       document
-        .querySelectorAll<HTMLInputElement>('.flatpickr-time')
+        .querySelectorAll<HTMLInputElement>('.js-flatpickr-time')
         .forEach((el) => {
           const fp = (el as { _flatpickr?: { destroy: () => void } })
             ._flatpickr

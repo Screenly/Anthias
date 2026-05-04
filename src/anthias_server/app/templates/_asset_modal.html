@@ -120,6 +120,13 @@
     </div>
 
     {# ---- Edit mode ---- #}
+    {% comment %} `advancedOpen` auto-expands when the asset already has any
+       non-default value in the Advanced block (weekday subset, day-parting
+       times, nocache, skip_asset_check) so existing settings aren't hidden
+       behind a closed disclosure. `isUploadedAsset` collapses the readonly
+       URI row for filesystem-stored uploads — the path is meaningless to
+       operators; remote URLs (web pages, hosted media, streaming) keep it.
+    {% endcomment %}
     <template x-if="mode === 'edit' && editAsset">
       <form
         method="post"
@@ -128,6 +135,23 @@
         hx-target="#asset-table"
         hx-swap="outerHTML"
         hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); }"
+        x-data="{
+          get isUploadedAsset() {
+            const u = editAsset && editAsset.uri ? String(editAsset.uri) : '';
+            return !(u.startsWith('http://') || u.startsWith('https://') ||
+                     u.startsWith('rtsp://') || u.startsWith('rtmp://'));
+          },
+          get hasAdvancedDefaults() {
+            const days = editAsset.play_days_list || [];
+            return days.length === 7 &&
+                   !editAsset.play_time_from &&
+                   !editAsset.play_time_to &&
+                   !editAsset.nocache &&
+                   !editAsset.skip_asset_check;
+          },
+          advancedOpen: false,
+        }"
+        x-init="advancedOpen = !hasAdvancedDefaults"
       >
         {% csrf_token %}
         <div class="modal-card__body">
@@ -136,75 +160,96 @@
             <label for="edit-name">Name</label>
           </div>
 
-          <div class="app-floating mb-3">
+          <div class="app-floating mb-3" x-show="!isUploadedAsset">
             <input type="text" class="app-input" id="edit-uri" :value="editAsset.uri" readonly>
             <label for="edit-uri">Asset location</label>
           </div>
 
           <div
-            class="flex justify-between items-center mb-4 pb-3"
+            class="flex justify-between items-center mb-5 pb-3"
             style="border-bottom: 1px solid var(--color-border);"
           >
             <span class="muted-label">Type</span>
             <span class="schedule-chip text-capitalize" x-text="editAsset.mimetype"></span>
           </div>
 
-          <div class="app-form-grid mb-3">
-            <div class="app-floating">
-              <input type="text" class="app-input flatpickr-datetime" id="edit-start" name="start_date" :value="editAsset.start_date_local" required autocomplete="off">
-              <label for="edit-start">Start</label>
+          <section class="modal-section">
+            <h3 class="modal-section__title">Availability</h3>
+            <p class="modal-section__hint">
+              The asset is only shown between these dates and times.
+            </p>
+            <div class="app-form-grid mb-3">
+              <div class="app-floating">
+                <input type="text" class="app-input js-flatpickr-datetime" id="edit-start" name="start_date" :value="editAsset.start_date_local" required autocomplete="off">
+                <label for="edit-start">Start</label>
+              </div>
+              <div class="app-floating">
+                <input type="text" class="app-input js-flatpickr-datetime" id="edit-end" name="end_date" :value="editAsset.end_date_local" required autocomplete="off">
+                <label for="edit-end">End</label>
+              </div>
             </div>
-            <div class="app-floating">
-              <input type="text" class="app-input flatpickr-datetime" id="edit-end" name="end_date" :value="editAsset.end_date_local" required autocomplete="off">
-              <label for="edit-end">End</label>
-            </div>
-          </div>
 
-          {% comment %} Video assets must stay at duration=0 (v2 API rule) — disable
-             the input for videos so the form POST omits it; the server defends too.
-          {% endcomment %}
-          <div class="app-floating mb-4">
-            <input type="number" class="app-input" id="edit-duration" name="duration"
-              :value="editAsset.mimetype === 'video' ? 0 : editAsset.duration"
-              :disabled="editAsset.mimetype === 'video'" required>
-            <label for="edit-duration">Duration (seconds)</label>
-          </div>
-
-          <p class="muted-label mb-2">Schedule</p>
-          <div class="weekday-picker mb-4">
-            <template x-for="d in [{n:1,l:'Mon'},{n:2,l:'Tue'},{n:3,l:'Wed'},{n:4,l:'Thu'},{n:5,l:'Fri'},{n:6,l:'Sat'},{n:7,l:'Sun'}]" :key="d.n">
-              <label class="weekday">
-                <input type="checkbox" name="play_days"
-                  :value="d.n"
-                  :checked="(editAsset.play_days_list || []).includes(d.n)">
-                <span x-text="d.l"></span>
-              </label>
-            </template>
-          </div>
-
-          <div class="app-form-grid mb-4">
+            {% comment %} Video assets must stay at duration=0 (v2 API rule) — disable
+               the input for videos so the form POST omits it; the server defends too.
+            {% endcomment %}
             <div class="app-floating">
-              <input type="text" class="app-input flatpickr-time" id="edit-play-from" name="play_time_from" :value="editAsset.play_time_from || ''" autocomplete="off">
-              <label for="edit-play-from">Play from</label>
+              <input type="number" class="app-input" id="edit-duration" name="duration"
+                :value="editAsset.mimetype === 'video' ? 0 : editAsset.duration"
+                :disabled="editAsset.mimetype === 'video'" required>
+              <label for="edit-duration">Duration (seconds)</label>
             </div>
-            <div class="app-floating">
-              <input type="text" class="app-input flatpickr-time" id="edit-play-to" name="play_time_to" :value="editAsset.play_time_to || ''" autocomplete="off">
-              <label for="edit-play-to">Play until</label>
-            </div>
-          </div>
+          </section>
 
-          <div class="flex flex-wrap gap-4">
-            <div class="app-check app-switch m-0">
-              <input type="hidden" name="nocache" value="false">
-              <input type="checkbox" class="app-check-input" id="edit-nocache" name="nocache" value="true" :checked="editAsset.nocache">
-              <label class="app-check-label ml-2" for="edit-nocache">No cache</label>
+          <section class="modal-section modal-section--collapsible" :class="advancedOpen && 'is-open'">
+            <button type="button" class="modal-section__toggle"
+              @click="advancedOpen = !advancedOpen"
+              :aria-expanded="advancedOpen ? 'true' : 'false'">
+              <span class="modal-section__title">Advanced</span>
+              <i class="ti ti-chevron-down modal-section__chevron"></i>
+            </button>
+
+            <div class="modal-section__body" x-show="advancedOpen" x-cloak>
+              <p class="modal-section__hint">
+                Restrict playback to specific weekdays and hours within the availability window. Leave times empty to play all day.
+              </p>
+              <div class="weekday-picker mb-3">
+                <template x-for="d in [{n:1,l:'Mon'},{n:2,l:'Tue'},{n:3,l:'Wed'},{n:4,l:'Thu'},{n:5,l:'Fri'},{n:6,l:'Sat'},{n:7,l:'Sun'}]" :key="d.n">
+                  <label class="weekday">
+                    <input type="checkbox" name="play_days"
+                      :value="d.n"
+                      :checked="(editAsset.play_days_list || []).includes(d.n)">
+                    <span x-text="d.l"></span>
+                  </label>
+                </template>
+              </div>
+
+              <div class="app-form-grid mb-4">
+                <div class="app-floating">
+                  <input type="text" class="app-input js-flatpickr-time" id="edit-play-from" name="play_time_from" :value="editAsset.play_time_from || ''" autocomplete="off">
+                  <label for="edit-play-from">Play from</label>
+                </div>
+                <div class="app-floating">
+                  <input type="text" class="app-input js-flatpickr-time" id="edit-play-to" name="play_time_to" :value="editAsset.play_time_to || ''" autocomplete="off">
+                  <label for="edit-play-to">Play until</label>
+                </div>
+              </div>
+
+              <div class="modal-section__divider"></div>
+
+              <div class="flex flex-wrap gap-4">
+                <div class="app-check app-switch m-0">
+                  <input type="hidden" name="nocache" value="false">
+                  <input type="checkbox" class="app-check-input" id="edit-nocache" name="nocache" value="true" :checked="editAsset.nocache">
+                  <label class="app-check-label ml-2" for="edit-nocache">No cache</label>
+                </div>
+                <div class="app-check app-switch m-0">
+                  <input type="hidden" name="skip_asset_check" value="false">
+                  <input type="checkbox" class="app-check-input" id="edit-skip" name="skip_asset_check" value="true" :checked="editAsset.skip_asset_check">
+                  <label class="app-check-label ml-2" for="edit-skip">Skip asset check</label>
+                </div>
+              </div>
             </div>
-            <div class="app-check app-switch m-0">
-              <input type="hidden" name="skip_asset_check" value="false">
-              <input type="checkbox" class="app-check-input" id="edit-skip" name="skip_asset_check" value="true" :checked="editAsset.skip_asset_check">
-              <label class="app-check-label ml-2" for="edit-skip">Skip asset check</label>
-            </div>
-          </div>
+          </section>
         </div>
 
         <div class="modal-card__footer">
