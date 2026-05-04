@@ -2,7 +2,6 @@
 Tests for Info API endpoints (v1 and v2).
 """
 
-from importlib.metadata import version as _pkg_version
 from typing import Any
 from unittest import mock
 
@@ -11,10 +10,14 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-# Pulled from pyproject.toml's [project].version via the installed
-# package metadata so the test moves in lockstep with the release
-# bumper without anyone having to update both places.
-_ANTHIAS_RELEASE = _pkg_version('anthias')
+from anthias_server.lib.diagnostics import get_anthias_release
+
+# Pulled from pyproject.toml's [project].version via the diagnostics
+# helper so the test moves in lockstep with the release bumper, and
+# also works in environments built with `uv sync --no-install-project`
+# (production, host install) where importlib.metadata wouldn't find
+# the package — the helper falls back to a tomllib read.
+_ANTHIAS_RELEASE = get_anthias_release()
 
 
 @pytest.fixture
