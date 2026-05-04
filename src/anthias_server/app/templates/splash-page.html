@@ -28,8 +28,15 @@
         <span>Ready to manage</span>
       </p>
 
-      <h1 class="splash-headline">Open this on your phone or laptop</h1>
-      <p class="splash-subhead">Point a browser at one of the addresses below, or scan the QR code.</p>
+      {# Headline + subhead are hidden on cold boot so the page doesn't
+         tell operators to "open this address" before any address has
+         been resolved. The pulsing status chip above carries the empty
+         state on its own. splash.ts toggles the [hidden] flag once at
+         least one IP arrives. #}
+      <div id="splash-prompt" hidden>
+        <h1 class="splash-headline">Open this on your phone or laptop</h1>
+        <p class="splash-subhead">Point a browser at one of the addresses below, or scan the QR code.</p>
+      </div>
 
       <div id="splash-ip-list" class="splash-ip-list" aria-live="polite"></div>
     </div>

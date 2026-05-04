@@ -37,7 +37,7 @@
   <title>{% block title %}{% endblock %}</title>
   {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   {% block content %}{% endblock %}
   {% block scripts %}{% endblock %}
 </body>

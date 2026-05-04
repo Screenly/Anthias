@@ -4,9 +4,4 @@
 {% block error_icon %}ti-lock{% endblock %}
 {% block error_code %}403{% endblock %}
 {% block error_headline %}You can't access this page{% endblock %}
-{% block error_subhead %}You don't have permission to view this. If you think you should, sign in again.{% endblock %}
-{% block error_cta %}
-<a href="{% url 'anthias_app:login' %}" class="app-btn app-btn-primary auth-submit">
-  <i class="ti ti-login"></i><span>Sign in</span>
-</a>
-{% endblock %}
+{% block error_subhead %}This URL is restricted — by an IP allow-list, an internal-auth check, or a permission boundary. Contact your operator if you believe this is wrong.{% endblock %}

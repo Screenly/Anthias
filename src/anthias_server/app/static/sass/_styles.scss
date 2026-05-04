@@ -1524,8 +1524,12 @@ $footer-height: 13rem;
 //     on Pi 1-4 is on an older Chromium and silently no-ops it), no
 //     CSS variables that don't already exist in :root.
 // -----------------------------------------------------------------------------
+// `.splash-page` is the <body> element. The global body rule above adds
+// 4.5rem of top padding for the navbar that this page does not have —
+// strip it here so the gradient + card actually centre.
 .splash-page {
   margin: 0;
+  padding: 0;
   min-height: 100vh;
   font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, sans-serif);
   color: var(--color-text-on-dark);
@@ -1702,6 +1706,21 @@ $footer-height: 13rem;
 //      pre-dashboard surface feels like one product, then a light card
 //      with the existing app-floating inputs.
 // -----------------------------------------------------------------------------
+
+// Templates that paint a full-bleed pre-auth/error layout opt into this
+// body class so the global 4.5rem navbar offset doesn't shift the card
+// down (and so `main`'s default block margins don't open a gap above
+// the gradient).
+body.auth-body {
+  padding-top: 0;
+  background-color: var(--color-bg-deep);
+
+  main {
+    min-height: auto;
+    padding: 0;
+  }
+}
+
 .auth-page {
   min-height: 100vh;
   font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, sans-serif);

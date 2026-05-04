@@ -18,6 +18,7 @@ const w = window as SplashWindow
 
 const detecting = document.getElementById('splash-status-detecting')
 const ready = document.getElementById('splash-status-ready')
+const prompt = document.getElementById('splash-prompt')
 const list = document.getElementById('splash-ip-list')
 const qrSlot = document.getElementById('splash-qr')
 const qrCard = document.getElementById('splash-qr-card')
@@ -50,6 +51,7 @@ async function render(ips: string[]): Promise<void> {
   if (!ips.length) {
     if (detecting) detecting.hidden = false
     if (ready) ready.hidden = true
+    if (prompt) prompt.hidden = true
     list.innerHTML = ''
     if (qrCard) qrCard.hidden = true
     if (qrSlot) qrSlot.innerHTML = ''
@@ -58,6 +60,7 @@ async function render(ips: string[]): Promise<void> {
 
   if (detecting) detecting.hidden = true
   if (ready) ready.hidden = false
+  if (prompt) prompt.hidden = false
 
   list.innerHTML = ''
   ips.forEach((ip) => {

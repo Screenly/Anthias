@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% load static %}
 
+{% block body_class %}auth-body{% endblock %}
+
 {% block content %}
 <div class="auth-page">
   <main class="auth-shell">
@@ -18,7 +20,7 @@
       <p class="auth-subhead">{% block error_subhead %}{% endblock %}</p>
 
       {% block error_cta %}
-      <a href="/" class="app-btn app-btn-primary auth-submit">
+      <a href="{% url 'anthias_app:home' %}" class="app-btn app-btn-primary auth-submit">
         <i class="ti ti-home"></i><span>Back to dashboard</span>
       </a>
       {% endblock %}
