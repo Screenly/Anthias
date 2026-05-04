@@ -1522,6 +1522,12 @@ $footer-height: 13rem;
 }
 // Named `.app-toast` rather than `.toast` so we don't collide with any
 // other framework's toast component if one ever lands underneath.
+//
+// The body background is anthias-purple-1 (#1f0029); the prior
+// `background: var(--color-text)` resolved to #1f002a — one hex
+// digit off, indistinguishable from the page. Use the surface white
+// instead so toasts stand out as a card notification on the dark
+// theme. Accent stays on the left-border + leading icon.
 .app-toast {
   pointer-events: auto;
   display: flex;
@@ -1529,8 +1535,8 @@ $footer-height: 13rem;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
-  background: var(--color-text);
-  color: var(--color-text-on-dark);
+  background: var(--color-surface);
+  color: var(--color-text);
   box-shadow: var(--shadow-lg);
   font-size: 0.95rem;
   border-left: 4px solid var(--color-link);
@@ -1541,13 +1547,13 @@ $footer-height: 13rem;
     flex: none;
     background: transparent;
     border: none;
-    color: var(--color-text-on-dark-muted);
+    color: var(--color-text-muted);
     cursor: pointer;
     padding: 0 var(--space-1);
     line-height: 1;
     border-radius: var(--radius-sm);
     transition: color var(--t-fast), background var(--t-fast);
-    &:hover { color: var(--color-text-on-dark); background: var(--scrim-on-dark-8); }
+    &:hover { color: var(--color-text); background: var(--scrim-8); }
   }
 }
 .app-toast--success { border-left-color: var(--color-success); > i { color: var(--color-success); } }
