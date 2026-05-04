@@ -132,12 +132,12 @@ def _alpine_state(page: Page, expression: str = 'state') -> Any:
     as a JSON-decoded Python value. Returns ``None`` when the home-app
     x-data root isn't present on the page (e.g. settings)."""
     raw = page.evaluate(
-        '''(expression) => {
+        """(expression) => {
             const el = document.querySelector('[x-data*="homeApp"]');
             if (!el) return null;
             const state = window.Alpine.$data(el);
             return JSON.stringify(eval(expression));
-        }''',
+        }""",
         expression,
     )
     return json.loads(raw) if raw is not None else None
@@ -155,13 +155,13 @@ def _wait_alpine(
     Alpine processed the click is the underlying state, not a CSS
     visibility check."""
     page.wait_for_function(
-        '''([expression, expected]) => {
+        """([expression, expected]) => {
             const el = document.querySelector('[x-data*="homeApp"]');
             if (!el) return false;
             const state = window.Alpine.$data(el);
             const actual = eval(expression);
             return JSON.stringify(actual) === JSON.stringify(expected);
-        }''',
+        }""",
         arg=[expression, expected],
         timeout=timeout,
     )
@@ -171,11 +171,11 @@ def _disable_asset_poll(page: Page) -> None:
     """Strip the 5 s asset-table htmx poll so a swap doesn't cancel a
     click or drag mid-test. Call AFTER the page has loaded."""
     page.evaluate(
-        '''() => {
+        """() => {
             const el = document.getElementById('asset-table');
             if (el) el.removeAttribute('hx-trigger');
             if (window.htmx) window.htmx.process(document.body);
-        }'''
+        }"""
     )
 
 
@@ -247,9 +247,7 @@ def _playwright() -> Iterator[Any]:
 
 @pytest.fixture(scope='session')
 def _browser(_playwright: Any) -> Iterator[Browser]:
-    browser = _playwright.chromium.launch(
-        headless=True, args=['--no-sandbox']
-    )
+    browser = _playwright.chromium.launch(headless=True, args=['--no-sandbox'])
     try:
         yield browser
     finally:
@@ -297,17 +295,13 @@ def test_home_page_renders(reset_assets: None, page: Page) -> None:
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_no_console_errors_on_load(
-    reset_assets: None, page: Page
-) -> None:
+def test_no_console_errors_on_load(reset_assets: None, page: Page) -> None:
     """The deferred home.js + vendor.js bundles must execute without
     throwing. A console error on a fresh page load means the minifier
     or an import broke the bundle — same class of regression as the
     Bun --minify-identifiers bug."""
     errors: list[str] = []
-    page.on(
-        'pageerror', lambda exc: errors.append(f'pageerror: {exc}')
-    )
+    page.on('pageerror', lambda exc: errors.append(f'pageerror: {exc}'))
     page.on(
         'console',
         lambda msg: (
@@ -349,9 +343,7 @@ def test_alpine_click_handlers_fire_on_production_bundle(
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_empty_state_when_no_assets(
-    reset_assets: None, page: Page
-) -> None:
+def test_empty_state_when_no_assets(reset_assets: None, page: Page) -> None:
     page.goto(BASE_URL)
     expect(
         page.get_by_role('heading', name='Schedule Overview')
@@ -403,9 +395,7 @@ def test_asset_row_shows_humanised_duration(
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_add_asset_modal_opens(
-    reset_assets: None, page: Page
-) -> None:
+def test_add_asset_modal_opens(reset_assets: None, page: Page) -> None:
     page.goto(BASE_URL)
     page.locator('#add-asset-button').click()
     _wait_alpine(page, 'state.mode', 'add')
@@ -419,9 +409,7 @@ def test_add_asset_via_url(reset_assets: None, page: Page) -> None:
     _wait_alpine(page, 'state.mode', 'add')
 
     page.locator('input[name="uri"]').fill('https://example.com')
-    page.locator(
-        'form[action*="assets/new"] button[type="submit"]'
-    ).click()
+    page.locator('form[action*="assets/new"] button[type="submit"]').click()
 
     _wait_db(
         lambda: Asset.objects.filter(uri='https://example.com').exists(),
@@ -434,9 +422,7 @@ def test_add_asset_via_url(reset_assets: None, page: Page) -> None:
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_add_asset_via_image_upload(
-    reset_assets: None, page: Page
-) -> None:
+def test_add_asset_via_image_upload(reset_assets: None, page: Page) -> None:
     image_file = '/tmp/image.png'
     page.goto(BASE_URL)
     page.locator('#add-asset-button').click()
@@ -461,9 +447,7 @@ def test_add_asset_via_image_upload(
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_add_asset_via_video_upload(
-    reset_assets: None, page: Page
-) -> None:
+def test_add_asset_via_video_upload(reset_assets: None, page: Page) -> None:
     with _TemporaryCopy('tests/assets/asset.mov', 'video.mov') as video:
         page.goto(BASE_URL)
         page.locator('#add-asset-button').click()
@@ -523,9 +507,7 @@ def test_add_two_uploads_in_one_modal_session(
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_edit_modal_opens_with_asset(
-    reset_assets: None, page: Page
-) -> None:
+def test_edit_modal_opens_with_asset(reset_assets: None, page: Page) -> None:
     Asset.objects.create(**asset_active)
     page.goto(BASE_URL)
     expect(
@@ -534,8 +516,7 @@ def test_edit_modal_opens_with_asset(
     _disable_asset_poll(page)
 
     page.locator(
-        f'tr[data-asset-id="{asset_active["asset_id"]}"] '
-        f'button[title="Edit"]'
+        f'tr[data-asset-id="{asset_active["asset_id"]}"] button[title="Edit"]'
     ).click()
     _wait_alpine(page, 'state.mode', 'edit')
     assert (
@@ -546,9 +527,7 @@ def test_edit_modal_opens_with_asset(
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_edit_changes_duration(
-    reset_assets: None, page: Page
-) -> None:
+def test_edit_changes_duration(reset_assets: None, page: Page) -> None:
     Asset.objects.create(**asset_active)
     page.goto(BASE_URL)
     expect(
@@ -557,20 +536,15 @@ def test_edit_changes_duration(
     _disable_asset_poll(page)
 
     page.locator(
-        f'tr[data-asset-id="{asset_active["asset_id"]}"] '
-        f'button[title="Edit"]'
+        f'tr[data-asset-id="{asset_active["asset_id"]}"] button[title="Edit"]'
     ).click()
     _wait_alpine(page, 'state.mode', 'edit')
 
     page.locator('input[name="duration"]').fill('333')
-    page.locator(
-        'form[action*="/update"] button[type="submit"]'
-    ).click()
+    page.locator('form[action*="/update"] button[type="submit"]').click()
 
     _wait_db(
-        lambda: Asset.objects.get(
-            asset_id=asset_active['asset_id']
-        ).duration
+        lambda: Asset.objects.get(asset_id=asset_active['asset_id']).duration
         == 333,
         description='duration update persisted',
     )
@@ -578,9 +552,7 @@ def test_edit_changes_duration(
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_preview_modal_opens(
-    reset_assets: None, page: Page
-) -> None:
+def test_preview_modal_opens(reset_assets: None, page: Page) -> None:
     Asset.objects.create(**asset_active)
     page.goto(BASE_URL)
     expect(
@@ -615,16 +587,12 @@ def test_delete_confirm_modal_opens_with_pending_id(
         f'tr[data-asset-id="{asset_active["asset_id"]}"] '
         f'button[title="Delete"]'
     ).click()
-    _wait_alpine(
-        page, 'state.pendingDeleteId', asset_active['asset_id']
-    )
+    _wait_alpine(page, 'state.pendingDeleteId', asset_active['asset_id'])
 
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_delete_confirm_removes_asset(
-    reset_assets: None, page: Page
-) -> None:
+def test_delete_confirm_removes_asset(reset_assets: None, page: Page) -> None:
     Asset.objects.create(**asset_active)
     page.goto(BASE_URL)
     expect(
@@ -636,12 +604,8 @@ def test_delete_confirm_removes_asset(
         f'tr[data-asset-id="{asset_active["asset_id"]}"] '
         f'button[title="Delete"]'
     ).click()
-    _wait_alpine(
-        page, 'state.pendingDeleteId', asset_active['asset_id']
-    )
-    page.locator(
-        'form[action*="/delete"] button[type="submit"]'
-    ).click()
+    _wait_alpine(page, 'state.pendingDeleteId', asset_active['asset_id'])
+    page.locator('form[action*="/delete"] button[type="submit"]').click()
 
     _wait_db(
         lambda: Asset.objects.count() == 0,
@@ -656,9 +620,7 @@ def test_delete_confirm_removes_asset(
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_toggle_enables_asset(
-    reset_assets: None, page: Page
-) -> None:
+def test_toggle_enables_asset(reset_assets: None, page: Page) -> None:
     Asset.objects.create(**asset_disabled)
     page.goto(BASE_URL)
     expect(
@@ -682,9 +644,7 @@ def test_toggle_enables_asset(
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_toggle_disables_asset(
-    reset_assets: None, page: Page
-) -> None:
+def test_toggle_disables_asset(reset_assets: None, page: Page) -> None:
     Asset.objects.create(**asset_active)
     page.goto(BASE_URL)
     expect(
@@ -698,9 +658,7 @@ def test_toggle_disables_asset(
     ).click()
 
     _wait_db(
-        lambda: Asset.objects.get(
-            asset_id=asset_active['asset_id']
-        ).is_enabled
+        lambda: Asset.objects.get(asset_id=asset_active['asset_id']).is_enabled
         is False,
         description='asset is_enabled flipped to False',
     )
@@ -713,9 +671,7 @@ def test_toggle_disables_asset(
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_drag_reorders_play_order(
-    reset_assets: None, page: Page
-) -> None:
+def test_drag_reorders_play_order(reset_assets: None, page: Page) -> None:
     """The vanilla pointer-events drag we replaced SortableJS with
     must move both the visible row and the persisted play_order."""
     Asset.objects.create(**asset_active)
@@ -803,21 +759,15 @@ def test_settings_form_persists_default_duration(
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_system_info_page_renders(
-    reset_assets: None, page: Page
-) -> None:
+def test_system_info_page_renders(reset_assets: None, page: Page) -> None:
     page.goto(SYSTEM_INFO_URL)
-    expect(
-        page.get_by_role('heading', name='System Info')
-    ).to_be_visible()
+    expect(page.get_by_role('heading', name='System Info')).to_be_visible()
     assert 'Internal Server Error' not in page.content()
 
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_skip_next_button_present(
-    reset_assets: None, page: Page
-) -> None:
+def test_skip_next_button_present(reset_assets: None, page: Page) -> None:
     """The Next/Previous controls fire a viewer Redis publish — we
     can't observe the side effect without a viewer process, so the
     test just confirms the controls exist and submit cleanly (no 5xx

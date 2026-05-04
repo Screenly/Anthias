@@ -255,9 +255,7 @@ def _ensure_assetdir() -> None:
 # extra ``docker cp``. Override the location via PYTEST_ARTIFACTS_DIR
 # if a future setup wants per-attempt subdirs.
 
-_ARTIFACTS_DIR = Path(
-    os.environ.get('PYTEST_ARTIFACTS_DIR', 'test-artifacts')
-)
+_ARTIFACTS_DIR = Path(os.environ.get('PYTEST_ARTIFACTS_DIR', 'test-artifacts'))
 
 
 def _safe_node_id(node_id: str) -> str:
