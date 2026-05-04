@@ -391,6 +391,7 @@ label { text-align: left; }
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
+  table-layout: fixed;
 
   thead th {
     font-size: 0.7rem;
