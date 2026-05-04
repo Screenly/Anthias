@@ -6,7 +6,12 @@ app_name = 'anthias_app'
 
 urlpatterns = [
     path('splash-page', views.splash_page, name='splash_page'),
-    path('login/', views.login, name='login'),
+    # All app routes are slashless to match the existing convention
+    # (`system-info`, `settings`, `assets/...`); the trailing slash on
+    # `login/` was an inconsistency that would 404 for anyone hitting
+    # `/login` (Django's APPEND_SLASH redirects only ADD a slash, never
+    # the other direction).
+    path('login', views.login, name='login'),
     path('', views.home, name='home'),
     path('system-info', views.system_info, name='system_info'),
     path('integrations', views.integrations, name='integrations'),
