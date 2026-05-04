@@ -100,6 +100,11 @@ if getenv('ANTHIAS_SERVICE') != 'viewer':
         'channels',
         'drf_spectacular',
         'rest_framework',
+        # Backs the bearer-token auth path for headless API consumers.
+        # Owns its own migrations (a single Token table keyed on
+        # User), so adding it here is enough to surface the migrate
+        # step on next boot.
+        'rest_framework.authtoken',
         'anthias_server.api.apps.ApiConfig',
         'django.contrib.admin',
         'django.contrib.humanize',
@@ -273,9 +278,25 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'anthias_server.api.helpers.custom_exception_handler',
-    # The project uses custom authentication classes,
-    # so we need to disable the default ones.
-    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    # Three auth paths layered for the JSON API:
+    #   * SessionAuthentication — browser dashboard, reuses the cookie
+    #     that gates the HTML views.
+    #   * BearerTokenAuthentication — preferred path for new headless
+    #     callers; the operator obtains a token via
+    #     /api/v2/auth/token/ and sends ``Authorization: Bearer <hex>``.
+    #   * BasicAuthentication — kept for backwards compatibility with
+    #     pre-2826 Anthias-CLI builds and existing third-party
+    #     scripts; new integrations should use bearer tokens. All three
+    #     backends resolve against the same Django User table.
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'anthias_server.lib.auth.BearerTokenAuthentication',
+        # ``DeprecatedBasicAuthentication`` is DRF's stock
+        # ``BasicAuthentication`` plus a warning log on every
+        # successful auth — surfaces the last callers still on the
+        # legacy header before we remove the path.
+        'anthias_server.lib.auth.DeprecatedBasicAuthentication',
+    ],
 }
 
 SPECTACULAR_SETTINGS = {

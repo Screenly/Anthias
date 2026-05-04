@@ -7,6 +7,8 @@ from os import path, remove
 from urllib.parse import urlparse, urlunparse
 
 from django.contrib import messages
+from django.contrib.auth import authenticate
+from django.contrib.auth import login as django_login
 from django.http import FileResponse, HttpRequest, HttpResponse
 from django.http.response import HttpResponseBase
 from django.shortcuts import redirect
@@ -18,7 +20,10 @@ from django.views.decorators.http import require_http_methods
 from anthias_server.app import page_context
 from anthias_server.celery_tasks import reboot_anthias, shutdown_anthias
 from anthias_server.lib import backup_helper, diagnostics
-from anthias_server.lib.auth import authorized
+from anthias_server.lib.auth import (
+    apply_auth_settings,
+    authorized,
+)
 from anthias_common.utils import (
     connect_to_redis,
 )
@@ -648,74 +653,17 @@ def settings_save(request: HttpRequest) -> HttpResponse:
     current_password = request.POST.get('current_password', '')
 
     try:
-        if (
-            auth_backend != settings['auth_backend']
-            and settings['auth_backend']
-        ):
-            if not current_password:
-                raise ValueError(
-                    'Must supply current password to change '
-                    'authentication method'
-                )
-            auth = settings.auth
-            if auth is None or not auth.check_password(current_password):
-                raise ValueError('Incorrect current password.')
-
         prev_auth_backend = settings['auth_backend']
-        if not current_password and prev_auth_backend:
-            current_pass_correct = None
-        else:
-            current_pass_correct = settings.auth_backends[
-                prev_auth_backend
-            ].check_password(current_password)
-        # Mirror api.views.v2.DeviceSettingsViewV2.update_auth_settings
-        # inline rather than reaching for the per-backend update_settings —
-        # the backend's signature takes a DRF request, not the form-POST
-        # dict we've got, and its v2 implementation lives in the API view.
-        if auth_backend == 'auth_basic':
-            new_user = request.POST.get('user', '')
-            new_pass = request.POST.get('password', '')
-            new_pass_2 = request.POST.get('password_2', '')
-
-            from anthias_server.lib.auth import hash_password
-
-            if settings['password']:
-                if new_user != settings['user']:
-                    if current_pass_correct is None:
-                        raise ValueError(
-                            'Must supply current password to change username'
-                        )
-                    if not current_pass_correct:
-                        raise ValueError('Incorrect current password.')
-                    settings['user'] = new_user
-                if new_pass:
-                    if current_pass_correct is None:
-                        raise ValueError(
-                            'Must supply current password to change password'
-                        )
-                    if not current_pass_correct:
-                        raise ValueError('Incorrect current password.')
-                    if new_pass_2 != new_pass:
-                        raise ValueError('New passwords do not match!')
-                    settings['password'] = hash_password(new_pass)
-            else:
-                if new_user:
-                    if new_pass and new_pass != new_pass_2:
-                        raise ValueError('New passwords do not match!')
-                    if not new_pass:
-                        raise ValueError('Must provide password')
-                    settings['user'] = new_user
-                    settings['password'] = hash_password(new_pass)
-                elif current_pass_correct is None:
-                    # Switching to basic auth without a username is a no-op
-                    # — fall through and let auth_backend save below. Same
-                    # behaviour the API view falls into when its
-                    # update_auth_settings sees an empty username.
-                    pass
+        apply_auth_settings(
+            request,
+            new_auth_backend=auth_backend,
+            current_password=current_password,
+            new_username=request.POST.get('user', ''),
+            new_password=request.POST.get('password', ''),
+            new_password_confirm=request.POST.get('password_2', ''),
+            prev_auth_backend=prev_auth_backend,
+        )
         settings['auth_backend'] = auth_backend
-        # current_pass_correct is consumed above; reference it so the
-        # local doesn't read as unused.
-        _ = current_pass_correct
 
         settings['player_name'] = request.POST.get('player_name', '')
         settings['default_duration'] = int(
@@ -886,16 +834,9 @@ def login(request: HttpRequest) -> HttpResponse:
         username = request.POST.get('username') or ''
         password = request.POST.get('password') or ''
 
-        auth = settings.auth
-        if (
-            auth is not None
-            and hasattr(auth, '_check')
-            and auth._check(username, password)
-        ):
-            # Store credentials in session
-            request.session['auth_username'] = username
-            request.session['auth_password'] = password
-
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            django_login(request, user)
             return redirect(_safe_login_next(request, next_url))
         else:
             messages.error(request, 'Invalid username or password')

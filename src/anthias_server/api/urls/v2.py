@@ -12,6 +12,7 @@ from anthias_server.api.views.v2 import (
     InfoViewV2,
     IntegrationsViewV2,
     NetworkIpAddressesViewV2,
+    ObtainAuthTokenViewV2,
     PlaylistOrderViewV2,
     RebootViewV2,
     RecoverViewV2,
@@ -21,6 +22,11 @@ from anthias_server.api.views.v2 import (
 
 def get_url_patterns() -> list[URLPattern | URLResolver]:
     return [
+        path(
+            'v2/auth/token',
+            ObtainAuthTokenViewV2.as_view(),
+            name='obtain_auth_token_v2',
+        ),
         path('v2/assets', AssetListViewV2.as_view(), name='asset_list_v2'),
         path(
             'v2/assets/order',
