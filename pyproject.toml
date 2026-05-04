@@ -91,8 +91,8 @@ dev = [
     "pytest-django==4.10.0",
     "pytest-mock==3.14.0",
     "pytest-xdist==3.6.1",
-    "selenium==4.36.0",
-    "splinter==0.21.0",
+    "playwright==1.59.0",
+    "pytest-playwright==0.7.2",
     "time-machine==2.15.0",
 ]
 host = [
@@ -209,7 +209,6 @@ module = [
     "hurry.filesize",
     "pydbus",
     "sh",
-    "splinter",
     "vlc",
 ]
 ignore_missing_imports = true

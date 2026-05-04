@@ -90,28 +90,15 @@ def get_uv_builder_context(service: str) -> dict[str, Any]:
 
 
 def get_test_context() -> dict[str, Any]:
-    chrome_dl_url = (
-        'https://storage.googleapis.com/chrome-for-testing-public/'
-        '123.0.6312.86/linux64/chrome-linux64.zip'
-    )
-    chromedriver_dl_url = (
-        'https://storage.googleapis.com/chrome-for-testing-public/'
-        '123.0.6312.86/linux64/chromedriver-linux64.zip'
-    )
-
+    # Playwright's `playwright install --with-deps chromium` pulls the
+    # apt packages it actually needs (the list shifts between Chromium
+    # builds, so leaving it to playwright avoids stale apt names that
+    # Debian eventually retires). We still pre-install wget here for
+    # the prepare_test_environment.sh asset copies.
     return {
         'apt_dependencies': [
             'wget',
-            'unzip',
-            'libnss3',
-            'libatk1.0-0',
-            'libatk-bridge2.0.0',
-            'libcups2',
-            'libxcomposite1',
-            'libxdamage1',
         ],
-        'chrome_dl_url': chrome_dl_url,
-        'chromedriver_dl_url': chromedriver_dl_url,
     }
 
 

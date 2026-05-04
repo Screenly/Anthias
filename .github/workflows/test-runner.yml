@@ -125,6 +125,23 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+      # Browser-test failure artifacts (Chrome screenshot + rendered
+      # HTML + console log) are written by tests/conftest.py's
+      # pytest_runtest_makereport hook into ./test-artifacts/. Same
+      # bind-mount story as coverage.xml: anything inside the test
+      # container under /usr/src/app shows up directly on the runner.
+      # `if: failure()` keeps green runs from uploading an empty bundle;
+      # `if-no-files-found: ignore` is a belt for the case where a
+      # failure is in setup/teardown and never reaches the hook.
+      - name: Upload integration test artifacts
+        if: failure() && inputs.test-type == 'python'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: integration-test-artifacts
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Stop the test container
         run: |
           docker compose down
