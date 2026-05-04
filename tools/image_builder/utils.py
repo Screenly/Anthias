@@ -93,12 +93,11 @@ def get_test_context() -> dict[str, Any]:
     # Playwright's `playwright install --with-deps chromium` pulls the
     # apt packages it actually needs (the list shifts between Chromium
     # builds, so leaving it to playwright avoids stale apt names that
-    # Debian eventually retires). We still pre-install wget here for
-    # the prepare_test_environment.sh asset copies.
+    # Debian eventually retires). The test image otherwise inherits all
+    # tooling from the base image (curl, ca-certificates, etc.), so the
+    # apt list here is empty.
     return {
-        'apt_dependencies': [
-            'wget',
-        ],
+        'apt_dependencies': [],
     }
 
 

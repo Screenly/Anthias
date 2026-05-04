@@ -47,8 +47,8 @@ from anthias_server.settings import settings
 
 
 BASE_URL = 'http://localhost:8080'
-SETTINGS_URL = f'{BASE_URL}/settings'
-SYSTEM_INFO_URL = f'{BASE_URL}/system-info'
+SETTINGS_URL = f'{BASE_URL}/settings/'
+SYSTEM_INFO_URL = f'{BASE_URL}/system-info/'
 
 DEFAULT_TIMEOUT_MS = 15_000
 

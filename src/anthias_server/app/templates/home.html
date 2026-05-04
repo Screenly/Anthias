@@ -69,7 +69,7 @@
       </div>
       <div class="modal-card__footer">
         <button type="button" class="app-btn app-btn-link" @click="pendingDeleteId = null">Cancel</button>
-        <form method="post" :action="`/assets/${pendingDeleteId}/delete`" class="inline m-0">
+        <form method="post" :action="`/assets/${pendingDeleteId}/delete/`" class="inline m-0">
           {% csrf_token %}
           <button type="submit" class="app-btn app-btn-danger confirm-delete">
             <i class="ti ti-trash"></i><span>Delete</span>

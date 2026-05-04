@@ -123,8 +123,8 @@
     <template x-if="mode === 'edit' && editAsset">
       <form
         method="post"
-        :action="`/assets/${editAsset.asset_id}/update`"
-        x-bind:hx-post="`/assets/${editAsset.asset_id}/update`"
+        :action="`/assets/${editAsset.asset_id}/update/`"
+        x-bind:hx-post="`/assets/${editAsset.asset_id}/update/`"
         hx-target="#asset-table"
         hx-swap="outerHTML"
         hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); }"
