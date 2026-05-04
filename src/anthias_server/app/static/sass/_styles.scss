@@ -208,21 +208,46 @@ label { text-align: left; }
 
 // -----------------------------------------------------------------------------
 // 4. Surface (card) component
+//
+// `.surface` declares a *context*, not just a background — it exposes
+// --surface-* CSS custom properties (text colour, muted text, scrim
+// for hover tints, divider colour, anchor colour) that every child
+// component reads. `.surface--active` overrides the context tokens to
+// flip contrast for the dark gradient variant — children don't need
+// per-component overrides to know "I'm on a dark surface now".
 // -----------------------------------------------------------------------------
 .surface {
-  background: var(--color-surface);
+  --surface-bg: var(--color-surface);
+  --surface-text: var(--color-text);
+  --surface-text-muted: var(--color-text-muted);
+  --surface-text-faint: var(--color-text-muted);
+  --surface-divider: var(--color-border);
+  --surface-scrim-2: var(--scrim-2);
+  --surface-scrim-5: var(--scrim-5);
+  --surface-scrim-8: var(--scrim-6);
+  --surface-scrim-10: var(--scrim-10);
+  --surface-anchor: var(--color-link);
+  --surface-anchor-hover: var(--color-link-hover);
+
+  background: var(--surface-bg);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   padding: var(--space-6);
-  color: var(--color-text);
+  color: var(--surface-text);
 }
 
 .surface--active {
-  background: linear-gradient(180deg, var(--color-active-tint) 0%, var(--color-active) 100%);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  padding: var(--space-6);
-  color: var(--color-text-on-dark);
+  --surface-bg: linear-gradient(180deg, var(--color-active-tint) 0%, var(--color-active) 100%);
+  --surface-text: var(--color-text-on-dark);
+  --surface-text-muted: var(--color-text-on-dark-muted);
+  --surface-text-faint: var(--color-text-on-dark-faint);
+  --surface-divider: var(--color-border-on-dark);
+  --surface-scrim-2: var(--scrim-on-dark-4);
+  --surface-scrim-5: var(--scrim-on-dark-8);
+  --surface-scrim-8: var(--scrim-on-dark-10);
+  --surface-scrim-10: var(--scrim-on-dark-15);
+  --surface-anchor: var(--color-accent);
+  --surface-anchor-hover: var(--color-accent);
 }
 
 .surface--inset {
@@ -244,11 +269,10 @@ label { text-align: left; }
   }
   .surface__count {
     font-size: 0.75rem;
-    color: var(--color-text-on-dark-muted);
+    color: var(--surface-text-muted);
     font-variant-numeric: tabular-nums;
   }
 }
-.surface .surface__header .surface__count { color: var(--color-text-muted); }
 
 // -----------------------------------------------------------------------------
 // 5. Buttons
@@ -323,10 +347,9 @@ label { text-align: left; }
   &:hover { color: var(--color-text); text-decoration: underline; }
 }
 
-// Icon-only square button — borderless on either surface; the
-// surrounding `.surface--active` flips contrast (see below) so the same
-// markup renders correctly on the white inactive table AND the dark
-// active card.
+// Icon-only square button — reads surface context, so the same markup
+// renders correctly on the white inactive table AND the dark active
+// card without any parent-selector override.
 .app-btn-icon {
   padding: 0.5rem;
   width: 2.25rem;
@@ -335,20 +358,11 @@ label { text-align: left; }
   font-size: 0.95rem;
   background: transparent;
   border: 1px solid transparent;
-  color: var(--color-text-muted);
+  color: var(--surface-text-muted);
 
   &:hover:not(:disabled):not(.disabled) {
-    background: var(--scrim-5);
-    color: var(--color-text);
-  }
-}
-
-.surface--active .app-btn-icon {
-  color: var(--color-text-on-dark-muted);
-
-  &:hover:not(:disabled):not(.disabled) {
-    background: var(--scrim-on-dark-10);
-    color: var(--color-text-on-dark);
+    background: var(--surface-scrim-8);
+    color: var(--surface-text);
   }
 }
 
@@ -384,32 +398,20 @@ label { text-align: left; }
     letter-spacing: 0.08em;
     text-transform: uppercase;
     padding: var(--space-3) var(--space-3);
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--surface-divider);
     background: transparent;
-    color: var(--color-text-muted);
+    color: var(--surface-text-muted);
     white-space: nowrap;
   }
 
   tbody td {
     padding: var(--space-4) var(--space-3);
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--surface-divider);
     vertical-align: middle;
-    color: var(--color-text);
+    color: var(--surface-text);
   }
   tbody tr:last-child td { border-bottom: none; }
-  tbody tr:hover td { background: var(--scrim-2); }
-}
-
-.surface--active .asset-table {
-  thead th {
-    color: var(--color-text-on-dark-muted);
-    border-bottom-color: var(--color-border-on-dark);
-  }
-  tbody td {
-    color: var(--color-text-on-dark);
-    border-bottom-color: var(--color-border-on-dark);
-  }
-  tbody tr:hover td { background: var(--scrim-on-dark-4); }
+  tbody tr:hover td { background: var(--surface-scrim-2); }
 }
 
 .asset-cell-name {
@@ -430,12 +432,12 @@ label { text-align: left; }
     width: 1.75rem;
     height: 1.75rem;
     border-radius: var(--radius-md);
-    background: var(--scrim-5);
+    background: var(--surface-scrim-5);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-size: 0.95rem;
-    color: var(--color-text-muted);
+    color: var(--surface-text-muted);
   }
   .asset-cell-name__title {
     flex: 1 1 auto;
@@ -451,13 +453,6 @@ label { text-align: left; }
     white-space: nowrap;
   }
 }
-.surface--active .asset-cell-name {
-  .asset-cell-name__icon {
-    background: var(--scrim-on-dark-8);
-    color: var(--color-text-on-dark-muted);
-  }
-}
-
 // -----------------------------------------------------------------------------
 // 7. Schedule chip
 // -----------------------------------------------------------------------------
@@ -467,6 +462,36 @@ label { text-align: left; }
   gap: var(--space-1);
   vertical-align: middle;
 }
+// Chip palette is exposed through context tokens so each surface picks
+// its own three-colour set (bg / text / border) without per-child
+// .surface--active rules. Defaults below are for light surface; the
+// .surface--active block down in section 4 flips them to the dark-
+// surface chip palette (yellow accent, deeper-green --all variant).
+.surface {
+  --chip-neutral-bg:     var(--scrim-5);
+  --chip-neutral-text:   var(--color-text-muted);
+  --chip-neutral-edge:   var(--scrim-6);
+  --chip-day-bg:         var(--color-link-wash);
+  --chip-day-text:       var(--color-link);
+  --chip-day-edge:       var(--color-link-edge);
+  --chip-all-bg:         var(--color-success-wash);
+  --chip-all-text:       var(--color-success-text-on-wash);
+  --chip-all-edge:       var(--color-success-edge);
+}
+.surface--active {
+  // On the dark purple gradient: time-window neutral chips lift to
+  // accent-yellow; the green --all chip pumps wash + text strength so
+  // contrast still clears WCAG AA against the darker background.
+  --chip-neutral-bg:     var(--color-accent-wash);
+  --chip-neutral-text:   var(--color-accent);
+  --chip-neutral-edge:   var(--color-accent-edge);
+  --chip-all-bg:         var(--color-success-wash-strong);
+  --chip-all-text:       var(--color-success-text-on-wash-strong);
+  --chip-all-edge:       var(--color-success-edge-strong);
+  // --chip-day-* inherits the light-surface defaults; that palette
+  // already reads cleanly on the gradient.
+}
+
 .schedule-chip {
   display: inline-flex;
   align-items: center;
@@ -476,40 +501,21 @@ label { text-align: left; }
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.02em;
-  background: var(--scrim-5);
-  color: var(--color-text-muted);
-  border: 1px solid var(--scrim-6);
+  background: var(--chip-neutral-bg);
+  color: var(--chip-neutral-text);
+  border: 1px solid var(--chip-neutral-edge);
 
   i { font-size: 0.85em; opacity: 0.85; }
 }
-// Time-window pill stays a soft neutral; day pills get a slightly
-// stronger purple tint so a row scheduled across many days reads as
-// "playlist, not free-running".
 .schedule-chip--day {
-  background: var(--color-link-wash);
-  color: var(--color-link);
-  border-color: var(--color-link-edge);
+  background: var(--chip-day-bg);
+  color: var(--chip-day-text);
+  border-color: var(--chip-day-edge);
 }
 .schedule-chip--all {
-  // Token --color-success-text-on-wash (#0e4a30) on --color-success-wash
-  // (rgba 52,211,153,0.22) gives a 5.4:1 contrast ratio (WCAG AA cleared).
-  background: var(--color-success-wash);
-  color: var(--color-success-text-on-wash);
-  border-color: var(--color-success-edge);
-}
-.surface--active .schedule-chip {
-  background: var(--color-accent-wash);
-  color: var(--color-accent);
-  border-color: var(--color-accent-edge);
-}
-.surface--active .schedule-chip--all {
-  // On the dark purple gradient .surface--active wears, the green
-  // chip's text raises to --color-success-text-on-wash-strong and the
-  // wash bumps to --color-success-wash-strong so the result still
-  // clears WCAG AA against the dark surface.
-  background: var(--color-success-wash-strong);
-  color: var(--color-success-text-on-wash-strong);
-  border-color: var(--color-success-edge-strong);
+  background: var(--chip-all-bg);
+  color: var(--chip-all-text);
+  border-color: var(--chip-all-edge);
 }
 
 // Schedule-window cell — replaces the prior pair of raw start/end
@@ -522,29 +528,46 @@ label { text-align: left; }
   gap: var(--space-2);
   min-width: 0;
 }
+// Schedule-window state-color set is also exposed through chip-style
+// context tokens so the live-dot fill and outer ring can shift on the
+// dark active surface (where success-bright reads better than the
+// regular --color-success). Sets default to light-surface palette;
+// .surface--active flips just the live-state pair.
+.surface {
+  --window-dot-default-ring: var(--scrim-4);
+  --window-live-fill: var(--color-success);
+  --window-live-ring: var(--color-success-ring);
+}
+.surface--active {
+  --window-dot-default-ring: var(--scrim-on-dark-5);
+  --window-live-fill: var(--color-success-bright);
+  --window-live-ring: var(--color-success-wash);
+}
+
 .schedule-window__dot {
   width: 0.55rem;
   height: 0.55rem;
   border-radius: 50%;
   flex: none;
-  background: var(--color-text-muted);
-  box-shadow: 0 0 0 var(--ring-width) var(--scrim-4);
+  background: var(--surface-text-muted);
+  box-shadow: 0 0 0 var(--ring-width) var(--window-dot-default-ring);
 }
 .schedule-window__primary {
   margin: 0;
   font-weight: 600;
   font-size: 0.95rem;
   line-height: 1.2;
+  color: var(--surface-text);
 }
 .schedule-window__secondary {
   margin: 2px 0 0;
   font-size: 0.78rem;
-  color: var(--color-text-muted);
+  color: var(--surface-text-muted);
   letter-spacing: 0.01em;
 }
 .schedule-window--live .schedule-window__dot {
-  background: var(--color-success);
-  box-shadow: 0 0 0 var(--ring-width) var(--color-success-ring);
+  background: var(--window-live-fill);
+  box-shadow: 0 0 0 var(--ring-width) var(--window-live-ring);
   animation: schedule-window-pulse 2.4s ease-in-out infinite;
 }
 .schedule-window--upcoming .schedule-window__dot {
@@ -553,29 +576,20 @@ label { text-align: left; }
 }
 .schedule-window--expired .schedule-window__dot,
 .schedule-window--disabled .schedule-window__dot {
-  background: var(--color-text-muted);
-  box-shadow: 0 0 0 var(--ring-width) var(--scrim-6);
+  background: var(--surface-text-muted);
+  box-shadow: 0 0 0 var(--ring-width) var(--window-dot-default-ring);
 }
 .schedule-window--expired .schedule-window__primary {
-  color: var(--color-text-muted);
+  color: var(--surface-text-muted);
   text-decoration: line-through;
-  text-decoration-color: rgba(94, 88, 104, 0.4);
+  text-decoration-color: var(--surface-text-faint);
 }
 .schedule-window--disabled .schedule-window__primary {
-  color: var(--color-text-muted);
+  color: var(--surface-text-muted);
 }
 .schedule-window--scheduled .schedule-window__dot {
   background: var(--color-warning);
   box-shadow: 0 0 0 var(--ring-width) var(--color-warning-ring);
-}
-.surface--active .schedule-window__primary { color: var(--color-text-on-dark); }
-.surface--active .schedule-window__secondary { color: var(--color-text-on-dark-muted); }
-.surface--active .schedule-window__dot {
-  box-shadow: 0 0 0 var(--ring-width) var(--scrim-on-dark-5);
-}
-.surface--active .schedule-window--live .schedule-window__dot {
-  background: var(--color-success-bright);
-  box-shadow: 0 0 0 var(--ring-width) var(--color-success-wash);
 }
 
 @keyframes schedule-window-pulse {
@@ -591,6 +605,11 @@ label { text-align: left; }
   height: 1.35em;
   cursor: pointer;
 }
+
+// Default unchecked switch uses the browser's native appearance — no
+// override needed on the light surface. The dark surface needs an
+// explicit fill because a transparent off-state vanishes against the
+// purple gradient.
 .surface--active .app-check-input:not(:checked) {
   background-color: var(--scrim-on-dark-18);
   border-color: var(--scrim-on-dark-30);
@@ -612,12 +631,8 @@ label { text-align: left; }
   border-radius: var(--radius-pill);
   font-size: 0.72rem;
   font-weight: 600;
-  background: var(--scrim-5);
-  color: var(--color-text-muted);
-}
-.surface--active .processing-pill {
-  background: var(--scrim-on-dark-10);
-  color: var(--color-text-on-dark-muted);
+  background: var(--surface-scrim-5);
+  color: var(--surface-text-muted);
 }
 
 // -----------------------------------------------------------------------------
@@ -626,7 +641,7 @@ label { text-align: left; }
 .empty-state {
   text-align: center;
   padding: var(--space-7) var(--space-4);
-  color: var(--color-text-muted);
+  color: var(--surface-text-muted);
 
   .empty-state__icon {
     font-size: 2rem;
@@ -643,13 +658,9 @@ label { text-align: left; }
   }
   a {
     font-weight: 600;
-    color: var(--color-link);
-    &:hover { color: var(--color-link-hover); }
+    color: var(--surface-anchor);
+    &:hover { color: var(--surface-anchor-hover); }
   }
-}
-.surface--active .empty-state {
-  color: var(--color-text-on-dark-muted);
-  a { color: var(--color-accent); }
 }
 
 // -----------------------------------------------------------------------------
