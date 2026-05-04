@@ -520,22 +520,31 @@ def test_splash_renders_with_polling_script() -> None:
 
 
 @pytest.mark.django_db
-def test_splash_references_built_bundle() -> None:
-    """The splash now loads a built ``splash.js`` instead of inline
-    JS. A broken build (renamed entry, dropped script step) would
-    leave operators stuck on 'Detecting network…' with all the
-    other splash tests still passing — this catches that regression."""
-    from django.contrib.staticfiles import finders
-
+def test_splash_template_references_built_bundle() -> None:
+    """Template-only check: the splash points at dist/js/splash.js
+    rather than carrying its old inline IIFE. A template refactor
+    that dropped the <script> tag would leave operators stuck on
+    'Detecting network…' — all other splash tests would still pass
+    because this is the only path that exercises the bundle wiring.
+    The companion integration test below also asserts the file
+    actually exists on the build path."""
     response = Client().get('/splash-page/')
     body = response.content.decode()
     assert 'dist/js/splash.js' in body, (
         'splash-page.html no longer references the built splash.js — '
         'check the template and the package.json build:splash step'
     )
-    # `finders.find` walks STATICFILES_FINDERS the same way collectstatic
-    # would. None means the bundle isn't on the build path; in prod
-    # WhiteNoise would 404 the script and the page would never poll.
+
+
+@pytest.mark.integration
+def test_splash_built_bundle_resolves_on_static_path() -> None:
+    """Build-artifact check, integration-only because the unit job
+    runs before bin/prepare_test_environment.sh (which is what
+    invokes `bun run build`). `finders.find` walks STATICFILES_FINDERS
+    the same way collectstatic would — None here means WhiteNoise
+    would 404 the script in prod and the page would never poll."""
+    from django.contrib.staticfiles import finders
+
     assert finders.find('dist/js/splash.js') is not None, (
         'dist/js/splash.js is not resolvable — run `bun run build:splash` '
         'or wire it into the build pipeline'
