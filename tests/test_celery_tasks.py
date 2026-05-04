@@ -778,6 +778,42 @@ def test_download_youtube_asset_writes_to_persisted_uri(
     fake_cls.assert_called_once()
     ydl_opts = fake_cls.call_args.args[0]
     assert ydl_opts['outtmpl'] == '/custom/assetdir/yt-uri.mp4'
+    # The row already had a uri; the task must not stomp on it.
+    assert Asset.objects.get(asset_id='yt-uri').uri == (
+        '/custom/assetdir/yt-uri.mp4'
+    )
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_backfills_uri_when_row_uri_missing(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """Defensive: if the row landed without a uri (e.g. a custom
+    caller skipped the serializer's path-stamping), the task uses
+    the recomputed destination to download AND backfills the row
+    so the viewer + API can find the file. Without the backfill
+    the file would land at the fallback path while Asset.uri stays
+    empty, leaving the asset orphaned from the operator's view."""
+    Asset.objects.create(
+        asset_id='yt-empty',
+        name='https://youtu.be/abc',
+        uri='',
+        mimetype='video',
+        duration=0,
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
+    )
+    fake_youtube_dl.extract_info.return_value = {'title': 't', 'duration': 5}
+    with mock.patch('anthias_server.app.consumers.notify_asset_update'):
+        download_youtube_asset('yt-empty', 'https://youtu.be/abc')
+
+    a = Asset.objects.get(asset_id='yt-empty')
+    expected = path.join(settings['assetdir'], 'yt-empty.mp4')
+    assert a.uri == expected
+    # And the actual yt-dlp invocation matched that same path.
+    fake_cls = fake_youtube_dl._cls
+    assert fake_cls.call_args.args[0]['outtmpl'] == expected
 
 
 @pytest.mark.django_db

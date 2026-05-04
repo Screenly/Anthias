@@ -502,6 +502,14 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
     }
     if duration is not None:
         update['duration'] = duration
+    # Backfill the row's uri when we used the defensive fallback
+    # above. Without this the file lands at ``location`` but
+    # Asset.uri stays empty, so the viewer's filesystem check and
+    # the API's serialised uri both come back missing. Only writes
+    # when uri was falsy on entry — leaves an operator-set uri
+    # alone in the normal path.
+    if not asset.uri:
+        update['uri'] = location
     Asset.objects.filter(asset_id=asset_id).update(**update)
 
     # Tell the viewer to reload its playlist now that the file
